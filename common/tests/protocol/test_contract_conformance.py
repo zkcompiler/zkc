@@ -1069,7 +1069,7 @@ def admission_failures(cases, replies):
 def test_actual_parameter_and_program_admission(drivers, directory):
     cases = json.loads((FIXTURES / "attribute-admission.json").read_text())
     assert len({case["name"] for case in cases}) == len(cases)
-    assert 60 <= len(cases) <= 103, "review the bounded attribute witness set"
+    assert 60 <= len(cases) <= 106, "review the bounded attribute witness set"
     replies = query(drivers, [attribute_request(case) for case in cases], directory)
     finish(directory, admission_failures(cases, replies))
 
@@ -1335,3 +1335,24 @@ def test_variant_share_checks_every_arm_in_native_policy_and_entry(drivers, dire
     replies = query({"rust": drivers["rust"]}, requests, directory / "entry")["rust"]
     assert [row.get("admitted") for row in replies] == expected, replies
     assert replies[-1]["error"] == "entry-interface-schema", replies
+
+
+def test_table_widths_independent_signatures(physical_drivers, directory):
+    # Height-independent immutable metadata: no data ports, three index results.
+    contract = 'relation.table_widths'
+    fields = ['koala-bear', 'koala-bear.ext8-binomial3']
+    logical = [binding(contract, [field, '0']) for field in fields]
+    replies = query({name: driver for name, driver in physical_drivers.items()
+                     if name != 'backend'}, logical, directory / 'logical')
+    for consumer, rows in replies.items():
+        assert rows == [{'accepted': True, 'physical': False,
+                         'inputs': [], 'outputs': ['index'] * 3}] * 2, (consumer, rows)
+    requests = [binding(contract, [field, '0'], 'plonky3/' + contract, True)
+                for field in fields]
+    replies = query(physical_drivers, requests, directory / 'physical')
+    finish(directory, agreements(replies, requests))
+    for consumer, rows in replies.items():
+        for row in rows:
+            assert row['accepted'] and row['physical'], (consumer, row)
+            assert row['inputs'] == []
+            assert [value.split('@')[0] for value in row['outputs']] == ['index'] * 3

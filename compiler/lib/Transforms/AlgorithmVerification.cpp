@@ -10,6 +10,7 @@
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/DenseMap.h"
+#include <functional>
 
 using namespace mlir;
 using namespace llvm;
@@ -24,6 +25,84 @@ class AlgorithmCorrespondence {
   const detail::AlgorithmExpansionRecord &input;
   detail::AlgorithmExpansionRecord expected;
   std::string functionName, declarationName, definitionName;
+  std::map<std::string, bool> selected;
+
+  // The reader derives retention need from outgoing calls. It does not use
+  // the producer's reverse graph or trust a producer selection record.
+  LogicalResult select(protocol_ir::ProtocolModuleOp source) {
+    std::map<std::string, SmallVector<std::string>> dependencies;
+    std::map<std::string, bool> direct;
+    for (auto function : source.getBody().front().getOps<local::FuncOp>()) {
+      auto name = function.getSymName().str();
+      direct[name] = false;
+      auto result = function.walk([&](Operation *op) {
+        if (op == function.getOperation())
+          return WalkResult::advance();
+        if (failed(charge(op)))
+          return WalkResult::interrupt();
+        if (!expected.inspectionWork) {
+          diagnostics::emit(op->emitOpError(), "algorithm-expansion-limit");
+          return WalkResult::interrupt();
+        }
+        --expected.inspectionWork;
+        if (auto call = dyn_cast<local::ApplyOp>(op)) {
+          auto *callee = symbols.lookup(call.getCallee());
+          if (isa_and_nonnull<local::FuncOp>(callee)) {
+            dependencies[name].push_back(call.getCallee().str());
+            direct[name] |= phase == AlgorithmExpansionPhase::Finish;
+          } else if (phase == AlgorithmExpansionPhase::RetainMaps &&
+                     isa_and_nonnull<algebra::MapRealizeOp, local::FiniteFoldOp,
+                                     local::FiniteCollectOp>(callee)) {
+            direct[name] = true;
+          } else {
+            (void)refuse(op, "unsupported local callee");
+            return WalkResult::interrupt();
+          }
+        }
+        return WalkResult::advance();
+      });
+      if (result.wasInterrupted())
+        return failure();
+    }
+    std::function<bool(const std::string &)> needsRetention =
+        [&](const std::string &name) {
+          auto found = selected.find(name);
+          if (found != selected.end())
+            return found->second;
+          bool needed = direct.at(name);
+          for (const auto &callee : dependencies[name])
+            needed |= needsRetention(callee);
+          selected.emplace(name, needed);
+          return needed;
+        };
+    if (phase == AlgorithmExpansionPhase::RetainMaps) {
+      for (const auto &entry : direct)
+        needsRetention(entry.first);
+      // Callback references are separate analysis roots, not ordinary call
+      // edges. Resolve them independently of the producer's selected set.
+      // block() reads their complete transitive helper substitution; a helper
+      // need not be selected as a standalone declaration to be read there.
+      auto callback = [&](FlatSymbolRefAttr reference) {
+        if (!reference)
+          return;
+        auto found = dependencies.find(reference.getValue().str());
+        if (found != dependencies.end() && !found->second.empty())
+          selected[found->first] = true;
+      };
+      for (auto fold : source.getBody().front().getOps<local::FiniteFoldOp>()) {
+        callback(fold.getStepAttr());
+        callback(fold.getPredicateAttr());
+      }
+      for (auto collect :
+           source.getBody().front().getOps<local::FiniteCollectOp>()) {
+        callback(collect.getBodyAttr());
+        callback(collect.getPredicateAttr());
+      }
+    } else {
+      selected = std::move(direct);
+    }
+    return success();
+  }
 
   LogicalResult refuse(Operation *op, StringRef reason) {
     return diagnostics::emit(op->emitOpError(), "algorithm-correspondence",
@@ -51,6 +130,56 @@ class AlgorithmCorrespondence {
     }
     return success();
   }
+  // Exact structural/SSA reading of an unchanged declaration. No substitution,
+  // capture canonicalization, site renaming or terminal normalization is legal.
+  LogicalResult unchanged(Block &source, Block &target, unsigned depth = 0) {
+    if (depth > 64)
+      return refuse(target.getParentOp(), "preserved region depth");
+    Values values;
+    if (source.getOperations().size() != target.getOperations().size() ||
+        failed(bind(source.getArguments(), target.getArguments(), values)))
+      return refuse(target.getParentOp(), "preserved block shape");
+    for (auto [op, actual] : zip(source, target)) {
+      if (failed(charge(&op)))
+        return failure();
+      if (op.getName() != actual.getName() ||
+          op.getAttrDictionary() != actual.getAttrDictionary() ||
+          op.getNumRegions() != actual.getNumRegions() ||
+          op.getNumOperands() != actual.getNumOperands())
+        return refuse(&actual, "preserved operation");
+      for (auto [operand, candidate] :
+           zip(op.getOperands(), actual.getOperands()))
+        if (values.lookup(operand) != candidate)
+          return refuse(&actual, "preserved operand");
+      if (failed(bind(op.getResults(), actual.getResults(), values)))
+        return refuse(&actual, "preserved results");
+      if (op.hasAttr("site")) {
+        auto site = attr(&op, "site").str();
+        auto saved = detail::occurrence(input, declarationName, site);
+        auto record =
+            saved ? *saved
+                  : detail::AlgorithmOccurrence{
+                        definitionName, declarationName, site, {}, depth};
+        if (record.path.size() > 64 || record.depth > 64 ||
+            (isa<local::ApplyOp>(op) &&
+             (record.path.size() >= 64 || record.depth >= 64)))
+          return refuse(&actual, "preserved occurrence depth");
+        if ((saved || phase == AlgorithmExpansionPhase::Finish) &&
+            !expected.occurrences
+                 .emplace(detail::OccurrenceKey{functionName, site}, record)
+                 .second)
+          return refuse(&actual, "duplicate preserved occurrence");
+      }
+      for (auto [a, b] : zip(op.getRegions(), actual.getRegions())) {
+        if (a.getBlocks().size() != b.getBlocks().size())
+          return refuse(&actual, "preserved region shape");
+        for (auto [x, y] : zip(a, b))
+          if (failed(unchanged(x, y, depth + 1)))
+            return failure();
+      }
+    }
+    return success();
+  }
   // The selected capture indices refer to the original capture list. Aliases
   // introduced by calls identify repeated immutable bindings, not loop state.
   LogicalResult block(Block &source, Block &target, Block::iterator &cursor,
@@ -67,9 +196,17 @@ class AlgorithmCorrespondence {
     for (auto &op : source) {
       if (failed(charge(&op)))
         return failure();
-      if (!expected.work)
+      auto call = dyn_cast<local::ApplyOp>(op);
+      bool expand =
+          call && !(phase == AlgorithmExpansionPhase::RetainMaps &&
+                    isa_and_nonnull<algebra::MapRealizeOp, local::FiniteFoldOp,
+                                    local::FiniteCollectOp>(
+                        symbols.lookup(call.getCallee())));
+      bool substitution = !invocation.empty() || expand;
+      if (substitution && !expected.work)
         return diagnostics::emit(op.emitOpError(), "algorithm-expansion-limit");
-      --expected.work;
+      if (substitution)
+        --expected.work;
       auto saved =
           detail::occurrence(input, declarationName, attr(&op, "site"));
       auto currentPath = saved ? invocation : path;
@@ -89,11 +226,7 @@ class AlgorithmCorrespondence {
         }
         return success();
       }
-      if (auto call = dyn_cast<local::ApplyOp>(op);
-          call && !(phase == AlgorithmExpansionPhase::RetainMaps &&
-                    isa_and_nonnull<algebra::MapRealizeOp, local::FiniteFoldOp,
-                                    local::FiniteCollectOp>(
-                        symbols.lookup(call.getCallee())))) {
+      if (expand) {
         auto callee = symbols.lookup<local::FuncOp>(call.getCallee());
         if (!callee || !callee.getBody().hasOneBlock())
           return refuse(&op, "missing local body");
@@ -287,6 +420,9 @@ public:
     expected.finished = phase == AlgorithmExpansionPhase::Finish;
   }
   const detail::AlgorithmExpansionRecord &result() const { return expected; }
+  LogicalResult initialize(protocol_ir::ProtocolModuleOp source) {
+    return select(source);
+  }
   LogicalResult function(local::FuncOp before, local::FuncOp after) {
     if (before->getAttrDictionary() != after->getAttrDictionary() ||
         before.isExternal() != after.isExternal())
@@ -298,6 +434,8 @@ public:
     functionName = before.getSymName().str();
     declarationName = functionName;
     definitionName = definition(before).str();
+    if (!selected.at(functionName))
+      return unchanged(before.getBody().front(), after.getBody().front());
     Values values;
     if (failed(bind(before.getArguments(), after.getArguments(), values)))
       return refuse(after, "function arguments");
@@ -359,6 +497,8 @@ LogicalResult detail::checkAlgorithmExpansion(
         return refuse();
   }
   AlgorithmCorrespondence check(a, phase, input);
+  if (failed(check.initialize(a)))
+    return failure();
   for (auto [x, y] : zip(a.getBody().front(), b.getBody().front())) {
     if (auto function = dyn_cast<local::FuncOp>(x)) {
       auto candidate = dyn_cast<local::FuncOp>(y);
@@ -371,6 +511,7 @@ LogicalResult detail::checkAlgorithmExpansion(
   const auto &expected = check.result();
   if (compareRecords && (expected.occurrences != output.occurrences ||
                          expected.work != output.work ||
+                         expected.inspectionWork != output.inspectionWork ||
                          expected.originBytes != output.originBytes ||
                          expected.retained != output.retained ||
                          expected.finished != output.finished))

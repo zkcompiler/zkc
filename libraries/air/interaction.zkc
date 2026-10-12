@@ -1,4 +1,6 @@
 module air_interaction;
+use zkc::vector as vec;
+use zkc::finite_math as total;
 use air_polynomial::{Vector, Indices, length, empty, append, concat, get, slice, fill,
   multiply, accumulate, inverse, less, both, maximum,
   index_list, index_push, index_get, index_length};
@@ -91,11 +93,12 @@ fn shaped<F: Field>(records: Interactions, values: Vector<F>, rows: index,
     challenges: Vector<F>) -> bool {
   return both(length(challenges) == 2 * records.channels, length(values) == records.width * rows);
 }
-// A zero product of field elements has a zero factor.
+// A zero product of field elements has a zero factor. Only the final product
+// is needed here; auxiliary running products remain explicit in the reduction.
 fn nonzero<F: Field>(values: Vector<F>) -> bool {
-  let count = length(values);
-  return if count == 0 { true }
-    else { not_zero(get(kernel<F>("vector.prefix_product", values), count - 1)) };
+  let one: F = 1;
+  return not_zero(total::fold(vec::elements(values), one,
+    fn(product, value) => product * value));
 }
 fn not_zero<F: Field>(value: F) -> bool { return kernel("bool.not", value == 0); }
 

@@ -17,6 +17,9 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Transforms/Finite.h"
+#include "llvm/ADT/SmallPtrSet.h"
+#include <algorithm>
+#include <limits>
 using namespace mlir;
 using namespace llvm;
 namespace zkc::finite {
@@ -36,6 +39,95 @@ observedChoice(mathematical::RealizationKind kind) {
     return Choice::Elementwise;
   }
   llvm_unreachable("unknown finite realization");
+}
+// This is a producer-only selection view. The original callback remains the
+// source for ordered emission and for the independent actual-payload reader.
+OwningOpRef<ModuleOp> normalizeSelectionCallback(Computation &computation,
+                                                 Operation *root,
+                                                 uint64_t &structural,
+                                                 OptimizationOutcome &outcome) {
+  // The helper APIs also require operation/slot counters. Bound these adapters
+  // by the same remaining optional work; every copy additionally debits the
+  // shared structural counter, so another callback or retry cannot refill it.
+  unsigned operations = static_cast<unsigned>(
+      std::min<uint64_t>(structural, std::numeric_limits<unsigned>::max()));
+  uint64_t slots = structural;
+  OwningOpRef<func::FuncOp> scratch;
+  SmallPtrSet<Operation *, 4> rootAccesses;
+  {
+    // Required helper expansion diagnoses failure. Here failure only declines
+    // an optional proposal; the untouched ordered path owns any real refusal.
+    ScopedDiagnosticHandler quiet(root->getContext(),
+                                  [](Diagnostic &) { return success(); });
+    if (succeeded(mathematical::chargeHelperOperations(
+            computation.helper, operations, slots, &structural, &outcome))) {
+      scratch = cast<func::FuncOp>(computation.helper->clone());
+      for (auto &op : scratch->front().without_terminator()) {
+        if (!consumeComputationWork(structural, 1, WorkOwner::Structural,
+                                    &outcome))
+          return {};
+        if (auto *facet = semantics(&op); facet && facet->access)
+          rootAccesses.insert(&op);
+      }
+      SymbolTableCollection symbols;
+      if (failed(mathematical::inlineHelpers(*scratch, operations, slots,
+                                             symbols, root, &structural,
+                                             &outcome)))
+        scratch = {};
+    }
+  }
+  if (!scratch) {
+    if (outcome.capacity) {
+      auto &capacity = *outcome.capacity;
+      if (capacity.owner == WorkOwner::HelperSlots && capacity.requested)
+        ++*capacity.requested; // Structural work also charges the operation.
+      capacity.owner = WorkOwner::Structural;
+      capacity.available = structural;
+    }
+    return {};
+  }
+  // The private scope below does not clone nested finite symbol closures. Keep
+  // such payloads ordered, including dead nested computations: erasing one
+  // would erase its conditional domain admission. The original payload reader
+  // also reads indexed premises in each retained callee, not its caller. Do not
+  // move an indexed read across that fact boundary. Root-local indexed reads
+  // keep their own premises while ordinary scalar helper calls can expand.
+  for (auto &op : scratch->front().without_terminator()) {
+    if (!consumeComputationWork(structural, 1, WorkOwner::Structural,
+                                &outcome) ||
+        isComputation(&op))
+      return {};
+    if (auto *facet = semantics(&op);
+        facet && facet->access && !rootAccesses.contains(&op))
+      return {};
+  }
+  // Facts only admit premises inside the occurrence's symbol root. Retain the
+  // helper's own signature/preconditions in a private symbol scope together
+  // with a typed occurrence. Fresh entry formals deliberately carry no
+  // caller-only extent assumptions. The domain view still borrows the original
+  // domain SSA, which admission and the emitter use as their shared identity.
+  auto signature = computation.signature;
+  if (!consumeComputationWork(structural,
+                              4 + 2 * signature.getNumInputs() +
+                                  2 * signature.getNumResults(),
+                              WorkOwner::Structural, &outcome))
+    return {};
+  OwningOpRef<ModuleOp> context(ModuleOp::create(root->getLoc()));
+  auto helper = scratch.release();
+  context->getBody()->push_back(helper);
+  OpBuilder builder(context->getBody(), context->getBody()->end());
+  auto subject = func::FuncOp::create(
+      builder, computation.operation->getLoc(),
+      (helper.getSymName() + "_selection").str(), signature);
+  subject.setPrivate();
+  builder.setInsertionPointToEnd(subject.addEntryBlock());
+  auto *occurrence = builder.clone(*computation.operation);
+  occurrence->setOperands(subject.getArguments());
+  func::ReturnOp::create(builder, occurrence->getLoc(),
+                         occurrence->getResults());
+  computation.helper = helper;
+  computation.operation = occurrence;
+  return context;
 }
 class Realizer {
   protocol_ir::ProtocolModuleOp unit;
@@ -230,9 +322,8 @@ class Realizer {
     return {emit(*col->get, {container, position}, col->element)};
   }
   Expected<mathematical::LaneRealizationResult>
-  elementwise(const ComputationView &view,
+  elementwise(Block &body, const ComputationView &view,
               const mathematical::Elementwise &equation, ValueRange entry) {
-    auto &body = computation.helper->getRegion(0).front();
     Value root = view.iteration[view.root].descriptor;
     llvm::DenseMap<Value, mathematical::LaneInput> inputs;
     for (const auto &access : view.accesses)
@@ -349,10 +440,53 @@ public:
       return failure();
     // Ordered emission reads the domain directly. It needs no optional
     // structural/equation work, including when retrying a discarded proposal.
+    // Keep the owned body alive through every borrowed view/equation and lane
+    // emission. Never replace computation or a source symbol with this copy.
+    OwningOpRef<ModuleOp> normalized;
+    Computation selectionComputation = computation;
     mathematical::ComputationSelection selection;
-    if (optimize)
-      selection = mathematical::selectComputation(computation, {true, false},
-                                                  work.matching, recipes);
+    if (optimize) {
+      bool ready = true;
+      if (computation.total && !computation.predicate) {
+        // A call-free helper already has its admitted symbol and fact context.
+        // Bound the discovery scan too; exhaustion only declines selection.
+        bool hasCall = false;
+        for (auto &op : computation.helper->getRegion(0).front()) {
+          if (!consumeComputationWork(work.matching.structural, 1,
+                                      WorkOwner::Structural,
+                                      &selection.diagnostic.outcome)) {
+            ready = false;
+            break;
+          }
+          if (isa<func::CallOp>(op)) {
+            hasCall = true;
+            break;
+          }
+        }
+        if (ready && hasCall) {
+          normalized = normalizeSelectionCallback(selectionComputation, unit,
+                                                  work.matching.structural,
+                                                  selection.diagnostic.outcome);
+          ready = bool(normalized);
+        }
+      }
+      if (ready)
+        selection = mathematical::selectComputation(
+            selectionComputation, {true, false}, work.matching, recipes);
+      // A normalized helper's positions are not source positions. Attribute
+      // queries inside that private view to the original finite occurrence.
+      auto prepared = [&](Operation *op) {
+        return normalized && op && normalized->getOperation()->isAncestor(op);
+      };
+      if (!selection.diagnostic.subject ||
+          selection.diagnostic.subject == selectionComputation.operation ||
+          prepared(selection.diagnostic.subject))
+        selection.diagnostic.subject = source;
+      for (auto *&occurrence : selection.diagnostic.occurrencePath)
+        if (occurrence == selectionComputation.operation ||
+            prepared(occurrence))
+          occurrence = source;
+    }
     if (!optimize)
       selection.diagnostic.outcome = {
           retryOrdered ? OptimizationStatus::Succeeded
@@ -421,7 +555,9 @@ public:
       return SmallVector<Value>{result};
     }
     if (selection.kind == mathematical::RealizationKind::Elementwise) {
-      auto result = elementwise(*view, *selection.equations.elementwise, entry);
+      auto result =
+          elementwise(selectionComputation.helper->getRegion(0).front(), *view,
+                      *selection.equations.elementwise, entry);
       if (!result) {
         diagnostics::emit(source->emitOpError(), result.takeError());
         return failure();
@@ -674,8 +810,10 @@ realizeLocalsWithLimits(ModuleOp module, MathematicalSelectionPolicy policy,
         attempt.publish();
       else
         attempt.complete(mathematical::CompletionKind::Unchanged);
-      scope.complete(changed ? mathematical::CompletionKind::Completed
-                             : mathematical::CompletionKind::Unchanged);
+      if (changed)
+        scope.publish();
+      else
+        scope.complete(mathematical::CompletionKind::Unchanged);
       return success();
     }
     attempt.discard(mathematical::verificationDecision(checked));

@@ -12,7 +12,8 @@ apply the same Fiat–Shamir construction to LogUp and grand-product reductions
 respectively. Both use the [three-table library profile](../../../libraries/air/README.md#whole-bundle-argument):
 base-field trace commitment, extension-field auxiliary and quotient commitments,
 OOD checks, DEEP composition and a shared FRI instance. The compiler sees
-native vector maps and imported record expressions throughout.
+native vector maps, finite folds and imported record expressions. Shared
+finite modules are captured explicitly in the project manifest.
 
 ## Run
 
@@ -49,9 +50,18 @@ The target relation requires table assertions, Boolean interaction counts and
 both program and memory multiset equalities. A proof Entry's target label states
 that intended relation; it does not certify the security of its protocol.
 
-The example admits at most 32 rows per table, uses a 64-point coset, eight
+The example admits at most 32 active rows per table, uses a 64-point coset, eight
 queries, eight OOD attempts and two interaction channels. These are execution
 test parameters, not a production security selection. Commitments are nonhiding.
 It demonstrates a complete selected machine proof path; the machine is not an
 Ethereum ISA or the deployed OpenVM. Relation comparison with upstream VM
 components is a separate adapter boundary.
+
+Absent tables contribute no columns, assertions or interactions. Their
+configuration still follows the captured Bundle's height policy and widths;
+the 32-row active bound does not restrict an absent configured table.
+
+The [protocol measurement driver](../../../common/benchmarks/README.md) compares
+both reductions with memory present and absent, including ordered finite
+execution and optional storage release. Its counters distinguish executed work,
+cumulative allocation charges and exit storage.

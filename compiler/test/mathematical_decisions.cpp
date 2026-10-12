@@ -158,6 +158,16 @@ int main() {
                   work.helperSlots == orderedWork.helperSlots,
               "retry replenished optional work or consumed required reserve");
       checkRetry(trace, "finite-attempt");
+      auto publications = events<PublicationDecision>(trace);
+      require(
+          llvm::count_if(
+              publications,
+              [](const RealizationEvent *event) {
+                return event->parent == 0 &&
+                       std::get<PublicationDecision>(event->payload).boundary ==
+                           PublicationBoundary::PublishedToCaller;
+              }) == 1,
+          "standalone finite service omitted caller installation");
       require(trace.activeScopes.empty() && sameWork(trace.remainingWork, work),
               "trace retained active scope or incorrect final balance");
     });
@@ -447,6 +457,49 @@ int main() {
                   !event->subject.site.empty();
     require(declined && events<PublicationDecision>(trace).empty(),
             "missing occurrence recipe was silent or claimed publication");
+  });
+  cases.run("wide fusion diagnostics preserve named occurrence identity", [&] {
+    std::string text = fusionFixture.str(), calls;
+    for (unsigned i = 0; i < 256; ++i)
+      calls += " %unused" + std::to_string(i) +
+               " = local.apply @mapped(%a,%b,%c,%s) {site=\"unused" +
+               std::to_string(i) + "\"} : (!V,!V,!V,!F)->!V\n";
+    text.insert(text.find(" %v = local.apply @mapped"), calls);
+    auto source = parseSourceString<ModuleOp>(text, &context);
+    require(bool(source) && succeeded(verify(*source)), "wide source refused");
+    protocol::AlgorithmExpansionState state;
+    RealizationTrace preparation;
+    require(succeeded(protocol::expandAlgorithms(
+                *source, protocol::AlgorithmExpansionPhase::RetainMaps, state,
+                nullptr, &preparation)),
+            "wide retained source refused");
+    bool installed = false;
+    for (auto *event : events<PublicationDecision>(preparation))
+      installed |= event->parent == 0 &&
+                   std::get<PublicationDecision>(event->payload).boundary ==
+                       PublicationBoundary::PublishedToCaller;
+    require(installed, "standalone expansion omitted caller installation");
+    auto control = copy(*source), observed = copy(*source);
+    auto controlState = state, observedState = state;
+    RealizationTrace trace;
+    require(
+        succeeded(fuseVectorReductions(*control, controlState)) &&
+            succeeded(fuseVectorReductions(*observed, observedState, &trace)) &&
+            same(*control, *observed),
+        "wide diagnostic changed fusion");
+    unsigned declined = 0;
+    for (auto *event : events<SelectionDecision>(trace)) {
+      const auto &selection = std::get<SelectionDecision>(event->payload);
+      if (selection.family != DecisionFamily::VectorReduction ||
+          selection.choice != RealizationChoice::Ordered)
+        continue;
+      require(!event->subject.site.empty() && event->subject.position.empty() &&
+                  event->subject.declaration == "work" &&
+                  !event->subject.originalSite.empty(),
+              "named occurrence lost its declaration or origin");
+      ++declined;
+    }
+    require(declined >= 256, "wide nonfusing occurrences were omitted");
   });
   cases.run("positive origin allowance can fail at the encoding request", [&] {
     auto source = parseSourceString<ModuleOp>(fusionFixture, &context);

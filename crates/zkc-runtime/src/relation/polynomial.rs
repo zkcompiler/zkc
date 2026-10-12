@@ -1,6 +1,7 @@
-//! A polynomial view of one present table on the multiplicative subgroup whose
-//! order is the table's own height. The immutable Bundle owns the bindings and
-//! degree facts; this view derives the descriptors a consuming library needs
+//! A table's assertion arena and its polynomial profile at an actual height.
+//! Only height-taking methods require a multiplicative subgroup whose order is
+//! the table's height; point substitution needs no domain. The Bundle owns the
+//! bindings and degree facts; this view derives the descriptors a consumer needs
 //! and prepares the ordered assertion arena for substitution. It selects no
 //! quotient combination, challenge, commitment or proof, and claims nothing
 //! about interactions.
@@ -72,17 +73,6 @@ impl PolynomialArena {
         &self.outputs
     }
 }
-/// Some power-of-two height of at least 2 is admitted by the policy. On the
-/// subgroup of order h, rotation by `offset mod h` realizes a cyclic read
-/// exactly and a finite read wherever its window is defined. KoalaBear has
-/// two-adicity 24, so every power-of-two height up to HEIGHT_LIMIT has that
-/// subgroup.
-pub(super) fn two_adic_premise(t: &Table) -> Result<()> {
-    if u64::from(t.height.min.max(2)).next_power_of_two() > u64::from(t.height.max) {
-        return Err(Error("bundle-polynomial-two-adic"));
-    }
-    Ok(())
-}
 /// The height checks every height-taking view kernel starts with: a
 /// power-of-two height of at least 2 that the policy admits.
 pub(super) fn checked_height(t: &Table, height: u64) -> Result<u32> {
@@ -101,16 +91,14 @@ pub(super) fn data_widths(bundle: &Bundle, t: &Table, height: u64) -> Result<[u6
     // Below HEIGHT_LIMIT, 256 groups of width 2^16 and 2^16 slots of eight
     // coordinates, these products and sums cannot overflow.
     let element = |field| degree(field).expect("admitted field") as u64;
-    let mut widths = [0; 3];
     let mut coordinates = bundle.publics.iter().map(|s| element(s.field)).sum::<u64>();
     for g in &t.groups {
-        widths[kind(g.authority) as usize - 1] += u64::from(g.width);
         coordinates += height * u64::from(g.width) * element(g.field);
     }
     if coordinates > COORDINATE_LIMIT {
         return Err(Error("bundle-data-limit"));
     }
-    Ok(widths)
+    Ok(t.data_widths())
 }
 /// A window is an interval condition: the extreme offsets of the outputs'
 /// reads decide it.
@@ -131,9 +119,9 @@ pub(super) fn window(
 impl Bundle {
     /// Static premises shared by the polynomial kernels: table index, an
     /// installed carrier, carrier compatibility of every public slot, table
-    /// group and assertion output, and a power-of-two height of at least 2
-    /// admitted by the height policy. Interaction-only outputs are not
-    /// checked. Nothing is allocated.
+    /// group and assertion output. No height or polynomial domain is required;
+    /// height-taking kernels check their actual height when reached.
+    /// Interaction-only outputs are not checked. Nothing is allocated.
     pub fn polynomial_view(&self, table: usize, field: Identity) -> Result<PolynomialView<'_>> {
         let t = self
             .tables
@@ -152,7 +140,6 @@ impl Bundle {
         {
             return Err(Error("relation-table-carrier"));
         }
-        two_adic_premise(t)?;
         Ok(PolynomialView {
             bundle: self,
             table,

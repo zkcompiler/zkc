@@ -4,6 +4,7 @@ The AIR fixture comes from direct upstream execution. Tests exercise the full
 proof path and adversarial obligations, without asserting a soundness bound.
 """
 
+from source_modules import finite_modules
 from input_files import input_files
 import json
 import re
@@ -70,7 +71,7 @@ def compile_entry(toolchain, journal, directory, *, log_size=5, queries=8,
                f'--module=air_stark={stark}',
                f'--module=air_table={table}',
                f'--module=air_polynomial={ROOT}/libraries/air/polynomial.zkc',
-               f'--module=fri={ROOT}/libraries/fri/lib.zkc',
+               f'--module=fri={ROOT}/libraries/fri/lib.zkc', *finite_modules(),
                f'--asset=recurrence=relation-bundle-json={FIXTURE}/bundle.json',
                f'air_stark_example::{entry}', f'--output={package}', *flags]
     report = journal.json(command)
@@ -97,7 +98,7 @@ def replace_frame(proof, position, value):
     return proof[:40] + b''.join(len(m).to_bytes(8, 'little') + m for m in messages)
 
 
-@pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
+@pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--no-finite-bulk'], ['--release-storage']])
 @pytest.mark.parametrize('profile', [(4, 8), (5, 8), (6, 12)])
 def test_external_air_stark_produces_and_verifies(toolchain, journal, directory, flags, profile):
     log_size, queries = profile
@@ -205,7 +206,7 @@ def test_stark_transcript_orders_commitments_claims_and_queries(toolchain, journ
         '--entry=air_stark_example::Proof', f'--module=air_stark_example={EXAMPLE}',
         f'--module=air_stark={STARK}', f'--module=air_table={TABLE}',
         f'--module=air_polynomial={ROOT}/libraries/air/polynomial.zkc',
-        f'--module=fri={ROOT}/libraries/fri/lib.zkc',
+        f'--module=fri={ROOT}/libraries/fri/lib.zkc', *finite_modules(),
         f'--asset=recurrence=relation-bundle-json={FIXTURE}/bundle.json'])
     descriptor = bundle[2]
     assert descriptor[0] == 'zkc.native-proof-descriptor/0'
@@ -280,7 +281,7 @@ def test_stark_rejects_consistent_dishonest_prover_words(toolchain, journal, dir
         '--entry=air_stark_example::Proof', f'--module=air_stark_example={directory}/main.zkc',
         f'--module=air_stark={library}', f'--module=air_table={TABLE}',
         f'--module=air_polynomial={ROOT}/libraries/air/polynomial.zkc',
-        f'--module=fri={ROOT}/libraries/fri/lib.zkc',
+        f'--module=fri={ROOT}/libraries/fri/lib.zkc', *finite_modules(),
         f'--asset=recurrence=relation-bundle-json={FIXTURE}/bundle.json'])
     sites = re.findall(r'"protocol\.guard"\(%\d+(?:#\d+)?\) <\{owner = "(\w+)", site = "(s\d+)"\}>', emitted)
     assert [owner for owner, _ in sites[:7]] == [

@@ -573,6 +573,7 @@ LogicalResult checkFiniteCollections(ModuleOp source, ModuleOp candidate,
     if (expected.occurrences != output->occurrences ||
         expected.originBytes != output->originBytes ||
         expected.work != output->work ||
+        expected.inspectionWork != output->inspectionWork ||
         expected.retained != output->retained ||
         expected.finished != output->finished)
       return refuse("occurrence records or cumulative limits differ");

@@ -205,9 +205,8 @@ def extension_bundle():
 @pytest.mark.parametrize('field,table,bundle,code', [
     ('Extension', 1, None, 'source.asset-table'),
     ('Base', 0, 'extension', 'source.asset-carrier'),
-    ('Extension', 0, 'height', 'source.asset-table'),
 ])
-def test_source_closure_checks_table_carrier_and_two_adic_premise(
+def test_source_closure_checks_table_and_carrier(
         toolchain, journal, directory, field, table, bundle, code):
     text = source(field, table)
     if bundle == 'extension':
@@ -216,9 +215,6 @@ def test_source_closure_checks_table_carrier_and_two_adic_premise(
             'base: Vector<Base>', 'base: Vector<Extension>').replace(
             'base_values: Vector<Base>', 'base_values: Vector<Extension>')
         value = extension_bundle()
-    elif bundle == 'height':
-        value = json.loads(BUNDLE)
-        value[3][0][2] = ['fixed', 12]
     else:
         value = None
     Client(toolchain, journal, directory, text, value, refuses=code)
@@ -243,7 +239,6 @@ def test_extension_tables_keep_every_coordinate(toolchain, journal, directory):
     ('tampered', 'relation-asset-identity'),
     ('table', 'relation-table-index'),
     ('carrier', 'entry-asset-carrier'),
-    ('non-two-adic', 'refused:bundle-polynomial-two-adic'),
 ])
 def test_host_preflight_checks_every_polynomial_reference(
         toolchain, journal, directory, mutation, code):
@@ -266,12 +261,8 @@ def test_host_preflight_checks_every_polynomial_reference(
                     binding[2][1] = '1'
             candidate = json.dumps(program, separators=(',', ':'))
         else:
-            if mutation == 'non-two-adic':
-                body = json.loads(BUNDLE)
-                body[3][0][2] = ['fixed', 3]
-            else:
-                # A KoalaBear reference to an Ext8 table, under its own identity.
-                body = extension_bundle()
+            # A KoalaBear reference to an Ext8 table, under its own identity.
+            body = extension_bundle()
             body = json.dumps(body, separators=(',', ':'))
             replacement = sha256(body.encode()).hexdigest()
             candidate = candidate.replace(identity, replacement)

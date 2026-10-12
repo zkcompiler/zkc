@@ -140,7 +140,7 @@ def positions(encoded):
 
 
 
-@pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
+@pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--no-finite-bulk'], ['--release-storage']])
 @pytest.mark.parametrize('profile', [(4, 0, 2, 8), (5, 0, 3, 8), (6, 1, 3, 12)])
 def test_fri_polynomials_prove_and_verify(toolchain, journal, directory, flags, profile):
     log_size, terminal_log, rounds, queries = profile

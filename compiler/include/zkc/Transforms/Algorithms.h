@@ -43,10 +43,13 @@ mlir::LogicalResult verifyAlgorithmExpansionPreserved(mlir::ModuleOp before,
 mlir::LogicalResult
 expandAlgorithms(mlir::ModuleOp, std::vector<AlgorithmOrigin> * = nullptr,
                  mathematical::RealizationTrace *trace = nullptr);
-/// RetainMaps expands ordinary helpers, retaining only admitted map calls.
-/// Finish expands the realized remainder and forbids preparation declarations.
-/// Both phases share work, depth and origin limits through state. Each is
-/// transactional and independently checked by virtual source substitution.
+/// RetainMaps expands bodies that transitively call admitted map/finite
+/// declarations and callbacks named by finite declarations, retaining only
+/// preparation calls. Other declarations and call-free callbacks stay exact.
+/// Finish expands remaining calls and forbids preparation declarations.
+/// Both phases share substitution, source-inspection, depth and origin limits
+/// through state. Each is transactional and independently checked by virtual
+/// source substitution or exact unchanged-body correspondence.
 mlir::LogicalResult
 expandAlgorithms(mlir::ModuleOp, AlgorithmExpansionPhase,
                  AlgorithmExpansionState &,

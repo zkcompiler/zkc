@@ -23,6 +23,9 @@ using OccurrenceKey = std::pair<std::string, std::string>;
 struct AlgorithmExpansionRecord {
   std::map<OccurrenceKey, AlgorithmOccurrence> occurrences;
   uint64_t work = 32768, originBytes = 16 * 1024 * 1024;
+  // Source bodies are inspected once per phase, independently of the work
+  // caused by substituting callees. Both allowances belong to the module.
+  uint64_t inspectionWork = 1000000;
   uint64_t checkWork = 1000000, checkOriginBytes = 16 * 1024 * 1024;
   bool retained = false, finished = false;
 };

@@ -344,6 +344,39 @@ int main(int argc, char **argv) {
     refuses(bundleTableLengths(single, singleView, 1048576),
             "bundle-work-limit");
   });
+  cases.run("immutable widths do not require a height or active windows", [] {
+    for (StringRef height :
+         {R"(["fixed",1])", R"(["fixed",3])", R"(["config",3,3,false])"}) {
+      // The finite interval is valid only at larger actual heights.
+      // Metadata still describes the admitted declaration at fixed height 1.
+      auto text =
+          std::string(R"(["zkc.relation-bundle/0",[],[],[["t","optional",)") +
+          height.str() + R"(,"finite",
+        [["w","witness","koala-bear",2],["c","config","koala-bear",1],
+         ["v","witness","koala-bear",3],["d","config","koala-bear",2],
+         ["p","public","koala-bear",1]],
+        ["zkc.ring/0",["koala-bear"],[["input",0]],[0]],
+        [["read",0,"1",0]],[[0,["interval",0,2]]],[]]]])";
+      auto b = bundle(text);
+      for (StringRef field : {StringRef(KB), StringRef(EXT)}) {
+        auto widths = take(bundleTableWidths(b, 0, field));
+        require(widths.witnessWidth == 5 && widths.configWidth == 3 &&
+                    widths.publicWidth == 1,
+                "widths sum element columns by authority without height");
+        take(accepted(
+            checkBundleTableReference(b, "relation.table_widths", 0, field)));
+      }
+      refuses(bundleTableWidths(b, 1, KB), "relation-table-index");
+      refuses(bundleTableWidths(b, 0, "bls12-381.fr"),
+              "relation-table-carrier");
+    }
+    auto extension = bundle(cyclic("", EXT));
+    auto widths = take(bundleTableWidths(extension, 0, EXT));
+    require(widths.witnessWidth == 1 && widths.configWidth == 1 &&
+                widths.publicWidth == 2,
+            "extension widths are elements, not base coordinates");
+    refuses(bundleTableWidths(extension, 0, KB), "relation-table-carrier");
+  });
   cases.run(
       "polynomial premises lift base tables and keep extensions exact", [] {
         auto recurrence = bundle(read("bundle.json"));
@@ -388,13 +421,12 @@ int main(int argc, char **argv) {
         [["field-balance",0,["global"],["all"],[1],2,null]]]]])");
         take(accepted(checkBundlePolynomialTable(interaction, 0, KB)));
         take(accepted(checkBundlePolynomialTable(interaction, 0, EXT)));
-        // Some power of two of at least 2 must satisfy the height policy.
+        // Reference formation does not choose an execution height.
         for (StringRef height :
              {R"(["fixed",1])", R"(["fixed",3])", R"(["instance",1,1,false])",
               R"(["instance",5,7,false])"})
-          refuses(accepted(checkBundlePolynomialTable(bundle(chain(1, height)),
-                                                      0, KB)),
-                  "bundle-polynomial-two-adic");
+          take(accepted(
+              checkBundlePolynomialTable(bundle(chain(1, height)), 0, KB)));
         for (StringRef height : {R"(["fixed",2])", R"(["instance",1,2,false])",
                                  R"(["instance",5,8,false])"})
           take(accepted(
@@ -409,9 +441,8 @@ int main(int argc, char **argv) {
               "relation.table_points"}) {
           take(accepted(
               checkBundleTableReference(recurrence, contract, 0, EXT)));
-          refuses(accepted(checkBundleTableReference(
-                      bundle(chain(1, R"(["fixed",3])")), contract, 0, KB)),
-                  "bundle-polynomial-two-adic");
+          take(accepted(checkBundleTableReference(
+              bundle(chain(1, R"(["fixed",3])")), contract, 0, KB)));
         }
         refuses(accepted(
                     checkBundleTableReference(recurrence, "ring.point", 0, KB)),
@@ -437,6 +468,10 @@ int main(int argc, char **argv) {
                                                 "relation.table_record_points"};
         take(accepted(checkBundleTableReference(
             interaction, "relation.table_points", 0, KB)));
+        refuses(bundleTableWidths(interaction, 0, KB),
+                "relation-table-carrier");
+        require(take(bundleTableWidths(interaction, 0, EXT)).witnessWidth == 2,
+                "metadata carrier includes interaction outputs");
         refuses(admitBundleTableCarrier(interaction, 0, KB),
                 "relation-table-carrier");
         for (StringRef contract : interactionKernels)
