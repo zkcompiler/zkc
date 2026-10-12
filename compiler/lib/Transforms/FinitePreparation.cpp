@@ -1,6 +1,7 @@
 #include "FinitePreparation.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/SymbolTable.h"
+#include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/ScopeExit.h"
@@ -46,6 +47,7 @@ struct HelperSize {
 };
 class CallbackSizer {
   Operation *root;
+  bool singleResultCalls;
   uint64_t &structural;
   OptimizationOutcome &outcome;
   SymbolTableCollection symbols;
@@ -63,8 +65,9 @@ class CallbackSizer {
 
 public:
   CallbackSizer(Operation *root, uint64_t &structural,
-                OptimizationOutcome &outcome)
-      : root(root), structural(structural), outcome(outcome) {}
+                OptimizationOutcome &outcome, bool singleResultCalls)
+      : root(root), singleResultCalls(singleResultCalls),
+        structural(structural), outcome(outcome) {}
 
   std::optional<HelperSize> read(func::FuncOp helper) {
     // Match admitted helper depth, including paths through memoized children.
@@ -99,6 +102,10 @@ public:
       }
       size.copying = addSize(size.copying, operationWork(&op));
       if (auto call = dyn_cast<func::CallOp>(op)) {
+        // The independent module reader follows single-result source calls.
+        // Keep other valid calls ordered; normalization must not hide them.
+        if (singleResultCalls && call.getNumResults() != 1)
+          return decline(OptimizationReason::ImplementationRestriction);
         // Every edge is charged, including edges to an already sized helper.
         if (!charge(1))
           return std::nullopt;
@@ -137,7 +144,10 @@ std::optional<uint64_t> sizeCallbackPreparation(const Computation &computation,
                OptimizationReason::ImplementationRestriction};
     return std::nullopt;
   }
-  CallbackSizer sizer(root, structural, outcome);
+  auto signature = computation.signature;
+  bool module = signature.getNumResults() == 1 &&
+                isa<algebra::GroupType>(signature.getResult(0));
+  CallbackSizer sizer(root, structural, outcome, module);
   auto size = sizer.read(helper);
   if (!size)
     return std::nullopt;

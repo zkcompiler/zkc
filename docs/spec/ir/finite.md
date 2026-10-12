@@ -250,7 +250,13 @@ This selection step performs no dead-code or polynomial elimination. Field
 reduction selection requires every payload instruction, including unused work,
 to belong to its supported field/access formula. An unrelated total group
 operation keeps the body ordered; a valid source must not become a failed
-correspondence proposal because its selected comparison omits that algebra.
+correspondence proposal because its selected comparison omits that algebra. Group
+reduction selection likewise requires the scalar-ring/group-action fragment,
+field-vector or group-vector element domains (possibly zipped), and
+single-result helper calls. Extra indexed
+work or multi-result group helpers remain valid ordered computations until the
+independent group reader covers them. These are selection limits, not new source
+admission rules.
 
 The analysis retains all constructors in admission order separately from the
 items of the returned descriptor, and retains every helper instruction even
