@@ -272,7 +272,7 @@ def test_source_construction_cryptographic_histories(toolchain, journal, directo
     modules = {'sample': root / f'common/tests/fixtures/constructions/{protocol}.zkc',
                'spongefish': root / 'libraries/spongefish/lib.zkc'}
     modules.update({f'zkc::{name}': root / f'libraries/zkc/{name}.zkc'
-                    for name in ['bytes', 'shake128', 'encoding', 'vector', 'boolean', 'finite', 'sequence', 'accumulation', 'curve']})
+                    for name in ['multilinear', 'bytes', 'shake128', 'encoding', 'vector', 'boolean', 'finite', 'sequence', 'accumulation', 'curve']})
     if protocol == 'sumcheck':
         modules['sumcheck'] = root / 'libraries/sumcheck/lib.zkc'
     package = directory / 'proof.zkpkg'

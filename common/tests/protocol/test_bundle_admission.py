@@ -164,7 +164,7 @@ protocol InspectAdmission<R: Reduction<Extension>> roles(P)
   let auxiliary @P = memory_layout.reduction.columns;
   let claims @P = memory_layout.reduction.claims;
   let chunks @P = memory_layout.chunks;
-  let scopes @P = air_polynomial::index_length(memory_layout.begin);
+  let scopes @P = zkc::indices::length(memory_layout.begin);
   return (present = present, height = height, logical_height = logical_height,
     witness_width = witness_width, configuration_width = configuration_width,
     public_width = public_width, inputs = inputs, assertions = assertions,

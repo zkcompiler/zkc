@@ -1,5 +1,9 @@
 module inspect_reduction;
-use air_polynomial::{Vector, Indices, index_get, index_length, empty, concat, slice};
+use zkc::indices as indices;
+use zkc::vector::{Vector, empty, concat, slice};
+use zkc::indices::{Indices};
+
+
 use air_interaction::{Interactions, Layout, Reduction, LogUp, GrandProduct, interactions,
   range_constraints};
 domain E = field("koala-bear.ext8-binomial3");
@@ -7,9 +11,9 @@ domain E = field("koala-bear.ext8-binomial3");
 // Openings on the table's own rows: column j rotated left by its rotation.
 fn rows_openings(columns: Vector<E>, layout: Layout, height: index) -> Vector<E> {
   let mut result = empty<E>();
-  for opening in 0..index_length(layout.opened) {
-    let column = slice(columns, index_get(layout.opened, opening) * height, height);
-    result = concat(result, kernel<E>("vector.rotate", column, index_get(layout.rotations, opening)));
+  for opening in 0..indices::length(layout.opened) {
+    let column = slice(columns, indices::get(layout.opened, opening) * height, height);
+    result = concat(result, kernel<E>("vector.rotate", column, indices::get(layout.rotations, opening)));
   }
   return result;
 }

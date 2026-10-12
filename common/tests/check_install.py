@@ -71,7 +71,7 @@ def check(binary, compiler, output):
     checked = json.loads(invoke("math-check", "check", "--project=mathematics.toml",
                                 "example::Run", "--declarations"))
     assert checked["scope"] == "entry"
-    assert any(d["name"] == "zkc::vector::fold" for d in checked["declarations"])
+    assert any(d["name"] == "zkc::multilinear::fix_first" for d in checked["declarations"])
     compiled = json.loads(invoke("math-compile", "compile", "--project=mathematics.toml",
                                  "example::Run", "--output=mathematics.zkpkg"))
 

@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 from typing import NamedTuple
 
-from source_modules import finite_modules
+from source_modules import library_modules
 
 import pytest
 
@@ -126,7 +126,7 @@ def build(toolchain, journal, directory, name, *, main=None, asset=None, edits=(
         texts[module] = texts[module].replace(old, new)
     for module, extra in appended:
         texts[module] += '\n' + extra
-    arguments = finite_modules()
+    arguments = library_modules('zkc')
     for module, text in texts.items():
         path = where / f'{module}.zkc'
         path.write_text(text)
@@ -262,7 +262,7 @@ def test_witness_claim_lie_consistent_at_zeta_stops_at_fri_degree(toolchain, jou
     helpers = 'bump_slot, compensate' if compensated else 'bump_slot'
     edits = [('air_stark', USE_TABLE, USE_TABLE.replace('deep_value}', f'deep_value, {helpers}}}')),
              ('air_stark', CLAIMS, CLAIMS.replace('let proposed @P', 'let honest @P')
-              + '\n  let proposed @P = bump_slot(honest, natural<0>());')]
+              + '\n  let proposed @P = bump_slot(honest, index<0>());')]
     if compensated:
         edits.append(('air_stark', QUOTIENT_CLAIMS,
                       QUOTIENT_CLAIMS.replace('let proposed_quotient @P', 'let honest_quotient @P')
@@ -289,7 +289,7 @@ COLUMN_BUNDLE = ['zkc.relation-bundle/0', [['x0', 'koala-bear']], [], [[
     [[0, ['interior', 0, 1]], [1, ['first']]], []]]]
 COLUMN_MAIN = '''module air_stark_example;
 use air_stark::{Base, Extension, Statement, TableArgument};
-use air_polynomial::{Vector};
+use zkc::vector::{Vector};
 domain Column = bundle(asset column);
 
 relation ConstantColumn(statement x0: Base, witness trace: Vector<Base>)
@@ -351,12 +351,11 @@ pub fn claims_lde<F: Field, Table: nat, B: Bundle>(witness: Vector<F>,
   return assignments;
 }
 '''
-USE_POLYNOMIAL = ('use air_polynomial::{Vector, length, natural, yes, both, not, less,\n'
-                  '  point, transpose, extend_columns, split_quotient, disjoint_coset, '
-                  'outside_domains};')
+USE_POLYNOMIAL = 'use air_polynomial::{split_quotient};'
+
 EXTENSION = ('let trace_lde @P = extend_columns(trace_columns, factsP.witness, heightP, '
              'statementP.shift, sizeP);')
-LIFTED = [('air_stark', USE_POLYNOMIAL, USE_POLYNOMIAL.replace('outside_domains}', 'outside_domains, lift}')),
+LIFTED = [('air_stark', USE_POLYNOMIAL, USE_POLYNOMIAL.replace('split_quotient}', 'split_quotient, lift}')),
           ('air_stark', USE_TABLE, USE_TABLE.replace('deep_value}', 'deep_value, claims_lde}')),
           ('air_stark', EXTENSION, EXTENSION.replace('= extend_columns(', '= lift(extend_columns(')
            .replace('sizeP);', 'sizeP), heightP, statementP.shift, sizeP);')),

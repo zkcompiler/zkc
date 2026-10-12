@@ -6,7 +6,7 @@ adversarial evidence, not a proof of cryptographic soundness or upstream VM
 compatibility.
 """
 
-from source_modules import finite_modules
+from source_modules import library_modules
 from input_files import input_files
 import importlib.util
 import json
@@ -36,7 +36,7 @@ def compile_entry(toolchain, journal, directory, entry, *, flags=(), source=None
                                f'accumulator_machine::{entry}', f'--output={package}', *flags])
         return package, report['package_sha256']
     command = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-               f'--module=accumulator_machine={path}', *finite_modules(),
+               f'--module=accumulator_machine={path}', *library_modules('zkc'),
                f'--asset=machine=relation-bundle-json={asset or FIXTURES / "bundle.json"}',
                f'accumulator_machine::{entry}', f'--output={package}', *flags]
     for module, file in [('air_bundle', 'air/bundle'), ('air_interaction', 'air/interaction'),

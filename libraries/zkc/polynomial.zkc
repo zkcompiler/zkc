@@ -12,3 +12,5 @@ pub fn evaluate<F: Field>(value: Polynomial<F>, point: F) -> F {
 pub fn boundary<F: Field>(value: Polynomial<F>) -> F {
   return kernel<F>("poly.univariate_boundary", value);
 }
+
+pub fn coefficients<F: Field>(value: Polynomial<F>) -> Vector<F> { return kernel<F>("poly.coefficients", value); }

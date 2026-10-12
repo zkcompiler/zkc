@@ -1,6 +1,7 @@
 format = "zkc.project/0"
 
 [modules]
+callbacks = "callbacks.zkc"
 "example" = "main.zkc"
 
 [dependencies]

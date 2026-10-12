@@ -1,12 +1,18 @@
-"""Explicit source-library dependencies for protocol test adapters."""
+"""Capture maintained library families in small protocol test adapters."""
 
 from pathlib import Path
+
+from project import project_inputs
 
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def finite_modules():
-    """Capture the finite library closure used by AIR and FRI source modules."""
-    names = ('accumulation', 'curve', 'finite', 'finite_domain', 'finite_math',
-             'indices', 'sequence', 'vector')
-    return [f'--module=zkc::{name}={ROOT}/libraries/zkc/{name}.zkc' for name in names]
+def library_modules(*families):
+    modules = {}
+    for family in families:
+        selected, assets = project_inputs(ROOT / 'libraries' / family / 'zkc.toml')
+        assert not assets, 'application assets belong to the test client'
+        for name, path in selected.items():
+            assert name not in modules or modules[name] == path
+            modules[name] = path
+    return [f'--module={name}={path}' for name, path in sorted(modules.items())]

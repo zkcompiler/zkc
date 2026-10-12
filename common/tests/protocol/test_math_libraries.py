@@ -7,7 +7,7 @@ from entry import Entry
 
 ROOT = Path(__file__).resolve().parents[3]
 MODULES = [f'--module=zkc::{name}={ROOT}/libraries/zkc/{name}.zkc'
-           for name in ('vector', 'matrix', 'boolean', 'polynomial', 'symbolic', 'field_array',
+           for name in ('multilinear', 'vector', 'matrix', 'boolean', 'polynomial', 'symbolic', 'field_array',
                         'accumulation', 'curve', 'finite', 'sequence')]
 
 
@@ -53,7 +53,7 @@ math fn symbolic(a:F,b:F,x:F) {
           zkc::symbolic::get<F,2,1>(table_two));
 }
 fn numerical(m:Matrix<F>,v:Vector<F>,a:F,x:F) {
-  let folded=zkc::vector::fold(v,x);
+  let folded=zkc::multilinear::fix_first(v,x);
   let repeated=zkc::vector::fill(a,2);
   let product=zkc::matrix::multiply(m,v);
   let transpose=zkc::matrix::transpose_multiply(m,v);

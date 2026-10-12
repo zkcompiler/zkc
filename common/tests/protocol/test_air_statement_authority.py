@@ -24,7 +24,7 @@ BUNDLE = ['zkc.relation-bundle/0', [['x0', 'koala-bear']], [], [[
 
 SOURCE = '''module air_stark_example;
 use air_stark::{Base, Extension, Statement, TableArgument};
-use air_polynomial::{Vector};
+use zkc::vector::{Vector};
 domain Scoped = bundle(asset statement_fixture);
 
 relation ScopedRelation(statement x0: Base, witness trace: Vector<Base>,

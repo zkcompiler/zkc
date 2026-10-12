@@ -1,4 +1,4 @@
-module zkc::computation;
+module callbacks;
 
 // Static user combinators. Captured data becomes explicit private helper inputs.
 pub math fn apply_math<A: Type + Copy + Drop, B: Type + Copy + Drop>(

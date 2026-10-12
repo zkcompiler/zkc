@@ -19,7 +19,7 @@ ClosedEntry example() {
       {{"example",
         read(root + "/examples/projects/scoped-computations/main.zkc"),
         "main.zkc"},
-       {"zkc::computation", read(root + "/libraries/zkc/computation.zkc"),
+       {"callbacks", read(root + "/examples/projects/scoped-computations/callbacks.zkc"),
         "scoped.zkc"},
        {"zkc::accumulation", read(root + "/libraries/zkc/accumulation.zkc"),
         "accumulation.zkc"},

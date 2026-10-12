@@ -15,15 +15,6 @@ pub fn hadamard<F: Field>(left: Vector<F>, right: Vector<F>) -> Vector<F> = prim
 pub fn scale<F: Field>(values: Vector<F>, scalar: F) -> Vector<F> = primitive("vector.scale");
 pub fn dot<F: Field>(left: Vector<F>, right: Vector<F>) -> F = primitive("vector.dot");
 pub fn fill<F: Field>(value: F, count: index) -> Vector<F> = primitive("vector.fill");
-math fn interpolate<F: Field>(low: F, high: F, r: F) -> F {
-  return low + (high - low) * r;
-}
-// Contiguous halves: fix the most significant Boolean coordinate.
-// Requires a positive even length, as does split.
-pub fn fold<F: Field>(values: Vector<F>, challenge: F) -> Vector<F> {
-  let halves = split(values);
-  return map interpolate(each halves.0, each halves.1, challenge);
-}
 pub fn has_length<F: Field, N: nat>(values: Vector<F>) -> bool {
   return length(values) == index<N>();
 }
@@ -60,8 +51,27 @@ pub fn reduce<I: Type + Copy + Drop, F: Field, R: Type>(
 // Bounds follow the selected total accessor; checked access can be rebound locally.
 pub indexing values[position] = at(values, position);
 
-// Restrict successive MSB-first Boolean coordinates, preserving any remaining
-// factor columns. Each fold checks its positive even input length.
-pub fn fix_prefix<F: Field>(values: Vector<F>, point: Vector<F>) -> Vector<F> {
-  return zkc::finite::fold(elements(point), values, fn(table, r) => fold(table, r));
+pub fn concat<F: Field>(left: Vector<F>, right: Vector<F>) -> Vector<F> {
+  return kernel<F>("vector.concat", left, right);
 }
+
+pub fn slice<F: Field>(values: Vector<F>, start: index, count: index) -> Vector<F> {
+  return kernel<F>("vector.slice", values, start, count);
+}
+
+math fn add_product<F: Field>(current: F, term: F, weight: F) -> F {
+  return current + term * weight;
+}
+
+pub fn accumulate<F: Field>(current: Vector<F>, term: Vector<F>, weight: F) -> Vector<F> {
+  return map add_product<F>(each current, each term, weight);
+}
+
+pub fn transpose<F: Field>(values: Vector<F>, rows: index, columns: index) -> Vector<F> {
+  return kernel<F>("vector.transpose", values, rows, columns);
+}
+
+pub fn subtract<F: Field>(a: Vector<F>, b: Vector<F>) -> Vector<F> = primitive("vector.sub");
+
+pub fn inverse<F: Field>(values: Vector<F>) -> Vector<F> = primitive("vector.inverse");
+pub fn geometric<F: Field>(base: F, count: index) -> Vector<F> = primitive("vector.geometric");

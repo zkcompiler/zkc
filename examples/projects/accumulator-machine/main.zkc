@@ -1,6 +1,6 @@
 module accumulator_machine;
 use air_stark::{Base, Extension};
-use air_polynomial::{Vector};
+use zkc::vector::{Vector};
 use air_bundle::{Statement, TableStatement, ThreeTableArgument};
 use air_interaction::{Reduction, LogUp, GrandProduct};
 domain Machine = bundle(asset machine);

@@ -1,12 +1,22 @@
 module air_stark;
+use zkc::boolean as boolean;
+use zkc::indices as indices;
+use zkc::vector as vector;
+use zkc::oracle as oracle;
 pub domain Base = field("koala-bear");
 pub domain Extension = field("koala-bear.ext8-binomial3");
 domain TraceRows = commitment("rows.merkle-keccak256.koala-bear/0");
 domain ExtensionRows = commitment("rows.merkle-keccak256.koala-bear.ext8-binomial3/0");
-use air_polynomial::{Vector, length, natural, yes, both, not, less,
-  point, transpose, extend_columns, split_quotient, disjoint_coset, outside_domains};
+use zkc::vector::{Vector, length, transpose};
+use zkc::boolean::{both};
+
+use zkc::indices::{less};
+use zkc::coset::{point, extend_columns, disjoint_coset, outside_domains};
+use air_polynomial::{split_quotient};
 use air_table::{shape, claims, quotient_values, opening_claims, identity, deep_word, deep_value};
-use fri::{Positions, LowDegree};
+use fri::{LowDegree};
+
+use zkc::oracle::{commit, open};
 
 // The statement is derived locally at each role from the caller's public
 // inputs. Keeping the two arguments explicit supports ordinary local packing
@@ -17,37 +27,20 @@ pub struct Statement {
   pub public_data: Vector<Base>,
   pub shift: Base
 }
-type Root<C: Commitment> = builtin("commitment", C);
-type Opening<C: Commitment> = builtin("opening_state", C);
-type Path<C: Commitment> = builtin("proof", C);
-fn commit<C: Commitment>(rows: Vector<C::ValueField>, width: index)
-    -> (Root<C>, Opening<C>) { return kernel<C>("oracle.commit", rows, width); }
-fn open<C: Commitment>(state: Opening<C>, position: index)
-    -> (Vector<C::ValueField>, Path<C>) { return kernel<C>("oracle.open", state, position); }
-fn authenticate<C: Commitment>(root: Root<C>, width: index, size: index,
-    position: index, row: Vector<C::ValueField>, path: Path<C>) -> bool {
-  return kernel<C>("oracle.check", root, width, size, position, row, path);
-}
 fn embed_vector(values: Vector<Base>) -> Vector<Extension> {
   return kernel<Extension>("vector.embed", values);
 }
 fn embed_scalar(value: Base) -> Extension { return kernel<Extension>("field.embed", value); }
 fn same_index(left: index, right: index) -> bool { return left == right; }
-fn at_position(values: Positions, position: index) -> index {
-  return kernel("indices.at", values, position);
-}
-fn at_value<F: Field>(values: Vector<F>, position: index) -> F {
-  return kernel<F>("vector.get", values, position);
-}
 fn profile<F: Field, Table: nat, B: Bundle, LogHeight: nat, LogSize: nat,
     Queries: nat, Attempts: nat>(configuration: Vector<F>, public_columns: Vector<F>,
     public_data: Vector<F>, shift: F, rounds: index, queries: index, attempts: index) -> bool {
-  let height = natural<pow2(LogHeight)>();
-  let size = natural<pow2(LogSize)>();
+  let height = index<pow2(LogHeight)>();
+  let size = index<pow2(LogSize)>();
   let facts = shape<F,Table,B>(height);
   return both(both(rounds == index<LogHeight>(),
       both(queries == index<Queries>(), attempts == index<Attempts>())),
-    both(both(not(facts.witness == 0), not(less(size, facts.chunks * height))),
+    both(both(boolean::negate(facts.witness == 0), boolean::negate(less(size, facts.chunks * height))),
       both(disjoint_coset(height, size, shift),
         both(length(configuration) == facts.configuration * height,
           both(length(public_columns) == facts.public_columns * height,
@@ -60,7 +53,7 @@ fn profile<F: Field, Table: nat, B: Bundle, LogHeight: nat, LogSize: nat,
 pub fn consider<F: Field>(height: index, size: index, shift: F,
     chosen: F, found: bool, candidate: F) -> (F, bool) {
   return if found { (chosen, true) }
-    else { if both(not(candidate == 0), outside_domains(height, size, shift, candidate)) {
+    else { if both(boolean::negate(candidate == 0), outside_domains(height, size, shift, candidate)) {
       (candidate, true)
     } else { (chosen, false) } };
 }
@@ -71,13 +64,13 @@ pub protocol Outside<F: Field, LogHeight: nat, LogSize: nat, Attempts: nat>
     roles(P,V)(shiftP: F @P, shiftV: F @V, attempt_count: index @(P,V), coins: Random<F> @V)
     -> (pointP: F @P, pointV: F @V) where 1 <= Attempts,
       zkc::algebra::TwoAdicField(F) {
-  let expected @V = natural<Attempts>();
+  let expected @V = index<Attempts>();
   let count_ok @V = same_index(attempt_count, expected);
   require @V count_ok;
-  let heightP @P = natural<pow2(LogHeight)>();
-  let heightV @V = natural<pow2(LogHeight)>();
-  let sizeP @P = natural<pow2(LogSize)>();
-  let sizeV @V = natural<pow2(LogSize)>();
+  let heightP @P = index<pow2(LogHeight)>();
+  let heightV @V = index<pow2(LogHeight)>();
+  let sizeP @P = index<pow2(LogSize)>();
+  let sizeV @V = index<pow2(LogSize)>();
   let mut chosenP: F @P = 0;
   let mut chosenV: F @V = 0;
   let mut foundP: bool @P = false;
@@ -116,10 +109,10 @@ pub protocol TableArgument<Table: nat, B: Bundle,
     statementP.configuration, statementP.public_columns, statementP.public_data,
     statementP.shift, round_count, query_count, attempt_count);
   require @P validP;
-  let heightP @P = natural<pow2(LogHeight)>();
-  let heightV @V = natural<pow2(LogHeight)>();
-  let sizeP @P = natural<pow2(LogSize)>();
-  let sizeV @V = natural<pow2(LogSize)>();
+  let heightP @P = index<pow2(LogHeight)>();
+  let heightV @V = index<pow2(LogHeight)>();
+  let sizeP @P = index<pow2(LogSize)>();
+  let sizeV @V = index<pow2(LogSize)>();
   let factsP @P = shape<Base,Table,B>(heightP);
   let factsV @V = shape<Base,Table,B>(heightV);
   let trace_columns @P = transpose(trace, heightP, factsP.witness);
@@ -170,25 +163,25 @@ pub protocol TableArgument<Table: nat, B: Bundle,
     LowDegree<ExtensionRows,LogSize,0,LogHeight,Queries>(reduced, shiftP, shiftV, round_count, query_count, coins);
   require @V fri_ok;
   for query in 0..query_count roles(P,V) max Queries {
-    let indexP @P = at_position(positionsP, query);
-    let indexV @V = at_position(positionsV, query);
+    let indexP @P = indices::get(positionsP, query);
+    let indexV @V = indices::get(positionsV, query);
     let trace_open @P = open<TraceRows>(trace_tree.1, indexP);
     let quotient_open @P = open<ExtensionRows>(quotient_tree.1, indexP);
     let trace_row = send P -> V(trace_open.0);
     let trace_path = send P -> V(trace_open.1);
     let quotient_row = send P -> V(quotient_open.0);
     let quotient_path = send P -> V(quotient_open.1);
-    let trace_ok @V = authenticate<TraceRows>(trace_root, factsV.witness, sizeV, indexV, trace_row, trace_path);
+    let trace_ok @V = oracle::check<TraceRows>(trace_root, factsV.witness, sizeV, indexV, trace_row, trace_path);
     require @V trace_ok;
-    let quotient_ok @V = authenticate<ExtensionRows>(quotient_root, factsV.chunks, sizeV, indexV, quotient_row, quotient_path);
+    let quotient_ok @V = oracle::check<ExtensionRows>(quotient_root, factsV.chunks, sizeV, indexV, quotient_row, quotient_path);
     require @V quotient_ok;
     let x @V = point(shiftV, sizeV, indexV);
     let extended_row @V = embed_vector(trace_row);
     let expected @V = deep_value<Extension,Table,B>(extended_row, quotient_row, opened,
       opened_quotient, heightV, x, zetaV, rhoV, adjustmentV);
-    let actual @V = at_value(valuesV, query);
+    let actual @V = vector::get(valuesV, query);
     require @V expected == actual;
   }
-  let accepted @V = yes();
+  let accepted @V = true;
   return (accepted = accepted);
 }

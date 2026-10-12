@@ -1,14 +1,13 @@
 module sumcheck;
+pub module expression;
 
-use zkc::vector::{Vector, split, sum, fold, length, empty, append, fix_prefix};
+use zkc::vector::{Vector, split, sum, length, empty, append};
 use zkc::boolean::{both};
 
 // An evaluation obligation, not an acceptance certificate. The caller binds
 // the polynomial and its dimension; coordinates are MSB-first.
-pub struct Evaluation<F: Field> {
-  pub point: Vector<F>,
-  pub value: F
-}
+pub use zkc::multilinear::{Evaluation};
+use zkc::multilinear::{fix_first, fix_prefix};
 
 fn sums<F: Field>(values: Vector<F>) {
   let halves = split(values);
@@ -33,7 +32,7 @@ pub protocol Reduce<F: Field, Max: nat> roles(P,V)
     require current == actual.0 + actual.1;
     #[site(challenge)] let cv = challenges.draw();
     #[site(delivery)] let cp = send V -> P(cv);
-    tableP = fold(tableP, cp);
+    tableP = fix_first(tableP, cp);
     pointP = append(pointP, cp);
     pointV = append(pointV, cv);
     current = (1 - cv) * actual.0 + cv * actual.1;

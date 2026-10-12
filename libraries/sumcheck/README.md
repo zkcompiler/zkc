@@ -9,6 +9,7 @@ They have different round messages and are not interchangeable encodings.
 | `Reduce` | Check each received round polynomial, draw and deliver a challenge, and return a remaining evaluation obligation |
 | `Evaluation<F>` | Verifier's MSB-first point and expected value; ordinary data, not a certificate |
 | `Sumcheck` | Complete public-table composition, including terminal evaluation |
+| `sumcheck::expression::check`, `check_factors` | Check public factor tables or authenticated factor values against the captured expression |
 | `sumcheck::check` | Check a multilinear evaluation against the caller's table, including its final dimension |
 
 `Reduce` gives P its delivered point and residual table, and V its independently
@@ -22,7 +23,9 @@ round fixes one coordinate of every ordered factor table; its coefficient count
 is `A::Degree + 1`, with `A::Inputs` factors and exactly one output. Expression
 composition must check `A(f1(point), ..., fk(point))`, not an unrelated single
 polynomial evaluation. P's residual preserves remaining entries/factor values.
-A caller that stops before the full dimension still owes that residual claim.
+After a partial prefix, the obligation is the sum of the remaining Boolean
+rows, rather than a full-dimensional evaluation. The caller supplies the
+remaining reduction or check.
 
 With zero rounds the point is empty and the initial claim remains. The public
 multilinear composition accepts only a one-entry matching table; the expression

@@ -1463,7 +1463,7 @@ present, including an empty origin list. This is the sole version-0 schema;
 there is no legacy suffix or inspection alias. Enclosing `requirements` remain
 obligations of the enclosing signature. `input_order` retains `data`, `service`,
 `domain` and `scoped` categories. This diagnostic view does not add runtime
-interface fields. The [computation library](../../../libraries/zkc/computation.zkc)
+interface fields. The [callback example](../../../examples/projects/scoped-computations/callbacks.zkc)
 and [module example](../../../examples/projects/scoped-computations/README.md)
 exercise user-defined apply/forward combinators. General finite domains, named consumers and mathematical binders use this same
 foundation.

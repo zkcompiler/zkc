@@ -65,4 +65,23 @@ def test_reduction_retains_actual_point_and_prover_residual(toolchain, journal, 
     result = json.loads(outputs.read_text())['roles']
     assert result['P']['point'] == result['V']['evaluation']['point']
     assert len(result['P']['point']) == 2
+    # Independent MSB-first interpolation, without using the library fold.
+    modulus = 52435875175126190479447740508185965837690552500527637822603658699938581184513
+    r0, r1 = map(int, result['V']['evaluation']['point'])
+    expected = (1 * (1-r0) * (1-r1) + 2 * (1-r0) * r1
+                + 3 * r0 * (1-r1) + 4 * r0 * r1) % modulus
+    assert int(result['V']['evaluation']['value']) == expected
     assert result['P']['residual'] == [result['V']['evaluation']['value']]
+
+
+def test_proof_binds_public_tables_even_with_unchanged_sum(toolchain, journal, directory):
+    package, pin = build(toolchain, journal, directory, 'composed-sumcheck', 'Proof', [])
+    public = read('composed-sumcheck', 'public')
+    request = input_files(journal, 'original', public=public)
+    proof = directory / 'proof.bin'
+    args = [f'--package={package}', f'--sha256={pin}']
+    journal.run([toolchain.runtime, '--json', 'prove', *args, *request, f'--output={proof}'])
+    public['left'] = list(reversed(public['left']))
+    changed = input_files(journal, 'changed', public=public)
+    journal.run([toolchain.runtime, '--json', 'verify', *args, *changed,
+                 f'--proof={proof}'], refuses='proof-header')

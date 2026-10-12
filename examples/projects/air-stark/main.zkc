@@ -1,6 +1,6 @@
 module air_stark_example;
 use air_stark::{Base, Extension, Statement, TableArgument};
-use air_polynomial::{Vector};
+use zkc::vector::{Vector};
 domain Recurrence = bundle(asset recurrence);
 
 relation RecurrenceRelation(statement x0: Base, statement y0: Base,

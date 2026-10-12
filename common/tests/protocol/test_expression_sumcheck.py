@@ -1,6 +1,7 @@
 """A generic Sumcheck library uses closed ring assets through ordinary Entries."""
 
 from input_files import input_files
+from source_modules import library_modules
 import json
 from hashlib import sha256
 from pathlib import Path
@@ -26,11 +27,7 @@ def build(toolchain, journal, directory, entry, flags=(), arena=None):
     arena = arena or PROJECT / 'product.ring.json'
     package = directory / f'{entry}.zkpkg'
     modules = ([f'--project={PROJECT}/zkc.toml'] if arena == PROJECT / 'product.ring.json' else [
-        f'--module=expression_sumcheck={ROOT}/libraries/sumcheck/expression.zkc',
-        *[f'--module=zkc::{name}={ROOT}/libraries/zkc/{name}.zkc'
-          for name in ('accumulation', 'curve', 'finite', 'sequence')],
-        f'--module=zkc::vector={ROOT}/libraries/zkc/vector.zkc',
-        f'--module=zkc::polynomial={ROOT}/libraries/zkc/polynomial.zkc',
+        *library_modules('sumcheck'),
         f'--module=example={PROJECT}/main.zkc', f'--asset=product=ring-json={arena}'])
     report = json.loads(journal.run([
         toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}', *modules,
@@ -184,3 +181,25 @@ def test_asset_sharing_command_refusals(toolchain, journal):
     journal.run([toolchain.compiler, 'asset-share'], refuses='asset-sharing-command')
     journal.run([toolchain.compiler, 'asset-share', 'unknown', '/not/opened'],
                 refuses='asset-sharing-kind')
+
+
+@pytest.mark.parametrize('table', [(1, 2, 3), (1, 2, 3, 4, 5, 6)])
+def test_factor_rows_cannot_be_truncated(toolchain, journal, directory, table):
+    package, pin = build(toolchain, journal, directory, 'Proof')
+    request = input_files(journal, 'malformed', public=values(table=table, claim=0))
+    journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}',
+                 f'--sha256={pin}', *request, f'--output={directory / "proof.bin"}'], refuses=True)
+
+
+@pytest.mark.parametrize('nodes,output,claim', [
+    ([['input', 0], ['mul', 0, 0], ['mul', 1, 1]], 2, 354),
+    ([['constant', 'koala-bear', '7']], 0, 28),
+])
+def test_expression_degree_is_independent_of_factor_count(toolchain, journal, directory, nodes, output, claim):
+    arena = write(directory, 'expression.ring.json', ['zkc.ring/0', ['koala-bear'], nodes, [output]])
+    package, pin = build(toolchain, journal, directory, 'Proof', arena=arena)
+    request = input_files(journal, 'expression', public=values(table=(1, 2, 3, 4), claim=claim))
+    proof = directory / 'proof.bin'
+    args = [f'--package={package}', f'--sha256={pin}', *request]
+    journal.run([toolchain.runtime, '--json', 'prove', *args, f'--output={proof}'])
+    assert journal.json([toolchain.runtime, '--json', 'verify', *args, f'--proof={proof}'])['status'] == 'accepted'

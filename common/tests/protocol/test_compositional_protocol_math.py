@@ -82,7 +82,7 @@ def polynomial_fold(coefficients, size, shift, beta):
 
 
 FRI_KERNEL_ADAPTER = '''module sample;
-use fri::{Vector};
+use zkc::vector::{Vector};
 domain F = field("koala-bear");
 fn fold_word(word: Vector<F>, shift: F, beta: F) -> Vector<F> {
   return kernel<F>("poly.even_odd_fold", word, shift, beta);

@@ -8,8 +8,8 @@ from entry import Entry
 from input_files import decimal_values, input_files
 
 ROOT = Path(__file__).resolve().parents[3]
-LIBRARY = (ROOT / 'libraries/zkc/computation.zkc').read_text().replace(
-    'module zkc::computation;', '')
+LIBRARY = (ROOT / 'examples/projects/scoped-computations/callbacks.zkc').read_text().replace(
+    'module callbacks;', '')
 PREFIX = '''module sample;
 domain F=field("koala-bear");
 type Vector<E:Field>=builtin("vector",E);

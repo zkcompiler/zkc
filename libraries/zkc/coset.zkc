@@ -1,0 +1,59 @@
+module zkc::coset;
+use zkc::boolean as boolean;
+use zkc::vector::{Vector, length, empty, concat, slice};
+use zkc::polynomial::{Polynomial, evaluate};
+use zkc::scalar::{power};
+use zkc::indices::{maximum};
+use zkc::boolean::{both};
+
+// Natural-order two-adic evaluations, with explicit shift and size.
+pub fn point<F: Field>(shift: F, size: index, position: index) -> F {
+  return kernel<F>("poly.domain_point", shift, size, position);
+}
+
+pub fn interpolate<F: Field>(values: Vector<F>, shift: F) -> Polynomial<F> {
+  return kernel<F>("poly.coset_interpolate", values, shift);
+}
+
+pub fn evaluate_coset<F: Field>(polynomial: Polynomial<F>, shift: F, size: index) -> Vector<F> {
+  return kernel<F>("poly.coset_evaluate", polynomial, shift, size);
+}
+
+pub fn extend_columns<F: Field>(columns: Vector<F>, count: index,
+    height: index, shift: F, size: index) -> Vector<F> {
+  require length(columns) == height * count;
+  let mut extended = empty<F>();
+  for column in 0..count {
+    let evaluations = slice(columns, column * height, height);
+    let polynomial = interpolate(evaluations, 1);
+    extended = concat(extended, evaluate_coset(polynomial, shift, size));
+  }
+  return extended;
+}
+
+pub fn column_at<F: Field>(columns: Vector<F>, column: index, size: index,
+    position: F, shift: F) -> F {
+  return evaluate(interpolate(slice(columns, column * size, size), shift), position);
+}
+
+pub fn disjoint_coset<F: Field>(height: index, size: index, shift: F) -> bool {
+  // Two two-adic cosets intersect exactly when shift^max(height,size) = 1.
+  let valid_root = kernel<F>("poly.domain_root", size);
+  let valid_trace_root = kernel<F>("poly.domain_root", height);
+  return both(both(boolean::negate(shift == 0), boolean::negate(power(shift, maximum(height, size)) == 1)),
+    both(boolean::negate(valid_root == 0), boolean::negate(valid_trace_root == 0)));
+}
+
+pub fn outside_domains<F: Field>(height: index, size: index, shift: F, x: F) -> bool {
+  return both(boolean::negate(power(x, height) == 1), boolean::negate(power(x, size) == power(shift, size)));
+}
+
+// Pair natural-order antipodal evaluations. The resulting word is on the
+// squared coset, with half the input length.
+pub fn fold<F: Field>(values: Vector<F>, shift: F, beta: F) -> Vector<F>
+    { return kernel<F>("poly.even_odd_fold", values, shift, beta); }
+
+pub fn points<F: Field>(shift: F, size: index) -> Vector<F> = primitive("poly.domain_points");
+pub fn root<F: Field>(size: index) -> F = primitive("poly.domain_root");
+pub fn opening_quotient<F: Field>(values: Vector<F>, shift: F, at: F, value: F)
+    -> Vector<F> = primitive("poly.opening_quotient");

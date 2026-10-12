@@ -1,6 +1,6 @@
 """Source AIR polynomial helpers against independent extension arithmetic."""
 
-from source_modules import finite_modules
+from source_modules import library_modules
 from input_files import input_files
 import json
 from pathlib import Path
@@ -13,7 +13,9 @@ ROOT = Path(__file__).resolve().parents[3]
 LIBRARY = ROOT / 'libraries/air/polynomial.zkc'
 SHIFT = [3, 1, 0, 0, 0, 0, 0, 0]
 CLIENT = '''module example;
-use air_polynomial::{Vector, vanishing_values, vanishing, extend_columns, transpose};
+use zkc::vector::{Vector, transpose};
+use air_polynomial::{vanishing_values, vanishing};
+use zkc::coset::{extend_columns};
 domain E = field("koala-bear.ext8-binomial3");
 protocol Run roles(P)(height:index@P, begin:index@P, end:index@P, shift:E@P,
  size:index@P, x:E@P, values:Vector<E>@P, width:index@P)
@@ -53,7 +55,8 @@ def zero_polynomial_at(roots, x):
 
 
 SCOPE_CLIENT = '''module example;
-use air_polynomial::{Vector, vanishing_values, vanishing, empty, append, length, get};
+use zkc::vector::{Vector, empty, append, length, get};
+use air_polynomial::{vanishing_values, vanishing};
 domain E = field("koala-bear.ext8-binomial3");
 protocol Run roles(P)(height:index@P, begin:index@P, end:index@P, shift:E@P,
  size:index@P, samples:Vector<E>@P) -> (scope:Vector<E>@P, sampled:Vector<E>@P) {
@@ -78,7 +81,7 @@ def test_scope_polynomials_on_intersecting_cosets(toolchain, journal, directory,
     source.write_text(SCOPE_CLIENT)
     package = directory / 'scope.zkpkg'
     report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                           f'--module=example={source}', f'--module=air_polynomial={LIBRARY}', *finite_modules(),
+                           f'--module=example={source}', f'--module=air_polynomial={LIBRARY}', *library_modules('zkc'),
                            'example::Demo', f'--output={package}', *flags])
     height = 8
     subgroup = points(height)
@@ -105,7 +108,7 @@ def test_scope_polynomials_and_column_extensions(toolchain, journal, directory, 
     source.write_text(CLIENT)
     package = directory / 'math.zkpkg'
     report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                           f'--module=example={source}', f'--module=air_polynomial={LIBRARY}', *finite_modules(),
+                           f'--module=example={source}', f'--module=air_polynomial={LIBRARY}', *library_modules('zkc'),
                            'example::Demo', f'--output={package}', *flags])
     pin = report['package_sha256']
     for height, size in [(8, 32), (16, 64)]:

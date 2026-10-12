@@ -449,7 +449,9 @@ run Demo = Count<Recurrence>;
     auto compile = [&](AssetBuffer asset) -> Expected<ClosedEntry> {
       auto captured = capture(
           {{"example", client, "main.zkc"},
-           {"expression_sumcheck", library, "library.zkc"},
+           {"sumcheck::expression", library, "library.zkc"},
+           {"sumcheck", file(ZKC_MATH_LIBRARIES "/../sumcheck/lib.zkc"), "sumcheck.zkc"},
+           {"zkc::boolean", file(ZKC_MATH_LIBRARIES "/boolean.zkc"), "boolean.zkc"},
            {"zkc::accumulation", file(ZKC_MATH_LIBRARIES "/accumulation.zkc"),
             "accumulation.zkc"},
            {"zkc::curve", file(ZKC_MATH_LIBRARIES "/curve.zkc"), "curve.zkc"},
@@ -457,6 +459,8 @@ run Demo = Count<Recurrence>;
             "finite.zkc"},
            {"zkc::sequence", file(ZKC_MATH_LIBRARIES "/sequence.zkc"),
             "sequence.zkc"},
+           {"zkc::multilinear", file(ZKC_MATH_LIBRARIES "/multilinear.zkc"),
+            "multilinear.zkc"},
            {"zkc::vector", file(ZKC_MATH_LIBRARIES "/vector.zkc"),
             "vector.zkc"},
            {"zkc::polynomial", file(ZKC_MATH_LIBRARIES "/polynomial.zkc"),

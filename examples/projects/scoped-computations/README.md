@@ -22,7 +22,7 @@ with a stopping computation causes the `effects()` contract to fail. A defined
 function can omit its output clause and let the compiler infer it.
 
 This [Entry](main.zkc) uses ordinary generic user combinators from
-[`zkc::computation`](../../../libraries/zkc/computation.zkc). A module forwards a nested
+[`callbacks`](../../../examples/projects/scoped-computations/callbacks.zkc). A module forwards a nested
 Local callback that retains lexical access to its `adjust` member. The
 protocol callback captures two record projections and an index; the checked
 vector read executes inside the callback. Its P-only captures select P as the

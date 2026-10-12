@@ -7,14 +7,14 @@ import pytest
 from entry import Entry
 from input_files import decimal_values
 from octic_reference import P, ZERO, ONE, add, mul, power
-from source_modules import finite_modules
+from source_modules import library_modules
 import test_air_stark as stark
 import test_fri as fri
 import test_machine_stark as machine
 from test_total_callback_selection import compile_entry as compile_counted_entry
 
 ROOT = Path(__file__).resolve().parents[3]
-SHARED = finite_modules()
+SHARED = library_modules('zkc')
 AIR = [f'--module=air_{name}={ROOT}/libraries/air/{name}.zkc'
        for name in ('polynomial', 'table', 'interaction')]
 FLAGS = [(), ('--no-simplify',), ('--no-finite-bulk',),
@@ -22,7 +22,8 @@ FLAGS = [(), ('--no-simplify',), ('--no-finite-bulk',),
 MODES = ['default', 'no-simplify', 'ordered', 'ordered-no-simplify']
 
 ARITHMETIC = '''module sample;
-use air_polynomial::{Vector, recombine};
+use zkc::vector::{Vector};
+use air_polynomial::{recombine};
 domain F = field("koala-bear.ext8-binomial3");
 protocol Inspect roles(P)(claims: Vector<F> @P, height: index @P, x: F @P)
     -> (value: F @P) {
@@ -49,7 +50,8 @@ def test_air_recombination_matches_independent_powers(
 
 
 TERMINAL = '''module sample;
-use fri::{Vector, terminal};
+use zkc::vector::{Vector};
+use fri::{terminal};
 domain F = field("koala-bear.ext8-binomial3");
 protocol Inspect roles(P)(coefficients: Vector<F> @P, shift: F @P,
     size: index @P, position: index @P) -> (value: F @P) {
@@ -84,16 +86,19 @@ def test_fri_terminal_coefficients_and_domain_admission(toolchain, journal, dire
                   refuses='entry-run-incomplete')
 
 
-REDUCTION = '''module sample;
-use air_polynomial::{Vector, index_list, index_push};
+REDUCTION = '''use zkc::indices as indices;
+module sample;
+use zkc::vector::{Vector};
+
+
 use air_interaction::{Reduction, LogUp, GrandProduct, interactions};
 domain F = field("koala-bear");
 fn build<R: Reduction<F>>(values: Vector<F>, rows: index,
     gamma: F, delta: F, active: bool) -> (Vector<F>, Vector<F>) {
-  let none = index_list();
-  let channel = if active { index_push(none, 0) } else { none };
-  let arity = if active { index_push(none, 2) } else { none };
-  let degrees = if active { index_push(none, 1) } else { none };
+  let none = indices::empty();
+  let channel = if active { indices::append(none, 0) } else { none };
+  let arity = if active { indices::append(none, 2) } else { none };
+  let degrees = if active { indices::append(none, 1) } else { none };
   let records = interactions(1, channel, channel, arity, degrees, degrees);
   let challenges = kernel<F>("vector.append",
     kernel<F>("vector.append", kernel<F>("vector.empty"), gamma), delta);

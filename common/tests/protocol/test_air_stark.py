@@ -4,7 +4,7 @@ The AIR fixture comes from direct upstream execution. Tests exercise the full
 proof path and adversarial obligations, without asserting a soundness bound.
 """
 
-from source_modules import finite_modules
+from source_modules import library_modules
 from input_files import input_files
 import json
 import re
@@ -71,7 +71,7 @@ def compile_entry(toolchain, journal, directory, *, log_size=5, queries=8,
                f'--module=air_stark={stark}',
                f'--module=air_table={table}',
                f'--module=air_polynomial={ROOT}/libraries/air/polynomial.zkc',
-               f'--module=fri={ROOT}/libraries/fri/lib.zkc', *finite_modules(),
+               f'--module=fri={ROOT}/libraries/fri/lib.zkc', *library_modules('zkc'),
                f'--asset=recurrence=relation-bundle-json={FIXTURE}/bundle.json',
                f'air_stark_example::{entry}', f'--output={package}', *flags]
     report = journal.json(command)
@@ -206,7 +206,7 @@ def test_stark_transcript_orders_commitments_claims_and_queries(toolchain, journ
         '--entry=air_stark_example::Proof', f'--module=air_stark_example={EXAMPLE}',
         f'--module=air_stark={STARK}', f'--module=air_table={TABLE}',
         f'--module=air_polynomial={ROOT}/libraries/air/polynomial.zkc',
-        f'--module=fri={ROOT}/libraries/fri/lib.zkc', *finite_modules(),
+        f'--module=fri={ROOT}/libraries/fri/lib.zkc', *library_modules('zkc'),
         f'--asset=recurrence=relation-bundle-json={FIXTURE}/bundle.json'])
     descriptor = bundle[2]
     assert descriptor[0] == 'zkc.native-proof-descriptor/0'
@@ -281,7 +281,7 @@ def test_stark_rejects_consistent_dishonest_prover_words(toolchain, journal, dir
         '--entry=air_stark_example::Proof', f'--module=air_stark_example={directory}/main.zkc',
         f'--module=air_stark={library}', f'--module=air_table={TABLE}',
         f'--module=air_polynomial={ROOT}/libraries/air/polynomial.zkc',
-        f'--module=fri={ROOT}/libraries/fri/lib.zkc', *finite_modules(),
+        f'--module=fri={ROOT}/libraries/fri/lib.zkc', *library_modules('zkc'),
         f'--asset=recurrence=relation-bundle-json={FIXTURE}/bundle.json'])
     sites = re.findall(r'"protocol\.guard"\(%\d+(?:#\d+)?\) <\{owner = "(\w+)", site = "(s\d+)"\}>', emitted)
     assert [owner for owner, _ in sites[:7]] == [
@@ -302,7 +302,7 @@ def test_stark_rejects_consistent_dishonest_prover_words(toolchain, journal, dir
 
 SAMPLER = '''module air_stark_example;
 use air_stark::{Extension, consider, finish};
-use air_polynomial::{Vector};
+use zkc::vector::{Vector};
 fn choose(values: Vector<Extension>, shift: Extension) -> Extension {
   let mut chosen: Extension = 0;
   let mut found = false;
@@ -357,7 +357,9 @@ def test_outside_sampler_excludes_domains_selects_first_and_exhausts(toolchain, 
 
 
 POLYNOMIAL_VIEW = '''module air_stark_example;
-use air_polynomial::{Vector, empty, extend_columns, split_quotient};
+use zkc::vector::{Vector, empty};
+use zkc::coset::{extend_columns};
+use air_polynomial::{split_quotient};
 use air_table::{quotient_values, claims, opening_claims, identity, deep_word};
 domain E=field("koala-bear.ext8-binomial3");
 domain B=bundle(asset recurrence);

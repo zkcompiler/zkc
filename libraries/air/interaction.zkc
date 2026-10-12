@@ -1,9 +1,15 @@
 module air_interaction;
+use zkc::vector as vector;
+use zkc::indices as indices;
 use zkc::vector as vec;
 use zkc::finite_math as total;
-use air_polynomial::{Vector, Indices, length, empty, append, concat, get, slice, fill,
-  multiply, accumulate, inverse, less, both, maximum,
-  index_list, index_push, index_get, index_length};
+use zkc::vector::{Vector, length, empty, append, concat, get, slice, fill, accumulate};
+
+use zkc::indices::{Indices};
+
+use zkc::scalar::{inverse};
+use zkc::indices::{less, maximum};
+use zkc::boolean::{both};
 
 // The multiset interactions of one present table, in declaration order. The
 // caller admits only global, all-row, bound-1 multiset records. A record row
@@ -24,40 +30,40 @@ pub struct Interactions {
 
 pub fn interactions(channels: index, channel: Indices, side: Indices, arity: Indices,
     tuple_degree: Indices, count_degree: Indices) -> Interactions {
-  let count = index_length(channel);
-  require both(both(index_length(side) == count, index_length(arity) == count),
-    both(index_length(tuple_degree) == count, index_length(count_degree) == count));
-  let mut offset = index_list();
+  let count = indices::length(channel);
+  require both(both(indices::length(side) == count, indices::length(arity) == count),
+    both(indices::length(tuple_degree) == count, indices::length(count_degree) == count));
+  let mut offset = indices::empty();
   let mut width: index = 0;
   for interaction in 0..count {
-    require both(less(index_get(channel, interaction), channels),
-      less(index_get(side, interaction), 2));
-    offset = index_push(offset, width);
-    width = width + index_get(arity, interaction) + 1;
+    require both(less(indices::get(channel, interaction), channels),
+      less(indices::get(side, interaction), 2));
+    offset = indices::append(offset, width);
+    width = width + indices::get(arity, interaction) + 1;
   }
   return Interactions { channels, count, width, channel, side, arity, offset,
     tuple_degree, count_degree };
 }
 pub fn no_interactions(channels: index) -> Interactions {
-  return interactions(channels, index_list(), index_list(), index_list(), index_list(),
-    index_list());
+  return interactions(channels, indices::empty(), indices::empty(), indices::empty(), indices::empty(),
+    indices::empty());
 }
 
 pub fn coordinate<F: Field>(values: Vector<F>, records: Interactions, rows: index,
     interaction: index, position: index) -> Vector<F> {
-  let column = index_get(records.offset, interaction) + position;
+  let column = indices::get(records.offset, interaction) + position;
   return slice(values, column * rows, rows);
 }
 pub fn multiplicity<F: Field>(values: Vector<F>, records: Interactions, rows: index,
     interaction: index) -> Vector<F> {
-  return coordinate(values, records, rows, interaction, index_get(records.arity, interaction));
+  return coordinate(values, records, rows, interaction, indices::get(records.arity, interaction));
 }
 // fp(t) = t_0 + delta*t_1 + ... + delta^(k-1)*t_(k-1), row by row.
 pub fn fingerprint<F: Field>(values: Vector<F>, records: Interactions, rows: index,
     interaction: index, delta: F) -> Vector<F> {
   let mut result = fill<F>(0, rows);
   let mut weight: F = 1;
-  for position in 0..index_get(records.arity, interaction) {
+  for position in 0..indices::get(records.arity, interaction) {
     result = accumulate(result, coordinate(values, records, rows, interaction, position), weight);
     weight = weight * delta;
   }
@@ -151,13 +157,13 @@ pub interface Reduction<F: Field> {
 
 // Channels used by a table's records, in increasing order.
 fn used_channels(records: Interactions) -> Indices {
-  let mut result = index_list();
+  let mut result = indices::empty();
   for channel in 0..records.channels {
     let mut found = false;
     for interaction in 0..records.count {
-      found = if index_get(records.channel, interaction) == channel { true } else { found };
+      found = if indices::get(records.channel, interaction) == channel { true } else { found };
     }
-    if found { result = index_push(result, channel); }
+    if found { result = indices::append(result, channel); }
   }
   return result;
 }
@@ -169,10 +175,10 @@ fn channel_term<F: Field>(records: Interactions, values: Vector<F>, inverses: Ve
   let zero: F = 0;
   let mut term = fill<F>(0, rows);
   for interaction in 0..records.count {
-    if index_get(records.channel, interaction) == channel {
-      let sign = if index_get(records.side, interaction) == 0 { one } else { zero - one };
+    if indices::get(records.channel, interaction) == channel {
+      let sign = if indices::get(records.side, interaction) == 0 { one } else { zero - one };
       let counts = multiplicity(values, records, rows, interaction);
-      term = accumulate(term, multiply(counts, slice(inverses, interaction * rows, rows)), sign);
+      term = accumulate(term, vector::hadamard(counts, slice(inverses, interaction * rows, rows)), sign);
     }
   }
   return term;
@@ -185,34 +191,34 @@ fn channel_term<F: Field>(records: Interactions, values: Vector<F>, inverses: Ve
 pub module LogUp<F: Field>: Reduction<F> {
   fn layout(records: Interactions, height: index) -> Layout {
     let sums = used_channels(records);
-    let mut opened = index_list();
-    let mut rotations = index_list();
-    let mut begin = index_list();
-    let mut end = index_list();
-    let mut degree = index_list();
+    let mut opened = indices::empty();
+    let mut rotations = indices::empty();
+    let mut begin = indices::empty();
+    let mut end = indices::empty();
+    let mut degree = indices::empty();
     for interaction in 0..records.count {
-      opened = index_push(opened, interaction);
-      rotations = index_push(rotations, 0);
-      begin = index_push(begin, 0);
-      end = index_push(end, height);
-      degree = index_push(degree, index_get(records.count_degree, interaction) + 1 +
-        index_get(records.tuple_degree, interaction));
+      opened = indices::append(opened, interaction);
+      rotations = indices::append(rotations, 0);
+      begin = indices::append(begin, 0);
+      end = indices::append(end, height);
+      degree = indices::append(degree, indices::get(records.count_degree, interaction) + 1 +
+        indices::get(records.tuple_degree, interaction));
     }
-    for sum in 0..index_length(sums) {
+    for sum in 0..indices::length(sums) {
       let column = records.count + sum;
-      opened = index_push(index_push(opened, column), column);
-      rotations = index_push(index_push(rotations, 0), height - 1);
+      opened = indices::append(indices::append(opened, column), column);
+      rotations = indices::append(indices::append(rotations, 0), height - 1);
       let mut term_degree: index = 1;
       for interaction in 0..records.count {
-        if index_get(records.channel, interaction) == index_get(sums, sum) {
-          term_degree = maximum(term_degree, index_get(records.count_degree, interaction) + 1);
+        if indices::get(records.channel, interaction) == indices::get(sums, sum) {
+          term_degree = maximum(term_degree, indices::get(records.count_degree, interaction) + 1);
         }
       }
-      begin = index_push(index_push(index_push(begin, 0), 1), height - 1);
-      end = index_push(index_push(index_push(end, 1), height), height);
-      degree = index_push(index_push(index_push(degree, term_degree), term_degree), 1);
+      begin = indices::append(indices::append(indices::append(begin, 0), 1), height - 1);
+      end = indices::append(indices::append(indices::append(end, 1), height), height);
+      degree = indices::append(indices::append(indices::append(degree, term_degree), term_degree), 1);
     }
-    return Layout { columns: records.count + index_length(sums), claims: index_length(sums),
+    return Layout { columns: records.count + indices::length(sums), claims: indices::length(sums),
       opened, rotations, begin, end, degree };
   }
   fn build(records: Interactions, values: Vector<F>, height: index,
@@ -220,7 +226,7 @@ pub module LogUp<F: Field>: Reduction<F> {
     require shaped(records, values, height, challenges);
     let mut denominators = empty<F>();
     for interaction in 0..records.count {
-      let channel = index_get(records.channel, interaction);
+      let channel = indices::get(records.channel, interaction);
       let counts = multiplicity(values, records, height, interaction);
       let fingerprints = fingerprint(values, records, height, interaction,
         compression(challenges, channel));
@@ -235,12 +241,12 @@ pub module LogUp<F: Field>: Reduction<F> {
     let mut columns = empty<F>();
     for interaction in 0..records.count {
       let counts = multiplicity(values, records, height, interaction);
-      columns = concat(columns, multiply(counts, slice(all, interaction * height, height)));
+      columns = concat(columns, vector::hadamard(counts, slice(all, interaction * height, height)));
     }
     let sums = used_channels(records);
     let mut claims = empty<F>();
-    for sum in 0..index_length(sums) {
-      let term = channel_term(records, values, columns, height, index_get(sums, sum));
+    for sum in 0..indices::length(sums) {
+      let term = channel_term(records, values, columns, height, indices::get(sums, sum));
       let running = kernel<F>("vector.prefix_sum", term);
       columns = concat(columns, running);
       claims = append(claims, get(running, height - 1));
@@ -251,11 +257,11 @@ pub module LogUp<F: Field>: Reduction<F> {
       rows: index, challenges: Vector<F>, claims: Vector<F>) -> Vector<F> {
     let sums = used_channels(records);
     require shaped(records, values, rows, challenges);
-    require both(length(openings) == (records.count + 2 * index_length(sums)) * rows,
-      length(claims) == index_length(sums));
+    require both(length(openings) == (records.count + 2 * indices::length(sums)) * rows,
+      length(claims) == indices::length(sums));
     let mut result = empty<F>();
     for interaction in 0..records.count {
-      let channel = index_get(records.channel, interaction);
+      let channel = indices::get(records.channel, interaction);
       let counts = multiplicity(values, records, rows, interaction);
       let fingerprints = fingerprint(values, records, rows, interaction,
         compression(challenges, channel));
@@ -264,8 +270,8 @@ pub module LogUp<F: Field>: Reduction<F> {
       result = concat(result,
         map reciprocal_residual<F>(each counts, each inverses, gamma, each fingerprints));
     }
-    for sum in 0..index_length(sums) {
-      let term = channel_term(records, values, openings, rows, index_get(sums, sum));
+    for sum in 0..indices::length(sums) {
+      let term = channel_term(records, values, openings, rows, indices::get(sums, sum));
       let current = slice(openings, (records.count + 2 * sum) * rows, rows);
       let previous = slice(openings, (records.count + 2 * sum + 1) * rows, rows);
       let claim = get(claims, sum);
@@ -279,12 +285,12 @@ pub module LogUp<F: Field>: Reduction<F> {
   fn start(channels: index) -> Vector<F> { return fill<F>(0, channels); }
   fn fold(records: Interactions, claims: Vector<F>, accumulator: Vector<F>) -> Vector<F> {
     let sums = used_channels(records);
-    require both(length(claims) == index_length(sums), length(accumulator) == records.channels);
+    require both(length(claims) == indices::length(sums), length(accumulator) == records.channels);
     let mut result = empty<F>();
     for channel in 0..records.channels {
       let mut value = get(accumulator, channel);
-      for sum in 0..index_length(sums) {
-        if index_get(sums, sum) == channel { value = value + get(claims, sum); }
+      for sum in 0..indices::length(sums) {
+        if indices::get(sums, sum) == channel { value = value + get(claims, sum); }
       }
       result = append(result, value);
     }
@@ -305,14 +311,14 @@ pub module LogUp<F: Field>: Reduction<F> {
 // Keys 2*channel + side used by a table's records, in increasing order: per
 // channel, push before pull.
 fn used_keys(records: Interactions) -> Indices {
-  let mut result = index_list();
+  let mut result = indices::empty();
   for key in 0..2 * records.channels {
     let mut found = false;
     for interaction in 0..records.count {
-      let own = 2 * index_get(records.channel, interaction) + index_get(records.side, interaction);
+      let own = 2 * indices::get(records.channel, interaction) + indices::get(records.side, interaction);
       found = if own == key { true } else { found };
     }
-    if found { result = index_push(result, key); }
+    if found { result = indices::append(result, key); }
   }
   return result;
 }
@@ -321,13 +327,13 @@ fn row_factor<F: Field>(records: Interactions, values: Vector<F>, rows: index,
     challenges: Vector<F>, key: index) -> Vector<F> {
   let mut row = fill<F>(1, rows);
   for interaction in 0..records.count {
-    let channel = index_get(records.channel, interaction);
-    if 2 * channel + index_get(records.side, interaction) == key {
+    let channel = indices::get(records.channel, interaction);
+    if 2 * channel + indices::get(records.side, interaction) == key {
       let counts = multiplicity(values, records, rows, interaction);
       let fingerprints = fingerprint(values, records, rows, interaction,
         compression(challenges, channel));
       let gamma = shift_challenge(challenges, channel);
-      row = multiply(row, map gated_denominator<F>(each counts, gamma, each fingerprints));
+      row = vector::hadamard(row, map gated_denominator<F>(each counts, gamma, each fingerprints));
     }
   }
   return row;
@@ -341,27 +347,27 @@ fn row_factor<F: Field>(records: Interactions, values: Vector<F>, rows: index,
 pub module GrandProduct<F: Field>: Reduction<F> {
   fn layout(records: Interactions, height: index) -> Layout {
     let keys = used_keys(records);
-    let mut opened = index_list();
-    let mut rotations = index_list();
-    let mut begin = index_list();
-    let mut end = index_list();
-    let mut degree = index_list();
-    for column in 0..index_length(keys) {
-      opened = index_push(index_push(opened, column), column);
-      rotations = index_push(index_push(rotations, 0), height - 1);
+    let mut opened = indices::empty();
+    let mut rotations = indices::empty();
+    let mut begin = indices::empty();
+    let mut end = indices::empty();
+    let mut degree = indices::empty();
+    for column in 0..indices::length(keys) {
+      opened = indices::append(indices::append(opened, column), column);
+      rotations = indices::append(indices::append(rotations, 0), height - 1);
       let mut row_degree: index = 0;
       for interaction in 0..records.count {
-        let own = 2 * index_get(records.channel, interaction) + index_get(records.side, interaction);
-        if own == index_get(keys, column) {
-          row_degree = row_degree + index_get(records.count_degree, interaction) +
-            index_get(records.tuple_degree, interaction);
+        let own = 2 * indices::get(records.channel, interaction) + indices::get(records.side, interaction);
+        if own == indices::get(keys, column) {
+          row_degree = row_degree + indices::get(records.count_degree, interaction) +
+            indices::get(records.tuple_degree, interaction);
         }
       }
-      begin = index_push(index_push(index_push(begin, 0), 1), height - 1);
-      end = index_push(index_push(index_push(end, 1), height), height);
-      degree = index_push(index_push(index_push(degree, maximum(1, row_degree)), row_degree + 1), 1);
+      begin = indices::append(indices::append(indices::append(begin, 0), 1), height - 1);
+      end = indices::append(indices::append(indices::append(end, 1), height), height);
+      degree = indices::append(indices::append(indices::append(degree, maximum(1, row_degree)), row_degree + 1), 1);
     }
-    return Layout { columns: index_length(keys), claims: index_length(keys),
+    return Layout { columns: indices::length(keys), claims: indices::length(keys),
       opened, rotations, begin, end, degree };
   }
   fn build(records: Interactions, values: Vector<F>, height: index,
@@ -369,15 +375,15 @@ pub module GrandProduct<F: Field>: Reduction<F> {
     require shaped(records, values, height, challenges);
     let keys = used_keys(records);
     let mut factors = empty<F>();
-    for column in 0..index_length(keys) {
+    for column in 0..indices::length(keys) {
       factors = concat(factors, row_factor(records, values, height, challenges,
-        index_get(keys, column)));
+        indices::get(keys, column)));
     }
     // A zero factor is an active record whose shift equals its fingerprint.
     if kernel("bool.not", nonzero(factors)) { stop "abort"; }
     let mut columns = empty<F>();
     let mut claims = empty<F>();
-    for column in 0..index_length(keys) {
+    for column in 0..indices::length(keys) {
       let running = kernel<F>("vector.prefix_product", slice(factors, column * height, height));
       columns = concat(columns, running);
       claims = append(claims, get(running, height - 1));
@@ -388,11 +394,11 @@ pub module GrandProduct<F: Field>: Reduction<F> {
       rows: index, challenges: Vector<F>, claims: Vector<F>) -> Vector<F> {
     let keys = used_keys(records);
     require shaped(records, values, rows, challenges);
-    require both(length(openings) == 2 * index_length(keys) * rows,
-      length(claims) == index_length(keys));
+    require both(length(openings) == 2 * indices::length(keys) * rows,
+      length(claims) == indices::length(keys));
     let mut result = empty<F>();
-    for column in 0..index_length(keys) {
-      let row = row_factor(records, values, rows, challenges, index_get(keys, column));
+    for column in 0..indices::length(keys) {
+      let row = row_factor(records, values, rows, challenges, indices::get(keys, column));
       let current = slice(openings, 2 * column * rows, rows);
       let previous = slice(openings, (2 * column + 1) * rows, rows);
       let claim = get(claims, column);
@@ -406,13 +412,13 @@ pub module GrandProduct<F: Field>: Reduction<F> {
   fn start(channels: index) -> Vector<F> { return fill<F>(1, 2 * channels); }
   fn fold(records: Interactions, claims: Vector<F>, accumulator: Vector<F>) -> Vector<F> {
     let keys = used_keys(records);
-    require both(length(claims) == index_length(keys),
+    require both(length(claims) == indices::length(keys),
       length(accumulator) == 2 * records.channels);
     let mut result = empty<F>();
     for key in 0..2 * records.channels {
       let mut value = get(accumulator, key);
-      for column in 0..index_length(keys) {
-        if index_get(keys, column) == key { value = value * get(claims, column); }
+      for column in 0..indices::length(keys) {
+        if indices::get(keys, column) == key { value = value * get(claims, column); }
       }
       result = append(result, value);
     }
