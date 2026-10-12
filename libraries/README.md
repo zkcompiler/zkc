@@ -15,7 +15,7 @@ concrete domains, Entries and transcript constructions in
 | [`zkc::accumulation`](zkc/accumulation.zkc) | `Combiner`, `FieldSum`, `FieldProduct`, `GroupSum` | Explicit identity/combine implementations; no associativity or commutativity is inferred |
 | [`zkc::indices`](zkc/indices.zkc) | `Indices`, empty/append/length/get/at/elements/indices/collect | Ordered index collections, checked and total access, finite traversal |
 | [`zkc::computation`](zkc/computation.zkc) | apply_math/forward_math/apply/forward/twice | Generic statically bound callbacks; fixed modes and effects that depend on the selected callback |
-| [`zkc::vector`](zkc/vector.zkc) | `Vector`, length/get/at/elements/indices/sum/product/split/add/hadamard/scale/dot/fill/collect/collect_where/reduce/fold/has_length, reduction bindings `∑`/`∏` | Ordered finite vectors; fold pairs contiguous halves |
+| [`zkc::vector`](zkc/vector.zkc) | `Vector`, empty/append/length/get/at/elements/indices/sum/product/split/add/hadamard/scale/dot/fill/collect/collect_where/reduce/fold/fix_prefix/has_length, reduction bindings `∑`/`∏` | Ordered finite vectors; fold pairs contiguous halves |
 | [`zkc::sequence`](zkc/sequence.zkc) | `Sequence`, empty/append/length/get/at/elements/indices | Immutable sequences of executable Copy + Drop elements, including source products |
 | [`zkc::matrix`](zkc/matrix.zkc) | `Matrix`, get/at/row_dot/column_dot/multiply/transpose_multiply/bilinear/rows/columns and explicit finite views | Ordered sparse matrix operations |
 | [`zkc::field_array`](zkc/field_array.zkc) | `Array`, from_vector/get/at/elements/indices/collect | Fixed-length field arrays with checked native construction and dynamic access |
@@ -31,8 +31,8 @@ concrete domains, Entries and transcript constructions in
 | [`zkc::encoding`](zkc/encoding.zkc) | field_be/field_from_be/field_reduce_be/group_compressed/group_from_compressed | Explicit mathematical codecs; currently BLS12-381 Fr and G1 |
 | [`schnorr`](schnorr/lib.zkc) | `DLog<G>`, `Schnorr<G>` | Discrete-log relation and three-message group protocol |
 | [`spongefish`, `spongefish_schnorr`](spongefish/README.md) | SHAKE128 framing, point/scalar observations, challenges and explicit Schnorr | Spongefish 0.7.4 BLS12-381 G1 specialization; authored 80-byte proofs |
-| [`sumcheck`](sumcheck/lib.zkc) | `Sumcheck<F, Max>` | Bounded multilinear Sumcheck over a public evaluation table |
-| [`expression_sumcheck`](sumcheck/expression.zkc) | `Sumcheck<F, Max, A: Ring>` | Sumcheck for a captured ring expression over public multilinear tables |
+| [`sumcheck`](sumcheck/lib.zkc) | `Reduce`, `Evaluation`, `check`, `Sumcheck<F, Max>` | Bounded multilinear Sumcheck over a public evaluation table |
+| [`expression_sumcheck`](sumcheck/expression.zkc) | `Reduce`, `Evaluation`, `Sumcheck<F, Max, A: Ring>` | Sumcheck for a captured ring expression over public multilinear tables |
 | [`fri`](fri/lib.zkc) | `LowDegree<C, LogSize, TerminalLog, Rounds, Queries>` | Binary FRI over a natural-order two-adic coset |
 | [`air_polynomial`, `air_table`, `air_stark`](air/README.md) | Scope polynomials, Bundle opening equations and `TableArgument` | A nonhiding KoalaBear/Ext8 argument for one present table, composed with FRI |
 | [`air_interaction`, `air_bundle`](air/README.md#whole-bundle-argument) | `Reduction<F>`, `LogUp<F>`, `GrandProduct<F>`, `ThreeTableArgument` | Three-table multiset arguments with phased auxiliary commitments and shared FRI |

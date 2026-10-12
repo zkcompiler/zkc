@@ -2,6 +2,9 @@ module zkc::vector;
 
 pub type Vector<F: Field> = builtin("vector", F);
 
+pub fn empty<F: Field>() -> Vector<F> = primitive("vector.empty");
+pub fn append<F: Field>(values: Vector<F>, value: F) -> Vector<F> = primitive("vector.append");
+
 pub fn length<F: Field>(values: Vector<F>) -> index = primitive("vector.length");
 pub fn get<F: Field>(values: Vector<F>, position: index) -> F = primitive("vector.get");
 pub fn sum<F: Field>(values: Vector<F>) -> F = primitive("vector.sum");
@@ -56,3 +59,9 @@ pub fn reduce<I: Type + Copy + Drop, F: Field, R: Type>(
 
 // Bounds follow the selected total accessor; checked access can be rebound locally.
 pub indexing values[position] = at(values, position);
+
+// Restrict successive MSB-first Boolean coordinates, preserving any remaining
+// factor columns. Each fold checks its positive even input length.
+pub fn fix_prefix<F: Field>(values: Vector<F>, point: Vector<F>) -> Vector<F> {
+  return zkc::finite::fold(elements(point), values, fn(table, r) => fold(table, r));
+}

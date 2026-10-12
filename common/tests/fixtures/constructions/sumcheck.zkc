@@ -22,12 +22,12 @@ module Provider:TranscriptState {
 construction Derived for Sumcheck<F,4> {
   transcript Provider;replace challenges;
   on start(t){return t;}
-  on message round(t,value){
+  on message reduce.round(t,value){
     let t=Provider::observe(t,value.0);
     return Provider::observe(t,value.1);
   }
-  on query challenge(t){return Provider::draw(t);}
-  on message delivery(t,value){return t;}
+  on query reduce.challenge(t){return Provider::draw(t);}
+  on message reduce.delivery(t,value){return t;}
 }
 proof Demo=Sumcheck<F,4>{
   prover P;verifier V;public{values,claim,rounds};accept accepted;construction Derived;
