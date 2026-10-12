@@ -56,7 +56,8 @@ enum class VerificationObservation {
   Mismatch,
   OptionalCapacity,
   RequiredCapacity,
-  Refused
+  /// The reader returned failure without a classified cause.
+  Unclassified
 };
 /// Verification remains distinct from optional recognition. The reader owns
 /// this cause, including any subject or debit precision it actually exposes.
@@ -85,7 +86,7 @@ struct DiscardDecision {
   DecisionCause cause;
 };
 struct RetryDecision {
-  uint64_t discardedProposal;
+  uint64_t discardedScope;
   MathematicalSelectionPolicy effectivePolicy;
 };
 struct PublicationDecision {
@@ -111,6 +112,10 @@ struct RealizationStage {
   uint64_t operationsBefore = 0, operationsAfter = 0;
   uint64_t microseconds = 0;
 };
+/// One synchronous outer invocation per journal. The caller must serialize
+/// access, including pass-manager clones sharing this observer; sequential
+/// reuse replaces the prior journal. Use separate observers to retain separate
+/// stages.
 struct RealizationTrace {
   /// Original request. Effective policy belongs to each proposal/retry.
   MathematicalSelectionPolicy policy;

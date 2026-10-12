@@ -253,5 +253,44 @@ int main() {
                         OptimizationStatus::ReplacementRestricted,
                 "replacement restriction became a recognition failure");
       });
+  cases.run("capacity and equation diagnostics retain nested occurrences", [&] {
+    auto source =
+        parseSourceString<ModuleOp>(fixture("nested-total"), &context);
+    require(bool(source), "fixture refused");
+    auto c = computation(*source);
+    auto &body = c.helper->getRegion(0).front();
+    OpBuilder builder(&body.back());
+    builder.clone(body.front());
+    require(succeeded(verify(*source)), "repeated helper fixture refused");
+    finite::ComputationWork measured;
+    auto initial = measured.structural;
+    auto view = finite::analyzeComputation(c, measured);
+    require(view && view->nested.size() == 2, "missing repeated occurrences");
+    bool first = false, second = false;
+    for (uint64_t budget = 0; budget < initial - measured.structural;
+         ++budget) {
+      finite::ComputationWork work;
+      work.structural = budget;
+      finite::ComputationDiagnostic diagnostic;
+      require(!finite::analyzeComputation(c, work, &diagnostic),
+              "insufficient structural work was admitted");
+      require(diagnostic.outcome.status == OptimizationStatus::Capacity &&
+                  !diagnostic.occurrencePath.empty() &&
+                  diagnostic.occurrencePath.front() == c.operation,
+              "failed debit lost its enclosing occurrence");
+      first |= diagnostic.occurrencePath == view->nested[0].occurrencePath;
+      second |= diagnostic.occurrencePath == view->nested[1].occurrencePath;
+    }
+    require(first && second, "repeated helper failures were not distinguished");
+    for (const auto &child : view->nested) {
+      finite::ComputationWork work;
+      work.equations = 0;
+      finite::ComputationDiagnostic diagnostic;
+      matchComputation(child, work, &diagnostic);
+      require(diagnostic.outcome.status == OptimizationStatus::Capacity &&
+                  diagnostic.occurrencePath == child.occurrencePath,
+              "equation failure lost its nested occurrence");
+    }
+  });
   return cases.result();
 }

@@ -580,7 +580,7 @@ FailureOr<SmallVector<Value>>
 realizeExpression(Operation *op, ValueRange inputs, OpBuilder &builder,
                   MathematicalSelectionPolicy policy,
                   mathematical::RealizationWork *work,
-                  mathematical::RealizationTrace *trace) {
+                  mathematical::RealizationTrace *trace, bool orderedRetry) {
   mathematical::RealizationWork standalone;
   auto &available = work ? *work : standalone;
   mathematical::RealizationScope scope(trace, "finite-expression", op, policy,
@@ -591,8 +591,7 @@ realizeExpression(Operation *op, ValueRange inputs, OpBuilder &builder,
     return failure();
   BodyRewriter rewriter(builder);
   Realizer realizer(unit, rewriter, available,
-                    mathematical::mathematicalRecipes(), &scope,
-                    trace && trace->policy.finiteBulk && !policy.finiteBulk);
+                    mathematical::mathematicalRecipes(), &scope, orderedRetry);
   auto results = realizer.emitBody(op, inputs, policy.finiteBulk);
   builder.restoreInsertionPoint(rewriter.saveInsertionPoint());
   if (succeeded(results))

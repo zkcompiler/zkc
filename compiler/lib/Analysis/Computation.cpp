@@ -110,7 +110,7 @@ private:
     bool accepted = consumeComputationWork(work.structural, count,
                                            WorkOwner::Structural, &outcome);
     if (!accepted && complete)
-      diagnostic = {outcome, view.occurrence, {}};
+      diagnostic = {outcome, view.occurrence, {}, view.occurrencePath};
     complete &= accepted;
     return complete;
   }
@@ -305,12 +305,13 @@ class ComputationAnalysis {
   facts::Work evidence;
   ComputationDiagnostic &diagnostic;
   Operation *subject = nullptr;
+  SmallVector<Operation *> occurrencePath;
   bool charge(uint64_t amount = 1) {
     OptimizationOutcome outcome;
     if (consumeComputationWork(work.structural, amount, WorkOwner::Structural,
                                &outcome))
       return true;
-    diagnostic = {outcome, subject, {}};
+    diagnostic = {outcome, subject, {}, occurrencePath};
     return false;
   }
   llvm::DenseSet<Operation *> active;
@@ -320,9 +321,9 @@ public:
   ComputationAnalysis(ComputationWork &work, Operation *subject,
                       ComputationDiagnostic &diagnostic)
       : work(work), factAnalysis(MathematicalFactAnalysis::rootFor(subject)),
-        evidence([&](uint64_t amount) {
-          uint64_t available = work.evidence;
-          if (consumeComputationWork(work.evidence, amount))
+        evidence([this](uint64_t amount) {
+          uint64_t available = this->work.evidence;
+          if (consumeComputationWork(this->work.evidence, amount))
             return true;
           evidenceDebit = CapacityCause{WorkOwner::Evidence, amount, available};
           return false;
@@ -334,16 +335,22 @@ public:
        const llvm::DenseMap<Value, Value> &enclosing =
            llvm::DenseMap<Value, Value>()) {
     Operation *previousSubject = subject;
+    auto previousPath = std::move(occurrencePath);
+    occurrencePath.assign(parentPath.begin(), parentPath.end());
+    occurrencePath.push_back(occurrence);
     subject = occurrence;
-    auto restore = llvm::scope_exit([&] { subject = previousSubject; });
+    auto restore = llvm::scope_exit([&] {
+      subject = previousSubject;
+      occurrencePath = std::move(previousPath);
+    });
     diagnostic = {
         {OptimizationStatus::Unsupported, OptimizationReason::Structure},
         occurrence,
-        {}};
+        {},
+        occurrencePath};
     if (active.size() >= 64) {
-      diagnostic.outcome =
-          OptimizationOutcome::exhausted(WorkOwner::Structural);
-      diagnostic.outcome.reason = OptimizationReason::Depth;
+      diagnostic.outcome = {OptimizationStatus::Unsupported,
+                            OptimizationReason::Depth};
       return std::nullopt;
     }
     if (!c.helper || c.helper->getNumRegions() != 1 ||
@@ -476,12 +483,6 @@ public:
       // A helper is active only while its own callback is being traversed.
       // A predicate may invoke an acyclic fold that shares this step helper.
       Operation *callback = block.getParentOp();
-      if (active.size() >= 64) {
-        diagnostic.outcome =
-            OptimizationOutcome::exhausted(WorkOwner::Structural);
-        diagnostic.outcome.reason = OptimizationReason::Depth;
-        return false;
-      }
       if (!active.insert(callback).second) {
         diagnostic.outcome = {OptimizationStatus::Unsupported,
                               OptimizationReason::Cycle};
@@ -511,7 +512,8 @@ public:
         diagnostic = {
             {OptimizationStatus::Unsupported, OptimizationReason::Structure},
             occurrence,
-            {}};
+            {},
+            occurrencePath};
       }
       return true;
     };
@@ -579,7 +581,10 @@ analyzeComputation(Computation c, ComputationWork &work,
   auto result =
       ComputationAnalysis(work, c.operation, observed).read(c, c.operation);
   if (result)
-    observed = {OptimizationOutcome::success(), c.operation, {}};
+    observed = {OptimizationOutcome::success(),
+                c.operation,
+                {},
+                result->occurrencePath};
   if (diagnostic)
     *diagnostic = observed;
   return result;

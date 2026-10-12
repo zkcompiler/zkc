@@ -195,7 +195,7 @@ LogicalResult expandMathRealizations(ModuleOp module,
   auto lower =
       lowerCalculations(unit, functions, policy, &stageWork, limits, trace);
   if (succeeded(lower))
-    scope.failure(VerificationDecision{VerificationObservation::Refused,
+    scope.failure(VerificationDecision{VerificationObservation::Unclassified,
                                        "realized helper correspondence",
                                        {},
                                        {}});

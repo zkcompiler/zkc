@@ -378,7 +378,7 @@ static LogicalResult expandAlgorithmsImpl(
         return failure();
       auto output = expansion.takeRecord();
       scope.failure(mathematical::VerificationDecision{
-          mathematical::VerificationObservation::Refused,
+          mathematical::VerificationObservation::Unclassified,
           "algorithm expansion correspondence",
           {},
           {}});

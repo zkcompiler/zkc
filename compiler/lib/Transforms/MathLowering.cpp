@@ -827,13 +827,12 @@ public:
   }
 };
 
-LogicalResult lowerRecipes(protocol_ir::ProtocolModuleOp unit,
-                           const llvm::DenseSet<Operation *> &generated,
-                           BindingSymbols &symbols,
-                           MathematicalSelectionPolicy policy = {},
-                           RealizationWork *work = nullptr,
-                           RealizationTrace *trace = nullptr,
-                           RealizationScope *attempt = nullptr) {
+LogicalResult
+lowerRecipes(protocol_ir::ProtocolModuleOp unit,
+             const llvm::DenseSet<Operation *> &generated,
+             BindingSymbols &symbols, MathematicalSelectionPolicy policy = {},
+             RealizationWork *work = nullptr, RealizationTrace *trace = nullptr,
+             RealizationScope *attempt = nullptr, bool orderedRetry = false) {
   // Finite bodies emit directly before primitive conversion. Callback
   // expansion and polynomial normalization still use a checked scratch clone
   // and can fail after mutation, so this phase cannot yet satisfy the
@@ -860,8 +859,9 @@ LogicalResult lowerRecipes(protocol_ir::ProtocolModuleOp unit,
     --finiteWork;
     IRRewriter builder(next->getContext());
     builder.setInsertionPoint(next);
-    auto result = finite::realizeExpression(next, next->getOperands(), builder,
-                                            policy, &realizationWork, trace);
+    auto result =
+        finite::realizeExpression(next, next->getOperands(), builder, policy,
+                                  &realizationWork, trace, orderedRetry);
     if (failed(result))
       return failure();
     builder.replaceOp(next, *result);
@@ -1011,6 +1011,7 @@ LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
   RealizationScope scope(trace, "lower-calculations", unit, policy, &available);
   if (!functions.empty())
     scope.propose(policy);
+  bool orderedRetry = false;
   for (;;) {
     // This unit is an intermediate outlined subject, so whole-module formation
     // belongs to the enclosing service. Keep its exact mathematical bodies
@@ -1033,7 +1034,7 @@ LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
     }
     BindingSymbols symbols(*candidate);
     if (failed(lowerRecipes(*candidate, selected, symbols, policy, &attemptWork,
-                            trace, &attempt)))
+                            trace, &attempt, orderedRetry)))
       return failure();
     finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
                                        {}};
@@ -1101,6 +1102,7 @@ LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
     if (outcome.status == finite::VerificationStatus::OptionalCapacity &&
         policy.finiteBulk) {
       policy.finiteBulk = false;
+      orderedRetry = true;
       attempt.retry(policy);
       continue;
     }

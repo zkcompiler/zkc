@@ -294,6 +294,10 @@ after its own reader accepts the actual source/candidate pair. Rejected proposal
 leave the original body and external expansion state unchanged. Stage records and
 IR dumps carry no independent proof authority. Reusing a trace starts a fresh
 journal at the outer invocation; nested services append within that invocation.
+Observers require exclusive access, including across pass-manager clones. Use
+separate observers to retain separate invocations. Readers that return only a
+success/failure result report an unclassified verification failure; the journal
+does not invent a mismatch or capacity cause.
 
 Fusion compares values and
 ordered shape refusals under sufficient resources; changed allocation and

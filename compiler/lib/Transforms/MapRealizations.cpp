@@ -375,8 +375,10 @@ LogicalResult expandMapRealizations(ModuleOp module, RealizationWork *work,
   for (auto &[map, formula] : maps)
     if (failed(realizer.run(map, formula->front(), scope)))
       return failure();
-  scope.failure(VerificationDecision{
-      VerificationObservation::Refused, "required map correspondence", {}, {}});
+  scope.failure(VerificationDecision{VerificationObservation::Unclassified,
+                                     "required map correspondence",
+                                     {},
+                                     {}});
   if (failed(candidate.publish(verifyMapRealizationsPreserved)))
     return diagnostics::emit(module.emitError(), "algebra-map-lowering",
                              "realized map failed its correspondence check");

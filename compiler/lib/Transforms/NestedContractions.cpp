@@ -298,7 +298,7 @@ LogicalResult rewriteFiniteCollectionsImpl(
   }
   auto expected = input;
   scope.failure(mathematical::VerificationDecision{
-      mathematical::VerificationObservation::Refused,
+      mathematical::VerificationObservation::Unclassified,
       "nested contraction correspondence",
       {},
       {}});

@@ -274,7 +274,7 @@ class RealizationScope {
         value.cause);
   }
   static void render(llvm::raw_ostream &out, const RetryDecision &value) {
-    out << " retry discarded=" << value.discardedProposal
+    out << " retry discarded=" << value.discardedScope
         << " finite-bulk=" << value.effectivePolicy.finiteBulk;
   }
   static void render(llvm::raw_ostream &out, const PublicationDecision &value) {
@@ -287,6 +287,7 @@ class RealizationScope {
   }
 
 public:
+  bool enabled() const { return trace != nullptr; }
   RealizationScope(RealizationTrace *trace, llvm::StringRef service,
                    mlir::Operation *anchor,
                    MathematicalSelectionPolicy policy = {},

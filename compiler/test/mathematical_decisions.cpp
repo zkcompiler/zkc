@@ -90,7 +90,7 @@ void checkRetry(const RealizationTrace &trace, StringRef service) {
           "effective fallback overwrote requested policy");
   const RealizationEvent *discard = nullptr;
   for (auto *event : events<DiscardDecision>(trace))
-    if (event->scope == retry.discardedProposal)
+    if (event->scope == retry.discardedScope)
       discard = event;
   require(discard && discard->sequence < retries[0]->sequence,
           "retry did not follow a discarded attempt");

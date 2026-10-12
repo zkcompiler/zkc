@@ -27,6 +27,8 @@ inline RealizationSubject realizationSubject(mlir::Operation *op) {
             result.definition = definition.getValue().str();
       break;
     }
+    if (!result.site.empty())
+      continue;
     auto *block = current->getBlock();
     if (!block)
       break;

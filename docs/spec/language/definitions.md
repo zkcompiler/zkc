@@ -1167,7 +1167,9 @@ Each call must discharge its own input conditions before that information is
 available. Forwarding an index literal preserves its known value; returning an
 unrelated container or computing an index does not supply that fact. These
 observations belong to the current source check and do not change callback
-capture layouts.
+capture layouts. Each check computes a forwarding summary once per declaration;
+repeated calls pay for lookup and selector substitution. Helper dependency depth
+is bounded independently of enclosing control regions and callback bindings.
 
 An unfiltered finite collection has a fresh value identity and preserves its
 domain's cardinality. Element and index domains also relate its extent to the

@@ -57,7 +57,6 @@ class ContractCheck {
   using ForwardedResult = std::optional<ValueOrigin>;
   struct ForwardingSummary {
     std::vector<ForwardedResult> outputs;
-    uint64_t work = 0;
     unsigned height = 0;
   };
   // Checked declarations may grow between ContractCheck runs. Never retain
@@ -115,7 +114,6 @@ class ContractCheck {
     return result;
   }
   const ForwardingSummary *forwarding(unsigned id, unsigned depth, Span span) {
-    const auto started = types.work.used;
     if (!bounded(depth, span) || depth > types.work.limits.callDepth) {
       if (!types.diagnostic)
         types.fail("source.limit", "helper forwarding depth", span);
@@ -128,9 +126,9 @@ class ContractCheck {
         types.fail("source.limit", "helper forwarding depth", span);
         return nullptr;
       }
-      // Replay logical extraction work, including nested descriptions. Cache
-      // hits save computation, never the caller's allowance or depth checks.
-      return types.charge(summary.work - 1, span) ? &summary : nullptr;
+      // Charge the lookup and each applied selector, not repeated expansion
+      // of the same dependency graph. Extraction is paid once per declaration.
+      return &summary;
     }
     if (id >= declarations.size())
       return nullptr;
@@ -173,8 +171,6 @@ class ContractCheck {
         if (call) {
           // Read only a returned value's dependency path. Checked callee
           // contracts justify internal calls, but supply no caller premises.
-          // Even an ineligible callee consumes this depth before declining.
-          // Preserve that observation when a later invocation uses the memo.
           summary.height = std::max(summary.height, nesting + 1);
           auto nested = forwarding(call->callee.index, depth + nesting + 1,
                                    producer->span);
@@ -220,12 +216,12 @@ class ContractCheck {
       if (types.diagnostic)
         return nullptr;
     }
-    summary.work = types.work.used - started;
     return &forwardingMemo.emplace(id, std::move(summary)).first->second;
   }
   bool forward(Context &context, const HelperCall &call,
-               ArrayRef<ValueId> outputs, unsigned depth, Span span) {
-    auto descriptions = forwarding(call.callee.index, depth, span);
+               ArrayRef<ValueId> outputs, Span span) {
+    // Lexical regions and callback binding depth are not helper call depth.
+    auto descriptions = forwarding(call.callee.index, 0, span);
     if (!descriptions)
       return !types.diagnostic;
     for (unsigned i = 0; i < descriptions->outputs.size() && i < outputs.size();
@@ -557,9 +553,9 @@ class ContractCheck {
       if (size.isClosed() && count.status == facts::Status::Proven &&
           count.value->precision == facts::Precision::Exact &&
           count.value->value != size.closedValue())
-        return types.fail("source.data-bound",
-                          "fixed collection needs exact unfiltered cardinality",
-                          span);
+        return types.fail(
+            "source.data-bound",
+            "fixed collection cardinality differs from its result size", span);
       // The type already supplies the result extent. Before closed formation,
       // neither an unknown count nor a symbolic result size justifies relating
       // that extent to the source domain. Publish no additional fixed facts.
@@ -949,7 +945,8 @@ class ContractCheck {
     if (!checkFiniteFormation(types, finite,
                               context.body.values[output.index].type,
                               context.body.mode == Body::Mode::Math, span,
-                              {constant, size, same, equal, bound}))
+                              {constant, size, same, equal, bound}) ||
+        types.diagnostic)
       return false;
     unsigned selected = domains[finite.domain->result];
     if (!closedCallback(context, finite.body, selected,
@@ -1122,7 +1119,7 @@ class ContractCheck {
         }
       } else if (const auto *helper = std::get_if<HelperCall>(&op.action)) {
         if (!call(context, *helper, depth + 1, op.span) ||
-            !forward(context, *helper, op.results, depth + 1, op.span) ||
+            !forward(context, *helper, op.results, op.span) ||
             !finiteResult(context, *helper, op.results, op.span))
           return false;
       } else if (const auto *finite =

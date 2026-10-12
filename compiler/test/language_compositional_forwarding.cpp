@@ -117,58 +117,57 @@ protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P)->(r:Fr@P){return subject
 )")),
          context);
   });
-  cases.run(
-      "cache replays logical extraction cost and exact work boundary", [&] {
-        auto project = take(check(R"(
+  cases.run("memoized extraction retains an exact work boundary", [&] {
+    auto project = take(check(R"(
 math fn subject(xs:Vector<Fr>,ys:Vector<Fr>)->Vector<Fr>{let a=nested(xs);return nested(ys);}
 )"));
-        std::vector<Declaration> declarations(project.declarations().begin(),
-                                              project.declarations().end());
-        auto subject = llvm::find_if(declarations, [](const auto &declaration) {
-          return declaration.name == "subject";
-        });
-        require(subject != declarations.end(), "missing forwarding subject");
-        unsigned subjectIndex = subject->id.index;
-        auto measure = [&](const Limits &limits) -> std::pair<bool, uint64_t> {
-          source_detail::Work work{limits};
-          source_detail::Semantics types(declarations, project.assets(), work);
-          const auto &declaration = declarations[subjectIndex];
-          bool accepted = source_detail::checkFiniteContracts(
-              types, declarations, declaration, *declaration.body);
-          if (!accepted)
-            require(types.diagnostic &&
-                        types.diagnostic->code == "source.limit",
-                    "unexpected bounded forwarding diagnostic");
-          return {accepted, work.used};
-        };
-        Limits limits;
-        auto [accepted, cost] = measure(limits);
-        require(accepted && cost, "unbounded forwarding failed");
-        limits.work = cost;
-        require(measure(limits).first, "last available work unit was refused");
-        limits.work = cost - 1;
-        require(!measure(limits).first, "insufficient work was admitted");
-        limits = Limits{};
-        limits.expressionDepth = 2;
-        require(!measure(limits).first, "nested forwarding ignored depth");
-        // The second call can use either a memoized declaration or an identical
-        // fresh declaration. Both must consume the same logical extraction
-        // work.
-        auto body = std::make_shared<Body>(*declarations[subjectIndex].body);
-        HelperCall *last = nullptr;
-        for (auto &op : body->operations)
-          if (auto *call = std::get_if<HelperCall>(&op.action))
-            last = call;
-        require(last, "missing repeated forwarding call");
-        Declaration clone = declarations[last->callee.index];
-        clone.id.index = declarations.size();
-        last->callee = clone.id;
-        declarations.push_back(std::move(clone));
-        declarations[subjectIndex].body = std::move(body);
-        auto [uncachedAccepted, uncachedCost] = measure(Limits{});
-        require(uncachedAccepted && uncachedCost == cost,
-                "memoization changed logical forwarding work");
-      });
+    std::vector<Declaration> declarations(project.declarations().begin(),
+                                          project.declarations().end());
+    auto subject = llvm::find_if(declarations, [](const auto &declaration) {
+      return declaration.name == "subject";
+    });
+    require(subject != declarations.end(), "missing forwarding subject");
+    unsigned subjectIndex = subject->id.index;
+    auto measure = [&](const Limits &limits) -> std::pair<bool, uint64_t> {
+      source_detail::Work work{limits};
+      source_detail::Semantics types(declarations, project.assets(), work);
+      const auto &declaration = declarations[subjectIndex];
+      bool accepted = source_detail::checkFiniteContracts(
+          types, declarations, declaration, *declaration.body);
+      if (!accepted)
+        require(types.diagnostic && types.diagnostic->code == "source.limit",
+                "unexpected bounded forwarding diagnostic");
+      return {accepted, work.used};
+    };
+    Limits limits;
+    auto [accepted, cost] = measure(limits);
+    require(accepted && cost, "unbounded forwarding failed");
+    limits.work = cost;
+    require(measure(limits).first, "last available work unit was refused");
+    limits.work = cost - 1;
+    require(!measure(limits).first, "insufficient work was admitted");
+    limits = Limits{};
+    limits.expressionDepth = 2;
+    require(measure(limits).first, "lexical depth reduced helper allowance");
+    limits.expressionDepth = 1;
+    require(!measure(limits).first, "nested forwarding ignored depth");
+    // An additional declaration requires its own extraction. Reusing one
+    // summary must cost less than reading an identical fresh declaration.
+    auto body = std::make_shared<Body>(*declarations[subjectIndex].body);
+    HelperCall *last = nullptr;
+    for (auto &op : body->operations)
+      if (auto *call = std::get_if<HelperCall>(&op.action))
+        last = call;
+    require(last, "missing repeated forwarding call");
+    Declaration clone = declarations[last->callee.index];
+    clone.id.index = declarations.size();
+    last->callee = clone.id;
+    declarations.push_back(std::move(clone));
+    declarations[subjectIndex].body = std::move(body);
+    auto [uncachedAccepted, uncachedCost] = measure(Limits{});
+    require(uncachedAccepted && uncachedCost > cost,
+            "repeated calls paid for extracting the same declaration");
+  });
   cases.run("unsuccessful nested query retains cached depth", [&] {
     for (StringRef prefix : {"", "let warm=via<M>(0);"}) {
       auto project = take(check(
@@ -183,14 +182,14 @@ math fn subject(xs:Vector<Fr>,ys:Vector<Fr>)->Vector<Fr>{let a=nested(xs);return
       });
       require(subject != declarations.end(),
               "missing abstract forwarding subject");
-      for (unsigned depth : {5u, 6u}) {
+      for (unsigned depth : {0u, 1u}) {
         Limits limits;
         limits.callDepth = depth;
         source_detail::Work work{limits};
         source_detail::Semantics types(declarations, project.assets(), work);
         bool accepted = source_detail::checkFiniteContracts(
             types, declarations, *subject, *subject->body);
-        require(accepted == (depth == 6),
+        require(accepted == (depth == 1),
                 "warming the forwarding memo changed depth admission");
         if (!accepted)
           require(types.diagnostic && types.diagnostic->code == "source.limit",
@@ -198,5 +197,23 @@ math fn subject(xs:Vector<Fr>,ys:Vector<Fr>)->Vector<Fr>{let a=nested(xs);return
       }
     }
   });
+  cases.run("shared forwarding dependencies do not expand logical work", [&] {
+    std::string source = "math fn h0(x:Fr)->Fr{return x;}\n";
+    for (unsigned i = 1; i <= 24; ++i) {
+      auto prior = "h" + std::to_string(i - 1);
+      source += "math fn h" + std::to_string(i) + "(x:Fr)->Fr{return " + prior +
+                "(" + prior + "(x));}\n";
+    }
+    take(check(source));
+  });
+  cases.run("generic module dispatch supplies no concrete forwarding fact",
+            [&] {
+              refuses(check(R"(
+interface Relay{math fn pass(xs:Vector<Fr>)->Vector<Fr>;}
+module Identity:Relay{math fn pass(xs:Vector<Fr>)->Vector<Fr>{return xs;}}
+math fn subject<M:Relay>(xs:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){return at(M::pass(xs),i);}
+)"),
+                      "source.data-bound");
+            });
   return cases.result();
 }

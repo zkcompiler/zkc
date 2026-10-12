@@ -18,7 +18,8 @@ mlir::FailureOr<llvm::SmallVector<mlir::Value>>
 realizeExpression(mlir::Operation *, mlir::ValueRange, mlir::OpBuilder &,
                   MathematicalSelectionPolicy policy = {},
                   mathematical::RealizationWork *work = nullptr,
-                  mathematical::RealizationTrace *trace = nullptr);
+                  mathematical::RealizationTrace *trace = nullptr,
+                  bool orderedRetry = false);
 mlir::FailureOr<llvm::SmallVector<mlir::Value>>
 verifyExpression(mlir::Operation *, mlir::ValueRange, mlir::Operation *&,
                  HelperReader, mlir::Operation *symbolRoot = nullptr);

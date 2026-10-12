@@ -141,14 +141,16 @@ public:
                                               OptimizationReason::Equation}
                         : found->second;
         }
-        scope.selection(realizationSubject(call, record),
-                        DecisionFamily::VectorReduction,
-                        RealizationChoice::Ordered, outcome);
+        if (scope.enabled())
+          scope.selection(realizationSubject(call, record),
+                          DecisionFamily::VectorReduction,
+                          RealizationChoice::Ordered, outcome);
         continue;
       }
-      scope.selection(
-          realizationSubject(call, record), DecisionFamily::VectorReduction,
-          RealizationChoice::MapSum, OptimizationOutcome::success());
+      if (scope.enabled())
+        scope.selection(
+            realizationSubject(call, record), DecisionFamily::VectorReduction,
+            RealizationChoice::MapSum, OptimizationOutcome::success());
       if (!changed)
         scope.propose();
       changed = true;
@@ -529,15 +531,19 @@ LogicalResult fuseVectorReductions(ModuleOp module,
                                     reductionRecipes};
   Reductions reductions;
   std::map<std::string, OptimizationOutcome> decisions;
-  SymbolTable subjects(unit(module));
+  std::optional<SymbolTable> subjects;
+  if (trace)
+    subjects.emplace(unit(module));
   for (const auto &[name, product] : *products) {
     OptimizationOutcome outcome;
     auto selected = selectMapSum(product, recipes, &outcome);
-    decisions.emplace(name, outcome);
-    scope.selection(subjects.lookup(name), DecisionFamily::VectorReduction,
-                    selected ? RealizationChoice::MapSum
-                             : RealizationChoice::Ordered,
-                    outcome);
+    if (trace) {
+      decisions.emplace(name, outcome);
+      scope.selection(subjects->lookup(name), DecisionFamily::VectorReduction,
+                      selected ? RealizationChoice::MapSum
+                               : RealizationChoice::Ordered,
+                      outcome);
+    }
     if (selected)
       reductions.emplace(name, std::move(*selected));
   }
@@ -547,7 +553,7 @@ LogicalResult fuseVectorReductions(ModuleOp module,
   if (failed(Rewriter(unit(*candidate), output, scope, changed)
                  .run(reductions, decisions)))
     return failure();
-  scope.failure(VerificationDecision{VerificationObservation::Refused,
+  scope.failure(VerificationDecision{VerificationObservation::Unclassified,
                                      "vector reduction correspondence",
                                      {},
                                      {}});
