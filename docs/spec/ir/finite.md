@@ -221,16 +221,36 @@ scan borrows call-free callbacks unchanged. Expanded callbacks live in a private
 analysis scope that retains their own preconditions and gives the occurrence
 fresh entry arguments with no caller-only premises. Matching and lane emission
 borrow that body for its entire lifetime; original helpers and the independent
-reader's source remain unchanged. Indexed reads introduced by a callee retain
-ordered execution because the reader checks those premises in the callee's
-scope. Root-local indexed reads keep their original premises.
+reader's source remain unchanged. Indexed reads inside ordinary helpers can
+use the original callback's extent premises. The independent reader retains the callback's exact argument meanings throughout its call
+closure and separately queries the existing Analysis fact service. Positional
+substitution, including reordered, repeated and returned arguments, preserves
+container and index identity. Equal extents never equate container elements.
+The leaf helper need not receive the domain's anchor container. These facts
+remain local to one source comparison; outer caller-only assumptions are not
+imported. The reader also retains each admitted callee's own premises.
+
+Each callback has a private ceiling of 8,192 optional structural work units,
+within the cumulative stage allowance. The same envelope covers call discovery,
+preparation and structural analysis, including call-free bodies. A memoized
+preflight sizes the immutable helper DAG before copying. It charges inspection,
+counts each call occurrence and intermediate call operation, and saturates above
+the ceiling. A predicted expansion-size decline spends inspection work only;
+actual copying remains charged when attempted. The cache is local to that
+preflight. The ceiling limits one callback's structural interference, while
+equation, evidence, lane and comparison limits remain separate. It does not
+promise selection independent of callback order.
 
 This preparation does not spend required helper-operation, helper-slot or
 polynomial reserves. A capacity decline emits no diagnostic and retains ordered
 execution; spent optional work is not restored on retry. Disabled bulk selection
 skips preparation. Nested finite computations exposed by expansion, including
 unused ones, also retain the ordered path and their conditional domain admission.
-This selection step performs no dead-code or polynomial elimination.
+This selection step performs no dead-code or polynomial elimination. Field
+reduction selection requires every payload instruction, including unused work,
+to belong to its supported field/access formula. An unrelated total group
+operation keeps the body ordered; a valid source must not become a failed
+correspondence proposal because its selected comparison omits that algebra.
 
 The analysis retains all constructors in admission order separately from the
 items of the returned descriptor, and retains every helper instruction even

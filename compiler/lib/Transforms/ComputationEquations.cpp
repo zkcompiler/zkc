@@ -35,6 +35,7 @@ struct PayloadAnalysis {
   ArrayRef<Operation *> operations;
   llvm::DenseMap<Operation *, const protocol::ComputationContract *> contracts;
   bool supported = true;
+  Operation *nonFieldOperation = nullptr;
   EquationWork &work;
 
   PayloadAnalysis(ArrayRef<Operation *> operations, ValueRange results,
@@ -58,12 +59,29 @@ struct PayloadAnalysis {
         supported = false;
         continue;
       }
+      // A field reduction compares a closed field/access formula, including
+      // unused instructions. Total work from another algebra must retain its
+      // ordered body until that comparison fragment is extended.
+      if (facet && !nonFieldOperation &&
+          (facet->law.algebra != protocol::ComputationAlgebra::FieldRing &&
+           !(facet->access &&
+             isa<algebra::FieldType>(op->getResult(0).getType()))))
+        nonFieldOperation = op;
       bool used = live.contains(op->getResult(0));
       if ((ordered && !used) || (facet && !facet->access && !facet->law.total))
         supported = false;
       if (used)
         live.insert(op->getOperands().begin(), op->getOperands().end());
     }
+  }
+  bool fieldFormula() const {
+    if (nonFieldOperation && work.diagnostic)
+      *work.diagnostic = {{OptimizationStatus::Unsupported,
+                           OptimizationReason::ImplementationRestriction},
+                          nonFieldOperation,
+                          {},
+                          work.diagnostic->occurrencePath};
+    return !nonFieldOperation;
   }
   const protocol::ComputationContract *contract(Value value) const {
     return value ? contracts.lookup(value.getDefiningOp()) : nullptr;
@@ -225,6 +243,9 @@ std::optional<Reduction> analyzeReduction(const ComputationFacts &facts,
     facts.reportMissingAccess();
     return std::nullopt;
   }
+  if (combined.facet->law.algebra == protocol::ComputationAlgebra::FieldRing &&
+      !facts.payload.fieldFormula())
+    return std::nullopt;
   auto c = facts.view.computation;
   Reduction result;
   result.combine = combined.facet->identity;
@@ -376,6 +397,8 @@ std::optional<Bilinear> analyzeBilinear(const ComputationFacts &facts,
   if (combined.facet->identity != MathematicalIdentity::FieldAdd ||
       !facts.payload.supported || product.kind != IterationKind::Product ||
       product.children.size() != 2 || view.items.size() != 4)
+    return std::nullopt;
+  if (!facts.payload.fieldFormula())
     return std::nullopt;
   if (facts.missingAccess) {
     facts.reportMissingAccess();

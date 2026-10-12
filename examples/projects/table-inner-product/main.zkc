@@ -1,0 +1,60 @@
+module table_claims;
+use zkc::vector as vec;
+use zkc::finite_math as total;
+
+domain Base = field("koala-bear");
+domain Extension = field("koala-bear.ext8-binomial3");
+
+math fn collect_vector<I: Type + Copy + Drop, E: Field>(
+    rows: domain<I>, body: math fn(item: I) -> E where item_from(item, rows)
+) -> vec::Vector<E> = finite("math.collect.vector");
+
+math fn read_at<E: Field>(values: vec::Vector<E>, position: index) -> E
+    where in_bounds(position, values) {
+  return vec::at(values, position);
+}
+
+// Return both reads in the opposite order to the claim's operands.
+math fn read_pair<E: Field>(right: vec::Vector<E>, position: index,
+                            left: vec::Vector<E>) -> (E, E)
+    where in_bounds(position, left), equal_extent(left, right) {
+  return (read_at(right, position), read_at(left, position));
+}
+
+math fn product_at<E: Field>(left: vec::Vector<E>, right: vec::Vector<E>,
+                             position: index) -> E
+    where in_bounds(position, left), equal_extent(left, right) {
+  let pair = read_pair(right, position, left);
+  return pair.1 * pair.0;
+}
+
+math fn claim_step<E: Field>(position: index, state: E,
+                             right: vec::Vector<E>, left: vec::Vector<E>) -> E
+    where in_bounds(position, left), equal_extent(left, right) {
+  return state + product_at(left, right, position);
+}
+
+math fn inner_product_claim<E: Field>(left: vec::Vector<E>, right: vec::Vector<E>,
+                                     initial: E) -> E
+    where equal_extent(left, right) {
+  return total::fold(vec::indices(left), initial,
+    fn(state, position) => claim_step(position, state, right, left));
+}
+
+math fn claims<E: Field>(values: vec::Vector<E>, factor: E, offset: E,
+                         initial: E) -> (E, E) {
+  // An unfiltered collect establishes equal extent, not equal values.
+  let weighted = collect_vector(vec::indices(values),
+    fn(position) => factor * read_at(values, position) + offset);
+  return (inner_product_claim(values, values, initial),
+          inner_product_claim(values, weighted, initial));
+}
+
+pub protocol Claims<E: Field> roles(P)(values: vec::Vector<E> @P,
+    factor: E @P, offset: E @P, initial: E @P)
+    -> (square_claim: E @P, weighted_claim: E @P) {
+  let result @P = claims(values, factor, offset, initial);
+  return (square_claim = result.0, weighted_claim = result.1);
+}
+run Demo = Claims<Base>;
+run ExtensionDemo = Claims<Extension>;

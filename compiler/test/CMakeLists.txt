@@ -38,6 +38,8 @@ mlir_target_link_libraries(zkc-finite_abi-test PRIVATE MLIRParser)
 
 add_zkc_test(finite_callback_selection Transforms finite-callback-selection)
 mlir_target_link_libraries(zkc-finite_callback_selection-test PRIVATE MLIRParser)
+add_zkc_test(finite_preparation Transforms finite-preparation)
+mlir_target_link_libraries(zkc-finite_preparation-test PRIVATE MLIRParser)
 
 add_zkc_test(computation_analysis IR computation-analysis)
 target_compile_definitions(zkc-computation_analysis-test PRIVATE

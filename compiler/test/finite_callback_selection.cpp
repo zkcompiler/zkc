@@ -205,27 +205,272 @@ int main() {
             require(compare(*source, *candidate),
                     "original callback reader refused the indexed dot");
         });
-  cases.run("called indexed reads retain their own premise scope", [&] {
-    auto source = parseSourceString<ModuleOp>(indexedSourceText, &context);
-    require(bool(source), "indexed fixture refused");
-    auto step = SymbolTable(unit(*source)).lookup<func::FuncOp>("step");
-    OpBuilder builder(step);
-    auto accessed = cast<func::FuncOp>(builder.clone(*step));
-    accessed.setSymName("accessed");
-    auto premises = step->getAttrOfType<ArrayAttr>("data.preconditions");
-    SmallVector<Attribute> attributes(premises.begin(), premises.end());
-    attributes.push_back(data::EqualExtentAttr::get(&context, 2, 0, 3, 0));
-    step->setAttr("data.preconditions", ArrayAttr::get(&context, attributes));
-    step.getBody().getBlocks().clear();
-    builder.setInsertionPointToEnd(step.addEntryBlock());
-    auto call = func::CallOp::create(builder, step.getLoc(), accessed,
-                                     step.getArguments());
-    func::ReturnOp::create(builder, step.getLoc(), call.getResults());
-    require(succeeded(verify(*source)), "indexed wrapper source refused");
+  cases.run(
+      "called indexed reads retain the original callback premise scope", [&] {
+        auto source = parseSourceString<ModuleOp>(indexedSourceText, &context);
+        require(bool(source), "indexed fixture refused");
+        auto step = SymbolTable(unit(*source)).lookup<func::FuncOp>("step");
+        OpBuilder builder(step);
+        auto accessed = cast<func::FuncOp>(builder.clone(*step));
+        accessed.setSymName("accessed");
+        auto premises = step->getAttrOfType<ArrayAttr>("data.preconditions");
+        SmallVector<Attribute> attributes(premises.begin(), premises.end());
+        attributes.push_back(data::EqualExtentAttr::get(&context, 2, 0, 3, 0));
+        step->setAttr("data.preconditions",
+                      ArrayAttr::get(&context, attributes));
+        step.getBody().getBlocks().clear();
+        builder.setInsertionPointToEnd(step.addEntryBlock());
+        auto call = func::CallOp::create(builder, step.getLoc(), accessed,
+                                         step.getArguments());
+        func::ReturnOp::create(builder, step.getLoc(), call.getResults());
+        require(succeeded(verify(*source)), "indexed wrapper source refused");
+        RealizationWork work;
+        auto candidate = emit(*source, work);
+        require(!hasLoop(selected(*candidate)) && compare(*source, *candidate),
+                "indexed callee lost the original callback extent premise");
+      });
+  for (bool equality : {false, true})
+    for (bool repeated : {false, true})
+      cases.run(
+          std::string("nested access argument identity ") +
+              (equality ? "with extent " : "without extent ") +
+              (repeated ? "repeated" : "distinct"),
+          [&] {
+            std::string text(indexedSourceText);
+            auto start = text.find("   %x = \"data.bounded_at\"");
+            auto end = text.find("   func.return %r : !F", start);
+            require(start != std::string::npos && end != std::string::npos,
+                    "missing indexed body");
+            text.replace(
+                start, end - start,
+                "   %y, %ys2 = func.call @load(%ys,%i) : (!V,ui64)->(!F,!V)\n"
+                "   %x, %xs2 = func.call @load(" +
+                    std::string(repeated ? "%ys2" : "%xs") +
+                    ",%i) : (!V,ui64)->(!F,!V)\n"
+                    "   %r = func.call @update(%state,%x,%y) : "
+                    "(!F,!F,!F)->!F\n");
+            text.insert(text.find(" func.func private @step"), R"mlir(
+ func.func private @leaf(%i:ui64,%xs:!V)->(!V,!F) attributes {data.preconditions=[#data.index_bound<0,1,0>]} {
+   %x = "data.bounded_at"(%xs,%i) : (!V,ui64)->!F
+   func.return %xs,%x : !V,!F
+ }
+ func.func private @load(%xs:!V,%i:ui64)->(!F,!V) attributes {data.preconditions=[#data.index_bound<1,0,0>]} {
+   %v,%x = func.call @leaf(%i,%xs) : (ui64,!V)->(!V,!F)
+   func.return %x,%v : !F,!V
+ }
+)mlir");
+            auto source = parseSourceString<ModuleOp>(text, &context);
+            require(bool(source), "nested indexed source refused");
+            auto step = SymbolTable(unit(*source)).lookup<func::FuncOp>("step");
+            if (equality) {
+              auto premises =
+                  step->getAttrOfType<ArrayAttr>("data.preconditions");
+              SmallVector<Attribute> attributes(premises.begin(),
+                                                premises.end());
+              attributes.push_back(
+                  data::EqualExtentAttr::get(&context, 2, 0, 3, 0));
+              step->setAttr("data.preconditions",
+                            ArrayAttr::get(&context, attributes));
+            }
+            require(succeeded(verify(*source)),
+                    "nested indexed formation failed");
+            RealizationWork work;
+            auto candidate = emit(*source, work);
+            require(hasLoop(selected(*candidate)) != equality,
+                    "nested selection confused bound and extent premises");
+            if (!equality)
+              return;
+            require(compare(*source, *candidate),
+                    "reader lost root facts when the leaf omitted the domain "
+                    "anchor");
+            auto withoutEquality = copy(*source);
+            auto unqualifiedStep = SymbolTable(unit(*withoutEquality))
+                                       .lookup<func::FuncOp>("step");
+            SmallVector<Attribute> bounds;
+            for (Attribute premise : unqualifiedStep->getAttrOfType<ArrayAttr>(
+                     "data.preconditions"))
+              if (!isa<data::EqualExtentAttr>(premise))
+                bounds.push_back(premise);
+            unqualifiedStep->setAttr("data.preconditions",
+                                     ArrayAttr::get(&context, bounds));
+            require(succeeded(verify(*withoutEquality)) &&
+                        !compare(*withoutEquality, *candidate),
+                    "reader imported a missing callback premise from the outer "
+                    "caller");
+            Operation *dot = nullptr;
+            selected(*candidate).walk([&](Operation *op) {
+              if (op->getName().getStringRef() == "algebra.exec.vector_dot")
+                dot = op;
+            });
+            require(dot, "nested access did not select dot");
+            // Same shape never permits replacing one captured container's
+            // values.
+            dot->setOperand(0,
+                            selected(*candidate).getArgument(repeated ? 0 : 2));
+            dot->setOperand(1,
+                            selected(*candidate).getArgument(repeated ? 0 : 2));
+            require(
+                succeeded(verify(*candidate)) && !compare(*source, *candidate),
+                "reader equated distinct containers or lost repeated actuals");
+          });
+  for (bool aliased : {false, true})
+    cases.run(
+        aliased ? "aliased formals and returned index"
+                : "distinct formals and returned index",
+        [&] {
+          std::string text(indexedSourceText);
+          auto start = text.find("   %x = \"data.bounded_at\"");
+          auto end = text.find("   %r = func.call @update", start);
+          text.replace(
+              start, end - start,
+              "   %right,%j,%left = func.call @positions(%xs," +
+                  std::string(aliased ? "%xs" : "%ys") +
+                  ",%i) : (!V,!V,ui64)->(!V,ui64,!V)\n"
+                  "   %x = \"data.bounded_at\"(%left,%j) : (!V,ui64)->!F\n"
+                  "   %y = \"data.bounded_at\"(%right,%j) : (!V,ui64)->!F\n");
+          text.insert(text.find(" func.func private @step"), R"mlir(
+ func.func private @positions(%left:!V,%right:!V,%i:ui64)->(!V,ui64,!V) {
+   func.return %right,%i,%left : !V,ui64,!V
+ }
+)mlir");
+          auto source = parseSourceString<ModuleOp>(text, &context);
+          require(bool(source), "alias source refused");
+          auto step = SymbolTable(unit(*source)).lookup<func::FuncOp>("step");
+          auto premises = step->getAttrOfType<ArrayAttr>("data.preconditions");
+          SmallVector<Attribute> attributes(premises.begin(), premises.end());
+          attributes.push_back(
+              data::EqualExtentAttr::get(&context, 2, 0, 3, 0));
+          step->setAttr("data.preconditions",
+                        ArrayAttr::get(&context, attributes));
+          require(succeeded(verify(*source)), "returned index lost formation");
+          RealizationWork work;
+          auto candidate = emit(*source, work);
+          require(!hasLoop(selected(*candidate)) &&
+                      compare(*source, *candidate),
+                  "same-typed actuals or returned index lost their identities");
+          Operation *dot = nullptr;
+          selected(*candidate).walk([&](Operation *op) {
+            if (op->getName().getStringRef() == "algebra.exec.vector_dot")
+              dot = op;
+          });
+          require(dot, "missing alias contraction");
+          dot->setOperand(0, selected(*candidate).getArgument(aliased ? 2 : 0));
+          dot->setOperand(1, selected(*candidate).getArgument(aliased ? 2 : 0));
+          require(succeeded(verify(*candidate)) &&
+                      !compare(*source, *candidate),
+                  "alias mapping accepted a changed container");
+        });
+  for (bool row : {false, true})
+    cases.run(
+        row ? "nested selected matrix row" : "nested selected matrix column",
+        [&] {
+          std::string text = R"mlir(
+!F = !algebra.field<"koala-bear">
+!V = !algebra.field_vector<"koala-bear">
+!M = !algebra.field_matrix<"koala-bear">
+module { "protocol.module"() ({
+ "data.domain"() ({ ^entry(%xs:!V):
+   %d = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>
+   "data.domain_yield"(%d) : (!data.domain<ui64>)->()
+ }) {sym_name="items",sym_visibility="private",function_type=(!V)->!data.domain<ui64>} : ()->()
+ func.func private @cell(%m:!M,%r:ui64,%c:ui64)->!F attributes {data.preconditions=[#data.index_bound<1,0,0>,#data.index_bound<2,0,1>]} {
+   %x = "data.bounded_matrix_at"(%m,%r,%c) : (!M,ui64,ui64)->!F
+   func.return %x : !F
+ }
+ func.func private @step(%s:!F,%i:ui64,%xs:!V,%m:!M,%selected:ui64)->!F attributes {data.preconditions=[#data.index_bound<1,2,0>,#data.index_bound<1,3,VARYING>,#data.index_bound<4,3,FIXED>,#data.equal_extent<2,0,3,VARYING>]} {
+   %x = "data.bounded_at"(%xs,%i) : (!V,ui64)->!F
+   %y = func.call @cell(%m,ROW,COLUMN) : (!M,ui64,ui64)->!F
+   %p = algebra.field_multiply %x,%y : (!F,!F)->!F
+   %r = algebra.field_add %s,%p : (!F,!F)->!F
+   func.return %r : !F
+ }
+ func.func private @total(%xs:!V,%seed:!F,%m:!M,%selected:ui64)->!F attributes {data.preconditions=[#data.equal_extent<0,0,2,VARYING>,#data.index_bound<3,2,FIXED>]} {
+   %r = "algebra.finite_fold"(%xs,%seed,%m,%selected) {domain=@items,step=@step} : (!V,!F,!M,ui64)->!F
+   func.return %r : !F
+ }
+ "protocol.func"() ({ "protocol.return"() : ()->() }) {sym_name="main",function_type=()->(),roles=["P"],input_roles=[],output_roles=[]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir";
+          auto replace = [&](StringRef from, StringRef to) {
+            size_t offset = 0;
+            while ((offset = text.find(from.str(), offset)) !=
+                   std::string::npos) {
+              text.replace(offset, from.size(), to.str());
+              offset += to.size();
+            }
+          };
+          replace("VARYING", row ? "1" : "0");
+          replace("FIXED", row ? "0" : "1");
+          replace("ROW", row ? "%selected" : "%i");
+          replace("COLUMN", row ? "%i" : "%selected");
+          auto source = parseSourceString<ModuleOp>(text, &context);
+          require(bool(source) && succeeded(verify(*source)),
+                  "matrix helper fixture refused");
+          RealizationWork work;
+          auto candidate = emit(*source, work);
+          require(
+              !hasLoop(selected(*candidate)) && compare(*source, *candidate),
+              "nested matrix access lost its axis or fixed selector premise");
+          Operation *dot = nullptr, *length = nullptr;
+          selected(*candidate).walk([&](Operation *op) {
+            if (op->getName().getStringRef() ==
+                (row ? "algebra.exec.matrix_row_dot"
+                     : "algebra.exec.matrix_column_dot"))
+              dot = op;
+            if (op->getName().getStringRef() == "algebra.exec.vector_length")
+              length = op;
+          });
+          require(dot && length,
+                  "matrix contraction or domain admission missing");
+          dot->setOperand(2, length->getResult(0));
+          require(succeeded(verify(*candidate)) &&
+                      !compare(*source, *candidate),
+                  "reader accepted a different fixed selector");
+        });
+  cases.run("unused callee algebra retains the checked ordered body", [&] {
+    std::string text(indexedSourceText);
+    auto replace = [&](std::string from, std::string to) {
+      size_t at = 0;
+      while ((at = text.find(from, at)) != std::string::npos) {
+        text.replace(at, from.size(), to);
+        at += to.size();
+      }
+    };
+    replace("!V = !algebra.field_vector<\"koala-bear\">",
+            "!V = !algebra.field_vector<\"koala-bear\">\n!G = "
+            "!algebra.group<\"bn254.g1\">");
+    replace("%ys:!V)->!F", "%ys:!V,%g:!G)->!F");
+    replace("#data.index_bound<1,3,0>]",
+            "#data.index_bound<1,3,0>,#data.equal_extent<2,0,3,0>]");
+    replace("   %x = \"data.bounded_at\"",
+            "   %unused = func.call @nonfield(%g) : (!G)->!G\n   %x = "
+            "\"data.bounded_at\"");
+    text.insert(
+        text.find(" func.func private @step"),
+        "func.func private @nonfield(%g:!G)->!G {\n %r=algebra.group_add %g,%g "
+        ": (!G,!G)->!G\nfunc.return %r : !G\n}\n");
+    replace("(%xs,%seed,%ys)", "(%xs,%seed,%ys,%g)");
+    replace("(!V,!F,!V)->!F", "(!V,!F,!V,!G)->!F");
+    auto begin = text.find(" \"protocol.func\"");
+    auto end = text.find("}) {profile=", begin);
+    text.replace(begin, end - begin,
+                 "\"protocol.func\"() ({ \"protocol.return\"() : ()->() }) "
+                 "{sym_name=\"main\",function_type=()->(),roles=[\"P\"],input_"
+                 "roles=[],output_roles=[]} : ()->()\n");
+    auto source = parseSourceString<ModuleOp>(text, &context);
+    require(bool(source) && succeeded(verify(*source)), "bad fixture");
     RealizationWork work;
-    auto candidate = emit(*source, work);
+    RealizationTrace trace;
+    auto candidate = emit(*source, work, true, &trace);
     require(hasLoop(selected(*candidate)),
-            "selection imported caller-only premises into an indexed callee");
+            "mixed-algebra work entered field-only comparison");
+    bool observed = false;
+    for (const auto &event : trace.events)
+      if (auto *decision = std::get_if<SelectionDecision>(&event.payload);
+          decision && decision->family == DecisionFamily::Finite)
+        observed |= decision->outcome.reason ==
+                    OptimizationReason::ImplementationRestriction;
+    require(observed, "mixed-algebra restriction lost its explanation");
   });
   cases.run("nested reusable calls select without required reserves", [&] {
     auto source = parse(context), original = copy(*source);

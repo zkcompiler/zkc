@@ -142,6 +142,15 @@ two protocol computations. They reuse `fri::fold_value` and the
 `boolean_residual`. These scalar functions express the equations; their callers
 supply authenticated values, valid inverses and the remaining protocol checks.
 
+The [table inner-product](../examples/projects/table-inner-product/README.md) and
+[lookup denominator](../examples/projects/lookup-denominators/README.md) components
+use private generic Math helpers containing bounded vector reads. The first
+constructs a distinct equal-length vector through an unfiltered collect; the
+second reuses `air_interaction::gated_denominator` before an indexed product.
+Both have KoalaBear and Ext8 Entries. Their tests distinguish executable bulk
+selection from arithmetic correctness with selection and simplification
+independently disabled.
+
 ### Native mathematics and containers
 
 Import only the modules a client needs. Native `fn` definitions retain ordered

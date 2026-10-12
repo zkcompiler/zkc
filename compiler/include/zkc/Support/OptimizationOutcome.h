@@ -29,11 +29,15 @@ enum class OptimizationReason {
   OrderedRetry,
   LaneFormula,
   Work,
+  /// A preparation size estimate does not fit; no estimated work was debited.
+  ExpansionSize,
   CallEligibility,
   ImplementationRestriction
 };
 enum class WorkOwner {
   Structural,
+  /// A private per-callback envelope, distinct from shared structural work.
+  FiniteCallbackStructural,
   Equations,
   Evidence,
   Lanes,
