@@ -609,6 +609,7 @@ bool Checker::body(DeclarationId id, unsigned depth) {
         !domainBody(decl, depth))
       return false;
     bodyState[id.index] = 2;
+    inferredContracts.erase(&decl);
     return true;
   }
   Body result;

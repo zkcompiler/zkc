@@ -1227,6 +1227,33 @@ def test_native_share_against_actual_entry_inputs(drivers, directory):
     finish(directory, failures)
 
 
+def test_native_constructor_authority_against_entry_schemas(drivers, directory):
+    witnesses = [
+        ("bool", "boolean", True),
+        ("field:koala-bear", "field", True),
+        ("table:bls12-381.fr", "builtin", True),
+        ("sequence<fixed_vector<field:koala-bear,4>>", "builtin", True),
+        ("sequence<fixed_vector<fixed_vector<field:koala-bear,0>,2>>", "builtin", True),
+        ("opening_state:rows.merkle-keccak256.koala-bear/0", "builtin", False),
+        ("sequence<fixed_vector<opening_state:rows.merkle-keccak256.koala-bear/0,0>>", "builtin", False),
+    ]
+    policies = query({"cpp": drivers["cpp"]}, [{"native_policy": s} for s, _, _ in witnesses],
+                     directory / "policy")["cpp"]
+    assert [p.get("constructible") for p in policies] == [a for _, _, a in witnesses]
+    requests, expected = [], []
+    for spelling, kind, authority in witnesses:
+        for claimed in (False, True):
+            for nested in (False, True):
+                schema = entry_schema(kind, spelling, ["Copy", "Drop"])
+                schema["constructible"] = claimed
+                if nested:
+                    schema = entry_record(schema)
+                requests.append(entry_request(schema, ["P"]))
+                expected.append(not claimed or authority)
+    replies = query({"rust": drivers["rust"]}, requests, directory / "entry")["rust"]
+    assert [r.get("admitted") for r in replies] == expected, replies
+
+
 def entry_custody_witnesses():
     scalar = entry_schema("field", "field:koala-bear", ["Copy", "Drop"])
     custody = entry_record(scalar, custody=True, permissions=["Drop"], name="Ticket")
@@ -1255,7 +1282,7 @@ def entry_custody_witnesses():
 def test_entry_custody_and_nested_permission_refusals(drivers, directory):
     token, cases = entry_custody_witnesses()
     policy = query({"cpp": drivers["cpp"]}, [{"native_policy": token}], directory / "policy")["cpp"]
-    assert policy == [{"accepted": True, "share": False, "affine": True, "copy": False, "drop": True}]
+    assert policy == [{"accepted": True, "share": False, "affine": True, "constructible": False, "copy": False, "drop": True}]
     replies = query({"rust": drivers["rust"]}, [entry_request(s, roles) for _, s, roles, _ in cases], directory / "entry")["rust"]
     failures = [{"case": name, "expected": admitted, "entry": reply}
                 for (name, _, _, admitted), reply in zip(cases, replies)

@@ -624,6 +624,42 @@ fn pcs_schemas_preserve_independent_boundaries() {
     }
 }
 
+#[test]
+fn input_description_uses_the_execution_admission_check() {
+    for (leaf, kind, admitted) in [
+        ("field:bls12-381.fr", "field", true),
+        ("table:bls12-381.fr", "builtin", false),
+        (
+            "sequence<fixed_vector<field:koala-bear,4>>",
+            "builtin",
+            false,
+        ),
+    ] {
+        let mut doc = document();
+        doc["job"] = json!({"kind":"run"});
+        doc["relations"] = json!([]);
+        doc["protocols"][0]["clauses"] = json!([]);
+        doc["protocols"][0]["inputs"] = json!([port(
+            "value",
+            0,
+            json!([0]),
+            json!(["P"]),
+            schema(kind, leaf, json!([leaf]))
+        )]);
+        let interface = read(&doc).unwrap();
+        assert_eq!(
+            crate::entry::arguments::check_ports(&interface).is_ok(),
+            admitted,
+            "{leaf}"
+        );
+        assert_eq!(
+            interface.input_groups()[0].describe()["ports"][0]["constructible"],
+            json!(admitted),
+            "{leaf}"
+        );
+    }
+}
+
 fn setup_document() -> Value {
     let mut doc = document();
     doc["relations"] = json!([]);

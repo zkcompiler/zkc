@@ -1,6 +1,7 @@
 #include "BodyCheck.h"
 #include "Effects.h"
 #include <algorithm>
+#include <set>
 using namespace llvm;
 namespace zkc::language::detail {
 namespace {
@@ -32,15 +33,18 @@ bool BodyChecker::use(ValueId value, Span span, ArrayRef<unsigned> path) {
     state.moved.emplace_back(path.begin(), path.end());
   return true;
 }
-bool BodyChecker::finish(Span span) {
+bool BodyChecker::finish(Span span, ArrayRef<ValueId> forwarded) {
   auto effects = inferEffects(checker.types, checker.output.declarations, body);
   if (!effects)
     return false;
   body.effects = std::move(*effects);
   if (body.stopped)
     return true;
+  std::set<unsigned> transferred;
+  for (auto value : forwarded)
+    transferred.insert(value.index);
   for (unsigned i = 0; i < body.values.size(); ++i)
-    if (!finishValue(ValueId{i}, span, false))
+    if (!transferred.count(i) && !finishValue(ValueId{i}, span, false))
       return false;
   return true;
 }

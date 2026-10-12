@@ -72,6 +72,13 @@ bool Checker::requirements(Declaration &decl) {
                               req.span);
           continue;
         }
+        const auto *nominal = types.typeDeclaration(*lhs);
+        if (nominal && nominal->resource &&
+            (req.permission == "Copy" ||
+             *nominal->resource == Resource::Linear))
+          return types.fail("source.resource",
+                            "usage bound contradicts the resource restriction",
+                            req.span);
         if (lhs->arguments.empty() ||
             (lhs->kind != Type::Kind::Associated &&
              lhs->kind != Type::Kind::Field &&
@@ -398,6 +405,11 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
                             src.span);
         if (decl.kind != Declaration::Kind::Math &&
             !types.executableType(*t, src.span))
+          return false;
+        if (decl.kind == Declaration::Kind::DomainFunction &&
+            !types.requireUsage(*t, Usage::Copy, src.span, &decl,
+                                "source.finite-domain",
+                                "domain operands require Copy"))
           return false;
         Port p{src.name, *t, {}, src.span};
         if (decl.kind == Declaration::Kind::Protocol) {

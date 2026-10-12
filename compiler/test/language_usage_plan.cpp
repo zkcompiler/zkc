@@ -133,7 +133,7 @@ int main() {
     tuple.arguments = {e.parameter, e.parameter};
     auto value = e.plan.own(tuple, {}, Plan::always);
     e.plan.use(value, {0}, Plan::always, {});
-    auto joined = e.plan.join(value, {});
+    auto joined = e.plan.join(value, tuple, {});
     e.plan.use(joined, {1}, Plan::always, {});
     e.solve();
     require(e.needs(Usage::Copy), "whole successor lost partial consumption");
@@ -144,7 +144,7 @@ int main() {
     tuple.arguments = {e.parameter, e.parameter};
     auto value = e.plan.own(tuple, {}, Plan::always);
     e.plan.use(value, {0}, Plan::always, {});
-    e.plan.join(value, {});
+    e.plan.join(value, tuple, {});
     e.solve();
     require(!e.needs(Usage::Copy), "unused successor required Copy");
   });
@@ -162,12 +162,13 @@ int main() {
     e.solve();
     require(e.needs(Usage::Drop), "nonempty continuing guard disappeared");
   });
-  cases.run("sequential guards do not consume expression nesting", [] {
+  cases.run("sequential guards share prefixes within a linear work budget", [] {
     Environment e;
     e.limits.expressionDepth = 8;
+    e.limits.work = 100000;
     auto value = e.plan.own(e.parameter, {}, Plan::always);
     auto continuing = Plan::always;
-    for (unsigned i = 0; i < 40; ++i) {
+    for (unsigned i = 0; i < 2048; ++i) {
       auto branch = e.plan.branch(2);
       continuing = e.plan.intersect(continuing, e.plan.arm(branch, 0, {}), {});
     }

@@ -38,6 +38,30 @@ const Declaration &declarationNamed(const CheckedProject &project,
 int main() {
   Cases cases;
 
+  cases.run("domain factories infer operand and called usage requirements", [] {
+    auto project = take(check(R"(
+domain fn data<T:Type>(x:T,lo:index,hi:index)->domain<index>{return range(lo,hi);}
+domain fn needs<T:Type+Copy>(lo:index,hi:index)->domain<index>{return range(lo,hi);}
+domain fn caller<T:Type>(lo:index,hi:index)->domain<index>{return needs<T>(lo,hi);}
+)"));
+    for (StringRef name : {"m::data", "m::caller"}) {
+      const auto &decl = declarationNamed(project, name);
+      require(decl.permissionBounds.size() == 1 &&
+                  decl.permissionBounds.front().permissions.copy &&
+                  decl.permissionBounds.front().permissions.drop,
+              "domain factory lost inferred Copy/Drop usage");
+    }
+    refuses(check(R"(
+domain fn data<T:Type>(x:T,lo:index,hi:index)->domain<index> where (){return range(lo,hi);}
+)"),
+            "source.finite-domain");
+    refuses(check(R"(
+domain fn needs<T:Type+Copy>(lo:index,hi:index)->domain<index>{return range(lo,hi);}
+domain fn caller<T:Type>(lo:index,hi:index)->domain<index> where (){return needs<T>(lo,hi);}
+)"),
+            "source.permission");
+  });
+
   const std::string finitePrelude = R"(
 domain Fr=field("koala-bear");
 fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,item:I)->S effects(stop) where item_from(item, rows))->S effects(stop)=finite("local.fold");

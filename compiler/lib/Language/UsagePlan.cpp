@@ -18,6 +18,31 @@ unsigned UsagePlan::branch(unsigned arms) {
   arities.push_back(arms);
   return result;
 }
+UsagePlan::Guard UsagePlan::ancestorAtDepth(Guard guard, unsigned depth) const {
+  unsigned distance = nodes[guard].depth - depth;
+  for (unsigned bit = 0; distance; ++bit, distance >>= 1)
+    if (distance & 1)
+      guard = nodes[guard].ancestors[bit];
+  return guard;
+}
+UsagePlan::Guard UsagePlan::commonAncestor(Guard a, Guard b) const {
+  unsigned depth = std::min(nodes[a].depth, nodes[b].depth);
+  a = ancestorAtDepth(a, depth);
+  b = ancestorAtDepth(b, depth);
+  if (a == b)
+    return a;
+  for (unsigned bit = nodes[a].ancestors.size(); bit-- > 0;)
+    if (bit < nodes[a].ancestors.size() &&
+        nodes[a].ancestors[bit] != nodes[b].ancestors[bit]) {
+      a = nodes[a].ancestors[bit];
+      b = nodes[b].ancestors[bit];
+    }
+  return nodes[a].ancestors.front();
+}
+bool UsagePlan::impliesAncestor(Guard guard, Guard ancestor) const {
+  return nodes[guard].depth >= nodes[ancestor].depth &&
+         ancestorAtDepth(guard, nodes[ancestor].depth) == ancestor;
+}
 UsagePlan::Guard UsagePlan::node(unsigned variable, std::vector<Guard> children,
                                  Span span) {
   if (!types.charge(children.size() + 1, span))
@@ -29,8 +54,19 @@ UsagePlan::Guard UsagePlan::node(unsigned variable, std::vector<Guard> children,
   auto found = unique.find(key);
   if (found != unique.end())
     return found->second;
+  Guard ancestor = never;
+  for (Guard child : children)
+    if (child != never)
+      ancestor = ancestor == never ? child : commonAncestor(ancestor, child);
+  Node next{
+      variable, std::move(children), nodes[ancestor].depth + 1, {ancestor}};
+  for (unsigned bit = 0; bit < nodes[next.ancestors.back()].ancestors.size();
+       ++bit)
+    next.ancestors.push_back(nodes[next.ancestors.back()].ancestors[bit]);
+  if (!types.charge(next.ancestors.size(), span))
+    return never;
   Guard result = nodes.size();
-  nodes.push_back({variable, std::move(children)});
+  nodes.push_back(std::move(next));
   unique.emplace(std::move(key), result);
   return result;
 }
@@ -53,6 +89,11 @@ UsagePlan::Guard UsagePlan::combine(bool disjunction, Guard a, Guard b,
       return a;
     if (b == (disjunction ? always : never))
       return b;
+    // Ancestors were allocated before their descendants. This implication is
+    // only a shortcut; the ordinary decision-graph operation handles all other
+    // relationships, including implications absent from the ancestor tree.
+    if (impliesAncestor(b, a))
+      return disjunction ? a : b;
     auto found = combinations.find({disjunction, a, b});
     return found == combinations.end() ? std::nullopt
                                        : std::optional(found->second);
@@ -76,8 +117,10 @@ UsagePlan::Guard UsagePlan::combine(bool disjunction, Guard a, Guard b,
       continue;
     }
     if (!frame.expanded) {
+      // New decisions precede older ones, so extending a continuing guard
+      // shares its existing diagram instead of copying the whole prefix.
       frame.variable =
-          std::min(nodes[frame.left].variable, nodes[frame.right].variable);
+          std::max(nodes[frame.left].variable, nodes[frame.right].variable);
       if (!types.charge(arities[frame.variable], span))
         return never;
       frame.children.reserve(arities[frame.variable]);
@@ -126,10 +169,28 @@ UsagePlan::Value UsagePlan::own(const Type &type, Span span, Guard guard) {
   origins.push_back({type, span, {}});
   return {{{}, origin, {}, guard, {}}};
 }
-UsagePlan::Value UsagePlan::join(Value value, Span span) {
+UsagePlan::Value UsagePlan::join(Value value, const Type &type, Span span) {
+  Value retained, transferable;
   for (auto &part : value) {
     if (!types.charge(part.sourcePath.size() + part.transfers.size() + 1, span))
       return {};
+    bool untouched = true;
+    for (const auto &use : origins[part.origin].uses) {
+      if (!types.charge(use.path.size() + part.sourcePath.size() + 1, span))
+        return {};
+      if ((prefix(use.path, part.sourcePath) ||
+           prefix(part.sourcePath, use.path)) &&
+          intersect(use.guard, part.guard, span) != never) {
+        untouched = false;
+        break;
+      }
+    }
+    if (untouched) {
+      transferable.push_back(std::move(part));
+      continue;
+    }
+    // A possibly consumed predecessor remains conditional: using its whole
+    // successor later must still account for earlier partial moves.
     auto found = llvm::find_if(part.transfers, [&](const auto &transfer) {
       return transfer.path == part.sourcePath;
     });
@@ -137,8 +198,24 @@ UsagePlan::Value UsagePlan::join(Value value, Span span) {
       part.transfers.push_back({part.sourcePath, order});
     else
       found->before = order;
+    retained.push_back(std::move(part));
   }
-  return value;
+  if (!transferable.empty()) {
+    // On these paths no predecessor has been used. Transfer it now, exactly
+    // like final elaboration, and give equivalent output fields one fresh
+    // origin. Repeated joins then retain state, not every historical alias.
+    std::map<std::vector<unsigned>, Guard> fields;
+    for (const auto &part : transferable) {
+      if (!use({part}, {}, part.guard, span))
+        return {};
+      auto &guard = fields[part.path];
+      guard = unite(guard, part.guard, span);
+    }
+    auto origin = own(type, span, always).front().origin;
+    for (auto &[path, guard] : fields)
+      retained.push_back({path, origin, path, guard, {}});
+  }
+  return retained;
 }
 UsagePlan::Value UsagePlan::within(const Value &value, Guard guard, Span span) {
   Value result;

@@ -408,6 +408,9 @@ fn constructible(ty: &LogicalType, remaining: &mut usize) -> Result<bool> {
     if let Some(element) = ty.sequence_element() {
         return constructible(element, remaining);
     }
+    if let Some((element, _)) = ty.fixed_vector_parts() {
+        return constructible(element, remaining);
+    }
     if let Some(descriptor) = ty.variant_descriptor() {
         for child in descriptor.alternatives().iter().flat_map(|a| a.payload()) {
             if !constructible(child, remaining)? {

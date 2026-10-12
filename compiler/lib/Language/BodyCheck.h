@@ -114,7 +114,7 @@ private:
   intrinsicSignature(const Expression &, std::vector<Type> &);
   bool active(llvm::ArrayRef<unsigned>, Span);
   bool use(ValueId, Span, llvm::ArrayRef<unsigned> = {});
-  bool finish(Span);
+  bool finish(Span, llvm::ArrayRef<ValueId> forwarded = {});
   bool finishValue(ValueId, Span, bool prefixOnly = true);
   bool finishOwner(unsigned, Span);
   bool available(ValueId, llvm::ArrayRef<unsigned> = {});

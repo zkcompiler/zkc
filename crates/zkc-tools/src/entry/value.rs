@@ -52,9 +52,6 @@ pub(super) fn flatten(schema: &Schema, value: Value, out: &mut Vec<InputValue>) 
             Ok(())
         }
         (Kind::Record, Value::Record(values)) => flatten_fields(&schema.fields, values, out),
-        (Kind::Associated, Value::Associated(value)) => {
-            flatten(&schema.fields[0].schema, *value, out)
-        }
         (
             Kind::Variant,
             Value::Variant {

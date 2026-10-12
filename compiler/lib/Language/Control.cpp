@@ -270,6 +270,7 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
   }
   for (auto &arm : arms) {
     auto &nested = *arm.checker;
+    std::vector<ValueId> forwarded;
     if (!arm.body->stopped) {
       std::vector<ValueId> values;
       if (arm.result)
@@ -283,11 +284,17 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
       if (!packed || (!collectingBranch && !nested.use(*packed, expr.span)))
         return {};
       arm.body->results.push_back(*packed);
+      if (collectingBranch) {
+        // These values leave the arm through the join. Their obligations end
+        // at a later use/exit, or disappear if the continuation stops.
+        forwarded = values;
+        forwarded.push_back(*packed);
+      }
       if (loop)
         arm.body->results.insert(arm.body->results.end(), arm.captures.begin(),
                                  arm.captures.end());
     }
-    if (!nested.finish(expr.span))
+    if (!nested.finish(expr.span, forwarded))
       return {};
     body.parameterizedSummary |= arm.body->parameterizedSummary;
     operation.regions.push_back(arm.body);
@@ -328,13 +335,12 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
           continue;
         auto &nested = *arm.checker;
         const auto value = *nested.bindings.at(id).value;
-        auto origins =
-            plan->usage.join(plan->usage.within(nested.usageValues[value.index],
-                                                nested.usageGuard, expr.span),
-                             expr.span);
+        auto origins = plan->usage.within(nested.usageValues[value.index],
+                                          nested.usageGuard, expr.span);
         state.insert(state.end(), origins.begin(), origins.end());
       }
-      fields.push_back(std::move(state));
+      fields.push_back(
+          plan->usage.join(std::move(state), bindings.at(id).type, expr.span));
     }
     usageValues[packed->index] = fields.size() == 1
                                      ? fields.front()

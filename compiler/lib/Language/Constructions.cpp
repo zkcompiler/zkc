@@ -43,9 +43,17 @@ bool Checker::constructions() {
       return types.fail("source.construction", "cyclic construction selection",
                         decl.span);
     state[id.index] = 1;
+    auto freezeContract = scope_exit([&] { inferredContracts.erase(&decl); });
     const auto &syntax = *sources[id.index]->construction;
     const auto &target = output.declarations[decl.target->index];
+    // Protocol bodies have now completed their inferred contracts. Signature
+    // formation alone cannot validate a construction's target application.
+    if (!types.checkArguments(target, decl.staticArguments, decl.span, &decl))
+      return false;
     auto substitution = types.substitution(target, decl.staticArguments);
+    for (const auto &bound : target.bounds)
+      if (!types.assumptions(decl, bound, substitution, decl.span))
+        return false;
     ConstructionDefinition result;
     result.base = syntax.base;
     if (syntax.parent) {

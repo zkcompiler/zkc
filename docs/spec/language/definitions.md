@@ -333,8 +333,9 @@ requirements, not cryptographic guarantees. Before source checking, the installe
 catalog must sustain inherent sort facts and every installed unary implication.
 This preserves generic assumptions when type aliases normalize away their bounds.
 
-Defined `fn`, `math fn` and `protocol` declarations without a `where` clause infer
-missing usage, open catalog and natural preconditions from signature formation,
+Defined `fn`, `math fn`, `domain fn`, `protocol` and `construction` declarations
+without a `where` clause infer missing usage, open catalog and natural
+preconditions from signature formation,
 specification selectors and body operations, including calls. Inference records
 requirements; it does not prove them or invent catalog facts. Every concrete
 application still checks them. A written `where` clause is complete: checking
@@ -736,8 +737,9 @@ effect that produced it. Effects and resource custody retain their own checks.
 it. `#[linear]` forbids copying and requires transfer or consumption on every
 successful path. Both seal construction and representation access to the defining
 module. `#[sealed]` supplies that access boundary without restricting ordinary
-usage. Restrictions cannot grant properties missing from a field. These
-attributes also apply to opaque runtime type definitions. Associated domains
+usage. Restrictions cannot grant properties missing from a field, and written
+usage bounds cannot contradict them. These attributes also apply to opaque
+runtime type definitions. Associated domains
 such as `type F: Field` and `type C: Commitment` cannot carry them: selecting a
 domain does not introduce a nominal runtime wrapper.
 

@@ -4,9 +4,9 @@
 
 namespace zkc::language::detail {
 /// Temporary checking data, discarded before final body elaboration. Authored
-/// uses consume places; compiler-generated mutable-state transport aliases
-/// their origins. Exclusive branches therefore neither duplicate a value nor
-/// hide a use on a continuing path.
+/// uses consume places; mutable-state transport records transfers and retains
+/// conditional predecessor history when needed. Exclusive branches therefore
+/// neither duplicate a value nor hide a use on a continuing path.
 class UsagePlan {
 public:
   using Guard = unsigned;
@@ -32,9 +32,9 @@ public:
   Guard intersect(Guard, Guard, Span);
   Guard unite(Guard, Guard, Span);
   Value own(const Type &, Span, Guard);
-  /// A joined state is available as a whole. Only later authored uses demand
-  /// that earlier partial moves preserve that whole successor.
-  Value join(Value, Span);
+  /// Safe transfers coalesce into fresh state. Only later authored uses demand
+  /// that partially consumed predecessors preserve a whole successor.
+  Value join(Value, const Type &, Span);
   Value within(const Value &, Guard, Span);
   Value project(const Value &, llvm::ArrayRef<unsigned>, Span);
   Value product(llvm::ArrayRef<Value>, Span);
@@ -50,7 +50,14 @@ private:
   struct Node {
     unsigned variable;
     std::vector<Guard> children;
+    unsigned depth = 0;
+    std::vector<Guard> ancestors;
   };
+  // A node implies the common mandatory ancestor of its nonfalse children.
+  // Jump links make implication between sequential prefixes logarithmic.
+  Guard ancestorAtDepth(Guard, unsigned) const;
+  Guard commonAncestor(Guard, Guard) const;
+  bool impliesAncestor(Guard, Guard) const;
   std::vector<unsigned> arities;
   std::vector<Node> nodes;
   std::map<std::pair<unsigned, std::vector<Guard>>, Guard> unique;

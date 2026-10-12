@@ -1,7 +1,10 @@
 //! Exact named argument admission shared by run and independent proof jobs.
 use super::{
     Interface, NamedValues, Value,
-    interface::{InputPort, RolePorts, raw::Service},
+    interface::{
+        InputPort, RolePorts,
+        raw::{Schema, Service},
+    },
     value,
 };
 use crate::host::request::InputValue;
@@ -11,18 +14,22 @@ pub(super) fn check_ports(interface: &Interface) -> Result<(), String> {
     for i in 0..interface.selected_protocol().inputs.len() {
         let port = interface.input(i);
         if port.key.is_none() {
-            value::check_import(&port.schema)?;
-            if !port.schema.leaves.iter().all(|leaf| {
-                interface
-                    .logical_type(leaf)
-                    .is_some_and(|ty| ty.is_native_message_data())
-            }) {
-                return Err("entry-input-codec".into());
-            }
+            check_input(interface, &port.schema)?;
         }
     }
     for port in &interface.selected_protocol().outputs {
         value::check_export(&port.schema)?;
+    }
+    Ok(())
+}
+pub(super) fn check_input(interface: &Interface, schema: &Schema) -> Result<(), String> {
+    value::check_import(schema)?;
+    if !schema.leaves.iter().all(|leaf| {
+        interface
+            .logical_type(leaf)
+            .is_some_and(|ty| ty.is_native_message_data())
+    }) {
+        return Err("entry-input-codec".into());
     }
     Ok(())
 }

@@ -32,7 +32,8 @@ Error Checker::run() {
         (decl.kind == Declaration::Kind::Math ||
          decl.kind == Declaration::Kind::Local ||
          decl.kind == Declaration::Kind::DomainFunction ||
-         decl.kind == Declaration::Kind::Protocol))
+         decl.kind == Declaration::Kind::Protocol ||
+         decl.kind == Declaration::Kind::Construction))
       inferredContracts.insert(&decl);
   types.inferCapability = [this](const Declaration *scope,
                                  const CapabilityBound &bound) {

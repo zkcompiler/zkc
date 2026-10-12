@@ -79,6 +79,55 @@ fn invalid(x:Claim)->(Claim,Claim){return duplicate(x);}
             "fn stop_twice<T:Type>(x:T)->(){let y=x;let z=x;stop \"reject\";}",
             "stop_twice", true, true);
       });
+  cases.run(
+      "stopping after a join does not strengthen a forwarding contract", [&] {
+        for (StringRef control :
+             {"if b {s=id(s);} else {} stop \"reject\";",
+              "if b {if b {s=id(s);} else {} stop \"reject\";} else {} return "
+              "s;",
+              "match choice {A()=>{s=id(s);},B()=>{}} stop \"reject\";"}) {
+          std::string declarations =
+              "enum Choice{A(),B()} fn id<T:Type>(x:T)->T{return x;}";
+          std::string body = "{let mut s=x;" + control.str() + "}";
+          contract(declarations +
+                       "fn forwarding<T:Type>(x:T,b:bool,choice:Choice)->T" +
+                       body,
+                   "forwarding", false, false);
+          take(check(
+              declarations +
+              "fn forwarding<T:Type>(x:T,b:bool,choice:Choice)->T where ()" +
+              body +
+              "fn call(x:Claim,b:bool)->Claim{return "
+              "forwarding(x,b,Choice::A());}"));
+        }
+      });
+  cases.run(
+      "associated resource bounds must be consistent even without uses", [] {
+        for (StringRef attribute : {"affine", "linear"})
+          refuses(check("interface I{#[" + attribute.str() +
+                        "] type Item;}fn unused<M:I>()->() where "
+                        "Copy(M::Item){return ();}"),
+                  "source.resource");
+        refuses(check("interface I{#[linear] type Item;}"
+                      "fn unused<M:I>()->() where Drop(M::Item){return ();}"),
+                "source.resource");
+      });
+  cases.run("long guarded forwarding retains an unrestricted contract", [&] {
+    std::string text = "fn id<T:Type>(x:T)->T{return x;}"
+                       "fn forward<T:Type>(x:T,b:bool)->T{let mut s=x;";
+    for (unsigned i = 0; i < 2048; ++i)
+      text += "if b {stop \"reject\";} else {} s=id(s);";
+    text += "return s;}";
+    contract(text, "forward", false, false);
+  });
+  cases.run("repeated branch joins retain only live state", [&] {
+    std::string text = "fn id<T:Type>(x:T)->T{return x;}"
+                       "fn forward<T:Type>(x:T,b:bool)->T{let mut s=x;";
+    for (unsigned i = 0; i < 1024; ++i)
+      text += "if b {s=id(s);} else {}";
+    text += "return s;}";
+    contract(text, "forward", false, false);
+  });
   cases.run("restoring moved mutable state does not infer Copy", [&] {
     contract(R"(
 fn restore<T:Type>(a:T,b:T,go:bool)->(T,T) {
@@ -291,7 +340,7 @@ interface Linear {#[linear] type Token;}
 fn duplicate<C:Linear>(x:C::Token)->(C::Token,C::Token)
  where Copy(C::Token) {return(x,x);}
 )"),
-                "source.move");
+                "source.resource");
       });
   cases.run("resource attributes cannot restrict associated domains", [] {
     for (StringRef attribute : {"affine", "linear", "sealed"})

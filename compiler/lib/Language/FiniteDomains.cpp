@@ -343,14 +343,6 @@ instantiateDomain(Semantics &types, const Declaration &callee,
 }
 bool Checker::domainBody(Declaration &decl, unsigned depth) {
   const auto &syntax = *sources[decl.id.index];
-  for (const auto &input : decl.inputs) {
-    auto permissions = types.permissions(input.type, input.span, &decl);
-    if (!permissions)
-      return false;
-    if (!permissions->copy || !permissions->drop)
-      return types.fail("source.finite-domain",
-                        "domain operands require Copy and Drop", input.span);
-  }
   auto definition = std::make_shared<DomainDefinition>();
   for (unsigned i = 0; i < decl.domainInputs.size(); ++i)
     definition->bindings.push_back({Kind::Parameter,

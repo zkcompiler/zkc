@@ -32,9 +32,11 @@ bool Checker::collectUsage(const Declaration &scope, const Type &type,
     plan->demands.push_back({type, usage, span, code.str(), message.str()});
     return true;
   }
-  // Formation requirements depend only on the signature, not on body flow.
-  // Freeze them before any use plan is built. Final elaboration never infers.
-  if (signatureState[scope.id.index] != 1)
+  // Signatures and static definitions collect direct requirements without
+  // a use plan. Completed definitions leave inferredContracts, like bodies.
+  if (signatureState[scope.id.index] != 1 &&
+      scope.kind != Declaration::Kind::Construction &&
+      scope.kind != Declaration::Kind::DomainFunction)
     return false;
   auto &decl = output.declarations[scope.id.index];
   return appendRequirements(types, decl, decl.permissionBounds, type, usage,
