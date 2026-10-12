@@ -20,7 +20,7 @@ fn check<C:Commitment>(vk:VK<C>,c:Commit<C>,point:Vector<C::PointField>,value:C:
 }
 protocol Opening<C:Commitment> roles(P,V)
   (vk:VK<C>@V,pk:PK<C>@P,data:Vector<C::ValueField>@P,point:Vector<C::PointField>@(P,V))
-  ->(accepted:bool@V) where zkc::pcs::MultilinearOpening(C), Share(C::PointField), Share(C::EvaluationField), Wire(C::EvaluationField) {
+  ->(accepted:bool@V) where zkc::pcs::MultilinearOpening(C) {
   let opened @P =produce<C>(pk,data,point);
   let c=send P->V(opened.0);
   let value=send P->V(opened.1);

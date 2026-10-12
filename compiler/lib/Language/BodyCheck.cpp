@@ -2,6 +2,7 @@
 #include "Effects.h"
 #include "FiniteContracts.h"
 #include "zkc/Contracts/Kernels.h"
+#include "llvm/Support/SaveAndRestore.h"
 #include <algorithm>
 #include <numeric>
 using namespace llvm;
@@ -14,7 +15,8 @@ BodyChecker::BodyChecker(Checker &checker, Declaration &decl,
                          const SyntaxDeclaration &syntax, Body &body,
                          unsigned depth)
     : checker(checker), decl(decl), syntax(syntax), body(body),
-      callDepth(depth) {}
+      plan(checker.bodyPlan(decl.id)),
+      witnesses(checker.bodyWitnesses(decl.id)), callDepth(depth) {}
 bool BodyChecker::active(ArrayRef<unsigned> roles, Span span) {
   auto available = allRoles();
   return std::includes(available.begin(), available.end(), roles.begin(),
@@ -61,6 +63,8 @@ std::optional<ValueId> BodyChecker::input(const Type &type,
   ValueId value{uint32_t(body.values.size())};
   body.values.push_back({type, std::move(components), span});
   uses.emplace_back();
+  if (plan)
+    usageValues.push_back(plan->usage.own(type, span, usageGuard));
   ++body.inputs;
   return value;
 }
@@ -91,9 +95,9 @@ std::optional<ValueId> BodyChecker::emit(decltype(Operation::action) action,
 std::optional<std::vector<ValueId>>
 BodyChecker::emitResults(decltype(Operation::action) action,
                          std::vector<Value> results, Span span) {
-  if (!checker.types.accept(checker.work.count(checker.work.operations,
-                                               checker.work.limits.operations,
-                                               "operation count", span)))
+  if (!checker.types.accept(checker.work.count(
+          plan ? plan->operations : checker.work.operations,
+          checker.work.limits.operations, "operation count", span)))
     return {};
   for (const auto &value : results) {
     if (!math() && !checker.types.executableType(value.type, span))
@@ -102,13 +106,8 @@ BodyChecker::emitResults(decltype(Operation::action) action,
         !checker.types.charge(value.components.size() + 1, span))
       return {};
     if (protocol() && !placement && value.components.size() > 1) {
-      auto caps = checker.types.permissions(value.type, span, &decl);
-      if (!caps || !caps->share) {
-        if (!checker.types.diagnostic)
-          fail("source.permission",
-               "multiple participant components require Share", span);
+      if (!checker.types.admit(value.type, Boundary::Participants, span, &decl))
         return {};
-      }
     }
   }
   std::vector<ValueId> ids;
@@ -118,6 +117,9 @@ BodyChecker::emitResults(decltype(Operation::action) action,
       placement->values.emplace(ids.back().index, Components(value.components));
     body.values.push_back(std::move(value));
     uses.emplace_back();
+    if (plan)
+      usageValues.push_back(plan->usage.own(
+          body.values.back().type, body.values.back().span, usageGuard));
   }
   body.operations.push_back({std::move(action), ids, span, statement});
   return ids;
@@ -167,7 +169,7 @@ bool BodyChecker::restricted(const Type &type) {
   if (type.kind == Type::Kind::Associated || type.kind == Type::Kind::Parameter)
     return true;
   auto *d = checker.types.typeDeclaration(type);
-  return d && d->permissions.has_value();
+  return d && d->sealed;
 }
 std::optional<Type> BodyChecker::projected(Type type, ArrayRef<unsigned> path,
                                            Span span) {
@@ -286,6 +288,11 @@ bool BodyChecker::statementBody(const Statement &s) {
     expected = Type{};
   if (s.kind == Statement::Kind::Expression && !s.terminated)
     expected = Type(Type::Kind::Unit);
+  SaveAndRestore completionScope(completionLoop,
+                                 s.kind == Statement::Kind::Expression &&
+                                         expr.kind == Expression::Kind::For
+                                     ? std::optional(s.expression)
+                                     : std::nullopt);
   auto value = expression(s.expression, expected, 1,
                           s.kind != Statement::Kind::Let &&
                               s.kind != Statement::Kind::Assign);
@@ -331,12 +338,10 @@ bool BodyChecker::statementBody(const Statement &s) {
     auto before = body.values[value->index];
     if (!checker.types.executableType(before.type, s.span))
       return false;
-    auto caps = checker.types.permissions(before.type, s.span, &decl);
-    if (!caps)
+    if (!checker.types.admit(before.type, Boundary::Construction, s.span,
+                             &decl) ||
+        !checker.types.admit(before.type, Boundary::Message, s.span, &decl))
       return false;
-    if (!caps->copy || !caps->drop || !caps->share || !caps->wire)
-      return fail("source.permission",
-                  "send requires Copy, Drop, Share and Wire", s.span);
     if (*sender == *receiver)
       return fail("source.send", "sender and receiver must be distinct",
                   s.span);
@@ -359,15 +364,15 @@ bool BodyChecker::statementBody(const Statement &s) {
       return false;
   } else {
     auto &type = body.values[value->index].type;
-    auto caps = checker.types.permissions(type, s.span, &decl);
-    if (!caps)
-      return false;
     if (!local())
       return fail("source.mode",
                   "explicit resource disposal belongs in local functions",
                   s.span);
-    if (s.kind == Statement::Kind::Drop && !caps->drop)
-      return fail("source.drop", "explicit drop requires Drop", s.span);
+    if (s.kind == Statement::Kind::Drop &&
+        !checker.types.requireUsage(type, Usage::Drop, s.span, &decl,
+                                    "source.drop",
+                                    "explicit drop requires Drop"))
+      return false;
     if (s.kind == Statement::Kind::Consume &&
         !checker.types.constructorAllowed(decl, type))
       return fail("source.private", "consume requires constructor authority",
@@ -377,14 +382,11 @@ bool BodyChecker::statementBody(const Statement &s) {
       if (!fs)
         return false;
       for (auto &f : *fs) {
-        auto child = checker.types.permissions(f.type, s.span, &decl);
-        if (!child)
+        if (!checker.types.requireUsage(f.type, Usage::Drop, s.span, &decl,
+                                        "source.drop",
+                                        "unpack and transfer mandatory fields "
+                                        "before consuming the wrapper"))
           return false;
-        if (!child->drop)
-          return fail("source.drop",
-                      "unpack and transfer mandatory fields before consuming "
-                      "the wrapper",
-                      s.span);
       }
     }
     if (!use(*value, s.span) ||
@@ -424,6 +426,13 @@ std::optional<ValueId> BodyChecker::tail(const SyntaxBody &source,
     return {};
   // A protocol loop body has its own tail statement. Expression-block tails
   // instead participate in the enclosing statement's demands.
+  SaveAndRestore completionScope(
+      completionLoop,
+      protocol() && !placement && source.results.size() == 1 &&
+              syntax.expressions[source.results.front().second].kind ==
+                  Expression::Kind::For
+          ? std::optional(source.results.front().second)
+          : std::nullopt);
   std::optional<StatementPlacement> inference;
   if (protocol() && !placement)
     inference.emplace(*this);
@@ -516,15 +525,69 @@ bool BodyChecker::run(const SyntaxBody &source, std::vector<Port> &outputs,
   if (isProtocol)
     for (unsigned i = 0; i < outputs.size(); ++i)
       if (body.values[body.results[i].index].components != outputs[i].roles) {
-        auto caps =
-            checker.types.permissions(outputs[i].type, outputs[i].span, &decl);
-        if (!caps || (!caps->drop &&
-                      !fail("source.permission",
-                            "return cannot discard components without Drop",
-                            outputs[i].span)))
+        if (!checker.types.requireUsage(
+                outputs[i].type, Usage::Drop, outputs[i].span, &decl,
+                "source.permission",
+                "return cannot discard components without Drop"))
           return false;
       }
   return finish(source.span);
+}
+bool Checker::checkBody(Declaration &decl, Body &result, unsigned depth) {
+  const auto &source = *sources[decl.id.index];
+  if (source.primitive)
+    return primitiveBody(decl, result);
+  if (source.finiteDefinition)
+    return finiteBody(decl, result);
+  BodyChecker check(*this, decl, *sources[decl.id.index], result, depth);
+  for (unsigned i = 0; i < decl.inputs.size(); ++i) {
+    auto &p = decl.inputs[i];
+    auto caps = types.permissions(p.type, p.span, &decl);
+    if (!caps)
+      return false;
+    if (result.mode == Body::Mode::Math &&
+        !types.mathematicalData(p.type, p.span, &decl))
+      return false;
+    if (result.mode == Body::Mode::Protocol) {
+      if (p.roles.size() > 1 &&
+          !types.admit(p.type, Boundary::Participants, p.span, &decl))
+        return false;
+    }
+    if (!check.addInput(sources[decl.id.index]->inputBindings[i], p.type,
+                        result.mode == Body::Mode::Math
+                            ? std::vector<unsigned>{i}
+                            : p.roles,
+                        p.span))
+      return false;
+  }
+  for (unsigned i = 0; i < decl.services.size(); ++i)
+    if (!check.addService(sources[decl.id.index]->serviceBindings[i],
+                          decl.services[i]))
+      return false;
+  for (unsigned i = 0; i < decl.domainInputs.size(); ++i)
+    if (!check.addDomain(sources[decl.id.index]->domainBindings[i],
+                         decl.domainInputs[i], i))
+      return false;
+  for (unsigned i = 0; i < decl.scopedInputs.size(); ++i)
+    if (!check.addScoped(sources[decl.id.index]->scopedBindings[i],
+                         decl.scopedInputs[i].signature,
+                         decl.scopedInputs[i].span))
+      return false;
+  if (!check.run(sources[decl.id.index]->bodies.front(), decl.outputs,
+                 result.mode == Body::Mode::Protocol))
+    return false;
+  for (auto &p : decl.outputs) {
+    auto caps = types.permissions(p.type, p.span, &decl);
+    if (!caps)
+      return false;
+    if (result.mode == Body::Mode::Math &&
+        !types.mathematicalData(p.type, p.span, &decl))
+      return false;
+    if (result.mode == Body::Mode::Protocol && p.roles.size() > 1 &&
+        !types.admit(p.type, Boundary::Participants, p.span, &decl))
+      return false;
+  }
+  return true;
 }
 bool Checker::body(DeclarationId id, unsigned depth) {
   auto &decl = output.declarations[id.index];
@@ -546,6 +609,7 @@ bool Checker::body(DeclarationId id, unsigned depth) {
         !domainBody(decl, depth))
       return false;
     bodyState[id.index] = 2;
+    inferredContracts.erase(&decl);
     return true;
   }
   Body result;
@@ -556,24 +620,6 @@ bool Checker::body(DeclarationId id, unsigned depth) {
                                                         : Body::Mode::Protocol;
   if (!resolveBindings(*this, decl, *sources[id.index]))
     return false;
-  if (sources[id.index]->primitive) {
-    if (!primitiveBody(decl, result) ||
-        !checkFiniteContracts(types, output.declarations, decl, result))
-      return false;
-    decl.body = std::make_shared<Body>(std::move(result));
-    bodyState[id.index] = 2;
-    inferredContracts.erase(&decl);
-    return true;
-  }
-  if (sources[id.index]->finiteDefinition) {
-    if (!finiteBody(decl, result) ||
-        !checkFiniteContracts(types, output.declarations, decl, result))
-      return false;
-    decl.body = std::make_shared<Body>(std::move(result));
-    bodyState[id.index] = 2;
-    inferredContracts.erase(&decl);
-    return true;
-  }
   std::set<std::string> sites;
   for (const auto &region : sources[id.index]->bodies)
     for (const auto &statement : region.statements) {
@@ -585,57 +631,28 @@ bool Checker::body(DeclarationId id, unsigned depth) {
         return types.fail("source.site", "duplicate site label in protocol",
                           statement.span);
     }
-  BodyChecker check(*this, decl, *sources[id.index], result, depth);
-  for (unsigned i = 0; i < decl.inputs.size(); ++i) {
-    auto &p = decl.inputs[i];
-    auto caps = types.permissions(p.type, p.span, &decl);
-    if (!caps)
-      return false;
-    if (result.mode == Body::Mode::Math &&
-        !types.mathematicalData(p.type, p.span, &decl))
-      return false;
-    if (result.mode == Body::Mode::Protocol) {
-      if (p.roles.size() > 1 && (!caps->copy || !caps->drop || !caps->share))
-        return types.fail("source.permission",
-                          "shared input requires Copy, Drop and Share", p.span);
-    }
-    if (!check.addInput(sources[id.index]->inputBindings[i], p.type,
-                        result.mode == Body::Mode::Math
-                            ? std::vector<unsigned>{i}
-                            : p.roles,
-                        p.span))
-      return false;
-  }
-  for (unsigned i = 0; i < decl.services.size(); ++i)
-    if (!check.addService(sources[id.index]->serviceBindings[i],
-                          decl.services[i]))
-      return false;
-  for (unsigned i = 0; i < decl.domainInputs.size(); ++i)
-    if (!check.addDomain(sources[id.index]->domainBindings[i],
-                         decl.domainInputs[i], i))
-      return false;
-  for (unsigned i = 0; i < decl.scopedInputs.size(); ++i)
-    if (!check.addScoped(sources[id.index]->scopedBindings[i],
-                         decl.scopedInputs[i].signature,
-                         decl.scopedInputs[i].span))
-      return false;
-  if (!check.run(sources[id.index]->bodies.front(), decl.outputs,
-                 result.mode == Body::Mode::Protocol))
+  const bool infer =
+      inferredContracts.count(&decl) &&
+      llvm::any_of(decl.parameters, [](const Parameter &parameter) {
+        return (parameter.sort == Parameter::Sort::Type &&
+                !parameter.permissions.copy) ||
+               parameter.sort == Parameter::Sort::Module;
+      });
+  if (infer && !inferUsage(decl, result.mode, depth))
     return false;
+  if (!checkBody(decl, result, depth)) {
+    if (infer && types.diagnostic &&
+        (types.diagnostic->code == "source.move" ||
+         types.diagnostic->code == "source.drop")) {
+      types.diagnostic->code = "source.usage-plan";
+      types.diagnostic->message =
+          "usage collection and fixed-contract elaboration disagree: " +
+          types.diagnostic->message;
+    }
+    return false;
+  }
   if (!checkFiniteContracts(types, output.declarations, decl, result))
     return false;
-  for (auto &p : decl.outputs) {
-    auto caps = types.permissions(p.type, p.span, &decl);
-    if (!caps)
-      return false;
-    if (result.mode == Body::Mode::Math &&
-        !types.mathematicalData(p.type, p.span, &decl))
-      return false;
-    if (result.mode == Body::Mode::Protocol && p.roles.size() > 1 &&
-        (!caps->copy || !caps->drop || !caps->share))
-      return types.fail("source.permission",
-                        "shared output requires Copy, Drop and Share", p.span);
-  }
   if (decl.effectAllowance &&
       !effectsWithin(types, result.effects, *decl.effectAllowance, decl.span))
     return types.fail("source.effect",

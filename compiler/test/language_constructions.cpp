@@ -29,7 +29,7 @@ interface TestTranscript<T:Field> {
   fn observe(t:State,v:T)->State effects(stop, opaque);
   fn draw(t:State)->(State,T) effects(stop, opaque);
 }
-protocol Round<T:Field+Share+Wire> roles(P,V)
+protocol Round<T:Field> roles(P,V)
     (public:T@(P,V),secret:T@P,challenges:Random<T>@V)->(ok:bool@V){
   #[site(commitment)] let first=send P->V(secret);
   #[site(challenge)] let c=challenges.draw();
@@ -37,7 +37,7 @@ protocol Round<T:Field+Share+Wire> roles(P,V)
   #[site(response)] let last=send P->V(secret+actual);
   return last==first+c;
 }
-construction Derived<T:Field+Share+Wire,H:TestTranscript<T>> for Round<T>{
+construction Derived<T:Field,H:TestTranscript<T>> for Round<T>{
   transcript H;
   replace challenges;
   on start(t,public){return H::observe(t,public);}
@@ -102,6 +102,57 @@ int main() {
   zkc::registerDialects(registry);
   mlir::MLIRContext context(registry);
   context.loadAllAvailableDialects();
+  cases.run("construction targets use completed protocol contracts", [] {
+    refuses(checked(R"(module m;
+protocol Dup<T:Type> roles(P)(x:T@P)->(a:T@P,b:T@P){return(a=x,b=x);}
+#[affine] struct Ticket{}
+construction Bad for Dup<Ticket>{base authored;}
+)"),
+            "source.permission");
+    refuses(checked(R"(module m;
+protocol Relay<T:Type> roles(P,V)(x:T@P)->(r:T@V){let y=send P->V(x);return y;}
+struct Secret{value:bool}
+construction Bad for Relay<Secret>{base authored;}
+)"),
+            "source.ingress");
+    refuses(checked(R"(module m;
+protocol First<N:nat> roles(P)(xs:[bool;N]@P)->(r:bool@P){return xs[0];}
+construction Bad for First<0>{base authored;}
+)"),
+            "source.bound");
+  });
+  cases.run("generic constructions retain target usage and admission", [] {
+    auto project = take(checked(R"(module m;
+protocol Relay<T:Type> roles(P,V)(x:T@P)->(a:T@P,b:T@V){
+ let delivered=send P->V(x);return(a=x,b=delivered);
+}
+construction Base<T:Type> for Relay<T>{base authored;}
+construction Derived<T:Type> for Relay<T>{base Base<T>;}
+)"));
+    for (const auto &decl : project.declarations()) {
+      if (decl.kind != Declaration::Kind::Construction)
+        continue;
+      require(decl.permissionBounds.size() == 1 &&
+                  decl.permissionBounds.front().permissions.copy,
+              "construction lost inferred target usage");
+      require(decl.admissions.size() == 2,
+              "construction lost target boundary obligations");
+    }
+    refuses(checked(R"(module m;
+protocol Dup<T:Type> roles(P)(x:T@P)->(a:T@P,b:T@P){return(a=x,b=x);}
+construction Restricted<T:Type> for Dup<T> where (){base authored;}
+)"),
+            "source.permission");
+  });
+  cases.run("generic constructions retain target natural requirements", [] {
+    auto project = take(checked(R"(module m;
+protocol First<N:nat> roles(P)(xs:[bool;N]@P)->(r:bool@P){return xs[0];}
+construction Base<N:nat> for First<N>{base authored;}
+)"));
+    for (const auto &decl : project.declarations())
+      if (decl.kind == Declaration::Kind::Construction)
+        require(decl.bounds.size() == 1, "construction lost target bound");
+  });
   cases.run("start handlers require a state parameter", [&] {
     refuses(checked(replace("on start(t,public)", "on start()")),
             "source.construction");
@@ -346,7 +397,7 @@ int main() {
   });
   cases.run("partial overrides inherit provider and unchanged rules", [&] {
     auto project = take(checked((program + R"(
-      construction Changed<T:Field+Share+Wire,H:TestTranscript<T>> for Round<T>{
+      construction Changed<T:Field,H:TestTranscript<T>> for Round<T>{
         base Derived<T,H>;
         on message response(t,value){return t;}
       })")
@@ -1025,8 +1076,8 @@ int main() {
     for (unsigned i = 0; i < 24; ++i) {
       auto parent = i ? "Layer" + std::to_string(i - 1) : "Derived";
       source += "construction Layer" + std::to_string(i) +
-                "<T:Field+Share+Wire,H:TestTranscript<T>> for Round<T>{base " +
-                parent + "<T,H>;}";
+                "<T:Field,H:TestTranscript<T>> for Round<T>{base " + parent +
+                "<T,H>;}";
     }
     auto project = take(checked(source));
     Limits limits;
@@ -1103,7 +1154,7 @@ int main() {
     auto text = replace("protocol Round<T:", "protocol Child<T:");
     const auto declaration = text.find("construction Derived");
     text.insert(declaration, R"(
-      protocol Round<T:Field+Share+Wire> roles(P,V)
+      protocol Round<T:Field> roles(P,V)
           (public:T@(P,V),secret:T@P,challenges:Random<T>@V)->(ok:bool@V){
         #[site(part)] let accepted=Child<T> roles(P,V)(public,secret,challenges);
         return accepted;
@@ -1156,8 +1207,8 @@ int main() {
   });
   cases.run("base cycles refuse", [&] {
     refuses(checked((program + R"(
-      construction A<T:Field+Share+Wire,H:TestTranscript<T>> for Round<T>{base B<T,H>;}
-      construction B<T:Field+Share+Wire,H:TestTranscript<T>> for Round<T>{base A<T,H>;}
+      construction A<T:Field,H:TestTranscript<T>> for Round<T>{base B<T,H>;}
+      construction B<T:Field,H:TestTranscript<T>> for Round<T>{base A<T,H>;}
     )")
                         .str()),
             "source.construction");

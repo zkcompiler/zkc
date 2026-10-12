@@ -54,6 +54,14 @@ class ZKC_Type<string value, list<ZKC_Parameter> ps = [],
   bit drop = droppable;
   // False records describe existing special carriers or generation-only types.
   bit commonGeneric = 1;
+  // Native profile facts, separate from source usage and concrete codecs.
+  bit nativeLocal = 1;
+  bit mathematical = 0;
+  bit participants = !eq(c, PublicValue);
+  bit constructible = !eq(c, PublicValue);
+  // A message frame exists for some complete applications of this head.
+  // Actual domain, shape and representation admission remains independent.
+  bit message = 0;
 }
 class ZKC_Apply<ZKC_Type head, list<ZKC_Term> args = []>
     : ZKC_Term<TypeParameter> {

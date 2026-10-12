@@ -257,8 +257,9 @@ bool Checker::primitiveBody(Declaration &decl, Body &body) {
   body.inputs = operands.size();
   if (!types.permissions(decl.outputs.front().type, decl.span, &decl) ||
       !types.chargeType(decl.outputs.front().type, decl.span) ||
-      !types.accept(work.count(work.operations, work.limits.operations,
-                               "operation count", decl.span)))
+      !types.accept(work.count(
+          bodyPlan(decl.id) ? bodyPlan(decl.id)->operations : work.operations,
+          work.limits.operations, "operation count", decl.span)))
     return false;
   ValueId result{uint32_t(body.values.size())};
   body.values.push_back({decl.outputs.front().type, dependencies, decl.span});

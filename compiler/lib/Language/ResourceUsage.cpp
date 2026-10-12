@@ -1,6 +1,7 @@
 #include "BodyCheck.h"
 #include "Effects.h"
 #include <algorithm>
+#include <set>
 using namespace llvm;
 namespace zkc::language::detail {
 namespace {
@@ -9,6 +10,8 @@ bool prefix(ArrayRef<unsigned> a, ArrayRef<unsigned> b) {
 }
 } // namespace
 bool BodyChecker::use(ValueId value, Span span, ArrayRef<unsigned> path) {
+  if (plan)
+    return plan->usage.use(usageValues[value.index], path, usageGuard, span);
   if (!checker.types.charge(path.size() + 1, span))
     return false;
   auto type = projected(body.values[value.index].type, path, span);
@@ -30,19 +33,36 @@ bool BodyChecker::use(ValueId value, Span span, ArrayRef<unsigned> path) {
     state.moved.emplace_back(path.begin(), path.end());
   return true;
 }
-bool BodyChecker::finish(Span span) {
+bool BodyChecker::finish(Span span, ArrayRef<ValueId> forwarded) {
   auto effects = inferEffects(checker.types, checker.output.declarations, body);
   if (!effects)
     return false;
   body.effects = std::move(*effects);
   if (body.stopped)
     return true;
+  std::set<unsigned> transferred;
+  for (auto value : forwarded)
+    transferred.insert(value.index);
   for (unsigned i = 0; i < body.values.size(); ++i)
-    if (!finishValue(ValueId{i}, span))
+    if (!transferred.count(i) && !finishValue(ValueId{i}, span, false))
       return false;
   return true;
 }
-bool BodyChecker::finishValue(ValueId value, Span span) {
+bool BodyChecker::finishOwner(unsigned owner, Span span) {
+  for (auto *scope = this; scope; scope = scope->enclosing)
+    for (unsigned i = 0; i < scope->body.values.size(); ++i) {
+      if (!checker.types.charge(1, span))
+        return false;
+      if (llvm::is_contained(scope->body.values[i].components, owner) &&
+          !scope->finishValue(ValueId{i}, span))
+        return false;
+    }
+  return true;
+}
+bool BodyChecker::finishValue(ValueId value, Span span, bool prefixOnly) {
+  if (plan)
+    return plan->usage.finish(usageValues[value.index], usageGuard, span,
+                              prefixOnly);
   auto &state = uses[value.index];
   std::function<bool(const Type &, std::vector<unsigned>, unsigned)> check =
       [&](const Type &t, std::vector<unsigned> path, unsigned depth) {
@@ -85,30 +105,14 @@ bool BodyChecker::finishValue(ValueId value, Span span) {
   return check(body.values[value.index].type, {}, 1);
 }
 bool BodyChecker::available(ValueId value, ArrayRef<unsigned> path) {
+  if (plan)
+    return true;
   for (const auto &moved : uses[value.index].moved) {
     if (!checker.types.charge(moved.size() + path.size() + 1,
                               body.values[value.index].span) ||
         prefix(moved, path) || prefix(path, moved))
       return false;
   }
-  return true;
-}
-bool BodyChecker::intersectUses(Uses &common, const Uses &other, Span span) {
-  std::vector<std::vector<unsigned>> paths;
-  for (const auto &a : common.used)
-    for (const auto &b : other.used) {
-      if (!checker.types.charge(a.size() + b.size() + 1, span))
-        return false;
-      if (prefix(a, b))
-        paths.push_back(b);
-      else if (prefix(b, a))
-        paths.push_back(a);
-    }
-  std::sort(paths.begin(), paths.end());
-  common.used.clear();
-  for (auto &path : paths)
-    if (common.used.empty() || !prefix(common.used.back(), path))
-      common.used.push_back(std::move(path));
   return true;
 }
 } // namespace zkc::language::detail

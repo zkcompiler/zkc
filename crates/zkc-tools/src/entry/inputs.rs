@@ -55,12 +55,7 @@ impl InputGroup<'_> {
                     "schema": describe(&port.schema),
                     "initializer": (port.key == Some(Type::ProverKey)).then_some("prover_key"),
                     "constructible": port.key == Some(Type::ProverKey) ||
-                        super::value::check_import(&port.schema).is_ok() &&
-                        port.schema.leaves.iter().all(|name| {
-                            self.interface.logical_type(name)
-                                .and_then(|logical| PhysicalType::default_for(logical.clone()).ok())
-                                .is_some_and(|ty| zkc_backends::has_native_wire(&ty))
-                        }),
+                        super::arguments::check_input(self.interface, &port.schema).is_ok(),
                 })
             })
             .collect::<Vec<_>>();
@@ -107,7 +102,6 @@ fn template(schema: &Schema) -> Json {
                 .map(|f| (f.name.clone(), template(&f.schema)))
                 .collect(),
         ),
-        Kind::Associated => template(&schema.fields[0].schema),
         _ => Json::Null,
     }
 }
@@ -233,7 +227,8 @@ impl Decoder {
                 }
                 .into()
             } else {
-                super::value::check_import(&port.schema).map_err(|e| InputError::at(e, &path))?;
+                super::arguments::check_input(group.interface, &port.schema)
+                    .map_err(|e| InputError::at(e, &path))?;
                 self.value(group.interface, &port.schema, value, &path, &mut resolver)?
             };
             result.insert(port.name.clone(), decoded);
@@ -293,13 +288,6 @@ impl Decoder {
             (Kind::Record, Json::Object(values)) => {
                 Value::Record(self.fields(interface, &schema.fields, values, path, resolver)?)
             }
-            (Kind::Associated, value) => Value::Associated(Box::new(self.value(
-                interface,
-                &schema.fields[0].schema,
-                value,
-                path,
-                resolver,
-            )?)),
             (_, Json::Null) => return Err(error("entry-input-unfilled".into())),
             (Kind::Variant, Json::Object(mut v)) => {
                 let alternative = v

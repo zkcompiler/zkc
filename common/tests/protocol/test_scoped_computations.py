@@ -144,7 +144,7 @@ run Demo=Run;
 @pytest.mark.parametrize('count', [0, 3])
 def test_affine_explicit_state_in_callback(toolchain, journal, directory, count):
     source = PREFIX + '''
-struct Token:Drop {}
+#[affine] struct Token {}
 fn work(n:index)->bool{
  let token=apply(Token{},fn(x)=>{let mut state=x;for _ in 0..n {let old=state;consume old;state=Token{};}state});
  consume token;return true;

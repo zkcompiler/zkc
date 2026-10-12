@@ -53,6 +53,7 @@ class Reader {
   StringMap<unsigned> roleIndices;
   struct NativeLeaf {
     Permissions permissions;
+    bool participants, constructible;
     bool setup = false, verifierKey = false, proverKey = false;
   };
   std::map<std::string, NativeLeaf> nativeLeaves;
@@ -149,7 +150,7 @@ class Reader {
   }
   std::optional<Permissions> permissions(const json::Array &values) {
     Permissions result;
-    const StringRef order[] = {"Copy", "Drop", "Share", "Wire"};
+    const StringRef order[] = {"Copy", "Drop"};
     unsigned next = 0;
     for (const auto &item : values) {
       auto value = item.getAsString();
@@ -167,14 +168,14 @@ class Reader {
         result.copy = true;
       else if (*value == "Drop")
         result.drop = true;
-      else if (*value == "Share")
-        result.share = true;
-      else if (*value == "Wire")
-        result.wire = true;
       else {
         fail("unknown permission");
         return {};
       }
+    }
+    if (result.copy && !result.drop) {
+      fail("Copy requires Drop");
+      return {};
     }
     return result;
   }
@@ -197,12 +198,12 @@ class Reader {
       return {};
     }
     Permissions result{protocol::duplicable(*type),
-                       protocol::discardable(*type), policy->shared,
-                       protocol::nativeMessageData(*type)};
-    nativeLeaves.emplace(spelling.str(),
-                         NativeLeaf{result, protocol::nativeSetupType(*type),
-                                    type->kind == "verifier_key",
-                                    type->kind == "prover_key"});
+                       protocol::discardable(*type)};
+    nativeLeaves.emplace(
+        spelling.str(),
+        NativeLeaf{result, policy->shared, policy->constructible,
+                   protocol::nativeSetupType(*type),
+                   type->kind == "verifier_key", type->kind == "prover_key"});
     return result;
   }
   bool sameFields(ArrayRef<InterfaceField> a, ArrayRef<InterfaceField> b) {
@@ -217,6 +218,7 @@ class Reader {
   bool sameSchema(const InterfaceSchema &a, const InterfaceSchema &b) {
     if (!charge(a.leaves.size() + a.alternatives.size() + 1) ||
         a.kind != b.kind || a.type != b.type || a.custody != b.custody ||
+        a.constructible != b.constructible ||
         !(a.permissions == b.permissions) || a.leaves != b.leaves ||
         a.alternatives.size() != b.alternatives.size() ||
         !sameFields(a.fields, b.fields))
@@ -229,7 +231,7 @@ class Reader {
   }
   bool fields(const json::Array &array, ArrayRef<std::string> leaves,
               unsigned start, unsigned depth, Permissions parent,
-              std::vector<InterfaceField> &result) {
+              bool constructible, std::vector<InterfaceField> &result) {
     unsigned offset = start;
     std::set<std::string> names;
     std::optional<bool> positional;
@@ -265,7 +267,8 @@ class Reader {
           child->leaves.size() > leaves.size() - offset ||
           !llvm::equal(child->leaves,
                        leaves.slice(offset, child->leaves.size())) ||
-          !child->permissions.includes(parent))
+          (!child->permissions.includes(parent) ||
+           (constructible && !child->constructible)))
         return fail("field leaves or permissions differ from parent");
       offset += child->leaves.size();
       result.push_back({name->str(), *at, std::move(child)});
@@ -322,14 +325,14 @@ class Reader {
             : value.kind == K::Builtin &&
                   (leafKind == "vector" || leafKind == "matrix" ||
                    leafKind == "groups" || leafKind == "indices" ||
-                   leafKind == "transcript" || leafKind == "bytes" ||
-                   leafKind == "shake128_state" || leafKind == "polynomial" ||
-                   leafKind == "table" || leafKind == "point" ||
-                   leafKind == "round" || leafKind == "sequence" ||
-                   leafKind == "field_array" || leafKind == "commitment" ||
-                   leafKind == "commitments" || leafKind == "proof" ||
-                   leafKind == "prover_key" || leafKind == "verifier_key" ||
-                   leafKind == "opening_state" || leafKind == "opening_states");
+                   leafKind == "bytes" || leafKind == "shake128_state" ||
+                   leafKind == "polynomial" || leafKind == "table" ||
+                   leafKind == "point" || leafKind == "round" ||
+                   leafKind == "sequence" || leafKind == "field_array" ||
+                   leafKind == "commitment" || leafKind == "commitments" ||
+                   leafKind == "proof" || leafKind == "prover_key" ||
+                   leafKind == "verifier_key" || leafKind == "opening_state" ||
+                   leafKind == "opening_states");
     return matched || fail("logical kind differs from native leaf kind");
   }
   std::shared_ptr<const InterfaceSchema>
@@ -342,13 +345,14 @@ class Reader {
     if (!charge(1))
       return {};
     auto *obj =
-        object(value, {"kind", "identity", "type", "custody", "permissions",
-                       "fields", "alternatives", "leaves"});
+        object(value, {"kind", "identity", "type", "custody", "constructible",
+                       "permissions", "fields", "alternatives", "leaves"});
     if (!obj)
       return {};
     auto type = text(*obj, "type"), kindName = text(*obj, "kind"),
          identity = text(*obj, "identity", 64);
-    auto custody = obj->getBoolean("custody");
+    auto custody = obj->getBoolean("custody"),
+         constructible = obj->getBoolean("constructible");
     auto *perms = array(*obj, "permissions"), *fs = array(*obj, "fields"),
          *alts = array(*obj, "alternatives"), *ls = array(*obj, "leaves");
     if (!type || !kindName || !identity || !perms || !fs || !alts || !ls)
@@ -374,7 +378,7 @@ class Reader {
     auto caps = permissions(*perms);
     if (!caps)
       return {};
-    if (!custody || ls->size() != expected.size() ||
+    if (!custody || !constructible || ls->size() != expected.size() ||
         ls->size() > limits.aggregateLeaves ||
         (!fs->empty() && !alts->empty())) {
       fail("invalid schema shape or custody");
@@ -385,6 +389,11 @@ class Reader {
     result->identity = identity->str();
     result->type = type->str();
     result->custody = *custody;
+    result->constructible = *constructible;
+    if (result->kind == K::Associated && *constructible) {
+      fail("opaque associated type cannot grant external construction");
+      return {};
+    }
     result->permissions = *caps;
     unsigned index = 0;
     for (const auto &leaf : *ls) {
@@ -398,13 +407,10 @@ class Reader {
       auto policy = leafPermissions(*spelling);
       if (!policy)
         return {};
-      // Source Share is a permission on logical components. For aggregates,
-      // children retain it even when their explicit nominal custody is affine.
-      // Actual multi-role placement is checked by native protocol admission.
-      auto promised = *caps;
-      if (!fs->empty() || !alts->empty())
-        promised.share = false;
-      if (!(result->custody && index == 0) && !policy->includes(promised)) {
+      if (!(result->custody && index == 0) &&
+          (!policy->includes(*caps) ||
+           (*constructible &&
+            !nativeLeaves.at(spelling->str()).constructible))) {
         fail("source permissions exceed native leaf permissions");
         return {};
       }
@@ -414,7 +420,7 @@ class Reader {
     constexpr StringLiteral custodyPrefix = "resource_unit:zkl_resource_";
     unsigned start = unsigned(result->custody);
     if (start &&
-        (result->leaves.empty() || caps->copy || caps->wire ||
+        (result->leaves.empty() || caps->copy || *constructible ||
          !StringRef(result->leaves.front()).starts_with(custodyPrefix) ||
          StringRef(result->leaves.front()).drop_front(custodyPrefix.size()) !=
              *identity)) {
@@ -464,12 +470,14 @@ class Reader {
           return {};
         }
         InterfaceAlternative arm{name->str(), {}};
-        if (!fields(*payload, expected.payload, 0, depth, *caps, arm.fields))
+        if (!fields(*payload, expected.payload, 0, depth, *caps, *constructible,
+                    arm.fields))
           return {};
         result->alternatives.push_back(std::move(arm));
       }
     } else if (!fs->empty()) {
-      if (!fields(*fs, result->leaves, start, depth, *caps, result->fields))
+      if (!fields(*fs, result->leaves, start, depth, *caps, *constructible,
+                  result->fields))
         return {};
     } else if (result->leaves.size() > (start ? start : 1) ||
                (!start && !result->leaves.empty() &&
@@ -526,9 +534,11 @@ class Reader {
       if (!logical)
         return false;
       if (owners->size() > 1 &&
-          (!logical->permissions.copy || !logical->permissions.drop ||
-           !logical->permissions.share))
-        return fail("shared logical port requires Copy, Drop and Share");
+          (!logical->permissions.copy ||
+           llvm::any_of(logical->leaves, [&](const auto &leaf) {
+             return !nativeLeaves.at(leaf).participants;
+           })))
+        return fail("logical port cannot have multiple participant components");
       if (!isSourceIdentifier(*name) || !names.insert(name->str()).second ||
           *index != result.size() || *type != logical->type ||
           ns->size() != logical->leaves.size())
@@ -553,8 +563,8 @@ class Reader {
     hash.frame(typeKindName(schema.kind));
     hash.frame(schema.identity);
     hash.frame(schema.custody ? "1" : "0");
-    for (bool allowed : {schema.permissions.copy, schema.permissions.drop,
-                         schema.permissions.share, schema.permissions.wire})
+    hash.frame(schema.constructible ? "1" : "0");
+    for (bool allowed : {schema.permissions.copy, schema.permissions.drop})
       hash.frame(allowed ? "1" : "0");
     hash.frame(std::to_string(schema.leaves.size()));
     for (const auto &leaf : schema.leaves)

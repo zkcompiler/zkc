@@ -3,12 +3,12 @@
 #include "zkc/Contracts/Bindings.h"
 namespace zkc::protocol {
 struct NativeTypePolicy {
-  bool total, shared, affine, protocolPort, wire;
+  bool total, shared, affine, protocolPort, wire, constructible;
 };
 /// Head classification only. Formation, custody, element permissions and
 /// concrete wire admission must still be checked on the complete type.
 struct NativeTypeConstructorPolicy {
-  bool total, shared;
+  bool total, shared, constructible, message;
 };
 std::optional<NativeTypeConstructorPolicy>
     nativeTypeConstructorPolicy(llvm::StringRef);

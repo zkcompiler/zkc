@@ -21,6 +21,10 @@ private:
   Declaration &decl;
   const SyntaxDeclaration &syntax;
   Body &body;
+  BodyPlan *plan;
+  BodyWitnesses &witnesses;
+  UsagePlan::Guard usageGuard = UsagePlan::always;
+  std::vector<UsagePlan::Value> usageValues;
   unsigned callDepth;
   uint32_t statement = 0;
   bool retainExpressionValues = false;
@@ -54,6 +58,11 @@ private:
   bool demand(ValueId, llvm::ArrayRef<unsigned>, Span);
   bool settle(Placement &);
   std::optional<std::vector<unsigned>> activeRoles;
+  /// Successful completion is a statement boundary, never an operand exit.
+  bool completionAllowed = true;
+  std::optional<uint32_t> completionLoop;
+  /// Protocol repetition may complete an owner in every enclosing scope.
+  BodyChecker *enclosing = nullptr;
   struct BindingState {
     Type type;
     std::vector<unsigned> roles;
@@ -105,10 +114,10 @@ private:
   intrinsicSignature(const Expression &, std::vector<Type> &);
   bool active(llvm::ArrayRef<unsigned>, Span);
   bool use(ValueId, Span, llvm::ArrayRef<unsigned> = {});
-  bool finish(Span);
-  bool finishValue(ValueId, Span);
+  bool finish(Span, llvm::ArrayRef<ValueId> forwarded = {});
+  bool finishValue(ValueId, Span, bool prefixOnly = true);
+  bool finishOwner(unsigned, Span);
   bool available(ValueId, llvm::ArrayRef<unsigned> = {});
-  bool intersectUses(Uses &, const Uses &, Span);
   std::optional<ValueId> input(const Type &, std::vector<unsigned>, Span);
   bool bindPattern(const Pattern &, ValueId, unsigned = 1);
   bool bindResults(const Statement &, llvm::ArrayRef<ValueId>);
@@ -117,6 +126,8 @@ private:
   std::optional<ValueId> restrictRoles(ValueId, llvm::ArrayRef<unsigned>, Span);
   std::optional<ValueId> fresh(ValueId, Span);
   std::optional<ValueId> pack(llvm::ArrayRef<ValueId>, Span);
+  std::optional<ValueId> transport(ValueId, llvm::ArrayRef<unsigned>, Span);
+  std::optional<ValueId> transport(llvm::ArrayRef<ValueId>, Span);
   std::optional<ValueId> project(ValueId, llvm::ArrayRef<unsigned>, Span);
   bool statements(const SyntaxBody &);
   bool statementBody(const Statement &);

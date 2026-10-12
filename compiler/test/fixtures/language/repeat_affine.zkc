@@ -1,6 +1,6 @@
 module sample;
 domain Fr = field("bls12-381.fr");
-struct State: Drop { value: Fr }
+#[affine] struct State { value: Fr }
 fn make(x: Fr) -> State { return State { value: x }; }
 fn identity(x: State) -> State { return x; }
 fn take(x: State) -> Fr { let fields = unpack(x); return fields.0; }

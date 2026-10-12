@@ -143,7 +143,7 @@ int main() {
       });
   cases.run("unary notation preserves affine consumption", [&] {
     const std::string source = R"(
-      struct Token:Drop {value:bool}
+      #[affine] struct Token {value:bool}
       fn move(x:Token)->Token{return x;}
       operator prefix(80) ⊖ = move;
     )";
@@ -153,7 +153,7 @@ int main() {
   });
   cases.run("delimiter notation preserves affine consumption", [&] {
     const std::string source = R"(
-      struct Token:Drop {value:bool}
+      #[affine] struct Token {value:bool}
       fn gather(a:Token,b:Token,c:Token)->(Token,Token,Token){return(a,b,c);}
       notation ⟪ a,b,c ⟫ = gather(a,b,c);
     )";

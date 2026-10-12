@@ -252,16 +252,16 @@ int main(int argc, char **argv) {
     require(pair->formal && pair->leaves.size() == 2,
             "formal product layout differs");
   });
-  cases.run("zero arrays retain executable element permissions", [&] {
+  cases.run("zero arrays retain element constructor authority", [&] {
     auto project = take(check(source("struct Hidden{x:F}")));
     Layouts layouts(project);
     Type hidden(Type::Kind::Record, "sample::Hidden"), empty(Type::Kind::Array);
     empty.arguments = {hidden};
     auto element = take(layouts.get(hidden));
     auto zero = take(layouts.get(empty));
-    require(!element->permissions.wire && !zero->permissions.wire &&
-                !zero->formal && zero->leaves.empty(),
-            "zero array erased its element permissions");
+    require(!element->constructible && !zero->constructible && !zero->formal &&
+                zero->leaves.empty(),
+            "zero array erased its element constructor authority");
   });
   cases.run("selected closure checks generic intrinsic shape ceiling", [&] {
     auto project = take(check(source(R"(

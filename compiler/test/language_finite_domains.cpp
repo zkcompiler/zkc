@@ -38,6 +38,30 @@ const Declaration &declarationNamed(const CheckedProject &project,
 int main() {
   Cases cases;
 
+  cases.run("domain factories infer operand and called usage requirements", [] {
+    auto project = take(check(R"(
+domain fn data<T:Type>(x:T,lo:index,hi:index)->domain<index>{return range(lo,hi);}
+domain fn needs<T:Type+Copy>(lo:index,hi:index)->domain<index>{return range(lo,hi);}
+domain fn caller<T:Type>(lo:index,hi:index)->domain<index>{return needs<T>(lo,hi);}
+)"));
+    for (StringRef name : {"m::data", "m::caller"}) {
+      const auto &decl = declarationNamed(project, name);
+      require(decl.permissionBounds.size() == 1 &&
+                  decl.permissionBounds.front().permissions.copy &&
+                  decl.permissionBounds.front().permissions.drop,
+              "domain factory lost inferred Copy/Drop usage");
+    }
+    refuses(check(R"(
+domain fn data<T:Type>(x:T,lo:index,hi:index)->domain<index> where (){return range(lo,hi);}
+)"),
+            "source.finite-domain");
+    refuses(check(R"(
+domain fn needs<T:Type+Copy>(lo:index,hi:index)->domain<index>{return range(lo,hi);}
+domain fn caller<T:Type>(lo:index,hi:index)->domain<index> where (){return needs<T>(lo,hi);}
+)"),
+            "source.permission");
+  });
+
   const std::string finitePrelude = R"(
 domain Fr=field("koala-bear");
 fn fold<I:Type+Copy+Drop,S:Type>(rows:domain<I>,initial:S,step:fn(S,item:I)->S effects(stop) where item_from(item, rows))->S effects(stop)=finite("local.fold");
@@ -1290,7 +1314,7 @@ fn example(a:index,b:index,c:index,d:index)->index{let rows=prepared(a,b,c,d);re
        "source.finite-domain"},
       {R"(domain fn bad<A:Type+Copy+Drop,B:Type+Copy+Drop>(a:domain<A>,b:domain<B>)->domain<(B,A)>=domain("zip");)",
        "source.finite-domain"},
-      {R"(domain fn bad<T:Type>(a:domain<T>)->domain<T>{return a;})",
+      {R"(domain fn bad<T:Type>(a:domain<T>)->domain<T> where (){return a;})",
        "source.finite-domain"},
       {R"(domain fn bad(lo:index,hi:index)->domain<index>{let mut rows=range(lo,hi);return rows;})",
        "source.finite-domain"},

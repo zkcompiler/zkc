@@ -90,9 +90,13 @@ add_zkc_component(Language
   lib/Language/EntrySetups.cpp
   lib/Language/Capabilities.cpp
   lib/Language/Permissions.cpp
+  lib/Language/Admission.cpp
   lib/Language/Conformance.cpp
   lib/Language/Resolution.cpp
   lib/Language/ResourceUsage.cpp
+  lib/Language/UsagePlan.cpp
+  lib/Language/UsageRequirements.cpp
+  lib/Language/UsageInference.cpp
   lib/Language/Bindings.cpp
   lib/Language/Effects.cpp
   lib/Language/BodySummary.cpp

@@ -304,9 +304,9 @@ struct Require {
 struct ProtocolCompletion {
   ValueId condition;
   unsigned owner;
-  /// Owner output order; continuations index the logical values moved on false.
+  /// Every owner output, in declaration order. False returns all logical
+  /// values; translation supplies native successors for their affine leaves.
   std::vector<ValueId> values;
-  std::vector<unsigned> continuations;
 };
 struct Exchange {
   unsigned sender, receiver;
@@ -507,6 +507,16 @@ struct PermissionBound {
   Type type;
   Permissions permissions;
   Span span;
+  bool inferred = false;
+};
+/// Boundary conditions are derived from use sites, never granted by `where`.
+enum class Boundary { Participants, Construction, Message };
+struct AdmissionObligation {
+  Type type;
+  Boundary boundary;
+  Span span;
+  /// Calls that transported this condition, from the original site outward.
+  std::vector<Span> calls;
 };
 /// A catalog proposition, independent of runtime custody permissions.
 struct CapabilityBound {
@@ -653,7 +663,11 @@ struct Declaration {
   std::vector<NaturalBound> bounds;
   std::vector<DataPrecondition> dataPreconditions;
   std::vector<PermissionBound> permissionBounds;
+  std::vector<AdmissionObligation> admissions;
   std::vector<CapabilityBound> capabilityBounds;
+  std::optional<Resource> resource;
+  bool sealed = false;
+  /// Explicit promises on associated types, independent of constructor access.
   std::optional<Permissions> permissions;
   std::vector<TypeField> fields;
   std::vector<Alternative> alternatives;

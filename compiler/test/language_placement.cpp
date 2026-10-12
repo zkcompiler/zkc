@@ -58,11 +58,11 @@ std::vector<unsigned> callOwners(const Body &body) {
   return result;
 }
 void examples() {
-  native("struct Ticket:Drop {} fn make()->Ticket{return Ticket{};}"
+  native("#[affine] struct Ticket {} fn make()->Ticket{return Ticket{};}"
          "fn consumeTicket(x:Ticket)->bool{consume x;return true;}"
          "protocol Run roles(P,V)()->(r:bool@V){return consumeTicket(make());}"
          "run Demo=Run;");
-  refuses("struct Ticket:Drop {} fn make()->Ticket{return Ticket{};}"
+  refuses("#[affine] struct Ticket {} fn make()->Ticket{return Ticket{};}"
           "protocol Run roles(P,V)()->(){let _=make();return ();}",
           "source.owner");
   native("interface Select{math fn selected(x:F,y:F)->F;}"
@@ -149,7 +149,7 @@ void examples() {
           "for _ in 0..count(n) roles(P,V) max 4{}return ();}",
           "source.roles");
   native("protocol Run roles(P,V)(s:F@(P,V),go:bool@V)->(r:F@V)completes{"
-         "let ()=finish_if @V(yes(go))(r=f(s));return f(s);}run Demo=Run;");
+         "let _=finish_if @V(yes(go))(r=f(s));return f(s);}run Demo=Run;");
   native("fn check(go:bool)->bool{require go;return go;}"
          "protocol Run roles(P,V)(go:bool@V)->(r:bool@V){require "
          "yes(go);return check(go);}run Demo=Run;");

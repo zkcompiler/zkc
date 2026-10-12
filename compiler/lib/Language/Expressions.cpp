@@ -1,6 +1,7 @@
 #include "BodyCheck.h"
 #include "zkc/Contracts/Kernels.h"
 #include "zkc/Contracts/Services.h"
+#include "llvm/Support/SaveAndRestore.h"
 #include <algorithm>
 #include <cassert>
 using namespace llvm;
@@ -11,6 +12,8 @@ std::optional<ValueId> BodyChecker::expression(uint32_t id,
                                                bool allowUntypedStop) {
   assert((!protocol() || placement) &&
          "protocol expression requires a statement inference scope");
+  SaveAndRestore completionScope(completionAllowed,
+                                 completionAllowed && completionLoop == id);
   TypeScope types(*this, id, expected);
   if (!types)
     return {};
@@ -299,12 +302,9 @@ std::optional<ValueId> BodyChecker::construct(const Expression &expr,
       type.arguments[index] = body.values[v->index].type;
     values[index] = *v;
   }
-  auto caps = checker.types.permissions(type, expr.span, &decl);
-  if (!caps)
-    return {};
-  if (!local() && (!caps->copy || !caps->drop)) {
-    fail("source.mode", "restricted construction requires local mode",
-         expr.span);
+  const auto *nominal = checker.types.typeDeclaration(type);
+  if (!local() && nominal && nominal->resource) {
+    fail("source.mode", "resource construction requires local mode", expr.span);
     return {};
   }
   auto components = combine(values, expr.span);

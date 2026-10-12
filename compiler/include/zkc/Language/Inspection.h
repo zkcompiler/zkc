@@ -8,7 +8,8 @@ llvm::Expected<std::string> inspectEntries(const CheckedProject &,
                                            const Limits & = {});
 /// JSON array of public modules, interfaces, callables and constructions,
 /// sorted by canonical declaration path, excluding import alias routes.
-/// Includes definition kind and source origin;
+/// Includes definition kind, source origin, inferred usage bounds and derived
+/// boundary obligations with their origin and call spans;
 /// installation declarations remain in CheckedProject. This diagnostic view is
 /// not an admitted artifact. Output is bounded by limits.interfaceBytes; no
 /// partial array is returned.

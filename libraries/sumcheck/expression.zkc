@@ -23,7 +23,7 @@ fn terminal<F: Field, A: Ring>(values: Vector<F>) -> F {
 // carries A::Degree + 1 coefficients and the terminal row has A::Inputs
 // factors. A commitment/opening protocol can replace this direct terminal
 // evaluation in a separate library.
-pub protocol Sumcheck<F: Field+Share+Wire, Max: nat, A: Ring> roles(P,V)
+pub protocol Sumcheck<F: Field, Max: nat, A: Ring> roles(P,V)
     (prover_values: Vector<F> @P, verifier_values: Vector<F> @V,
      claim: F @V, rounds: index @(P,V),
      challenges: Random<F> @V) -> (accepted: bool @V)

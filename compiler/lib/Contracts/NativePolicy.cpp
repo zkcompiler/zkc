@@ -1,32 +1,17 @@
 #include "zkc/Contracts/NativePolicy.h"
 #include "zkc/Contracts/TypeProperties.h"
-#include "llvm/ADT/StringSwitch.h"
 using namespace llvm;
 namespace zkc::protocol {
 std::optional<NativeTypeConstructorPolicy>
 nativeTypeConstructorPolicy(StringRef kind) {
-  bool total = kind == "bool" || kind == "field" || kind == "group" ||
-               kind == "field_array" || kind == "index" || kind == "indices" ||
-               kind == "vector" || kind == "matrix" || kind == "groups" ||
-               kind == "bytes";
-  bool shared =
-      total ||
-      llvm::StringSwitch<bool>(kind)
-          .Cases({"index", "indices", "vector", "matrix"}, true)
-          .Cases({"polynomial", "table", "point", "round"}, true)
-          .Cases({"groups", "commitment", "commitments", "proof"}, true)
-          .Default(false);
-  bool local = llvm::StringSwitch<bool>(kind)
-                   .Cases({"opening_states", "prover_key", "verifier_key",
-                           "opening_state"},
-                          true)
-                   .Cases({"rng", "nonce", "transcript", "resource_unit"}, true)
-                   .Case("shake128_state", true)
-                   .Cases({"fixed_vector", "variant"}, true)
-                   .Default(false);
-  if (!shared && !local && kind != "sequence")
+  // Variants are structural carriers rather than nominal registry entries.
+  if (kind == "variant")
+    return NativeTypeConstructorPolicy{false, false, true, true};
+  const auto *type = typeDeclaration(kind);
+  if (!type || !type->nativeLocal)
     return std::nullopt;
-  return NativeTypeConstructorPolicy{total, shared};
+  return NativeTypeConstructorPolicy{type->mathematical, type->participants,
+                                     type->constructible, type->message};
 }
 namespace {
 std::optional<NativeTypePolicy> policy(const protocol::BoundType &type,
@@ -45,7 +30,7 @@ std::optional<NativeTypePolicy> policy(const protocol::BoundType &type,
   // Accumulate custody and boundary facts once per child. Do not stringify
   // and reparse every subtree through the generic custody helpers.
   bool childrenCopy = true, childrenTotal = true, childrenShared = true,
-       protocolPort = true;
+       protocolPort = true, childrenConstructible = true;
   auto include = [&](const protocol::BoundType &child) {
     bool childCopy = false;
     auto facts = policy(child, depth + 1, remaining, limited, childCopy);
@@ -54,6 +39,7 @@ std::optional<NativeTypePolicy> policy(const protocol::BoundType &type,
     childrenCopy &= childCopy;
     childrenTotal &= facts->total;
     childrenShared &= facts->shared;
+    childrenConstructible &= facts->constructible;
     protocolPort &= facts->protocolPort;
     return true;
   };
@@ -63,9 +49,12 @@ std::optional<NativeTypePolicy> policy(const protocol::BoundType &type,
       return std::nullopt;
   if (kind == "sequence") {
     copy = childrenCopy;
-    return NativeTypePolicy{copy && childrenTotal, copy && childrenShared,
-                            !copy, copy && protocolPort,
-                            protocol::nativeMessageData(type)};
+    return NativeTypePolicy{copy && childrenTotal,
+                            copy && childrenShared,
+                            !copy,
+                            copy && protocolPort,
+                            protocol::nativeMessageData(type),
+                            childrenConstructible};
   }
   if (kind == "variant") {
     auto descriptor = protocol::decodeVariant(type.spelling());
@@ -82,9 +71,12 @@ std::optional<NativeTypePolicy> policy(const protocol::BoundType &type,
           return std::nullopt;
       }
     copy = childrenCopy;
-    return NativeTypePolicy{copy && childrenTotal, copy && childrenShared,
-                            !copy, copy && protocolPort,
-                            protocol::nativeMessageData(type)};
+    return NativeTypePolicy{copy && childrenTotal,
+                            copy && childrenShared,
+                            !copy,
+                            copy && protocolPort,
+                            protocol::nativeMessageData(type),
+                            childrenConstructible};
   }
   const auto *permissions = protocol::typePermissions(kind);
   if (!permissions)
@@ -98,7 +90,10 @@ std::optional<NativeTypePolicy> policy(const protocol::BoundType &type,
               !protocol::defaultCodec(type).empty();
   if (kind == "field_array")
     wire = protocol::nativeFieldArrayWire(type);
-  return NativeTypePolicy{total, shared, affine, protocolPort, wire};
+  return NativeTypePolicy{
+      total,  shared,
+      affine, protocolPort,
+      wire,   constructor->constructible && childrenConstructible};
 }
 } // namespace
 std::optional<NativeTypePolicy>

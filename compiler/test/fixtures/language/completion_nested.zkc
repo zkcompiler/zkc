@@ -6,7 +6,7 @@ protocol Run roles(P,V)(go: bool @V, x: Fr @(P,V), coins: Random<Fr> @V) -> (res
   let mut state @V = x;
   for _ in 0..n roles(V) max 2 {
     for _ in 0..n roles(V) max 2 {
-      let () = finish_if @V(go) (result = state);
+      let _ = finish_if @V(go) (result = state);
       let unused = coins.draw();
       state = state;
     }

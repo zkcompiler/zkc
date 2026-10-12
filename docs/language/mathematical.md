@@ -79,10 +79,10 @@ embedded prelude, so they require no project file.
 A generic library can bind an explicit interface implementation locally:
 
 ```zkc
-interface Addition<T: Type + Copy + Drop> {
+interface Addition<T: Type + Copy> {
   math fn add(a: T, b: T) -> T;
 }
-math fn combine<T: Type + Copy + Drop, A: Addition<T>>(a: T, b: T) -> T {
+math fn combine<T: Type + Copy, A: Addition<T>>(a: T, b: T) -> T {
   operator + = A::add;
   return a + b;
 }
@@ -157,10 +157,11 @@ arguments. The protocol sends its result. The receiver obtains its actual
 received components. The record becomes two ordered payload leaves, which the
 interface maps back to named fields.
 
-Generic libraries declare the permissions they use. A mathematical parameter
-needs `Copy + Drop`; a protocol message also needs `Share + Wire`. A plain `Type`
-parameter promises none. These permissions are independent. Modules select
-interface implementations statically and can seal an associated representation.
+Generic definitions infer the usage properties their bodies need unless a written
+`where` clause supplies the complete contract. Mathematical parameters need `Copy`,
+which implies `Drop`; a plain `Type` parameter promises neither. Message and
+participant admission are derived separately and checked on concrete types.
+Modules select interface implementations statically and can seal an associated representation.
 Library clients need neither its representation nor a runtime dispatch table.
 
 A file and a nested `module` use the same scope and visibility rules:
@@ -213,20 +214,21 @@ Nonlinear dimension inference and arbitrary inequality solving remain outside
 this source profile.
 
 Defined helpers can omit result types. Defined helpers and protocols infer
-catalog and natural preconditions when `where` is absent. A written clause is a
-complete contract; `where ()` forbids additional preconditions. Resource
-permissions stay explicit. For example:
+usage, catalog and natural preconditions when `where` is absent. A written clause
+is a complete contract; `where ()` forbids additional inferred preconditions.
+Resource restrictions use explicit attributes. For example:
 
 ```text
-fn first<T: Type + Copy + Drop, N: nat>(xs: [T; N]) {
+fn first<T: Type, N: nat>(xs: [T; N]) {
   return xs[0];
 }
-fn pairFirst<T: Type + Copy + Drop>(xs: [T; 2]) {
+fn pairFirst<T: Type>(xs: [T; 2]) {
   return first<N = 2>(xs = xs);
 }
 ```
 
-`first` infers result `T` and condition `1 <= N`; the call fixes `N` and infers `T`.
+`first` infers result `T`, `Copy(T)` and `1 <= N`; the call fixes `N` and infers
+`T`. `pairFirst` inherits the usage requirement.
 An explicit result type remains useful for literals and stable library interfaces.
 
 Static and value arguments can use declared parameter names. Positional arguments
@@ -289,10 +291,10 @@ The maintained fixtures cover [arrays](../../compiler/test/fixtures/language/arr
 [static modules](../../compiler/test/fixtures/language/module.zkc),
 [associated domains](../../compiler/test/fixtures/language/associated_domain.zkc),
 and [affine control and stop cleanup](../../compiler/test/fixtures/language/resource_control.zkc).
-Generic associated types can declare explicit bounds such as
-`where Share(G::Scalar), Wire(G::Scalar)`; selecting a group checks those bounds.
-Fixed arrays currently use static numeric indices. Private ingress requires a
-validator that this source profile does not yet expose. Zero-leaf messages refuse;
+Generic associated types can declare usage bounds such as `where Copy(C::Item)`.
+Message codec obligations are retained until concrete selection.
+Fixed arrays currently use static numeric indices. Private values are built by their owning module; receive transparent input and
+validate it explicitly before constructing a private value. Zero-leaf messages refuse;
 empty values and ports still retain their source obligations and interface rows.
 
 The [retained interface](../spec/formats/entry.md) maps logical names and

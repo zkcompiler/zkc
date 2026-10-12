@@ -13,6 +13,7 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
   }
   const bool loop = expr.kind == Expression::Kind::For;
   const bool match = expr.kind == Expression::Kind::Match;
+  const bool collectingBranch = plan && !loop;
   if (loop && expr.roles) {
     fail("source.mode", "participant loop headers require protocol mode",
          expr.span);
@@ -73,7 +74,7 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
   for (auto id : states) {
     const auto &state = bindings.at(id);
     if (state.value && available(*state.value)) {
-      if (!use(*state.value, expr.span))
+      if (!collectingBranch && !use(*state.value, expr.span))
         return {};
       initial.emplace_back(id, *state.value);
       operation.operands.push_back(*state.value);
@@ -93,17 +94,16 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
         }))
       continue;
     auto type = projected(bindings.at(p.binding).type, p.path, expr.span);
-    auto caps = type ? checker.types.permissions(*type, expr.span, &decl)
-                     : std::nullopt;
-    if (!caps)
+    if (!type)
       return {};
-    if (loop && !caps->copy) {
-      fail("source.permission",
-           "loop invariants require Copy; declare mutable state and supply its "
-           "successor",
-           expr.span);
+    if (loop && !checker.types.requireUsage(
+                    *type, Usage::Copy, expr.span, &decl, "source.permission",
+                    "loop invariants require Copy; declare mutable state and "
+                    "supply its successor")) {
       return {};
     }
+    // Captures are transferred into the control. Unlike mutable state they
+    // are not returned from its arms, so the collector must own fresh inputs.
     auto value = capturePlace(p, expr.span);
     if (!value || !use(*value, expr.span))
       return {};
@@ -117,6 +117,8 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
     std::vector<ValueId> captures;
   };
   std::vector<Arm> arms;
+  const auto branch =
+      collectingBranch ? plan->usage.branch(expr.regions.size()) : 0;
   std::optional<Type> resultType =
       loop ? std::optional<Type>(Type(Type::Kind::Unit)) : expected;
   std::set<std::string> seen;
@@ -143,6 +145,12 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
     arm.checker = std::make_unique<BodyChecker>(checker, decl, syntax,
                                                 *arm.body, callDepth);
     auto &nested = *arm.checker;
+    nested.usageGuard =
+        collectingBranch
+            ? plan->usage.intersect(usageGuard,
+                                    plan->usage.arm(branch, ordinal, expr.span),
+                                    expr.span)
+            : usageGuard;
     nested.inference = inference;
     nested.retainExpressionValues = retainExpressionValues;
     if (!inheritScoped(nested))
@@ -170,9 +178,14 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
           return {};
         payloads.push_back(*value);
       }
-    for (auto &[id, value] : initial)
+    for (auto &[id, value] : initial) {
       if (!inheritBinding(nested, id, expr.span))
         return {};
+      if (collectingBranch)
+        nested.usageValues[nested.bindings.at(id).value->index] =
+            plan->usage.within(usageValues[value.index], nested.usageGuard,
+                               expr.span);
+    }
     for (auto id : states)
       if (!nested.bindings.count(id)) {
         const auto &state = bindings.at(id);
@@ -243,42 +256,6 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
       return {};
     }
   }
-  if (!loop)
-    for (unsigned i = 0; i < captures.size(); ++i) {
-      auto operand = captures[i].second;
-      auto caps = checker.types.permissions(body.values[operand.index].type,
-                                            expr.span, &decl);
-      if (!caps)
-        return {};
-      if (!caps->copy || caps->drop)
-        continue;
-      std::optional<Uses> common;
-      for (auto &arm : arms) {
-        if (arm.body->stopped)
-          continue;
-        auto &nested = *arm.checker;
-        auto input = arm.captures[i];
-        if (!common)
-          common = nested.uses[input.index];
-        else if (!intersectUses(*common, nested.uses[input.index], expr.span))
-          return {};
-        // Only the inferred input is exempt. User-created copies and aliases
-        // still have their own no-Drop obligations.
-        if (!nested.use(input, expr.span))
-          return {};
-      }
-      if (common) {
-        auto origin = place(captures[i].first, expr.span);
-        if (!origin)
-          return {};
-        for (const auto &path : common->used) {
-          auto full = origin->second;
-          full.insert(full.end(), path.begin(), path.end());
-          if (!use(origin->first, expr.span, full))
-            return {};
-        }
-      }
-    }
   Type packedType(Type::Kind::Unit);
   std::vector<Type> types;
   if (resultType->kind != Type::Kind::Unit)
@@ -293,24 +270,41 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
   }
   for (auto &arm : arms) {
     auto &nested = *arm.checker;
+    std::vector<ValueId> forwarded;
     if (!arm.body->stopped) {
       std::vector<ValueId> values;
       if (arm.result)
         values.push_back(*arm.result);
       for (auto id : joined)
         values.push_back(*nested.bindings.at(id).value);
-      auto packed = nested.pack(values, expr.span);
-      if (!packed || !nested.use(*packed, expr.span))
+      if (collectingBranch && arm.result && !nested.use(*arm.result, expr.span))
+        return {};
+      auto packed = collectingBranch ? nested.transport(values, expr.span)
+                                     : nested.pack(values, expr.span);
+      if (!packed || (!collectingBranch && !nested.use(*packed, expr.span)))
         return {};
       arm.body->results.push_back(*packed);
+      if (collectingBranch) {
+        // These values leave the arm through the join. Their obligations end
+        // at a later use/exit, or disappear if the continuation stops.
+        forwarded = values;
+        forwarded.push_back(*packed);
+      }
       if (loop)
         arm.body->results.insert(arm.body->results.end(), arm.captures.begin(),
                                  arm.captures.end());
     }
-    if (!nested.finish(expr.span))
+    if (!nested.finish(expr.span, forwarded))
       return {};
     body.parameterizedSummary |= arm.body->parameterizedSummary;
     operation.regions.push_back(arm.body);
+  }
+  if (collectingBranch) {
+    usageGuard = UsagePlan::never;
+    for (const auto &arm : arms)
+      if (!arm.body->stopped)
+        usageGuard =
+            plan->usage.unite(usageGuard, arm.checker->usageGuard, expr.span);
   }
   auto packed = emit(std::move(operation), packedType, {}, expr.span);
   if (!packed)
@@ -327,9 +321,36 @@ std::optional<ValueId> BodyChecker::control(const Expression &expr,
     bindings.at(id).pieces.clear();
   }
   unsigned offset = resultType->kind != Type::Kind::Unit ? 1 : 0;
+  if (collectingBranch && !types.empty()) {
+    std::vector<UsagePlan::Value> fields;
+    if (offset)
+      fields.push_back(types.size() == 1
+                           ? usageValues[packed->index]
+                           : plan->usage.project(usageValues[packed->index],
+                                                 {0}, expr.span));
+    for (auto id : joined) {
+      UsagePlan::Value state;
+      for (const auto &arm : arms) {
+        if (arm.body->stopped)
+          continue;
+        auto &nested = *arm.checker;
+        const auto value = *nested.bindings.at(id).value;
+        auto origins = plan->usage.within(nested.usageValues[value.index],
+                                          nested.usageGuard, expr.span);
+        state.insert(state.end(), origins.begin(), origins.end());
+      }
+      fields.push_back(
+          plan->usage.join(std::move(state), bindings.at(id).type, expr.span));
+    }
+    usageValues[packed->index] = fields.size() == 1
+                                     ? fields.front()
+                                     : plan->usage.product(fields, expr.span);
+  }
   for (unsigned i = 0; i < joined.size(); ++i) {
-    auto value =
-        types.size() == 1 ? packed : project(*packed, {i + offset}, expr.span);
+    auto value = types.size() == 1 ? packed
+                 : collectingBranch
+                     ? transport(*packed, {i + offset}, expr.span)
+                     : project(*packed, {i + offset}, expr.span);
     if (!value)
       return {};
     bindings.at(joined[i]).value = *value;

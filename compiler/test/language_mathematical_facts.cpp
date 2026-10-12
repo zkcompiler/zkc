@@ -1,6 +1,7 @@
 #include "../lib/Language/FiniteContracts.h"
 #include "../lib/Language/FiniteFormation.h"
 #include "../lib/Language/MathematicalFacts.h"
+#include "../lib/Language/ValueOrigins.h"
 #include "support/NativeCases.h"
 #include "zkc/Language/Project.h"
 #include <limits>
@@ -52,6 +53,21 @@ void proven(facts::Status status) {
 } // namespace
 int main() {
   Cases cases;
+  cases.run("read-only mutable captures preserve mathematical facts", [] {
+    auto project = take(check(R"(
+fn preserve(xs:Vector<Fr>,c:bool,n:index)->Vector<Fr> {
+ let mut values=xs;
+ if c {let observed=values;} else {}
+ for _ in 0..n {let observed=values;}
+ return values;
+})"));
+    const auto &body = *named(project, "preserve").body;
+    Environment env;
+    source::ValueOrigins origins(env.semantics, body);
+    auto origin = origins.get(body.results.front());
+    require(origin && *origin == source::ValueOrigin{0, {}},
+            "read-only control changed the returned value's origin");
+  });
   cases.run(
       "helper input contracts transfer through symmetric transitive extents",
       [] {

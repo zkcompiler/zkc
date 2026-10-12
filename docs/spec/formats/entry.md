@@ -42,10 +42,12 @@ Entry. Setup metadata is part of authenticated package bytes.
 Each protocol record has `symbol`, `roles`, `inputs`, `outputs`, `services` and
 `clauses`. Each port has `name`, display `type`, `roles`, logical `index`, ordered
 native leaf indices in `native`, and recursive `schema`. A schema has `kind`,
-`identity`, display `type`, `custody`, `permissions`, `leaves`, `fields` and
-`alternatives`. Fields have `name`, leaf `offset` and child `schema`; alternatives
+`identity`, display `type`, `custody`, `constructible`, `permissions`, `leaves`,
+`fields` and `alternatives`. Fields have `name`, leaf `offset` and child `schema`; alternatives
 have `name` and payload `fields`. Zero-leaf ports retain empty native indices.
-Offsets are relative to their product or alternative payload.
+Offsets are relative to their product or alternative payload. `constructible` is
+a required Boolean for source external construction authority. `permissions` is
+the canonical ordered subset of `Copy`, `Drop`; `Copy` requires `Drop`.
 
 ### Source names and native correspondence
 
@@ -91,7 +93,7 @@ Printing pins every flag, disables hex output and uses elision thresholds above
 admitted payload sizes, independent of process-global MLIR flags.
 
 The schema digest hashes framed `zkc.language.schema/0`, textual kind, nominal
-`identity`, custody, Copy/Drop/Share/Wire (each `0` or `1`), leaf count and ordered
+`identity`, custody, constructible, Copy/Drop (each `0` or `1`), leaf count and ordered
 leaf spellings, field count and ordered fields, then alternative count and ordered
 alternatives. Counts and offsets use unsigned decimal text. A field contributes
 its name, offset and child schema digest; an alternative contributes its name,
@@ -156,9 +158,11 @@ validate UTF-8 and hash the decoded bytes. A chosen label or a digest in place o
 the preimage refuses. The reader checks both anchors. Other source type identities
 remain source assertions until checked against the retained project. `type` is display text, never equality authority.
 An empty array's element meaning is bound by its identity and source agreement;
-no selectable element field is invented for it. Promised Copy, Drop and
-Wire permissions cannot exceed native leaves; aggregate Share is checked through
-logical children while native admission checks actual placement.
+no selectable element field is invented for it. Copy, Drop and
+external construction authority cannot exceed children or native leaves. Opaque
+associated schemas cannot be externally constructible. Multi-participant ports
+require Copy and native participant admission for every leaf. Concrete codecs
+remain independently checked by message and Host input admission.
 
 `compareInterface` checks the decoded view against the retained source layouts,
 ports, services, relations and clauses. It independently checks the clause inventory

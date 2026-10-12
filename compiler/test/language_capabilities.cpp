@@ -298,7 +298,7 @@ int main() {
         }
       )")
                             .str()),
-                  "source.permission");
+                  head == "commitments" ? "source.codec" : "source.ingress");
         }
         for (StringRef head :
              {"commitment", "proof", "prover_key", "opening_state"})

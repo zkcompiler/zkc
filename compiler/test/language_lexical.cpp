@@ -19,9 +19,10 @@ void require(bool condition, StringRef message) {
 }
 std::string prefix = R"(module m;
 domain Fr=field("bls12-381.fr");
-struct Ticket:Share {}
-struct Required:Copy {}
-struct State:Drop { value: Fr }
+#[linear] struct Ticket {}
+#[linear] struct Required {}
+#[sealed] struct Snapshot {}
+#[affine] struct State { value: Fr }
 fn make(x:Fr)->State {return State{value:x};}
 fn identity(x:State)->State {return x;}
 fn take(x:State)->Fr {let State{value}=x;return value;}
@@ -92,12 +93,12 @@ void reviewRegressions() {
         "s;}return pair({s=make(x);x},s);}",
         "fn f(x:Fr,go:bool)->Fr{let mut s=make(x);if go{consume "
         "s;}else{consume s;}return {s=make(x);x}+take(s);}",
-        "fn f(k:Required,go:bool)->(){if go{consume k;}consume k;return ();}",
-        "fn f(k:Required,go:bool)->(){if go{consume k;}else{consume k;}return "
+        "fn f(k:Snapshot,go:bool)->(){if go{consume k;}consume k;return ();}",
+        "fn f(k:Snapshot,go:bool)->(){if go{consume k;}else{consume k;}return "
         "();}",
-        "fn f(k:(Required,Required),go:bool)->(){if go{consume k.0;consume "
+        "fn f(k:(Snapshot,Snapshot),go:bool)->(){if go{consume k.0;consume "
         "k.1;}else{consume k.0;}consume k.1;return ();}",
-        "fn f(k:(Required,Required),go:bool)->(){if go{consume k.0;consume "
+        "fn f(k:(Snapshot,Snapshot),go:bool)->(){if go{consume k.0;consume "
         "k.1;}else{let(a,b)=k;consume a;consume b;}return ();}",
         "fn f(x:Fr,go:bool,a:bool)->Fr{let y=if go{if a{stop "
         "\"reject\";}else{stop \"abort\";}}else{x};return y;}",
@@ -211,7 +212,7 @@ void control() {
         "p.1;p=(Ticket{},Ticket{});}consume p.0;consume p.1;return ();}",
         "fn f(a:Ticket,x:Fr,n:index)->Fr{let mut p=(a,x);consume p.0;let mut "
         "sum=x;for _ in 0..n{sum=sum+p.1;}return sum;}",
-        "fn f(k:Required,n:index)->(){for _ in 0..n{consume k;}consume "
+        "fn f(k:Snapshot,n:index)->(){for _ in 0..n{consume k;}consume "
         "k;return ();}",
         "fn f(x:(Fr,Ticket),n:index)->Fr{let mut y=x.0;for _ in "
         "0..n{y=y+x.0;}consume x.1;return y;}"})
@@ -223,7 +224,7 @@ void control() {
         {"fn f(t:Ticket,go:bool)->(){if go{consume t;}return ();}",
          "source.drop"},
         {"fn f(k:Required,n:index)->(){for _ in 0..n{consume k;}return ();}",
-         "source.drop"},
+         "source.permission"},
         {"fn f(s:State)->Fr{return s.value;}", "source.private"},
         {"fn f(s:State,go:bool)->Fr{return if go{s.value}else{s.value};}",
          "source.private"},
@@ -239,8 +240,9 @@ void control() {
         {"fn f(x:Fr,go:bool)->(){if go{let _=x;}+x;return ();}",
          "source.notation-visibility"}})
     refuses(source, code);
-  refuses("fn f<T:Type>(x:T,n:index)->T{for _ in 0..n{let y=x;}return x;}",
-          "source.permission");
+  refuses(
+      "fn f<T:Type>(x:T,n:index)->T where (){for _ in 0..n{let y=x;}return x;}",
+      "source.permission");
   refuses("fn f(t:Ticket)->(){if true{consume t;}return ();}", "source.drop");
   refuses("fn f(t:Ticket,go:bool)->(){let mut s=t;consume s;if "
           "go{s=Ticket{};}return ();}",
@@ -280,7 +282,7 @@ void protocols() {
     protocol Run roles(P)(n:index@P,go:bool@P,x:Fr@P)->(a:State@P,b:State@P,data:Fr@P)completes{
       let mut a@P=make(x);let mut b@P=make(x);
       for _ in 0..n roles(P) max 4{
-        let (nextA,nextB)=finish_if @P(go)(data=x,b=b,a=a);
+        let (nextA,nextB,_)=finish_if @P(go)(data=x,b=b,a=a);
         a=nextA;b=nextB;
       }return(a,b,data=x);
     }run Demo=Run;

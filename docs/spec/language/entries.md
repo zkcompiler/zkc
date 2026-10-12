@@ -62,10 +62,14 @@ construction, not a security theorem. Native proof admission and its limits stil
 apply to the resulting program.
 
 A named construction associates the protocol specialization with deployment
-choices. It may have ordinary static parameters and requirements:
+choices. It may have ordinary static parameters and requirements. Its contract
+includes the target protocol's completed requirements and boundary obligations.
+Omitting `where` infers usage, natural and capability requirements; a written
+`where` clause must establish them. Invalid concrete targets fail even when the
+construction is unused:
 
 ```zkc
-construction ExternalWire<G: Group + Share> for Schnorr<G> {
+construction ExternalWire<G: Group> for Schnorr<G> {
   base authored;
   format RawBytes;
 }
@@ -293,7 +297,7 @@ A run block accepts setup associations without proof choices. A proof block
 always requires its complete configuration, even if it also has setup slots.
 
 Explicit setup association admits whole builtin `prover_key` and `verifier_key`
-input ports through checked Host initialization. It does not grant `Wire`,
+input ports through checked Host initialization. It does not grant external construction authority,
 message transmission, nested/private key construction or opening-state ingress.
 Other input constructors keep their existing permission requirements. Current
 source slots require an input association; they do not express receive-only keys

@@ -8,8 +8,8 @@ fn digest(s: &str) -> String {
     zkc_test_support::hex(&Sha256::digest(s.as_bytes()))
 }
 fn schema(kind: &str, key: &str, leaves: Json) -> Json {
-    json!({"kind":kind,"identity":digest(key),"type":key,"custody":false,
-        "permissions":["Copy","Drop","Share","Wire"],"fields":[],"alternatives":[],"leaves":leaves})
+    json!({"kind":kind,"identity":digest(key),"type":key,"custody":false,"constructible":true,
+        "permissions":["Copy","Drop"],"fields":[],"alternatives":[],"leaves":leaves})
 }
 fn port(name: &str, index: usize, ty: &Json, native: usize) -> Json {
     json!({"name":name,"index":index,"native":(native..native + ty["leaves"].as_array().unwrap().len()).collect::<Vec<_>>(),
@@ -67,7 +67,7 @@ fn package() -> Package {
     let reserved = schema("record", "PROVER", json!([]));
     let vk = "verifier_key:multilinear.kzg.bls12-381/0";
     let mut key = schema("builtin", vk, json!([vk]));
-    key["permissions"] = json!(["Copy", "Drop"]);
+    key["constructible"] = json!(false);
     let inputs = vec![
         port("data", 0, &record, 0),
         port("choice", 1, &variant, names.len()),

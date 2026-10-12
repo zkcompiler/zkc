@@ -14,10 +14,6 @@ json::Array permissions(Permissions value) {
     result.push_back("Copy");
   if (value.drop)
     result.push_back("Drop");
-  if (value.share)
-    result.push_back("Share");
-  if (value.wire)
-    result.push_back("Wire");
   return result;
 }
 json::Object describe(const CheckedProject &project, const Declaration &decl) {
@@ -95,7 +91,26 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
         json::Object{{"kind", "permission"},
                      {"type", type(bound.type)},
                      {"permissions", permissions(bound.permissions)},
-                     {"inferred", false}});
+                     {"inferred", bound.inferred}});
+  auto location = [&](Span span) {
+    return json::Object{{"module", project.sources()[span.source.index].module},
+                        {"begin", span.begin},
+                        {"end", span.end}};
+  };
+  json::Array admissions;
+  for (const auto &obligation : decl.admissions) {
+    json::Array calls;
+    for (auto span : obligation.calls)
+      calls.push_back(location(span));
+    admissions.push_back(json::Object{
+        {"kind", obligation.boundary == Boundary::Participants ? "participants"
+                 : obligation.boundary == Boundary::Construction
+                     ? "construction"
+                     : "message"},
+        {"type", type(obligation.type)},
+        {"source", location(obligation.span)},
+        {"calls", std::move(calls)}});
+  }
   auto selector = [&](const InputSelector &input, unsigned axis) {
     json::Array path;
     for (auto index : input.path)
@@ -181,6 +196,7 @@ json::Object describe(const CheckedProject &project, const Declaration &decl) {
       {"outputs", ports(decl.outputs)},
       {"services", std::move(services)},
       {"requirements", std::move(requirements)},
+      {"admissions", std::move(admissions)},
       {"effects", renderEffects(effects)},
       {"source",
        json::Object{

@@ -6,6 +6,7 @@ use zkc_runtime::interactive::{Identity, LogicalType, Type};
 struct Leaf {
     ty: LogicalType,
     shared: bool,
+    constructible: bool,
     needs_setup: bool,
     source_identity: Option<String>,
 }
@@ -52,6 +53,7 @@ impl<'a> Schemas<'a> {
                 .ok_or(E::Limit)?;
             require(self.retained <= 16 * 1024 * 1024, E::Limit)?;
             let shared = shared(&ty, &mut self.remaining)?;
+            let constructible = constructible(&ty, &mut self.remaining)?;
             let needs_setup = needs_setup(&ty, &mut self.remaining)?;
             let source_identity = ty.variant_descriptor().and_then(|d| {
                 let nominal = d.nominal_identity().ok()?;
@@ -68,6 +70,7 @@ impl<'a> Schemas<'a> {
                 Leaf {
                     ty,
                     shared,
+                    constructible,
                     needs_setup,
                     source_identity,
                 },
@@ -87,6 +90,14 @@ impl<'a> Schemas<'a> {
             E::Schema,
         )?;
         require(
+            !schema.permissions.contains(&Copy) || schema.permissions.contains(&Drop),
+            E::Schema,
+        )?;
+        require(
+            schema.kind != Kind::Associated || !schema.constructible,
+            E::Schema,
+        )?;
+        require(
             schema.fields.is_empty() || schema.alternatives.is_empty(),
             E::Schema,
         )?;
@@ -95,17 +106,12 @@ impl<'a> Schemas<'a> {
             if schema.custody && index == 0 {
                 continue;
             }
+            require(!schema.constructible || leaf.constructible, E::Schema)?;
             for permission in &schema.permissions {
                 require(
                     match permission {
                         Copy => leaf.ty.is_duplicable(),
                         Drop => leaf.ty.is_discardable(),
-                        Wire => leaf.ty.is_native_message_data(),
-                        Share => {
-                            !schema.fields.is_empty()
-                                || !schema.alternatives.is_empty()
-                                || leaf.shared
-                        }
                     },
                     E::Schema,
                 )?;
@@ -116,7 +122,7 @@ impl<'a> Schemas<'a> {
             require(
                 matches!(schema.kind, Kind::Record | Kind::Variant | Kind::Associated)
                     && !schema.permissions.contains(&Copy)
-                    && !schema.permissions.contains(&Wire)
+                    && !schema.constructible
                     && schema.leaves.first().is_some_and(|l| {
                         l == &format!("resource_unit:zkl_resource_{}", schema.identity)
                     }),
@@ -157,7 +163,14 @@ impl<'a> Schemas<'a> {
                     .iter()
                     .map(LogicalType::spelling)
                     .collect();
-                self.fields(&actual.fields, &payload, 0, depth, &schema.permissions)?;
+                self.fields(
+                    &actual.fields,
+                    &payload,
+                    0,
+                    depth,
+                    &schema.permissions,
+                    schema.constructible,
+                )?;
             }
         } else if !schema.fields.is_empty() {
             self.fields(
@@ -166,6 +179,7 @@ impl<'a> Schemas<'a> {
                 start,
                 depth,
                 &schema.permissions,
+                schema.constructible,
             )?;
         } else {
             require(schema.leaves.len() <= start.max(1), E::Schema)?;
@@ -197,6 +211,7 @@ impl<'a> Schemas<'a> {
         start: usize,
         depth: usize,
         permissions: &[Permission],
+        constructible: bool,
     ) -> Result<()> {
         let mut next = start;
         let mut names = BTreeSet::new();
@@ -225,6 +240,7 @@ impl<'a> Schemas<'a> {
                 E::Schema,
             )?;
             self.check(&field.schema, depth + 1)?;
+            require(!constructible || field.schema.constructible, E::Schema)?;
             require(
                 permissions
                     .iter()
@@ -234,6 +250,16 @@ impl<'a> Schemas<'a> {
             next = end;
         }
         require(next == leaves.len(), E::Schema)
+    }
+    pub(super) fn participants(&self, schema: &Schema) -> Result<()> {
+        require(
+            schema.permissions.contains(&Permission::Copy)
+                && schema
+                    .leaves
+                    .iter()
+                    .all(|leaf| self.leaves[leaf.as_str()].shared),
+            E::Schema,
+        )
     }
     fn shape(&self, s: &Schema) -> Result<()> {
         let start = usize::from(s.custody);
@@ -307,6 +333,7 @@ fn same_schema(a: &Schema, b: &Schema) -> bool {
         && a.identity == b.identity
         && a.display_type == b.display_type
         && a.custody == b.custody
+        && a.constructible == b.constructible
         && a.permissions == b.permissions
         && a.leaves == b.leaves
         && same_fields(&a.fields, &b.fields)
@@ -316,8 +343,8 @@ fn same_schema(a: &Schema, b: &Schema) -> bool {
             .zip(&b.alternatives)
             .all(|(a, b)| a.name == b.name && same_fields(&a.fields, &b.fields))
 }
-// Source Share is placement permission, separate from Copy and native wire
-// encoding. A copyable setup key, for example, is still participant-local.
+// Participant-family admission is independent of usage and decoding.
+// A copyable setup key, for example, remains participant-local.
 fn shared(ty: &LogicalType, remaining: &mut usize) -> Result<bool> {
     *remaining = remaining.checked_sub(1).ok_or(E::Limit)?;
     if let Some(element) = ty.sequence_element() {
@@ -372,4 +399,44 @@ fn needs_setup(ty: &LogicalType, remaining: &mut usize) -> Result<bool> {
         }
     }
     Ok(false)
+}
+
+// Native decoder authority is distinct from the installed message codec.
+// Source metadata may restrict this authority further for opaque types.
+fn constructible(ty: &LogicalType, remaining: &mut usize) -> Result<bool> {
+    *remaining = remaining.checked_sub(1).ok_or(E::Limit)?;
+    if let Some(element) = ty.sequence_element() {
+        return constructible(element, remaining);
+    }
+    if let Some((element, _)) = ty.fixed_vector_parts() {
+        return constructible(element, remaining);
+    }
+    if let Some(descriptor) = ty.variant_descriptor() {
+        for child in descriptor.alternatives().iter().flat_map(|a| a.payload()) {
+            if !constructible(child, remaining)? {
+                return Ok(false);
+            }
+        }
+        return Ok(true);
+    }
+    Ok(matches!(
+        ty.kind(),
+        Type::Bool
+            | Type::Index
+            | Type::Field
+            | Type::Group
+            | Type::FieldArray
+            | Type::Vector
+            | Type::Matrix
+            | Type::Groups
+            | Type::Indices
+            | Type::Bytes
+            | Type::Polynomial
+            | Type::Table
+            | Type::Point
+            | Type::Round
+            | Type::Commitment
+            | Type::Commitments
+            | Type::Proof
+    ))
 }

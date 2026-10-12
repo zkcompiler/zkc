@@ -54,13 +54,9 @@ bool Checker::requirements(Declaration &decl) {
       for (auto &p : decl.parameters)
         if (p.atom == lhs->domain) {
           if (req.permission == "Copy")
-            p.permissions.copy = true;
+            p.permissions.copy = p.permissions.drop = true;
           else if (req.permission == "Drop")
             p.permissions.drop = true;
-          else if (req.permission == "Share")
-            p.permissions.share = true;
-          else
-            p.permissions.wire = true;
           matched = true;
           break;
         }
@@ -69,16 +65,20 @@ bool Checker::requirements(Declaration &decl) {
           auto caps = types.permissions(*lhs, req.span, &decl);
           if (!caps)
             return false;
-          bool holds = req.permission == "Copy"    ? caps->copy
-                       : req.permission == "Drop"  ? caps->drop
-                       : req.permission == "Share" ? caps->share
-                                                   : caps->wire;
+          bool holds = req.permission == "Copy" ? caps->copy : caps->drop;
           if (!holds)
             return types.fail("source.permission",
                               "closed permission requirement does not hold",
                               req.span);
           continue;
         }
+        const auto *nominal = types.typeDeclaration(*lhs);
+        if (nominal && nominal->resource &&
+            (req.permission == "Copy" ||
+             *nominal->resource == Resource::Linear))
+          return types.fail("source.resource",
+                            "usage bound contradicts the resource restriction",
+                            req.span);
         if (lhs->arguments.empty() ||
             (lhs->kind != Type::Kind::Associated &&
              lhs->kind != Type::Kind::Field &&
@@ -90,13 +90,9 @@ bool Checker::requirements(Declaration &decl) {
                             req.span);
         Permissions caps;
         if (req.permission == "Copy")
-          caps.copy = true;
+          caps.copy = caps.drop = true;
         else if (req.permission == "Drop")
           caps.drop = true;
-        else if (req.permission == "Share")
-          caps.share = true;
-        else
-          caps.wire = true;
         decl.permissionBounds.push_back({*lhs, caps, req.span});
       }
     } else {
@@ -171,6 +167,18 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
     }
   }
   auto &source = *sources[id.index];
+  if ((decl.resource || decl.sealed) &&
+      decl.kind == Declaration::Kind::Associated &&
+      isDomainSort(decl.associatedSort))
+    return types.fail("source.resource",
+                      "resource attributes require an opaque runtime type",
+                      decl.span);
+  if (decl.resource && decl.permissions &&
+      (decl.permissions->copy ||
+       (*decl.resource == Resource::Linear && decl.permissions->drop)))
+    return types.fail("source.resource",
+                      "associated promises contradict the resource restriction",
+                      decl.span);
   if (decl.kind == Declaration::Kind::Associated && !source.parameters.empty())
     return types.fail(
         "source.unsupported",
@@ -313,12 +321,6 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       decl.domain = *def;
     }
   }
-  if (decl.kind == Declaration::Kind::Associated && !decl.abstract &&
-      !isDomainSort(decl.associatedSort) && decl.permissions &&
-      decl.permissions->wire)
-    return types.fail("source.permission",
-                      "private associated Wire requires an admitted validator",
-                      decl.span);
   if (decl.kind == Declaration::Kind::Associated &&
       isDomainSort(decl.associatedSort) && decl.associatedSort != "Field" &&
       decl.associatedSort != "Group" &&
@@ -404,6 +406,11 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
         if (decl.kind != Declaration::Kind::Math &&
             !types.executableType(*t, src.span))
           return false;
+        if (decl.kind == Declaration::Kind::DomainFunction &&
+            !types.requireUsage(*t, Usage::Copy, src.span, &decl,
+                                "source.finite-domain",
+                                "domain operands require Copy"))
+          return false;
         Port p{src.name, *t, {}, src.span};
         if (decl.kind == Declaration::Kind::Protocol) {
           auto set = roles(decl, src.roles, src.span);
@@ -430,27 +437,23 @@ bool Checker::signature(DeclarationId id, unsigned depth) {
       if (!valueType(*item))
         return types.fail("source.finite-domain", "domain item must be data",
                           src.span);
-      auto permissions = types.permissions(*item, src.span, &decl);
-      if (!permissions)
+      if (!types.requireUsage(*item, Usage::Copy, src.span, &decl,
+                              "source.finite-domain",
+                              "domain items require Copy"))
         return false;
-      if (!permissions->copy || !permissions->drop)
-        return types.fail("source.finite-domain",
-                          "domain items require Copy and Drop", src.span);
       decl.domainInputs.push_back({src.name, *item, src.span});
     }
     if (source.domainResult) {
       decl.domainResult = type(decl, *source.domainResult, depth + 1);
       if (!decl.domainResult)
         return false;
-      auto permissions =
-          types.permissions(*decl.domainResult, decl.span, &decl);
-      if (!permissions)
-        return false;
-      if (!valueType(*decl.domainResult) || !permissions->copy ||
-          !permissions->drop)
-        return types.fail("source.finite-domain",
-                          "domain result items require Copy and Drop",
+      if (!valueType(*decl.domainResult))
+        return types.fail("source.finite-domain", "domain result must be data",
                           decl.span);
+      if (!types.requireUsage(*decl.domainResult, Usage::Copy, decl.span, &decl,
+                              "source.finite-domain",
+                              "domain result items require Copy"))
+        return false;
     }
     for (const auto &src : source.scopedInputs) {
       if (!bindingName(decl, src.name, src.span) ||

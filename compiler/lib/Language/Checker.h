@@ -2,7 +2,27 @@
 #define ZKC_LANGUAGE_CHECKER_H
 #include "Internal.h"
 #include "Semantics.h"
+#include "UsagePlan.h"
 namespace zkc::language::detail {
+struct BodyWitnesses {
+  std::vector<std::shared_ptr<ScopedSource>> sources;
+  std::vector<std::shared_ptr<ScopedCallSource>> calls;
+  std::vector<std::shared_ptr<ScopedInvocationSource>> invocations;
+  std::map<unsigned, std::shared_ptr<NotationFamilies>> notations;
+};
+struct BodyPlan {
+  UsagePlan usage;
+  BodyWitnesses witnesses;
+  struct Demand {
+    Type type;
+    Usage usage;
+    Span span;
+    std::string code, message;
+  };
+  std::vector<Demand> demands;
+  uint64_t operations = 0;
+  BodyPlan(Semantics &types, const Declaration &scope) : usage(types, scope) {}
+};
 class Checker {
 public:
   Checker(std::vector<SyntaxDeclaration>, CheckedStorage &, Work &);
@@ -65,14 +85,24 @@ public:
   bool configureEntry(Declaration &, const Declaration &,
                       const SyntaxProofEntry &);
   bool retainNotations();
-  std::vector<std::shared_ptr<ScopedSource>> scopedSources;
-  std::vector<std::shared_ptr<ScopedCallSource>> scopedCalls;
-  std::vector<std::shared_ptr<ScopedInvocationSource>> scopedInvocations;
-  std::map<unsigned, std::shared_ptr<NotationFamilies>> notationFamilies;
+  BodyWitnesses witnesses;
+  std::map<unsigned, BodyPlan *> bodyPlans;
+  BodyPlan *bodyPlan(DeclarationId id) {
+    auto found = bodyPlans.find(id.index);
+    return found == bodyPlans.end() ? nullptr : found->second;
+  }
+  BodyWitnesses &bodyWitnesses(DeclarationId id) {
+    auto *plan = bodyPlan(id);
+    return plan ? plan->witnesses : witnesses;
+  }
   bool retainScopedSources();
   std::shared_ptr<const SyntaxDeclaration> retainSyntax(DeclarationId);
 
 private:
+  bool checkBody(Declaration &, Body &, unsigned);
+  bool inferUsage(Declaration &, Body::Mode, unsigned);
+  bool collectUsage(const Declaration &, const Type &, Usage, Span,
+                    llvm::StringRef, llvm::StringRef);
   std::optional<Type> elaborateType(const Declaration &, const SyntaxType &,
                                     unsigned);
   std::vector<SyntaxDeclaration> syntax;

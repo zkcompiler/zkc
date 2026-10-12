@@ -284,7 +284,7 @@ Catalog associations project domains, such as `G::Scalar`, `C::ValueField`,
 selection requires each association to exist for the installed identity. Closed
 associated fields/groups are identical to their directly declared types. A module
 may expose an associated domain (`type C: Commitment`); this adds no runtime value
-or constructor. Static-only domains have no Copy, Drop, Share or Wire permission.
+or constructor. Static-only domains have no runtime usage or boundary admission.
 Naming a transcript domain does not expose managed transcript operations as local
 kernels. Runtime constructors retain their separate admitted vocabulary below.
 
@@ -308,9 +308,9 @@ exponential arithmetic. Static argument inference does not invert `pow2`.
 
 `where 1 <= N` requires a natural bound. `where Copy(T), Drop(T)` adds permission
 requirements; `T: Type + Copy + Drop` expresses the same parameter permissions.
-`where Share(G::Scalar), Wire(G::Scalar)` constrains an associated projection.
-Calls must prove permission bounds from the caller's explicit assumptions or the selected
-concrete type. Closed permission requirements are evaluated immediately; a true
+`where Copy(C::Item)` can constrain an abstract associated projection.
+Calls must prove permission bounds from the caller's checked contract or the
+selected concrete type. Closed permission requirements are evaluated immediately; a true
 requirement adds no generic assumption. Group permissions do not imply scalar permissions.
 Requirements follow a callable's result type or a nominal declaration's parameter
 list; an alias places them before `=`. Symbolic inequalities must match a
@@ -333,8 +333,9 @@ requirements, not cryptographic guarantees. Before source checking, the installe
 catalog must sustain inherent sort facts and every installed unary implication.
 This preserves generic assumptions when type aliases normalize away their bounds.
 
-Defined `fn`, `math fn` and `protocol` declarations without a `where` clause infer
-missing open catalog and natural preconditions from signature formation,
+Defined `fn`, `math fn`, `domain fn`, `protocol` and `construction` declarations
+without a `where` clause infer missing usage, open catalog and natural
+preconditions from signature formation,
 specification selectors and body operations, including calls. Inference records
 requirements; it does not prove them or invent catalog facts. Every concrete
 application still checks them. A written `where` clause is complete: checking
@@ -343,13 +344,28 @@ bounds suffice. Abstract members, relations, types, interfaces and modules
 retain explicit preconditions. Module implementations may infer member
 conditions only when their interface and module contract establish them.
 
-`Copy`, `Drop`, `Share` and `Wire` remain explicit resource permissions. Omitting
-them from `T: Type` promises none; `Field` and `Group` retain their inherent Copy
-and Drop. An inline bound such as `T: Type + Copy` supplies that permission while
-leaving catalog and natural inference enabled when `where` is absent. Inference
-does not change move behavior, select participants or insert communication.
-The checked declaration API exposes completed result types and requirements;
-each inferred bound records its origin span and `inferred` flag.
+A bare `T: Type` promises no usage property. A defined body infers `Copy(T)`
+when it reuses a value and `Drop(T)` when a continuing path leaves one unused.
+Identity forwarding needs neither. `Copy` implies `Drop`; `Field` and `Group`
+supply both. An inline bound such as `T: Type + Copy` remains an explicit promise.
+A written `where` clause closes usage inference as well as catalog and natural
+inference. Abstract members expose only their written contracts.
+
+```zkc
+fn identity<T: Type>(x: T) -> T { return x; }
+fn duplicate<T: Type>(x: T) -> (T, T) { return (x, x); } // infers Copy(T)
+fn ignore<T: Type>(x: T) -> () { return (); } // infers Drop(T)
+```
+
+The compiler collects authored uses and continuing paths, freezes the resulting
+contract, then elaborates moves under that contract. Captures transfer into a
+control region; mutable state crosses a join as a whole. Inference follows these
+transfer rules, including stopped branches and partial moves. Explicit resource
+restrictions and native policies cannot be strengthened by inference. Collection
+and elaboration share bounded compiler work; exceeding that budget refuses.
+The checked declaration exposes inferred bounds with their origin and `inferred`
+flag. Boundary obligations are separate, typed conditions with the originating
+site and intervening call sites; an explicit `where ()` does not disable them.
 
 Bounds apply to generic type and module applications as well as calls. Parent
 bounds are inherited. Associated type declarations cannot introduce their own
@@ -423,9 +439,9 @@ whose yield preserves every payload position. Mathematical adapters use
 `data.make` and ordered `data.get` projections. Independent source comparison
 checks the actual operations, fields, binding identities and result mappings.
 
-Packing conveys no field access or constructor authority. Sequence permissions
-are the logical element permissions, so neither an otherwise serializable
-private representation nor explicit nominal permission restrictions gain Wire.
+Packing conveys no field access or constructor authority. Sequence usage follows
+its element type. Packing a private representation does not grant external
+construction authority; explicit resource restrictions remain in force.
 Affine/non-Drop values, formal data and managed services cannot be elements.
 Existing source variant construction and match semantics are unchanged.
 Managed services are separate from these data types. Container permissions retain
@@ -433,8 +449,9 @@ element permissions, and concrete external boundaries require native message
 admission. A symbolic message shape still needs an admitted codec at closure.
 Commitments and proofs may be messages when concrete native admission permits.
 Keys and opening state remain local, copyable private data; they do not gain
-Share or Wire. Commitment collections retain the native collection policy, which
-does not currently admit them as protocol messages. Admitting a constructor does
+participant-family or external construction admission. Commitment collections
+retain the native collection policy, which does not currently admit them as
+protocol messages. Admitting a constructor does
 not admit every domain instance. External key/state inputs still require an
 explicit ingress contract; this constructor support supplies none.
 
@@ -647,9 +664,9 @@ math fn evaluate<F: Field, N: nat>(p: Poly<F, N>, point: [F; N]) -> F {
 
 A formal polynomial denotes an expression over a field and an ordered list of
 variables. It is an SSA value in Protocol IR and has no executable value
-encoding. Its type carries the field and natural arity. It has Copy and Drop,
-but no Share or Wire. Mathematical helper ports, products, fixed arrays and
-ordinary record fields can contain formal values. A zero-length array retains
+encoding. Its type carries the field and natural arity. It has Copy and Drop
+and cannot cross participant or external boundaries. Mathematical helper ports,
+products, fixed arrays and ordinary record fields can contain formal values. A zero-length array retains
 its formal element meaning even though it has no SSA leaves.
 
 Formal values are confined to mathematical helpers. Protocol and local-function
@@ -704,19 +721,33 @@ polynomial elimination produces ordinary executable calculations.
 |---|---|
 | `Copy` | Reading a value may preserve the original place. Otherwise the read moves it. |
 | `Drop` | A continuing path may leave a value unused. |
-| `Share` | Participant placement may admit multiple components. |
-| `Wire` | A source decoder may construct this value at an external boundary, subject to target codec and layout admission. |
 
-Permissions are independent: `Copy` does not imply `Drop`. Products, arrays and
-variants derive permissions from all their element/payload types. Explicit
-permissions on a record or variant restrict those derived permissions; they cannot
-add permissions that its fields lack. Restricted nominal constructors and private
-record fields do not derive `Wire`; writing `Wire` on a restricted record or
-variant is refused without an admitted validator. A private associated
-implementation cannot promise `Wire` from its representation alone. `Field` and
-`Group` parameters promise `Copy`
-and `Drop`. Ground domain availability, sharing and transport still pass the
-installed native type policy and codecs.
+Ordinary records, variants, products and arrays derive reuse and abandonment
+from their fields. Reusing data does not authorize duplicating or reordering the
+effect that produced it. Effects and resource custody retain their own checks.
+`Copy` implies `Drop`. Explicit restrictions use attributes:
+
+```zkc
+#[affine] struct Ticket { value: bool }
+#[linear] struct Claim {}
+#[sealed] struct Snapshot { pub value: bool }
+```
+
+`#[affine]` forbids copying and permits abandonment only if every field permits
+it. `#[linear]` forbids copying and requires transfer or consumption on every
+successful path. Both seal construction and representation access to the defining
+module. `#[sealed]` supplies that access boundary without restricting ordinary
+usage. Restrictions cannot grant properties missing from a field, and written
+usage bounds cannot contradict them. These attributes also apply to opaque
+runtime type definitions. Associated domains
+such as `type F: Field` and `type C: Commitment` cannot carry them: selecting a
+domain does not introduce a nominal runtime wrapper.
+
+Private fields, sealed declarations and opaque associated types do not grant
+external constructor authority. Concrete associated types derive usage from their
+representation; abstract types expose only their declared promises. `Field` and
+`Group` parameters promise `Copy` and `Drop`. Target representation, custody and
+codec checks remain independent.
 
 Fields are private unless marked `pub`. A restricted nominal constructor and its
 representation are available in its defining module and descendants. Private associated
@@ -735,13 +766,30 @@ path, including empty values and copies made by a new binding. A stopped path
 uses the target's cleanup semantics. This source obligation is distinct from
 native affine custody; an affine runtime value can be cleaned up on a stop.
 
-Entry inputs and message receives refuse private associated representations, restricted
-records/variants, and recursively private record fields without an admitted validator.
-Generic `Wire` bounds therefore discharge source constructor authority before
-selection; native codec, layout and size support are separate target obligations.
-Entry ingress is checked after generic selection. Internal protocol applications transfer
-existing values and do not introduce an ingress boundary. A public native
-representation does not grant authority to construct a private source value.
+Boundary checks derive three independent facts from source structure and the
+installed native type declarations:
+
+- Participant families require reusable component data; restricted resources and
+  participant-local native material cannot have multiple components.
+- External construction requires transparent source authority. Private fields,
+  sealed types and opaque associated types refuse. This also applies to empty
+  arrays whose element type is private or restricted.
+- Message transport requires an installed codec for the concrete native type.
+  Public construction authority alone does not supply one.
+
+Boundary admission is derived rather than expressed as a generic usage bound.
+An open generic message retains its constructor and codec obligations. Generic calls substitute and propagate
+these conditions; concrete application and Entry closure must discharge them.
+Known invalid types fail immediately, including in unused definitions. Repeated
+conditions are stored once, retaining a representative message or placement
+origin and call chain for diagnostics. No condition selects a
+codec, inserts communication or supplies a private constructor.
+
+Entry inputs undergo these checks after generic selection. Internal protocol
+applications transfer existing values without introducing an ingress boundary.
+To receive data for a sealed type, accept transparent data and call its module's
+validation function explicitly. A public native representation does not grant
+source construction authority.
 
 ## Callables and static modules
 
@@ -921,8 +969,9 @@ An interface declares associated types/domains and math/local member signatures.
 A module may select one interface and must define every required member exactly
 once. Additional declarations and private helpers are allowed. A generic `M: I`
 client sees only `I`; concrete module paths may use additional public members. Associated
-runtime types default to no permissions; their promised permissions must be supported
-by their representation. Associated `Field` and `Group` declarations expose their
+abstract runtime types expose only their promised usage properties. Concrete
+associated types derive usage properties from their representation; explicit
+resource attributes can strengthen those restrictions. Associated `Field` and `Group` declarations expose their
 selected domain. Conformance checks callable modes, types, permissions, natural
 preconditions, callback acceptance contracts and implementation effects. An
 implementation cannot require more than its interface allows. Interfaces and
@@ -935,7 +984,8 @@ parameters on associated types are rejected.
 `type Name = T;` is always a transparent alias. `type Name: Type = T;` or
 `type Name: Copy + Drop = T;` declares a sealed associated type, including outside
 an interface implementation. Interface `type Name;` is an abstract requirement;
-its implementation must explicitly declare a nominal type with `:`. Interface
+its implementation must explicitly declare a nominal type with `:` or a resource
+or sealing attribute. Interface
 membership never changes an alias's meaning. The module path and canonical static
 arguments determine nominal identity, independent of imports or file layout.
 Records and variants are ordinary module declarations. An abstract call or type projection
@@ -1282,9 +1332,9 @@ inputs; `fn(()) => expression` takes one Unit input.
 one tuple input; it does not curry the function. Ordinary binding patterns,
 including `_`, apply. Input and result types are inferred contextually using
 the ordinary expression solver and the receiving scoped signature. Generic
-functions and their literal computations are checked even when unused. Their
-explicit generic permissions and bounds remain necessary; call sites do not
-repair malformed definitions.
+functions and their literal computations are checked even when unused. The
+enclosing definition infers requirements under the ordinary `where` rules;
+call sites check that contract and do not repair malformed definitions.
 
 A signature fixes the body's mode. `math fn(A) -> B` is total Math;
 `fn(A) -> B` is ordered Local. An omitted Local callback ceiling allows both

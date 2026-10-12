@@ -50,6 +50,7 @@ struct Layout {
   std::vector<LayoutField> fields;
   std::vector<LayoutAlternative> alternatives;
   bool custody = false;
+  bool constructible = false;
   /// Includes formal element meaning even when an array has zero leaves.
   bool formal = false;
 };

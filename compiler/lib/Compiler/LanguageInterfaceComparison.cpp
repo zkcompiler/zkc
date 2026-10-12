@@ -91,6 +91,7 @@ class Comparison {
               actual.identity) ||
         !text(spelling(source.type), actual.type) ||
         source.type.kind != actual.kind || source.custody != actual.custody ||
+        source.constructible != actual.constructible ||
         !(source.permissions == actual.permissions) ||
         source.leaves.size() != actual.leaves.size() ||
         source.alternatives.size() != actual.alternatives.size())

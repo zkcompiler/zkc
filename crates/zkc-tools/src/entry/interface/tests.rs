@@ -4,8 +4,8 @@ fn digest(s: &str) -> String {
     crate::host::inputs::hex(&Sha256::digest(s.as_bytes()))
 }
 fn schema(kind: &str, ty: &str, leaves: Value) -> Value {
-    json!({"kind":kind,"identity":digest(ty),"type":ty,"custody":false,
-        "permissions":["Copy","Drop","Share","Wire"],"fields":[],"alternatives":[],"leaves":leaves})
+    json!({"kind":kind,"identity":digest(ty),"type":ty,"custody":false,"constructible":true,
+        "permissions":["Copy","Drop"],"fields":[],"alternatives":[],"leaves":leaves})
 }
 fn port(name: &str, index: u32, native: Value, roles: Value, schema: Value) -> Value {
     json!({"name":name,"index":index,"native":native,"roles":roles,"type":schema["type"],"schema":schema})
@@ -221,10 +221,7 @@ fn ports_require_exact_logical_roles_order_and_native_slices() {
         ("/protocols/0/inputs/1/name", json!("statement")),
         ("/protocols/0/roles", json!(["P", "P"])),
         ("/protocols/0/inputs/0/type", json!("index")),
-        (
-            "/protocols/0/inputs/0/schema/permissions",
-            json!(["Copy", "Drop", "Wire"]),
-        ),
+        ("/protocols/0/inputs/0/schema/permissions", json!(["Drop"])),
     ] {
         changed(path, value, InterfaceError::Schema);
     }
@@ -265,15 +262,12 @@ fn proof_and_clause_selections_are_complete() {
 #[test]
 fn conflicting_same_identity_and_unearned_permissions_are_refused() {
     for (path, value) in [
-        (
-            "/relations/0/inputs/0/schema/permissions",
-            json!(["Copy", "Drop"]),
-        ),
+        ("/relations/0/inputs/0/schema/constructible", json!(false)),
         ("/relations/0/inputs/0/schema/leaves", json!(["index"])),
         ("/relations/0/inputs/0/schema/custody", json!(true)),
         (
             "/relations/0/inputs/0/schema/permissions",
-            json!(["Wire", "Copy", "Drop"]),
+            json!(["Drop", "Copy"]),
         ),
         (
             "/relations/0/inputs/0/schema/permissions",
@@ -294,9 +288,12 @@ fn conflicting_same_identity_and_unearned_permissions_are_refused() {
         json!(["P"]),
         schema("builtin", "Polynomial", json!(["polynomial:bls12-381.fr"]))
     )]);
-    assert_eq!(read(&value).unwrap_err(), InterfaceError::Schema);
-    value["protocols"][0]["inputs"][0]["schema"]["permissions"] = json!(["Copy", "Drop", "Share"]);
-    assert!(read(&value).is_ok());
+    let interface = read(&value).unwrap();
+    assert!(interface.selected_protocol().inputs[0].schema.constructible);
+    assert_eq!(
+        super::super::arguments::check_ports(&interface).unwrap_err(),
+        "entry-input-codec"
+    );
 }
 /// A bundle relation whose formals have the four derived shapes: a field
 /// slot, a height index, a presence Boolean and a group vector.
@@ -536,7 +533,8 @@ fn custody_optional_targets_and_continuations_have_positive_controls() {
         json!([format!("resource_unit:zkl_resource_{id}")]),
     );
     guard["custody"] = json!(true);
-    guard["permissions"] = json!(["Drop", "Share"]);
+    guard["permissions"] = json!(["Drop"]);
+    guard["constructible"] = json!(false);
     read(&run_with(port("guard", 0, json!([0]), json!(["P"]), guard))).unwrap();
     let mut value = document();
     value["job"]["target"] = Value::Null;
@@ -584,50 +582,81 @@ fn excessive_schema_depth_refuses_on_a_two_mebibyte_stack() {
 }
 
 #[test]
-fn pcs_schemas_preserve_local_material_permissions() {
+fn pcs_schemas_preserve_independent_boundaries() {
     let kzg = "multilinear.kzg.bls12-381/0";
     let rows = "rows.merkle-keccak256.koala-bear/0";
-    for (head, domain, shared, wire) in [
-        ("commitment", kzg, true, true),
-        ("proof", kzg, true, true),
-        ("commitments", rows, true, false),
-        ("prover_key", kzg, false, false),
-        ("verifier_key", kzg, false, false),
-        ("opening_state", kzg, false, false),
-        ("opening_states", rows, false, false),
+    for (head, domain, participants, constructible, message) in [
+        ("commitment", kzg, true, true, true),
+        ("proof", kzg, true, true, true),
+        ("commitments", rows, true, true, false),
+        ("prover_key", kzg, false, false, false),
+        ("verifier_key", kzg, false, false, false),
+        ("opening_state", kzg, false, false, false),
+        ("opening_states", rows, false, false, false),
     ] {
         let leaf = format!("{head}:{domain}");
         let mut value = schema("builtin", &leaf, json!([leaf]));
-        let mut permissions = vec!["Copy", "Drop"];
-        if shared {
-            permissions.push("Share");
-        }
-        if wire {
-            permissions.push("Wire");
-        }
-        value["permissions"] = json!(permissions);
+        value["constructible"] = json!(constructible);
         let parsed = serde_json::from_value(value.clone()).unwrap();
-        schemas::Schemas::new().check(&parsed, 0).unwrap();
-        if !shared {
-            let mut forged = value.clone();
-            forged["permissions"] = json!(["Copy", "Drop", "Share"]);
-            let forged = serde_json::from_value(forged).unwrap();
-            assert_eq!(
-                schemas::Schemas::new().check(&forged, 0),
-                Err(InterfaceError::Schema),
-                "{head} acquired sharing"
-            );
-        }
-        if !wire {
-            permissions.push("Wire");
-            value["permissions"] = json!(permissions);
+        let mut schemas = schemas::Schemas::new();
+        schemas.check(&parsed, 0).unwrap();
+        assert_eq!(
+            schemas.participants(&parsed).is_ok(),
+            participants,
+            "{head}"
+        );
+        assert_eq!(
+            zkc_runtime::interactive::LogicalType::parse(&leaf)
+                .unwrap()
+                .is_native_message_data(),
+            message,
+            "{head}"
+        );
+        if !constructible {
+            value["constructible"] = json!(true);
             let forged = serde_json::from_value(value).unwrap();
             assert_eq!(
                 schemas::Schemas::new().check(&forged, 0),
                 Err(InterfaceError::Schema),
-                "{head} acquired a message permission"
+                "{head} acquired constructor authority"
             );
         }
+    }
+}
+
+#[test]
+fn input_description_uses_the_execution_admission_check() {
+    for (leaf, kind, admitted) in [
+        ("field:bls12-381.fr", "field", true),
+        ("table:bls12-381.fr", "builtin", false),
+        (
+            "sequence<fixed_vector<field:koala-bear,4>>",
+            "builtin",
+            false,
+        ),
+    ] {
+        let mut doc = document();
+        doc["job"] = json!({"kind":"run"});
+        doc["relations"] = json!([]);
+        doc["protocols"][0]["clauses"] = json!([]);
+        doc["protocols"][0]["inputs"] = json!([port(
+            "value",
+            0,
+            json!([0]),
+            json!(["P"]),
+            schema(kind, leaf, json!([leaf]))
+        )]);
+        let interface = read(&doc).unwrap();
+        assert_eq!(
+            crate::entry::arguments::check_ports(&interface).is_ok(),
+            admitted,
+            "{leaf}"
+        );
+        assert_eq!(
+            interface.input_groups()[0].describe()["ports"][0]["constructible"],
+            json!(admitted),
+            "{leaf}"
+        );
     }
 }
 
@@ -636,22 +665,17 @@ fn setup_document() -> Value {
     doc["relations"] = json!([]);
     doc["protocols"][0]["clauses"] = json!([]);
     let mut inputs = Vec::new();
-    for (i, (name, head, role, permissions)) in [
-        ("vk", "verifier_key", "V", vec!["Copy", "Drop"]),
-        ("pk", "prover_key", "P", vec!["Copy", "Drop"]),
-        (
-            "statement",
-            "commitment",
-            "V",
-            vec!["Copy", "Drop", "Share", "Wire"],
-        ),
+    for (i, (name, head, role)) in [
+        ("vk", "verifier_key", "V"),
+        ("pk", "prover_key", "P"),
+        ("statement", "commitment", "V"),
     ]
     .into_iter()
     .enumerate()
     {
         let leaf = format!("{head}:multilinear.kzg.bls12-381/0");
         let mut ty = schema("builtin", &leaf, json!([leaf]));
-        ty["permissions"] = json!(permissions);
+        ty["constructible"] = json!(head == "commitment");
         inputs.push(port(name, i as u32, json!([i]), json!([role]), ty));
     }
     doc["protocols"][0]["inputs"] = json!(inputs);
@@ -837,3 +861,22 @@ fn readable_input_groups_share_the_checked_interface_and_require_opt_in_resoluti
     }
 }
 mod unicode;
+
+#[test]
+fn managed_transcript_leaves_are_not_source_builtin_data() {
+    let mut value = document();
+    value["job"] = json!({"kind":"run"});
+    value["relations"] = json!([]);
+    let mut data = schema(
+        "builtin",
+        "Transcript",
+        json!(["transcript:merlin3.bls12-381.fr64be/0"]),
+    );
+    data["constructible"] = json!(false);
+    data["permissions"] = json!([]);
+    value["protocols"] = json!([{"symbol":"sample_Protocol", "roles":["P"],
+        "inputs":[port("x",0,json!([0]),json!(["P"]),data.clone())],
+        "outputs":[port("r",0,json!([0]),json!(["P"]),data)],
+        "services":[],"clauses":[]}]);
+    assert_eq!(read(&value).unwrap_err(), InterfaceError::Schema);
+}

@@ -7,8 +7,7 @@ using namespace llvm;
 namespace zkc::language::detail {
 namespace {
 Permissions intersect(Permissions a, const Permissions &b) {
-  return {a.copy && b.copy, a.drop && b.drop, a.share && b.share,
-          a.wire && b.wire};
+  return {a.copy && b.copy, a.drop && b.drop};
 }
 } // namespace
 
@@ -119,8 +118,7 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
   using K = Type::Kind;
   auto scoped = [&](Permissions inherent) -> std::optional<Permissions> {
     auto include = [&](Permissions p) {
-      inherent = {inherent.copy || p.copy, inherent.drop || p.drop,
-                  inherent.share || p.share, inherent.wire || p.wire};
+      inherent = {inherent.copy || p.copy, inherent.drop || p.drop};
     };
     if (scope) {
       for (const auto &parameter : scope->parameters) {
@@ -136,6 +134,7 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
           include(bound.permissions);
       }
     }
+    inherent.drop |= inherent.copy;
     return inherent;
   };
   if (isStaticOnly(type)) {
@@ -150,13 +149,43 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
       fail("source.type", "unknown associated type", span);
       return {};
     }
-    return scoped(decl->permissions.value_or(Permissions{}));
+    Permissions result;
+    if (decl->abstract)
+      result = decl->permissions.value_or(Permissions{});
+    else {
+      auto representation = fields(type, span, depth + 1);
+      auto properties = representation
+                            ? permissions(representation->front().type, span,
+                                          scope, depth + 1)
+                            : std::nullopt;
+      if (!properties)
+        return {};
+      result = *properties;
+      if (decl->permissions && !result.includes(*decl->permissions)) {
+        fail("source.permission", "associated promises exceed representation",
+             decl->span);
+        return {};
+      }
+    }
+    if (decl->resource) {
+      if (*decl->resource == Resource::Affine && !result.drop &&
+          !decl->abstract) {
+        fail("source.permission", "affine representation must permit Drop",
+             decl->span);
+        return {};
+      }
+      result.copy = false;
+      result.drop = *decl->resource == Resource::Affine;
+    }
+    // Generic assumptions refine unknown properties, never an authored
+    // restriction on this nominal type.
+    return decl->resource ? std::optional(result) : scoped(result);
   }
   if (type.kind == K::Boolean || type.kind == K::Index ||
       type.kind == K::Field || type.kind == K::Group || type.kind == K::Unit)
-    return Permissions{true, true, true, true};
+    return Permissions{true, true};
   if (type.kind == K::Formal)
-    return Permissions{true, true, false, false};
+    return Permissions{true, true};
   if (type.kind == K::Builtin) {
     auto formed = builtinType(type.domain, type.arguments);
     if (!formed) {
@@ -168,11 +197,6 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
       auto child = permissions(element, span, scope, depth + 1);
       if (!child)
         return {};
-      if (!child->copy || !child->drop) {
-        fail("source.sequence", "sequence element requires Copy and Drop",
-             span);
-        return {};
-      }
       if (!executableType(element, span, depth + 1))
         return {};
       return child;
@@ -183,25 +207,11 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
         accept(native.takeError(), span);
         return {};
       }
-      auto policy = protocol::nativeTypePolicy(*native);
-      if (!policy) {
-        fail("source.builtin", "native data lacks an installed type policy",
-             span);
-        return {};
-      }
       return Permissions{protocol::duplicable(*native),
-                         protocol::discardable(*native), policy->shared,
-                         protocol::nativeMessageData(*native)};
+                         protocol::discardable(*native)};
     }
     const auto *base = protocol::typePermissions(type.domain);
-    auto head = protocol::nativeTypeConstructorPolicy(type.domain);
-    if (!head) {
-      fail("source.builtin", "native data lacks an installed type policy",
-           span);
-      return {};
-    }
-    Permissions result{base && base->copy, base && base->drop,
-                       head->shared || type.domain == "sequence", true};
+    Permissions result{base && base->copy, base && base->drop};
     for (const auto &argument : type.arguments) {
       if (isStaticOnly(argument))
         continue;
@@ -210,15 +220,9 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
         return {};
       result = intersect(result, *child);
     }
-    // Open message shapes require a concrete admitted codec at closure.
-    result.wire &= type.domain == "vector" || type.domain == "matrix" ||
-                   type.domain == "groups" || type.domain == "indices" ||
-                   type.domain == "bytes" || type.domain == "sequence" ||
-                   type.domain == "field_array" ||
-                   type.domain == "commitment" || type.domain == "proof";
     return result;
   }
-  Permissions result{true, true, true, true};
+  Permissions result{true, true};
   std::vector<Type> children;
   if (type.kind == K::Tuple || type.kind == K::Array)
     children = type.arguments;
@@ -228,7 +232,6 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
       return {};
     for (auto &f : *fs) {
       children.push_back(f.type);
-      result.wire &= f.isPublic;
     }
   } else if (type.kind == K::Variant) {
     auto alts = alternatives(type, span, depth + 1);
@@ -247,16 +250,15 @@ std::optional<Permissions> Semantics::permissions(const Type &type, Span span,
       return {};
     result = intersect(result, *p);
   }
-  if (auto *decl = typeDeclaration(type); decl && decl->permissions) {
-    // Explicit nominal permissions seal constructor authority. Without a
-    // declared validator, that authority cannot arrive from a wire decoder.
-    result.wire = false;
-    if (!result.includes(*decl->permissions)) {
-      fail("source.permission", "declared permissions exceed field permissions",
-           decl->span);
-      return {};
+  if (auto *decl = typeDeclaration(type)) {
+    if (decl->resource) {
+      if (*decl->resource == Resource::Affine && !result.drop) {
+        fail("source.permission", "affine fields must permit Drop", decl->span);
+        return {};
+      }
+      result.copy = false;
+      result.drop = *decl->resource == Resource::Affine;
     }
-    result = *decl->permissions;
   }
   return result;
 }
@@ -299,11 +301,11 @@ bool Semantics::mathematicalData(const Type &type, Span span,
   if (depth > work.limits.typeDepth || !charge(1, span))
     return diagnostic ? false
                       : fail("source.limit", "mathematical type depth", span);
-  auto caps = permissions(type, span, scope, depth);
-  if (!caps || !caps->copy || !caps->drop)
-    return diagnostic ? false
-                      : fail("source.mode",
-                             "mathematical values require Copy and Drop", span);
+  // Copy is structural: one demand covers the complete value. The recursive
+  // walk below independently checks mathematical vocabulary and representation.
+  if (depth == 1 && !requireUsage(type, Usage::Copy, span, scope, "source.mode",
+                                  "mathematical values require Copy"))
+    return false;
   using K = Type::Kind;
   if (type.kind == K::Builtin) {
     auto policy = protocol::nativeTypeConstructorPolicy(type.domain);
@@ -351,16 +353,6 @@ bool Semantics::constructorAllowed(const Declaration &context,
          (type.kind == Type::Kind::Record || type.kind == Type::Kind::Variant ||
           type.kind == Type::Kind::Associated) &&
          withinModule(context.module, decl->module);
-}
-bool Semantics::ingress(const Type &type, Span span) {
-  if (!executableType(type, span))
-    return false;
-  auto caps = permissions(type, span);
-  return caps &&
-         (caps->wire ||
-          fail("source.ingress",
-               "external input requires Wire or an admitted ingress validator",
-               span));
 }
 std::optional<std::vector<TypeField>>
 Semantics::structuralFields(const Type &type, Span span) {
@@ -440,7 +432,7 @@ std::optional<unsigned> Semantics::fieldIndex(const Declaration &decl,
                                               Span span) {
   auto *nominal = typeDeclaration(type);
   if (type.kind == Type::Kind::Associated ||
-      type.kind == Type::Kind::Parameter || (nominal && nominal->permissions)) {
+      type.kind == Type::Kind::Parameter || (nominal && nominal->sealed)) {
     fail("source.private",
          "restricted values require their module's unpack or consume operation",
          span);

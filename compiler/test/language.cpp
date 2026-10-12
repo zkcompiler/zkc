@@ -622,7 +622,7 @@ protocol Run roles(V)(x:Fr@V, coins:Random<Fr>@V)->(){require @V coins.draw()==x
   must(compileEntry(original(R"(module m;fn yes(x:bool)->bool{return x;}
 protocol Run roles(V)(go:bool@V)->(){require @V yes(go);return();}run Demo=Run;)")));
   auto emptyMessage = check(R"(module m;
-protocol Relay<T:Type+Copy+Drop+Share+Wire> roles(P,V)(x:T@P)->(r:T@V){let y=send P->V(x);return(r=y);}run Demo=Relay<()>;)");
+protocol Relay<T:Type+Copy+Drop> roles(P,V)(x:T@P)->(r:T@V){let y=send P->V(x);return(r=y);}run Demo=Relay<()>;)");
   refuses(closeEntry(emptyMessage, "m::Demo"), "source.wire");
   auto distinct = original(R"(module m;domain Fr=field("bls12-381.fr");
 interface Mix {math fn mix(a:Fr,b:Fr)->Fr;}
@@ -657,8 +657,7 @@ void participantCompletion() {
            {"(result = x)", "()", "source.completion"},
            {"(result = x)", "(unknown = x)", "source.completion"},
            {"(result = x)", "(result = x, result = x)", "source.completion"},
-           {"let () = finish_if", "let unusedResult = finish_if",
-            "source.binding"},
+           {"let _ = finish_if", "let () = finish_if", "source.binding"},
            {"finish_if @V(go)", "finish_if @V(x)", "source.type"},
        })
     sourceRefuses(replace(source, from, to), code);
@@ -671,7 +670,7 @@ protocol Reuse roles(P,V)(go:bool@V,x:Fr@(P,V), coins:Random<Fr>@V)->(result:Fr@
       replace(read("completion_affine.zkc"), "module sample;", "module m;");
   sourceRefuses(replace(affine, "state = next;", "state = state;"),
                 "source.move");
-  sourceRefuses(replace(replace(affine, "state = next;", ""),
+  sourceRefuses(replace(replace(affine, "state = next;", "state = state;"),
                         "let next = finish_if", "let () = finish_if"),
                 "source.binding");
   must(compileEntry(original(R"(module m;domain Fr=field("bls12-381.fr");
@@ -736,7 +735,7 @@ void distributedRepetition() {
       replace(read("conditional_query.zkc"), "module sample;", "module m;"));
   must(compileEntry(conditional));
   const std::string affine = R"(module m;
-struct State:Drop {} fn make()->State{return State{};}
+#[affine] struct State {} fn make()->State{return State{};}
 fn identity(x:State)->State{return x;}
 fn consume_state(x:State)->(){consume x;return ();}
 protocol Run roles(P)(n:index@P)->(){
@@ -860,7 +859,7 @@ void selectedClosure() {
           "capture stopped binding unselected source");
   must(prepareOriginal(must(closeEntry(project, "m::Demo"))));
   auto privateState = original(R"(module m;
-    struct State:Drop {} fn make()->State{return State{};}
+    #[affine] struct State {} fn make()->State{return State{};}
     fn discard(state:State)->(){consume state;return ();}
     protocol Create roles(P)()->(state:State@P){let state @P =make();return(state=state);}
     protocol Consume roles(P)(state:State@P)->(){let done @P =discard(state);return();}

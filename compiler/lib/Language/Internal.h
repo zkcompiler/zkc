@@ -333,6 +333,8 @@ struct SyntaxDeclaration {
   std::vector<SyntaxRequirement> requirements;
   bool explicitRequirements = false;
   std::optional<Permissions> permissions;
+  std::optional<Resource> resource;
+  bool sealed = false;
   std::optional<Effects> effects;
   std::vector<std::string> effectDependencies;
   std::optional<SyntaxType> definition;

@@ -47,7 +47,7 @@ run Demo=Run;
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
 def test_unicode_entry_names_survive_execution(toolchain, journal, directory, flags):
     source = '''module sample;
-enum 状態:Copy+Drop+Share { 完了(index), 未完了() }
+#[sealed] enum 状態 { 完了(index), 未完了() }
 fn 計算(α:index,β₂:index)->状態{return 状態::完了(α+β₂);}
 protocol 実行 roles(参加者)(α:index@参加者,β₂:index@参加者)->(結果:状態@参加者){
   return 計算(α,β₂);

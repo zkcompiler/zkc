@@ -6,15 +6,16 @@
 #include <vector>
 
 namespace zkc::language {
+/// Authored resource restrictions. Ordinary declarations derive their usage
+/// properties from their representation instead.
+enum class Resource { Affine, Linear };
 struct Permissions {
-  bool copy = false, drop = false, share = false, wire = false;
+  bool copy = false, drop = false;
   bool operator==(const Permissions &b) const {
-    return copy == b.copy && drop == b.drop && share == b.share &&
-           wire == b.wire;
+    return copy == b.copy && drop == b.drop;
   }
   bool includes(const Permissions &b) const {
-    return (!b.copy || copy) && (!b.drop || drop) && (!b.share || share) &&
-           (!b.wire || wire);
+    return (!b.copy || copy) && (!b.drop || drop);
   }
 };
 /// A resolved source term. Natural, Domain, Asset and Module are static

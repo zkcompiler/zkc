@@ -55,13 +55,9 @@ bool BodyChecker::settle(Placement &plan) {
     auto &value = body.values[id];
     value.components = plan.resolve(formula);
     if (value.components.size() > 1) {
-      auto caps = checker.types.permissions(value.type, value.span, &decl);
-      if (!caps || !caps->share)
-        return checker.types.diagnostic
-                   ? false
-                   : fail("source.permission",
-                          "multiple participant components require Share",
-                          value.span);
+      if (!checker.types.admit(value.type, Boundary::Participants, value.span,
+                               &decl))
+        return false;
     }
   }
   for (auto [index, variable] : plan.calls) {
@@ -70,15 +66,11 @@ bool BodyChecker::settle(Placement &plan) {
     call.owner = plan.selected(variable);
     for (auto arg : call.operands)
       if (body.values[arg.index].components.size() > 1) {
-        auto caps = checker.types.permissions(body.values[arg.index].type,
-                                              operation.span, &decl);
-        if (!caps || !caps->copy || !caps->drop)
-          return checker.types.diagnostic
-                     ? false
-                     : fail("source.permission",
-                            "owned call cannot duplicate or discard restricted "
-                            "components",
-                            operation.span);
+        if (!checker.types.requireUsage(
+                body.values[arg.index].type, Usage::Copy, operation.span, &decl,
+                "source.permission",
+                "owned call cannot duplicate or discard restricted components"))
+          return false;
       }
   }
   for (auto index : plan.applications) {
@@ -92,14 +84,11 @@ bool BodyChecker::settle(Placement &plan) {
         roles.push_back(application.roles[role]);
       llvm::sort(roles);
       if (value.components != roles) {
-        auto caps =
-            checker.types.permissions(value.type, operation.span, &decl);
-        if (!caps || !caps->drop)
-          return checker.types.diagnostic ? false
-                                          : fail("source.permission",
-                                                 "application cannot discard a "
-                                                 "component without Drop",
-                                                 operation.span);
+        if (!checker.types.requireUsage(
+                value.type, Usage::Drop, operation.span, &decl,
+                "source.permission",
+                "application cannot discard a component without Drop"))
+          return false;
       }
     }
   }

@@ -31,7 +31,9 @@ Error Checker::run() {
     if (!decl.abstract && !sources[decl.id.index]->explicitRequirements &&
         (decl.kind == Declaration::Kind::Math ||
          decl.kind == Declaration::Kind::Local ||
-         decl.kind == Declaration::Kind::Protocol))
+         decl.kind == Declaration::Kind::DomainFunction ||
+         decl.kind == Declaration::Kind::Protocol ||
+         decl.kind == Declaration::Kind::Construction))
       inferredContracts.insert(&decl);
   types.inferCapability = [this](const Declaration *scope,
                                  const CapabilityBound &bound) {
@@ -51,6 +53,32 @@ Error Checker::run() {
     requirement.inferred = true;
     output.declarations[scope.id.index].bounds.push_back(
         std::move(requirement));
+    return true;
+  };
+  types.collectUsage = [this](const Declaration &scope, const Type &type,
+                              Usage usage, Span span, StringRef code,
+                              StringRef message) {
+    return collectUsage(scope, type, usage, span, code, message);
+  };
+  // The vector is the checked contract; this index only accelerates collection.
+  // Repeated sites need one condition, with one representative origin chain.
+  std::map<unsigned, std::map<std::pair<Boundary, std::string>, unsigned>>
+      admissionIndices;
+  types.recordAdmission = [this,
+                           &admissionIndices](const Declaration &scope,
+                                              AdmissionObligation obligation) {
+    if (!types.chargeType(obligation.type, obligation.span) ||
+        !types.charge(obligation.calls.size() + 1, obligation.span))
+      return false;
+    auto &admissions = output.declarations[scope.id.index].admissions;
+    auto key =
+        std::make_pair(obligation.boundary, typeIdentity(obligation.type));
+    auto [at, inserted] = admissionIndices[scope.id.index].emplace(
+        std::move(key), admissions.size());
+    if (inserted)
+      admissions.push_back(std::move(obligation));
+    else if (obligation.calls.size() < admissions[at->second].calls.size())
+      admissions[at->second] = std::move(obligation);
     return true;
   };
   signatureState.resize(output.declarations.size());
@@ -79,9 +107,19 @@ Error Checker::run() {
         nominal.arguments.push_back(parameterType(parameter));
       if (!types.permissions(nominal, decl.span, &decl))
         return types.takeError();
+    } else if (decl.kind == Declaration::Kind::Associated && !decl.abstract &&
+               !isStaticOnly(decl.domain)) {
+      const auto &owner = output.declarations[decl.parent->index];
+      Type module(Type::Kind::Module, owner.qualifiedName);
+      for (const auto &parameter : owner.parameters)
+        module.arguments.push_back(parameterType(parameter));
+      Type associated(Type::Kind::Associated, decl.qualifiedName);
+      associated.arguments.push_back(std::move(module));
+      if (!types.permissions(associated, decl.span, &decl))
+        return types.takeError();
     }
   for (const auto &decl : output.declarations)
-    if (decl.kind == Declaration::Kind::Math)
+    if (decl.kind == Declaration::Kind::Math && decl.abstract)
       for (auto *ports : {&decl.inputs, &decl.outputs})
         for (const auto &port : *ports) {
           auto caps = types.permissions(port.type, port.span, &decl);
@@ -110,6 +148,8 @@ Error Checker::run() {
   inferredContracts.clear();
   types.inferCapability = {};
   types.inferNatural = {};
+  types.collectUsage = {};
+  types.recordAdmission = {};
   if (!retainNotations() || !retainScopedSources())
     return types.takeError();
   return checkScopedSources(output, work);
@@ -194,6 +234,8 @@ bool Checker::collect() {
     decl.abstract = source.abstract;
     decl.completes = source.completes;
     decl.permissions = source.permissions;
+    decl.resource = source.resource;
+    decl.sealed = source.sealed || source.resource.has_value();
     if (source.effects)
       decl.effectAllowance = EffectSummary{*source.effects};
     decl.inputOrder = source.inputOrder;

@@ -21,7 +21,7 @@ it cannot be combined with `--no-results`. Other modes publish values only with
 file limit. Requested output types without a native codec refuse with
 `entry-output-codec` before execution. Value-dependent encoding and size failures
 can still occur after execution; neither these nor publication failures cause an
-automatic rerun. Non-Wire private results cannot be serialized.
+automatic rerun. Results without an admitted native codec cannot be serialized.
 
 ## File admission
 

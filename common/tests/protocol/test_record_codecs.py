@@ -65,7 +65,7 @@ def test_record_codec_execution(toolchain, journal, directory, native, nested, f
         text = text.replace('let first=send P->V((secret,secret));',
                             'let first=send P->V((secret,secret));\n'
                             'let ()=finish_if @P(go)();\n'
-                            'let ()=finish_if @V(go)(ok=true);')
+                            'let _=finish_if @V(go)(ok=true);')
         text = text.replace('public{public,rounds}', 'public{go,public,rounds}')
         extra = extra.replace('public{public,rounds}', 'public{go,public,rounds}')
     base = ('base fiat_shamir("merlin3.bls12-381.fr64be/0",challenges);' if native else
@@ -374,7 +374,7 @@ def test_empty_record_and_state_keep_conditional_finalization(toolchain, journal
       fn write(r:Record)->Bytes{return empty();}
       fn finish(r:Record,proof:Bytes)->(){require length(proof)==0;return ();}}
     protocol End roles(P,V)(go:bool@(P,V),challenges:Random<F>@V)->(ok:bool@V) completes {
-      let ()=finish_if @P(go)();let ()=finish_if @V(go)(ok=true);return true;
+      let ()=finish_if @P(go)();let _=finish_if @V(go)(ok=true);return true;
     }
     construction Closed for End {transcript History;replace challenges;format Empty;on start(t){return t;}}
     proof Demo=End{prover P;verifier V;public{go};accept ok;construction Closed;}

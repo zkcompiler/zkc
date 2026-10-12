@@ -57,22 +57,18 @@ an explicit type is required.
 
 Free places are reads before assignment on some continuing path, preserving
 projection privacy and partial moves. Capturing one field does not move its affine siblings.
-A noncopyable immutable branch capture transfers custody; return it explicitly to
-retain access. Mutable state is joined only when wholly available on every
+A noncopyable read-only branch capture transfers custody; return it explicitly to
+retain access. Bindings assigned by a region become state. State is joined only when wholly available on every
 continuing arm. Otherwise it becomes unavailable; each residual must be consumed
 or permit `Drop`. Assignment can restore an unavailable binding. A partially moved
-root may supply its remaining fields, but cannot supply a whole value. Inferred
-`Copy` inputs do not create authored obligations: for values without `Drop`, only
-uses guaranteed on every continuing arm discharge the corresponding outer places.
-A later outer use remains valid; explicit aliases still require their own use.
+root may supply its remaining fields, but cannot supply a whole value.
 
 Local `for i in lower..upper { ... }` evaluates both `index` bounds once, in written
-order, and produces unit. Outer assignments and referenced, wholly available
-noncopyable mutable roots become loop state. Every state slot needs a whole initial
+order, and produces unit. Outer assignments determine loop state, independently
+of usage properties. Every state slot needs a whole initial
 value and a whole successor on every continuing iteration; zero iterations retain
 the initial value. Local state may replace a resource with a newly constructed one.
-Invariant places require `Copy`. A possibly empty loop does not discharge an outer
-invariant's no-`Drop` obligation: it still needs a use outside the loop. Managed
+Invariant places require `Copy`, which also permits `Drop`. Managed
 services are unavailable inside local functions.
 
 `require condition;` stops with native reason `reject` on false and retains
@@ -157,8 +153,8 @@ helpers and native flattening. Separate protocol result ports keep separate sets
 Dependencies are determined before optimization: `x-x` and `x*0` retain x's source
 dependency.
 
-Narrowing availability requires `Drop`; multi-role values require `Share` in
-addition to each operation's own permissions. `let mut x = shared;` fixes both
+Narrowing availability requires `Drop`; multi-role values require derived
+participant-family admission in addition to each operation's usage conditions. `let mut x = shared;` fixes both
 components; assigning a P-only value cannot narrow x. Use separate bindings such
 as `let mut xp @P = shared;` and `let mut xv @V = shared;` for independent state.
 No rule inserts communication or replicates an ordinary call. Inside a restricted
@@ -171,9 +167,10 @@ Expressions evaluate in written order, then operands are placed in declared port
 order. Missing, repeated and unknown outputs refuse.
 
 Send occupies a whole binding RHS. It requires distinct declared roles, sender
-availability, and `Copy + Drop + Share + Wire`. Its result denotes the actual
-received value and is available only at the receiver. The original payload retains
-its roles. Each native payload leaf emits `protocol.exchange` followed immediately
+availability, source construction authority and a concrete native message codec.
+Its result denotes the actual received value and is available only at the receiver.
+Sending reads the original payload under its usage contract; reusable data retains
+its original roles. Open generic types retain boundary obligations until selection. Each native payload leaf emits `protocol.exchange` followed immediately
 by receiver-only `protocol.restrict_roles`. Zero-leaf messages refuse because erasing
 a message would erase an interaction. These operations assume neither honest
 delivery nor equality of participant components.
@@ -330,7 +327,7 @@ types or swapping same-typed resources do not suffice.
 
 Invariant data places require `Copy`; their selected availability is the nonempty
 intersection with loop roles, with narrowing allowed only under `Drop`. A
-copyable mutable binding with no assignment can be an invariant. Managed aliases
+mutable binding with no assignment is an invariant. Managed aliases
 capture their common root once and require its owner inside the loop. Nested
 actions use only active loop participants. Mathematical component semantics remain
 unchanged; separate participant states are never bundled into a common-role tuple.
@@ -346,15 +343,18 @@ iteration and is never hoisted or evaluated speculatively.
 
 ```text
 protocol Run roles(V)(go: bool @V, x: Fr @V) -> (result: Fr @V) completes {
-  let () = finish_if @V(go) (result = x);
+  let _ = finish_if @V(go) (result = x);
   return (result = x + x);
 }
 ```
 
 `completes` declares an Entry-only protocol: applying it as a reusable component
 refuses, including when its body has no current completion action. `finish_if`
-requires that marker and occupies a complete unannotated immutable `let` RHS. Its Boolean
-condition and named outputs must be available at its owner. The named list
+requires that marker and occupies a complete unannotated immutable `let` RHS in
+a protocol body or protocol-loop body. It cannot occur inside a value operand,
+including a block or loop used as an operand: completion must not interrupt a
+pending transfer. Its Boolean condition and named outputs must be available at
+its owner. The named list
 supplies exactly that owner's declared protocol outputs. Expressions evaluate in
 written order; native operands follow output declaration order.
 
@@ -363,13 +363,18 @@ its remaining actions. False continues. Neither path informs peers or equates
 shared output components. Every suffix remains statically checked. This action
 is normal completion, distinct from a guard failure or host retry decision.
 
-The binding list names the outputs without `Copy`, in declaration order. Those
-values move on both paths; false returns fresh continuations. Copyable outputs
-remain usable through their original bindings. A product continuation preserves
-its copyable data leaves and replaces each native affine leaf with the action's
-successor. Generic definitions retain their declared move discipline even when
-an instantiation selects a copyable type. Normal cleanup follows the existing
-[entry completion contract](../ir/completion.md).
+The binding list names every owner output in declaration order. Its shape is
+independent of usage properties: false returns all supplied logical values.
+A product continuation preserves its ordinary data leaves and replaces each
+native affine leaf with the action's successor. Restricted outputs transfer on
+both paths and must be used through their continuations on false. Ordinary
+outputs may also remain usable through their original bindings.
+
+True completion must discharge every live non-droppable value of that owner,
+including values outside an enclosing repeat and remaining fields of partially
+moved products. Transferring an output discharges its obligation. Completing one
+participant does not discharge another participant's values. Normal cleanup
+follows the existing [entry completion contract](../ir/completion.md).
 
 ## Relations and specification clauses
 

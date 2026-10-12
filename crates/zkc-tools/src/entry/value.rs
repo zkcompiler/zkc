@@ -34,7 +34,7 @@ impl From<InputValue> for Value {
 /// Constructor permission is checked once at Entry admission. The validated
 /// schema inherits that permission through all product fields and alternatives.
 pub(super) fn check_import(schema: &Schema) -> Result<()> {
-    if schema.custody || !schema.permissions.contains(&Permission::Wire) {
+    if schema.custody || !schema.constructible {
         return Err("entry-input-constructor".into());
     }
     Ok(())
@@ -52,9 +52,6 @@ pub(super) fn flatten(schema: &Schema, value: Value, out: &mut Vec<InputValue>) 
             Ok(())
         }
         (Kind::Record, Value::Record(values)) => flatten_fields(&schema.fields, values, out),
-        (Kind::Associated, Value::Associated(value)) => {
-            flatten(&schema.fields[0].schema, *value, out)
-        }
         (
             Kind::Variant,
             Value::Variant {

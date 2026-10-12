@@ -565,25 +565,11 @@ private:
   }
   bool permission(Permissions &p) {
     if (take("Copy"))
-      p.copy = true;
+      p.copy = p.drop = true;
     else if (take("Drop"))
       p.drop = true;
-    else if (take("Share"))
-      p.share = true;
-    else if (take("Wire"))
-      p.wire = true;
     else
-      return fail("source.permission", "expected Copy, Drop, Share, or Wire");
-    return true;
-  }
-  bool permissionList(std::optional<Permissions> &p) {
-    if (!take(":"))
-      return true;
-    p.emplace();
-    do {
-      if (!permission(*p))
-        return false;
-    } while (take("+"));
+      return fail("source.permission", "expected Copy or Drop");
     return true;
   }
   bool typeTreeBound(SyntaxType &type) {
@@ -775,7 +761,7 @@ private:
       if (at("in_bounds") || at("equal_extent")) {
         if (!dataRequirement(req))
           return false;
-      } else if (at("Copy") || at("Drop") || at("Share") || at("Wire")) {
+      } else if (at("Copy") || at("Drop")) {
         req.permission = text().str();
         advance();
         if (!expect("(") || !type(req.lhs) || !expect(")"))
@@ -1230,6 +1216,30 @@ private:
       return {};
     SyntaxDeclaration d;
     d.span = current().span;
+    while (take("#")) {
+      if (!expect("["))
+        return {};
+      if (at("affine") || at("linear")) {
+        if (d.resource) {
+          fail("source.resource", "resource restriction was already specified");
+          return {};
+        }
+        d.resource = take("affine") ? Resource::Affine : Resource::Linear;
+        if (*d.resource == Resource::Linear)
+          advance();
+      } else if (take("sealed")) {
+        if (d.sealed) {
+          fail("source.resource", "constructor sealing was already specified");
+          return {};
+        }
+        d.sealed = true;
+      } else {
+        fail("source.resource", "expected affine, linear, or sealed attribute");
+        return {};
+      }
+      if (!expect("]"))
+        return {};
+    }
     d.isPublic = take("pub") || member;
     bool domainFunction = take("domain");
     if (domainFunction && !at("fn")) {
@@ -1531,14 +1541,14 @@ private:
       } else if (!expect(";"))
         return {};
     } else if (take("type")) {
-      d.kind =
-          member ? Declaration::Kind::Associated : Declaration::Kind::Alias;
+      d.kind = member || d.resource || d.sealed ? Declaration::Kind::Associated
+                                                : Declaration::Kind::Alias;
       if (!name(d.name) || !parameters(d.parameters))
         return {};
       if (take(":")) {
         d.kind = Declaration::Kind::Associated;
         d.permissions.emplace();
-        if (!at("Copy") && !at("Drop") && !at("Share") && !at("Wire")) {
+        if (!at("Copy") && !at("Drop")) {
           if (current().kind != TokenKind::Word) {
             fail("source.type", "expected an associated sort or permission");
             return {};
@@ -1576,8 +1586,8 @@ private:
       if (!variant)
         advance();
       d.kind = variant ? Declaration::Kind::Variant : Declaration::Kind::Record;
-      if (!name(d.name) || !parameters(d.parameters) ||
-          !permissionList(d.permissions) || !requirements(d) || !expect("{"))
+      if (!name(d.name) || !parameters(d.parameters) || !requirements(d) ||
+          !expect("{"))
         return {};
       if (!at("}"))
         do {
@@ -1746,6 +1756,12 @@ private:
           d.primitive = std::move(identity);
       } else if (!body(d, protocol, false, 1))
         return {};
+    }
+    if ((d.resource || d.sealed) && d.kind != Declaration::Kind::Record &&
+        d.kind != Declaration::Kind::Variant &&
+        d.kind != Declaration::Kind::Associated) {
+      fail("source.resource", "resource attributes require a nominal type");
+      return {};
     }
     d.span.end = previousEnd;
     if (!accept(work.count(work.declarations, work.limits.declarations,

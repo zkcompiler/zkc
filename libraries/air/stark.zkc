@@ -67,7 +67,7 @@ pub fn consider<F: Field>(height: index, size: index, shift: F,
 pub fn finish<F: Field>(chosen: F, found: bool) -> F {
   return if found { chosen } else { stop "exhausted"; };
 }
-pub protocol Outside<F: Field+Share+Wire, LogHeight: nat, LogSize: nat, Attempts: nat>
+pub protocol Outside<F: Field, LogHeight: nat, LogSize: nat, Attempts: nat>
     roles(P,V)(shiftP: F @P, shiftV: F @V, attempt_count: index @(P,V), coins: Random<F> @V)
     -> (pointP: F @P, pointV: F @V) where 1 <= Attempts,
       zkc::algebra::TwoAdicField(F) {

@@ -107,11 +107,10 @@ json::Object respond(StringRef line, Resolver resolve, bool attributeDrift,
       return refused();
     if (shareDrift && type->spelling() == "field:koala-bear")
       policy->shared = !policy->shared;
-    return json::Object{{"accepted", true},
-                        {"share", policy->shared},
-                        {"affine", policy->affine},
-                        {"copy", duplicable(*type)},
-                        {"drop", discardable(*type)}};
+    return json::Object{
+        {"accepted", true},          {"share", policy->shared},
+        {"affine", policy->affine},  {"constructible", policy->constructible},
+        {"copy", duplicable(*type)}, {"drop", discardable(*type)}};
   }
   if (request->size() == 1) {
     auto text = request->getString("type");

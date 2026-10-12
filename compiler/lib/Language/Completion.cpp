@@ -17,6 +17,13 @@ BodyChecker::complete(const Statement &statement) {
          expr.span);
     return {};
   }
+  if (!completionAllowed) {
+    fail("source.completion",
+         "finish_if must be a statement in a protocol body or protocol loop, "
+         "outside value operands",
+         expr.span);
+    return {};
+  }
   auto role = checker.roles(decl, {expr.text}, expr.span);
   if (!role || !active(*role, expr.span))
     return {};
@@ -33,8 +40,8 @@ BodyChecker::complete(const Statement &statement) {
       ports.emplace(port.name, outputs.size());
       outputs.push_back(&port);
     }
-  ProtocolCompletion operation{
-      *condition, owner, std::vector<ValueId>(outputs.size()), {}};
+  ProtocolCompletion operation{*condition, owner,
+                               std::vector<ValueId>(outputs.size())};
   std::set<unsigned> seen;
   for (unsigned i = 0; i < expr.labels.size(); ++i) {
     auto found = ports.find(expr.labels[i]);
@@ -58,21 +65,22 @@ BodyChecker::complete(const Statement &statement) {
          expr.span);
     return {};
   }
+  // Outputs have now transferred on the true edge. Resolve all owner choices
+  // before checking the values that successful completion would leave behind.
+  // This is a complete statement RHS, so its binding adds no placement demands.
+  if ((placement && !settle(*placement)) || !finishOwner(owner, expr.span))
+    return {};
   std::vector<Value> results;
   for (unsigned i = 0; i < outputs.size(); ++i) {
-    auto caps = checker.types.permissions(outputs[i]->type, expr.span, &decl);
-    if (!caps)
-      return {};
     auto available = components(operation.values[i]);
-    if (available.owners.empty() && available.roles != *role && !caps->drop) {
-      fail("source.permission",
-           "completion cannot discard components without Drop", expr.span);
+    if (available.owners.empty() && available.roles != *role &&
+        !checker.types.requireUsage(
+            outputs[i]->type, Usage::Drop, expr.span, &decl,
+            "source.permission",
+            "completion cannot discard components without Drop")) {
       return {};
     }
-    if (!caps->copy) {
-      operation.continuations.push_back(i);
-      results.push_back({outputs[i]->type, *role, expr.span});
-    }
+    results.push_back({outputs[i]->type, *role, expr.span});
   }
   auto emitted =
       emitResults(std::move(operation), std::move(results), expr.span);

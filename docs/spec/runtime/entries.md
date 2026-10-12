@@ -7,7 +7,7 @@ for source rules and the [runtime reference](../../runtime/README.md) for usage.
 
 The native Host reads `zkc.language-interface/0`. It checks strict object members,
 including required nullable fields, before using source names. Recursive schema
-validation preserves kind, exact logical identity, permissions, custody, field
+validation preserves kind, exact logical identity, usage permissions, constructor authority, custody, field
 slices and nominal alternatives. Every logical port remains present, including
 zero-leaf values. Selectors and Entry choices must agree with those schemas.
 Source names use the [Unicode source profile](../language/lexical.md), retaining
@@ -151,8 +151,9 @@ Rust `entry::RunEntry::admit` retains an authenticated package, validates its
 interface and admits the exact run artifact through `RunHost`. Proof jobs use a
 separate API. Before accepting a run, every logical output must be copyable and
 have no affine custody; unsupported custody returns `entry-output-custody`.
-Every ordinary input must have source `Wire` constructor permission or admission
-returns `entry-input-constructor`. Whole builtin key ports instead use the explicit
+Every ordinary input must have source external construction authority or admission
+returns `entry-input-constructor`. Its native leaves must also have message codecs,
+otherwise admission returns `entry-input-codec`. Whole builtin key ports instead use the explicit
 setup route above. These checks precede native bundle admission, which precedes
 asset admission.
 
@@ -169,7 +170,7 @@ layout descriptions.
 Ordinary leaves use `entry::Value::Leaf` with `InputValue::Native`, `Wire`, or
 `WireFile`. `WireFile` retains an opened regular descriptor and an expected
 SHA-256; common Host preparation reads and authenticates it under input limits.
-The admitted source schema's `Wire` constructor permission applies recursively
+The admitted source schema's `constructible` authority applies recursively
 through products and alternative payloads. A matching native representation does
 not confer private constructor authority. Source randomness comes through named
 managed services; setup keys use the named initialization route above. Native

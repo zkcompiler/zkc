@@ -107,7 +107,10 @@ std::optional<Type> Checker::elaborateType(const Declaration &context,
       return {};
     }
     if (s.kind == S::Builtin && s.name == "sequence" &&
-        !types.permissions(*result, s.span, &context))
+        (!types.requireUsage(arguments.front(), Usage::Copy, s.span, &context,
+                             "source.sequence",
+                             "sequence elements require Copy") ||
+         !types.executableType(arguments.front(), s.span)))
       return {};
     return std::move(*result);
   }

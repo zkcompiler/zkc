@@ -1126,6 +1126,8 @@ llvm::Error specialize(std::vector<Declaration> &declarations,
       }
       DeclarationId id{uint32_t(declarations.size())};
       result.id = id;
+      // checkArguments has discharged every template admission against args.
+      result.admissions.clear();
       result.origin = origin;
       result.members.clear();
       result.staticArguments.assign(args.begin(), args.end());

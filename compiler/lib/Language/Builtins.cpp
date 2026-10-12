@@ -45,7 +45,7 @@ Expected<Type> domainMember(const Type &base, StringRef member) {
     result.symbolic = true;
     result.arguments = {base};
     if (!isStaticOnly(result))
-      result.assumptions = {true, true, false, false};
+      result.assumptions = {true, true};
   }
   return result;
 }

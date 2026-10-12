@@ -120,7 +120,7 @@ int main() {
       });
   cases.run("type lookahead does not move values or execute effects", [&] {
     compile(identity + R"(
-      struct Token:Drop {value:bool}
+      #[affine] struct Token {value:bool}
       fn f(x:Token,b:bool){
         return id(if b{x}else{x});
       }
@@ -131,7 +131,7 @@ int main() {
       run Demo=Run;
     )");
     refuses(check(identity + R"(
-      struct Token:Drop {}
+      #[affine] struct Token {}
       fn f(x:Token,b:bool){
         let y=id(if b{x}else{x});return (y,x);
       }
@@ -274,17 +274,18 @@ int main() {
       refuses(check(source + "run Demo=Parent<0>;"), "source.bound");
     }
   });
-  cases.run("resource contracts remain explicit", [] {
-    refuses(check("fn twice<T:Type>(x:T){return (x,x);}"), "source.move");
-    refuses(check("fn discard<T:Type>(x:T){return ();}"), "source.drop");
+  cases.run("written usage contracts remain complete", [] {
+    refuses(check("fn twice<T:Type>(x:T) where () {return (x,x);}"),
+            "source.move");
+    refuses(check("fn discard<T:Type>(x:T) where () {return ();}"),
+            "source.drop");
     take(check("fn twice<T:Type+Copy>(x:T){return (x,x);}"));
     take(check("fn discard<T:Type+Drop>(x:T){return ();}"));
-    refuses(check(R"(
-      protocol Transfer<T:Type> roles(P,V)(x:T@P)->(y:T@V){
+    take(check(R"(
+      protocol Transfer<T:Type> roles(P,V)(x:T@P)->(y:T@V) where () {
         let y=send P->V(x); return y;
       }
-    )"),
-            "source.permission");
+    )"));
   });
   cases.run("module results and requirements obey interface promises", [] {
     take(check(R"(
