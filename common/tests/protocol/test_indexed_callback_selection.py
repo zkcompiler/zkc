@@ -11,6 +11,7 @@ import pytest
 
 from input_files import decimal_values
 from octic_reference import P, add as extension_add, mul as extension_mul
+from source_modules import library_modules
 from test_compositional_protocol_math import ProjectEntry, project_modules, published_inputs
 from test_total_callback_selection import compile_entry
 
@@ -218,4 +219,4 @@ use zkc::finite_math as total;
 domain F = field("{field}");
 ''' + body)
     journal.run([toolchain.compiler, 'language-check', '--source-format=zkc',
-                 f'--module=sample={source}', *finite_modules()], refuses='source.data-bound')
+                 f'--module=sample={source}', *library_modules('zkc')], refuses='source.data-bound')
