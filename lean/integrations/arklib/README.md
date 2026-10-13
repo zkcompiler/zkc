@@ -18,6 +18,12 @@ and actual verifier result. The simulator uses only the public key and a uniform
 response. Challenges are fixed independently of nonces. It does not prove
 malicious-verifier or Fiat–Shamir security.
 
+`VCVio/Schnorr/FiatShamir` separately proves fixed-statement cached-RO game
+correspondence and quantitative extraction for realized constructed Schnorr
+verifiers. Its [feature reference](ZkcSecurity/VCVio/Schnorr/README.md) records
+the exact adversary, final-query budget, actual constructed participant example,
+consumer API, and remaining native/provider assumptions.
+
 `TestsSecurity.Audit` checks every owned declaration's transitive axiom closure.
 Only `propext`, `Classical.choice` and `Quot.sound` are allowed. Unrelated upstream
 `sorry` declarations are not claims of this package. `clients/ArkLib.lean` in the
