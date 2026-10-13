@@ -69,9 +69,9 @@ Exact equality is too strong for some optimizing transformations. Observational
 adapters must state which events and resources they may hide. The Sumcheck
 completion adapter transports acceptance while distinguishing final caches and
 query counts after early rejection; it is not arbitrary contextual replacement.
-General native control import, waiting schedulers, production fields/groups, provider
+General branches and Local control import, waiting schedulers, production fields/groups, provider
 randomness, DSL compiler correctness and lower-stage preservation require their
-own adequacy proofs or maintained tests. Variable-round full-prefix reductions,
+own adequacy proofs or maintained tests. Runtime-variable security schedules beyond the proved fixed finite-round family,
 concrete transcript instantiation, general PCS and concurrent zero-knowledge
 composition need appropriate external theorems and adapters.
 A generic automation claim must quantify the supported contract language and
@@ -82,3 +82,40 @@ all programs can be automatically proved safe. New protocol families should be
 chosen to falsify the interfaces: variable-round protocols, stateful commitments,
 lookup arguments and different adversary/query structures are useful tests.
 Research can adjust package boundaries when these tests expose a concrete need.
+
+## Semantic intermediate representation as a proof boundary
+
+An intermediate representation is useful when it makes the observations required
+by the security game explicit: roles, challenge dependencies, state transitions,
+message order, stopping and mathematical domains. Its benefit is conditional on
+adequacy. Adding a translation alone cannot decrease trust or establish that a
+source program has the intended meaning. The implemented independent evaluators
+and elaboration/decoding laws remove specific within-model translation premises;
+actual native extraction and production primitive conformance remain separate.
+
+The selected theorem chain is: retained carrier, checked typed process,
+proved contract, selected experiment, security consumer. A source transformation
+may be proposed by untrusted code and validated by a sound but incomplete
+normalizer. A single contract certificate can support multiple consumers; a
+consumer can apply to multiple source forms. Changing observations requires a
+proved adapter with explicit state relations and coverage. Equality of accepted
+bits cannot justify replacing a residual oracle cache in arbitrary continuations.
+This factoring reduces duplicated proof obligations without claiming all
+source/contract/experiment combinations are compatible.
+
+The implementation tests three distinct security interfaces: Schnorr extraction,
+finite-round Sumcheck bad-query bounds, and KZG-backed evaluation-sum binding.
+The KZG route uses a concrete reduction and an explicit bound for its reduced
+adversary. The pinned upstream convenience assumption quantifies unrestricted
+adversaries, so it is not presented as standard efficient-adversary hardness.
+Broader PCS composition needs its own extraction and representation connections.
+
+The implementation order follows dependency rather than protocol popularity:
+semantic adequacy and raw/typed correspondence; finite FS experiments and control;
+concrete commitment composition; structural decoding and native controls; then
+shared proof automation and explicit requests. At each boundary, falsification
+cases challenge dormant malformed paths, state/capture substitutions, wrong
+subjects, incompatible experiments, stops and actual provider calls. Resource
+capacity is kept distinct from semantic correctness: string-size enforcement is
+an executable preflight, while a compositional theorem validates structural
+JSON interpretation without reducing large byte arrays inside each certificate.

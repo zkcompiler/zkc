@@ -1662,9 +1662,26 @@ class ConstructedExporter {
   SymbolTable symbols;
   llvm::DenseMap<Value, unsigned> references;
   json::Array instructions, handlers;
+  std::optional<json::Value> control;
   llvm::StringSet<> retainedHandlers;
-  unsigned work = 0;
+  unsigned work = 0, instructionCount = 0;
   bool stopped = false;
+
+  void emit(json::Value instruction) {
+    instructions.push_back(std::move(instruction));
+    ++instructionCount;
+  }
+  json::Value finishBody(ArrayRef<unsigned> returned) {
+    if (control) {
+      auto result = std::move(*control);
+      control.reset();
+      return result;
+    }
+    json::Array values;
+    for (unsigned index : returned)
+      values.push_back(index);
+    return json::Array{"flat", std::move(instructions), std::move(values)};
+  }
 
   Expected<unsigned> reference(Value value) {
     auto found = references.find(value);
@@ -1676,16 +1693,19 @@ class ConstructedExporter {
     for (auto &entry : references)
       ++entry.second;
   }
-  Expected<SmallVector<unsigned>> body(Block &block, unsigned depth,
-                                       StringRef origin) {
+  Expected<SmallVector<unsigned>> body(Block &block, TypeRange outputs,
+                                       unsigned depth, StringRef origin,
+                                       Block::iterator start,
+                                       bool allowControl) {
     if (depth > 64)
       return error("constructed-source-limit");
-    for (Operation &op : block) {
-      if (++work > 4096 || instructions.size() > 2048)
+    for (auto current = start; current != block.end(); ++current) {
+      Operation &op = *current;
+      if (++work > 4096 || instructionCount > 2048)
         return error("constructed-source-limit");
       StringRef name = op.getName().getStringRef();
       if (name == "local.return" || name == "func.return" ||
-          name == "protocol.finish") {
+          name == "protocol.finish" || name == "protocol.yield") {
         SmallVector<unsigned> result;
         for (Value value : op.getOperands()) {
           auto index = reference(value);
@@ -1722,7 +1742,8 @@ class ConstructedExporter {
         std::string path = origin.str() + "/" + callee.getValue().str();
         if (auto site = op.getAttrOfType<StringAttr>("site"))
           path += ":" + site.str();
-        auto returned = body(nested, depth + 1, path);
+        auto returned = body(nested, op.getResultTypes(), depth + 1, path,
+                             nested.begin(), false);
         if (!returned)
           return returned.takeError();
         if (stopped)
@@ -1739,9 +1760,8 @@ class ConstructedExporter {
             (reason != "reject" && reason != "abort" && reason != "exhausted" &&
              reason != "incomplete" && reason != "refused"))
           return error("constructed-source-stop");
-        instructions.push_back(
-            json::Array{"stop", reason.getValue(),
-                        constructedPrint(op.getAttrDictionary())});
+        emit(json::Array{"stop", reason.getValue(),
+                         constructedPrint(op.getAttrDictionary())});
         stopped = true;
         return SmallVector<unsigned>{};
       }
@@ -1761,10 +1781,99 @@ class ConstructedExporter {
           auto index = reference(op.getOperand(0));
           if (!index)
             return index.takeError();
-          instructions.push_back(
-              json::Array{"guard", *index, constructedPrint(&op)});
+          emit(json::Array{"guard", *index, constructedPrint(&op)});
           continue;
         }
+      }
+      if (name == "protocol.loop" && allowControl) {
+        auto maximum = op.getAttrOfType<IntegerAttr>("maximum");
+        auto carried = op.getAttrOfType<IntegerAttr>("carried");
+        auto parameter = op.getAttrOfType<BoolAttr>("parameter");
+        auto countName = op.getAttrOfType<StringAttr>("count");
+        if (!maximum || maximum.getInt() < 0 || maximum.getInt() > 8192 ||
+            !carried || carried.getInt() < 0 || !parameter ||
+            parameter.getValue() || !countName ||
+            !countName.getValue().empty() ||
+            carried.getInt() >= int64_t(op.getNumOperands()) ||
+            op.getNumResults() != unsigned(carried.getInt()) ||
+            op.getNumRegions() != 1 || !hasSingleElement(op.getRegion(0)))
+          return error("constructed-source-loop-profile");
+        auto &iteration = op.getRegion(0).front();
+        if (iteration.getNumArguments() != op.getNumOperands() ||
+            !llvm::equal(iteration.getArgumentTypes(), op.getOperandTypes()) ||
+            !llvm::equal(
+                op.getResultTypes(),
+                TypeRange(op.getOperandTypes()).slice(1, carried.getInt())))
+          return error("constructed-source-loop-ports");
+
+        // Materialize the scalar boundary once. The prefix keeps all actual
+        // effects; only dead tuple containers and duplicate aliases disappear.
+        std::map<unsigned, Type> boundary;
+        for (auto [value, index] : references) {
+          auto [position, inserted] = boundary.emplace(index, value.getType());
+          if (!inserted && position->second != value.getType())
+            return error("constructed-source-loop-alias");
+        }
+        if (boundary.size() > 512)
+          return error("constructed-source-limit");
+        json::Array boundaryTypes, prefixReturns;
+        std::map<unsigned, unsigned> renaming;
+        for (auto [index, type] : boundary) {
+          renaming[index] = boundaryTypes.size();
+          boundaryTypes.push_back(constructedPrint(type));
+          prefixReturns.push_back(index);
+        }
+        json::Value prefix(json::Array{"flat", std::move(instructions),
+                                       std::move(prefixReturns)});
+        instructions = {};
+        for (auto &entry : references)
+          entry.second = renaming.at(entry.second);
+        auto count = reference(op.getOperand(0));
+        if (!count)
+          return count.takeError();
+        json::Array initial, captured;
+        for (auto [index, value] : enumerate(op.getOperands().drop_front())) {
+          auto position = reference(value);
+          if (!position)
+            return position.takeError();
+          (index < unsigned(carried.getInt()) ? initial : captured)
+              .push_back(*position);
+        }
+
+        auto parent = std::move(references);
+        references.clear();
+        for (auto [index, argument] : enumerate(iteration.getArguments()))
+          references[argument] = index;
+        stopped = false;
+        auto yielded = body(iteration, op.getResultTypes(), depth + 1, origin,
+                            iteration.begin(), true);
+        if (!yielded)
+          return yielded.takeError();
+        json::Value loopBody = finishBody(*yielded);
+
+        // Loop completion prepends the actual carried reply. An authored stop
+        // in the body does not statically stop a zero-trip loop or its suffix.
+        references = std::move(parent);
+        for (auto &entry : references)
+          entry.second += op.getNumResults();
+        for (auto [index, result] : enumerate(op.getResults()))
+          references[result] = index;
+        instructions = {};
+        stopped = false;
+        auto returned =
+            body(block, outputs, depth + 1, origin, std::next(current), true);
+        if (!returned)
+          return returned.takeError();
+        json::Value suffix = finishBody(*returned);
+        json::Value loop(json::Array{
+            "loop", maximum.getInt(), *count,
+            constructedTypes(op.getResultTypes()), std::move(initial),
+            constructedTypes(TypeRange(op.getOperandTypes())
+                                 .drop_front(1 + unsigned(carried.getInt()))),
+            std::move(captured), std::move(loopBody), std::move(suffix)});
+        control = json::Array{"sequence", std::move(boundaryTypes),
+                              std::move(prefix), std::move(loop)};
+        return SmallVector<unsigned>{};
       }
       if (op.getNumRegions() || op.getNumSuccessors())
         return error("constructed-source-control", name);
@@ -1772,8 +1881,8 @@ class ConstructedExporter {
         auto index = reference(op.getOperand(0));
         if (!index)
           return index.takeError();
-        instructions.push_back(json::Array{
-            "guard", *index, constructedPrint(op.getAttrDictionary())});
+        emit(json::Array{"guard", *index,
+                         constructedPrint(op.getAttrDictionary())});
         continue;
       }
       // Other regionless operations are primitive leaves, never whole Local
@@ -1807,8 +1916,7 @@ class ConstructedExporter {
                             origin.str(),
                             constructedTypes(op.getOperandTypes()),
                             constructedTypes(op.getResultTypes())};
-      instructions.push_back(
-          json::Array{"apply", std::move(primitive), std::move(args)});
+      emit(json::Array{"apply", std::move(primitive), std::move(args)});
       push();
       if (op.getNumResults() == 1) {
         references[op.getResult(0)] = 0;
@@ -1816,9 +1924,8 @@ class ConstructedExporter {
         // Keep the complete primitive reply before projecting ordered results.
         // Projection is pure and cannot invent a replacement successor state.
         for (auto [index, value] : enumerate(op.getResults())) {
-          instructions.push_back(
-              json::Array{"project", constructedTypes(op.getResultTypes()),
-                          unsigned(index), unsigned(index)});
+          emit(json::Array{"project", constructedTypes(op.getResultTypes()),
+                           unsigned(index), unsigned(index)});
           push();
           references[value] = 0;
         }
@@ -1839,15 +1946,27 @@ public:
       return error("constructed-source-limit");
     for (auto [index, argument] : enumerate(entry.getArguments()))
       references[argument] = index;
-    auto returned = body(entry, 0, participant.getSymName());
+    auto returned = body(entry, participant.getFunctionType().getResults(), 0,
+                         participant.getSymName(), entry.begin(), true);
     if (!returned)
       return returned.takeError();
-    if (instructions.size() > 2048 || handlers.size() > 256)
+    if (instructionCount > 2048 || handlers.size() > 256)
       return error("constructed-source-limit");
     json::Array results;
     for (unsigned index : *returned)
       results.push_back(index);
     auto type = participant.getFunctionType();
+    if (control) {
+      json::Value result(json::Array{
+          "zkc.constructed-control/0", constructedHash(source),
+          constructedHash(candidate), policy.entry, policy.validator,
+          participant.getSymName(), printJson(encodeNativeProofPolicy(policy)),
+          std::move(handlers), constructedTypes(type.getInputs()),
+          constructedTypes(type.getResults()), std::move(*control)});
+      if (printJson(result).size() > 1024 * 1024)
+        return error("constructed-source-limit");
+      return result;
+    }
     json::Value result(json::Array{
         "zkc.constructed-source/0", constructedHash(source),
         constructedHash(candidate), policy.entry, policy.validator,

@@ -11,10 +11,17 @@ open Lean
 
 abbrev Decode := Except Source.Format.Error
 
-def text (json : Json) : Decode String := do
-  let value ← Source.Format.string json
-  if value.utf8ByteSize > 262144 then throw .string
-  return value
+/-- Resource policy is separate from structural decoding. The executable runs
+this gate before either flat or structured decoding. -/
+def preflight : Nat → Json → Decode Unit
+  | 0, _ => .error .depthLimit
+  | depth + 1, .arr values => do
+      for value in values do preflight depth value
+  | _ + 1, .str value =>
+      if value.utf8ByteSize > 262144 then .error .string else .ok ()
+  | _ + 1, _ => .ok ()
+
+def text : Json → Decode String := Source.Format.string
 
 def list {α : Type} (decode : Json → Decode α) (json : Json) : Decode (List α) := do
   let values ← Source.Format.array json

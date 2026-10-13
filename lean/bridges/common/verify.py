@@ -210,9 +210,7 @@ def render_certificate(data, request, proposal):
         if contract.properties[prop].module}))
     result = external_imports + f'''import Zkc.Source.Common.Import
 import {contract.module}
-import Mathlib.Tactic.Ring
-import Mathlib.Tactic.Abel
-import Mathlib.Tactic.FailIfNoProgress
+import Zkc.Source.ContractAutomation
 import Lean
 
 /-! Generated candidate: source identity alone proves no semantic property. -/
@@ -271,12 +269,7 @@ theorem correspondence {contract.binders} :
     sourceProcess {parameters} {contract.arguments} = experiment {parameters} wiring {contract.arguments} := by
   dsimp +instances [{', '.join(unfolds)}]
   {('simp only [PIR.Proc.bind_ite, PIR.Proc.bind]'+chr(10)+'  dsimp +instances [terminal, publicChecks, value]' if contract.composed else 'skip')}
-  all_goals repeat' first
-    | rfl
-    | (apply PIR.Proc.call_congr; intro reply)
-    | (solve | ring1)
-    | (solve | abel1)
-    | fail_if_no_progress congr 1
+  zkc_contract
 
 theorem contract : VerifierContract {cert_args} :=
   ⟨fun {contract.arguments} => ⟨(source_expansion {parameters} {contract.arguments}).trans

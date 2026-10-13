@@ -49,7 +49,21 @@ consumer must separately check primitive descriptors and prove its actual-body
 normalization equation under a specified interpretation. No assumed
 correspondence field replaces that equation.
 
-The generated realization proof audits both `source_denotation` and
+The generated artifact retains the native JSON syntax tree independently of the
+rendered `Snapshot` constructor. Its kernel-checked `decoded` theorem proves that the same `Format.snapshot`
+structural decoder used by the executable returns that exact snapshot. Reusable
+`Encoding.snapshot_encode` laws (in the `Format` namespace) prove decoding after
+encoding under explicit size bounds; each artifact checks equality of its retained
+JSON tree to that encoding and discharges list, natural and control-depth bounds
+in the kernel. Per-string byte limits run in the executable's separate
+`Format.preflight 128` capacity gate. They are not premises of the structural
+meaning or part of the generated decoding theorem; native/JSON byte selection
+and runtime capacity enforcement remain tested boundaries. This catches renderer/decoder disagreement over
+constructor shapes, field order, references, strings, and primitive descriptors.
+JSON text parsing, the choice of input bytes, and native re-extraction remain
+separate boundaries; the theorem starts at the retained `Lean.Json` value.
+
+The generated realization proof audits `decoded`, `source_denotation` and
 `raw_denotation` in addition to admission and its protocol-specific equation.
 This closes translation within the declared export grammar. JSON parsing,
 native extraction, selected Local expansion before export, nominal type meaning
@@ -62,3 +76,26 @@ and deterministic state-sensitive transcript are test meanings. They make no
 production field/curve, byte-decoder, Merlin or random-oracle conformance claim.
 The [bridge driver](../../bridges/constructed/README.md) states reproduction and
 failure controls.
+
+## Structured finite control
+
+`Constructed.Control` composes typed flat fragments, sequencing, branches and
+runtime bounded loops. Each loop declares carried and captured types and selects
+actual operands. Its index representation and count interpretation are explicit
+fields of `Control.Meaning`; no native integer-conformance law is assumed.
+`RawBody.elaborate` checks every body, branch and suffix, including dormant paths
+and zero-trip loops. `RawBody.denote` independently evaluates the raw control tree
+and uses the direct flat instruction evaluator at its leaves.
+
+`RawBody.denote_elaborate` and `Control.Snapshot.check_denotation` prove equal
+complete open processes for every successful admission, meaning and input.
+They preserve returned values, ordered effects, carried state, early stops and
+runtime bound refusal. `ControlEncoding.body_encode` and `snapshot_encode` (in
+`Control.Format`) connect the structural decoder to the retained tree. The
+reader's depth and expansion limits are capacity policies, not security bounds.
+
+The native exporter currently produces structured runtime loops, including
+nesting and sequential suffixes. General branches, parameter counts and control
+inside Local helpers remain unsupported there. The Schnorr/two-round Sumcheck
+security CLI continues to select flat source contracts: structured admission
+alone does not attach a Fiat–Shamir security theorem to a loop.

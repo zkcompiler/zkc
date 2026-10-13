@@ -60,11 +60,16 @@ import Zkc.Source.Common.Scalar
 import Zkc.Source.Common.Vocabulary
 import Zkc.Source.Common
 import Zkc.Source.Composition
+import Zkc.Source.Constructed.Control
+import Zkc.Source.Constructed.ControlEncoding
+import Zkc.Source.Constructed.ControlFormat
+import Zkc.Source.Constructed.Encoding
 import Zkc.Source.Constructed.Execution
 import Zkc.Source.Constructed.Format
 import Zkc.Source.Constructed.Scalar
 import Zkc.Source.Constructed
 import Zkc.Source.Context
+import Zkc.Source.ContractAutomation
 import Zkc.Source.Decoding
 import Zkc.Source.Expansion
 import Zkc.Source.FiniteControl
@@ -77,8 +82,10 @@ import Zkc.Source.RawSemantics
 import Zkc.Source.Region
 import Zkc.Source.RoleFamily
 import Zkc.Source.Validation
+import Zkc.Source.Verification
 import Zkc.Specification
 import Tests.Constructed
+import Tests.ConstructedControl
 import Tests.ConstructedRealizationAudit
 import Tests.ExecutionSimulation
 import Tests.Machine
@@ -86,6 +93,7 @@ import Tests.OpeningSum
 import Tests.RingNormalization
 import Tests.SemanticLaws
 import Tests.SourceValidation
+import Tests.VerificationNormalization
 import ZkcExamples.NativePrograms.ContractControls
 import ZkcExamples.NativePrograms.CustomProperty
 import ZkcExamples.NativePrograms.FactorControls

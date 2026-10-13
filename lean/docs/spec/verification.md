@@ -38,6 +38,14 @@ source and process expressions. A restricted vocabulary admits constructor and
 scalar terms, with no commands, comments, imports, macros or tactics. The reviewed
 renderer owns the Lean declarations, subject bindings, normalization proofs and
 audits. Lean checks admission and the verifier-contract equality.
+The shared `zkc_contract` tactic recurses through exposed matching process
+constructors and invokes Mathlib's ring/group proof procedures on pure equations.
+Contract selection and unfolding remain explicit. The tactic produces ordinary
+proof terms, cannot exchange effects or assume a security property, and may fail
+on semantically equivalent programs. The standalone distributive expression
+checker is a smaller sufficient criterion; it does not replace Mathlib's more
+complete arithmetic proof search in the request generator.
+
 A separate request interpreter reconstructs the inputs, role, sites and actual
 program denotation. It checks the candidate contract against that subject and
 re-derives the requested properties. A separate relation-subject check does the
@@ -70,6 +78,15 @@ consumer to an actual imported source via `Certificate.verify`, without changing
 the compiler or existing contract. CLI support for an extension registers its
 reviewed input schema and consumer; automatic correspondence may require new
 normalization lemmas. Failure to find a proof is not a counterexample to safety.
+
+`Source.Normalizer.certificate` connects the generic executable equivalence
+checker to this typed API. Both the authored source and reference have independent
+admission proofs. The author/library supplies a contract proof for the reference;
+successful normalization transports it to the complete actual source process
+family. `Certificate.verify` then applies any compatible consumer while retaining
+that consumer's assumptions. Neither a proposed reference nor its name supplies
+the contract proof. This typed extension is separate from the current bounded
+CLI schema; adding arbitrary user-selected normalizers to JSON is not supported.
 
 Open-process refinement composes through continuations and preserves shared state.
 Residual contracts connect rounds to downstream checks. Security composition

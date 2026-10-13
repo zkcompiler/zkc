@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Source.Constructed.Format
+public import Zkc.Source.Constructed.ControlFormat
 public import ZkcTools.JsonSupport
 
 @[expose] public section
@@ -76,6 +77,24 @@ def evaluate {s : Snapshot} (imported : Imported s) (json : Json) : Except Strin
   if entries.size > 2048 then throw "constructed-run-limit"
   let input ← values s.inputs input.toList
   let result := (imported.denote meaning (inputs s.inputs input)).run handler ⟨entries, 0⟩
+  let outcome := match result.outcome with
+    | .stopped reason => Json.arr #[.str "stopped", Source.Format.stop.encode reason]
+    | .returned result => .arr #[.str "returned", toJson (tokens result)]
+  return .arr #[.str "zkc.constructed-result/0", outcome,
+    toJson result.state.position, toJson result.events]
+
+abbrev controlMeaning : Control.Meaning interface where
+  toMeaning := meaning
+  index := id
+  count := id
+
+def evaluateControl {s : Control.Snapshot} (imported : Control.Imported s)
+    (json : Json) : Except String Json := do
+  let .arr #[.str "zkc.constructed-run/0", .arr input, .arr entries] := json
+    | throw "constructed-run-format"
+  if entries.size > 2048 then throw "constructed-run-limit"
+  let input ← values s.inputs input.toList
+  let result := (imported.program.denote controlMeaning input).run handler ⟨entries, 0⟩
   let outcome := match result.outcome with
     | .stopped reason => Json.arr #[.str "stopped", Source.Format.stop.encode reason]
     | .returned result => .arr #[.str "returned", toJson (tokens result)]

@@ -28,8 +28,8 @@ inferred from separate service names.
 
 The review distinguishes a returned false decision, rejection, handler stops,
 missing replies and an unfinished observation prefix. Well-founded open processes
-embed into the machine model, with resumption and completion laws. Native loops
-and external waiting remain outside the imported profile.
+embed into the machine model, with resumption and completion laws. Runtime by-value bounded loops now have a structured import; general native
+branches, Local control and external waiting remain outside the exported profile.
 
 Native differential execution reads SSA independently of the exporter and
 compares full selected observations with the Lean executable over Z/97. Generated
@@ -151,3 +151,30 @@ The next research extensions are broader source admission, observation-based
 refinement, reusable relation adapters, richer adversary interfaces and explicit
 PCS compositions and broader Fiat–Shamir constructions. They require new definitions and proofs; current
 success receipts do not stand in for them.
+
+## Compositional extension review
+
+The subsequent extension was reviewed through implementation self-review,
+independent executable comparisons, kernel checks and exhaustive dependency
+audits. No additional independent-agent or human review is claimed for this
+extension. The following boundaries were inspected separately:
+
+| Boundary | Resolution and remaining scope |
+|---|---|
+| Vacuous refinement relations | Execution simulation requires coverage for each declared implementation input and compatible residual observations; probability coupling is separate |
+| Translation asserted by syntax erasure alone | Independent raw and flat interpreters have all-input, all-meaning correspondence laws with typed denotation |
+| Fixed two-round FS architecture | A heterogeneous finite-round full-prefix experiment reuses ArkLib knowledge laws and VCVio bad-query accounting; Sumcheck instantiates any finite number of variables |
+| Completed-path security versus early rejection | The generic security observation does not claim equality of post-rejection caches or costs; the existing early-stop CLI keeps its own consumer |
+| Nominal PCS oracle with assumed binding | Actual ArkLib KZG verification, an explicit setup/adversary game and a concrete t-SDH reduction instantiate the evaluation-sum composition |
+| Unrestricted upstream hardness premise | State a bound for the actual reduced adversary; no efficient-adversary or asymptotic cost theorem is inferred |
+| Runtime loop unrolling or hidden captures | Retain one typed body, actual count/index, carried values and captures; statically check all bodies and compare nested/sequential native executions |
+| Rendered Lean subject detached from JSON | Retain a separate JSON tree and prove its structural decoding equation; altered Snapshot constructors fail kernel checking |
+| Kernel reduction of large byte arrays exhausted resources | Move text-capacity checks to the explicit executable preflight and prove structural codecs compositionally; retain executable over-limit refusals |
+| Protocol-specific automation copied into each request | Share process/algebra proof search and connect certified normalization to typed certificates; intent and experiments remain explicit |
+
+Native C++ extraction and Local expansion are still tested boundaries. Primitive
+mathematics, record bytes, concrete Merlin behavior, Host initialization and
+subsequent backend execution require additional connections. The KZG example is
+a registered-polynomial evaluation-sum protocol; it is not a complete native KZG
+implementation or a multivariate Sumcheck/PCS verifier. The structured native
+carrier currently has admission/execution support, not a general FS CLI consumer.

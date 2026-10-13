@@ -135,6 +135,7 @@ def controls(compiler, optimizer, protocol, variant, directory):
     assert actual == expected, next((i, a, b) for i, (a, b) in enumerate(zip(actual, expected)) if a != b)
     negatives = []
     for name, mutate, code in [
+        ('text-limit', lambda x: x.__setitem__(6, 'x' * 262145), 'expected-string'),
         ('unknown-field', lambda x: x.append('ignored'), 'invalid-shape'),
         ('bad-reference', lambda x: x[11].__setitem__(0, 8192), 'constructed-source-operands'),
         ('bad-result-type', lambda x: x[9].__setitem__(0, 'different'), 'constructed-source-operands'),

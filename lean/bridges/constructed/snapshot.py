@@ -58,23 +58,65 @@ def handler(value):
     return '⟨' + ', '.join(text(v) for v in array(value, 3)) + '⟩'
 
 
+def json_constructor(value):
+    """Preserve the parsed native JSON independently of Snapshot constructors."""
+    if isinstance(value, str):
+        return '.str ' + text(value)
+    if type(value) is int:
+        return '.num ⟨Int.ofNat ' + natural(value) + ', 0⟩'
+    return '.arr #[' + ', '.join(json_constructor(item) for item in array(value)) + ']'
+
+
+def control_body(value, depth=64):
+    array(value)
+    if depth <= 0:
+        raise ValueError('constructed-control-depth')
+    if value and value[0] == 'flat':
+        _, instructions, returned = array(value, 3)
+        return f'.flat {seq(instructions, instruction)} {seq(returned, natural)}'
+    if value and value[0] == 'sequence':
+        _, types, first, next_body = array(value, 4)
+        return f'.sequence {seq(types)} ({control_body(first, depth-1)}) ({control_body(next_body, depth-1)})'
+    if value and value[0] == 'branch':
+        _, condition, yes, no = array(value, 4)
+        return f'.branch {natural(condition)} ({control_body(yes, depth-1)}) ({control_body(no, depth-1)})'
+    if value and value[0] == 'loop':
+        _, maximum, count, carried, initial, captures, captured, body, next_body = array(value, 9)
+        return (f'.loop {natural(maximum)} {natural(count)} {seq(carried)} {seq(initial, natural)} '
+                f'{seq(captures)} {seq(captured, natural)} ({control_body(body, depth-1)}) '
+                f'({control_body(next_body, depth-1)})')
+    raise ValueError('constructed-control-body')
+
+
 def render(data, namespace):
-    array(data, 12)
-    if data[0] != 'zkc.constructed-source/0':
+    array(data)
+    structured = bool(data) and data[0] == 'zkc.constructed-control/0'
+    array(data, 11 if structured else 12)
+    if data[0] not in ('zkc.constructed-source/0', 'zkc.constructed-control/0'):
         raise ValueError('constructed-source-format')
     if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)*', namespace):
         raise ValueError('constructed-source-namespace')
     fields = list(zip(['source', 'candidate', 'entry', 'role', 'participant', 'policy'],
                       map(text, data[1:7])))
-    fields += [('handlers', seq(data[7], handler)), ('inputs', seq(data[8])),
-               ('outputs', seq(data[9])), ('instructions', seq(data[10], instruction)),
-               ('returned', seq(data[11], natural))]
-    return ('module\n\npublic import Zkc.Source.Constructed\n\n@[expose] public section\n\n'
+    fields += [('handlers', seq(data[7], handler)), ('inputs', seq(data[8])), ('outputs', seq(data[9]))]
+    fields += ([('body', control_body(data[10]))] if structured else
+               [('instructions', seq(data[10], instruction)), ('returned', seq(data[11], natural))])
+    imported_module = 'Zkc.Source.Constructed.ControlEncoding' if structured else 'Zkc.Source.Constructed.Encoding'
+    opened = 'Zkc.Source.Constructed.Control' if structured else 'Zkc.Source.Constructed'
+    return (f'module\n\npublic import {imported_module}\npublic import Batteries.Lean.Except\n\n'
+            '@[expose] public section\n\n'
             '/-! Generated from the actual checked native candidate. -/\n'
             'set_option autoImplicit false\n\n'
-            f'namespace {namespace}\nopen Zkc.Source.Constructed\n\n'
+            f'namespace {namespace}\nopen {opened}\n\n'
             'def snapshot : Snapshot where\n' +
             '\n'.join(f'  {key} := {value}' for key, value in fields) +
+            '\n\ndef carrier : Lean.Json := ' + json_constructor(data) +
+            '\n\nset_option maxRecDepth 8192 in\n'
+            'set_option maxHeartbeats 2000000 in\n'
+            'theorem decoded : Format.snapshot carrier = .ok snapshot := by\n'
+            '  have encoded : carrier = Format.encodeSnapshot snapshot := by rfl\n'
+            '  rw [encoded]\n'
+            '  exact Format.snapshot_encode snapshot (by decide +kernel)\n' +
             '\n\nset_option maxRecDepth 8192 in\n'
             'set_option maxHeartbeats 2000000 in\n'
             'theorem admitted : snapshot.check.isOk = true := by decide +kernel\n'

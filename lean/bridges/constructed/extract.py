@@ -46,7 +46,7 @@ def main():
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         raise SystemExit(str(error)) from error
     print(json.dumps({'status': 'checked' if args.check else 'exported',
-                      'candidate': data[2], 'instructions': len(data[10])}))
+                      'candidate': data[2], 'format': data[0]}))
 
 
 if __name__ == '__main__':

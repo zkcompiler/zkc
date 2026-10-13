@@ -48,16 +48,52 @@ primitive vocabulary and provide its meaning.
 The bounded profile supports straight-line selected Local bodies, actual receives,
 guards, explicit terminal stops and record codecs whose handlers use those forms.
 The exact zero-result Local conditional with empty successful yield and rejecting
-alternative is a guard. Other control and unsupported leaves refuse, including
-control in selected handler bodies. Import retains unused ordered provider work,
+alternative is a guard. Runtime by-value `protocol.loop` uses the structured carrier described below.
+Other control and unsupported leaves refuse, including control in selected
+handler bodies, general native branches and parameter-selected loop counts. Import retains unused ordered provider work,
 post-final-message observations, decode guards and codec finalization. Stops from
 primitive interpretation bypass subsequent work. Host-created initial transcript
 state and raw proof buffers remain explicit participant inputs.
 
-Limits are 16 MiB native input per CLI file, 1 MiB exported JSON, 64 Local call
-nesting levels, 4096 inspected operations and 2048 exported instructions. The
-formal reader additionally bounds each text to 262144 bytes, references to 8192,
-input/output ports to 512 and selected handlers to 256. It rejects malformed
+The structured sibling carrier is `zkc.constructed-control/0`:
+
+```text
+[format, source-sha256, candidate-sha256, entry, role, participant,
+ policy-json, handlers, inputs, outputs, body]
+```
+
+Headers and primitive instructions have the same meaning as the flat carrier.
+A body is one of:
+
+| Body | Exact shape |
+|---|---|
+| Flat fragment | `["flat", instructions, returned]` |
+| Sequence | `["sequence", intermediate-types, first, next]` |
+| Conditional | `["branch", condition-reference, yes, no]` |
+| Runtime loop | `["loop", maximum, count-reference, carried-types, initial-references, capture-types, captured-references, body, next]` |
+
+Sequence replaces the input context with the first body's complete returned
+values. A loop reads a `ui64` count, refuses a count above the declared maximum
+before entering its body, and iterates from index zero. Each iteration receives
+`[index, carried-values..., captured-values...]` and returns exactly the carried
+values. Its suffix receives `[final-carried-values..., original-context...]`.
+Stops propagate without running the suffix. Zero iterations run the suffix with
+the initial carried values. The exporter retains a single body and actual
+captures; it does not unroll based on a test execution. Before a loop it packs
+actual scalar references in context order, retaining all prefix effects. This
+removes dead tuple containers and duplicate aliases, not primitive calls.
+Conditional bodies are admitted by the formal reader; the current native exporter
+does not emit general native conditional control.
+
+Limits are 16 MiB native input per CLI file, 1 MiB exported JSON, 64 nested body/Local-call levels, 4096 inspected operations and 2048 exported instructions. The
+formal executable runs a separate text-capacity preflight (128 JSON levels,
+262144 bytes per text) before structural decoding. Structural decoding bounds references to 8192,
+input/output ports to 512 and selected handlers to 256. Structured bodies have
+64 decoder levels and a conservative expanded-control bound of 65536: flat work
+is instruction count plus one, sequence adds both children plus one, branch takes
+the larger child plus one, and loop uses one plus maximum times (body bound plus
+one) plus suffix bound. This is executable admission policy, not native cost or
+cryptographic adversary complexity. It rejects malformed
 constructor shapes, unknown instructions, invalid result projections and mistyped
 operands. See the [formal admission contract](../../../lean/docs/spec/constructed-source.md).
 

@@ -79,6 +79,8 @@ class Native:
             return [value]
         if name == 'algebra.exec.indices_empty':
             return [0]
+        if name == 'algebra.exec.indices_append':
+            return [(args[0] * 257 + args[1] + 1) % 65521]
         if name == 'crypto.exec.indexed_transcript_observe_data':
             state, value, coordinate = args
             return [(state * 131 + value * 17 + coordinate + 1) % 65521]
@@ -106,7 +108,9 @@ class Native:
         formals, lines = self.definitions[name]
         if len(formals) != len(inputs):
             raise ValueError('native-interpreter-arity')
-        env = dict(zip(formals, inputs))
+        return self.body(lines, dict(zip(formals, inputs)))
+
+    def body(self, lines, env):
         pending = iter(lines)
         for line in pending:
             match = OP.match(line)
@@ -114,8 +118,44 @@ class Native:
                 raise ValueError('native-interpreter-syntax: ' + line)
             result, count, operation, operands = match.groups()
             args = [env[r] for r in REF.findall(operands)]
-            if operation in ('local.return', 'protocol.finish'):
+            if operation in ('local.return', 'protocol.finish', 'protocol.yield'):
                 return args
+            if operation == 'protocol.loop':
+                maximum = int(re.search(r'maximum = ([0-9]+)', line)[1])
+                carried = int(re.search(r'carried = ([0-9]+)', line)[1])
+                if 'parameter = false' not in line or 'count = ""' not in line:
+                    raise ValueError('native-interpreter-loop-profile')
+                block = next(pending)
+                formals = re.findall(r'(%[A-Za-z0-9_]+):', block)
+                if len(formals) != len(args):
+                    raise ValueError('native-interpreter-loop-arity')
+                nested, depth = [], 1
+                for bodyline in pending:
+                    if bodyline.endswith('({'):
+                        depth += 1
+                    if bodyline.startswith('})'):
+                        depth -= 1
+                    if depth == 0:
+                        break
+                    nested.append(bodyline)
+                if depth != 0:
+                    raise ValueError('native-interpreter-loop-region')
+                if args[0] > maximum:
+                    raise Stopped('refused')
+                values, captures = args[1:1 + carried], args[1 + carried:]
+                for index in range(args[0]):
+                    values = self.body(nested, dict(zip(formals, [index] + values + captures)))
+                    if len(values) != carried:
+                        raise ValueError('native-interpreter-loop-yield')
+                if count:
+                    env.update({f'{result}#{i}': value for i, value in enumerate(values)})
+                elif result:
+                    if len(values) != 1:
+                        raise ValueError('native-interpreter-loop-results')
+                    env[result] = values[0]
+                elif values:
+                    raise ValueError('native-interpreter-loop-results')
+                continue
             if operation == 'local.if':
                 tail = [next(pending) for _ in range(4)]
                 if ('"local.yield"()' not in tail[0] or

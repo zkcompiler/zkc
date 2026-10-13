@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Native refusal of unmodelled control and preservation of an authored stop."""
+"""Native loop export and preservation of an authored stop."""
 import argparse
 import json
 from pathlib import Path
@@ -31,8 +31,8 @@ def main():
     policy_path.write_text(json.dumps(policy))
     candidate = args.output / 'bounded.candidate.mlir'
     candidate.write_text(execute([args.compiler, 'protocol-construct-proof', original, policy_path]))
-    refused = execute([args.compiler, 'protocol-constructed-lean', original, policy_path, candidate], success=False)
-    assert 'constructed-source-control: protocol.loop' in refused
+    exported = json.loads(execute([args.compiler, 'protocol-constructed-lean', original, policy_path, candidate]))
+    assert exported[0] == 'zkc.constructed-control/0'
 
     # A selected decoder with an unconditional authored stop normalizes to an
     # actual terminal stop, including the primitive/decode prefix before it.
@@ -65,7 +65,7 @@ def main():
     run.write_text(json.dumps(['zkc.constructed-run/0', inputs, native.entries]))
     assert json.loads(lean(output, run)) == ['zkc.constructed-result/0', result, len(native.entries),
                                             [[entry[0], entry] for entry in native.entries]]
-    report = {'unsupported_control': 'constructed-source-control: protocol.loop',
+    report = {'runtime_control': exported[0],
               'authored_stop': result, 'primitive_calls_before_stop': len(native.entries)}
     (args.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report))

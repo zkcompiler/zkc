@@ -205,8 +205,9 @@ def typed_program(data):
 def prelude(data, protocol, namespace):
     source = render_snapshot(data, namespace)
     source = source[:source.index('set_option maxRecDepth')]
-    source = source.replace('public import Zkc.Source.Constructed',
+    source = source.replace('public import Zkc.Source.Constructed.Encoding',
                             f'public import Zkc.Protocols.{protocol.title()}.NativeConstruction\n'
+                            'public import Zkc.Source.Constructed.Encoding\n'
                             'public import Zkc.Source.Constructed.Scalar\n'
                             'public import Zkc.Source.Constructed.Execution\npublic import Lean')
     source += '''
@@ -215,6 +216,13 @@ set_option maxHeartbeats 16000000
 set_option linter.unusedSimpArgs false
 set_option backward.isDefEq.respectTransparency false
 open Zkc.Source
+
+/-- The executable structural JSON decoder recovers this exact source subject.
+Text parsing and native export remain separately tested boundaries. -/
+theorem decoded : Format.snapshot carrier = .ok snapshot := by
+  have encoded : carrier = Format.encodeSnapshot snapshot := by rfl
+  rw [encoded]
+  exact Format.snapshot_encode snapshot (by decide +kernel)
 '''
     source += f'def program : Program language (snapshot.inputs.map scalar) snapshot.outputs :=\n{typed_program(data)}\n'
     source += '''
@@ -330,8 +338,8 @@ def audit(namespace, names):
 def render(data, protocol, namespace='ConstructedRealization', receive_sites=None):
     profile = validate(data, protocol, receive_sites)
     if protocol == 'schnorr':
-        return schnorr(data, namespace, profile) + audit(namespace, ['admitted', 'raw_denotation', 'source_denotation', 'full_denotation', 'projected_denotation'])
-    return sumcheck(data, namespace, profile) + audit(namespace, ['admitted', 'raw_denotation', 'source_denotation', 'full_denotation', 'projected_denotation'])
+        return schnorr(data, namespace, profile) + audit(namespace, ['decoded', 'admitted', 'raw_denotation', 'source_denotation', 'full_denotation', 'projected_denotation'])
+    return sumcheck(data, namespace, profile) + audit(namespace, ['decoded', 'admitted', 'raw_denotation', 'source_denotation', 'full_denotation', 'projected_denotation'])
 
 
 

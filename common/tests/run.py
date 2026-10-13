@@ -88,7 +88,8 @@ def execute(scope, args):
              "--output", output / "intent"])
         constructed = ROOT / "lean/bridges/constructed"
         for check, destination in (("check.py", "constructed"), ("codec_check.py", "codec"),
-                                   ("boundary_check.py", "constructed-boundaries")):
+                                   ("boundary_check.py", "constructed-boundaries"),
+                                   ("control_check.py", "constructed-control")):
             run([sys.executable, constructed / check, "--compiler", compiler / "zkc-compile",
                  "--optimizer", compiler / "zkc-opt", "--output", output / destination])
         run([sys.executable, constructed / "security_check.py", "--compiler", compiler / "zkc-compile",

@@ -21,7 +21,9 @@ in one untyped universal evaluator.
 `Zkc.Source.Constructed` admits an actual constructed participant separately from
 its original interactive program. Its typed SSA retains selected Local bodies,
 primitive descriptors, every result of a provider call, guards and returned
-state. It reuses the existing typed `Program` and `Proc` semantics. A protocol
+state. Structured finite-control carriers compose the same flat fragments with
+runtime bounded loops, explicit captures and carried values; their raw/typed
+correspondence is proved for all interpretations and inputs. It reuses the existing typed `Program` and `Proc` semantics. A protocol
 adapter supplies fixed primitive meanings and proves the actual imported body's
 equation before projecting a security observation. An abstract transformation of
 the original program alone does not establish that equation.
@@ -31,7 +33,10 @@ the admitted typed body. A generic normalization validator checks two actual raw
 bodies under a fixed interpretation. Its correctness theorem reuses those
 admission laws and locally proved transformation laws. Helper expansion is one
 such law; a separate ring-expression checker supports local arithmetic proofs.
-Neither checker decides general program equivalence or proves native extraction.
+`Normalizer.certificate` transports a proved reference contract to the admitted
+source after a successful check. The bounded CLI reuses `zkc_contract` for exposed
+process equality and Mathlib arithmetic normalization. Neither route decides
+general program equivalence or proves native extraction.
 
 `Zkc.Protocols` owns mathematical experiments and reusable verifier contracts.
 It may use generic source semantics; source semantics may not import protocols.
@@ -58,7 +63,11 @@ connects Sumcheck rounds to a terminal checker. `FactorOpening` composes rounds
 with adaptive factor replies and an explicit bad-opening event. Its conditional
 bound is the Sumcheck error **plus** an opening error bound; independent events
 are not assumed. Public polynomial checks prove that opening error is zero.
-A PCS needs its own proved opening consumer and assumptions.
+`OpeningSum` provides another composition: two guarded opening checks and a
+scalar sum relation. Its optional ArkLib KZG adapter uses real commitment/opening
+operations and bounds false acceptance by a concrete reduced t-SDH adversary's
+advantage. It requires a registered polynomial commitment, and does not supply
+arbitrary commitment extraction or an automatic multivariate Sumcheck/PCS link.
 
 This supports many compatible source × contract × property combinations.
 Incompatible views, adversary access or sampling policies need an explicit
@@ -87,8 +96,8 @@ A direct finite-round consumer reuses the same ArkLib knowledge interface with
 full-prefix keys and VCVio's actual query-log bound. It supports heterogeneous
 rounds without translating through salts. Quadratic Sumcheck discharges those
 conditions for any finite number of variables; source acceptance is connected
-to the existing typed verifier. Native structured-control import remains a
-distinct implementation boundary.
+to the existing typed verifier. The native loop carrier is admitted independently; attaching this generic
+consumer to a native loop still requires its specific source/game equation.
 
 Transcript bindings include the source, construction, application context and
 public statement. An ideal transcript interpretation does not establish that a
@@ -108,8 +117,9 @@ asserts independent randomness for providers sharing mutable state.
 
 `FiniteControl` supplies runtime-selected bounded iteration and conditional
 completion over the existing process model. Its call bounds and retained state
-are formal-model laws; the constructed importer still rejects unsupported native
-control. A selected iteration count can reveal private data through observations
+are formal-model laws. Constructed import supports runtime by-value loops, including
+nesting and sequential suffixes, but still rejects general native branches and
+control inside selected Local handlers. A selected iteration count can reveal private data through observations
 or costs even if both executions return the same Boolean.
 
 Exact process or cache equations support subsequent compatible computation.
