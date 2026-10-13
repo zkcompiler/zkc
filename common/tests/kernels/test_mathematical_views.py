@@ -69,6 +69,7 @@ def test_table_shape_predicate_returns_false(toolchain, journal, directory, flag
         ('valid', ['1', '2'], '1', '1', True),
         ('empty', [], '0', '1', False),
         ('zero-columns', [], '0', '0', False),
+        ('nonempty-zero-columns', ['1'], '0', '0', False),
         ('oversized-dimension', ['1'], '64', '1', False),
     ]:
         result = entry.run(name, {'values': values, 'dimensions': dimensions, 'columns': columns})

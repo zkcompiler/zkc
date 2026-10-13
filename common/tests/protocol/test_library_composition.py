@@ -62,8 +62,10 @@ def test_public_sumcheck_terminal_dimension(toolchain, journal, directory, round
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
-@pytest.mark.parametrize('table', [[], ['3', '7'], ['1'] * 8])
+@pytest.mark.parametrize('table', [[], ['3', '7'], ['1', '0', '2', '0', '3', '0', '4', '0']])
 def test_sumcheck_rejects_only_the_verifier_table(toolchain, journal, directory, flags, table):
+    # The padded table leaves [P(r1,r2), 0] after the two MSB-first folds.
+    # Its residual sum agrees, so only complete dimension discharge rejects it.
     package, pin = build(toolchain, journal, directory, 'examples/projects/sumcheck', 'Interactive', flags)
     inputs = input_files(journal, 'interactive', roles={
         'P': {'inputs': {'values': ['1', '2', '3', '4'], 'rounds': '2'}},
