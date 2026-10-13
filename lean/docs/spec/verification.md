@@ -85,3 +85,12 @@ and remaining external boundaries. Receipts are reproducibility records, not
 signed proof objects or runtime authorization. Recheck retained Lean certificates
 with the recorded manifests. Source hashes identify inputs; they establish no
 compiler, cryptographic-provider, Fiat–Shamir, PCS or whole-prover correctness.
+
+## Constructed Fiat–Shamir subjects
+
+The [constructed-program verification specification](fs-verification.md) owns
+`zkc.fs-verification-spec/0`: actual checked native construction, fixed ideal
+primitive interpretation, complete denotation, independently selected security
+consumer and exact requested-subject checks. Its receipts retain the native Merlin
+descriptor separately from the conditional ideal model and identify the remaining
+provider, encoding, compiler and runtime boundaries.
