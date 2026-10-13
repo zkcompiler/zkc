@@ -3,6 +3,8 @@
 | Project | Library and Entry | Execution |
 |---|---|---|
 | [Finite computations](finite-computations/README.md) | Shared domain, Local and Math libraries | Strict dot product, records and filters, bounded reads and nested matrix traversal |
+| [Table inner-product claims](table-inner-product/README.md) | Seeded evaluation-table claims in KoalaBear and Ext8 | Nested indexed helpers, repeated captures and a distinct vector with proven equal extent |
+| [Lookup denominator products](lookup-denominators/README.md) | AIR gated-denominator arithmetic in KoalaBear and Ext8 | Nested indexed collection and seeded products at two supplied shifts |
 | [Scoped computations](scoped-computations/README.md) | Generic user apply/forward functions and a module wrapper | Nested callbacks with record projections, vector lookup and capture-selected ownership |
 | [Schnorr](schnorr/README.md) | Generic group protocol, discrete-log relation and concrete Entry | Interactive exchange or independent transcript-derived proofs |
 | [Spongefish Schnorr](spongefish-schnorr/README.md) | Explicit source transcript with BLS12-381 G1 byte encodings | Raw 80-byte external proofs with ordinary prover/verifier execution |

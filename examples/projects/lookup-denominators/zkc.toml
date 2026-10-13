@@ -1,0 +1,12 @@
+format = "zkc.project/0"
+
+[modules]
+lookup_denominators = "main.zkc"
+air_interaction = "../../../libraries/air/interaction.zkc"
+air_polynomial = "../../../libraries/air/polynomial.zkc"
+"zkc::accumulation" = "../../../libraries/zkc/accumulation.zkc"
+"zkc::curve" = "../../../libraries/zkc/curve.zkc"
+"zkc::finite" = "../../../libraries/zkc/finite.zkc"
+"zkc::finite_math" = "../../../libraries/zkc/finite_math.zkc"
+"zkc::sequence" = "../../../libraries/zkc/sequence.zkc"
+"zkc::vector" = "../../../libraries/zkc/vector.zkc"

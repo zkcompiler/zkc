@@ -35,6 +35,7 @@ struct PayloadAnalysis {
   ArrayRef<Operation *> operations;
   llvm::DenseMap<Operation *, const protocol::ComputationContract *> contracts;
   bool supported = true;
+  Operation *nonFieldOperation = nullptr, *nonModuleOperation = nullptr;
   EquationWork &work;
 
   PayloadAnalysis(ArrayRef<Operation *> operations, ValueRange results,
@@ -58,6 +59,22 @@ struct PayloadAnalysis {
         supported = false;
         continue;
       }
+      // These are the closed fragments interpreted by the independent readers.
+      // A new total algebra law does not automatically extend either reader.
+      if (facet) {
+        using I = MathematicalIdentity;
+        bool scalar = facet->identity == I::FieldConstant ||
+                      facet->identity == I::FieldAdd ||
+                      facet->identity == I::FieldSubtract ||
+                      facet->identity == I::FieldMultiply;
+        if (!nonFieldOperation && !scalar &&
+            !(facet->access &&
+              isa<algebra::FieldType>(op->getResult(0).getType())))
+          nonFieldOperation = op;
+        if (!nonModuleOperation && !scalar && facet->identity != I::GroupAdd &&
+            facet->identity != I::GroupScale)
+          nonModuleOperation = op;
+      }
       bool used = live.contains(op->getResult(0));
       if ((ordered && !used) || (facet && !facet->access && !facet->law.total))
         supported = false;
@@ -65,6 +82,17 @@ struct PayloadAnalysis {
         live.insert(op->getOperands().begin(), op->getOperands().end());
     }
   }
+  bool formula(Operation *unsupported) const {
+    if (unsupported && work.diagnostic)
+      *work.diagnostic = {{OptimizationStatus::Unsupported,
+                           OptimizationReason::ImplementationRestriction},
+                          unsupported,
+                          {},
+                          work.diagnostic->occurrencePath};
+    return !unsupported;
+  }
+  bool fieldFormula() const { return formula(nonFieldOperation); }
+  bool moduleFormula() const { return formula(nonModuleOperation); }
   const protocol::ComputationContract *contract(Value value) const {
     return value ? contracts.lookup(value.getDefiningOp()) : nullptr;
   }
@@ -225,6 +253,25 @@ std::optional<Reduction> analyzeReduction(const ComputationFacts &facts,
     facts.reportMissingAccess();
     return std::nullopt;
   }
+  if (combined.facet->law.algebra == protocol::ComputationAlgebra::FieldRing &&
+      !facts.payload.fieldFormula())
+    return std::nullopt;
+  if (combined.facet->law.algebra ==
+      protocol::ComputationAlgebra::GroupModule) {
+    if (!facts.payload.moduleFormula())
+      return std::nullopt;
+    // The module reader currently interprets element domains and their zips.
+    // Even an unused extra factor must remain within that source fragment.
+    for (const auto &item : facts.view.items) {
+      auto *factor = facts.view.iteration[item.iteration].operation;
+      if (!isa<data::DomainElementsOp>(factor) ||
+          !isa<algebra::FieldVectorType, algebra::GroupVectorType>(
+              factor->getOperand(0).getType())) {
+        facts.payload.formula(factor);
+        return std::nullopt;
+      }
+    }
+  }
   auto c = facts.view.computation;
   Reduction result;
   result.combine = combined.facet->identity;
@@ -376,6 +423,8 @@ std::optional<Bilinear> analyzeBilinear(const ComputationFacts &facts,
   if (combined.facet->identity != MathematicalIdentity::FieldAdd ||
       !facts.payload.supported || product.kind != IterationKind::Product ||
       product.children.size() != 2 || view.items.size() != 4)
+    return std::nullopt;
+  if (!facts.payload.fieldFormula())
     return std::nullopt;
   if (facts.missingAccess) {
     facts.reportMissingAccess();

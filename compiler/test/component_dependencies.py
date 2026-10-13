@@ -182,6 +182,7 @@ def main():
         ROOT / "lib/Transforms/NestedContractionVerification.h",
         ROOT / "lib/Transforms/RecipeRealizations.h",
         ROOT / "lib/Transforms/FiniteVerification.h",
+        ROOT / "lib/Transforms/FinitePreparation.h",
         ROOT / "lib/Transforms/CheckedCandidate.h",
         ROOT / "lib/Transforms/CollectionInterpretation.h",
         ROOT / "lib/Transforms/CollectionRealization.h",

@@ -520,7 +520,32 @@ class Comparison {
   Value rows;
   llvm::DenseMap<Block *, std::map<std::vector<uint64_t>, SmallVector<Meaning>>>
       helpers;
+  // Exact argument meanings of the original callback, retained while reading
+  // its call closure. Callee substitution does not change this fact scope.
+  // In particular, these are not the finite occurrence's caller assumptions.
+  SmallVector<std::pair<Value, Meaning>> rootArguments;
 
+  bool rootEqualExtent(Value container, unsigned axis, Extent other) {
+    for (const auto &[source, meaning] : rootArguments) {
+      if (!terms.charge())
+        return false;
+      if (meaning.kind != Meaning::Container || meaning.container != container)
+        continue;
+      for (const auto &[otherSource, otherMeaning] : rootArguments) {
+        if (!terms.charge())
+          return false;
+        if (otherMeaning.kind == Meaning::Container &&
+            otherMeaning.container == other.container &&
+            terms.evidence(
+                [&, left = source, right = otherSource](uint64_t &work) {
+                  return finite::equalExtentStatus(left, axis, right,
+                                                   other.axis, work);
+                }))
+          return true;
+      }
+    }
+    return false;
+  }
   unsigned identity(Value value) {
     auto [found, inserted] = identities.try_emplace(value, identities.size());
     return found->second;
@@ -586,6 +611,11 @@ class Comparison {
         !isa<func::ReturnOp, local::ReturnOp>(block.back()) ||
         !block.back().getAttrs().empty())
       return {};
+    if (depth == 0) {
+      rootArguments.clear();
+      for (auto [argument, meaning] : zip(block.getArguments(), inputs))
+        rootArguments.emplace_back(argument, meaning);
+    }
     std::vector<uint64_t> key;
     for (const Meaning &value : inputs) {
       key.insert(key.end(),
@@ -694,6 +724,13 @@ class Comparison {
                         break;
                       }
                 }
+                if (!equal)
+                  for (Extent extent : dimensions[index.identity].equal) {
+                    if (rootEqualExtent(container.container, axis, extent)) {
+                      equal = true;
+                      break;
+                    }
+                  }
                 if (!equal)
                   return {};
                 dimensions[index.identity].equal.push_back(
