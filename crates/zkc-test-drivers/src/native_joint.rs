@@ -32,7 +32,7 @@ fn tape(registry: &ServiceRegistry, owner: &str, budget: u64, values: &[u64]) ->
         .issue_test_tape(
             owner,
             budget,
-            values.iter().copied().map(Scalar::from).collect(),
+            values.iter().copied().map(Scalar::from).collect::<Vec<_>>(),
         )
         .unwrap()
 }

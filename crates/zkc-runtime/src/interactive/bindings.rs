@@ -30,6 +30,7 @@ pub enum Identity {
     KoalaBear,
     KoalaBearExt8,
     Ristretto255Group,
+    Edwards25519Prime,
     Merlin3Ristretto64Le,
 }
 impl Identity {
@@ -82,9 +83,10 @@ impl Identity {
             | Self::Spongefish080KeccakFr64Be
             | Self::Merlin3Fr64Be
             | Self::MultilinearKzgBls12381 => Some(Self::Bls12381Fr),
-            Self::Ristretto255Scalar | Self::Ristretto255Group | Self::Merlin3Ristretto64Le => {
-                Some(Self::Ristretto255Scalar)
-            }
+            Self::Ristretto255Scalar
+            | Self::Ristretto255Group
+            | Self::Edwards25519Prime
+            | Self::Merlin3Ristretto64Le => Some(Self::Ristretto255Scalar),
             Self::KoalaBear | Self::MerkleKoalaBear => Some(Self::KoalaBear),
             Self::KoalaBearExt8 | Self::MerkleKoalaBearExt8 | Self::Merlin3KoalaBearExt8 => {
                 Some(Self::KoalaBearExt8)
@@ -104,7 +106,10 @@ impl Identity {
         }
     }
     pub fn group(self) -> Option<Self> {
-        if matches!(self, Self::Bn254G1 | Self::Bn254G2 | Self::Bn254Gt) {
+        if matches!(
+            self,
+            Self::Bn254G1 | Self::Bn254G2 | Self::Bn254Gt | Self::Edwards25519Prime
+        ) {
             return Some(self);
         }
         match self.scalar_field()? {
@@ -151,6 +156,7 @@ impl Identity {
             Self::MerkleKoalaBearExt8 => "rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
             Self::Ristretto255Scalar => "ristretto255.scalar",
             Self::Ristretto255Group => "ristretto255.group",
+            Self::Edwards25519Prime => "edwards25519.prime",
             Self::Merlin3Ristretto64Le => "merlin3.ristretto255.scalar64le/0",
             Self::Merlin3KoalaBearExt8 => "merlin3.koala-bear.ext8-binomial3.rejection31le/0",
             Self::Merlin3Fr64Be => "merlin3.bls12-381.fr64be/0",
@@ -176,6 +182,7 @@ impl Identity {
             Self::KoalaBear,
             Self::KoalaBearExt8,
             Self::Ristretto255Group,
+            Self::Edwards25519Prime,
             Self::Merlin3Ristretto64Le,
         ]
         .into_iter()
@@ -267,9 +274,12 @@ impl LogicalType {
             Type::Table | Type::Point => identity == Bls12381Fr,
             Type::Group => matches!(
                 identity,
-                Bn254Gt | Bn254G1 | Bn254G2 | Bls12381G1 | Ristretto255Group
+                Bn254Gt | Bn254G1 | Bn254G2 | Bls12381G1 | Ristretto255Group | Edwards25519Prime
             ),
-            Type::Groups => matches!(identity, Bn254G1 | Bn254G2 | Bls12381G1 | Ristretto255Group),
+            Type::Groups => matches!(
+                identity,
+                Bn254G1 | Bn254G2 | Bls12381G1 | Ristretto255Group | Edwards25519Prime
+            ),
             Type::Transcript => matches!(
                 identity,
                 Merlin3Fr64Be
@@ -371,7 +381,10 @@ impl LogicalType {
                         | Identity::KoalaBearExt8
                 ) | (
                     Type::Group | Type::Groups,
-                    Identity::Bn254G1 | Identity::Bn254G2 | Identity::Ristretto255Group
+                    Identity::Bn254G1
+                        | Identity::Bn254G2
+                        | Identity::Ristretto255Group
+                        | Identity::Edwards25519Prime
                 ) | (
                     Type::Field | Type::Vector | Type::Matrix,
                     Identity::Bls12381Fr
@@ -538,6 +551,8 @@ pub enum Representation {
     DalekRound,
     Ristretto,
     RistrettoVector,
+    EdwardsPrime,
+    EdwardsPrimeVector,
     FrDiagonal,
     RistrettoDiagonal,
 
@@ -598,6 +613,8 @@ impl Representation {
             Self::DalekRound => "dalek.quadratic/0",
             Self::Ristretto => "dalek.ristretto/0",
             Self::RistrettoVector => "dalek.ristretto-vector/0",
+            Self::EdwardsPrime => "dalek.edwards-prime/0",
+            Self::EdwardsPrimeVector => "dalek.edwards-prime-vector/0",
             Self::FrDiagonal => "arkworks.fr-diagonal/0",
             Self::RistrettoDiagonal => "dalek.ristretto-diagonal/0",
 
@@ -662,6 +679,8 @@ impl Representation {
             Self::DalekRound,
             Self::Ristretto,
             Self::RistrettoVector,
+            Self::EdwardsPrime,
+            Self::EdwardsPrimeVector,
             Self::FrDiagonal,
             Self::RistrettoDiagonal,
             Self::Bool,
@@ -791,6 +810,8 @@ impl PhysicalType {
             (T::Vector, I::Ristretto255Scalar) => R::DalekVector,
             (T::Polynomial, I::Ristretto255Scalar) => R::DalekPolynomial,
             (T::Round, I::Ristretto255Scalar) => R::DalekRound,
+            (T::Group, I::Edwards25519Prime) => R::EdwardsPrime,
+            (T::Groups, I::Edwards25519Prime) => R::EdwardsPrimeVector,
             (T::Group, I::Ristretto255Group) => R::Ristretto,
             (T::Groups, I::Ristretto255Group) => R::RistrettoVector,
             (T::Vector, I::Bls12381Fr) => R::FrVector,

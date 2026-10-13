@@ -1,0 +1,161 @@
+module bulletproofs::inner_product;
+use zkc::bytes::{Bytes};
+use zkc::vector::{Vector};
+use zkc::curve::{Groups};
+use zkc::vector as vec;
+use zkc::scalar as scalar;
+use zkc::indices as indices;
+use zkc::sampling;
+
+// Wire observations may retain information discarded by point admission.
+// For example, Monero hashes full-curve encodings before multiplying by eight.
+pub interface PointEncoding<G: Group> {
+  fn emit(point: G) -> Bytes effects(stop, opaque);
+  fn admit(bytes: Bytes) -> G effects(stop, opaque);
+}
+
+pub struct Bases<G: Group> { pub left: Groups<G>, pub right: Groups<G> }
+pub struct Witness<F: Field> { pub left: Vector<F>, pub right: Vector<F>, pub mask: F }
+
+pub fn count<G: Group>(bases: Bases<G>) -> index {
+  return kernel<G>("curve.length", bases.left);
+}
+fn msm<G: Group>(points: Groups<G>, scalars: Vector<G::Scalar>) -> G {
+  return kernel<G>("curve.msm", scalars, points);
+}
+fn weighted<F: Field>(left: Vector<F>, right: Vector<F>, y: F) -> F {
+  let weights = vec::scale(vec::geometric(y, vec::length(left)), y);
+  return vec::dot(vec::hadamard(left, weights), right);
+}
+
+pub fn cross<G: Group>(bases: Bases<G>, witness: Witness<G::Scalar>,
+    value_base: G, mask_base: G, y: G::Scalar,
+    left_mask: G::Scalar, right_mask: G::Scalar) -> (G, G) {
+  let (g0, g1) = kernel<G>("curve.split", bases.left);
+  let (h0, h1) = kernel<G>("curve.split", bases.right);
+  let (a0, a1) = vec::split(witness.left);
+  let (b0, b1) = vec::split(witness.right);
+  let power = scalar::power(y, vec::length(a0));
+  let left = msm(g1, vec::scale(a0, scalar::inverse(power))) + msm(h0, b1)
+    + value_base * weighted(a0, b1, y) + mask_base * left_mask;
+  let right = msm(g0, vec::scale(a1, power)) + msm(h1, b0)
+    + value_base * (power * weighted(a1, b0, y)) + mask_base * right_mask;
+  return (left, right);
+}
+
+// Both roles use precisely this fold, including the asymmetric y weight.
+pub fn fold_bases<G: Group>(bases: Bases<G>, y: G::Scalar, x: G::Scalar) -> Bases<G> {
+  let (g0, g1) = kernel<G>("curve.split", bases.left);
+  let (h0, h1) = kernel<G>("curve.split", bases.right);
+  let inverse_x = scalar::inverse(x);
+  let inverse_power = scalar::inverse(scalar::power(y, kernel<G>("curve.length", g0)));
+  let left = kernel<G>("curve.vector_add",
+    kernel<G>("curve.vector_scale", g0, inverse_x),
+    kernel<G>("curve.vector_scale", g1, x * inverse_power));
+  let right = kernel<G>("curve.vector_add",
+    kernel<G>("curve.vector_scale", h0, x), kernel<G>("curve.vector_scale", h1, inverse_x));
+  return Bases<G>{left: left, right: right};
+}
+
+pub fn fold_witness<F: Field>(witness: Witness<F>, y: F, x: F,
+    left_mask: F, right_mask: F) -> Witness<F> {
+  let (a0, a1) = vec::split(witness.left);
+  let (b0, b1) = vec::split(witness.right);
+  let inverse_x = scalar::inverse(x);
+  let power = scalar::power(y, vec::length(a0));
+  return Witness<F>{
+    left: vec::add(vec::scale(a0, x), vec::scale(a1, inverse_x * power)),
+    right: vec::add(vec::scale(b0, inverse_x), vec::scale(b1, x)),
+    mask: witness.mask + left_mask * x * x + right_mask * inverse_x * inverse_x
+  };
+}
+
+fn terminal<G: Group>(bases: Bases<G>, witness: Witness<G::Scalar>,
+    value_base: G, mask_base: G, y: G::Scalar,
+    r: G::Scalar, s: G::Scalar, d: G::Scalar, eta: G::Scalar) -> (G, G) {
+  require count(bases) == 1;
+  let left = kernel<G>("curve.get", bases.left, 0);
+  let right = kernel<G>("curve.get", bases.right, 0);
+  let a = vec::get(witness.left, 0);
+  let b = vec::get(witness.right, 0);
+  return (left * r + right * s + mask_base * d + value_base * (r * y * b + s * y * a),
+          mask_base * eta + value_base * (r * y * s));
+}
+fn responses<F: Field>(witness: Witness<F>, e: F, r: F, s: F, d: F, eta: F) -> (F,F,F) {
+  return (vec::get(witness.left, 0) * e + r, vec::get(witness.right, 0) * e + s,
+    eta + d * e + witness.mask * e * e);
+}
+fn check<G: Group>(bases: Bases<G>, claim: G, value_base: G, mask_base: G,
+    y: G::Scalar, e: G::Scalar, first: G, second: G,
+    response: (G::Scalar,G::Scalar,G::Scalar)) -> bool {
+  require count(bases) == 1;
+  let (r,s,d) = response;
+  return claim * (e * e) + first * e + second ==
+    kernel<G>("curve.get", bases.left, 0) * (e * r)
+    + kernel<G>("curve.get", bases.right, 0) * (e * s)
+    + value_base * (r * y * s) + mask_base * d;
+}
+
+fn check_shape<G: Group>(bases: Bases<G>, rounds: index, y: G::Scalar) -> () {
+  require !(y == 0);
+  require indices::less(rounds, 64);
+  let mut expected: index = 1;
+  for _ in 0..rounds { expected = expected * 2; }
+  require count(bases) == expected;
+  require kernel<G>("curve.length", bases.right) == expected;
+  return ();
+}
+
+// Blinded weighted inner-product argument, including its terminal proof.
+// Callers establish the commitment represented by claim and witness.
+pub protocol Argument<G: Group, Encoding: PointEncoding<G>, MaxRounds: nat> roles(P,V)
+    (basesP: Bases<G> @P, basesV: Bases<G> @V,
+     value_baseP: G @P, value_baseV: G @V, mask_baseP: G @P, mask_baseV: G @V,
+     yP: G::Scalar @P, yV: G::Scalar @V, witness: Witness<G::Scalar> @P,
+     claim: G @V, rounds: index @(P,V), nonces: Random<G::Scalar> @P,
+     challenges: Random<G::Scalar> @V) -> (accepted: bool @V) {
+  check_shape(basesP, rounds, yP);
+  check_shape(basesV, rounds, yV);
+  require @P vec::length(witness.left) == count(basesP);
+  require @P vec::length(witness.right) == count(basesP);
+  let mut basisP = basesP;
+  let mut basisV = basesV;
+  let mut secret = witness;
+  let mut current = claim;
+  for round in 0..rounds roles(P,V) max MaxRounds {
+    let left_mask = sampling::Nonzero<G::Scalar,32>(nonces);
+    let right_mask = sampling::Nonzero<G::Scalar,32>(nonces);
+    let pair @P = cross(basisP, secret, value_baseP, mask_baseP, yP, left_mask, right_mask);
+    let encoded @P = (Encoding::emit(pair.0), Encoding::emit(pair.1));
+    #[site(fold)] let actual = send P -> V(encoded);
+    #[site(fold_challenge)] let xV = challenges.draw();
+    require @V !(xV == 0);
+    #[site(fold_delivery)] let xP = send V -> P(xV);
+    require @P !(xP == 0);
+    let decoded @V = (Encoding::admit(actual.0), Encoding::admit(actual.1));
+    let inverse_x @V = scalar::inverse(xV);
+    current = current + decoded.0 * (xV * xV) + decoded.1 * (inverse_x * inverse_x);
+    let nextP @P = fold_bases(basisP, yP, xP);
+    let nextV @V = fold_bases(basisV, yV, xV);
+    basisP = nextP;
+    basisV = nextV;
+    secret = fold_witness(secret, yP, xP, left_mask, right_mask);
+  }
+  let r = sampling::Nonzero<G::Scalar,32>(nonces);
+  let s = sampling::Nonzero<G::Scalar,32>(nonces);
+  let d = sampling::Nonzero<G::Scalar,32>(nonces);
+  let eta = sampling::Nonzero<G::Scalar,32>(nonces);
+  let pair @P = terminal(basisP, secret, value_baseP, mask_baseP, yP, r, s, d, eta);
+  let encoded @P = (Encoding::emit(pair.0), Encoding::emit(pair.1));
+  #[site(terminal)] let actual = send P -> V(encoded);
+  #[site(terminal_challenge)] let eV = challenges.draw();
+  require @V !(eV == 0);
+  #[site(terminal_delivery)] let eP = send V -> P(eV);
+  require @P !(eP == 0);
+  let response @P = responses(secret, eP, r, s, d, eta);
+  #[site(response)] let received = send P -> V(response);
+  let decoded @V = (Encoding::admit(actual.0), Encoding::admit(actual.1));
+  let accepted @V = check(basisV, current, value_baseV, mask_baseV, yV, eV,
+    decoded.0, decoded.1, received);
+  return (accepted = accepted);
+}

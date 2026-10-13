@@ -239,3 +239,10 @@ These functions use `primitive` bodies when their ports determine the installed
 scheme. Algorithms and operations with explicit attributes retain ordinary bodies.
 Both paths reach the same native mathematical/vector contracts; imports control
 source notation and do not install new runtime semantics.
+
+`sampling::Nonzero<F,Attempts>` is a single-participant protocol that rejects zero
+candidates from a managed `Random<F>` service. It returns the first nonzero field
+value or stops after `Attempts` draws, retaining actual service consumption.
+Uniformity is conditional on the provider's field distribution; it supplies no
+new randomness assumption. `sampling::uniform_index` similarly bounds rejection
+over an explicit word provider.

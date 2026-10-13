@@ -9,3 +9,5 @@ pub fn slice(value: Bytes, start: index, count: index) -> Bytes = primitive("byt
 pub fn at(value: Bytes, position: index) -> index = primitive("bytes.at");
 pub fn length(value: Bytes) -> index = primitive("bytes.length");
 pub fn equal(left: Bytes, right: Bytes) -> bool = primitive("bytes.equal");
+
+pub fn keccak256(value: Bytes) -> Bytes = primitive("hash.keccak256");

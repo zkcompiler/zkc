@@ -227,3 +227,9 @@ name = "spongefish_schnorr"
 path = "src/spongefish_schnorr.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "bulletproofs_plus"
+path = "src/bulletproofs_plus.rs"
+test = false
+bench = false

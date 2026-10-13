@@ -27,6 +27,11 @@ pub const BLS: NativeDomain = NativeDomain {
     group: Some(Identity::Bls12381G1),
     provider: "arkworks",
 };
+pub const EDWARDS: NativeDomain = NativeDomain {
+    field: Identity::Ristretto255Scalar,
+    group: Some(Identity::Edwards25519Prime),
+    provider: "dalek",
+};
 pub const RISTRETTO: NativeDomain = NativeDomain {
     field: Identity::Ristretto255Scalar,
     group: Some(Identity::Ristretto255Group),
@@ -45,6 +50,7 @@ pub const KOALA_BEAR_EXT8: NativeDomain = NativeDomain {
 pub const INSTALLED: &[NativeDomain] = &[
     BLS,
     RISTRETTO,
+    EDWARDS,
     KOALA_BEAR,
     KOALA_BEAR_EXT8,
     BN254_G1,
@@ -55,6 +61,27 @@ impl NativeDomain {
     pub fn physical(self, kind: Type) -> Option<PhysicalType> {
         use Representation as R;
         use Type::*;
+        if matches!(kind, Group | Groups) {
+            let group = self.group?;
+            if group.scalar_field()? != self.field {
+                return None;
+            }
+            let representation = match (group, kind) {
+                (Identity::Bls12381G1, Group) => R::G1,
+                (Identity::Bls12381G1, Groups) => R::Groups,
+                (Identity::Bn254G1, Group) => R::Bn254G1,
+                (Identity::Bn254G1, Groups) => R::Bn254G1Vector,
+                (Identity::Bn254G2, Group) => R::Bn254G2,
+                (Identity::Bn254G2, Groups) => R::Bn254G2Vector,
+                (Identity::Bn254Gt, Group) => R::Bn254Gt,
+                (Identity::Ristretto255Group, Group) => R::Ristretto,
+                (Identity::Ristretto255Group, Groups) => R::RistrettoVector,
+                (Identity::Edwards25519Prime, Group) => R::EdwardsPrime,
+                (Identity::Edwards25519Prime, Groups) => R::EdwardsPrimeVector,
+                _ => return None,
+            };
+            return PhysicalType::new(LogicalType::new(kind, group).ok()?, representation).ok();
+        }
         let (identity, representation) = match (self.field, kind) {
             (Identity::Bn254Fr, Field) => (self.field, R::Bn254Fr),
             (Identity::Bn254Fr, Vector) => (self.field, R::Bn254FrVector),
@@ -62,18 +89,6 @@ impl NativeDomain {
             (Identity::Bn254Fr, Round) => (self.field, R::Bn254Round),
             (Identity::Bn254Fr, Matrix) => (self.field, R::Bn254SparseCoo),
             (Identity::Bn254Fr, Rng) => (self.field, R::Resource),
-            (Identity::Bn254Fr, Group | Groups) => {
-                let g = self.group?;
-                let r = match (g, kind) {
-                    (Identity::Bn254G1, Group) => R::Bn254G1,
-                    (Identity::Bn254G1, Groups) => R::Bn254G1Vector,
-                    (Identity::Bn254G2, Group) => R::Bn254G2,
-                    (Identity::Bn254Gt, Group) => R::Bn254Gt,
-                    (Identity::Bn254G2, Groups) => R::Bn254G2Vector,
-                    _ => return None,
-                };
-                (g, r)
-            }
             (_, Bool) => (Identity::None, R::Bool),
             (_, Index) => (Identity::None, R::Index),
             (_, Indices) => (Identity::None, R::Indices),
@@ -95,14 +110,10 @@ impl NativeDomain {
             (Identity::Ristretto255Scalar, Vector) => (self.field, R::DalekVector),
             (Identity::Ristretto255Scalar, Polynomial) => (self.field, R::DalekPolynomial),
             (Identity::Ristretto255Scalar, Round) => (self.field, R::DalekRound),
-            (Identity::Ristretto255Scalar, Group) => (self.group?, R::Ristretto),
-            (Identity::Ristretto255Scalar, Groups) => (self.group?, R::RistrettoVector),
             (Identity::Bls12381Fr, Field) => (self.field, R::Fr),
             (Identity::Bls12381Fr, Vector) => (self.field, R::FrVector),
             (Identity::Bls12381Fr, Polynomial) => (self.field, R::Polynomial),
             (Identity::Bls12381Fr, Round) => (self.field, R::Round),
-            (Identity::Bls12381Fr, Group) => (self.group?, R::G1),
-            (Identity::Bls12381Fr, Groups) => (self.group?, R::Groups),
             (Identity::Bls12381Fr, Table) => (self.field, R::TableLsb),
             (Identity::Bls12381Fr, Point) => (self.field, R::Point),
             (Identity::Bls12381Fr, Commitment | Proof | ProverKey | VerifierKey | OpeningState) => {

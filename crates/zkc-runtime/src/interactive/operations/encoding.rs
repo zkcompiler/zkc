@@ -3,6 +3,31 @@ use super::*;
 use Type::*;
 pub(super) const CONTRACTS: &[Contract] = &[
     Contract::new(
+        "encoding.field_le",
+        (&[Field], &[Bytes], AttributeRule::None),
+    )
+    .implemented_by(&["dalek/encoding.field_le"]),
+    Contract::new(
+        "encoding.field_from_le",
+        (&[Bytes], &[Bool, Field], AttributeRule::None),
+    )
+    .implemented_by(&["dalek/encoding.field_from_le"]),
+    Contract::new(
+        "encoding.field_reduce_le",
+        (&[Bytes], &[Field], AttributeRule::None),
+    )
+    .implemented_by(&["dalek/encoding.field_reduce_le"]),
+    Contract::new(
+        "encoding.group_decode_cofactor",
+        (&[Bytes], &[Bool, Group], AttributeRule::None),
+    )
+    .implemented_by(&["dalek/encoding.group_decode_cofactor"]),
+    Contract::new(
+        "encoding.cryptonote_map",
+        (&[Bytes], &[Group], AttributeRule::None),
+    )
+    .implemented_by(&["dalek/encoding.cryptonote_map"]),
+    Contract::new(
         "encoding.field_be",
         (&[Field], &[Bytes], AttributeRule::None),
     )
@@ -21,12 +46,18 @@ pub(super) const CONTRACTS: &[Contract] = &[
         "encoding.group_compressed",
         (&[Group], &[Bytes], AttributeRule::None),
     )
-    .implemented_by(&["arkworks/encoding.group_compressed"]),
+    .implemented_by(&[
+        "arkworks/encoding.group_compressed",
+        "dalek/encoding.group_compressed",
+    ]),
     Contract::new(
         "encoding.group_from_compressed",
         (&[Bytes], &[Bool, Group], AttributeRule::None),
     )
-    .implemented_by(&["arkworks/encoding.group_from_compressed"]),
+    .implemented_by(&[
+        "arkworks/encoding.group_from_compressed",
+        "dalek/encoding.group_from_compressed",
+    ]),
 ];
 fn resolve(
     binding: &OperationBinding,
@@ -35,7 +66,10 @@ fn resolve(
     let primary = support::primary(binding)?;
     let group = matches!(
         binding.contract.as_str(),
-        "encoding.group_compressed" | "encoding.group_from_compressed"
+        "encoding.group_compressed"
+            | "encoding.group_from_compressed"
+            | "encoding.group_decode_cofactor"
+            | "encoding.cryptonote_map"
     );
     let field = primary.scalar_field().ok_or_else(support::failure)?;
     if binding.arguments.len() != 1
@@ -57,20 +91,22 @@ fn select(
     logical: &KernelSignature<LogicalType>,
     selection: Selection,
 ) -> Result<BoundSignature> {
-    // Logical formation is generic. The installed byte algorithms are the
-    // BLS12-381 scalar and compressed G1 encodings, selected independently.
-    let group = matches!(
-        binding.contract.as_str(),
-        "encoding.group_compressed" | "encoding.group_from_compressed"
-    );
-    support::require_primary(
-        binding,
-        if group {
-            Identity::Bls12381G1
-        } else {
-            Identity::Bls12381Fr
-        },
-    )?;
+    let primary = support::primary(binding)?;
+    let allowed = match binding.contract.as_str() {
+        "encoding.field_le" | "encoding.field_from_le" | "encoding.field_reduce_le" => {
+            primary == Identity::Ristretto255Scalar
+        }
+        "encoding.group_decode_cofactor" | "encoding.cryptonote_map" => {
+            primary == Identity::Edwards25519Prime
+        }
+        "encoding.group_compressed" | "encoding.group_from_compressed" => {
+            matches!(primary, Identity::Bls12381G1 | Identity::Edwards25519Prime)
+        }
+        _ => primary == Identity::Bls12381Fr,
+    };
+    if !allowed {
+        return Err(support::failure());
+    }
     support::select_nominal(binding, logical, selection)
 }
 pub(super) const CONTRIBUTION: Contribution = Contribution {

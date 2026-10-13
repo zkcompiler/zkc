@@ -277,7 +277,11 @@ fn repeated_queries(bundle: &serde_json::Value, conditional: bool) {
     for &(n, go) in cases {
         let registry = ServiceRegistry::new(Policy::default());
         let root = registry
-            .issue_test_tape(verifier_role, 4, (1..=4).map(Scalar::from).collect())
+            .issue_test_tape(
+                verifier_role,
+                4,
+                (1..=4).map(Scalar::from).collect::<Vec<_>>(),
+            )
             .unwrap();
         let values = if conditional {
             vec![Value::Bool(go)]
@@ -379,7 +383,11 @@ fn completion_queries(bundle: &serde_json::Value, nested: bool) {
     for go in [false, true] {
         let registry = ServiceRegistry::new(Policy::default());
         let root = registry
-            .issue_test_tape("role00000001", 4, (1..=4).map(Scalar::from).collect())
+            .issue_test_tape(
+                "role00000001",
+                4,
+                (1..=4).map(Scalar::from).collect::<Vec<_>>(),
+            )
             .unwrap();
         let mut verifier = start(
             bundle,

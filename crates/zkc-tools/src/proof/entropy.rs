@@ -11,7 +11,7 @@ pub(super) enum Entropy {
     #[default]
     System,
     #[cfg(feature = "test-utils")]
-    Tapes(std::collections::BTreeMap<usize, Vec<zkc_backends::Scalar>>),
+    Tapes(std::collections::BTreeMap<usize, zkc_backends::TestTape>),
 }
 impl Entropy {
     pub(super) fn capability(
@@ -25,13 +25,27 @@ impl Entropy {
     ) -> Result<Value> {
         #[cfg(feature = "test-utils")]
         if let Self::Tapes(tapes) = self {
-            if field != Identity::Bls12381Fr {
+            use zkc_backends::TestTape;
+            let tape = tapes.get(&port).ok_or("native-proof-test-entropy-port")?;
+            if tape.identity() != field {
                 return Err("native-proof-test-entropy-field".into());
             }
-            let tape = tapes.get(&port).ok_or("native-proof-test-entropy-port")?;
-            return match kind {
-                Type::Nonce if tape.len() == 1 => backend.issue_test_nonce(domain, budget, tape[0]),
-                Type::Rng => backend.issue_test_tape(domain, budget, tape.clone()),
+            return match (kind, tape) {
+                (Type::Nonce, TestTape::Bls12381(t)) if t.len() == 1 => {
+                    backend.issue_test_nonce(domain, budget, t[0])
+                }
+                (Type::Nonce, TestTape::Ristretto(t)) if t.len() == 1 => {
+                    backend.issue_test_ristretto_nonce(domain, budget, t[0])
+                }
+                (Type::Rng, TestTape::Bls12381(t)) => {
+                    backend.issue_test_tape(domain, budget, t.clone())
+                }
+                (Type::Rng, TestTape::Bn254(t)) => {
+                    backend.issue_test_bn254_tape(domain, budget, t.clone())
+                }
+                (Type::Rng, TestTape::Ristretto(t)) => {
+                    backend.issue_test_ristretto_tape(domain, budget, t.clone())
+                }
                 _ => return Err("native-proof-test-entropy-kind".into()),
             }
             .map_err(|e| e.to_string());
@@ -54,18 +68,12 @@ impl Entropy {
     ) -> Result<ServiceReference> {
         #[cfg(feature = "test-utils")]
         if let Self::Tapes(tapes) = self {
-            if contract.field() != Identity::Bls12381Fr {
+            let tape = tapes.get(&port).ok_or("native-proof-test-entropy-port")?;
+            if tape.identity() != contract.field() {
                 return Err("native-proof-test-entropy-field".into());
             }
             return registry
-                .issue_test_tape(
-                    owner,
-                    budget,
-                    tapes
-                        .get(&port)
-                        .ok_or("native-proof-test-entropy-port")?
-                        .clone(),
-                )
+                .issue_test_tape(owner, budget, tape.clone())
                 .map_err(|e| e.to_string());
         }
         let _ = port;

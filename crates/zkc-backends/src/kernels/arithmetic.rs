@@ -788,7 +788,7 @@ impl Value {
         Ok(Self::RistrettoVector(v.into()))
     }
     pub fn ristretto_groups(values: &[crate::RistrettoPoint], policy: &Policy) -> Result<Self> {
-        policy.ristretto_groups(values.len())?;
+        policy.dalek_groups(values.len())?;
         let mut v = reserve(values.len())?;
         v.extend_from_slice(values);
         Ok(Self::RistrettoGroups(v.into()))

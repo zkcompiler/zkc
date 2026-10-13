@@ -104,7 +104,11 @@ impl<'a> Invocation<'a> {
     }
 }
 #[cfg(feature = "test-utils")]
-fn test_entropy(tapes: BTreeMap<usize, Vec<zkc_backends::Scalar>>) -> Result<Entropy> {
+fn test_entropy<T: Into<zkc_backends::TestTape>>(tapes: BTreeMap<usize, T>) -> Result<Entropy> {
+    let tapes: BTreeMap<_, zkc_backends::TestTape> = tapes
+        .into_iter()
+        .map(|(port, t)| (port, t.into()))
+        .collect();
     if tapes.len() > 1024 || tapes.values().any(|t| t.len() > 1_000_000) {
         return Err("native-proof-test-entropy-limit".into());
     }
@@ -444,11 +448,11 @@ impl NativeDeployment {
     /// Deterministic provider controls for tests. No production command or file
     /// format selects this feature-gated entry point.
     #[cfg(feature = "test-utils")]
-    pub fn execute_test(
+    pub fn execute_test<T: Into<zkc_backends::TestTape>>(
         &self,
         input: &ProofInputs,
         invocation: Invocation<'_>,
-        tapes: BTreeMap<usize, Vec<zkc_backends::Scalar>>,
+        tapes: BTreeMap<usize, T>,
     ) -> Result<NativeProofReport> {
         let entropy = test_entropy(tapes)?;
         let mut imports =

@@ -1,0 +1,6 @@
+format = "zkc.project/0"
+[modules]
+example = "main.zkc"
+[dependencies]
+bulletproofs = "../../../../../libraries/bulletproofs"
+zkc = "../../../../../libraries/zkc"

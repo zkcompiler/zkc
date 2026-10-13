@@ -293,6 +293,7 @@ const DomainCatalog &installedDomains() {
     const std::string transcript = "merlin3.bls12-381.fr64be/0";
     const std::string scalar = "ristretto255.scalar";
     const std::string ristretto = "ristretto255.group";
+    const std::string edwards = "edwards25519.prime";
     const std::string merlin = "merlin3.ristretto255.scalar64le/0";
     const std::string spongefish = "spongefish0.8.0.keccak.bls12-381.fr64be/0";
     const std::string koala = "koala-bear";
@@ -349,6 +350,7 @@ const DomainCatalog &installedDomains() {
           "72370055773322622139731865630429942408571163593799076060019509382854"
           "54250989"},
          {ristretto, "Group", {{"Scalar", scalar}}, {"Group", "ScalarAction"}},
+         {edwards, "Group", {{"Scalar", scalar}}, {"Group", "ScalarAction"}},
          {merlin,
           "Transcript",
           {{"ChallengeField", scalar}},
@@ -412,6 +414,8 @@ const DomainCatalog &installedDomains() {
          {"groups", group},
          {"group", ristretto},
          {"groups", ristretto},
+         {"group", edwards},
+         {"groups", edwards},
          {"group", bn254g1},
          {"groups", bn254g1},
          {"group", bn254g2},
@@ -476,6 +480,8 @@ const DomainCatalog &installedDomains() {
          {"zkcv.vector.ristretto255.scalar/0", "vector", scalar},
          {"zkcv.polynomial.ristretto255.scalar/0", "polynomial", scalar},
          {"zkcv.round.ristretto255.scalar/0", "round", scalar},
+         {"zkcv.group.edwards25519.prime/0", "group", edwards},
+         {"zkcv.groups.edwards25519.prime/0", "groups", edwards},
          {"zkcv.group.ristretto255.group/0", "group", ristretto},
          {"zkcv.groups.ristretto255.group/0", "groups", ristretto},
          {"zkcv.bool/0", "bool", ""},
@@ -533,6 +539,8 @@ const DomainCatalog &installedDomains() {
          {"dalek.scalar-vector/0", "vector", scalar, true, ""},
          {"dalek.polynomial/0", "polynomial", scalar, true, ""},
          {"dalek.quadratic/0", "round", scalar, true, ""},
+         {"dalek.edwards-prime/0", "group", edwards, true, ""},
+         {"dalek.edwards-prime-vector/0", "groups", edwards, true, ""},
          {"dalek.ristretto/0", "group", ristretto, true, ""},
          {"dalek.ristretto-vector/0", "groups", ristretto, true, ""},
          {"host.resource/0", "rng", scalar, true, ""},
@@ -575,6 +583,7 @@ const DomainCatalog &installedDomains() {
          {transcript, "arkworks"},
          {scalar, "dalek"},
          {ristretto, "dalek"},
+         {edwards, "dalek"},
          {merlin, "dalek"},
          {spongefish, "spongefish"},
          {koala, "plonky3"},

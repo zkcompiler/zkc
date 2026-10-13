@@ -1,0 +1,10 @@
+module example;
+use bulletproofs::monero::{Range, Monero};
+
+proof Proof = Range {
+  prover P;
+  verifier V;
+  public { commitments, rounds };
+  accept accepted;
+  construction Monero;
+}

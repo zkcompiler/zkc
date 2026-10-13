@@ -11,6 +11,7 @@ user-facing protocol examples live in `examples/projects/`.
   outputs for `lean/checks/check_tools.py`.
 - `contracts/` records the current native conformance probe coverage and
   consumer-specific facet observations; see its README for the scope.
+- [Bulletproofs+](bulletproofs-plus/README.md) retains independent Monero proofs with recorded test coins. Its [upstream producer](../reference/monero/README.md) also owns the native Edwards map vectors.
 - `clean/air-control.json` is the output of the pinned Clean producer in
   `lean/integrations/clean` (`TestsClean/Control.lean`): exported relations
   and arenas, rows and Clean's residuals. The C++ and Rust native comparison

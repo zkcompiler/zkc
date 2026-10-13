@@ -10,6 +10,7 @@ Start with Schnorr, then Sumcheck and FRI before the STARK examples.
 | [FRI](fri/README.md) | Authenticated folding and a bounded terminal polynomial |
 | [Fibonacci](fibonacci/README.md) | One STARK protocol applied to Clean and Plonky3 AIRs |
 | [FemtoCairo](femtocairo/README.md) | Clean VM execution with program and immutable-memory lookups |
+| [Bulletproofs+](bulletproofs-plus/README.md) | Monero range proofs with reusable weighted inner-product rounds, exact external bytes and managed randomness |
 
 Each project owns its concrete domains, Entries and invocation inputs. Reusable
 algorithms live in [`libraries/`](../../libraries/README.md). Language feature

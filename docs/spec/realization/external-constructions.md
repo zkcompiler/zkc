@@ -123,7 +123,8 @@ snapshot, including snapshots inside aggregates. A fork does not refund work.
 
 `zkc::encoding` provides explicit encodings independently of transport and
 transcript observation. The installed implementations use arkworks for
-BLS12-381 Fr and G1. Other domains require their own installed implementations;
+BLS12-381 Fr and G1, and dalek for Ristretto scalar and prime-order Edwards25519.
+Other domains require their own installed implementations;
 the generic source signature does not promise support for every field or group.
 
 | Operation | Inputs | Outputs | Interpretation |
@@ -131,8 +132,36 @@ the generic source signature does not promise support for every field or group.
 | `field_be<F>` | `F` | `Bytes` | Canonical 32-byte big-endian integer |
 | `field_from_be<F>` | `Bytes` | `(bool, F)` | Exact width and integer below the scalar modulus |
 | `field_reduce_be<F>` | `Bytes` | `F` | Big-endian integer reduced modulo the scalar modulus |
-| `group_compressed<G>` | `G` | `Bytes` | Canonical 48-byte compressed G1 point |
+| `field_le<F>` | `F` | `Bytes` | Canonical 32-byte little-endian scalar-order integer |
+| `field_from_le<F>` | `Bytes` | `(bool, F)` | Exact width and integer below the scalar order |
+| `field_reduce_le<F>` | `Bytes` | `F` | Little-endian integer reduced modulo the scalar order |
+| `group_compressed<G>` | `G` | `Bytes` | Canonical compressed point: 48-byte BLS G1 or 32-byte Edwards |
 | `group_from_compressed<G>` | `Bytes` | `(bool, G)` | Exact width, canonical encoding and prime-order subgroup check |
+
+`field_le`, `field_from_le` and `field_reduce_le` are installed for
+`ristretto255.scalar`. `group_decode_cofactor<edwards25519.prime>` takes `Bytes`
+and returns `(bool,G)`: it checks exact 32-byte width and canonical full-curve
+Edwards decompression, then multiplies by eight. This deliberately differs from
+`group_from_compressed`, which rejects nontrivial torsion. Invalid encodings
+return `(false, identity)`. Canonicality rejects y coordinates at or above
+`2^255-19` and the negative encoding of x=0. Edwards encoding charges 256 logical work
+units; cofactor decoding charges 2048 and subgroup decoding 4096 before work.
+These are bounded algorithm charges, not elapsed-time estimates. Native wire
+admission separately bounds point counts and decoded storage; it is not charged
+to a running kernel's external-work counter.
+
+`cryptonote_map<edwards25519.prime> : Bytes -> G` requires 32 bytes and implements
+Monero's `ge_fromfe_frombytes_vartime` followed by `ge_mul8` at the revision pinned
+above. All 256 input bits enter the field-element reduction; it does not mask
+the high bit. This legacy deterministic map is not an RFC 9380 suite. It charges
+2048 logical external work units before evaluation; wrong width refuses. Its implementation is variable-time and intended for
+public generator inputs. The language does not enforce secret/public timing
+information, so this operation supplies no constant-time guarantee.
+
+`hash.keccak256 : Bytes -> Bytes`, exposed as `zkc::bytes::keccak256`, returns the
+32-byte Keccak-256 digest with no framing. It uses the original Keccak padding,
+not SHA3-256. Its binding has no domain arguments or attributes. Native execution
+checks input/output capacities and charges one hash call plus the input bytes.
 
 The decoder Boolean reports validity. On invalid encoding the accompanying value
 is zero or the group identity. Decoding has no transcript effect; a caller uses

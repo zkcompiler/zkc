@@ -145,7 +145,69 @@ impl Group for RistrettoPoint {
         Value::RistrettoGroups(v)
     }
     fn limit(p: &Policy, n: usize) -> Result<()> {
-        p.ristretto_groups(n)
+        p.dalek_groups(n)
+    }
+    fn width() -> usize {
+        std::mem::size_of::<Self>()
+    }
+}
+impl Group for crate::EdwardsPrime {
+    type Scalar = RistrettoScalar;
+    fn generator() -> Self {
+        Self::generator()
+    }
+    fn identity() -> Self {
+        Self::identity()
+    }
+    fn add(self, other: Self) -> Self {
+        self + other
+    }
+    fn neg(self) -> Self {
+        -self
+    }
+    fn scale(self, scalar: RistrettoScalar) -> Self {
+        self.scale(scalar)
+    }
+    fn msm(s: &[RistrettoScalar], p: &[Self]) -> Result<Self> {
+        equal_len(s.len(), p.len())?;
+        Ok(Self::msm(s, p))
+    }
+    fn point(v: &Value) -> Result<Self> {
+        if let Value::EdwardsGroup(v) = v {
+            Ok(*v)
+        } else {
+            Err(refused("kernel-operands"))
+        }
+    }
+    fn points(v: &Value) -> Result<&Arc<[Self]>> {
+        if let Value::EdwardsGroups(v) = v {
+            Ok(v)
+        } else {
+            Err(refused("kernel-operands"))
+        }
+    }
+    fn scalar(v: &Value) -> Result<RistrettoScalar> {
+        if let Value::RistrettoField(v) = v {
+            Ok(*v)
+        } else {
+            Err(refused("kernel-operands"))
+        }
+    }
+    fn scalars(v: &Value) -> Result<&[RistrettoScalar]> {
+        if let Value::RistrettoVector(v) = v {
+            Ok(v)
+        } else {
+            Err(refused("kernel-operands"))
+        }
+    }
+    fn value(v: Self) -> Value {
+        Value::EdwardsGroup(v)
+    }
+    fn values(v: Arc<[Self]>) -> Value {
+        Value::EdwardsGroups(v)
+    }
+    fn limit(p: &Policy, n: usize) -> Result<()> {
+        p.dalek_groups(n)
     }
     fn width() -> usize {
         std::mem::size_of::<Self>()
@@ -220,7 +282,6 @@ bn_group!(crate::Bn254G1, Bn254G1, Bn254G1Vector);
 bn_group!(crate::Bn254G2, Bn254G2, Bn254G2Vector);
 pub(crate) fn apply(
     name: &str,
-    field: Option<zkc_runtime::interactive::Identity>,
     args: &[Value],
     i: &Invocation<'_>,
     p: &Policy,
@@ -252,27 +313,20 @@ pub(crate) fn apply(
     if !name.starts_with("curve.") || matches!(name, "curve.commit" | "curve.response") {
         return Err(refused("kernel-operands"));
     }
-    match field {
-        Some(zkc_runtime::interactive::Identity::Bn254Fr) => {
-            match i
-                .binding
-                .declaration()
-                .arguments
-                .first()
-                .map(String::as_str)
-            {
-                Some("bn254.g1") => dense::<crate::Bn254G1>(name, args, i, p),
-                Some("bn254.g2") => dense::<crate::Bn254G2>(name, args, i, p),
-                Some("bn254.gt") => target(name, args, i, p),
-                _ => Err(refused("kernel-operands")),
-            }
-        }
-        Some(zkc_runtime::interactive::Identity::Ristretto255Scalar) => {
-            dense::<RistrettoPoint>(name, args, i, p)
-        }
-        Some(zkc_runtime::interactive::Identity::Bls12381Fr) => {
-            dense::<GroupPoint>(name, args, i, p)
-        }
+    use zkc_runtime::interactive::Identity;
+    let group = i
+        .binding
+        .declaration()
+        .arguments
+        .first()
+        .and_then(|name| Identity::parse(name).ok());
+    match group {
+        Some(Identity::Bls12381G1) => dense::<GroupPoint>(name, args, i, p),
+        Some(Identity::Bn254G1) => dense::<crate::Bn254G1>(name, args, i, p),
+        Some(Identity::Bn254G2) => dense::<crate::Bn254G2>(name, args, i, p),
+        Some(Identity::Bn254Gt) => target(name, args, i, p),
+        Some(Identity::Ristretto255Group) => dense::<RistrettoPoint>(name, args, i, p),
+        Some(Identity::Edwards25519Prime) => dense::<crate::EdwardsPrime>(name, args, i, p),
         _ => Err(refused("kernel-operands")),
     }
 }

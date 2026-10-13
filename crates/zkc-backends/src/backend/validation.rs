@@ -154,8 +154,12 @@ impl Core {
                 }
                 None
             }
+            Value::EdwardsGroups(a) => {
+                self.policy.dalek_groups(a.len())?;
+                None
+            }
             Value::RistrettoGroups(a) => {
-                self.policy.ristretto_groups(a.len())?;
+                self.policy.dalek_groups(a.len())?;
                 None
             }
             Value::FrDiagonal(d) => {
@@ -164,7 +168,7 @@ impl Core {
             }
             Value::RistrettoDiagonal(d) => {
                 self.policy.vector(d.factors().len())?;
-                self.policy.ristretto_groups(d.backing().len())?;
+                self.policy.dalek_groups(d.backing().len())?;
                 None
             }
             Value::Table(t) => {
@@ -224,6 +228,7 @@ impl Core {
             | Value::Rng(..)
             | Value::Nonce(..)
             | Value::Transcript(..)
+            | Value::EdwardsGroup(..)
             | Value::Curve(..) => None,
         };
         if let Some(m) = metadata {

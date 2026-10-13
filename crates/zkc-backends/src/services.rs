@@ -1,6 +1,5 @@
 //! Registry-owned native services. References name roots; leases own execution.
-#[cfg(feature = "test-utils")]
-use crate::Scalar;
+
 use crate::resource::Resources;
 use crate::{Capability, CapabilityObservation, Policy, Result, Value, refused};
 use std::collections::{BTreeMap, BTreeSet};
@@ -201,10 +200,10 @@ impl ServiceRegistry {
         &self,
         owner: &str,
         budget: u64,
-        tape: Vec<Scalar>,
+        tape: impl Into<crate::TestTape>,
     ) -> Result<ServiceReference> {
         self.issue(owner, |resources| {
-            resources.issue_managed_tape(owner, budget, tape)
+            resources.issue_managed_tape(owner, budget, tape.into())
         })
     }
     pub fn observe(&self, reference: &ServiceReference) -> Result<ServiceObservation> {
@@ -470,6 +469,7 @@ impl Drop for ServiceLease {
 #[cfg(all(test, feature = "test-utils"))]
 mod tests {
     use super::*;
+    use crate::Scalar;
     fn registry() -> ServiceRegistry {
         ServiceRegistry::new(Policy::default())
     }
@@ -478,7 +478,7 @@ mod tests {
             .issue_test_tape(
                 "Alice",
                 budget,
-                values.iter().copied().map(Scalar::from).collect(),
+                values.iter().copied().map(Scalar::from).collect::<Vec<_>>(),
             )
             .unwrap()
     }

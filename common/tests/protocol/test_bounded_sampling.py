@@ -29,6 +29,38 @@ run Demo=Sample;
 '''
 
 
+def test_replaced_service_cannot_hide_queries_inside_nonzero_sampler(toolchain, journal, directory):
+    source = directory / 'main.zkc'
+    source.write_text('''module sample;
+    use zkc::sampling::{Nonzero};
+    domain F=field("bls12-381.fr");
+    interface ProviderType {type State:Copy+Drop;fn initialize()->State effects();}
+    module Provider:ProviderType {
+      type State:Copy+Drop=();
+      fn initialize()->State{return State(());}
+    }
+    protocol Choose roles(P,V)(challenges:Random<F>@V)->(ok:bool@V){
+      #[site(sample)] let value=Nonzero<F,2> roles(V)(challenges);
+      #[site(delivery)] let actual=send V->P(value);
+      #[site(response)] let received=send P->V(actual);
+      return received==value;
+    }
+    construction Custom for Choose {
+      transcript Provider;replace challenges;
+      on start(t){return t;}
+      on message {delivery,response}(t,value){return t;}
+    }
+    proof Demo=Choose{prover P;verifier V;public{};accept ok;construction Custom;}
+    ''')
+    library = Path(__file__).resolve().parents[3] / 'libraries/zkc/sampling.zkc'
+    # The private sampler's unlabelled draw is still a query on the selected
+    # root. A construction cannot omit it and silently retain managed entropy.
+    journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
+                  f'--module=sample={source}', f'--module=zkc::sampling={library}',
+                  'sample::Demo', f'--output={directory / "proof.zkpkg"}'],
+                 refuses='source.construction')
+
+
 @pytest.mark.parametrize('attempts', [0, 1, 2])
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
 def test_bounded_word_sampling(toolchain, journal, directory, attempts, flags):

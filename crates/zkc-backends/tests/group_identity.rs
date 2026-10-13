@@ -11,7 +11,7 @@ fn binding(group: &str, contract: &str) -> OperationBinding {
         arguments: vec![group.into()],
         implementation: format!(
             "{}/{contract}",
-            if group == "ristretto255.group" {
+            if matches!(group, "ristretto255.group" | "edwards25519.prime") {
                 "dalek"
             } else {
                 "arkworks"
@@ -115,6 +115,63 @@ fn ristretto_identity() {
     );
 }
 #[test]
+fn edwards_identity() {
+    check(
+        "edwards25519.prime",
+        Value::EdwardsGroup(zkc_backends::EdwardsPrime::identity()),
+        support::field(true, 0),
+        support::field(true, 7),
+        Some((
+            support::vector(true, &[]),
+            Value::EdwardsGroups(vec![].into()),
+        )),
+    );
+}
+#[test]
+fn edwards_native_frames_preserve_subgroup_and_vector_boundaries() {
+    let backend = support::backend(Policy::default());
+    let point = zkc_backends::EdwardsPrime::generator();
+    let raw = point.to_bytes();
+    let hex: String = raw.iter().map(|b| format!("{b:02x}")).collect();
+    let readable = serde_json::json!({"bytes": hex});
+    for (value, input, offset) in [
+        (Value::EdwardsGroup(point), readable.clone(), 6),
+        (
+            Value::EdwardsGroups(vec![point, point].into()),
+            serde_json::json!([readable, readable]),
+            10,
+        ),
+    ] {
+        let ty = value.physical_type();
+        let wire = backend.encode_native_value(&value).unwrap();
+        assert_eq!(
+            zkc_backends::readable_wire(&ty, &input, 1024).unwrap(),
+            wire
+        );
+        let decoded = backend.decode_native_value(&ty, &wire).unwrap();
+        assert_eq!(backend.encode_native_value(&decoded).unwrap(), wire);
+        assert!(
+            backend
+                .decode_native_value(&ty, &wire[..wire.len() - 1])
+                .is_err()
+        );
+        let mut changed = wire.clone();
+        changed.push(0);
+        assert!(backend.decode_native_value(&ty, &changed).is_err());
+        // A canonical full-curve point cannot enter a native prime-group value.
+        let torsion = (curve25519_dalek::constants::ED25519_BASEPOINT_POINT
+            + curve25519_dalek::constants::EIGHT_TORSION[1])
+            .compress()
+            .to_bytes();
+        changed = wire.clone();
+        changed[offset..offset + 32].copy_from_slice(&torsion);
+        assert!(backend.decode_native_value(&ty, &changed).is_err());
+        changed = wire;
+        changed[5] = if offset == 6 { 16 } else { 17 }; // Ristretto has distinct tags.
+        assert!(backend.decode_native_value(&ty, &changed).is_err());
+    }
+}
+#[test]
 fn bls_g1_identity() {
     check(
         "bls12-381.g1",
@@ -178,13 +235,14 @@ fn exact_provider_group_codec_and_nullary_signature() {
     let backend = support::backend(Policy::default());
     for group in [
         "ristretto255.group",
+        "edwards25519.prime",
         "bls12-381.g1",
         "bn254.g1",
         "bn254.g2",
         "bn254.gt",
     ] {
         let mut wrong = binding(group, "curve.identity");
-        wrong.implementation = if group == "ristretto255.group" {
+        wrong.implementation = if matches!(group, "ristretto255.group" | "edwards25519.prime") {
             "arkworks/curve.identity"
         } else {
             "dalek/curve.identity"
@@ -196,6 +254,7 @@ fn exact_provider_group_codec_and_nullary_signature() {
         let bytes = backend.encode_native_value(&identity).unwrap();
         for other in [
             "ristretto255.group",
+            "edwards25519.prime",
             "bls12-381.g1",
             "bn254.g1",
             "bn254.g2",

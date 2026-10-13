@@ -110,6 +110,7 @@ def required_atomic_types():
         "koala-bear.ext8-binomial3": "field vector polynomial round matrix rng",
         "bls12-381.g1": "group groups",
         "ristretto255.group": "group groups",
+        "edwards25519.prime": "group groups",
         "bn254.g1": "group groups",
         "bn254.g2": "group groups",
         "multilinear.kzg.bls12-381/0": "commitment proof opening_state prover_key verifier_key",
@@ -121,7 +122,7 @@ def required_atomic_types():
         "merlin3.koala-bear.ext8-binomial3.rejection31le/0": "transcript",
     }
     result = {(kind, domain) for domain, kinds in families.items() for kind in kinds.split()}
-    assert len(result) == 63
+    assert len(result) == 65
     return result
 
 
@@ -249,7 +250,7 @@ def candidates(inventory):
         if group == "resource":
             choices = [(["Ticket"], "logical")]
         elif group == "nullary":
-            choices = [([], "native" if name.startswith(("index.", "indices.", "external.", "bytes.", "shake128.")) else "arkworks")]
+            choices = [([], "native" if name.startswith(("index.", "indices.", "external.", "bytes.", "shake128.", "hash.")) else "arkworks")]
         elif group == "sequence":
             choices = [([payload], "native") for payload in
                        ["index", "field:bn254.fr", "group:bn254.g2", "field:koala-bear",

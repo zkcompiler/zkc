@@ -113,4 +113,12 @@ def IndexedTranscriptObserveDataOp : KernelOp<CryptoDialect,
 def IndexedTranscriptIndexOp : KernelOp<CryptoDialect,
     "exec.indexed_transcript_index", [OpIndexedTranscriptIndex]>;
 
+
+def EncodingFieldLeOp : KernelOp<CryptoDialect, "exec.encoding_field_le", [OpEncodingFieldLe]>;
+def EncodingFieldFromLeOp : KernelOp<CryptoDialect, "exec.encoding_field_from_le", [OpEncodingFieldFromLe]>;
+def EncodingFieldReduceLeOp : KernelOp<CryptoDialect, "exec.encoding_field_reduce_le", [OpEncodingFieldReduceLe]>;
+def EncodingGroupDecodeCofactorOp : KernelOp<CryptoDialect, "exec.encoding_group_decode_cofactor", [OpEncodingGroupDecodeCofactor]>;
+def EncodingCryptonoteMapOp : KernelOp<CryptoDialect, "exec.encoding_cryptonote_map", [OpEncodingCryptonoteMap]>;
+def Keccak256Op : KernelOp<CryptoDialect, "exec.keccak256", [OpHashKeccak256]>;
+
 #endif
