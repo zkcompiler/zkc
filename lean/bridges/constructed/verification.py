@@ -16,10 +16,12 @@ import math
 import re
 import os
 from pathlib import Path
+import selectors
 import signal
 import subprocess
 import sys
 import tempfile
+import time
 
 from security_request import Unresolved, decode_json, read_json, require, validate
 
@@ -86,23 +88,71 @@ def save_json(path, value):
     temporary.replace(path)
 
 
+def stop_tool(child):
+    try:
+        os.killpg(child.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+
+
+def lean_error(line):
+    try:
+        diagnostic = json.loads(line)
+    except (ValueError, UnicodeDecodeError):
+        return False
+    return isinstance(diagnostic, dict) and diagnostic.get('severity') == 'error'
+
+
+def lean_output(child, timeout):
+    """Retain structured diagnostics and stop after Lean has reported an error."""
+    deadline = time.monotonic() + timeout
+    chunks, pending = [], b''
+    with selectors.DefaultSelector() as selector:
+        selector.register(child.stdout, selectors.EVENT_READ)
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or not selector.select(remaining):
+                raise subprocess.TimeoutExpired(child.args, timeout, output=b''.join(chunks))
+            chunk = os.read(child.stdout.fileno(), 65536)
+            if not chunk:
+                try:
+                    child.wait(timeout=max(0, deadline - time.monotonic()))
+                except subprocess.TimeoutExpired:
+                    raise subprocess.TimeoutExpired(child.args, timeout, output=b''.join(chunks)) from None
+                return b''.join(chunks), lean_error(pending)
+            chunks.append(chunk)
+            pending += chunk
+            while b'\n' in pending:
+                line, pending = pending.split(b'\n', 1)
+                if lean_error(line):
+                    stop_tool(child)
+                    tail, _ = child.communicate()
+                    return b''.join(chunks) + tail, True
+
+
 def execute(command, directory, label, timeout, cwd=None):
     """Kill the complete proof/tool process group on bounded execution failure."""
     require(math.isfinite(timeout) and 0 < timeout <= 1200, 'tool-budget', 'Timeout must be positive')
     save_json(directory / (label + '.command.json'),
               {'argv': list(map(str, command)), 'cwd': str(cwd or Path.cwd()), 'timeout_seconds': timeout})
-    with subprocess.Popen(list(map(str, command)), cwd=cwd, text=True,
+    reported_error = False
+    with subprocess.Popen(list(map(str, command)), cwd=cwd,
                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                           start_new_session=True) as child:
         try:
-            stdout, _ = child.communicate(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            os.killpg(child.pid, signal.SIGKILL)
-            stdout, _ = child.communicate()
-            (directory / (label + '.log')).write_text(stdout)
+            if label == 'lean':
+                stdout, reported_error = lean_output(child, timeout)
+            else:
+                stdout, _ = child.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired as error:
+            stop_tool(child)
+            tail, _ = child.communicate()
+            stdout = ((error.output or b'') if label == 'lean' else b'') + tail
+            (directory / (label + '.log')).write_text(stdout.decode())
             raise Unresolved('tool-timeout', f'{label} exceeded its execution budget') from None
+    stdout = stdout.decode()
     (directory / (label + '.log')).write_text(stdout)
-    require(child.returncode == 0, 'tool-failed', f'{label} failed; inspect {label}.log')
+    require(child.returncode == 0 and not reported_error, 'tool-failed', f'{label} failed; inspect {label}.log')
     return stdout
 
 
@@ -239,8 +289,19 @@ variable {Context F G : Type} [Field F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 '''
     if expected:
+        # Compare the retained subject before reusing admission; reducing the
+        # whole checker on a mismatched snapshot is needlessly expensive.
         result += '''
-theorem admitted_subject : snapshot.check = .ok GeneratedFS.imported := GeneratedFS.admitted
+set_option backward.isDefEq.respectTransparency true
+theorem snapshot_subject : snapshot = GeneratedFS.snapshot := by rfl
+theorem admitted_subject :
+    snapshot.check = .ok (snapshot_subject.symm ▸ GeneratedFS.imported) := by
+  have transport {left right : Snapshot} (same : left = right)
+      {value : Imported right} (checked : right.check = .ok value) :
+      left.check = .ok (same.symm ▸ value) := by
+    cases same
+    exact checked
+  exact transport snapshot_subject GeneratedFS.admitted
 
 theorem full_denotation (bound : Binding Context G) (proof : G × F) :
     imported.denote (meaning proof) (inputs bound) =
@@ -295,7 +356,16 @@ variable {Context F : Type} [Field F] [DecidableEq F]
 '''
     if expected:
         result += '''
-theorem admitted_subject : snapshot.check = .ok GeneratedFS.imported := GeneratedFS.admitted
+set_option backward.isDefEq.respectTransparency true
+theorem snapshot_subject : snapshot = GeneratedFS.snapshot := by rfl
+theorem admitted_subject :
+    snapshot.check = .ok (snapshot_subject.symm ▸ GeneratedFS.imported) := by
+  have transport {left right : Snapshot} (same : left = right)
+      {value : Imported right} (checked : right.check = .ok value) :
+      left.check = .ok (same.symm ▸ value) := by
+    cases same
+    exact checked
+  exact transport snapshot_subject GeneratedFS.admitted
 
 theorem full_denotation (context : Context) (coefficients : Coefficients F)
     (claim : F) (proof : Message F × Message F) :
@@ -354,7 +424,8 @@ def binding {Context F : Type} (context : Context) (coefficients : Common.Coeffi
 
 def audit_actual(protocol):
     roots = ['ExpectedRequest.admitted_subject', 'ExpectedRequest.approvedContract',
-             'ExpectedFS.admitted', 'ExpectedFS.admitted_subject', 'ExpectedFS.full_denotation',
+             'ExpectedFS.admitted', 'ExpectedFS.snapshot_subject',
+             'ExpectedFS.admitted_subject', 'ExpectedFS.full_denotation',
              'ExpectedFS.realizes' if protocol == 'schnorr' else 'ExpectedFS.denotation',
              'ExpectedFS.security']
     if protocol == 'sumcheck':
@@ -517,7 +588,7 @@ def verify_owned(args):
         receipt['local_formal_sources'] = formal_source_closure(imports)
         receipt['bridge_implementation'] = {str(p.relative_to(ROOT)): digest(p.read_bytes())
             for directory in [HERE, ROOT / 'bridges/common'] for p in sorted(directory.glob('*.py'))}
-        log = execute([args.lake, 'env', 'lean', '-DwarningAsError=true', path], output, 'lean', args.timeout, environment)
+        log = execute([args.lake, 'env', 'lean', '--json', '-DwarningAsError=true', path], output, 'lean', args.timeout, environment)
         required = ['PROOF-REQUEST-KERNEL-PASS', 'PROOF-REQUEST-BOUNDARY-PASS',
                     'FS-ACTUAL-SUBJECT-PASS', 'FS-SECURITY-CONSUMER-PASS', 'FS-TRANSITIVE-AXIOMS-PASS']
         require(all(marker in log for marker in required), 'proof-incomplete',

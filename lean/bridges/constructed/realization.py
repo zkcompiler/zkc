@@ -217,6 +217,7 @@ set_option linter.unusedSimpArgs false
 set_option backward.isDefEq.respectTransparency false
 open Zkc.Source
 
+set_option backward.isDefEq.respectTransparency true in
 /-- The executable structural JSON decoder recovers this exact source subject.
 Text parsing and native export remain separately tested boundaries. -/
 theorem decoded : Format.snapshot carrier = .ok snapshot := by

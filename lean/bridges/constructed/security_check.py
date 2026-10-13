@@ -8,6 +8,7 @@ hooks, Lean source strings or theorem selections are accepted by the public CLI.
 """
 import argparse
 import copy
+import json
 import re
 import subprocess
 import sys
@@ -32,6 +33,9 @@ def checked(args, label, selected, positive=False):
         raise AssertionError(f'{label}: false/missing receipt: {receipt}')
     if positive and (len(receipt['discharged_layers']) != 6 or not receipt['verified_properties']):
         raise AssertionError(f'{label}: incomplete positive receipt')
+    if label != 'proof-timeout' and any(
+            obligation['code'] == 'tool-timeout' for obligation in receipt['obligations']):
+        raise AssertionError(f'{label}: an unexpected timeout is not evidence of proof refusal')
     persisted = driver.read_json(selected.output / 'receipt.json')
     if persisted != receipt:
         raise AssertionError(f'{label}: persisted receipt differs')
@@ -53,15 +57,41 @@ def mutate_request(args, label, change):
     checked(args, label, selected)
 
 
+def proof_refused(args, label, selected):
+    """A proof mutation must reach Lean and fail checking, not exhaust the tool."""
+    checked(args, label, selected)
+    receipt = driver.read_json(selected.output / 'receipt.json')
+    log = selected.output / 'lean.log'
+    expected = [{'code': 'tool-failed', 'detail': 'lean failed; inspect lean.log'}]
+    text = log.read_text() if log.exists() else ''
+    resource_errors = ('(deterministic) timeout', 'maximum recursion depth',
+                       'maximum memory', 'deep recursion detected')
+    diagnostics = []
+    for line in text.splitlines():
+        try:
+            diagnostics.append(json.loads(line))
+        except ValueError:
+            pass
+    ordinary_error = any(isinstance(item, dict) and item.get('severity') == 'error'
+                         for item in diagnostics)
+    if (receipt['obligations'] != expected or not ordinary_error or
+            any(error in text for error in resource_errors)):
+        raise AssertionError(label + ': missing ordinary Lean proof refusal')
+
+
 def proposal_control(args, label, protocol, transform):
     """Only the proposal changes; independent expected subject is reconstructed intact."""
     selected = options(args, protocol, 'Helpers', label)
     with driver.CONSTRUCTED.load('realization') as realization:
         original = realization.render
         def altered(data, *rest):
-            return transform(original(data, *rest))
+            source = original(data, *rest)
+            changed = transform(source)
+            if changed == source:
+                raise AssertionError('proposal mutation did not change the certificate: ' + label)
+            return changed
         with patch.object(realization, 'render', altered):
-            checked(args, label, selected)
+            proof_refused(args, label, selected)
 
 
 def retained(args, label, source):
@@ -94,7 +124,7 @@ def state_control(args, label):
                 raise AssertionError('predecessor state mutation did not apply')
             return original(changed, *rest)
         with patch.object(realization, 'render', altered):
-            checked(args, label, selected)
+            proof_refused(args, label, selected)
 
 
 def cli_failures(args, base):
@@ -287,7 +317,7 @@ def main():
             changed[1] = 'sha256:' + '0' * 64
             return original_render(changed, request, proposal)
         with patch.object(common, 'render_certificate', substitute_source):
-            checked(args, 'same-typed-source-substitution',
+            proof_refused(args, 'same-typed-source-substitution',
                     options(args, 'schnorr', 'Helpers', 'same-typed-source-substitution'))
     original_subject = driver.schnorr_subject
     def wrong_property(namespace, expected=False):
@@ -298,7 +328,7 @@ def main():
         end = text.index('\nend ', start)
         return text[:start] + '    True := True.intro\n' + text[end:]
     with patch.object(driver, 'schnorr_subject', wrong_property):
-        checked(args, 'wrong-proved-property', options(args, 'schnorr', 'Helpers', 'wrong-proved-property'))
+        proof_refused(args, 'wrong-proved-property', options(args, 'schnorr', 'Helpers', 'wrong-proved-property'))
     proposal_control(args, 'wrong-returned-state', 'schnorr',
         replace_once('some challenge, true, some proof.2', 'some challenge, false, some proof.2'))
     state_control(args, 'dropped-predecessor-challenge')

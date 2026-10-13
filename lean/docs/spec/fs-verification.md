@@ -159,9 +159,13 @@ python3 lean/bridges/constructed/security_check.py \
 ```
 
 The driver builds its selected maintained imports, then checks the generated
-certificate with `lake env lean -DwarningAsError=true` in the optional ArkLib
+certificate with `lake env lean --json -DwarningAsError=true` in the optional ArkLib
 integration. `--lake` selects the trusted toolchain executable; `--timeout` bounds
 each invocation (positive, finite, at most 1200 seconds). Timeout kills the
-complete child process group. Native/exporter controls remain owned by
+complete child process group. A structured Lean error also stops the process
+group and retains the diagnostic; success requires normal completion and all
+required audit markers. Mutation controls require ordinary proof errors and do
+not count a timeout, crash, or resource exhaustion as proof refusal.
+Native/exporter controls remain owned by
 `bridges/constructed/check.py`; `security_check.py` exercises the four supported
 source forms and the false-receipt authority boundaries of this pipeline.

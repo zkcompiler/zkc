@@ -65,6 +65,8 @@ separate boundaries; the theorem starts at the retained `Lean.Json` value.
 
 The generated realization proof audits `decoded`, `source_denotation` and
 `raw_denotation` in addition to admission and its protocol-specific equation.
+The security consumer independently reconstructs the retained snapshot and checks
+its equality with the proposed snapshot before transporting the admission proof.
 This closes translation within the declared export grammar. JSON parsing,
 native extraction, selected Local expansion before export, nominal type meaning
 and production primitive implementations remain explicit boundaries.

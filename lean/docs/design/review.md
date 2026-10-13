@@ -169,6 +169,7 @@ extension. The following boundaries were inspected separately:
 | Unrestricted upstream hardness premise | State a bound for the actual reduced adversary; no efficient-adversary or asymptotic cost theorem is inferred |
 | Runtime loop unrolling or hidden captures | Retain one typed body, actual count/index, carried values and captures; statically check all bodies and compare nested/sequential native executions |
 | Rendered Lean subject detached from JSON | Retain a separate JSON tree and prove its structural decoding equation; altered Snapshot constructors fail kernel checking |
+| Expensive mismatch checking was counted as a negative result | Compare retained snapshots explicitly before transporting admission, restrict unfolding at subject checks, stop on structured Lean errors, and require ordinary proof diagnostics in mutation controls |
 | Kernel reduction of large byte arrays exhausted resources | Move text-capacity checks to the explicit executable preflight and prove structural codecs compositionally; retain executable over-limit refusals |
 | Protocol-specific automation copied into each request | Share process/algebra proof search and connect certified normalization to typed certificates; intent and experiments remain explicit |
 
