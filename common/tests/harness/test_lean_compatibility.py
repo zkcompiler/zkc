@@ -17,7 +17,8 @@ def package(tmp_path):
     subprocess.run(['git', 'init', '--quiet', str(source)], check=True)
     before, after = 'import Old.Module\n', 'import New.Module\n'
     (source / 'Example.lean').write_text(before)
-    subprocess.run(['git', '-C', str(source), 'add', 'Example.lean'], check=True)
+    (source / 'Other.lean').write_text('def unchanged := true\n')
+    subprocess.run(['git', '-C', str(source), 'add', 'Example.lean', 'Other.lean'], check=True)
     subprocess.run(['git', '-C', str(source), '-c', 'user.name=Test', '-c',
                     'user.email=test@example.invalid', 'commit', '--quiet', '-m', 'fixture'], check=True)
     revision = subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip()
@@ -61,6 +62,20 @@ def test_patch_refuses_drift(package, mutation, diagnostic):
     before = (source / 'Example.lean').read_bytes()
     compatibility = load('lean_compatibility', 'lean/support/compatibility.py')
     with pytest.raises(ValueError, match=diagnostic):
+        compatibility.prepare(root)
+    assert (source / 'Example.lean').read_bytes() == before
+
+
+@pytest.mark.parametrize('already_patched', [False, True])
+@pytest.mark.parametrize('name', ['Other.lean', 'Untracked.lean'])
+def test_patch_refuses_undeclared_sources(package, already_patched, name):
+    root, source, _ = package
+    compatibility = load('lean_compatibility', 'lean/support/compatibility.py')
+    if already_patched:
+        compatibility.prepare(root)
+    (source / name).write_text('def unexpected := false\n')
+    before = (source / 'Example.lean').read_bytes()
+    with pytest.raises(ValueError, match='undeclared dependency source changes'):
         compatibility.prepare(root)
     assert (source / 'Example.lean').read_bytes() == before
 

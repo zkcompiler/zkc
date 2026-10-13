@@ -43,9 +43,9 @@ the selected bridge and upstream declarations. Only `propext`,
 | CompPoly | `df591bb8c6745126d1d72f5243faae3022b0432a`, the shared polynomial pin |
 
 The remaining entries of [the manifest](lake-manifest.json) are the main
-package's revisions, overriding Clean's transitive pins. Clean's library
-requires module-system importers, but a `module` file cannot import the main zkc
-library, so both libraries here set `allowNonModules`.
+package's revisions, overriding Clean's transitive pins. The main zkc library
+uses the module system. This adapter retains ordinary importer modules and sets
+`allowNonModules` to admit them alongside upstream Clean's module-system sources.
 
 The pinned upstream needs two compatibility edits for this Mathlib: a renamed
 logic import and a normalization proof whose term ordering changed.

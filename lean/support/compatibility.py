@@ -26,6 +26,12 @@ def prepare(package):
     patch = package / config['patch']
     if digest(patch) != config['patch_sha256']:
         raise ValueError('compatibility patch digest mismatch')
+    changed = subprocess.check_output(
+        ['git', '-C', str(source), 'diff', '--name-only', '-z', 'HEAD']).decode().split('\0')
+    untracked = subprocess.check_output(
+        ['git', '-C', str(source), 'ls-files', '--others', '--exclude-standard', '-z']).decode().split('\0')
+    if (set(changed) - {''} - config['files'].keys()) or any(untracked):
+        raise ValueError('undeclared dependency source changes; compatibility patch refused')
     states = [{kind for kind in ('base_sha256', 'patched_sha256')
                if digest(source / name) == values[kind]} for name, values in config['files'].items()]
     if not states:
