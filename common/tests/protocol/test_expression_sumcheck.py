@@ -93,6 +93,21 @@ def test_expression_sumcheck_actual_claim_and_terminal_shape(toolchain, journal,
         journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *request, f'--proof={proof}'], refuses='artifact-stopped')
 
 
+@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+@pytest.mark.parametrize('table', [[], ['1'] * 4, ['1'] * 16])
+def test_expression_stops_on_only_the_verifier_table(toolchain, journal, directory, flags, table):
+    package, pin = build(toolchain, journal, directory, 'ExtensionRun', flags)
+    request = input_files(journal, 'interactive', roles={
+        'P': {'inputs': {'values': values()['values'], 'rounds': '2'}},
+        'V': {'inputs': values() | {'values': table}}})
+    output = directory / 'output.json'
+    report = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}',
+                           f'--sha256={pin}', *request, f'--results={output}'],
+                          refuses='entry-run-incomplete')
+    assert report['execution']['wire']['sends'] == 4
+    assert not output.exists()
+
+
 def test_expression_asset_authority(toolchain, journal, directory):
     package, pin = build(toolchain, journal, directory, 'Proof')
     request = input_files(journal, 'request.json', public=values())

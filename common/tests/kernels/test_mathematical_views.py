@@ -55,6 +55,26 @@ def test_multilinear_factor_layout(toolchain, journal, directory, flags):
         entry.run(name, {'data': data, 'dimensions': dimensions, 'width': width, 'point': point}, refuses=True)
 
 
+@pytest.mark.parametrize('flags', [(), ('--no-simplify',)])
+def test_table_shape_predicate_returns_false(toolchain, journal, directory, flags):
+    source = '''module sample;
+      use zkc::vector::{Vector}; use zkc::multilinear as mle;
+      domain F=field("koala-bear");
+      protocol Run roles(P)(values:Vector<F>@P,dimensions:index@P,columns:index@P)
+          ->(valid:bool@P){return mle::has_shape(values,dimensions,columns);}
+      run Demo=Run;
+    '''
+    entry = Entry(toolchain, journal, directory, source, (*flags, *MODULES))
+    for name, values, dimensions, columns, valid in [
+        ('valid', ['1', '2'], '1', '1', True),
+        ('empty', [], '0', '1', False),
+        ('zero-columns', [], '0', '0', False),
+        ('oversized-dimension', ['1'], '64', '1', False),
+    ]:
+        result = entry.run(name, {'values': values, 'dimensions': dimensions, 'columns': columns})
+        assert result['valid'] is valid
+
+
 @pytest.mark.parametrize('flags', [(), ('--no-simplify', '--release-storage')])
 def test_coset_word_domain_and_fold(toolchain, journal, directory, flags):
     source = '''module sample;
@@ -116,7 +136,8 @@ def test_view_constructor_authority(toolchain, journal, directory, view, constru
     report = journal.json([toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
                            f'--module=sample={path}', *MODULES,
                            *(['sample::Demo'] if boundary == 'entry' else [])], refuses='source-compilation')
-    assert 'private' in report['diagnostics'] or 'authority' in report['diagnostics'], report
+    code = 'source.private' if boundary == 'construct' else 'source.ingress'
+    assert report['diagnostics'].startswith(code + ':'), report
 
 
 @pytest.mark.parametrize('operation,inputs', [

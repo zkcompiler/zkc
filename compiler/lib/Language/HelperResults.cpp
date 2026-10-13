@@ -140,9 +140,12 @@ class HelperResults::Extraction {
       if (pending || types.diagnostic)
         return remember({});
       if (node.parameter) {
-        nested.push_back(*node.parameter < parameters.size()
-                             ? parameters[*node.parameter]
-                             : remember({}));
+        if (*node.parameter >= parameters.size()) {
+          types.fail("source.scoped-domain",
+                     "helper domain parameter coverage differs", span);
+          return 0;
+        }
+        nested.push_back(parameters[*node.parameter]);
         continue;
       }
       if (!types.charge(node.operands.size() + node.children.size() + 1, span))
@@ -236,9 +239,13 @@ class HelperResults::Extraction {
                      : nested->shape.axis == 0 ? actual.shape
                                                : ResultShape{};
     } else if (nested->shape.domain) {
-      if (*nested->shape.domain < call.domainArguments.size())
-        result.shape =
-            shapes[bodyDomain(call.domainArguments[*nested->shape.domain])];
+      if (*nested->shape.domain >= call.domainArguments.size()) {
+        types.fail("source.scoped-domain",
+                   "helper result domain coverage differs", span);
+        return {};
+      }
+      result.shape =
+          shapes[bodyDomain(call.domainArguments[*nested->shape.domain])];
     } else {
       result.shape = nested->shape;
     }

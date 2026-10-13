@@ -212,17 +212,21 @@ math fn filtered<I:Type+Copy+Drop>(rows:domain<I>,keep:math fn(item:I)->bool whe
 math fn copy(xs:Vector<Fr>)->Vector<Fr>{return mapped(elements(xs),fn(x)=>x);}
 )";
   for (StringRef mutation :
-       {"body-domain", "call-input", "factory-data", "factory-child"})
+       {"body-domain", "call-input", "call-domain", "factory-data",
+        "factory-child", "factory-parameter"})
     cases.run("helper result rejects malformed coverage: " + mutation, [&] {
       auto project = take(check(collections + R"(
 domain fn selected(xs:Vector<Fr>)->domain<Fr>{return elements(xs);}
 math fn selected_copy(xs:Vector<Fr>)->Vector<Fr>{return mapped(selected(xs),fn(x)=>x);}
 math fn chain(xs:Vector<Fr>)->Vector<Fr>{return copy(xs);}
+math fn from_domain(rows:domain<Fr>)->Vector<Fr>{return mapped(rows,fn(x)=>x);}
+math fn applied(xs:Vector<Fr>)->Vector<Fr>{return from_domain(elements(xs));}
 )"));
       Environment env;
       env.declarations = project.declarations().vec();
       auto target =
           named(project, mutation == "call-input"    ? "chain"
+                         : mutation == "call-domain" ? "applied"
                          : mutation == "body-domain" ? "copy"
                                                      : "selected_copy")
               .id.index;
@@ -233,6 +237,8 @@ math fn chain(xs:Vector<Fr>)->Vector<Fr>{return copy(xs);}
         require(!recipe->bindings.empty(), "missing domain recipe");
         if (mutation == "factory-data")
           recipe->bindings.front().operands = {{999999}};
+        else if (mutation == "factory-parameter")
+          recipe->bindings.front().parameter = 0;
         else
           recipe->bindings.front().children = {0};
         env.declarations[factory].domainDefinition = std::move(recipe);
@@ -244,7 +250,10 @@ math fn chain(xs:Vector<Fr>)->Vector<Fr>{return copy(xs);}
           bool changed = false;
           for (auto &op : body->operations)
             if (auto *call = std::get_if<HelperCall>(&op.action)) {
-              call->operands.clear();
+              if (mutation == "call-domain")
+                call->domainArguments.clear();
+              else
+                call->operands.clear();
               changed = true;
             }
           require(changed, "missing helper call");

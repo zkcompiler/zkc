@@ -1,7 +1,7 @@
 #include "FinitePreparation.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/SymbolTable.h"
-#include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
+#include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/ScopeExit.h"
@@ -44,6 +44,7 @@ struct HelperSize {
   // Only the root clone copies its function operation and terminator.
   uint64_t rootOverhead = 0;
   unsigned depth = 1;
+  bool arrayProjections = false;
 };
 class CallbackSizer {
   Operation *root;
@@ -120,8 +121,10 @@ public:
         size.expandedOperations =
             addSize(size.expandedOperations, child->expandedOperations);
         size.depth = std::max(size.depth, child->depth + 1);
+        size.arrayProjections |= child->arrayProjections;
       } else {
         size.expandedOperations = addSize(size.expandedOperations, 1);
+        size.arrayProjections |= isa<algebra::ArrayAtOp>(op);
       }
       // This is a proved fixed-threshold result, not temporary exhaustion.
       // Its partial operation/overhead counts are never used as exact costs.
@@ -134,10 +137,9 @@ public:
 };
 } // namespace
 
-std::optional<uint64_t> sizeCallbackPreparation(const Computation &computation,
-                                                Operation *root,
-                                                uint64_t &structural,
-                                                OptimizationOutcome &outcome) {
+std::optional<CallbackPreparation>
+sizeCallbackPreparation(const Computation &computation, Operation *root,
+                        uint64_t &structural, OptimizationOutcome &outcome) {
   auto helper = dyn_cast<func::FuncOp>(computation.helper);
   if (!helper) {
     outcome = {OptimizationStatus::Unsupported,
@@ -153,12 +155,13 @@ std::optional<uint64_t> sizeCallbackPreparation(const Computation &computation,
     return std::nullopt;
   uint64_t context = 4 + 2 * uint64_t(computation.signature.getNumInputs()) +
                      2 * uint64_t(computation.signature.getNumResults());
-  // One admission scan and two bounded projection-fold scans, including the
-  // latter scans' terminator. Saturation remains a conservative size refusal.
-  auto scans = addSize(
-      size->expandedOperations,
-      addSize(size->expandedOperations, addSize(size->expandedOperations, 2)));
-  return addSize(addSize(size->copying, size->rootOverhead),
-                 addSize(scans, context));
+  // Every callback needs admission scanning. Only helpers containing array
+  // projections need the two folding scans (including their terminator).
+  auto scans = size->expandedOperations;
+  if (size->arrayProjections)
+    scans = addSize(scans, addSize(scans, addSize(scans, 2)));
+  return CallbackPreparation{addSize(addSize(size->copying, size->rootOverhead),
+                                     addSize(scans, context)),
+                             size->arrayProjections};
 }
 } // namespace zkc::finite

@@ -61,6 +61,21 @@ def test_public_sumcheck_terminal_dimension(toolchain, journal, directory, round
 
 
 
+@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+@pytest.mark.parametrize('table', [[], ['3', '7'], ['1'] * 8])
+def test_sumcheck_rejects_only_the_verifier_table(toolchain, journal, directory, flags, table):
+    package, pin = build(toolchain, journal, directory, 'examples/projects/sumcheck', 'Interactive', flags)
+    inputs = input_files(journal, 'interactive', roles={
+        'P': {'inputs': {'values': ['1', '2', '3', '4'], 'rounds': '2'}},
+        'V': {'inputs': {'values': table, 'claim': '10', 'rounds': '2'}}})
+    outputs = directory / 'outputs.json'
+    report = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}',
+                           f'--sha256={pin}', *inputs, f'--results={outputs}'])
+    # Each round sends two boundary sums and one delivered challenge.
+    assert report['execution']['wire']['sends'] == 6
+    assert json.loads(outputs.read_text())['roles']['V']['accepted'] is False
+
+
 @pytest.mark.parametrize('rounds', [0, 1, 2])
 def test_reduction_retains_actual_point_and_prover_residual(toolchain, journal, directory, rounds):
     package, pin = build(toolchain, journal, directory, 'examples/projects/sumcheck/composed', 'Reduction', [])

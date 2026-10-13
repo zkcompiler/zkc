@@ -14,7 +14,8 @@ LogicalResult foldArrayProjections(Block &body, uint64_t &work,
                                         outcome))
       return failure();
     if (auto projection = dyn_cast<algebra::ArrayAtOp>(op)) {
-      auto folded = projection.fold({{}, projection});
+      SmallVector<Attribute> attributes(projection->getNumOperands());
+      auto folded = projection.fold({attributes, projection});
       if (auto value = dyn_cast_if_present<Value>(folded)) {
         projection.getResult().replaceAllUsesWith(value);
         projection.erase();

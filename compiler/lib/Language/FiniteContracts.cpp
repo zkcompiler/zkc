@@ -120,7 +120,7 @@ class ContractCheck {
     if (!type || !established(mathematical.record(result, *type, span), span))
       return {};
     valueTypes.emplace(result, *type);
-    if (summary && !staticExtent(*type, 0) &&
+    if (summary && !summary->forwarded && !staticExtent(*type, 0) &&
         !publishShape(context, *call, result, *type, summary->shape, span))
       return {};
     return result;

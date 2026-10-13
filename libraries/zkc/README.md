@@ -13,15 +13,15 @@ Names above are under `zkc::`. The [manifest](zkc.toml) captures this family.
 
 ## Representation contracts
 
-`multilinear::table(values, variables, width)` checks a row-major table with
-`2^variables` rows and positive factor width. `Table<F>` retains these
+`multilinear::table(entries, dimensions, columns)` checks a row-major table with
+`2^dimensions` rows and positive factor width. `Table<F>` retains these
 dimensions in private fields. `fix_first` fixes the leading, MSB-first Boolean
 coordinate; `fix_prefix` retains the remaining dimensions and every factor
 column. `values`, `variables` and `width` expose observations. Zero variables
 means one row. `Evaluation<F>` carries a point and value; its polynomial,
 dimension and commitment remain the caller's obligation.
 
-`coset::word(values, shift)` checks a nonempty two-adic size and nonzero shift.
+`coset::word(data, shift)` checks a nonempty two-adic size and nonzero shift.
 `Word<F>` keeps its values and shift in private fields and uses natural domain
 order.
 `interpolate` and `evaluate_coset` convert between a word and univariate

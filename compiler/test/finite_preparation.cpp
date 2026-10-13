@@ -187,16 +187,19 @@ int main() {
     auto size =
         finite::sizeCallbackPreparation(c, unit(*source), work, outcome);
     // Two four-unit operations are copied (call and multiply); the root and
-    // return cost three, the three scans cost five, and the private context
-    // ten.
-    require(size == 26 && work == 99980, "incorrect preparation or scan cost");
+    // return cost three, the admission scan costs one, and the private context
+    // ten. No array projections means no projection-fold scans.
+    require(size && size->work == 22 && !size->arrayProjections &&
+                work == 99980,
+            "incorrect preparation or scan cost");
     auto step = helper(*source, "step");
     OpBuilder builder(&step.front().back());
     builder.clone(step.front().front());
     require(succeeded(verify(*source)), "duplicate-call fixture refused");
     work = 100000;
     size = finite::sizeCallbackPreparation(c, unit(*source), work, outcome);
-    require(size == 37 && work == 99975,
+    require(size && size->work == 31 && !size->arrayProjections &&
+                work == 99975,
             "duplicate call was not counted or shared callee was rescanned");
   });
   cases.run("an exhausted sizing invocation cannot poison later sizing", [&] {
@@ -208,10 +211,26 @@ int main() {
                 !work && outcome.status == OptimizationStatus::Capacity,
             "partial sizing did not retain its failed scan charge");
     work = 100000;
-    require(finite::sizeCallbackPreparation(c, unit(*source), work, outcome) ==
-                    26 &&
-                work == 99980,
+    auto size =
+        finite::sizeCallbackPreparation(c, unit(*source), work, outcome);
+    require(size && size->work == 22 && work == 99980,
             "temporary exhaustion was cached as a helper property");
+  });
+  cases.run("projection preparation follows nested helper bodies", [&] {
+    auto text = fixtureText();
+    text.insert(text.find("%r = algebra.field_multiply"), R"mlir(
+ %pack = "algebra.array_from_elements"(%a,%b) : (!F,!F)->!algebra.field_array<"koala-bear",2>
+ %selected = "algebra.array_at"(%pack) {index=1:i64} : (!algebra.field_array<"koala-bear",2>)->!F
+)mlir");
+    auto source = parseSourceString<ModuleOp>(text, &context);
+    require(bool(source) && succeeded(verify(*source)),
+            "packed helper refused");
+    uint64_t work = 100000;
+    OptimizationOutcome outcome;
+    auto size = finite::sizeCallbackPreparation(computation(*source),
+                                                unit(*source), work, outcome);
+    require(size && size->arrayProjections && size->work == 39,
+            "nested projection folding was omitted from preparation work");
   });
   for (unsigned depth : {0u, 4u, 8u, 12u})
     cases.run("bounded doubling DAG " + llvm::Twine(depth), [&] {
@@ -222,11 +241,11 @@ int main() {
       auto size = finite::sizeCallbackPreparation(computation(*source),
                                                   unit(*source), work, outcome);
       // Every edge contributes a fresh copy, but only one body is inspected
-      // per helper. 15 * 2^depth + 11 includes intermediate calls and overhead.
-      const uint64_t expected =
-          std::min<uint64_t>(15 * (uint64_t(1) << depth) + 11,
-                             finite::callbackStructuralLimit + 1);
-      require(size == expected && initial - work <= 20 + 15 * depth,
+      // per helper. 13 * 2^depth + 9 includes intermediate calls and overhead.
+      const uint64_t expected = std::min<uint64_t>(
+          13 * (uint64_t(1) << depth) + 9, finite::callbackStructuralLimit + 1);
+      require(size && size->work == expected &&
+                  initial - work <= 20 + 15 * depth,
               "DAG multiplicity, saturation or memoized scan bound changed");
     });
   for (bool warm : {false, true})
@@ -367,7 +386,7 @@ int main() {
         OptimizationOutcome outcome;
         auto size =
             finite::sizeCallbackPreparation(c, unit(*source), sizing, outcome);
-        require(size == finite::callbackStructuralLimit + 1,
+        require(size && size->work == finite::callbackStructuralLimit + 1,
                 "DAG did not saturate");
         RealizationWork work;
         RealizationTrace trace;
@@ -392,7 +411,7 @@ int main() {
   cases.run("early shared-size decline preserves unspent work", [&] {
     auto source = fixture(context);
     RealizationWork work;
-    work.matching.structural = 42; // Discovery 1, sizing 20, preparation 26.
+    work.matching.structural = 42; // Discovery 1, sizing 20, preparation 22.
     RealizationTrace trace;
     auto candidate = emit(*source, work, &trace);
     const auto &decline = decision(trace, "total");
@@ -400,7 +419,7 @@ int main() {
                 decline.outcome.reason == OptimizationReason::ExpansionSize &&
                 decline.outcome.capacity &&
                 decline.outcome.capacity->owner == WorkOwner::Structural &&
-                decline.outcome.capacity->requested == 26 &&
+                decline.outcome.capacity->requested == 22 &&
                 decline.outcome.capacity->available == 21,
             "size prediction was reported as an actual shared debit");
   });

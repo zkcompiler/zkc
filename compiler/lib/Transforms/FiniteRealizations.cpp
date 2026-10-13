@@ -50,14 +50,14 @@ OwningOpRef<ModuleOp> normalizeSelectionCallback(Computation &computation,
   auto size = sizeCallbackPreparation(computation, root, structural, outcome);
   if (!size)
     return {};
-  if (*size > structural) {
+  if (size->work > structural) {
     // This predicts insufficient room without spending unperformed copying.
     // A saturated estimate is a lower bound, not an exact failed debit.
     outcome = {OptimizationStatus::Capacity, OptimizationReason::ExpansionSize,
                CapacityCause{WorkOwner::Structural,
-                             *size > callbackStructuralLimit
+                             size->work > callbackStructuralLimit
                                  ? std::nullopt
-                                 : std::optional<uint64_t>(*size),
+                                 : std::optional<uint64_t>(size->work),
                              structural}};
     return {};
   }
@@ -109,8 +109,8 @@ OwningOpRef<ModuleOp> normalizeSelectionCallback(Computation &computation,
       return {};
     }
   }
-  if (failed(mathematical::foldArrayProjections(scratch->front(), structural,
-                                                &outcome)))
+  if (size->arrayProjections && failed(mathematical::foldArrayProjections(
+                                    scratch->front(), structural, &outcome)))
     return {};
   // Facts only admit premises inside the occurrence's symbol root. Retain the
   // helper's own signature/preconditions in a private symbol scope together

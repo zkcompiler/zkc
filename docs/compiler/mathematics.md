@@ -156,9 +156,10 @@ premises. It checks actual candidate operands, including matrix axes and fixed
 selectors, without using the producer's normalized body or equation witness.
 Returned arguments and repeated captures retain their original value identities.
 Fixed pack/projection pairs can be folded before equation selection, including
-inside ordinary helpers. The independent reader interprets the original pack
-and its selected coordinate. This does not remove other operations or admission
-checks. General constructed containers and nested finite computations remain
+inside ordinary helpers. Normal canonicalization can also apply this fold.
+When selection folds a retained pack, the independent reader interprets that
+source pack and its selected coordinate. Projection folding does not remove
+other operations or admission checks. General constructed containers and nested finite computations remain
 outside this optional normalization rule.
 
 Indexed-access recognition currently covers field vectors and field matrices.
