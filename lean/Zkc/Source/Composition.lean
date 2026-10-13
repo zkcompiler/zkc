@@ -1,5 +1,9 @@
-import Zkc.Source.Program
-import Zkc.Semantics.Interpretation
+module
+
+public import Zkc.Source.Program
+public import Zkc.Semantics.Interpretation
+
+@[expose] public section
 
 /-! Sequencing independently authored typed source regions.
 

@@ -38,10 +38,6 @@ let
     "compiler/adapters/accumulator-machine/fixtures"
     "compiler/adapters/plonky3/fixtures/recurrence"
   ];
-  leanFixtures = [
-    "common/tests/fixtures/variants/history-contracts.txt"
-    "common/tests/fixtures/blocks"
-  ];
   definitions = {
     compiler.paths = compiler;
     compilerTests.paths =
@@ -111,9 +107,8 @@ let
       "lean/Zkc.lean"
       "lean/Zkc"
       "lean/Tests"
-      "lean/Examples"
-      "lean/Tools"
-      "common/tests/fixtures/variants/history-contracts.txt"
+      "lean/ZkcExamples"
+      "lean/ZkcTools"
     ];
     arklib.paths = [
       "lean/integrations/arklib"
@@ -125,13 +120,10 @@ let
     leanChecks.paths = [
       "lean"
     ]
-    ++ leanFixtures
     ++ runner
     ++ [
       "common/tests/support"
-      "common/tests/fixtures/variants"
       "common/tests/fixtures/clean/air-control.json"
-      "examples/relations/multiply.r1cs.json"
     ];
     llzk.paths = [
       "compiler/adapters/llzk"

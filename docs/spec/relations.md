@@ -3,7 +3,7 @@
 Native relation declarations, reduction checks and explicit terminal decisions use these obligations.
 This chapter states shared laws; a native implementation claim needs its
 actual instance and evidence. Independent formal examples retain their own
-[model scope](../../lean/docs/spec/README.md).
+[model scope](../../lean/docs/README.md).
 
 A relation describes the mathematical statement being established. A protocol
 reduction connects actual statement instances, and a terminal contract connects
@@ -54,12 +54,9 @@ assignments an honest witness generator never emits. Together they imply
 recovery need not be executable. An importer claiming stronger knowledge or
 efficient extraction properties must state those additional requirements.
 
-Composition uses the actual composed statement map and an existential related
-intermediate witness. A target protocol's reduction and terminal acceptance can
-then establish source validity with the same exceptional event; encoding
-adequacy does not bound that event's probability or prove the target protocol.
-These laws are implemented by
-[`Zkc.Relation.Encoding`](../../lean/Zkc/Relation/Encoding.lean).
+These are source-encoding adequacy obligations. The current scalar relation
+adapter mechanizes a specific authored discrete-log predicate connection; it does
+not supply a general native relation-encoding theorem.
 
 An operation whitelist, successful export, hash equality or honest-witness test
 alone does not construct such an encoding. Artifact-specific equation comparison
@@ -173,7 +170,7 @@ Both premises use the same actual `r` and the same predicate `middle`.
 Equality of type names or identifiers is insufficient. The rule follows by
 applying the second implication and, on its valid-middle branch, the first.
 The exceptional events remain a disjunction; any probability estimate uses
-their [actual joint experiment](../../lean/docs/spec/properties/probability.md#attempts-and-extensions).
+their [actual joint experiment](../../lean/docs/architecture.md#reuse-and-composition).
 
 ## Finite obligation derivations
 
@@ -198,15 +195,13 @@ reusable, and repeated requirements cannot replace a different missing root.
 
 Given sound terminal facts and a sound law for each applied rule, successful
 checking implies that all required propositions hold together or an exceptional
-event of an applied rule occurs. The
-[`PIR.Obligations`](../../lean/Zkc/Semantics/Obligations.lean) reference
-proves this implication and packages it as the existing `ReductionContract`.
-Its sequencing law uses the actual available facts returned by the first segment.
+event of an applied rule occurs. A checker implementing this derivation scheme must prove the implication.
+Its sequencing law must use the actual facts returned by the first segment;
+the current protocol certificate API does not provide a general native rule-graph checker.
 
 An accepted finite derivation remains accepted when one substitution is applied
-consistently to its requirements, terminals and every rule. This is the forward
-instantiation law (`Rule.map`, `derive_map`, `check_map`). `Rule.Sound.map`
-transports a semantic law when its predicate is the target predicate pulled back
+consistently to its requirements, terminals and every rule. A forward
+instantiation proof transports a semantic law when its predicate is the target predicate pulled back
 through the same map. The substitution need not be injective, but then the
 converse does not follow: merging distinct claim
 subjects can make an originally unavailable prerequisite appear available.
@@ -232,9 +227,9 @@ Terminal A = accepted(a : A) | rejected.
 ```
 
 This is distinct from an execution outcome. An execution can return either
-terminal value or stop with a [stop reason](../../lean/docs/spec/core/execution.md#complete-results).
+terminal value or stop with a [stop reason](../../lean/docs/spec/semantics.md#effects-and-observations).
 In particular, `returned rejected` and `stopped reject` are different records.
-The [accepted-continuation profile](../../lean/docs/spec/profiles/services/accepted-continuations.md#verifier-decisions-and-ordinary-composition)
+The [accepted-continuation profile](../../lean/Zkc/Semantics/Continuation.lean)
 specifies the adapter that turns a returned rejection into a stopping combined
 execution.
 

@@ -78,8 +78,7 @@ scope `S` requires its numerator to be divisible by the vanishing polynomial
 `Z_S` of the scope's rows. Degrees weigh every read one and every public slot
 zero, whatever the group's authority, exactly as the Bundle's facts do. For a
 cyclic table the view adds a native wrap rule, stated below, that the finite
-law and its formal model do not cover. The
-native analysis is `analyzeBundlePolynomials` in
+law does not cover. The native analysis is `analyzeBundlePolynomials` in
 [`Relation/BundlePolynomial.h`](../../../compiler/include/zkc/Relation/BundlePolynomial.h).
 Its parameters `height`, `domain_size` and `trace_degree` and their law
 `1 <= height <= domain_size <= 2^24` and `domain_size - 1 <= trace_degree <=
@@ -151,7 +150,8 @@ applies only when the instance makes it present. The view establishes no
 whole-Bundle interaction, presence, satisfaction, commitment, batching or
 proof claim. On a finite table, per-assertion divisibility is the
 [per-constraint law](constraints.md#polynomial-interpretation-of-finite-scopes)
-with its formal model. The cyclic wrap rule has no Lean model; its evidence is
+stated above. The current Lean import profile covers neither table rule;
+the cyclic wrap rule is exercised by
 the bounded coefficient check of the recurrence fixture recorded in the
 [native validation map](../../../common/tests/native.md).
 
@@ -705,8 +705,8 @@ weighted degree. Staged assignments reuse bundle value, group, window, scope
 and resource identifiers; challenge/claim list shape uses `staged-slot-shape`
 in both the reader and evaluator.
 
-[`Zkc.Relation.Bundle`](../../../lean/Zkc/Relation/Bundle.lean) is the
-independent formal denotation. The
-[correspondence map](../../../lean/docs/correspondence/domains.md#relation-domain-foundation)
-states its theorem scope; it is not a proof of the native admission or
-evaluation code.
+The current [formal support](../../../lean/docs/support.md) does not include a
+complete independent model of this Bundle format. Native admission and evaluation
+are checked by their own implementations and differential controls. A future
+formal Bundle adapter must preserve this specification, including its staged
+and simultaneous substitution semantics.

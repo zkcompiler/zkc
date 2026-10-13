@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""Render exported data as transparent Lean constructors; no proof is generated.
+
+The native bridge checks regenerated text byte for byte. Lean separately checks
+admission and semantic theorems. This renderer is a tested serialization edge.
+"""
+import argparse
+import json
+from pathlib import Path
+import re
+
+
+def array(value, length=None):
+    if not isinstance(value, list) or (length is not None and len(value) != length):
+        raise ValueError('invalid constructor array or arity')
+    return value
+
+
+def string(value):
+    # Lean accepts these JSON escapes; reject control/non-ASCII identifiers in
+    # this bounded rendering profile instead of silently changing their bytes.
+    if (not isinstance(value, str) or not 1 <= len(value) <= 512 or
+            any(ord(c) < 32 or ord(c) > 126 for c in value)):
+        raise ValueError("renderer requires nonempty printable ASCII strings of at most 512 bytes")
+    return json.dumps(value)
+
+
+def natural(value):
+    if type(value) is not int or not 0 <= value <= 2048:
+        raise ValueError("invalid source reference")
+    return str(value)
+
+
+def seq(values, render=natural):
+    if len(array(values)) > 512:
+        raise ValueError('source array limit')
+    return '[' + ', '.join(map(render, values)) + ']'
+
+
+def ty(value):
+    tag, *args = array(value)
+    if tag == 'bool' and not args:
+        return '.boolean'
+    if tag in ('field', 'group', 'service') and len(args) == 1:
+        return f'.{tag} {string(args[0])}'
+    raise ValueError('unsupported type')
+
+
+def op(value):
+    tag, *args = array(value)
+    names = {'field.constant': 'fieldConstant', 'field.add': 'fieldAdd',
+             'field.subtract': 'fieldSubtract', 'field.multiply': 'fieldMultiply',
+             'field.equal': 'fieldEqual', 'group.identity': 'groupIdentity',
+             'group.add': 'groupAdd', 'group.scale': 'groupScale',
+             'group.equal': 'groupEqual', 'bool.constant': 'booleanConstant',
+             'bool.and': 'booleanAnd', 'bool.or': 'booleanOr', 'bool.xor': 'booleanXor',
+             'bool.equal': 'booleanEqual', 'bool.not_equal': 'booleanNotEqual'}
+    if tag not in names and tag != 'select':
+        raise ValueError('unsupported operation')
+    arity = (3 if tag in ('field.constant', 'group.scale') else
+             2 if tag.startswith(('field.', 'group.')) or tag in ('select', 'bool.constant') else 1)
+    array(value, arity)
+    if tag == 'select':
+        return f'.select ({ty(args[0])})'
+    if tag == 'field.constant':
+        value = args[1]
+        if (not isinstance(value,str) or not value.isascii() or not value.isdecimal()
+                or len(value)>512 or (len(value)>1 and value.startswith('0'))):
+            raise ValueError('noncanonical constant')
+        return f'.fieldConstant {string(args[0])} {int(value)}'
+    if tag == 'bool.constant':
+        if type(args[0]) is not bool: raise ValueError('invalid boolean')
+        return '.booleanConstant ' + str(args[0]).lower()
+    return '.' + names[tag] + ''.join(' ' + string(a) for a in args)
+
+
+def instruction(value):
+    tag, *a = array(value)
+    arities = {'pure': 3, 'restrict': 4, 'exchange': 6, 'draw': 5, 'guard': 4, 'statement': 5}
+    if tag not in arities:
+        raise ValueError('unsupported instruction')
+    array(value, arities[tag])
+    if tag == 'pure':
+        return f'.pure ({op(a[0])}) {seq(a[1])}'
+    if tag == 'restrict':
+        return f'.restrict {seq(a[0])} ({ty(a[1])}) {natural(a[2])}'
+    if tag == 'exchange':
+        return f'.exchange {string(a[0])} {natural(a[1])} {natural(a[2])} ({ty(a[3])}) {natural(a[4])}'
+    if tag == 'draw':
+        return f'.draw {string(a[0])} {natural(a[1])} {string(a[2])} {natural(a[3])}'
+    if tag == 'guard':
+        return f'.guard {string(a[0])} {natural(a[1])} {natural(a[2])}'
+    if tag == 'statement':
+        return f'.statement {string(a[0])} {seq(a[1], ty)} {seq(a[2])} {seq(a[3])}'
+    raise ValueError('unsupported instruction')
+
+
+def render(data, namespace):
+    array(data, 10)
+    if data[0] != 'zkc.common-source/0':
+        raise ValueError('unsupported format')
+    string(data[1])
+    if not re.fullmatch('sha256:[0-9a-f]{64}', data[1]):
+        raise ValueError('invalid source identity')
+    if len(array(data[3])) > 16 or len(array(data[8])) > 1024:
+        raise ValueError('source profile limit')
+    if not all(p.isidentifier() for p in namespace.split('.')):
+        raise ValueError('invalid namespace')
+    fields = [('source', string(data[1])), ('symbol', string(data[2])),
+              ('roles', seq(data[3], string)), ('inputs', seq(data[4], ty)),
+              ('inputRoles', seq(data[5], seq)), ('result', ty(data[6])),
+              ('outputRoles', seq(data[7])),
+              ('instructions', '[\n    ' + ',\n    '.join(map(instruction, data[8])) + ']'),
+              ('returned', natural(data[9]))]
+    return ('module\n\npublic import Zkc.Source.Common.Import\n\n@[expose] public section\n\n'
+            '/-! Generated by bridges/common/snapshot.py from the retained native export.\n'
+            'Do not edit the constructor data independently of its JSON fixture. -/\n\n'
+            'set_option autoImplicit false\n\n'
+            f'namespace {namespace}\n\nopen Zkc.Source.Common.Native\n\n'
+            'def snapshot : Snapshot where\n' +
+            '\n'.join(f'  {key} := {value}' for key, value in fields) +
+            f'\n\nend {namespace}\n')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('input', type=Path)
+    parser.add_argument('output', type=Path)
+    parser.add_argument('--namespace', required=True)
+    args = parser.parse_args()
+    args.output.write_text(render(json.loads(args.input.read_text()), args.namespace))
+
+
+if __name__ == '__main__':
+    main()

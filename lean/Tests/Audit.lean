@@ -1,4 +1,4 @@
 import Tests.LibraryImports
-import Tools.DeclarationAudit
+import ZkcTools.DeclarationAudit
 
-run_cmd Tools.DeclarationAudit.check [`Zkc, `Tests, `Examples, `Tools.Interactive, `Tools.Artifact, `Tools.Crypto, `Tools.RequirementChecker] "WHOLE-LIBRARY-AUDIT-PASS"
+run_cmd ZkcTools.DeclarationAudit.check [`Zkc, `Tests, `ZkcExamples, `ZkcTools.CommonSource.Reference, `ZkcTools.JsonSupport] "CORE-AUDIT-PASS"

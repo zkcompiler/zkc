@@ -1,4 +1,8 @@
-import Zkc.Semantics.Relation
+module
+
+public import Zkc.Semantics.Relation
+
+@[expose] public section
 
 /-! Connections between component relations at their actual boundary values.
 

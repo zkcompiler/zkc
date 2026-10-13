@@ -2,11 +2,8 @@
 
 These independently retained vectors support the native and formal checks below.
 
-- `variants/history-contracts.txt` is embedded by `lean/Tests/Variant.lean`
-  and included by the formal package's input manifest and reproduction checks.
-  The compiler's native operation-contract tests also consume these vectors.
-- `blocks/blocks.json` and `blocks/block-results.jsonl` are inputs and expected
-  outputs for `lean/checks/check_tools.py`.
+- `variants/history-contracts.txt` and `blocks/` retain vectors for historical
+  reference models. The current scalar protocol package does not consume them.
 - `contracts/` records the current native conformance probe coverage and
   consumer-specific facet observations; see its README for the scope.
 - `clean/air-control.json` is the output of the pinned Clean producer in

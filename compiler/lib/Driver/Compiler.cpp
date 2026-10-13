@@ -13,6 +13,7 @@
 #include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
 #include "zkc/Support/Refusal.h"
+#include "zkc/Translation/CommonSource.h"
 #include "zkc/Translation/Protocol.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
@@ -55,6 +56,7 @@ int zkc::runCompiler(int argc, char **argv,
            "  asset-share ring-json|relation-bundle-json FILE\n\n"
            "Protocol IR and native participant programs:\n"
            "  protocol-export FILE.mlir\n"
+           "  protocol-lean FILE.mlir --symbol=NAME\n"
            "  protocol-bundle FILE.mlir [--entry=NAME] [--no-simplify] "
            "[--release-storage] [--fuse-vector-reductions] [--no-finite-bulk]\n"
            "    [--fix-polynomial-factors]\n"
@@ -331,8 +333,13 @@ int zkc::runCompiler(int argc, char **argv,
       outs() << result->bundle;
     return 0;
   }
-  if (mode == "protocol-export") {
-    if (argc != 3)
+  if (mode == "protocol-export" || mode == "protocol-lean") {
+    StringRef symbol;
+    if (mode == "protocol-lean" && argc == 4) {
+      symbol = argv[3];
+      if (!symbol.consume_front("--symbol=") || symbol.empty())
+        return fail(error("unsupported-option"));
+    } else if (mode == "protocol-lean" || argc != 3)
       return fail(error("unsupported-option"));
     auto text = readInput(argv[2], 16 * 1024 * 1024);
     if (!text)
@@ -340,6 +347,13 @@ int zkc::runCompiler(int argc, char **argv,
     if (!mlirNestingWithinLimit(*text))
       return fail(error("mlir-depth-limit"));
     mlir::MLIRContext context(registry);
+    if (mode == "protocol-lean") {
+      auto result = protocol::exportCommonSource(*text, symbol, context);
+      if (!result)
+        return fail(result.takeError());
+      outs() << printJson(*result) << '\n';
+      return 0;
+    }
     auto module = mlir::parseSourceString<mlir::ModuleOp>(*text, &context);
     if (!module)
       return fail(error("interactive-malformed-ir"));

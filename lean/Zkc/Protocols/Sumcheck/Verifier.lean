@@ -1,7 +1,11 @@
-import Zkc.Protocols.Sumcheck.Polynomial
-import Zkc.Probability.UniformTape
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.Positivity.Finset
+module
+
+public import Zkc.Protocols.Sumcheck.Polynomial
+public import Zkc.Probability.UniformTape
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.Positivity.Finset
+
+@[expose] public section
 
 /-! Complete ordinary interactive Sumcheck for fixed degree-two polynomials.
 
@@ -69,7 +73,7 @@ theorem acceptance_le_one (p : Quadratic F n) (claim : F) (strategy : Strategy F
 
 theorem perfect_completeness (p : Quadratic F n) :
     acceptance p p.booleanSum (honest p) = 1 := by
-  simp only [acceptance, completeness, if_true]
+  simp only [acceptance, completeness, ite_true]
   exact UniformTape.constant n 1
 
 theorem acceptance_step (p : Quadratic F (n + 1)) (claim : F)
@@ -79,13 +83,13 @@ theorem acceptance_step (p : Quadratic F (n + 1)) (claim : F)
         (∑ r : F, acceptance (p.restrict r) (message.evaluate r) (next r)) / Fintype.card F
       else 0 := by
   by_cases passes : message.boundary = claim
-  · simp only [acceptance, UniformTape.average, verify, if_pos passes]
+  · simp only [acceptance, UniformTape.average, verify, ite_eq_left passes]
   · have all : (fun coins : Tape F (n + 1) =>
         if verify p claim (.send message next) coins then (1 : ℚ) else 0) = (fun _ => 0) := by
       funext coins
       rcases coins with ⟨r, tail⟩
       simp [verify, passes]
-    rw [acceptance, all, UniformTape.constant, if_neg passes]
+    rw [acceptance, all, UniformTape.constant, ite_eq_right passes]
 
 set_option maxHeartbeats 800000 in
 /-- Ordinary soundness: a false claimed Boolean sum is accepted with probability
@@ -106,7 +110,7 @@ theorem soundness (p : Quadratic F n) (claim : F) (strategy : Strategy F n)
       | send message next =>
           rw [acceptance_step]
           by_cases passes : message.boundary = claim
-          · rw [if_pos passes]
+          · rw [ite_eq_left passes]
             have different : message.boundary ≠ p.booleanSum := passes ▸ falseClaim
             have collisions : ((Finset.univ.filter fun r =>
                 message.evaluate r = (p.restrict r).booleanSum).card : ℚ) ≤ 2 := by
@@ -116,11 +120,11 @@ theorem soundness (p : Quadratic F n) (claim : F) (strategy : Strategy F n)
                   (if message.evaluate r = (p.restrict r).booleanSum then (1 : ℚ) else 0) +
                     (2 * (n : ℚ)) / Fintype.card F := by
               by_cases same : message.evaluate r = (p.restrict r).booleanSum
-              · rw [if_pos same]
+              · rw [ite_eq_left same]
                 exact (acceptance_le_one _ _ _).trans (le_add_of_nonneg_right
                   (div_nonneg (mul_nonneg (by norm_num) (Nat.cast_nonneg n))
                     (le_of_lt (UniformTape.card_positive (F := F)))))
-              · rw [if_neg same, zero_add]
+              · rw [ite_eq_right same, zero_add]
                 exact ih _ _ _ same
             calc
               _ ≤ (∑ r : F, ((if message.evaluate r = (p.restrict r).booleanSum then (1 : ℚ) else 0) +
@@ -138,7 +142,7 @@ theorem soundness (p : Quadratic F n) (claim : F) (strategy : Strategy F n)
                 div_le_div_of_nonneg_right (by linarith [collisions])
                   (le_of_lt (UniformTape.card_positive (F := F)))
               _ = _ := by push_cast; ring
-          · rw [if_neg passes]
+          · rw [ite_eq_right passes]
             exact div_nonneg (mul_nonneg (by norm_num) (Nat.cast_nonneg (n + 1)))
               (le_of_lt (UniformTape.card_positive (F := F)))
 

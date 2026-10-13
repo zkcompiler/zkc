@@ -53,11 +53,14 @@ def execute(scope, args):
         run(["ctest", "--preset", args.profile, "--output-junit", reports / "ctest.xml"], cwd=ROOT / "compiler")
     elif scope == "lean":
         for check in lean_checks():
-            run([sys.executable, check])
+            selection = ["--main-only"] if check.name in {"audit_imports.py", "check_library.py"} else []
+            run([sys.executable, check, *selection])
     elif scope == "lean-integration":
+        run([sys.executable, ROOT / "lean/checks/check_library.py", "--integration", "arklib"])
         run([sys.executable, ROOT / "lean/checks/check_clients.py", "--with-arklib",
              "--output", reports / "lean/clients-arklib"], cwd=ROOT / "lean")
     elif scope == "lean-clean":
+        run([sys.executable, ROOT / "lean/checks/check_library.py", "--integration", "clean"])
         directory = ROOT / "lean/integrations/clean"
         output = reports / "lean/clean-air-control.json"
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -67,6 +70,18 @@ def execute(scope, args):
         if output.read_bytes() != control.read_bytes():
             raise ValueError(f"{control.relative_to(ROOT)} is not the current Clean export; "
                              f"review {output} and replace the fixture with it")
+    elif scope == "lean-native":
+        compiler = Path(args.compiler_build).resolve() if args.compiler_build else compiler_directory(args.profile)
+        bridge = ROOT / "lean/bridges/common"
+        output = reports / "lean/native"
+        run([sys.executable, bridge / "check.py", "--compiler", compiler / "zkc-compile",
+             "--reference", compiler / "test/zkc-common_reference-test",
+             "--lean", ROOT / "lean/.lake/build/bin/common-source", "--cases", "80",
+             "--report", output / "differential.json"])
+        run([sys.executable, bridge / "verify_tests.py", "--compiler", compiler / "zkc-compile",
+             "--output", output / "requests"])
+        run([sys.executable, bridge / "intent_tests.py", "--compiler", compiler / "zkc-compile",
+             "--output", output / "intent"])
     elif scope == "install":
         from check_sdk import check_install
         check_install(args, run)
@@ -93,10 +108,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     scopes = parser.add_subparsers(dest="scope", required=True)
     for scope in ["integration", "harness", "sdk", "rust", "compiler", "lean",
-                  "lean-integration", "lean-clean", "install", "install-domain", "docs", "style", "lint"]:
+                  "lean-integration", "lean-clean", "lean-native", "install", "install-domain", "docs", "style", "lint"]:
         command = scopes.add_parser(scope)
-        if scope in {"compiler", "install", "install-domain"}:
+        if scope in {"compiler", "install", "install-domain", "lean-native"}:
             command.add_argument("--profile", default="release", help="CMake build profile (default: release)")
+        if scope == "lean-native":
+            command.add_argument("--compiler-build", help="explicit prepared compiler build directory")
         if scope in {"install", "install-domain"}:
             command.add_argument("--output", help="fresh installation output directory")
         if scope == "install-domain":

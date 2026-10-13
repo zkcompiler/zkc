@@ -100,6 +100,14 @@ of that control runs in `just test-integration` without Lean.
 `just test-lean-fresh` rebuilds research packages without previous
 project/dependency objects. These can be expensive.
 
+`just test-lean-native` prepares the native compiler and ArkLib integration, then
+runs independent finite SSA/Lean comparisons, the source/property request matrix,
+and authored-target controls. To use an existing build, run
+`python3 common/tests/run.py lean-native --compiler-build=build/compiler`.
+This scope exercises wrong-program, wrong-relation and unproved-certificate
+refusals as well as successful claims. Reports are retained under
+`build/reports/lean/native` (or the selected report root).
+
 Sandboxed optional packages are `.#lean`, `.#lean-checks`, `.#arklib` and
 `.#lean-toolchain-checks`. They are outside `nix flake check`'s native check graph.
 The retained research sources and their vectors do not establish correspondence

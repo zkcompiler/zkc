@@ -1,6 +1,10 @@
-import Zkc.Semantics.Relation
-import Mathlib.Algebra.Polynomial.Degree.Operations
-import Mathlib.Algebra.Polynomial.Eval.Defs
+module
+
+public import Zkc.Semantics.Relation
+public import Mathlib.Algebra.Polynomial.Degree.Operations
+public import Mathlib.Algebra.Polynomial.Eval.Defs
+
+@[expose] public section
 
 /-! A finite, noncyclic arithmetic AIR view. Constraints retain actual row
 offsets, first/last/transition scopes, public values, read sets and degree.

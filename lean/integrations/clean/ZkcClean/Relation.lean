@@ -94,7 +94,7 @@ theorem decode_export {component : Air.Flat.Component F} {artifact : Artifact}
     ∃ cs, artifact.decode F = some cs := by
   have admitted := exportComponent_ok exported
   unfold Artifact.decode
-  rw [if_pos admitted.fieldSize_eq, admitted.assertions]
+  rw [ite_eq_left admitted.fieldSize_eq, admitted.assertions]
   exact decodeAssertions_of_bounded (fun e h => admitted.width_eq ▸ admitted.bounded e h)
 
 /-- Obligation (2) for an arbitrary nonempty trace of the artifact's width. -/
@@ -107,7 +107,7 @@ theorem holds_iff {component : Air.Flat.Component F} {artifact : Artifact}
       ∀ row, component.operations.ConstraintsHold (rowEnvironment (trace row) data) := by
   have admitted := exportComponent_ok exported
   unfold Artifact.decode at decoded
-  rw [if_pos admitted.fieldSize_eq, admitted.assertions] at decoded
+  rw [ite_eq_left admitted.fieldSize_eq, admitted.assertions] at decoded
   have related := decodeAssertions_encode decoded
   change (∀ c ∈ cs, c.Holds statement trace) ↔ _
   simp only [constraintsHold_iff admitted.noLookups]

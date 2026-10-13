@@ -1,0 +1,35 @@
+module scalar_algebra;
+domain F = field("bls12-381.fr");
+
+math fn fold(low: F, high: F, half: F, inverse_x: F, beta: F) -> F {
+  let even = (low + high) * half;
+  let odd = ((low - high) * half) * inverse_x;
+  return even + beta * odd;
+}
+
+// These inputs are explicit scalars. No inverse or FRI premise is inferred.
+protocol WithHelper roles(P,V)
+    (low: F @(P,V), high: F @(P,V), half: F @(P,V), inverse_x: F @(P,V), beta: F @(P,V))
+    -> (value: F @V) {
+  let first = fold(low, high, half, inverse_x, beta);
+  let second = fold(first, high, half, inverse_x, beta);
+  return (value = second);
+}
+protocol Inline roles(P,V)
+    (low: F @(P,V), high: F @(P,V), half: F @(P,V), inverse_x: F @(P,V), beta: F @(P,V))
+    -> (value: F @V) {
+  let first = half * (low + high) + inverse_x * ((low - high) * (half * beta));
+  let second = half * (first + high) + inverse_x * ((first - high) * (half * beta));
+  return (value = second);
+}
+// A scalar transition residual with explicit weighting and denominator input.
+protocol Residual roles(P,V)
+    (current: F @(P,V), next: F @(P,V), initial: F @(P,V), inverse_z: F @(P,V), alpha: F @(P,V))
+    -> (value: F @V) {
+  let transition = next - current * current;
+  let boundary = current - initial;
+  return (value = transition * inverse_z + alpha * boundary);
+}
+run Helpers = WithHelper;
+run Expanded = Inline;
+run AirResidual = Residual;

@@ -1,5 +1,9 @@
-import Zkc.Source.Context
-import Zkc.Semantics.Interaction
+module
+
+public import Zkc.Source.Context
+public import Zkc.Semantics.Interaction
+
+@[expose] public section
 
 /-! A finite, intrinsically typed source language.
 

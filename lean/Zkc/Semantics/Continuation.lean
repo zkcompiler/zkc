@@ -1,4 +1,8 @@
-import Zkc.Semantics.Boundary
+module
+
+public import Zkc.Semantics.Boundary
+
+@[expose] public section
 
 set_option autoImplicit false
 namespace PIR.Continuation

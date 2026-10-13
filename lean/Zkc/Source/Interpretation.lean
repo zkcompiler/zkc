@@ -1,5 +1,9 @@
-import Zkc.Source.Program
-import Zkc.Semantics.Interpretation
+module
+
+public import Zkc.Source.Program
+public import Zkc.Semantics.Interpretation
+
+@[expose] public section
 
 /-! Reinterpret structured source operations through a lower-level signature.
 Values and source structure stay fixed; each operation can expand into a process.

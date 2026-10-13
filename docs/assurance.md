@@ -6,11 +6,10 @@ its actual subject, assumptions and evidence.
 
 ## Formal propositions
 
-The independent [formal specification](../lean/docs/spec/README.md) defines the
-models. [Formal support](../lean/docs/support.md) owns the theorem inventory,
-premises and limits; [correspondence maps](../lean/docs/README.md#definitions-and-proofs)
-link selected clauses to exact declarations. Some profiles give their formal
-references in-page. A generic record states obligations; constructing such a
+The independent [formal reference](../lean/docs/README.md) defines the current
+models. [Formal support](../lean/docs/support.md) owns theorem scope, premises and
+limits. Source admission, contract correspondence and property consumers are
+separate proofs. A generic record states obligations; merely defining that
 record does not verify an arbitrary native implementation.
 
 The library's declaration audit permits only `propext`, `Classical.choice` and
@@ -19,18 +18,17 @@ declarations. External dependencies may contain unfinished proofs, but reached
 declarations may not depend on them. This audit does not prove kernel correctness
 or statement adequacy.
 
-`native_decide` adds native-evaluation trust and is excluded from the proof
-library, its tools and its examples by structural controls. Conformance cases
-under `lean/Tests/` use it only in `example` declarations: those cases check
-compiled evaluation on named inputs and are not audited library theorems.
-Declaration counts therefore do not measure those tests or model maturity.
+The maintained source/property certificates and declaration audits reject
+native-evaluation axioms as well as `sorryAx`. Finite native/Lean execution
+comparisons are separate evidence and do not enter those theorem statements.
+Declaration counts do not measure model adequacy or implementation coverage.
 
 ## Contract boundaries
 
 | Claim | Owning definition | Additional native obligation |
 |---|---|---|
-| Preserve observations and disclosure | [Observations](../lean/docs/spec/core/observations.md), [disclosure](../lean/docs/spec/properties/disclosure.md) | Implement the selected projection over actual releases, diagnostics and identifiers |
-| Authorize a retained continuation | [Accepted continuations](../lean/docs/spec/profiles/services/accepted-continuations.md) | Actual identity, custody and publication adapter; the model's atomic single export is not distributed persistence |
+| Preserve selected observations | [PIR semantics](../lean/docs/spec/semantics.md) | Implement the selected projection over actual releases, diagnostics and identifiers; disclose-only security needs its own property |
+| Authorize a retained continuation | [Continuation laws](../lean/Zkc/Semantics/Continuation.lean) | Actual identity, custody and publication adapter; the model's atomic single export is not distributed persistence |
 | Bind interpretation to the supplied subject | [Artifacts](spec/realization/artifacts.md), [representations](spec/realization/representations.md) | Resolver, loader, parser and backend correspondence |
 | Use a conditional checked result | [Judgments](spec/verification/judgments.md), [refinement](spec/verification/refinement.md) | Native checker correspondence and actual premise discharge |
 | Establish source adequacy | [Relation encoding](spec/relations.md#source-encoding-adequacy), [source translation](spec/language/translation.md) | Preserve the intended source, captures and actual target; import/type validity alone is insufficient |
@@ -54,7 +52,7 @@ and a separately implemented contract at the boundary being tested.
 
 ## Verification and reproducibility
 
-The [formal package guide](../lean/README.md#build-and-validate) describes builds,
+The [formal package guide](../lean/README.md#build-and-use) describes builds,
 axiom audits and fresh reproduction. A reproducer or workflow definition is not
 evidence that it succeeded on the current revision. Build records identify
 source, dependency locks, toolchain and completed scope; pinned Lean/Std and its
@@ -101,5 +99,5 @@ security additionally fixes the actual
 statement, adversary, oracle/sampling model, encoding and property transport.
 Transcript construction correctness is not a Fiat–Shamir security reduction.
 
-[Formal connection components](../lean/docs/native-connection.md) identify
+[Current formal connections](../lean/docs/support.md) identify
 existing laws; the [roadmap](roadmap.md) sequences further work.

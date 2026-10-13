@@ -1,4 +1,8 @@
-import Zkc.Semantics.ExecutionPath
+module
+
+public import Zkc.Semantics.ExecutionPath
+
+@[expose] public section
 
 set_option autoImplicit false
 namespace PIR.Boundary

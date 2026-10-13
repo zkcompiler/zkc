@@ -1,6 +1,10 @@
-import Zkc.Source.Interpretation
-import Zkc.Semantics.InterpretationAdmission
-import Mathlib.Algebra.Ring.Basic
+module
+
+public import Zkc.Source.Interpretation
+public import Zkc.Semantics.InterpretationAdmission
+public import Mathlib.Algebra.Ring.Basic
+
+@[expose] public section
 
 /-! A structured source for quadratic algebraic rounds.
 
@@ -162,9 +166,9 @@ theorem formed (count : Nat) (claim : F) :
     refine ⟨trivial, ?_⟩
     intro message
     by_cases accepted : message.boundary = claim
-    · simp only [Conforms, interaction, start, if_pos accepted]
+    · simp only [Conforms, interaction, start, ite_eq_left accepted]
       exact ⟨trivial, fun _ => ih _⟩
-    · simp only [Conforms, interaction, start, if_neg accepted]
+    · simp only [Conforms, interaction, start, ite_eq_right accepted]
       exact ⟨trivial, fun _ => trivial⟩
 
 theorem returns (count : Nat) (claim : F) :
@@ -175,7 +179,7 @@ theorem returns (count : Nat) (claim : F) :
   | succ count ih =>
     intro message
     by_cases accepted : message.boundary = claim
-    · simp only [Boundary.Returns, interaction, start, if_pos accepted]
+    · simp only [Boundary.Returns, interaction, start, ite_eq_left accepted]
       exact fun _ => ih _
     · simp [Boundary.Returns, interaction, accepted]
 
@@ -186,8 +190,8 @@ theorem bounded (count : Nat) (claim : F) : Within (2 * count) (rounds count cla
     rw [show 2 * (count + 1) = (2 * count + 1) + 1 by omega]
     intro message
     by_cases accepted : message.boundary = claim
-    · simp only [if_pos accepted, Within]
+    · simp only [ite_eq_left accepted, Within]
       exact fun _ => ih _
-    · simp [if_neg accepted, Within]
+    · simp [ite_eq_right accepted, Within]
 
 end Zkc.Protocols.AlgebraicRounds

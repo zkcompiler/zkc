@@ -41,17 +41,14 @@ def build_inputs(root, with_arklib=False, with_clean=False):
     # named five of them and went stale the moment the checks moved together.
     files.extend((root / 'checks').glob('*.py'))
     files.extend((root / 'support').glob('*.py'))
-    for directory in ('Zkc', 'Tests', 'Examples', 'Tools'):
+    for directory in ('Zkc', 'Tests', 'ZkcExamples', 'ZkcTools'):
         files.extend((root / directory).rglob('*.lean'))
     files.append(root / 'clients/Main.lean')
-    # Tests.Variant includes this shared file at compile time. Copy and hash it
-    # with the package so an isolated rebuild has the same declared inputs.
-    files.append(root / '../common/tests/fixtures/variants/history-contracts.txt')
     if with_arklib:
         files.append(root / 'clients/ArkLib.lean')
         optional = root / INTEGRATION
         files.extend(optional / name for name in ('lakefile.toml', 'lake-manifest.json', 'lean-toolchain'))
-        for directory in ('ZkcArkLib', 'TestsArkLib'):
+        for directory in ('ZkcSecurity', 'TestsSecurity'):
             files.extend((optional / directory).rglob('*.lean'))
     if with_clean:
         optional = root / CLEAN
@@ -198,11 +195,10 @@ def run(args):
     subprocess.run(['python3', 'checks/audit_imports.py', *options], cwd=work, env=env, check=True)
     start = time.monotonic()
     runs = {'main': checked_build(lake, work, output / 'main-build.log', env,
-            ['DEPENDENCY-AUDIT-PASS', 'FOUNDATION-AUDIT-PASS', 'SOURCE-PLAN-AUDIT-PASS'])}
+            ['DEPENDENCY-AUDIT-PASS', 'CORE-AUDIT-PASS'])}
     if args.with_arklib and runs['main']['status'] == 'pass':
         runs['arklib'] = checked_build(lake, work / INTEGRATION, output / 'arklib-build.log', env,
-            ['DEPENDENCY-AUDIT-PASS', 'UPSTREAM-STATUS FiatShamir.euf_cma_bound:',
-             'UPSTREAM-STATUS fiatShamir_completeness:'])
+            ['DEPENDENCY-AUDIT-PASS', 'SECURITY-AUDIT-PASS'])
     control = {'status': 'not-run'}
     if args.with_clean and runs['main']['status'] == 'pass':
         runs['clean'] = checked_build(lake, work / CLEAN, output / 'clean-build.log', env,

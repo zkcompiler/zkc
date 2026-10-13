@@ -3,7 +3,7 @@
 Native availability, resource-origin and public-coin analyses have their own bounded transfer vocabularies.
 This chapter states shared laws; a native implementation claim needs its
 actual instance and evidence. Independent formal examples retain their own
-[model scope](../../../lean/docs/spec/README.md).
+[model scope](../../../lean/docs/README.md).
 
 An analysis computes descriptions used to justify a transformation or admission
 claim. Its meaning and soundness concern the actual operations and states of
@@ -23,11 +23,10 @@ A sound weakening from `x` to `y` satisfies
 unjustified new fact. Which facts survive a mutation depends on the actual
 effect and alias contract. An unknown effect supplies no purity premise.
 
-These are requirements on the chosen analysis meaning and transfers. They do
-not prescribe a universal abstract domain, lattice, least fixed point or
-Galois connection. The [finite phase profile](../../../lean/docs/spec/profiles/compiler/finite-phases.md) gives an exact selected
-instance. The [factor profile](../../../lean/docs/spec/profiles/compiler/factor-preparation.md) supplies a different interpretation
-of facts, availability and result-dependent module summaries.
+A sound analysis must justify its selected abstract domain and transfer laws.
+This contract does not require one universal lattice, least fixed point or
+Galois connection. Phase sets, availability facts and result-dependent module
+summaries can use different sound interpretations.
 
 ## Summaries and exact consumers
 
@@ -65,7 +64,7 @@ This is weakening from each alternative to the same description. The concrete
 state is unchanged by this analysis step. The meaning of a description determines
 how it can be merged: a list of facts asserted together can retain facts justified
 on both alternatives, while a cover of possible phases contains both alternatives.
-The [finite phase merge](../../../lean/docs/spec/profiles/compiler/finite-phases.md#abstract-phase-policy)
+A merge of phase covers
 therefore uses union. A generic list operation alone does not define a sound merge.
 
 ## Factor analysis and proposals
@@ -75,11 +74,10 @@ fact. Its value theorem requires validity of the actual fact context. Its
 readiness theorem separately requires the query's availability premise. A
 checked value identity alone cannot manufacture an unavailable input.
 
-The [typed factor rule](../../../lean/docs/spec/profiles/compiler/factor-preparation.md#typed-factor-rule)
-specifies its concrete transfers, loop treatment and invariant premises.
-Proposal generation may be heuristic; accepted use requires the selected
-[checked transformation](refinement.md#checking-the-actual-candidate) or another
-sound judgment. Search failure does not prove semantic impossibility.
+A factor-analysis implementation must specify its concrete transfers, loop
+treatment and invariant premises. This is not supplied by the protocol
+certificate API.
 
-The [bounded representation-cost decision](../../../lean/docs/design/analysis.md#bound-the-cost-of-precision)
-explains the conservative merge used by the independent factor-analysis model.
+A representation-cost analysis must bound its precision and conservatively
+account for merging alternatives. Such an analysis is a separate native/formal
+adapter obligation, outside the current scalar protocol verification profile.

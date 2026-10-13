@@ -24,8 +24,6 @@ stdenvNoCC.mkDerivation {
   buildPhase = ''
     runHook preBuild
     cd lean
-    # Tests.Variant embeds the shared inventory relative to its source file.
-    test -f ../common/tests/fixtures/variants/history-contracts.txt
     mkdir -p .lake/packages
     for dependency in ${lakeSources}/*; do
       cp -R "$dependency/" ".lake/packages/$(basename "$dependency")"
@@ -44,7 +42,6 @@ stdenvNoCC.mkDerivation {
     runHook preInstall
     mkdir -p "$library/share/zkc/lean" "$library/share/zkc/common/tests" "$out/bin"
     cp -a . "$library/share/zkc/lean/"
-    cp -R ../common/tests/fixtures "$library/share/zkc/common/tests/fixtures"
     for executable in "$library/share/zkc/lean/.lake/build/bin/"*; do
       if [ -f "$executable" ] && [ -x "$executable" ]; then
         name=$(basename "$executable")

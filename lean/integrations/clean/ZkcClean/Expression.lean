@@ -95,7 +95,7 @@ theorem eval_decode {width : Nat} :
         simp [AIR.Expr.eval, Expression.eval, hv]
       · cases h
   | .const c, x, h, statement, read, data => by
-      simp only [encode, Term.decode, if_pos (FiniteField.val_lt c)] at h
+      simp only [encode, Term.decode, ite_eq_left (FiniteField.val_lt c)] at h
       cases h
       simp [AIR.Expr.eval, Expression.eval, FiniteField.fromNat_val]
   | .add left right, x, h, statement, read, data => by
@@ -140,7 +140,7 @@ theorem evaluateAt_decode {width height : Nat} {e : Expression F} {x : AIR.Expr 
   have reads : (fun column => AIR.Expr.traceRead trace row (0, column)) = trace row := by
     funext column
     simp [AIR.Expr.traceRead]
-  simp only [AIR.Expr.evaluateAt, if_pos fits]
+  simp only [AIR.Expr.evaluateAt, ite_eq_left fits]
   rw [eval_decode h statement _ data]
   simp only [reads]
 

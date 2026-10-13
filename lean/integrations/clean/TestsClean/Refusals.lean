@@ -1,7 +1,6 @@
 import ZkcClean.Specification
 import TestsClean.KoalaBear
 import Clean.Gadgets.Addition8.Addition8
-import Clean.Examples.FibonacciWithChannels
 
 /-! Refusal controls. The export restriction is checked on the flattened
 operations, so a lookup inside a nested subcircuit is refused even though the
@@ -32,16 +31,10 @@ theorem nestedLookup_flattened :
 theorem nestedLookup_refused : exportComponent nestedLookup = .error .lookup := by
   decide +kernel
 
-/-- Upstream `add8` from `Clean.Examples.FibonacciWithChannels`: channel pull
-and emit interactions. -/
-def channel : Air.Flat.Component KoalaBear := ⟨add8 (p := koalaBear)⟩
-
-theorem channel_interactions :
-    (FlatOperation.interactions (flatten channel.operations)).length = 2 := by
-  decide +kernel
-
-theorem channel_refused : exportComponent channel = .error .interaction := by
-  decide +kernel
+/-- Every channel operation is refused, independently of its payload. This
+uses the public operation interface without importing an unrelated VM proof. -/
+theorem channel_refused (interaction : AbstractInteraction KoalaBear) :
+    exportOperations (F := KoalaBear) 1 [.interact interaction] = .error .interaction := rfl
 
 /-- Clean reads an out-of-range variable as zero ... -/
 theorem outOfRange_reads_zero :

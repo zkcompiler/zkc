@@ -1,0 +1,52 @@
+module schnorr_forms;
+domain G = group("bls12-381.g1");
+domain F = field("bls12-381.fr");
+
+math fn response(nonce: F, challenge: F, secret: F) -> F {
+  return nonce + challenge * secret;
+}
+math fn equation(base: G, point: G, commitment: G, challenge: F, answer: F) -> bool {
+  return base * answer == commitment + point * challenge;
+}
+
+protocol HelpersProtocol roles(P, V)
+    (base: G @(P,V), point: G @(P,V), scalar: F @P,
+     nonces: Random<F> @P, challenges: Random<F> @V) -> (accepted: bool @V) {
+  let nonce = nonces.draw();
+  #[site(commitment)] let commitment = send P -> V(base * nonce);
+  #[site(challenge)] let challenge = challenges.draw();
+  #[site(delivery)] let received = send V -> P(challenge);
+  #[site(response)] let answer = send P -> V(response(nonce, received, scalar));
+  let accepted = equation(base, point, commitment, challenge, answer);
+  return (accepted = accepted);
+}
+
+run Helpers = HelpersProtocol;
+
+protocol ReorderedProtocol roles(P, V)
+    (base: G @(P,V), point: G @(P,V), scalar: F @P,
+     nonces: Random<F> @P, challenges: Random<F> @V) -> (accepted: bool @V) {
+  let nonce = nonces.draw();
+  #[site(commitment)] let commitment = send P -> V(base * nonce);
+  #[site(challenge)] let challenge = challenges.draw();
+  #[site(delivery)] let received = send V -> P(challenge);
+  #[site(response)] let answer = send P -> V(received * scalar + nonce);
+  let accepted = base * answer == point * challenge + commitment;
+  return (accepted = accepted);
+}
+
+run Reordered = ReorderedProtocol;
+
+protocol EarlyChallengeProtocol roles(P, V)
+    (base: G @(P,V), point: G @(P,V), scalar: F @P,
+     nonces: Random<F> @P, challenges: Random<F> @V) -> (accepted: bool @V) {
+  let nonce = nonces.draw();
+  #[site(challenge)] let challenge = challenges.draw();
+  #[site(commitment)] let commitment = send P -> V(base * nonce);
+  #[site(delivery)] let received = send V -> P(challenge);
+  #[site(response)] let answer = send P -> V(nonce + received * scalar);
+  let accepted = base * answer == commitment + point * challenge;
+  return (accepted = accepted);
+}
+
+run EarlyChallenge = EarlyChallengeProtocol;

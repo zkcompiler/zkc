@@ -1,0 +1,205 @@
+module factor_openings;
+domain F = field("bls12-381.fr");
+
+math fn factor(a: F, b: F, c: F, d: F, x: F, y: F) -> F {
+  return a + y * b + x * (c + y * d);
+}
+math fn quadratic(a: F, b: F, c: F, x: F) -> F {
+  return a + x * b + (x * x) * c;
+}
+
+protocol ExpandedProtocol roles(P,V)
+    (l00: F @(P,V), l01: F @(P,V), l10: F @(P,V), l11: F @(P,V),
+     r00: F @(P,V), r01: F @(P,V), r10: F @(P,V), r11: F @(P,V),
+     claim: F @(P,V), challenges: Random<F> @V) -> (accepted: bool @V) {
+  let a00 = l00 * r00;
+  let a01 = l00 * r01 + l01 * r00;
+  let a02 = l01 * r01;
+  let a10 = l00 * r10 + l10 * r00;
+  let a11 = l00 * r11 + l01 * r10 + l10 * r01 + l11 * r00;
+  let a12 = l01 * r11 + l11 * r01;
+  let a20 = l10 * r10;
+  let a21 = l10 * r11 + l11 * r10;
+  let a22 = l11 * r11;
+  let h0 = a00 + a00 + a01 + a02;
+  #[site(first0)] let m0 = send P -> V(h0);
+  let h1 = a10 + a10 + a11 + a12;
+  #[site(first1)] let m1 = send P -> V(h1);
+  let h2 = a20 + a20 + a21 + a22;
+  #[site(first2)] let m2 = send P -> V(h2);
+  let boundary0 = m0 + m0 + m1 + m2;
+  require @V boundary0 == claim;
+  #[site(draw0)] let r0 = challenges.draw();
+  #[site(deliver0)] let x = send V -> P(r0);
+  let k0 = a00 + x * a10 + (x * x) * a20;
+  #[site(second0)] let n0 = send P -> V(k0);
+  let k1 = a01 + x * a11 + (x * x) * a21;
+  #[site(second1)] let n1 = send P -> V(k1);
+  let k2 = a02 + x * a12 + (x * x) * a22;
+  #[site(second2)] let n2 = send P -> V(k2);
+  let claim1 = m0 + r0 * m1 + (r0 * r0) * m2;
+  let boundary1 = n0 + n0 + n1 + n2;
+  require @V boundary1 == claim1;
+  #[site(draw1)] let r1 = challenges.draw();
+  #[site(deliver1)] let y = send V -> P(r1);
+  let residual = n0 + r1 * n1 + (r1 * r1) * n2;
+  let localLeft = (l00 + y * l01 + x * (l10 + y * l11));
+  #[site(left)] let leftOpening = send P -> V(localLeft);
+  let expectedLeft = (l00 + r1 * l01 + r0 * (l10 + r1 * l11));
+  require @V leftOpening == expectedLeft;
+  let localRight = (r00 + y * r01 + x * (r10 + y * r11));
+  #[site(right)] let rightOpening = send P -> V(localRight);
+  let expectedRight = (r00 + r1 * r01 + r0 * (r10 + r1 * r11));
+  let rightValid = rightOpening == expectedRight;
+  let productValid = residual == leftOpening * rightOpening;
+  return (accepted = rightValid && productValid);
+}
+
+run Expanded = ExpandedProtocol;
+
+protocol HornerProtocol roles(P,V)
+    (l00: F @(P,V), l01: F @(P,V), l10: F @(P,V), l11: F @(P,V),
+     r00: F @(P,V), r01: F @(P,V), r10: F @(P,V), r11: F @(P,V),
+     claim: F @(P,V), challenges: Random<F> @V) -> (accepted: bool @V) {
+  let a00 = l00 * r00;
+  let a01 = l00 * r01 + l01 * r00;
+  let a02 = l01 * r01;
+  let a10 = l00 * r10 + l10 * r00;
+  let a11 = l00 * r11 + l01 * r10 + l10 * r01 + l11 * r00;
+  let a12 = l01 * r11 + l11 * r01;
+  let a20 = l10 * r10;
+  let a21 = l10 * r11 + l11 * r10;
+  let a22 = l11 * r11;
+  let h0 = a00 + a00 + a01 + a02;
+  #[site(first0)] let m0 = send P -> V(h0);
+  let h1 = a10 + a10 + a11 + a12;
+  #[site(first1)] let m1 = send P -> V(h1);
+  let h2 = a20 + a20 + a21 + a22;
+  #[site(first2)] let m2 = send P -> V(h2);
+  let boundary0 = m0 + m0 + m1 + m2;
+  require @V boundary0 == claim;
+  #[site(draw0)] let r0 = challenges.draw();
+  #[site(deliver0)] let x = send V -> P(r0);
+  let k0 = a00 + x * (a10 + x * a20);
+  #[site(second0)] let n0 = send P -> V(k0);
+  let k1 = a01 + x * (a11 + x * a21);
+  #[site(second1)] let n1 = send P -> V(k1);
+  let k2 = a02 + x * (a12 + x * a22);
+  #[site(second2)] let n2 = send P -> V(k2);
+  let claim1 = m0 + r0 * (m1 + r0 * m2);
+  let boundary1 = n0 + n0 + n1 + n2;
+  require @V boundary1 == claim1;
+  #[site(draw1)] let r1 = challenges.draw();
+  #[site(deliver1)] let y = send V -> P(r1);
+  let residual = n0 + r1 * (n1 + r1 * n2);
+  let localLeft = factor(l00, l01, l10, l11, x, y);
+  #[site(left)] let leftOpening = send P -> V(localLeft);
+  let expectedLeft = factor(l00, l01, l10, l11, r0, r1);
+  require @V leftOpening == expectedLeft;
+  let localRight = factor(r00, r01, r10, r11, x, y);
+  #[site(right)] let rightOpening = send P -> V(localRight);
+  let expectedRight = factor(r00, r01, r10, r11, r0, r1);
+  let rightValid = rightOpening == expectedRight;
+  let productValid = residual == leftOpening * rightOpening;
+  return (accepted = rightValid && productValid);
+}
+
+run Horner = HornerProtocol;
+
+protocol WrongPointProtocol roles(P,V)
+    (l00: F @(P,V), l01: F @(P,V), l10: F @(P,V), l11: F @(P,V),
+     r00: F @(P,V), r01: F @(P,V), r10: F @(P,V), r11: F @(P,V),
+     claim: F @(P,V), challenges: Random<F> @V) -> (accepted: bool @V) {
+  let a00 = l00 * r00;
+  let a01 = l00 * r01 + l01 * r00;
+  let a02 = l01 * r01;
+  let a10 = l00 * r10 + l10 * r00;
+  let a11 = l00 * r11 + l01 * r10 + l10 * r01 + l11 * r00;
+  let a12 = l01 * r11 + l11 * r01;
+  let a20 = l10 * r10;
+  let a21 = l10 * r11 + l11 * r10;
+  let a22 = l11 * r11;
+  let h0 = a00 + a00 + a01 + a02;
+  #[site(first0)] let m0 = send P -> V(h0);
+  let h1 = a10 + a10 + a11 + a12;
+  #[site(first1)] let m1 = send P -> V(h1);
+  let h2 = a20 + a20 + a21 + a22;
+  #[site(first2)] let m2 = send P -> V(h2);
+  let boundary0 = m0 + m0 + m1 + m2;
+  require @V boundary0 == claim;
+  #[site(draw0)] let r0 = challenges.draw();
+  #[site(deliver0)] let x = send V -> P(r0);
+  let k0 = a00 + x * a10 + (x * x) * a20;
+  #[site(second0)] let n0 = send P -> V(k0);
+  let k1 = a01 + x * a11 + (x * x) * a21;
+  #[site(second1)] let n1 = send P -> V(k1);
+  let k2 = a02 + x * a12 + (x * x) * a22;
+  #[site(second2)] let n2 = send P -> V(k2);
+  let claim1 = m0 + r0 * m1 + (r0 * r0) * m2;
+  let boundary1 = n0 + n0 + n1 + n2;
+  require @V boundary1 == claim1;
+  #[site(draw1)] let r1 = challenges.draw();
+  #[site(deliver1)] let y = send V -> P(r1);
+  let residual = n0 + r1 * n1 + (r1 * r1) * n2;
+  let localLeft = factor(l00, l01, l10, l11, x, y);
+  #[site(left)] let leftOpening = send P -> V(localLeft);
+  let expectedLeft = factor(l00, l01, l10, l11, r1, r0);
+  require @V leftOpening == expectedLeft;
+  let localRight = factor(r00, r01, r10, r11, x, y);
+  #[site(right)] let rightOpening = send P -> V(localRight);
+  let expectedRight = factor(r00, r01, r10, r11, r0, r1);
+  let rightValid = rightOpening == expectedRight;
+  let productValid = residual == leftOpening * rightOpening;
+  return (accepted = rightValid && productValid);
+}
+
+run WrongPoint = WrongPointProtocol;
+
+protocol WrongResidualProtocol roles(P,V)
+    (l00: F @(P,V), l01: F @(P,V), l10: F @(P,V), l11: F @(P,V),
+     r00: F @(P,V), r01: F @(P,V), r10: F @(P,V), r11: F @(P,V),
+     claim: F @(P,V), challenges: Random<F> @V) -> (accepted: bool @V) {
+  let a00 = l00 * r00;
+  let a01 = l00 * r01 + l01 * r00;
+  let a02 = l01 * r01;
+  let a10 = l00 * r10 + l10 * r00;
+  let a11 = l00 * r11 + l01 * r10 + l10 * r01 + l11 * r00;
+  let a12 = l01 * r11 + l11 * r01;
+  let a20 = l10 * r10;
+  let a21 = l10 * r11 + l11 * r10;
+  let a22 = l11 * r11;
+  let h0 = a00 + a00 + a01 + a02;
+  #[site(first0)] let m0 = send P -> V(h0);
+  let h1 = a10 + a10 + a11 + a12;
+  #[site(first1)] let m1 = send P -> V(h1);
+  let h2 = a20 + a20 + a21 + a22;
+  #[site(first2)] let m2 = send P -> V(h2);
+  let boundary0 = m0 + m0 + m1 + m2;
+  require @V boundary0 == claim;
+  #[site(draw0)] let r0 = challenges.draw();
+  #[site(deliver0)] let x = send V -> P(r0);
+  let k0 = a00 + x * a10 + (x * x) * a20;
+  #[site(second0)] let n0 = send P -> V(k0);
+  let k1 = a01 + x * a11 + (x * x) * a21;
+  #[site(second1)] let n1 = send P -> V(k1);
+  let k2 = a02 + x * a12 + (x * x) * a22;
+  #[site(second2)] let n2 = send P -> V(k2);
+  let claim1 = m0 + r0 * m1 + (r0 * r0) * m2;
+  let boundary1 = n0 + n0 + n1 + n2;
+  require @V boundary1 == claim1;
+  #[site(draw1)] let r1 = challenges.draw();
+  #[site(deliver1)] let y = send V -> P(r1);
+  let residual = n0;
+  let localLeft = factor(l00, l01, l10, l11, x, y);
+  #[site(left)] let leftOpening = send P -> V(localLeft);
+  let expectedLeft = factor(l00, l01, l10, l11, r0, r1);
+  require @V leftOpening == expectedLeft;
+  let localRight = factor(r00, r01, r10, r11, x, y);
+  #[site(right)] let rightOpening = send P -> V(localRight);
+  let expectedRight = factor(r00, r01, r10, r11, r0, r1);
+  let rightValid = rightOpening == expectedRight;
+  let productValid = residual == leftOpening * rightOpening;
+  return (accepted = rightValid && productValid);
+}
+
+run WrongResidual = WrongResidualProtocol;

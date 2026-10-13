@@ -1,32 +1,47 @@
-name = "zkc_arklib"
+name = "zkc_security"
 version = "0.0.0"
-defaultTargets = ["ZkcArkLib", "ZkcArkLibTests"]
+defaultTargets = ["ZkcSecurity", "ZkcSecurityTests"]
 
 [leanOptions]
 autoImplicit = false
 warningAsError = true
 
 [[require]]
+name = "Arklib"
+git = "https://github.com/Verified-zkEVM/ArkLib.git"
+rev = "db7005f84a9dbad7ff2abbbb4e8feeeac6f4dfd8"
+
+[[require]]
+name = "VCVio"
+git = "https://github.com/Verified-zkEVM/VCVio"
+rev = "d606eab018ab87bf4a0a6ac7b6d2da4fedfa53b0"
+
+[[require]]
+name = "CompPoly"
+git = "https://github.com/Verified-zkEVM/CompPoly"
+rev = "df591bb8c6745126d1d72f5243faae3022b0432a"
+
+[[require]]
+name = "PolyFun"
+git = "https://github.com/Verified-zkEVM/PolyFun"
+rev = "3710d71b28404a151b8d1f0ce080ea448778dec0"
+
+[[require]]
 name = "zkc"
 path = "../.."
 
 [[require]]
-name = "Arklib"
-git = "https://github.com/Verified-zkEVM/ArkLib.git"
-rev = "3f3f045dd295834c262bd6f0d9dfdfee07cc8e76"
-
-# Select the main package's Mathlib revision over upstream transitive pins.
-[[require]]
 name = "mathlib"
 git = "https://github.com/leanprover-community/mathlib4"
-rev = "0df444a360eaa60ab8c11dca51a86af692955474"
+rev = "d13f23b723b8a846827a245b89c10fc7d3f11612"
 
 [[lean_lib]]
-name = "ZkcArkLib"
-roots = ["ZkcArkLib"]
-globs = ["ZkcArkLib.+"]
+name = "ZkcSecurityTests"
+roots = ["TestsSecurity"]
+globs = ["TestsSecurity.+"]
+allowNonModules = true
 
 [[lean_lib]]
-name = "ZkcArkLibTests"
-roots = ["TestsArkLib"]
-globs = ["TestsArkLib.+"]
+name = "ZkcSecurity"
+globs = ["ZkcSecurity.+"]
+requiresModuleSystem = true

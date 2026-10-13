@@ -1,321 +1,103 @@
 #!/usr/bin/env python3
-"""Check package pins, architectural imports and module naming.
+"""Check exact dependency closure, source ownership and architectural imports.
 
-Lean's separate declaration audit checks types, proof bodies and axioms.
+The separate Lean declaration audit checks proof bodies and transitive axioms.
 """
-
 import argparse
-import hashlib
 import json
-import sys
 from pathlib import Path
 import re
+import sys
+import tomllib
 
-# The package directory, which is no longer this file's own now that the
-# checks sit together: support/ is beside lean/, not beside this.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from support.lean_headers import HeaderParser  # noqa: E402
-
+from support.lean_headers import HeaderParser
 
 ROOT = Path(__file__).resolve().parents[1]
-# Optional packages: directory, owned module families and the external package
-# names that must never enter the main manifest.
-INTEGRATIONS = {
-    "arklib": (ROOT / "integrations/arklib", ("ZkcArkLib", "TestsArkLib"),
-               ("Arklib", "VCVio", "PolyFun")),
-    "clean": (ROOT / "integrations/clean", ("ZkcClean", "TestsClean"), ("Clean", "CompPoly")),
-}
-OWNERS = {family: directory for directory, families, _ in INTEGRATIONS.values()
-          for family in families}
-BOUNDARIES = {
-    "family_and_iteration_realization": {
-        "roots": ["Zkc.Realization.Family", "Zkc.Realization.Iteration"],
-        "external": ["Init", "Lean", "Std"],
-        "forbidden": ["Zkc.Compiler", "Zkc.Protocols", "ZkcArkLib", "Tests", "Examples", "Tools"],
-    },
-    "participant_projection": {
-        "roots": ["Zkc.Compiler.Participant.Execution", "Zkc.Compiler.Participant.Counts",
-                  "Zkc.Compiler.Role.Counts"],
-        "external": ["Init", "Lean", "Std"],
-        "forbidden": ["Zkc.Protocols", "ZkcArkLib", "Tests", "Examples", "Tools"],
-    },
-    "source_definitions": {
-        "roots": ["Zkc.Source.DefinitionRenaming", "Zkc.Source.LocatedExecution",
-                  "Zkc.Source.ControlAgreement", "Zkc.Source.Protocol.Execution",
-                  "Zkc.Source.Family", "Zkc.Source.Protocol.Family"],
-        "external": ["Init", "Lean", "Std"],
-        "forbidden": ["Zkc.Compiler", "Zkc.Protocols", "ZkcArkLib", "Tests", "Examples", "Tools"],
-    },
-    "factor_semantic_contracts": {
-        "roots": ["Zkc.Modules.Factor", "Zkc.Modules.FactorState",
-                  "Zkc.Modules.FactorExecution", "Zkc.Modules.FactorBinding",
-                  "Zkc.Modules.FreshAllocation", "Zkc.Modules.PolynomialPreparation",
-                  "Zkc.Source.FactorQueries", "Zkc.Source.FactorInputs"],
-        "external": ["Init", "Lean", "Std", "Mathlib"],
-        "forbidden": ["Zkc.Compiler", "Zkc.Protocols", "ZkcArkLib", "Tests", "Examples", "Tools"],
-    },
-    "json_arrays": {
-        "roots": ["Zkc.Realization.JsonArrays"],
-        "external": ["Init", "Lean", "Std"],
-        "forbidden": ["Zkc.Compat", "Zkc.Protocols", "ZkcArkLib", "Tests", "TestsArkLib"],
-    },
-    "structural_readback": {
-        "roots": ["Zkc.Compiler.Readback.Compilation"],
-        "external": ["Init", "Lean", "Std", "Mathlib"],
-        "forbidden": ["Zkc.Compat", "Zkc.Protocols", "ZkcArkLib", "Tests", "TestsArkLib"],
-    },
-    "bytecode_endpoints": {
-        "roots": ["Zkc.Protocols.ScalarBytecode.Endpoint.Frames", "Zkc.Protocols.ScalarBytecode.ReadPackets", "Zkc.Protocols.ScalarBytecode.Suppliers.Causality"],
-        "external": ["Init", "Lean", "Std"],
-        "forbidden": ["Zkc.Compat", "ZkcArkLib", "Zkc.Protocols.ScalarBytecode.Schedules", "Zkc.Protocols.ScalarBytecode.Horner", "Zkc.Protocols.ScalarBytecode.StreamingFamily", "Tests", "TestsArkLib"],
-    },
-    "bytecode_execution": {
-        "roots": ["Zkc.Protocols.ScalarBytecode.Execution", "Zkc.Protocols.ScalarBytecode.Frames", "Zkc.Protocols.ScalarBytecode.MessageEvaluation.Composition"],
-        "external": ["Init", "Lean", "Std"],
-        "forbidden": ["Zkc.Compat", "ZkcArkLib", "Tests", "TestsArkLib"],
-    },
-    "public_dimensions": {
-        "roots": ["Zkc.Source.PublicDimensions", "Zkc.Protocols.AlgebraicRounds.ParameterFamily"],
-        "external": ["Init", "Lean", "Std"],
-        "forbidden": ["Zkc.Compat", "ZkcArkLib", "Zkc.Protocols.ScalarBytecode", "Tests"],
-    },
-    "scalar_codec_and_prover": {
-        "roots": ["Zkc.Protocols.ScalarBytecode.ProverCorrespondence", "Zkc.Protocols.ScalarBytecode.Certificates"],
-        "external": ["Init", "Lean", "Std"],
-        "forbidden": ["Zkc.Compat", "ZkcArkLib", "Tests", "TestsArkLib"],
-    },
-    "public_shape_and_local_code": {
-        "roots": ["Zkc.Source.MessageSchema", "Zkc.Compiler.Arithmetic.Dag", "Zkc.Transformations.EncodingReuse"],
-        "external": ["Init", "Lean", "Std"],
-        "forbidden": ["Zkc.Compat", "ZkcArkLib", "Zkc.Protocols", "Tests"],
-    },
-    "external_free_programs": {
-        "roots": ["ZkcArkLib.PolyFun.Blocks", "ZkcArkLib.PolyFun.Failure"],
-        "external": ["Init", "Lean", "Std", "Mathlib", "PolyFun"],
-        "forbidden": ["Zkc.Compat", "Zkc.Protocols", "ZkcArkLib.Sumcheck", "Tests", "TestsArkLib"],
-    },
-    "table_preparation": {
-        "roots": ["Zkc.Source.TablePreparation"],
-        "external": ["Init", "Lean", "Std"],
-        "forbidden": ["Zkc.Compat", "ZkcArkLib", "Zkc.Protocols", "Zkc.Polynomial", "Tests"],
-    },
-    "bilinear_preparation": {
-        "roots": ["Zkc.Polynomial.Bilinear.Compilation"],
-        "external": ["Init", "Lean", "Std", "Mathlib"],
-        "forbidden": ["Zkc.Compat", "ZkcArkLib", "Zkc.Protocols", "Tests"],
-    },
-    "commitment_sessions": {
-        "roots": ["Zkc.Protocols.CommitmentSessions.Source"],
-        "external": ["Init", "Lean", "Std"],
-        "forbidden": ["Zkc.Compat", "ZkcArkLib", "Zkc.Polynomial", "Tests"],
-    },
-    "execution_representations": {
-        "roots": ["Zkc.Realization.InstructionSimulation", "Zkc.Realization.InstructionComposition", "Zkc.Realization.ByteEncoding", "Zkc.Semantics.OperationContract", "Zkc.Semantics.Locality"],
-        "external": ["Init", "Lean", "Std"],
-        "forbidden": ["Zkc.Compat", "ZkcArkLib", "Zkc.Protocols", "Zkc.Examples", "Tests"],
-    },
-    "scalar_rounds": {
-        "roots": ["Zkc.Protocols.AlgebraicRounds.EarlySource", "Zkc.Protocols.AlgebraicRounds.BlockTemplates", "Zkc.Protocols.Sumcheck.ProductFamily.Wire"],
-        "external": ["Init", "Lean", "Std", "Mathlib"],
-        "forbidden": ["Zkc.Compat", "ZkcArkLib", "Zkc.Examples", "Tests"],
-    },
-    "captured_programs": {
-        "roots": ["Zkc.Protocols.CapturedPrograms.Probability", "Zkc.Protocols.CorrelatedSetup.Communication"],
-        "external": ["Init", "Lean", "Std", "Mathlib", "Aesop"],
-        "forbidden": ["Zkc.Compat", "ZkcArkLib", "Zkc.Examples", "Tests"],
-    },
-    "local_prover": {
-        "roots": ["Zkc.Protocols.Sumcheck.LocalProver.Admission", "Zkc.Source.Frontend"],
-        "external": ["Init", "Lean", "Std", "Mathlib", "Aesop"],
-        "forbidden": ["Zkc.Compat", "ZkcArkLib", "Zkc.Examples", "Tests"],
-    },
-    "bounded_cache": {
-        "roots": ["Zkc.Modules.BoundedCache"],
-        "external": ["Init", "Lean", "Std"],
-        "forbidden": ["Zkc.Compat", "Zkc.Compiler", "Zkc.Protocols", "Zkc.Examples", "Tests"],
-    },
-    "block_compiler": {
-        "roots": ["Zkc.Compiler.Blocks.StateRefinement", "Zkc.Compiler.Blocks.BoundedCache"],
-        "external": ["Init", "Lean", "Std", "Mathlib"],
-        "forbidden": ["Zkc.Compat", "Zkc.Protocols", "Zkc.Examples", "Tests"],
-    },
-    "bound_inputs": {
-        "roots": ["Zkc.Source.Elaboration"],
-        "external": ["Init", "Lean", "Std", "Mathlib", "Aesop"],
-        "forbidden": ["Zkc.Compat", "Zkc.Protocols", "Zkc.Examples", "Tests"],
-    },
-    "factor_allocation": {
-        "roots": ["Zkc.Modules.FreshAllocation", "Zkc.Polynomial.Factors"],
-        "external": ["Init", "Lean", "Std", "Mathlib"],
-        "forbidden": ["Zkc.Compat", "Zkc.Protocols", "Zkc.Examples", "Tests"],
-    },
-    "sumcheck": {
-        "roots": ["Zkc.Protocols.Sumcheck.Security", "Zkc.Protocols.Sumcheck.Admission",
-                  "Zkc.Protocols.Sumcheck.Optimization", "Zkc.Protocols.Sumcheck.Framed",
-                  "Zkc.Protocols.Sumcheck.Endpoints.Composition"],
-        "external": ["Init", "Lean", "Std", "Mathlib"],
-        "forbidden": ["Zkc.Compat", "Zkc.Examples", "Tests"],
-    },
-    "probability": {
-        "roots": ["Zkc.Probability.FramedMask", "Zkc.Probability.AdaptiveTape",
-                  "Zkc.Probability.AffineMask", "Zkc.Probability.UniformTape",
-                  "Zkc.Probability.FiniteKernel", "Zkc.Probability.ProductTape",
-                  "Zkc.Probability.ConditionalTape", "Zkc.Probability.Concentration",
-                  "Zkc.Probability.FiniteDomain", "Zkc.Probability.Disclosure"],
-        "external": ["Init", "Lean", "Std", "Mathlib"],
-        "forbidden": ["Zkc.Compat", "Zkc.Protocols", "Zkc.Source", "Zkc.Compiler",
-                      "Zkc.Examples", "Tests"],
-    },
-    "embedded_roots": {
-        "roots": ["Zkc.Polynomial.EmbeddedRoots", "Zkc.Protocols.Sumcheck.ProductFamily.OneRound"],
-        "external": ["Init", "Lean", "Std", "Mathlib"],
-        "forbidden": ["Zkc.Compat", "ZkcArkLib", "Zkc.Examples", "Tests"],
-    },
-    "correlated_preparation": {
-        "roots": ["Zkc.Protocols.CorrelatedSetup.Preparation"],
-        "external": ["Init", "Lean", "Std", "Mathlib"],
-        "forbidden": ["Zkc.Compat", "Zkc.Examples", "Tests"],
-    },
-    "factor_compiler": {
-        "roots": ["Zkc.Compiler.FactorOptimization",
-                  "Zkc.Compiler.FactorOptimization.Size"],
-        "external": ["Init", "Lean", "Std"],
-        "forbidden": ["Zkc.Compat", "Zkc.Protocols", "Zkc.Examples", "Tests"],
-    },
-    "polynomial_preparation": {
-        "roots": ["Zkc.Modules.PolynomialPreparation"],
-        "external": ["Init", "Lean", "Std", "Mathlib"],
-        "forbidden": ["Zkc.Compat", "Zkc.Protocols", "Zkc.Examples", "Tests"],
-    },
-    "immutable_operations": {
-        "roots": ["Zkc.Modules.ImmutableCache", "Zkc.Transformations.Memoization",
-                  "Zkc.Modules.Preparation", "Zkc.Semantics.Preparation"],
-        "external": ["Init", "Lean", "Std"],
-        "forbidden": ["Zkc.Compat", "Zkc.Protocols", "Zkc.Examples", "Tests"],
-    },
-    "foundation": {
-        "roots": ["Zkc", "Tests.FoundationAudit"],
-        "external": ["Init", "Lean", "Std"],
-        "forbidden": ["Zkc.Compat", "Zkc.Protocols", "Zkc.Examples"],
-    },
-    "compiler": {
-        "roots": ["Zkc.Compiler.ArtifactFormat", "Zkc.Compiler.Admission",
-                  "Zkc.Compiler.Arithmetic.Horner"],
-        "external": ["Init", "Lean", "Std", "Mathlib"],
-        "forbidden": ["Zkc.Compat", "Zkc.Protocols", "Zkc.Examples", "Tests"],
-    },
-    "algebraic_rounds": {
-        "roots": ["Zkc.Protocols.AlgebraicRounds.Framed",
-                  "Zkc.Protocols.AlgebraicRounds.Endpoints"],
-        "external": ["Init", "Lean", "Std", "Mathlib"],
-        "forbidden": ["Zkc.Compat", "Zkc.Examples", "Tests"],
-    },
-}
+INTEGRATIONS = {'arklib': ('ZkcSecurity', 'TestsSecurity'), 'clean': ('ZkcClean', 'TestsClean')}
 
 
-def check_boundary(name, boundary, parser):
-    pending = list(boundary["roots"])
-    sources = {}
-    external = set()
-    while pending:
-        module = pending.pop()
-        if module in sources:
-            continue
-        if any(module == prefix or module.startswith(prefix + ".")
-               for prefix in boundary["forbidden"]):
-            raise ValueError(f"{name}: forbidden dependency {module}")
-        family = module.split(".")[0]
-        if family not in {"Zkc", "Tests", "Examples", "Tools", *OWNERS}:
-            if family not in boundary["external"]:
-                raise ValueError(f"{name}: undeclared external dependency {module}")
-            external.add(family)
-            continue
-        root = OWNERS.get(family, ROOT)
-        path = root.joinpath(*module.split(".")).with_suffix(".lean")
-        data = path.read_bytes()
-        source = data.decode()
-        namespaces = re.findall(r"^namespace\s+(\S+)", source, re.M)
-        if any(re.match(r"[A-Z]\d", part)
-               for namespace in namespaces for part in namespace.split(".")):
-            raise ValueError(f"{name}: numbered namespace in {module}")
-        sources[module] = hashlib.sha256(data).hexdigest()
-        pending.extend(parser.imports(source, path))
-    return {"roots": boundary["roots"], "local_sources": sources,
-            "direct_external_families": sorted(external)}
+def below(name, root):
+    return name == root or name.startswith(root + '.')
 
 
-def package_pins(integrations):
-    main = json.loads((ROOT / "lake-manifest.json").read_text())
-    pins = {entry["name"]: entry["rev"] for entry in main["packages"]}
-    if any(set(external) & pins.keys() for _, _, external in INTEGRATIONS.values()):
-        raise ValueError("optional dependencies entered the main package")
-    shared = dict(pins)
-    for selected in integrations:
-        directory = INTEGRATIONS[selected][0]
-        optional = json.loads((directory / "lake-manifest.json").read_text())
-        other = {entry["name"]: entry["rev"] for entry in optional["packages"]
-                 if entry["type"] == "git"}
-        for name in pins.keys() | (shared.keys() & other.keys()):
-            if other.get(name) != shared[name]:
-                raise ValueError(f"incompatible shared dependency: {name} in {selected}")
-        shared.update(other)
-        if (ROOT / "lean-toolchain").read_bytes() != (directory / "lean-toolchain").read_bytes():
-            raise ValueError(f"incompatible main and {selected} integration Lean toolchains")
-    return pins
+def permitted(owner, dependency):
+    if below(owner, 'Zkc'):
+        if any(below(dependency, root) for root in (
+                'Tests', 'TestsSecurity', 'TestsClean', 'ZkcExamples', 'ZkcTools',
+                'ZkcSecurity', 'ZkcClean', 'ArkLib', 'VCVio', 'Clean', 'PolyFun', 'CompPoly')):
+            return False
+        if not below(owner, 'Zkc.Protocols') and below(dependency, 'Zkc.Protocols'):
+            return False
+    if below(owner, 'ZkcSecurity') and not below(owner, 'ZkcSecurity.Examples'):
+        if any(below(dependency, root) for root in ('ZkcExamples', 'Tests', 'TestsSecurity',
+                'TestsClean', 'ZkcTools', 'ZkcClean', 'Clean')):
+            return False
+    if below(owner, 'ZkcClean'):
+        if any(below(dependency, root) for root in ('Tests', 'TestsSecurity', 'TestsClean',
+                'ZkcTools', 'ZkcExamples', 'ZkcSecurity', 'ArkLib', 'VCVio', 'PolyFun')):
+            return False
+    return True
 
 
-def all_modules(root, family):
-    return [".".join(path.relative_to(root).with_suffix("").parts)
-            for path in sorted((root / family).rglob("*.lean"))]
+def check(selected, lake):
+    packages = [(ROOT, ('Zkc', 'ZkcExamples', 'ZkcTools', 'Tests'))]
+    packages.extend((ROOT / 'integrations' / name, INTEGRATIONS[name]) for name in selected)
+    pins, graph, source_hashes = {}, {}, {}
+    import hashlib
+    toolchain = (ROOT / 'lean-toolchain').read_text()
+    for directory, families in packages:
+        assert (directory / 'lean-toolchain').read_text() == toolchain, f'{directory}: toolchain mismatch'
+        manifest = json.loads((directory / 'lake-manifest.json').read_text())
+        names = set()
+        for dep in manifest['packages']:
+            assert dep['name'] not in names, f'duplicate dependency: {dep["name"]}'
+            names.add(dep['name'])
+            if dep['type'] == 'path':
+                assert directory != ROOT and dep['name'] == 'zkc' and (directory / dep['dir']).resolve() == ROOT
+                continue
+            assert dep['type'] == 'git' and re.fullmatch('[0-9a-f]{40}', dep['rev']), dep
+            value = (dep['url'].removesuffix('.git'), dep['rev'])
+            assert dep['name'] not in pins or pins[dep['name']] == value, f'conflicting pin: {dep["name"]}'
+            pins[dep['name']] = value
+        if directory == ROOT:
+            assert not names.intersection({'Arklib', 'VCVio', 'Clean', 'PolyFun', 'CompPoly'})
+        config = tomllib.loads((directory / 'lakefile.toml').read_text())
+        targets = {entry['name'] for kind in ('lean_lib', 'lean_exe') for entry in config.get(kind, [])}
+        assert set(config['defaultTargets']) == targets, f'{directory}: default targets omit maintained code'
+        files = [p for family in families for p in (directory / family).rglob('*.lean')]
+        files += [directory / (family + '.lean') for family in families if (directory / (family + '.lean')).is_file()]
+        with HeaderParser(root=directory, lake=lake) as headers:
+            for path in sorted(files):
+                source = path.read_text()
+                owner = '.'.join(path.relative_to(directory).with_suffix('').parts)
+                graph[owner] = headers.imports(source, path)
+                source_hashes[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
+                if owner.startswith(('Zkc.', 'ZkcExamples.', 'ZkcSecurity.')):
+                    assert source.startswith('module\n'), f'{path}: expected module-system source'
+    for owner, dependencies in graph.items():
+        pending, seen = list(dependencies), set()
+        while pending:
+            dependency = pending.pop()
+            if dependency in seen:
+                continue
+            seen.add(dependency)
+            assert permitted(owner, dependency), f'forbidden dependency: {owner} reaches {dependency}'
+            pending.extend(graph.get(dependency, []))
+    return {'status': 'pass', 'toolchain': toolchain.strip(), 'packages': len(packages),
+            'modules': len(graph), 'pins': pins, 'source_sha256': source_hashes}
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    integrations = parser.add_mutually_exclusive_group()
-    integrations.add_argument("--main-only", action="store_true")
-    integrations.add_argument("--integration", action="append", choices=sorted(INTEGRATIONS),
-                              help="check only the named optional packages (default: all)")
     selection = parser.add_mutually_exclusive_group()
-    selection.add_argument("--lean", default="lean")
-    selection.add_argument("--lake", help="select the header parser through Lake env lean")
+    selection.add_argument('--main-only', action='store_true')
+    selection.add_argument('--integration', action='append', choices=sorted(INTEGRATIONS))
+    parser.add_argument('--lake', default='lake')
     args = parser.parse_args()
     selected = [] if args.main_only else args.integration or sorted(INTEGRATIONS)
-    pins = package_pins(selected)
-    boundaries = {name: value for name, value in BOUNDARIES.items()
-                  if not ("arklib" not in selected and name == "external_free_programs")}
-    boundaries["source_and_module_contracts"] = {
-        "roots": all_modules(ROOT, "Zkc/Source") + all_modules(ROOT, "Zkc/Modules"),
-        "external": ["Init", "Lean", "Std", "Mathlib", "Aesop"],
-        "forbidden": ["Zkc.Compiler", "Zkc.Protocols", "ZkcArkLib", "Tests", "Examples", "Tools"],
-    }
-    boundaries["complete_main_library"] = {
-        "roots": ["Zkc"] + all_modules(ROOT, "Zkc"),
-        "external": ["Init", "Lean", "Std", "Mathlib", "Aesop"],
-        "forbidden": ["Zkc.Compat", "ZkcArkLib", "ZkcClean", "Tests", "TestsArkLib", "TestsClean",
-                      "Examples", "Tools"],
-    }
-    if "arklib" in selected:
-        boundaries["complete_optional_library"] = {
-            "roots": all_modules(INTEGRATIONS["arklib"][0], "ZkcArkLib"),
-            "external": ["Init", "Lean", "Std", "Mathlib", "Aesop", "ArkLib", "VCVio", "PolyFun"],
-            "forbidden": ["Zkc.Compat", "Tests", "TestsArkLib", "Examples", "Tools"],
-        }
-    if "clean" in selected:
-        boundaries["complete_clean_library"] = {
-            "roots": all_modules(INTEGRATIONS["clean"][0], "ZkcClean"),
-            "external": ["Init", "Lean", "Std", "Mathlib", "Aesop", "Clean"],
-            "forbidden": ["Zkc.Compat", "Tests", "TestsArkLib", "TestsClean", "Examples", "Tools",
-                          "ZkcArkLib"],
-        }
-    with HeaderParser(args.lean, lake=args.lake) as headers:
-        checked = {name: check_boundary(name, boundary, headers) for name, boundary in boundaries.items()}
-    print(json.dumps({"format": "zkc.library-boundaries.v0", "status": "pass",
-                      "main_package_pins": pins,
-                      "boundaries": checked,
-                      "scope": "complete owned library imports, selected narrower dependency boundaries, "
-                               "module naming and compatible package pins; not a theorem or native proof"},
-                     indent=2))
+    print(json.dumps(check(selected, args.lake), indent=2))
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

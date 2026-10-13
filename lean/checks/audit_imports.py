@@ -20,12 +20,7 @@ def modules(root, directory, excluded=()):
 
 
 def expected(root, library, tests, examples=(), tools=(), marker="WHOLE-LIBRARY-AUDIT-PASS"):
-    excluded = {Path(tests) / "Audit.lean", Path(tests) / "LibraryImports.lean",
-                # Executable wrappers each define the process-level `main`.
-                # Audit their namespaced consumer/CLI implementations below,
-                # and compile each wrapper separately as a Lake executable.
-                Path("Tools/Interactive.lean"), Path("Tools/Artifact.lean"),
-                Path("Tools/RequirementChecker.lean")}
+    excluded = {Path(tests) / "Audit.lean", Path(tests) / "LibraryImports.lean"}
     names = modules(root, library, excluded) + modules(root, tests, excluded)
     for directory in examples:
         names += modules(root, directory, excluded)
@@ -38,12 +33,12 @@ def expected(root, library, tests, examples=(), tools=(), marker="WHOLE-LIBRARY-
     )
     imports += "".join(f"import {name}\n" for name in names)
     families = [library, tests] + list(examples) + list(tools)
-    audit = f"import {tests}.LibraryImports\nimport Tools.DeclarationAudit\n\n"
+    audit = f"import {tests}.LibraryImports\nimport ZkcTools.DeclarationAudit\n\n"
     # The widest audit names itself like the narrower ones do, so a build log
     # says which scope passed rather than leaving the broadest one as the
     # unlabelled default. Each library generated here gets its own name: two
     # scopes emitting one marker would be no more legible than the default.
-    audit += ("run_cmd Tools.DeclarationAudit.check ["
+    audit += ("run_cmd ZkcTools.DeclarationAudit.check ["
               + ", ".join("`" + x.replace("/", ".") for x in families)
               + f"] \"{marker}\"\n")
     return {root / tests / "LibraryImports.lean": imports,
@@ -52,7 +47,7 @@ def expected(root, library, tests, examples=(), tools=(), marker="WHOLE-LIBRARY-
 
 # Each optional integration package: its library, its tests and its audit marker.
 INTEGRATIONS = {
-    "arklib": ("ZkcArkLib", "TestsArkLib", "ARKLIB-INTEGRATION-AUDIT-PASS"),
+    "arklib": ("ZkcSecurity", "TestsSecurity", "SECURITY-AUDIT-PASS"),
     "clean": ("ZkcClean", "TestsClean", "CLEAN-INTEGRATION-AUDIT-PASS"),
 }
 
@@ -65,8 +60,8 @@ def main():
     selection.add_argument("--integration", action="append", choices=sorted(INTEGRATIONS),
                            help="check only the named optional packages (default: all)")
     args = parser.parse_args()
-    outputs = expected(ROOT, "Zkc", "Tests", ["Examples"],
-                       ["Tools/Interactive", "Tools/Artifact", "Tools/Crypto", "Tools/RequirementChecker"])
+    outputs = expected(ROOT, "Zkc", "Tests", ["ZkcExamples"],
+                       ["ZkcTools/CommonSource/Reference", "ZkcTools/JsonSupport"], marker="CORE-AUDIT-PASS")
     selected = [] if args.main_only else args.integration or sorted(INTEGRATIONS)
     for name in selected:
         library, tests, marker = INTEGRATIONS[name]

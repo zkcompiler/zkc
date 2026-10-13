@@ -115,7 +115,7 @@ depth or node admission. An inline graph subtree can satisfy a later text lookup
 only after that spelling passes its own expansion bound; the containing graph's
 bound alone is insufficient. This loading policy is separate from portable formation
 and live-value accounting: C++ formation can accept a program that the Rust Host refuses for loading
-capacity; the independent Lean descriptor model has its own admission scope.
+capacity. The current Lean import profile does not admit variant descriptors.
 Executable values incur the charges below. Bounded unpack scratch is additional
 to installed metadata; concurrent
 loads and allocator overhead are not a process memory guarantee.
@@ -158,8 +158,8 @@ adds `256 + 512 * activePayloadCount` and each active value's retained-byte char
 These are conservative profile charges, not allocator measurements. The native
 representation retains canonical nominal bytes, not an additional expanded
 nominal tree, and uses bounded immutable descriptor storage and compile-time size
-checks. The independent Lean model uses the same declared charge without
-establishing native execution correspondence. Descriptor sharing does not discount
+checks. These charges have no maintained Lean correspondence theorem.
+Descriptor sharing does not discount
 a live value's budget. Changing this accounting changes the executable profile
 and requires corresponding updates to its actual consumers.
 

@@ -1,4 +1,8 @@
-import Zkc.Semantics.Execution
+module
+
+public import Zkc.Semantics.Execution
+
+@[expose] public section
 
 /-! Program-producing interpretations of finite protocol operations.
 

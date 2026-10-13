@@ -1,4 +1,8 @@
-import Zkc.Polynomial.Layout
+module
+
+public import Zkc.Polynomial.Layout
+
+@[expose] public section
 
 /-! The fixed-table, honest-commitment experiment boundary.
 

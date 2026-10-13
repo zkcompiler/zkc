@@ -1,4 +1,8 @@
-import Zkc.Protocols.AlgebraicRounds.Construction
+module
+
+public import Zkc.Protocols.AlgebraicRounds.Construction
+
+@[expose] public section
 
 /-! Interactive execution with an explicit fresh-challenge provider.
 

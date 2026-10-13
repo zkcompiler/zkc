@@ -1,4 +1,8 @@
-import Zkc.Source.Program
+module
+
+public import Zkc.Source.Program
+
+@[expose] public section
 
 /-! Untyped finite source data, typed elaboration and exact erasure laws.
 

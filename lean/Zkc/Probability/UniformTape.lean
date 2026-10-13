@@ -1,8 +1,12 @@
-import Zkc.Probability.AdaptiveTape
-import Mathlib.Algebra.BigOperators.Field
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Rat.Cast.Order
-import Mathlib.Data.Fintype.BigOperators
+module
+
+public import Zkc.Probability.AdaptiveTape
+public import Mathlib.Algebra.BigOperators.Field
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Data.Rat.Cast.Order
+public import Mathlib.Data.Fintype.BigOperators
+
+@[expose] public section
 
 /-! Independent uniform finite tapes, with executable rational expectations.
 

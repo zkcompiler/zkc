@@ -69,7 +69,9 @@ def test_clean_integration_requires_the_committed_control(current, monkeypatch, 
     else:
         with pytest.raises(ValueError, match="air-control.json is not the current Clean export"):
             developer.main()
-    assert calls == [(["lake", "env", "lean", "--run", "TestsClean/Control.lean"],
+    assert calls == [([sys.executable, str(tmp_path / "lean/checks/check_library.py"),
+                      "--integration", "clean"], None),
+                    (["lake", "env", "lean", "--run", "TestsClean/Control.lean"],
                       tmp_path / "lean/integrations/clean")]
     root, = (tmp_path / "reports/runs").iterdir()
     assert json.loads((root / "run.json").read_text())["status"] == ("pass" if current else "failed")

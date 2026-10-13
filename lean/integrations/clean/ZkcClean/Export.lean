@@ -130,7 +130,7 @@ theorem exportExpression_ok {width : Nat} :
 
 theorem exportExpression_of_bounded {width : Nat} :
     ∀ {e : Expression F}, Bounded width e → exportExpression width e = .ok (encode e)
-  | .var v, h => by simp only [exportExpression, encode, if_pos (show v.index < width from h)]
+  | .var v, h => by simp only [exportExpression, encode, ite_eq_left (show v.index < width from h)]
   | .const c, _ => rfl
   | .add left right, h => by
       simp only [exportExpression, exportExpression_of_bounded h.1,

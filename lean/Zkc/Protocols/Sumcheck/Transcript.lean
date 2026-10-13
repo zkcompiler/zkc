@@ -1,5 +1,9 @@
-import Zkc.Protocols.Sumcheck.Verifier
-import Zkc.Polynomial.Coordinates
+module
+
+public import Zkc.Protocols.Sumcheck.Verifier
+public import Zkc.Polynomial.Coordinates
+
+@[expose] public section
 
 /-! Connect the residual-polynomial verifier to one fixed statement and the
 actual complete challenge sequence. -/
@@ -53,7 +57,7 @@ theorem verify_iff_final (p : Quadratic F n) (claim : F) (strategy : Strategy F 
       | send message next =>
           rcases coins with ⟨r, tail⟩
           by_cases passes : message.boundary = claim
-          · simp only [verify, finalClaim, if_pos passes]
+          · simp only [verify, finalClaim, ite_eq_left passes]
             rw [ih, Quadratic.eval_restrict]
             rfl
           · simp [verify, finalClaim, passes]

@@ -1,4 +1,8 @@
-import Mathlib.Logic.Equiv.Defs
+module
+
+public import Mathlib.Logic.Equiv.Defs
+
+@[expose] public section
 
 /-! Observation fibers under an explicit change of sample representation.
 

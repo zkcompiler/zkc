@@ -1,4 +1,8 @@
-import Std
+module
+
+public import Std
+
+@[expose] public section
 
 /-! Finite typed contexts shared by source formation and execution plans.
 

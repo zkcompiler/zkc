@@ -1,4 +1,8 @@
-import Zkc.Protocols.Sumcheck.Execution
+module
+
+public import Zkc.Protocols.Sumcheck.Execution
+
+@[expose] public section
 
 /-! Source-bound completeness and ordinary interactive soundness.
 

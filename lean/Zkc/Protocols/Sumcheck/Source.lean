@@ -1,5 +1,9 @@
-import Zkc.Protocols.Sumcheck.Transcript
-import Zkc.Protocols.AlgebraicRounds.Fresh
+module
+
+public import Zkc.Protocols.Sumcheck.Transcript
+public import Zkc.Protocols.AlgebraicRounds.Fresh
+
+@[expose] public section
 
 /-! A typed whole-protocol verifier source.
 

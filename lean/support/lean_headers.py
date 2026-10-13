@@ -9,7 +9,7 @@ from pathlib import Path
 import subprocess
 
 # The formal package, which is this module's parent now that it sits in
-# support/: it runs Lean over Tools/ImportHeaders.lean from there.
+# support/: it runs Lean over ZkcTools/ImportHeaders.lean from there.
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -17,7 +17,7 @@ class HeaderParser:
     def __init__(self, lean="lean", root=ROOT, lake=None):
         command = [lake, "env", "lean"] if lake else [lean]
         self.process = subprocess.Popen(
-            [*command, "-DwarningAsError=true", "--run", str(ROOT / "Tools/ImportHeaders.lean")],
+            [*command, "-DwarningAsError=true", "--run", str(ROOT / "ZkcTools/ImportHeaders.lean")],
             cwd=root, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
         self.cache = {}
 

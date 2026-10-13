@@ -25,7 +25,7 @@ def check(root, output, with_arklib=False, lake="lake"):
     results = {}
     for kind in (['main', 'arklib'] if with_arklib else ['main']):
         upstream = root if kind == 'main' else root / 'integrations/arklib'
-        dependency = 'zkc' if kind == 'main' else 'zkc_arklib'
+        dependency = 'zkc' if kind == 'main' else 'zkc_security'
         client = output / kind
         client.mkdir()
         shutil.copy2(root / 'lean-toolchain', client / 'lean-toolchain')
@@ -34,13 +34,13 @@ def check(root, output, with_arklib=False, lake="lake"):
         compiled_source = client / 'Client.lean'
         shutil.copy2(source, compiled_source)
         (client / 'Audit.lean').write_text(
-            'import Client\nimport Tools.DeclarationAudit\n\n'
-            'run_cmd Tools.DeclarationAudit.check [`Client]\n')
+            'import Client\nimport ZkcTools.DeclarationAudit\n\n'
+            'run_cmd ZkcTools.DeclarationAudit.check [`Client]\n')
         (client / 'lakefile.toml').write_text(
             'name = "zkc_client"\ndefaultTargets = ["Client"]\n\n'
             '[[require]]\nname = ' + json.dumps(dependency) + '\n'
             'path = ' + json.dumps(str(upstream)) + '\n\n'
-            '[[lean_lib]]\nname = "Client"\nroots = ["Client", "Audit"]\n')
+            '[[lean_lib]]\nname = "Client"\nroots = ["Client", "Audit"]\nallowNonModules = true\n')
         manifest = json.loads((upstream / 'lake-manifest.json').read_text())
         manifest['name'] = 'zkc_client'
         manifest['packages'].append({

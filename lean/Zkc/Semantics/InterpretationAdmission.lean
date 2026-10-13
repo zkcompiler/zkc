@@ -1,5 +1,9 @@
-import Zkc.Semantics.Interpretation
-import Zkc.Semantics.Boundary
+module
+
+public import Zkc.Semantics.Interpretation
+public import Zkc.Semantics.Boundary
+
+@[expose] public section
 
 /-! Phase and uniform call-bound transport across operation interpretation.
 

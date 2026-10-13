@@ -15,6 +15,7 @@ Examples are informative. [Status](../status.md) records implemented coverage.
 | Data | [Variants](ir/variants.md), [nested data](ir/data.md) |
 | Construction and analysis | [Transcripts](ir/construction.md), [public-coin views](ir/public-coin.md), [compiler limits](ir/limits.md) |
 | Serialized artifacts | [Program](formats/program.md), [Entry package and interface](formats/entry.md), [proof deployment and transport](formats/proof.md), [message frames and setups](formats/messages.md) |
+| Formal import | [Scalar mathematical source](formats/common-source.md): retained program and relation-body exports |
 | Host execution | [Entries](runtime/entries.md), [joint bundles](runtime/joint.md), [proofs](runtime/proofs.md), [attempts](runtime/attempts.md), [services](runtime/services.md) |
 | Operational boundaries | [Capacity](runtime/capacity.md), [file admission and publication](runtime/publication.md) |
 
@@ -39,15 +40,13 @@ premises. A law alone does not prove that a C++ checker or Rust kernel realizes 
 | External constructions | [Hash-chain and duplex transitions](realization/external-constructions.md): explicit native primitive calls |
 | Validation | [Refinement](verification/refinement.md), [analysis](verification/analysis.md), [judgments](verification/judgments.md): the obligations of source-relative checking |
 
-The mathematical chapters use the [formal core](../../lean/docs/spec/README.md)
-vocabulary of signatures, interpretations, handlers, complete results and
-observations. Those definitions are normative for the parameterized laws;
-a native consumer must supply an instance and establish its connection to
-actual execution. The native contracts above define the implemented surfaces.
-Formal profiles supply informative examples and separate proof subjects,
-without selecting another native execution path.
-[Correspondence maps](../../lean/docs/README.md#definitions-and-proofs) identify
-exact Lean declarations and their premises.
+The mathematical chapters specify parameterized obligations over signatures,
+interpretations, handlers, complete results and observations. A native consumer
+must supply an instance and establish its connection to actual execution.
+The current [formal reference](../../lean/docs/README.md) mechanizes selected
+models and protocol connections; [formal support](../../lean/docs/support.md)
+identifies their exact claims. Unmechanized native contracts remain obligations,
+not implicit theorems of the Lean package.
 
 ## Conformance
 

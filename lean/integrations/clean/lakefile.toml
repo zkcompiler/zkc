@@ -19,17 +19,15 @@ rev = "b449bf590f93e13827c3c7e747e392d6969aa380"
 [[require]]
 name = "CompPoly"
 git = "https://github.com/Verified-zkEVM/CompPoly"
-rev = "a09455a22fea4623a2a1c5b363cf6efc61486a83"
+rev = "df591bb8c6745126d1d72f5243faae3022b0432a"
 
 # Select the main package's Mathlib revision over upstream transitive pins.
 [[require]]
 name = "mathlib"
 git = "https://github.com/leanprover-community/mathlib4"
-rev = "0df444a360eaa60ab8c11dca51a86af692955474"
+rev = "d13f23b723b8a846827a245b89c10fc7d3f11612"
 
-# Clean's library requires module-system importers. A `module` file cannot
-# import the main zkc library, which is not a module-system package, so these
-# libraries import Clean from ordinary files.
+# The adapter is kept separate from protocol security and uses the shared pins.
 [[lean_lib]]
 name = "ZkcClean"
 roots = ["ZkcClean"]

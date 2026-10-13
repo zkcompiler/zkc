@@ -1,5 +1,9 @@
-import Zkc.Protocols.Sumcheck.Committed.Statement
-import Zkc.Protocols.Sumcheck.Acceptance
+module
+
+public import Zkc.Protocols.Sumcheck.Committed.Statement
+public import Zkc.Protocols.Sumcheck.Acceptance
+
+@[expose] public section
 
 /-! Actual adaptive rounds followed by two sequential opening checks.
 

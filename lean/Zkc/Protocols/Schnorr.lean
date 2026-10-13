@@ -1,6 +1,10 @@
-import Mathlib.Algebra.Module.Basic
-import Mathlib.Algebra.Field.Basic
-import Mathlib.Tactic.Abel
+module
+
+public import Mathlib.Algebra.Module.Basic
+public import Mathlib.Algebra.Field.Basic
+public import Mathlib.Tactic.Abel
+
+@[expose] public section
 
 /-! Algebraic completeness and two-response extraction for the Schnorr equation.
 
