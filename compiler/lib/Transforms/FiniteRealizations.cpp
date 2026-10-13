@@ -61,8 +61,9 @@ OwningOpRef<ModuleOp> normalizeSelectionCallback(Computation &computation,
     return {};
   }
   // The helper APIs also require operation/slot counters. Bound these adapters
-  // by the same remaining optional work; every copy additionally debits the
-  // shared structural counter, so another callback or retry cannot refill it.
+  // by the same remaining optional work; every copy debits the callback view,
+  // which settles into the shared counter when its scope ends. Neither another
+  // callback nor a retry can refill it.
   unsigned operations = static_cast<unsigned>(
       std::min<uint64_t>(structural, std::numeric_limits<unsigned>::max()));
   uint64_t slots = structural;

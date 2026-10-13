@@ -253,9 +253,21 @@ std::optional<Reduction> analyzeReduction(const ComputationFacts &facts,
     facts.reportMissingAccess();
     return std::nullopt;
   }
-  if (combined.facet->law.algebra == protocol::ComputationAlgebra::FieldRing &&
-      !facts.payload.fieldFormula())
-    return std::nullopt;
+  if (combined.facet->law.algebra == protocol::ComputationAlgebra::FieldRing) {
+    if (!facts.payload.fieldFormula())
+      return std::nullopt;
+    // The field reader admits indices and matrix slices, but element domains
+    // must carry field vectors. An unused zipped item still belongs to the
+    // source domain and cannot disappear from independent comparison.
+    for (const auto &item : facts.view.items) {
+      auto *factor = facts.view.iteration[item.iteration].operation;
+      if (isa<data::DomainElementsOp>(factor) &&
+          !isa<algebra::FieldVectorType>(factor->getOperand(0).getType())) {
+        facts.payload.formula(factor);
+        return std::nullopt;
+      }
+    }
+  }
   if (combined.facet->law.algebra ==
       protocol::ComputationAlgebra::GroupModule) {
     if (!facts.payload.moduleFormula())

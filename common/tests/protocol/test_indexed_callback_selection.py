@@ -11,7 +11,6 @@ import pytest
 
 from input_files import decimal_values
 from octic_reference import P, add as extension_add, mul as extension_mul
-from source_modules import finite_modules
 from test_compositional_protocol_math import ProjectEntry, project_modules, published_inputs
 from test_total_callback_selection import compile_entry
 
@@ -78,9 +77,8 @@ use {module}::{{{protocol}}};
 domain F = field("{field}");
 run Demo = {protocol}<F>;
 '''
-    shared = set(finite_modules())
-    modules = [option for option in project_modules(project) if option not in shared]
-    return compile_entry(toolchain, journal, directory, source, flags, modules=modules)
+    return compile_entry(toolchain, journal, directory, source, flags,
+                         modules=project_modules(project))
 
 
 @pytest.mark.parametrize('flags', FLAGS, ids=MODES)
