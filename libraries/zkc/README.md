@@ -13,16 +13,27 @@ Names above are under `zkc::`. The [manifest](zkc.toml) captures this family.
 
 ## Representation contracts
 
-`multilinear::fix_first` pairs contiguous halves and fixes the most significant
-Boolean coordinate. `fix_prefix` applies successive coordinates and retains
-remaining rows or factor columns. `Evaluation<F>` carries a point and value;
-its polynomial, dimension and commitment remain the caller's obligation.
+`multilinear::table(entries, dimensions, columns)` checks a row-major table with
+`2^dimensions` rows and positive factor width. `Table<F>` retains these
+dimensions in private fields. `fix_first` fixes the leading, MSB-first Boolean
+coordinate; `fix_prefix` retains the remaining dimensions and every factor
+column. `values`, `variables` and `width` expose observations. Zero variables
+means one row. `Evaluation<F>` carries a point and value; its polynomial,
+dimension and commitment remain the caller's obligation.
 
-`coset` uses natural-order two-adic domains. Its fold pairs points `x` and `-x`
-and returns evaluations on the squared coset. This differs from multilinear
-restriction. `opening_quotient` forms `(f(X)-value)/(X-at)` on the supplied
-coset and refuses a denominator of zero. `disjoint_coset` checks both domain
-sizes and excludes intersection in either size ordering.
+`coset::word(data, shift)` checks a nonempty two-adic size and nonzero shift.
+`Word<F>` keeps its values and shift in private fields and uses natural domain
+order.
+`interpolate` and `evaluate_coset` convert between a word and univariate
+coefficients. `fold` pairs points `x` and `-x` and returns a word on the squared
+coset with half the size. This differs from multilinear restriction.
+`opening_quotient` forms `(f(X)-value)/(X-at)` on the supplied coset and refuses
+a zero denominator. `disjoint_coset` excludes intersection in either size order.
+
+These records are checked library values, not new native types or compiler
+refinements. They cannot enter through raw Entry inputs or messages; receive
+raw values and construct the view locally. Constructors establish layout and
+domain validity, not polynomial identity, a degree bound or authentication.
 
 `oracle` commits row-major field elements with an explicit width. Authentication
 requires the root, width, number of rows, position, row and path. A successful
@@ -120,7 +131,10 @@ length. For a collect over `elements(xs)` or `indices(xs)`, `indices(xs)` can
 therefore read its newly constructed result. An arbitrary range's values need
 not be indices into the result.
 Exact forwarding helpers preserve the input's identity; collection construction
-preserves length without identifying the two values. Direct total finite calls
+preserves length without identifying the two values. These shape relationships
+also cross total acyclic helpers, including returned record projections. A
+filtered result has only an upper count; it does not inherit bounds for the
+unfiltered input. Direct total finite calls
 also preserve actual range endpoints: `field_array::collect(range(0, 4), body)`
 can produce `Array<F, 4>` when its backend supports that carrier. A wrapper with
 an unconstrained domain parameter must still justify its own output length.
@@ -216,7 +230,18 @@ libraries, using explicit asset/module parameters and installed kernels.
 
 Use `zkc::curve::identity<G>()` for a nullary mathematical group zero. Its
 result fixes the exact group; no point is needed, including for empty sums.
-This is distinct from the native generator and empty group-vector operations.
+Use `curve::msm(scalars, points)` for a weighted group sum and
+`curve::scale_each(scalars, points)` for one result per pair. Both check equal
+lengths and use the selected group's associated scalar field. `curve::add` and
+`curve::scale` have the imported spellings `points + other` and `points * scalar`.
+`empty`, `append`, `length`, `get`, `split` and `concat` provide the matching
+collection operations; `generator`, `neg` and `nonidentity` operate on points.
+These source names select existing contracts, not new group families or providers.
+`scalar::from_index<F>` embeds an index by reduction in `F`.
+
+`encoding::cryptonote_map` is specific to `edwards25519.prime`; its signature
+makes that restriction explicit. Other encoding functions retain their admitted
+generic domains.
 
 Import a whole math module to enable its public operators, for example
 `use zkc::vector as vec;`. Vector `+` calls `add`; vector `*` calls `scale` with

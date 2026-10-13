@@ -49,29 +49,66 @@ def test_public_sumcheck_terminal_dimension(toolchain, journal, directory, round
         'P': {'inputs': {'values': table, 'rounds': str(rounds)}},
         'V': {'inputs': public}})
     outputs = directory / 'outputs.json'
-    journal.run([toolchain.runtime, '--json', 'run', f'--package={package}',
-                 f'--sha256={pin}', *inputs, f'--results={outputs}'])
-    assert json.loads(outputs.read_text())['roles']['V']['accepted'] is accepted
+    malformed = len(table) != 2 ** rounds
+    report = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}',
+                           f'--sha256={pin}', *inputs, f'--results={outputs}'],
+                          refuses='entry-run-incomplete' if malformed else None)
+    if malformed:
+        assert report['execution']['wire']['sends'] == 0
+        assert not outputs.exists()
+    else:
+        assert json.loads(outputs.read_text())['roles']['V']['accepted'] is accepted
 
 
-def test_reduction_retains_actual_point_and_prover_residual(toolchain, journal, directory):
-    package, pin = build(toolchain, journal, directory, 'examples/projects/sumcheck/composed', 'Reduction', [])
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+@pytest.mark.parametrize('table', [[], ['3', '7'], ['1', '0', '2', '0', '3', '0', '4', '0']])
+def test_sumcheck_rejects_only_the_verifier_table(toolchain, journal, directory, flags, table):
+    # The padded table leaves [P(r1,r2), 0] after the two MSB-first folds.
+    # Its residual sum agrees, so only complete dimension discharge rejects it.
+    package, pin = build(toolchain, journal, directory, 'examples/projects/sumcheck', 'Interactive', flags)
     inputs = input_files(journal, 'interactive', roles={
         'P': {'inputs': {'values': ['1', '2', '3', '4'], 'rounds': '2'}},
-        'V': {'inputs': {'claim': '10', 'rounds': '2'}}})
+        'V': {'inputs': {'values': table, 'claim': '10', 'rounds': '2'}}})
+    outputs = directory / 'outputs.json'
+    report = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}',
+                           f'--sha256={pin}', *inputs, f'--results={outputs}'])
+    # Each round sends two boundary sums and one delivered challenge.
+    assert report['execution']['wire']['sends'] == 6
+    assert json.loads(outputs.read_text())['roles']['V']['accepted'] is False
+
+
+@pytest.mark.parametrize('rounds', [0, 1, 2])
+def test_reduction_retains_actual_point_and_prover_residual(toolchain, journal, directory, rounds):
+    package, pin = build(toolchain, journal, directory, 'examples/projects/sumcheck/composed', 'Reduction', [])
+    inputs = input_files(journal, 'interactive', roles={
+        'P': {'inputs': {'values': ['1', '2', '3', '4'], 'variables': '2', 'rounds': str(rounds)}},
+        'V': {'inputs': {'claim': '10', 'rounds': str(rounds)}}})
     outputs = directory / 'outputs.json'
     journal.run([toolchain.runtime, '--json', 'run', f'--package={package}',
                  f'--sha256={pin}', *inputs, f'--results={outputs}'])
     result = json.loads(outputs.read_text())['roles']
     assert result['P']['point'] == result['V']['evaluation']['point']
-    assert len(result['P']['point']) == 2
-    # Independent MSB-first interpolation, without using the library fold.
+    assert len(result['P']['point']) == rounds
+    # Independent MSB-first interpolation of each remaining Boolean row.
     modulus = 52435875175126190479447740508185965837690552500527637822603658699938581184513
-    r0, r1 = map(int, result['V']['evaluation']['point'])
-    expected = (1 * (1-r0) * (1-r1) + 2 * (1-r0) * r1
-                + 3 * r0 * (1-r1) + 4 * r0 * r1) % modulus
-    assert int(result['V']['evaluation']['value']) == expected
-    assert result['P']['residual'] == [result['V']['evaluation']['value']]
+    residual = [1, 2, 3, 4]
+    for coordinate in map(int, result['V']['evaluation']['point']):
+        half = len(residual) // 2
+        residual = [(1-coordinate) * low + coordinate * high
+                    for low, high in zip(residual[:half], residual[half:], strict=True)]
+    assert int(result['V']['evaluation']['value']) == sum(residual) % modulus
+    assert list(map(int, result['P']['residual'])) == [x % modulus for x in residual]
+
+
+def test_reduction_rejects_excess_rounds_before_sending(toolchain, journal, directory):
+    package, pin = build(toolchain, journal, directory, 'examples/projects/sumcheck/composed', 'Reduction', [])
+    inputs = input_files(journal, 'interactive', roles={
+        'P': {'inputs': {'values': ['1', '2', '3', '4'], 'variables': '2', 'rounds': '3'}},
+        'V': {'inputs': {'claim': '10', 'rounds': '3'}}})
+    report = journal.json([toolchain.runtime, '--json', 'run', f'--package={package}',
+                           f'--sha256={pin}', *inputs], refuses='entry-run-incomplete')
+    assert report['execution']['wire']['sends'] == 0
 
 
 def test_proof_binds_public_tables_even_with_unchanged_sum(toolchain, journal, directory):
@@ -156,3 +193,34 @@ def test_each_opening_participant_checks_its_own_domain(toolchain, journal, dire
     stopped = refused['execution']['roles'][0 if role == 'P' else 1]['after']
     assert stopped[0] == 'stopped'
     assert stopped[1]['cause'] == ['explicit', {'text': 'reject', 'omitted_bytes': 0}]
+
+
+@pytest.mark.parametrize('flags', [(), ('--no-simplify', '--release-storage')])
+def test_residual_view_composes_two_partial_reductions(toolchain, journal, directory, flags):
+    from entry import Entry
+    from source_modules import library_modules
+
+    source = '''module sample;
+use zkc::multilinear as mle;
+use zkc::vector as vec;
+use sumcheck::{Reduce};
+domain F=field("bls12-381.fr");
+protocol Run roles(P,V)(values:vec::Vector<F>@P,claim:F@V,challenges:Random<F>@V)
+ ->(point:vec::Vector<F>@P,residual:vec::Vector<F>@P,remaining:index@P,value:F@V){
+ let table=mle::table(values,2,1);
+ let (p0,residual0,e0)=Reduce<F,2>(table,claim,1,challenges);
+ let (p1,residual1,e1)=Reduce<F,2>(residual0,e0.value,1,challenges);
+ return(point=vec::concat(p0,p1),residual=mle::values(residual1),
+        remaining=mle::variables(residual1),value=e1.value);
+}run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, (*library_modules('sumcheck'), *flags))
+    result = entry.run_roles('two-prefixes', {
+        'P': {'inputs': {'values': ['1', '2', '3', '4']}},
+        'V': {'inputs': {'claim': '10'}}})
+    r0, r1 = map(int, result['P']['point'])
+    modulus = 52435875175126190479447740508185965837690552500527637822603658699938581184513
+    expected = ((1-r0)*(1-r1) + 2*(1-r0)*r1 + 3*r0*(1-r1) + 4*r0*r1) % modulus
+    assert result['P']['remaining'] == '0'
+    assert result['P']['residual'] == [str(expected)]
+    assert result['V']['value'] == str(expected)

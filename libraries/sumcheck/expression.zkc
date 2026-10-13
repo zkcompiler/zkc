@@ -1,6 +1,6 @@
 module sumcheck::expression;
 
-use zkc::vector::{Vector, split, length, has_length, empty, append, get};
+use zkc::vector::{Vector, length, has_length, empty, append, get};
 use zkc::indices::{divide};
 use zkc::polynomial::{from_coefficients, boundary, evaluate};
 
@@ -8,8 +8,8 @@ use zkc::polynomial::{from_coefficients, boundary, evaluate};
 // slots. Values are row-major assignments with A::Inputs columns. Round
 // returns the exact coefficient sum over affine pairs; terminal substitutes
 // the final factor values and reads the single output.
-fn round<F: Field, A: Ring>(values: Vector<F>) -> Vector<F> {
-  let halves = split(values);
+fn round<F: Field, A: Ring>(values: Table<F>) -> Vector<F> {
+  let halves = multilinear::halves(values);
   let rows = divide(length(halves.0), index<A::Inputs>());
   return kernel<F>("ring.affine_sum", halves.0, halves.1, rows; A);
 }
@@ -18,16 +18,20 @@ fn terminal<F: Field, A: Ring>(values: Vector<F>) -> F {
   return get(result, 0);
 }
 pub use zkc::multilinear::{Evaluation};
-use zkc::multilinear::{fix_first, fix_prefix};
+use zkc::multilinear as multilinear;
+use zkc::multilinear::{Table, fix_first, fix_prefix};
 
-// MSB-first point for A(f1(point), ..., fk(point)) = value. The caller binds
-// the ordered factor polynomials and their dimension. This is an obligation.
+// An MSB-first prefix and residual-sum obligation:
+// sum_y A(f1(point || y), ..., fk(point || y)) = value, over the remaining
+// Boolean variables. The caller binds the factor polynomials and dimension.
 pub protocol Reduce<F: Field, Max: nat, A: Ring> roles(P,V)
-    (values: Vector<F> @P, claim: F @V, rounds: index @(P,V),
+    (values: Table<F> @P, claim: F @V, rounds: index @(P,V),
      challenges: Random<F> @V)
-    -> (point: Vector<F> @P, residual: Vector<F> @P,
+    -> (point: Vector<F> @P, residual: Table<F> @P,
         evaluation: Evaluation<F> @V)
     where 1 <= A::Inputs, 1 <= A::Outputs, A::Outputs <= 1 {
+  require @P multilinear::width(values) == index<A::Inputs>();
+  require @P !zkc::indices::less(multilinear::variables(values), rounds);
   let mut tableP = values;
   let mut pointP @P = empty<F>();
   let mut pointV @V = empty<F>();
@@ -60,8 +64,9 @@ pub protocol Sumcheck<F: Field, Max: nat, A: Ring> roles(P,V)
      claim: F @V, rounds: index @(P,V),
      challenges: Random<F> @V) -> (accepted: bool @V)
     where 1 <= A::Inputs, 1 <= A::Outputs, A::Outputs <= 1 {
+  let table @P = multilinear::table(prover_values, rounds, index<A::Inputs>());
   #[site(reduce)] let (point, residual, evaluation) =
-    Reduce<F,Max,A>(prover_values, claim, rounds, challenges);
+    Reduce<F,Max,A>(table, claim, rounds, challenges);
   return check<F,A>(verifier_values, evaluation);
 }
 
@@ -74,5 +79,6 @@ pub fn check_factors<F: Field, A: Ring>(factors: Vector<F>, expected: F) -> bool
 
 pub fn check<F: Field, A: Ring>(values: Vector<F>, evaluation: Evaluation<F>) -> bool
     where 1 <= A::Inputs, 1 <= A::Outputs, A::Outputs <= 1 {
-  return check_factors<F,A>(fix_prefix(values, evaluation.point), evaluation.value);
+  let table = multilinear::table(values, length(evaluation.point), index<A::Inputs>());
+  return check_factors<F,A>(multilinear::values(fix_prefix(table, evaluation.point)), evaluation.value);
 }

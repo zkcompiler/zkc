@@ -1,4 +1,5 @@
 #include "../lib/Transforms/FinitePreparation.h"
+#include "../lib/Transforms/HelperNormalization.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "../lib/Transforms/RealizationTrace.h"
 #include "mlir/IR/IRMapping.h"
@@ -186,15 +187,19 @@ int main() {
     auto size =
         finite::sizeCallbackPreparation(c, unit(*source), work, outcome);
     // Two four-unit operations are copied (call and multiply); the root and
-    // return cost three, the final scan one, and the private context ten.
-    require(size == 22 && work == 99980, "incorrect preparation or scan cost");
+    // return cost three, the admission scan costs one, and the private context
+    // ten. No array projections means no projection-fold scans.
+    require(size && size->work == 22 && !size->arrayProjections &&
+                work == 99980,
+            "incorrect preparation or scan cost");
     auto step = helper(*source, "step");
     OpBuilder builder(&step.front().back());
     builder.clone(step.front().front());
     require(succeeded(verify(*source)), "duplicate-call fixture refused");
     work = 100000;
     size = finite::sizeCallbackPreparation(c, unit(*source), work, outcome);
-    require(size == 31 && work == 99975,
+    require(size && size->work == 31 && !size->arrayProjections &&
+                work == 99975,
             "duplicate call was not counted or shared callee was rescanned");
   });
   cases.run("an exhausted sizing invocation cannot poison later sizing", [&] {
@@ -206,10 +211,26 @@ int main() {
                 !work && outcome.status == OptimizationStatus::Capacity,
             "partial sizing did not retain its failed scan charge");
     work = 100000;
-    require(finite::sizeCallbackPreparation(c, unit(*source), work, outcome) ==
-                    22 &&
-                work == 99980,
+    auto size =
+        finite::sizeCallbackPreparation(c, unit(*source), work, outcome);
+    require(size && size->work == 22 && work == 99980,
             "temporary exhaustion was cached as a helper property");
+  });
+  cases.run("projection preparation follows nested helper bodies", [&] {
+    auto text = fixtureText();
+    text.insert(text.find("%r = algebra.field_multiply"), R"mlir(
+ %pack = "algebra.array_from_elements"(%a,%b) : (!F,!F)->!algebra.field_array<"koala-bear",2>
+ %selected = "algebra.array_at"(%pack) {index=1:i64} : (!algebra.field_array<"koala-bear",2>)->!F
+)mlir");
+    auto source = parseSourceString<ModuleOp>(text, &context);
+    require(bool(source) && succeeded(verify(*source)),
+            "packed helper refused");
+    uint64_t work = 100000;
+    OptimizationOutcome outcome;
+    auto size = finite::sizeCallbackPreparation(computation(*source),
+                                                unit(*source), work, outcome);
+    require(size && size->arrayProjections && size->work == 39,
+            "nested projection folding was omitted from preparation work");
   });
   for (unsigned depth : {0u, 4u, 8u, 12u})
     cases.run("bounded doubling DAG " + llvm::Twine(depth), [&] {
@@ -223,7 +244,8 @@ int main() {
       // per helper. 13 * 2^depth + 9 includes intermediate calls and overhead.
       const uint64_t expected = std::min<uint64_t>(
           13 * (uint64_t(1) << depth) + 9, finite::callbackStructuralLimit + 1);
-      require(size == expected && initial - work <= 20 + 15 * depth,
+      require(size && size->work == expected &&
+                  initial - work <= 20 + 15 * depth,
               "DAG multiplicity, saturation or memoized scan bound changed");
     });
   for (bool warm : {false, true})
@@ -364,7 +386,7 @@ int main() {
         OptimizationOutcome outcome;
         auto size =
             finite::sizeCallbackPreparation(c, unit(*source), sizing, outcome);
-        require(size == finite::callbackStructuralLimit + 1,
+        require(size && size->work == finite::callbackStructuralLimit + 1,
                 "DAG did not saturate");
         RealizationWork work;
         RealizationTrace trace;
@@ -479,6 +501,14 @@ int main() {
           OpBuilder builder(&step.front().front());
           builder.clone(total.front().front(), mapping);
           require(succeeded(verify(*source)), "nested source refused");
+          CheckedHelperNormalizations helpers(unit(*source));
+          require(succeeded(helpers.prepareRealization(step)),
+                  "nested realization normalization refused");
+          auto prepared = helpers.lookup(step, true);
+          require(llvm::any_of(
+                      prepared.front(),
+                      [](Operation &op) { return finite::isComputation(&op); }),
+                  "normalization erased unused nested admission");
           uint64_t structural = 100000;
           OptimizationOutcome outcome;
           require(!finite::sizeCallbackPreparation(computation(*source),

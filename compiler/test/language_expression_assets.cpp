@@ -135,7 +135,8 @@ std::string rewrite(std::string text, StringRef before, StringRef after) {
   return text;
 }
 /// Every closed `index.constant` parameter, in body order.
-std::vector<std::string> indexConstants(const ClosedEntry &entry) {
+std::vector<std::string> indexConstants(const ClosedEntry &entry,
+                                        StringRef owner = {}) {
   std::vector<std::string> result;
   std::function<void(const Body &)> visit = [&](const Body &body) {
     for (const auto &op : body.operations) {
@@ -150,7 +151,9 @@ std::vector<std::string> indexConstants(const ClosedEntry &entry) {
     }
   };
   for (const auto &decl : entry.declarations())
-    if (decl.body && decl.origin)
+    if (decl.body && decl.origin &&
+        (owner.empty() ||
+         entry.declarations()[decl.origin->index].name == owner))
       visit(*decl.body);
   return result;
 }
@@ -481,14 +484,19 @@ run Demo = Count<Recurrence>;
         "product", "ring-json",
         file(ZKC_EXPRESSION_SUMCHECK_PROJECT "/product.ring.json"),
         "product.ring.json"};
-    // Width and degree constants come from the arena; the final zero selects
-    // the single terminal output through the shared vector accessor.
-    require(indexConstants(take(compile(shipped))) ==
-                std::vector<std::string>({"2", "3", "2", "0"}),
-            "shipped arena did not derive width 2 and degree bound 3");
-    require(indexConstants(take(compile(cubic()))) ==
-                std::vector<std::string>({"3", "4", "3", "0"}),
-            "cubic arena did not derive width 3 and degree bound 4");
+    // Check the consumers of the derived arena facts. Other library helpers
+    // also contain index constants for table shape and checked layout.
+    for (auto [asset, width, coefficients] :
+         {std::make_tuple(shipped, "2", "3"),
+          std::make_tuple(cubic(), "3", "4")}) {
+      auto closed = take(compile(asset));
+      require(indexConstants(closed, "round") ==
+                  std::vector<std::string>{width},
+              "round width did not come from the captured arena");
+      auto shapes = indexConstants(closed, "has_length");
+      require(is_contained(shapes, width) && is_contained(shapes, coefficients),
+              "coefficient and terminal widths did not come from the arena");
+    }
     refuses(compile(twoOutputs()), "source.bound");
     refuses(compile(constant()), "source.bound");
     take(compile(product("product", "koala-bear.ext8-binomial3")));

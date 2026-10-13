@@ -176,6 +176,11 @@ LogicalResult ArrayAtOp::verify() {
         "expected static in-bounds field-array extraction");
   return success();
 }
+OpFoldResult ArrayAtOp::fold(FoldAdaptor) {
+  if (auto packed = getArray().getDefiningOp<ArrayFromElementsOp>())
+    return packed.getElements()[getIndexAttr().getInt()];
+  return {};
+}
 LogicalResult SubtractFieldOp::verify() { return verifyField(*this, false); }
 std::optional<MathematicalIdentity> ConstantFieldOp::getMathematicalIdentity() {
   return MathematicalIdentity::FieldConstant;

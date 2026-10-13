@@ -1,7 +1,7 @@
 module example;
 use zkc::vector as vec;
 use zkc::vector::{Vector};
-use zkc::multilinear::{fix_first};
+use zkc::multilinear as multilinear;
 use zkc::symbolic::{pack, mle, evaluate};
 domain F = field("bls12-381.fr");
 
@@ -11,7 +11,7 @@ math fn symbolic(a: F, b: F, point: F) {
   return evaluate(polynomial, [point]);
 }
 fn dynamic(values: Vector<F>, point: F) {
-  return vec::sum(fix_first(values, point));
+  return vec::sum(multilinear::values(multilinear::fix_first(multilinear::table(values, 1, 1), point)));
 }
 protocol Compare roles(P)(a: F @P, b: F @P, values: Vector<F> @P, point: F @P)
     -> (formal_result: F @P, runtime_result: F @P) {

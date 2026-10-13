@@ -13,4 +13,5 @@ pub fn field_reduce_le<F: Field>(value: Bytes) -> F = primitive("encoding.field_
 pub fn group_decode_cofactor<G: Group>(value: Bytes) -> (bool, G) = primitive("encoding.group_decode_cofactor");
 // CryptoNote field-element map followed by multiplication by eight.
 // Variable-time; intended for public generator derivation, not secret inputs.
-pub fn cryptonote_map<G: Group>(value: Bytes) -> G = primitive("encoding.cryptonote_map");
+domain Edwards = group("edwards25519.prime");
+pub fn cryptonote_map(value: Bytes) -> Edwards = primitive("encoding.cryptonote_map");

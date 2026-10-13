@@ -24,12 +24,8 @@ fn authenticate<C: Commitment>(roots: Roots<C>, round: index, height: index,
   return oracle::check(oracle::root_at(roots, round),
                    1, height, position, row, path);
 }
-fn fold<F: Field>(values: Vector<F>, shift: F, beta: F) -> Vector<F> {
-  return coset::fold(values, shift, beta);
-}
-fn interpolate_coefficients<F: Field>(values: Vector<F>, shift: F) -> Vector<F> {
-  let interpolated = coset::interpolate(values, shift);
-  return polynomial::coefficients(interpolated);
+fn interpolate_coefficients<F: Field>(word: coset::Word<F>) -> Vector<F> {
+  return polynomial::coefficients(coset::interpolate(word));
 }
 fn bounded<F: Field, LogDegree: nat>(coefficients: Vector<F>) -> bool {
   let count = length(coefficients);
@@ -101,13 +97,12 @@ pub protocol LowDegree<C: Commitment, LogSize: nat, TerminalLog: nat,
   let initial_sizeV @V = index<pow2(LogSize)>();
   let input_ok @P = shape<C::ValueField,LogSize>(word, prover_shift);
   require @P input_ok;
-  let mut current = word;
-  let mut current_shift = prover_shift;
+  let mut current = coset::word(word, prover_shift);
   let mut roots @V = oracle::roots<C>();
   let mut states @P = oracle::states<C>();
   let mut betas @V = empty<C::ValueField>();
   for round in 0..round_count roles(P,V) max Rounds {
-    let tree @P = oracle::commit<C>(current, 1);
+    let tree @P = oracle::commit<C>(coset::values(current), 1);
     let root = send P -> V(tree.0);
     let kept_root @V = oracle::append_root(roots, root);
     let kept_state @P = oracle::append_state(states, tree.1);
@@ -117,11 +112,10 @@ pub protocol LowDegree<C: Commitment, LogSize: nat, TerminalLog: nat,
     let betaP = send V -> P(betaV);
     let kept_beta @V = append(betas, betaV);
     betas = kept_beta;
-    let next @P = fold(current, current_shift, betaP);
+    let next @P = coset::fold(current, betaP);
     current = next;
-    current_shift = current_shift * current_shift;
   }
-  let proposed @P = interpolate_coefficients(current, current_shift);
+  let proposed @P = interpolate_coefficients(current);
   let final_coefficients = send P -> V(proposed);
   let final_degree_ok @V = bounded<C::ValueField,TerminalLog>(final_coefficients);
   require @V final_degree_ok;

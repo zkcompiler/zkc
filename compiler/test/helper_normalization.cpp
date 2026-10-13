@@ -155,6 +155,32 @@ int main() {
     llvm::raw_string_ostream(after) << *source;
     require(before == after, "proposal preparation changed its original");
   });
+  cases.run("packed projections are checked before recipe lowering", [&] {
+    auto source = parseSourceString<ModuleOp>(insert(base, R"(
+ func.func private @projection(%a:!F,%b:!F)->!F {
+   %pack = "algebra.array_from_elements"(%a,%b) : (!F,!F)->!A
+   %value = "algebra.array_at"(%pack) {index=1:i64} : (!A)->!F
+   func.return %value : !F
+ }
+ )"),
+                                              &context);
+    require(bool(source), "packed helper refused");
+    auto helper = SymbolTable(unit(*source)).lookup<func::FuncOp>("projection");
+    mathematical::CheckedHelperNormalizations proposals(unit(*source));
+    require(succeeded(proposals.prepareRealization(helper)),
+            "packed helper realization could not be checked");
+    auto normalized = proposals.lookup(helper, true);
+    require(normalized && normalized.front().getOperations().size() == 1 &&
+                normalized.front().back().getOperand(0) ==
+                    normalized.getArgument(1),
+            "packed projection was not folded to its selected value");
+    normalized.front().back().setOperand(0, normalized.getArgument(0));
+    ScopedDiagnosticHandler quiet(&context,
+                                  [](Diagnostic &) { return success(); });
+    mathematical::HelperNormalizationChecker checker(unit(*source));
+    require(failed(checker.check(helper, normalized.front())),
+            "changed packed result escaped normalization comparison");
+  });
   cases.run("static dimension meaning is checked before recipe lowering", [&] {
     auto source = parseSourceString<ModuleOp>(insert(base, R"(
  func.func private @dimension(%v:!algebra.field_array<"bls12-381.fr", 4>)->ui64 {

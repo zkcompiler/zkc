@@ -44,10 +44,6 @@ AuthoringStage authoringStage(llvm::StringRef contract);
 struct SourceTypeExport {
   std::string module, name, constructor;
 };
-struct SourceOperationExport {
-  std::string module, name, contract;
-  std::vector<std::string> inputLabels;
-};
 /// A finite source type family reduces after its element head is known.
 /// It does not introduce a new common logical constructor.
 struct SourceTypeFamilyCase {
@@ -63,7 +59,6 @@ llvm::ArrayRef<SourceTypeFamilyCase> sourceTypeFamilies();
 llvm::ArrayRef<SourceAssociatedType> sourceAssociatedTypes();
 llvm::ArrayRef<SourceCapabilityExport> sourceCapabilityExports();
 llvm::ArrayRef<SourceTypeExport> sourceTypeExports();
-llvm::ArrayRef<SourceOperationExport> sourceOperationExports();
 
 enum class Custody { Unknown, PublicValue, PrivateImmutable, Affine };
 struct TypePermissions {

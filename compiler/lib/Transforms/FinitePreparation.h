@@ -26,13 +26,17 @@ public:
   CallbackStructuralWork &operator=(const CallbackStructuralWork &) = delete;
 };
 
+struct CallbackPreparation {
+  uint64_t work;
+  bool arrayProjections;
+};
+
 // Read the admitted immutable helper DAG once per invocation. The result is
-// normalization work (copying, the final scan, and the private context), capped
+// normalization work (copying, required scans, and the private context), capped
 // at callbackStructuralLimit + 1. Sizing itself spends structural work; an
 // estimate never debits hypothetical copies. No cache survives this invocation.
-std::optional<uint64_t> sizeCallbackPreparation(const Computation &computation,
-                                                mlir::Operation *root,
-                                                uint64_t &structural,
-                                                OptimizationOutcome &outcome);
+std::optional<CallbackPreparation>
+sizeCallbackPreparation(const Computation &computation, mlir::Operation *root,
+                        uint64_t &structural, OptimizationOutcome &outcome);
 } // namespace zkc::finite
 #endif

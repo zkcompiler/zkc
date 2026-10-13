@@ -212,13 +212,6 @@ class ZKC_TypeExport<string m, string n, ZKC_TypeHead t> : ZKC_Declaration {
   string name = n;
   ZKC_TypeHead type = t;
 }
-class ZKC_OperationExport<string m, string n, ZKC_Operation op,
-                          list<string> labels> : ZKC_Declaration {
-  string module = m;
-  string name = n;
-  ZKC_Operation operation = op;
-  list<string> inputLabels = labels;
-}
 // Closed mathematical vocabulary. Meanings are independent of executable
 // declarations, intrinsic spellings, and realization availability.
 class ZKC_ScalarLaws<string family, string shape> : ZKC_Declaration {

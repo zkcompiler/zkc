@@ -9,6 +9,9 @@ the field, operation or resource contract.
 logical signatures, requirements, static parameter schemas, type permissions and
 installed facets. Language and IR adapters consume those records. Semantic
 validators and backend implementations retain their separate obligations.
+Ordinary library declarations own public function names and argument names.
+The generated inventory exports types and capabilities; it does not duplicate
+source function APIs or turn installed operations into implicit imports.
 
 ## Mathematical meaning and realization
 

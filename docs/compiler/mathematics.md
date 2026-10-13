@@ -53,12 +53,14 @@ are separate properties. A copyable PCS payload can be constructed and matched
 locally without becoming total common mathematics. Every alternative is checked,
 including inactive arms; live resources and keys cannot hide in wire messages.
 
-Native sequence append copies the immediate slice. Checked operations validate
-the expanded sequence, and the Runner charges frame bindings cumulatively.
-Repeated indexing or carrying can therefore have quadratic validation or value
-charges even when shared live storage fits. `NativeBackend::with_sequence_work_limit`
-controls sequence-kernel work independently of Runner payload limits. A storage
-change needs an explicit accounting contract and a measured consumer.
+Native sequences use immutable shared storage. The Runner accounts separately
+for retained live storage, newly allocated storage, and logical kernel reads.
+Aliases and frame handoffs preserve sharing; equal contents do not establish
+allocation identity. Successful validation can be reused for retained immutable
+values, while capability custody and external admission remain checked. Sequence
+work limits still bound nested validation independently of storage. See the
+[capacity contract](../spec/runtime/capacity.md#retained-values-and-logical-work)
+for the accounting rules.
 
 ## Bulk computation
 
@@ -89,7 +91,8 @@ Source checking retains its occurrence-specific origins and symbolic natural
 dimensions. After checking a concrete Math call's input conditions, it can
 follow returned inputs and full record projections through checked helper calls.
 This preserves the original value's facts. A newly collected value instead has
-a fresh identity: an unfiltered collect can preserve an extent or exact count,
+a fresh identity, including through total helper returns and record projections.
+An unfiltered collect can preserve an extent or exact count,
 while filtering preserves only an upper count, except when that upper count is
 zero. A direct call to a Math finite definition keeps its computation at the
 caller occurrence during specialization. The independent specialization reader
@@ -152,8 +155,12 @@ follows the original calls and carries exact argument meanings back to those
 premises. It checks actual candidate operands, including matrix axes and fixed
 selectors, without using the producer's normalized body or equation witness.
 Returned arguments and repeated captures retain their original value identities.
-Helpers that construct new containers or contain nested finite computations
-remain outside this optional normalization rule.
+Fixed pack/projection pairs can be folded before equation selection, including
+inside ordinary helpers. Normal canonicalization can also apply this fold.
+When selection folds a retained pack, the independent reader interprets that
+source pack and its selected coordinate. Projection folding does not remove
+other operations or admission checks. General constructed containers and nested
+finite computations remain outside this optional normalization rule.
 
 Indexed-access recognition currently covers field vectors and field matrices.
 Group-vector indexing retains ordered execution; zipped group/scalar elements can

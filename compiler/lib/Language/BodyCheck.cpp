@@ -1,6 +1,7 @@
 #include "BodyCheck.h"
 #include "Effects.h"
 #include "FiniteContracts.h"
+#include "HelperResults.h"
 #include "zkc/Contracts/Kernels.h"
 #include "llvm/Support/SaveAndRestore.h"
 #include <algorithm>
@@ -651,7 +652,9 @@ bool Checker::body(DeclarationId id, unsigned depth) {
     }
     return false;
   }
-  if (!checkFiniteContracts(types, output.declarations, decl, result))
+  HelperResults helperResults(types, output.declarations);
+  if (!checkFiniteContracts(types, output.declarations, decl, result,
+                            helperResults))
     return false;
   if (decl.effectAllowance &&
       !effectsWithin(types, result.effects, *decl.effectAllowance, decl.span))
