@@ -119,3 +119,13 @@ structured, setup-backed and authored clients and their references.
 A new delivery recipe or suite needs explicit admission, encoding, sampling and
 failure contracts. A domain's presence in the kernel catalog does not extend a
 construction's allow-list. See the [roadmap](../roadmap.md) for assurance work.
+
+## Actual constructed verifier import
+
+`protocol-constructed-lean` exports a supplied source-checked unsimplified
+verifier, recursively retaining selected Local bodies, actual receive values,
+provider/codec actions and complete state successors. The bounded
+[carrier contract](../spec/formats/constructed-source.md) and
+[Lean admission](../../lean/docs/spec/constructed-source.md) state exact scope.
+The maintained [bridge controls](../../lean/bridges/constructed/README.md) cover
+Schnorr and two-round Sumcheck source variants and a selected raw-record codec.
