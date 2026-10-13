@@ -23,6 +23,19 @@ Only `propext`, `Classical.choice` and `Quot.sound` are allowed. Unrelated upstr
 `sorry` declarations are not claims of this package. `clients/ArkLib.lean` in the
 core package exercises reuse from an independent Lake package.
 
+`ArkLib/FiatShamir/Prefix` proves a two-round full-transcript classical-RO
+simulation into ArkLib salted restoration, including inconsistent and out-of-order
+queries, shared-cache completion, and the explicit `Q + 1` translated-adversary
+budget. Its extraction bound is `(Q + 3) * error` under the protocol's all-prefix
+knowledge premises. The [model specification](../../docs/spec/prefix-simulation.md)
+records the exact supported keys and remaining native/provider boundary.
+Run its standalone checks from this directory:
+
+```sh
+lake build ZkcSecurity.ArkLib.FiatShamir.Prefix.Security TestsSecurity.PrefixSimulation
+lake env lean TestsSecurity/PrefixAudit.lean
+```
+
 The Python [proof-request bridge](../../bridges/common/README.md) exposes these
 consumers through explicit requests. Neither successful sampling tests nor the
 mere presence of a library dependency replaces the connection proofs.
