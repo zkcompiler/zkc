@@ -1,5 +1,9 @@
-import Zkc.Source.Constructed.Format
-import ZkcTools.Constructed.Replay
+module
+
+public import Zkc.Source.Constructed.Format
+public import ZkcTools.Constructed.Replay
+
+@[expose] public section
 
 open Lean Zkc.Source.Constructed
 

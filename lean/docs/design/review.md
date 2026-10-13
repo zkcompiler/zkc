@@ -4,9 +4,8 @@ This review asks whether an accepted security claim is about the actual imported
 program and authored relation, whether its experiment is explicit, and whether
 the architecture supports reuse without copying proofs for each source form.
 The implementation passes were followed by independent read-only agent reviews
-of the semantics, source bridge, security proofs, architecture and external FS
-theorem candidates. An automation review returned findings but was terminated by
-an automatic safety filter before its final report. These are agent reviews,
+of the semantics, source bridge, security proofs, architecture, external FS
+theorem applications and certificate automation. These are agent reviews,
 not a human external audit. The [support matrix](../support.md) owns the supported claims.
 
 ## Architecture and composition
@@ -95,16 +94,60 @@ input snapshots. Python execution and the selected toolchain remain trusted.
 | Maintenance instructions and bridge links retained obsolete versions/paths | Align the guide with the manifests and include bridge Markdown in link checks |
 | New parser refusal controls could count a crash as rejection | Require exit 1 and each reader's exact diagnostic; separately exercise non-refusal exit codes |
 | A repeated successful request inflated the reported source count | Name the metric `verified_requests`; test nested source, request and relation mutations |
+| New foundation modules were absent from aggregate audits | Regenerate exhaustive core/security import roots, including constructed replay |
+| An FS command-line parse failure could preserve a stale success receipt | Acquire output ownership and invalidate prior success before complete argument parsing; exercise the public CLI |
+| Concurrent output reuse could detach a receipt from the certificate Lean checked | Lock each output directory, use a private invocation-specific proof file, and recheck retained subject/proof bytes before publishing success |
+| Module-system replay through `lean --run` lacked native implementations | Build and invoke the maintained `constructed-source` executable; resolve CLI paths before changing directories |
+
+## Constructed-program and Fiat–Shamir review
+
+The construction extension received separate read-only reviews of semantic
+foundations, security mathematics, and the request/export/certificate boundary.
+The foundation and mathematics reviews found no defect in the inspected laws.
+The foundation review identified missing aggregate import coverage; maintained
+audit roots now enumerate the new modules as well as the constructed replay tool.
+These reviews are bounded by the checked source versions and supported profiles.
+
+The actual source-checked candidate is exported independently of the common
+interactive source. Its admission retains all primitive replies, guards, Local
+handler bodies and final state. Generated normalization exposes a typed program
+and proves its exact erasure against the imported syntax, avoiding repeated
+evaluation of the entire decoder during dependent denotation proofs. This is a
+proof scalability choice, not a relaxation of admission.
+
+Schnorr connects full constructed execution to VCVio's shared cached-oracle
+extraction experiment. Sumcheck proves the all-prefix residual knowledge and
+existential bad-event bounds required by ArkLib. A fixed salted-key simulation
+handles arbitrary full-prefix queries, including inconsistent earlier challenges.
+The bound charges its additional query. Early-stop coupling preserves acceptance;
+it deliberately does not claim equality of final caches or costs after rejection.
+
+The full denotation equations cover Helpers/Reordered Schnorr and Helpers/Horner
+Sumcheck. Source variants share fixed primitive interpretations and consumers.
+Mutations challenge missing observations, stale successor state, altered
+arithmetic, wrong residuals and foreign bindings. The receipt checker separately
+reconstructs the intended actual subject and security theorem type, rather than
+accepting a generator-selected alias as the expected program.
+
+The reviews distinguish public binding supplied by the mathematical input from
+native Host initialization, and a typed ideal transcript from concrete Merlin.
+They also distinguish the theorem's mathematical relation from an authored DSL
+target: the FS request does not invoke the separate named-target resolver.
+These are explicit connection boundaries, not consequences of successful
+normalization. Schnorr's query budget covers prover calls before the added final
+verification query; Sumcheck's actual `Q+2` calls and reduction's `Q+3` bound
+remain different quantities.
 
 ## Reproduction and further research
 
 The [package guide](../../README.md) gives source-only reproduction and maintained
 commands. `just test-lean-native` runs differential execution, the source/property
-matrix and authored-target controls; `just test-lean` runs core boundary and audit
+matrix, authored-target controls, constructed execution/codec comparisons,
+actual-body normalization and FS security requests; `just test-lean` runs core boundary and audit
 controls plus a standalone consumer. Optional security and Clean commands retain
 their own clients and fixture checks. Reports record their inputs and outcomes.
 
 The next research extensions are broader source admission, observation-based
 refinement, reusable relation adapters, richer adversary interfaces and explicit
-PCS/Fiat–Shamir compositions. They require new definitions and proofs; current
+PCS compositions and broader Fiat–Shamir constructions. They require new definitions and proofs; current
 success receipts do not stand in for them.

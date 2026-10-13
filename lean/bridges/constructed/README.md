@@ -10,16 +10,12 @@ From the repository root, build the native compiler using the
 [development guide](../../../docs/development/README.md). From `lean/`:
 
 ```sh
-lake build Zkc.Source.Constructed.Format ZkcTools.JsonSupport
-mkdir -p .lake/build/lib/lean/ZkcTools/Constructed
-lake env lean -o .lake/build/lib/lean/ZkcTools/Constructed/Replay.olean ZkcTools/Constructed/Replay.lean
+lake build
 lake env lean Tests/Constructed.lean
 ```
 
-The explicit tool-module command permits standalone checking without changing
-shared Lake manifests. Integration should register `ZkcTools.Constructed.Replay`
-and an executable rooted at `ZkcTools.Constructed` in the existing manifest.
-The proof modules use the existing module system.
+The default build includes the `constructed-source` executable and its audited
+replay module. The proof modules use the existing module system.
 
 Using a retained protocol-profile source and strict native proof policy:
 
@@ -28,7 +24,7 @@ build/compiler/zkc-compile protocol-construct-proof source.mlir policy.json > ca
 python3 lean/bridges/constructed/extract.py source.mlir policy.json candidate.mlir Snapshot.json --namespace ActualVerifier
 python3 lean/bridges/constructed/extract.py source.mlir policy.json candidate.mlir Snapshot.json --namespace ActualVerifier --check
 cd lean
-lake env lean --run ZkcTools/Constructed.lean ../Snapshot.json
+.lake/build/bin/constructed-source ../Snapshot.json
 lake env lean ../Snapshot.lean
 ```
 

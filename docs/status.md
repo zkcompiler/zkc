@@ -254,6 +254,11 @@ The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retain
 PIR programs, proves open-process contracts, and applies selected ArkLib/VCVio
 security results. Its named DSL target path also checks an authored relation body.
 Native SSA/Lean differential tests cover the admitted finite scalar profile.
+The [constructed-participant bridge](../lean/bridges/constructed/README.md)
+retains actual selected Local bodies and provider state, with separate Schnorr
+and two-round Sumcheck security consumers under explicit ideal transcript
+interpretations. The native Merlin descriptor is retained; these model theorems
+do not establish its random-oracle conformance or native Host initialization.
 [Formal support](../lean/docs/support.md) states exact experiments and premises.
 Full DSL/compiler/runtime correspondence, production arithmetic/sampling,
 backend correctness and complete protocol security remain open.

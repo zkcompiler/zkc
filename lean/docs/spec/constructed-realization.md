@@ -30,7 +30,7 @@ For Schnorr the initial binding contains base and public key. The key also
 contains the received commitment. `OccurrenceContext` includes the exact policy
 and primitive descriptors, so typed occurrence metadata is part of the binding.
 The live transcript retains the sampled challenge, its delivery and the response
-observation after the final challenge. The peer-owned Schnorr interpretation
+observation after the final challenge. The Schnorr primitive interpretation
 supplies these fixed transition meanings.
 
 For two-round Sumcheck `NativeConstruction.Schedule` contains the exact receive,

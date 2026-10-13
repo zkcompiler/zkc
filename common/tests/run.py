@@ -86,6 +86,15 @@ def execute(scope, args):
              "--output", output / "requests"])
         run([sys.executable, bridge / "intent_tests.py", "--compiler", compiler / "zkc-compile",
              "--output", output / "intent"])
+        constructed = ROOT / "lean/bridges/constructed"
+        for check, destination in (("check.py", "constructed"), ("codec_check.py", "codec"),
+                                   ("boundary_check.py", "constructed-boundaries")):
+            run([sys.executable, constructed / check, "--compiler", compiler / "zkc-compile",
+                 "--optimizer", compiler / "zkc-opt", "--output", output / destination])
+        run([sys.executable, constructed / "security_check.py", "--compiler", compiler / "zkc-compile",
+             "--output", output / "fiat-shamir"])
+        run([sys.executable, constructed / "realization_tests.py", "--compiler", compiler / "zkc-compile",
+             "--output", output / "constructed-realization"])
     elif scope == "install":
         from check_sdk import check_install
         check_install(args, run)

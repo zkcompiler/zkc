@@ -15,6 +15,9 @@ def main():
     parser.add_argument('--optimizer', type=Path, default=ROOT / 'build/compiler/zkc-opt')
     parser.add_argument('--output', type=Path, default=ROOT / 'build/experiments/constructed/boundaries')
     args = parser.parse_args()
+    args.compiler = args.compiler.resolve()
+    args.optimizer = args.optimizer.resolve()
+    args.output = args.output.resolve()
     args.output.mkdir(parents=True, exist_ok=True)
     source = ROOT / 'lean/bridges/constructed/fixtures/bounded-control.zkc'
     options = ['--source-format=zkc', '--entry=bounded::Demo', f'--module=bounded={source}']

@@ -15,6 +15,9 @@ def main():
     parser.add_argument('--optimizer', type=Path, default=ROOT / 'build/compiler/zkc-opt')
     parser.add_argument('--output', type=Path, default=ROOT / 'build/experiments/constructed/codec')
     args = parser.parse_args()
+    args.compiler = args.compiler.resolve()
+    args.optimizer = args.optimizer.resolve()
+    args.output = args.output.resolve()
     directory = args.output
     directory.mkdir(parents=True, exist_ok=True)
     source = ROOT / 'lean/bridges/constructed/fixtures/schnorr-codec.zkc'

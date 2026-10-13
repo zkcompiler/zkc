@@ -42,6 +42,13 @@ lake build ZkcSecurity.ArkLib.FiatShamir.Prefix.Security TestsSecurity.PrefixSim
 lake env lean TestsSecurity/PrefixAudit.lean
 ```
 
-The Python [proof-request bridge](../../bridges/common/README.md) exposes these
-consumers through explicit requests. Neither successful sampling tests nor the
+`ArkLib/Sumcheck/FiatShamir` discharges those all-prefix conditions for quadratic
+Sumcheck and connects actual constructed two-round verifiers to the full-prefix
+false-acceptance bound `(Q + 3) * 2/|F|`. Its
+[feature reference](ZkcSecurity/ArkLib/Sumcheck/FiatShamir/README.md) separates
+complete execution correspondence, acceptance-only completion and oracle costs.
+
+The Python [source proof-request bridge](../../bridges/common/README.md) and
+[constructed-program requests](../../docs/spec/fs-verification.md) expose the
+selected consumers through explicit requests. Neither successful sampling tests nor the
 mere presence of a library dependency replaces the connection proofs.

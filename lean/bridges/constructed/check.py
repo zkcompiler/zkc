@@ -7,6 +7,7 @@ from pathlib import Path
 import random
 import re
 import subprocess
+import sys
 
 from extract import ROOT, extract
 from native import Native
@@ -15,13 +16,13 @@ from native import Native
 def execute(command, cwd=ROOT, success=True):
     result = subprocess.run(list(map(str, command)), cwd=cwd, text=True,
                             capture_output=True, timeout=120)
-    if (result.returncode == 0) != success:
+    if result.returncode != (0 if success else 1):
         raise AssertionError(f'{command}\n{result.stdout}\n{result.stderr}')
     return result.stdout if success else result.stdout + result.stderr
 
 
 def lean(snapshot, run=None, success=True):
-    command = ['lake', 'env', 'lean', '--run', 'ZkcTools/Constructed.lean', snapshot]
+    command = [ROOT / 'lean/.lake/build/bin/constructed-source', snapshot]
     if run is not None:
         command.append(run)
     return execute(command, cwd=ROOT / 'lean', success=success)
@@ -226,6 +227,18 @@ def main():
     parser.add_argument('--output', type=Path, default=ROOT / 'build/experiments/constructed/controls')
     parser.add_argument('--protocol', choices=['schnorr', 'sumcheck'])
     args = parser.parse_args()
+    args.compiler = args.compiler.resolve()
+    args.optimizer = args.optimizer.resolve()
+    args.output = args.output.resolve()
+    # A tool crash or unrelated failure is not an ordinary tested refusal.
+    for command in ([sys.executable, '-c', 'raise SystemExit(2)'],
+                    [sys.executable, '-c', 'import os, signal; os.kill(os.getpid(), signal.SIGTERM)']):
+        try:
+            execute(command, success=False)
+        except AssertionError:
+            pass
+        else:
+            raise AssertionError('non-refusal exit accepted by test helper')
     results = []
     for protocol, variants in [('schnorr', ['Helpers', 'Reordered']), ('sumcheck', ['Helpers', 'Horner'])]:
         if args.protocol and args.protocol != protocol:

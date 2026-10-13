@@ -16,13 +16,30 @@ Typed adapters, not source-name recognition, connect mathematical interfaces.
 The CLI deliberately admits a bounded source language and reviewed schema;
 Lean's typed API supports new contracts and consumers beyond that registry.
 
-Two external connections test different reasoning styles: ArkLib's interactive
-polynomial soundness bound and a VCVio simulation game. A more complex factor-
-opening verifier tests residual composition and a conditional bad-opening bound.
+External connections test different reasoning styles: ArkLib's interactive
+polynomial soundness bound, VCVio's simulation and extraction games, and ArkLib's
+all-prefix restoration bound. A more complex factor-opening verifier tests
+residual composition and a conditional bad-opening bound.
 Helper-based, reordered, Horner and renamed source forms test whether proofs
 follow semantics rather than fixed source identities. A separate authored-target
 check tests whether a mathematically wrong relation can hide behind a correct
 protocol or familiar name.
+
+The Fiat–Shamir extension keeps construction explicit. It imports the actual
+native constructed participant, gives each admitted primitive a fixed meaning,
+and proves a complete denotation equation before applying a security observation.
+This avoids assuming that an abstract construction was the one implemented by a
+candidate. Source normalization and the security theorem remain reusable across
+different authored forms, while exact native identities bind each request.
+
+The two security families deliberately stress different interfaces. Schnorr
+requires a fixed-statement extraction experiment and a replay query bound.
+Sumcheck permits an adaptively selected public statement and arbitrary oracle
+queries on full message/challenge prefixes. A proved salted-key simulation
+connects that model to ArkLib. Its extra access is explicit in the bound;
+discarding earlier challenges from a query key is not an assumed simplification.
+All-prefix residual knowledge predicates include earlier failed checks, and the
+local bad event retains its existential witness quantifier.
 
 ## Evaluation and falsification
 
@@ -48,12 +65,15 @@ and their resolutions.
 
 ## What remains open beyond the implemented profile
 
-Exact equality is too strong for some optimizing transformations. A future
-observational refinement must state which events and resources it may hide.
-General native control, waiting schedulers, production fields/groups, provider
+Exact equality is too strong for some optimizing transformations. Observational
+adapters must state which events and resources they may hide. The Sumcheck
+completion adapter transports acceptance while distinguishing final caches and
+query counts after early rejection; it is not arbitrary contextual replacement.
+General native control import, waiting schedulers, production fields/groups, provider
 randomness, DSL compiler correctness and lower-stage preservation require their
-own adequacy proofs or maintained tests. General PCS, Fiat–Shamir and concurrent
-zero-knowledge composition need appropriate external theorems and adapters.
+own adequacy proofs or maintained tests. Variable-round full-prefix reductions,
+concrete transcript instantiation, general PCS and concurrent zero-knowledge
+composition need appropriate external theorems and adapters.
 A generic automation claim must quantify the supported contract language and
 state what obligations remain when normalization does not succeed.
 
