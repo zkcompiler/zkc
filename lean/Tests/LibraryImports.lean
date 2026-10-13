@@ -13,6 +13,7 @@ import Zkc.Probability.UniformTape
 import Zkc.Protocols.AlgebraicRounds.Construction
 import Zkc.Protocols.AlgebraicRounds.Fresh
 import Zkc.Protocols.AlgebraicRounds.Source
+import Zkc.Protocols.OpeningSum
 import Zkc.Protocols.Schnorr.Common
 import Zkc.Protocols.Schnorr.Construction
 import Zkc.Protocols.Schnorr.NativeConstruction
@@ -81,6 +82,7 @@ import Tests.Constructed
 import Tests.ConstructedRealizationAudit
 import Tests.ExecutionSimulation
 import Tests.Machine
+import Tests.OpeningSum
 import Tests.RingNormalization
 import Tests.SemanticLaws
 import Tests.SourceValidation

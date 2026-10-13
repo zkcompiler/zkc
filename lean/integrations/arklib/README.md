@@ -61,3 +61,9 @@ ArkLib's all-prefix knowledge laws, without salt preparation. The generic
 acceptance to the existing whole typed Sumcheck source for any finite `n`.
 Its bound is `(Q+n) * 2/|F|`. The [model specification](../../docs/spec/finite-transcript.md)
 separates this theorem from native loop import and early-stop cache equivalence.
+
+`ArkLib/KZG/OpeningSum` connects a typed two-opening evaluation-sum verifier to
+actual ArkLib KZG operations and a concrete t-SDH adversary. The
+[composition contract](../../docs/spec/opening-composition.md) records the
+registered-polynomial experiment and explicit hardness/resource boundary.
+The reduction also accepts any verifier satisfying the common process contract.

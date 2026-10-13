@@ -24,6 +24,8 @@ that all native behavior already has a Lean model.
 - [Finite full-prefix experiment](spec/finite-transcript.md): heterogeneous rounds,
   direct bad-query extraction and finite-round Sumcheck source soundness.
 - [Oracle encoding](spec/oracle-encoding.md): adaptive cached-query and residual-state transport.
+- [Opening composition](spec/opening-composition.md): a typed evaluation-sum
+  consumer, actual ArkLib KZG checks, and a concrete t-SDH reduction.
 - [Ring expressions](spec/ring-expressions.md): retained Clean/AIR connection.
 - [Support](support.md): theorem scope, assumptions and tested boundaries.
 - [Dependencies](dependencies.md): exact pins and compatibility decisions.

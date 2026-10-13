@@ -6,6 +6,7 @@ import ZkcSecurity.ArkLib.FiatShamir.Prefix.Security
 import ZkcSecurity.ArkLib.FiatShamir.Transcript.Experiment
 import ZkcSecurity.ArkLib.FiatShamir.Transcript.Keys
 import ZkcSecurity.ArkLib.FiatShamir.Transcript.Security
+import ZkcSecurity.ArkLib.KZG.OpeningSum
 import ZkcSecurity.ArkLib.Sumcheck.Bridge
 import ZkcSecurity.ArkLib.Sumcheck.Domain
 import ZkcSecurity.ArkLib.Sumcheck.Execution
@@ -37,6 +38,7 @@ import ZkcSecurity.VCVio.Schnorr
 import TestsSecurity.Compatibility
 import TestsSecurity.Encoding
 import TestsSecurity.FiniteTranscript
+import TestsSecurity.KZGOpeningSum
 import TestsSecurity.PrefixAudit
 import TestsSecurity.PrefixSimulation
 import TestsSecurity.SchnorrFiatShamirAudit
