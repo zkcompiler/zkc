@@ -78,7 +78,7 @@ def component_pages():
     ignored = {".git", ".lake", "target", "build", "node_modules", "__pycache__",
                ".cache", ".work", "records"}
     for folder in (".github", "compiler", "crates", "examples", "libraries", "common",
-                   "lean/consumers"):
+                   "lean/bridges"):
         for directory, children, files in os.walk(ROOT / folder):
             children[:] = sorted(name for name in children if name not in ignored
                                  and not name.startswith(".venv"))
@@ -102,7 +102,7 @@ def check(include_components=False):
     formal_reference = sorted((ROOT / "lean" / "docs").rglob("*.md"))
     formal_pages += formal_reference
     formal_pages += sorted((ROOT / "lean" / "Zkc").rglob("*.md"))
-    formal_pages += sorted((ROOT / "lean" / "Examples").rglob("*.md"))
+    formal_pages += sorted((ROOT / "lean" / "ZkcExamples").rglob("*.md"))
     formal_pages += sorted((ROOT / "lean" / "integrations").glob("*/*.md"))
     pages = active + formal_pages + [ROOT / p for p in extra]
     if include_components:

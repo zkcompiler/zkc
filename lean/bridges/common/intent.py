@@ -111,7 +111,15 @@ def validate_relation(data, request):
 
 
 def relation_candidate(data, request):
+    """Propose pure syntax; admission, relation and audit commands are reviewed."""
     validate_relation(data, request)
+    return program(data)
+
+
+def render_relation(data, request, proposal):
+    from candidate import program_expression
+    validate_relation(data, request)
+    source_program = program_expression(proposal)
     rendered = render(data, 'GeneratedRelation.Data').split('namespace ', 1)[1]
     return f'''
 namespace {rendered}
@@ -119,7 +127,7 @@ namespace GeneratedRelation
 open Zkc.Source Zkc.Source.Common Zkc.Source.Common.Native
 
 def sourceProgram : Program Nat language services Data.snapshot.inputs Data.snapshot.result :=
-{indent(program(data))}
+{indent(source_program)}
 def sourceScopes : Values (fun _ => Nat → Bool) Data.snapshot.inputs :=
   (inputScopes Data.snapshot.inputs Data.snapshot.inputRoles).get (by decide +kernel)
 def imported : Imported := ⟨Data.snapshot, sourceProgram, sourceScopes⟩

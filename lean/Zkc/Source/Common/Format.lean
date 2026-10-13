@@ -117,10 +117,12 @@ def parse (text : String) : Except String Json := do
       else if char == '\\' then escaped := true
       else if char == '"' then quoted := false
     else if char == '"' then quoted := true
-    else if char == '[' || char == '{' then
+    else if char == '-' then throw "expected-natural"
+    else if char == '{' || char == '}' then throw "invalid-shape"
+    else if char == '[' then
       depth := depth + 1
       if depth > 64 then throw "depth-limit"
-    else if char == ']' || char == '}' then depth := depth - 1
+    else if char == ']' then depth := depth - 1
   (Source.Format.parse (1024 * 1024) text).mapError Source.Format.Error.code
 
 def decode (text : String) : Except String Imported := do

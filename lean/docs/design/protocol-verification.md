@@ -41,7 +41,8 @@ semantic review examines role-local availability, termination, observation
 budgets, state and stop distinctions. The proof-chain review reconstructs all
 source-to-game equalities and external theorem premises. The generator review
 reconstructs the requested subject independently of candidate aliases.
-These are separate review passes; they do not imply an external independent reviewer.
+Independent read-only agents also reviewed the foundations and external theorem
+candidates; this does not constitute a human external audit.
 The [implementation review](review.md) records the reviewed boundaries, findings
 and their resolutions.
 

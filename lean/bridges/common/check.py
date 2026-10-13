@@ -27,11 +27,13 @@ STOPS = ('reject', 'abort', 'exhausted', 'incomplete', 'refused')
 TYPES = {'f': '!F', 'g': '!G', 'b': 'i1', 's': '!S'}
 
 
-def execute(command, ok=True):
+def execute(command, ok=True, diagnostic=None):
     result = subprocess.run(list(map(str, command)), cwd=ROOT, text=True,
                             capture_output=True, timeout=30)
-    if (result.returncode == 0) != ok:
+    if result.returncode != (0 if ok else 1):
         raise AssertionError(f'{command}: exit {result.returncode}\n{result.stderr}\n{result.stdout}')
+    if diagnostic is not None:
+        assert diagnostic in result.stderr.splitlines(), (command, result.stderr, diagnostic)
     return result.stdout
 
 
@@ -253,6 +255,28 @@ class Suite:
             execute([self.args.lean,'check',path],ok=False)
         return len(mutations)
 
+    def request_formats(self):
+        source, exported, _ = self.export(wrap([], [('a', 'f', [0, 1, 2])], ('a', 'f'), [0, 1, 2]))
+        assert self.compare(source, exported, 'main', ['zkc.common-run/0', 0, [0], []])[1] == ['returned', 0]
+        controls = [
+            '["zkc.common-run/0",-0,[0],[]]',
+            '["zkc.common-run/0",0,[-0],[]]',
+            '["zkc.common-run/0",0,[0],[[-1]]]',
+            '["zkc.common-run/0",0,[0],[{"x":0,"x":1}]]',
+            '["zkc.common-run/0",0,[0],[{"x":0}]]',
+            '["zkc.common-run/0",0,[0],[[1e0]]]',
+            '["zkc.common-run/0",0,[0],[[0.0]]]',
+        ]
+        path = self.directory / 'raw-request.json'
+        for text in controls:
+            path.write_text(text)
+            execute([self.args.reference, source, 'main', path], ok=False, diagnostic='common-run-format')
+            refusal = json.loads(execute([self.args.lean, 'run', exported, path], ok=False))
+            assert refusal == {'status': 'refused', 'code': 'common-run-json'}, refusal
+        # Lexical preflight must leave string contents alone, even in an unused tail.
+        self.compare(source, exported, 'main', ['zkc.common-run/0', 0, [0], ['-0{}1e0']])
+        return len(controls)
+
     def mutation_control(self):
         # Deliberately corrupt an exported operation, then shrink native source
         # while rechecking native admission at every candidate.
@@ -354,9 +378,11 @@ def main():
         for _ in range(args.cases):
             suite.exercise(generated(suite.rng,suite.rng.randrange(4,30)))
         negatives=suite.negatives(data)
+        request_formats=suite.request_formats()
         control=suite.mutation_control()
         report={'binaries':binaries,'seed':args.seed,'generated_cases':args.cases,'comparisons':suite.comparisons,
-                'negative_formats':negatives,'mutation_control':control,'sources':suite.sources,
+                'negative_formats':negatives,'request_format_refusals':request_formats,
+                'mutation_control':control,'sources':suite.sources,
                 'sumcheck_controls':sumcheck_controls,'source_variation_checks':variation_checks,
                 'contract_controls':contract_controls,'factor_opening_controls':factor_controls,
                 'instruction_coverage':dict(sorted(suite.instructions.items())),

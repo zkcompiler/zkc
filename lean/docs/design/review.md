@@ -3,8 +3,11 @@
 This review asks whether an accepted security claim is about the actual imported
 program and authored relation, whether its experiment is explicit, and whether
 the architecture supports reuse without copying proofs for each source form.
-The reviews below were separate passes by the implementing agent, not an external
-independent review. The [support matrix](../support.md) owns the supported claims.
+The implementation passes were followed by independent read-only agent reviews
+of the semantics, source bridge, security proofs, architecture and external FS
+theorem candidates. An automation review returned findings but was terminated by
+an automatic safety filter before its final report. These are agent reviews,
+not a human external audit. The [support matrix](../support.md) owns the supported claims.
 
 ## Architecture and composition
 
@@ -67,6 +70,9 @@ certificates, stale selectors and unsupported experiments. Transitive axiom
 checks reject proof holes; the audit controls also test unused axioms, native
 evaluation axioms and empty module selections. The resolver and renderer remain
 reviewed/tested trusted software boundaries, stated explicitly in receipts.
+Generators now return restricted pure expressions, not Lean command streams.
+The renderer owns declarations and audits, and the checker retains independent
+input snapshots. Python execution and the selected toolchain remain trusted.
 
 ## Findings resolved during implementation
 
@@ -82,6 +88,13 @@ reviewed/tested trusted software boundaries, stated explicitly in receipts.
 | Deleted models left stale native documentation claims | Remove obsolete proof claims while retaining native mathematical obligations |
 | Core checks could resolve optional dependencies | Select core-only boundaries in the default runner; check integrations explicitly |
 | A negative test could accept signal termination as refusal | Require an ordinary positive error exit |
+| A candidate command stream could terminate before subject checks | Admit only restricted pure expression proposals; let reviewed rendering own all Lean commands and audits |
+| A generator could mutate the source or requested properties shared with the checker | Pass disposable copies and retain independent checker/receipt snapshots; test source and request changes |
+| Native and Lean replay parsers disagreed on signed zero and unused malformed replies | Require unsigned integer tokens and tagged arrays throughout requests; compare both executable refusals |
+| The native Lean check could use a missing or stale core executable | Build the main Lean package before native differential checks |
+| Maintenance instructions and bridge links retained obsolete versions/paths | Align the guide with the manifests and include bridge Markdown in link checks |
+| New parser refusal controls could count a crash as rejection | Require exit 1 and each reader's exact diagnostic; separately exercise non-refusal exit codes |
+| A repeated successful request inflated the reported source count | Name the metric `verified_requests`; test nested source, request and relation mutations |
 
 ## Reproduction and further research
 

@@ -39,3 +39,11 @@ The native `language-interface` identity and chosen symbol are compared before
 verification. Constructor data is freshly rendered, admitted by `Snapshot.check`,
 and tied to a separately generated requested-subject theorem. The renderer,
 parser and interface-name resolution remain tested software boundaries.
+
+The finite reference request `zkc.common-run/0` is
+`[format, role, input-values, replay-entries]`. Both reference readers require
+unsigned integer tokens and tagged arrays; JSON objects are outside this
+profile, including in unused replay entries. Negative zero, fractional or
+exponent tokens and malformed JSON are refused before execution. Strings retain
+their contents. This admission policy is distinct from an executed malformed
+reply, which yields an explicit refused stop.

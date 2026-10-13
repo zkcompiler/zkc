@@ -33,14 +33,17 @@ reviewed and tested boundary, not a kernel proof of the DSL compiler.
 
 ## Contract proof and property application
 
-The bounded generator symbolically expands the selected role, proposes typed
-source syntax and proves it is the actual admission result. Algebraic
-normalization and open-process congruence propose a verifier-contract proof.
+The bounded generator symbolically expands the selected role and proposes pure
+source and process expressions. A restricted vocabulary admits constructor and
+scalar terms, with no commands, comments, imports, macros or tactics. The reviewed
+renderer owns the Lean declarations, subject bindings, normalization proofs and
+audits. Lean checks admission and the verifier-contract equality.
 A separate request interpreter reconstructs the inputs, role, sites and actual
 program denotation. It checks the candidate contract against that subject and
 re-derives the requested properties. A separate relation-subject check does the
 same for the authored predicate. Copying a hash, proving a lookalike experiment,
-or returning success text is insufficient.
+or returning success text is insufficient. Each generator receives disposable
+copies; the checker and receipt retain independent source/request snapshots.
 
 Registered properties include Schnorr perfect completeness and special soundness,
 VCVio honest-verifier simulation, finite two-round Sumcheck completeness/soundness,
@@ -53,7 +56,9 @@ Lean checks proof terms and the transitive axiom closure of every accepted
 subject/property theorem. Only `propext`, `Classical.choice`, and `Quot.sound`
 are permitted. `sorryAx`, extra assumptions introduced as axioms, a valid proof
 about another program, timeout and unsupported input all leave an unresolved
-receipt. The registry and request interpreter are reviewed code. Requests cannot
+receipt. The registry, expression validator, renderer and request interpreter are
+reviewed code. Python execution and the selected Lean toolchain are trusted;
+this interface does not sandbox a malicious Python process. Requests cannot
 supply Lean snippets, imports, tactics or arbitrary theorem names.
 
 ## Composition and extensions

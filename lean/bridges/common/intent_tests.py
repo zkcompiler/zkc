@@ -85,6 +85,18 @@ def main():
         rows.append({'case': 'wrong-relation-subject', 'result': 'refused'})
     finally:
         intent.relation_candidate = generator
+    def changing_relation(data, request):
+        data[8][:] = correct[8]
+        return generator(data, request)
+    intent.relation_candidate = changing_relation
+    try:
+        original_relation = copy.deepcopy(wrong)
+        receipt = verify(data, request, output / 'changed-relation-input', relation=wrong)
+        assert receipt['status'] == 'unresolved'
+        assert wrong == original_relation
+        rows.append({'case': 'changed-relation-input', 'result': 'refused'})
+    finally:
+        intent.relation_candidate = generator
     # Independent external theorem reuse across all three admitted source forms.
     for family, forms, request_name in [('sumcheck', ['', '-helpers', '-horner'], 'sumcheck-arklib'),
                                         ('schnorr', ['', '-helpers', '-reordered'], 'schnorr-simulation')]:

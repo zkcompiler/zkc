@@ -100,7 +100,7 @@ of that control runs in `just test-integration` without Lean.
 `just test-lean-fresh` rebuilds research packages without previous
 project/dependency objects. These can be expensive.
 
-`just test-lean-native` prepares the native compiler and ArkLib integration, then
+`just test-lean-native` prepares the native compiler, main Lean package and ArkLib integration, then
 runs independent finite SSA/Lean comparisons, the source/property request matrix,
 and authored-target controls. To use an existing build, run
 `python3 common/tests/run.py lean-native --compiler-build=build/compiler`.

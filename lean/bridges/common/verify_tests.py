@@ -128,40 +128,68 @@ def main():
     # admitted by its own success marker or by other valid property aliases.
     import verify as implementation
     original_generator = implementation.generate
+    for name, proposal in [('candidate-not-object', '.done none'),
+                           ('candidate-missing-process', {'program': '.ret .nil'}),
+                           ('candidate-extra-field', {'program': '.ret .nil',
+                                                       'process': '.done none', 'extra': True})]:
+        implementation.generate = lambda _data, _request, proposal=proposal: proposal
+        try:
+            check(name, read_json(FIXTURES / 'sumcheck.json'), requests['sumcheck'], 'candidate-shape')
+        finally:
+            implementation.generate = original_generator
     def corrupted_generator(data, request):
         candidate = original_generator(data, request)
-        start = candidate.index('theorem source_expansion')
-        finish = candidate.index('theorem correspondence')
-        altered = candidate[start:finish].replace('  rfl', '  sorry')
-        assert altered != candidate[start:finish]
-        return candidate[:start] + altered + candidate[finish:]
+        candidate['process'] = 'by sorry'
+        return candidate
     implementation.generate = corrupted_generator
     try:
         check('generator-sorry-control', read_json(FIXTURES / 'sumcheck.json'),
-              requests['sumcheck'], 'correspondence-unproved')
+              requests['sumcheck'], 'candidate-syntax')
     finally:
         implementation.generate = original_generator
+    for name, payload in [
+            ('generator-exit-control', 'run_cmd Lean.logInfo "PROOF-REQUEST-KERNEL-PASS"\n'
+             'run_cmd Lean.logInfo "PROOF-REQUEST-BOUNDARY-PASS"\n#exit'),
+            ('generator-comment-control', '.done none /-'),
+            ('generator-line-comment-control', '.done none --'),
+            ('generator-command-control', '.done none\ndef approvedContract := true')]:
+        def active_generator(data, request, payload=payload):
+            return {'program': original_generator(data, request)['program'], 'process': payload}
+        implementation.generate = active_generator
+        try:
+            check(name, read_json(FIXTURES / 'sumcheck.json'), requests['sumcheck'], 'candidate-syntax')
+        finally:
+            implementation.generate = original_generator
     def wrong_subject_generator(data, request):
-        candidate = original_generator(data, request)
-        # Keep the real source admission, but prove the intended experiment
-        # against itself instead of proving this source implements it.
-        for definition in ('verifier', 'sourceProcess'):
-            start = candidate.index('def ' + definition + ' ')
-            body = candidate.index(':=', start) + 2
-            end = candidate.index('\n\n', body)
-            candidate = candidate[:body] + '\n  experiment (F := F) wiring statement claim service' + candidate[end:]
-        for declaration, following in [('source_expansion', 'correspondence'), ('correspondence', 'contract')]:
-            start = candidate.index('theorem ' + declaration)
-            body = candidate.index(':= by', start) + len(':= by')
-            end = candidate.index('theorem ' + following, body)
-            candidate = candidate[:body] + '\n  rfl\n\n' + candidate[end:]
-        return candidate
+        return original_generator(read_json(FIXTURES / 'factor-horner.json'), request)
     implementation.generate = wrong_subject_generator
     try:
         check('wrong-subject-certificate-control', read_json(FIXTURES / 'factor-wrongpoint.json'),
               requests['factor-openings'], 'correspondence-unproved')
-        log = (args.output / 'wrong-subject-certificate-control/lean.log').read_text()
-        assert 'PROOF-REQUEST-KERNEL-PASS' in log and 'PROOF-REQUEST-BOUNDARY-PASS' not in log
+    finally:
+        implementation.generate = original_generator
+    def mutating_generator(data, request):
+        data[8][:] = read_json(FIXTURES / 'factor-horner.json')[8]
+        return original_generator(data, request)
+    implementation.generate = mutating_generator
+    try:
+        check('mutated-source-control', read_json(FIXTURES / 'factor-wrongpoint.json'),
+              requests['factor-openings'], 'correspondence-unproved')
+    finally:
+        implementation.generate = original_generator
+    def mutating_request_generator(data, request):
+        request['properties'][:] = ['perfect-completeness']
+        return original_generator(data, request)
+    implementation.generate = mutating_request_generator
+    try:
+        original_request = copy.deepcopy(requests['sumcheck'])
+        receipt = verify(read_json(FIXTURES / 'sumcheck.json'), original_request,
+                         args.output / 'mutated-request-control', args.lake)
+        assert receipt['status'] == 'verified-in-model'
+        assert [p['property'] for p in receipt['verified_properties']] == original_request['properties']
+        assert read_json(args.output / 'mutated-request-control/request.json') == original_request
+        rows.append({'case': 'mutated-request-control', 'status': 'verified-in-model',
+                     'properties': len(receipt['verified_properties'])})
     finally:
         implementation.generate = original_generator
     # A deliberately tiny external budget must never become a verified receipt.
@@ -184,7 +212,7 @@ def main():
     quoted_value = '[\\"' * 5000
     quoted.write_text(json.dumps(quoted_value))
     assert read_json(quoted) == quoted_value
-    report = {'cases': rows, 'verified_sources': sum(r['status'] == 'verified-in-model' for r in rows),
+    report = {'cases': rows, 'verified_requests': sum(r['status'] == 'verified-in-model' for r in rows),
               'property_instances': sum(r['properties'] for r in rows),
               'unresolved_controls': sum(r['status'] != 'verified-in-model' for r in rows),
               'parser_controls': 3,

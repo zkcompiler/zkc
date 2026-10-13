@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Check an explicit proof request against an actual common-source export.
 
-Candidate generation is untrusted. Success requires kernel checking, a separate
-requested-subject check and a transitive axiom audit. Request interpretation,
-native export/rendering and runtime conformance remain reviewed or tested
+Candidate expressions are untrusted. Reviewed code owns their validation and
+the Lean command stream. Success requires kernel checking, a separate requested-
+subject check and a transitive axiom audit. Python execution, the selected toolchain,
+request interpretation and native export/rendering remain trusted or tested
 boundaries. Receipt status always describes the selected mathematical model.
 """
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -20,6 +22,7 @@ from registry import CONTRACTS
 from request_support import Obligation, require
 from snapshot import render, string, natural
 from symbolic import process, program, indent, Unsupported
+from candidate import expression, program_expression
 
 ROOT = Path(__file__).resolve().parents[2]
 VERSION = 'zkc.proof-request/0'
@@ -176,7 +179,19 @@ def wiring_term(contract, wiring):
 
 
 def generate(data, request):
+    """Propose pure expressions only; the reviewed renderer owns all commands."""
     contract = validate(data, request)
+    initial = [None if binding is None else contract.inputs[binding][0] for binding in request['inputs']]
+    return {'program': program(data), 'process': process(data, request['role'], initial)}
+
+
+def render_certificate(data, request, proposal):
+    contract = validate(data, request)
+    require(type(proposal) is dict and set(proposal) == {'program', 'process'},
+            'candidate-shape', 'Expected only program and process expression proposals')
+    source_program = program_expression(proposal['program'])
+    source_process = expression(proposal['process'], 'process',
+                                [item[0] for item in contract.inputs.values()])
     namespace = contract.namespace
     initial = [None if binding is None else contract.inputs[binding][0] for binding in request['inputs']]
     values = '.nil'
@@ -215,7 +230,7 @@ open Zkc.Source Zkc.Source.Common Zkc.Source.Common.Native
 open {namespace}
 
 def sourceProgram : Program Nat language services Data.snapshot.inputs Data.snapshot.result :=
-{indent(program(data))}
+{indent(source_program)}
 
 def sourceScopes : Values (fun _ => Nat → Bool) Data.snapshot.inputs :=
   (inputScopes Data.snapshot.inputs Data.snapshot.inputRoles).get (by decide +kernel)
@@ -242,7 +257,7 @@ def verifier {contract.binders} : {actual_type} :=
   imported.denote (scalarMeaning F {generic}) id {request['role']} (inputs {parameters} {contract.arguments})
 
 def sourceProcess {contract.binders} : {actual_type} :=
-{indent(process(data, request['role'], initial))}
+{indent(source_process)}
 
 theorem source_expansion {contract.binders} :
     verifier {parameters} {contract.arguments} = sourceProcess {parameters} {contract.arguments} := by
@@ -354,7 +369,7 @@ def render_client(data, request, name):
     allowed = {'FactorExpanded', 'FactorHorner', 'FactorWrongPoint', 'FactorWrongResidual'}
     if name not in allowed:
         raise ValueError('unsupported maintained client')
-    candidate = generate(data, request)
+    candidate = render_certificate(data, request, generate(copy.deepcopy(data), copy.deepcopy(request)))
     start = candidate.index('namespace GeneratedCertificate.Data')
     finish = candidate.index('end GeneratedCertificate.Data') + len('end GeneratedCertificate.Data')
     candidate = candidate[:start] + candidate[finish:]
@@ -373,6 +388,9 @@ def render_client(data, request, name):
 
 
 def verify(data, request, output, lake='lake', timeout=180, relation=None):
+    # Each generator sees its own disposable inputs. The requested subject and
+    # receipt retain independent snapshots even if a generator mutates its copy.
+    data, request, relation = copy.deepcopy((data, request, relation))
     output.mkdir(parents=True, exist_ok=True)
     receipt = {'format': RECEIPT, 'status': 'unresolved', 'claim_scope': 'formal-model',
                'contract': request.get('contract') if isinstance(request, dict) else None,
@@ -380,17 +398,21 @@ def verify(data, request, output, lake='lake', timeout=180, relation=None):
                'request_sha256': hashlib.sha256(json.dumps(request, sort_keys=True).encode()).hexdigest(),
                'verified_properties': [], 'obligations': [],
                'external_boundaries': ['native-source-to-export (check separately)', 'export-to-constructor-rendering (check separately)',
-                   'request-parser and registry interpretation (reviewed and tested)'],
+                   'request-parser and registry interpretation (reviewed and tested)',
+                   'candidate expression validation and command rendering (reviewed and tested)',
+                   'Python execution and selected Lean toolchain (trusted)'],
                'not_established': ['native-runtime arithmetic and sampling conformance',
                    'DSL compiler correctness', 'Fiat-Shamir security', 'PCS binding or extractability',
                    'malicious-verifier or concurrent zero knowledge', 'whole native prover correctness']}
     (output / 'request.json').write_text(json.dumps(request, indent=2) + '\n')
     (output / 'source.json').write_text(json.dumps(data, indent=2) + '\n')
     try:
-        candidate = generate(data, request) + check_subject(data, request)
+        proposal = generate(copy.deepcopy(data), copy.deepcopy(request))
+        candidate = render_certificate(data, request, proposal) + check_subject(data, request)
         if relation is not None:
-            from intent import relation_candidate, relation_subject
-            candidate += relation_candidate(relation, request) + relation_subject(relation, request)
+            from intent import relation_candidate, render_relation, relation_subject
+            relation_proposal = relation_candidate(copy.deepcopy(relation), copy.deepcopy(request))
+            candidate += render_relation(relation, request, relation_proposal) + relation_subject(relation, request)
         path = output / 'Certificate.lean'
         path.write_text(candidate)
         receipt['certificate_sha256'] = hashlib.sha256(candidate.encode()).hexdigest()

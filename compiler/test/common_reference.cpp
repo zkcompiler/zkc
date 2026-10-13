@@ -17,6 +17,16 @@ using namespace zkc;
 namespace {
 using Scalar = std::optional<uint64_t>;
 
+bool taggedArrayJson(const json::Value &value) {
+  if (value.getAsObject())
+    return false;
+  if (auto items = value.getAsArray())
+    for (const auto &item : *items)
+      if (!taggedArrayJson(item))
+        return false;
+  return true;
+}
+
 json::Value typeJson(Type type) {
   if (type.isInteger(1))
     return json::Array{"bool"};
@@ -317,6 +327,8 @@ int main(int argc, char **argv) {
                                "common-run-limit");
   if (!json)
     return fail(json.takeError());
+  if (!taggedArrayJson(*json))
+    return fail(error("common-run-format"));
   auto fields = json->getAsArray();
   if (!fields || fields->size() != 4 ||
       (*fields)[0].getAsString() != "zkc.common-run/0" ||

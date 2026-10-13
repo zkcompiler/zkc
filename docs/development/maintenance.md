@@ -85,14 +85,12 @@ maintained integration without changing its meaning, retain the newest
 compatible set and record the concrete constraint here. Do not suppress proof
 checks or add a second dependency manager to force an upgrade.
 
-The maintained set currently retains Lean/Mathlib 4.33.1 and the ArkLib,
-VCVio and Clean revisions recorded in the Lake manifests. The 4.34.1 upgrade
-built the main package, but ArkLib 4.34.0 selects a VCVio revision that deprecates the discrete
-probability API (`probOutput`, `probEvent` and `Pr[...]`) still used by the
-maintained bridges. Retaining the earlier VCVio/PolyFun revisions with Lean 4.34.1
-also fails upstream reducibility and proof checks. Upgrade this set together
-with an explicit probability-interface migration; do not mix toolchains or
-relax the owned warning/axiom checks to accept it.
+The maintained packages use Lean 4.34.1. The owning manifests select exact
+Mathlib, ArkLib, VCVio and Clean revisions; the
+[formal dependency rationale](../../lean/docs/dependencies.md) records their
+compatibility constraints and the checked adapter boundaries. Revalidate those
+consumers when changing the set; do not mix toolchains or relax the owned
+warning/axiom checks to accept an upgrade.
 
 ## Upgrade and validate
 

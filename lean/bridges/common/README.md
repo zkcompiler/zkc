@@ -48,7 +48,7 @@ shrinking control, not a general minimal-counterexample theorem.
 The field and additive group use **Z/97** in both references. These comparisons
 check the selected scalar PIR interpretation, not production BLS12-381 kernels,
 four lowering stages, Rust execution, real randomness or full FRI/STARK security.
-See [the connection boundary](../../docs/native-connection.md).
+See [the supported connection boundaries](../../docs/support.md).
 
 ## Constructor data
 
@@ -58,10 +58,10 @@ checks exact regeneration; Lean separately checks admission and program proofs.
 Refreshing a source fixture requires reviewing changed correspondence, not just
 replacing a hash to obtain a passing test.
 
-[Schnorr](../../Examples/NativePrograms/Schnorr.lean) and
-[Sumcheck](../../Examples/NativePrograms/Sumcheck.lean) are concrete clients.
-The [variant clients](../../Examples/NativePrograms/README.md) reuse their
-contracts and property theorems. Their positive proofs are for arbitrary
+[Schnorr](../../ZkcExamples/NativePrograms/Schnorr.lean) and
+[Sumcheck](../../ZkcExamples/NativePrograms/Sumcheck.lean) are concrete clients.
+Variant clients [reuse their contracts and property theorems](../../docs/architecture.md#reuse-and-composition).
+Their positive proofs are for arbitrary
 fields/modules under stated hypotheses, rather
 than exhaustive checks of Z/97. Explicit proof requests automate bounded
 correspondence and registered property application; arbitrary-source theorem
@@ -101,9 +101,13 @@ and proof-budget failures produce `unresolved` receipts and a nonzero exit.
 A copied hash or a printed success marker cannot replace a proof.
 
 `registry.py` owns reviewed contract descriptions and independent property
-consumers. `symbolic.py` proposes typed source syntax and selected-role processes;
-its output is untrusted. Explicit syntax avoids repeated dependent-type checking
-through the importer. `Snapshot.check_parts` still requires all admission checks
+consumers. `symbolic.py` proposes typed source syntax and selected-role processes.
+`candidate.py` restricts these expressions to pure constructor and scalar syntax;
+the reviewed renderer owns every Lean command, proof script and audit. Generator
+inputs are disposable copies, separate from the checker and receipt subjects.
+The proposed expressions are untrusted; Python execution, the validator, renderer,
+registry and selected toolchain remain trusted. Explicit syntax avoids repeated
+dependent-type checking through the importer. `Snapshot.check_parts` still requires all admission checks
 and equality to the actual elaboration. The correspondence proof normalizes pure
 algebra while retaining effects, arbitrary replies, guards and stops. This is a
 bounded partial evaluator and equality procedure, not a general theorem search.
@@ -124,8 +128,9 @@ python3 lean/bridges/common/verify_tests.py \
 It includes a newly compiled source with renamed module/protocol/sites and
 reordered inputs, stale bindings, changed equations/effect order, a copied
 positive identity, unsupported PCS/Fiat–Shamir claims, incorrect coin models and
-deliberately corrupted proof candidates, a kernel-valid certificate about the
-wrong program, proof-budget exhaustion and JSON parser bounds. The ordinary bridge additionally
+deliberately corrupted expression candidates, commands and comments in proposals,
+changed generator inputs, valid expressions for a different program, proof-budget
+exhaustion and JSON parser bounds. The ordinary bridge additionally
 checks expanded/Horner composed sources, both opening failures, wrong points
 and residuals, and stopped prefixes at every reached action. These executions
 use Z/97; symbolic certificates quantify over the stated fields/modules.
