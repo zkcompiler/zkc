@@ -7,7 +7,8 @@ against Clean's own definitions. The main `lean/` package has no Clean
 dependency. The package uses a local path dependency on main and exact pins.
 
 ```sh
-just test-lean-clean          # from the repository root: fetch, build, audit, control
+just fetch-lean clean         # from the repository root: prepare pinned dependencies
+just test-lean-clean          # build, audit and check generated controls and fixtures
 cd lean/integrations/clean
 lake build
 lake env lean --run TestsClean/Control.lean   # print the native comparison control
