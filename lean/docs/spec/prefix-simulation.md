@@ -93,6 +93,9 @@ child-session, private-oracle, QROM, or reset experiment. Extending to more roun
 requires an encoded salt-prefix construction, injectivity and cache laws, an
 adaptive preparation program, completion equality, and a proved query charge;
 none is supplied by assuming a fixed table-dependent encoding.
+The separate [finite transcript theorem](finite-transcript.md) takes a direct
+bad-query route and supports heterogeneous finite schedules without this salt
+preparation. Its result does not extend the cache equality proved here.
 
 Native participant normalization, typed grouping of actual absorbs, statement
 and domain binding, byte encoding, challenge decoding and sampler/provider

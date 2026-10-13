@@ -207,7 +207,8 @@ def prelude(data, protocol, namespace):
     source = source[:source.index('set_option maxRecDepth')]
     source = source.replace('public import Zkc.Source.Constructed',
                             f'public import Zkc.Protocols.{protocol.title()}.NativeConstruction\n'
-                            'public import Zkc.Source.Constructed.Scalar\npublic import Lean')
+                            'public import Zkc.Source.Constructed.Scalar\n'
+                            'public import Zkc.Source.Constructed.Execution\npublic import Lean')
     source += '''
 set_option maxRecDepth 32768
 set_option maxHeartbeats 16000000
@@ -223,6 +224,18 @@ theorem admitted : snapshot.check = .ok imported := by
   apply snapshot.check_program program
   · decide +kernel
   · decide +kernel
+
+/-- Direct raw execution agrees for all primitive meanings and input values. -/
+theorem raw_denotation {I : PIR.Signature} (selected : Meaning I)
+    (values : Values (Values selected.Value) (snapshot.inputs.map scalar)) :
+    snapshot.denoteRaw selected values = imported.denote selected values :=
+  Snapshot.check_denoteRaw admitted selected values
+
+/-- The flat carrier is evaluated without using lowering or typed elaboration. -/
+theorem source_denotation {I : PIR.Signature} (selected : Meaning I)
+    (values : Values (Values selected.Value) (snapshot.inputs.map scalar)) :
+    snapshot.execute selected values = imported.denote selected values :=
+  Snapshot.check_execute admitted selected values
 '''
     return source
 
@@ -317,8 +330,8 @@ def audit(namespace, names):
 def render(data, protocol, namespace='ConstructedRealization', receive_sites=None):
     profile = validate(data, protocol, receive_sites)
     if protocol == 'schnorr':
-        return schnorr(data, namespace, profile) + audit(namespace, ['admitted', 'full_denotation', 'projected_denotation'])
-    return sumcheck(data, namespace, profile) + audit(namespace, ['admitted', 'full_denotation', 'projected_denotation'])
+        return schnorr(data, namespace, profile) + audit(namespace, ['admitted', 'raw_denotation', 'source_denotation', 'full_denotation', 'projected_denotation'])
+    return sumcheck(data, namespace, profile) + audit(namespace, ['admitted', 'raw_denotation', 'source_denotation', 'full_denotation', 'projected_denotation'])
 
 
 

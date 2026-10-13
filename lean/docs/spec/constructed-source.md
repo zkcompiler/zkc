@@ -32,15 +32,28 @@ The maintained laws are:
 - `Imported.reelaborate`: erasure/re-elaboration recovers the same typed program.
 - `Snapshot.check_denotation_unique`: two successful admissions of the same
   carrier have equal complete denotations for every interpretation and input.
+- `Snapshot.check_execute`: direct execution of the flat instruction carrier
+  equals the checked typed program for every primitive meaning and every input.
+  The direct evaluator does not call lowering, elaboration or typed denotation.
+  `lower_denotation` proves the pack/project/guard translation into raw syntax;
+  `RawProgram.denote_elaborate` proves raw-to-typed execution correspondence.
+- `Snapshot.check_denoteRaw`: the intermediate raw evaluator has the same
+  denotation, independently of the flat-instruction evaluator.
 - `project_reply` and `pack_reply`: bridge-introduced result movement is pure and
   returns precisely the selected component or complete ordered product.
 
-These are admission and representation laws. They do not prove native C++
+These are admission, representation and source-model execution laws. They do not prove native C++
 exporter correctness or a Fiat–Shamir reduction. Applying them to native output
 requires the checked native export and exact artifact regeneration. A protocol
 consumer must separately check primitive descriptors and prove its actual-body
 normalization equation under a specified interpretation. No assumed
 correspondence field replaces that equation.
+
+The generated realization proof audits both `source_denotation` and
+`raw_denotation` in addition to admission and its protocol-specific equation.
+This closes translation within the declared export grammar. JSON parsing,
+native extraction, selected Local expansion before export, nominal type meaning
+and production primitive implementations remain explicit boundaries.
 
 `ZkcTools.Constructed.Replay` checks reached primitive names and actual operands
 against explicit replies, keeping full result tuples, stops and event order.

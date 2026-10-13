@@ -3,10 +3,14 @@ import ZkcSecurity.ArkLib.FiatShamir.Prefix.Cache
 import ZkcSecurity.ArkLib.FiatShamir.Prefix.Experiment
 import ZkcSecurity.ArkLib.FiatShamir.Prefix.Keys
 import ZkcSecurity.ArkLib.FiatShamir.Prefix.Security
+import ZkcSecurity.ArkLib.FiatShamir.Transcript.Experiment
+import ZkcSecurity.ArkLib.FiatShamir.Transcript.Keys
+import ZkcSecurity.ArkLib.FiatShamir.Transcript.Security
 import ZkcSecurity.ArkLib.Sumcheck.Bridge
 import ZkcSecurity.ArkLib.Sumcheck.Domain
 import ZkcSecurity.ArkLib.Sumcheck.Execution
 import ZkcSecurity.ArkLib.Sumcheck.FiatShamir.EarlyStop
+import ZkcSecurity.ArkLib.Sumcheck.FiatShamir.FiniteRounds
 import ZkcSecurity.ArkLib.Sumcheck.FiatShamir.FullPrefix
 import ZkcSecurity.ArkLib.Sumcheck.FiatShamir.Game
 import ZkcSecurity.ArkLib.Sumcheck.FiatShamir.Knowledge
@@ -32,6 +36,7 @@ import ZkcSecurity.VCVio.Schnorr.FiatShamir
 import ZkcSecurity.VCVio.Schnorr
 import TestsSecurity.Compatibility
 import TestsSecurity.Encoding
+import TestsSecurity.FiniteTranscript
 import TestsSecurity.PrefixAudit
 import TestsSecurity.PrefixSimulation
 import TestsSecurity.SchnorrFiatShamirAudit

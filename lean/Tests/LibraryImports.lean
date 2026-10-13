@@ -1,6 +1,7 @@
 -- Maintained by audit_imports.py; library, test, example and selected executable consumers are audited.
 import Zkc
 import Zkc.Algebra.RingExpression
+import Zkc.Algebra.RingNormalization
 import Zkc.Polynomial.BooleanCube
 import Zkc.Polynomial.Coordinates
 import Zkc.Polynomial.Layout
@@ -35,6 +36,7 @@ import Zkc.Protocols.Sumcheck.Source
 import Zkc.Protocols.Sumcheck.Transcript
 import Zkc.Protocols.Sumcheck.Verifier
 import Zkc.Realization.Acceptance
+import Zkc.Realization.Execution
 import Zkc.Relation.AIR.RingExpression
 import Zkc.Relation.AIR
 import Zkc.Semantics.Boundary
@@ -57,24 +59,31 @@ import Zkc.Source.Common.Scalar
 import Zkc.Source.Common.Vocabulary
 import Zkc.Source.Common
 import Zkc.Source.Composition
+import Zkc.Source.Constructed.Execution
 import Zkc.Source.Constructed.Format
 import Zkc.Source.Constructed.Scalar
 import Zkc.Source.Constructed
 import Zkc.Source.Context
 import Zkc.Source.Decoding
+import Zkc.Source.Expansion
 import Zkc.Source.FiniteControl
 import Zkc.Source.Format
 import Zkc.Source.Interpretation
 import Zkc.Source.Mathematical.Projection
 import Zkc.Source.Mathematical
 import Zkc.Source.Program
+import Zkc.Source.RawSemantics
 import Zkc.Source.Region
 import Zkc.Source.RoleFamily
+import Zkc.Source.Validation
 import Zkc.Specification
 import Tests.Constructed
 import Tests.ConstructedRealizationAudit
+import Tests.ExecutionSimulation
 import Tests.Machine
+import Tests.RingNormalization
 import Tests.SemanticLaws
+import Tests.SourceValidation
 import ZkcExamples.NativePrograms.ContractControls
 import ZkcExamples.NativePrograms.CustomProperty
 import ZkcExamples.NativePrograms.FactorControls

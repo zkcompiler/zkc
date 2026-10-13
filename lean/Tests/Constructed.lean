@@ -1,4 +1,5 @@
 import Zkc.Source.Constructed.Format
+import Zkc.Source.Constructed.Execution
 
 open Zkc.Source Zkc.Source.Constructed
 
@@ -38,6 +39,13 @@ example : admitted.denote tokens (.cons (.cons 0 .nil) .nil) = .halt .reject := 
 example : admitted.denote tokens (.cons (.cons 1 .nil) .nil) = .done (.cons 1 .nil) := by
   rfl
 
+example (value : Nat) : sample.execute tokens (.cons (.cons value .nil) .nil) =
+    admitted.denote tokens (.cons (.cons value .nil) .nil) :=
+  Snapshot.check_execute (sample.imported_checked (by decide +kernel)) tokens _
+
+example : sample.execute tokens (.cons (.cons 0 .nil) .nil) = .halt .reject := rfl
+example : sample.execute tokens (.cons (.cons 1 .nil) .nil) = .done (.cons 1 .nil) := rfl
+
 #print axioms Zkc.Source.Constructed.Snapshot.check_exact
 #print axioms Zkc.Source.Constructed.Snapshot.check_elaborate
 #print axioms Zkc.Source.Constructed.Snapshot.check_denotation_unique
@@ -45,3 +53,4 @@ example : admitted.denote tokens (.cons (.cons 1 .nil) .nil) = .done (.cons 1 .n
 #print axioms Zkc.Source.Constructed.Imported.reelaborate
 #print axioms Zkc.Source.Constructed.project_reply
 #print axioms Zkc.Source.Constructed.pack_reply
+#print axioms Zkc.Source.Constructed.Snapshot.check_execute

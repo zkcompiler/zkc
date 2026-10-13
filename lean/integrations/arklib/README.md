@@ -52,3 +52,12 @@ The Python [source proof-request bridge](../../bridges/common/README.md) and
 [constructed-program requests](../../docs/spec/fs-verification.md) expose the
 selected consumers through explicit requests. Neither successful sampling tests nor the
 mere presence of a library dependency replaces the connection proofs.
+
+`ArkLib/FiatShamir/Transcript` supplies a direct bound for a fixed finite list of
+heterogeneous public-coin rounds. Full prefixes retain every earlier challenge;
+VCVio's adaptive bad-query theorem yields `(Q + rounds.length) * error` under
+ArkLib's all-prefix knowledge laws, without salt preparation. The generic
+`Sumcheck/FiatShamir/FiniteRounds` consumer discharges these laws and connects
+acceptance to the existing whole typed Sumcheck source for any finite `n`.
+Its bound is `(Q+n) * 2/|F|`. The [model specification](../../docs/spec/finite-transcript.md)
+separates this theorem from native loop import and early-stop cache equivalence.

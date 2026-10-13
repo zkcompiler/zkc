@@ -21,6 +21,8 @@ that all native behavior already has a Lean model.
   predicates and quantitative security experiments.
 - [Full-prefix simulation](spec/prefix-simulation.md): shared-cache connection
   to salted restoration, with explicit query accounting.
+- [Finite full-prefix experiment](spec/finite-transcript.md): heterogeneous rounds,
+  direct bad-query extraction and finite-round Sumcheck source soundness.
 - [Oracle encoding](spec/oracle-encoding.md): adaptive cached-query and residual-state transport.
 - [Ring expressions](spec/ring-expressions.md): retained Clean/AIR connection.
 - [Support](support.md): theorem scope, assumptions and tested boundaries.

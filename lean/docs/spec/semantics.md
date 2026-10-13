@@ -16,6 +16,27 @@ projection preserves restrictions, sender/receiver actions and service ownership
 Inputs shared by two roles may have different role-local values. The semantic
 model never derives agreement merely from their shared source port name.
 
+`RawProgram.denote` evaluates the raw grammar directly, using operand lookup and
+the selected primitive interpretation without invoking typed elaboration.
+`denote_elaborate` proves that every successful elaboration preserves the open
+process on all inputs. Static admission examines dormant branches and empty-loop
+bodies even though direct execution examines only reached code.
+
+`Source.OperationExpansion` replaces an operation with a typed source body
+whose arguments are exactly its declared operands. Its local equation lifts
+through source captures, branches and loops. One pass expands original sites
+once; it does not recursively unfold a cyclic helper dictionary.
+`Source.Normalizer.check` elaborates both actual raw bodies and compares their
+normalized erasures. `check_sound` proves equality of their open processes on
+every input. Each normalizer needs a semantic preservation proof; normalizers
+compose. Refusal means that this sufficient criterion did not establish equality.
+
+`Algebra.RingNormalization` supplies a separate executable criterion for pure
+ring expressions: distribute multiplication, move signs into coefficients, and
+compare unordered sums of unordered products. Checked integer-coefficient
+identities hold in every commutative ring. The criterion does not collect like
+terms, move effects, remove guards or equate different provider meanings.
+
 ## Effects and observations
 
 `PIR.Proc` is a well-founded interaction tree with returned values, terminal stops and
@@ -48,6 +69,15 @@ continuations and final-state observers respect that relation. Equal acceptance
 alone is insufficient: a later session can distinguish different caches even
 when both earlier sessions accepted. Contexts obtain operation replies; the
 hidden handler state is not an additional attacker argument.
+
+`Realization.ExecutionSimulation` additionally requires coverage of every input
+in the claimed implementation domain by an admitted specification input. Its
+initial and residual-state relations are separate. `compose` retains an admitted
+intermediate input and an actual intermediate residual state. `transport` carries
+predicates of the complete selected observation only when final-state observers
+respect the residual relation. `ofHandlers` derives whole-process simulation from
+per-operation laws and coverage. These laws do not supply a probability coupling,
+resource restriction, input decoder or adversary correspondence.
 
 `Provider.run_joint_related` lifts component simulations through adaptive clients
 of a sum signature with a pair of disjoint state cells. Both components retain

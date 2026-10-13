@@ -26,6 +26,13 @@ adapter supplies fixed primitive meanings and proves the actual imported body's
 equation before projecting a security observation. An abstract transformation of
 the original program alone does not establish that equation.
 
+Direct evaluators for the flat carrier and raw source are proved equivalent to
+the admitted typed body. A generic normalization validator checks two actual raw
+bodies under a fixed interpretation. Its correctness theorem reuses those
+admission laws and locally proved transformation laws. Helper expansion is one
+such law; a separate ring-expression checker supports local arithmetic proofs.
+Neither checker decides general program equivalence or proves native extraction.
+
 `Zkc.Protocols` owns mathematical experiments and reusable verifier contracts.
 It may use generic source semantics; source semantics may not import protocols.
 `ZkcExamples.NativePrograms` owns particular native exports and correspondence
@@ -76,6 +83,13 @@ salt and proves the resulting cached-game equation. These constructions reuse
 the source contracts and the same admission/execution interfaces, but their
 adversaries, observations and quantitative conclusions differ.
 
+A direct finite-round consumer reuses the same ArkLib knowledge interface with
+full-prefix keys and VCVio's actual query-log bound. It supports heterogeneous
+rounds without translating through salts. Quadratic Sumcheck discharges those
+conditions for any finite number of variables; source acceptance is connected
+to the existing typed verifier. Native structured-control import remains a
+distinct implementation boundary.
+
 Transcript bindings include the source, construction, application context and
 public statement. An ideal transcript interpretation does not establish that a
 native Merlin descriptor realizes a random oracle. Provider conformance, byte
@@ -103,3 +117,9 @@ Acceptance-only correspondence has a narrower use: the Sumcheck completion game
 may make queries after the actual verifier has rejected. Its acceptance bound
 does not justify replacing the actual execution's final cache, trace or cost in
 an arbitrary continuation.
+
+`Realization.ExecutionSimulation` packages input coverage with the selected
+initial and residual-state relations. Its observation/property transport cannot
+hide an admitted implementation input behind an empty relation or expose a
+state observation unsupported by the residual relation. Probabilistic consumers
+still need their distribution and adversary correspondence.

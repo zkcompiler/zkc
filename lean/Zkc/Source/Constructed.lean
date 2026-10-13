@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Decoding
+public import Zkc.Source.RawSemantics
 
 @[expose] public section
 
@@ -223,6 +223,24 @@ theorem Snapshot.check_elaborate {s : Snapshot} {imported : Imported s}
         (fun _ => "constructed-source-operands")) = .ok imported.program := by
   rw [Snapshot.check_exact checked]
   simp only [Except.bind, Program.elaborate_erase, Except.mapError]
+
+/-- Execute the exported raw carrier directly. Shape/type admission stays a
+separate static check; this path does not invoke typed denotation. -/
+def Snapshot.denoteRaw (s : Snapshot) {I : PIR.Signature} (meaning : Meaning I)
+    (inputs : Values (Values meaning.Value) (s.inputs.map scalar)) :
+    PIR.Proc I (Values meaning.Value s.outputs) :=
+  match s.raw with
+  | .error _ => .halt .refused
+  | .ok raw => raw.denote meaning.interpretation s.outputs inputs.get
+
+/-- Successful admission connects independently defined raw execution to the
+actual imported body for every primitive interpretation and every input. -/
+theorem Snapshot.check_denoteRaw {s : Snapshot} {imported : Imported s}
+    (checked : s.check = .ok imported) {I : PIR.Signature} (meaning : Meaning I)
+    (inputs : Values (Values meaning.Value) (s.inputs.map scalar)) :
+    s.denoteRaw meaning inputs = imported.denote meaning inputs := by
+  simp only [Snapshot.denoteRaw, Snapshot.check_exact checked, Imported.denote]
+  exact imported.program.denote_erase meaning.interpretation inputs.get
 
 /-- The pack/projection normalization is independent of native primitive meaning. -/
 @[simp] theorem project_reply {I : PIR.Signature} (meaning : Meaning I)
