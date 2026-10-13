@@ -141,6 +141,11 @@ two protocol computations. They reuse `fri::fold_value` and the
 `boolean_residual`. These scalar functions express the equations; their callers
 supply authenticated values, valid inverses and the remaining protocol checks.
 
+The [table inner-product](../../common/tests/fixtures/projects/table-inner-product/README.md)
+and [lookup denominator](../../common/tests/fixtures/projects/lookup-denominators/README.md)
+controls exercise indexed reads through nested helpers, repeated arguments and
+distinct equal-length vectors in KoalaBear and Ext8.
+
 ## Native mathematics and containers
 
 Import only the modules a client needs. Native `fn` definitions retain ordered

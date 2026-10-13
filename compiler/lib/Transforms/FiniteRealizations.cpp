@@ -1,6 +1,7 @@
 #include "CheckedCandidate.h"
 #include "CollectionRealization.h"
 #include "ComputationSelection.h"
+#include "FinitePreparation.h"
 #include "FiniteVerification.h"
 #include "LaneRealization.h"
 #include "MathematicalSupport.h"
@@ -17,7 +18,6 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Transforms/Finite.h"
-#include "llvm/ADT/SmallPtrSet.h"
 #include <algorithm>
 #include <limits>
 using namespace mlir;
@@ -46,6 +46,20 @@ OwningOpRef<ModuleOp> normalizeSelectionCallback(Computation &computation,
                                                  Operation *root,
                                                  uint64_t &structural,
                                                  OptimizationOutcome &outcome) {
+  auto size = sizeCallbackPreparation(computation, root, structural, outcome);
+  if (!size)
+    return {};
+  if (*size > structural) {
+    // This predicts insufficient room without spending unperformed copying.
+    // A saturated estimate is a lower bound, not an exact failed debit.
+    outcome = {OptimizationStatus::Capacity, OptimizationReason::ExpansionSize,
+               CapacityCause{WorkOwner::Structural,
+                             *size > callbackStructuralLimit
+                                 ? std::nullopt
+                                 : std::optional<uint64_t>(*size),
+                             structural}};
+    return {};
+  }
   // The helper APIs also require operation/slot counters. Bound these adapters
   // by the same remaining optional work; every copy additionally debits the
   // shared structural counter, so another callback or retry cannot refill it.
@@ -53,7 +67,6 @@ OwningOpRef<ModuleOp> normalizeSelectionCallback(Computation &computation,
       std::min<uint64_t>(structural, std::numeric_limits<unsigned>::max()));
   uint64_t slots = structural;
   OwningOpRef<func::FuncOp> scratch;
-  SmallPtrSet<Operation *, 4> rootAccesses;
   {
     // Required helper expansion diagnoses failure. Here failure only declines
     // an optional proposal; the untouched ordered path owns any real refusal.
@@ -62,13 +75,6 @@ OwningOpRef<ModuleOp> normalizeSelectionCallback(Computation &computation,
     if (succeeded(mathematical::chargeHelperOperations(
             computation.helper, operations, slots, &structural, &outcome))) {
       scratch = cast<func::FuncOp>(computation.helper->clone());
-      for (auto &op : scratch->front().without_terminator()) {
-        if (!consumeComputationWork(structural, 1, WorkOwner::Structural,
-                                    &outcome))
-          return {};
-        if (auto *facet = semantics(&op); facet && facet->access)
-          rootAccesses.insert(&op);
-      }
       SymbolTableCollection symbols;
       if (failed(mathematical::inlineHelpers(*scratch, operations, slots,
                                              symbols, root, &structural,
@@ -88,18 +94,17 @@ OwningOpRef<ModuleOp> normalizeSelectionCallback(Computation &computation,
   }
   // The private scope below does not clone nested finite symbol closures. Keep
   // such payloads ordered, including dead nested computations: erasing one
-  // would erase its conditional domain admission. The original payload reader
-  // also reads indexed premises in each retained callee, not its caller. Do not
-  // move an indexed read across that fact boundary. Root-local indexed reads
-  // keep their own premises while ordinary scalar helper calls can expand.
+  // would erase its conditional domain admission. Indexed accesses may use
+  // the callback's original premises: the independent reader retains that
+  // exact argument environment while interpreting the original helper calls.
   for (auto &op : scratch->front().without_terminator()) {
-    if (!consumeComputationWork(structural, 1, WorkOwner::Structural,
-                                &outcome) ||
-        isComputation(&op))
+    if (!consumeComputationWork(structural, 1, WorkOwner::Structural, &outcome))
       return {};
-    if (auto *facet = semantics(&op);
-        facet && facet->access && !rootAccesses.contains(&op))
+    if (isComputation(&op)) {
+      outcome = {OptimizationStatus::Unsupported,
+                 OptimizationReason::ImplementationRestriction};
       return {};
+    }
   }
   // Facts only admit premises inside the occurrence's symbol root. Retain the
   // helper's own signature/preconditions in a private symbol scope together
@@ -446,13 +451,15 @@ public:
     Computation selectionComputation = computation;
     mathematical::ComputationSelection selection;
     if (optimize) {
+      CallbackStructuralWork callbackWork(work.matching,
+                                          selection.diagnostic.outcome);
       bool ready = true;
       if (computation.total && !computation.predicate) {
         // A call-free helper already has its admitted symbol and fact context.
         // Bound the discovery scan too; exhaustion only declines selection.
         bool hasCall = false;
         for (auto &op : computation.helper->getRegion(0).front()) {
-          if (!consumeComputationWork(work.matching.structural, 1,
+          if (!consumeComputationWork(callbackWork.remaining.structural, 1,
                                       WorkOwner::Structural,
                                       &selection.diagnostic.outcome)) {
             ready = false;
@@ -464,15 +471,16 @@ public:
           }
         }
         if (ready && hasCall) {
-          normalized = normalizeSelectionCallback(selectionComputation, unit,
-                                                  work.matching.structural,
-                                                  selection.diagnostic.outcome);
+          normalized = normalizeSelectionCallback(
+              selectionComputation, unit, callbackWork.remaining.structural,
+              selection.diagnostic.outcome);
           ready = bool(normalized);
         }
       }
       if (ready)
-        selection = mathematical::selectComputation(
-            selectionComputation, {true, false}, work.matching, recipes);
+        selection =
+            mathematical::selectComputation(selectionComputation, {true, false},
+                                            callbackWork.remaining, recipes);
       // A normalized helper's positions are not source positions. Attribute
       // queries inside that private view to the original finite occurrence.
       auto prepared = [&](Operation *op) {
