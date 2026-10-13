@@ -7,9 +7,7 @@ from entry import Entry
 from source_modules import library_modules
 
 ROOT = Path(__file__).resolve().parents[3]
-MODULES = [f'--module=zkc::{name}={ROOT}/libraries/zkc/{name}.zkc'
-           for name in ('multilinear', 'vector', 'matrix', 'boolean', 'polynomial', 'symbolic', 'field_array',
-                        'accumulation', 'curve', 'finite', 'sequence')]
+MODULES = library_modules('zkc')
 
 
 def scalar(n):
@@ -54,7 +52,8 @@ math fn symbolic(a:F,b:F,x:F) {
           zkc::symbolic::get<F,2,1>(table_two));
 }
 fn numerical(m:Matrix<F>,v:Vector<F>,a:F,x:F) {
-  let folded=zkc::multilinear::fix_first(v,x);
+  let table=zkc::multilinear::table(v,1,1);
+  let folded=zkc::multilinear::values(zkc::multilinear::fix_first(table,x));
   let repeated=zkc::vector::fill(a,2);
   let product=zkc::matrix::multiply(m,v);
   let transpose=zkc::matrix::transpose_multiply(m,v);
@@ -95,10 +94,12 @@ run Demo=Run;
     assert result['logic'] == [False, True, False, True]
     report = entry.run('odd-table', inputs | {'v': vector([2, 3, 4])},
                        refuses='entry-run-incomplete')
-    assert 'split' in str(report)
+    after = report['execution']['roles'][0]['after']
+    assert after[0] == 'stopped' and after[1]['cause'][0] == 'explicit'
     report = entry.run('empty-table', inputs | {'v': vector([])},
                        refuses='entry-run-incomplete')
-    assert 'split' in str(report)
+    after = report['execution']['roles'][0]['after']
+    assert after[0] == 'stopped' and after[1]['cause'][0] == 'explicit'
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])

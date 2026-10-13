@@ -51,7 +51,7 @@ pub fn vanishing<F: Field>(height: index, begin: index, end: index, x: F) -> F {
 // The padding is only representation padding, never a change in degree bound.
 pub fn split_quotient<F: Field>(values: Vector<F>, shift: F, size: index,
     width: index, count: index) -> Vector<F> {
-  let coefficients = polynomial::coefficients(interpolate(values, shift));
+  let coefficients = polynomial::coefficients(interpolate(coset::word(values, shift)));
   let actual = length(coefficients);
   let capacity = width * count;
   require boolean::negate(less(capacity, actual));
@@ -59,7 +59,7 @@ pub fn split_quotient<F: Field>(values: Vector<F>, shift: F, size: index,
   let mut columns = empty<F>();
   for block in 0..count {
     let block_polynomial = polynomial::from_coefficients(slice(padded, block * width, width));
-    columns = concat(columns, evaluate_coset(block_polynomial, shift, size));
+    columns = concat(columns, coset::values(evaluate_coset(block_polynomial, shift, size)));
   }
   return columns;
 }

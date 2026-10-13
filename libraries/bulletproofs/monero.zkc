@@ -105,7 +105,7 @@ pub fn value_base() -> G {
   require valid;
   return point;
 }
-pub fn mask_base() -> G { return kernel<G>("curve.generator"); }
+pub fn mask_base() -> G { return curve::generator<G>(); }
 
 fn varint(value: index) -> Bytes {
   let mut result = bytes::empty();
@@ -123,7 +123,7 @@ fn varint(value: index) -> Bytes {
   return result;
 }
 fn mapped(preimage: Bytes) -> G {
-  return encoding::cryptonote_map<G>(bytes::keccak256(bytes::keccak256(preimage)));
+  return encoding::cryptonote_map(bytes::keccak256(bytes::keccak256(preimage)));
 }
 pub fn initial_transcript() -> Bytes { return encoding::group_compressed(mapped(transcript_tag())); }
 pub fn hash_scalar(value: Bytes) -> F { return encoding::field_reduce_le<F>(bytes::keccak256(value)); }
@@ -147,8 +147,8 @@ pub fn generators(size: index) -> ip::Bases<G> {
   let prefix = bytes::concat(value_base_bytes(), generator_tag());
   // Bounded blocks avoid repeatedly copying the entire growing vector in
   // the sequential interpreter. The generator index remains unchanged.
-  let mut left = kernel<G>("curve.empty");
-  let mut right = kernel<G>("curve.empty");
+  let mut left = curve::empty<G>();
+  let mut right = curve::empty<G>();
   for block in 0..indices::divide(size + 63, 64) {
     let begin = block * 64;
     let end = if indices::less(size, begin + 64) { size } else { begin + 64 };
@@ -156,8 +156,8 @@ pub fn generators(size: index) -> ip::Bases<G> {
       fn(i) => mapped(bytes::concat(prefix, varint(2 * i + 1))));
     let hs = curve::collect(range(begin, end),
       fn(i) => mapped(bytes::concat(prefix, varint(2 * i))));
-    left = kernel<G>("curve.concat", left, gs);
-    right = kernel<G>("curve.concat", right, hs);
+    left = curve::concat(left, gs);
+    right = curve::concat(right, hs);
   }
   return ip::Bases<G>{left: left, right: right};
 }
@@ -172,7 +172,7 @@ pub fn commit(values: Indices, masks: Vector<F>) -> Bytes {
   let blind = mask_base();
   let mut result = bytes::empty();
   for i in 0..count {
-    let amount = kernel<F>("field.from_index", indices::get(values, i));
+    let amount = scalar::from_index<F>(indices::get(values, i));
     result = bytes::concat(result, Wire::emit(value * amount + blind * vec::get(masks, i)));
   }
   return result;
@@ -186,12 +186,12 @@ fn decompose(values: Indices, masks: Vector<F>, statement: Bytes, size: index) -
     let mut amount: index = 0;
     if indices::less(j, count) {
       amount = indices::get(values, j);
-      let expected = value_base() * kernel<F>("field.from_index", amount)
+      let expected = value_base() * scalar::from_index<F>(amount)
         + mask_base() * vec::get(masks, j);
       require Wire::admit(bytes::slice(statement, j * 32, 32)) == expected;
     }
     for _ in 0..64 {
-      result = vec::append(result, kernel<F>("field.from_index", indices::remainder(amount, 2)));
+      result = vec::append(result, scalar::from_index<F>(indices::remainder(amount, 2)));
       amount = indices::divide(amount, 2);
     }
   }
@@ -212,8 +212,8 @@ fn reverse_weights(size: index, y: F) -> Vector<F> {
 }
 fn bit_commit(bases: ip::Bases<G>, bits: Vector<F>, alpha: F) -> G {
   let right = vec::subtract(bits, vec::fill<F>(1, vec::length(bits)));
-  return kernel<G>("curve.msm", bits, bases.left)
-    + kernel<G>("curve.msm", right, bases.right) + mask_base() * alpha;
+  return curve::msm(bits, bases.left)
+    + curve::msm(right, bases.right) + mask_base() * alpha;
 }
 fn witness(bits: Vector<F>, masks: Vector<F>, alpha: F, y: F, z: F) -> ip::Witness<F> {
   let size = vec::length(bits);
@@ -231,8 +231,8 @@ fn claim(bases: ip::Bases<G>, statement: Bytes, commitment: Bytes, y: F, z: F) -
   let power = scalar::power(y, size + 1);
   let right = vec::add(vec::fill(z, size), vec::hadamard(d, reverse_weights(size, y)));
   let mut result = Wire::admit(commitment)
-    + kernel<G>("curve.msm", vec::fill<F>(0 - z, size), bases.left)
-    + kernel<G>("curve.msm", right, bases.right);
+    + curve::msm(vec::fill<F>(0 - z, size), bases.left)
+    + curve::msm(right, bases.right);
   let mut weight = z * z * power;
   for j in 0..indices::divide(bytes::length(statement), 32) {
     result = result + Wire::admit(bytes::slice(statement, j * 32, 32)) * weight;

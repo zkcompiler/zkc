@@ -1,6 +1,7 @@
 #ifndef ZKC_TRANSFORMS_HELPERNORMALIZATION_H
 #define ZKC_TRANSFORMS_HELPERNORMALIZATION_H
 
+#include "zkc/Analysis/ComputationWork.h"
 #include "zkc/Dialect/Operations.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
@@ -8,6 +9,11 @@
 #include <memory>
 
 namespace zkc::mathematical {
+// Bounded ordinary MLIR folds; independent readers interpret original packs.
+mlir::LogicalResult
+foldArrayProjections(mlir::Block &, uint64_t &work,
+                     OptimizationOutcome *outcome = nullptr);
+
 // Independent, read-only substitution and polynomial-meaning comparison.
 // Keep one instance for a complete verification: calls, dead formation,
 // polynomial laws and all result coordinates share its work budget and memo.

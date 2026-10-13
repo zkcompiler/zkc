@@ -53,12 +53,16 @@ def test_source_protocols_reject_false_inputs(toolchain, journal, directory, pro
         # Canonical scalar 4 against the public point 3*G.
         witness['scalar'] = '4'
     else:
-        # The first round is valid, but two table entries remain. The actual
-        # terminal predicate must reject; returning a round claim is insufficient.
+        # The complete wrapper requires exactly one round per table variable.
+        # Partial reduction is exposed separately by sumcheck::Reduce.
         public['rounds'] = '1'
     producer = input_files(journal, 'producer', public=public, witness=witness)
     verifier = input_files(journal, 'verifier', public=public)
     proof = directory / 'proof.bin'
+    if project == 'examples/projects/sumcheck':
+        journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'], refuses='artifact-stopped')
+        assert not proof.exists()
+        return
     journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
     journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'], refuses='artifact-rejected')
 

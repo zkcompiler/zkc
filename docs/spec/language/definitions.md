@@ -1232,13 +1232,18 @@ Each call must discharge its own input conditions before that information is
 available. Forwarding an index literal preserves its known value; returning an
 unrelated container or computing an index does not supply that fact. These
 observations belong to the current source check and do not change callback
-capture layouts. Each check computes a forwarding summary once per declaration;
-repeated calls pay for lookup and selector substitution. Helper dependency depth
-is bounded independently of enclosing control regions and callback bindings.
+capture layouts. Result observations are cached only over an immutable checked
+helper closure; each call substitutes its actual inputs and projections.
+Sequential SSA dependencies use bounded work rather than recursive call depth.
+Helper-call depth remains bounded independently of enclosing control regions
+and callback bindings.
 
 An unfiltered finite collection has a fresh value identity and preserves its
 domain's cardinality. Element and index domains also relate its extent to the
 selected input axis, so indices of the original collection can read the result.
+These result properties also pass through total acyclic helpers and immutable
+record fields, while each constructed result retains its fresh identity.
+A domain parameter can describe a result count without identifying its items.
 Filtered collections generally provide only an upper count; zero is also exact.
 Such an upper count cannot justify a positive indexing bound or fixed length.
 Known ranges and products use checked cardinality arithmetic. All constructor

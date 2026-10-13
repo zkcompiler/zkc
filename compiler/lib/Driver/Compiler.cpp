@@ -3,6 +3,7 @@
 #include "Language.h"
 #include "Relations.h"
 #include "mlir/Parser/Parser.h"
+#include "zkc/Compiler/CommonSource.h"
 #include "zkc/Compiler/Compilation.h"
 #include "zkc/Compiler/NativeProof.h"
 #include "zkc/Compiler/PolynomialReduction.h"
@@ -13,7 +14,6 @@
 #include "zkc/Support/Json.h"
 #include "zkc/Support/MLIRInput.h"
 #include "zkc/Support/Refusal.h"
-#include "zkc/Translation/CommonSource.h"
 #include "zkc/Translation/Protocol.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>

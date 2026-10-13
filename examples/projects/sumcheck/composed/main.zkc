@@ -12,4 +12,4 @@ proof Proof = TwoSums<F,4> {
 run Interactive = TwoSums<F,4>;
 
 // Inspect the reusable round result without claiming proof acceptance.
-run Reduction = sumcheck::Reduce<F,4>;
+run Reduction = sums::Reduction<F,4>;

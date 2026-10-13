@@ -3,6 +3,7 @@
 #include "ComputationSelection.h"
 #include "FinitePreparation.h"
 #include "FiniteVerification.h"
+#include "HelperNormalization.h"
 #include "LaneRealization.h"
 #include "MathematicalSupport.h"
 #include "RealizationEmission.h"
@@ -98,7 +99,8 @@ OwningOpRef<ModuleOp> normalizeSelectionCallback(Computation &computation,
   // would erase its conditional domain admission. Indexed accesses may use
   // the callback's original premises: the independent reader retains that
   // exact argument environment while interpreting the original helper calls.
-  for (auto &op : scratch->front().without_terminator()) {
+  for (auto &op :
+       llvm::make_early_inc_range(scratch->front().without_terminator())) {
     if (!consumeComputationWork(structural, 1, WorkOwner::Structural, &outcome))
       return {};
     if (isComputation(&op)) {
@@ -107,6 +109,9 @@ OwningOpRef<ModuleOp> normalizeSelectionCallback(Computation &computation,
       return {};
     }
   }
+  if (failed(mathematical::foldArrayProjections(scratch->front(), structural,
+                                                &outcome)))
+    return {};
   // Facts only admit premises inside the occurrence's symbol root. Retain the
   // helper's own signature/preconditions in a private symbol scope together
   // with a typed occurrence. Fresh entry formals deliberately carry no
@@ -456,9 +461,10 @@ public:
                                           selection.diagnostic.outcome);
       bool ready = true;
       if (computation.total && !computation.predicate) {
-        // A call-free helper already has its admitted symbol and fact context.
-        // Bound the discovery scan too; exhaustion only declines selection.
-        bool hasCall = false;
+        // Helpers without calls or pack projections retain their admitted
+        // context. Bound the discovery scan too; exhaustion only declines
+        // selection.
+        bool needsNormalization = false;
         for (auto &op : computation.helper->getRegion(0).front()) {
           if (!consumeComputationWork(callbackWork.remaining.structural, 1,
                                       WorkOwner::Structural,
@@ -466,12 +472,12 @@ public:
             ready = false;
             break;
           }
-          if (isa<func::CallOp>(op)) {
-            hasCall = true;
+          if (isa<func::CallOp, algebra::ArrayAtOp>(op)) {
+            needsNormalization = true;
             break;
           }
         }
-        if (ready && hasCall) {
+        if (ready && needsNormalization) {
           normalized = normalizeSelectionCallback(
               selectionComputation, unit, callbackWork.remaining.structural,
               selection.diagnostic.outcome);

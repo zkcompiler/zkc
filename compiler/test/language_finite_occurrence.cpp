@@ -1,4 +1,5 @@
 #include "../lib/Language/FiniteContracts.h"
+#include "../lib/Language/HelperResults.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
@@ -56,8 +57,9 @@ void requireAdmitted(const ClosedEntry &closed, const Declaration &declaration,
   Limits limits;
   source_detail::Work work{limits};
   source_detail::Semantics types(declarations, closed.project().assets(), work);
+  source_detail::HelperResults results(types, declarations);
   if (!source_detail::checkFiniteContracts(types, declarations, declaration,
-                                           body))
+                                           body, results))
     throw std::runtime_error(toString(types.takeError()));
 }
 std::string fixedSubject(StringRef domain, unsigned size) {
@@ -247,8 +249,9 @@ math fn subject(a:Fr)->Array<Fr,0>{let xs=filtered(product(range(0,0),range(0,4)
     auto measure = [&](const Limits &limits) -> std::pair<bool, uint64_t> {
       source_detail::Work work{limits};
       source_detail::Semantics types(declarations, project.assets(), work);
+      source_detail::HelperResults results(types, declarations);
       bool accepted = source_detail::checkFiniteContracts(
-          types, declarations, *subject, *subject->body);
+          types, declarations, *subject, *subject->body, results);
       if (!accepted)
         require(types.diagnostic && types.diagnostic->code == "source.limit",
                 "count exhaustion became a mathematical condition");
@@ -262,6 +265,38 @@ math fn subject(a:Fr)->Array<Fr,0>{let xs=filtered(product(range(0,0),range(0,4)
     limits.work = cost - 1;
     require(!measure(limits).first, "zero count hid exhausted extraction");
   });
+  for (bool missingBody : {false, true})
+    cases.run(
+        missingBody ? "fixed definition refuses a missing body action"
+                    : "fixed definition refuses a missing domain parameter",
+        [&] {
+          auto project = take(check(R"(
+math fn subject(a:Fr)->Array<Fr,4>{return fixed(range(0,4),fn(i)=>a);}
+)"));
+          auto declarations = project.declarations().vec();
+          auto fixed = llvm::find_if(
+              declarations, [](const auto &d) { return d.name == "fixed"; });
+          auto subject = llvm::find_if(
+              declarations, [](const auto &d) { return d.name == "subject"; });
+          require(fixed != declarations.end() && subject != declarations.end(),
+                  "missing fixed consumer");
+          auto body = std::make_shared<Body>(*fixed->body);
+          if (missingBody)
+            body->operations.clear();
+          else
+            body->domainBindings.front().parameter.reset();
+          fixed->body = std::move(body);
+          Limits limits;
+          source_detail::Work work{limits};
+          source_detail::Semantics types(declarations, project.assets(), work);
+          source_detail::HelperResults results(types, declarations);
+          require(!source_detail::checkFiniteContracts(
+                      types, declarations, *subject, *subject->body, results),
+                  "malformed fixed definition was admitted");
+          require(types.diagnostic &&
+                      types.diagnostic->code == "source.scoped-domain",
+                  "malformed fixed definition lost its diagnostic");
+        });
   cases.run("factory parameters expand using actual caller operands", [&] {
     verify(take(close(R"(
 domain fn relay(rows:domain<index>)->domain<index>{return rows;}

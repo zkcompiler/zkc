@@ -153,7 +153,12 @@ std::optional<uint64_t> sizeCallbackPreparation(const Computation &computation,
     return std::nullopt;
   uint64_t context = 4 + 2 * uint64_t(computation.signature.getNumInputs()) +
                      2 * uint64_t(computation.signature.getNumResults());
+  // One admission scan and two bounded projection-fold scans, including the
+  // latter scans' terminator. Saturation remains a conservative size refusal.
+  auto scans = addSize(
+      size->expandedOperations,
+      addSize(size->expandedOperations, addSize(size->expandedOperations, 2)));
   return addSize(addSize(size->copying, size->rootOverhead),
-                 addSize(size->expandedOperations, context));
+                 addSize(scans, context));
 }
 } // namespace zkc::finite

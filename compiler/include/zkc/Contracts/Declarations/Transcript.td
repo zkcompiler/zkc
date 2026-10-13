@@ -68,6 +68,3 @@ def OpTranscriptIndex : ZKC_Operation<"transcript.index", [SourceTranscript],
   int ordinal = 178;
   let facets = [SourceIndexSample, ZKC_History<0, 0>, ManagedHistory];
 }
-def ExportTranscriptObserve : ZKC_OperationExport<"zkc::transcript", "observe", OpTranscriptObserve, ["state", "label", "value"]>;
-def ExportTranscriptChallenge : ZKC_OperationExport<"zkc::transcript", "challenge", OpTranscriptChallenge, ["state", "label"]>;
-def ExportTranscriptIndex : ZKC_OperationExport<"zkc::transcript", "challenge_index", OpTranscriptIndex, ["state", "label", "bound"]>;

@@ -14,5 +14,4 @@ def Field : ZKC_Capability<"Field", [FDomain]>;
 def Multiply : ZKC_Operation<"field.mul", [F],
     [ZKC_Apply<Element, [F]>, ZKC_Apply<Element, [F]>],
     [ZKC_Apply<Element, [F]>], [ZKC_Holds<Ring, [F]>]>;
-def ExportMultiply : ZKC_OperationExport<"zkc::algebra", "mul", Multiply, ["left", "right"]>;
 def ExportElement : ZKC_TypeExport<"zkc::algebra", "Element", Element>;

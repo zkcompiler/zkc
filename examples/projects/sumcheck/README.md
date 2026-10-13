@@ -8,8 +8,9 @@ Merlin construction. `Interactive` retains the original exchange.
 The public vector contains `[1, 2, 3, 4]`, and the claimed sum is 10. Each round
 sends the sums of the two halves. V checks their sum against its current claim,
 draws a challenge, and updates the claim. P folds its table with the delivered
-challenge. After the rounds, V folds its own public table at the recorded point, then checks that exactly one
-entry remains and equals the final claim. Table halves define the variable order;
+challenge. P checks the table size against the full round count before the
+first message. After the rounds, V checks its own table dimensions, folds at the
+recorded point and compares the final value with the claim. Table halves define the variable order;
 this example uses the contiguous-half convention.
 
 This is a public polynomial example. V evaluates its public table directly;

@@ -12,8 +12,11 @@ They have different round messages and are not interchangeable encodings.
 | `sumcheck::expression::check`, `check_factors` | Check public factor tables or authenticated factor values against the captured expression |
 | `sumcheck::check` | Check a multilinear evaluation against the caller's table, including its final dimension |
 
-`Reduce` gives P its delivered point and residual table, and V its independently
-recorded point and expected value. The same random service is threaded through
+`Reduce` accepts a checked `multilinear::Table<F>` at P and returns its residual
+as the same view, preserving width and remaining dimensions. P also receives
+its delivered point; V receives its independently recorded point and expected
+value. Construct a table from raw data before the first reduction; pass the
+residual directly to later reductions. The same random service is threaded through
 all rounds. The caller binds the original polynomial, its dimension and, when
 applicable, its commitment before the relevant challenges. The `rounds` input
 must agree between participants and is bounded by `Max`.
@@ -30,9 +33,11 @@ remaining reduction or check.
 With zero rounds the point is empty and the initial claim remains. The public
 multilinear composition accepts only a one-entry matching table; the expression
 composition requires exactly one row of `A::Inputs` factors and evaluates it.
-Insufficient rounds reject the multilinear terminal predicate or stop at the
-expression shape requirement. Invalid splits and malformed round coefficients
-stop; a wrong final value returns false. These are distinct outcomes.
+The complete `Sumcheck` wrappers check the prover table against the full
+`rounds` dimension before the first message. `Reduce` permits a partial prefix;
+requesting more rounds than its residual dimension stops before sending.
+Malformed round
+coefficients stop; a wrong final value returns false. These are distinct outcomes.
 
 Public-table verification runs after the interaction, using the recorded point.
 A malformed verifier table is therefore detected during this final local

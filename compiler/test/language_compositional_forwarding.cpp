@@ -1,4 +1,5 @@
 #include "../lib/Language/FiniteContracts.h"
+#include "../lib/Language/HelperResults.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
@@ -97,6 +98,22 @@ math fn apply_pair(rows:domain<(index,index)>,body:math fn(item:(index,index))->
 )"),
             "source.scoped-domain");
   });
+  cases.run("record return preserves whole-item callback provenance", [&] {
+    emit(take(check(R"(
+math fn pair(x:index)->(index,index){return (x,x);}
+math fn apply(rows:domain<index>,body:math fn(item:index)->Fr where item_from(item,rows))->Fr{return total(rows,0,fn(s,item)=>{let paired=pair(item);s+body(paired.0)});}
+math fn subject(xs:Vector<Fr>)->Fr{return apply(indices(xs),fn(i)=>at(xs,i));}
+protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return subject(xs);}run Run=Demo;
+)")),
+         context);
+  });
+  cases.run("record return cannot substitute an unrelated callback item", [&] {
+    refuses(check(R"(
+math fn pair(x:index,y:index)->(index,index){return (x,y);}
+math fn apply(rows:domain<index>,other:index,body:math fn(item:index)->Fr where item_from(item,rows))->Fr{return total(rows,0,fn(s,item)=>{let paired=pair(item,other);s+body(paired.1)});}
+)"),
+            "source.scoped-domain");
+  });
   cases.run("whole item survives exact helper forwarding", [&] {
     emit(take(check(R"(
 domain fn range(lo:index,hi:index)->domain<index>=domain("range");
@@ -132,8 +149,9 @@ math fn subject(xs:Vector<Fr>,ys:Vector<Fr>)->Vector<Fr>{let a=nested(xs);return
       source_detail::Work work{limits};
       source_detail::Semantics types(declarations, project.assets(), work);
       const auto &declaration = declarations[subjectIndex];
+      source_detail::HelperResults results(types, declarations);
       bool accepted = source_detail::checkFiniteContracts(
-          types, declarations, declaration, *declaration.body);
+          types, declarations, declaration, *declaration.body, results);
       if (!accepted)
         require(types.diagnostic && types.diagnostic->code == "source.limit",
                 "unexpected bounded forwarding diagnostic");
@@ -150,7 +168,9 @@ math fn subject(xs:Vector<Fr>,ys:Vector<Fr>)->Vector<Fr>{let a=nested(xs);return
     limits.expressionDepth = 2;
     require(measure(limits).first, "lexical depth reduced helper allowance");
     limits.expressionDepth = 1;
-    require(!measure(limits).first, "nested forwarding ignored depth");
+    require(measure(limits).first, "SSA forwarding consumed lexical depth");
+    limits.callDepth = 0;
+    require(!measure(limits).first, "nested forwarding ignored call depth");
     // An additional declaration requires its own extraction. Reusing one
     // summary must cost less than reading an identical fresh declaration.
     auto body = std::make_shared<Body>(*declarations[subjectIndex].body);
@@ -187,8 +207,9 @@ math fn subject(xs:Vector<Fr>,ys:Vector<Fr>)->Vector<Fr>{let a=nested(xs);return
         limits.callDepth = depth;
         source_detail::Work work{limits};
         source_detail::Semantics types(declarations, project.assets(), work);
+        source_detail::HelperResults results(types, declarations);
         bool accepted = source_detail::checkFiniteContracts(
-            types, declarations, *subject, *subject->body);
+            types, declarations, *subject, *subject->body, results);
         require(accepted == (depth == 1),
                 "warming the forwarding memo changed depth admission");
         if (!accepted)

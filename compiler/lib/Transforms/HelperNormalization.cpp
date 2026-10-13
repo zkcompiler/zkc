@@ -7,6 +7,31 @@
 
 using namespace mlir;
 namespace zkc::mathematical {
+LogicalResult foldArrayProjections(Block &body, uint64_t &work,
+                                   OptimizationOutcome *outcome) {
+  for (auto &op : llvm::make_early_inc_range(body)) {
+    if (!finite::consumeComputationWork(work, 1, WorkOwner::Structural,
+                                        outcome))
+      return failure();
+    if (auto projection = dyn_cast<algebra::ArrayAtOp>(op)) {
+      auto folded = projection.fold({{}, projection});
+      if (auto value = dyn_cast_if_present<Value>(folded)) {
+        projection.getResult().replaceAllUsesWith(value);
+        projection.erase();
+      }
+    }
+  }
+  // Do not erase unused arithmetic, nested computations or admission actions.
+  for (auto &op : llvm::make_early_inc_range(llvm::reverse(body))) {
+    if (!finite::consumeComputationWork(work, 1, WorkOwner::Structural,
+                                        outcome))
+      return failure();
+    if (isa<algebra::ArrayFromElementsOp>(op) && op.use_empty())
+      op.erase();
+  }
+  return success();
+}
+
 CheckedHelperNormalizations::CheckedHelperNormalizations(Operation *root)
     : root(root), checker(root) {}
 
@@ -75,6 +100,9 @@ CheckedHelperNormalizations::prepareRealization(func::FuncOp helper) {
     return failure();
   OwningOpRef<func::FuncOp> proposal(cast<func::FuncOp>(normalized->clone()));
   auto &body = proposal->front();
+  if (failed(foldArrayProjections(body, work)))
+    return diagnostics::emit(helper->emitOpError(), "mathematical-helper-limit",
+                             "projection folding work bound");
   OpBuilder builder(helper.getContext());
   for (auto dim : llvm::make_early_inc_range(body.getOps<data::DimOp>())) {
     auto type = cast<CollectionTypeInterface>(dim.getInput().getType());
@@ -90,7 +118,7 @@ CheckedHelperNormalizations::prepareRealization(func::FuncOp helper) {
     dim.erase();
   }
   for (auto &op : llvm::make_early_inc_range(llvm::reverse(body)))
-    if (isTotal(&op) && op.use_empty())
+    if (isTotal(&op) && !finite::isComputation(&op) && op.use_empty())
       op.erase();
   if (failed(checker.check(helper, body)))
     return failure();

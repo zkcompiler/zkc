@@ -1,5 +1,6 @@
 #include "../lib/Language/FiniteContracts.h"
 #include "../lib/Language/FiniteFormation.h"
+#include "../lib/Language/HelperResults.h"
 #include "../lib/Language/MathematicalFacts.h"
 #include "../lib/Language/ValueOrigins.h"
 #include "support/NativeCases.h"
@@ -21,11 +22,11 @@ domain fn coords<F:Field>(xs:Matrix<F>)->domain<(index,index)>=domain("matrix.co
 math fn total<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,step:math fn(S,item:I)->S where item_from(item,rows))->S=finite("math.fold");
 math fn at(xs:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){return intrinsic<Vector<Fr>>("container.at",xs,i);}
 )";
-Expected<CheckedProject> check(StringRef text) {
+Expected<CheckedProject> check(StringRef text, const Limits &limits = {}) {
   auto captured = capture({{"m", prelude + text.str(), "facts.zkc"}});
   if (!captured)
     return captured.takeError();
-  return analyze(*captured).checkedProject();
+  return analyze(*captured, limits).checkedProject();
 }
 const Declaration &named(const CheckedProject &project, StringRef name) {
   for (const auto &decl : project.declarations())
@@ -202,6 +203,230 @@ protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return same(xs);}run Run=Demo;
     auto closed = take(closeEntry(project, "m::Run"));
     if (auto error = checkScopedSpecialization(closed))
       throw std::runtime_error(toString(std::move(error)));
+  });
+  const std::string collections = R"(
+domain fn elements(xs:Vector<Fr>)->domain<Fr>=domain("elements");
+domain fn array_elements<N:nat>(xs:Array<Fr,N>)->domain<Fr>=domain("elements");
+math fn mapped<I:Type+Copy+Drop>(rows:domain<I>,body:math fn(item:I)->Fr where item_from(item,rows))->Vector<Fr>=finite("math.collect.vector");
+math fn filtered<I:Type+Copy+Drop>(rows:domain<I>,keep:math fn(item:I)->bool where item_from(item,rows),body:math fn(item:I)->Fr where item_from(item,rows))->Vector<Fr>=finite("math.collect.vector_where");
+math fn copy(xs:Vector<Fr>)->Vector<Fr>{return mapped(elements(xs),fn(x)=>x);}
+)";
+  for (StringRef mutation :
+       {"body-domain", "call-input", "factory-data", "factory-child"})
+    cases.run("helper result rejects malformed coverage: " + mutation, [&] {
+      auto project = take(check(collections + R"(
+domain fn selected(xs:Vector<Fr>)->domain<Fr>{return elements(xs);}
+math fn selected_copy(xs:Vector<Fr>)->Vector<Fr>{return mapped(selected(xs),fn(x)=>x);}
+math fn chain(xs:Vector<Fr>)->Vector<Fr>{return copy(xs);}
+)"));
+      Environment env;
+      env.declarations = project.declarations().vec();
+      auto target =
+          named(project, mutation == "call-input"    ? "chain"
+                         : mutation == "body-domain" ? "copy"
+                                                     : "selected_copy")
+              .id.index;
+      if (mutation.starts_with("factory")) {
+        auto factory = named(project, "selected").id.index;
+        auto recipe = std::make_shared<DomainDefinition>(
+            *env.declarations[factory].domainDefinition);
+        require(!recipe->bindings.empty(), "missing domain recipe");
+        if (mutation == "factory-data")
+          recipe->bindings.front().operands = {{999999}};
+        else
+          recipe->bindings.front().children = {0};
+        env.declarations[factory].domainDefinition = std::move(recipe);
+      } else {
+        auto body = std::make_shared<Body>(*env.declarations[target].body);
+        if (mutation == "body-domain")
+          body->domainBindings.clear();
+        else {
+          bool changed = false;
+          for (auto &op : body->operations)
+            if (auto *call = std::get_if<HelperCall>(&op.action)) {
+              call->operands.clear();
+              changed = true;
+            }
+          require(changed, "missing helper call");
+        }
+        env.declarations[target].body = std::move(body);
+      }
+      source::HelperResults results(env.semantics, env.declarations);
+      require(!results.get(target, 0, {}, {}) && env.semantics.diagnostic &&
+                  env.semantics.diagnostic->code == "source.scoped-domain",
+              "malformed helper dependency did not refuse");
+    });
+  cases.run("unfiltered result extents cross nested helper calls", [&] {
+    take(check(collections + R"(
+math fn twice(xs:Vector<Fr>)->Vector<Fr>{return copy(copy(xs));}
+math fn read(xs:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){return at(twice(xs),i);}
+)"));
+  });
+  cases.run("result extents retain actual argument permutation", [&] {
+    take(check(collections + R"(
+math fn second(a:Vector<Fr>,b:Vector<Fr>)->Vector<Fr>{return copy(b);}
+math fn read(xs:Vector<Fr>,ys:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){return at(second(ys,xs),i);}
+)"));
+    refuses(check(collections + R"(
+math fn second(a:Vector<Fr>,b:Vector<Fr>)->Vector<Fr>{return copy(b);}
+math fn read(xs:Vector<Fr>,ys:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){return at(second(xs,ys),i);}
+)"),
+            "source.data-bound");
+  });
+  cases.run("returned record projections preserve each extent separately", [&] {
+    auto record = collections + R"(
+struct Pair{pub left:Vector<Fr>,pub right:Vector<Fr>}
+math fn copies(a:Vector<Fr>,b:Vector<Fr>)->Pair{return Pair{left:copy(a),right:copy(b)};}
+)";
+    take(check(record + R"(
+math fn read(xs:Vector<Fr>,ys:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){let pair=copies(xs,ys);return at(pair.left,i);}
+)"));
+    refuses(check(record + R"(
+math fn read(xs:Vector<Fr>,ys:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){let pair=copies(xs,ys);return at(pair.right,i);}
+)"),
+            "source.data-bound");
+  });
+  cases.run("separate calls do not share result extent evidence", [&] {
+    refuses(check(collections + R"(
+math fn read(xs:Vector<Fr>,ys:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){
+ let first=copy(xs);let second=copy(ys);return at(second,i);}
+)"),
+            "source.data-bound");
+  });
+  cases.run("fixed array input supplies helper result cardinality", [&] {
+    take(check(collections + R"(
+math fn from_array(xs:Array<Fr,2>)->Vector<Fr>{return mapped(array_elements(xs),fn(x)=>x);}
+math fn read(xs:Array<Fr,2>)->Fr{return at(from_array(xs),1);}
+)"));
+    refuses(check(collections + R"(
+math fn from_array(xs:Array<Fr,2>)->Vector<Fr>{return mapped(array_elements(xs),fn(x)=>x);}
+math fn read(xs:Array<Fr,2>)->Fr{return at(from_array(xs),2);}
+)"),
+            "source.data-bound");
+  });
+  cases.run("filtered helper results never acquire the source exact extent",
+            [&] {
+              refuses(check(collections + R"(
+math fn select(xs:Vector<Fr>)->Vector<Fr>{return filtered(elements(xs),fn(x)=>false,fn(x)=>x);}
+math fn read(xs:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){return at(select(xs),i);}
+)"),
+                      "source.data-bound");
+            });
+  cases.run("helper result evidence survives closed specialization", [&] {
+    auto project = take(check(collections + R"(
+math fn read(xs:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){return at(copy(xs),i);}
+math fn work(xs:Vector<Fr>)->Fr{return total(indices(xs),0,fn(s,i)=>s+read(xs,i));}
+protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return work(xs);}run Run=Demo;
+)"));
+    auto closed = take(closeEntry(project, "m::Run"));
+    if (auto error = checkScopedSpecialization(closed))
+      throw std::runtime_error(toString(std::move(error)));
+  });
+  cases.run("captured result facts remain available after callback scope", [&] {
+    auto project = take(check(collections + R"(
+struct Pair{pub left:Vector<Fr>,pub right:Vector<Fr>}
+math fn copies(a:Vector<Fr>,b:Vector<Fr>)->Pair{return Pair{left:copy(a),right:copy(b)};}
+math fn read(xs:Vector<Fr>,ys:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){
+ let pair=copies(xs,ys);let l=pair.left;
+ let subtotal=total(indices(xs),0,fn(st,j)=>st+at(l,j));
+ return subtotal+at(l,i);
+}
+math fn work(xs:Vector<Fr>)->Fr{return total(indices(xs),0,fn(st,i)=>st+read(xs,xs,i));}
+protocol Demo roles(P)(xs:Vector<Fr>@P)->(r:Fr@P){return work(xs);}run Run=Demo;
+)"));
+    auto closed = take(closeEntry(project, "m::Run"));
+    if (auto error = checkScopedSpecialization(closed))
+      throw std::runtime_error(toString(std::move(error)));
+  });
+  cases.run("record fields retain origins across callback captures", [&] {
+    auto project = take(check(collections + R"(
+struct Pair{pub left:Vector<Fr>,pub right:Vector<Fr>}
+math fn work(xs:Vector<Fr>,ys:Vector<Fr>)->Fr{
+ let p=Pair{left:copy(xs),right:copy(ys)};
+ return total(indices(xs),0,fn(st,j)=>st+at(p.left,j));
+}
+protocol Demo roles(P)(xs:Vector<Fr>@P,ys:Vector<Fr>@P)->(r:Fr@P){return work(xs,ys);}run Run=Demo;
+)"));
+    auto closed = take(closeEntry(project, "m::Run"));
+    if (auto error = checkScopedSpecialization(closed))
+      throw std::runtime_error(toString(std::move(error)));
+  });
+  cases.run("sequential helper result chains use work rather than call depth",
+            [&] {
+              std::string chain =
+                  collections + "math fn chain(xs:Vector<Fr>)->Vector<Fr>{";
+              std::string previous = "xs";
+              for (unsigned i = 0; i < 256; ++i) {
+                auto current = "v" + std::to_string(i);
+                chain += "let " + current + "=copy(" + previous + ");";
+                previous = current;
+              }
+              chain += "return " + previous + ";}";
+              take(check(chain + R"(
+math fn read(xs:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){return at(chain(xs),i);}
+)"));
+            });
+  cases.run(
+      "result dependency traversal handles thousands of admitted SSA links",
+      [&] {
+        auto project = take(check(collections + R"(
+math fn chain(xs:Vector<Fr>)->Vector<Fr>{return copy(xs);}
+)"));
+        Environment env;
+        env.declarations = project.declarations().vec();
+        auto index = named(project, "chain").id.index;
+        auto storage = std::make_shared<Body>(*env.declarations[index].body);
+        auto &body = *storage;
+        env.declarations[index].body = storage;
+        auto prototype = body.operations.front();
+        for (const auto &op : body.operations)
+          if (std::holds_alternative<HelperCall>(op.action))
+            prototype = op;
+        auto resultType = body.values[prototype.results.front().index];
+        body.operations.clear();
+        body.values.resize(1);
+        ValueId previous{0};
+        for (unsigned i = 0; i < 4096; ++i) {
+          auto op = prototype;
+          std::get<HelperCall>(op.action).operands = {previous};
+          previous = {static_cast<unsigned>(body.values.size())};
+          op.results = {previous};
+          body.values.push_back(resultType);
+          body.operations.push_back(std::move(op));
+        }
+        body.results = {previous};
+        source::HelperResults results(env.semantics, env.declarations);
+        const auto *result = results.get(index, 0, {}, {});
+        require(result && result->shape.input == source::ValueOrigin{0, {}},
+                "iterative result analysis lost the original extent");
+        require(env.work.used < 1000000,
+                "linear chain repeated result analysis");
+      });
+  cases.run("domain result facts survive direct and nested wrappers", [&] {
+    take(check(collections + R"(
+math fn wrap<I:Type+Copy+Drop>(rows:domain<I>,body:math fn(item:I)->Fr where item_from(item,rows))->Vector<Fr>{return mapped(rows,body);}
+math fn outer(xs:Vector<Fr>)->Vector<Fr>{return wrap(indices(xs),fn(i)=>0);}
+math fn direct(xs:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){return at(wrap(indices(xs),fn(j)=>0),i);}
+math fn nested(xs:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){return at(outer(xs),i);}
+)"));
+    refuses(check(collections + R"(
+math fn wrap<I:Type+Copy+Drop>(rows:domain<I>,body:math fn(item:I)->Fr where item_from(item,rows))->Vector<Fr>{return filtered(rows,fn(i)=>false,body);}
+math fn read(xs:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){return at(wrap(indices(xs),fn(j)=>0),i);}
+)"),
+            "source.data-bound");
+  });
+  cases.run("local and returned records respect declared field order", [&] {
+    std::string records = collections + R"(
+struct Pair{pub left:Vector<Fr>,pub right:Vector<Fr>}
+math fn copies(a:Vector<Fr>,b:Vector<Fr>)->Pair{return Pair{right:copy(b),left:copy(a)};}
+math fn returned(xs:Vector<Fr>,ys:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){let p=copies(xs,ys);return at(p.left,i);}
+math fn local(xs:Vector<Fr>,ys:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){let p=Pair{right:copy(ys),left:copy(xs)};return at(p.left,i);}
+)";
+    take(check(records));
+    refuses(check(records + R"(
+math fn wrong(xs:Vector<Fr>,ys:Vector<Fr>,i:index)->Fr where in_bounds(i,xs){let p=Pair{right:copy(ys),left:copy(xs)};return at(p.right,i);}
+)"),
+            "source.data-bound");
   });
   cases.run("source fact scopes preserve full paths and isolate branches", [] {
     Environment environment;

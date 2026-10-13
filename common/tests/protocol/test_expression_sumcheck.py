@@ -85,9 +85,9 @@ def test_expression_sumcheck_actual_claim_and_terminal_shape(toolchain, journal,
     package, pin = build(toolchain, journal, directory, 'Proof')
     request = input_files(journal, 'request.json', public=values(claim=claim, rounds=rounds))
     proof = directory / 'proof.bin'
-    if rounds == 3:
-        # A third fold cannot split the final factor row into two assignments.
-        journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}'], refuses='ring-input-shape')
+    if rounds != 2:
+        # Admit the complete factor-table dimensions before any round message.
+        journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}'], refuses='artifact-stopped')
     else:
         journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *request, f'--output={proof}'])
         journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *request, f'--proof={proof}'], refuses='artifact-stopped')

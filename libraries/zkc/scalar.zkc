@@ -1,6 +1,7 @@
 module zkc::scalar;
 
-pub fn inverse<F: Field>(value: F) -> F { return kernel<F>("field.inverse", value); }
+pub fn inverse<F: Field>(value: F) -> F = primitive("field.inverse");
+pub fn from_index<F: Field>(value: index) -> F = primitive("field.from_index");
 
 pub fn power<F: Field>(base: F, exponent: index) -> F {
   let mut remaining = exponent;

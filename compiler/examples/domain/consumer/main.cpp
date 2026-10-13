@@ -62,8 +62,8 @@ module { "protocol.module"() ({
 }) {profile=#protocol.profile<protocol>} : ()->() })",
                                             ParserConfig(&context, false));
   require(bool(module), "contributed operation fixture refused");
-  // The contributed carrier has logical adapters but no native port policy.
-  // Check its registered operation invariant independently of module admission.
+  // Logical IR can carry the contributed type without a native representation.
+  // The representation refusal above is independent of operation admission.
   unsigned operations = 0;
   module->walk([&](envelope::KeepOp operation) {
     ++operations;
@@ -82,12 +82,8 @@ module { "protocol.module"() ({
             "contributed operation restoration failed");
   });
   require(operations == 1, "contributed operation missing");
-  {
-    ScopedDiagnosticHandler silence(&context,
-                                    [](Diagnostic &) { return success(); });
-    require(failed(verify(*module)),
-            "logical-only carrier acquired native endpoint support");
-  }
+  require(succeeded(verify(*module)),
+          "contributed logical carrier failed protocol admission");
   bool unknownProperty = false;
   {
     ScopedDiagnosticHandler capture(&context, [&](Diagnostic &diagnostic) {

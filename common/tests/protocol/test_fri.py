@@ -231,17 +231,17 @@ def test_fri_rejects_altered_commitments_openings_and_terminal(toolchain, journa
 DISHONEST = [
     # A wrong folding challenge first separates layer one from the verifier's
     # expectation, which is checked in round one.
-    ('fold-beta', 'let next @P = fold(current, current_shift, betaP);',
-     'let next @P = fold(current, current_shift, betaP + 1);', 'chain', ['0', '1']),
+    ('fold-beta', 'let next @P = coset::fold(current, betaP);',
+     'let next @P = coset::fold(current, betaP + 1);', 'chain', ['0', '1']),
     # Layer one is folded with the right shift; the cubed shift first spoils
     # layer two, which is checked in round two.
-    ('fold-shift', 'current_shift = current_shift * current_shift;',
-     'current_shift = current_shift * current_shift * current_shift;', 'chain', ['0', '2']),
+    ('fold-shift', 'current = next;',
+     'current = coset::word(coset::values(next), coset::offset(next) * coset::offset(current));', 'chain', ['0', '2']),
     # Honest folds with a wrong constant pass every chain check and fail where
     # the terminal polynomial is evaluated, after the first query's rounds.
-    ('terminal-constant', 'let proposed @P = interpolate_coefficients(current, current_shift);',
+    ('terminal-constant', 'let proposed @P = interpolate_coefficients(current);',
      'let proposed @P = append(empty<C::ValueField>(), '
-     'first(interpolate_coefficients(current, current_shift)) + 1);', 'terminal', ['0']),
+     'first(interpolate_coefficients(current)) + 1);', 'terminal', ['0']),
 ]
 
 

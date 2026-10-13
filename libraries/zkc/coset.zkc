@@ -11,12 +11,28 @@ pub fn point<F: Field>(shift: F, size: index, position: index) -> F {
   return kernel<F>("poly.domain_point", shift, size, position);
 }
 
-pub fn interpolate<F: Field>(values: Vector<F>, shift: F) -> Polynomial<F> {
-  return kernel<F>("poly.coset_interpolate", values, shift);
+// Natural-order evaluations on shift*<omega>. Private fields prevent a caller
+// from changing the shift or claiming another ordering without re-admission.
+pub struct Word<F: Field> {
+  data: Vector<F>,
+  shift: F
 }
 
-pub fn evaluate_coset<F: Field>(polynomial: Polynomial<F>, shift: F, size: index) -> Vector<F> {
-  return kernel<F>("poly.coset_evaluate", polynomial, shift, size);
+pub fn word<F: Field>(data: Vector<F>, shift: F) -> Word<F> {
+  // point checks the installed two-adic size bound, including nonempty input.
+  require !(point(shift, length(data), 0) == 0);
+  return Word<F> { data: data, shift: shift };
+}
+pub math fn values<F: Field>(input: Word<F>) -> Vector<F> { return input.data; }
+pub math fn offset<F: Field>(input: Word<F>) -> F { return input.shift; }
+
+pub fn interpolate<F: Field>(input: Word<F>) -> Polynomial<F> {
+  return kernel<F>("poly.coset_interpolate", input.data, input.shift);
+}
+
+pub fn evaluate_coset<F: Field>(polynomial: Polynomial<F>, shift: F, size: index) -> Word<F> {
+  let data = kernel<F>("poly.coset_evaluate", polynomial, shift, size);
+  return Word<F> { data: data, shift: shift };
 }
 
 pub fn extend_columns<F: Field>(columns: Vector<F>, count: index,
@@ -25,15 +41,15 @@ pub fn extend_columns<F: Field>(columns: Vector<F>, count: index,
   let mut extended = empty<F>();
   for column in 0..count {
     let evaluations = slice(columns, column * height, height);
-    let polynomial = interpolate(evaluations, 1);
-    extended = concat(extended, evaluate_coset(polynomial, shift, size));
+    let polynomial = interpolate(word(evaluations, 1));
+    extended = concat(extended, values(evaluate_coset(polynomial, shift, size)));
   }
   return extended;
 }
 
 pub fn column_at<F: Field>(columns: Vector<F>, column: index, size: index,
     position: F, shift: F) -> F {
-  return evaluate(interpolate(slice(columns, column * size, size), shift), position);
+  return evaluate(interpolate(word(slice(columns, column * size, size), shift)), position);
 }
 
 pub fn disjoint_coset<F: Field>(height: index, size: index, shift: F) -> bool {
@@ -50,10 +66,12 @@ pub fn outside_domains<F: Field>(height: index, size: index, shift: F, x: F) -> 
 
 // Pair natural-order antipodal evaluations. The resulting word is on the
 // squared coset, with half the input length.
-pub fn fold<F: Field>(values: Vector<F>, shift: F, beta: F) -> Vector<F>
-    { return kernel<F>("poly.even_odd_fold", values, shift, beta); }
+pub fn fold<F: Field>(input: Word<F>, beta: F) -> Word<F> {
+  let data = kernel<F>("poly.even_odd_fold", input.data, input.shift, beta);
+  return Word<F> { data: data, shift: input.shift * input.shift };
+}
 
 pub fn points<F: Field>(shift: F, size: index) -> Vector<F> = primitive("poly.domain_points");
 pub fn root<F: Field>(size: index) -> F = primitive("poly.domain_root");
-pub fn opening_quotient<F: Field>(values: Vector<F>, shift: F, at: F, value: F)
+pub fn opening_quotient<F: Field>(entries: Vector<F>, shift: F, at: F, value: F)
     -> Vector<F> = primitive("poly.opening_quotient");

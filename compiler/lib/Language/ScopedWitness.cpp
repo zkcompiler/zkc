@@ -4,6 +4,7 @@
 #include "Effects.h"
 #include "FiniteContracts.h"
 #include "FiniteDomains.h"
+#include "HelperResults.h"
 #include "Semantics.h"
 #include "SignatureWitness.h"
 #include <algorithm>
@@ -281,6 +282,9 @@ public:
 } // namespace
 Error checkScopedSources(const CheckedStorage &storage, Work &work) {
   Semantics types(storage.declarations, storage.assets, work);
+  // This closure is immutable for the whole check; share operand-relative
+  // summaries, while each declaration reconstructs its own premise scope.
+  HelperResults helperResults(types, storage.declarations);
   if (auto error = checkSignatureSources(storage, work))
     return error;
   std::vector<unsigned> uses(storage.scopedSources.size());
@@ -664,7 +668,8 @@ Error checkScopedSources(const CheckedStorage &storage, Work &work) {
     for (const auto &parameter : decl.scopedInputs)
       formals.emplace_back(&parameter.signature, parameter.span);
     if (!visit(*decl.body, formals, 1) ||
-        !checkFiniteContracts(types, storage.declarations, decl, *decl.body))
+        !checkFiniteContracts(types, storage.declarations, decl, *decl.body,
+                              helperResults))
       return types.takeError();
     if (decl.effectAllowance &&
         !effectsWithin(types, decl.body->effects, *decl.effectAllowance,
