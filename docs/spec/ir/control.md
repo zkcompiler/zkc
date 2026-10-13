@@ -111,12 +111,18 @@ Boolean result proves public transcript schedule safety.
 
 ## Formal interpretation and assurance boundary
 
-`Zkc.Source.FiniteControl` treats admitted runtime bounds as a selection from a
-family of existing finite `Region.iterate` terms. It proves count/zero/index
-properties and reuses the selected branch/iteration denotations. Executable
-adapters check bounds before instantiation. No unbounded process constructor is
-added. Structural laws for a fixed typed region do not by themselves prove raw
-frontend elaboration, candidate decoding or native execution correct.
+The independent `Zkc.Source.FiniteControl` module retains one bound selector and
+indexed body in `Loop`, then denotes the selected finite interval. It proves
+zero-trip behavior, index bounds, interval splitting, selected-count call bounds
+and phase-invariant composition. Index-insensitive bodies are connected to the
+existing `Region.iterate` denotation by `denote_region_iterate`. Its `admitRange`
+checks both bound magnitudes against an explicit maximum, including inverted
+intervals. `iterateWhile` distinguishes normal carried-value completion from
+terminal stops and preserves stopped state and events.
+
+These [formal semantics](../../../lean/docs/spec/semantics.md) do not add an
+unbounded process constructor or prove correspondence to native bound admission,
+frontend elaboration, candidate decoding, instruction accounting or execution.
 
 Independent Lean models and model-specific tools interpret their own region and
 carrier contracts. Their correspondence results are separate from the current
