@@ -71,7 +71,9 @@ first selected key once to select its second restoration salt, then charges both
 completion accesses. The first completion access is a cache hit. The actual
 early-stop game itself uses at most `Q+2` accesses. Acceptance equality with full
 completion holds for every preexisting cache, but query logs and final caches
-are not equated after an early rejection.
+are not equated after an early rejection. A stopped process does not return its
+local SSA transcript value; its handler state and reached event prefix remain
+in the execution record.
 
 The canonical umbrella remains usable independently; import `.FiatShamir.Native`
 explicitly for the constructed-subject consumer.
@@ -115,9 +117,10 @@ actual PIR execution record is retained by `programGame`; it is not substituted
 with the completed native transcript.
 
 There is no PCS, private polynomial, or commitment binding premise here. Native
-export authenticity, parsing/rendering, field implementation, compiler/lowering,
-provider state, byte framing/codecs, sampling bias, concrete hash security, and
-Merlin/STROBE conformance remain outside this mathematical theorem. Actual-body normalization remains a required proved equation at the native
+export authenticity, parsing/rendering, Host initial-transcript and proof-buffer
+wiring, field implementation, compiler/lowering, provider state, byte framing/codecs, sampling bias, concrete hash security, and
+Merlin/STROBE conformance remain outside this mathematical theorem. Actual-body
+normalization remains a required proved equation at the native
 consumer boundary. The full-prefix/restoration simulation and all local security
 premises are discharged. Native source/export authenticity and concrete provider
 conformance remain separate even after a generated body equation is checked.

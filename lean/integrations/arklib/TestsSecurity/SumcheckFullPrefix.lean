@@ -84,4 +84,20 @@ theorem native_identity_control (choice : Native.Selection Unit F)
   · have := congrArg Zkc.Protocols.Sumcheck.NativeConstruction.Binding.construction equal
     simp [Native.binding] at this
 
+/-- A same-typed subject that skips all guards is not a valid native consumer. -/
+def alwaysAccept (schedule : Zkc.Protocols.Sumcheck.NativeConstruction.Schedule) :
+    Native.Subject Unit F := fun choice =>
+  .done (.cons true (.cons
+    (⟨Native.binding "source" "constructed" schedule choice, [], none⟩ :
+      Zkc.Protocols.Sumcheck.NativeConstruction.Transcript Unit F) .nil))
+
+theorem missing_guard_no_denotation
+    (schedule : Zkc.Protocols.Sumcheck.NativeConstruction.Schedule) :
+    ¬ (∀ choice, alwaysAccept schedule choice =
+      Native.reference "source" "constructed" schedule choice) := by
+  intro law
+  have wrong := law (⟨(), zeroCoefficients, 1, zeroMessage, zeroMessage⟩ : Native.Selection Unit F)
+  simp [alwaysAccept, Native.reference, Native.binding,
+    Zkc.Protocols.Sumcheck.NativeConstruction.experiment, zeroMessage, wireBoundary] at wrong
+
 end TestsSecurity.SumcheckFullPrefix

@@ -92,15 +92,19 @@ returns real replies and records the full keys. `PIR.Proc.runM` retains returned
 transcript, stop reason, unit handler state and reached event log. A proved full
 process equation for `Imported.denote` transports this entire game before the
 acceptance projection; a returned true Boolean accepts, and every stopped result
-rejects. `Native.soundness` then supplies the bound without any residual-security
+rejects. A stopped process does not return its internal SSA transcript; the
+execution still records its handler state and reached events. `Native.soundness`
+then supplies the bound without any residual-security
 or oracle-simulation premise. The actual game needs at most `Q+2` accesses; the
 security reduction conservatively charges `Q+3`. Independent private coins may
 select a family of adaptive adversaries with a common budget.
 
 This endpoint relies on finite-field axioms, the supplied uniform `SampleableType`
 laws, Lean's kernel and standard logical axioms, and the audited pinned upstream
-theorems. Byte encodings, concrete transcript implementations, cryptographic
-primitives, native lowering, and source/export authenticity require their own
-correspondences. The typed full-prefix simulation is proved here and in its owning optional
+theorems. Actual Host initial-transcript/proof-buffer conformance, byte encodings,
+concrete transcript implementations, cryptographic primitives, native lowering,
+and source/export authenticity require their own
+correspondences. The typed full-prefix simulation is proved here and in its
+owning optional
 integration. It does not cover Merlin/STROBE state, byte framing, digest collisions,
 or modulo/rejection sampling in an arbitrary native transcript provider.
