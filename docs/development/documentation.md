@@ -45,7 +45,8 @@ needs its execution scope and environment; a historical run is not a current
 build result. Follow the [assurance policy](../assurance.md). Measurements must
 record the revision, dependency locks, tool versions, machine, inputs, repetitions
 and statistic. Identify the measured stages and report failures and resource
-ceilings alongside successful runs. No benchmark campaign is currently maintained.
+ceilings alongside successful runs. The [benchmark guide](../../common/benchmarks/README.md)
+defines maintained workloads, measurement boundaries and evidence retention.
 
 For executable instructions, state the working directory, prerequisites,
 required inputs and expected result. Distinguish a development command that

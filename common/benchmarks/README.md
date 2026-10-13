@@ -1,160 +1,175 @@
-# Protocol measurements
+# Benchmarks
 
-[`protocol_math.py`](protocol_math.py) compares complete FRI, imported AIR/STARK,
-machine LogUp and machine grand-product proofs through the existing compiler
-and native CLI. It uses Python's standard library and the maintained
-[`processes`](../../scripts/processes.py) lifecycle helper and the
-[explicit project capture helper](../tests/support/project.py). It does not import
-pytest integration modules, build tools, synchronize dependencies or modify
-the selected source trees. Input preparation reuses the maintained example
-scripts and their small adapter dependencies.
+The benchmark suite compares compiled zkc protocols with independent implementations.
+It uses explicit, already-built tools and writes a new evidence directory. It never
+builds dependencies, tunes the machine, changes runtime limits or retries failed samples.
 
-## Run a comparison
+## Run
 
-Run from a checkout with Python 3.12 or later. Supply existing executables as
-file paths; there is no PATH search or implicit build-directory selection.
-The output directory must not exist. The baseline HEAD must match the requested
-revision supplied with `--baseline-revision`, and every consumed baseline file must match that
-commit. Current source may be dirty: its exact consumed files are copied and
-hashed. Finish library edits before starting a comparison.
+Build the benchmark client in the development environment:
 
 ```sh
-python3 common/benchmarks/protocol_math.py \
-  --baseline-revision COMMIT \
-  --baseline-source /path/to/original-checkout \
-  --baseline-compiler /path/to/baseline/zkc-compile \
-  --baseline-runtime /path/to/baseline/zkc \
-  --baseline-opt /path/to/baseline/zkc-opt \
-  --current-source /path/to/current-checkout \
-  --current-compiler /path/to/current/zkc-compile \
-  --current-runtime /path/to/current/zkc \
-  --current-opt /path/to/current/zkc-opt \
-  --repetitions 3 --release-storage --interactive-storage \
-  --output build/experiments/protocol-measurements
+cargo build --release --locked -p zkc-benchmarks
+python3 common/benchmarks/run.py list
+python3 common/benchmarks/run.py run \
+  --suite schnorr --suite sumcheck \
+  --compiler build/compiler/zkc-compile --runtime target/release/zkc \
+  --worker target/release/zkc-benchmarks \
+  --output build/experiments/benchmarks
 ```
 
-The matrix always contains baseline default, current default and current
-`--no-finite-bulk`. `--release-storage` adds current default with storage release
-as its own policy; it does not silently change either default. The same binary
-paths may be supplied for both sources to isolate source changes. Distinct
-binaries compare the combined source/tool changes. A binary's SHA-256 is its
-identity here; the adjacent source revision is **not** a verified build provenance
-claim. Installed source modules embedded in the compiler belong to that binary.
+All executable options are file paths. Select individual workloads with repeated
+`--case`, or families with repeated `--suite`; combining them takes their intersection.
+With neither option, all families are required, including the optional Monero build.
+The default is four fresh processes per implementation/operation, two warmup
+samples and five measured samples per process, one call per sample. `--processes`,
+`--warmups`, `--samples` and `--iterations` make these choices explicit. A quick
+correctness trial can use `--processes 1 --warmups 0 --samples 1`.
+`--source` selects the project source tree. The executing harness and its imported
+helpers always come from this checkout; both sets of consumed files are captured.
 
-`--baseline-only` omits all current arguments and runs just baseline default for
-prototyping. Repeat `--case NAME` to select a subset. `--timeout SECONDS` bounds
-each subprocess (default 300); a timeout is a failed sample. There is no silent
-retry, higher runtime capacity, skipped refusal or timing threshold. Existing
-runtime capacity records and work limits are retained in each report.
+`--threads` sets `RAYON_NUM_THREADS` (default one), not a universal thread limit.
+Workers record their observed exit thread count and confirm the requested environment
+and affinity. `--cpu` optionally binds the
+experiment and its children to one allowed CPU. The harness does not change the
+frequency governor, turbo or SMT. `--seed` shuffles case/operation blocks;
+each implementation pair runs consecutively, with order reversed on alternating repetitions.
+An odd requested process count leaves one extra repetition in one direction.
+The schedule seed does not seed production prover randomness. Builds or other CPU-intensive work
+should finish before measurements start. Small process counts and busy hosts
+produce exploratory measurements, not reliable rankings.
+
+### Monero
+
+Build `monero-benchmark` with the [pinned reference build](../tests/reference/monero/README.md)
+in Release mode, then supply both `--monero /path/to/monero-benchmark` and
+`--monero-source /path/to/pinned/monero`. The benchmark uses upstream randomness;
+the reference's deterministic replay wrapper is linked only into `monero-reference`.
+Run `--suite monero` to measure aggregation counts 1, 2, 4, 8 and 16.
 
 ## Workloads
 
-| Case | Profile and inputs |
+| Family | Definition | Comparison |
+|---|---|---|
+| Schnorr | BLS12-381 G1/Fr, Spongefish 0.7.4 SHAKE128, 80-byte proof | Ordinary library and construction versus direct arkworks/Spongefish calls |
+| Monero BP+ | 64-bit amounts, mixed test values, pinned Monero transcript and binary encoding | Ordinary library versus upstream C++ prover/verifier |
+| Sumcheck | Public multilinear table, 16–4,096 entries, contiguous halves, MSB-first variables, pair-valued rounds | Ordinary Sumcheck library versus an independent linear-time Rust implementation |
+
+Sumcheck's [Entry](projects/sumcheck/main.zkc) binds the ordered table, claim and
+round count using an authored Spongefish construction. Its verifier evaluates
+the public table, so verification is linear in table size. It has no PCS or
+zero-knowledge claim. The independent implementation must produce identical
+proof bytes. The other two provers use fresh randomness, so proofs are checked
+by cross-verification, not byte equality.
+
+These are complete implementation-stack comparisons. Monero uses different curve
+and multiexponentiation code; zkc also performs input admission, interpretation,
+service management and result reconstruction. Ratios do not isolate compiler
+overhead. All calls in one case reuse a fixed public statement and witness;
+this is repeated-statement throughput, not a changing-statement or batch-verification
+workload. Input identities and these distinctions are retained in each contract.
+
+## Measurement boundaries
+
+| Metric | Included |
 |---|---|
-| `fri-32`, `fri-64` | 32/64 Ext8 evaluations, degree below 8/16, 3/4 folds, 8 queries |
-| `fri-1024` | 1,024 Ext8 evaluations, degree below 64, 6 folds, 8 queries |
-| `air-stark-32`, `air-stark-64`, `air-stark-1024` | Imported recurrence Bundle, fixed 8-row trace, 32/64/1,024 evaluation points, 8 queries and OOD attempts |
-| `machine-logup-absent`, `machine-product-absent` | Arithmetic-only fixture: CPU/program height 4; optional memory absent; 64-point domain |
-| `machine-logup-present`, `machine-product-present` | Store/load fixture: CPU/program height 16, memory height 32; 64-point domain |
+| Compilation process | CLI, project capture, compiler and package publication; repeated with package identity checked |
+| Admission | First package capture, authentication and native admission per zkc worker; excludes reading package bytes |
+| First call | First invocation in a fresh worker, including the first warmup when enabled |
+| Repeated API calls | Transcript initialization and statement binding, proof encoding/decoding and protocol execution; Host also performs adaptation and checks |
+| CLI observation | A separate prove/verify process including file I/O and admission; one exploratory observation per case |
+| Process peak RSS | Worker lifetime high-water mark, including setup, warmups, reports and proof retention; not per-call or incremental allocation |
+| CPU time | Process CPU clock over each call, including clock instrumentation; may exceed wall time with parallel work |
 
-Each source's project manifest supplies modules and captured assets. The tool
-copies the selected Entry into the output and changes only exact FRI/STARK
-profile anchors; an unknown or repeated anchor refuses. FRI inputs use integer
-polynomial evaluation in the documented Ext8 field. AIR/STARK and machine inputs
-come from their example preparation scripts. Baseline and current public/witness
-documents must agree before measurements start.
+Input JSON decoding and request construction precede each Host timer. Reference
+inputs are decoded before the loop; reference-owned table copies happen inside
+the protocol call. Protocol temporaries (including reference transcript states and C++ proof objects)
+are destroyed inside the timer. Returned Host reports or reference proof byte buffers
+are consumed and destroyed outside it, as are proof file writes. The next call starts after those outputs are consumed. Warmups are retained
+but excluded from summaries. The timer floor is reported and never subtracted.
+The Host client currently consumes inline JSON inputs without external file resolvers
+or setup authorities. New workloads can add those through the ordinary Host API.
+Runtime work counters come from the last successful call, not from the wall timer;
+cumulative allocation counters are not peak memory.
 
-These are bounded implementation profiles. The 1,024-point cases add a larger
-evaluation domain; they do not constitute a scaling study. The imported recurrence's height remains eight; changing its
-evaluation domain does not create a larger AIR. Machine shapes exercise both
-presence paths and both interaction reductions. They are not general zkVM
-workloads or evidence of cryptographic soundness.
+The process journal's wall time includes the entire worker, including preparation,
+all calls and output writing. It must not be confused with the per-call timer.
+No attempt is made to flush filesystem or CPU caches. Compilation, negative controls
+and preparation checks can warm system caches before timed workers. Upstream Monero
+initializes generator and multiexponentiation tables once per process; first-call
+timing includes that cost, while repeated calls reuse those tables.
 
-## What is measured
+## Correctness and evidence
 
-| Field | Meaning |
-|---|---|
-| `compile_wall_seconds` | Direct `language-package` process: capture, frontend, checked realization/lowering, serialization and process/output-transport overhead |
-| `frontend_emit_wall_seconds` | Separate `language-emit` process: capture, analysis, Entry closure, checked translation and original IR emission; not parsing alone |
-| `preparation` | Optional, separate `zkc-opt` preparation invocation, stage microseconds, before/after operation counts, decision/capacity remarks and prepared inventory |
-| `original_inventory` | Static generic logical operation and binding-declaration counts from the packaged original |
-| `emitted_inventory` | Static executable kernel binding/contract/implementation inventory and op-site counts in all emitted functions/participants, including unused definitions |
-| `prove`, `verify` | Separate native CLI process wall times, including package admission, I/O, transcript, execution and cleanup; report counters remain separate |
-| `instructions`, `iterations` | Executed work reported by the native runner |
-| `logical_bytes` | Cumulative logical byte work; not physical memory |
-| `total_value_bytes` | Cumulative fresh retained-value allocation charge; not peak or exit memory |
-| `ring_work`, `external_work` | Provider work counters, with their reported limits; not wall time |
-| `package`, `proof` | Exact serialized file sizes and SHA-256 identities |
-| `exit_storage` | Proof report live counters when exposed; otherwise `null` with explicit missing-field names |
-| `interactive_storage` | Optional separate interactive Entry, per-role exit usage/live resource units/retained output units and raw report |
+Before measuring a case, both implementations verify both proofs and reject a
+changed statement, truncation and trailing bytes. Every timed verification must
+accept. Every produced proof, including warmups, is retained and verified by the
+other implementation after all timed workers exit. Deterministic proofs must match
+the control bytes on every call, including CLI execution. Randomized provers must
+not repeat a proof across controls, CLI calls or workers. A failed gate, timeout, crash, missing sample or changed
+captured input invalidates the run's timing summaries and ratios. Partial evidence
+remains available; failures are never dropped from a favorable aggregate.
+Timed verifiers consume the same reference-produced proof bytes. Negative controls
+require proof rejection; an unrelated execution or resource-limit failure does not pass.
 
-Supplying each `--*-opt` enables `trace-mathematics` using the same finite-bulk
-policy on the independently emitted original. Successful diagnostics must
-contain stage measurements; unsupported tools fail visibly. Omitting it records
-unavailable preparation data. Remarks are retained without repeating the entire
-IR on every diagnostic. Original and prepared IR are retained separately.
+Each output directory contains:
 
-The full compiler CLI does not expose internal realization timing. The separate
-preparation run therefore does **not** identify every decision of full package
-compilation, participant demand lowering, or proof construction. Do not subtract
-the frontend process time from total compile time to invent realization time.
-Do not sum nested stage times or infer aggregate work allowances from operation
-counts: the CLI exposes stage records and capacity remarks, not the observer's
-complete work-budget structure. Storage release is a later physical policy and
-does not change this preparation pass.
+- `plan.json`: selected matrix, contracts, sample plan, seed, schedule, host and input identities.
+- `manifest.json`: plan information, outcomes, raw worker samples and correctness results.
+- `report.md`, `summary.json`, `summary.csv`: descriptive summaries.
+- `capture/`, `packages/`, `cases/`, `runs/`: consumed source files, compiled artifacts, inputs, proofs and command journals.
 
-The current proof report does not expose live retained-value bytes or live
-resource units. `--interactive-storage` obtains available exit counters through
-the corresponding interactive protocol instead. The product case adds an
-interactive Entry to an output-local copy. Interactive execution uses its own
-randomness/session and is a separate observation; it is not Fiat–Shamir proof
-timing or a substitute for missing proof live counters. Exit storage can be zero
-after release. Neither it nor cumulative allocation measures peak memory or RSS.
-
-## Evidence and acceptance
-
-The output contains only a source snapshot, prepared cases, process journals and
-repeated run artifacts. No complete build tree or optional upstream workspace
-is required. Runtime/compiler shared-library dependencies must already work in
-the selected environment. Each run retains its package, proof, IR, diagnostic
-stream, JSON CLI reports, commands, exit codes and wall times. Source inputs,
-dependency locks, binaries, measurement code, Python version and host details
-are recorded. Only named locale/Python environment overrides are recorded;
-arbitrary inherited environment and dynamic-library closure are not captured.
-
-`manifest.json` retains all samples, `summary.json` and `summary.csv` give
-min/median/max per case and variant. Execution is serial with variant order
-rotated by repetition. There are no warmups, cache flushes or CPU pinning. All
-repetitions, including the first, are retained; timings are advisory. Diagnostic
-processes are separately timed but can still affect cache state. Binary/source
-changes detected at the end invalidate the comparison. The copied inputs and
-original failed attempts remain available for inspection.
-
-Subprocess output is captured through pipes to avoid timeout polling intervals
-dominating short runs. Wall timing stops after process completion/output capture,
-before the tool writes its retained stdout/stderr files. The tool therefore
-temporarily holds each subprocess output in memory; it is not a memory profiler.
-
-Acceptance is hard: every requested compile, policy check, frontend identity
-check, available diagnostic pass, proof production, verification and changed-public
-refusal must succeed. Optional interactive storage
-observations must also accept. A failed cell has no timing summary; the command
-returns nonzero if any cell fails. No equality of proof bytes across different
-source packages is required: source/policy changes can change transcript
-bindings. This checks the selected public statement's acceptance and rejection
-controls, not a general equivalence theorem.
-
-## Focused checks
+Summaries use each process's median as one observation. Ratios pair corresponding
+process repetitions and report their median and dispersion; no significance test
+or performance pass/fail threshold is inferred. Raw samples remain available for
+other analyses.
 
 ```sh
-uv run --no-sync --locked pytest common/tests/harness/test_protocol_measurements.py
-uv run --no-sync --locked ruff check common/benchmarks/protocol_math.py \
+python3 common/benchmarks/run.py report RUN/manifest.json --output NEW_REPORT
+python3 common/benchmarks/run.py compare BASELINE/manifest.json CURRENT/manifest.json
+```
+
+Cross-run comparison requires matching workload contracts, sampling choices and
+host metadata. It cannot establish that background load was equal. Binary hashes
+identify selected executables; captured sources do not prove how those binaries
+were built. Workers report compiler/optimization facts; unoptimized client builds
+and client builds with debug assertions are refused. This does not certify
+dependency optimization or exclude per-package profile overrides. An allowlist records performance-related
+environment variables without copying unrelated credentials. Dynamic library closures are not captured. Generated results stay
+under ignored build directories; published numbers should cite retained evidence.
+
+## Architecture and extension
+
+- [`bench/workloads.py`](bench/workloads.py): case sizes, protocol inputs, semantics and optional upstream requirements.
+- [`bench/suites.py`](bench/suites.py): common source preparation, compilation and interoperability controls.
+- [`bench/runner.py`](bench/runner.py): capture, scheduling, worker lifecycle and evidence retention.
+- [`bench/results.py`](bench/results.py): worker validation, summaries and comparison.
+- [`zkc-benchmarks`](../../crates/zkc-benchmarks): generic Host client and independent Rust algorithms.
+- [`monero.cpp`](monero.cpp): upstream C++ client using the same worker result contract.
+
+Add a workload definition and an independent client where needed. Reuse the common
+Entry adapter for source protocols; add another adapter for a genuinely different
+measurement boundary. The scheduler and statistics contain no protocol algorithms.
+Benchmark clients have no test-only execution provider and introduce no production
+runtime branches. This design follows the explicit worker/warmup separation in
+[pyperf](https://pyperf.readthedocs.io/en/stable/run_benchmark.html) and the setup,
+interleaving and timing-boundary guidance in
+[Google Benchmark](https://google.github.io/benchmark/user_guide.html).
+
+The existing [protocol mathematics comparison](protocol-math.md) measures source
+and compiler policies for FRI, AIR/STARK and machine protocols. It shares the
+process journal with this suite and retains its different measurement contract.
+
+## Validation
+
+```sh
+cargo test --locked -p zkc-benchmarks
+uv run --no-sync --locked pytest common/tests/harness/test_benchmarks.py \
   common/tests/harness/test_protocol_measurements.py
+uv run --no-sync --locked ruff check common/benchmarks
 python3 common/tests/check_docs.py --all
 ```
 
-The harness checks independent FRI values, input preparation from a minimal
-copied source closure, profile selection, explicit tool selection, baseline
-identity, inventories, missing report fields, failed-run retention, timeout
-cleanup and a controlled end-to-end trial. These checks require no compiled
-project tools; actual native measurements require the supplied executables.
+Harness controls cover malformed and incomplete worker results, process failure,
+timeout cleanup, input mutation, complete-run summaries and comparison contracts.
+Real protocol gates require the selected built tools and optional upstream build.
