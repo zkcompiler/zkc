@@ -12,16 +12,20 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from ring_arena import compact  # noqa: E402
-from adapter import export  # noqa: E402
+from clean.adapter import export  # noqa: E402
 
 
 def generate(source):
     files = {}
-    for path in sorted(source.glob('*.json')):
+    for path in sorted(source.glob('*/source.json')):
         document = json.loads(path.read_text())
-        documents = {'source.json': document, **export(document).documents()}
+        inputs = json.loads(path.with_name('inputs.json').read_text())
+        documents = {'source.json': document, 'inputs.json': inputs, **export(document, inputs)}
+        reference = path.with_name('reference.json')
+        if reference.exists():
+            documents['reference.json'] = json.loads(reference.read_text())
         for name, value in documents.items():
-            files[f'{path.stem}/{name}'] = compact(value) + '\n'
+            files[f'{path.parent.name}/{name}'] = compact(value) + '\n'
     if not files:
         raise ValueError('no extracted Clean sources')
     return files

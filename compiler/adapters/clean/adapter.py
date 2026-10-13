@@ -1,60 +1,16 @@
-"""Translate explicit Clean extraction plans to ordinary relation Bundles.
+"""Compile Clean declarations, then encode instances and prepare witnesses.
 
-This adapter handles arithmetic table constraints and indexed immutable lookup
-tables. It does not infer a Lean proposition's meaning from a table name.
-Configuration, instance and witness carriers are separate outputs.
+Only static declarations reach the relation compiler. The compiled layout is
+immutable; its JSON carrier properties return independent values for callers.
 """
 
 from collections import Counter
 from dataclasses import dataclass, field
+import json
 
-from ring_arena import Arena, BASE, P, Refusal, identity
-
-
-def fields(value, required, optional=()):
-    """The extraction format has one exact schema, with no compatibility fields."""
-    if not isinstance(value, dict) or not set(required) <= value.keys() <= set(required) | set(optional):
-        raise Refusal('clean-schema', str(required))
-
-
-def natural(value, label, maximum=1 << 20):
-    if type(value) is not int or not 0 <= value <= maximum:
-        raise Refusal('clean-shape', label)
-    return value
-
-
-def residue(value):
-    return natural(value, 'noncanonical field value', P - 1)
-
-
-def scalar(value):
-    return str(residue(value))
-
-
-def flatten(operations):
-    for operation in operations:
-        if set(operation) == {'subcircuit'}:
-            yield from flatten(operation['subcircuit'])
-        elif set(operation) == {'name', 'operations'}:
-            yield from flatten(operation['operations'])
-        elif set(operation) in ({'witness'}, {'assert'}, {'lookup'}, {'interact'}):
-            yield operation
-        else:
-            raise Refusal('clean-operation', str(operation.keys()))
-
-
-def expression(source, variable, constant):
-    """Interpret the extracted expression through the caller's arithmetic."""
-    kind = source['type']
-    if kind == 'var' and set(source) == {'type', 'index'}:
-        return variable(natural(source['index'], 'variable'))
-    if kind == 'const' and set(source) == {'type', 'value'}:
-        return constant(residue(source['value']))
-    if kind in ('add', 'mul') and set(source) == {'type', 'lhs', 'rhs'}:
-        left = expression(source['lhs'], variable, constant)
-        right = expression(source['rhs'], variable, constant)
-        return left + right if kind == 'add' else left * right
-    raise Refusal('clean-expression', kind)
+from ring_arena import Arena, BASE, P, Refusal, compact, identity
+from clean.schema import (Assertion, Interaction, Lookup, Source,
+                    decode_public, decode_source, decode_witness, fields)
 
 
 @dataclass
@@ -65,8 +21,6 @@ class Table:
     arena: Arena = field(default_factory=Arena)
     assertions: list = field(default_factory=list)
     records: list = field(default_factory=list)
-    configuration: list = field(default_factory=list)
-    witness: list = field(default_factory=list)
 
     def read(self, group, column, offset=0):
         return self.arena.input(BASE, ['read', group, str(offset), column])
@@ -95,35 +49,6 @@ class Table:
                 self.groups, arena, inputs, assertions, records]
 
 
-@dataclass
-class Export:
-    bundle: list
-    configuration: list
-    instance: list
-    witness: list
-
-    def documents(self):
-        return {'bundle.json': self.bundle, 'configuration.json': self.configuration,
-                'instance.json': self.instance, 'witness.json': self.witness}
-
-
-def scoped_context(operation, height):
-    kind = operation['type']
-    if kind == 'EveryRow':
-        return ['all'], range(height)
-    if kind == 'EveryRowExceptLast':
-        return ['interior', 0, 1], range(height - 1)
-    if kind == 'Boundary':
-        row = operation['row']
-        if type(row) is not int:
-            raise Refusal('clean-boundary', str(row))
-        row = row if row >= 0 else height + row
-        if not 0 <= row < height:
-            raise Refusal('clean-boundary', str(row))
-        return ['interval', row, row + 1], range(row, row + 1)
-    raise Refusal('clean-scope', kind)
-
-
 def check_cardinality(tables, channels):
     """Check structural record counts, including records with zero weights."""
     for channel, declaration in enumerate(channels):
@@ -133,73 +58,73 @@ def check_cardinality(tables, channels):
             raise Refusal('clean-channel-characteristic', declaration[0])
 
 
-def export(document):
-    fields(document, ('format', 'field', 'table', 'public_bindings', 'public',
-                      'lookups', 'trace', 'witness_tables'), ('channels', 'reference'))
-    if document['format'] != 'zkc.clean-export/0' or document['field'] != P:
-        raise Refusal('clean-format')
-    source = document['table']
-    fields(source, ('model', 'height', 'width', 'operations'))
-    height = natural(source['height'], 'height')
-    width = natural(source['width'], 'width')
-    if not height or not width:
-        raise Refusal('clean-shape', 'empty source table')
-    is_component = source['model'] == 'component'
-    if is_component:
-        source = {**source, 'model': 'table', 'operations': [{
-            'type': 'EveryRow', 'context': {'window': 1,
-                'vars': [{'row': 0, 'column': i} for i in range(width)],
-                'circuit': source['operations']}}]}
-    if source['model'] != 'table':
-        raise Refusal('clean-model', source['model'])
-    if not is_component and document.get('channels'):
-        raise Refusal('clean-interaction', 'TableOperation has no ensemble balance semantics')
-    trace = document['trace']
-    if len(trace) != height or any(len(row) != width for row in trace):
-        raise Refusal('clean-trace-shape')
-    trace = [[residue(value) for value in row] for row in trace]
-    if not isinstance(document['witness_tables'], dict):
-        raise Refusal('clean-schema', 'witness_tables')
-    public = [scalar(value) for value in document['public']]
-    main = Table('trace', height, [['trace', 'witness', BASE, width]],
-                 witness=[[scalar(value) for row in trace for value in row]])
+@dataclass(frozen=True)
+class CompiledRelation:
+    source: Source = field(repr=False)
+    selectors: tuple[range, ...]
+    digest: str
+    _bundle: str = field(repr=False)
+    _configuration: str = field(repr=False)
 
-    tables, channels, lookup_tables, queries = [main], [], {}, {}
-    declared_channels = {}
-    for channel in document.get('channels', []):
-        fields(channel, ('name', 'arity'))
-        name, arity = channel['name'], natural(channel['arity'], 'channel arity')
-        if name in declared_channels:
-            raise Refusal('clean-channel-duplicate', name)
-        declared_channels[name] = (len(channels), arity)
-        channels.append([name, 'field-balance', [BASE] * arity, BASE])
-    for declaration in document['lookups']:
-        fields(declaration, ('name', 'interpretation'), ('values', 'height'))
-        name, interpretation = declaration['name'], declaration['interpretation']
-        if name in lookup_tables or name in declared_channels:
-            raise Refusal('clean-lookup-duplicate', name)
-        if interpretation == 'fixed-indexed':
-            fields(declaration, ('name', 'interpretation', 'values'))
-            values = [residue(value) for value in declaration['values']]
-        elif interpretation == 'witness-indexed':
-            fields(declaration, ('name', 'interpretation', 'height'))
-            if name not in document['witness_tables']:
-                raise Refusal('clean-lookup-shape', name)
-            values = [residue(value) for value in document['witness_tables'][name]]
-            if len(values) != natural(declaration['height'], 'lookup height'):
-                raise Refusal('clean-lookup-shape', name)
-        else:
-            raise Refusal('clean-lookup-interpretation', interpretation)
-        if not values or len(values) >= P:
-            raise Refusal('clean-lookup-shape', name)
+    @property
+    def bundle(self):
+        return json.loads(self._bundle)
+
+    @property
+    def configuration(self):
+        return json.loads(self._configuration)
+
+    def encode_instance(self, public):
+        values = decode_public(public, self.source.public_size)
+        return ['zkc.relation-instance/0', self.digest, list(map(str, values)),
+                [['present', None, []] for _ in range(1 + len(self.source.lookups))]]
+
+    def prepare_witness(self, trace, witness_tables):
+        rows, lookup_values = decode_witness(trace, witness_tables, self.source)
+        queries = {table.source.name: Counter() for table in self.source.lookups}
+        for context in self.source.contexts:
+            for lookup in context.operations:
+                if not isinstance(lookup, Lookup):
+                    continue
+                for row in context.active:
+                    def fetch(index):
+                        offset, column = context.cells[index]
+                        return rows[row + offset][column]
+                    pair = tuple(e.apply(fetch, int, lambda v: v % P) for e in lookup.entry)
+                    queries[lookup.name][pair] += 1
+        main = [[str(value) for row, values in enumerate(rows)
+                 for value in (*values, *(int(row in active) for active in self.selectors))]]
+        witness = [main]
+        for table, values in zip(self.source.lookups, lookup_values):
+            counts = queries[table.source.name]
+            unknown = set(counts) - set(enumerate(values))
+            if unknown:
+                raise Refusal('clean-witness-lookup', f'{table.source.name}: {sorted(unknown)}')
+            witness.append([[str(v) for i, value in enumerate(values)
+                for v in ([counts[i, value]] if table.values is not None else [i, value, counts[i, value]])]])
+        return ['zkc.relation-witness/0', self.digest, witness]
+
+
+def compile_relation(document):
+    """Compile a static extraction plan without any execution's input values."""
+    source = decode_source(document)
+    main = Table('trace', source.height, [['trace', 'witness', BASE, source.width]])
+    tables, configuration, selectors = [main], [[None, []]], []
+    channels = [[channel.name, 'field-balance', [BASE] * channel.arity, BASE]
+                for channel in source.channels]
+    channel_indices = {channel.name: i for i, channel in enumerate(source.channels)}
+    lookup_indices = {}
+    for declaration in source.lookups:
+        name, height, values = declaration.source.name, declaration.height, declaration.values
         channel = len(channels)
+        lookup_indices[name] = channel
         channels.append([name, 'field-balance', [BASE, BASE], BASE])
-        fixed = interpretation == 'fixed-indexed'
+        fixed = values is not None
         groups = ([['indexed', 'config', BASE, 2], ['counts', 'witness', BASE, 1]]
                   if fixed else [['indexed_counts', 'witness', BASE, 3]])
-        table = Table(name, len(values), groups)
-        if fixed:
-            table.configuration = [[scalar(v) for i, value in enumerate(values) for v in [i, value]]]
+        table = Table(name, height, groups)
+        configuration.append([None, [[str(v) for i, value in enumerate(values) for v in (i, value)]]
+                              if fixed else []])
         address, value = table.read(0, 0), table.read(0, 1)
         count = table.read(1 if fixed else 0, 0 if fixed else 2)
         table.assertions.extend([(address, ['first']),
@@ -208,107 +133,53 @@ def export(document):
             table.fixed_column(0, 1, values)
         table.records.append((channel, [address, value], count))
         tables.append(table)
-        lookup_tables[name] = (channel, table, values, fixed)
-        queries[name] = Counter()
 
-    fields(document['witness_tables'], [name for name, (_, _, _, fixed) in lookup_tables.items() if not fixed])
-
-    selectors = []
-    for operation in source['operations']:
-        fields(operation, ('type', 'context'), ('row',))
-        fields(operation, ('type', 'context', 'row') if operation['type'] == 'Boundary' else ('type', 'context'))
-        scope, active = scoped_context(operation, height)
-        ctx = operation['context']
-        fields(ctx, ('window', 'vars', 'circuit'))
-        window = natural(ctx['window'], 'window', 2)
-        if window != (2 if operation['type'] == 'EveryRowExceptLast' else 1):
-            raise Refusal('clean-window')
-        cells = ctx['vars']
-        for cell in cells:
-            fields(cell, ('row', 'column'))
-            if natural(cell['row'], 'cell row', 1) >= window or natural(cell['column'], 'column') >= width:
-                raise Refusal('clean-cell')
-        if any(row + cell['row'] >= height for row in active for cell in cells):
-            raise Refusal('clean-window')
-
+    for context in source.contexts:
         def variable(index):
-            if index >= len(cells):
-                raise Refusal('clean-variable', str(index))
-            return main.read(0, cells[index]['column'], cells[index]['row'])
+            row, column = context.cells[index]
+            return main.read(0, column, row)
 
         def term(value):
-            return expression(value, variable, lambda n: main.arena.constant(BASE, n))
+            return value.apply(variable, lambda n: main.arena.constant(BASE, n), lambda v: v)
 
         selector = None
-        for flat in flatten(ctx['circuit']):
-            if 'witness' in flat:
-                continue
-            if 'assert' in flat:
-                main.assertions.append((term(flat['assert']), scope))
-            elif 'lookup' in flat:
-                lookup = flat['lookup']
-                fields(lookup, ('table', 'entry'))
-                name = lookup['table']
-                if name not in lookup_tables:
-                    raise Refusal('clean-lookup-unregistered', name)
-                if len(lookup['entry']) != 2:
-                    raise Refusal('clean-lookup-arity', name)
-                if len(active) != height and selector is None:
-                    selector = main.read(0, width + len(selectors))
-                    selectors.append([int(row in active) for row in range(height)])
-                channel = lookup_tables[name][0]
-                values = [term(e) for e in lookup['entry']]
-                count = -selector if selector is not None else main.arena.constant(BASE, -1)
-                main.records.append((channel, values, count))
-                for row in active:
-                    def fetch(index):
-                        if index >= len(cells):
-                            raise Refusal('clean-variable', str(index))
-                        cell = cells[index]
-                        return trace[row + cell['row']][cell['column']]
-                    pair = tuple(expression(e, fetch, int) % P for e in lookup['entry'])
-                    queries[name][pair] += 1
-            else:
-                if not is_component:
-                    raise Refusal('clean-interaction', 'TableOperation has no ensemble balance semantics')
-                interaction = flat['interact']
-                fields(interaction, ('channel', 'arity', 'multiplicity', 'message', 'assume_guarantees'))
-                name = interaction['channel']
-                if name not in declared_channels:
-                    raise Refusal('clean-channel-unregistered', name)
-                channel, arity = declared_channels[name]
-                if (len(interaction['message']) != arity or interaction['arity'] != arity
-                        or type(interaction['assume_guarantees']) is not bool):
-                    raise Refusal('clean-channel-arity', name)
-                count = term(interaction['multiplicity'])
-                main.records.append((channel, [term(e) for e in interaction['message']], count))
+        for operation in context.operations:
+            match operation:
+                case Assertion(value):
+                    main.assertions.append((term(value), list(context.scope)))
+                case Lookup(name, entry):
+                    if len(context.active) != source.height and selector is None:
+                        selector = main.read(0, source.width + len(selectors))
+                        selectors.append(context.active)
+                    values = [term(e) for e in entry]
+                    count = -selector if selector is not None else main.arena.constant(BASE, -1)
+                    main.records.append((lookup_indices[name], values, count))
+                case Interaction(name, multiplicity, message, _):
+                    count = term(multiplicity)
+                    main.records.append((channel_indices[name], [term(e) for e in message], count))
 
-    if selectors:
-        main.groups[0][3] += len(selectors)
-        main.witness = [[scalar(value) for row, values in enumerate(trace)
-                         for value in values + [selector[row] for selector in selectors]]]
-        for column, values in enumerate(selectors):
-            main.fixed_column(0, width + column, values)
-    for binding in document['public_bindings']:
-        fields(binding, ('column', 'slot', 'row'))
-        column, slot = natural(binding['column'], 'boundary column'), natural(binding['slot'], 'public slot')
-        if column >= width or slot >= len(public) or binding['row'] not in ('first', 'last'):
-            raise Refusal('clean-public-binding')
-        main.assertions.append((main.read(0, column) - main.arena.input(BASE, ['public', slot]), [binding['row']]))
-    for name, (_, table, values, fixed) in lookup_tables.items():
-        counts = queries[name]
-        unknown = set(counts) - {(i, value) for i, value in enumerate(values)}
-        if unknown:
-            raise Refusal('clean-witness-lookup', f'{name}: {sorted(unknown)}')
-        table.witness = [[scalar(v) for i, value in enumerate(values)
-                          for v in ([counts[i, value]] if fixed else [i, value, counts[i, value]])]]
-    bundle = ['zkc.relation-bundle/0', [[f'public_{i}', BASE] for i in range(len(public))],
-              channels, [table.encode() for table in tables]]
-    # Clean's flat Balance counts records even when their weight is zero.
-    # For lookup membership this is our encoding's non-cancellation premise.
+    main.groups[0][3] += len(selectors)
+    for column, active in enumerate(selectors):
+        main.fixed_column(0, source.width + column, [int(row in active) for row in range(source.height)])
+    for binding in source.bindings:
+        main.assertions.append((main.read(0, binding.column)
+            - main.arena.input(BASE, ['public', binding.slot]), [binding.row]))
+    # Clean counts even zero-weight records. Lookup membership also relies on
+    # the number of requests being below the characteristic (no cancellation).
     check_cardinality(tables, channels)
+    bundle = ['zkc.relation-bundle/0', [[f'public_{i}', BASE] for i in range(source.public_size)],
+              channels, [table.encode() for table in tables]]
     digest = identity(bundle)
-    return Export(bundle,
-        ['zkc.relation-configuration/0', digest, [[None, table.configuration] for table in tables]],
-        ['zkc.relation-instance/0', digest, public, [['present', None, []] for table in tables]],
-        ['zkc.relation-witness/0', digest, [table.witness for table in tables]])
+    return CompiledRelation(source, tuple(selectors), digest, compact(bundle),
+        compact(['zkc.relation-configuration/0', digest, configuration]))
+
+
+def export(source, inputs):
+    """Compose the independent stages for fixture producers and small clients."""
+    fields(inputs, ('format', 'public', 'trace', 'witness_tables'), 'inputs')
+    if inputs['format'] != 'zkc.clean-inputs/0':
+        raise Refusal('clean-format', 'inputs')
+    compiled = compile_relation(source)
+    return {'bundle.json': compiled.bundle, 'configuration.json': compiled.configuration,
+            'instance.json': compiled.encode_instance(inputs['public']),
+            'witness.json': compiled.prepare_witness(inputs['trace'], inputs['witness_tables'])}

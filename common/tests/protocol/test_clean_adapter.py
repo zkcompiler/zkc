@@ -10,8 +10,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[3]
 ADAPTER = ROOT / 'compiler/adapters/clean'
 sys.path.insert(0, str(ADAPTER.parent))
-sys.path.insert(0, str(ADAPTER))
-from adapter import Table, check_cardinality, export  # noqa: E402
+from clean.adapter import Table, check_cardinality, compile_relation, export  # noqa: E402
 from ring_arena import P, Refusal, compact, identity  # noqa: E402
 
 
@@ -19,6 +18,11 @@ def fixture(name):
     path = ADAPTER / 'fixtures' / name
     return [json.loads((path / f'{part}.json').read_text())
             for part in ('bundle', 'configuration', 'instance', 'witness')]
+
+
+def extraction(name):
+    path = ADAPTER / 'fixtures' / name
+    return tuple(json.loads((path / f'{part}.json').read_text()) for part in ('source', 'inputs'))
 
 
 def evaluate(toolchain, journal, candidates):
@@ -35,14 +39,15 @@ def evaluate(toolchain, journal, candidates):
 @pytest.mark.parametrize('name', ['fibonacci', 'femtocairo', 'flat-channel', 'table-scopes'])
 def test_clean_extraction_regenerates_native_carriers(name):
     path = ADAPTER / 'fixtures' / name
-    source = json.loads((path / 'source.json').read_text())
-    for filename, value in export(source).documents().items():
+    source, inputs = extraction(name)
+    for filename, value in export(source, inputs).items():
         assert compact(value) + '\n' == (path / filename).read_text()
     # FemtoCairo uses Clean's Spec interpreter; Fibonacci uses a local recursive
     # reference. Neither evaluates the exported constraints to obtain the answer.
-    if reference := source.get('reference'):
-        assert source['trace'][-1][:len(reference)] == reference
-        assert source['public'][-len(reference):] == reference
+    if (path / 'reference.json').exists():
+        reference = json.loads((path / 'reference.json').read_text())
+        assert inputs['trace'][-1][:len(reference)] == reference
+        assert inputs['public'][-len(reference):] == reference
 
 
 def test_fibonacci_frontends_match_independent_recurrence(toolchain, journal):
@@ -95,14 +100,14 @@ def test_clean_flat_component_retains_signed_channel_balance(toolchain, journal)
     assert any('interact' in op and 'assume_guarantees' in op['interact']
                for op in source['table']['operations'])
     native = fixture('flat-channel')
-    assert export(source).bundle == native[0]
+    assert compile_relation(source).bundle == native[0]
     changed = deepcopy(native)
     changed[3][2][0][0][256 + 42] = str(P - 2)
     assert evaluate(toolchain, journal, [native, changed]) == [True, False]
 
 
 def test_vm_pins_reject_attacks_that_preserve_lookup_balance(toolchain, journal):
-    source = json.loads((ADAPTER / 'fixtures/femtocairo/source.json').read_text())
+    source, inputs = extraction('femtocairo')
     address, program, selector = [fixture('femtocairo') for _ in range(3)]
     # Unqueried cells contribute zero to the balance, but are still constrained.
     assert address[3][2][2][0][23] == '0'
@@ -119,7 +124,7 @@ def test_vm_pins_reject_attacks_that_preserve_lookup_balance(toolchain, journal)
                 return expr['value']
             case 'var':
                 cell = ctx['vars'][expr['index']]
-                return source['trace'][cell['row']][cell['column']]
+                return inputs['trace'][cell['row']][cell['column']]
             case 'add':
                 return (value(expr['lhs']) + value(expr['rhs'])) % P
             case 'mul':
@@ -163,16 +168,21 @@ def test_channel_cardinality_counts_zero_weight_records():
         check_cardinality([table], [['bytes']])
 
 
-def test_all_row_lookup_needs_no_selector(toolchain, journal):
+@pytest.mark.parametrize('model', ['table', 'component'])
+def test_all_row_lookup_needs_no_selector(toolchain, journal, model):
     source = {'format': 'zkc.clean-export/0', 'field': P,
-        'table': {'model': 'table', 'height': 2, 'width': 1, 'operations': [{
+        'table': {'origin': 'Test.values', 'model': 'table', 'height': 2, 'width': 1, 'operations': [{
             'type': 'EveryRow', 'context': {'window': 1, 'vars': [{'row': 0, 'column': 0}],
                 'circuit': [{'lookup': {'table': 'values', 'entry': [
                     {'type': 'const', 'value': 0}, {'type': 'var', 'index': 0}]}}]}}]},
-        'public_bindings': [], 'public': [], 'lookups': [
-            {'name': 'values', 'interpretation': 'fixed-indexed', 'values': [7]}],
-        'trace': [[7], [7]], 'witness_tables': {}}
-    native = list(export(source).documents().values())
+        'public': {'origin': 'Test.noPublic', 'size': 0, 'bindings': []}, 'channels': [],
+        'lookups': [{'source': {'definition': 'Test.values', 'name': 'values', 'arity': 2},
+                    'interpretation': {'kind': 'fixed-indexed', 'values': [7]}}]}
+    inputs = {'format': 'zkc.clean-inputs/0', 'public': [], 'trace': [[7], [7]], 'witness_tables': {}}
+    if model == 'component':
+        source['table']['operations'] = source['table']['operations'][0]['context']['circuit']
+        source['table']['model'] = model
+    native = list(export(source, inputs).values())
     assert native[0][3][0][4][0][3] == 1
     assert evaluate(toolchain, journal, [native]) == [True]
     native[3][2][0][0][0] = '8'
@@ -207,43 +217,44 @@ def test_examples_regenerate_inputs(journal):
     ('raw-interaction', 'clean-interaction'),
     ('table-channels', 'clean-interaction'),
     ('missing-lookup-name', 'clean-schema'),
-    ('missing-witness-table', 'clean-lookup-shape'),
+    ('missing-witness-table', 'clean-schema'),
     ('extra-witness-table', 'clean-schema'),
     ('window', 'clean-window'),
     ('witness-lookup', 'clean-witness-lookup'),
     ('duplicate', 'clean-lookup-duplicate'),
 ])
 def test_clean_refuses_unrepresented_source_semantics(change, code):
-    source = json.loads((ADAPTER / 'fixtures/femtocairo/source.json').read_text())
+    source, inputs = extraction('femtocairo')
     if change == 'unregistered':
         source['lookups'] = source['lookups'][1:]
     elif change == 'interpretation':
-        source['lookups'][1]['interpretation'] = 'arbitrary-Lean-proposition'
+        source['lookups'][1]['interpretation']['kind'] = 'arbitrary-Lean-proposition'
     elif change == 'variable':
         source['table']['operations'][0]['context']['circuit'].append(
             {'assert': {'type': 'var', 'index': 1000}})
     elif change == 'noncanonical':
-        source['trace'][0][0] = P
+        inputs['trace'][0][0] = P
     elif change == 'extra':
         source['verifier'] = {}  # Must never silently omit an ensemble verifier.
     elif change == 'raw-interaction':
         source['table']['operations'][0]['context']['circuit'].append({'interact': {}})
     elif change == 'table-channels':
-        source['channels'] = [{'name': 'unused', 'arity': 1}]
+        source['channels'] = [{'source': {'definition': 'Test.unused', 'name': 'unused', 'arity': 1},
+                               'interpretation': 'field-balance'}]
     elif change == 'missing-lookup-name':
-        del source['lookups'][0]['name']
+        del source['lookups'][0]['source']['name']
     elif change == 'missing-witness-table':
-        source['witness_tables'] = {}
+        inputs['witness_tables'] = {}
     elif change == 'extra-witness-table':
-        source['witness_tables']['extra'] = []
+        inputs['witness_tables']['extra'] = []
     elif change == 'window':
         source['table']['operations'][0]['context']['window'] = 1
     elif change == 'witness-lookup':
-        source['witness_tables']['memory'][1] = 99
+        inputs['witness_tables']['memory'][1] = 99
     elif change == 'duplicate':
         source['lookups'].append(source['lookups'][0])
     with pytest.raises(Refusal) as failure:
-        export(source)
+        export(source, inputs)
     assert failure.value.code == code
 
 
@@ -260,7 +271,7 @@ def test_boundary_schema_matches_one_row_clean_operations(change, code):
         operation['row'] = 0
         operation['context']['window'] = 2
     with pytest.raises(Refusal) as failure:
-        export(source)
+        compile_relation(source)
     assert failure.value.code == code
 
 
@@ -271,11 +282,11 @@ def test_component_refuses_unrepresented_channel_shape(change, code):
     if change == 'unregistered':
         source['channels'] = []
     elif change == 'arity':
-        source['channels'][0]['arity'] = 2
+        source['channels'][0]['source']['arity'] = 2
     else:
         source['table']['width'] = '256'
     with pytest.raises(Refusal) as failure:
-        export(source)
+        compile_relation(source)
     assert failure.value.code == code
 
 
@@ -307,3 +318,211 @@ def test_external_relations_use_ordinary_source_proofs(toolchain, journal, direc
                   f'--public={path}', f'--output={false_proof}'], refuses='artifact-stopped')
     assert stopped['execution']['stop']['kind'] == 'Explicit("reject")'
     assert not false_proof.exists()
+
+
+def test_compile_once_prepares_independent_instances_and_witnesses(toolchain, journal):
+    source, inputs = extraction('fibonacci')
+    compiled = compile_relation(source)
+    original = [compiled.bundle, compiled.configuration,
+                compiled.encode_instance(inputs['public']),
+                compiled.prepare_witness(inputs['trace'], inputs['witness_tables'])]
+    # A second execution has different initial/final values and trace, with the
+    # exact same relation and configuration. No recompilation or data cache.
+    x, y, trace = 3, 5, []
+    for _ in range(8):
+        trace.append([x, y])
+        x, y = y, (x + y) % P
+    another = [compiled.bundle, compiled.configuration,
+               compiled.encode_instance([3, 5, *trace[-1]]), compiled.prepare_witness(trace, {})]
+    assert original[:2] == another[:2] == fixture('fibonacci')[:2]
+    assert original[2:] != another[2:]
+    assert evaluate(toolchain, journal, [original, another]) == [True, True]
+    # Crossed public values must fail even though both executions are valid.
+    assert evaluate(toolchain, journal, [[*original[:3], another[3]]]) == [False]
+    original[0][0] = 'caller mutation'
+    original[1][1] = 'caller mutation'
+    source['public']['size'] = 0
+    assert compiled.bundle == fixture('fibonacci')[0]
+    assert compiled.configuration == fixture('fibonacci')[1]
+    assert compiled.source.public_size == 4
+    assert compiled.digest == another[2][1]
+
+
+def test_source_retains_explicit_interpretation_contracts():
+    source, _ = extraction('femtocairo')
+    compiled = compile_relation(source)
+    assert compiled.source.origin == 'TestsClean.NativeClients.Machine.machine'
+    assert compiled.source.public_origin == 'InductiveTable.tableConstraints'
+    assert compiled.source.lookups[1].source.definition == 'Examples.FemtoCairo.MemoryTable'
+    assert compiled.source.lookups[1].source.arity == 2
+    assert compiled.source.lookups[1].values is None
+    # Provenance is review metadata; changing it cannot certify a predicate or
+    # change the native algebra. Changing the interpretation does change it.
+    source['lookups'][1]['source']['definition'] = 'AnotherDefinition'
+    assert compile_relation(source).bundle == compiled.bundle
+    source['lookups'][0]['interpretation']['values'][0] += 1
+    assert compile_relation(source).digest != compiled.digest
+    flat, _ = extraction('flat-channel')
+    retained = compile_relation(flat).source.contexts[0].operations
+    assert all(op.assume_guarantees is False for op in retained)
+    # Admitting algebraic balance does not discharge a Lean guarantee premise.
+    original = compile_relation(flat).bundle
+    interaction = next(op['interact'] for op in flat['table']['operations'] if 'interact' in op)
+    interaction['assume_guarantees'] = True
+    conditional = compile_relation(flat)
+    assert conditional.source.contexts[0].operations[0].assume_guarantees is True
+    assert conditional.bundle == original
+
+
+@pytest.mark.parametrize('document,path,value,code', [
+    ('source', (), None, 'clean-schema'),
+    ('source', ('format',), 'unknown', 'clean-format'),
+    ('source', ('field',), P + 1, 'clean-format'),
+    ('source', ('table', 'model'), 'unknown', 'clean-model'),
+    ('source', ('table', 'operations', 0, 'type'), 'unknown', 'clean-scope'),
+    ('source', ('table', 'operations', 0, 'context', 'circuit', 0),
+     {'assert': {'type': 'const', 'value': P}}, 'clean-shape'),
+    ('source', ('lookups', 0, 'interpretation', 'values'), [], 'clean-lookup-shape'),
+    ('source', ('table',), [], 'clean-schema'),
+    ('source', ('table', 'operations'), None, 'clean-schema'),
+    ('source', ('table', 'operations', 0, 'context', 'vars'), None, 'clean-schema'),
+    ('source', ('table', 'operations', 0, 'context', 'vars', 0), None, 'clean-schema'),
+    ('source', ('table', 'operations', 0, 'context', 'circuit'), None, 'clean-schema'),
+    ('source', ('table', 'operations', 0, 'context', 'circuit', 0), None, 'clean-operation'),
+    ('source', ('table', 'operations', 0, 'context', 'circuit', 0), {'assert': {}}, 'clean-schema'),
+    ('source', ('table', 'operations', 0, 'context', 'circuit', 0), {'witness': None}, 'clean-shape'),
+    ('source', ('table', 'operations', 0, 'context', 'circuit', 0), {'subcircuit': []}, 'clean-operation'),
+    ('source', ('table', 'operations', 0, 'context', 'circuit', 0),
+     {'name': 'nested', 'operations': []}, 'clean-operation'),
+    ('source', ('public', 'size'), True, 'clean-shape'),
+    ('source', ('public', 'bindings', 0, 'slot'), 9, 'clean-public-binding'),
+    ('source', ('lookups', 0, 'source', 'name'), [], 'clean-schema'),
+    ('source', ('lookups', 0, 'source', 'name'), 'trace', 'clean-lookup-duplicate'),
+    ('source', ('lookups', 0, 'source', 'arity'), 3, 'clean-lookup-arity'),
+    ('source', ('lookups', 0, 'interpretation', 'values'), None, 'clean-schema'),
+    ('inputs', (), None, 'clean-schema'),
+    ('inputs', ('public',), None, 'clean-schema'),
+    ('inputs', ('public',), [], 'clean-public-shape'),
+    ('inputs', ('trace',), None, 'clean-schema'),
+    ('inputs', ('trace', 0), None, 'clean-schema'),
+    ('inputs', ('trace', 0, 0), True, 'clean-shape'),
+    ('inputs', ('witness_tables',), None, 'clean-schema'),
+    ('inputs', ('witness_tables', 'memory'), None, 'clean-schema'),
+    ('inputs', ('witness_tables', 'memory'), [], 'clean-lookup-shape'),
+])
+def test_malformed_json_is_refused_at_the_boundary(document, path, value, code):
+    source, inputs = extraction('femtocairo')
+    pair = {'source': source, 'inputs': inputs}
+    cursor = pair
+    for part in (document, *path)[:-1]:
+        cursor = cursor[part]
+    cursor[(document, *path)[-1]] = value
+    with pytest.raises(Refusal) as failure:
+        export(pair['source'], pair['inputs'])
+    assert failure.value.code == code
+    assert document in str(failure.value)
+
+
+def test_repeated_witness_preparation_does_not_accumulate_counts():
+    source, inputs = extraction('femtocairo')
+    compiled = compile_relation(source)
+    expected = fixture('femtocairo')[3]
+    for _ in range(2):
+        assert compiled.prepare_witness(inputs['trace'], inputs['witness_tables']) == expected
+    damaged = deepcopy(inputs['witness_tables'])
+    damaged['memory'][1] = 99
+    with pytest.raises(Refusal, match='clean-witness-lookup'):
+        compiled.prepare_witness(inputs['trace'], damaged)
+    assert compiled.prepare_witness(inputs['trace'], inputs['witness_tables']) == expected
+    assert compiled.encode_instance(inputs['public']) == fixture('femtocairo')[2]
+
+
+def test_lookup_expressions_evaluate_in_the_field(toolchain, journal):
+    source, _ = extraction('fibonacci')
+    source['table'].update(height=1, width=1, operations=[{
+        'type': 'EveryRow', 'context': {'window': 1, 'vars': [{'row': 0, 'column': 0}],
+            'circuit': [{'lookup': {'table': 'values', 'entry': [
+                {'type': 'const', 'value': 0},
+                {'type': 'mul', 'lhs': {'type': 'var', 'index': 0},
+                 'rhs': {'type': 'var', 'index': 0}}]}}]}}])
+    source['public'].update(size=0, bindings=[])
+    source['lookups'] = [{'source': {'definition': 'Test.values', 'name': 'values', 'arity': 2},
+                         'interpretation': {'kind': 'fixed-indexed', 'values': [1]}}]
+    compiled = compile_relation(source)
+    native = [compiled.bundle, compiled.configuration, compiled.encode_instance([]),
+              compiled.prepare_witness([[P - 1]], {})]
+    assert evaluate(toolchain, journal, [native]) == [True]
+    native[3][2][0][0][0] = '2'
+    assert evaluate(toolchain, journal, [native]) == [False]
+
+
+@pytest.mark.parametrize('first,last,expected', [
+    (0, -1, [0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0]),
+    (1, -2, [0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0]),
+])
+def test_lookup_layout_keeps_each_context_and_window(toolchain, journal, first, last, expected):
+    source, _ = extraction('fibonacci')
+    request = {'lookup': {'table': 'values', 'entry': [{'type': 'var', 'index': 0}] * 2}}
+    contexts = []
+    for kind, row, offset in [('Boundary', first, 0), ('Boundary', last, 0), ('EveryRowExceptLast', None, 1)]:
+        op = {'type': kind, 'context': {'window': offset + 1,
+            'vars': [{'row': offset, 'column': 0}],
+            'circuit': [request]}}
+        if row is not None:
+            op['row'] = row
+        contexts.append(op)
+    source['table'].update(height=4, width=1, operations=contexts)
+    source['public'].update(size=0, bindings=[])
+    source['lookups'] = [{'source': {'definition': 'Test.values', 'name': 'values', 'arity': 2},
+                         'interpretation': {'kind': 'fixed-indexed', 'values': [0, 1]}}]
+    compiled = compile_relation(source)
+    witness = compiled.prepare_witness([[0], [1], [0], [1]], {})
+    assert witness[2][0][0] == list(map(str, expected))
+    assert witness[2][1][0] == ['2', '3']
+    native = [compiled.bundle, compiled.configuration, compiled.encode_instance([]), witness]
+    assert evaluate(toolchain, journal, [native]) == [True]
+    invalid = deepcopy(native)
+    invalid[3][2][0][0][4 * (first + 1) + 1] = '1'  # Enable a lookup outside its boundary.
+    assert evaluate(toolchain, journal, [invalid]) == [False]
+
+
+@pytest.mark.parametrize('depth', [256, 257, 2048])
+def test_expression_depth_has_an_explicit_admission_boundary(toolchain, journal, depth):
+    source, _ = extraction('fibonacci')
+    value = {'type': 'const', 'value': 0}
+    for _ in range(depth):
+        value = {'type': 'add', 'lhs': value, 'rhs': {'type': 'const', 'value': 0}}
+    source['table']['operations'][0]['context']['circuit'] = [{'assert': value}]
+    if depth > 256:
+        with pytest.raises(Refusal, match='clean-expression-depth: source.table.operations'):
+            compile_relation(source)
+        return
+    compiled = compile_relation(source)
+    native = [compiled.bundle, compiled.configuration, compiled.encode_instance([0] * 4),
+              compiled.prepare_witness([[0, 0] for _ in range(8)], {})]
+    assert evaluate(toolchain, journal, [native]) == [True]
+
+
+@pytest.mark.parametrize('arity', [0, 1])
+def test_component_channel_arity_and_diagnostic_paths(toolchain, journal, arity):
+    source, _ = extraction('fibonacci')
+    interaction = {'channel': 'balance', 'arity': arity,
+        'multiplicity': {'type': 'var', 'index': 0},
+        'message': [{'type': 'const', 'value': 7}] * arity, 'assume_guarantees': False}
+    source['table'].update(model='component', height=2, width=1, operations=[{'interact': interaction}])
+    source['public'].update(size=0, bindings=[])
+    source['channels'] = [{'source': {'definition': 'Test.balance', 'name': 'balance', 'arity': arity},
+                           'interpretation': 'field-balance'}]
+    compiled = compile_relation(source)
+    native = [compiled.bundle, compiled.configuration, compiled.encode_instance([]),
+              compiled.prepare_witness([[3], [P - 3]], {})]
+    assert evaluate(toolchain, journal, [native]) == [True]
+    native[3][2][0][0][1] = str(P - 2)
+    assert evaluate(toolchain, journal, [native]) == [False]
+    interaction['assume_guarantees'] = 'true'
+    with pytest.raises(Refusal, match=r'clean-schema: source.table.operations\[0\].interact.assume_guarantees'):
+        compile_relation(source)
+    interaction['assume_guarantees'] = False
+    source['channels'].append(source['channels'][0])
+    with pytest.raises(Refusal, match='clean-channel-duplicate'):
+        compile_relation(source)

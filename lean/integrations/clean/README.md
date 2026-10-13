@@ -54,7 +54,9 @@ and one flat component with channels. The audited
 [clients](TestsClean/NativeClients.lean) author a Fibonacci constraint and
 instantiate upstream FemtoCairo, with explicit public bindings and lookup meanings.
 The small [wrapper](CleanExamples.lean), `lake env lean --run CleanExamples.lean OUTPUT`,
-produces their source plans; `just test-lean-clean` checks the resulting native
+produces separate static source plans, execution inputs and reference results.
+The native adapter compiles without execution inputs and reuses the compiled layout
+for instances and witnesses. `just test-lean-clean` checks the resulting native
 fixtures as well as the original flat control.
 
 This path has native differential and proof-execution tests. It is outside the
