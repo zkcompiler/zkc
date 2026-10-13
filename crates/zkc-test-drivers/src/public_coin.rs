@@ -119,7 +119,7 @@ fn execute(
 ) -> (Report<NativeBackend>, u64) {
     let registry = ServiceRegistry::new(Policy::default());
     let reference = registry
-        .issue_test_tape("Checker", budget, tape.into())
+        .issue_test_tape("Checker", budget, tape.to_vec())
         .unwrap();
     let inputs = bundle
         .roles()

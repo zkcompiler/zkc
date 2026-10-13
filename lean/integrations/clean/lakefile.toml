@@ -1,6 +1,6 @@
 name = "zkc_clean"
 version = "0.0.0"
-defaultTargets = ["ZkcClean", "ZkcCleanTests"]
+defaultTargets = ["ZkcClean", "ZkcCleanTests", "CleanExamples"]
 
 [leanOptions]
 autoImplicit = false
@@ -38,4 +38,9 @@ allowNonModules = true
 name = "ZkcCleanTests"
 roots = ["TestsClean"]
 globs = ["TestsClean.+"]
+allowNonModules = true
+
+[[lean_lib]]
+name = "CleanExamples"
+roots = ["CleanExamples"]
 allowNonModules = true

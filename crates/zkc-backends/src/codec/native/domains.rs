@@ -9,12 +9,13 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> 
         Value::Vector(v) => (66, 32, v.len()),
         Value::RistrettoVector(v) => (14, 32, v.len()),
         Value::RistrettoGroups(v) => (17, 32, v.len()),
+        Value::EdwardsGroups(v) => (69, 32, v.len()),
         _ => return None,
     };
     Some((|| {
         value.validate_serializable()?;
-        if matches!(value, Value::RistrettoGroups(_)) {
-            policy.ristretto_groups(count)?;
+        if matches!(value, Value::RistrettoGroups(_) | Value::EdwardsGroups(_)) {
+            policy.dalek_groups(count)?;
         } else {
             policy.vector_width(count, width)?;
         }
@@ -48,6 +49,11 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> 
                 }
             }
             Value::RistrettoVector(values) => {
+                for x in values.iter() {
+                    out.extend(x.to_bytes());
+                }
+            }
+            Value::EdwardsGroups(values) => {
                 for x in values.iter() {
                     out.extend(x.to_bytes());
                 }

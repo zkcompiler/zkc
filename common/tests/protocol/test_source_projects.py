@@ -11,19 +11,19 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 def read(project, group, entry='Proof'):
-    path = ROOT / f'examples/projects/{project}/inputs/example.{entry}/{group}.json'
+    path = ROOT / f'{project}/inputs/example.{entry}/{group}.json'
     return json.loads(path.read_text()) if path.exists() else {}
 
 
 def build(toolchain, journal, directory, project, entry, flags):
     package = directory / f'{entry}.zkpkg'
     report = json.loads(journal.run([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-        f'--project={ROOT}/examples/projects/{project}/zkc.toml',
+        f'--project={ROOT}/{project}/zkc.toml',
         f'example::{entry}', f'--output={package}', *flags]))
     return package, report['package_sha256']
 
 
-@pytest.mark.parametrize('project', ['schnorr', 'sumcheck'])
+@pytest.mark.parametrize('project', ['examples/projects/schnorr', 'examples/projects/sumcheck'])
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
 def test_library_entry_runs_and_independent_proofs(toolchain, journal, directory, project, flags):
     package, pin = build(toolchain, journal, directory, project, 'Proof', flags)
@@ -45,11 +45,11 @@ def test_library_entry_runs_and_independent_proofs(toolchain, journal, directory
     assert json.loads(outputs.read_text())['roles']['V']['accepted'] is True
 
 
-@pytest.mark.parametrize('project', ['schnorr', 'sumcheck'])
+@pytest.mark.parametrize('project', ['examples/projects/schnorr', 'examples/projects/sumcheck'])
 def test_source_protocols_reject_false_inputs(toolchain, journal, directory, project):
     package, pin = build(toolchain, journal, directory, project, 'Proof', [])
     public, witness = read(project, 'public'), read(project, 'witness')
-    if project == 'schnorr':
+    if project == 'examples/projects/schnorr':
         # Canonical scalar 4 against the public point 3*G.
         witness['scalar'] = '4'
     else:
@@ -64,8 +64,8 @@ def test_source_protocols_reject_false_inputs(toolchain, journal, directory, pro
 
 
 def test_sumcheck_uses_received_coefficients_and_actual_claim(toolchain, journal, directory):
-    package, pin = build(toolchain, journal, directory, 'sumcheck', 'Proof', [])
-    public, witness = read('sumcheck', 'public'), {}
+    package, pin = build(toolchain, journal, directory, 'examples/projects/sumcheck', 'Proof', [])
+    public, witness = read('examples/projects/sumcheck', 'public'), {}
     public['claim'] = '11'
     producer = input_files(journal, 'producer', public=public, witness=witness)
     verifier = input_files(journal, 'verifier', public=public)
@@ -74,8 +74,8 @@ def test_sumcheck_uses_received_coefficients_and_actual_claim(toolchain, journal
     rejected = json.loads(journal.run([toolchain.runtime, '--json', 'verify', f'--package={package}', f'--sha256={pin}', *verifier, f'--proof={proof}'], refuses='artifact-stopped'))
     assert rejected['execution']['stop']['role'] == 'role00000001'
     assert rejected['execution']['stop']['kind'] == 'Explicit("reject")'
-    producer = input_files(journal, 'producer', public=read('sumcheck', 'public'))
-    verifier = input_files(journal, 'verifier', public=read('sumcheck', 'public'))
+    producer = input_files(journal, 'producer', public=read('examples/projects/sumcheck', 'public'))
+    verifier = input_files(journal, 'verifier', public=read('examples/projects/sumcheck', 'public'))
     journal.run([toolchain.runtime, '--json', 'prove', f'--package={package}', f'--sha256={pin}', *producer, f'--output={proof}'])
     changed = bytearray(proof.read_bytes())
     changed[-32] ^= 1  # Canonical final coefficient, with its framing intact.

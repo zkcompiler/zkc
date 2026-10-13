@@ -1,0 +1,12 @@
+format = "zkc.project/0"
+
+[modules]
+"example" = "main.zkc"
+
+[dependencies]
+sumcheck = "../../../../libraries/sumcheck"
+zkc = "../../../../libraries/zkc"
+
+[assets.product]
+format = "ring-json"
+path = "product.ring.json"

@@ -6,3 +6,11 @@ pub fn field_from_be<F: Field>(value: Bytes) -> (bool, F) = primitive("encoding.
 pub fn field_reduce_be<F: Field>(value: Bytes) -> F = primitive("encoding.field_reduce_be");
 pub fn group_compressed<G: Group>(value: G) -> Bytes = primitive("encoding.group_compressed");
 pub fn group_from_compressed<G: Group>(value: Bytes) -> (bool, G) = primitive("encoding.group_from_compressed");
+
+pub fn field_le<F: Field>(value: F) -> Bytes = primitive("encoding.field_le");
+pub fn field_from_le<F: Field>(value: Bytes) -> (bool, F) = primitive("encoding.field_from_le");
+pub fn field_reduce_le<F: Field>(value: Bytes) -> F = primitive("encoding.field_reduce_le");
+pub fn group_decode_cofactor<G: Group>(value: Bytes) -> (bool, G) = primitive("encoding.group_decode_cofactor");
+// CryptoNote field-element map followed by multiplication by eight.
+// Variable-time; intended for public generator derivation, not secret inputs.
+pub fn cryptonote_map<G: Group>(value: Bytes) -> G = primitive("encoding.cryptonote_map");

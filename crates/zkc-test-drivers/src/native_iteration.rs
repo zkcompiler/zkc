@@ -34,7 +34,7 @@ fn tape(registry: &ServiceRegistry, owner: &str, budget: u64, values: &[u64]) ->
         .issue_test_tape(
             owner,
             budget,
-            values.iter().copied().map(Scalar::from).collect(),
+            values.iter().copied().map(Scalar::from).collect::<Vec<_>>(),
         )
         .unwrap()
 }
@@ -286,7 +286,7 @@ fn table(values: &[u64]) -> Value {
 }
 // Independent tensor-product reference in logical MSB axis order.
 fn evaluate(values: &[u64], point: &[u64]) -> Scalar {
-    let mut values: Vec<_> = values.iter().copied().map(Scalar::from).collect();
+    let mut values: Vec<_> = values.iter().copied().map(Scalar::from).collect::<Vec<_>>();
     for r in point {
         let half = values.len() / 2;
         values = (0..half)

@@ -1,0 +1,25 @@
+module zkc::multilinear;
+use zkc::vector::{Vector, split, elements};
+
+// Point/value data; its polynomial, dimension and commitment are supplied by
+// the caller. It is not a proof certificate.
+pub struct Evaluation<F: Field> {
+  pub point: Vector<F>,
+  pub value: F
+}
+
+math fn interpolate<F: Field>(low: F, high: F, r: F) -> F {
+  return low + (high - low) * r;
+}
+
+// Fix the leading Boolean coordinate; requires positive even table length.
+pub fn fix_first<F: Field>(values: Vector<F>, challenge: F) -> Vector<F> {
+  let halves = split(values);
+  return map interpolate(each halves.0, each halves.1, challenge);
+}
+
+// Fix successive leading coordinates, retaining the remaining rows/factors.
+pub fn fix_prefix<F: Field>(values: Vector<F>, point: Vector<F>) -> Vector<F> {
+  return zkc::finite::fold(elements(point), values, fn(table, r) => fix_first(table, r));
+}
+

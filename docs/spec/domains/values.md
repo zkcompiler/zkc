@@ -92,11 +92,29 @@ limits and may exhaust resources. Totality of the mathematical denotation does
 not make native allocation infallible.
 
 The installed providers are `dalek/curve.identity` for `ristretto255.group` and
+`edwards25519.prime`, and
 `arkworks/curve.identity` for `bls12-381.g1`, `bn254.g1`, `bn254.g2`, and
 `bn254.gt`. Identity uses the same group representations and canonical codecs
 as other operations in each family. For GT it is multiplicative one; it is not
 extension-field zero. Dense GT vectors and BLS12-381 G2/GT are not installed.
 These are native profile contracts, without a native adequacy or security proof.
+
+## Prime-order Edwards25519
+
+`edwards25519.prime` denotes the prime-order subgroup of Edwards25519, with
+scalar field `ristretto255.scalar` of order
+`2^252 + 27742317777372353535851937790883648493`. The generator is the usual
+Ed25519 basepoint. It has its own nominal type, physical representations
+`dalek.edwards-prime/0` and `dalek.edwards-prime-vector/0`, and native codecs.
+It is not interchangeable with the Ristretto quotient group. All installed
+group operations preserve subgroup membership, including identities and MSMs.
+
+Native input decoding checks canonical compressed Edwards coordinates and
+prime-subgroup membership. The explicit [mathematical byte operations](../realization/external-constructions.md#mathematical-byte-encodings)
+can instead decode a canonical full-curve encoding and multiply by eight.
+That operation changes the represented point. Protocols needing the original
+wire observation must retain its bytes separately; a scalar action over the
+full cofactor-eight curve is not installed.
 
 ## Pairing field capabilities
 

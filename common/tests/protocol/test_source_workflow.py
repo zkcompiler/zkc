@@ -5,22 +5,20 @@ from pathlib import Path
 import sys
 import tomllib
 
-from project import project_text
+from project import project_text, project_arguments
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 
 
-@pytest.mark.parametrize('project', sorted((ROOT / 'examples/projects').glob('*/zkc.toml')),
+@pytest.mark.parametrize('project', sorted([*(ROOT / 'examples/projects').rglob('zkc.toml'),
+                                      *(ROOT / 'common/tests/fixtures/projects').glob('*/zkc.toml')]),
                          ids=lambda path: path.parent.name)
 def test_example_project_declarations_match_explicit_inputs(toolchain, journal, directory, project):
     command = [toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}', '--declarations']
     checked = journal.json([*command, f'--project={project}'], cwd=directory)
-    config = tomllib.loads(project.read_text())
-    explicit = [f'--module={name}={project.parent / path}' for name, path in config['modules'].items()]
-    explicit += [f'--asset={name}={asset["format"]}={project.parent / asset["path"]}'
-                 for name, asset in config.get('assets', {}).items()]
+    explicit = project_arguments(project)
     assert checked.pop("project") == str(project)
     assert checked == journal.json([*command, *explicit], cwd=directory)
     assert checked['scope'] == 'definitions'
@@ -258,7 +256,7 @@ def test_project_paths_use_the_visible_parent_and_do_not_enter_identity(toolchai
 def test_project_assets_are_captured_and_protected(toolchain, journal, directory):
     _, project = source_project(directory)
     asset = directory / 'product.ring.json'
-    asset.write_bytes((ROOT / 'examples/projects/expression-sumcheck/product.ring.json').read_bytes())
+    asset.write_bytes((ROOT / 'examples/projects/sumcheck/product/product.ring.json').read_bytes())
     config = tomllib.loads(project.read_text())
     config['assets'] = {'product': {'format': 'ring-json', 'path': asset.name}}
     project.write_text(project_text(config))
@@ -461,3 +459,30 @@ def test_default_output_uses_the_entire_module_name(toolchain, journal, director
     report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}'],
                           cwd=directory)
     assert Path(report['output']).name == 'zkc.sample.Job.zkpkg'
+
+
+def test_local_dependency_capture_matches_explicit_and_protects_manifests(toolchain, journal, directory):
+    family = directory / 'family'
+    family.mkdir()
+    source, leaf = source_project(family)
+    project = write(directory, 'zkc.toml', {'format': 'zkc.project/0',
+                    'dependencies': {'family': 'family'}})
+    command = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}', 'main::Job']
+    indirect = journal.json([*command, f'--project={project}', f'--output={directory}/indirect.zkpkg'])
+    direct = journal.json([*command, f'--module=main={source}', f'--output={directory}/direct.zkpkg'])
+    assert indirect['package_sha256'] == direct['package_sha256']
+    original = leaf.read_bytes()
+    journal.run([*command, f'--project={project}', f'--output={leaf}'], refuses='entry-output-path')
+    assert leaf.read_bytes() == original
+    leaf.write_text(project_text({'format': 'zkc.project/0', 'dependencies': {'root': '..'}}))
+    journal.run([*command, f'--project={project}', f'--output={directory}/cycle.zkpkg'],
+                refuses='source-project-cycle')
+    assert not (directory / 'cycle.zkpkg').exists()
+
+
+@pytest.mark.parametrize('family', ['zkc', 'schnorr', 'sumcheck', 'fri', 'air', 'stark', 'spongefish'])
+def test_library_family_has_a_complete_standalone_capture(toolchain, journal, family):
+    root = Path(__file__).resolve().parents[3]
+    result = journal.json([toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
+                           f'--project={root}/libraries/{family}/zkc.toml'])
+    assert result['status'] == 'checked' and result['scope'] == 'definitions'

@@ -15,7 +15,7 @@ import pytest
 from entry import Entry
 
 ROOT = Path(__file__).resolve().parents[3]
-PROJECT = ROOT / 'examples/projects/native-map'
+PROJECT = ROOT / 'common/tests/fixtures/projects/native-map'
 MODULUS = 2130706433  # KoalaBear
 
 SOURCE = '''module sample;

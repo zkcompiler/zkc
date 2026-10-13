@@ -1,0 +1,8 @@
+format = "zkc.project/0"
+
+[modules]
+lookup_denominators = "main.zkc"
+
+[dependencies]
+air = "../../../../../libraries/air"
+zkc = "../../../../../libraries/zkc"

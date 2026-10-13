@@ -1,6 +1,7 @@
-module expression_sumcheck;
+module sumcheck::expression;
 
-use zkc::vector::{Vector, split, length, fold, has_length};
+use zkc::vector::{Vector, split, length, has_length, empty, append, get};
+use zkc::indices::{divide};
 use zkc::polynomial::{from_coefficients, boundary, evaluate};
 
 // The captured arena A fixes one closed expression and its ordered factor
@@ -9,14 +10,45 @@ use zkc::polynomial::{from_coefficients, boundary, evaluate};
 // the final factor values and reads the single output.
 fn round<F: Field, A: Ring>(values: Vector<F>) -> Vector<F> {
   let halves = split(values);
-  let rows = kernel("index.div", length(halves.0),
-                    index<A::Inputs>());
+  let rows = divide(length(halves.0), index<A::Inputs>());
   return kernel<F>("ring.affine_sum", halves.0, halves.1, rows; A);
 }
 fn terminal<F: Field, A: Ring>(values: Vector<F>) -> F {
   let result = kernel<F>("ring.point", values; A);
-  return kernel<F>("vector.at", result; "0");
+  return get(result, 0);
 }
+pub use zkc::multilinear::{Evaluation};
+use zkc::multilinear::{fix_first, fix_prefix};
+
+// MSB-first point for A(f1(point), ..., fk(point)) = value. The caller binds
+// the ordered factor polynomials and their dimension. This is an obligation.
+pub protocol Reduce<F: Field, Max: nat, A: Ring> roles(P,V)
+    (values: Vector<F> @P, claim: F @V, rounds: index @(P,V),
+     challenges: Random<F> @V)
+    -> (point: Vector<F> @P, residual: Vector<F> @P,
+        evaluation: Evaluation<F> @V)
+    where 1 <= A::Inputs, 1 <= A::Outputs, A::Outputs <= 1 {
+  let mut tableP = values;
+  let mut pointP @P = empty<F>();
+  let mut pointV @V = empty<F>();
+  let mut current = claim;
+  for _ in 0..rounds roles(P,V) max Max {
+    let proposed = round<F,A>(tableP);
+    #[site(round)] let received = send P -> V(proposed);
+    require has_length<F,A::Degree+1>(received);
+    let actual = from_coefficients(received);
+    require current == boundary(actual);
+    #[site(challenge)] let cv = challenges.draw();
+    #[site(delivery)] let cp = send V -> P(cv);
+    tableP = fix_first(tableP, cp);
+    pointP = append(pointP, cp);
+    pointV = append(pointV, cv);
+    current = evaluate(actual, cv);
+  }
+  let evaluation @V = Evaluation<F> { point: pointV, value: current };
+  return (point = pointP, residual = tableP, evaluation = evaluation);
+}
+
 // Public factor tables, MSB-first variable order. The verifier folds the public
 // factors and checks the exact terminal expression. The table width and the
 // round-polynomial degree are derived from the captured arena: each round
@@ -28,30 +60,19 @@ pub protocol Sumcheck<F: Field, Max: nat, A: Ring> roles(P,V)
      claim: F @V, rounds: index @(P,V),
      challenges: Random<F> @V) -> (accepted: bool @V)
     where 1 <= A::Inputs, 1 <= A::Outputs, A::Outputs <= 1 {
-  let mut tableP = prover_values;
-  let mut tableV = verifier_values;
-  let mut current = claim;
-  for i in 0..rounds roles(P,V) max Max {
-    let proposed @P = round<F,A>(tableP);
-    let received = send P -> V(proposed);
-    let actual @V = from_coefficients(received);
-    let size_ok @V = has_length<F,A::Degree+1>(received);
-    require @V size_ok;
-    let total @V = boundary(actual);
-    let sum_ok @V = current == total;
-    require @V sum_ok;
-    let cv = challenges.draw();
-    let cp = send V -> P(cv);
-    let nextP @P = fold(tableP, cp);
-    let nextV @V = fold(tableV, cv);
-    let nextClaim @V = evaluate(actual, cv);
-    tableP = nextP;
-    tableV = nextV;
-    current = nextClaim;
-  }
-  let size_ok @V = has_length<F,A::Inputs>(tableV);
-  require @V size_ok;
-  let evaluated @V = terminal<F,A>(tableV);
-  let accepted @V = evaluated == current;
-  return (accepted = accepted);
+  #[site(reduce)] let (point, residual, evaluation) =
+    Reduce<F,Max,A>(prover_values, claim, rounds, challenges);
+  return check<F,A>(verifier_values, evaluation);
+}
+
+// Authenticated factor values must follow the captured arena's input order.
+pub fn check_factors<F: Field, A: Ring>(factors: Vector<F>, expected: F) -> bool
+    where 1 <= A::Inputs, 1 <= A::Outputs, A::Outputs <= 1 {
+  require has_length<F,A::Inputs>(factors);
+  return terminal<F,A>(factors) == expected;
+}
+
+pub fn check<F: Field, A: Ring>(values: Vector<F>, evaluation: Evaluation<F>) -> bool
+    where 1 <= A::Inputs, 1 <= A::Outputs, A::Outputs <= 1 {
+  return check_factors<F,A>(fix_prefix(values, evaluation.point), evaluation.value);
 }

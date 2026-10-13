@@ -66,11 +66,26 @@ bound. Caller limits may only lower these ceilings. Analysis rechecks the captur
 against its requested limits before parsing assets. Capture alone supplies no
 protocol ports, runtime matrices or specification binding.
 
-The CLI accepts a TOML manifest with `format = "zkc.project/0"`, a nonempty
-`modules` table mapping logical names to paths, and an optional `assets` table
+The CLI accepts a TOML manifest with `format = "zkc.project/0"`, an optional
+`modules` table mapping logical names to paths, an optional `dependencies` table
+mapping local labels to library directories, and an optional `assets` table
 mapping names to tables with exactly `format` and `path`. Unknown or duplicate
 keys and unsupported types refuse. A manifest is a bounded regular file (at most
-1 MiB); modules and assets together are limited to 256 files. Each supplied path
+1 MiB). Each dependency directory supplies its own `zkc.toml`, interpreted
+relative to that manifest's visible parent. Dependency labels do not rename
+modules. The closure must contain at least one module. An individual manifest
+must contain modules or dependencies. At most 64 manifest contexts and 32 active
+levels are admitted; the entire closure has at most 256 module and asset bindings.
+A context is the canonical parent directory plus the visible manifest filename,
+so directory aliases share a context and symlinked manifest files retain their
+relative-path meaning. Shared dependencies are expanded once; active cycles
+refuse with `source-project-cycle`. A repeated logical module or asset name must
+refer to the same filesystem path (allowing symlink aliases), with the same asset
+format. Other collisions refuse with `source-project-conflict`; neither traversal
+order nor dependency labels select a winner. Distinct files with equal bytes are
+still distinct providers. The resulting maps are sorted by name before capture.
+All participating manifests and mapped files are protected compilation inputs.
+No registry lookup, implicit module discovery or version selection occurs. Each supplied path
 is nonempty, contains no NUL, and is at most 4096 bytes.
 
 `--project=FILE` selects an explicit manifest. Otherwise explicit `--module` or
@@ -1448,8 +1463,8 @@ present, including an empty origin list. This is the sole version-0 schema;
 there is no legacy suffix or inspection alias. Enclosing `requirements` remain
 obligations of the enclosing signature. `input_order` retains `data`, `service`,
 `domain` and `scoped` categories. This diagnostic view does not add runtime
-interface fields. The [computation library](../../../libraries/zkc/computation.zkc)
-and [module example](../../../examples/projects/scoped-computations/README.md)
+interface fields. The [callback example](../../../common/tests/fixtures/projects/scoped-computations/callbacks.zkc)
+and [module example](../../../common/tests/fixtures/projects/scoped-computations/README.md)
 exercise user-defined apply/forward combinators. General finite domains, named consumers and mathematical binders use this same
 foundation.
 

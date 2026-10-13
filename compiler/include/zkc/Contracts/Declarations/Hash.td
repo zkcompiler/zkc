@@ -16,3 +16,8 @@ def OpShake128Squeeze : ZKC_Operation<"shake128.squeeze", [],
   let facets = [ZKC_History<0, 0>, SourceHistory];
 }
 def ExportShake128Squeeze : ZKC_OperationExport<"zkc::shake128", "squeeze", OpShake128Squeeze, ["state", "length"]>;
+
+// Raw Keccak-256; no domain separator, framing, or scalar reduction.
+def OpHashKeccak256 : ZKC_Operation<"hash.keccak256", [],
+    [ZKC_Apply<TypeBytes, []>], [ZKC_Apply<TypeBytes, []>], []> { int ordinal = 184; }
+def ExportHashKeccak256 : ZKC_OperationExport<"zkc::bytes", "keccak256", OpHashKeccak256, ["value"]>;

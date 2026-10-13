@@ -40,6 +40,8 @@ mlir_target_link_libraries(zkc-finite_abi-test PRIVATE MLIRParser)
 
 add_zkc_test(finite_callback_selection Transforms finite-callback-selection)
 mlir_target_link_libraries(zkc-finite_callback_selection-test PRIVATE MLIRParser)
+add_zkc_test(finite_preparation Transforms finite-preparation)
+mlir_target_link_libraries(zkc-finite_preparation-test PRIVATE MLIRParser)
 
 add_zkc_test(computation_analysis IR computation-analysis)
 target_compile_definitions(zkc-computation_analysis-test PRIVATE
@@ -120,7 +122,7 @@ add_zkc_test(language_expression_assets Language language-expression-assets)
 target_compile_definitions(zkc-language_expression_assets-test PRIVATE
   ZKC_MATH_LIBRARIES="${PROJECT_SOURCE_DIR}/../libraries/zkc"
   ZKC_SUMCHECK_LIBRARY="${PROJECT_SOURCE_DIR}/../libraries/sumcheck/expression.zkc"
-  ZKC_EXPRESSION_SUMCHECK_PROJECT="${PROJECT_SOURCE_DIR}/../examples/projects/expression-sumcheck")
+  ZKC_EXPRESSION_SUMCHECK_PROJECT="${PROJECT_SOURCE_DIR}/../examples/projects/sumcheck/product")
 add_zkc_test(language_asset_ir Compiler language-asset-ir)
 mlir_target_link_libraries(zkc-language_asset_ir-test PRIVATE MLIRParser)
 add_zkc_test(language_specifications Language language-specifications)

@@ -11,6 +11,54 @@ pub mod refused;
 
 pub type F = KoalaBear;
 
+/// Fibonacci over the base field, with both boundary states public.
+pub struct FibonacciAir;
+
+impl<T> BaseAir<T> for FibonacciAir {
+    fn width(&self) -> usize {
+        2
+    }
+    fn num_public_values(&self) -> usize {
+        4
+    }
+}
+
+impl<AB: AirBuilder> Air<AB> for FibonacciAir {
+    fn eval(&self, builder: &mut AB) {
+        let main = builder.main();
+        let current = main.current_slice().to_vec();
+        let next = main.next_slice().to_vec();
+        let public = builder.public_values().to_vec();
+        builder.when_first_row().assert_eq(current[0], public[0]);
+        builder.when_first_row().assert_eq(current[1], public[1]);
+        builder.when_transition().assert_eq(next[0], current[1]);
+        builder
+            .when_transition()
+            .assert_eq(next[1], current[0] + current[1]);
+        builder.when_last_row().assert_eq(current[0], public[2]);
+        builder.when_last_row().assert_eq(current[1], public[3]);
+    }
+}
+
+impl FibonacciAir {
+    pub fn generate(height: usize, first: F, second: F) -> (RowMajorMatrix<F>, Vec<F>) {
+        assert!(height > 0);
+        let (mut x, mut y) = (first, second);
+        let mut values = Vec::with_capacity(2 * height);
+        for _ in 0..height {
+            values.extend([x, y]);
+            (x, y) = (y, x + y);
+        }
+        let public = vec![
+            first,
+            second,
+            values[2 * height - 2],
+            values[2 * height - 1],
+        ];
+        (RowMajorMatrix::new(values, 2), public)
+    }
+}
+
 /// Added to every recurrence step; a constant above 2^26 exercises canonical
 /// encoding rather than a small literal that internal forms might preserve.
 pub const STEP_CONSTANT: u32 = 123_456_789;

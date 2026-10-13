@@ -1,0 +1,10 @@
+format = "zkc.project/0"
+
+[modules]
+"spongefish" = "lib.zkc"
+"spongefish::schnorr" = "schnorr.zkc"
+
+"spongefish::bls12_381" = "bls12_381.zkc"
+
+[dependencies]
+zkc = "../zkc"

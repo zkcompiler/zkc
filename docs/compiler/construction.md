@@ -102,7 +102,7 @@ does not require every received message to be observed.
 A format-only source construction can select `RawBytes`: one authored `Bytes`
 message becomes the entire proof without a header or prefix. The report then
 uses `binding_scope = "authored"`; source code owns statement/context binding.
-The [Spongefish example](../../examples/projects/spongefish-schnorr/README.md)
+The [Spongefish example](../../common/tests/fixtures/projects/spongefish-schnorr/README.md)
 uses this path for an external 80-byte record. Byte data and mathematical
 encodings are independent of native transport frames. Bounded search and
 early participant return use [ordinary control](control.md); retry remains an

@@ -1,0 +1,11 @@
+format = "zkc.project/0"
+
+[modules]
+example = "main.zkc"
+
+[dependencies]
+stark = "../../../libraries/stark"
+
+[assets.execution]
+format = "relation-bundle-json"
+path = "../../../compiler/adapters/clean/fixtures/femtocairo/bundle.json"

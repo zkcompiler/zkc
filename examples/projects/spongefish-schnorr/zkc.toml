@@ -1,9 +1,0 @@
-format = "zkc.project/0"
-
-[modules]
-example = "main.zkc"
-spongefish = "../../../libraries/spongefish/lib.zkc"
-spongefish_schnorr = "../../../libraries/spongefish/schnorr.zkc"
-"zkc::bytes" = "../../../libraries/zkc/bytes.zkc"
-"zkc::shake128" = "../../../libraries/zkc/shake128.zkc"
-"zkc::encoding" = "../../../libraries/zkc/encoding.zkc"

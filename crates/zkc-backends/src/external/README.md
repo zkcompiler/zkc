@@ -63,11 +63,14 @@ symmetric traits are aliased to the same version. No equivalence to workspace
 implemented `DuplexChallenger`. Both paths trust the same crypto permutation.
 
 Monero hash and reduction use RustCrypto sha3 0.12.0 (`Keccak256`, **not**
-`Sha3_256`) and curve25519-dalek 5.0.0. The saved `BP_PLUS_INITIAL` is an encoded
-hash-to-point constant from the pinned upstream harness; this crate does not
-implement or independently prove its hash-to-point derivation. Six additional
-primitive vectors use the retained pinned native `cn_fast_hash` shared library
-and independent Python integer reduction, including empty input.
+`Sha3_256`) and curve25519-dalek 5.0.0. The saved `BP_PLUS_INITIAL` in the replay
+fixtures comes from the pinned upstream harness. The [source Bulletproofs+
+library](../../../../libraries/bulletproofs/README.md) derives this initial value
+with the separate [Edwards point map](../edwards.rs); its BSD source notice is
+retained in [UPSTREAM-LICENSE-BSD](UPSTREAM-LICENSE-BSD). Independent
+[map vectors](../../tests/fixtures/README.md) cover that primitive. Six additional
+hash vectors use the retained pinned native `cn_fast_hash` shared library and
+independent Python integer reduction, including empty input.
 
 ## Independent validation
 

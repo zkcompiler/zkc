@@ -1,4 +1,5 @@
-//! SHAKE128 snapshots with an explicit read cursor and no wire representation.
+//! Raw Keccak-256 and SHAKE128 snapshots. Library code owns framing.
+//! SHAKE128 has an explicit read cursor and no wire representation.
 //!
 //! The abstract state is (M, k): absorb(x) gives (M || x, 0), while
 //! squeeze(n) returns SHAKE128(M)[k..k+n] and advances k. Neither read positions
@@ -52,6 +53,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         return None;
     }
     let (inputs, outputs): (&[Type], &[Type]) = match binding.contract.as_str() {
+        "hash.keccak256" => (&[Bytes], &[Bytes]),
         "shake128.init" => (&[], &[Shake128State]),
         "shake128.absorb" => (&[Shake128State, Bytes], &[Shake128State]),
         "shake128.squeeze" => (&[Shake128State, Index], &[Shake128State, Bytes]),
@@ -74,7 +76,7 @@ pub(crate) fn apply(
     budget: &mut crate::external_kernels::Budget,
 ) -> Result<Vec<Value>> {
     if !attributes.is_empty() {
-        return Err(refused("shake128-attributes"));
+        return Err(refused("hash-attributes"));
     }
     let charge = |n: usize, budget: &mut crate::external_kernels::Budget| {
         budget.charge(crate::external::Work {
@@ -86,6 +88,18 @@ pub(crate) fn apply(
     };
     let state = |value| Value::Shake128State(Arc::new(value));
     match (name, args) {
+        ("hash.keccak256", [Value::Bytes(bytes)]) => {
+            use sha3::{Digest, Keccak256};
+            policy.bytes(bytes.len())?;
+            policy.bytes(32)?;
+            policy.output(size(32, 1)?, available)?;
+            budget.charge(crate::external::Work {
+                hash_calls: 1,
+                hash_bytes: bytes.len() as u64,
+                ..Default::default()
+            })?;
+            Ok(vec![Value::Bytes(Keccak256::digest(bytes).to_vec().into())])
+        }
         ("shake128.init", []) => {
             policy.output(Shake128State::RETAINED_BYTES, available)?;
             charge(0, budget)?;
@@ -111,11 +125,12 @@ pub(crate) fn apply(
             let next = s.squeeze(&mut bytes);
             Ok(vec![state(next), Value::Bytes(bytes.into())])
         }
-        _ => Err(refused("shake128-operands")),
+        _ => Err(refused("hash-operands")),
     }
 }
 
 pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
+    ("native/hash.keccak256", "hash.keccak256"),
     ("native/shake128.init", "shake128.init"),
     ("native/shake128.absorb", "shake128.absorb"),
     ("native/shake128.squeeze", "shake128.squeeze"),
@@ -137,6 +152,61 @@ mod tests {
         output[cursor..].to_vec()
     }
 
+    #[test]
+    fn raw_keccak_is_not_sha3_and_debits_work() {
+        for (input, expected) in [
+            (
+                b"".as_slice(),
+                "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+            ),
+            (
+                b"abc".as_slice(),
+                "4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45",
+            ),
+        ] {
+            let values = [Value::Bytes(input.to_vec().into())];
+            let mut budget = crate::external_kernels::Budget::default();
+            let output = apply(
+                "hash.keccak256",
+                &values,
+                &[],
+                &Policy::default(),
+                usize::MAX,
+                &mut budget,
+            )
+            .unwrap();
+            assert!(
+                matches!(&output[0], Value::Bytes(b) if b.as_ref() == zkc_test_support::unhex(expected))
+            );
+            assert!(budget.spent > 0);
+            let mut limited = crate::external_kernels::Budget { limit: 0, spent: 0 };
+            assert_eq!(
+                apply(
+                    "hash.keccak256",
+                    &values,
+                    &[],
+                    &Policy::default(),
+                    usize::MAX,
+                    &mut limited
+                )
+                .unwrap_err()
+                .code,
+                "exhausted:external-work-limit"
+            );
+            assert_eq!(limited.spent, 0);
+            assert!(
+                apply(
+                    "hash.keccak256",
+                    &values,
+                    &[],
+                    &Policy::default(),
+                    0,
+                    &mut budget
+                )
+                .is_err()
+            );
+        }
+    }
     #[test]
     fn known_answer_and_snapshot_state_machine() {
         // NIST SHAKE128, empty input, first 256 output bits.

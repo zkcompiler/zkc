@@ -1,34 +1,57 @@
 module sumcheck;
+pub module expression;
 
-use zkc::vector::{Vector, split, sum, fold, length};
+use zkc::vector::{Vector, split, sum, length, empty, append};
 use zkc::boolean::{both};
+
+// An evaluation obligation, not an acceptance certificate. The caller binds
+// the polynomial and its dimension; coordinates are MSB-first.
+pub use zkc::multilinear::{Evaluation};
+use zkc::multilinear::{fix_first, fix_prefix};
 
 fn sums<F: Field>(values: Vector<F>) {
   let halves = split(values);
   return (sum(halves.0), sum(halves.1));
 }
-fn terminal<F: Field>(values: Vector<F>, claim: F) {
-  return both(length(values) == 1, sum(values) == claim);
-}
 
-// Multilinear public-table Sumcheck. V evaluates the public table directly at
-// the delivered point; there is no commitment or hidden evaluation callback.
-pub protocol Sumcheck<F: Field, Max: nat> roles(P, V)
-    (values: Vector<F> @(P,V), claim: F @V, rounds: index @(P,V),
-     challenges: Random<F> @V) -> (accepted: bool @V) {
-  let mut tableP @P = values;
-  let mut tableV @V = values;
+// Pair-valued multilinear rounds. V checks each received boundary sum before
+// drawing; P retains the residual table for a subsequent opening argument.
+// A complete caller must discharge the returned evaluation and dimension.
+pub protocol Reduce<F: Field, Max: nat> roles(P,V)
+    (values: Vector<F> @P, claim: F @V, rounds: index @(P,V),
+     challenges: Random<F> @V)
+    -> (point: Vector<F> @P, residual: Vector<F> @P,
+        evaluation: Evaluation<F> @V) {
+  let mut tableP = values;
+  let mut pointP @P = empty<F>();
+  let mut pointV @V = empty<F>();
   let mut current = claim;
-  for _ in 0..rounds roles(P, V) max Max {
+  for _ in 0..rounds roles(P,V) max Max {
     let parts = sums(tableP);
     #[site(round)] let actual = send P -> V(parts);
     require current == actual.0 + actual.1;
     #[site(challenge)] let cv = challenges.draw();
     #[site(delivery)] let cp = send V -> P(cv);
-    tableP = fold(tableP, cp);
-    tableV = fold(tableV, cv);
+    tableP = fix_first(tableP, cp);
+    pointP = append(pointP, cp);
+    pointV = append(pointV, cv);
     current = (1 - cv) * actual.0 + cv * actual.1;
   }
-  let accepted = terminal(tableV, current);
-  return accepted;
+  let evaluation @V = Evaluation<F> { point: pointV, value: current };
+  return (point = pointP, residual = tableP, evaluation = evaluation);
+}
+
+// Complete public-table discharge. A partial point rejects even if the sum of
+// the remaining entries agrees. Invalid splits stop during the local fold.
+pub fn check<F: Field>(values: Vector<F>, evaluation: Evaluation<F>) -> bool {
+  let remaining = fix_prefix(values, evaluation.point);
+  return both(length(remaining) == 1, sum(remaining) == evaluation.value);
+}
+
+pub protocol Sumcheck<F: Field, Max: nat> roles(P,V)
+    (values: Vector<F> @(P,V), claim: F @V, rounds: index @(P,V),
+     challenges: Random<F> @V) -> (accepted: bool @V) {
+  #[site(reduce)] let (point, residual, evaluation) =
+    Reduce<F,Max>(values, claim, rounds, challenges);
+  return check(values, evaluation);
 }

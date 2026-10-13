@@ -323,6 +323,7 @@ void installedInventory() {
        {"field", "vector", "polynomial", "round", "matrix", "rng"}},
       {"bls12-381.g1", {"group", "groups"}},
       {"ristretto255.group", {"group", "groups"}},
+      {"edwards25519.prime", {"group", "groups"}},
       {"bn254.g1", {"group", "groups"}},
       {"bn254.g2", {"group", "groups"}},
       {"bn254.gt", {"group"}},
@@ -346,7 +347,7 @@ void installedInventory() {
   for (const auto &type : catalog.allLogicalTypes())
     require(actual.emplace(type.kind, type.domain).second,
             "logical inventory contains no duplicate instances");
-  require(pairs.size() == 66 && actual == pairs,
+  require(pairs.size() == 68 && actual == pairs,
           "the complete installed logical inventory is unchanged");
 
   std::vector<std::string> identities{"", "missing"};
@@ -382,6 +383,7 @@ void installedInventory() {
       {"merlin3.bls12-381.fr64be/0", "arkworks"},
       {"ristretto255.scalar", "dalek"},
       {"ristretto255.group", "dalek"},
+      {"edwards25519.prime", "dalek"},
       {"merlin3.ristretto255.scalar64le/0", "dalek"},
       {"spongefish0.8.0.keccak.bls12-381.fr64be/0", "spongefish"},
       {"koala-bear", "plonky3"},
@@ -405,6 +407,10 @@ struct ExpectedType {
   const char *kind, *domain, *rep, *codec;
 };
 const ExpectedType types[] = {
+    {"group", "edwards25519.prime", "dalek.edwards-prime/0",
+     "zkcv.group.edwards25519.prime/0"},
+    {"groups", "edwards25519.prime", "dalek.edwards-prime-vector/0",
+     "zkcv.groups.edwards25519.prime/0"},
     {"bool", "", "native.bool/0", "zkcv.bool/0"},
     {"index", "", "native.index/0", "zkcv.index/0"},
     {"indices", "", "native.indices/0", "zkcv.indices/0"},
@@ -529,6 +535,14 @@ void installedBindings() {
                     (operation.name == "transcript.native.indexed.index" ||
                      operation.name == "transcript.index")
                 ? "merlin3.koala-bear.ext8-binomial3.rejection31le/0"
+            : sort == "Group" &&
+                    (operation.name == "encoding.group_decode_cofactor" ||
+                     operation.name == "encoding.cryptonote_map")
+                ? "edwards25519.prime"
+            : sort == "Field" && (operation.name == "encoding.field_le" ||
+                                  operation.name == "encoding.field_from_le" ||
+                                  operation.name == "encoding.field_reduce_le")
+                ? "ristretto255.scalar"
             : sort == "Nat" ? "4"
             : sort == "Field" &&
                     (twoAdic ||

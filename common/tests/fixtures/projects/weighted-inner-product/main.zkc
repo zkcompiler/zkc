@@ -1,0 +1,56 @@
+module example;
+use zkc::bytes::{Bytes};
+use zkc::finite_domain::{range};
+use bulletproofs::inner_product as ip;
+use zkc::curve as curve;
+use zkc::vector as vec;
+use zkc::encoding as encoding;
+domain G = group("bls12-381.g1");
+domain F = field("bls12-381.fr");
+
+// Algebraic control only: these known-related generators are not secure bases.
+module Wire: ip::PointEncoding<G> {
+  fn emit(point: G) -> Bytes { return encoding::group_compressed(point); }
+  fn admit(raw: Bytes) -> G {
+    let (ok, point) = encoding::group_from_compressed<G>(raw);
+    require ok;
+    return point;
+  }
+}
+fn multiple(value: F) -> G { return kernel<G>("curve.generator") * value; }
+fn bases(count: index, right_count: index) -> ip::Bases<G> {
+  let g = kernel<G>("curve.generator");
+  let left = curve::collect(range(0,count), fn(i) => g * kernel<F>("field.from_index", i+1));
+  let right = curve::collect(range(0,right_count), fn(i) => g * kernel<F>("field.from_index", i+11));
+  return ip::Bases<G>{left: left, right: right};
+}
+fn claim(b: ip::Bases<G>, y: F, value_base: G, mask_base: G) -> G {
+  let n = ip::count(b);
+  return kernel<G>("curve.msm", vec::fill<F>(2,n), b.left)
+    + kernel<G>("curve.msm", vec::fill<F>(3,kernel<G>("curve.length",b.right)), b.right)
+    + value_base * (6 * vec::sum(vec::scale(vec::geometric(y,n),y))) + mask_base * 7;
+}
+protocol Client roles(P,V)
+    (count: index @(P,V), right_count: index @(P,V), witness_count: index @P,
+     rounds: index @(P,V), y: F @(P,V), nonces: Random<F> @P,
+     challenges: Random<F> @V) -> (accepted: bool @V) {
+  let bp @P = bases(count,right_count);
+  let bv @V = bases(count,right_count);
+  let valueP @P = multiple(17);
+  let valueV @V = multiple(17);
+  let maskP @P = multiple(19);
+  let maskV @V = multiple(19);
+  let witness @P = ip::Witness<F>{left: vec::fill<F>(2,witness_count),
+    right: vec::fill<F>(3,witness_count),mask: 7};
+  let statement @V = claim(bv,y,valueV,maskV);
+  let accepted = ip::Argument<G,Wire,4>(bp,bv,valueP,valueV,maskP,maskV,
+    y,y,witness,statement,rounds,nonces,challenges);
+  return (accepted = accepted);
+}
+proof Proof = Client {
+  prover P;
+  verifier V;
+  public { count, right_count, rounds, y };
+  accept accepted;
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
+}

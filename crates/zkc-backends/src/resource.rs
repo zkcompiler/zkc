@@ -715,12 +715,16 @@ impl Resources {
         &mut self,
         owner: &str,
         budget: u64,
-        tape: Vec<Scalar>,
+        tape: crate::TestTape,
     ) -> Result<Capability> {
         self.allocate(
             Custody::Service(owner.into()),
             budget,
-            State::Rng(Source::Tape(tape.into())),
+            match tape {
+                crate::TestTape::Bls12381(t) => State::Rng(Source::Tape(t.into())),
+                crate::TestTape::Bn254(t) => State::Bn254Tape(t.into()),
+                crate::TestTape::Ristretto(t) => State::RistrettoTape(t.into()),
+            },
         )
     }
     #[cfg(feature = "test-utils")]

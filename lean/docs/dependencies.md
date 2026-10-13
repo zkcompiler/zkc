@@ -22,11 +22,15 @@ Use ArkLib's tested VCVio pin until an upstream migration or maintained adapter
 makes a newer joint closure work. These are revisable compatibility decisions,
 not a requirement to remain on older Lean indefinitely.
 
-Clean's selected flat-component/gadget adapter cone builds on this baseline.
-An unrelated `Clean.Air.Balance` proof fails because a `ring_nf` call makes no
-progress with this Mathlib. The maintained channel-refusal theorem quantifies
-directly over every channel operation and does not import that VM development.
-This establishes the adapter's compatibility, not a whole-Clean build claim.
+Clean's selected adapter and native example cone uses a declared compatibility
+patch at [the integration boundary](../integrations/clean/compatibility.json).
+Upstream still imports the renamed `Mathlib.Logic.Basic`, and a `ring_nf` call
+in `Clean.Air.Balance` now fails under the changed normalization order. The patch updates the
+import and proves the required reassociation directly with ring arithmetic; theorem
+statements and executable definitions are unchanged. Preparation checks the
+exact upstream revision and before/after file hashes. Both cache preparation
+and fresh source reproduction apply the same patch. This is a patched Clean
+source claim, not an unmodified upstream or whole-Clean build claim.
 
 Upgrades must build actual protocol consumers, check their axiom closures,
 regenerate the native Clean fixture, and run source/target negative controls.

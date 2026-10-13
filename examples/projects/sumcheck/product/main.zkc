@@ -1,0 +1,50 @@
+module example;
+use sumcheck::expression::{Sumcheck};
+use zkc::vector::{Vector};
+domain Base = field("koala-bear");
+domain Extension = field("koala-bear.ext8-binomial3");
+
+// The captured product.ring.json is the summed expression. The library derives
+// the table width and round degree from it; the compiler has no
+// Sumcheck-specific branch.
+domain Product = ring(asset product);
+
+fn embed_vector(values: Vector<Base>) -> Vector<Extension> {
+  return kernel<Extension>("vector.embed", values);
+}
+fn embed_scalar(value: Base) -> Extension {
+  return kernel<Extension>("field.embed", value);
+}
+protocol BaseSumcheck roles(P,V)
+    (values: Vector<Base> @(P,V), claim: Base @V, rounds: index @(P,V),
+     challenges: Random<Extension> @V) -> (accepted: bool @V) {
+  let prover_values @P = embed_vector(values);
+  let verifier_values @V = embed_vector(values);
+  let expected @V = embed_scalar(claim);
+  let accepted = Sumcheck<Extension,16,Product>
+    (prover_values, verifier_values, expected, rounds, challenges);
+  return (accepted = accepted);
+}
+protocol ExtensionSumcheck roles(P,V)
+    (values: Vector<Extension> @(P,V), claim: Extension @V, rounds: index @(P,V),
+     challenges: Random<Extension> @V) -> (accepted: bool @V) {
+  let accepted = Sumcheck<Extension,16,Product>
+    (values, values, claim, rounds, challenges);
+  return (accepted = accepted);
+}
+run BaseRun = BaseSumcheck;
+run ExtensionRun = ExtensionSumcheck;
+proof BaseProof = BaseSumcheck {
+  prover P;
+  verifier V;
+  public { values, claim, rounds };
+  accept accepted;
+  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0", challenges);
+}
+proof Proof = ExtensionSumcheck {
+  prover P;
+  verifier V;
+  public { values, claim, rounds };
+  accept accepted;
+  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0", challenges);
+}

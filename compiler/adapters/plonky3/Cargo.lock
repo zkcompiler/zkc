@@ -2195,6 +2195,7 @@ dependencies = [
  "serde_json",
  "sha2 0.11.0",
  "sha3",
+ "shake",
  "spongefish",
  "zkc-arkworks",
  "zkc-runtime",

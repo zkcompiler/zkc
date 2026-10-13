@@ -21,11 +21,12 @@ import statistics
 import subprocess
 import sys
 import time
-import tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from processes import positive_timeout, run  # noqa: E402
+sys.path.insert(0, str(ROOT / 'common/tests/support'))
+from project import project_inputs  # noqa: E402
 
 FORMAT = 'zkc.protocol-measurement/0'
 P = 2130706433
@@ -135,12 +136,9 @@ def case_catalog():
 
 
 def project(root, name):
-    manifest = root / 'examples/projects' / name / 'zkc.toml'
-    data = tomllib.loads(manifest.read_text())
-    require(data['format'] == 'zkc.project/0', f'unknown project format: {manifest}')
-    modules = {k: (manifest.parent / v).resolve() for k, v in data['modules'].items()}
-    assets = {k: (v['format'], (manifest.parent / v['path']).resolve())
-              for k, v in data.get('assets', {}).items()}
+    directory = 'examples/projects' if name == 'fri' else 'common/tests/fixtures/projects'
+    manifest = root / directory / name / 'zkc.toml'
+    modules, assets = project_inputs(manifest)
     return manifest, modules, assets
 
 
@@ -148,6 +146,9 @@ def source_files(root, cases):
     paths = set()
     for case in cases:
         manifest, modules, assets = project(root, case['project'])
+        manifests = []
+        project_inputs(manifest, manifests=manifests)
+        paths.update(manifests)
         paths.update([manifest, *modules.values(), *(v[1] for v in assets.values())])
         if case['project'] != 'fri':
             paths.add(manifest.parent / 'prepare.py')
@@ -155,7 +156,7 @@ def source_files(root, cases):
             paths.add(root / 'compiler/adapters/plonky3/fixtures/recurrence/source-trace-honest.json')
         if case['project'] == 'accumulator-machine':
             adapter = root / 'compiler/adapters/accumulator-machine'
-            paths.update([adapter / 'accumulator_machine.py', adapter / 'ring_arena.py',
+            paths.update([adapter / 'accumulator_machine.py', adapter.parent / 'ring_arena.py',
                           adapter / 'fixtures' / case['fixture'] / 'run.json'])
     for name in ('Cargo.lock', 'flake.lock', 'uv.lock', 'rust-toolchain.toml'):
         paths.add(root / name)

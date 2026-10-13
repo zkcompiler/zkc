@@ -1,0 +1,16 @@
+module zkc::scalar;
+
+pub fn inverse<F: Field>(value: F) -> F { return kernel<F>("field.inverse", value); }
+
+pub fn power<F: Field>(base: F, exponent: index) -> F {
+  let mut remaining = exponent;
+  let mut factor = base;
+  let mut result: F = 1;
+  for _ in 0..64 {
+    let bit = kernel("index.mod", remaining, 2);
+    if bit == 1 { result = result * factor; }
+    factor = factor * factor;
+    remaining = kernel("index.div", remaining, 2);
+  }
+  return result;
+}

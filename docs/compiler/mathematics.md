@@ -143,6 +143,18 @@ choices; collection interfaces expose observations without granting execution
 permission. A candidate-local binding allocator avoids duplicate generated bindings
 and collisions with authored symbols, while preserving authored implementation pins.
 
+Total callbacks may compose indexed arithmetic through ordinary acyclic helpers.
+For example, an indexed sum of `left[i] * right[i]` can select a dot even when
+its loads and multiplication live in separate helpers. The callback must retain
+the relevant extent premises; knowing only that both reads are in bounds does
+not establish that the traversal covers both vectors. The independent reader
+follows the original calls and carries exact argument meanings back to those
+premises. It checks actual candidate operands, including matrix axes and fixed
+selectors, without using the producer's normalized body or equation witness.
+Returned arguments and repeated captures retain their original value identities.
+Helpers that construct new containers or contain nested finite computations
+remain outside this optional normalization rule.
+
 Indexed-access recognition currently covers field vectors and field matrices.
 Group-vector indexing retains ordered execution; zipped group/scalar elements can
 select MSM. Closed Ring laws justify bounded field comparison; group/module
@@ -162,9 +174,14 @@ or polynomial error. This is native compiler correspondence checking; the
 independent Lean models do not establish a bridge to this implementation.
 
 Optional finite recognition shares separate structural, equation and bound/extent
-allowances across definitions and nested occurrences. Optional lane emission has
-its own allowance. Exhaustion retains ordered execution with full domain admission;
-it does not consume the reserve for required expansion. Required map and helper
+allowances across definitions and nested occurrences. A private per-callback
+structural ceiling covers discovery, preparation and analysis, preserving opportunities after an expensive callback. A memoized
+preflight counts helper expansion before copying, including repeated call
+occurrences; declining an oversized expansion charges only inspection already
+performed. Decision records distinguish `expansion-size` from actual work
+exhaustion, and `finite-callback-structural` from a depleted stage allowance.
+Optional lane emission has its own allowance. Exhaustion retains ordered
+execution with full domain admission; it does not consume the reserve for required expansion. Required map and helper
 copies consume cumulative operation and slot budgets across the preparation
 window. Domain constructors retain unknown MLIR effects until their ordered
 admission is explicit in the lowered code.
@@ -334,8 +351,8 @@ general mechanisms at their stated scope, without claiming full Groth16, BP+,
 FRI or zkVM implementations.
 
 Two smaller executable examples exercise compositional source facts directly:
-[FRI folding](../../examples/projects/fri-fold/README.md) collects folded pairs
-and checks their next-layer residuals; [LogUp rows](../../examples/projects/logup-rows/README.md)
+[FRI folding](../../common/tests/fixtures/projects/fri-fold/README.md) collects folded pairs
+and checks their next-layer residuals; [LogUp rows](../../common/tests/fixtures/projects/logup-rows/README.md)
 compresses tuples and computes reciprocal and Boolean residuals. Both read a
 fresh collect using the original collection's indices. The LogUp companion also
 constructs a fixed array over a range whose endpoint passes through a helper.
@@ -343,7 +360,7 @@ Their tests compare arithmetic with independent integer references under default
 unsimplified and ordered compilation. They establish these mathematical slices,
 not complete proof protocols or a performance improvement.
 
-The maintained [AIR library](../../libraries/air/README.md) also uses finite
+The maintained [AIR library](../../libraries/stark/README.md) also uses finite
 folds for quotient-claim recombination and interaction nonzero checks. Complete
 single-table AIR and three-table machine tests exercise these through proof
 construction and verification, with both LogUp and grand-product reductions.

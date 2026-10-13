@@ -106,6 +106,8 @@ inline const char *decisionName(OptimizationReason value) {
     return "lane-formula";
   case OptimizationReason::Work:
     return "work";
+  case OptimizationReason::ExpansionSize:
+    return "expansion-size";
   case OptimizationReason::CallEligibility:
     return "call-eligibility";
   case OptimizationReason::ImplementationRestriction:
@@ -117,6 +119,8 @@ inline const char *decisionName(WorkOwner value) {
   switch (value) {
   case WorkOwner::Structural:
     return "structural";
+  case WorkOwner::FiniteCallbackStructural:
+    return "finite-callback-structural";
   case WorkOwner::Equations:
     return "equations";
   case WorkOwner::Evidence:

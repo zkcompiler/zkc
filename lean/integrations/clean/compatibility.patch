@@ -1,0 +1,23 @@
+--- a/Clean/Utils/Primes.lean
++++ b/Clean/Utils/Primes.lean
+@@ -5,7 +5,7 @@
+ -- `native_decide` compiles the decision procedure, so the instances it runs must also be
+ -- reachable from meta code.
+ public meta import Mathlib.Data.Nat.Prime.Defs
+-public meta import Mathlib.Logic.Basic
++public meta import Mathlib.Basic.Logic.Basic
+ public meta import Mathlib.Algebra.Group.Nat.Defs
+ 
+ @[expose] public section
+--- a/Clean/Air/Balance.lean
++++ b/Clean/Air/Balance.lean
+@@ -519,8 +519,7 @@
+           exact h_zero ((h_pair 0 (by simp) (by simp)).mpr h_push_zero)
+         simp [activeInteractions, h_zero, h_push_ne_zero, balanceOf_append,
+           balanceOf_cons] at ih' ⊢
+-        ring_nf at ih' ⊢
+-        exact congrArg (fun x => x + if push.msg = msg then push.mult else 0) ih'
++        convert congrArg (fun x => x + if push.msg = msg then push.mult else 0) ih' using 1 <;> ring
+ 
+ lemma balancedInteractions_active_append {pulls pushes : List (Interaction F)}
+     (balance : BalancedInteractions (pulls ++ pushes))

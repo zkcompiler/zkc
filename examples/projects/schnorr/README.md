@@ -22,3 +22,6 @@ They add no implicit guard or knowledge theorem. The executed verifier equation,
 source comparison, native admission and separate proof acceptance are distinct
 checks. Native Lean correspondence and a security theorem for this executable
 construction remain separate work.
+
+The [Spongefish variant](spongefish/README.md) uses the same generic protocol
+with an application-selected transcript and raw external proof encoding.

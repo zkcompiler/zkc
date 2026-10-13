@@ -22,6 +22,7 @@ import shutil
 import subprocess
 import time
 import tomllib
+from support.compatibility import prepare
 
 
 HERE = Path(__file__).resolve().parent
@@ -52,6 +53,8 @@ def build_inputs(root, with_arklib=False, with_clean=False):
             files.extend((optional / directory).rglob('*.lean'))
     if with_clean:
         optional = root / CLEAN
+        files.extend(optional.glob('*.lean'))
+        files.extend(optional / name for name in ('compatibility.json', 'compatibility.patch'))
         files.extend(optional / name for name in ('lakefile.toml', 'lake-manifest.json', 'lean-toolchain'))
         for directory in ('ZkcClean', 'TestsClean'):
             files.extend((optional / directory).rglob('*.lean'))
@@ -109,6 +112,7 @@ def prepare_dependencies(work, caches, integrations=()):
                 materialize(package, targets, caches)
                 pins[package['name']] = package['rev']
                 sources[package['name']] = targets / name
+        prepare(optional)
     return pins
 
 
@@ -222,6 +226,9 @@ def run(args):
         'toolchain': (work / 'lean-toolchain').read_text().strip(), 'lean_version': version,
         'build_inputs': inputs, 'builds': runs, 'clean_control': control, 'clients': clients,
         'external_source_pins': pins,
+        'dependency_compatibility': {
+            str(path): json.loads((work / path / 'compatibility.json').read_text())
+            for path in integrations if (work / path / 'compatibility.json').is_file()},
         'allowed_axioms': ['propext', 'Classical.choice', 'Quot.sound'],
         'prior_lean_build_objects': False,
         'dependency_source_transport': 'local Git objects' if caches else 'manifest URLs',

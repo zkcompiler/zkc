@@ -1,0 +1,16 @@
+{
+  "package": "Clean",
+  "revision": "b449bf590f93e13827c3c7e747e392d6969aa380",
+  "patch": "compatibility.patch",
+  "patch_sha256": "6b4c9c9767cbdd704aeaf058562b466e36f7709a57cc3e8db9b297190114cbd4",
+  "files": {
+    "Clean/Utils/Primes.lean": {
+      "base_sha256": "73e7d3fadc2cbc4122c1c8e3ab463267941e796c3b5f1b8be76f4c908684b1c8",
+      "patched_sha256": "3817fb4940d716e5cc405617fc8bc9c7d711f0eb8228f194e32062cf5c2c5b24"
+    },
+    "Clean/Air/Balance.lean": {
+      "base_sha256": "49b17d945e6c2cf724935d4c69e6a99c3e49254c319d594a34cc0e82671d4f7d",
+      "patched_sha256": "bfe249802b314824bb2fadbd852c2b43c5b45c4a8a551b69a6227502bc1018c0"
+    }
+  }
+}

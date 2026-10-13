@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 
 import support.lake
+from support.compatibility import prepare
 import subprocess
 
 from support.lean_headers import HeaderParser
@@ -93,6 +94,7 @@ def main():
         work = ROOT / "integrations" / integration
         share_dependencies(ROOT, work)
         raw = subprocess.check_output([lake, "env", "printenv", "LEAN_SRC_PATH"], cwd=work, text=True).strip()
+        prepare(work)
     search = [(work / path).resolve() for path in raw.split(os.pathsep) if path]
     seeds = [ROOT / "Zkc.lean", ROOT / "clients/Main.lean"]
     for directory in ("Zkc", "Tests", "ZkcExamples", "ZkcTools"):

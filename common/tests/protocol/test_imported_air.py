@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-PROJECT = ROOT / 'examples/projects/imported-air'
+PROJECT = ROOT / 'common/tests/fixtures/projects/imported-air'
 FIXTURES = ROOT / 'compiler/adapters/plonky3/fixtures'
 RECURRENCE = FIXTURES / 'recurrence'
 P = 2130706433
