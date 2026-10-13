@@ -1,0 +1,21 @@
+module sums;
+
+use sumcheck::{Reduce, check};
+use zkc::vector::{Vector};
+use zkc::boolean::{both};
+
+// A client of the round protocol: check two independent public-table claims.
+// Each role supplies its own data; each obligation is checked against its own
+// table. One random service is threaded through both calls in source order.
+pub protocol TwoSums<F: Field, Max: nat> roles(P,V)
+    (left: Vector<F> @(P,V), right: Vector<F> @(P,V),
+     left_sum: F @V, right_sum: F @V, rounds: index @(P,V),
+     challenges: Random<F> @V) -> (accepted: bool @V) {
+  #[site(left)] let (left_point, left_residual, left_claim) =
+    Reduce<F,Max>(left, left_sum, rounds, challenges);
+  let left_ok = check(left, left_claim);
+  #[site(right)] let (right_point, right_residual, right_claim) =
+    Reduce<F,Max>(right, right_sum, rounds, challenges);
+  let right_ok = check(right, right_claim);
+  return both(left_ok, right_ok);
+}

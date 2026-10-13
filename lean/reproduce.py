@@ -55,6 +55,7 @@ def build_inputs(root, with_arklib=False, with_clean=False):
             files.extend((optional / directory).rglob('*.lean'))
     if with_clean:
         optional = root / CLEAN
+        files.extend(optional.glob('*.lean'))
         files.extend(optional / name for name in ('lakefile.toml', 'lake-manifest.json', 'lean-toolchain'))
         for directory in ('ZkcClean', 'TestsClean'):
             files.extend((optional / directory).rglob('*.lean'))

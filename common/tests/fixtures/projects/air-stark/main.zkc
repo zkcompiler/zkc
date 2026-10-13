@@ -1,0 +1,52 @@
+module air_stark_example;
+use stark::koala_bear::{Base, Extension};
+use stark::koala_bear::table::{Statement, TableArgument};
+use zkc::vector::{Vector};
+use zkc::vector as vec;
+domain Recurrence = bundle(asset recurrence);
+
+relation RecurrenceRelation(statement x0: Base, statement y0: Base,
+    statement final_acc: Base, witness trace: Vector<Base>,
+    parameter configuration: Vector<Base>) = bundle(asset recurrence);
+
+fn statement(configuration: Vector<Base>, x0: Base, y0: Base,
+    final_acc: Base, shift: Base) -> Statement {
+  let x = vec::fill(x0, 1);
+  let y = vec::fill(y0, 1);
+  let final = vec::fill(final_acc, 1);
+  let public_data = vec::concat(
+    vec::concat( x, y), final);
+  let zero: Base = 0;
+  let public_columns = vec::fill(zero, 0);
+  return Statement { configuration, public_columns, public_data, shift };
+}
+
+// Sizes and counts are deliberately small for executable protocol tests.
+protocol RecurrenceProof roles(P,V)
+    (trace: Vector<Base> @P, configuration: Vector<Base> @(P,V),
+     x0: Base @(P,V), y0: Base @(P,V), final_acc: Base @(P,V),
+     shift: Base @(P,V), round_count: index @(P,V),
+     query_count: index @(P,V), attempt_count: index @(P,V),
+     coins: Random<Extension> @V) -> (accepted: bool @V)
+    where Recurrence::Tables <= 1, Recurrence::Channels <= 0
+    spec {
+      target constraints = RecurrenceRelation(in.x0@V, in.y0@V, in.final_acc@V,
+        in.trace, in.configuration@V) accept out.accepted;
+    } {
+  let statementP @P = statement(configuration, x0, y0, final_acc, shift);
+  let statementV @V = statement(configuration, x0, y0, final_acc, shift);
+  let accepted = TableArgument<0,Recurrence,3,5,8,8>(trace, statementP,
+    statementV, round_count, query_count, attempt_count, coins);
+  return (accepted = accepted);
+}
+
+run Run = RecurrenceProof;
+proof Proof = RecurrenceProof {
+  prover P;
+  verifier V;
+  public { configuration, x0, y0, final_acc, shift,
+    round_count, query_count, attempt_count };
+  accept accepted;
+  target constraints;
+  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0", coins);
+}

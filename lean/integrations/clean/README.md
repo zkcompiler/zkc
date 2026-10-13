@@ -7,7 +7,8 @@ against Clean's own definitions. The main `lean/` package has no Clean
 dependency. The package uses a local path dependency on main and exact pins.
 
 ```sh
-just test-lean-clean          # from the repository root: fetch, build, audit, control
+just fetch-lean clean         # from the repository root: prepare pinned dependencies
+just test-lean-clean          # build, audit and check generated controls and fixtures
 cd lean/integrations/clean
 lake build
 lake env lean --run TestsClean/Control.lean   # print the native comparison control
@@ -46,7 +47,26 @@ package's revisions; Clean's own manifest selects the same ones. Clean's library
 requires module-system importers, but a `module` file cannot import the main zkc
 library, so both libraries here set `allowNonModules`.
 
-## Admitted fragment
+## Native Bundle examples
+
+The [native adapter](../../../compiler/adapters/clean/README.md) uses
+[NativeExport](ZkcClean/NativeExport.lean) to extract inductive table operations
+and one flat component with channels. The audited
+[clients](TestsClean/NativeClients.lean) author a Fibonacci constraint and
+instantiate upstream FemtoCairo, with explicit public bindings and lookup meanings.
+The small [wrapper](CleanExamples.lean), `lake env lean --run CleanExamples.lean OUTPUT`,
+produces separate static source plans, execution inputs and reference results.
+The native adapter compiles without execution inputs and reuses the compiled layout
+for instances and witnesses. `just test-lean-clean` checks the resulting native
+fixtures as well as the original flat control.
+
+This path has native differential and proof-execution tests. It is outside the
+correspondence theorems below. Lookup interpretations are explicit trusted
+adapter inputs, and arbitrary `Contains` predicates are not automatically
+translated. Full ensemble export must retain its verifier's singleton public
+row and channel balance premises; it is not admitted by the current adapter.
+
+## Proved flat fragment
 
 `exportComponent` reads `Air.Flat.Component.operations` of one component. It
 refuses any lookup or channel interaction anywhere in the flattened operations,

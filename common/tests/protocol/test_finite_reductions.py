@@ -167,7 +167,7 @@ run Demo=Run;
 def test_published_finite_reductions_project(toolchain, journal, directory, flags):
     package = directory / 'reductions.zkpkg'
     built = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                          f'--project={ROOT}/examples/projects/finite-reductions/zkc.toml',
+                          f'--project={ROOT}/common/tests/fixtures/projects/finite-reductions/zkc.toml',
                           'example::Demo', f'--output={package}', *flags])
     request = input_files(journal, 'input.json', session='reductions',
         roles={'P': {'inputs': {'left': decimal_values([2, 3]),
@@ -184,7 +184,7 @@ def test_published_finite_reductions_project(toolchain, journal, directory, flag
         ('--fuse-vector-reductions' in flags)
     assert built['options'] == json.loads(package.read_text())['options']
     source = [f'--compiler={toolchain.compiler}',
-              f'--project={ROOT}/examples/projects/finite-reductions/zkc.toml', *flags]
+              f'--project={ROOT}/common/tests/fixtures/projects/finite-reductions/zkc.toml', *flags]
     checked = journal.json([toolchain.runtime, '--json', 'inputs', 'check',
                             '--operation=run', *source, *request])
     assert checked['status'] == 'inputs-checked'

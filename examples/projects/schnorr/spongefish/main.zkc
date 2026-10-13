@@ -1,0 +1,44 @@
+module example;
+use statement::{Session};
+use spongefish::bls12_381::{G, Provider};
+use zkc::proof::{Stream};
+use zkc::encoding as encoding;
+
+construction External for Session {
+  transcript Provider;
+  replace challenges;
+  format Stream;
+  on start(t, tag, session, base, point) {
+    return Provider::start(t, tag, session, base, point);
+  }
+  on message proof.commitment(t, value) { return Provider::point(t, value); }
+  on query proof.challenge(t) { return Provider::draw(t); }
+  on message proof.delivery(t, value) { return t; }
+  on message proof.response(t, value) { return Provider::scalar(t, value); }
+  on encode proof.commitment(r, value) {
+    return Stream::append(r, encoding::group_compressed(value));
+  }
+  on encode proof.response(r, value) {
+    return Stream::append(r, encoding::field_be(value));
+  }
+  on receive proof.commitment(r, proof) { return Stream::take(r, 48); }
+  on receive proof.response(r, proof) { return Stream::take(r, 32); }
+  on decode proof.commitment(chunk) {
+    let (valid, value) = encoding::group_from_compressed<G>(chunk);
+    require valid;
+    return value;
+  }
+  on decode proof.response(chunk) {
+    let (valid, value) = encoding::field_from_be<G::Scalar>(chunk);
+    require valid;
+    return value;
+  }
+}
+
+proof Proof = Session {
+  prover P;
+  verifier V;
+  public { tag, session, base, point };
+  accept accepted;
+  construction External;
+}

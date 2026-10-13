@@ -42,8 +42,17 @@ def test_exported_bundles_and_mutations_agree(toolchain, journal):
         cases.append((f'{directory.name}: noncanonical value', changed, 'bundle-value', None))
         changed = deepcopy(original)
         changed[0][3][0][3] = 'finite'
-        if directory.name != 'counter-guarded':
+        if directory.name in {'counter-guarded', 'fibonacci'}:
+            # Transition selectors exclude the last row, so no read wraps.
+            cases.append((f'{directory.name}: guarded finite rows', deepcopy(rebind(changed)),
+                          not failures, failures))
+        else:
             cases.append((f'{directory.name}: finite wrap', rebind(changed), 'bundle-window', None))
+        # Force a genuinely undefined read even when selectors guard boundaries.
+        changed = deepcopy(original)
+        changed[0][3][0][3] = 'finite'
+        changed[0][3][0][6][0] = ['read', 0, '64', 0]
+        cases.append((f'{directory.name}: distant finite read', rebind(changed), 'bundle-window', None))
         if directory.name == 'recurrence':
             changed = deepcopy(original)
             changed[2][2][-1] = str(int(changed[2][2][-1]) + 1)

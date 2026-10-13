@@ -7,22 +7,22 @@ import pytest
 from entry import Entry
 from input_files import decimal_values
 from octic_reference import P, ZERO, ONE, add, mul, power
-from source_modules import finite_modules
+from source_modules import library_modules
 import test_air_stark as stark
 import test_fri as fri
 import test_machine_stark as machine
 from test_total_callback_selection import compile_entry as compile_counted_entry
 
 ROOT = Path(__file__).resolve().parents[3]
-SHARED = finite_modules()
-AIR = [f'--module=air_{name}={ROOT}/libraries/air/{name}.zkc'
-       for name in ('polynomial', 'table', 'interaction')]
+SHARED = library_modules('zkc')
+AIR = library_modules('air')
 FLAGS = [(), ('--no-simplify',), ('--no-finite-bulk',),
          ('--no-simplify', '--no-finite-bulk')]
 MODES = ['default', 'no-simplify', 'ordered', 'ordered-no-simplify']
 
 ARITHMETIC = '''module sample;
-use air_polynomial::{Vector, recombine};
+use zkc::vector::{Vector};
+use air::polynomial::{recombine};
 domain F = field("koala-bear.ext8-binomial3");
 protocol Inspect roles(P)(claims: Vector<F> @P, height: index @P, x: F @P)
     -> (value: F @P) {
@@ -35,7 +35,7 @@ run Demo = Inspect;
 @pytest.mark.parametrize('flags', FLAGS, ids=MODES)
 def test_air_recombination_matches_independent_powers(
         toolchain, journal, directory, flags):
-    entry = Entry(toolchain, journal, directory, ARITHMETIC, [*SHARED, *AIR, *flags])
+    entry = Entry(toolchain, journal, directory, ARITHMETIC, [*AIR, *flags])
     x = [11, 3, 0, 0, 0, 0, 0, 0]
     for count, height in [(0, 0), (1, 8), (5, 0), (5, 8)]:
         claims = [[i + 1, 0, i * i, 0, 0, 0, 0, 0] for i in range(count)]
@@ -49,7 +49,8 @@ def test_air_recombination_matches_independent_powers(
 
 
 TERMINAL = '''module sample;
-use fri::{Vector, terminal};
+use zkc::vector::{Vector};
+use fri::{terminal};
 domain F = field("koala-bear.ext8-binomial3");
 protocol Inspect roles(P)(coefficients: Vector<F> @P, shift: F @P,
     size: index @P, position: index @P) -> (value: F @P) {
@@ -85,16 +86,19 @@ def test_fri_terminal_coefficients_and_domain_admission(toolchain, journal, dire
 
 
 REDUCTION = '''module sample;
-use air_polynomial::{Vector, index_list, index_push};
-use air_interaction::{Reduction, LogUp, GrandProduct, interactions};
+use zkc::indices as indices;
+use zkc::vector::{Vector};
+
+
+use air::interaction::{Reduction, LogUp, GrandProduct, interactions};
 domain F = field("koala-bear");
 fn build<R: Reduction<F>>(values: Vector<F>, rows: index,
     gamma: F, delta: F, active: bool) -> (Vector<F>, Vector<F>) {
-  let none = index_list();
-  let channel = if active { index_push(none, 0) } else { none };
-  let arity = if active { index_push(none, 2) } else { none };
-  let degrees = if active { index_push(none, 1) } else { none };
-  let records = interactions(1, channel, channel, arity, degrees, degrees);
+  let none = indices::empty();
+  let channel = if active { indices::append(none, 0) } else { none };
+  let arity = if active { indices::append(none, 2) } else { none };
+  let degrees = if active { indices::append(none, 1) } else { none };
+  let records = interactions(1, degrees, channel, channel, arity, degrees, degrees);
   let challenges = kernel<F>("vector.append",
     kernel<F>("vector.append", kernel<F>("vector.empty"), gamma), delta);
   return R::build(records, values, rows, challenges);

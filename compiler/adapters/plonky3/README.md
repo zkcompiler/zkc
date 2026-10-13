@@ -1,5 +1,10 @@
 # Plonky3 AIR adapter
 
+The [Fibonacci project](../../../examples/projects/fibonacci/README.md) applies
+one `.zkc` STARK library to both this adapter's two-column Fibonacci AIR and a
+Clean table. `FibonacciAir` owns the recurrence and four public boundary values;
+the fixture uses eight rows.
+
 This standalone Rust workspace captures AIRs written against pinned Plonky3
 0.8.0 and exports them as views over the shared `zkc.ring/0` expression arena.
 An importer rechecks the exported view, binds it to an authorized instance and a
@@ -136,7 +141,7 @@ per line, each value in compact JSON. Identities are SHA-256 of that text.
 | `arena.json` | `zkc.ring/0` | Exact arena text, captured by the source compiler with `--asset=export=ring-json=FILE` and retained in the authenticated Entry package |
 | `bundle*.json` | `zkc.relation-bundle/0` and its configuration, instance and witness | Derived relation-bundle carriers |
 | `expected.json` | | Upstream debug-checker failures for the fixture's instance and witness |
-| `source-*.json` | Entry input maps | Recurrence only: participant inputs for the [imported AIR source client](../../../examples/projects/imported-air/README.md). Trace requests keep witness, configuration and public values separate; polynomial requests carry assignments prepared by the closed view. `source-expected.json` holds direct `Air::eval` values for each. |
+| `source-*.json` | Entry input maps | Recurrence only: participant inputs for the [imported AIR source client](../../../common/tests/fixtures/projects/imported-air/README.md). Trace requests keep witness, configuration and public values separate; polynomial requests carry assignments prepared by the closed view. `source-expected.json` holds direct `Air::eval` values for each. |
 
 Slot bindings are `["main", column, offset]`, `["preprocessed", column, offset]`,
 `["public", index]` and `["selector", kind]`. Assertion `i` is upstream
@@ -181,7 +186,7 @@ value:
 - native affine sums over row pairs, and Ext8 promotion of base inputs;
 - bundle residuals on scope rows with row-indicator residuals.
 
-The [source client](../../../examples/projects/imported-air/README.md) runs the
+The [source client](../../../common/tests/fixtures/projects/imported-air/README.md) runs the
 recurrence arena through the common compiler and the Entry Host as an evaluator
 asset. Its requests come from the closed view of the honest trace, one changed
 cell and one changed public value: row assignments under both selector laws,

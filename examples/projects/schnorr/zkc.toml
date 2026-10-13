@@ -1,5 +1,7 @@
 format = "zkc.project/0"
 
 [modules]
-example = "main.zkc"
-schnorr = "../../../libraries/schnorr/lib.zkc"
+"example" = "main.zkc"
+
+[dependencies]
+schnorr = "../../../libraries/schnorr"

@@ -12,14 +12,20 @@ challenges reduce 64 big-endian XOF bytes. G1 uses 48-byte compressed subgroup
 encodings. Decoding succeeds before observation. A final response is observed
 even when no later challenge is requested.
 
-`spongefish_schnorr::Schnorr` obtains its nonce from the prover's `Random`
+`spongefish::schnorr::Schnorr` obtains its nonce from the prover's `Random`
 service. `produce` accepts an explicit nonce for composition and deterministic
 tests; callers must ensure its secrecy, independence and freshness. `verify`
 checks the group equation before EOF. The protocol sends a single `Bytes` value
 containing the 48-byte commitment and 32-byte response. It does not add a zkc
 artifact identity, session or message prefix.
 
-The [example](../../examples/projects/spongefish-schnorr/README.md) selects
+`spongefish::bls12_381::Provider` adapts these same transitions to programmable
+constructions. The [constructed client](../../examples/projects/schnorr/spongefish/README.md)
+uses it with the generic Schnorr library and the common stream codec. The
+application explicitly selects observations, decoding and record sizes; no
+protocol-specific compiler or runtime path is involved.
+
+The [explicit transcript reference](../../common/tests/fixtures/projects/spongefish-schnorr/README.md) selects
 `RawBytes`. Generic signatures do not make the fixed-width record a format for
 every group. The current specialization is BLS12-381 G1/Fr. Caller-supplied base,
 statement and session values define the statement; applications must authorize

@@ -94,7 +94,7 @@ pub(crate) fn apply(
             Ok(vec![Groups(out.into()), Nonce(t)])
         }
         ("curve.commit", [RistrettoGroups(b), Nonce(t)]) => {
-            p.ristretto_groups(b.len())?;
+            p.dalek_groups(b.len())?;
             p.output(
                 size(b.len(), std::mem::size_of::<crate::RistrettoPoint>())?
                     .checked_add(512)

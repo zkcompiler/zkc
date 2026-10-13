@@ -490,7 +490,8 @@ class CleanIntegrationControls(unittest.TestCase):
     def test_reproduction_hashes_the_package_and_its_control(self):
         inputs = reproduce.build_inputs(ROOT, with_clean=True)
         for name in ("integrations/clean/lake-manifest.json", "integrations/clean/ZkcClean/Native.lean",
-                     "integrations/clean/TestsClean/Control.lean", str(reproduce.CLEAN_CONTROL)):
+                     "integrations/clean/TestsClean/Control.lean", "integrations/clean/CleanExamples.lean",
+                     str(reproduce.CLEAN_CONTROL)):
             self.assertIn(name, inputs)
         self.assertNotIn(str(reproduce.CLEAN_CONTROL), reproduce.build_inputs(ROOT))
 

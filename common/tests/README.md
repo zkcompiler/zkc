@@ -94,8 +94,9 @@ cases.
 ## Optional formal checks
 
 Use `nix develop .#lean`, then `just fetch-lean` and `just test-lean` to build and check the independent package. Prepare optional dependencies with `just fetch-lean arklib` or `just fetch-lean clean`, then use `just test-lean-integration` or `just test-lean-clean` to build and check that package. The Clean check requires
-[its native control](fixtures/clean/air-control.json) to be the producer's
-current output; the [native comparison](protocol/test_clean_air_conformance.py)
+[its native control](fixtures/clean/air-control.json) and the
+[Bundle fixtures](../../compiler/adapters/clean/README.md) to be the producers'
+current outputs; the [native comparison](protocol/test_clean_air_conformance.py)
 of that control runs in `just test-integration` without Lean.
 `just test-lean-fresh` rebuilds research packages without previous
 project/dependency objects. These can be expensive.

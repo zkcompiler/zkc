@@ -253,6 +253,62 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
+  for (unsigned variant = 0; variant < 3; ++variant)
+    cases.run("field reduction domain coverage " + llvm::Twine(variant), [&] {
+      std::string text = R"mlir(
+!F = !algebra.field<"bls12-381.fr">
+!V = !algebra.field_vector<"bls12-381.fr">
+!E = EXTRA_CONTAINER
+!X = EXTRA_ELEMENT
+module { "protocol.module"() ({
+ "data.domain"() ({ ^entry(%xs:!V,%extra:!E):
+   %x = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
+   %e = "data.domain_elements"(%extra) : (!E)->!data.domain<!X>
+   %d = "data.domain_zip"(%x,%e) : (!data.domain<!F>,!data.domain<!X>)->!data.domain<!F,!X>
+   "data.domain_yield"(%d) : (!data.domain<!F,!X>)->()
+ }) {sym_name="items",sym_visibility="private",function_type=(!V,!E)->!data.domain<!F,!X>} : ()->()
+ func.func private @step(%state:!F,%x:!F,%unused:!X,%xs:!V,%extra:!E)->!F {
+   %r = algebra.field_add %state,%x : (!F,!F)->!F
+   func.return %r : !F
+ }
+ func.func private @total(%xs:!V,%extra:!E,%seed:!F)->!F attributes {data.preconditions=[#data.equal_extent<0,0,1,0>]} {
+   %r = "algebra.finite_fold"(%xs,%extra,%seed) {domain=@items,step=@step} : (!V,!E,!F)->!F
+   func.return %r : !F
+ }
+ "protocol.func"() ({ "protocol.return"() : ()->() }) {sym_name="main",function_type=()->(),roles=["P"],input_roles=[],output_roles=[]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir";
+      StringRef container = variant == 0 ? "!V"
+                            : variant == 1
+                                ? "!algebra.group_vector<\"bls12-381.g1\">"
+                                : "!algebra.field_array<\"bls12-381.fr\", 2>";
+      StringRef element =
+          variant == 1 ? "!algebra.group<\"bls12-381.g1\">" : "!F";
+      text.replace(text.find("EXTRA_CONTAINER"),
+                   StringRef("EXTRA_CONTAINER").size(), container.str());
+      text.replace(text.find("EXTRA_ELEMENT"),
+                   StringRef("EXTRA_ELEMENT").size(), element.str());
+      auto source = parseSourceString<ModuleOp>(text, &context);
+      require(bool(source) && succeeded(verify(*source)),
+              "field domain fixture refused");
+      RealizationWork work;
+      RealizationTrace trace;
+      auto candidate = emit(*source, work, true, &trace);
+      require(hasLoop(selected(*candidate)) == (variant != 0),
+              "field reduction selected outside its independent domain reader");
+      if (!variant)
+        require(compare(*source, *candidate),
+                "supported field zip did not compare");
+      else {
+        bool observed = false;
+        for (const auto &event : trace.events)
+          if (auto *decision = std::get_if<SelectionDecision>(&event.payload);
+              decision && decision->family == DecisionFamily::Finite)
+            observed |= decision->outcome.reason ==
+                        OptimizationReason::ImplementationRestriction;
+        require(observed, "field domain decline lost its explanation");
+      }
+    });
   for (bool equality : {false, true})
     cases.run(
         equality ? "called callback retains its indexed extent premise"

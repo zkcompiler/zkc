@@ -28,15 +28,18 @@ the independent semantic foundations.
 ## Project inputs
 
 `zkc.toml` records explicit source and asset locations. Relative paths use the
-manifest's visible parent, including when the manifest is a symlink. Imports
-never search directories.
+manifest's visible parent, including when the manifest is a symlink. Local
+dependencies select library directories with their own `zkc.toml`. Their explicit
+source maps are combined before compilation; imports never search directories.
 
 ```toml
 format = "zkc.project/0"
 
 [modules]
 example = "main.zkc"
-schnorr = "../../libraries/schnorr/lib.zkc"
+
+[dependencies]
+schnorr = "../../libraries/schnorr"
 
 # Optional external relation data.
 [assets.constraints]

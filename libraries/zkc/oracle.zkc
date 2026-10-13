@@ -1,0 +1,28 @@
+module zkc::oracle;
+use zkc::vector::{Vector};
+
+// Row commitments. Width, row count and index remain explicit authentication
+// inputs. These operations do not establish a polynomial evaluation argument.
+pub type Root<C: Commitment> = builtin("commitment", C);
+pub type Path<C: Commitment> = builtin("proof", C);
+pub type State<C: Commitment> = builtin("opening_state", C);
+pub type Roots<C: Commitment> = builtin("commitments", C);
+pub type States<C: Commitment> = builtin("opening_states", C);
+
+pub fn commit<C: Commitment>(values: Vector<C::ValueField>, width: index)
+    -> (Root<C>, State<C>) = primitive("oracle.commit");
+pub fn open<C: Commitment>(state: State<C>, position: index)
+    -> (Vector<C::ValueField>, Path<C>) = primitive("oracle.open");
+pub fn check<C: Commitment>(root: Root<C>, width: index, rows: index,
+    position: index, values: Vector<C::ValueField>, path: Path<C>) -> bool
+    = primitive("oracle.check");
+pub fn roots<C: Commitment>() -> Roots<C> = primitive("commitments.empty");
+pub fn append_root<C: Commitment>(items: Roots<C>, root: Root<C>) -> Roots<C>
+    = primitive("commitments.append");
+pub fn root_at<C: Commitment>(items: Roots<C>, position: index) -> Root<C>
+    = primitive("commitments.at");
+pub fn states<C: Commitment>() -> States<C> = primitive("opening_states.empty");
+pub fn append_state<C: Commitment>(items: States<C>, state: State<C>) -> States<C>
+    = primitive("opening_states.append");
+pub fn state_at<C: Commitment>(items: States<C>, position: index) -> State<C>
+    = primitive("opening_states.at");

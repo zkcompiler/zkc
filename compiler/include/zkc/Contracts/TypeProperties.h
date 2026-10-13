@@ -99,7 +99,8 @@ inline bool nativeMessageData(const BoundType &type) {
            type.identity == "koala-bear.ext8-binomial3")) ||
          ((type.kind == "group" || type.kind == "groups") &&
           (type.identity == "bn254.g1" || type.identity == "bn254.g2" ||
-           type.identity == "ristretto255.group")) ||
+           type.identity == "ristretto255.group" ||
+           type.identity == "edwards25519.prime")) ||
          ((type.kind == "field" || type.kind == "vector" ||
            type.kind == "matrix") &&
           type.identity == "bls12-381.fr") ||

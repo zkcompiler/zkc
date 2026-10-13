@@ -11,6 +11,7 @@
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/MathExtras.h"
 #include <map>
@@ -626,7 +627,9 @@ class Comparison {
     auto &memo = helpers[&block];
     if (auto found = memo.find(key); found != memo.end())
       return found->second;
-    llvm::DenseMap<Value, Meaning> values;
+    // Extent evidence consumes bounded work while visiting these entries.
+    // Preserve source order so pointer hashes cannot change which proof fits.
+    llvm::MapVector<Value, Meaning> values;
     for (auto [argument, meaning] : zip(block.getArguments(), inputs))
       values[argument] = meaning;
     for (Operation &op : block.without_terminator()) {

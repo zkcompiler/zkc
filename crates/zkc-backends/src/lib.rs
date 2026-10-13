@@ -75,8 +75,10 @@ pub fn classify_error(error: &BackendError) -> ErrorClass {
     }
 }
 
+mod edwards;
 pub use curve25519_dalek::{ristretto::RistrettoPoint, scalar::Scalar as RistrettoScalar};
 pub use diagonal::Diagonal;
+pub use edwards::EdwardsPrime;
 pub use kernels::arithmetic::parse_ristretto_decimal;
 
 /// Exact order of the Ristretto255 scalar field. No sampler uniformity claim.
@@ -97,3 +99,8 @@ mod sequence;
 pub use sequence::Sequence;
 mod field_array;
 pub use field_array::FieldArray;
+
+#[cfg(feature = "test-utils")]
+mod test_tape;
+#[cfg(feature = "test-utils")]
+pub use test_tape::TestTape;

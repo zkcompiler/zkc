@@ -1,0 +1,253 @@
+# Common operations
+
+These modules expose checked local operations and total mathematical functions.
+They select no application relation, participant protocol or transcript policy.
+
+| Family | Modules |
+|---|---|
+| Collections and traversal | `vector`, `indices`, `sequence`, `matrix`, `field_array`, `finite`, `finite_math`, `finite_domain`, `accumulation` |
+| Algebra and polynomials | `scalar`, `curve`, `polynomial`, `multilinear`, `coset`, `opening`, `symbolic`, `boolean` |
+| Commitments and encoding | `oracle`, `bytes`, `encoding`, `proof`, `shake128`, `transcript`, `sampling` |
+
+Names above are under `zkc::`. The [manifest](zkc.toml) captures this family.
+
+## Representation contracts
+
+`multilinear::fix_first` pairs contiguous halves and fixes the most significant
+Boolean coordinate. `fix_prefix` applies successive coordinates and retains
+remaining rows or factor columns. `Evaluation<F>` carries a point and value;
+its polynomial, dimension and commitment remain the caller's obligation.
+
+`coset` uses natural-order two-adic domains. Its fold pairs points `x` and `-x`
+and returns evaluations on the squared coset. This differs from multilinear
+restriction. `opening_quotient` forms `(f(X)-value)/(X-at)` on the supplied
+coset and refuses a denominator of zero. `disjoint_coset` checks both domain
+sizes and excludes intersection in either size ordering.
+
+`oracle` commits row-major field elements with an explicit width. Authentication
+requires the root, width, number of rows, position, row and path. A successful
+row check establishes no polynomial evaluation or low-degree claim. `State`
+contains prover opening data; `Root` and `Path` are distinct native values.
+
+`scalar::inverse` and vector inversion refuse zero. Vector arithmetic and
+layout operations retain native shape checks. `scalar::power` uses an unsigned
+64-bit index exponent. `indices::two_adic<Max>` recognizes powers of two from
+2 through `2^Max`, with `Max <= 63`; zero and one return false. Prefix sums and
+products preserve every prefix, while ordinary sums and products return one
+value. `polynomial` stores univariate coefficients in increasing
+power order; an empty coefficient vector denotes zero.
+
+`opening::deep_columns` and `deep_column_values` batch ordered column openings
+with successive powers of `rho`, continuing the supplied accumulator and first
+weight. The vector accumulator has the evaluation-domain size, including for
+an empty batch. Callers exclude every rotated opening point from that domain.
+The row form checks the same equation at one authenticated row; the caller
+still supplies authentication, degree checks and acceptance.
+
+## Bounded sampling
+
+`zkc::sampling::uniform_index<W, Attempts>(state, bound)` returns the next
+provider state and an index in `[0, bound)`. `W: Words` supplies one unsigned
+64-bit word per `next` call; the interface does not require copyable state.
+`bound` may be any positive u64. Zero rejects before a provider call. The
+sampler stops drawing after the first accepted word; exhausting `Attempts`
+stops with `exhausted`, including when the attempt count is zero. Bound one
+still consumes one word when an attempt is available.
+
+The rejected prefix has length `2^64 mod bound`. The accepted interval therefore
+contains equally many representatives of each residue. Under independent
+uniform provider words, the result conditioned on success is uniform. Provider
+uniformity and independence are premises; compiler checks and deterministic
+test vectors do not establish them. A copied provider state is an explicit
+trial of that snapshot, and its executed work remains chargeable.
+
+## Finite computations
+
+The finite libraries use statically bound callbacks written `fn(...) -> ...`
+or `math fn(...) -> ...`, and finite domains written `domain<I>`. These are
+static parameter categories, with no runtime function or domain values. The input
+item, accumulated state and output element can have different types. Library
+callback signatures name the item input and promise
+`where item_from(item, rows)` after their effects. This requires the whole
+original item of that exact domain; an equal or reconstructed value does not
+satisfy the contract. Lambda binders can use any valid name. For example:
+
+```text
+use zkc::finite as finite;
+use zkc::finite_domain as domains;
+
+let dot = finite::sum(domains::zip(xs, ys), fn((x, y)) => x * y);
+let decimal = finite::fold(xs, initial, fn(state, x) => state * 10 + x);
+let selected = finite::sum_where(rows, fn(row) => row.enabled,
+                                fn(row) => checked_value(row));
+```
+
+A native vector, group vector, sequence, index collection or fixed array supplied
+at a domain parameter traverses its elements in storage order. Source arrays
+use their existing fixed shape. `elements` names the same traversal explicitly;
+`indices` yields positions tied to that exact input. Scalars and matrices have
+no implicit element traversal. Matrix views are explicit: `row_values`,
+`column_values`, `row_indices`, `column_indices`, `coordinates` (row-major) and
+`column_coordinates`. A strict zip validates every child extent before entering
+its body, including ignored rows and empty inputs. A product traverses all pairs
+in lexicographic order. Nested calls construct inner domains only when reached.
+
+`fold` uses its explicit initial state. `collect` returns a `Sequence<T>`;
+representation-specific `vector::collect`, `curve::collect` and `indices::collect`
+return their native containers. `field_array::collect` is total and requires an
+exact proven cardinality. Filtered forms evaluate their predicate before the
+body and skip the body on false. Predicate failures propagate.
+
+`accumulate<I, T, C>` starts from `C::identity()` and applies `C::combine` in
+traversal order. The `Combiner<T>` interface supplies total operations without
+claiming algebraic laws. The field sum/product and group sum functions select
+standard modules. A custom nonassociative combiner still preserves order;
+no optimization law follows just from implementing the interface. Group sums
+require `ScalarAction(G)`, including empty sums.
+
+`vector::reduce(rows, body, reducer)` materializes the body results before
+calling the arbitrary scoped reducer exactly once. The reducer sees the whole
+vector and may reject even an empty one. This differs from accumulation; the
+compiler does not infer an incremental implementation for a user reducer.
+
+`finite_math` uses the same domain and capture infrastructure with total Math
+callbacks. `vector::at`, `sequence::at`, `curve::at`, `indices::at` and
+`matrix::at` require proven bounds. Their checked `get` counterparts retain
+ordinary Local failure behavior where provided.
+
+Within a Math body, an unfiltered collect preserves the input domain's known
+length. For a collect over `elements(xs)` or `indices(xs)`, `indices(xs)` can
+therefore read its newly constructed result. An arbitrary range's values need
+not be indices into the result.
+Exact forwarding helpers preserve the input's identity; collection construction
+preserves length without identifying the two values. Direct total finite calls
+also preserve actual range endpoints: `field_array::collect(range(0, 4), body)`
+can produce `Array<F, 4>` when its backend supports that carrier. A wrapper with
+an unconstrained domain parameter must still justify its own output length.
+
+The vector, matrix, curve, sequence, indices and field-array modules export
+library-owned indexing bindings to their total `at` functions. Import
+`indexing []` to write `values[position]` or `matrix[row, column]`; the same
+bound requirements apply as for the named call. A body-local declaration such
+as `indexing values[position] = zkc::vector::get(values, position);` selects
+checked Local access explicitly. See the [notation guide](../../docs/language/notation.md#index-collections).
+The [finite computation example](../../common/tests/fixtures/projects/finite-computations/README.md)
+combines named functions, records, matrix views and total mathematical helpers.
+The [FRI fold](../../common/tests/fixtures/projects/fri-fold/README.md) and
+[LogUp row](../../common/tests/fixtures/projects/logup-rows/README.md) examples exercise returned
+projections, intermediate collection lengths and fixed compression weights in
+two protocol computations. They reuse `fri::fold_value` and the
+`air::interaction` functions `gated_denominator`, `reciprocal_residual` and
+`boolean_residual`. These scalar functions express the equations; their callers
+supply authenticated values, valid inverses and the remaining protocol checks.
+
+The [table inner-product](../../common/tests/fixtures/projects/table-inner-product/README.md)
+and [lookup denominator](../../common/tests/fixtures/projects/lookup-denominators/README.md)
+controls exercise indexed reads through nested helpers, repeated arguments and
+distinct equal-length vectors in KoalaBear and Ext8.
+
+## Native mathematics and containers
+
+Import only the modules a client needs. Native `fn` definitions retain ordered
+execution and the kernels' possible stop behavior: vector splitting requires a
+positive even length, point access checks bounds, arithmetic checks lengths,
+and matrix products check dimensions. `multilinear::fix_first` applies a scalar affine formula
+through native `map` after splitting; both Sumcheck libraries use this definition.
+It fixes one Boolean coordinate of an evaluation table. FRI folding additionally
+uses its coset points and keeps its separate domain-specific operation.
+`has_length<F, N>` compares the dynamic
+length with explicit static `N`; it does not resize or pad a vector.
+
+`zkc::matrix::row_dot(matrix, values, row)` and `column_dot(matrix, values,
+column)` compute one selected contraction without materializing all outputs.
+The compiler selects these same scalar contracts for supported finite row and
+column reductions. Whole row/column collections can select a matvec while
+retaining the empty-outer behavior of the authored nested computation.
+
+`zkc::matrix::get(matrix, row, column)` checks both dynamic coordinates and
+returns the coefficient in the matrix's field. An absent in-range sparse cell
+is zero; an out-of-range coordinate stops execution, including every access to
+a matrix with either dimension zero.
+`zkc::field_array::from_vector<F, N>(values)` checks that the vector has exactly
+`N` elements. `zkc::field_array::get(array, position)` checks `position < N`.
+Both are ordinary native functions; fixed field arrays currently execute only
+over BLS12-381 Fr. This `Array` has the same type as `zkc::symbolic::Array`.
+The symbolic module's static `get<F, N, I>` retains its mathematical bound
+requirement. A dynamic `index` alone establishes no such bound.
+
+`zkc::sequence::Sequence<T>` stores executable `Copy + Drop` values, including
+records, tuples, fixed source arrays, unit and nested sequences. `empty<T>()`
+creates an empty sequence, `append(values, value)` returns the extended sequence,
+`length(values)` returns an index, and `get(values, position)` stops when the
+zero-based position is out of bounds. These are ordinary ordered `fn` primitives.
+Products are packed only at the sequence element boundary; functions taking or
+returning records still use the ordinary source ABI. Generic helpers retain the
+written Copy/Drop requirements. Private fields and restricted constructors retain
+their module authority, and sequence formation grants no external construction authority.
+Native JSON/wire codecs retain the packed variant's nominal descriptor and ordered
+payload; decoding does not construct private source values.
+
+`zkc::symbolic::Polynomial<F, N>` is a formal expression with `N` variables.
+`zkc::polynomial::Polynomial<F>` is runtime univariate coefficient data. Use
+qualified paths when both occur in one module. Formal MLEs use MSB-first Boolean
+coordinates. `mle<F, N>` keeps `N` explicit because inferring it would invert
+`pow2(N)`; ordinary field, array and result inference still applies. Coefficients
+are increasing powers; formal coefficient extraction checks its degree premise.
+`fix_prefix` substitutes leading coordinates; `sum_suffix` sums trailing Boolean
+coordinates. `fix_table` performs the same prefix substitution on an MLE table.
+Their static arguments name the remaining arity and the fixed/summed arity;
+these choices stay explicit when their sum alone would not determine them.
+Generic preconditions are completed from the intrinsic contracts and checked
+at each call. These modules select no field, commitment or transcript.
+
+Use `!`, `&&` and `||` to write Boolean expressions. The `zkc::boolean` helpers
+remain ordinary functions: `both(a, check(b))` evaluates both arguments even
+when `a` is false. In local `fn` code, `a && check(b)` skips the call when `a`
+is false. See the [Boolean rules](../../docs/spec/language/definitions.md#boolean-formulas)
+for mathematical formulas and resource checks.
+
+The [mathematics client](../../common/tests/fixtures/projects/mathematics/README.md) compares
+formal evaluation and vector arithmetic. The embedded scalar prelude supplies
+field arithmetic and equality, group addition/equality and `point * scalar`
+scaling, Boolean equality, and index arithmetic/equality. Its named functions
+and operators share the compiler's native operation identities. Asset-specific
+ring operations and module-specific PCS operations stay in their owning
+libraries, using explicit asset/module parameters and installed kernels.
+
+Use `zkc::curve::identity<G>()` for a nullary mathematical group zero. Its
+result fixes the exact group; no point is needed, including for empty sums.
+This is distinct from the native generator and empty group-vector operations.
+
+Import a whole math module to enable its public operators, for example
+`use zkc::vector as vec;`. Vector `+` calls `add`; vector `*` calls `scale` with
+the scalar on the right. Matrix `*` calls `multiply` on a matrix and vector.
+Formal polynomial `+`/`*` call symbolic `add`/`multiply`. Vector `⊙` is
+left-associative at power 70 and calls `hadamard`, an explicit wrapper for
+`primitive("vector.mul")`; `⟪a, b⟫` calls `dot(a, b)`. Both retain native
+length checks and stop behavior. Vector `*` remains right-scalar scaling.
+Named `vec::hadamard(a, b)` and `vec::dot(a, b)` remain available.
+Importing `::{Vector, add}` alone enables no notation; add `operator +`,
+`operator ⊙` or `notation ⟪` to select the corresponding exported binding. The
+[operator contract](../../docs/spec/language/definitions.md#library-defined-operators)
+defines ambiguity and local replacement rules. The
+[notation guide](../../docs/language/notation.md) shows weighted vector expressions,
+delimiter declarations and Unicode input. Symbols preserve ordinary callable
+modes and effects; they supply no additional algebra, optimizer or security claim.
+The vector module reexports `finite`'s paired sum/product notation. Write
+`∑ x in xs, x * x` or `finite::sum(xs, fn(x) => x * x)`. Selective imports use
+`reduction ∑` and `reduction ∏`; filters use `with`. Strict zip retains checks
+for ignored rows. Named `vec::sum(xs)` and `vec::product(xs)` still reduce an
+already constructed vector. The [finite reduction guide](../../docs/language/notation.md#reduce-finite-domains)
+explains general domains, scoped bodies, precedence and Local/Math selection.
+
+These functions use `primitive` bodies when their ports determine the installed
+scheme. Algorithms and operations with explicit attributes retain ordinary bodies.
+Both paths reach the same native mathematical/vector contracts; imports control
+source notation and do not install new runtime semantics.
+
+`sampling::Nonzero<F,Attempts>` is a single-participant protocol that rejects zero
+candidates from a managed `Random<F>` service. It returns the first nonzero field
+value or stops after `Attempts` draws, retaining actual service consumption.
+Uniformity is conditional on the provider's field distribution; it supplies no
+new randomness assumption. `sampling::uniform_index` similarly bounds rejection
+over an explicit word provider.

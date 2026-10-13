@@ -65,6 +65,7 @@ fn frame(ty: &PhysicalType) -> Option<(u8, usize)> {
             (Field, KoalaBearExt8) => Some((26, 38)),
             (Field, Ristretto255Scalar) => Some((13, 38)),
             (Group, Ristretto255Group) => Some((16, 38)),
+            (Group, Edwards25519Prime) => Some((68, 38)),
             _ => Option::None,
         }
     } else {
@@ -186,6 +187,7 @@ fn encode_fixed(value: &Value, policy: &Policy) -> Result<Vec<u8>, NativeWireErr
         }
         Value::RistrettoField(v) => bytes.extend_from_slice(&v.to_bytes()),
         Value::RistrettoGroup(v) => bytes.extend_from_slice(&v.compress().to_bytes()),
+        Value::EdwardsGroup(v) => bytes.extend_from_slice(&v.to_bytes()),
         _ => return Err(unsupported()),
     }
     if bytes.len() != width {
@@ -373,6 +375,9 @@ impl NativeBackend {
                     bytes[6..].try_into().expect("checked scalar width"),
                 ))
                 .ok_or(Invalid(DecodeReason::Scalar))?,
+            ),
+            68 => Value::EdwardsGroup(
+                crate::EdwardsPrime::from_bytes(&bytes[6..]).ok_or(Invalid(DecodeReason::Group))?,
             ),
             16 => {
                 let compressed = curve25519_dalek::ristretto::CompressedRistretto(

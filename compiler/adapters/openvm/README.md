@@ -42,8 +42,8 @@ The remaining ISA, executable commitment,
 public-value publication, continuations, recursion and proof verification are
 outside this selection.
 
-The [accumulator-machine proof](../../../examples/projects/accumulator-machine/README.md)
-is a separate executable STARK example. Its three-table Boolean-multiset source
+The [accumulator-machine proof](../../../common/tests/fixtures/projects/accumulator-machine/README.md)
+is a separate executable STARK example. Its three-table source
 profile does not directly prove this five-table field-balance relation.
 
 ## Dependencies and capture

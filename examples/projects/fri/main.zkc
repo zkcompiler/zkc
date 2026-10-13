@@ -1,5 +1,6 @@
 module example;
-use fri::{Vector, LowDegree};
+use zkc::vector::{Vector};
+use fri::{LowDegree};
 domain E = field("koala-bear.ext8-binomial3");
 domain Rows = commitment("rows.merkle-keccak256.koala-bear.ext8-binomial3/0");
 protocol Fri roles(P,V)(word: Vector<E> @P, shift: E @(P,V), round_count: index @(P,V),

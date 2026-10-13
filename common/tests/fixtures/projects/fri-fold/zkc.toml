@@ -1,0 +1,8 @@
+format = "zkc.project/0"
+
+[modules]
+"fri_fold" = "main.zkc"
+
+[dependencies]
+fri = "../../../../../libraries/fri"
+zkc = "../../../../../libraries/zkc"

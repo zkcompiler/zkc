@@ -102,7 +102,7 @@ fn execute(
         .iter()
         .find(|r| !r.entry.services.is_empty())
         .map(|r| r.entry.role.as_str());
-    let reference = verifier.map(|v| registry.issue_test_tape(v, budget, tape.into()).unwrap());
+    let reference = verifier.map(|v| registry.issue_test_tape(v, budget, tape.to_vec()).unwrap());
     let inputs = bundle
         .roles()
         .iter()

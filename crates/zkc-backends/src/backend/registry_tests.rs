@@ -297,6 +297,8 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
             "RistrettoRound" => R::DalekRound,
             "RistrettoGroup" => R::Ristretto,
             "RistrettoGroups" => R::RistrettoVector,
+            "EdwardsGroup" => R::EdwardsPrime,
+            "EdwardsGroups" => R::EdwardsPrimeVector,
             "FrDiagonal" => R::FrDiagonal,
             "RistrettoDiagonal" => R::RistrettoDiagonal,
             "Field" => R::Fr,
@@ -430,6 +432,13 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         Curve,
         Groups,
         128
+    );
+    group_family!(
+        crate::EdwardsPrime::generator(),
+        Edwards25519Prime,
+        EdwardsGroup,
+        EdwardsGroups,
+        std::mem::size_of::<crate::EdwardsPrime>()
     );
     group_family!(
         crate::Bn254G1::generator(),
@@ -1283,6 +1292,7 @@ fn every_exact_installation_has_a_supported_binding_and_impossible_owners_are_ab
         &["bn254.g2"],
         &["bn254.gt"],
         &["ristretto255.group"],
+        &["edwards25519.prime"],
         &["multilinear.kzg.bls12-381/0"],
         &["rows.merkle-keccak256.koala-bear/0"],
         &["rows.merkle-keccak256.koala-bear.ext8-binomial3/0"],

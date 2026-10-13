@@ -9,6 +9,7 @@ runCommand "zkc-source-boundaries" { } ''
   test ! -e ${sources.compiler}/lean
   test -f ${sources.compilerTests}/common/tests/fixtures/clean/air-control.json
   test -f ${sources.compilerTests}/compiler/test/CMakeLists.txt
+  test -f ${sources.compilerTests}/common/tests/fixtures/projects/scoped-computations/main.zkc
   test ! -e ${sources.compilerTests}/common/tests/run.py
   test -f ${sources.rust}/crates/zkc-tools/Cargo.toml
   test ! -e ${sources.rust}/scripts
@@ -18,6 +19,9 @@ runCommand "zkc-source-boundaries" { } ''
   test ! -e ${sources.integration}/common/tests/harness
   test ! -e ${sources.integration}/common/tests/consumer
   test -f ${sources.integration}/docs/getting-started.md
+  test -f ${sources.integration}/compiler/adapters/clean/adapter.py
+  test -f ${sources.integration}/compiler/adapters/ring_arena.py
+  test -f ${sources.integration}/compiler/adapters/clean/fixtures/femtocairo/bundle.json
   test -f ${sources.sdk}/common/tests/consumer/test_discovery.py
   test ! -e ${sources.sdk}/compiler/lib
   test ! -e ${sources.lean}/lean/integrations

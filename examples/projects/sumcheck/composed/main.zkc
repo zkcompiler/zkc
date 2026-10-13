@@ -1,0 +1,15 @@
+module example;
+use sums::{TwoSums};
+domain F = field("bls12-381.fr");
+
+proof Proof = TwoSums<F,4> {
+  prover P;
+  verifier V;
+  public { left, right, left_sum, right_sum, rounds };
+  accept accepted;
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
+}
+run Interactive = TwoSums<F,4>;
+
+// Inspect the reusable round result without claiming proof acceptance.
+run Reduction = sumcheck::Reduce<F,4>;

@@ -1,4 +1,4 @@
-"""Small protocol arithmetic slices through public projects and ordinary Hosts.
+"""Small protocol arithmetic slices through test projects and ordinary Hosts.
 
 Independent integer references establish values and row residuals, not complete
 FRI or LogUp proofs. Compiler modes exercise the same authored consumers.
@@ -7,15 +7,16 @@ FRI or LogUp proofs. Compiler modes exercise the same authored consumers.
 import json
 from pathlib import Path
 import random
-import tomllib
+from project import project_inputs
 
 import pytest
 
 from entry import Entry
+from source_modules import library_modules
 from input_files import decimal_values
 
 ROOT = Path(__file__).resolve().parents[3]
-PROJECTS = ROOT / 'examples/projects'
+PROJECTS = ROOT / 'common/tests/fixtures/projects'
 KOALA_BEAR = 2130706433
 BLS_SCALAR = 52435875175126190479447740508185965837690552500527637822603658699938581184513
 FLAGS = [(), ('--no-simplify',), ('--no-finite-bulk',),
@@ -45,9 +46,8 @@ def published_inputs(project, selector):
 def project_modules(project):
     """Import the authored modules into small adapters without copying source."""
     path = PROJECTS / project / 'zkc.toml'
-    modules = tomllib.loads(path.read_text())['modules']
-    return [f'--module={name}={(path.parent / source).resolve()}'
-            for name, source in modules.items()]
+    modules, _ = project_inputs(path)
+    return [f'--module={name}={source}' for name, source in modules.items()]
 
 
 def evaluate(coefficients, point, modulus):
@@ -83,7 +83,7 @@ def polynomial_fold(coefficients, size, shift, beta):
 
 
 FRI_KERNEL_ADAPTER = '''module sample;
-use fri::{Vector};
+use zkc::vector::{Vector};
 domain F = field("koala-bear");
 fn fold_word(word: Vector<F>, shift: F, beta: F) -> Vector<F> {
   return kernel<F>("poly.even_odd_fold", word, shift, beta);
@@ -100,7 +100,7 @@ def test_fri_pairs_match_polynomial_and_existing_kernel(toolchain, journal, dire
     kernel_dir = directory / 'kernel'
     kernel_dir.mkdir()
     kernel = Entry(toolchain, journal, kernel_dir, FRI_KERNEL_ADAPTER,
-                   [f'--module=fri={ROOT}/libraries/fri/lib.zkc', *flags])
+                   [*library_modules('fri'), *flags])
 
     fixture, _, folded = polynomial_fold([3, 2, 1, 4], 4, 1, 5)
     assert folded == [34, KOALA_BEAR - 8]

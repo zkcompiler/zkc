@@ -1,0 +1,7 @@
+format = "zkc.project/0"
+
+[modules]
+table_claims = "main.zkc"
+
+[dependencies]
+zkc = "../../../../../libraries/zkc"

@@ -1,0 +1,96 @@
+module logup_rows;
+use air::interaction::{gated_denominator, reciprocal_residual, boolean_residual};
+use zkc::vector::{Vector};
+use zkc::vector as vec;
+use zkc::sequence::{Sequence};
+use zkc::sequence as seq;
+use zkc::finite as finite;
+use zkc::finite_math as total;
+use zkc::finite_domain as domains;
+use zkc::field_array::{Array};
+use zkc::field_array as arrays;
+
+domain F = field("koala-bear");
+domain Fr = field("bls12-381.fr");
+
+struct Record<E: Field> {
+  pub tuple: Vector<E>,
+  pub count: E,
+  pub reciprocal: E
+}
+struct Batch<E: Field> {
+  pub rows: Sequence<Record<E>>,
+  pub gamma: E,
+  pub delta: E
+}
+
+math fn record_rows<E: Field>(batch: Batch<E>) -> Sequence<Record<E>> {
+  return batch.rows;
+}
+
+math fn inspect<E: Field>(batch: Batch<E>)
+    -> (Sequence<E>, Sequence<E>, Sequence<E>, Sequence<E>) {
+  let view = record_rows(batch);
+  let fingerprints = total::collect(seq::indices(batch.rows), fn(i) => {
+    let row = seq::at(view, i);
+    let initial: (E, E) = (0, 1);
+    let state = total::fold(vec::elements(row.tuple), initial,
+      fn((value, weight), coordinate) =>
+        (value + weight * coordinate, weight * batch.delta));
+    state.0
+  });
+  // Each consumer retains the original row indices, including reads of collect.
+  let denominators = total::collect(seq::indices(batch.rows), fn(i) => {
+    let row = seq::at(view, i);
+    gated_denominator(row.count, batch.gamma, seq::at(fingerprints, i))
+  });
+  let reciprocal_residuals = total::collect(seq::indices(batch.rows), fn(i) => {
+    let row = seq::at(view, i);
+    reciprocal_residual(row.count, row.reciprocal, batch.gamma, seq::at(fingerprints, i))
+  });
+  let boolean_residuals = total::collect(seq::indices(batch.rows), fn(i) => {
+    let row = seq::at(view, i);
+    boolean_residual(row.count)
+  });
+  return (fingerprints, denominators, reciprocal_residuals, boolean_residuals);
+}
+
+// Flattened tuples are row-major, with `arity` coordinates per count/reciprocal.
+fn from_columns<E: Field>(tuple_values: Vector<E>, arity: index, counts: Vector<E>,
+                          reciprocals: Vector<E>, gamma: E, delta: E) -> Batch<E> {
+  let count = vec::length(counts);
+  require vec::length(reciprocals) == count;
+  require vec::length(tuple_values) == count * arity;
+  let rows = finite::collect(vec::indices(counts), fn(i) => {
+    let tuple = vec::collect(domains::range(0, arity), fn(k) =>
+      vec::get(tuple_values, i * arity + k));
+    Record<E> { tuple, count: vec::get(counts, i), reciprocal: vec::get(reciprocals, i) }
+  });
+  return Batch<E> { rows, gamma, delta };
+}
+
+pub protocol Inspect roles(P)(tuple_values: Vector<F> @P, arity: index @P,
+    counts: Vector<F> @P, reciprocals: Vector<F> @P, gamma: F @P, delta: F @P)
+    -> (fingerprints: Sequence<F> @P, denominators: Sequence<F> @P,
+        reciprocal_residuals: Sequence<F> @P, boolean_residuals: Sequence<F> @P) {
+  let batch @P = from_columns(tuple_values, arity, counts, reciprocals, gamma, delta);
+  let (fingerprints, denominators, reciprocal_residuals, boolean_residuals) @P = inspect(batch);
+  return (fingerprints = fingerprints, denominators = denominators,
+    reciprocal_residuals = reciprocal_residuals, boolean_residuals = boolean_residuals);
+}
+run Demo = Inspect;
+
+math fn forwarded_index(value: index) -> index { return value; }
+
+// The endpoint is forwarded from the literal 4, not computed by an opaque helper.
+pub math fn compression_weights<E: Field>(delta: E) -> Array<E, 4> {
+  let one: E = 1;
+  return arrays::collect(domains::range(0, forwarded_index(4)), fn(k) =>
+    total::fold(domains::range(0, k), one, fn(power, _) => power * delta));
+}
+
+pub protocol Weights roles(P)(delta: Fr @P) -> (weights: Array<Fr, 4> @P) {
+  let weights @P = compression_weights(delta);
+  return (weights = weights);
+}
+run CompressionWeights = Weights;

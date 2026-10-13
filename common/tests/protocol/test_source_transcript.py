@@ -7,11 +7,12 @@ and typed nonce 11. Both native framing and raw external proofs use the CLI.
 from pathlib import Path
 
 import pytest
+from source_modules import library_modules
 
 ROOT = Path(__file__).resolve().parents[3]
 SOURCE = '''module sample;
 use zkc::bytes::{Bytes};
-use spongefish_schnorr as schnorr;
+use spongefish::schnorr as schnorr;
 domain G=group("bls12-381.g1");
 protocol Fixed roles(P,V)
     (tag:Bytes@(P,V),session:Bytes@(P,V),base:G@(P,V),point:G@(P,V),
@@ -47,13 +48,13 @@ def test_source_transcript_vector_and_decode_effect_order(toolchain, journal, di
         text += 'construction ExternalWire for Fixed {base authored;format RawBytes;}\n'
     source.write_text(text)
     modules = {'sample': source, 'spongefish': ROOT / 'libraries/spongefish/lib.zkc',
-               'spongefish_schnorr': ROOT / 'libraries/spongefish/schnorr.zkc'}
+               'spongefish::schnorr': ROOT / 'libraries/spongefish/schnorr.zkc'}
     modules.update({f'zkc::{name}': ROOT / f'libraries/zkc/{name}.zkc'
                     for name in ['bytes', 'shake128', 'encoding']})
     package = directory / 'proof.zkpkg'
     report = journal.json([toolchain.runtime, '--json', 'compile',
                            f'--compiler={toolchain.compiler}',
-                           *[f'--module={name}={path}' for name, path in modules.items()],
+                           *library_modules('spongefish', 'sumcheck', overrides=modules),
                            'sample::Demo', f'--output={package}', *flags])
     public = journal.write('public.json', PUBLIC)
     witness = journal.write('witness.json', {'scalar': '7', 'nonce': '11'})
@@ -146,7 +147,7 @@ def test_raw_format_refuses_non_byte_or_repeated_messages(toolchain, journal, di
 
 
 def test_random_source_prover_and_external_verifier(toolchain, journal, directory):
-    project = ROOT / 'examples/projects/spongefish-schnorr'
+    project = ROOT / 'common/tests/fixtures/projects/spongefish-schnorr'
     proof = directory / 'proof.bin'
     common = [f'--project={project / "zkc.toml"}', f'--compiler={toolchain.compiler}', '--allow-authored']
     produced = journal.json([toolchain.runtime, '--json', 'prove', *common, f'--output={proof}'])

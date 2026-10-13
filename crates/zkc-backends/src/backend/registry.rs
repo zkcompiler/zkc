@@ -278,13 +278,7 @@ pub(crate) fn conversions(
     crate::kernels::conversions::apply(&i.binding.declaration().contract, args, i, &b.core.policy)
 }
 fn curve(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
-    crate::kernels::curve::apply(
-        &i.binding.declaration().contract,
-        field(i),
-        args,
-        i,
-        &b.core.policy,
-    )
+    crate::kernels::curve::apply(&i.binding.declaration().contract, args, i, &b.core.policy)
 }
 
 fn resources(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
@@ -316,6 +310,8 @@ fn numerical(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Resul
 fn encoding(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
     crate::kernels::encoding::apply(
         &i.binding.declaration().contract,
+        Identity::parse(&i.binding.declaration().arguments[0])
+            .map_err(|_| crate::refused("encoding-domain"))?,
         args,
         i.attributes,
         &b.core.policy,

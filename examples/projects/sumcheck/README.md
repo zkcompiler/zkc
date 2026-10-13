@@ -8,7 +8,7 @@ Merlin construction. `Interactive` retains the original exchange.
 The public vector contains `[1, 2, 3, 4]`, and the claimed sum is 10. Each round
 sends the sums of the two halves. V checks their sum against its current claim,
 draws a challenge, and updates the claim. P folds its table with the delivered
-challenge. V separately folds its own public table, then checks that exactly one
+challenge. After the rounds, V folds its own public table at the recorded point, then checks that exactly one
 entry remains and equals the final claim. Table halves define the variable order;
 this example uses the contiguous-half convention.
 
@@ -32,3 +32,7 @@ explains input encodings and limits. Use `zkc run` from this project to select
 The source and CLI tests check both successful execution and changed claims,
 insufficient rounds, actual transcript messages and proof truncation. These are
 bounded implementation controls, not an executable-path soundness theorem.
+
+The [composed variant](composed/README.md) combines two reductions before
+discharging their terminal evaluations. The [product variant](product/README.md)
+imports a ring expression and evaluates it with base or extension challenges.

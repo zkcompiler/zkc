@@ -55,7 +55,7 @@ impl Policy {
         }
         self.output(size(n, width)?, usize::MAX)
     }
-    pub(crate) fn ristretto_groups(&self, n: usize) -> Result<()> {
+    pub(crate) fn dalek_groups(&self, n: usize) -> Result<()> {
         if n > self.max_groups.min(32_768) {
             return Err(exhausted("group-limit"));
         }
@@ -182,6 +182,8 @@ value_inventory! {
     RistrettoVector(Arc<[crate::RistrettoScalar]>),
     RistrettoPolynomial(Arc<[crate::RistrettoScalar]>),
     RistrettoRound([crate::RistrettoScalar; 3]),
+    EdwardsGroup(crate::EdwardsPrime),
+    EdwardsGroups(Arc<[crate::EdwardsPrime]>),
     RistrettoGroup(crate::RistrettoPoint),
     RistrettoGroups(Arc<[crate::RistrettoPoint]>),
     FrDiagonal(Arc<crate::diagonal::Diagonal<Scalar, Scalar>>),
@@ -385,6 +387,16 @@ impl Value {
                 Identity::Ristretto255Scalar,
                 Representation::DalekRound,
             ),
+            Self::EdwardsGroup(_) => (
+                Type::Group,
+                Identity::Edwards25519Prime,
+                Representation::EdwardsPrime,
+            ),
+            Self::EdwardsGroups(_) => (
+                Type::Groups,
+                Identity::Edwards25519Prime,
+                Representation::EdwardsPrimeVector,
+            ),
             Self::RistrettoGroup(_) => (
                 Type::Group,
                 Identity::Ristretto255Group,
@@ -586,8 +598,10 @@ impl Value {
             };
             policy.output(bytes, usize::MAX)?;
             Ok(bytes)
-        } else if ty.logical().identity() == Identity::Ristretto255Group
-            && ty.kind() == Type::Groups
+        } else if matches!(
+            ty.logical().identity(),
+            Identity::Ristretto255Group | Identity::Edwards25519Prime
+        ) && ty.kind() == Type::Groups
         {
             policy.wire(wire_len)?;
             let bytes = size(wire_len / 32, std::mem::size_of::<crate::RistrettoPoint>())?;
@@ -630,6 +644,7 @@ impl Value {
             Self::Vector(v) | Self::Polynomial(v) | Self::Point(v) => Backing::of(v, bytes),
             Self::RistrettoVector(v) | Self::RistrettoPolynomial(v) => Backing::of(v, bytes),
             Self::RistrettoGroups(v) => Backing::of(v, bytes),
+            Self::EdwardsGroups(v) => Backing::of(v, bytes),
             Self::Groups(v) => Backing::of(v, bytes),
             Self::Table(t) => Backing::of(t, bytes),
             Self::TableMsb(t) => Backing::of(t, bytes),
@@ -659,6 +674,7 @@ impl Value {
             | Self::KoalaBearRound(_)
             | Self::RistrettoField(_)
             | Self::RistrettoRound(_)
+            | Self::EdwardsGroup(_)
             | Self::RistrettoGroup(_)
             | Self::Field(_)
             | Self::Round(_)
@@ -714,6 +730,8 @@ impl Value {
             | Self::RistrettoVector(..)
             | Self::RistrettoPolynomial(..)
             | Self::RistrettoRound(..)
+            | Self::EdwardsGroup(..)
+            | Self::EdwardsGroups(..)
             | Self::RistrettoGroup(..)
             | Self::RistrettoGroups(..)
             | Self::FrDiagonal(..)
@@ -877,6 +895,7 @@ impl RuntimeValue for Value {
             Self::Vector(v) | Self::Polynomial(v) => size(v.len(), 32),
             Self::RistrettoVector(v) | Self::RistrettoPolynomial(v) => size(v.len(), 32),
             Self::RistrettoGroups(v) => size(v.len(), std::mem::size_of::<crate::RistrettoPoint>()),
+            Self::EdwardsGroups(v) => size(v.len(), std::mem::size_of::<crate::EdwardsPrime>()),
             Self::FrDiagonal(d) => d.retained_bytes(),
             Self::RistrettoDiagonal(d) => d.retained_bytes(),
             Self::Table(t) => payload_bytes(Type::Table, t.storage_capacity()),
@@ -900,6 +919,7 @@ impl RuntimeValue for Value {
             | Self::KoalaBearRound(_)
             | Self::RistrettoField(_)
             | Self::RistrettoRound(_)
+            | Self::EdwardsGroup(_)
             | Self::RistrettoGroup(_)
             | Self::Field(_)
             | Self::Round(_)

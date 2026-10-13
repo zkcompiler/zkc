@@ -6,7 +6,6 @@ adversarial evidence, not a proof of cryptographic soundness or upstream VM
 compatibility.
 """
 
-from source_modules import finite_modules
 from input_files import input_files
 import importlib.util
 import json
@@ -17,7 +16,7 @@ import pytest
 from logical_tree import decode_tree
 
 ROOT = Path(__file__).resolve().parents[3]
-EXAMPLE = ROOT / 'examples/projects/accumulator-machine'
+EXAMPLE = ROOT / 'common/tests/fixtures/projects/accumulator-machine'
 FIXTURES = ROOT / 'compiler/adapters/accumulator-machine/fixtures'
 _spec = importlib.util.spec_from_file_location('machine_proof_requests', EXAMPLE / 'prepare.py')
 prepare = importlib.util.module_from_spec(_spec)
@@ -36,13 +35,12 @@ def compile_entry(toolchain, journal, directory, entry, *, flags=(), source=None
                                f'accumulator_machine::{entry}', f'--output={package}', *flags])
         return package, report['package_sha256']
     command = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-               f'--module=accumulator_machine={path}', *finite_modules(),
+               f'--module=accumulator_machine={path}',
                f'--asset=machine=relation-bundle-json={asset or FIXTURES / "bundle.json"}',
                f'accumulator_machine::{entry}', f'--output={package}', *flags]
-    for module, file in [('air_bundle', 'air/bundle'), ('air_interaction', 'air/interaction'),
-                         ('air_stark', 'air/stark'), ('air_table', 'air/table'),
-                         ('air_polynomial', 'air/polynomial'), ('fri', 'fri/lib')]:
-        module_path = ROOT / 'libraries' / (file + '.zkc')
+    from project import project_inputs
+    modules, _ = project_inputs(ROOT / 'libraries/stark/zkc.toml')
+    for module, module_path in modules.items():
         replacements = [(old, new) for owner, old, new in edits if owner == module]
         if replacements:
             text = module_path.read_text()
@@ -293,7 +291,8 @@ def test_machine_refuses_other_interaction_profiles(toolchain, journal, director
         else:
             record[3] = ['first']
     asset = journal.write('bundle.json', bundle)
-    package, pin = compile_entry(toolchain, journal, directory, 'ProofLogUp', asset=asset)
+    entry = 'ProofProduct' if profile == 'field-balance' else 'ProofLogUp'
+    package, pin = compile_entry(toolchain, journal, directory, entry, asset=asset)
     public, witness = requests('store-load')
     producer = input_files(journal, 'prover', public=public, witness=witness)
     proof = directory / 'unsupported.proof'

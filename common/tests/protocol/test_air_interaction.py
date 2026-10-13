@@ -5,7 +5,7 @@ the source builds columns with generic vector operations. This compares their
 values, claim order and scoped residuals for both reductions on all tables.
 """
 
-from source_modules import finite_modules
+from source_modules import library_modules
 from input_files import input_files
 import json
 from pathlib import Path
@@ -16,6 +16,55 @@ from test_machine_relations import machine, reductions
 from ring_arena import decode, ZERO
 
 ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_field_balance_logup_signed_counts_and_inactive_poles(toolchain, journal, directory):
+    p = 2130706433
+    def base(values):
+        return ext_vector([(value % p,) + (0,) * 7 for value in values])
+    inputs = {'channels': '1', 'kind': ['0'], 'channel': ['0'], 'side': ['0'],
+              'arity': ['1'], 'tuple_degree': ['1'], 'count_degree': ['1'],
+              'height': '4', 'values': base([37, 1, 7, 1, 0, 2, p - 1, 3]),
+              'challenges': base([37, 5])}
+    request = input_files(journal, 'weighted', roles={'P': {'inputs': inputs}})
+    arguments = [f'--compiler={toolchain.compiler}',
+        f'--module=inspect_reduction={ROOT}/common/tests/protocol/sources/interaction-reduction.zkc',
+        *library_modules('air')]
+    output = directory / 'weighted-results.json'
+    journal.json([toolchain.runtime, '--json', 'run', *arguments,
+                  'inspect_reduction::LogUpRun', *request, f'--results={output}'])
+    actual = json.loads(output.read_text())['roles']['P']
+    inverses = [0, pow(36, -1, p), pow(30, -1, p), pow(36, -1, p)]
+    running, total = [], 0
+    for count, inverse in zip([0, 2, p - 1, 3], inverses):
+        total = (total + count * inverse) % p
+        running.append(total)
+    assert actual['columns'] == base(inverses + running)
+    assert actual['claims'] == base([total])
+    assert actual['ranges'] == []
+    # Inverse constraints hold everywhere; first/transition/last sum equations
+    # apply only on their respective row scopes.
+    assert all(actual['residuals'][i] == ['0'] * 8 for i in [0, 1, 2, 3, 4, 9, 10, 11, 15])
+    journal.json([toolchain.runtime, '--json', 'run', *arguments,
+                  'inspect_reduction::ProductRun', *request], refuses='entry-run-incomplete')
+
+
+def test_mixed_interactions_range_only_natural_counts(toolchain, journal, directory):
+    def base(values):
+        return ext_vector([(value,) + (0,) * 7 for value in values])
+    inputs = {'channels': '2', 'kind': ['0', '1'], 'channel': ['0', '1'], 'side': ['0', '0'],
+        'arity': ['1', '1'], 'tuple_degree': ['1', '1'], 'count_degree': ['1', '1'],
+        'height': '2', 'values': base([1, 2, 3, 4, 5, 6, 0, 2]),
+        'challenges': base([37, 5, 41, 7])}
+    request = input_files(journal, 'mixed', roles={'P': {'inputs': inputs}})
+    output = directory / 'mixed-results.json'
+    journal.json([toolchain.runtime, '--json', 'run', f'--compiler={toolchain.compiler}',
+        f'--module=inspect_reduction={ROOT}/common/tests/protocol/sources/interaction-reduction.zkc',
+        *library_modules('air'), 'inspect_reduction::LogUpRun', *request, f'--results={output}'])
+    actual = json.loads(output.read_text())['roles']['P']
+    # Field weights 3 and 4 are unrestricted. The natural record's count 2
+    # violates its Boolean range equation, regardless of the LogUp recurrence.
+    assert actual['ranges'] == base([0, 2])
 
 
 def ext_vector(values):
@@ -53,8 +102,7 @@ def test_source_reduction_matches_independent_staged_reference(toolchain, journa
     package = directory / 'reduction.zkpkg'
     report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
         f'--module=inspect_reduction={ROOT}/common/tests/protocol/sources/interaction-reduction.zkc',
-        f'--module=air_polynomial={ROOT}/libraries/air/polynomial.zkc',
-        f'--module=air_interaction={ROOT}/libraries/air/interaction.zkc', *finite_modules(),
+        *library_modules('air'),
         f'inspect_reduction::{entry}', f'--output={package}'])
     pin = report['package_sha256']
     reduction = reductions.Reduction(kind, bundle, [True, True, True])
@@ -65,7 +113,7 @@ def test_source_reduction_matches_independent_staged_reference(toolchain, journa
         values = record_columns(reduction, t, table, height, data, publics)
         interactions = table[8]
         inputs = {
-            'channels': 2, 'channel': indices([x[1] for x in interactions]),
+            'channels': 2, 'kind': indices([1] * len(interactions)), 'channel': indices([x[1] for x in interactions]),
             'side': indices([0 if x[4] == 'push' else 1 for x in interactions]),
             'arity': indices([len(x[5]) for x in interactions]),
             'tuple_degree': indices([2] * len(interactions)),

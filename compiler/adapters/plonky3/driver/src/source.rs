@@ -1,5 +1,5 @@
 //! Entry input maps for the maintained `.zkc` source client in
-//! `examples/projects/imported-air`, with direct `Air::eval` expectations.
+//! `common/tests/fixtures/projects/imported-air`, with direct `Air::eval` expectations.
 //!
 //! Trace inputs keep witness, configuration and public values separate;
 //! the native Bundle view supplies their read bindings. Polynomial inputs

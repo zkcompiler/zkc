@@ -81,7 +81,7 @@ fetch-lean deps="main":
 test-lean-integration: (build-lean "arklib")
     python3 common/tests/run.py lean-integration
 
-# Build the optional Clean integration and check its committed native control.
+# Build the optional Clean integration and regenerate its native fixtures.
 test-lean-clean: (build-lean "clean")
     python3 common/tests/run.py lean-clean
 

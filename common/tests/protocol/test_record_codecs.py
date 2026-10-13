@@ -1,6 +1,7 @@
 """Record byte provenance, ordered parsing and codec lifetime through the Host."""
 import json
 import pytest
+from source_modules import library_modules
 from test_constructions import SOURCE
 
 CODEC = '''
@@ -138,7 +139,7 @@ def test_record_codec_external_schnorr(toolchain, journal, directory, flags):
                     for name in ['bytes', 'encoding', 'shake128', 'proof']})
     package = directory / 'proof.zkpkg'
     compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                             *[f'--module={name}={path}' for name, path in modules.items()],
+                             *library_modules('spongefish', 'sumcheck', overrides=modules),
                              'sample::ExternalProof', f'--output={package}', *flags])
     public = journal.write('public.json', PUBLIC)
     witness = journal.write('witness.json', {'scalar': '7', 'nonce': '11'})
