@@ -1,4 +1,8 @@
-import Zkc.Polynomial.Quadratic
+module
+
+public import Zkc.Polynomial.Quadratic
+
+@[expose] public section
 
 /-! Ordered Boolean-table semantics and its degree-two coefficient realization.
 

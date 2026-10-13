@@ -1,5 +1,9 @@
-import Zkc.Protocols.Sumcheck.Security
-import Zkc.Realization.Acceptance
+module
+
+public import Zkc.Protocols.Sumcheck.Security
+public import Zkc.Realization.Acceptance
+
+@[expose] public section
 
 /-! Full-domain direct evaluation as an acceptance-realization client.
 

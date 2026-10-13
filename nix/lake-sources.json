@@ -1,112 +1,107 @@
 {
-  "0df444a360eaa60ab8c11dca51a86af692955474": {
+  "0e569d08b6443ce0908d356884c765397253e2f0": {
     "format": "canonical-git-v0",
-    "hash": "sha256-df1XJwsFc5EJQvJ6QHdPaGJ67vCnviZkd/XUPZZIZzU=",
-    "url": "https://github.com/leanprover-community/mathlib4"
+    "hash": "sha256-FH+bdSIud6Bc2NTuss9TGZjvmSVSCI29M4ex99GdFCo=",
+    "url": "https://github.com/fgdorais/lean4-unicode-basic"
   },
-  "16f02aa7642864af59f1ff0e384a015994db9118": {
+  "106ff4fafc74ef4ac99d81dbf3ab399118f497a5": {
     "format": "canonical-git-v0",
-    "hash": "sha256-bruDtDiPS8CPrrelK2YP0jz7+xyfSptaynkFcmhp5x8=",
-    "url": "https://github.com/leanprover-community/import-graph"
+    "hash": "sha256-a6U168fCNJBSB8nJ+DFZ6O9AcXA7hRIm+iPOvp9c25o=",
+    "url": "https://github.com/leanprover-community/ProofWidgets4"
   },
-  "2f65f311fae959c302586b07aa45390999b935d4": {
+  "118aa17ee84656b8bd727fef7c458ee8c833385c": {
     "format": "canonical-git-v0",
-    "hash": "sha256-wQadvXNMPvkOppK53R9T23GkFjTOSfHCYTC3Rh4RT8U=",
-    "url": "https://github.com/quangvdao/loom2"
+    "hash": "sha256-pQQl176xjfiPmRFadosVnlJjL7BrXNh/l9LtJxlYhGU=",
+    "url": "https://github.com/leanprover-community/plausible"
   },
   "31907cc18f48a95384f99cee5582c00fb39e0f67": {
     "format": "canonical-git-v0",
     "hash": "sha256-TJl50uNYltArASX5yIfuTHYhUY4l9Qm1ZgGluj1xLoM=",
     "url": "https://github.com/acmepjz/md4lean"
   },
-  "3448c0bcc5ce01b2d1546e483ec3620e32df3d0e": {
+  "355695d523e41d0554926416cba2a2b3544fbbc9": {
     "format": "canonical-git-v0",
-    "hash": "sha256-fdJmuu8nOz1M4e7TteBFyumf6xUVoNxdOYcHakEiuPw=",
+    "hash": "sha256-YOaJIL8jSxniWZMyUrEBew4Y5JtzBoEwngyQ27e39PU=",
     "url": "https://github.com/leanprover-community/aesop"
   },
-  "37e7d8cb7316a88cd3e91208385c9ec6ae780019": {
+  "3710d71b28404a151b8d1f0ce080ea448778dec0": {
     "format": "canonical-git-v0",
-    "hash": "sha256-JL4wckPEr0XGW5crwa2Oq6Y/Am1n8I8gSV+MpYgsj6g=",
-    "url": "https://github.com/fgdorais/lean4-unicode-basic"
+    "hash": "sha256-EGqQuATjH79O1D1APrjhjiQk6SM/JgegDAipMPd/Df8=",
+    "url": "https://github.com/Verified-zkEVM/PolyFun"
   },
   "3d425859e73fcfbef85b9638c2a91708ef4a22d4": {
     "format": "canonical-git-v0",
     "hash": "sha256-8nCzVl+G1vMZBr+SwzuqrzlbNOZjdFNKyUOd9GI2CEw=",
     "url": "https://github.com/PatrickMassot/checkdecls.git"
   },
-  "3f3f045dd295834c262bd6f0d9dfdfee07cc8e76": {
+  "4d8616fd4870d0a3453d845770833eac7951fe1c": {
     "format": "canonical-git-v0",
-    "hash": "sha256-U0KOpQ+ZH4gcrHSt6iJq+j0rNoFI2FRlByswrIFT/pU=",
-    "url": "https://github.com/Verified-zkEVM/ArkLib.git"
-  },
-  "4488d40d070b9700d4d5a6aa342f0d40c31b2a2d": {
-    "format": "canonical-git-v0",
-    "hash": "sha256-6TYu8AqtvrDOljMvRaJFcWEt4zg7tEw8G/o5GdduKU8=",
-    "url": "https://github.com/leanprover-community/batteries"
-  },
-  "4be2e3d5087eeb272cf5a8853b8f9dd025ef5957": {
-    "format": "canonical-git-v0",
-    "hash": "sha256-rr3yeoqKQqBvajK6sx40OD3OD3wyFqRDw/+FZj8IqJE=",
-    "url": "https://github.com/leanprover-community/ProofWidgets4"
-  },
-  "5f4d51b81cbd3f6b32b156bfad9056621a040404": {
-    "format": "canonical-git-v0",
-    "hash": "sha256-QB70uRfOin6/xT2aSD1QMAqIjxserMlmUZ/w7YfhYtM=",
-    "url": "https://github.com/leanprover-community/LeanSearchClient"
-  },
-  "6130a47896ce867c6a4a55373441e59e565bad0f": {
-    "format": "canonical-git-v0",
-    "hash": "sha256-5Sl0sf0bi+8/EQ54clAfxTqIVYPXxXupVg6XX02ba3s=",
-    "url": "https://github.com/leanprover/lean4-cli"
-  },
-  "6168b7549738a19bc837a1625c60c5d1e5dd8aeb": {
-    "format": "canonical-git-v0",
-    "hash": "sha256-yaX/pn8TwhGDhU1VTqV/6t/QuggeMH5DU4WbwH/8pYk=",
-    "url": "https://github.com/leanprover/leansqlite"
-  },
-  "7607103730459b127e2218fb36f5f13c2d65c038": {
-    "format": "canonical-git-v0",
-    "hash": "sha256-mBgB2SIiFAW3bUdXHiupxg3CdfAnom7MHTVuaOfsZvA=",
-    "url": "https://github.com/Verified-zkEVM/VCVio"
-  },
-  "852edafa268eb038a7158551fd580ee8433847b0": {
-    "format": "canonical-git-v0",
-    "hash": "sha256-/5WCqmrItkMcMnZZtpffi9ftbUPT4GNNPyvX5/mQwLI=",
+    "hash": "sha256-WglqG+pnCiOz6rwNPJZMSu4moVRhzxIbqdRtUbBEzk8=",
     "url": "https://github.com/dupuisf/BibtexQuery"
   },
-  "92c15be17b7caf78c2ad767ec40f89052d908d81": {
+  "6a489d9af5d0c47e5b259e2e8bcdfc1811b5a259": {
     "format": "canonical-git-v0",
-    "hash": "sha256-s3b3wOUxYUuqzdglKPMM1hkZl4TGhb8qK6Rs1lJJy0I=",
+    "hash": "sha256-KJoQCfYBKeGHwXmx8pzdeUsxpWjnPW8piZdJeEeBrhI=",
     "url": "https://github.com/leanprover-community/quote4"
   },
-  "98e395a701f2027a413ad24729e1a11a6c772eb4": {
+  "990e65a685bed413f43b139db900a36ad5322a10": {
     "format": "canonical-git-v0",
-    "hash": "sha256-Qmd7mxMSWZXWiJqKSaLyjYCluWa25b0y+a3IOzk/E64=",
+    "hash": "sha256-fKF4AhCRCHVXxxz+Ytmew1qG1Rv03DgfzvuJUJ8xm5w=",
     "url": "https://github.com/leanprover/cslib"
   },
-  "a09455a22fea4623a2a1c5b363cf6efc61486a83": {
+  "a6521b2d0c93dcdf2d640089f95548df5dd8bf46": {
     "format": "canonical-git-v0",
-    "hash": "sha256-ox5Zn+0wfIk/eznSq/avpP6DVB7dnB/bzXZEenBXVZk=",
-    "url": "https://github.com/Verified-zkEVM/CompPoly"
+    "hash": "sha256-BAFURGFLqKY1+tDKzaDiscZBwEEihgkt1S1CPXhoFSE=",
+    "url": "https://github.com/leanprover/doc-gen4"
   },
   "b449bf590f93e13827c3c7e747e392d6969aa380": {
     "format": "canonical-git-v0",
     "hash": "sha256-0Enp57zQZ2hIHKPs9RWX+CZjJ4W4yWsS4vQu3wSOoWk=",
     "url": "https://github.com/Verified-zkEVM/clean"
   },
-  "b7eb3304aeae834b12dda98993a37f6a41f6f0bb": {
+  "d13f23b723b8a846827a245b89c10fc7d3f11612": {
     "format": "canonical-git-v0",
-    "hash": "sha256-wkw7QsjAd0OX8uBc5LrwEdWxUtutaHh06gBkErQV8lI=",
-    "url": "https://github.com/leanprover-community/plausible"
+    "hash": "sha256-BV8l1j3RH8bTebvQoEr3IDquwjsckB1RzFmyFFOPxXA=",
+    "url": "https://github.com/leanprover-community/mathlib4"
   },
-  "bb7e1003544b8461e3d484fc51c61b2ff865250f": {
+  "d606eab018ab87bf4a0a6ac7b6d2da4fedfa53b0": {
     "format": "canonical-git-v0",
-    "hash": "sha256-9OpZiNA1U0jP0uTWo3VlhJC7fgJ4RjeCs9NAbHdCDT4=",
-    "url": "https://github.com/Verified-zkEVM/PolyFun.git"
+    "hash": "sha256-OUrMUZYH/2laYT9Mr9e7VRf88WEQTOIFgvTadilKtTI=",
+    "url": "https://github.com/Verified-zkEVM/VCVio"
   },
-  "e2af49a7b7e5e1a9224008c1f15e7aa4f58a4015": {
+  "db7005f84a9dbad7ff2abbbb4e8feeeac6f4dfd8": {
     "format": "canonical-git-v0",
-    "hash": "sha256-UkVBd5s4YvtwXo4Cyuj99lqrZGl4+n9SLlE5RKuj/tY=",
-    "url": "https://github.com/leanprover/doc-gen4"
+    "hash": "sha256-qfBv1gkk+14bSioZXbx9T7xq7UMEh23nwl5hVOJb6H8=",
+    "url": "https://github.com/Verified-zkEVM/ArkLib.git"
+  },
+  "ddf04cf3949fa556442341e87d47f9f6e6074707": {
+    "format": "canonical-git-v0",
+    "hash": "sha256-eubZYePB4LieR8P6npzOfhq5Xljz4qBmQ+NrxhcLqlI=",
+    "url": "https://github.com/leanprover-community/LeanSearchClient"
+  },
+  "df591bb8c6745126d1d72f5243faae3022b0432a": {
+    "format": "canonical-git-v0",
+    "hash": "sha256-LdUC1mYvyJ96SiAqOsN7dLF7jZzOKLf8XmF582Uwk/Q=",
+    "url": "https://github.com/Verified-zkEVM/CompPoly"
+  },
+  "e928b72544873815af278d38681b31c0293588e3": {
+    "format": "canonical-git-v0",
+    "hash": "sha256-+CEDmKcZhlWjVnEyBcdaGHQfircd3yZmCT2YmZ7XZec=",
+    "url": "https://github.com/leanprover-community/import-graph"
+  },
+  "e92c9f15fdfacc8536f31cfb3b7ad26c3c8cd204": {
+    "format": "canonical-git-v0",
+    "hash": "sha256-F6zdULb8nuiWallkM2OlBSv6RhNArV+1sSP3ikVc4zo=",
+    "url": "https://github.com/leanprover/lean4-cli"
+  },
+  "f2effa3d803fda822b1f97b806c47cf2adfbcbc2": {
+    "format": "canonical-git-v0",
+    "hash": "sha256-ZlYqzeoYmidhN3YYuKLFC78CasLpJ12rGaz97ZD+I7k=",
+    "url": "https://github.com/leanprover-community/batteries"
+  },
+  "f9cdb9eacb5c8b8ecc02ee9fd9e568d7d28c1416": {
+    "format": "canonical-git-v0",
+    "hash": "sha256-mBchdKXOPb3QavVbPhXff97E9YDPb9E8zURMDD81TBQ=",
+    "url": "https://github.com/leanprover/leansqlite"
   }
 }

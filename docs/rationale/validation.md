@@ -32,13 +32,12 @@ different questions. Agreement under one provider does not imply legality for
 all possible replies. A mathematical equality does not imply equal behavior at
 the same native instruction limit. Each claim retains its own premises.
 
-The independent Lean model has a
-[sound rule-based candidate check](../../lean/docs/native-connection.md#checking-in-the-current-formal-model).
-Its theorem concerns the exact plan reconstructed by that rule and compared with
-the candidate. Native checks are bounded implementation checks; they are not
-proved instances merely because they follow the same method. The
-[assurance policy](../assurance.md#native-correspondence) keeps those
-evidence levels explicit.
+The independent Lean [proof-request checker](../../lean/docs/spec/verification.md)
+reconstructs the requested program subject separately from an untrusted candidate
+proof. Its claims concern the exact admitted scalar program and selected property.
+Native transformation checks are not automatically proved instances of it.
+The [assurance policy](../assurance.md#native-correspondence) keeps those evidence
+levels explicit.
 
 [Translation validation](https://xavierleroy.org/publi/validation-scheduling.pdf)
 provides the methodological precedent. Its published proofs do not cover zkc's

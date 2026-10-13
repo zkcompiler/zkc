@@ -1,7 +1,11 @@
-import Zkc.Polynomial.Quadratic
-import Zkc.Protocols.AlgebraicRounds.Source
-import Mathlib.Algebra.Polynomial.Roots
-import Mathlib.Algebra.Polynomial.Degree.Lemmas
+module
+
+public import Zkc.Polynomial.Quadratic
+public import Zkc.Protocols.AlgebraicRounds.Source
+public import Mathlib.Algebra.Polynomial.Roots
+public import Mathlib.Algebra.Polynomial.Degree.Lemmas
+
+@[expose] public section
 
 /-! Honest round polynomials and the degree-two collision bound. -/
 

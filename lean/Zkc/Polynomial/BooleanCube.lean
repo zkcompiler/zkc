@@ -1,4 +1,8 @@
-import Mathlib.Algebra.BigOperators.Fin
+module
+
+public import Mathlib.Algebra.BigOperators.Fin
+
+@[expose] public section
 
 /-! Summation over an ordered Boolean cube, independent of a polynomial
 representation or protocol execution. The first coordinate is split first. -/

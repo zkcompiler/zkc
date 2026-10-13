@@ -1,4 +1,8 @@
-import Zkc.Protocols.AlgebraicRounds.Source
+module
+
+public import Zkc.Protocols.AlgebraicRounds.Source
+
+@[expose] public section
 
 /-! Construction-level effects, distinct from logical interactive round calls. -/
 

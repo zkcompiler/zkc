@@ -8,7 +8,7 @@ role-local inputs, and guards can stop the reached execution prefix.
 [Relations and terminals](../relations.md) define the retained statement and
 explicit terminal checks; [realization](../realization/representations.md) states
 the obligations of a claimed implementation relation. The formal
-[interaction model](../../../lean/docs/spec/language/interaction.md) is a
+[interaction model](../../../lean/docs/spec/semantics.md) is a
 parameterized counterpart, not an established interpretation of this IR.
 Implementation coverage and deferred connections belong to [status](../../status.md).
 

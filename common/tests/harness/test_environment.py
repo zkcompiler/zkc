@@ -72,8 +72,8 @@ def test_formal_and_python_reports_share_one_root(monkeypatch, tmp_path):
     formal = load("formal_evidence", "lean/support/evidence.py")
     monkeypatch.setenv("ZKC_REPORTS_DIR", str(tmp_path / "reports with spaces"))
     assert formal.records("library") == records_root().parent / "lean/library"
-    domain = load("domain_reference", "lean/checks/check_domain_reference.py")
-    assert domain.REPORTS == records_root().parent / "lean/domain-reference"
+    clients = load("formal_clients", "lean/checks/check_clients.py")
+    assert clients.support.evidence.records("clients") == records_root().parent / "lean/clients"
 
 
 @pytest.mark.parametrize("profile,relative", [("release", "build/compiler"),

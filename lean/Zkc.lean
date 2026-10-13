@@ -1,1 +1,3 @@
-import Zkc.Semantics
+module
+
+public import Zkc.Source.Common.Import

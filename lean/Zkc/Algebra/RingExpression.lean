@@ -1,5 +1,9 @@
-import Mathlib.Algebra.Polynomial.Degree.Operations
-import Mathlib.Algebra.Polynomial.Eval.Defs
+module
+
+public import Mathlib.Algebra.Polynomial.Degree.Operations
+public import Mathlib.Algebra.Polynomial.Eval.Defs
+
+@[expose] public section
 
 /-! Formal ring expressions shared by relation and polynomial interpretations.
 This tree model states the substitution laws. A native DAG/decoder correspondence

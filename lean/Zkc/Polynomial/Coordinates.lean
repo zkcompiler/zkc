@@ -1,5 +1,9 @@
-import Zkc.Polynomial.Quadratic
-import Mathlib.Data.List.OfFn
+module
+
+public import Zkc.Polynomial.Quadratic
+public import Mathlib.Data.List.OfFn
+
+@[expose] public section
 
 /-! Bridge ordered coordinate lists to indexed polynomial points.
 

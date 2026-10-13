@@ -1,4 +1,8 @@
-import Zkc.Protocols.Sumcheck.Committed.Execution
+module
+
+public import Zkc.Protocols.Sumcheck.Committed.Execution
+
+@[expose] public section
 
 /-! The committed terminal implies the maintained direct-source acceptance
 on the same adaptive round strategy and the same tape, except on an actual

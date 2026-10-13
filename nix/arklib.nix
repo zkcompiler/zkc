@@ -20,8 +20,6 @@ stdenvNoCC.mkDerivation {
   ];
   buildPhase = ''
     cp -R ${lean.library}/share/zkc/lean lean
-    mkdir -p common/tests
-    cp -R ${lean.library}/share/zkc/common/tests/fixtures common/tests/fixtures
     chmod -R u+w lean
     cp -R ${source}/lean/. lean/
     chmod -R u+w lean
@@ -56,7 +54,6 @@ stdenvNoCC.mkDerivation {
       fi
     done
     cp -a . "$out/share/zkc/lean/"
-    cp -R ../common/tests/fixtures "$out/share/zkc/common/tests/fixtures"
     # Logs and source records remain useful; temporary dependency links do not.
     (cd "$TMPDIR/clients-arklib" &&
       find . -type f ! -path '*/.lake/*' -exec cp --parents {} "$out/reports/" \;)

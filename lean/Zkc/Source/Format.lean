@@ -1,5 +1,9 @@
-import Zkc.Source.Decoding
-import Lean.Data.Json
+module
+
+public import Zkc.Source.Decoding
+public import Lean.Data.Json
+
+@[expose] public section
 
 /-! A tagged-array format for the finite source and direct logical plan.
 
@@ -101,7 +105,7 @@ def decodeProgram (types : Codec Ty) (operations : Codec Op) :
 /-- Prevent exponent expansion in the JSON parser; strings are left untouched.
 The format uses integer tokens only. A token limit is decoder capacity policy,
 not a restriction on mathematical naturals in the source language. -/
-private def checkNumbers (text : String) : Except Error Unit := do
+def checkNumbers (text : String) : Except Error Unit := do
   let mut quoted := false
   let mut escaped := false
   let mut digits := 0

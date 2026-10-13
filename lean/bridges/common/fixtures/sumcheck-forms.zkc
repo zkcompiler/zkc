@@ -1,0 +1,111 @@
+module sumcheck_forms;
+domain F = field("bls12-381.fr");
+
+math fn boundary(a: F, b: F, c: F) -> F {
+  return a + a + b + c;
+}
+math fn evaluate(a: F, b: F, c: F, x: F) -> F {
+  return a + x * b + (x * x) * c;
+}
+
+protocol HelpersProtocol roles(P, V)
+    (a00: F @(P,V), a01: F @(P,V), a02: F @(P,V), a10: F @(P,V), a11: F @(P,V), a12: F @(P,V), a20: F @(P,V), a21: F @(P,V), a22: F @(P,V),
+     claim: F @(P,V), challenges: Random<F> @V) -> (accepted: bool @V) {
+  let h0 = boundary(a00, a01, a02);
+  #[site(first0)] let m0 = send P -> V(h0);
+  let h1 = boundary(a10, a11, a12);
+  #[site(first1)] let m1 = send P -> V(h1);
+  let h2 = boundary(a20, a21, a22);
+  #[site(first2)] let m2 = send P -> V(h2);
+  let boundary0 = boundary(m0, m1, m2);
+  require @V boundary0 == claim;
+  #[site(draw0)] let r0 = challenges.draw();
+  #[site(deliver0)] let x = send V -> P(r0);
+  let k0 = evaluate(a00, a10, a20, x);
+  #[site(second0)] let n0 = send P -> V(k0);
+  let k1 = evaluate(a01, a11, a21, x);
+  #[site(second1)] let n1 = send P -> V(k1);
+  let k2 = evaluate(a02, a12, a22, x);
+  #[site(second2)] let n2 = send P -> V(k2);
+  let claim1 = evaluate(m0, m1, m2, r0);
+  let boundary1 = boundary(n0, n1, n2);
+  require @V boundary1 == claim1;
+  #[site(draw1)] let r1 = challenges.draw();
+  #[site(deliver1)] let y = send V -> P(r1);
+  let row0 = evaluate(a00, a01, a02, r1);
+  let row1 = evaluate(a10, a11, a12, r1);
+  let row2 = evaluate(a20, a21, a22, r1);
+  let actual = evaluate(row0, row1, row2, r0);
+  let finalClaim = evaluate(n0, n1, n2, r1);
+  return (accepted = finalClaim == actual);
+}
+
+run Helpers = HelpersProtocol;
+
+protocol HornerProtocol roles(P, V)
+    (a00: F @(P,V), a01: F @(P,V), a02: F @(P,V), a10: F @(P,V), a11: F @(P,V), a12: F @(P,V), a20: F @(P,V), a21: F @(P,V), a22: F @(P,V),
+     claim: F @(P,V), challenges: Random<F> @V) -> (accepted: bool @V) {
+  let h0 = a00 + a00 + a01 + a02;
+  #[site(first0)] let m0 = send P -> V(h0);
+  let h1 = a10 + a10 + a11 + a12;
+  #[site(first1)] let m1 = send P -> V(h1);
+  let h2 = a20 + a20 + a21 + a22;
+  #[site(first2)] let m2 = send P -> V(h2);
+  let boundary0 = m2 + m1 + (m0 + m0);
+  require @V boundary0 == claim;
+  #[site(draw0)] let r0 = challenges.draw();
+  #[site(deliver0)] let x = send V -> P(r0);
+  let k0 = a00 + x * (a10 + x * a20);
+  #[site(second0)] let n0 = send P -> V(k0);
+  let k1 = a01 + x * (a11 + x * a21);
+  #[site(second1)] let n1 = send P -> V(k1);
+  let k2 = a02 + x * (a12 + x * a22);
+  #[site(second2)] let n2 = send P -> V(k2);
+  let claim1 = m0 + r0 * (m1 + r0 * m2);
+  let boundary1 = n2 + n1 + (n0 + n0);
+  require @V boundary1 == claim1;
+  #[site(draw1)] let r1 = challenges.draw();
+  #[site(deliver1)] let y = send V -> P(r1);
+  let row0 = a00 + r1 * (a01 + r1 * a02);
+  let row1 = a10 + r1 * (a11 + r1 * a12);
+  let row2 = a20 + r1 * (a21 + r1 * a22);
+  let actual = row0 + r0 * (row1 + r0 * row2);
+  let finalClaim = n0 + r1 * (n1 + r1 * n2);
+  return (accepted = finalClaim == actual);
+}
+
+run Horner = HornerProtocol;
+
+protocol WrongResidualProtocol roles(P, V)
+    (a00: F @(P,V), a01: F @(P,V), a02: F @(P,V), a10: F @(P,V), a11: F @(P,V), a12: F @(P,V), a20: F @(P,V), a21: F @(P,V), a22: F @(P,V),
+     claim: F @(P,V), challenges: Random<F> @V) -> (accepted: bool @V) {
+  let h0 = a00 + a00 + a01 + a02;
+  #[site(first0)] let m0 = send P -> V(h0);
+  let h1 = a10 + a10 + a11 + a12;
+  #[site(first1)] let m1 = send P -> V(h1);
+  let h2 = a20 + a20 + a21 + a22;
+  #[site(first2)] let m2 = send P -> V(h2);
+  let boundary0 = m0 + m0 + m1 + m2;
+  require @V boundary0 == claim;
+  #[site(draw0)] let r0 = challenges.draw();
+  #[site(deliver0)] let x = send V -> P(r0);
+  let k0 = a00 + x * a10 + (x * x) * a20;
+  #[site(second0)] let n0 = send P -> V(k0);
+  let k1 = a01 + x * a11 + (x * x) * a21;
+  #[site(second1)] let n1 = send P -> V(k1);
+  let k2 = a02 + x * a12 + (x * x) * a22;
+  #[site(second2)] let n2 = send P -> V(k2);
+  let claim1 = m0;
+  let boundary1 = n0 + n0 + n1 + n2;
+  require @V boundary1 == claim1;
+  #[site(draw1)] let r1 = challenges.draw();
+  #[site(deliver1)] let y = send V -> P(r1);
+  let row0 = a00 + r1 * a01 + (r1 * r1) * a02;
+  let row1 = a10 + r1 * a11 + (r1 * r1) * a12;
+  let row2 = a20 + r1 * a21 + (r1 * r1) * a22;
+  let actual = row0 + r0 * row1 + (r0 * r0) * row2;
+  let finalClaim = n0 + r1 * n1 + (r1 * r1) * n2;
+  return (accepted = finalClaim == actual);
+}
+
+run WrongResidual = WrongResidualProtocol;

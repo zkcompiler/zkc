@@ -25,8 +25,8 @@ byte-identical to the producer's output. `python3 reproduce.py --with-clean` in
 comparison.
 
 `lake build` builds the library and its controls. The generated
-[TestsClean.Audit](TestsClean/Audit.lean) (`checks/audit_imports.py`) audits
-every owned declaration with `Tools.DeclarationAudit`, whose dependency rule
+[TestsClean.Audit](TestsClean/Audit.lean) (`lean/checks/audit_imports.py`) audits
+every owned declaration with `ZkcTools.DeclarationAudit`, whose dependency rule
 keeps `ZkcClean` free of tests, tools, examples and the ArkLib package and keeps
 the main library free of this package and Clean ([rule controls](TestsClean/AuditRules.lean)).
 [TestsClean.UpstreamStatus](TestsClean/UpstreamStatus.lean) records the axioms of
@@ -37,15 +37,25 @@ the selected bridge and upstream declarations. Only `propext`,
 
 | Dependency | Revision |
 |---|---|
-| Lean | `leanprover/lean4:v4.33.1` |
+| Lean | `leanprover/lean4:v4.34.1` |
 | Clean | `b449bf590f93e13827c3c7e747e392d6969aa380` |
-| Mathlib | `0df444a360eaa60ab8c11dca51a86af692955474`, the main package's pin |
-| CompPoly | `a09455a22fea4623a2a1c5b363cf6efc61486a83`, Clean's resolution |
+| Mathlib | `d13f23b723b8a846827a245b89c10fc7d3f11612`, the main package's pin |
+| CompPoly | `df591bb8c6745126d1d72f5243faae3022b0432a`, the shared polynomial pin |
 
 The remaining entries of [the manifest](lake-manifest.json) are the main
-package's revisions; Clean's own manifest selects the same ones. Clean's library
-requires module-system importers, but a `module` file cannot import the main zkc
-library, so both libraries here set `allowNonModules`.
+package's revisions, overriding Clean's transitive pins. The main zkc library
+uses the module system. This adapter retains ordinary importer modules and sets
+`allowNonModules` to admit them alongside upstream Clean's module-system sources.
+
+The pinned upstream needs two compatibility edits for this Mathlib: a renamed
+logic import and a normalization proof whose term ordering changed.
+[compatibility.json](compatibility.json) records the exact base revision and
+file hashes; [compatibility.patch](compatibility.patch) contains the edits.
+`just fetch-lean clean`, `just build-lean clean` and the fresh reproducer apply
+this patch and refuse unexpected source contents. Direct `lake build` assumes
+that preparation has run. The patch changes no theorem statement or executable
+protocol definition. [Dependency rationale](../../docs/dependencies.md)
+records the selected baseline.
 
 ## Native Bundle examples
 
@@ -187,7 +197,7 @@ The controls use the KoalaBear field `F 2130706433`. Kernel evaluation
 - [Nested](TestsClean/Nested.lean): upstream `Gadgets.IsEqual` on pairs; four
   assertions three subcircuit levels deep and none shallow.
 - [Refusals](TestsClean/Refusals.lean): a lookup only inside a nested
-  subcircuit (`Addition8Full`), channel interactions (`add8`), an out-of-range
+  subcircuit (`Addition8Full`), every channel interaction through its public operation type, an out-of-range
   variable that Clean would read as zero, and import of noncanonical constants,
   out-of-range columns or a different field size.
 - [Mutations](TestsClean/Mutations.lean) and

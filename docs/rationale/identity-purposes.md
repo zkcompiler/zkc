@@ -3,7 +3,7 @@
 Artifact binding, live resource identity, immutable preparation, probability
 provenance and continuation authority have different validity conditions. The
 [binding contract](../spec/realization/artifacts.md#identity-purposes) distinguishes
-them; the [artifact guide](../../lean/docs/guides/artifact-binding.md) explains their use.
+them; the [verification specification](../../lean/docs/spec/verification.md) explains source and certificate identity.
 
 ## Why one identifier is insufficient
 
@@ -15,9 +15,8 @@ policy and actual ledger state. Copying a digest supplies none of those facts.
 Lifetimes differ too. An immutable prepared value can remain valid after a
 mutation invalidates a fact about a live object. Rebinding its provider is sound
 only where retained entries agree. An allocator's name can be fresh in its own
-pool and already present in another world. The reference
-[allocation law](../../lean/docs/spec/profiles/compiler/factor-preparation.md#monotone-allocation-and-registration)
-therefore states the pool and world relationship explicitly.
+pool and already present in another world. An allocation-preservation claim
+therefore needs an explicit relationship between the pool and world.
 
 One universal identifier would couple otherwise independent caches, resource
 lifetimes and disclosure policies. Separate relations let each boundary bind

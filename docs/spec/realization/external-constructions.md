@@ -196,8 +196,8 @@ Fiat-Shamir construction rule. Internal Merlin/Spongefish artifact-bound
 constructions remain distinct; selecting an external name in their suite slot
 is unsupported. No automatic construction correspondence is asserted.
 
-Kernel diagnostic identities use `external-…` consistently in native and Lean
-execution. With sufficient host capacity, validation checks the state envelope
+Native kernel diagnostic identities use `external-…`. The current Lean import
+profile does not admit these external constructions. With sufficient host capacity, validation checks the state envelope
 and its canonical payload before other operands. Monero update checks state
 bytes before item length/bytes. Witness checking checks state, u32 bit width,
 allowed bit range, u32 witness and field canonicality in that order. A malformed

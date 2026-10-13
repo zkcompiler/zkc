@@ -3,14 +3,14 @@
 Native lowering, storage, kernels and Hosts owe these representation obligations.
 This chapter states shared laws; a native implementation claim needs its
 actual instance and evidence. Independent formal examples retain their own
-[model scope](../../../lean/docs/spec/README.md).
+[model scope](../../../lean/docs/README.md).
 
 A representation relates a logical result to a result carried by another
 execution. It can relate different value types, heaps and event alphabets.
 A returned reference denotes its value in the actual state left by execution.
 
-This applies to [family ingress](../../../lean/docs/spec/profiles/source/families.md) and
-[iteration](../../../lean/docs/spec/core/iteration.md) as well as individual operations. Related
+This applies to family ingress and
+iteration as well as individual operations. Related
 ingress results select related dependent inputs in their actual residual states;
 the corresponding member law then yields a relation of the complete family
 runs. For iteration, the relation also covers pending continuation values and
@@ -31,7 +31,7 @@ right : F → List O
 
 `R` relates residual states. `V a s b t` states that result `b` in state `t`
 represents result `a` in state `s`. The functions `left` and `right` are
-ordered [event projections](../../../lean/docs/spec/core/observations.md#event-projections) into `O`.
+ordered event projections into `O`.
 
 For any value relation `W : A → B → Prop`, lift it to outcomes by:
 
@@ -70,7 +70,7 @@ selected logical correspondence.
 `[7]` under `V a s slot heap ⇔ heap[slot]? = some a`. Slot `0` in heap `[8]`
 does not represent that return. The numeric slot alone cannot distinguish them.
 
-The formal [equal-result relation](../../../lean/docs/spec/core/observations.md#execution-relation)
+The formal equal-result relation
 is included by choosing `V a s b t ⇔ a = b`. This specialization still retains
 the chosen state relation and event projections.
 
@@ -237,7 +237,7 @@ coordinate sequence, lifetime or implementation.
 
 Replacing an implementation requires the selected relational contract. Two
 implementations satisfying a weak unary contract need not be interchangeable;
-the distinction follows the formal [contract boundary](../../../lean/docs/spec/core/contracts.md#satisfaction-and-replacement).
+the distinction follows the formal contract boundary.
 
 ## Algebra and provider correspondence
 
@@ -254,7 +254,7 @@ uniformity requires an additional probability argument.
 Reuse of a deterministic encoding or provider computation preserves the
 selected absorption order, draw order and observer. Equality of an arithmetic
 return alone does not justify removing or moving provider transitions. The
-[probability specification](../../../lean/docs/spec/properties/probability.md) supplies the relevant law operands;
+[probability specification](../../../lean/docs/architecture.md#reuse-and-composition) supplies the relevant law operands;
 a deterministic same-provider equation does not create a fresh-coin theorem.
 
 ## Storage and ownership
@@ -272,8 +272,7 @@ native-name freshness.
 
 Immutable cache validity, facts about live state, allocation ownership and
 continuation authority have different premises. One content digest or reference
-tag does not establish all four. The [factor-state profile](../../../lean/docs/spec/profiles/compiler/factor-preparation.md)
-specifies one concrete collection of these state and allocation laws.
+tag does not establish all four. A concrete allocation or cache adapter must specify its own state and allocation laws.
 
 ## Capacity and progress
 
@@ -303,7 +302,7 @@ logical result.
 Synchronous completion establishes the promised end of buffer accesses and
 recovery of ownership. Callbacks, resumption, interleaving or device overlap
 require an execution contract supporting those behaviors. A native scheduler
-cannot silently replace an [atomic call](../../../lean/docs/spec/core/execution.md#call-boundary)
+cannot silently replace an [atomic call](../../../lean/docs/spec/semantics.md#effects-and-observations)
 by observably interleaved steps.
 
 ## Admission and custody

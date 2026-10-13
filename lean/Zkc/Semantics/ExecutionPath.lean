@@ -1,4 +1,8 @@
-import Zkc.Semantics.Interaction
+module
+
+public import Zkc.Semantics.Interaction
+
+@[expose] public section
 
 set_option autoImplicit false
 namespace PIR.ExecutionPath

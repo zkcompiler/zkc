@@ -1,4 +1,8 @@
-import Zkc.Protocols.Sumcheck.Committed.Connection
+module
+
+public import Zkc.Protocols.Sumcheck.Committed.Connection
+
+@[expose] public section
 
 /-! Conditional soundness for honestly committed fixed factor tables.
 
@@ -71,8 +75,8 @@ theorem acceptance_le_source_add_bad (statement : Statement scheme) (adversary :
     funext coins
     by_cases accepted : (Execution.run adversary.send adversary.react statement.polynomial claim prover
         (tapeList n coins)).outcome = .returned true
-    · rw [if_pos accepted, if_pos accepted]
-    · rw [if_neg accepted, if_neg accepted]
+    · rw [ite_eq_left accepted, ite_eq_left accepted]
+    · rw [ite_eq_right accepted, ite_eq_right accepted]
   rw [sourceEq] at bound
   exact bound
 

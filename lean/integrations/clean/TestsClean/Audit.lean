@@ -1,4 +1,4 @@
 import TestsClean.LibraryImports
-import Tools.DeclarationAudit
+import ZkcTools.DeclarationAudit
 
-run_cmd Tools.DeclarationAudit.check [`ZkcClean, `TestsClean] "CLEAN-INTEGRATION-AUDIT-PASS"
+run_cmd ZkcTools.DeclarationAudit.check [`ZkcClean, `TestsClean] "CLEAN-INTEGRATION-AUDIT-PASS"

@@ -1,9 +1,9 @@
 # Canonical local algorithm expansion
 
 This profile expands acyclic ordered local applications before participant
-projection. The independent [stored-definition model](../../../lean/docs/spec/profiles/source/definitions.md)
-supplies selected inlining laws; native expansion and accounting have their own
-[preservation checks](../../compiler/verification.md).
+projection. The [scalar formal bridge](../../../lean/docs/spec/common-source.md)
+imports a bounded statically inlined subset. General native expansion and
+accounting retain their own preservation obligations.
 
 ## Formation and intermediate representation
 

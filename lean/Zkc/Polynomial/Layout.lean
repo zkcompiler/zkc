@@ -1,4 +1,8 @@
-import Zkc.Polynomial.Multilinear
+module
+
+public import Zkc.Polynomial.Multilinear
+
+@[expose] public section
 
 /-! High-bit logical coordinates and low-bit storage for multilinear tables.
 

@@ -1,4 +1,8 @@
-import Zkc.Semantics.RelationComposition
+module
+
+public import Zkc.Semantics.RelationComposition
+
+@[expose] public section
 
 /-! Exact realization of a selected acceptance-and-output relation.
 

@@ -1,5 +1,9 @@
-import Zkc.Polynomial.BooleanCube
-import Mathlib.Tactic.Ring
+module
+
+public import Zkc.Polynomial.BooleanCube
+public import Mathlib.Tactic.Ring
+
+@[expose] public section
 
 /-! Fixed polynomials with per-coordinate degree at most two.
 

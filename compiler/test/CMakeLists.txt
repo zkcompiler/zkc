@@ -13,6 +13,8 @@ function(add_zkc_test name component)
 endfunction()
 
 add_zkc_test(mathematical_facts Contracts mathematical-facts)
+add_zkc_test(common_reference Translation)
+mlir_target_link_libraries(zkc-common_reference-test PRIVATE MLIRParser)
 add_zkc_test(finite_cardinality Contracts finite-cardinality)
 add_zkc_test(mathematical_fact_analysis IR mathematical-fact-analysis)
 mlir_target_link_libraries(zkc-mathematical_fact_analysis-test PRIVATE

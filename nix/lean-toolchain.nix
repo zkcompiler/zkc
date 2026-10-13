@@ -13,7 +13,7 @@ let
     lib.trim (builtins.readFile ../lean/lean-toolchain)
   );
   hashes = {
-    "4.33.1" = "sha256:890afd185370f85666025b883914ab4f4b339136f8c96167b69cfb62aecaf235";
+    "4.34.1" = "sha256:47bf4bbd78f70c2e9670598ab7124d92b6efb7330ff33e5fbb4030f6fd72e4e4";
   };
 in
 stdenvNoCC.mkDerivation {

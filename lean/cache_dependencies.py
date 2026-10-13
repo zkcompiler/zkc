@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 
 import support.lake
+from support.compatibility import prepare
 import subprocess
 
 from support.lean_headers import HeaderParser
@@ -23,7 +24,7 @@ from support.lean_headers import HeaderParser
 ROOT = Path(__file__).resolve().parent
 # Optional packages: owned source directories and a standalone client, if any.
 INTEGRATIONS = {
-    "arklib": (("ZkcArkLib", "TestsArkLib"), "clients/ArkLib.lean"),
+    "arklib": (("ZkcSecurity", "TestsSecurity"), "clients/ArkLib.lean"),
     "clean": (("ZkcClean", "TestsClean"), None),
 }
 
@@ -93,9 +94,10 @@ def main():
         work = ROOT / "integrations" / integration
         share_dependencies(ROOT, work)
         raw = subprocess.check_output([lake, "env", "printenv", "LEAN_SRC_PATH"], cwd=work, text=True).strip()
+        prepare(work)
     search = [(work / path).resolve() for path in raw.split(os.pathsep) if path]
     seeds = [ROOT / "Zkc.lean", ROOT / "clients/Main.lean"]
-    for directory in ("Zkc", "Tests", "Examples", "Tools"):
+    for directory in ("Zkc", "Tests", "ZkcExamples", "ZkcTools"):
         seeds.extend((ROOT / directory).rglob("*.lean"))
     if integration:
         directories, client = INTEGRATIONS[integration]

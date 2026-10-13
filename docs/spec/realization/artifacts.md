@@ -3,7 +3,7 @@
 Native compilation, Entry packages and deployment admission use these subject-binding obligations.
 This chapter states shared laws; a native implementation claim needs its
 actual instance and evidence. Independent formal examples retain their own
-[model scope](../../../lean/docs/spec/README.md).
+[model scope](../../../lean/docs/README.md).
 
 Evidence concerns a particular subject under particular meanings and premises.
 An artifact carries that subject across proposal, checking and execution.
@@ -21,12 +21,12 @@ Admission and execution MUST bind the same source, candidate and meanings used
 by the applicable law. Invocation additionally binds the actual input
 environment and initial state. A universally quantified preservation theorem
 can apply to many environments; each invocation still uses one actual
-[binding](../../../lean/docs/spec/profiles/source/named-inputs.md#exact-ordered-binding).
+binding.
 
-The [direct profile](../../../lean/docs/spec/profiles/compiler/direct-plan.md#checked-plans) gives a concrete
-source-indexed checked record. Other profiles may use different representations
-of evidence, provided they establish the specified judgment about the actual
-retained operands.
+A source-indexed checked record can carry this evidence. Different profiles
+may represent certificates differently, but each must establish the specified
+judgment about the actual retained operands. The [verification specification](../../../lean/docs/spec/verification.md)
+defines the current scalar source/property instance.
 
 ## Interpretation closure
 
@@ -49,6 +49,9 @@ interpretation. It does not resolve a provider name or establish that two
 different installed libraries implement that shared interpretation.
 
 ## Identity purposes
+
+The [identity rationale](../../rationale/identity-purposes.md) explains why these
+relations remain separate.
 
 An identity is used within a contract that gives its comparisons meaning:
 
@@ -77,7 +80,7 @@ applicable frame, equivalence or rebinding law. A mutable read follows its
 declared transition. It cannot masquerade as an immutable capture while
 rereading changed storage.
 
-The [immutable cache contract](../../../lean/docs/spec/core/contracts.md#immutable-cache-validity)
+An immutable cache validity contract
 can justify reuse beyond the lifetime of a mutable fact when the cache's own
 provider and dependency law remains valid. Rebinding a provider requires its
 agreement on the actual occupied entries; agreement at an unrelated test key
@@ -123,7 +126,7 @@ identifies bytes under its stated assumptions. It does not establish semantic
 correctness, secrecy, security or publication permission.
 
 Source, code, proofs, receipts, digests and diagnostics exposed to an observer
-form part of the [permitted release](../../../lean/docs/spec/properties/disclosure.md). This includes values
+form part of the permitted release policy. This includes values
 revealed through secret-dependent specialization. Admission to execute a
 candidate is not by itself admission to publish every artifact of its creation.
 
@@ -146,10 +149,10 @@ omits the unused classes explicitly. Unknown mandatory facilities or unresolved
 required meanings fail admission. Missing optional hints can prevent an
 optimization; missing effect information cannot default to purity.
 
-Extending a logical-plan claim to generated native code requires a realization
-definition, a checking rule and the corresponding realization laws. The
-[direct envelope](../../../lean/docs/spec/profiles/compiler/direct-plan.md#envelope-grammar) fixes one
-concrete instance of these distinctions.
+Extending a logical-program claim to generated native code requires an
+explicit realization definition, a checking rule and the corresponding laws.
+The current scalar proof receipt states that native realization remains outside
+its kernel-checked boundary.
 
 ## Exact retained content
 

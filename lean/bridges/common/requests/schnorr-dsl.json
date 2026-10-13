@@ -1,0 +1,28 @@
+{
+  "format": "zkc.verification-spec/0",
+  "role": "V",
+  "properties": [
+    "perfect-completeness",
+    "special-soundness"
+  ],
+  "experiment": "interactive.causal-transcripts/0",
+  "contract": "schnorr.verifier/0",
+  "inputs": {
+    "base": "base",
+    "key": "point",
+    "service": "challenges"
+  },
+  "wiring": {
+    "prover": "P",
+    "fieldDomain": "bls12-381.fr",
+    "groupDomain": "bls12-381.g1",
+    "commitmentSite": "label_636f6d6d69746d656e74_0",
+    "challengeSite": "label_6368616c6c656e6765",
+    "deliverySite": "label_64656c6976657279_0",
+    "responseSite": "label_726573706f6e7365_0"
+  },
+  "target": {
+    "clause": "knowledge",
+    "relation": "discrete-log/0"
+  }
+}

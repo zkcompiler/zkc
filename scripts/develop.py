@@ -46,6 +46,8 @@ def execute(args):
         directory = ROOT / "lean"
         if args.deps != "main":
             directory /= f"integrations/{args.deps}"
+        if args.deps == "clean":
+            run([sys.executable, ROOT / "lean/support/compatibility.py", directory])
         run(["lake", "build"], cwd=directory)
     elif args.operation == "rust":
         run(["cargo", "build", "--release", "--locked", "-p", "zkc-tools", "--bin", "zkc"])

@@ -1,0 +1,40 @@
+{
+  "format": "zkc.proof-request/0",
+  "role": 1,
+  "properties": [
+    "arklib-interactive-soundness"
+  ],
+  "experiment": "interactive.reached-uniform-queries/0",
+  "contract": "sumcheck.quadratic-two-round/0",
+  "inputs": [
+    "constant.constant",
+    "constant.linear",
+    "constant.quadratic",
+    "linear.constant",
+    "linear.linear",
+    "linear.quadratic",
+    "quadratic.constant",
+    "quadratic.linear",
+    "quadratic.quadratic",
+    "claim",
+    "service"
+  ],
+  "wiring": {
+    "prover": 0,
+    "fieldDomain": "bls12-381.fr",
+    "firstSites": [
+      "label_666972737430_0",
+      "label_666972737431_0",
+      "label_666972737432_0"
+    ],
+    "secondSites": [
+      "label_7365636f6e6430_0",
+      "label_7365636f6e6431_0",
+      "label_7365636f6e6432_0"
+    ],
+    "firstChallenge": "label_6472617730",
+    "secondChallenge": "label_6472617731",
+    "firstDelivery": "label_64656c6976657230_0",
+    "secondDelivery": "label_64656c6976657231_0"
+  }
+}

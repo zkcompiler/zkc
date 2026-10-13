@@ -1,4 +1,8 @@
-import Zkc.Semantics.Continuation
+module
+
+public import Zkc.Semantics.Continuation
+
+@[expose] public section
 
 /-! Statement/witness relations and soundness contracts for protocol reductions.
 

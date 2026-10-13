@@ -3,7 +3,7 @@ import ZkcClean.Native
 import TestsClean.Bits
 import TestsClean.Nested
 import TestsClean.Refusals
-import Tools.DeclarationAudit
+import ZkcTools.DeclarationAudit
 
 /-! Axiom status of the selected bridge theorems and of the upstream Clean
 source declarations at the pinned revision. Only `propext`, `Classical.choice`
@@ -28,13 +28,13 @@ run_cmd do
     ``Operations.interactions_toFlat, ``FiniteField.fromNat_val,
     ``Air.Flat.Component.weakSoundness, ``Air.Flat.Table.weakSoundness,
     ``GeneralFormalCircuit.original_full_soundness, ``Gadgets.ToBits.toBits,
-    ``Gadgets.IsEqual.circuit, ``Gadgets.Addition8Full.circuit, ``add8,
+    ``Gadgets.IsEqual.circuit, ``Gadgets.Addition8Full.circuit,
     ``FlatOperation.dynamicWitnesses]
   for (label, names) in [("BRIDGE-AXIOMS", bridge), ("UPSTREAM-AXIOMS", upstream)] do
     for name in names do
       unless (← getEnv).contains name do
         throwError "selected declaration is missing: {name}"
       let axioms ← Lean.collectAxioms name
-      unless axioms.all Tools.DeclarationAudit.allowedAxioms.contains do
+      unless axioms.all ZkcTools.DeclarationAudit.allowedAxioms.contains do
         throwError "unexpected axiom in {name}: {axioms}"
       logInfo m!"{label} {name}: {axioms}"

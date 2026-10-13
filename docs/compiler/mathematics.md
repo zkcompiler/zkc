@@ -327,8 +327,7 @@ Fusion compares values and
 ordered shape refusals under sufficient resources; changed allocation and
 instruction charges may change exhaustion.
 No general optimization theorem, backend-failure equivalence or peak-memory
-improvement follows. The independent Lean reduction laws cover their list
-model, with no source capture or native runtime adequacy theorem.
+improvement follows. The current scalar Lean bridge does not cover these native vector reductions.
 
 Finite comparison distinguishes a mismatch from exhausted checker capacity.
 An optional candidate that exhausts comparison is discarded; the transaction

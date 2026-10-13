@@ -1,5 +1,9 @@
-import Zkc.Relation.AIR
-import Zkc.Algebra.RingExpression
+module
+
+public import Zkc.Relation.AIR
+public import Zkc.Algebra.RingExpression
+
+@[expose] public section
 
 /-! The existing finite AIR expression embeds into shared ring substitution.
 Finite window and scope obligations remain owned by AIR; this translation does

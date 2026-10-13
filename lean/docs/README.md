@@ -1,43 +1,19 @@
-# Formal models
+# Formal reference
 
-The Lean library defines independent models of execution, typed source,
-transformations, probability and protocol properties. Their proofs concern the
-exact subjects and hypotheses stated here. They do not establish correspondence
-with native `.zkc`, MLIR or Rust execution.
+These documents own the independent formal models and their precise claims.
+[Native specifications](../../docs/spec/README.md) remain authoritative for the
+compiler and runtime. A native export is a connection boundary, not an assertion
+that all native behavior already has a Lean model.
 
-## Reading routes
-
-| Task | Reference |
-|---|---|
-| Understand the semantic model | [Model guides](guides/README.md), [theory](theory.md) |
-| Read exact definitions | [Model specification](spec/README.md) |
-| Find established propositions and limits | [Support](support.md) |
-| Understand library structure | [Architecture](architecture.md) |
-| Build or use Lean APIs and tools | [Formal package](../README.md) |
-| Assess a native connection | [Connection boundary](native-connection.md), [assurance policy](../../docs/assurance.md#native-correspondence) |
-
-## Definitions and proofs
-
-`lean/docs/spec/` owns model-specific prose definitions. Shared mathematical
-and representation laws remain in the [native/common specification](../../docs/spec/README.md#mathematical-and-checking-contracts).
-[Support](support.md) owns theorem scope. Correspondence maps identify the exact
-clause-to-declaration connections and remaining obligations:
-
-- [Execution and observations](correspondence/core.md)
-- [Programs, inputs and interaction](correspondence/programs.md)
-- [Domains and source](correspondence/domains.md)
-- [Ordered finite computations](correspondence/finite-computations.md)
-- [Transformations and judgments](correspondence/transformations.md)
-- [Properties and release](correspondence/properties.md)
-- [Realization and binding](correspondence/realization.md)
-
-## Design and tools
-
-Adopted choices are grouped into [semantics](design/semantics.md),
-[analysis](design/analysis.md) and [observations](design/observations.md).
-Maintained tool and application designs cover [artifact checking](design/artifact-reference.md),
-[interactive references](design/interactive-reference.md),
-[local control](design/local-control.md), [role execution](design/role-execution.md)
-and [committed Sumcheck](design/committed-sumcheck.md).
-The [theory chapter](theory.md#references) cites the methods used by these models.
-Unadopted implementation proposals and review history are private research.
+- [Architecture](architecture.md): packages, interfaces and proof composition.
+- [PIR semantics](spec/semantics.md): typed mathematics, participants, effects,
+  observations, termination and exact refinement.
+- [Verification](spec/verification.md): explicit intent, contracts, consumers,
+  authored targets, candidate generation and receipt semantics.
+- [Scalar import](spec/common-source.md): admitted syntax and encoding.
+- [Ring expressions](spec/ring-expressions.md): retained Clean/AIR connection.
+- [Support](support.md): theorem scope, assumptions and tested boundaries.
+- [Dependencies](dependencies.md): exact pins and compatibility decisions.
+- [Research design](design/protocol-verification.md): questions, choices and
+  evaluation criteria for extending the implemented architecture.
+- [Native bridge](../bridges/common/README.md): differential and proof-request tests.

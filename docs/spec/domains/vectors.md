@@ -3,7 +3,7 @@
 Native MSM, matrix contractions and vector kernels use these ordered value contracts.
 This chapter states shared laws; a native implementation claim needs its
 actual instance and evidence. Independent formal examples retain their own
-[model scope](../../../lean/docs/spec/README.md).
+[model scope](../../../lean/docs/README.md).
 
 For a carrier `X`, `Vector X n = Fin n → X`. A dynamically sized vector carries
 its length together with that indexed value. Length zero is permitted. Element
@@ -49,9 +49,9 @@ gives:
 combine(w, fun i => d[i] • x[i]) = combine(fun i => w[i]*d[i], x)
 ```
 
-The maintained Lean laws are
-[`linearCombination_rows` and `linearCombination_smul`](../../../lean/Zkc/Algebra/LinearCombination.lean).
-They establish value equalities under the stated algebraic and shape premises.
+These are value equalities under the stated algebraic and shape premises.
+The current protocol-focused formal package does not claim a general native
+vector-map or reduction correctness theorem.
 
 ## Matrix and sequence operations
 
@@ -195,8 +195,8 @@ beginning at the dynamic `index` operand `start`, with exactly `length` entries.
 It has no attributes. It requires `start <= length(v)` and
 `length <= length(v) - start`; checked-size and allocation limits also apply.
 An empty slice at the end is valid. Out-of-range slices refuse rather than
-truncate, wrap, or pad. The typed Lean slice laws establish bounds, length and
-coordinate preservation; native runtime adequacy remains separately tested.
+truncate, wrap, or pad. The bounds, length and coordinate laws are native obligations. The current
+scalar PIR-to-Lean import profile does not cover vector slicing.
 
 `vector.transpose<F>(v,rows,columns)` changes a flat row-major `rows × columns`
 matrix into the flat row-major transpose. It requires exactly `rows*columns`
@@ -257,15 +257,12 @@ check, not a native protocol rejection; see the
 formal polynomials: a pointwise product of two tables is not the table of the
 product of their multilinear or univariate interpretations.
 
-The maintained Lean laws are
-[`map_coordinate`, `map_shape`, `map_substitute` and `map_hoist`](../../../lean/Zkc/Algebra/RingExpression/Pointwise.lean):
-a successful map is row-by-row evaluation, unequal rowwise lengths never
-succeed, a formula composed of helpers may be mapped in one pass over the same
-operands, and a subformula over scalar inputs has one value for every row.
-Dropping scalar operations the result never reaches is the restricted node map
-of the [arena sharing laws](../../../lean/Zkc/Algebra/RingExpression/Sharing.lean).
-They establish value equalities in a list model under the stated shape premises;
-the native realization and its checks are separately tested.
+A successful map is row-by-row evaluation; unequal rowwise lengths cannot
+succeed. A helper-composed formula may be mapped over the same operands, and a
+scalar-only subformula has one value for every row. Eliminating unreachable
+arithmetic must still preserve every original shape guard. These are native
+preservation obligations; the selected scalar Lean bridge does not cover vector
+maps or their backend implementation.
 
 ## Finite map reductions
 
@@ -289,11 +286,11 @@ all original ordered shape guards, even when the dot itself uses only two of
 several row inputs. The [optional native fusion contract](../ir/protocols.md#optional-vector-reduction-fusion)
 states the restricted rewrite and its resource relation.
 
-The independent [Lean reduction model](../../../lean/docs/spec/core/ring-expressions.md)
-proves list-value, empty, unused-row refusal and error-propagation laws under
-its stated admission premises. It does not prove native compiler correspondence,
-source capture snapshots or runtime adequacy. Source binding and evaluation
-order belong to the [finite reduction contract](../language/definitions.md#finite-reduction-binders).
+Source binding and evaluation order belong to the
+[finite reduction contract](../language/definitions.md#finite-reduction-binders).
+The current scalar Lean bridge does not prove these native vector reductions;
+empty inputs, unused-row refusal and error propagation remain required native
+checks and future adapter obligations.
 
 ## Representation and execution
 

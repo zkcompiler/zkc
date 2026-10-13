@@ -225,6 +225,7 @@ add_zkc_component(Translation
   lib/Translation/Language/Comparison.cpp
   lib/Translation/AIR.cpp
   lib/Translation/ProtocolExport.cpp
+  lib/Translation/CommonSource.cpp
   lib/Translation/ProgramVerification.cpp
   lib/Translation/R1CS.cpp
   lib/Translation/R1CSSumcheck.cpp

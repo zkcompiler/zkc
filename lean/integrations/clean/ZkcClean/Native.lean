@@ -52,7 +52,7 @@ theorem component_ring {component : Air.Flat.Component F} {artifact : Artifact}
       component.operations.constraints cs := by
   have admitted := exportComponent_ok exported
   unfold Artifact.decode at decoded
-  rw [if_pos admitted.fieldSize_eq, admitted.assertions] at decoded
+  rw [ite_eq_left admitted.fieldSize_eq, admitted.assertions] at decoded
   refine (decodeAssertions_encode decoded).imp ?_
   rintro e c ⟨scope, hc⟩
   exact ⟨scope, fun statement read data => by

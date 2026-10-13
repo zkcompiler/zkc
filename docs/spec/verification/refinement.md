@@ -3,7 +3,7 @@
 Native adjacent comparisons and publication checks address these source-relative obligations.
 This chapter states shared laws; a native implementation claim needs its
 actual instance and evidence. Independent formal examples retain their own
-[model scope](../../../lean/docs/spec/README.md).
+[model scope](../../../lean/docs/README.md).
 
 A refinement compares the complete executions of an actual source and target
 under selected meanings, inputs, states and observations. Its premises state
@@ -27,7 +27,7 @@ property argument as well as any local implementation refinement.
 
 ## Selected execution models
 
-For a [language](../../../lean/docs/spec/language/programs.md#language-signatures) `L`, an execution
+For a [language](../../../lean/docs/spec/semantics.md#mathematical-and-participant-layers) `L`, an execution
 model consists of:
 
 ```text
@@ -44,8 +44,7 @@ For a source program `Γ ⊢ p : τ`, its selected run is:
 runSource M p η s = run M.handler (⟦p⟧M.meaning η) s.
 ```
 
-The selected typed-plan interface uses the
-[logical plan evaluator](../../../lean/docs/spec/profiles/compiler/direct-plan.md#typed-plans):
+A typed plan interface can use the following logical evaluator:
 
 ```text
 runPlan M q η s = evaluatePlan M.meaning M.handler q η s.
@@ -116,7 +115,7 @@ it provides no execution conclusion for an arbitrary invocation.
 
 Refinement does not itself prove that the source faithfully expresses an
 external mathematical statement. That connection also uses exact
-[input binding](../../../lean/docs/spec/profiles/source/named-inputs.md#exact-ordered-binding) and
+input binding and
 [domain adequacy](../domains/values.md#domain-adequacy).
 
 ## Advertised input coverage
@@ -155,8 +154,7 @@ value through `encode` requires a retained consumer satisfying:
 ```
 
 In particular, admitted source values with the same encoding must have the
-same required observation. This is observational factorization, as used by the
-[locality law](../../../lean/Zkc/Semantics/Locality.lean); it requires neither an inverse
+same required observation. This is observational factorization, under a proved locality law; it requires neither an inverse
 for every source value nor preservation of observations no remaining consumer
 uses.
 
@@ -268,11 +266,9 @@ arbitrary supplied effectful invocation remains fixed, including any stop,
 state mutation or event it produces.
 
 Factor reuse additionally requires valid facts, actual availability and
-justified state transfer. The [typed factor rule](../../../lean/docs/spec/profiles/compiler/factor-preparation.md#typed-factor-rule)
-defines these premises on the actual module implementations and proves
-complete-execution preservation under its guarded handler. The common
-refinement judgment applies that law to the selected initial domain and
-candidate.
+justified state transfer. An implementation must prove these premises on its
+actual module implementations and preserve them through control flow. The
+current scalar source certificates do not establish a native factor optimizer.
 
 ## Effects and admission timing
 
@@ -296,7 +292,5 @@ programs does not automatically prove it.
 Phase admission also concerns every interface-typed reply, rather than only runs
 under a selected handler. Combining source phase evidence with an execution
 refinement requires a law transporting that admission to the actual target, or
-separate target admission evidence. The [phase interpretation law](../../../lean/docs/spec/core/interpretations.md#phase-admission)
-and the [finite phase realization](../../../lean/docs/spec/profiles/compiler/finite-phases.md#realizing-a-policy)
-state the relevant operation and phase premises. A decoded source certificate
+separate target admission evidence. Such a law must state the relevant operation and phase premises. A decoded source certificate
 and equality under one handler do not supply those premises.

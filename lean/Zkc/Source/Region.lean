@@ -1,4 +1,8 @@
-import Zkc.Source.Composition
+module
+
+public import Zkc.Source.Composition
+
+@[expose] public section
 
 /-! Typed computation regions with explicit, shared sequential composition.
 

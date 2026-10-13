@@ -97,7 +97,7 @@ validates installed alternatives, conversions and all actual uses.
 
 Compiler and runtime independently check their consumed contracts. Shared
 schema data and matching signatures do not prove kernel correctness. Independent
-Lean operation interpretations and sampling/locality laws apply to their named
-models; extraction, native realization and security reductions need their own
+Lean scalar interpretations and reached-query sampling laws apply to their named
+models; extraction, native realization and additional security reductions need their own
 connections. Use the [extension guide](../development/extensions.md#logical-contracts-and-source-exports)
 when changing this boundary.

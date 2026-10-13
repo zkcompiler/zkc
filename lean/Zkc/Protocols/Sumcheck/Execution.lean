@@ -1,4 +1,8 @@
-import Zkc.Protocols.Sumcheck.Source
+module
+
+public import Zkc.Protocols.Sumcheck.Source
+
+@[expose] public section
 
 /-! The whole typed source runs under the same staged Fresh construction as
 algebraic rounds. Its acceptance event is exactly the complete verifier game. -/
@@ -64,9 +68,9 @@ theorem rounds_outcome (send : S → Message F × S) (react : S → F → S)
       | mk message next =>
           by_cases passes : message.boundary = accumulator.claim
           · simp only [Source.rounds, Proc.run, handler, sent, Execution.follow, tapeList,
-              if_pos passes]
+              ite_eq_left passes]
             rw [ih]
-            simp only [strategy, sent, finalClaim, if_pos passes]
+            simp only [strategy, sent, finalClaim, ite_eq_left passes]
             cases result : finalClaim (strategy send react count (react next r)) (message.evaluate r) tail <;>
               simp [Source.advance, List.append_assoc, result]
           · simp [Source.rounds, Proc.run, handler, sent, Execution.follow, tapeList,

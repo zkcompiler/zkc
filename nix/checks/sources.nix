@@ -26,7 +26,8 @@ runCommand "zkc-source-boundaries" { } ''
   test ! -e ${sources.sdk}/compiler/lib
   test ! -e ${sources.lean}/lean/integrations
   test ! -e ${sources.lean}/lean/checks
-  test -f ${sources.lean}/lean/Tools/ContractConformance.lean
+  test -f ${sources.lean}/lean/ZkcTools/CommonSource.lean
+  test -f ${sources.lean}/lean/ZkcExamples/NativePrograms/CustomProperty.lean
   test -f ${sources.leanChecks}/common/tests/fixtures/clean/air-control.json
   test ! -e ${sources.arklib}/lean/integrations/clean
   test -f ${sources.arklib}/lean/checks/check_clients.py

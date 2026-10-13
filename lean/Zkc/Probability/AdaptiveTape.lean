@@ -1,7 +1,11 @@
-import Zkc.Probability.Observation
-import Mathlib.Data.Fintype.Card
-import Mathlib.Data.Rat.Defs
-import Mathlib.Data.Fintype.Prod
+module
+
+public import Zkc.Probability.Observation
+public import Mathlib.Data.Fintype.Card
+public import Mathlib.Data.Rat.Defs
+public import Mathlib.Data.Fintype.Prod
+
+@[expose] public section
 
 
 set_option autoImplicit false

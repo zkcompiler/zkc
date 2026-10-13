@@ -3,18 +3,18 @@
 Typed native algebra and physical value admission use these domain distinctions.
 This chapter states shared laws; a native implementation claim needs its
 actual instance and evidence. Independent formal examples retain their own
-[model scope](../../../lean/docs/spec/README.md).
+[model scope](../../../lean/docs/README.md).
 
 A domain interpretation gives source values and operations their mathematical
 meaning. It declares its sorts, operations, legal inputs and source denotation.
-The [language](../../../lean/docs/spec/language/programs.md#language-signatures) supplies the
+The [language](../../../lean/docs/spec/semantics.md#mathematical-and-participant-layers) supplies the
 typed control structure in which those operations occur.
 
 ## Sorts and interpretations
 
 For a language with sort type `Ty`, a value interpretation assigns
 `Value : Ty → Type`. Its operation interpretation takes the declared ordered
-arguments and produces a [body](../../../lean/docs/spec/core/execution.md#bodies) returning the
+arguments and produces a [body](../../../lean/docs/spec/semantics.md#effects-and-observations) returning the
 interpreted result sort.
 
 Field, scalar, group, digest, index and shape-indexed values have distinct sorts
@@ -133,9 +133,9 @@ scalar field is `bn254.fr`. Its scalar modulus is
 `21888242871839275222246405745257275088548364400416034343698204186575808495617`.
 The base field used to encode group coordinates is distinct. The scalar domain
 has the pinned generator-5 two-adic root convention and two-adicity 28. Native
-group and pairing operations use arkworks; Lean's executable arithmetic is
-independent, while group equations and subgroup validation use an explicitly
-trusted primitive service.
+group and pairing operations use arkworks. The current scalar Lean interpretation
+uses abstract group/module equations and does not execute or prove adequacy of
+these production pairing primitives.
 
 ### Pairing results
 
@@ -159,9 +159,8 @@ followed by exactly 384 canonical arkworks bytes. Decoding checks canonical
 encoding and target subgroup membership; extension-field zero is invalid.
 Only individual target-group values are installed, including recursive data
 containers; a dense `groups:bn254.gt` representation is not installed.
-The independent Lean binding consumer admits the operation and type. Its
-current executable value reference explicitly refuses target decoding with
-`reference-pairing-target-unsupported`; it provides no native GT adequacy proof.
+The current scalar Lean import profile does not admit pairing target operations
+or provide a native GT adequacy proof.
 
 ## Byte strings
 
@@ -214,12 +213,12 @@ ordered scalar/group sequences and linear contractions. A dynamically sized
 vector is distinct from a coordinate point or a polynomial table; conversions
 establish their shape and indexing connections explicitly.
 
-For messages, the [interaction](../../../lean/docs/spec/language/interaction.md#roles-and-phases)
+For messages, the [interaction](../../../lean/docs/spec/semantics.md#mathematical-and-participant-layers)
 specifies the entire permitted reply domain, including hostile values of the
 declared shape. An honest arithmetic predicate is a separate condition.
 The [codec contract](../realization/codecs.md#codec-domains) specifies the
 accepted external language, decoding and malformed-input behavior. The public
-[dimension syntax](../../../lean/docs/spec/profiles/source/public-dimensions.md) is one selected profile; a different shape language
+dimension syntax is one selected profile; a different shape language
 specifies its own evaluation and admission rules.
 
 ## Domain adequacy
@@ -230,7 +229,7 @@ correctness, source-name equality, successful compilation and finite tests do
 not by themselves establish that connection.
 
 An operation can retain a logical computation for later
-[interpretation](../../../lean/docs/spec/core/interpretations.md#interpretation-interface). Its
+[interpretation](../../../lean/docs/spec/semantics.md#mathematical-and-participant-layers). Its
 eventual implementation refines the same declared operation on the same bound
 operands, including failure and retained effects under the applicable execution
 relation. Keeping an operation abstract does not supply a cryptographic theorem.
@@ -279,12 +278,11 @@ ports cannot duplicate it. Each use consumes its SSA binding; distinct nominal
 slots cannot substitute for one another. Local/protocol calls and selected
 control regions preserve role custody and the existing affine capture/carry
 rules. Dynamic invariant capture of an affine value remains refused. Independent
-source/MLIR, Rust physical, and Lean source/physical admission check these rules;
+source/MLIR and Rust physical admission check these rules;
 the compiler output alone is not admission evidence. Native execution maintains
 an authenticated occurrence, generation and owner, rejects cloned handles at a
 multi-port boundary and stale generations after a pass, and transfers newly
-created units through explicit results. The reference maintains logical
-occurrences, generations and owners independently of native handles.
+created units through explicit results. The current scalar Lean profile does not import affine logical resource units.
 
 This permission is affine: unused values may be dropped, including explicit
 physical release. A stronger use obligation, such as must-consume, is a
