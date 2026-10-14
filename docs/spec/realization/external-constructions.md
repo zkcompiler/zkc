@@ -138,6 +138,17 @@ the generic source signature does not promise support for every field or group.
 | `group_compressed<G>` | `G` | `Bytes` | Canonical compressed point: 48-byte BLS G1 or 32-byte Edwards |
 | `group_from_compressed<G>` | `Bytes` | `(bool, G)` | Exact width, canonical encoding and prime-order subgroup check |
 
+`fields_be(Vector<F>)`, `fields_le(Vector<F>)` and
+`groups_compressed(Groups<G>)` concatenate the corresponding scalar encodings
+in element order, without a count prefix. Their installed domains match the
+scalar encoders above. Empty collections produce empty bytes. Input element
+limits, checked output length, wire limits and `256 + 2*n` output allowance
+(temporary plus immutable bytes) precede allocation. Elements are encoded in
+order and no partial result is published on failure. Edwards collection encoding
+charges 256 external-work units per element after these checks. Usual operand
+read and result-retention charges also apply. These are explicit bulk operations,
+not automatic rewrites of scalar loops or transcript observations.
+
 `field_le`, `field_from_le` and `field_reduce_le` are installed for
 `ristretto255.scalar`. `group_decode_cofactor<edwards25519.prime>` takes `Bytes`
 and returns `(bool,G)`: it checks exact 32-byte width and canonical full-curve

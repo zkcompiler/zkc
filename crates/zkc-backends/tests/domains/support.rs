@@ -296,6 +296,7 @@ impl Controlled {
     }
 }
 impl Backend for Controlled {
+    type Call = ();
     type Value = Value;
     type Kernel = zkc_backends::NativeKernel;
     fn prepare_binding(&self, b: &OperationBinding) -> Option<Self::Kernel> {

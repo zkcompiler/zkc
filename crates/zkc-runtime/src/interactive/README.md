@@ -16,12 +16,34 @@ static code and signature facts; actual values, attributes, policy, setup,
 resources and remaining budgets are checked during execution. Handles do not
 carry state or authority from the backend used for admission.
 
+Each reached call may additionally retain backend-owned `Backend::Call` facts
+in a per-runner slot. The native backend caches successful static attribute
+validation at its original invocation check point, keyed by exact rule and
+attributes. Handlers still own their parsing and execution. Direct backend calls
+use the same kernel body with checked attributes and no cache. Call slots are
+bounded by admitted call sites; an unexecuted site retains no attribute copy.
+Capabilities, current custody, setup authorization and remaining budgets are
+checked at use. No prepared fact crosses to another runner.
+
+`Value::has_type` must agree exactly with physical-type equality. Native leaf
+values compare kind, domain and representation without constructing a descriptor;
+structural and resource values compare their complete descriptors. This query
+does not establish value validity or authority. Runner acceptance checks actual
+produced values, including backend outputs, before retaining or publishing them.
+
 `FrameInputs` retains explicit ports and a shared capture suffix. Variant arms
-share that suffix instead of copying every capture into every arm. Type
+share that suffix instead of copying every capture into every arm. Child regions
+also share their parent's immutable call metadata. Type
 descriptors remain shared and static metadata is bounded by the admitted source
 counts. Local value slots grow only after retention succeeds; declarations in an
 unexecuted suffix reserve no value storage. Storage release leaves vacant slots
 and preserves the existing conservative charges until frame exit.
+
+Each runner reuses one argument buffer across kernel calls. Its capacity grows
+only to the largest reached argument list, bounded by admitted port limits.
+All value handles are cleared after each call, including failures; only empty
+storage survives between instructions. This changes allocation, not operand
+work or retention charges.
 
 An entry maps roles to flat participant definitions. Participants contain local
 calls, service queries, messages, bounded value-counted loops and returns.

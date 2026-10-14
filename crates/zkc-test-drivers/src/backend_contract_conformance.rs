@@ -10,6 +10,7 @@ use zkc_runtime::interactive::{
 // change its attribute contract. Any execution attempt is a harness defect.
 struct AttributeDrift<'a>(&'a NativeBackend);
 impl Backend for AttributeDrift<'_> {
+    type Call = ();
     type Value = <NativeBackend as Backend>::Value;
     type Kernel = zkc_runtime::interactive::BoundSignature;
     fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {

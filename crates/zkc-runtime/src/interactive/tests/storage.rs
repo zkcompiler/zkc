@@ -133,6 +133,7 @@ impl StorageBackend {
     }
 }
 impl Backend for StorageBackend {
+    type Call = ();
     type Value = Stored;
     type Kernel = crate::interactive::BoundSignature;
     fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {
@@ -342,6 +343,9 @@ fn run_budgeted(
         }
     };
     let usage = runner.usage();
+    // Check while the Runner is alive: dropping it must not hide values retained
+    // by argument scratch after a successful or refused kernel call.
+    assert!(runner.backend().all_freed());
     (outcome, usage, runner.into_backend())
 }
 

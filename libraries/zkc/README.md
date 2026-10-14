@@ -55,6 +55,19 @@ an empty batch. Callers exclude every rotated opening point from that domain.
 The row form checks the same equation at one authenticated row; the caller
 still supplies authentication, degree checks and acceptance.
 
+## Byte assembly
+
+`bytes::repeat(byte, count)` creates padding and `bytes::join(Sequence<Bytes>)`
+assembles ordered fragments without repeatedly copying their growing prefix.
+`encoding::fields_be`, `fields_le` and `groups_compressed` encode collections
+using the corresponding scalar codecs, with no length prefix. Domain support
+and capacity checks follow the [native encoding contract](../../docs/spec/realization/external-constructions.md#mathematical-byte-encodings).
+These operations do not observe values or choose transcript framing.
+
+Use `concat` for a few small fixed fragments. `join` is useful when fragments
+already form a sequence or repeated prefix copying dominates; constructing a
+sequence also has storage and work costs.
+
 ## Bounded sampling
 
 `zkc::sampling::uniform_index<W, Attempts>(state, bound)` returns the next

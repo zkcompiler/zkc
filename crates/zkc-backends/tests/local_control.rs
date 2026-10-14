@@ -103,6 +103,7 @@ impl Traced {
     }
 }
 impl Backend for Traced {
+    type Call = ();
     type Value = Value;
     type Kernel = zkc_backends::NativeKernel;
     fn prepare_binding(&self, b: &OperationBinding) -> Option<Self::Kernel> {
@@ -145,13 +146,9 @@ impl Backend for Traced {
         self.inner.apply(kernel, i, args)
     }
 }
-fn execute(
-    mut r: Runner<Traced>,
-) -> (
-    Result<Vec<Value>, zkc_runtime::interactive::Stop>,
-    Usage,
-    Traced,
-) {
+fn execute<B: Backend<Value = Value>>(
+    mut r: Runner<B>,
+) -> (Result<Vec<Value>, zkc_runtime::interactive::Stop>, Usage, B) {
     loop {
         match r.poll() {
             Action::Local(a) => r.execute_local(&a.cut).unwrap(),
@@ -900,4 +897,116 @@ fn prepared_code_keeps_attributes_at_each_call_site() {
     );
     // One preparation during admission and one on the owned runner backend.
     assert_eq!(backend.prepared.borrow().len(), 2);
+}
+
+#[test]
+fn prepared_calls_match_checked_calls_at_repeated_sites_and_budget_failures() {
+    // The same literal site is reached repeatedly before a later out-of-bounds
+    // access. The untaken arm remains unexecuted; malformed literals are already refused
+    // by admission.
+    let program = candidate(
+        json!([
+            ["lo", "index"],
+            ["hi", "index"],
+            ["xs", "vector:bls12-381.fr"],
+            ["ok", "bool"]
+        ]),
+        json!([]),
+        json!([
+            [
+                "for",
+                "repeat",
+                "i",
+                "lo",
+                "hi",
+                [],
+                ["xs", "ok"],
+                [
+                    [
+                        "if",
+                        "branch",
+                        "ok",
+                        [],
+                        [
+                            [
+                                "op",
+                                "literal",
+                                "field.constant",
+                                ["123456789"],
+                                [],
+                                ["value"]
+                            ],
+                            ["yield", []]
+                        ],
+                        [
+                            [
+                                "op",
+                                "alternative",
+                                "field.constant",
+                                ["999"],
+                                [],
+                                ["alternative_value"]
+                            ],
+                            ["yield", []]
+                        ],
+                        []
+                    ],
+                    ["op", "get", "vector.get", [], ["xs", "i"], ["item"]],
+                    ["yield", []]
+                ],
+                []
+            ],
+            ["return", []]
+        ]),
+    );
+    let admitted = admit_supplied(&program, &ark_backend(None)).unwrap();
+    for (length, instructions, cumulative) in [
+        (8, 1000, usize::MAX),
+        (2, 1000, usize::MAX),
+        (8, 14, usize::MAX),
+        (8, 1000, 4000),
+    ] {
+        let inputs = vec![
+            Value::Index(0),
+            Value::Index(4),
+            Value::Vector(vec![Scalar::from(7u64); length].into()),
+            Value::Bool(true),
+        ];
+        let values = ValueBudget {
+            total_bytes: cumulative,
+            ..Default::default()
+        };
+        let work = zkc_runtime::interactive::WorkBudget {
+            instructions,
+            ..Default::default()
+        };
+        let prepared = Runner::new_with_budgets(
+            &admitted,
+            "main",
+            "P",
+            "session",
+            ark_backend(None),
+            inputs.clone(),
+            values,
+            work,
+        )
+        .unwrap_or_else(|e| panic!("{}", e.error));
+        let checked = Runner::new_with_budgets(
+            &admitted,
+            "main",
+            "P",
+            "session",
+            Traced::new(ark_backend(None)),
+            inputs,
+            values,
+            work,
+        )
+        .unwrap_or_else(|e| panic!("{}", e.error));
+        let (actual, actual_usage, backend) = execute(prepared);
+        let (expected, expected_usage, checked) = execute(checked);
+        assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
+        assert_eq!(actual_usage, expected_usage);
+        assert_eq!(backend.active_frames(), 0);
+        assert_eq!(checked.inner.active_frames(), 0);
+    }
 }

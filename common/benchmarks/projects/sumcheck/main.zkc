@@ -1,6 +1,6 @@
 module example;
 use sumcheck::{Sumcheck};
-use zkc::vector::{Vector, get, length};
+use zkc::vector::{Vector};
 use zkc::bytes::{Bytes};
 use zkc::scalar::{from_index};
 use zkc::encoding as encoding;
@@ -27,11 +27,7 @@ module Provider: Transcript {
   type State: Copy + Drop = builtin("shake128_state");
   fn initialize() -> State { return State(shake::init()); }
   fn start(t: State, values: Vector<F>, claim: F, rounds: index, tag: Bytes, session: Bytes) -> State {
-    let mut state = spongefish::initialize(tag, session);
-    for i in 0..length(values) {
-      let value = get(values, i);
-      state = spongefish::observe_scalar(state, value);
-    }
+    let mut state = spongefish::observe_scalars(spongefish::initialize(tag, session), values);
     state = spongefish::observe_scalar(state, claim);
     state = spongefish::observe_scalar(state, from_index<F>(rounds));
     return State(state);

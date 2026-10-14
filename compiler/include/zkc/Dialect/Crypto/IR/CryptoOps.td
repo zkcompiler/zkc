@@ -8,6 +8,9 @@ include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
 include "zkc/Dialect/Kernels.td"
 
+def EncodingFieldsBeOp : KernelOp<CryptoDialect, "exec.encoding_fields_be", [OpEncodingFieldsBe]>;
+def EncodingFieldsLeOp : KernelOp<CryptoDialect, "exec.encoding_fields_le", [OpEncodingFieldsLe]>;
+def EncodingGroupsCompressedOp : KernelOp<CryptoDialect, "exec.encoding_groups_compressed", [OpEncodingGroupsCompressed]>;
 def EncodingFieldBeOp : KernelOp<CryptoDialect, "exec.encoding_field_be", [OpEncodingFieldBe]>;
 def EncodingFieldFromBeOp : KernelOp<CryptoDialect, "exec.encoding_field_from_be", [OpEncodingFieldFromBe]>;
 def EncodingFieldReduceBeOp : KernelOp<CryptoDialect, "exec.encoding_field_reduce_be", [OpEncodingFieldReduceBe]>;

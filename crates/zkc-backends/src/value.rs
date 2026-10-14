@@ -827,6 +827,74 @@ impl RuntimeValue for Value {
         Ok(Self::Index(index))
     }
 
+    fn has_type(&self, expected: &PhysicalType) -> bool {
+        match self {
+            Self::Sequence(v) => v.physical_type() == expected,
+            Self::FieldArray(v) => v.physical_type() == expected,
+            Self::FixedVector(v) => v.physical_type() == expected,
+            Self::Variant(v) => v.physical_type() == expected,
+            Self::Bn254Field(..)
+            | Self::Bn254Vector(..)
+            | Self::Bn254Polynomial(..)
+            | Self::Bn254Round(..)
+            | Self::Bn254Matrix(..)
+            | Self::Bn254G1(..)
+            | Self::Bn254G1Vector(..)
+            | Self::Bn254G2(..)
+            | Self::Bn254Gt(..)
+            | Self::Bn254G2Vector(..)
+            | Self::OracleRoot(..)
+            | Self::OraclePath(..)
+            | Self::OracleState(..)
+            | Self::OracleRoots(..)
+            | Self::OracleStates(..)
+            | Self::Index(..)
+            | Self::Indices(..)
+            | Self::Bytes(..)
+            | Self::Shake128State(..)
+            | Self::Matrix(..)
+            | Self::RistrettoMatrix(..)
+            | Self::KoalaBearMatrix(..)
+            | Self::KoalaBearExt8Matrix(..)
+            | Self::KoalaBearExt8Field(..)
+            | Self::KoalaBearExt8Vector(..)
+            | Self::KoalaBearExt8Polynomial(..)
+            | Self::KoalaBearExt8Round(..)
+            | Self::KoalaBearField(..)
+            | Self::KoalaBearVector(..)
+            | Self::KoalaBearPolynomial(..)
+            | Self::KoalaBearRound(..)
+            | Self::Vector(..)
+            | Self::Polynomial(..)
+            | Self::RistrettoField(..)
+            | Self::RistrettoVector(..)
+            | Self::RistrettoPolynomial(..)
+            | Self::RistrettoRound(..)
+            | Self::EdwardsGroup(..)
+            | Self::EdwardsGroups(..)
+            | Self::RistrettoGroup(..)
+            | Self::RistrettoGroups(..)
+            | Self::FrDiagonal(..)
+            | Self::RistrettoDiagonal(..)
+            | Self::Field(..)
+            | Self::Table(..)
+            | Self::TableMsb(..)
+            | Self::Point(..)
+            | Self::Round(..)
+            | Self::Bool(..)
+            | Self::Commitment(..)
+            | Self::OpeningState(..)
+            | Self::Proof(..)
+            | Self::ProverKey(..)
+            | Self::VerifierKey(..)
+            | Self::Curve(..)
+            | Self::Groups(..) => {
+                let (kind, identity, representation) = self.type_identity();
+                expected.is_leaf(kind, identity, representation)
+            }
+            _ => self.physical_type() == *expected,
+        }
+    }
     fn physical_type(&self) -> PhysicalType {
         if let Self::Sequence(value) = self {
             return value.physical_type().clone();

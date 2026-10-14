@@ -110,6 +110,14 @@ For example, a prover that commits 65,536 extension-field rows once and opens
 and the 6.29 MB state once; each opening allocates and reads only its row and
 path. This completes under the default record.
 
+## Byte construction
+
+Native `bytes.repeat` and `bytes.join` check byte limits and reserve `256 + 2*n`
+output bytes for a result of length `n`, including temporary and immutable
+storage. Operand-read and result-retention charges also apply. `join` uses the
+sequence validation work ledger: a retained input needs only its root check,
+while the full operand-read charge accounts for reading its fragments.
+
 ## Host allowances
 
 [Joint dispatch](joint.md#joint-dispatch-and-handoff) owns dispatch, message

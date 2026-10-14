@@ -1,5 +1,7 @@
 //! Native backend composition and explicit host-issued capabilities.
+mod call;
 mod execute;
+pub use call::NativeCall;
 mod policy;
 pub(crate) mod registry;
 mod resource_unit;
@@ -41,6 +43,25 @@ pub struct NativeBackend {
     implementations: &'static registry::Registry,
 }
 impl NativeBackend {
+    fn invoke(
+        &mut self,
+        kernel: &NativeKernel,
+        call: Option<&mut Option<NativeCall>>,
+        i: &Invocation<'_>,
+        args: &[Value],
+    ) -> Result<Vec<Value>> {
+        self.core.resources.active(i.frame)?;
+        if kernel.declaration != *i.binding.declaration() {
+            return Err(crate::refused("kernel-binding"));
+        }
+        if kernel.sequence {
+            self.sequence_work.charge(args, i.retained)?;
+        }
+        self.core.invoke(i, args, &kernel.signature, call)?;
+        let outputs = (kernel.handler)(self, i, args)?;
+        self.core.outputs(i, args, outputs)
+    }
+
     pub fn with_relation_assets(mut self, assets: crate::relation::Registry) -> Result<Self> {
         if self.active_frames() != 0 {
             return Err(crate::refused("relation-active-backend"));
@@ -75,7 +96,7 @@ impl NativeBackend {
         }
         for ((_, ty), value) in role.inputs.iter().zip(values) {
             if let Some(value) = value {
-                if value.physical_type() != *ty {
+                if !value.has_type(ty) {
                     return Err(crate::refused("input-type"));
                 }
                 self.core.validate(value)?;
@@ -281,6 +302,7 @@ impl NativeBackend {
     }
 }
 impl Backend for NativeBackend {
+    type Call = NativeCall;
     fn supports_boolean_literals(&self) -> bool {
         true
     }
@@ -335,14 +357,19 @@ impl Backend for NativeBackend {
         binding: &zkc_runtime::interactive::OperationBinding,
     ) -> Option<NativeKernel> {
         let implementation = self.implementations.get(&binding.implementation)?;
+        let signature = implementation.signature(binding)?;
+        // Traversal charging belongs to the operation contract. Observing a
+        // sequence through a transcript retains that operation's own budget.
+        let sequence = binding.contract == "bytes.join"
+            || crate::sequence::IMPLEMENTATIONS
+                .iter()
+                .any(|(_, contract)| *contract == binding.contract);
         Some(NativeKernel {
             declaration: binding.clone(),
-            signature: implementation.signature(binding)?,
+            signature,
             handler: implementation.handler,
             read_extent: work::ReadExtent::for_contract(&binding.contract),
-            sequence: crate::sequence::IMPLEMENTATIONS
-                .iter()
-                .any(|(_, c)| *c == binding.contract),
+            sequence,
         })
     }
     fn validate_value(&self, v: &Value) -> Result<()> {
@@ -418,15 +445,15 @@ impl Backend for NativeBackend {
         i: &Invocation<'_>,
         args: &[Value],
     ) -> Result<Vec<Value>> {
-        self.core.resources.active(i.frame)?;
-        if kernel.declaration != *i.binding.declaration() {
-            return Err(crate::refused("kernel-binding"));
-        }
-        if kernel.sequence {
-            self.sequence_work.charge(args, i.retained)?;
-        }
-        self.core.invoke(i, args, &kernel.signature)?;
-        let outputs = (kernel.handler)(self, i, args)?;
-        self.core.outputs(i, args, outputs)
+        self.invoke(kernel, None, i, args)
+    }
+    fn apply_prepared(
+        &mut self,
+        kernel: &NativeKernel,
+        call: &mut Option<NativeCall>,
+        i: &Invocation<'_>,
+        args: &[Value],
+    ) -> Result<Vec<Value>> {
+        self.invoke(kernel, Some(call), i, args)
     }
 }

@@ -167,6 +167,7 @@ struct LiteralAdapter {
     active: usize,
 }
 impl zkc_runtime::interactive::Backend for LiteralAdapter {
+    type Call = ();
     type Value = WrongBoolean;
     type Kernel = zkc_runtime::interactive::BoundSignature;
     fn supports_boolean_literals(&self) -> bool {

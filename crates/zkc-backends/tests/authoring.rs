@@ -89,6 +89,7 @@ struct Divergent {
     input: bool,
 }
 impl Backend for Divergent {
+    type Call = ();
     type Value = Value;
     type Kernel = zkc_runtime::interactive::BoundSignature;
     fn validate_value(&self, _: &Value) -> Result<(), BackendError> {

@@ -81,7 +81,7 @@ PROTOCOLS = (
              'bls12-381.fr', 'spongefish-0.7.4-shake128', 'round-pairs-fr-be-32', sumcheck_inputs,
              randomized=False, witness=False, verification='public-table terminal evaluation is included',
              notes=('Both calls bind the complete ordered table: O(n) transcript work.',
-                    'zkc binds elements in an interpreted loop; the reference encodes and absorbs one buffer.')),
+                    'Both implementations encode and absorb the table as one ordered buffer.')),
 )
 
 

@@ -236,6 +236,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
     };
     let policy = Policy::default();
     let mut seen = HashSet::new();
+    let mut classified = Vec::new();
     let mut check = |value: Value, kind: Type, identity: I, bytes: usize| {
         assert_eq!(value.ty(), kind, "{value:?}");
         let logical = match kind {
@@ -321,6 +322,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         };
         let expected = PhysicalType::new(logical, representation).unwrap();
         assert_eq!(value.physical_type(), expected, "{value:?}");
+        classified.push((value.clone(), expected.clone()));
         assert_eq!(value.retained_bytes(), bytes, "{value:?}");
         let cloned = value.clone();
         assert_eq!(cloned.retained_bytes(), bytes);
@@ -670,7 +672,21 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
     );
     let (unit, _) = run(backend(), &b, &[], vec![]);
     check(unit.unwrap().remove(0), Type::ResourceUnit, I::None, 512);
+    drop(check);
     assert_eq!(seen, Value::PAYLOAD_NAMES.iter().copied().collect());
+    for (value, actual) in &classified {
+        for (_, expected) in &classified {
+            assert_eq!(value.has_type(expected), actual == expected);
+        }
+        for spelling in [
+            "sequence<field:bls12-381.fr>",
+            "fixed_vector<field:koala-bear,3>",
+        ] {
+            let expected =
+                PhysicalType::default_for(LogicalType::parse(spelling).unwrap()).unwrap();
+            assert_eq!(value.has_type(&expected), *actual == expected);
+        }
+    }
 }
 
 #[test]
@@ -1363,4 +1379,18 @@ fn every_exact_installation_has_a_supported_binding_and_impossible_owners_are_ab
         assert!(native.binding_signature(&b).is_none());
         assert!(b.signature().is_err());
     }
+}
+
+#[test]
+fn nested_transcript_observation_keeps_its_own_work_contract() {
+    use zkc_runtime::interactive::Backend;
+    let native = backend();
+    let observe = binding(
+        "transcript.native.indexed.observe.data",
+        &["merlin3.bls12-381.fr64be/0", "sequence<index>"],
+        "arkworks/transcript.native.indexed.observe.data",
+    );
+    assert!(!native.prepare_binding(&observe).unwrap().sequence);
+    let join = binding("bytes.join", &[], "native/bytes.join");
+    assert!(native.prepare_binding(&join).unwrap().sequence);
 }

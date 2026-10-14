@@ -5,7 +5,17 @@ message order of Spongefish 0.7.4, specialized to arkworks 0.6 BLS12-381 G1.
 They use the common compiler, participant Runner and bounded byte transport.
 
 `spongefish` exports initialization, point/scalar observation, scalar challenge
-sampling and checked point/scalar reads. Protocol identifiers are padded to
+sampling and checked point/scalar reads. `observe_scalars` leaves the same state
+and produces the same later challenges as successive scalar observations. An
+empty vector leaves the state unchanged, even after a challenge. This helper
+defines scalar-loop equivalence; it does not claim equivalence with an upstream
+slice-observation API. It adds no length framing, so callers must bind vector
+lengths through the statement or earlier observations.
+
+Bulk observation allocates a contiguous `32*n`-byte encoding and temporary
+storage of the same size, subject to the byte and output limits. It can therefore
+refuse a vector that scalar observations process separately; it also charges
+less SHAKE work than those separate calls. Protocol identifiers are padded to
 64 bytes within a 168-byte rate block. Session initialization uses the upstream
 session tag and 32-byte session digest. Scalars use canonical big-endian bytes;
 challenges reduce 64 big-endian XOF bytes. G1 uses 48-byte compressed subgroup

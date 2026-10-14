@@ -46,6 +46,13 @@ pub trait Value: Clone {
     }
     /// Intrinsic full type, derived from the admitted payload representation.
     fn physical_type(&self) -> PhysicalType;
+    /// Exact equality with `physical_type()`, without requiring a new descriptor.
+    /// Implementations may inspect native payloads or borrow stored descriptors.
+    /// This stable classification never establishes current resource authority,
+    /// payload validity, normalization, or policy acceptance.
+    fn has_type(&self, expected: &PhysicalType) -> bool {
+        self.physical_type() == *expected
+    }
     /// Validate the complete public representation, including nested contents.
     /// A private key/capability disguised as a public value must fail here.
     fn validate_serializable(&self) -> Result<(), BackendError>;
@@ -160,7 +167,7 @@ pub struct Frame {
     pub(crate) parent: Option<FrameId>,
     pub(crate) role: String,
     pub(crate) origin: Origin,
-    pub(crate) kind: FrameKind,
+    pub(crate) kind: Arc<FrameKind>,
     pub(crate) inputs: FrameInputs,
     pub(crate) services: Vec<super::ServicePort>,
 }
@@ -216,7 +223,7 @@ impl Invocation<'_> {
             "zkc.local-domain/0",
             self.frame.origin.json(),
             self.frame.role,
-            match &self.frame.kind {
+            match self.frame.kind() {
                 FrameKind::Local { site, .. } => Some(site),
                 _ => None,
             },
@@ -274,6 +281,9 @@ impl InstalledKernel for BoundSignature {
 pub trait Backend {
     type Value: Value;
     type Kernel: InstalledKernel;
+    /// Private backend data for one reached call site. Use `()` when no static
+    /// invocation work needs preparation. It carries no resource authority.
+    type Call;
     /// Read-only installation fact. True promises both Boolean constructors
     /// return native.bool/0 values. Runtime validation still checks each value.
     /// Admission checks this before any frame, message or backend transition.
@@ -373,6 +383,20 @@ pub trait Backend {
     ) -> Option<u64> {
         None
     }
+    /// Execute with storage for this Runner's call-site preparation. Prepare only
+    /// at the original validation point inside execution: unused branches must
+    /// not fail early. The default needs no preparation and uses the same checked
+    /// path as direct calls. Implementations must check any reused facts against
+    /// the current binding/attributes and keep dynamic checks at every use.
+    fn apply_prepared(
+        &mut self,
+        kernel: &Self::Kernel,
+        _call: &mut Option<Self::Call>,
+        invocation: &Invocation<'_>,
+        arguments: &[Self::Value],
+    ) -> Result<Vec<Self::Value>, BackendError> {
+        self.apply(kernel, invocation, arguments)
+    }
     /// Execute with a handle prepared for the invocation's exact binding. Check
     /// dynamic operands, attributes, policy, work and resource custody at use.
     /// Backends with public direct-call support must refuse a mismatched handle.
@@ -420,7 +444,8 @@ mod domain_tests {
             kind: FrameKind::Local {
                 site: "round".into(),
                 function: function.into(),
-            },
+            }
+            .into(),
             inputs: vec![].into(),
             services: vec![],
         }

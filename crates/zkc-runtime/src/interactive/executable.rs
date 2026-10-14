@@ -24,6 +24,7 @@ pub(super) type Slot = usize;
 pub(super) struct Executable {
     pub functions: BTreeMap<String, Arc<Function>>,
     pub bindings: Vec<Arc<ResolvedBinding>>,
+    pub calls: usize,
     pub requires_boolean_literals: bool,
 }
 #[derive(Debug)]
@@ -47,6 +48,7 @@ struct Preparation {
     indices: BTreeMap<OperationBinding, usize>,
     bindings: Vec<Arc<ResolvedBinding>>,
     requires_boolean_literals: bool,
+    calls: usize,
 }
 impl Preparation {
     fn binding(&mut self, binding: &Arc<ResolvedBinding>) -> Binding {
@@ -123,6 +125,7 @@ pub(super) enum Operation {
     Yield(Vec<Slot>),
     Release(Vec<Slot>),
     Op {
+        call: usize,
         site: String,
         binding: Binding,
         attributes: Vec<String>,
@@ -193,6 +196,7 @@ pub(super) fn prepare(program: &Program) -> Executable {
     Executable {
         functions,
         bindings: preparation.bindings,
+        calls: preparation.calls,
         requires_boolean_literals: preparation.requires_boolean_literals,
     }
 }
@@ -364,7 +368,10 @@ impl Preparation {
                 } => {
                     let inputs = env.slots(inputs);
                     let outputs = env.outputs(outputs, &binding.signature().outputs);
+                    let call = self.calls;
+                    self.calls += 1;
                     Operation::Op {
+                        call,
                         site: site.clone(),
                         binding: self.binding(binding),
                         attributes: attributes.clone(),
@@ -392,37 +399,5 @@ impl Preparation {
             }),
             results,
         )
-    }
-}
-
-/// One frame's values. Slots are monotonic SSA definitions; release leaves a
-/// vacant slot and never reuses its identity while the frame remains active.
-pub(super) struct Values<V>(Vec<Option<V>>);
-impl<V> Values<V> {
-    pub fn new(inputs: Vec<V>) -> Self {
-        // The Runner reserves retention before inserting values. Do not allocate
-        // slots for declarations that have not executed or will exhaust a budget.
-        Self(inputs.into_iter().map(Some).collect())
-    }
-    pub fn insert(&mut self, slot: Slot, value: V) {
-        assert_eq!(slot, self.0.len(), "prepared SSA definition order");
-        self.0.push(Some(value));
-    }
-    pub fn extend(&mut self, entries: impl IntoIterator<Item = (Slot, V)>) {
-        for (slot, value) in entries {
-            self.insert(slot, value);
-        }
-    }
-    pub fn remove(&mut self, slot: &Slot) -> Option<V> {
-        self.0[*slot].take()
-    }
-    pub fn values(&self) -> impl Iterator<Item = &V> {
-        self.0.iter().filter_map(Option::as_ref)
-    }
-}
-impl<V> std::ops::Index<&Slot> for Values<V> {
-    type Output = V;
-    fn index(&self, slot: &Slot) -> &V {
-        self.0[*slot].as_ref().expect("admitted live operand")
     }
 }
