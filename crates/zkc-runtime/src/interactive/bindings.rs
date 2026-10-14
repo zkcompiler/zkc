@@ -923,7 +923,7 @@ impl PhysicalType {
 
 /// Declaration selected by the compiler. Resolution below checks its contents;
 /// constructing this record does not install a new contract or implementation.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct OperationBinding {
     pub contract: String,
     pub arguments: Vec<String>,

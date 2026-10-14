@@ -1,3 +1,4 @@
+use super::executable::{LocalCode, Operation, Values};
 use super::retention::{Charge, Ledger, Retention};
 use super::{Admitted, PhysicalType, admit, backend::*, model::*, transport::*};
 use super::{ProgramCut, ProgramState};
@@ -47,6 +48,7 @@ enum Destination {
 pub struct Runner<B: Backend> {
     admitted: Admitted,
     backend: BackendOwner<B>,
+    kernels: Vec<B::Kernel>,
     role: String,
     root: Origin,
     stack: Vec<Execution<B::Value>>,
@@ -140,6 +142,7 @@ impl<B: Backend> Runner<B> {
         let mut runner = Self {
             admitted: admitted.clone(),
             backend: BackendOwner(Some(backend)),
+            kernels: Vec::new(),
             role: role.to_owned(),
             root,
             stack: Vec::new(),
@@ -184,8 +187,12 @@ impl<B: Backend> Runner<B> {
         {
             return Err(RuntimeError::Session);
         }
-        admit::installed(&self.admitted.program, self.backend())
-            .map_err(RuntimeError::Admission)?;
+        self.kernels = admit::installed(
+            &self.admitted.program,
+            &self.admitted.executable,
+            self.backend(),
+        )
+        .map_err(RuntimeError::Admission)?;
         let roles = self
             .admitted
             .program
@@ -195,7 +202,7 @@ impl<B: Backend> Runner<B> {
         let symbol = roles.get(role).ok_or(RuntimeError::Role)?;
         let p = self.admitted.program.participants[symbol].clone();
         self.root.instance = p.instance.clone();
-        let mut frame = self.frame(self.root.clone(), FrameKind::Entry, p.inputs.clone());
+        let mut frame = self.frame(self.root.clone(), FrameKind::Entry, p.inputs.clone().into());
         frame.services = p.services.clone();
         self.push(
             frame,
@@ -320,7 +327,7 @@ impl<B: Backend> Runner<B> {
             self.halt(StopKind::Cancelled, None, None);
         }
     }
-    fn frame(&mut self, origin: Origin, kind: FrameKind, inputs: Ports) -> Frame {
+    fn frame(&mut self, origin: Origin, kind: FrameKind, inputs: FrameInputs) -> Frame {
         self.next_frame += 1; // bounded by instruction/iteration/call ceilings
         let services = if matches!(kind, FrameKind::Loop { .. }) {
             self.stack
@@ -340,8 +347,8 @@ impl<B: Backend> Runner<B> {
             services,
         }
     }
-    fn validate(&self, value: &B::Value, ty: PhysicalType, wire: bool) -> Result<()> {
-        if value.physical_type() != ty {
+    fn validate(&self, value: &B::Value, ty: &PhysicalType, wire: bool) -> Result<()> {
+        if value.physical_type() != *ty {
             return Err(RuntimeError::Payload);
         }
         if value.retained_bytes() > Limits::VALUE_BYTES {
@@ -349,7 +356,7 @@ impl<B: Backend> Runner<B> {
         }
         // An alias of a bound, capability-free immutable value of this type has
         // already passed backend validation; its contents cannot have changed.
-        if !self.ledger.validated(value, &ty) {
+        if !self.ledger.validated(value, ty) {
             self.backend
                 .validate_value_retained(value, self.ledger.view())?;
         }
@@ -459,7 +466,7 @@ impl<B: Backend> Runner<B> {
     }
     /// Cleanup releases exactly the bound environment, so every retained
     /// region result must receive a name. Admission already checks the arity.
-    fn matches_outputs(outputs: &[String], values: &[B::Value]) -> Result<()> {
+    fn matches_outputs<T>(outputs: &[T], values: &[B::Value]) -> Result<()> {
         if outputs.len() != values.len() {
             return Err(RuntimeError::Payload);
         }
@@ -484,8 +491,8 @@ impl<B: Backend> Runner<B> {
         if frame.inputs.len() != values.len() {
             return Err(RuntimeError::Inputs);
         }
-        for (v, (_, ty)) in values.iter().zip(&frame.inputs) {
-            self.validate(v, ty.clone(), false)?;
+        for (v, (_, ty)) in values.iter().zip(frame.inputs.iter()) {
+            self.validate(v, ty, false)?;
         }
         // Captures remain in the suspended parent. The destination stores only
         // names; each iteration owns one checked body view, never a second
@@ -677,7 +684,7 @@ impl<B: Backend> Runner<B> {
                 } => {
                     let payload = execution.env[input].clone();
                     let ty = payload.physical_type();
-                    self.validate(&payload, ty.clone(), true)?;
+                    self.validate(&payload, &ty, true)?;
                     self.pending = Some(Action::Send(Packet {
                         envelope: Envelope {
                             origin,
@@ -788,7 +795,7 @@ impl<B: Backend> Runner<B> {
                 site: site.clone(),
                 iteration: 0,
             },
-            all_ports,
+            all_ports.into(),
         );
         self.push_child(frame, body.clone(), all_values, destination, site);
         Ok(())
@@ -1044,7 +1051,7 @@ impl<B: Backend> Runner<B> {
                             site: site.clone(),
                             iteration: iteration + 1,
                         },
-                        ports,
+                        ports.into(),
                     );
                     self.push_child(
                         frame,
@@ -1152,7 +1159,7 @@ impl<B: Backend> Runner<B> {
                 return Err(RuntimeError::Payload);
             }
             for (value, (_, ty)) in values.iter().zip(&query.results) {
-                self.validate(value, ty.clone(), false)?;
+                self.validate(value, ty, false)?;
             }
             // The installed reply bound counts shared backing in full.
             let actual = values
@@ -1193,17 +1200,18 @@ impl<B: Backend> Runner<B> {
         else {
             unreachable!("checked local cut")
         };
-        let f = self.admitted.program.functions[function].clone();
         let args = self.values(inputs);
+        let prepared = self.admitted.executable.functions[function].clone();
+        let code = &prepared.body;
         let frame = self.frame(
             execution.frame.origin.clone(),
             FrameKind::Local {
                 site: site.clone(),
                 function: function.clone(),
             },
-            f.inputs.clone(),
+            code.inputs.clone(),
         );
-        let result = self.run_local_frame(&frame, &f.origin, &f.body, args, 1);
+        let result = self.run_local_frame(&frame, &prepared.origin, code, args, 1);
         if let Err(e) = result {
             let context = LocalContext {
                 site: site.clone(),
@@ -1251,7 +1259,7 @@ impl<B: Backend> Runner<B> {
         &mut self,
         frame: &Frame,
         logical_origin: &LogicalOrigin,
-        body: &[LocalInstruction],
+        body: &LocalCode,
         args: Vec<B::Value>,
         depth: usize,
     ) -> Result<Vec<B::Value>> {
@@ -1287,53 +1295,44 @@ impl<B: Backend> Runner<B> {
     }
     fn index_value(&self, index: u64) -> Result<B::Value> {
         let value = B::Value::from_control_index(index)?;
-        self.validate(
-            &value,
-            PhysicalType::parse("index@native.index/0").expect("installed index representation"),
-            false,
-        )?;
+        self.validate(&value, &super::executable::INDEX_TYPE, false)?;
         Ok(value)
     }
     fn run_local_body(
         &mut self,
         frame: &Frame,
         logical_origin: &LogicalOrigin,
-        body: &[LocalInstruction],
+        body: &LocalCode,
         args: Vec<B::Value>,
         depth: usize,
     ) -> Result<Vec<B::Value>> {
         self.retain(&args, Retention::Transfer)?;
         let mut local_count = args.len();
         let mut ghost = 0usize;
-        let mut env: BTreeMap<String, B::Value> = frame
-            .inputs
-            .iter()
-            .map(|(n, _)| n.clone())
-            .zip(args)
-            .collect();
+        let mut env = Values::new(args);
         let mut current_site = None;
         let mut current_has_own_site = false;
         let result = (|| {
-            for instruction in body.iter() {
+            for instruction in &body.instructions {
                 current_has_own_site = matches!(
                     instruction,
-                    LocalInstruction::BoolConstant { .. }
-                        | LocalInstruction::Conditional { .. }
-                        | LocalInstruction::For { .. }
-                        | LocalInstruction::Match { .. }
-                        | LocalInstruction::Stop { .. }
+                    Operation::BoolConstant { .. }
+                        | Operation::Conditional { .. }
+                        | Operation::For { .. }
+                        | Operation::Match { .. }
+                        | Operation::Stop { .. }
                 );
                 current_site = match instruction {
-                    LocalInstruction::BoolConstant { site, .. }
-                    | LocalInstruction::Variant { site, .. }
-                    | LocalInstruction::Match { site, .. }
-                    | LocalInstruction::Stop { site, .. }
-                    | LocalInstruction::Op { site, .. }
-                    | LocalInstruction::Conditional { site, .. }
-                    | LocalInstruction::For { site, .. } => Some(site.clone()),
+                    Operation::BoolConstant { site, .. }
+                    | Operation::Variant { site, .. }
+                    | Operation::Match { site, .. }
+                    | Operation::Stop { site, .. }
+                    | Operation::Op { site, .. }
+                    | Operation::Conditional { site, .. }
+                    | Operation::For { site, .. } => Some(site.as_str()),
                     _ => None,
                 };
-                if let LocalInstruction::Release(names) = instruction {
+                if let Operation::Release(names) = instruction {
                     for name in names {
                         // Admission independently excludes resources and future reads.
                         // Removing ordinary immutable storage has no backend effect.
@@ -1347,26 +1346,17 @@ impl<B: Backend> Runner<B> {
                 }
                 self.tick()?;
                 match instruction {
-                    LocalInstruction::BoolConstant { output, value, .. } => {
+                    Operation::BoolConstant { output, value, .. } => {
                         let value = B::Value::from_control_bool(*value)?;
-                        self.validate(
-                            &value,
-                            PhysicalType::parse("bool@native.bool/0")
-                                .expect("installed Boolean representation"),
-                            false,
-                        )?;
+                        self.validate(&value, &super::executable::BOOL_TYPE, false)?;
                         self.retain(std::slice::from_ref(&value), Retention::Input)?;
                         local_count += 1;
-                        let previous = env.insert(output.clone(), value);
-                        debug_assert!(
-                            previous.is_none(),
-                            "admission guarantees fresh SSA bindings"
-                        );
+                        env.insert(*output, value);
                     }
-                    LocalInstruction::Stop { reason, .. } => {
+                    Operation::Stop { reason, .. } => {
                         return Err(RuntimeError::ExplicitStop(reason.clone()));
                     }
-                    LocalInstruction::Variant {
+                    Operation::Variant {
                         ty,
                         alternative,
                         payload,
@@ -1378,23 +1368,15 @@ impl<B: Backend> Runner<B> {
                             .variant_descriptor()
                             .expect("admitted variant")
                             .clone();
-                        let index = descriptor
-                            .alternatives()
-                            .iter()
-                            .position(|a| a.label() == alternative)
-                            .expect("admitted alternative");
+                        let index = *alternative;
                         let payload = payload.iter().map(|n| env[n].clone()).collect();
                         let value = B::Value::pack_variant(descriptor, index, payload)?;
-                        self.validate(&value, ty.clone(), false)?;
+                        self.validate(&value, ty, false)?;
                         self.retain(std::slice::from_ref(&value), Retention::Input)?;
                         local_count += 1;
-                        let previous = env.insert(output.clone(), value);
-                        debug_assert!(
-                            previous.is_none(),
-                            "admission guarantees fresh SSA bindings"
-                        );
+                        env.insert(*output, value);
                     }
-                    LocalInstruction::Match {
+                    Operation::Match {
                         site,
                         input,
                         captures,
@@ -1421,28 +1403,14 @@ impl<B: Backend> Runner<B> {
                         {
                             return Err(BackendError::new("variant-payload").into());
                         }
-                        for (v, ty) in args.iter().zip(declared.payload()) {
-                            self.validate(
-                                v,
-                                PhysicalType::default_for(ty.clone()).map_err(|_| {
-                                    BackendError::new("variant-payload-representation")
-                                })?,
-                                false,
-                            )?;
+                        for (v, (_, ty)) in args.iter().zip(arm.body.inputs.iter()) {
+                            self.validate(v, ty, false)?;
                         }
                         args.extend(captures.iter().map(|n| env[n].clone()));
-                        let ports = arm
-                            .payload
-                            .iter()
-                            .chain(captures)
-                            .zip(&args)
-                            .map(|(n, v)| (n.clone(), v.physical_type()))
-                            .collect();
                         let values = self.run_local_region(
                             frame,
                             logical_origin,
                             &arm.body,
-                            ports,
                             args,
                             PathElement::Match {
                                 site: site.clone(),
@@ -1458,7 +1426,7 @@ impl<B: Backend> Runner<B> {
                             Ok(())
                         })?;
                     }
-                    LocalInstruction::Op {
+                    Operation::Op {
                         site,
                         binding,
                         attributes,
@@ -1468,7 +1436,7 @@ impl<B: Backend> Runner<B> {
                         let arguments: Vec<_> = inputs.iter().map(|n| env[n].clone()).collect();
                         let signature = binding.signature();
                         for (v, ty) in arguments.iter().zip(&signature.inputs) {
-                            self.validate(v, ty.clone(), false)?;
+                            self.validate(v, ty, false)?;
                         }
                         let mut invocation = Invocation {
                             frame,
@@ -1486,31 +1454,31 @@ impl<B: Backend> Runner<B> {
                         let full = Self::operand_bytes(&arguments);
                         let read = self
                             .backend
-                            .operand_work(&invocation, &arguments)
+                            .operand_work(&self.kernels[binding.index], &invocation, &arguments)
                             .map_or(full, |declared| declared.min(full));
                         self.charge_logical(read)?;
                         invocation.max_output_bytes = self.output_allowance();
                         invocation.retained = self.ledger.view();
-                        let values = self.backend.apply(&invocation, &arguments)?;
+                        let values = self.backend.apply(
+                            &self.kernels[binding.index],
+                            &invocation,
+                            &arguments,
+                        )?;
                         if values.len() != signature.outputs.len() {
                             return Err(RuntimeError::Backend(BackendError::new(
                                 "kernel-output-arity",
                             )));
                         }
                         for (v, ty) in values.iter().zip(&signature.outputs) {
-                            self.validate(v, ty.clone(), false)?;
+                            self.validate(v, ty, false)?;
                         }
                         self.retain(&values, Retention::Result)?;
                         local_count += values.len();
                         for (n, v) in outputs.iter().zip(values) {
-                            let previous = env.insert(n.clone(), v);
-                            debug_assert!(
-                                previous.is_none(),
-                                "admission guarantees fresh SSA bindings"
-                            );
+                            env.insert(*n, v);
                         }
                     }
-                    LocalInstruction::Conditional {
+                    Operation::Conditional {
                         site,
                         condition,
                         captures,
@@ -1520,16 +1488,10 @@ impl<B: Backend> Runner<B> {
                     } => {
                         let taken = env[condition].control_bool()?;
                         let args = captures.iter().map(|n| env[n].clone()).collect::<Vec<_>>();
-                        let ports = captures
-                            .iter()
-                            .zip(&args)
-                            .map(|(n, v)| (n.clone(), v.physical_type()))
-                            .collect();
                         let values = self.run_local_region(
                             frame,
                             logical_origin,
                             if taken { then_body } else { else_body },
-                            ports,
                             args,
                             PathElement::Conditional {
                                 site: site.clone(),
@@ -1545,10 +1507,9 @@ impl<B: Backend> Runner<B> {
                             Ok(())
                         })?;
                     }
-                    LocalInstruction::For {
+                    Operation::For {
                         conditional,
                         site,
-                        induction,
                         lower,
                         upper,
                         carried,
@@ -1564,10 +1525,7 @@ impl<B: Backend> Runner<B> {
                         {
                             return Err(BackendError::new("exhausted:local-bound-limit").into());
                         }
-                        let mut values = carried
-                            .iter()
-                            .map(|(_, n)| env[n].clone())
-                            .collect::<Vec<_>>();
+                        let mut values = carried.iter().map(|n| env[n].clone()).collect::<Vec<_>>();
                         let mut pinned = false;
                         let result = (|| {
                             for index in lower..upper {
@@ -1583,18 +1541,10 @@ impl<B: Backend> Runner<B> {
                                 let mut args = vec![self.index_value(index)?];
                                 args.extend(values.iter().cloned());
                                 args.extend(captures.iter().map(|n| env[n].clone()));
-                                let names = std::iter::once(induction.clone())
-                                    .chain(carried.iter().map(|(n, _)| n.clone()))
-                                    .chain(captures.iter().cloned());
-                                let ports = names
-                                    .zip(&args)
-                                    .map(|(n, v)| (n, v.physical_type()))
-                                    .collect();
                                 let returned = self.run_local_region(
                                     frame,
                                     logical_origin,
                                     body,
-                                    ports,
                                     args,
                                     PathElement::For {
                                         site: site.clone(),
@@ -1627,8 +1577,8 @@ impl<B: Backend> Runner<B> {
                         }
                         result?;
                     }
-                    LocalInstruction::Release(_) => unreachable!("handled without a tick"),
-                    LocalInstruction::Return(names) | LocalInstruction::Yield(names) => {
+                    Operation::Release(_) => unreachable!("handled without a tick"),
+                    Operation::Return(names) | Operation::Yield(names) => {
                         return Ok(names.iter().map(|n| env[n].clone()).collect::<Vec<_>>());
                     }
                 }
@@ -1636,14 +1586,17 @@ impl<B: Backend> Runner<B> {
             unreachable!("admitted local terminator")
         })();
         if result.is_err() && self.local_failure.is_none() && (depth > 1 || current_has_own_site) {
-            let site = current_site.unwrap_or_else(|| match frame.origin.path.last() {
-                Some(
-                    PathElement::Conditional { site, .. }
-                    | PathElement::For { site, .. }
-                    | PathElement::Match { site, .. },
-                ) => site.clone(),
-                _ => String::new(),
-            });
+            let site =
+                current_site
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| match frame.origin.path.last() {
+                        Some(
+                            PathElement::Conditional { site, .. }
+                            | PathElement::For { site, .. }
+                            | PathElement::Match { site, .. },
+                        ) => site.clone(),
+                        _ => String::new(),
+                    });
             self.local_failure = Some((site, frame.origin.clone()));
         }
         if let Ok(values) = &result {
@@ -1663,22 +1616,21 @@ impl<B: Backend> Runner<B> {
         &mut self,
         parent: &Frame,
         logical_origin: &LogicalOrigin,
-        body: &[LocalInstruction],
-        ports: Ports,
+        body: &LocalCode,
         args: Vec<B::Value>,
         path: PathElement,
         depth: usize,
     ) -> Result<Vec<B::Value>> {
         let mut origin = parent.origin.clone();
         origin.path.push(path);
-        let mut frame = self.frame(origin, parent.kind.clone(), ports);
+        let mut frame = self.frame(origin, parent.kind.clone(), body.inputs.clone());
         frame.parent = Some(parent.id);
         let result = (|| {
             if self.stack.len() + depth >= Limits::STACK_DEPTH {
                 return Err(RuntimeError::Limit);
             }
-            for (v, (_, ty)) in args.iter().zip(&frame.inputs) {
-                self.validate(v, ty.clone(), false)?;
+            for (v, (_, ty)) in args.iter().zip(frame.inputs.iter()) {
+                self.validate(v, ty, false)?;
             }
             self.run_local_frame(&frame, logical_origin, body, args, depth + 1)
         })();
@@ -1729,7 +1681,7 @@ impl<B: Backend> Runner<B> {
             return Err(RuntimeError::Payload);
         }
         let ty = request.ty.clone();
-        self.validate(&packet.payload, ty, true)?;
+        self.validate(&packet.payload, &ty, true)?;
         self.can_retain(std::slice::from_ref(&packet.payload), Retention::Input)?;
         if self.usage.instructions >= self.work_budget.instructions {
             return Err(RuntimeError::Limit);
@@ -1772,7 +1724,7 @@ impl<B: Backend> Runner<B> {
         let result = (|| {
             // Serializability was checked before acceptance. Backend validation
             // retains the existing runtime's typed error contract (no text parsing).
-            self.validate(&value, ty, false)?;
+            self.validate(&value, &ty, false)?;
             let frame = self.stack.last().expect("pending receiver frame");
             let Instruction::Receive { output, .. } = &frame.body[frame.pc] else {
                 unreachable!("pending native receive")

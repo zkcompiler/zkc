@@ -49,6 +49,7 @@ impl Default for Host {
 }
 impl Backend for Host {
     type Value = Value;
+    type Kernel = zkc_runtime::interactive::BoundSignature;
     fn supports_boolean_literals(&self) -> bool {
         true
     }
@@ -74,7 +75,12 @@ impl Backend for Host {
             Ok(())
         }
     }
-    fn apply(&mut self, _: &Invocation<'_>, _: &[Value]) -> Result<Vec<Value>, BackendError> {
+    fn apply(
+        &mut self,
+        _kernel: &Self::Kernel,
+        _: &Invocation<'_>,
+        _: &[Value],
+    ) -> Result<Vec<Value>, BackendError> {
         panic!("identity has no kernel")
     }
 }

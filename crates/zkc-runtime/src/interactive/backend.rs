@@ -108,6 +108,51 @@ pub enum FrameExit {
     Cancelled,
 }
 
+/// Immutable ordered input layout. Alternative regions share their capture
+/// suffix, so retained metadata grows with source ports rather than arms times
+/// captures. Iteration and equality expose the same flat port order to backends.
+#[derive(Clone, Debug, Default)]
+pub struct FrameInputs {
+    explicit: Arc<[(String, PhysicalType)]>,
+    captures: Arc<[(String, PhysicalType)]>,
+}
+impl FrameInputs {
+    pub(crate) fn with_captures(
+        explicit: Vec<(String, PhysicalType)>,
+        captures: Arc<[(String, PhysicalType)]>,
+    ) -> Self {
+        Self {
+            explicit: explicit.into(),
+            captures,
+        }
+    }
+    pub fn len(&self) -> usize {
+        self.explicit.len() + self.captures.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.explicit.is_empty() && self.captures.is_empty()
+    }
+    pub fn iter(&self) -> impl Iterator<Item = &(String, PhysicalType)> + Clone {
+        self.explicit.iter().chain(self.captures.iter())
+    }
+}
+impl From<Vec<(String, PhysicalType)>> for FrameInputs {
+    fn from(explicit: Vec<(String, PhysicalType)>) -> Self {
+        Self {
+            explicit: explicit.into(),
+            captures: Arc::from([]),
+        }
+    }
+}
+impl PartialEq for FrameInputs {
+    fn eq(&self, other: &Self) -> bool {
+        (Arc::ptr_eq(&self.explicit, &other.explicit)
+            && Arc::ptr_eq(&self.captures, &other.captures))
+            || self.iter().eq(other.iter())
+    }
+}
+impl Eq for FrameInputs {}
+
 /// Runtime-minted boundary. Only the actual argument view crosses into a child.
 #[derive(Clone, Debug)]
 pub struct Frame {
@@ -116,7 +161,7 @@ pub struct Frame {
     pub(crate) role: String,
     pub(crate) origin: Origin,
     pub(crate) kind: FrameKind,
-    pub(crate) inputs: Vec<(String, PhysicalType)>,
+    pub(crate) inputs: FrameInputs,
     pub(crate) services: Vec<super::ServicePort>,
 }
 impl Frame {
@@ -141,7 +186,7 @@ impl Frame {
     pub fn kind(&self) -> &FrameKind {
         &self.kind
     }
-    pub fn inputs(&self) -> &[(String, PhysicalType)] {
+    pub fn inputs(&self) -> &FrameInputs {
         &self.inputs
     }
 }
@@ -196,6 +241,19 @@ pub struct ServiceInvocation<'a> {
     pub max_output_bytes: usize,
 }
 
+/// Independent installation evidence for one exact operation binding.
+/// The Runner prepares handles again on the backend it takes into custody;
+/// admission does not transfer handles from another backend. A handle carries
+/// no input, frame, resource or setup authority.
+pub trait InstalledKernel {
+    fn signature(&self) -> &BoundSignature;
+}
+impl InstalledKernel for BoundSignature {
+    fn signature(&self) -> &BoundSignature {
+        self
+    }
+}
+
 /// Installed, trusted implementation. Artifact text never supplies these methods.
 ///
 /// `enter_frame` atomically validates issuance, current generations, actual aliases,
@@ -215,6 +273,7 @@ pub struct ServiceInvocation<'a> {
 /// identities and the host's admitted input policy for this exact role/entry.
 pub trait Backend {
     type Value: Value;
+    type Kernel: InstalledKernel;
     /// Read-only installation fact. True promises both Boolean constructors
     /// return native.bool/0 values. Runtime validation still checks each value.
     /// Admission checks this before any frame, message or backend transition.
@@ -245,9 +304,19 @@ pub trait Backend {
     /// Implementations supporting queries must override this hook.
     fn reject_service_reply(&mut self, _invocation: &ServiceInvocation<'_>) {}
 
-    /// Independently installed full signature. Unsupported bindings fail closed.
-    fn binding_signature(&self, _binding: &OperationBinding) -> Option<BoundSignature> {
+    /// Resolve code and its independently installed signature for this exact
+    /// contract, static arguments and implementation. Unsupported bindings refuse.
+    /// This read-only operation must not draw randomness or consume resources.
+    /// Code selection and signature stay valid for this backend's Runner lifetime;
+    /// invocation-dependent policy, setup and resource checks remain in `apply`.
+    /// The Runner calls this once per distinct binding before entering any frame.
+    fn prepare_binding(&self, _binding: &OperationBinding) -> Option<Self::Kernel> {
         None
+    }
+    /// Inspect an installed signature without retaining a prepared handle.
+    fn binding_signature(&self, binding: &OperationBinding) -> Option<BoundSignature> {
+        self.prepare_binding(binding)
+            .map(|kernel| kernel.signature().clone())
     }
     /// Canonical representation, variant/type consistency and per-value bounds.
     /// This is read-only and must not consume randomness/capabilities.
@@ -298,13 +367,18 @@ pub trait Backend {
     /// bound those walks separately.
     fn operand_work(
         &self,
+        _kernel: &Self::Kernel,
         _invocation: &Invocation<'_>,
         _arguments: &[Self::Value],
     ) -> Option<u64> {
         None
     }
+    /// Execute with a handle prepared for the invocation's exact binding. Check
+    /// dynamic operands, attributes, policy, work and resource custody at use.
+    /// Backends with public direct-call support must refuse a mismatched handle.
     fn apply(
         &mut self,
+        kernel: &Self::Kernel,
         invocation: &Invocation<'_>,
         arguments: &[Self::Value],
     ) -> Result<Vec<Self::Value>, BackendError>;
@@ -314,6 +388,23 @@ pub trait Backend {
 mod domain_tests {
     use super::*;
     use crate::interactive::{LogicalOrigin, OperationBinding};
+
+    #[test]
+    fn frame_inputs_share_capture_storage_and_compare_flat_order() {
+        let ty = PhysicalType::parse("index@native.index/0").unwrap();
+        let captures: Arc<[_]> = vec![("captured".into(), ty.clone())].into();
+        let first = FrameInputs::with_captures(vec![("a".into(), ty.clone())], captures.clone());
+        let second = FrameInputs::with_captures(vec![("b".into(), ty.clone())], captures);
+        assert!(std::ptr::eq(
+            first.iter().nth(1).unwrap(),
+            second.iter().nth(1).unwrap()
+        ));
+        let flat: FrameInputs = vec![("a".into(), ty.clone()), ("captured".into(), ty)].into();
+        assert_eq!(first, flat);
+        assert_ne!(first, second);
+        assert_eq!(first.len(), 2);
+        assert!(!first.is_empty());
+    }
 
     fn frame(function: &str) -> Frame {
         Frame {
@@ -330,7 +421,7 @@ mod domain_tests {
                 site: "round".into(),
                 function: function.into(),
             },
-            inputs: vec![],
+            inputs: vec![].into(),
             services: vec![],
         }
     }

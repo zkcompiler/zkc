@@ -134,7 +134,8 @@ impl StorageBackend {
 }
 impl Backend for StorageBackend {
     type Value = Stored;
-    fn binding_signature(&self, binding: &OperationBinding) -> Option<BoundSignature> {
+    type Kernel = crate::interactive::BoundSignature;
+    fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {
         binding.signature().ok()
     }
     fn validate_value(&self, value: &Stored) -> Result<(), BackendError> {
@@ -143,7 +144,12 @@ impl Backend for StorageBackend {
         }
         Ok(())
     }
-    fn operand_work(&self, call: &Invocation<'_>, _: &[Stored]) -> Option<u64> {
+    fn operand_work(
+        &self,
+        _kernel: &Self::Kernel,
+        call: &Invocation<'_>,
+        _: &[Stored],
+    ) -> Option<u64> {
         self.declared.filter(|_| call.site == "alias")
     }
     fn enter_frame(&mut self, frame: &Frame, args: &[Stored]) -> Result<(), BackendError> {
@@ -166,6 +172,7 @@ impl Backend for StorageBackend {
     }
     fn apply(
         &mut self,
+        _kernel: &Self::Kernel,
         call: &Invocation<'_>,
         args: &[Stored],
     ) -> Result<Vec<Stored>, BackendError> {

@@ -297,11 +297,9 @@ impl Controlled {
 }
 impl Backend for Controlled {
     type Value = Value;
-    fn binding_signature(
-        &self,
-        b: &OperationBinding,
-    ) -> Option<zkc_runtime::interactive::BoundSignature> {
-        self.inner.binding_signature(b)
+    type Kernel = zkc_backends::NativeKernel;
+    fn prepare_binding(&self, b: &OperationBinding) -> Option<Self::Kernel> {
+        self.inner.prepare_binding(b)
     }
     fn validate_value(&self, v: &Value) -> Result<(), zkc_runtime::interactive::BackendError> {
         self.inner.validate_value(v)
@@ -325,6 +323,7 @@ impl Backend for Controlled {
     }
     fn apply(
         &mut self,
+        kernel: &Self::Kernel,
         i: &zkc_runtime::interactive::Invocation<'_>,
         a: &[Value],
     ) -> Result<Vec<Value>, zkc_runtime::interactive::BackendError> {
@@ -333,6 +332,7 @@ impl Backend for Controlled {
             args[0] = v.clone();
         }
         let result = self.inner.apply(
+            kernel,
             &zkc_runtime::interactive::Invocation {
                 attributes: self.attributes.as_deref().unwrap_or(i.attributes),
                 max_output_bytes: self.output_limit.unwrap_or(i.max_output_bytes),

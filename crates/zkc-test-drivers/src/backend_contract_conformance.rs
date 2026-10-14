@@ -2,8 +2,8 @@
 use serde_json::{Value, json};
 use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy};
 use zkc_runtime::interactive::{
-    AttributeRule, Backend, BackendError, BoundSignature, Frame, FrameExit, Invocation,
-    OperationBinding, PhysicalType, admit_supplied,
+    AttributeRule, Backend, BackendError, Frame, FrameExit, Invocation, OperationBinding,
+    PhysicalType, admit_supplied,
 };
 
 // Admission-only adapter: preserve the native backend's ports and deliberately
@@ -11,7 +11,8 @@ use zkc_runtime::interactive::{
 struct AttributeDrift<'a>(&'a NativeBackend);
 impl Backend for AttributeDrift<'_> {
     type Value = <NativeBackend as Backend>::Value;
-    fn binding_signature(&self, binding: &OperationBinding) -> Option<BoundSignature> {
+    type Kernel = zkc_runtime::interactive::BoundSignature;
+    fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {
         let mut signature = self.0.binding_signature(binding)?;
         if binding.contract == "field.add" {
             signature.attributes = AttributeRule::Unsigned64;
@@ -34,6 +35,7 @@ impl Backend for AttributeDrift<'_> {
     }
     fn apply(
         &mut self,
+        _kernel: &Self::Kernel,
         _: &Invocation<'_>,
         _: &[Self::Value],
     ) -> Result<Vec<Self::Value>, BackendError> {

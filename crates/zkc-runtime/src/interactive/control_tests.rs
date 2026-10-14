@@ -48,6 +48,7 @@ struct Store {
 }
 impl Backend for Store {
     type Value = Datum;
+    type Kernel = crate::interactive::BoundSignature;
     fn supports_boolean_literals(&self) -> bool {
         true
     }
@@ -73,7 +74,12 @@ impl Backend for Store {
             Ok(())
         }
     }
-    fn apply(&mut self, _: &Invocation<'_>, _: &[Datum]) -> Result<Vec<Datum>, BackendError> {
+    fn apply(
+        &mut self,
+        _kernel: &Self::Kernel,
+        _: &Invocation<'_>,
+        _: &[Datum],
+    ) -> Result<Vec<Datum>, BackendError> {
         panic!("unreached kernel")
     }
 }

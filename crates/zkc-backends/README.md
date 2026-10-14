@@ -53,6 +53,11 @@ Each contract row lists its actual default implementation names. Custom families
 list exact implementation/contract pairs. The inventory contains no inferred
 provider-by-contract combinations; nominal arguments still need the owner's
 signature checks. Runtime and backend rows remain independently authored.
+`prepare_binding` returns a `NativeKernel` with its exact binding, independently
+resolved signature, handler and static work classification. The Runner prepares
+each distinct binding once per backend instance. Calls retain input, attribute,
+resource, policy and output validation; a handle for another binding is refused.
+Operation attributes and transcript occurrences stay invocation-specific.
 
 Private custody checks visit active variant payloads and sequence elements in
 declaration order without collecting a temporary leaf list. Each capability is

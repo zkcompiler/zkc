@@ -68,6 +68,7 @@ struct Adapter {
 }
 impl Backend for Adapter {
     type Value = Value;
+    type Kernel = zkc_backends::NativeKernel;
     fn service_support(&self, contract: ServiceContract, method: &str) -> Option<ServiceSupport> {
         let mut support = self.inner.service_support(contract, method)?;
         (self.mutate)(&mut support);
@@ -104,10 +105,11 @@ impl Backend for Adapter {
     }
     fn apply(
         &mut self,
+        kernel: &Self::Kernel,
         call: &Invocation<'_>,
         values: &[Value],
     ) -> Result<Vec<Value>, BackendError> {
-        self.inner.apply(call, values)
+        self.inner.apply(kernel, call, values)
     }
 }
 

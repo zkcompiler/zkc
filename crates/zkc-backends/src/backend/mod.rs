@@ -12,6 +12,21 @@ use validation::Core;
 use zkc_arkworks::{Metadata, VerifierKey};
 use zkc_runtime::interactive::{Backend, Frame, FrameExit, Invocation};
 
+/// Immutable implementation selection, independently resolved by this backend.
+/// Dynamic policy, inputs, resource custody and work limits are checked at use.
+pub struct NativeKernel {
+    declaration: zkc_runtime::interactive::OperationBinding,
+    signature: zkc_runtime::interactive::BoundSignature,
+    handler: registry::Handler,
+    read_extent: work::ReadExtent,
+    sequence: bool,
+}
+impl zkc_runtime::interactive::InstalledKernel for NativeKernel {
+    fn signature(&self) -> &zkc_runtime::interactive::BoundSignature {
+        &self.signature
+    }
+}
+
 /// Production Arkworks/Dalek field, group, PCS and challenge adapter. Private committed originals are
 /// explicit values owned by the caller/runtime, never held in a backend map.
 /// Configure a verifier key to decode peer PCS bytes.
@@ -66,7 +81,7 @@ impl NativeBackend {
                 self.core.validate(value)?;
             }
         }
-        self.core.check_entry_values(&role.inputs, values)
+        self.core.check_entry_values(role.inputs.iter(), values)
     }
 
     /// Bound cumulative sequence work: `3 * (1 + examined operand nodes)` per
@@ -270,6 +285,7 @@ impl Backend for NativeBackend {
         true
     }
     type Value = Value;
+    type Kernel = NativeKernel;
     fn service_support(
         &self,
         contract: zkc_runtime::interactive::ServiceContract,
@@ -314,13 +330,20 @@ impl Backend for NativeBackend {
         }
     }
 
-    fn binding_signature(
+    fn prepare_binding(
         &self,
         binding: &zkc_runtime::interactive::OperationBinding,
-    ) -> Option<zkc_runtime::interactive::BoundSignature> {
-        self.implementations
-            .get(&binding.implementation)?
-            .signature(binding)
+    ) -> Option<NativeKernel> {
+        let implementation = self.implementations.get(&binding.implementation)?;
+        Some(NativeKernel {
+            declaration: binding.clone(),
+            signature: implementation.signature(binding)?,
+            handler: implementation.handler,
+            read_extent: work::ReadExtent::for_contract(&binding.contract),
+            sequence: crate::sequence::IMPLEMENTATIONS
+                .iter()
+                .any(|(_, c)| *c == binding.contract),
+        })
     }
     fn validate_value(&self, v: &Value) -> Result<()> {
         self.core.validate(v)
@@ -381,26 +404,29 @@ impl Backend for NativeBackend {
         }
         validation.and(cleanup)
     }
-    fn operand_work(&self, i: &Invocation<'_>, args: &[Value]) -> Option<u64> {
-        work::operand_work(&i.binding.declaration().contract, args)
+    fn operand_work(
+        &self,
+        kernel: &NativeKernel,
+        _i: &Invocation<'_>,
+        args: &[Value],
+    ) -> Option<u64> {
+        kernel.read_extent.bytes(args)
     }
-    fn apply(&mut self, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
+    fn apply(
+        &mut self,
+        kernel: &NativeKernel,
+        i: &Invocation<'_>,
+        args: &[Value],
+    ) -> Result<Vec<Value>> {
         self.core.resources.active(i.frame)?;
-        let implementation = self
-            .implementations
-            .get(i.binding.implementation())
-            .ok_or_else(|| crate::refused("kernel-binding"))?;
-        let signature = implementation
-            .signature(i.binding.declaration())
-            .ok_or_else(|| crate::refused("kernel-binding"))?;
-        if crate::sequence::IMPLEMENTATIONS
-            .iter()
-            .any(|(_, contract)| *contract == i.binding.declaration().contract)
-        {
+        if kernel.declaration != *i.binding.declaration() {
+            return Err(crate::refused("kernel-binding"));
+        }
+        if kernel.sequence {
             self.sequence_work.charge(args, i.retained)?;
         }
-        self.core.invoke(i, args, &signature)?;
-        let outputs = (implementation.handler)(self, i, args)?;
+        self.core.invoke(i, args, &kernel.signature)?;
+        let outputs = (kernel.handler)(self, i, args)?;
         self.core.outputs(i, args, outputs)
     }
 }

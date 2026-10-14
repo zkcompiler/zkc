@@ -84,7 +84,11 @@ selected project and compiler and capture the returned package bytes. Deployed
 applications supply an independently authorized expected package digest.
 The Rust Host binds named inputs to the independently
 admitted program; it trusts the compiler publication for source correspondence.
-It does not interpret the retained MLIR.
+It does not interpret the retained MLIR. Admission prepares immutable local code
+with positional operands and shared frame layouts. Each Runner resolves installed
+backend handles independently, then interprets that code with fresh values,
+resource custody and budgets. The [interpreter contract](../crates/zkc-runtime/src/interactive/README.md)
+describes this execution layout; it is internal to the existing program boundary.
 
 The native proof policy covers flat, iterated, PCS and structured
 programs on the shared executable and Runner. [Proof compilation](compiler/construction.md)

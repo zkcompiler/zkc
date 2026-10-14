@@ -23,6 +23,7 @@ pub use structural::{
 };
 pub use variant::{VariantAlternative, VariantDescriptor};
 mod decode;
+mod executable;
 mod model;
 mod native_proof;
 mod program;
@@ -37,8 +38,8 @@ mod transport;
 
 pub use admit::{Admitted, EntryRole, admit_supplied};
 pub use backend::{
-    Backend, BackendError, Frame, FrameExit, FrameId, FrameKind, Invocation, ServiceInvocation,
-    Value,
+    Backend, BackendError, Frame, FrameExit, FrameId, FrameInputs, FrameKind, InstalledKernel,
+    Invocation, ServiceInvocation, Value,
 };
 pub use bindings::{
     BoundSignature, Identity, LogicalType, OperationBinding, PhysicalType, Representation,

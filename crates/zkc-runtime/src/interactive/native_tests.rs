@@ -90,6 +90,7 @@ struct Mock {
 }
 impl Backend for Mock {
     type Value = V;
+    type Kernel = crate::interactive::BoundSignature;
     fn validate_value(&self, v: &V) -> std::result::Result<(), BackendError> {
         if v.valid {
             Ok(())
@@ -115,7 +116,12 @@ impl Backend for Mock {
             Ok(())
         }
     }
-    fn apply(&mut self, _: &Invocation<'_>, _: &[V]) -> std::result::Result<Vec<V>, BackendError> {
+    fn apply(
+        &mut self,
+        _kernel: &Self::Kernel,
+        _: &Invocation<'_>,
+        _: &[V],
+    ) -> std::result::Result<Vec<V>, BackendError> {
         Err(BackendError::new("unexpected-kernel"))
     }
 }

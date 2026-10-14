@@ -4,7 +4,7 @@ use serde_json::{Value as Json, json};
 use zkc_backends::*;
 use zkc_runtime::interactive::Identity;
 use zkc_runtime::interactive::{
-    Action, Backend, BackendError, BoundSignature, ErrorCode, Frame, FrameExit, Invocation, Limits,
+    Action, Backend, BackendError, ErrorCode, Frame, FrameExit, Invocation, Limits,
     OperationBinding, PathElement, Runner, StopKind, Usage, ValueBudget, admit_supplied,
 };
 
@@ -85,6 +85,8 @@ struct Traced {
     events: Vec<Json>,
     frames: Vec<(u64, Option<u64>)>,
     blocked: Option<String>,
+    prepared: std::cell::RefCell<Vec<OperationBinding>>,
+    substitute: Option<OperationBinding>,
     fail_leave: Option<u64>,
 }
 impl Traced {
@@ -94,17 +96,21 @@ impl Traced {
             events: vec![],
             frames: vec![],
             blocked: None,
+            prepared: Default::default(),
+            substitute: None,
             fail_leave: None,
         }
     }
 }
 impl Backend for Traced {
     type Value = Value;
-    fn binding_signature(&self, b: &OperationBinding) -> Option<BoundSignature> {
+    type Kernel = zkc_backends::NativeKernel;
+    fn prepare_binding(&self, b: &OperationBinding) -> Option<Self::Kernel> {
+        self.prepared.borrow_mut().push(b.clone());
         if self.blocked.as_deref() == Some(&b.contract) {
             None
         } else {
-            self.inner.binding_signature(b)
+            self.inner.prepare_binding(b)
         }
     }
     fn validate_value(&self, v: &Value) -> Result<(), BackendError> {
@@ -124,10 +130,19 @@ impl Backend for Traced {
             Ok(())
         }
     }
-    fn apply(&mut self, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>, BackendError> {
+    fn apply(
+        &mut self,
+        kernel: &Self::Kernel,
+        i: &Invocation<'_>,
+        args: &[Value],
+    ) -> Result<Vec<Value>, BackendError> {
         self.events
             .push(json!([i.site, i.frame.origin().json(), i.domain_bytes()]));
-        self.inner.apply(i, args)
+        if let Some(binding) = &self.substitute {
+            let other = self.inner.prepare_binding(binding).unwrap();
+            return self.inner.apply(&other, i, args);
+        }
+        self.inner.apply(kernel, i, args)
     }
 }
 fn execute(
@@ -679,4 +694,210 @@ fn nested_cleanup_failure_is_recorded_without_hiding_consumed_rng_exhaustion() {
     assert_eq!(b.inner.observe(token(&rng)).unwrap().draw_count, 1);
     assert_eq!(b.inner.active_frames(), 0);
     assert_eq!(u.live_values, 0);
+}
+
+#[test]
+fn bindings_are_prepared_once_per_owned_backend_not_per_iteration() {
+    let bytes = sum_loop();
+    let admitting = Traced::new(ark_backend(None));
+    let admitted = admit_supplied(&bytes, &admitting).unwrap();
+    assert_eq!(admitting.prepared.borrow().len(), 3);
+    for count in [0, 1, 64] {
+        let runner = Runner::new(
+            &admitted,
+            "main",
+            "P",
+            "session",
+            Traced::new(ark_backend(None)),
+            vec![
+                Value::Index(0),
+                Value::Vector(vec![Scalar::from(1); count].into()),
+                f(0),
+            ],
+        )
+        .unwrap_or_else(|_| panic!("entry"));
+        let (out, _, backend) = execute(runner);
+        assert_eq!(scalar(&out.unwrap()[0]), Scalar::from(count as u64));
+        assert_eq!(*backend.prepared.borrow(), *admitting.prepared.borrow());
+        assert_eq!(backend.events.len(), 1 + 2 * count);
+    }
+    // Admitting with one backend does not authorize another backend's installation.
+    let mut different = Traced::new(ark_backend(None));
+    different.blocked = Some("field.add".into());
+    let failure = Runner::new(&admitted, "main", "P", "session", different, vec![])
+        .err()
+        .expect("uninstalled binding");
+    assert!(
+        matches!(failure.error, zkc_runtime::interactive::RuntimeError::Admission(ref e)
+        if e.code == ErrorCode::Backend)
+    );
+    assert!(failure.backend.frames.is_empty());
+    assert!(failure.backend.events.is_empty());
+}
+
+#[test]
+fn preparation_identity_includes_static_arguments_and_coalesces_declaration_aliases() {
+    use zkc_runtime::interactive::{LogicalType, PhysicalType, Value as RuntimeValue};
+    let types: Vec<_> = ["sequence<index>", "sequence<bool>"]
+        .into_iter()
+        .map(|s| PhysicalType::default_for(LogicalType::parse(s).unwrap()).unwrap())
+        .collect();
+    let bytes = serde_json::to_vec(&json!([
+        "zkc.program/0",
+        [
+            [
+                "first",
+                "sequence.empty",
+                ["index"],
+                "native/sequence.empty"
+            ],
+            [
+                "alias",
+                "sequence.empty",
+                ["index"],
+                "native/sequence.empty"
+            ],
+            ["other", "sequence.empty", ["bool"], "native/sequence.empty"]
+        ],
+        [[
+            "function",
+            "make",
+            [],
+            [types[0].spelling(), types[1].spelling()],
+            [
+                ["op", "one", "first", [], [], ["unused"]],
+                ["op", "two", "alias", [], [], ["indices"]],
+                ["op", "three", "other", [], [], ["bools"]],
+                ["return", ["indices", "bools"]]
+            ],
+            ["make", []]
+        ]],
+        [[
+            "participant",
+            "root",
+            "instance",
+            "P",
+            [],
+            [types[0].spelling(), types[1].spelling()],
+            [
+                ["local", "run", "make", [], ["a", "b"]],
+                ["return", ["a", "b"]]
+            ],
+            []
+        ]],
+        [["entry", "main", [["P", "root"]]]]
+    ]))
+    .unwrap();
+    let admitting = Traced::new(ark_backend(None));
+    let admitted = admit_supplied(&bytes, &admitting).unwrap();
+    assert_eq!(admitting.prepared.borrow().len(), 2);
+    let runner = Runner::new(
+        &admitted,
+        "main",
+        "P",
+        "session",
+        Traced::new(ark_backend(None)),
+        vec![],
+    )
+    .unwrap_or_else(|_| panic!("entry"));
+    let (out, _, backend) = execute(runner);
+    assert_eq!(
+        out.unwrap()
+            .iter()
+            .map(RuntimeValue::physical_type)
+            .collect::<Vec<_>>(),
+        types
+    );
+    assert_eq!(backend.prepared.borrow().len(), 2);
+    assert_eq!(backend.events.len(), 3);
+}
+
+#[test]
+fn native_direct_call_refuses_a_handle_for_a_different_binding() {
+    let mut backend = Traced::new(ark_backend(None));
+    backend.substitute = Some(OperationBinding {
+        contract: "bool.not".into(),
+        arguments: vec![],
+        implementation: "arkworks/bool.not".into(),
+    });
+    let (out, _, backend) = execute(load(
+        &choose(),
+        backend,
+        vec![Value::Bool(true), Value::Bool(true)],
+    ));
+    assert_eq!(code(&out.unwrap_err()), "refused:kernel-binding");
+    assert_eq!(backend.inner.active_frames(), 0);
+}
+
+#[test]
+fn preparation_handles_terminal_branches_and_rejects_fabricated_results() {
+    let bytes = candidate(
+        json!([["c", "bool"]]),
+        json!([]),
+        json!([
+            [
+                "if",
+                "choose",
+                "c",
+                [],
+                [["stop", "left", "reject"]],
+                [["stop", "right", "abort"]],
+                []
+            ],
+            ["return", []]
+        ]),
+    );
+    for (c, site) in [(true, "left"), (false, "right")] {
+        let (result, _, backend) = execute(load(
+            &bytes,
+            Traced::new(ark_backend(None)),
+            vec![Value::Bool(c)],
+        ));
+        assert_eq!(result.unwrap_err().site.as_deref(), Some(site));
+        assert_eq!(backend.inner.active_frames(), 0);
+    }
+    let mut bad: Json = serde_json::from_slice(&bytes).unwrap();
+    bad[2][0][4][0][6] = json!(["fabricated"]);
+    assert_eq!(
+        admit_supplied(&serde_json::to_vec(&bad).unwrap(), &ark_backend(None))
+            .unwrap_err()
+            .code,
+        ErrorCode::Signature
+    );
+    let mut duplicate: Json = serde_json::from_slice(&bytes).unwrap();
+    duplicate[2][0][2]
+        .as_array_mut()
+        .unwrap()
+        .push(json!(["c", "bool@native.bool/0"]));
+    assert_eq!(
+        admit_supplied(&serde_json::to_vec(&duplicate).unwrap(), &ark_backend(None))
+            .unwrap_err()
+            .code,
+        ErrorCode::Ssa
+    );
+}
+
+#[test]
+fn prepared_code_keeps_attributes_at_each_call_site() {
+    let bytes = candidate(
+        json!([]),
+        json!(["field:bls12-381.fr", "field:bls12-381.fr"]),
+        json!([
+            ["op", "first", "field.constant", ["11"], [], ["a"]],
+            ["op", "second", "field.constant", ["19"], [], ["b"]],
+            ["return", ["a", "b"]]
+        ]),
+    );
+    let backend = Traced::new(ark_backend(None));
+    let admitted = admit_supplied(&bytes, &backend).unwrap();
+    assert_eq!(backend.prepared.borrow().len(), 1);
+    let runner = Runner::new(&admitted, "main", "P", "session", backend, vec![])
+        .unwrap_or_else(|_| panic!("entry"));
+    let (values, _, backend) = execute(runner);
+    assert_eq!(
+        values.unwrap().iter().map(scalar).collect::<Vec<_>>(),
+        vec![Scalar::from(11), Scalar::from(19)]
+    );
+    // One preparation during admission and one on the owned runner backend.
+    assert_eq!(backend.prepared.borrow().len(), 2);
 }

@@ -238,23 +238,23 @@ impl Core {
         Ok(())
     }
     /// Pure entry constraints; missing values are only pending resource roots.
-    pub(super) fn check_entry_values(
+    pub(super) fn check_entry_values<'a>(
         &self,
-        inputs: &[(String, zkc_runtime::interactive::PhysicalType)],
+        inputs: impl Iterator<Item = &'a (String, zkc_runtime::interactive::PhysicalType)> + Clone,
         values: &[Option<&Value>],
     ) -> Result<()> {
-        if inputs.len() != values.len() {
+        if inputs.clone().count() != values.len() {
             return Err(refused("frame-arguments"));
         }
         if let Some(n) = self.entry.arity {
             self.policy.arity(n)?;
         }
         for name in self.entry.ports.keys() {
-            if !inputs.iter().any(|(n, _)| n == name) {
+            if !inputs.clone().any(|(n, _)| n == name) {
                 return Err(refused("entry-constraint-port"));
             }
         }
-        for ((port, ty), v) in inputs.iter().zip(values) {
+        for ((port, ty), v) in inputs.zip(values) {
             if v.is_none() && !matches!(ty.kind(), Type::Rng | Type::Nonce | Type::Transcript) {
                 return Err(refused("entry-preparation-value"));
             }
@@ -301,7 +301,10 @@ impl Core {
             if !self.entry.domain.matches(frame) {
                 return Err(refused("entry-domain"));
             }
-            self.check_entry_values(frame.inputs(), &args.iter().map(Some).collect::<Vec<_>>())?;
+            self.check_entry_values(
+                frame.inputs().iter(),
+                &args.iter().map(Some).collect::<Vec<_>>(),
+            )?;
         }
         self.resources.enter(frame, args)
     }

@@ -3,7 +3,25 @@
 `admit_supplied` accepts exactly `zkc.program/0`. It validates all retained
 functions, participant bodies, entries and operation declarations before asking
 the backend to confirm installed signatures. `Admitted` retains the exact bytes
-and immutable typed model. Artifact text cannot install backend code.
+and immutable typed model. Admission also prepares local code with positional
+operands, static region layouts and distinct operation bindings. This internal
+layout introduces no artifact format or second execution semantics. Every source
+instruction retains its original work, failure and frame boundary. Artifact text
+cannot install backend code.
+
+Prepared code is shared between runners. Each runner independently obtains
+`Backend::Kernel` handles through `prepare_binding` on the backend it owns, and
+compares their installed signatures before entering any frame. A handle resolves
+static code and signature facts; actual values, attributes, policy, setup,
+resources and remaining budgets are checked during execution. Handles do not
+carry state or authority from the backend used for admission.
+
+`FrameInputs` retains explicit ports and a shared capture suffix. Variant arms
+share that suffix instead of copying every capture into every arm. Type
+descriptors remain shared and static metadata is bounded by the admitted source
+counts. Local value slots grow only after retention succeeds; declarations in an
+unexecuted suffix reserve no value storage. Storage release leaves vacant slots
+and preserves the existing conservative charges until frame exit.
 
 An entry maps roles to flat participant definitions. Participants contain local
 calls, service queries, messages, bounded value-counted loops and returns.
