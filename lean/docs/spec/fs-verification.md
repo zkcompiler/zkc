@@ -32,6 +32,21 @@ assumptions. The complete source request must select the reviewed source contrac
 properties. Unsupported inputs produce an unresolved receipt, not a security
 counterexample.
 
+The conclusions are owned Lean definitions:
+`ZkcSecurity.VCVio.Schnorr.FiatShamir.extractionProperty` and
+`ZkcSecurity.ArkLib.Sumcheck.FiatShamir.Native.soundnessProperty`.
+They fix the experiment, actual acceptance observation, witness or false-statement
+relation, and quantitative bound. Generated certificates instantiate these
+definitions on the independently reconstructed actual subject. The request cannot
+replace the event, relation, initialization or theorem definition. Each verified
+property's receipt records the owning `claim` and its `initialization` scope;
+these are maintained registry data, not extra request selectors.
+Expected claim, adversary, query-bound and game names are rooted at their Lean
+owners. Negative controls include valid proofs of a weaker property or looser
+query budget, and a forged false budget alias. Their first error must be a type
+mismatch inside the independently reconstructed `ExpectedFS` namespace; an
+earlier linter error does not count as this evidence.
+
 ## Proof and identity chain
 
 The driver retains the native source, source export, construction policy, candidate,
@@ -106,6 +121,15 @@ acceptance is at most `(Q + 3) * (2 / card F)`. The actual adversary-plus-verifi
 process uses at most `Q + 2` oracle calls; the conservative bound additionally
 accounts for one reduction preparation query. The event is actual acceptance
 and a claimed sum unequal to the polynomial's Boolean sum.
+
+The separate `Native.direct_soundness` theorem strengthens the same actual game
+to `(Q + 2) * (2 / card F)`. Its verifier-level law holds for every input, message
+pair and answer table: acceptance implies all three checks and both actual
+full-prefix queries. Lifting this law through an arbitrary adversary supplies
+ArkLib's extraction-failure argument and VCVio's adaptive bad-query bound.
+No salt-selection access or rejected-run completion is executed. Registered
+receipts retain the conservative `soundnessProperty` conclusion above; the new
+theorem does not silently change their selected claim.
 
 The native Sumcheck game retains the full execution record, reached query log and
 returned transcript before observing acceptance. Early rejection need not have

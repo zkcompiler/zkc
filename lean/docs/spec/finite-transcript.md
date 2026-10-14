@@ -48,6 +48,22 @@ The [two-round restoration simulation](prefix-simulation.md) remains a separate
 proved route with its own cache equality and conservative `Q + 3` charge. The
 direct theorem does not turn that simulation's query log into a shorter one.
 
+## Actual computations
+
+`Transcript.Direct.FailureTrace` connects a fixed computation and event to the
+same knowledge argument for any fixed heterogeneous finite schedule. For every
+answer table, an event occurrence must supply a terminal witness, failure of its
+backward extraction, and all corresponding path keys in the actual query log.
+`extraction_event_bound` then charges only the actual computation's total query
+bound. Rejecting runs need not execute any remaining rounds.
+
+The interface leaves terminal knowledge inside the event connection. A later
+PCS composition can account separately for terminal failure in the same shared
+experiment; this theorem supplies neither that PCS reduction nor independence.
+The native two-round adapter in `Prefix.Direct` preserves the registered key
+domain. A general native loop still needs a uniform execution/trace law and
+adequate transcript interpretation; the generic theorem alone provides neither.
+
 ## Sumcheck consumer
 
 `ArkLib.Sumcheck.FiatShamir.FiniteRounds` discharges the local knowledge premises
@@ -79,3 +95,7 @@ out-of-order queries and repeated-call accounting. Three-variable Sumcheck
 controls include a real false-accepting path, rejection under a changed challenge,
 and an adaptive experiment with the informative bound `12/101`. The optional
 package's declaration audit checks the transitive axiom closure of these results.
+`TestsSecurity.ActualTranscript` applies the actual-query interface to an
+admission-guarded finite Sumcheck experiment, proves its trace law and query
+budget uniformly in `n`, and checks that rejection adds no completion accesses.
+This is a generic regression consumer, not a native loop correspondence.

@@ -30,6 +30,8 @@ def require(condition, code, detail):
 class Experiment:
     contract: str
     property: str
+    claim: str
+    initialization: str
     statement: str
     adversary: str
     observation: str
@@ -41,6 +43,8 @@ EXPERIMENTS = {
     'fs.schnorr.fixed-statement-cached-ro/0': Experiment(
         contract='schnorr.verifier/0',
         property='knowledge-extraction',
+        claim='ZkcSecurity.VCVio.Schnorr.FiatShamir.extractionProperty',
+        initialization='one empty oracle cache, shared by prover and final verification; binding fixed before prover execution',
         statement='source, construction, application context, base and public key fixed before the prover',
         adversary='ordinary total oracle computation with private randomness and adaptive oracle queries',
         observation='acceptance and the named extractor witness relation',
@@ -54,6 +58,8 @@ EXPERIMENTS = {
     'fs.sumcheck.full-prefix-cached-ro/0': Experiment(
         contract='sumcheck.quadratic-two-round/0',
         property='false-acceptance-bound',
+        claim='ZkcSecurity.ArkLib.Sumcheck.FiatShamir.Native.soundnessProperty',
+        initialization='one empty oracle cache, shared by adversary and verification; source, construction and schedule fixed before adversary execution',
         statement='public polynomial and claimed sum may be chosen adaptively within the fixed source and construction domain',
         adversary='ordinary total oracle computation with arbitrary full-prefix queries, including inconsistent and out-of-order prefixes',
         observation='false acceptance; early-stop and completed replay need not have equal final caches',

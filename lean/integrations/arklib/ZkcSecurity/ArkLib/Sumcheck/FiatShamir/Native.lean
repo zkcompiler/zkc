@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.ArkLib.Sumcheck.FiatShamir.EarlyStop
+public import ZkcSecurity.ArkLib.Sumcheck.FiatShamir.Direct
 public import Zkc.Protocols.Sumcheck.NativeConstruction
 public import Zkc.Semantics.MonadExecution
 
@@ -140,6 +140,20 @@ theorem game_queryBound (source construction : String) (schedule : Schedule)
 
 variable [DecidableEq Context]
 
+/-- The registered claim fixes the actual subject, false-statement event,
+initially empty shared oracle, and conservative bound. A generator cannot
+substitute its own acceptance predicate or statement relation. -/
+noncomputable def soundnessProperty (source construction : String) (schedule : Schedule)
+    (adversary : Adversary Context F) (Q : Nat) :
+    Zkc.Verification.Property (Subject Context F) where
+  assumptions _ := IsTotalQueryBound adversary Q
+  conclusion subject :=
+    Pr{let output ← (simulateQ randomOracle
+      (game source construction schedule subject adversary)).run' ∅}[
+      acceptedRecord output.2 = true ∧
+        output.1.claim ≠ (polynomial output.1.coefficients).booleanSum] ≤
+          (Q + 3 : ENNReal) * (2 / (Fintype.card F : ENNReal))
+
 /-- Actual full-denotation consumers discharge only the body equation. Every
 Sumcheck residual, existential bad-event, simulation and early-stop premise has
 already been proved. Arbitrary adaptive queries to other bindings remain allowed. -/
@@ -159,6 +173,34 @@ theorem soundness (source construction : String) (schedule : Schedule)
   rw [← game_observation, simulateQ_map] at bound
   simpa only [StateT.run'_map', prEvent_map, statement] using bound
 
+/-- The only subject-specific obligation is the full process equation, checked
+for every adversarial selection before the fixed claim is instantiated. -/
+theorem soundnessConsumer (source construction : String) (schedule : Schedule)
+    (adversary : Adversary Context F) (Q : Nat) :
+    Zkc.Verification.Consumer
+      (fun subject => ∀ choice, subject choice = reference source construction schedule choice)
+      (soundnessProperty source construction schedule adversary Q) :=
+  ⟨fun subject denotation queryBound =>
+    soundness source construction schedule subject denotation adversary Q queryBound⟩
+
+/-- A direct query-log proof strengthens the bound for the same actual game.
+It needs no salt-selection query or completion of a rejected verifier run. -/
+theorem direct_soundness (source construction : String) (schedule : Schedule)
+    (subject : Subject Context F)
+    (denotation : ∀ choice, subject choice = reference source construction schedule choice)
+    (adversary : Adversary Context F) (Q : Nat) (queryBound : IsTotalQueryBound adversary Q) :
+    Pr{let output ← (simulateQ randomOracle
+      (game source construction schedule subject adversary)).run' ∅}[
+      acceptedRecord output.2 = true ∧
+        output.1.claim ≠ (polynomial output.1.coefficients).booleanSum] ≤
+          (Q + 2 : ENNReal) * (2 / (Fintype.card F : ENNReal)) := by
+  rw [game_eq source construction schedule subject denotation]
+  have bound := FullPrefix.early_soundness_direct statement
+    (selectedAdversary source construction schedule adversary) Q
+    (by simpa only [selectedAdversary, IsTotalQueryBound, isQueryBound_map_iff] using queryBound)
+  rw [← game_observation, simulateQ_map] at bound
+  simpa only [StateT.run'_map', prEvent_map, statement] using bound
+
 /-- Independently sampled private coins select adaptive adversaries with a
 common all-branch budget; each run begins with the same empty cache. -/
 theorem randomized_soundness (source construction : String) (schedule : Schedule)
@@ -173,6 +215,22 @@ theorem randomized_soundness (source construction : String) (schedule : Schedule
           (Q + 3 : ENNReal) * (2 / (Fintype.card F : ENNReal)) :=
   prEvent_bind_le_of_forall_le coins _ _
     (fun coin => soundness source construction schedule subject denotation
+      (adversary coin) Q (queryBound coin))
+
+/-- Private coins are sampled independently before sharing the initially empty
+oracle between the selected adversary and the actual verifier. -/
+theorem randomized_direct_soundness (source construction : String) (schedule : Schedule)
+    (subject : Subject Context F)
+    (denotation : ∀ choice, subject choice = reference source construction schedule choice)
+    {Coins : Type} (coins : ProbComp Coins) (adversary : Coins → Adversary Context F)
+    (Q : Nat) (queryBound : ∀ coin, IsTotalQueryBound (adversary coin) Q) :
+    Pr{let output ← (coins >>= fun coin => (simulateQ randomOracle
+      (game source construction schedule subject (adversary coin))).run' ∅)}[
+      acceptedRecord output.2 = true ∧
+        output.1.claim ≠ (polynomial output.1.coefficients).booleanSum] ≤
+          (Q + 2 : ENNReal) * (2 / (Fintype.card F : ENNReal)) :=
+  prEvent_bind_le_of_forall_le coins _ _
+    (fun coin => direct_soundness source construction schedule subject denotation
       (adversary coin) Q (queryBound coin))
 
 end ZkcSecurity.ArkLib.Sumcheck.FiatShamir.Native

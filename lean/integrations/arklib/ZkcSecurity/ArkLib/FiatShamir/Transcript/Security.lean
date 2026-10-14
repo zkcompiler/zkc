@@ -1,10 +1,11 @@
+module
+
 /-
 Query-log extraction argument adapted from ArkLib StateRestoration.lean.
 Copyright (c) 2026 ArkLib Contributors. All rights reserved.
 Released under Apache 2.0 license as described in ArkLib's LICENSE file.
 Original author: Quang Dao.
 -/
-module
 
 public import ZkcSecurity.ArkLib.FiatShamir.Transcript.Experiment
 

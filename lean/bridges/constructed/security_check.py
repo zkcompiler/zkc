@@ -33,6 +33,14 @@ def checked(args, label, selected, positive=False):
         raise AssertionError(f'{label}: false/missing receipt: {receipt}')
     if positive and (len(receipt['discharged_layers']) != 6 or not receipt['verified_properties']):
         raise AssertionError(f'{label}: incomplete positive receipt')
+    if positive:
+        protocol = driver.read_json(selected.spec)['source']['contract']
+        claim = ('ZkcSecurity.VCVio.Schnorr.FiatShamir.extractionProperty'
+                 if protocol == 'schnorr.verifier/0' else
+                 'ZkcSecurity.ArkLib.Sumcheck.FiatShamir.Native.soundnessProperty')
+        prop = receipt['verified_properties'][0]
+        if prop.get('claim') != claim or not prop.get('initialization', '').startswith('one empty oracle cache, shared by'):
+            raise AssertionError(f'{label}: missing fixed claim or initial-state scope')
     if label != 'proof-timeout' and any(
             obligation['code'] == 'tool-timeout' for obligation in receipt['obligations']):
         raise AssertionError(f'{label}: an unexpected timeout is not evidence of proof refusal')
@@ -47,17 +55,85 @@ def checked(args, label, selected, positive=False):
     return selected
 
 
-def mutate_request(args, label, change):
-    selected = options(args, 'schnorr', 'Helpers', label)
+def mutate_request(args, label, change, protocol='schnorr', code=None):
+    selected = options(args, protocol, 'Helpers', label)
     request = driver.read_json(selected.spec)
     change(request)
     path = args.output / (label + '.json')
     driver.save_json(path, request)
     selected.spec = path
     checked(args, label, selected)
+    if code is not None:
+        codes = [item['code'] for item in driver.read_json(selected.output / 'receipt.json')['obligations']]
+        if codes != [code]:
+            raise AssertionError(f'{label}: expected {code}, received {codes}')
 
 
-def proof_refused(args, label, selected):
+def claim_controls(args):
+    """Generated proofs cannot weaken either family's independently fixed claim."""
+    for protocol, method in [('schnorr', 'schnorr_subject'), ('sumcheck', 'sumcheck_subject')]:
+        original = getattr(driver, method)
+        def wrong_property(namespace, expected=False):
+            text = original(namespace, expected)
+            if expected:
+                return text
+            start = text.index('    (_root_.ZkcSecurity.', text.index('theorem security '))
+            end = text.index('\nend ', start)
+            weakened = text[:start] + '    True := by\n  have _ := queryBound\n  trivial\n' + text[end:]
+            # The weaker theorem must elaborate so the independent expected
+            # type rejects it. An unused-variable warning is not that evidence.
+            return weakened.replace('theorem security ',
+                'set_option linter.unusedSectionVars false in\ntheorem security ', 1)
+        label = protocol + '-wrong-proved-property'
+        with patch.object(driver, method, wrong_property):
+            proof_refused(args, label, options(args, protocol, 'Helpers', label),
+                          expected_fragment='GeneratedFS.security')
+    original = driver.sumcheck_subject
+    def wrong_budget(namespace, expected=False):
+        text = original(namespace, expected)
+        if expected:
+            return text
+        text = text.replace('(Q + 2) := ', '(Q + 3) := ', 1)
+        return text.replace(
+            '  game_queryBound snapshot.source snapshot.candidate schedule subject denotation adversary Q queryBound',
+            '  (game_queryBound snapshot.source snapshot.candidate schedule subject denotation adversary Q queryBound).mono (by omega)', 1)
+    with patch.object(driver, 'sumcheck_subject', wrong_budget):
+        proof_refused(args, 'sumcheck-weaker-budget', options(args, 'sumcheck', 'Helpers', 'sumcheck-weaker-budget'),
+                      expected_fragment='GeneratedFS.query_cost')
+    def false_budget_alias(namespace, expected=False):
+        text = original(namespace, expected)
+        if expected:
+            return text
+        alias = '''
+set_option linter.unusedSectionVars false in
+def IsTotalQueryBound {ι α : Type} {spec : _root_.OracleSpec ι}
+    (_ : _root_.OracleComp spec α) (_ : Nat) : Prop := False
+'''
+        text = text.replace('theorem query_cost ', alias + '\ntheorem query_cost ', 1)
+        text = text.replace('_root_.OracleComp.IsTotalQueryBound', 'IsTotalQueryBound')
+        text = text.replace(
+            '  game_queryBound snapshot.source snapshot.candidate schedule subject denotation adversary Q queryBound',
+            '  False.elim queryBound', 1)
+        text = text.replace(
+            '  soundness snapshot.source snapshot.candidate schedule subject denotation adversary Q queryBound',
+            '  False.elim queryBound', 1)
+        for theorem in ('query_cost', 'security'):
+            text = text.replace('theorem ' + theorem + ' ',
+                'set_option linter.unusedSectionVars false in\ntheorem ' + theorem + ' ', 1)
+        return text + '\nnamespace ExpectedFS\n' + alias + '\nend ExpectedFS\n'
+    with patch.object(driver, 'sumcheck_subject', false_budget_alias):
+        proof_refused(args, 'sumcheck-false-budget-alias',
+                      options(args, 'sumcheck', 'Helpers', 'sumcheck-false-budget-alias'),
+                      expected_fragment='GeneratedFS.query_cost')
+    mutate_request(args, 'sumcheck-wrong-experiment',
+                   lambda r: r.update(experiment='fs.schnorr.fixed-statement-cached-ro/0'), 'sumcheck',
+                   code='fs-property-mismatch')
+    mutate_request(args, 'sumcheck-supplied-initial-state',
+                   lambda r: r.update(initialization='adversarial-prepopulated-cache'), 'sumcheck',
+                   code='fs-request-shape')
+
+
+def proof_refused(args, label, selected, expected_fragment=None):
     """A proof mutation must reach Lean and fail checking, not exhaust the tool."""
     checked(args, label, selected)
     receipt = driver.read_json(selected.output / 'receipt.json')
@@ -77,6 +153,20 @@ def proof_refused(args, label, selected):
     if (receipt['obligations'] != expected or not ordinary_error or
             any(error in text for error in resource_errors)):
         raise AssertionError(label + ': missing ordinary Lean proof refusal')
+    def independent_mismatch(item):
+        if not isinstance(item, dict) or item.get('severity') != 'error':
+            return False
+        message = str(item.get('data', item.get('message', '')))
+        if expected_fragment not in message or 'type mismatch' not in message.lower():
+            return False
+        source = Path(item['fileName']).read_text().splitlines(keepends=True)
+        prefix = ''.join(source[:item['pos']['line']])
+        return prefix.rfind('namespace ExpectedFS\n') > prefix.rfind('end ExpectedFS\n')
+    if expected_fragment is not None:
+        first_error = next((item for item in diagnostics if isinstance(item, dict) and
+                            item.get('severity') == 'error'), None)
+        if not independent_mismatch(first_error):
+            raise AssertionError(label + ': first error was not the independent theorem-type check')
 
 
 def proposal_control(args, label, protocol, transform):
@@ -319,16 +409,7 @@ def main():
         with patch.object(common, 'render_certificate', substitute_source):
             proof_refused(args, 'same-typed-source-substitution',
                     options(args, 'schnorr', 'Helpers', 'same-typed-source-substitution'))
-    original_subject = driver.schnorr_subject
-    def wrong_property(namespace, expected=False):
-        text = original_subject(namespace, expected)
-        if expected:
-            return text
-        start = text.index('    let bound := binding context base key')
-        end = text.index('\nend ', start)
-        return text[:start] + '    True := True.intro\n' + text[end:]
-    with patch.object(driver, 'schnorr_subject', wrong_property):
-        proof_refused(args, 'wrong-proved-property', options(args, 'schnorr', 'Helpers', 'wrong-proved-property'))
+    claim_controls(args)
     proposal_control(args, 'wrong-returned-state', 'schnorr',
         replace_once('some challenge, true, some proof.2', 'some challenge, false, some proof.2'))
     state_control(args, 'dropped-predecessor-challenge')

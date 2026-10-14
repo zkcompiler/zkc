@@ -1,8 +1,10 @@
 -- Maintained by audit_imports.py; all library, test and example modules are audit inputs; tooling is separate.
 import ZkcSecurity.ArkLib.FiatShamir.Prefix.Cache
+import ZkcSecurity.ArkLib.FiatShamir.Prefix.Direct
 import ZkcSecurity.ArkLib.FiatShamir.Prefix.Experiment
 import ZkcSecurity.ArkLib.FiatShamir.Prefix.Keys
 import ZkcSecurity.ArkLib.FiatShamir.Prefix.Security
+import ZkcSecurity.ArkLib.FiatShamir.Transcript.Direct
 import ZkcSecurity.ArkLib.FiatShamir.Transcript.Experiment
 import ZkcSecurity.ArkLib.FiatShamir.Transcript.Keys
 import ZkcSecurity.ArkLib.FiatShamir.Transcript.Security
@@ -10,6 +12,7 @@ import ZkcSecurity.ArkLib.KZG.OpeningSum
 import ZkcSecurity.ArkLib.Sumcheck.Bridge
 import ZkcSecurity.ArkLib.Sumcheck.Domain
 import ZkcSecurity.ArkLib.Sumcheck.Execution
+import ZkcSecurity.ArkLib.Sumcheck.FiatShamir.Direct
 import ZkcSecurity.ArkLib.Sumcheck.FiatShamir.EarlyStop
 import ZkcSecurity.ArkLib.Sumcheck.FiatShamir.FiniteRounds
 import ZkcSecurity.ArkLib.Sumcheck.FiatShamir.FullPrefix
@@ -35,6 +38,7 @@ import ZkcSecurity.Oracle.Encoding
 import ZkcSecurity.VCVio.Schnorr.FiatShamir.Sigma
 import ZkcSecurity.VCVio.Schnorr.FiatShamir
 import ZkcSecurity.VCVio.Schnorr
+import TestsSecurity.ActualTranscript
 import TestsSecurity.Compatibility
 import TestsSecurity.Encoding
 import TestsSecurity.FiniteTranscript

@@ -80,9 +80,27 @@ supply its actual all-prefix extractor, prover preservation, local bad-challenge
 bound, and terminal witness map. Any acceptance claim additionally needs the
 protocol's terminal acceptance law.
 
-The repeated first access is charged despite being a cache hit. No tighter
-`Q + 2` bound is claimed here. The model does not expose query-log equality:
+The repeated first access is charged despite being a cache hit. This reduction
+does not establish a tighter `Q + 2` bound. It does not expose query-log equality:
 preparation adds an access. Nor does it establish a concrete extraction runtime.
+
+## Actual-query proof
+
+`Prefix.Direct` proves a separate bound on an actual computation with this same
+two-round oracle. The native keys are explicitly equivalent to the generic
+two-round transcript keys. Their table interpretation reuses the generic
+all-prefix knowledge predicates without changing the adversary's oracle.
+
+`FailureTrace` requires that, for every total answer table, the selected event
+yields a terminal knowledge witness, failure of its backward-extracted initial
+witness, and both keys in the actual log. Prover preservation and local bounds
+then give `totalCalls * error` using VCVio's adaptive bad-query theorem. The
+claim owner must fix the actual computation and event; supplying an empty event
+is not a proof of the registered security claim.
+
+The Sumcheck adapter proves this trace law for the actual early-stopping verifier
+uniformly before composing it with any adversary. It obtains `Q + 2` without
+modifying the salted simulation, its logs or its cache-equality theorem.
 
 ## Boundary and validation
 

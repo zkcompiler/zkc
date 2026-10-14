@@ -99,6 +99,16 @@ or oracle-simulation premise. The actual game needs at most `Q+2` accesses; the
 security reduction conservatively charges `Q+3`. Independent private coins may
 select a family of adaptive adversaries with a common budget.
 
+`Native.soundnessProperty` owns this registered conclusion as a property of the
+actual subject. `Native.soundnessConsumer` requires the full process equation
+uniformly over every selection and discharges that property.
+`Native.direct_soundness` separately proves `(Q+2) * 2/|F|` for the same game.
+`FullPrefix.earlyVerify_acceptance_queries` proves the actual two-query trace on
+acceptance for every answer table; `earlyGame_failureTrace` lifts it through any
+adaptive adversary. ArkLib's extraction-failure lemma and VCVio's bad-query bound
+then apply to the actual accesses. `randomized_direct_soundness` also permits
+independently sampled private coins with a common all-branch budget.
+
 This endpoint relies on finite-field axioms, the supplied uniform `SampleableType`
 laws, Lean's kernel and standard logical axioms, and the audited pinned upstream
 theorems. Actual Host initial-transcript/proof-buffer conformance, byte encodings,

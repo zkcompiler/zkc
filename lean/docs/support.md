@@ -14,8 +14,8 @@ They do not certify arbitrary DSL programs or the full native lowering pipeline.
 | VCVio Schnorr simulation | Equality for every event on commitment, fixed honest challenge, response and actual verifier outcome under uniform nonce/response sampling | One-session honest-verifier simulation; no malicious-verifier or concurrent theorem |
 | VCVio Schnorr Fiat–Shamir | Fixed-statement extraction for a realized constructed verifier: if acceptance is `a`, extractor success is at least `a * (a / (Q+1) - 1/|F|)` | Truncated subtraction; ordinary total adaptive prover with private coins; one initially empty shared uniform-field oracle; `Q` bounds prover oracle calls; no efficiency or discrete-log hardness conclusion |
 | ArkLib Sumcheck | Actual imported two-round degree-two verifier acceptance on a false public sum claim is at most `4 / |F|` | Finite field; reached fresh uniform queries; causal coefficient-message strategies, including arbitrary private probabilistic mixtures chosen before verifier draws |
-| ArkLib Sumcheck Fiat–Shamir | All-prefix local knowledge conditions for quadratic Sumcheck; two-round full-prefix false acceptance at most `(Q+3) * 2/|F|` | Classical typed random oracle; adaptive statement and arbitrary full-prefix queries; `Q` bounds adversary calls; reduction/completion accesses charged; early-stop correspondence observes acceptance |
-| Finite full-prefix Fiat–Shamir | Heterogeneous finite-round extraction bound `(Q+n) * error`; quadratic Sumcheck source false acceptance at most `(Q+n) * 2/|F|` | Fixed schedule; all-prefix knowledge laws; one classical typed RO; completed-path source replay identifies acceptance, not early-stop caches or arbitrary native loops |
+| ArkLib Sumcheck Fiat–Shamir | Actual two-round early-stop false acceptance at most `(Q+2) * 2/|F|`; registered receipts retain conservative `(Q+3) * 2/|F|` | Initially empty shared classical typed oracle; adaptive statement and arbitrary full-prefix queries; `Q` bounds adversary calls; actual denotation and acceptance trace proved; concrete transcript conformance remains separate |
+| Finite full-prefix Fiat–Shamir | Heterogeneous finite-round extraction bound `(Q+n) * error`; a generic actual-query trace consumer charges `totalCalls * error`; quadratic Sumcheck source bound `(Q+n) * 2/|F|` | Fixed schedule; all-prefix knowledge laws; one initially empty classical typed RO; general native loops still need an execution/trace law; existing finite source consumer uses completed replay |
 | Public factor openings | Imported composed verifier bound `4 / |F|`; generic conditional bound `4 / |F| + epsilon` | Public polynomial factor checks prove zero opening error; PCS binding/extractability needs a separate opening theorem |
 | KZG opening composition | A typed two-opening evaluation-sum verifier's false acceptance is bounded by an actual ArkLib t-SDH reduction; reusable process contract | Registered polynomial behind the commitment; explicit setup/group/pairing and reduced-adversary hardness premises; no malicious-commitment extraction, native KZG or Sumcheck/PCS connection |
 | Authored DSL target | Imported Schnorr relation denotes discrete-log; two accepting imported verifier transcripts yield a witness accepted by that relation | Bounded scalar formula adapter and tested interface selector binding |
@@ -41,6 +41,9 @@ matching honest prover/verifier challenges supplies these security arguments.
 The separate [finite transcript consumer](spec/finite-transcript.md) instead
 applies VCVio's adaptive bad-query theorem directly to full prefixes, charging
 exactly `Q+n` accesses under the same kind of local knowledge premises.
+Its actual-computation interface requires a proved failure trace. The native
+two-round Sumcheck adapter establishes that trace uniformly and applies the
+direct bound to the full PIR experiment before acceptance is observed.
 Some unrelated upstream declarations contain `sorry`; the transitive axioms of
 owned claimed results are audited separately and must use only Lean's standard
 three axioms. A build of all upstream sources is not asserted.

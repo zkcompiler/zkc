@@ -330,13 +330,11 @@ open ZkcSecurity.VCVio.Schnorr.FiatShamir
 variable [Fintype F] [Inhabited F] [SampleableType F] [DecidableEq Context]
 
 theorem security (context : Context) (base key : G)
-    (prover : Prover (OccurrenceContext Context) F G) (Q : Nat)
+    (prover : _root_.ZkcSecurity.VCVio.Schnorr.FiatShamir.Prover (OccurrenceContext Context) F G) (Q : Nat)
     (queryBound : _root_.FiatShamir.nmaHashQueryBound (Binding (OccurrenceContext Context) G)
       (prover key (binding context base key)) Q) :
-    let bound := binding context base key
-    let acc := acceptance actual prover bound
-    acc * (acc / (Q + 1 : ENNReal) - _root_.FiatShamir.challengeSpaceInv F) ≤
-      Pr{let witness ← extractor prover bound Q}[witness • base = key] := '''
+    (_root_.ZkcSecurity.VCVio.Schnorr.FiatShamir.extractionProperty
+      prover (binding context base key) Q).conclusion actual := '''
     result += ('GeneratedFS.security context base key prover Q queryBound\n' if expected else '''by
   exact extraction ExpectedRequest.approvedContract realizes prover
     (binding context base key) Q queryBound
@@ -374,32 +372,32 @@ theorem full_denotation (context : Context) (coefficients : Coefficients F)
   GeneratedFS.full_denotation context coefficients claim proof
 '''
     result += '''
-def subject : Subject Context F := fun choice =>
+def subject : _root_.ZkcSecurity.ArkLib.Sumcheck.FiatShamir.Native.Subject Context F := fun choice =>
   imported.denote (meaning schedule (choice.first, choice.second))
     (inputs (binding choice.context choice.coefficients choice.claim))
 
-theorem denotation (choice : Selection Context F) :
-    subject choice = reference snapshot.source snapshot.candidate schedule choice := '''
+theorem denotation (choice : _root_.ZkcSecurity.ArkLib.Sumcheck.FiatShamir.Native.Selection Context F) :
+    subject choice = _root_.ZkcSecurity.ArkLib.Sumcheck.FiatShamir.Native.reference
+      snapshot.source snapshot.candidate schedule choice := '''
     result += ('GeneratedFS.denotation choice\n' if expected else '''by
   exact full_denotation choice.context choice.coefficients choice.claim (choice.first, choice.second)
 ''')
     result += '''
 variable [Fintype F] [SampleableType F]
-theorem query_cost (adversary : Adversary Context F) (Q : Nat)
-    (queryBound : IsTotalQueryBound adversary Q) :
-    IsTotalQueryBound (game snapshot.source snapshot.candidate schedule subject adversary) (Q + 2) := '''
+theorem query_cost (adversary : _root_.ZkcSecurity.ArkLib.Sumcheck.FiatShamir.Native.Adversary Context F) (Q : Nat)
+    (queryBound : _root_.OracleComp.IsTotalQueryBound adversary Q) :
+    _root_.OracleComp.IsTotalQueryBound
+      (_root_.ZkcSecurity.ArkLib.Sumcheck.FiatShamir.Native.game
+        snapshot.source snapshot.candidate schedule subject adversary) (Q + 2) := '''
     result += ('GeneratedFS.query_cost adversary Q queryBound\n' if expected else '''
   game_queryBound snapshot.source snapshot.candidate schedule subject denotation adversary Q queryBound
 ''')
     result += '''
 variable [DecidableEq Context]
-theorem security (adversary : Adversary Context F) (Q : Nat)
-    (queryBound : IsTotalQueryBound adversary Q) :
-    Pr{let output ← (simulateQ randomOracle
-      (game snapshot.source snapshot.candidate schedule subject adversary)).run' ∅}[
-      acceptedRecord output.2 = true ∧
-        output.1.claim ≠ (polynomial output.1.coefficients).booleanSum] ≤
-          (Q + 3 : ENNReal) * (2 / (Fintype.card F : ENNReal)) := '''
+theorem security (adversary : _root_.ZkcSecurity.ArkLib.Sumcheck.FiatShamir.Native.Adversary Context F) (Q : Nat)
+    (queryBound : _root_.OracleComp.IsTotalQueryBound adversary Q) :
+    (_root_.ZkcSecurity.ArkLib.Sumcheck.FiatShamir.Native.soundnessProperty
+      snapshot.source snapshot.candidate schedule adversary Q).conclusion subject := '''
     result += ('GeneratedFS.security adversary Q queryBound\n' if expected else '''
   soundness snapshot.source snapshot.candidate schedule subject denotation adversary Q queryBound
 ''')
@@ -607,6 +605,7 @@ def verify_owned(args):
             'transitive axiom audit of checked subject and security consumer']
         receipt['verified_properties'] = [{'property': experiment.property,
             'certificate': 'ExpectedFS.security', 'premises': list(experiment.premises),
+            'claim': experiment.claim, 'initialization': experiment.initialization,
             'query_bound': query_conclusion(specification), 'observation': experiment.observation,
             'statement': experiment.statement, 'adversary': experiment.adversary}]
         receipt['status'] = 'verified-in-model'
