@@ -419,7 +419,7 @@ pub(super) fn prepare(
             .and_then(|n| n.checked_add(root_size))
             .filter(|n| *n <= logical::TreeLimits::BYTES)
             .ok_or("tree-limit")?;
-        row[3] = json!(hex(&bytes));
+        row[3] = Json::String(hex(&bytes));
         root[8]
             .as_array_mut()
             .expect("binding public rows")

@@ -55,24 +55,23 @@ pub(crate) fn unhex(v: &Json) -> Result<Vec<u8>> {
     {
         return Err("artifact-hex".into());
     }
-    s.as_bytes()
+    Ok(s.as_bytes()
         .as_chunks::<2>()
         .0
         .iter()
         .map(|p| {
             let digit = |b| if b <= b'9' { b - b'0' } else { b - b'a' + 10 };
-            Ok(digit(p[0]) * 16 + digit(p[1]))
+            digit(p[0]) * 16 + digit(p[1])
         })
-        .collect()
+        .collect())
 }
 pub fn hex(bytes: &[u8]) -> String {
     const DIGITS: &[u8] = b"0123456789abcdef";
-    let mut s = String::with_capacity(bytes.len() * 2);
-    for &b in bytes {
-        s.push(DIGITS[(b >> 4) as usize] as char);
-        s.push(DIGITS[(b & 15) as usize] as char);
+    let mut out = vec![0; bytes.len() * 2];
+    for (pair, &b) in out.as_chunks_mut::<2>().0.iter_mut().zip(bytes) {
+        *pair = [DIGITS[(b >> 4) as usize], DIGITS[(b & 15) as usize]];
     }
-    s
+    String::from_utf8(out).expect("hex digits are ASCII")
 }
 
 /// Decode an independently selected canonical SHA-256 identity.
@@ -93,6 +92,15 @@ pub(crate) fn hash(bytes: &[u8]) -> String {
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn hex_preserves_lowercase_wire_bytes() {
+        for bytes in [vec![], (0..=255).collect(), vec![255; 65536]] {
+            let expected: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
+            let encoded = hex(&bytes);
+            assert_eq!(encoded, expected);
+            assert_eq!(unhex(&Json::String(encoded)).unwrap(), bytes);
+        }
+    }
     #[test]
     fn ingress_is_bounded_before_json_and_canonical_afterwards() {
         assert_eq!(parse(&[b'['; 66], 100).unwrap_err(), "artifact-json-depth");

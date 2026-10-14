@@ -53,7 +53,7 @@ Run `--suite monero` to measure aggregation counts 1, 2, 4, 8 and 16.
 |---|---|---|
 | Schnorr | BLS12-381 G1/Fr, Spongefish 0.7.4 SHAKE128, 80-byte proof | Ordinary library and construction versus direct arkworks/Spongefish calls |
 | Monero BP+ | 64-bit amounts, mixed test values, pinned Monero transcript and binary encoding | Ordinary library versus upstream C++ prover/verifier |
-| Sumcheck | Public multilinear table, 16–4,096 entries, contiguous halves, MSB-first variables, pair-valued rounds | Ordinary Sumcheck library versus an independent linear-time Rust implementation |
+| Sumcheck | Public multilinear table, 16–65,536 entries, contiguous halves, MSB-first variables, pair-valued rounds | Ordinary Sumcheck library versus an independent linear-time Rust implementation |
 
 Sumcheck's [Entry](projects/sumcheck/main.zkc) binds the ordered table, claim and
 round count using an authored Spongefish construction. Its verifier evaluates
@@ -61,6 +61,12 @@ the public table, so verification is linear in table size. It has no PCS or
 zero-knowledge claim. The independent implementation must produce identical
 proof bytes. The other two provers use fresh randomness, so proofs are checked
 by cross-verification, not byte equality.
+
+The Sumcheck sizes reach the default native table limit without changing runtime
+policy. They distinguish fixed invocation overhead from work that grows with the
+input. Larger inputs can reduce the relative overhead, but input admission,
+canonical encoding and statement binding also grow with the table. A size sweep
+alone does not isolate kernel execution from those costs.
 
 These are complete implementation-stack comparisons. Monero uses different curve
 and multiexponentiation code; zkc also performs input admission, interpretation,

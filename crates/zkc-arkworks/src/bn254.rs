@@ -31,11 +31,7 @@ pub fn encode_scalar(s: &Scalar) -> Result<[u8; 32], Error> {
 }
 /// Exact canonical scalar decoding, without modular reduction.
 pub fn decode_scalar(b: &[u8]) -> Result<Scalar, Error> {
-    if b.len() != 32 {
-        return Err(Error::InvalidEncoding);
-    }
-    let mut input = b;
-    crate::codec::read(&mut input, 32)
+    crate::codec::read_field(b)
 }
 macro_rules! group {
     ($name:ident,$affine:ty,$projective:ty,$width:expr) => {

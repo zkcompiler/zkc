@@ -1,4 +1,5 @@
 use crate::{Bounds, Error, Metadata, PROFILE, bounds::vector};
+use ark_ff::{Fp, FpConfig, PrimeField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use sha2::{Digest, Sha256};
 
@@ -92,10 +93,25 @@ pub(crate) fn write<T: CanonicalSerialize>(value: &T, bytes: &mut Vec<u8>) -> Re
         .map_err(|_| Error::InvalidEncoding)
 }
 
-/// Only fixed-size field/group objects reach the upstream deserializer. No
-/// attacker-controlled Vec length is ever handed to canonical deserialization.
+/// Arkworks Fp uses an unflagged little-endian integer strictly below the
+/// modulus. Its checked decoder rejects noncanonical integers directly;
+/// unlike group decoding, it cannot normalize an exceptional encoding.
+pub(crate) fn read_field<P: FpConfig<N>, const N: usize>(bytes: &[u8]) -> Result<Fp<P, N>, Error> {
+    if bytes.len() != Fp::<P, N>::MODULUS_BIT_SIZE.div_ceil(8) as usize {
+        return Err(Error::InvalidEncoding);
+    }
+    let mut input = bytes;
+    let value =
+        Fp::<P, N>::deserialize_compressed(&mut input).map_err(|_| Error::InvalidEncoding)?;
+    finish(input)?;
+    Ok(value)
+}
+
 // Largest installed fixed object: the BN254 pairing target (twelve Fq coefficients).
 const MAX_FIXED_BYTES: usize = 384;
+/// Group objects require checked decoding and byte-for-byte canonicality.
+/// Only fixed-size objects reach either upstream decoder; no attacker-controlled
+/// Vec length is ever handed to canonical deserialization.
 pub(crate) fn read<T: CanonicalDeserialize + CanonicalSerialize>(
     input: &mut &[u8],
     width: usize,

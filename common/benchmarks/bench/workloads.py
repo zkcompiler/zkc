@@ -77,7 +77,7 @@ PROTOCOLS = (
              notes=('Retained conformance amounts and small fixture masks; not a sampled wallet workload.',
                     'Upstream PROVE derives commitments inside the timer.',
                     'Upstream generator and multiexponentiation precomputation persists within each process; first-call timing includes initialization.')),
-    Protocol('sumcheck', 'common/benchmarks/projects/sumcheck', (16, 64, 256, 1024, 4096),
+    Protocol('sumcheck', 'common/benchmarks/projects/sumcheck', (16, 64, 256, 1024, 4096, 16384, 65536),
              'bls12-381.fr', 'spongefish-0.7.4-shake128', 'round-pairs-fr-be-32', sumcheck_inputs,
              randomized=False, witness=False, verification='public-table terminal evaluation is included',
              notes=('Both calls bind the complete ordered table: O(n) transcript work.',
