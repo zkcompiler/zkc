@@ -87,8 +87,7 @@ std::string indices(ArrayRef<int64_t> values) {
 struct Model {
   DeclarationOrder order;
   Records sorts, types, operations, members, capabilities, rules, typeExports,
-      operationExports, families, familyCases, associatedTypes,
-      capabilityExports;
+      families, familyCases, associatedTypes, capabilityExports;
   explicit Model(const RecordKeeper &records)
       : order(records), sorts(order.sort("ZKC_Sort")),
         types(order.sort("ZKC_Type")), operations(order.sort("ZKC_Operation")),
@@ -96,7 +95,6 @@ struct Model {
         capabilities(order.sort("ZKC_Capability")),
         rules(order.sort("ZKC_Implication")),
         typeExports(order.sort("ZKC_TypeExport")),
-        operationExports(order.sort("ZKC_OperationExport")),
         families(order.sort("ZKC_TypeFamily")),
         familyCases(order.sort("ZKC_TypeFamilyCase")),
         associatedTypes(order.sort("ZKC_AssociatedType")),
@@ -241,24 +239,6 @@ void Model::validate() {
         r->getValueAsDef("capability")->getValueAsListOfDefs("parameters");
     require(ps.size() == 1 && parameter(ps[0]).first == "Domain", r,
             "source capability requires a unary domain predicate");
-  }
-  std::map<const Record *, std::vector<StringRef>> operationLabels;
-  for (const auto *r : operationExports) {
-    checkExport(r);
-    auto *op = r->getValueAsDef("operation");
-    require(name(op->getValueAsDef("stage")) == "Source" &&
-                op->getValueAsBit("commonGeneric"),
-            r, "source export requires a source operation");
-    auto labels = r->getValueAsListOfStrings("inputLabels");
-    auto [labelOwner, inserted] = operationLabels.emplace(op, labels);
-    require(inserted || labelOwner->second == labels, r,
-            "operation aliases must share input labels");
-    require(labels.size() == op->getValueAsListOfDefs("inputs").size(), r,
-            "source export input label arity");
-    std::set<std::string> seen;
-    for (auto label : labels)
-      require(identifier(label) && seen.insert(label.str()).second, r,
-              "invalid or duplicate input label");
   }
 }
 void Model::validateOperation(const Record *op) {
@@ -853,13 +833,6 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
     os << "{" << quote(r->getValueAsString("module")) << ", " << quote(name(r))
        << ", " << quote(name(r->getValueAsDef("type"))) << "},\n";
   os << "}; return values; }\n";
-  os << "llvm::ArrayRef<SourceOperationExport> sourceOperationExports() "
-        "{\nstatic const std::vector<SourceOperationExport> values = {\n";
-  for (const auto *r : m.operationExports)
-    os << "{" << quote(r->getValueAsString("module")) << ", " << quote(name(r))
-       << ", " << quote(name(r->getValueAsDef("operation"))) << ", "
-       << strings(r->getValueAsListOfStrings("inputLabels")) << "},\n";
-  os << "}; return values; }\n";
   os << "llvm::ArrayRef<SourceTypeFamilyCase> sourceTypeFamilies() {\n"
         "static const std::vector<SourceTypeFamilyCase> values = {\n";
   for (const auto *r : m.familyCases)
@@ -891,12 +864,6 @@ json::Array parametersJSON(const Record *r) {
   json::Array result;
   for (const auto *p : r->getValueAsListOfDefs("parameters"))
     result.push_back(parameterJSON(p));
-  return result;
-}
-json::Array stringsJSON(ArrayRef<StringRef> values) {
-  json::Array result;
-  for (auto v : values)
-    result.push_back(v);
   return result;
 }
 json::Object inventory(const Model &m) {
@@ -1007,13 +974,6 @@ json::Object inventory(const Model &m) {
         json::Object{{"module", r->getValueAsString("module")},
                      {"name", name(r)},
                      {"constructor", name(r->getValueAsDef("type"))}});
-  for (const auto *r : m.operationExports)
-    exports.push_back(
-        json::Object{{"module", r->getValueAsString("module")},
-                     {"name", name(r)},
-                     {"contract", name(r->getValueAsDef("operation"))},
-                     {"inputLabels",
-                      stringsJSON(r->getValueAsListOfStrings("inputLabels"))}});
   for (const auto *r : m.familyCases)
     families.push_back(json::Object{
         {"family", name(r->getValueAsDef("family"))},

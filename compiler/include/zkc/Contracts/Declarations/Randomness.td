@@ -7,8 +7,6 @@ def OpRandomVector : ZKC_Operation<"random.vector", [OpRandomVectorF],
   let parameters = ExtentParameter;
   let facets = [ZKC_Sampling<Entropy, VectorSample, -1>];
 }
-def ExportRandomVector : ZKC_OperationExport<"zkc::random", "vector",
-    OpRandomVector, ["rng"]>;
 
 def OpRandomIndexF : ZKC_Root<"F", FieldDomain>;
 def OpRandomIndex : ZKC_Operation<"random.index", [OpRandomIndexF],
@@ -17,8 +15,6 @@ def OpRandomIndex : ZKC_Operation<"random.index", [OpRandomIndexF],
   int ordinal = 123;
   let facets = [ZKC_Sampling<Entropy, IndexSample, 1>];
 }
-def ExportRandomIndex : ZKC_OperationExport<"zkc::random", "index",
-    OpRandomIndex, ["rng", "index"]>;
 
 def OpRandomDrawF : ZKC_Root<"F", FieldDomain>;
 def OpRandomDraw : ZKC_Operation<"random.draw", [OpRandomDrawF],
@@ -27,5 +23,3 @@ def OpRandomDraw : ZKC_Operation<"random.draw", [OpRandomDrawF],
   int ordinal = 125;
   let facets = [ZKC_Sampling<Entropy, FieldSample, -1>];
 }
-def ExportRandomDraw : ZKC_OperationExport<"zkc::random", "draw",
-    OpRandomDraw, ["rng"]>;

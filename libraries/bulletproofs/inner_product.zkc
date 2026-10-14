@@ -2,6 +2,7 @@ module bulletproofs::inner_product;
 use zkc::bytes::{Bytes};
 use zkc::vector::{Vector};
 use zkc::curve::{Groups};
+use zkc::curve as curve;
 use zkc::vector as vec;
 use zkc::scalar as scalar;
 use zkc::indices as indices;
@@ -18,10 +19,7 @@ pub struct Bases<G: Group> { pub left: Groups<G>, pub right: Groups<G> }
 pub struct Witness<F: Field> { pub left: Vector<F>, pub right: Vector<F>, pub mask: F }
 
 pub fn count<G: Group>(bases: Bases<G>) -> index {
-  return kernel<G>("curve.length", bases.left);
-}
-fn msm<G: Group>(points: Groups<G>, scalars: Vector<G::Scalar>) -> G {
-  return kernel<G>("curve.msm", scalars, points);
+  return curve::length(bases.left);
 }
 fn weighted<F: Field>(left: Vector<F>, right: Vector<F>, y: F) -> F {
   let weights = vec::scale(vec::geometric(y, vec::length(left)), y);
@@ -31,29 +29,26 @@ fn weighted<F: Field>(left: Vector<F>, right: Vector<F>, y: F) -> F {
 pub fn cross<G: Group>(bases: Bases<G>, witness: Witness<G::Scalar>,
     value_base: G, mask_base: G, y: G::Scalar,
     left_mask: G::Scalar, right_mask: G::Scalar) -> (G, G) {
-  let (g0, g1) = kernel<G>("curve.split", bases.left);
-  let (h0, h1) = kernel<G>("curve.split", bases.right);
+  let (g0, g1) = curve::split(bases.left);
+  let (h0, h1) = curve::split(bases.right);
   let (a0, a1) = vec::split(witness.left);
   let (b0, b1) = vec::split(witness.right);
   let power = scalar::power(y, vec::length(a0));
-  let left = msm(g1, vec::scale(a0, scalar::inverse(power))) + msm(h0, b1)
+  let left = curve::msm(vec::scale(a0, scalar::inverse(power)), g1) + curve::msm(b1, h0)
     + value_base * weighted(a0, b1, y) + mask_base * left_mask;
-  let right = msm(g0, vec::scale(a1, power)) + msm(h1, b0)
+  let right = curve::msm(vec::scale(a1, power), g0) + curve::msm(b0, h1)
     + value_base * (power * weighted(a1, b0, y)) + mask_base * right_mask;
   return (left, right);
 }
 
 // Both roles use precisely this fold, including the asymmetric y weight.
 pub fn fold_bases<G: Group>(bases: Bases<G>, y: G::Scalar, x: G::Scalar) -> Bases<G> {
-  let (g0, g1) = kernel<G>("curve.split", bases.left);
-  let (h0, h1) = kernel<G>("curve.split", bases.right);
+  let (g0, g1) = curve::split(bases.left);
+  let (h0, h1) = curve::split(bases.right);
   let inverse_x = scalar::inverse(x);
-  let inverse_power = scalar::inverse(scalar::power(y, kernel<G>("curve.length", g0)));
-  let left = kernel<G>("curve.vector_add",
-    kernel<G>("curve.vector_scale", g0, inverse_x),
-    kernel<G>("curve.vector_scale", g1, x * inverse_power));
-  let right = kernel<G>("curve.vector_add",
-    kernel<G>("curve.vector_scale", h0, x), kernel<G>("curve.vector_scale", h1, inverse_x));
+  let inverse_power = scalar::inverse(scalar::power(y, curve::length(g0)));
+  let left = g0 * inverse_x + g1 * (x * inverse_power);
+  let right = h0 * x + h1 * inverse_x;
   return Bases<G>{left: left, right: right};
 }
 
@@ -74,8 +69,8 @@ fn terminal<G: Group>(bases: Bases<G>, witness: Witness<G::Scalar>,
     value_base: G, mask_base: G, y: G::Scalar,
     r: G::Scalar, s: G::Scalar, d: G::Scalar, eta: G::Scalar) -> (G, G) {
   require count(bases) == 1;
-  let left = kernel<G>("curve.get", bases.left, 0);
-  let right = kernel<G>("curve.get", bases.right, 0);
+  let left = curve::get(bases.left, 0);
+  let right = curve::get(bases.right, 0);
   let a = vec::get(witness.left, 0);
   let b = vec::get(witness.right, 0);
   return (left * r + right * s + mask_base * d + value_base * (r * y * b + s * y * a),
@@ -91,8 +86,8 @@ fn check<G: Group>(bases: Bases<G>, claim: G, value_base: G, mask_base: G,
   require count(bases) == 1;
   let (r,s,d) = response;
   return claim * (e * e) + first * e + second ==
-    kernel<G>("curve.get", bases.left, 0) * (e * r)
-    + kernel<G>("curve.get", bases.right, 0) * (e * s)
+    curve::get(bases.left, 0) * (e * r)
+    + curve::get(bases.right, 0) * (e * s)
     + value_base * (r * y * s) + mask_base * d;
 }
 
@@ -102,7 +97,7 @@ fn check_shape<G: Group>(bases: Bases<G>, rounds: index, y: G::Scalar) -> () {
   let mut expected: index = 1;
   for _ in 0..rounds { expected = expected * 2; }
   require count(bases) == expected;
-  require kernel<G>("curve.length", bases.right) == expected;
+  require curve::length(bases.right) == expected;
   return ();
 }
 

@@ -1,5 +1,5 @@
-#ifndef ZKC_TRANSLATION_COMMONSOURCE_H
-#define ZKC_TRANSLATION_COMMONSOURCE_H
+#ifndef ZKC_COMPILER_COMMONSOURCE_H
+#define ZKC_COMPILER_COMMONSOURCE_H
 
 #include "mlir/IR/BuiltinOps.h"
 #include "llvm/Support/JSON.h"

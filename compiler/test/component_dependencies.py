@@ -27,7 +27,7 @@ HEADER_ROOTS = {
     "ZkcProgram": ["Program"],
     "ZkcTransforms": ["Transforms", "Target"],
     "ZkcCompiler": [f"Compiler/{name}.h" for name in (
-        "Compilation", "Diagnostics", "Language", "LanguageInterface", "AssetSharing",
+        "Compilation", "Diagnostics", "Language", "LanguageInterface", "AssetSharing", "CommonSource",
         "LanguagePackage", "LanguageInspection", "NativeProof", "Run",
         "PolynomialReduction", "PublicCoin", "Passes", "Pipelines")],
     "ZkcDriver": ["Driver"],
@@ -159,7 +159,7 @@ def main():
     }.items():
         assert owners[ROOT / source] == owner, f"mandatory component ownership: {source} belongs to {owner}"
     private_headers = {
-        "ZkcLanguage": {ROOT / f"lib/Language/{name}.h" for name in ("Internal", "State", "Semantics", "Checker", "BodyCheck", "Placement", "TypeInference", "Arguments", "CallableConstraints", "OperatorInference", "BindingWitness", "NotationRecords", "BodySummary", "BodyMapping", "FreePlaces", "ScopedWitness", "SignatureWitness", "Effects", "FiniteDomains", "FiniteContracts", "FiniteFormation", "MathematicalFacts", "DataRequirements", "DomainClosure", "DomainWitness", "ValueOrigins", "ClosureInputs", "UsagePlan")},
+        "ZkcLanguage": {ROOT / f"lib/Language/{name}.h" for name in ("Internal", "State", "Semantics", "Checker", "BodyCheck", "Placement", "TypeInference", "Arguments", "CallableConstraints", "OperatorInference", "BindingWitness", "NotationRecords", "BodySummary", "BodyMapping", "FreePlaces", "ScopedWitness", "SignatureWitness", "Effects", "FiniteDomains", "FiniteContracts", "FiniteFormation", "MathematicalFacts", "DataRequirements", "DomainClosure", "DomainWitness", "ValueOrigins", "HelperResults", "ClosureInputs", "UsagePlan")},
         "ZkcSupport": {ROOT / "lib/Support/Input.h"},
         "ZkcContracts": {ROOT / "lib/Contracts/RequirementChecks.h"},
         "ZkcRelation": {ROOT / "lib/Relation/Field.h", ROOT / "lib/Relation/BundleInternal.h"},

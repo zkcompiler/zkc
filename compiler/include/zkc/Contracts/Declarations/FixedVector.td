@@ -29,10 +29,3 @@ def OpFixedVectorDot : ZKC_Operation<"fixed_vector.dot",
      ZKC_Apply<TypeFixedVector, [FixedVectorElement, FixedVectorN]>],
     [ZKC_Apply<TypeField, [FixedVectorF]>],
     [ZKC_Holds<CapabilityField, [FixedVectorF]>]>;
-
-def ExportFixedVectorFromVector : ZKC_OperationExport<"zkc::algebra",
-    "fixed_vector_from_vector", OpFixedVectorFromVector, ["vector"]>;
-def ExportFixedVectorToVector : ZKC_OperationExport<"zkc::algebra",
-    "fixed_vector_to_vector", OpFixedVectorToVector, ["vector"]>;
-def ExportFixedVectorDot : ZKC_OperationExport<"zkc::algebra",
-    "fixed_vector_dot", OpFixedVectorDot, ["left", "right"]>;

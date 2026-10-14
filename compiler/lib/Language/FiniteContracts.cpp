@@ -2,6 +2,7 @@
 #include "DataRequirements.h"
 #include "FiniteCardinality.h"
 #include "FiniteFormation.h"
+#include "HelperResults.h"
 #include "MathematicalFacts.h"
 #include "llvm/ADT/ScopeExit.h"
 #include <limits>
@@ -54,15 +55,7 @@ class ContractCheck {
   std::vector<DataFact> assumptions;
   std::map<ValueOrigin, Type> valueTypes;
   std::map<ValueOrigin, uint64_t> constants;
-  using ForwardedResult = std::optional<ValueOrigin>;
-  struct ForwardingSummary {
-    std::vector<ForwardedResult> outputs;
-    unsigned height = 0;
-  };
-  // Checked declarations may grow between ContractCheck runs. Never retain
-  // these descriptions in Semantics or in the capture-layout origin reader.
-  std::map<unsigned, ForwardingSummary> forwardingMemo;
-  std::set<unsigned> forwardingActive;
+  HelperResults &helperResults;
   struct Context {
     const Body &body;
     Facts inputs;
@@ -70,8 +63,11 @@ class ContractCheck {
     std::vector<std::optional<unsigned>> domains;
     ValueOrigins origins;
     InputValues inputValues;
-    std::map<unsigned, ValueOrigin> forwardedValues;
+    std::map<ValueOrigin, ValueOrigin> values;
+    std::optional<ValueOrigin> pending;
+    bool resolving = false;
     std::map<unsigned, Item> forwardedItems;
+    std::map<unsigned, std::pair<const HelperCall *, unsigned>> resultCalls;
     unsigned base;
     unsigned depth;
     Context(Semantics &types, const Body &body, Facts inputs,
@@ -89,156 +85,142 @@ class ContractCheck {
       return types.fail("source.limit", "finite contract checking depth", span);
     return types.charge(1, span);
   }
-  std::optional<ValueOrigin> value(Context &context, ValueId id, Span span) {
-    auto local = context.origins.get(id, span);
-    if (!local)
-      return {};
-    ValueOrigin result{context.base + local->first, local->second};
-    std::optional<ValueOrigin> replacement;
-    if (auto found = context.forwardedValues.find(local->first);
-        found != context.forwardedValues.end())
-      replacement = found->second;
-    else if (local->first < context.inputValues.size())
-      replacement = context.inputValues[local->first];
-    if (replacement) {
-      result = *replacement;
-      if (!types.charge(result.second.size() + local->second.size() + 1, span))
+  std::optional<ValueOrigin> resolve(Context &context, const ValueOrigin &local,
+                                     Span span) {
+    ValueOrigin result{context.base + local.first, local.second};
+    if (local.first < context.inputValues.size())
+      if (const auto &replacement = context.inputValues[local.first]) {
+        result = *replacement;
+        if (!types.charge(result.second.size() + local.second.size() + 1, span))
+          return {};
+        result.second.insert(result.second.end(), local.second.begin(),
+                             local.second.end());
+      }
+    const HelperResult *summary = nullptr;
+    const HelperCall *call = nullptr;
+    if (auto found = context.resultCalls.find(local.first);
+        found != context.resultCalls.end()) {
+      call = found->second.first;
+      summary = helperResults.get(call->callee.index, found->second.second,
+                                  local.second, span);
+      if (types.diagnostic)
         return {};
-      result.second.insert(result.second.end(), local->second.begin(),
-                           local->second.end());
+      if (summary && summary->forwarded) {
+        auto actual = select(
+            context, call->operands,
+            {summary->forwarded->first, summary->forwarded->second, span},
+            span);
+        if (!actual)
+          return {};
+        result = *actual;
+      }
     }
-    const auto &type = context.body.values[id.index].type;
-    if (!established(mathematical.record(result, type, span), span))
+    auto type = types.projectedType(
+        *owner, context.body.values[local.first].type, local.second, span);
+    if (!type || !established(mathematical.record(result, *type, span), span))
       return {};
-    valueTypes.emplace(result, type);
+    valueTypes.emplace(result, *type);
+    if (summary && !summary->forwarded && !staticExtent(*type, 0) &&
+        !publishShape(context, *call, result, *type, summary->shape, span))
+      return {};
     return result;
   }
-  const ForwardingSummary *forwarding(unsigned id, unsigned depth, Span span) {
-    if (!bounded(depth, span) || depth > types.work.limits.callDepth) {
-      if (!types.diagnostic)
-        types.fail("source.limit", "helper forwarding depth", span);
-      return nullptr;
+  std::optional<ValueOrigin> value(Context &context, ValueId id, Span span,
+                                   ArrayRef<unsigned> path = {}) {
+    auto requested = context.origins.select(id, path, span);
+    if (!requested)
+      return {};
+    if (auto found = context.values.find(*requested);
+        found != context.values.end())
+      return found->second;
+    if (context.resolving) {
+      if (!context.pending)
+        context.pending = requested;
+      return {};
     }
-    if (auto found = forwardingMemo.find(id); found != forwardingMemo.end()) {
-      const auto &summary = found->second;
-      if (depth + summary.height > types.work.limits.expressionDepth ||
-          depth + summary.height > types.work.limits.callDepth) {
-        types.fail("source.limit", "helper forwarding depth", span);
-        return nullptr;
-      }
-      // Charge the lookup and each applied selector, not repeated expansion
-      // of the same dependency graph. Extraction is paid once per declaration.
-      return &summary;
-    }
-    if (id >= declarations.size())
-      return nullptr;
-    const auto &callee = declarations[id];
-    if (callee.abstract || callee.kind != Declaration::Kind::Math ||
-        !callee.body || !forwardingActive.insert(id).second)
-      return nullptr;
-    auto leave = llvm::scope_exit([&] { forwardingActive.erase(id); });
-    const auto &body = *callee.body;
-    if (!types.charge(body.values.size() + body.operations.size() +
-                          body.results.size() + 1,
-                      span))
-      return nullptr;
-    ValueOrigins origins(types, body);
-    std::vector<const Operation *> producers(body.values.size());
-    for (const auto &op : body.operations) {
-      if (!types.charge(op.results.size() + 1, op.span))
-        return nullptr;
-      for (auto result : op.results)
-        producers[result.index] = &op;
-    }
-    ForwardingSummary summary;
-    std::map<unsigned, ForwardedResult> results;
-    std::function<ForwardedResult(ValueId, unsigned)> describe =
-        [&](ValueId id, unsigned nesting) -> ForwardedResult {
-      if (!bounded(depth + nesting, span))
+    context.resolving = true;
+    auto leave = llvm::scope_exit([&] {
+      context.resolving = false;
+      context.pending.reset();
+    });
+    std::vector<ValueOrigin> stack{*requested};
+    std::set<ValueOrigin> active{*requested};
+    while (!stack.empty()) {
+      if (!types.charge(stack.back().second.size() + 1, span))
         return {};
-      summary.height = std::max(summary.height, nesting);
-      auto origin = origins.get(id, span);
-      if (!origin)
-        return {};
-      if (origin->first < body.inputs)
-        return origin;
-      auto found = results.find(origin->first);
-      if (found == results.end()) {
-        ForwardedResult result;
-        const auto *producer = producers[origin->first];
-        const auto *call =
-            producer ? std::get_if<HelperCall>(&producer->action) : nullptr;
-        if (call) {
-          // Read only a returned value's dependency path. Checked callee
-          // contracts justify internal calls, but supply no caller premises.
-          summary.height = std::max(summary.height, nesting + 1);
-          auto nested = forwarding(call->callee.index, depth + nesting + 1,
-                                   producer->span);
-          if (types.diagnostic)
-            return {};
-          if (nested) {
-            summary.height =
-                std::max(summary.height, nesting + 1 + nested->height);
-            for (unsigned i = 0; i < producer->results.size(); ++i) {
-              if (!types.charge(1, span))
-                return {};
-              if (producer->results[i].index != origin->first ||
-                  i >= nested->outputs.size() || !nested->outputs[i])
-                continue;
-              const auto &[port, path] = *nested->outputs[i];
-              if (port >= call->operands.size())
-                return {};
-              result = describe(call->operands[port], nesting + 1);
-              if (result) {
-                if (!types.charge(result->second.size() + path.size() + 1,
-                                  span))
-                  return {};
-                result->second.insert(result->second.end(), path.begin(),
-                                      path.end());
-              }
-            }
-          }
-        }
-        found = results.emplace(origin->first, std::move(result)).first;
-      }
-      auto result = found->second;
-      if (result) {
-        if (!types.charge(result->second.size() + origin->second.size() + 1,
-                          span))
-          return {};
-        result->second.insert(result->second.end(), origin->second.begin(),
-                              origin->second.end());
-      }
-      return result;
-    };
-    for (auto output : body.results) {
-      summary.outputs.push_back(describe(output, 0));
+      context.pending.reset();
+      auto result = resolve(context, stack.back(), span);
       if (types.diagnostic)
-        return nullptr;
+        return {};
+      if (context.pending) {
+        if (!active.insert(*context.pending).second) {
+          refuse(span, "cyclic helper result facts");
+          return {};
+        }
+        stack.push_back(*context.pending);
+        continue;
+      }
+      if (!result)
+        return {};
+      context.values.emplace(stack.back(), *result);
+      active.erase(stack.back());
+      stack.pop_back();
     }
-    return &forwardingMemo.emplace(id, std::move(summary)).first->second;
+    return context.values.at(*requested);
+  }
+  bool publishShape(Context &context, const HelperCall &call,
+                    const ValueOrigin &result, const Type &type,
+                    const ResultShape &shape, Span span) {
+    auto count = shape.count;
+    if (shape.input) {
+      auto source =
+          select(context, call.operands,
+                 {shape.input->first, shape.input->second, span}, span);
+      if (!source)
+        return false;
+      if (!shape.filtered &&
+          !established(
+              mathematical.resultExtent(result, *source, shape.axis, span),
+              span))
+        return false;
+      auto known = mathematical.cardinality(*source, shape.axis, span);
+      if (known.status == facts::Status::Capacity)
+        return established(known.status, span);
+      if (known.value)
+        count = known.value;
+    }
+    if (shape.domain) {
+      if (*shape.domain >= call.domainArguments.size())
+        return refuse(span, "helper result domain coverage differs");
+      unsigned selected;
+      return domain(context, call.domainArguments[*shape.domain], selected,
+                    span) &&
+             collectResult(context, selected, result, type, shape.filtered,
+                           span);
+    }
+    if (count) {
+      if (shape.filtered && count->value)
+        count->precision = facts::Precision::Upper;
+      return established(mathematical.resultCardinality(result, *count, span),
+                         span);
+    }
+    return !types.diagnostic;
   }
   bool forward(Context &context, const HelperCall &call,
                ArrayRef<ValueId> outputs, Span span) {
-    // Lexical regions and callback binding depth are not helper call depth.
-    auto descriptions = forwarding(call.callee.index, 0, span);
-    if (!descriptions)
-      return !types.diagnostic;
-    for (unsigned i = 0; i < descriptions->outputs.size() && i < outputs.size();
-         ++i) {
-      const auto &description = descriptions->outputs[i];
-      if (!types.charge(1, span))
-        return false;
+    for (unsigned i = 0; i < outputs.size(); ++i) {
+      context.resultCalls.emplace(outputs[i].index, std::make_pair(&call, i));
+      auto summary = helperResults.get(call.callee.index, i, {}, span);
+      if (!summary) {
+        if (types.diagnostic)
+          return false;
+        continue;
+      }
+      const auto &description = summary->forwarded;
       if (description) {
         const auto &[port, path] = *description;
         if (port >= call.operands.size())
           return refuse(span, "forwarded result input coverage differs");
-        auto origin = value(context, call.operands[port], span);
-        if (!origin ||
-            !types.charge(origin->second.size() + path.size() + 1, span))
-          return false;
-        origin->second.insert(origin->second.end(), path.begin(), path.end());
-        context.forwardedValues.emplace(outputs[i].index, std::move(*origin));
         std::optional<Item> item;
         if (!fact(context, call.operands[port], item, span))
           return false;
@@ -249,6 +231,10 @@ class ContractCheck {
           context.forwardedItems.emplace(outputs[i].index, std::move(*item));
         }
       }
+      if ((summary->forwarded || summary->shape.input ||
+           summary->shape.domain || summary->shape.count) &&
+          !value(context, outputs[i], span))
+        return false;
     }
     return true;
   }
@@ -259,20 +245,7 @@ class ContractCheck {
       refuse(span, "data precondition input is outside its call");
       return {};
     }
-    auto result = value(context, operands[selector.port], span);
-    if (!result || !types.charge(selector.path.size() + 1, span))
-      return {};
-    auto selected = types.projectedType(
-        *owner, context.body.values[operands[selector.port].index].type,
-        selector.path, span);
-    if (!selected)
-      return {};
-    result->second.insert(result->second.end(), selector.path.begin(),
-                          selector.path.end());
-    if (!established(mathematical.record(*result, *selected, span), span))
-      return {};
-    valueTypes.emplace(*result, *selected);
-    return result;
+    return value(context, operands[selector.port], span, selector.path);
   }
   std::optional<DataFact> condition(Context &context,
                                     ArrayRef<ValueId> operands,
@@ -503,11 +476,9 @@ class ContractCheck {
     domainEvidence[result] = std::move(evidence);
     return result;
   }
-  bool collectResult(Context &context, unsigned domain, ValueId output,
+  bool collectResult(Context &context, unsigned domain,
+                     const ValueOrigin &result, const Type &resultType,
                      bool filtered, Span span) {
-    auto result = value(context, output, span);
-    if (!result)
-      return false;
     facts::Work work([&](uint64_t amount) {
       return !types.diagnostic && types.charge(amount, span);
     });
@@ -546,10 +517,8 @@ class ContractCheck {
     auto count = facts::collect(work, cardinality.count(domain), filtered);
     if (count.status == facts::Status::Capacity)
       return established(count.status, span);
-    const auto &resultType = context.body.values[output.index].type;
-    if (resultType.kind == Type::Kind::Builtin &&
-        resultType.domain == "field_array") {
-      const auto &size = resultType.arguments[1].dimension;
+    if (const auto *dimension = staticExtent(resultType, 0)) {
+      const auto &size = *dimension;
       if (size.isClosed() && count.status == facts::Status::Proven &&
           count.value->precision == facts::Precision::Exact &&
           count.value->value != size.closedValue())
@@ -562,8 +531,8 @@ class ContractCheck {
       return !types.diagnostic;
     }
     if (count.status == facts::Status::Proven &&
-        !established(
-            mathematical.resultCardinality(*result, *count.value, span), span))
+        !established(mathematical.resultCardinality(result, *count.value, span),
+                     span))
       return false;
     // Dynamic element traversal preserves an extent even when its numeric
     // count is unknown. Equality relates axes, never container identities.
@@ -578,49 +547,82 @@ class ContractCheck {
       }
       const auto &source = domainEvidence[domain].node;
       if (source.kind == facts::DomainKind::Extent)
-        return established(mathematical.resultExtent(
-                               *result, domainLeaves[source.extent.value],
-                               source.extent.axis, span),
-                           span);
+        return established(
+            mathematical.resultExtent(result, domainLeaves[source.extent.value],
+                                      source.extent.axis, span),
+            span);
     }
     return !types.diagnostic;
   }
-  bool finiteResult(Context &context, const HelperCall &call,
-                    ArrayRef<ValueId> outputs, Span span) {
+  bool collectResult(Context &context, unsigned domain, ValueId output,
+                     bool filtered, Span span) {
+    auto result = value(context, output, span);
+    return result && collectResult(context, domain, *result,
+                                   context.body.values[output.index].type,
+                                   filtered, span);
+  }
+  bool checkFixedCollection(Context &context, const HelperCall &call,
+                            ArrayRef<ValueId> outputs, Span span) {
     const auto &callee = declarations[call.callee.index];
-    if (context.body.mode != Body::Mode::Math || callee.abstract ||
-        callee.kind != Declaration::Kind::Math || !callee.finiteDefinition ||
-        !callee.body || callee.body->operations.size() != 1)
+    if (context.body.mode != Body::Mode::Math || !callee.finiteDefinition ||
+        !callee.body || outputs.size() != 1 ||
+        !staticExtent(context.body.values[outputs.front().index].type, 0))
       return true;
+    if (callee.body->operations.size() != 1)
+      return refuse(span, "finite definition body differs");
     const auto *finite =
         std::get_if<FiniteApplication>(&callee.body->operations.front().action);
-    if (!finite || finite->kind != FiniteApplication::Kind::Collect)
+    if (!finite)
+      return refuse(span, "finite definition action differs");
+    if (finite->kind != FiniteApplication::Kind::Collect)
       return true;
-    if (outputs.size() != 1 || call.domainArguments.size() != 1)
-      return refuse(span, "finite definition result coverage differs");
+    if (finite->domain >= callee.body->domainBindings.size())
+      return refuse(span, "finite definition domain differs");
+    auto parameter = callee.body->domainBindings[finite->domain].parameter;
+    if (!parameter || *parameter >= call.domainArguments.size())
+      return refuse(span, "finite definition parameter coverage differs");
+    // A direct finite definition is specialized at the call occurrence. Check
+    // fixed formation now when its actual domain already determines a count.
     unsigned selected;
-    return domain(context, call.domainArguments.front(), selected, span) &&
+    return domain(context, call.domainArguments[*parameter], selected, span) &&
            collectResult(context, selected, outputs.front(),
                          bool(finite->predicate), span);
   }
   bool fact(Context &context, ValueId value, std::optional<Item> &result,
             Span span) {
-    auto origin = context.origins.get(value, span);
-    if (!origin)
-      return false;
+    auto origin = context.origins.select(value, {}, span);
     result.reset();
-    if (auto found = context.forwardedItems.find(origin->first);
-        found != context.forwardedItems.end())
-      result = found->second;
-    else if (origin->first < context.inputs.size())
-      result = context.inputs[origin->first];
-    if (!result)
-      return true;
-    if (!types.charge(result->path.size() + origin->second.size() + 1, span))
-      return false;
-    result->path.insert(result->path.end(), origin->second.begin(),
-                        origin->second.end());
-    return true;
+    while (origin) {
+      if (!types.charge(origin->second.size() + 1, span))
+        return false;
+      if (auto found = context.forwardedItems.find(origin->first);
+          found != context.forwardedItems.end())
+        result = found->second;
+      else if (origin->first < context.inputs.size())
+        result = context.inputs[origin->first];
+      if (result) {
+        if (!types.charge(result->path.size(), span))
+          return false;
+        result->path.insert(result->path.end(), origin->second.begin(),
+                            origin->second.end());
+        return true;
+      }
+      auto found = context.resultCalls.find(origin->first);
+      if (found == context.resultCalls.end())
+        return true;
+      const auto &call = *found->second.first;
+      auto summary = helperResults.get(call.callee.index, found->second.second,
+                                       origin->second, span);
+      if (!summary || !summary->forwarded)
+        return !types.diagnostic;
+      const auto &[port, path] = *summary->forwarded;
+      if (port >= call.operands.size())
+        return refuse(span, "forwarded item input coverage differs");
+      // A projection of a returned record can forward a whole domain item.
+      // Shape equality alone never supplies that item provenance.
+      origin = context.origins.select(call.operands[port], path, span);
+    }
+    return false;
   }
   bool restriction(Context &context, unsigned index, OriginMap &result,
                    Span span) {
@@ -810,14 +812,6 @@ class ContractCheck {
                       Span span) {
     if (!bounded(depth, span) || callback.helper.index >= declarations.size())
       return types.diagnostic ? false : refuse(span, "invalid finite helper");
-    auto parentScope = mathematical.scope();
-    auto savedAssumptions = assumptions.size();
-    if (!established(mathematical.enter(span), span))
-      return false;
-    auto restore = llvm::scope_exit([&] {
-      mathematical.restore(parentScope);
-      assumptions.resize(savedAssumptions);
-    });
     const auto &helper = declarations[callback.helper.index];
     unsigned explicitInputs = itemInput + 1;
     if (helper.inputs.size() != explicitInputs + callback.captures.size() ||
@@ -826,20 +820,30 @@ class ContractCheck {
     if (nextValue > std::numeric_limits<unsigned>::max() - explicitInputs)
       return types.fail("source.limit", "finite item fact identity limit",
                         span);
-    std::vector<ValueOrigin> inputs;
-    for (unsigned i = 0; i < explicitInputs; ++i) {
-      inputs.push_back({nextValue++, {}});
-      if (!established(
-              mathematical.record(inputs.back(), helper.inputs[i].type, span),
-              span))
-        return false;
-      valueTypes.emplace(inputs.back(), helper.inputs[i].type);
-    }
+    // Resolve captures before entering the callback scope. Parent origins
+    // are memoized, so their facts must outlive this callback's assumptions.
+    std::vector<ValueOrigin> inputs(explicitInputs);
     for (auto capture : callback.captures) {
       auto origin = value(context, capture, span);
       if (!origin)
         return false;
       inputs.push_back(std::move(*origin));
+    }
+    auto parentScope = mathematical.scope();
+    auto savedAssumptions = assumptions.size();
+    if (!established(mathematical.enter(span), span))
+      return false;
+    auto restore = llvm::scope_exit([&] {
+      mathematical.restore(parentScope);
+      assumptions.resize(savedAssumptions);
+    });
+    for (unsigned i = 0; i < explicitInputs; ++i) {
+      inputs[i] = {nextValue++, {}};
+      if (!established(
+              mathematical.record(inputs[i], helper.inputs[i].type, span),
+              span))
+        return false;
+      valueTypes.emplace(inputs[i], helper.inputs[i].type);
     }
     for (const auto &fact : domainBounds[domain]) {
       if (!types.charge(inputs[itemInput].second.size() + fact.path.size() + 1,
@@ -1120,7 +1124,7 @@ class ContractCheck {
       } else if (const auto *helper = std::get_if<HelperCall>(&op.action)) {
         if (!call(context, *helper, depth + 1, op.span) ||
             !forward(context, *helper, op.results, op.span) ||
-            !finiteResult(context, *helper, op.results, op.span))
+            !checkFixedCollection(context, *helper, op.results, op.span))
           return false;
       } else if (const auto *finite =
                      std::get_if<FiniteApplication>(&op.action)) {
@@ -1176,9 +1180,11 @@ class ContractCheck {
 
 public:
   ContractCheck(Semantics &types, ArrayRef<Declaration> declarations,
-                bool infer = false, bool allowAdditional = false)
+                HelperResults &helperResults, bool infer = false,
+                bool allowAdditional = false)
       : types(types), mathematical(types), declarations(declarations),
-        infer(infer), allowAdditional(allowAdditional) {}
+        infer(infer), allowAdditional(allowAdditional),
+        helperResults(helperResults) {}
   std::vector<DataPrecondition> takeRequirements() {
     return std::move(requirements);
   }
@@ -1213,14 +1219,16 @@ public:
 };
 } // namespace
 bool checkFiniteContracts(Semantics &types, ArrayRef<Declaration> declarations,
-                          const Declaration &decl, const Body &body) {
-  return ContractCheck(types, declarations).run(decl, body);
+                          const Declaration &decl, const Body &body,
+                          HelperResults &results) {
+  return ContractCheck(types, declarations, results).run(decl, body);
 }
 std::optional<std::vector<DataPrecondition>>
 deriveDataPreconditions(Semantics &types, ArrayRef<Declaration> declarations,
                         const Declaration &decl, const Body &body,
                         bool allowAdditional) {
-  ContractCheck check(types, declarations, true, allowAdditional);
+  HelperResults results(types, declarations);
+  ContractCheck check(types, declarations, results, true, allowAdditional);
   if (!check.run(decl, body))
     return {};
   return check.takeRequirements();

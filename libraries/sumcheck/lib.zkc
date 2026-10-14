@@ -1,16 +1,16 @@
 module sumcheck;
 pub module expression;
 
-use zkc::vector::{Vector, split, sum, length, empty, append};
-use zkc::boolean::{both};
+use zkc::vector::{Vector, sum, length, empty, append};
 
 // An evaluation obligation, not an acceptance certificate. The caller binds
 // the polynomial and its dimension; coordinates are MSB-first.
 pub use zkc::multilinear::{Evaluation};
-use zkc::multilinear::{fix_first, fix_prefix};
+use zkc::multilinear as multilinear;
+use zkc::multilinear::{Table, fix_first, fix_prefix};
 
-fn sums<F: Field>(values: Vector<F>) {
-  let halves = split(values);
+fn sums<F: Field>(values: Table<F>) {
+  let halves = multilinear::halves(values);
   return (sum(halves.0), sum(halves.1));
 }
 
@@ -18,10 +18,12 @@ fn sums<F: Field>(values: Vector<F>) {
 // drawing; P retains the residual table for a subsequent opening argument.
 // A complete caller must discharge the returned evaluation and dimension.
 pub protocol Reduce<F: Field, Max: nat> roles(P,V)
-    (values: Vector<F> @P, claim: F @V, rounds: index @(P,V),
+    (values: Table<F> @P, claim: F @V, rounds: index @(P,V),
      challenges: Random<F> @V)
-    -> (point: Vector<F> @P, residual: Vector<F> @P,
+    -> (point: Vector<F> @P, residual: Table<F> @P,
         evaluation: Evaluation<F> @V) {
+  require @P multilinear::width(values) == 1;
+  require @P !zkc::indices::less(multilinear::variables(values), rounds);
   let mut tableP = values;
   let mut pointP @P = empty<F>();
   let mut pointV @V = empty<F>();
@@ -41,17 +43,22 @@ pub protocol Reduce<F: Field, Max: nat> roles(P,V)
   return (point = pointP, residual = tableP, evaluation = evaluation);
 }
 
-// Complete public-table discharge. A partial point rejects even if the sum of
-// the remaining entries agrees. Invalid splits stop during the local fold.
+// Complete public-table discharge. The supplied point must fix every variable.
+fn check_table<F: Field>(values: Vector<F>, evaluation: Evaluation<F>) -> bool {
+  let table = multilinear::table(values, length(evaluation.point), 1);
+  let remaining = fix_prefix(table, evaluation.point);
+  return sum(multilinear::values(remaining)) == evaluation.value;
+}
 pub fn check<F: Field>(values: Vector<F>, evaluation: Evaluation<F>) -> bool {
-  let remaining = fix_prefix(values, evaluation.point);
-  return both(length(remaining) == 1, sum(remaining) == evaluation.value);
+  return multilinear::has_shape(values, length(evaluation.point), 1)
+    && check_table(values, evaluation);
 }
 
 pub protocol Sumcheck<F: Field, Max: nat> roles(P,V)
     (values: Vector<F> @(P,V), claim: F @V, rounds: index @(P,V),
      challenges: Random<F> @V) -> (accepted: bool @V) {
+  let table @P = multilinear::table(values, rounds, 1);
   #[site(reduce)] let (point, residual, evaluation) =
-    Reduce<F,Max>(values, claim, rounds, challenges);
+    Reduce<F,Max>(table, claim, rounds, challenges);
   return check(values, evaluation);
 }

@@ -190,20 +190,6 @@ int main() {
                 AuthoringStage::Construction &&
             authoringStage("unknown.call") != AuthoringStage::Source,
         "source authoring stage boundary");
-  bool foundEvaluate = false, foundMultilinear = false;
-  for (const auto &e : sourceOperationExports()) {
-    check(authoringStage(e.contract) == AuthoringStage::Source &&
-              (!StringRef(e.contract).starts_with("transcript.") ||
-               operationContracts(e.contract)->managedHistory),
-          "construction operation leaked through export");
-    if (e.module == "zkc::poly" && e.name == "evaluate")
-      foundEvaluate =
-          e.contract == "poly.univariate_evaluate" &&
-          e.inputLabels == std::vector<std::string>{"polynomial", "point"};
-    if (e.module == "zkc::poly" && e.name == "evaluate_multilinear")
-      foundMultilinear = e.contract == "poly.evaluate";
-  }
-  check(foundEvaluate && foundMultilinear, "curated polynomial exports");
   check(sourceTypeFamilies().size() == 3 &&
             any_of(sourceTypeFamilies(),
                    [](const auto &f) {

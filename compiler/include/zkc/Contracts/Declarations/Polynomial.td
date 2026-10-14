@@ -5,8 +5,6 @@ def OpPolyCoefficientCount : ZKC_Operation<"poly.coefficient_count", [OpPolyCoef
     [ZKC_Apply<TypeIndex, []>], [ZKC_Holds<CapabilityCommRing, [OpPolyCoefficientCountF]>]> {
   int ordinal = 36;
 }
-def ExportPolyCoefficientCount : ZKC_OperationExport<"zkc::poly", "coefficient_count",
-    OpPolyCoefficientCount, ["polynomial"]>;
 
 def OpPolyCosetEvaluateF : ZKC_Root<"F", FieldDomain>;
 def OpPolyCosetEvaluate : ZKC_Operation<"poly.coset_evaluate", [OpPolyCosetEvaluateF],
@@ -15,8 +13,6 @@ def OpPolyCosetEvaluate : ZKC_Operation<"poly.coset_evaluate", [OpPolyCosetEvalu
   int ordinal = 37;
   let facets = [ZKC_Coset<1, 2, 0, 0, 0>];
 }
-def ExportPolyCosetEvaluate : ZKC_OperationExport<"zkc::poly", "coset_evaluate",
-    OpPolyCosetEvaluate, ["polynomial", "field", "index"]>;
 
 def OpPolyCosetInterpolateF : ZKC_Root<"F", FieldDomain>;
 def OpPolyCosetInterpolate : ZKC_Operation<"poly.coset_interpolate", [OpPolyCosetInterpolateF],
@@ -25,8 +21,6 @@ def OpPolyCosetInterpolate : ZKC_Operation<"poly.coset_interpolate", [OpPolyCose
   int ordinal = 38;
   let facets = [ZKC_Coset<1, 0, 1, -1, 0>];
 }
-def ExportPolyCosetInterpolate : ZKC_OperationExport<"zkc::poly", "coset_interpolate",
-    OpPolyCosetInterpolate, ["vector", "field"]>;
 
 def OpPolyDomainPointF : ZKC_Root<"F", FieldDomain>;
 def OpPolyDomainPoint : ZKC_Operation<"poly.domain_point", [OpPolyDomainPointF],
@@ -35,8 +29,6 @@ def OpPolyDomainPoint : ZKC_Operation<"poly.domain_point", [OpPolyDomainPointF],
   int ordinal = 39;
   let facets = [ZKC_Coset<0, 1, 0, -1, 0>];
 }
-def ExportPolyDomainPoint : ZKC_OperationExport<"zkc::poly", "domain_point",
-    OpPolyDomainPoint, ["field", "index1", "index2"]>;
 
 def OpPolyDomainRootF : ZKC_Root<"F", FieldDomain>;
 def OpPolyDomainRoot : ZKC_Operation<"poly.domain_root", [OpPolyDomainRootF],
@@ -44,8 +36,6 @@ def OpPolyDomainRoot : ZKC_Operation<"poly.domain_root", [OpPolyDomainRootF],
     [ZKC_Apply<TypeField, [OpPolyDomainRootF]>], [ZKC_Holds<CapabilityTwoAdicField, [OpPolyDomainRootF]>]> {
   int ordinal = 40;
 }
-def ExportPolyDomainRoot : ZKC_OperationExport<"zkc::poly", "domain_root",
-    OpPolyDomainRoot, ["index"]>;
 
 def OpPolyDomainPointsF : ZKC_Root<"F", FieldDomain>;
 def OpPolyDomainPoints : ZKC_Operation<"poly.domain_points", [OpPolyDomainPointsF],
@@ -54,8 +44,6 @@ def OpPolyDomainPoints : ZKC_Operation<"poly.domain_points", [OpPolyDomainPoints
   int ordinal = 41;
   let facets = [ZKC_Coset<0, 1, 0, 0, 0>];
 }
-def ExportPolyDomainPoints : ZKC_OperationExport<"zkc::poly", "domain_points",
-    OpPolyDomainPoints, ["field", "index"]>;
 
 def OpPolyEvenOddFoldF : ZKC_Root<"F", FieldDomain>;
 def OpPolyEvenOddFold : ZKC_Operation<"poly.even_odd_fold", [OpPolyEvenOddFoldF],
@@ -64,8 +52,6 @@ def OpPolyEvenOddFold : ZKC_Operation<"poly.even_odd_fold", [OpPolyEvenOddFoldF]
   int ordinal = 42;
   let facets = [ZKC_Coset<1, 0, 1, 0, 1>];
 }
-def ExportPolyEvenOddFold : ZKC_OperationExport<"zkc::poly", "even_odd_fold",
-    OpPolyEvenOddFold, ["vector", "field1", "field2"]>;
 
 def OpPolyDivideOpeningF : ZKC_Root<"F", FieldDomain>;
 def OpPolyDivideOpening : ZKC_Operation<"poly.divide_opening", [OpPolyDivideOpeningF],
@@ -73,8 +59,6 @@ def OpPolyDivideOpening : ZKC_Operation<"poly.divide_opening", [OpPolyDivideOpen
     [ZKC_Apply<TypePolynomial, [OpPolyDivideOpeningF]>], [ZKC_Holds<CapabilityCommRing, [OpPolyDivideOpeningF]>]> {
   int ordinal = 43;
 }
-def ExportPolyDivideOpening : ZKC_OperationExport<"zkc::poly", "divide_opening",
-    OpPolyDivideOpening, ["polynomial", "field1", "field2"]>;
 
 def OpPolyOpeningQuotientF : ZKC_Root<"F", FieldDomain>;
 def OpPolyOpeningQuotient : ZKC_Operation<"poly.opening_quotient", [OpPolyOpeningQuotientF],
@@ -83,8 +67,6 @@ def OpPolyOpeningQuotient : ZKC_Operation<"poly.opening_quotient", [OpPolyOpenin
   int ordinal = 44;
   let facets = [ZKC_Coset<1, 0, 1, 0, 0>];
 }
-def ExportPolyOpeningQuotient : ZKC_OperationExport<"zkc::poly", "opening_quotient",
-    OpPolyOpeningQuotient, ["vector", "field1", "field2", "field3"]>;
 
 def OpPolyEqualityWeightsF : ZKC_Root<"F", FieldDomain>;
 def OpPolyEqualityWeights : ZKC_Operation<"poly.equality_weights", [OpPolyEqualityWeightsF],
@@ -92,8 +74,6 @@ def OpPolyEqualityWeights : ZKC_Operation<"poly.equality_weights", [OpPolyEquali
     [ZKC_Apply<TypeVector, [OpPolyEqualityWeightsF]>], [ZKC_Holds<CapabilityCommRing, [OpPolyEqualityWeightsF]>]> {
   int ordinal = 77;
 }
-def ExportPolyEqualityWeights : ZKC_OperationExport<"zkc::poly", "equality_weights",
-    OpPolyEqualityWeights, ["point"]>;
 
 def OpPolyFromCoefficientsF : ZKC_Root<"F", FieldDomain>;
 def OpPolyFromCoefficients : ZKC_Operation<"poly.from_coefficients", [OpPolyFromCoefficientsF],
@@ -101,8 +81,6 @@ def OpPolyFromCoefficients : ZKC_Operation<"poly.from_coefficients", [OpPolyFrom
     [ZKC_Apply<TypePolynomial, [OpPolyFromCoefficientsF]>], [ZKC_Holds<CapabilityCommRing, [OpPolyFromCoefficientsF]>]> {
   int ordinal = 78;
 }
-def ExportPolyFromCoefficients : ZKC_OperationExport<"zkc::poly", "from_coefficients",
-    OpPolyFromCoefficients, ["vector"]>;
 
 def OpPolyCoefficientsF : ZKC_Root<"F", FieldDomain>;
 def OpPolyCoefficients : ZKC_Operation<"poly.coefficients", [OpPolyCoefficientsF],
@@ -110,8 +88,6 @@ def OpPolyCoefficients : ZKC_Operation<"poly.coefficients", [OpPolyCoefficientsF
     [ZKC_Apply<TypeVector, [OpPolyCoefficientsF]>], [ZKC_Holds<CapabilityCommRing, [OpPolyCoefficientsF]>]> {
   int ordinal = 79;
 }
-def ExportPolyCoefficients : ZKC_OperationExport<"zkc::poly", "coefficients",
-    OpPolyCoefficients, ["polynomial"]>;
 
 def OpPolyDegreeCheckF : ZKC_Root<"F", FieldDomain>;
 def OpPolyDegreeCheck : ZKC_Operation<"poly.degree_check", [OpPolyDegreeCheckF],
@@ -120,8 +96,6 @@ def OpPolyDegreeCheck : ZKC_Operation<"poly.degree_check", [OpPolyDegreeCheckF],
   int ordinal = 80;
   let parameters = ExtentParameter;
 }
-def ExportPolyDegreeCheck : ZKC_OperationExport<"zkc::poly", "degree_check",
-    OpPolyDegreeCheck, ["polynomial"]>;
 
 def OpPolyUnivariateEvaluateF : ZKC_Root<"F", FieldDomain>;
 def OpPolyUnivariateEvaluate : ZKC_Operation<"poly.univariate_evaluate", [OpPolyUnivariateEvaluateF],
@@ -129,8 +103,6 @@ def OpPolyUnivariateEvaluate : ZKC_Operation<"poly.univariate_evaluate", [OpPoly
     [ZKC_Apply<TypeField, [OpPolyUnivariateEvaluateF]>], [ZKC_Holds<CapabilityCommRing, [OpPolyUnivariateEvaluateF]>]> {
   int ordinal = 81;
 }
-def ExportPolyUnivariateEvaluate : ZKC_OperationExport<"zkc::poly", "evaluate",
-    OpPolyUnivariateEvaluate, ["polynomial", "point"]>;
 
 def OpPolyUnivariateBoundaryF : ZKC_Root<"F", FieldDomain>;
 def OpPolyUnivariateBoundary : ZKC_Operation<"poly.univariate_boundary", [OpPolyUnivariateBoundaryF],
@@ -138,8 +110,6 @@ def OpPolyUnivariateBoundary : ZKC_Operation<"poly.univariate_boundary", [OpPoly
     [ZKC_Apply<TypeField, [OpPolyUnivariateBoundaryF]>], [ZKC_Holds<CapabilityCommRing, [OpPolyUnivariateBoundaryF]>]> {
   int ordinal = 82;
 }
-def ExportPolyUnivariateBoundary : ZKC_OperationExport<"zkc::poly", "univariate_boundary",
-    OpPolyUnivariateBoundary, ["polynomial"]>;
 
 def OpPolyProductSumF : ZKC_Root<"F", FieldDomain>;
 def OpPolyProductSum : ZKC_Operation<"poly.product_sum", [OpPolyProductSumF],
@@ -147,8 +117,6 @@ def OpPolyProductSum : ZKC_Operation<"poly.product_sum", [OpPolyProductSumF],
     [ZKC_Apply<TypeField, [OpPolyProductSumF]>], [ZKC_Holds<CapabilityCommRing, [OpPolyProductSumF]>]> {
   int ordinal = 101;
 }
-def ExportPolyProductSum : ZKC_OperationExport<"zkc::poly", "product_sum",
-    OpPolyProductSum, ["table0", "table1"]>;
 
 def OpPolyProductRoundF : ZKC_Root<"F", FieldDomain>;
 def OpPolyProductRound : ZKC_Operation<"poly.product_round", [OpPolyProductRoundF],
@@ -156,8 +124,6 @@ def OpPolyProductRound : ZKC_Operation<"poly.product_round", [OpPolyProductRound
     [ZKC_Apply<TypeRound, [OpPolyProductRoundF]>], [ZKC_Holds<CapabilityCommRing, [OpPolyProductRoundF]>]> {
   int ordinal = 102;
 }
-def ExportPolyProductRound : ZKC_OperationExport<"zkc::poly", "product_round",
-    OpPolyProductRound, ["table0", "table1"]>;
 
 def OpPolyBoundaryF : ZKC_Root<"F", FieldDomain>;
 def OpPolyBoundary : ZKC_Operation<"poly.boundary", [OpPolyBoundaryF],
@@ -166,8 +132,6 @@ def OpPolyBoundary : ZKC_Operation<"poly.boundary", [OpPolyBoundaryF],
   int ordinal = 103;
   let facets = [PublicReplay];
 }
-def ExportPolyBoundary : ZKC_OperationExport<"zkc::poly", "boundary",
-    OpPolyBoundary, ["round"]>;
 
 def OpPolyRoundEvaluateF : ZKC_Root<"F", FieldDomain>;
 def OpPolyRoundEvaluate : ZKC_Operation<"poly.round_evaluate", [OpPolyRoundEvaluateF],
@@ -176,8 +140,6 @@ def OpPolyRoundEvaluate : ZKC_Operation<"poly.round_evaluate", [OpPolyRoundEvalu
   int ordinal = 104;
   let facets = [PublicReplay];
 }
-def ExportPolyRoundEvaluate : ZKC_OperationExport<"zkc::poly", "round_evaluate",
-    OpPolyRoundEvaluate, ["round", "field"]>;
 
 def OpPolyFoldF : ZKC_Root<"F", FieldDomain>;
 def OpPolyFold : ZKC_Operation<"poly.fold", [OpPolyFoldF],
@@ -185,8 +147,6 @@ def OpPolyFold : ZKC_Operation<"poly.fold", [OpPolyFoldF],
     [ZKC_Apply<TypeTable, [OpPolyFoldF]>], [ZKC_Holds<CapabilityCommRing, [OpPolyFoldF]>]> {
   int ordinal = 105;
 }
-def ExportPolyFold : ZKC_OperationExport<"zkc::poly", "fold",
-    OpPolyFold, ["table", "field"]>;
 
 def OpPolyEvaluateF : ZKC_Root<"F", FieldDomain>;
 def OpPolyEvaluate : ZKC_Operation<"poly.evaluate", [OpPolyEvaluateF],
@@ -194,8 +154,6 @@ def OpPolyEvaluate : ZKC_Operation<"poly.evaluate", [OpPolyEvaluateF],
     [ZKC_Apply<TypeField, [OpPolyEvaluateF]>], [ZKC_Holds<CapabilityCommRing, [OpPolyEvaluateF]>]> {
   int ordinal = 106;
 }
-def ExportPolyEvaluate : ZKC_OperationExport<"zkc::poly", "evaluate_multilinear",
-    OpPolyEvaluate, ["table", "point"]>;
 
 def OpPolyEmptyPointF : ZKC_Root<"F", FieldDomain>;
 def OpPolyEmptyPoint : ZKC_Operation<"poly.empty_point", [OpPolyEmptyPointF],
@@ -204,8 +162,6 @@ def OpPolyEmptyPoint : ZKC_Operation<"poly.empty_point", [OpPolyEmptyPointF],
   int ordinal = 107;
   let facets = [PublicReplay];
 }
-def ExportPolyEmptyPoint : ZKC_OperationExport<"zkc::poly", "empty_point",
-    OpPolyEmptyPoint, []>;
 
 def OpPolyAppendPointF : ZKC_Root<"F", FieldDomain>;
 def OpPolyAppendPoint : ZKC_Operation<"poly.append_point", [OpPolyAppendPointF],
@@ -214,13 +170,9 @@ def OpPolyAppendPoint : ZKC_Operation<"poly.append_point", [OpPolyAppendPointF],
   int ordinal = 108;
   let facets = [PublicReplay];
 }
-def ExportPolyAppendPoint : ZKC_OperationExport<"zkc::poly", "append_point",
-    OpPolyAppendPoint, ["point", "field"]>;
 
 // Current ordered arity of a dynamically shaped multilinear table.
 def OpPolyTableArityF : ZKC_Root<"F", FieldDomain>;
 def OpPolyTableArity : ZKC_Operation<"poly.table_arity", [OpPolyTableArityF],
     [ZKC_Apply<TypeTable, [OpPolyTableArityF]>], [ZKC_Apply<TypeIndex, []>],
     [ZKC_Holds<CapabilityCommRing, [OpPolyTableArityF]>]>;
-def ExportPolyTableArity : ZKC_OperationExport<"zkc::poly", "table_arity",
-    OpPolyTableArity, ["table"]>;

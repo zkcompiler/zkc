@@ -6,8 +6,6 @@ def OpCurveNeg : ZKC_Operation<"curve.neg", [OpCurveNegG, OpCurveNegScalar],
     [ZKC_Apply<TypeGroup, [OpCurveNegG]>], [ZKC_Holds<CapabilityScalarAction, [OpCurveNegG]>]> {
   int ordinal = 84;
 }
-def ExportCurveNeg : ZKC_OperationExport<"zkc::curve", "neg",
-    OpCurveNeg, ["group"]>;
 
 def OpCurveNonidentityG : ZKC_Root<"G", GroupDomain>;
 def OpCurveNonidentityScalar : ZKC_Project<OpCurveNonidentityG, GroupScalar>;
@@ -16,8 +14,6 @@ def OpCurveNonidentity : ZKC_Operation<"curve.nonidentity", [OpCurveNonidentityG
     [ZKC_Apply<TypeBool, []>], [ZKC_Holds<CapabilityScalarAction, [OpCurveNonidentityG]>]> {
   int ordinal = 85;
 }
-def ExportCurveNonidentity : ZKC_OperationExport<"zkc::curve", "nonidentity",
-    OpCurveNonidentity, ["group"]>;
 
 def OpCurveMsmG : ZKC_Root<"G", GroupDomain>;
 def OpCurveMsmScalar : ZKC_Project<OpCurveMsmG, GroupScalar>;
@@ -27,8 +23,6 @@ def OpCurveMsm : ZKC_Operation<"curve.msm", [OpCurveMsmG, OpCurveMsmScalar],
   int ordinal = 86;
   let facets = [ZKC_Contraction<0, 1>];
 }
-def ExportCurveMsm : ZKC_OperationExport<"zkc::curve", "msm",
-    OpCurveMsm, ["vector", "groups"]>;
 
 def OpCurveScaleEachG : ZKC_Root<"G", GroupDomain>;
 def OpCurveScaleEachScalar : ZKC_Project<OpCurveScaleEachG, GroupScalar>;
@@ -38,8 +32,6 @@ def OpCurveScaleEach : ZKC_Operation<"curve.scale_each", [OpCurveScaleEachG, OpC
   int ordinal = 87;
   let facets = [ZKC_Diagonal<0, 1, 0>];
 }
-def ExportCurveScaleEach : ZKC_OperationExport<"zkc::curve", "scale_each",
-    OpCurveScaleEach, ["vector", "groups"]>;
 
 def OpCurveVectorAddG : ZKC_Root<"G", GroupDomain>;
 def OpCurveVectorAddScalar : ZKC_Project<OpCurveVectorAddG, GroupScalar>;
@@ -48,8 +40,6 @@ def OpCurveVectorAdd : ZKC_Operation<"curve.vector_add", [OpCurveVectorAddG, OpC
     [ZKC_Apply<TypeGroups, [OpCurveVectorAddG]>], [ZKC_Holds<CapabilityScalarAction, [OpCurveVectorAddG]>]> {
   int ordinal = 88;
 }
-def ExportCurveVectorAdd : ZKC_OperationExport<"zkc::curve", "vector_add",
-    OpCurveVectorAdd, ["groups0", "groups1"]>;
 
 def OpCurveVectorScaleG : ZKC_Root<"G", GroupDomain>;
 def OpCurveVectorScaleScalar : ZKC_Project<OpCurveVectorScaleG, GroupScalar>;
@@ -58,8 +48,6 @@ def OpCurveVectorScale : ZKC_Operation<"curve.vector_scale", [OpCurveVectorScale
     [ZKC_Apply<TypeGroups, [OpCurveVectorScaleG]>], [ZKC_Holds<CapabilityScalarAction, [OpCurveVectorScaleG]>]> {
   int ordinal = 89;
 }
-def ExportCurveVectorScale : ZKC_OperationExport<"zkc::curve", "vector_scale",
-    OpCurveVectorScale, ["groups", "field"]>;
 
 def OpCurveSplitG : ZKC_Root<"G", GroupDomain>;
 def OpCurveSplitScalar : ZKC_Project<OpCurveSplitG, GroupScalar>;
@@ -68,8 +56,6 @@ def OpCurveSplit : ZKC_Operation<"curve.split", [OpCurveSplitG, OpCurveSplitScal
     [ZKC_Apply<TypeGroups, [OpCurveSplitG]>, ZKC_Apply<TypeGroups, [OpCurveSplitG]>], [ZKC_Holds<CapabilityScalarAction, [OpCurveSplitG]>]> {
   int ordinal = 90;
 }
-def ExportCurveSplit : ZKC_OperationExport<"zkc::curve", "split",
-    OpCurveSplit, ["groups"]>;
 
 def OpCurveConcatG : ZKC_Root<"G", GroupDomain>;
 def OpCurveConcatScalar : ZKC_Project<OpCurveConcatG, GroupScalar>;
@@ -78,8 +64,6 @@ def OpCurveConcat : ZKC_Operation<"curve.concat", [OpCurveConcatG, OpCurveConcat
     [ZKC_Apply<TypeGroups, [OpCurveConcatG]>], [ZKC_Holds<CapabilityScalarAction, [OpCurveConcatG]>]> {
   int ordinal = 91;
 }
-def ExportCurveConcat : ZKC_OperationExport<"zkc::curve", "concat",
-    OpCurveConcat, ["groups0", "groups1"]>;
 
 def OpPairingCheckF : ZKC_Root<"F", FieldDomain>;
 def OpPairingCheckPairingG1 : ZKC_Project<OpPairingCheckF, FieldPairingG1>;
@@ -89,8 +73,6 @@ def OpPairingCheck : ZKC_Operation<"pairing.check", [OpPairingCheckF, OpPairingC
     [ZKC_Apply<TypeBool, []>], [ZKC_Holds<CapabilityPairingField, [OpPairingCheckF]>]> {
   int ordinal = 92;
 }
-def ExportPairingCheck : ZKC_OperationExport<"zkc::curve", "pairing_check",
-    OpPairingCheck, ["groups0", "groups1"]>;
 
 def OpCurveGeneratorG : ZKC_Root<"G", GroupDomain>;
 def OpCurveGeneratorScalar : ZKC_Project<OpCurveGeneratorG, GroupScalar>;
@@ -100,8 +82,6 @@ def OpCurveGenerator : ZKC_Operation<"curve.generator", [OpCurveGeneratorG, OpCu
   int ordinal = 127;
   let facets = [PublicReplay];
 }
-def ExportCurveGenerator : ZKC_OperationExport<"zkc::curve", "generator",
-    OpCurveGenerator, []>;
 
 def OpCurveIdentityG : ZKC_Root<"G", GroupDomain>;
 def OpCurveIdentityScalar : ZKC_Project<OpCurveIdentityG, GroupScalar>;
@@ -111,8 +91,6 @@ def OpCurveIdentity : ZKC_Operation<"curve.identity", [OpCurveIdentityG, OpCurve
   int ordinal = 161;
   let facets = [PublicReplay];
 }
-def ExportCurveIdentity : ZKC_OperationExport<"zkc::curve", "identity",
-    OpCurveIdentity, []>;
 
 def OpCurveAddG : ZKC_Root<"G", GroupDomain>;
 def OpCurveAddScalar : ZKC_Project<OpCurveAddG, GroupScalar>;
@@ -122,8 +100,6 @@ def OpCurveAdd : ZKC_Operation<"curve.add", [OpCurveAddG, OpCurveAddScalar],
   int ordinal = 128;
   let facets = [ZKC_Mathematical<MathGroupAdd>, PublicReplay];
 }
-def ExportCurveAdd : ZKC_OperationExport<"zkc::curve", "add",
-    OpCurveAdd, ["group0", "group1"]>;
 
 def OpCurveScaleG : ZKC_Root<"G", GroupDomain>;
 def OpCurveScaleScalar : ZKC_Project<OpCurveScaleG, GroupScalar>;
@@ -133,8 +109,6 @@ def OpCurveScale : ZKC_Operation<"curve.scale", [OpCurveScaleG, OpCurveScaleScal
   int ordinal = 129;
   let facets = [ZKC_Mathematical<MathGroupScale>, PublicReplay];
 }
-def ExportCurveScale : ZKC_OperationExport<"zkc::curve", "scale",
-    OpCurveScale, ["group", "field"]>;
 
 def OpCurveEqualG : ZKC_Root<"G", GroupDomain>;
 def OpCurveEqualScalar : ZKC_Project<OpCurveEqualG, GroupScalar>;
@@ -144,8 +118,6 @@ def OpCurveEqual : ZKC_Operation<"curve.equal", [OpCurveEqualG, OpCurveEqualScal
   int ordinal = 130;
   let facets = [PublicReplay];
 }
-def ExportCurveEqual : ZKC_OperationExport<"zkc::curve", "equal",
-    OpCurveEqual, ["group0", "group1"]>;
 
 def OpCurveEmptyG : ZKC_Root<"G", GroupDomain>;
 def OpCurveEmptyScalar : ZKC_Project<OpCurveEmptyG, GroupScalar>;
@@ -155,8 +127,6 @@ def OpCurveEmpty : ZKC_Operation<"curve.empty", [OpCurveEmptyG, OpCurveEmptyScal
   int ordinal = 131;
   let facets = [PublicReplay];
 }
-def ExportCurveEmpty : ZKC_OperationExport<"zkc::curve", "empty",
-    OpCurveEmpty, []>;
 
 def OpCurveAppendG : ZKC_Root<"G", GroupDomain>;
 def OpCurveAppendScalar : ZKC_Project<OpCurveAppendG, GroupScalar>;
@@ -166,8 +136,6 @@ def OpCurveAppend : ZKC_Operation<"curve.append", [OpCurveAppendG, OpCurveAppend
   int ordinal = 132;
   let facets = [PublicReplay];
 }
-def ExportCurveAppend : ZKC_OperationExport<"zkc::curve", "append",
-    OpCurveAppend, ["groups", "group"]>;
 
 def OpCurveAtG : ZKC_Root<"G", GroupDomain>;
 def OpCurveAtScalar : ZKC_Project<OpCurveAtG, GroupScalar>;
@@ -178,8 +146,6 @@ def OpCurveAt : ZKC_Operation<"curve.at", [OpCurveAtG, OpCurveAtScalar],
   let parameters = ExtentParameter;
   let facets = [PublicReplay];
 }
-def ExportCurveAt : ZKC_OperationExport<"zkc::curve", "at",
-    OpCurveAt, ["groups"]>;
 
 def OpCurveGetG : ZKC_Root<"G", GroupDomain>;
 def OpCurveGetScalar : ZKC_Project<OpCurveGetG, GroupScalar>;
@@ -189,8 +155,6 @@ def OpCurveGet : ZKC_Operation<"curve.get", [OpCurveGetG, OpCurveGetScalar],
   int ordinal = 134;
   let facets = [PublicReplay];
 }
-def ExportCurveGet : ZKC_OperationExport<"zkc::curve", "get",
-    OpCurveGet, ["groups", "index"]>;
 
 def OpCurveLengthG : ZKC_Root<"G", GroupDomain>;
 def OpCurveLengthScalar : ZKC_Project<OpCurveLengthG, GroupScalar>;
@@ -200,8 +164,6 @@ def OpCurveLength : ZKC_Operation<"curve.length", [OpCurveLengthG, OpCurveLength
   int ordinal = 135;
   let facets = [PublicReplay];
 }
-def ExportCurveLength : ZKC_OperationExport<"zkc::curve", "length",
-    OpCurveLength, ["groups"]>;
 
 def OpCurveCommitG : ZKC_Root<"G", GroupDomain>;
 def OpCurveCommitScalar : ZKC_Project<OpCurveCommitG, GroupScalar>;
@@ -210,8 +172,6 @@ def OpCurveCommit : ZKC_Operation<"curve.commit", [OpCurveCommitG, OpCurveCommit
     [ZKC_Apply<TypeGroups, [OpCurveCommitG]>, ZKC_Apply<TypeNonce, [OpCurveCommitScalar]>], [ZKC_Holds<CapabilityScalarAction, [OpCurveCommitG]>]> {
   int ordinal = 136;
 }
-def ExportCurveCommit : ZKC_OperationExport<"zkc::curve", "commit",
-    OpCurveCommit, ["groups", "nonce"]>;
 
 def OpCurveResponseF : ZKC_Root<"F", FieldDomain>;
 def OpCurveResponse : ZKC_Operation<"curve.response", [OpCurveResponseF],
@@ -219,9 +179,6 @@ def OpCurveResponse : ZKC_Operation<"curve.response", [OpCurveResponseF],
     [ZKC_Apply<TypeField, [OpCurveResponseF]>], [ZKC_Holds<CapabilityField, [OpCurveResponseF]>]> {
   int ordinal = 137;
 }
-def ExportCurveResponse : ZKC_OperationExport<"zkc::curve", "response",
-    OpCurveResponse, ["field0", "field1", "nonce"]>;
-
 
 // A reusable pairing result is a prime-order target group element, not a
 // Miller-loop accumulator or an arbitrary extension-field element.
@@ -238,5 +195,3 @@ def OpPairingApply : ZKC_Operation<"pairing.apply",
   int ordinal = 158;
   let facets = [PublicReplay];
 }
-def ExportPairingApply : ZKC_OperationExport<"zkc::curve", "pairing",
-    OpPairingApply, ["g1", "g2"]>;

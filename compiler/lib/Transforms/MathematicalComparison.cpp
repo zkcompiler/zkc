@@ -493,7 +493,14 @@ struct Index {
   }
 };
 struct Meaning {
-  enum Kind { Unknown, Scalar, Lane, Container, Position } kind = Unknown;
+  enum Kind {
+    Unknown,
+    Scalar,
+    Lane,
+    Container,
+    Position,
+    Array
+  } kind = Unknown;
   Term term = invalidTerm;
   Value container = {};
   Index index = {};
@@ -516,6 +523,7 @@ class Comparison {
   llvm::DenseSet<Operation *> usedBindings;
   llvm::DenseMap<Value, unsigned> identities;
   SmallVector<Dimension> dimensions;
+  SmallVector<SmallVector<Meaning>> arrays;
   std::set<std::tuple<unsigned, unsigned, unsigned>> selectedBounds;
   llvm::DenseMap<Value, Meaning> candidate;
   Value rows;
@@ -660,6 +668,29 @@ class Comparison {
         for (auto [value, meaning] : zip(op.getResults(), *returned))
           values[value] = meaning;
         continue;
+      } else if (auto pack = dyn_cast<algebra::ArrayFromElementsOp>(op)) {
+        if (!op.getAttrs().empty() || arrays.size() >= invalidTerm ||
+            !terms.charge(pack.getNumOperands() + 1))
+          return {};
+        SmallVector<Meaning> elements;
+        for (Value operand : pack.getElements()) {
+          auto element = values.lookup(operand);
+          if (element.kind != Meaning::Scalar && element.kind != Meaning::Lane)
+            return {};
+          elements.push_back(element);
+        }
+        // Array identities are local to this reader. They retain every ordered
+        // element meaning across calls; equal types or sizes never substitute
+        // elements. This reader does not invoke the producer's MLIR fold.
+        arrays.push_back(std::move(elements));
+        result = {Meaning::Array, static_cast<Term>(arrays.size() - 1)};
+      } else if (auto projection = dyn_cast<algebra::ArrayAtOp>(op)) {
+        auto array = values.lookup(projection.getArray());
+        auto index = projection.getIndexAttr().getInt();
+        if (array.kind != Meaning::Array || index < 0 ||
+            uint64_t(index) >= arrays[array.term].size())
+          return {};
+        result = arrays[array.term][index];
       } else {
         if (op.getNumResults() != 1)
           return {};

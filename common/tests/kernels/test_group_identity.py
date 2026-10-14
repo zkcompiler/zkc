@@ -41,10 +41,47 @@ def test_group_identity(toolchain, journal, directory, group, flags):
     protocol Run roles(P)()->(ok:bool@P){{let ok @P=check();return(ok=ok);}}
     run Demo=Run;
     '''
-    library = f'--module=zkc::curve={ROOT / "libraries/zkc/curve.zkc"}'
-    entry = Entry(toolchain, journal, directory, source, (*flags, library))
+    libraries = [f'--module=zkc::{path.stem}={path}'
+                 for path in (ROOT / "libraries/zkc").glob("*.zkc")]
+    entry = Entry(toolchain, journal, directory, source, (*flags, *libraries))
     package = json.loads(entry.package.read_text())
     assert 'algebra.group_identity' in package['original']
     assert 'curve.identity' in package['artifact']
     result = entry.run('identity', {})
     assert result['ok'] is True, result
+
+
+@pytest.mark.parametrize('group', ['ristretto255.group', 'bn254.g1', 'bls12-381.g1'])
+@pytest.mark.parametrize('flags', [(), ('--no-simplify', '--release-storage')])
+def test_curve_bulk_api(toolchain, journal, directory, group, flags):
+    source = f'''module sample;
+    use zkc::curve as curve;
+    use zkc::vector as vec;
+    use zkc::scalar as scalar;
+    domain G=group("{group}");
+    fn check(malformed:bool)->bool{{
+      let g=curve::generator<G>();
+      let points=curve::append(curve::append(curve::empty<G>(),g),g*2);
+      let scalars=vec::append(vec::append(vec::empty<G::Scalar>(),3),5);
+      let chosen=if malformed {{vec::empty<G::Scalar>()}} else {{scalars}};
+      let result=curve::msm(chosen,points);
+      require result==g*13;
+      let scaled=curve::scale_each(scalars,points);
+      require curve::get(scaled,0)==g*3;
+      require curve::get(scaled,1)==g*10;
+      let combined=points + scaled * 2;
+      require curve::get(combined,0)==g*7;
+      require curve::get(combined,1)==g*22;
+      let halves=curve::split(combined);
+      require curve::length(curve::concat(halves.0,halves.1))==2;
+      require scalar::from_index<G::Scalar>(17)==17;
+      return true;
+    }}
+    protocol Run roles(P)(malformed:bool@P)->(ok:bool@P){{return check(malformed);}}
+    run Demo=Run;
+    '''
+    libraries = [f'--module=zkc::{path.stem}={path}'
+                 for path in (ROOT / 'libraries/zkc').glob('*.zkc')]
+    entry = Entry(toolchain, journal, directory, source, (*flags, *libraries))
+    assert entry.run('bulk', {'malformed': False})['ok'] is True
+    entry.run('mismatched-lengths', {'malformed': True}, refuses=True)

@@ -14,7 +14,9 @@ zkc verify
 
 The single proof Entry uses the supplied public inputs. `Interactive` runs the
 complete protocol; `Reduction` exposes one reduction's role-local result for
-inspection. Select the desired run Entry explicitly when preparing inputs with
+inspection. Its `variables` input describes the original table; `rounds` can
+select a shorter prefix. Library callers retain the checked residual view for
+further reductions; this inspection Entry exports its raw values. Select the desired run Entry explicitly when preparing inputs with
 `zkc prepare` or invoking `zkc run`.
 
 A reduction returns an obligation, not acceptance. `check` folds the verifier's

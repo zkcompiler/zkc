@@ -255,7 +255,7 @@ bool checkNotationOccurrence(Semantics &types, const Expression &expr,
                             expr.filteredReduction);
 }
 
-std::optional<std::vector<OperatorBinding>>
+std::optional<ArrayRef<OperatorBinding>>
 Checker::operatorWitnessFamily(const Declaration &decl,
                                const SyntaxDeclaration &source,
                                uint32_t expression) {
@@ -273,6 +273,8 @@ Checker::operatorWitnessFamily(const Declaration &decl,
   if (!checkNotationOccurrence(types, expr, *environment))
     return {};
   const auto descriptorKey = expr.notation->key();
+  if (!types.charge(descriptorKey.size() + 1, expr.span))
+    return {};
   // Reconstruct the family from the checked lexical environment, without
   // using operatorCandidates or any candidate list produced by inference.
   std::map<std::string, OperatorBinding> family;
@@ -297,9 +299,17 @@ Checker::operatorWitnessFamily(const Declaration &decl,
     family.try_emplace(std::move(key), binding);
     return true;
   };
+  auto retain = [&](OperatorFamilyKey key) -> ArrayRef<OperatorBinding> {
+    std::vector<OperatorBinding> result;
+    for (auto &[identity, binding] : family)
+      result.push_back(std::move(binding));
+    auto stored =
+        operatorWitnessFamilies.emplace(std::move(key), std::move(result));
+    return stored.first->second;
+  };
   auto scope = expr.scope;
   unsigned depth = 0;
-  while (scope && family.empty()) {
+  while (scope) {
     if (*scope >= source.bodies.size() ||
         ++depth > work.limits.expressionDepth) {
       types.fail("source.binding-witness", "invalid notation scope", expr.span);
@@ -308,23 +318,29 @@ Checker::operatorWitnessFamily(const Declaration &decl,
     const auto &region = source.bodies[*scope];
     if (!types.charge(region.resolvedOperators.size() + 1, expr.span))
       return {};
+    OperatorFamilyKey key{decl.id.index, scope, descriptorKey};
+    if (auto found = operatorWitnessFamilies.find(key);
+        found != operatorWitnessFamilies.end())
+      return ArrayRef<OperatorBinding>(found->second);
     for (const auto &binding : region.resolvedOperators)
       if (!include(binding))
         return {};
+    if (!family.empty())
+      return retain(std::move(key));
     scope = region.parent;
   }
-  if (family.empty()) {
-    if (!types.charge(visibleOperators[decl.module.index].size() + 1,
-                      expr.span))
+  // All declarations in one module share its immutable imported family.
+  // A lexical family above replaces that family for its descriptor.
+  OperatorFamilyKey key{decl.module.index, std::nullopt, descriptorKey};
+  if (auto found = operatorWitnessFamilies.find(key);
+      found != operatorWitnessFamilies.end())
+    return ArrayRef<OperatorBinding>(found->second);
+  if (!types.charge(visibleOperators[decl.module.index].size() + 1, expr.span))
+    return {};
+  for (auto site : visibleOperators[decl.module.index])
+    if (!include(moduleOperators.at(site)))
       return {};
-    for (auto site : visibleOperators[decl.module.index])
-      if (!include(moduleOperators.at(site)))
-        return {};
-  }
-  std::vector<OperatorBinding> result;
-  for (auto &[key, binding] : family)
-    result.push_back(std::move(binding));
-  return result;
+  return retain(std::move(key));
 }
 
 bool checkCallInputMapping(Semantics &types, ArrayRef<unsigned> mapping,

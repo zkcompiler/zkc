@@ -3,6 +3,7 @@
 #include "Internal.h"
 #include "Semantics.h"
 #include "UsagePlan.h"
+#include <tuple>
 namespace zkc::language::detail {
 struct BodyWitnesses {
   std::vector<std::shared_ptr<ScopedSource>> sources;
@@ -64,7 +65,7 @@ public:
                                                  bool filtered = false);
   std::optional<std::vector<OperatorBinding>>
   operatorCandidates(const Declaration &, const SyntaxDeclaration &, uint32_t);
-  std::optional<std::vector<OperatorBinding>>
+  std::optional<llvm::ArrayRef<OperatorBinding>>
   operatorWitnessFamily(const Declaration &, const SyntaxDeclaration &,
                         uint32_t);
   bool body(DeclarationId, unsigned);
@@ -121,6 +122,13 @@ private:
   using OperatorSite = std::pair<unsigned, unsigned>;
   std::vector<std::vector<OperatorSite>> visibleOperators, exportedOperators;
   std::map<OperatorSite, OperatorBinding> moduleOperators;
+  // Definition environments are fixed by resolveBindings before body checking.
+  // A scope key uses (declaration, body); a module key uses (module, null).
+  // Keep this cache separate from inference's candidate enumeration.
+  using OperatorFamilyKey =
+      std::tuple<unsigned, std::optional<uint32_t>, std::string>;
+  std::map<OperatorFamilyKey, std::vector<OperatorBinding>>
+      operatorWitnessFamilies;
   std::vector<unsigned> signatureState;
   std::set<const Declaration *> inferredContracts;
   unsigned signatureDepth = 0;

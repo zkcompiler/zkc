@@ -19,8 +19,9 @@ folds eliminate the most significant Boolean variable first. A four-row table
 The prover sends the exact coefficients of each round polynomial. The verifier
 uses the received vector and checks its length and its sum at zero and one.
 After the reduction, it folds its own public factor tables at the recorded
-point and evaluates the terminal expression. Too few rounds
-fail the terminal shape check; too many fail the next input-shape preflight.
+point and evaluates the terminal expression. The prover checks the table
+against the full round count before sending a message. The verifier independently
+checks its factor-table dimensions during terminal evaluation.
 The result is a public-table protocol with direct terminal evaluation, without
 a polynomial commitment or a claimed soundness/Fiat–Shamir theorem.
 

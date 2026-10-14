@@ -8,8 +8,6 @@ def OpPcsCommit : ZKC_Operation<"pcs.commit", [OpPcsCommitC, OpPcsCommitValueFie
     [ZKC_Apply<TypeCommitment, [OpPcsCommitC]>, ZKC_Apply<TypeOpeningState, [OpPcsCommitC]>], [ZKC_Holds<CapabilityMultilinearOpening, [OpPcsCommitC]>]> {
   int ordinal = 120;
 }
-def ExportPcsCommit : ZKC_OperationExport<"zkc::pcs", "commit",
-    OpPcsCommit, ["prover_key", "table"]>;
 
 def OpPcsOpenC : ZKC_Root<"C", CommitmentDomain>;
 def OpPcsOpenValueField : ZKC_Project<OpPcsOpenC, CommitmentValueField>;
@@ -20,8 +18,6 @@ def OpPcsOpen : ZKC_Operation<"pcs.open", [OpPcsOpenC, OpPcsOpenValueField, OpPc
     [ZKC_Apply<TypeField, [OpPcsOpenEvaluationField]>, ZKC_Apply<TypeProof, [OpPcsOpenC]>], [ZKC_Holds<CapabilityMultilinearOpening, [OpPcsOpenC]>]> {
   int ordinal = 121;
 }
-def ExportPcsOpen : ZKC_OperationExport<"zkc::pcs", "open",
-    OpPcsOpen, ["opening_state", "point"]>;
 
 def OpPcsCheckC : ZKC_Root<"C", CommitmentDomain>;
 def OpPcsCheckValueField : ZKC_Project<OpPcsCheckC, CommitmentValueField>;
@@ -32,8 +28,6 @@ def OpPcsCheck : ZKC_Operation<"pcs.check", [OpPcsCheckC, OpPcsCheckValueField, 
     [ZKC_Apply<TypeBool, []>], [ZKC_Holds<CapabilityMultilinearOpening, [OpPcsCheckC]>]> {
   int ordinal = 122;
 }
-def ExportPcsCheck : ZKC_OperationExport<"zkc::pcs", "check",
-    OpPcsCheck, ["verifier_key", "commitment", "point", "field", "proof"]>;
 
 def OpPcsEqualC : ZKC_Root<"C", CommitmentDomain>;
 def OpPcsEqualValueField : ZKC_Project<OpPcsEqualC, CommitmentValueField>;
@@ -45,5 +39,3 @@ def OpPcsEqual : ZKC_Operation<"pcs.equal", [OpPcsEqualC, OpPcsEqualValueField, 
   int ordinal = 126;
   let facets = [PublicReplay];
 }
-def ExportPcsEqual : ZKC_OperationExport<"zkc::pcs", "equal",
-    OpPcsEqual, ["commitment0", "commitment1"]>;

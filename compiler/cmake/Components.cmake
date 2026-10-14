@@ -109,6 +109,7 @@ add_zkc_component(Language
   lib/Language/FiniteDomains.cpp
   lib/Language/FiniteDefinitions.cpp
   lib/Language/FiniteContracts.cpp
+  lib/Language/HelperResults.cpp
   lib/Language/MathematicalFacts.cpp
   lib/Language/FiniteFormation.cpp
   lib/Language/DataRequirements.cpp
@@ -225,7 +226,6 @@ add_zkc_component(Translation
   lib/Translation/Language/Comparison.cpp
   lib/Translation/AIR.cpp
   lib/Translation/ProtocolExport.cpp
-  lib/Translation/CommonSource.cpp
   lib/Translation/ProgramVerification.cpp
   lib/Translation/R1CS.cpp
   lib/Translation/R1CSSumcheck.cpp
@@ -281,6 +281,7 @@ add_zkc_component(Compiler
   lib/Compiler/LanguageInterfaceComparison.cpp
   lib/Compiler/LanguageInspection.cpp
   lib/Compiler/Compilation.cpp
+  lib/Compiler/CommonSource.cpp
   lib/Compiler/ArtifactJson.cpp
   lib/Compiler/RunVerification.cpp
   lib/Compiler/Run.cpp

@@ -20,13 +20,7 @@ def OpFieldArrayAt : ZKC_Operation<"field_array.at", [ArrayField, ArrayLength],
     [ZKC_Holds<CapabilityField, [ArrayField]>]> {
   let parameters = NaturalParameter;
 }
-def ExportFieldArrayFromVector : ZKC_OperationExport<"zkc::algebra",
-    "field_array_from_vector", OpFieldArrayFromVector, ["vector"]>;
-def ExportFieldArrayAt : ZKC_OperationExport<"zkc::algebra",
-    "field_array_at", OpFieldArrayAt, ["array"]>;
 def OpFieldArrayGet : ZKC_Operation<"field_array.get", [ArrayField, ArrayLength],
     [ZKC_Apply<TypeFieldArray, [ArrayField, ArrayLength]>, ZKC_Apply<TypeIndex, []>],
     [ZKC_Apply<TypeField, [ArrayField]>],
     [ZKC_Holds<CapabilityField, [ArrayField]>]>;
-def ExportFieldArrayGet : ZKC_OperationExport<"zkc::algebra",
-    "field_array_get", OpFieldArrayGet, ["array", "index"]>;

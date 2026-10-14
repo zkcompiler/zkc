@@ -235,25 +235,15 @@ def Bad : ZKC_Operation<"bad.sample", [F], [ZKC_Apply<Element,[F]>], [ZKC_Apply<
   let facets = [ZKC_Sampling<Entropy,FieldSample>];
 }
 ]=] "facet port constructor mismatch")
-declaration_case(source-export-stage [=[
-def Hidden : ZKC_Operation<"hidden.draw", [], [], []> { let stage = Construction; }
-def Leak : ZKC_OperationExport<"zkc::random", "draw", Hidden, []>;
-]=] "source export requires a source operation")
 declaration_case(duplicate-export [=[
-def Duplicate : ZKC_OperationExport<"zkc::algebra", "mul", Multiply, ["x","y"]>;
+def Duplicate : ZKC_TypeExport<"zkc::algebra", "Element", Element>;
 ]=] "duplicate source export ownership")
 declaration_case(capability-type-export-collision [=[
 def Collision : ZKC_CapabilityExport<"zkc::algebra", "Element", Field>;
 ]=] "duplicate source export ownership")
-declaration_case(capability-operation-export-collision [=[
-def Collision : ZKC_CapabilityExport<"zkc::algebra", "mul", Field>;
-]=] "duplicate source export ownership")
 declaration_case(capability-export-collision [=[
 def First : ZKC_CapabilityExport<"zkc::algebra", "Field", Field>;
 def Collision : ZKC_CapabilityExport<"zkc::algebra", "Field", Ring>;
-]=] "duplicate source export ownership")
-declaration_case(type-operation-export-collision [=[
-def Collision : ZKC_OperationExport<"zkc::algebra", "Element", Multiply, ["left","right"]>;
 ]=] "duplicate source export ownership")
 # Qualified carrier paths distinguish these names. Neither a global name
 # restriction nor one export per constructor belongs in the generator.
@@ -267,15 +257,6 @@ declaration_case(capability-export-names-in-different-modules [=[
 def OtherElement : ZKC_CapabilityExport<"zkc::curve", "Element", Field>;
 def OtherMultiply : ZKC_CapabilityExport<"zkc::curve", "mul", Ring>;
 ]=] "")
-declaration_case(label-arity [=[
-def Bad : ZKC_OperationExport<"zkc::algebra", "bad", Multiply, ["x"]>;
-]=] "source export input label arity")
-declaration_case(label-duplicate [=[
-def Bad : ZKC_OperationExport<"zkc::algebra", "bad", Multiply, ["x","x"]>;
-]=] "invalid or duplicate input label")
-declaration_case(alias-labels [=[
-def Alias : ZKC_OperationExport<"zkc::algebra", "product", Multiply, ["x","y"]>;
-]=] "operation aliases must share input labels")
 declaration_case(family-case-duplicate [=[
 def Family : ZKC_TypeFamily<"family">;
 def A : ZKC_TypeFamilyCase<Family, Element, Element>;
@@ -305,7 +286,6 @@ def Case : ZKC_TypeFamilyCase<Family, Element, Element>;
 def Export : ZKC_TypeExport<"zkc::algebra", "Family", Family>;
 def Member : ZKC_AssociatedType<FDomain, "Element", Element>;
 def Capability : ZKC_CapabilityExport<"zkc::algebra", "Field", Field>;
-def Alias : ZKC_OperationExport<"zkc::algebra", "product", Multiply, ["left","right"]>;
 ]=] "")
 declaration_case(type-nat-generation [=[
 include "type_nat.td"

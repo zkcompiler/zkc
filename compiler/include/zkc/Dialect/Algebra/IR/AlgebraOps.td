@@ -235,6 +235,7 @@ def ArrayAtOp : Op<AlgebraDialect, "array_at",
   let arguments = (ins FieldArray:$array, I64Attr:$index);
   let results = (outs Field:$result);
   let hasVerifier = 1;
+  let hasFolder = 1;
 }
 def SubtractFieldOp : TotalMathOp<AlgebraDialect, "field_subtract", Field,
     Field, Field, [DeclareOpInterfaceMethods<MathematicalOpInterface>]>;

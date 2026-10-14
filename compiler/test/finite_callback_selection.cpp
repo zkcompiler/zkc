@@ -253,6 +253,38 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
+  cases.run("packed scalar projections select a checked dot", [&] {
+    std::string text(indexedSourceText);
+    auto product = text.find("   %p = algebra.field_multiply %x,%y");
+    text.insert(product, R"mlir(
+   %a = "algebra.array_from_elements"(%x,%y) : (!F,!F)->!algebra.field_array<"koala-bear",2>
+   %left = "algebra.array_at"(%a) {index=0:i64} : (!algebra.field_array<"koala-bear",2>)->!F
+   %right = "algebra.array_at"(%a) {index=1:i64} : (!algebra.field_array<"koala-bear",2>)->!F
+)mlir");
+    auto operands = text.find("algebra.field_multiply %x,%y");
+    text.replace(operands, StringRef("algebra.field_multiply %x,%y").size(),
+                 "algebra.field_multiply %left,%right");
+    auto source = parseSourceString<ModuleOp>(text, &context);
+    require(bool(source), "packed callback fixture refused");
+    auto step = SymbolTable(unit(*source)).lookup<func::FuncOp>("step");
+    auto premises = step->getAttrOfType<ArrayAttr>("data.preconditions");
+    SmallVector<Attribute> attributes(premises.begin(), premises.end());
+    attributes.push_back(data::EqualExtentAttr::get(&context, 2, 0, 3, 0));
+    step->setAttr("data.preconditions", ArrayAttr::get(&context, attributes));
+    require(succeeded(verify(*source)), "packed callback source refused");
+    RealizationWork work;
+    auto candidate = emit(*source, work);
+    require(
+        !hasLoop(selected(*candidate)) && compare(*source, *candidate),
+        "packed scalar projection did not select an independently checked dot");
+    auto update = SymbolTable(unit(*source)).lookup<func::FuncOp>("update");
+    auto projection = *update.front().getOps<algebra::ArrayAtOp>().begin();
+    projection.setIndexAttr(
+        IntegerAttr::get(IntegerType::get(&context, 64), 1));
+    require(succeeded(verify(*source)), "changed projection is malformed");
+    require(!compare(*source, *candidate),
+            "changed packed element escaped original-callback comparison");
+  });
   for (unsigned variant = 0; variant < 3; ++variant)
     cases.run("field reduction domain coverage " + llvm::Twine(variant), [&] {
       std::string text = R"mlir(
