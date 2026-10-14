@@ -15,7 +15,7 @@ public:
   virtual llvm::Expected<std::vector<std::string>>
   implementations(const protocol::BindingApplication &) const = 0;
   /// Optional contraction preferences, separate from ordinary default order.
-  /// The default derives the installed diagonal alternative; an override may
+  /// The default ranks installed alternatives by identity; an override may
   /// withhold or reorder candidates but cannot install an implementation.
   virtual std::vector<std::string>
   diagonalImplementations(const protocol::BindingApplication &) const;
@@ -25,6 +25,14 @@ public:
 };
 
 const CandidateCatalog &installedCandidates();
+
+/// Enumerate applicable diagonal implementations by identity, independent of
+/// registration order, within this build's installed domains and contracts.
+/// This supplies candidates, not installation authority; physical plan
+/// validation still resolves against the installed implementation catalog.
+std::vector<std::string>
+diagonalCandidates(const protocol::BindingApplication &,
+                   const protocol::ImplementationCatalog &);
 
 /// Admit the exact installed diagonal contract instance and all its ports,
 /// independently of candidate policy. A matching signature is insufficient.

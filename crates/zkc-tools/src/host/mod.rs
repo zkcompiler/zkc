@@ -8,6 +8,7 @@ pub(crate) mod publication;
 
 pub(crate) mod admission;
 pub(crate) mod capacity;
+pub(crate) mod data;
 pub(crate) mod inputs;
 pub(crate) mod json;
 pub(crate) mod material;

@@ -3,6 +3,7 @@
 #include "mlir/IR/Verifier.h"
 #include "support/MathematicalFixture.h"
 #include "support/NativeCases.h"
+#include "zkc/Contracts/Implementations.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
@@ -534,6 +535,63 @@ int main() {
                   std::vector<std::string>{std::string(backend) + "-diagonal/" +
                                            contract},
               "separate diagonal preference resolves through Contracts");
+    }
+  });
+  cases.run("multiple diagonal candidates have deterministic discovery", [&] {
+    auto a = *installedImplementations().find("vector.mul",
+                                              "arkworks-diagonal/vector.mul");
+    auto b = a;
+    a.identity = "test.a/0";
+    b.identity = "test.b/0";
+    for (bool reverse : {false, true}) {
+      auto catalog = take(ImplementationCatalog::create(
+          reverse ? std::vector<ImplementationDescriptor>{b, a}
+                  : std::vector<ImplementationDescriptor>{a, b},
+          {}));
+      require(
+          diagonalCandidates({"vector.mul", {"bls12-381.fr"}, ""}, catalog) ==
+              std::vector<std::string>{a.identity, b.identity},
+          "stable candidate identities");
+      require(
+          diagonalCandidates({"vector.mul", {"bn254.fr"}, ""}, catalog).empty(),
+          "discovery preserves exact domain applicability");
+    }
+    // Discovery in an independent catalog cannot install code into this build.
+    auto module = take(executableFixture(contractions(), context));
+    refuses(proposePhysical(*module, installedCandidates(),
+                            {{"map", a.identity}}, true),
+            "binding-implementation");
+  });
+  cases.run("nested block contractions are checked before publication", [&] {
+    for (bool group : {false, true}) {
+      auto source = contractions(group);
+      auto start = source.find("%mapped =");
+      auto end = source.find("local.return %b : !R", start);
+      auto body =
+          replaceText(source.substr(start, end - start), "%", "%inner_");
+      auto nested =
+          std::string(
+              R"(%yes = "local.bool_constant"() {value=true,site="yes"} : ()->i1
+%result = "local.if"(%yes,%w,%f,%v) ({^chosen(%inner_w:!V,%inner_f:!V,%inner_v:!A):
+)") + body +
+          R"("local.yield"(%inner_b) : (!R)->()
+}, {^unused(%unused_w:!V,%unused_f:!V,%unused_v:!A):
+"local.stop"() {site="unused",reason="abort"} : ()->()
+}) {site="branch"} : (i1,!V,!V,!A)->!R
+local.return %result : !R)";
+      source.replace(start,
+                     end + std::string("local.return %b : !R").size() - start,
+                     nested);
+      auto module = take(executableFixture(source, context));
+      auto plan =
+          take(proposePhysical(*module, installedCandidates(), {}, true));
+      require(plan.contractions.size() == 1, "nested opportunity is selected");
+      auto corrupted = plan;
+      corrupted.contractions.front().consumers.pop_back();
+      refusedMutation(*module, corrupted, "binding-contraction");
+      auto checked = take(validatePhysical(*module, plan));
+      accept(materializePhysical(*module, checked));
+      require(succeeded(verify(*module)), "nested plan materializes");
     }
   });
   cases.run(

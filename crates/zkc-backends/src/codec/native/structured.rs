@@ -102,6 +102,14 @@ pub(super) fn value_counts(value: &Value, policy: &Policy) -> Result<Counts> {
                 Value::Proof(p) => counts.add(0, p.metadata().arity())?,
                 _ => return Err(unsupported()),
             }
+        } else if super::table_type(ty) {
+            let Value::Table(table) = value else {
+                return Err(unsupported());
+            };
+            counts.add(
+                policy.table_len(table.arity()).map_err(|_| Error::Limit)?,
+                0,
+            )?;
         } else {
             return Err(unsupported());
         }
@@ -112,7 +120,7 @@ pub(super) fn value_counts(value: &Value, policy: &Policy) -> Result<Counts> {
     Ok(counts)
 }
 
-fn fixed_counts(ty: &PhysicalType, width: usize) -> (usize, usize) {
+pub(super) fn fixed_counts(ty: &PhysicalType, width: usize) -> (usize, usize) {
     (
         match ty.kind() {
             Type::Field | Type::Index => 1,

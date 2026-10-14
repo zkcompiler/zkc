@@ -9,6 +9,8 @@ pub enum InputValue {
     /// Immutable data satisfying its upstream scalar/group library invariants.
     Native(Box<Value>),
     Wire(Vec<u8>),
+    /// Application-owned decoded data with a retained canonical encoding.
+    Prepared(super::data::PreparedData),
     /// Opened native frame; its exact bytes must match the declared digest.
     WireFile {
         file: super::input_file::InputFile,
@@ -36,6 +38,22 @@ pub enum InputValue {
         file: super::input_file::InputFile,
         fingerprint: [u8; 32],
     },
+}
+
+impl InputValue {
+    /// Available wire storage. A Wire variant still requires ordinary admission.
+    pub(crate) fn wire_bytes(&self) -> Option<&[u8]> {
+        match self {
+            Self::Wire(bytes) => Some(bytes),
+            Self::Prepared(data) => Some(data.canonical_bytes()),
+            _ => None,
+        }
+    }
+}
+impl From<super::data::PreparedData> for InputValue {
+    fn from(data: super::data::PreparedData) -> Self {
+        Self::Prepared(data)
+    }
 }
 
 impl From<Value> for InputValue {

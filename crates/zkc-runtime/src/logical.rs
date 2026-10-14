@@ -23,61 +23,17 @@ impl std::fmt::Display for CodecError {
 impl std::error::Error for CodecError {}
 type Result<T> = std::result::Result<T, CodecError>;
 
+mod encoding;
+pub use encoding::{Encoding, Tree};
+
 /// Check the complete tree's grammar and bounds without allocating its encoding.
 pub fn tree_size(tree: &Value) -> Result<usize> {
-    fn measure(v: &Value, depth: usize, nodes: &mut usize) -> Result<usize> {
-        *nodes += 1;
-        if depth > TreeLimits::DEPTH || *nodes > TreeLimits::NODES {
-            return Err(CodecError("tree-limit"));
-        }
-        let n = match v {
-            Value::String(s) if s.len() <= TreeLimits::STRING_BYTES => 9 + s.len(),
-            Value::Array(a) if a.len() <= TreeLimits::ARRAY_LENGTH => {
-                let mut n = 9usize;
-                for v in a {
-                    n = n
-                        .checked_add(measure(v, depth + 1, nodes)?)
-                        .ok_or(CodecError("tree-limit"))?;
-                }
-                n
-            }
-            Value::String(_) | Value::Array(_) => return Err(CodecError("tree-limit")),
-            _ => return Err(CodecError("tree-kind")),
-        };
-        if n > TreeLimits::BYTES {
-            return Err(CodecError("tree-limit"));
-        }
-        Ok(n)
-    }
-    measure(tree, 0, &mut 0)
+    Ok(Tree::Json(tree).prepare()?.size())
 }
 
-/// Encode arrays/strings with tags 1/0, u64 LE counts/UTF-8 byte lengths.
-/// Preflight the whole tree before allocating; construction-tree ceilings apply.
+/// Encode arrays/strings with tags 1/0 and u64 LE counts/UTF-8 byte lengths.
 pub fn encode_tree(tree: &Value) -> Result<Vec<u8>> {
-    fn write(v: &Value, out: &mut Vec<u8>) {
-        match v {
-            Value::String(s) => {
-                out.push(0);
-                out.extend((s.len() as u64).to_le_bytes());
-                out.extend(s.as_bytes());
-            }
-            Value::Array(a) => {
-                out.push(1);
-                out.extend((a.len() as u64).to_le_bytes());
-                for v in a {
-                    write(v, out);
-                }
-            }
-            _ => unreachable!("preflight"),
-        }
-    }
-    let n = tree_size(tree)?;
-    let mut out = Vec::new();
-    out.try_reserve_exact(n)
-        .map_err(|_| CodecError("tree-allocation"))?;
-    write(tree, &mut out);
-    Ok(out)
+    Tree::Json(tree).prepare()?.to_vec()
 }
 
 /// Exact bounded decoder. Invalid tags, UTF-8, truncation, excess nesting and

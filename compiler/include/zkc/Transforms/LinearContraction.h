@@ -29,9 +29,8 @@ struct LinearContractionGroup {
 /// Read-only, same-function all-uses analysis. Groups are atomic. No operation
 /// moves. This reports semantic opportunities without testing backend
 /// availability; Target separately admits installed physical choices.
-/// Only direct operations in a single-block function are considered; nested
-/// region pairs remain outside this planner even when carrier admission allows
-/// them.
+/// Nested local regions are visited in source order. Views cannot cross a
+/// block boundary, become a loop carry/capture, or escape the local function.
 llvm::SmallVector<LinearContractionGroup>
 findLinearContractions(mlir::FunctionOpInterface, LinearContractionStats &);
 } // namespace zkc

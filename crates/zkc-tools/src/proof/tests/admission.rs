@@ -203,6 +203,49 @@ fn request(producer: bool, decision: bool, public: bool) -> ProofInputs {
 }
 
 #[test]
+fn prepared_public_data_preserves_binding_and_statement_authority() {
+    use crate::execution::{Capacity, PreparedData};
+    let host = admit(&deployment()).unwrap();
+    let data = PreparedData::from_value(Value::Bool(true), Capacity::default()).unwrap();
+    let expected = host
+        .execute(&request(true, true, true), Invocation::Prove)
+        .unwrap();
+    let mut inputs = request(true, true, true);
+    inputs.public[0] = data.clone().into();
+    inputs.inputs[2] = PreparedData::from_wire(
+        data.physical_type().clone(),
+        data.canonical_bytes().to_vec(),
+        Capacity::default(),
+    )
+    .unwrap()
+    .into();
+    crate::host::admission::DECODE_COUNT.set(0);
+    let actual = host.execute(&inputs, Invocation::Prove).unwrap();
+    assert_eq!(actual.binding, expected.binding);
+    assert_eq!(actual.outcome, expected.outcome);
+    assert_eq!(crate::host::admission::DECODE_COUNT.get(), 0);
+    let proof = actual.outcome.unwrap();
+    let mut verifier = request(false, true, true);
+    verifier.public[0] = data.clone().into();
+    verifier.inputs[0] = data.into();
+    for _ in 0..3 {
+        assert!(
+            host.execute(&verifier, Invocation::Verify(&proof))
+                .unwrap()
+                .outcome
+                .is_ok()
+        );
+    }
+    inputs.inputs[2] = PreparedData::from_value(Value::Bool(false), Capacity::default())
+        .unwrap()
+        .into();
+    assert_eq!(
+        host.execute(&inputs, Invocation::Prove).err().unwrap(),
+        "native-proof-shared-public-input"
+    );
+}
+
+#[test]
 fn proof_cli_preserves_trusted_inputs_and_publishes_only_to_distinct_regular_paths() {
     let directory = tempfile::tempdir().unwrap();
     let bundle = directory.path().join("bundle");

@@ -141,6 +141,7 @@ fn duplicate(
             InputValue::Wire(bytes.clone())
         }
         InputValue::Native(value) => InputValue::Native(value.clone()),
+        InputValue::Prepared(data) => InputValue::Prepared(data.clone()),
         InputValue::WireFile { file, sha256 } => InputValue::WireFile {
             file: file.clone(),
             sha256: *sha256,

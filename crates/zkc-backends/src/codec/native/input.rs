@@ -1,5 +1,5 @@
-//! Whole-value admission for host-assembled immutable sums. Counts share the
-//! native wire scanner; callers reserve invocation-wide retention before loading.
+//! Whole-value admission for immutable native data. Counts share the native
+//! codec; callers reserve invocation-wide retention before loading.
 use super::{NativeWireError as Error, structured, unsupported};
 use crate::{NativeBackend, Value, Variant};
 use zkc_runtime::interactive::{PhysicalType, Value as RuntimeValue};
@@ -31,18 +31,39 @@ impl NativeBackend {
             .output(value.retained_bytes(), usize::MAX)
             .map_err(|_| Error::Limit)?;
         Ok(NativeInputSize {
-            ty: value.physical_type(),
+            ty,
             retained: value.retained_bytes(),
             wire: 0,
             counts: structured::value_counts(value, self.policy())?,
         })
     }
-    /// Scan one payload frame without decoding its cryptographic elements.
+    /// Measure one native frame without decoding its cryptographic elements.
+    /// Fixed leaves and tables use length bounds; recursive and bulk frames
+    /// require shape scans. Complete framing and value checks remain with loading.
     pub fn measure_native_wire(&self, ty: &PhysicalType, bytes: &[u8]) -> Result<NativeInputSize> {
         let mut counts = structured::Counts::default();
-        let retained = structured::scan(ty, bytes, self.policy(), self.setups(), &mut counts)?;
+        let retained = if super::table_type(ty)
+            || super::frame(ty).is_some() && !ty.has_native_array_frame()
+        {
+            // Match the ordinary leaf decoder's retention contract. Recursive
+            // framing may need a more conservative estimate for nested leaves.
+            counts.nodes = 1;
+            let (elements, groups) = if super::table_type(ty) {
+                // This profile is BLS12-381 Fr: 32-byte elements after a
+                // 10-byte header, so division bounds the decoded element count.
+                (bytes.len() / 32, 0)
+            } else {
+                structured::fixed_counts(ty, super::frame(ty).unwrap().1)
+            };
+            counts.add(elements, groups)?;
+            Value::typed_wire_retained_bytes_bound(ty.clone(), bytes.len(), self.policy())
+                .map_err(|_| Error::Limit)?
+        } else {
+            let retained = structured::scan(ty, bytes, self.policy(), self.setups(), &mut counts)?;
+            structured::peak(self.policy(), retained, bytes.len())?;
+            retained
+        };
         counts.admit(self.policy())?;
-        structured::peak(self.policy(), retained, bytes.len())?;
         Ok(NativeInputSize {
             ty: ty.clone(),
             retained,

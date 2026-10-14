@@ -243,6 +243,7 @@ fn check_declaration(
         (
             "wire",
             value @ (InputValue::Wire(_)
+            | InputValue::Prepared(_)
             | InputValue::WireFile { .. }
             | InputValue::Native(_)
             | InputValue::Variant { .. }),
@@ -390,6 +391,7 @@ pub(super) fn prepare<'a>(
                     continue;
                 }
                 InputValue::Variant { .. }
+                | InputValue::Prepared(_)
                 | InputValue::Wire(_)
                 | InputValue::WireFile { .. }
                 | InputValue::Native(_) => {

@@ -10,7 +10,8 @@ use zkc_runtime::interactive::{Limits, PhysicalType, Type, Value as RuntimeValue
 
 /// Per-bind ceilings for retained input bytes, value/operand count and
 /// cumulative loading work. Requests above the Host's installed loading ceilings refuse.
-/// Work charges wire bytes and retained estimates, including cache hits.
+/// Work charges each input node, wire scan or native measurement, and retained
+/// estimates, including cache hits.
 #[derive(Clone, Copy, Debug)]
 pub struct LoadLimits {
     pub bytes: usize,
@@ -61,6 +62,7 @@ pub(crate) enum Input<'a> {
     Native {
         ty: PhysicalType,
         value: &'a Value,
+        estimate: usize,
         selected: Option<Arc<VerifierKey>>,
     },
     NativeWire {
@@ -89,6 +91,7 @@ impl<'a> Input<'a> {
         ty: PhysicalType,
         value: &'a Value,
         selected: Option<Arc<VerifierKey>>,
+        estimate: Option<usize>,
     ) -> Result<Self> {
         if value.physical_type() != ty {
             return Err("native-input-type".into());
@@ -102,6 +105,7 @@ impl<'a> Input<'a> {
         Ok(Self::Native {
             ty,
             value,
+            estimate: estimate.unwrap_or_else(|| value.retained_bytes()),
             selected,
         })
     }
@@ -120,8 +124,9 @@ impl<'a> Input<'a> {
                 Value::key_retained_bytes(Type::ProverKey, verifier).map_err(|e| e.to_string())
             }
             Self::Ready(value) => Ok(value.retained_bytes()),
-            Self::Native { value, .. } => Ok(value.retained_bytes()),
-            Self::NativeWire { estimate, .. } | Self::Variant { estimate, .. } => Ok(*estimate),
+            Self::Native { estimate, .. }
+            | Self::NativeWire { estimate, .. }
+            | Self::Variant { estimate, .. } => Ok(*estimate),
         }
     }
 }
@@ -189,17 +194,9 @@ impl<'a> Admission<'a> {
         bytes: impl Into<Cow<'a, [u8]>>,
         selected: Option<Arc<VerifierKey>>,
     ) -> Result<usize> {
-        let bytes = bytes.into();
-        self.work(bytes.len())?;
-        let estimate = backend
-            .native_input_retained_bytes(&ty, &bytes)
-            .map_err(|e| e.to_string())?;
-        self.add(Input::NativeWire {
-            ty,
-            bytes,
-            estimate,
-            selected,
-        })
+        self.work(1)?;
+        let (input, _) = self.plan_wire(backend, ty, bytes.into(), None, selected)?;
+        self.add(input)
     }
     pub(super) fn file_wire(
         &mut self,
