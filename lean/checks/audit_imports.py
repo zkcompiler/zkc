@@ -61,7 +61,8 @@ def main():
                            help="check only the named optional packages (default: all)")
     args = parser.parse_args()
     outputs = expected(ROOT, "Zkc", "Tests", ["ZkcExamples"],
-                       ["ZkcTools/CommonSource/Reference", "ZkcTools/JsonSupport"], marker="CORE-AUDIT-PASS")
+                       ["ZkcTools/CommonSource/Reference", "ZkcTools/JsonSupport",
+                        "ZkcTools/StructuredSource"], marker="CORE-AUDIT-PASS")
     selected = [] if args.main_only else args.integration or sorted(INTEGRATIONS)
     for name in selected:
         library, tests, marker = INTEGRATIONS[name]

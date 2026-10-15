@@ -102,8 +102,10 @@ of that control runs in `just test-integration` without Lean.
 project/dependency objects. These can be expensive.
 
 `just test-lean-native` prepares the native compiler, main Lean package and ArkLib integration, then
-runs independent finite SSA/Lean comparisons, the source/property request matrix,
-and authored-target controls. To use an existing build, run
+runs independent scalar and structured SSA/Lean comparisons, the source/property
+request matrix, and authored-target controls. The [structured bridge](../../lean/bridges/structured/README.md)
+also has a standalone command and optional production Runner comparisons.
+To use an existing build, run
 `python3 common/tests/run.py lean-native --compiler-build=build/compiler`.
 This scope exercises wrong-program, wrong-relation and unproved-certificate
 refusals as well as successful claims. Reports are retained under

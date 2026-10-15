@@ -1,6 +1,6 @@
 name = "zkc"
 version = "0.0.0"
-defaultTargets = ["Zkc", "ZkcExamples", "ZkcTools", "ZkcAudit", "ZkcTests", "common-source", "import-headers"]
+defaultTargets = ["Zkc", "ZkcExamples", "ZkcTools", "ZkcAudit", "ZkcTests", "common-source", "structured-source", "import-headers"]
 
 [leanOptions]
 autoImplicit = false
@@ -23,7 +23,7 @@ requiresModuleSystem = true
 
 [[lean_lib]]
 name = "ZkcTools"
-globs = ["ZkcTools.JsonSupport", "ZkcTools.CommonSource.Reference"]
+globs = ["ZkcTools.JsonSupport", "ZkcTools.CommonSource.Reference", "ZkcTools.StructuredSource.+"]
 requiresModuleSystem = true
 
 [[lean_exe]]
@@ -33,6 +33,10 @@ root = "ZkcTools.CommonSource"
 [[lean_exe]]
 name = "import-headers"
 root = "ZkcTools.ImportHeaders"
+
+[[lean_exe]]
+name = "structured-source"
+root = "ZkcTools.StructuredSource"
 
 [[lean_lib]]
 name = "ZkcAudit"

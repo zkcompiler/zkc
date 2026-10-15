@@ -282,6 +282,7 @@ add_zkc_component(Compiler
   lib/Compiler/LanguageInspection.cpp
   lib/Compiler/Compilation.cpp
   lib/Compiler/CommonSource.cpp
+  lib/Compiler/StructuredSource.cpp
   lib/Compiler/ArtifactJson.cpp
   lib/Compiler/RunVerification.cpp
   lib/Compiler/Run.cpp

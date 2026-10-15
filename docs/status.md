@@ -259,6 +259,13 @@ The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retain
 PIR programs, proves open-process contracts, and applies selected ArkLib/VCVio
 security results. Its named DSL target path also checks an authored relation body.
 Native SSA/Lean differential tests cover the admitted finite scalar profile.
+The separate [structured import](spec/formats/structured-source.md) exports
+original single-participant MLIR with immutable BLS scalar/vector values,
+shared helper definitions, finite folds and nested Local control. Lean checks
+the exact snapshot into the common Region carrier and gives it an owned logical
+meaning. [Structured comparisons](../lean/bridges/structured/README.md) exercise
+direct SSA execution, Lean and selected production Runner cases. This profile
+does not yet import group/service communication or prove native transformations.
 [Formal support](../lean/docs/support.md) states exact experiments and premises.
 Full DSL/compiler/runtime correspondence, production arithmetic/sampling,
 backend correctness and complete protocol security remain open.

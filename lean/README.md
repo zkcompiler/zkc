@@ -12,6 +12,9 @@ states exact claims and assumptions. Native compilation, arithmetic, providers
 and the full lowering pipeline are not universally verified by this package.
 The [native bridge](bridges/common/README.md) tests the selected boundary with
 independent execution and negative controls.
+The separate [structured bridge](bridges/structured/README.md) retains shared
+helpers, multiple results, finite folds and Local control in a bounded immutable
+single-participant profile.
 
 ## Architecture
 
@@ -21,7 +24,8 @@ independent execution and negative controls.
 - `ZkcExamples`: actual imported programs, equivalent source forms, composed
   residual/opening clients, effectful structured endpoint examples and a
   downstream custom property.
-- `ZkcTools`: executable scalar reference, header parser and declaration audit.
+- `ZkcTools`: executable scalar and structured references, header parser and
+  declaration audit.
 - [Security integration](integrations/arklib/README.md): optional ArkLib/VCVio
   consumers. The core does not import these libraries.
 - [Clean integration](integrations/clean/README.md): isolated finite AIR export

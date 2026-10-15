@@ -1,0 +1,24 @@
+module structured;
+domain Fr = field("bls12-381.fr");
+type Vector<F: Field> = builtin("vector", F);
+domain fn elements<F: Field>(xs: Vector<F>) -> domain<F> = domain("elements");
+math fn fold<F: Field, I: Type + Copy + Drop>(rows: domain<I>, initial: F,
+  step: math fn(F, item: I) -> F where item_from(item, rows)) -> F = finite("math.fold");
+math fn accumulate(xs: Vector<Fr>, seed: Fr) -> Fr {
+  return fold(elements(xs), seed, fn(s, x) => s + x);
+}
+protocol Accumulate roles(P)(xs: Vector<Fr>@P, seed: Fr@P) -> (result: Fr@P) {
+  return accumulate(xs, seed);
+}
+run Run = Accumulate;
+domain fn indices<F: Field>(xs: Vector<F>) -> domain<index> = domain("indices");
+math fn at(xs: Vector<Fr>, i: index) -> Fr where in_bounds(i, xs) {
+  return intrinsic<Vector<Fr>>("container.at", xs, i);
+}
+math fn indexed(xs: Vector<Fr>, seed: Fr) -> Fr {
+  return fold(indices(xs), seed, fn(s, i) => s + at(xs, i));
+}
+protocol Indexed roles(P)(xs: Vector<Fr>@P, seed: Fr@P) -> (result: Fr@P) {
+  return indexed(xs, seed);
+}
+run IndexedRun = Indexed;

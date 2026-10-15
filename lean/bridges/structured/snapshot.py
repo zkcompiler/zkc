@@ -1,0 +1,195 @@
+#!/usr/bin/env python3
+"""Render a retained structured export as transparent Lean constructor data.
+
+This is a tested data boundary. It generates no proof and never interprets a
+helper name as a mathematical specification.
+"""
+
+import argparse
+import json
+from pathlib import Path
+import re
+
+
+def record(value, size):
+    if not isinstance(value, list) or len(value) != size:
+        raise ValueError(f"expected array of size {size}")
+    return value
+
+
+def text(value):
+    if not isinstance(value, str) or len(value) > 512 or any(not 32 <= ord(c) <= 126 for c in value):
+        raise ValueError("renderer requires printable ASCII strings of at most 512 bytes")
+    return json.dumps(value)
+
+
+def nat(value):
+    if type(value) is not int or not 0 <= value <= 4096:
+        raise ValueError("invalid bounded natural")
+    return str(value)
+
+
+def seq(values, render=nat):
+    if not isinstance(values, list) or len(values) > 4096:
+        raise ValueError("invalid bounded array")
+    return "[" + ", ".join(render(value) for value in values) + "]"
+
+
+def ty(value):
+    if value == ["bool"]:
+        return ".boolean"
+    if value == ["index"]:
+        return ".index"
+    tag, domain = record(value, 2)
+    if tag not in ("field", "vector"):
+        raise ValueError("unsupported type")
+    return f".{tag} {text(domain)}"
+
+
+def descriptor(value):
+    if not isinstance(value, list) or not value:
+        raise ValueError("invalid descriptor")
+    tag, *args = value
+    unary = {"field.add": "fieldAdd", "field.subtract": "fieldSubtract",
+             "field.multiply": "fieldMultiply", "field.equal": "fieldEqual",
+             "bounded_at": "boundedAt", "call": "call", "apply": "apply", "guard": "guard"}
+    nullary = {"bool.and": "booleanAnd", "bool.or": "booleanOr", "bool.xor": "booleanXor",
+               "bool.equal": "booleanEqual", "bool.not_equal": "booleanNotEqual",
+               "if": "branch", "for": "loop", "for_condition": "loopCondition"}
+    if tag in unary:
+        record(args, 1)
+        return f".{unary[tag]} {text(args[0])}"
+    if tag in nullary:
+        record(args, 0)
+        return "." + nullary[tag]
+    if tag == "bool.constant":
+        record(args, 1)
+        if type(args[0]) is not bool:
+            raise ValueError("invalid Boolean")
+        return ".booleanConstant " + str(args[0]).lower()
+    if tag == "select":
+        record(args, 1)
+        return f".select ({ty(args[0])})"
+    if tag in ("field.constant", "local_call", "fold"):
+        record(args, 3 if tag == "fold" else 2)
+        name = {"field.constant": "fieldConstant", "local_call": "localCall", "fold": "fold"}[tag]
+        return "." + name + " " + " ".join(text(arg) for arg in args)
+    raise ValueError(f"unknown descriptor: {tag}")
+
+
+def terminator(value):
+    if not isinstance(value, list) or not value:
+        raise ValueError("invalid terminator")
+    if value[0] in ("return", "yield", "condition"):
+        _, refs = record(value, 2)
+        name = "ret" if value[0] == "return" else value[0]
+        return f".{name} {seq(refs)}"
+    tag, reason, site = record(value, 3)
+    if tag != "stop" or reason not in ("reject", "abort", "exhausted", "incomplete", "refused"):
+        raise ValueError("invalid stop")
+    return f".stop .{reason} {text(site)}"
+
+
+def block(value):
+    tag, instructions, terminal = record(value, 3)
+    if tag != "block":
+        raise ValueError("invalid block")
+    return f".block {seq(instructions, instruction)} ({terminator(terminal)})"
+
+
+def region(value):
+    inputs, outputs, body = record(value, 3)
+    return f".region {seq(inputs, ty)} {seq(outputs, ty)} ({block(body)})"
+
+
+def instruction(value):
+    op, operands, results, regions, site = record(value, 5)
+    return (f".instruction ({descriptor(op)}) {seq(operands)} {seq(results, ty)} "
+            f"{seq(regions, region)} {text(site)}")
+
+
+def bound(value):
+    tag, index, container, axis = record(value, 4)
+    if tag != "index_bound":
+        raise ValueError("invalid precondition")
+    return "⟨" + ", ".join(map(nat, (index, container, axis))) + "⟩"
+
+
+def domain(value):
+    tag, name, inputs, constructor = record(value, 4)
+    if tag != "domain":
+        raise ValueError("invalid domain")
+    if constructor[0] == "elements":
+        _, index = record(constructor, 2)
+        operation = ".elements " + nat(index)
+    elif constructor[0] == "indices":
+        _, index, axis = record(constructor, 3)
+        operation = f".indices {nat(index)} {nat(axis)}"
+    else:
+        raise ValueError("unsupported domain constructor")
+    return f"⟨{text(name)}, {seq(inputs, ty)}, {operation}⟩"
+
+
+def definition(value):
+    if value[0] == "finite":
+        _, name, visibility, inputs, outputs, domain_name, step, predicate = record(value, 8)
+        if visibility not in ("public", "private"):
+            raise ValueError("invalid visibility")
+        return (f".finite ⟨{text(name)}, .{visibility}Def, {seq(inputs, ty)}, {seq(outputs, ty)}, "
+                f"{text(domain_name)}, {text(step)}, {text(predicate)}⟩")
+    tag, name, kind, visibility, inputs, outputs, premises, origin, body = record(value, 9)
+    if tag != "function" or kind not in ("protocol", "math", "local") or visibility not in ("public", "private"):
+        raise ValueError("invalid function header")
+    if origin == []:
+        origin_text = "none"
+    else:
+        origin_name, bindings = record(origin, 2)
+        def binding(pair):
+            key, value = record(pair, 2)
+            return f"({text(key)}, {text(value)})"
+        origin_text = f"some ({text(origin_name)}, {seq(bindings, binding)})"
+    return (f".function ⟨{text(name)}, .{kind}, .{visibility}Def, {seq(inputs, ty)}, "
+            f"{seq(outputs, ty)}, {seq(premises, bound)}, {origin_text}, ({block(body)})⟩")
+
+
+def render(data, namespace):
+    version, stage, source, entry, role, domains, definitions = record(data, 7)
+    if version != "zkc.structured-source/0" or stage != "original":
+        raise ValueError("wrong version or stage")
+    if not re.fullmatch(r"(?:[A-Za-z][A-Za-z0-9_]*\.)*[A-Za-z][A-Za-z0-9_]*", namespace):
+        raise ValueError("invalid Lean namespace")
+    return f'''module
+
+public import Zkc.Source.Structured.Import
+
+@[expose] public section
+
+/-! Constructor data from the retained actual MLIR export.
+Regenerate with bridges/structured/snapshot.py; admission and semantic proofs
+are separate. The native bridge checks exact regeneration against the source. -/
+
+namespace {namespace}
+open Zkc.Source.Structured
+
+def snapshot : Snapshot where
+  source := {text(source)}
+  entry := {text(entry)}
+  role := {text(role)}
+  domains := {seq(domains, domain)}
+  definitions := {seq(definitions, definition)}
+
+end {namespace}
+'''
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("input", type=Path)
+    parser.add_argument("output", type=Path)
+    parser.add_argument("--namespace", required=True)
+    args = parser.parse_args()
+    args.output.write_text(render(json.loads(args.input.read_text()), args.namespace))
+
+
+if __name__ == "__main__":
+    main()

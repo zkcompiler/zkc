@@ -82,6 +82,11 @@ def execute(scope, args):
              "--reference", compiler / "test/zkc-common_reference-test",
              "--lean", ROOT / "lean/.lake/build/bin/common-source", "--cases", "80",
              "--report", output / "differential.json"])
+        run([sys.executable, ROOT / "lean/bridges/structured/check.py",
+             "--compiler", compiler / "zkc-compile",
+             "--reference", compiler / "test/zkc-structured_reference-test",
+             "--lean", ROOT / "lean/.lake/build/bin/structured-source",
+             "--report", output / "structured/report.json"])
         run([sys.executable, bridge / "verify_tests.py", "--compiler", compiler / "zkc-compile",
              "--output", output / "requests"])
         run([sys.executable, bridge / "intent_tests.py", "--compiler", compiler / "zkc-compile",

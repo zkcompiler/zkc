@@ -11,6 +11,8 @@ that all native behavior already has a Lean model.
 - [Verification](spec/verification.md): explicit intent, contracts, consumers,
   authored targets, candidate generation and receipt semantics.
 - [Scalar import](spec/common-source.md): admitted syntax and encoding.
+- [Structured import](spec/structured-source.md): checked native helper tables,
+  finite folds and closed Local control.
 - [Ring expressions](spec/ring-expressions.md): retained Clean/AIR connection.
 - [Support](support.md): theorem scope, assumptions and tested boundaries.
 - [Dependencies](dependencies.md): exact pins and compatibility decisions.

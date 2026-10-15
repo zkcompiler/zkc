@@ -29,6 +29,12 @@ the final output-role restriction as well as all actions and stops.
 A region lowered for one participant cannot be interpreted by another
 participant's meaning without an explicit change of representation.
 
+The [structured native profile](structured-source.md) resolves an actual export
+into this same `Region` carrier. Its operation family owns signatures and
+meanings; named helpers retain shared checked bodies, and ordinary control
+passes closed callbacks. Provenance stays in the admitted snapshot instead of
+being inferred from process equality.
+
 `Source.Finite` defines ordered domain admission and open folds as semantic
 helpers. Admission runs before iteration, even when a loop is empty or a domain
 is otherwise unused. Zip checks both factors before their lengths; product checks

@@ -1,3 +1,5 @@
+import ZkcExamples.Structured.TotalState
+import ZkcExamples.Structured.UnitState
 import ZkcExamples.NativePrograms.CustomProperty
 import ZkcExamples.NativePrograms.FactorHorner
 import Zkc.Specification
@@ -34,3 +36,11 @@ theorem importedStructuredSourceCorrespondence
       (imported.denote meaning condition self inputs).bind
         (fun value => .done (Zkc.Source.Values.singleton value)) :=
   imported.denote_toRegion meaning condition self inputs
+
+/-- A downstream client consumes complete-process equations for actual admitted
+structured compiler artifacts, without importing test modules. -/
+noncomputable def importedTotalStateEquation :=
+  @ZkcExamples.Structured.TotalState.process_eq_reference
+
+noncomputable def importedUnitStateEquation :=
+  @ZkcExamples.Structured.UnitState.process_eq_reference

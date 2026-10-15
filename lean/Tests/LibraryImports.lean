@@ -68,6 +68,14 @@ import Zkc.Source.RegionTotality
 import Zkc.Source.RoleFamily
 import Zkc.Source.ScalarRegion
 import Zkc.Source.Structure
+import Zkc.Source.Structured.Admission
+import Zkc.Source.Structured.Format
+import Zkc.Source.Structured.Import
+import Zkc.Source.Structured.Laws
+import Zkc.Source.Structured.Meaning
+import Zkc.Source.Structured.Operations
+import Zkc.Source.Structured.Provenance
+import Zkc.Source.Structured.Vocabulary
 import Zkc.Specification
 import Tests.CommonRegion
 import Tests.Finite
@@ -76,6 +84,7 @@ import Tests.RegionCompatibility
 import Tests.RegionDecoding
 import Tests.RegionLaws
 import Tests.StructuredPrograms
+import Tests.StructuredSource
 import ZkcExamples.NativePrograms.ContractControls
 import ZkcExamples.NativePrograms.CustomProperty
 import ZkcExamples.NativePrograms.FactorControls
@@ -100,6 +109,12 @@ import ZkcExamples.NativePrograms.Variants.SchnorrReorderedData
 import ZkcExamples.NativePrograms.Variants.SumcheckHelpersData
 import ZkcExamples.NativePrograms.Variants.SumcheckHornerData
 import ZkcExamples.NativePrograms.Variants.SumcheckWrongResidualData
+import ZkcExamples.Structured.TotalState
+import ZkcExamples.Structured.TotalStateData
+import ZkcExamples.Structured.UnitState
+import ZkcExamples.Structured.UnitStateData
 import ZkcExamples.StructuredPrograms
 import ZkcTools.CommonSource.Reference
 import ZkcTools.JsonSupport
+import ZkcTools.StructuredSource
+import ZkcTools.StructuredSource.Evaluation

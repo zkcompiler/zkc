@@ -6,7 +6,8 @@ They do not certify arbitrary DSL programs or the full native lowering pipeline.
 | Surface | Maintained claim | Explicit boundary |
 |---|---|---|
 | Core execution | Typed mathematical/role-local programs; exact process refinement; shared-state sequential composition; machine prefix/resumption and finite-process completion | General native loops and external waiting are not imported by the scalar profile |
-| Structured source | Multi-result closed callbacks and lexical binding; strict formation in both directions; scalar/mathematical/participant/import bridges; contextual equality, totality and compatible effect translation | Independent Lean carrier; no general native structured importer or native transformation theorem |
+| Structured source | Multi-result closed callbacks and lexical binding; strict formation in both directions; scalar/mathematical/participant/import bridges; contextual equality, totality and compatible effect translation | Shared structural carrier; native transformation correctness requires separate correspondence |
+| Structured native import | Actual original single-participant MLIR with immutable scalar/vector values, shared helpers, finite folds and nested Local control; exact snapshot admission and owned logical meaning | Bounded vocabulary; no group/service communication, affine resources, general Math-totality theorem or proved C++ exporter |
 | Ordered finite semantics | Admission-preserving effectful folds, product/zip laws and conditional pure replacement | Evaluated mathematical domains; native capacity, failure diagnostics and domain lowering require their own correspondence |
 | Scalar import | Checked admission and source-specific open-process correspondence for actual exports | Native exporter, interface resolver and constructor rendering are reviewed/tested, not universally proved |
 | Schnorr | Imported verifier completeness, two-transcript special soundness and custom invalid-equation rejection | Algebraic group/module interpretation; no discrete-log hardness reduction or whole native prover proof |
@@ -34,5 +35,8 @@ three axioms. A build of all upstream sources is not asserted.
 For precise APIs read the theorem statements in `Zkc`, `ZkcExamples`, and
 `integrations/arklib/ZkcSecurity`; [architecture](architecture.md) explains their
 roles. [Bridge commands](../bridges/common/README.md) reproduce finite checks.
-Native Z/97 comparisons do not establish BLS12-381 arithmetic, production
-randomness, transcript encoding or native executable soundness.
+The scalar bridge's Z/97 comparisons do not establish BLS12-381 arithmetic.
+The [structured bridge](../bridges/structured/README.md) separately compares
+full-size BLS12-381 scalar values with direct SSA execution and selected production
+Runner cases. Those finite comparisons do not establish native executable
+soundness, randomness or transcript encoding.
