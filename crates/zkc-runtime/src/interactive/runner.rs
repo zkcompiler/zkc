@@ -216,10 +216,11 @@ impl<B: Backend> Runner<B> {
         let symbol = roles.get(role).ok_or(RuntimeError::Role)?;
         let p = self.admitted.program.participants[symbol].clone();
         self.root.instance = p.instance.clone();
-        let mut frame = self.frame(self.root.clone(), FrameKind::Entry, p.inputs.clone().into());
+        let mut frame =
+            self.frame_data(self.root.clone(), FrameKind::Entry, p.inputs.clone().into());
         frame.services = p.services.clone();
         self.push(
-            frame,
+            frame.into(),
             p.body.clone(),
             inputs,
             Destination::Root,
@@ -345,26 +346,26 @@ impl<B: Backend> Runner<B> {
             self.halt(StopKind::Cancelled, None, None);
         }
     }
-    fn frame(
+    fn frame_data(
         &mut self,
         origin: Origin,
         kind: impl Into<Arc<FrameKind>>,
         inputs: FrameInputs,
-    ) -> Frame {
+    ) -> FrameData {
         self.counts.event(Event::Frame);
         let kind = kind.into();
         self.next_frame += 1; // bounded by instruction/iteration/call ceilings
         let services = if matches!(kind.as_ref(), FrameKind::Loop { .. }) {
             self.stack
                 .last()
-                .map(|frame| frame.frame.services.clone())
+                .map(|frame| frame.frame.services().to_vec())
                 .unwrap_or_default()
         } else {
             vec![]
         };
-        Frame {
+        FrameData {
             id: FrameId(self.next_frame),
-            parent: self.stack.last().map(|s| s.frame.id),
+            parent: self.stack.last().map(|s| s.frame.id()),
             role: self.role.clone(),
             origin,
             kind,
@@ -538,10 +539,10 @@ impl<B: Backend> Runner<B> {
         if self.stack.len() >= Limits::STACK_DEPTH {
             return Err(RuntimeError::Limit);
         }
-        if frame.inputs.len() != values.len() {
+        if frame.inputs().len() != values.len() {
             return Err(RuntimeError::Inputs);
         }
-        let values = self.accept_values(values, frame.inputs.iter().map(|(_, ty)| ty))?;
+        let values = self.accept_values(values, frame.inputs().iter().map(|(_, ty)| ty))?;
         // Captures remain in the suspended parent. The destination stores only
         // names; each iteration owns one checked body view, never a second
         // hidden payload store. The parent cannot advance while this frame lives.
@@ -556,7 +557,7 @@ impl<B: Backend> Runner<B> {
             return Err(e.into());
         }
         let env = frame
-            .inputs
+            .inputs()
             .iter()
             .map(|(n, _)| n.clone())
             .zip(values)
@@ -578,7 +579,7 @@ impl<B: Backend> Runner<B> {
         destination: Destination,
         site: &str,
     ) {
-        let origin = frame.origin.clone();
+        let origin = frame.origin().clone();
         if let Err(error) = self.push(frame, body, values, destination, Retention::Transfer) {
             // A refused child has no installed execution to supply its origin.
             // Unwind only accepted frames, retaining the attempted child's cut.
@@ -624,7 +625,7 @@ impl<B: Backend> Runner<B> {
     fn active_origin(&self) -> Origin {
         self.stack
             .last()
-            .map_or_else(|| self.root.clone(), |f| f.frame.origin.clone())
+            .map_or_else(|| self.root.clone(), |f| f.frame.origin().clone())
     }
     fn halt(&mut self, kind: StopKind, site: Option<String>, origin: Option<Origin>) {
         let origin = origin.unwrap_or_else(|| self.active_origin());
@@ -686,7 +687,7 @@ impl<B: Backend> Runner<B> {
             let execution = self.stack.last().expect("nonterminal runner has frame");
             let body = execution.body.clone();
             let instruction = &body[execution.pc];
-            let origin = execution.frame.origin.clone();
+            let origin = execution.frame.origin().clone();
             if !matches!(instruction, Instruction::Local { .. })
                 && let Some(p) = &mut self.preparation
             {
@@ -702,7 +703,7 @@ impl<B: Backend> Runner<B> {
                 } => {
                     let port = execution
                         .frame
-                        .services
+                        .services()
                         .iter()
                         .find(|p| &p.name == port)
                         .expect("admitted service port")
@@ -846,7 +847,7 @@ impl<B: Backend> Runner<B> {
         let value = self.index_value(0)?;
         all_ports.insert(0, (induction, value.physical_type()));
         all_values.insert(0, value);
-        let frame = self.frame(
+        let frame = self.frame_data(
             child_origin,
             FrameKind::Loop {
                 site: site.clone(),
@@ -854,7 +855,7 @@ impl<B: Backend> Runner<B> {
             },
             all_ports.into(),
         );
-        self.push_child(frame, body.clone(), all_values, destination, site);
+        self.push_child(frame.into(), body.clone(), all_values, destination, site);
         Ok(())
     }
     /// Advance one reached loop boundary using this role's own count. This is
@@ -893,7 +894,7 @@ impl<B: Backend> Runner<B> {
             return Err(RuntimeError::WrongAction);
         }
         let frame = self.stack.last().ok_or(RuntimeError::WrongAction)?;
-        if &frame.frame.origin != origin {
+        if frame.frame.origin() != origin {
             return Err(RuntimeError::WrongCut);
         }
         Ok((frame.body.clone(), frame.pc))
@@ -1043,7 +1044,7 @@ impl<B: Backend> Runner<B> {
     }
     fn finish_retained(&mut self, values: Vec<B::Value>) -> Result<()> {
         let execution = self.stack.pop().expect("return frame");
-        let origin = execution.frame.origin.clone();
+        let origin = execution.frame.origin().clone();
         self.release(execution.env.values());
         let root = matches!(execution.destination, Destination::Root);
         if root && self.retain(&values, Retention::Transfer).is_err() {
@@ -1108,7 +1109,7 @@ impl<B: Backend> Runner<B> {
                     let value = self.index_value(iteration + 1)?;
                     ports.insert(0, (induction.clone(), value.physical_type()));
                     all_values.insert(0, value);
-                    let frame = self.frame(
+                    let frame = self.frame_data(
                         origin,
                         FrameKind::Loop {
                             site: site.clone(),
@@ -1117,7 +1118,7 @@ impl<B: Backend> Runner<B> {
                         ports.into(),
                     );
                     self.push_child(
-                        frame,
+                        frame.into(),
                         execution.body,
                         all_values,
                         Destination::Loop {
@@ -1264,14 +1265,16 @@ impl<B: Backend> Runner<B> {
         let args = self.values(inputs);
         let prepared = self.admitted.executable.functions[function].clone();
         let code = &prepared.body;
-        let frame = self.frame(
-            execution.frame.origin.clone(),
-            FrameKind::Local {
-                site: site.clone(),
-                function: function.clone(),
-            },
-            code.inputs.clone(),
-        );
+        let frame: Frame = self
+            .frame_data(
+                execution.frame.origin().clone(),
+                FrameKind::Local {
+                    site: site.clone(),
+                    function: function.clone(),
+                },
+                code.inputs.clone(),
+            )
+            .into();
         let public = self.public_computation(code, inputs);
         let key = if public {
             Self::computation_key(function, &args)
@@ -1633,7 +1636,7 @@ impl<B: Backend> Runner<B> {
                         let result = (|| {
                             for index in lower..upper {
                                 if let Err(error) = self.iteration() {
-                                    let mut origin = frame.origin.clone();
+                                    let mut origin = frame.origin().clone();
                                     origin.path.push(PathElement::For {
                                         site: site.clone(),
                                         index,
@@ -1689,18 +1692,17 @@ impl<B: Backend> Runner<B> {
             unreachable!("admitted local terminator")
         })();
         if result.is_err() && self.local_failure.is_none() && (depth > 1 || current_has_own_site) {
-            let site =
-                current_site
-                    .map(str::to_owned)
-                    .unwrap_or_else(|| match frame.origin.path.last() {
-                        Some(
-                            PathElement::Conditional { site, .. }
-                            | PathElement::For { site, .. }
-                            | PathElement::Match { site, .. },
-                        ) => site.clone(),
-                        _ => String::new(),
-                    });
-            self.local_failure = Some((site, frame.origin.clone()));
+            let site = current_site.map(str::to_owned).unwrap_or_else(|| {
+                match frame.origin().path.last() {
+                    Some(
+                        PathElement::Conditional { site, .. }
+                        | PathElement::For { site, .. }
+                        | PathElement::Match { site, .. },
+                    ) => site.clone(),
+                    _ => String::new(),
+                }
+            });
+            self.local_failure = Some((site, frame.origin().clone()));
         }
         if let Ok(values) = &result {
             // Each value is already held by this region and validated by this
@@ -1727,19 +1729,20 @@ impl<B: Backend> Runner<B> {
         path: PathElement,
         depth: usize,
     ) -> Result<Vec<B::Value>> {
-        let mut origin = parent.origin.clone();
+        let mut origin = parent.origin().clone();
         origin.path.push(path);
-        let mut frame = self.frame(origin, parent.kind.clone(), body.inputs.clone());
-        frame.parent = Some(parent.id);
+        let mut frame = self.frame_data(origin, parent.shared_kind(), body.inputs.clone());
+        frame.parent = Some(parent.id());
+        let frame: Frame = frame.into();
         let result = (|| {
             if self.stack.len() + depth >= Limits::STACK_DEPTH {
                 return Err(RuntimeError::Limit);
             }
-            let args = self.accept_values(args, frame.inputs.iter().map(|(_, ty)| ty))?;
+            let args = self.accept_values(args, frame.inputs().iter().map(|(_, ty)| ty))?;
             self.run_local_frame(&frame, logical_origin, body, args, depth + 1, None)
         })();
         if result.is_err() && self.local_failure.is_none() {
-            let site = match frame.origin.path.last() {
+            let site = match frame.origin().path.last() {
                 Some(
                     PathElement::Conditional { site, .. }
                     | PathElement::For { site, .. }
@@ -1747,7 +1750,7 @@ impl<B: Backend> Runner<B> {
                 ) => site.clone(),
                 _ => String::new(),
             };
-            self.local_failure = Some((site, frame.origin));
+            self.local_failure = Some((site, frame.origin().clone()));
         }
         result
     }

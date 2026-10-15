@@ -822,7 +822,7 @@ impl Resources {
         Ok(observation)
     }
     pub fn active(&self, f: &Frame) -> Result<()> {
-        if !self.frames.last().is_some_and(|v| same_frame(&v.frame, f)) {
+        if !self.frames.last().is_some_and(|v| v.frame.same_boundary(f)) {
             return Err(refused("inactive-frame"));
         }
         Ok(())
@@ -896,7 +896,7 @@ impl Resources {
         Ok(())
     }
     pub fn leave(&mut self, f: &Frame, exit: FrameExit, outputs: &[Value]) -> Result<()> {
-        let Some(index) = self.frames.iter().position(|v| same_frame(&v.frame, f)) else {
+        let Some(index) = self.frames.iter().position(|v| v.frame.same_boundary(f)) else {
             return Err(refused("frame-missing"));
         };
         if index + 1 != self.frames.len() {
@@ -1070,15 +1070,6 @@ impl Resources {
         Ok(k + c * x)
     }
 }
-fn same_frame(a: &Frame, b: &Frame) -> bool {
-    a.id() == b.id()
-        && a.parent() == b.parent()
-        && a.role() == b.role()
-        && a.origin() == b.origin()
-        && a.kind() == b.kind()
-        && a.inputs() == b.inputs()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
