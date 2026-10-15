@@ -45,9 +45,7 @@ def sort (json : Json) : Except String Ty := do
 
 def decimal (json : Json) : Except String Nat := do
   let text ← string json
-  if !(text.toList.all Char.isDigit) || (text.length > 1 && text.startsWith "0") then
-    throw "common-source-constant"
-  let some value := text.toNat? | throw "common-source-constant"
+  let some value := Source.Format.canonicalDecimal text | throw "common-source-constant"
   return value
 
 def operation (json : Json) : Except String Op := do

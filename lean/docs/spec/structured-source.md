@@ -12,6 +12,10 @@ participant, every domain and definition, visibility, origins, preconditions,
 sites, operand positions and ordered results. `Format` reads exact tagged arrays
 and rejects unknown tags, extra fields, JSON objects, noncanonical numeric tokens
 and unsupported vocabulary, including in dormant bodies.
+Canonical decimal constants use a bounded ASCII-digit fold shared with the
+scalar importer. This computation reduces in the Lean kernel, so admission of
+constructor snapshots containing constants can be proved without native
+evaluation. JSON parsing and export correspondence remain separate boundaries.
 Logical-origin binding values remain opaque retained metadata. Their membership
 in the native identity language is checked by the native verifier; Lean checks
 the pair structure, lengths, nonemptiness and key uniqueness.

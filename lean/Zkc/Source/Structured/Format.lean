@@ -27,9 +27,7 @@ def natural (json : Json) (limit : Nat := 4096) : Except String Nat := do
   return value
 
 def decimal (text : String) : Except String Nat := do
-  if text.isEmpty || text.utf8ByteSize > 512 || !text.toList.all Char.isDigit ||
-      (text.length > 1 && text.startsWith "0") then throw "structured-decimal"
-  let some value := text.toNat? | throw "structured-decimal"
+  let some value := Source.Format.canonicalDecimal text | throw "structured-decimal"
   return value
 
 def field (json : Json) : Except String String := do

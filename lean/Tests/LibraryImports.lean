@@ -81,6 +81,7 @@ import Zkc.Source.Structured.Provenance
 import Zkc.Source.Structured.Vocabulary
 import Zkc.Specification
 import Tests.CommonRegion
+import Tests.DecimalAdmission
 import Tests.Finite
 import Tests.Machine
 import Tests.RegionCompatibility

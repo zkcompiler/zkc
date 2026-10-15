@@ -52,6 +52,16 @@ def natural : Json → Except Error Nat
   | _ => .error .natural
 def string (json : Json) : Except Error String := json.getStr?.mapError (fun _ => .string)
 
+/-- Bounded canonical ASCII decimal text. The list fold reduces in the kernel,
+so checked constructor data can contain constants without a native evaluator.
+The format excludes signs, separators, whitespace and leading zeroes. -/
+def canonicalDecimal (text : String) (byteLimit : Nat := 512) : Option Nat := do
+  if text.utf8ByteSize > byteLimit then none else do
+    let digits := text.toList
+    if digits.isEmpty || !digits.all Char.isDigit ||
+        (digits.length > 1 && digits.head? == some '0') then none
+    else some (digits.foldl (fun value digit => 10 * value + (digit.toNat - '0'.toNat)) 0)
+
 def array (json : Json) : Except Error (List Json) :=
   json.getArr?.map Array.toList |>.mapError (fun _ => .shape)
 
