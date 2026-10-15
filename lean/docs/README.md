@@ -14,6 +14,8 @@ that all native behavior already has a Lean model.
 - [Structured import](spec/structured-source.md): checked native helper tables,
   finite folds and closed Local control.
 - [Ring expressions](spec/ring-expressions.md): retained Clean/AIR connection.
+- [Multilinear Sumcheck](spec/multilinear-sumcheck.md): independent ordered table,
+  endpoint-message and residual/discharge laws; no source or security connection.
 - [Support](support.md): theorem scope, assumptions and tested boundaries.
 - [Dependencies](dependencies.md): exact pins and compatibility decisions.
 - [Structured computations](design/structured-computations.md): canonical multi-result

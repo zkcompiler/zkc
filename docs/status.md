@@ -292,6 +292,10 @@ region law preserves complete helper processes and suffixes; regeneration and
 native SSA comparisons test these executable boundaries. These pair-specific
 proofs do not establish general compiler pass correctness.
 [Formal support](../lean/docs/support.md) states exact experiments and premises.
+The independent [multilinear Sumcheck foundation](../lean/docs/spec/multilinear-sumcheck.md)
+proves arbitrary-length table restriction, endpoint-message and residual-to-full
+discharge laws, including empty rounds. It adds no structured protocol import,
+native correspondence or multilinear security theorem.
 Full DSL/compiler/runtime correspondence, production arithmetic/sampling,
 backend correctness and complete protocol security remain open.
 [Assurance](assurance.md) distinguishes these evidence boundaries.

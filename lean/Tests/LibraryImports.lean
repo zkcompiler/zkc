@@ -4,6 +4,8 @@ import Zkc.Algebra.RingExpression
 import Zkc.Polynomial.BooleanCube
 import Zkc.Polynomial.Coordinates
 import Zkc.Polynomial.Layout
+import Zkc.Polynomial.Multilinear.Prefix
+import Zkc.Polynomial.Multilinear.Restriction
 import Zkc.Polynomial.Multilinear
 import Zkc.Polynomial.Quadratic
 import Zkc.Probability.AdaptiveTape
@@ -26,6 +28,9 @@ import Zkc.Protocols.Sumcheck.Common
 import Zkc.Protocols.Sumcheck.Execution
 import Zkc.Protocols.Sumcheck.FactorOpening.Program
 import Zkc.Protocols.Sumcheck.FactorOpening.Security
+import Zkc.Protocols.Sumcheck.Multilinear.Reduction
+import Zkc.Protocols.Sumcheck.Multilinear.Round
+import Zkc.Protocols.Sumcheck.Multilinear
 import Zkc.Protocols.Sumcheck.Polynomial
 import Zkc.Protocols.Sumcheck.Security
 import Zkc.Protocols.Sumcheck.Source
@@ -106,6 +111,7 @@ import Tests.Component
 import Tests.DecimalAdmission
 import Tests.Finite
 import Tests.Machine
+import Tests.MultilinearSumcheck
 import Tests.ParticipantInterface
 import Tests.RegionCompatibility
 import Tests.RegionDecoding

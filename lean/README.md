@@ -19,6 +19,10 @@ profile has independent admission, proved declaration linking and compositional
 helper-table laws. Its [scalar inlining pairs](bridges/structured/README.md#scalar-inlining-pairs)
 prove exact original/prepared model equality for authored response and claim
 computations using checked body contracts and a reusable inlining law.
+The [multilinear Sumcheck foundation](docs/spec/multilinear-sumcheck.md) separately
+proves ordered table restriction, endpoint-message and residual/discharge laws
+for arbitrary round counts. Its model is independent of source import and the
+optional degree-two Sumcheck security examples.
 
 ## Architecture
 

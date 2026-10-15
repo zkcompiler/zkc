@@ -5,6 +5,7 @@ import ZkcExamples.NativePrograms.FactorHorner
 import Zkc.Specification
 import Zkc.Source.Common.Region
 import Zkc.Source.Region
+import Zkc.Protocols.Sumcheck.Multilinear
 
 /-! An independent Lake consumer of an actual imported source certificate and
 an independently authored typed property. No external security package is needed. -/
@@ -44,3 +45,12 @@ noncomputable def importedTotalStateEquation :=
 
 noncomputable def importedUnitStateEquation :=
   @ZkcExamples.Structured.UnitState.process_eq_reference
+
+/-- The mathematical multilinear API is independently consumable without an
+optional security dependency or an imported Sumcheck subject. -/
+theorem multilinearResidualMeaning {F : Type} [CommRing F] {n k : Nat}
+    (table : Zkc.Polynomial.Multilinear.Table F (n + k)) (point : Fin k → F) (claim : F) :
+    Zkc.Protocols.Sumcheck.Multilinear.ResidualClaim k table point claim ↔
+      Zkc.Polynomial.cubeSum n (fun suffix => Zkc.Polynomial.Multilinear.extension
+        (n + k) table (Zkc.Polynomial.Quadratic.point k point suffix)) = claim :=
+  Zkc.Protocols.Sumcheck.Multilinear.residualClaim_iff table point claim
