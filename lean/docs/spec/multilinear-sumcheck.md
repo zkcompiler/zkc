@@ -108,9 +108,10 @@ The pair algebra accepts arbitrary pair values. There is no process constructor
 that silently makes received values equal to sent values. A later `PIR.Proc`
 contract must preserve the source order: receive both endpoints, guard the
 boundary, draw `cv`, deliver a separate `cp`, and update each role locally.
-The actual lowering uses two ordered scalar receives for the pair. Their
-intermediate state and possible stops need a separate expansion theorem;
-atomic pair receipt is not exact equality of that emitted effect tree.
+The actual lowering uses two ordered scalar receives for the pair. Keep both
+in the source-facing contract, including the intermediate state and possible
+stops. A strategy or handler may aggregate them into an endpoint pair through
+an explicit correspondence lemma; atomic receipt is not the same effect tree.
 
 The independent process package must also retain local count checks, maximum
 failure distinct from authored rejection, the original table guards, ordered
