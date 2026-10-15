@@ -146,7 +146,6 @@ def resolveFold (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
 
 structure LowerState where
   sites : List String := []
-  instructions : Nat := 0
 
 abbrev LowerM := StateT LowerState (Except String)
 
@@ -287,8 +286,6 @@ def lowerInstructions (snapshot : Snapshot) (domains : List DomainSpec)
     List Ty → Facts → List Nat → List Instruction → LowerM (RawRegion Ty Op)
   | _, _, _, [] => lowerTerminator kind exitKind terminal
   | context, facts, identities, .instruction descriptor operands results regions site :: rest => do
-    modify fun state => { state with instructions := state.instructions + 1 }
-    if (← get).instructions > 4096 then throw "structured-instruction-limit"
     let op ← resolveOp snapshot domains kind context facts identities descriptor operands results site
     if regions.length > 2 then throw "structured-region-count"
     let bodies ← regions.mapM fun (.region inputs outputs body) => do

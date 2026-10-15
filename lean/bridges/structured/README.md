@@ -91,7 +91,8 @@ equations, rather than merely updating an identity string.
 UTF-8 names remain data inside escaped Lean string literals. The independent
 renderer check compiles generated declarations and compares their exact Unicode
 codepoints in the kernel, including controls, quotes, backslashes, multibyte
-length boundaries and text resembling Lean declarations:
+length boundaries and text resembling Lean declarations. Its CLI control also
+runs under an ASCII locale; source files and tool output use explicit UTF-8:
 
 ```sh
 python3 lean/checks/check_structured_renderer.py

@@ -29,7 +29,7 @@ def digest(path):
 
 
 def write_json(path, value):
-    path.write_text(json.dumps(value, indent=2) + "\n")
+    path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
 
 
 def fields(values):
@@ -86,11 +86,11 @@ class Suite:
     def command(self, label, argv, success=True):
         start = time.monotonic()
         result = subprocess.run(list(map(str, argv)), cwd=ROOT, capture_output=True,
-                                text=True, timeout=60)
+                                encoding="utf-8", timeout=60)
         number = len(self.commands)
         prefix = self.directory / f"command-{number:04d}"
-        prefix.with_suffix(".stdout").write_text(result.stdout)
-        prefix.with_suffix(".stderr").write_text(result.stderr)
+        prefix.with_suffix(".stdout").write_text(result.stdout, encoding="utf-8")
+        prefix.with_suffix(".stderr").write_text(result.stderr, encoding="utf-8")
         self.commands.append({"label": label, "argv": list(map(str, argv)),
                               "exit": result.returncode,
                               "seconds": round(time.monotonic() - start, 4),
@@ -116,14 +116,14 @@ class Suite:
         folder = self.directory / label
         folder.mkdir(exist_ok=True)
         original = folder / "source.mlir"
-        original.write_text(source)
+        original.write_text(source, encoding="utf-8")
         output = self.command(label + ":export",
                               [self.tools["compiler"], "protocol-structured", original, "--symbol=" + symbol])
         snapshot = json.loads(output)
         assert snapshot[:4] == ["zkc.structured-source/0", "original",
                                 "sha256:" + digest(original), symbol], snapshot[:4]
         path = folder / "source.json"
-        path.write_text(output)
+        path.write_text(output, encoding="utf-8")
         self.command(label + ":check", [self.tools["lean"], "check", path])
         self.sources.append({"name": label, "source": str(original), "sha256": digest(original),
                              "snapshot": str(path), "snapshotSha256": digest(path)})
@@ -165,20 +165,20 @@ class Suite:
 
     def refuse_native(self, label, source, code):
         path = self.directory / (label + ".mlir")
-        path.write_text(source)
+        path.write_text(source, encoding="utf-8")
         number = len(self.commands)
         self.command(label, [self.tools["compiler"], "protocol-structured", path, "--symbol=main"],
                      success=False)
-        diagnostic = (self.directory / f"command-{number:04d}.stderr").read_text()
+        diagnostic = (self.directory / f"command-{number:04d}.stderr").read_text(encoding="utf-8")
         assert code in diagnostic, diagnostic
 
     def retained(self, subject, stem, module):
         _, _, data = subject
         fixtures = Path(__file__).parent / "fixtures"
-        assert data == json.loads((fixtures / (stem + ".json")).read_text())
+        assert data == json.loads((fixtures / (stem + ".json")).read_text(encoding="utf-8"))
         generated = constructors.render(data, "ZkcExamples.Structured." + module + "Data")
         maintained = ROOT / "lean/ZkcExamples/Structured" / (module + "Data.lean")
-        assert generated == maintained.read_text(), "constructor data differs from actual export"
+        assert generated == maintained.read_text(encoding="utf-8"), "constructor data differs from actual export"
 
     def changed_body(self, subject):
         _, path, data = subject
@@ -210,8 +210,8 @@ class Suite:
         if not bundle.exists():
             bundle.write_text(self.command(label + ":bundle",
                 [self.tools["compiler"], "protocol-bundle", original, "--entry=" + data[3],
-                 "--no-simplify"] + ([] if finite_bulk else ["--no-finite-bulk"])))
-        candidate = json.loads(json.loads(bundle.read_text())["candidate"])
+                 "--no-simplify"] + ([] if finite_bulk else ["--no-finite-bulk"])), encoding="utf-8")
+        candidate = json.loads(json.loads(bundle.read_text(encoding="utf-8"))["candidate"])
         ports = candidate[3][0][4]
         entry = definition(data, data[3])
         encoded = [wire(ty, value) for ty, value in zip(entry[4], values, strict=True)]
@@ -264,7 +264,7 @@ def wire(ty, value):
 
 
 def provenance_cases(suite, fixtures):
-    forwarded_text = (fixtures / "forwarded-bounds.mlir").read_text()
+    forwarded_text = (fixtures / "forwarded-bounds.mlir").read_text(encoding="utf-8")
     forwarded = suite.export("forwarded-bounds", forwarded_text)
     mixed_text = forwarded_text.replace(
         "func.func private @permute(%xs: !V, %ys: !V, %i: ui64) -> (!V, ui64, !V, !V)",
@@ -281,7 +281,7 @@ def provenance_cases(suite, fixtures):
         "func.call @read(%forward#0, %forward#1)",
         '"data.bounded_at"(%forward#0, %forward#1)')
     direct = suite.export("forwarded-read", direct_text)
-    aliased_text = (fixtures / "aliased-indices.mlir").read_text()
+    aliased_text = (fixtures / "aliased-indices.mlir").read_text(encoding="utf-8")
     aliased = suite.export("aliased-indices", aliased_text)
     capture_text = aliased_text.replace(
         "^entry(%xs: !V, %ys: !V):", "^entry(%xs: !V):").replace(
@@ -361,7 +361,7 @@ def boundary_cases(suite, unit_text):
         suite.command('reference-finite-instruction-limit',
                       [suite.tools['reference'], original, 'main', request], success=False)
         assert 'structured-reference-capacity' in (
-            suite.directory / f'command-{number:04d}.stderr').read_text()
+            suite.directory / f'command-{number:04d}.stderr').read_text(encoding="utf-8")
     suite.case('finite-declaration-counts-domain-and-terminators-do-not', finite_instruction_boundary)
 
     def file_boundary():
@@ -397,14 +397,14 @@ def boundary_cases(suite, unit_text):
             assert definition(subject[2], name)[1] == name
             suite.compare(subject, 'unicode-identity', [True], returned(True))
             rendered = constructors.render(subject[2], 'UnicodeData')
-            (subject[1].parent / 'Data.lean').write_text(rendered)
+            (subject[1].parent / 'Data.lean').write_text(rendered, encoding="utf-8")
         suite.case('native-unicode-helper-' + str(len(name)), renamed)
 
 
 def run_cases(suite):
     finite = ROOT / "compiler/test/fixtures/finite"
-    total_text = (finite / "total-state.mlir").read_text()
-    unit_text = (finite / "unit-state.mlir").read_text()
+    total_text = (finite / "total-state.mlir").read_text(encoding="utf-8")
+    unit_text = (finite / "unit-state.mlir").read_text(encoding="utf-8")
     total = suite.export("total-state", total_text)
     unit = suite.export("unit-state", unit_text)
     suite.case("retained-total-source-export-constructors", lambda: suite.retained(total, "total-state", "TotalState"))
@@ -437,10 +437,10 @@ def run_cases(suite):
         suite.case("stop-class-" + stop, lambda s=changed, reason=stop: suite.compare(
             s, "active", [["2"], True], ["stopped", reason]))
 
-    shared = suite.export("shared-math", (Path(__file__).parent / "fixtures/shared-math.mlir").read_text())
+    shared = suite.export("shared-math", (Path(__file__).parent / "fixtures/shared-math.mlir").read_text(encoding="utf-8"))
     assert sum(item[1] == "pair" for item in shared[2][6]) == 1
     structured = ROOT / "compiler/test/fixtures/structured-source"
-    indexed = suite.export("indexed-helper", (structured / "indexed-helper.mlir").read_text())
+    indexed = suite.export("indexed-helper", (structured / "indexed-helper.mlir").read_text(encoding="utf-8"))
     for entry in ("Run", "IndexedRun"):
         compiled = suite.frontend(entry)
         for items in ([], [2], [MODULUS - 1, 2, 2**180]):
@@ -452,14 +452,14 @@ def run_cases(suite):
                 suite.case(name + "-runner", lambda s=compiled, n=name, v=values, e=expected: suite.native(s, n, v, e))
     provenance_cases(suite, structured)
     boundary_cases(suite, unit_text)
-    guarded = suite.export("guarded", (structured / "guards.mlir").read_text())
+    guarded = suite.export("guarded", (structured / "guards.mlir").read_text(encoding="utf-8"))
     for enabled in (False, True):
         expected = returned(True) if enabled else ["stopped", "reject"]
         name = "guard-" + str(enabled)
         suite.case(name, lambda n=name, v=enabled, e=expected: suite.compare(guarded, n, [v], e))
         if "runtime" in suite.tools:
             suite.case(name + "-runner", lambda n=name, v=enabled, e=expected: suite.native(guarded, n, [v], e))
-    dag = suite.export("shared-local-dag", (structured / "shared-local-dag.mlir").read_text())
+    dag = suite.export("shared-local-dag", (structured / "shared-local-dag.mlir").read_text(encoding="utf-8"))
     def shared_dag_capacity():
         suite.command("shared-dag:check", [suite.tools["lean"], "check", dag[1]])
         assert len(dag[2][6]) == 23, len(dag[2][6])
@@ -469,10 +469,10 @@ def run_cases(suite):
             [suite.tools["lean"], "run", dag[1], request], success=False))
         assert result == {"code": "structured-evaluation-work-limit", "status": "refused"}, result
     suite.case("shared-helper-admission-is-separate-from-execution-capacity", shared_dag_capacity)
-    nested = suite.export("nested-control", (structured / "nested-controls.mlir").read_text())
-    loops = suite.export("loop-control", (structured / "loops-and-captures.mlir").read_text(), "entry")
+    nested = suite.export("nested-control", (structured / "nested-controls.mlir").read_text(encoding="utf-8"))
+    loops = suite.export("loop-control", (structured / "loops-and-captures.mlir").read_text(encoding="utf-8"), "entry")
     completed = suite.export("conditional-completion",
-        (Path(__file__).parent / "fixtures/conditional-completion.mlir").read_text())
+        (Path(__file__).parent / "fixtures/conditional-completion.mlir").read_text(encoding="utf-8"))
     for lower, upper in ((0, 0), (3, 1), (0, 1), (0, 2), (0, 3)):
         values = [str(lower), str(upper), "7", "11"]
         expected = returned("11", "7") if lower < upper else returned("7", "11")

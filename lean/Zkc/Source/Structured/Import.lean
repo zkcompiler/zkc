@@ -102,6 +102,8 @@ def check_payload (snapshot : Snapshot) : Except String Payload := do
   let domains ← snapshot.domains.mapM Domain.resolve
   let summaries ← snapshot.identitySummaries
   let definitions ← snapshot.definitions.mapM (checkDefinition snapshot domains summaries)
+  -- Preflight bounds work on input syntax before summarization. This bounds
+  -- the actual formed IR; future lowering may introduce additional operations.
   if (definitions.map (·.instructionCount)).foldl (· + ·) 0 > 4096 then
     throw "structured-instruction-limit"
   let ordered ← orderDefinitions definitions.length definitions []

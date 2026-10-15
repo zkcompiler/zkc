@@ -4,6 +4,7 @@
 import argparse
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -32,6 +33,16 @@ def check(output, lake):
         data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
                 "main", "P", [], [helper, entry]]
         namespace = f"RenderedCase{index}"
+        if index == 4:
+            # Exercise the actual CLI under an ASCII locale as well as the
+            # in-process renderer. File encoding must not depend on the host.
+            snapshot_path = output / "unicode.json"
+            snapshot_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+            rendered_path = output / "Unicode.lean"
+            environment = dict(os.environ, LC_ALL="C", PYTHONUTF8="0", PYTHONCOERCECLOCALE="0")
+            subprocess.run([sys.executable, renderer.__file__, snapshot_path, rendered_path,
+                            "--namespace", namespace], env=environment, check=True, timeout=30)
+            assert rendered_path.read_bytes() == renderer.render(data, namespace).encode("utf-8")
         source = renderer.render(data, namespace).replace("module\n\n", "", 1)
         # Numeric codepoints are an independent expectation; never render this
         # expected value through the string function being tested.
@@ -50,10 +61,10 @@ example : (Zkc.Source.Structured.check {namespace}.snapshot).isOk = true := by
     bodies = [source.replace("public import Zkc.Source.Structured.Import\n", "")
               .replace("@[expose] public section\n", "") for source in modules]
     path = output / "Rendered.lean"
-    path.write_text(header + "\n".join(bodies))
+    path.write_text(header + "\n".join(bodies), encoding="utf-8")
     run = subprocess.run([lake, "env", "lean", path], cwd=HERE,
-                         capture_output=True, text=True, timeout=60)
-    (output / "lean.log").write_text(run.stdout + run.stderr)
+                         capture_output=True, encoding="utf-8", timeout=60)
+    (output / "lean.log").write_text(run.stdout + run.stderr, encoding="utf-8")
     if run.returncode:
         raise AssertionError(run.stdout + run.stderr)
     for invalid in ["α" * 257, "🙂" * 129, "\ud800"]:
@@ -63,9 +74,10 @@ example : (Zkc.Source.Structured.check {namespace}.snapshot).isOk = true := by
             continue
         raise AssertionError("renderer accepted an invalid or oversized UTF-8 string")
     report = {"status": "pass", "kernel_cases": len(names), "refusal_cases": 3,
+              "ascii_locale_cli_cases": 1,
               "renderer_sha256": support.lake.sha(Path(renderer.__file__)),
               "subject_sha256": support.lake.sha(path)}
-    (output / "result.json").write_text(json.dumps(report, indent=2) + "\n")
+    (output / "result.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     return report
 
 

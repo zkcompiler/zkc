@@ -25,6 +25,8 @@ Dependency lists and instruction counts are derived from the formed operation
 tree, including every callback and suffix. `CheckedDefinition.helpers_eq_body`
 ties the helper inventory to the erasure of that same typed body. There is no
 separately maintained dependency log.
+Math-return summaries still order their syntactic call subgraph before admission;
+the formed inventory checks the complete helper graph afterward.
 
 `Imported snapshot` uses the common `Verification.Imported` carrier. Its check
 witness ties the resulting program to that exact snapshot.
@@ -121,6 +123,9 @@ definitions to 128 each, signatures to 512, instructions and references to
 not count as instructions; each finite declaration contributes one fold.
 The helper inventory has at most two references per stored instruction, so it
 needs no additional edge budget.
+Input instruction preflight bounds work before summarization. The formed-body
+count separately checks the resulting IR, so future lowering cannot silently
+exceed that limit by introducing operations.
 Shared call trees are not expanded during admission. The separate CLI work
 estimate can refuse an admitted helper DAG whose execution would be too large.
 The CLI has additional input and evaluation limits so a valid mathematical
