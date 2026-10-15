@@ -266,7 +266,8 @@ the exact snapshot into the common Region carrier, proves exact helper linking
 and table framing, and gives it an owned logical meaning. Conditional contracts
 retain input bounds and ordered output facts. [Structured comparisons](../lean/bridges/structured/README.md) exercise
 direct SSA execution, Lean and selected production Runner cases. This profile
-does not yet import group/service communication or prove native transformations.
+does not yet import group/service communication or establish general native
+compiler pass correctness.
 The [optional component foundation](../lean/docs/spec/structured-source.md#optional-component-meaning)
 interprets the same typed helper bodies with optional operands/results and closed
 callbacks, with all-present adequacy and full-table helper equations. Named

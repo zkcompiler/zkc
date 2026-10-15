@@ -10,7 +10,6 @@ import argparse
 import json
 import os
 from pathlib import Path
-import shutil
 import sys
 
 from check import MODULUS, ROOT, Suite, definition, digest, returned, write_json
@@ -94,6 +93,19 @@ def subject_cases(suite, stem, module, proof):
                           "sha256": digest(EXAMPLES / f"{proof}.lean")})
 
 
+def run_cases(suite):
+    args = suite.args
+    write_json(suite.directory / "environment.json", {
+        "affinity": sorted(os.sched_getaffinity(0)),
+        "threads": {key: os.environ.get(key) for key in
+                    ("LEAN_NUM_THREADS", "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS")},
+        "toolchain": suite.command("lean-version", [args.lake, "--dir", ROOT / "lean",
+                                                    "env", "lean", "--version"]).strip(),
+    })
+    for stem, module, proof in SUBJECTS:
+        suite.case(stem, lambda s=stem, m=module, p=proof: subject_cases(suite, s, m, p))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--compiler", type=Path, default=ROOT / "build/compiler/zkc-compile")
@@ -107,28 +119,9 @@ def main():
     parser.add_argument("--write-fixtures", action="store_true",
                         help="replace retained subjects; checked proof sources are never generated")
     args = parser.parse_args()
-    if args.cases < 1:
-        parser.error("--cases must be positive")
     args.runtime = None
     suite = Suite(args)
-    optimizer = suite.directory / "tools/optimizer"
-    shutil.copy2(args.optimizer.resolve(), optimizer)
-    suite.tools["optimizer"] = optimizer
-    # Record source/tool identities independently of the native input digest.
-    for path in [Path(__file__), Path(snapshot.__file__), Path(__file__).with_name("check.py"),
-                 ROOT / "lean/Zkc/Source/Structured/Inlining.lean",
-                 ROOT / "lean/lake-manifest.json", ROOT / "lean/lean-toolchain"]:
-        suite.sources.append({"source": str(path.relative_to(ROOT)), "sha256": digest(path)})
-    write_json(suite.directory / "environment.json", {
-        "affinity": sorted(os.sched_getaffinity(0)),
-        "threads": {key: os.environ.get(key) for key in
-                    ("LEAN_NUM_THREADS", "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS")},
-        "toolchain": suite.command("lean-version", [args.lake, "--dir", ROOT / "lean",
-                                                    "env", "lean", "--version"]).strip(),
-    })
-    for stem, module, proof in SUBJECTS:
-        suite.case(stem, lambda s=stem, m=module, p=proof: subject_cases(suite, s, m, p))
-    return suite.finish()
+    return suite.run(run_cases)
 
 
 if __name__ == "__main__":

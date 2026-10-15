@@ -6,8 +6,7 @@ math fn weighted(value: Fr, weight: Fr) -> Fr {
 }
 
 math fn claim(a0: Fr, a1: Fr, r: Fr) -> Fr {
-  // Expanded interpolation avoids a decimal literal in the imported proof subject.
-  return a0 - weighted(a0, r) + weighted(a1, r);
+  return weighted(a0, 1 - r) + weighted(a1, r);
 }
 
 protocol Claim roles(P)(a0: Fr@P, a1: Fr@P, r: Fr@P) -> (claim: Fr@P) {

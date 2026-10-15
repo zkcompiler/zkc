@@ -8,6 +8,7 @@ agreement evidence, not a proof of either compiler boundary.
 
 import argparse
 import copy
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -16,10 +17,15 @@ import shutil
 import subprocess
 import sys
 import time
+from uuid import uuid4
 
 import snapshot as constructors
+from evidence import archive_sources, atomic_json
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / "scripts"))
+from reporting import new_directory  # noqa: E402
+
 FIELD = "bls12-381.fr"
 MODULUS = 52435875175126190479447740508185965837690552500527637822603658699938581184513
 
@@ -66,35 +72,87 @@ def typed_result(types, expected):
 class Suite:
     def __init__(self, args):
         self.args = args
-        self.directory = args.report.resolve().parent
-        self.directory.mkdir(parents=True, exist_ok=True)
+        self.directory = None
         self.commands, self.checks, self.sources = [], [], []
-        self.tools = {}
+        self.tools, self.tool_records = {}, {}
+        self.archives = {}
+        self.revision = None
+        self.identity = str(uuid4())
+        self.started = datetime.now(timezone.utc).isoformat()
+        self.rng = random.Random(args.seed)
+        # Clear any previous success before allocation, copies, Git or commands.
+        # No old archive is changed: all subsequent writes use a fresh directory.
+        self.publish("running")
+
+    def setup(self):
+        self.directory = new_directory(self.args.report.resolve().parent / "runs",
+                                       self.identity, "structured")
+        self.publish("running")
+        if self.args.cases < 1:
+            raise ValueError("--cases must be positive")
+        self.revision = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+        self.archives["before"] = archive_sources(ROOT, self.directory / "source-before")
         tool_dir = self.directory / "tools"
-        tool_dir.mkdir(exist_ok=True)
-        for name in ("compiler", "reference", "lean", "runtime"):
-            source = getattr(args, name)
+        tool_dir.mkdir()
+        for name in ("compiler", "optimizer", "reference", "lean", "runtime"):
+            source = getattr(self.args, name, None)
             if source is None:
                 continue
             source = source.resolve()
             target = tool_dir / name
-            if source != target:
-                shutil.copy2(source, target)
+            shutil.copy2(source, target)
             self.tools[name] = target
-        self.rng = random.Random(args.seed)
+            self.tool_records[name] = {"path": str(target), "sha256": digest(target),
+                                       "source": str(source)}
+
+    def run(self, action):
+        """Own setup and finalization for both structured drivers, including failure."""
+        status = None
+        try:
+            self.setup()
+            action(self)
+            if getattr(self.args, "write_fixtures", False):
+                self.archives["after"] = archive_sources(ROOT, self.directory / "source-after")
+        except BaseException as error:
+            status = "interrupted" if isinstance(error, KeyboardInterrupt) else "failed"
+            self.checks.append({"name": "setup-or-generation", "passed": False,
+                                "error": f"{type(error).__name__}: {error}"})
+            print(error, file=sys.stderr)
+        return self.finish(status)
+
+    def publish(self, status):
+        report = {"format": "zkc.structured-comparison/0", "seed": self.args.seed,
+                  "argv": sys.argv, "cases": self.args.cases,
+                  "run": self.identity, "directory": str(self.directory) if self.directory else None,
+                  "status": status, "startedUtc": self.started,
+                  "revision": self.revision, "tools": self.tool_records,
+                  "sourceArchives": self.archives,
+                  "sources": self.sources, "checks": self.checks, "commands": self.commands,
+                  "scope": "bounded logical outcomes; no native correspondence theorem or resource equivalence"}
+        if status != "running":
+            report["finishedUtc"] = datetime.now(timezone.utc).isoformat()
+        if self.directory is not None:
+            atomic_json(self.directory / "report.json", report)
+        atomic_json(self.args.report, report)
 
     def command(self, label, argv, success=True):
         start = time.monotonic()
-        result = subprocess.run(list(map(str, argv)), cwd=ROOT, capture_output=True,
-                                encoding="utf-8", timeout=60)
         number = len(self.commands)
         prefix = self.directory / f"command-{number:04d}"
+        record = {"label": label, "argv": list(map(str, argv)), "output": str(prefix), "exit": None}
+        self.commands.append(record)
+        try:
+            result = subprocess.run(list(map(str, argv)), cwd=ROOT, capture_output=True,
+                                    encoding="utf-8", timeout=60)
+        except (OSError, subprocess.SubprocessError) as error:
+            record["error"] = f"{type(error).__name__}: {error}"
+            raise
+        finally:
+            record["seconds"] = round(time.monotonic() - start, 4)
+        record["exit"] = result.returncode
         prefix.with_suffix(".stdout").write_text(result.stdout, encoding="utf-8")
         prefix.with_suffix(".stderr").write_text(result.stderr, encoding="utf-8")
-        self.commands.append({"label": label, "argv": list(map(str, argv)),
-                              "exit": result.returncode,
-                              "seconds": round(time.monotonic() - start, 4),
-                              "output": str(prefix)})
         expected = 0 if success else 1
         if result.returncode != expected:
             raise AssertionError(f"{label}: exit {result.returncode}, expected {expected}\n"
@@ -236,16 +294,14 @@ class Suite:
             assert endpoint["after"][1]["cause"] == ["explicit", {
                 "omitted_bytes": 0, "text": expected[1]}], report
 
-    def finish(self):
-        report = {"format": "zkc.structured-comparison/0", "seed": self.args.seed,
-                  "revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
-                  "tools": {key: {"path": str(path), "sha256": digest(path)} for key, path in self.tools.items()},
-                  "sources": self.sources, "checks": self.checks, "commands": self.commands,
-                  "scope": "bounded logical outcomes; no native correspondence theorem or resource equivalence"}
-        write_json(self.args.report, report)
+    def finish(self, status=None):
+        if not self.checks:
+            self.checks.append({"name": "suite", "passed": False, "error": "no checks executed"})
         failures = sum(not check["passed"] for check in self.checks)
+        status = status or ("failed" if failures else "pass")
+        self.publish(status)
         print(f"{len(self.checks)} checks, {failures} failures; {self.args.report}")
-        return int(failures != 0)
+        return int(status != "pass")
 
 
 def wire(ty, value):
@@ -575,15 +631,8 @@ def main():
     parser.add_argument("--seed", type=int, default=73191)
     parser.add_argument("--report", type=Path, required=True)
     args = parser.parse_args()
-    if args.cases < 1:
-        parser.error("--cases must be positive")
     suite = Suite(args)
-    try:
-        run_cases(suite)
-    except (AssertionError, ValueError, OSError, subprocess.SubprocessError) as error:
-        suite.checks.append({"name": "setup-or-generation", "passed": False, "error": str(error)})
-        print(error, file=sys.stderr)
-    return suite.finish()
+    return suite.run(run_cases)
 
 
 if __name__ == "__main__":

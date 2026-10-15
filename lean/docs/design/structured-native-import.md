@@ -122,12 +122,9 @@ body; table-frame laws isolate the helper meanings each region actually uses.
 The [scalar inlining clients](../../bridges/structured/README.md#scalar-inlining-pairs)
 now exercise this interface on two actual authored Entries. Schnorr response
 computes `nonce + challenge * secret`. The multilinear claim client computes
-`a0 - r * a0 + r * a1`, proved equal to `(1 - r) * a0 + r * a1` in any
-commutative ring, with two calls to one shared nested helper. This expanded
-source avoids the decimal-literal parsing path, which currently does not reduce
-under kernel admission evaluation; it does not change admission or assume a
-literal-decoding equation. The literal spelling passes executable admission,
-but that alone cannot supply its kernel witness.
+`(1 - r) * a0 + r * a1` in any commutative ring, through the authored expression
+`weighted(a0, 1 - r) + weighted(a1, r)`. The two calls share a nested helper;
+the decimal literal and both exact bodies have kernel-checked admission witnesses.
 
 Each proof concerns the retained native original and the actual output of
 `zkc-opt --zkc-prepare-protocol="simplify=false optimize-finite=false"`.
