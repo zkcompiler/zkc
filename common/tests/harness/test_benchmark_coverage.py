@@ -1,0 +1,231 @@
+"""Mathematical oracles and evidence integrity, without performance thresholds."""
+import importlib
+import json
+from pathlib import Path
+import subprocess
+import sys
+
+import pytest
+
+
+@pytest.fixture
+def modules(monkeypatch, tmp_path):
+    root = Path(__file__).resolve().parents[3]
+    monkeypatch.syspath_prepend(str(root/'common/benchmarks'))
+    loaded = {name: importlib.import_module(f'bench.{name}') for name in
+              ('algebra', 'coverage', 'programs', 'stark', 'io', 'runner', 'results')}
+    monkeypatch.setattr(loaded['io'], 'MEASUREMENT_LOCK', tmp_path/'measurement.lock')
+    return loaded
+
+
+@pytest.mark.parametrize('size', [1, 2, 8, 32])
+@pytest.mark.parametrize('degree', [1, 8])
+def test_coset_oracle_matches_horner_at_every_point(modules, size, degree):
+    a = modules['algebra']
+    coefficients = a.dense(size, degree, 131)
+    shift = a.dense(1, degree, 132)[0]
+    root = pow(1791270792, (1 << 24)//size, a.P)
+    expected = [a.horner(coefficients, tuple(x*pow(root, i, a.P) % a.P for x in shift)) for i in range(size)]
+    assert a.coset(coefficients, shift, size) == expected
+
+
+def test_coverage_has_matched_forms_and_independent_stark_dimensions(modules):
+    cases = modules['coverage'].cases()
+    names = {c.identifier for c in cases}
+    assert len(names) == len(cases)
+    assert set(modules['coverage'].SMOKE) <= names
+    assert {c.name for c in cases} >= {'finite', 'matrix', 'curve', 'pairing', 'control', 'transcript', 'air', 'fri', 'machine'}
+    for field in ('koala-bear', 'bls12-381.fr'):
+        for n in (0, 17, 1024, 8192):
+            forms = [c for c in cases if c.name == 'finite' and c.shape['field'] == field and c.shape['elements'] == n]
+            assert {c.shape['form'] for c in forms} == {'reduce', 'collect', 'bulk'}
+            programs = [modules['programs'].finite(c.shape) for c in forms]
+            assert programs[0].inputs == programs[1].inputs == programs[2].inputs
+    air = [c.shape for c in cases if c.name == 'air']
+    assert len({s['height'] for s in air if s['width'] == 1}) >= 3
+    assert len({s['width'] for s in air if s['height'] == 32 and s['evaluation_size'] == 128}) >= 3
+    assert len({s['evaluation_size'] for s in air if s['height'] == 32 and s['width'] == 4}) >= 2
+
+
+def test_distinct_stark_statements_keep_the_same_program(modules, tmp_path):
+    root = Path(__file__).resolve().parents[3]
+    for family in ('fri', 'air', 'transcript', 'bulletproofs'):
+        case = next(c for c in modules['coverage'].cases() if c.name == family)
+        left, right = [case.generate(root, tmp_path, i) for i in (0, 1)]
+        assert left.source == right.source and left.assets == right.assets
+        assert left.inputs[0]['public'] != right.inputs[0]['public']
+        assert left.inputs[0]['public'] != left.changed
+
+
+def test_shared_slot_is_exclusive_fail_fast_and_preserves_evidence(modules, tmp_path):
+    io = modules['io']
+    output = tmp_path/'new'
+    with io.measurement_slot(output/'coordination.json'):
+        output.mkdir()
+        code = ('import fcntl,sys; f=open(sys.argv[1],"a"); '
+                'fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB)')
+        other = subprocess.run([sys.executable, '-c', code, io.MEASUREMENT_LOCK], capture_output=True)
+        assert other.returncode != 0 and b'BlockingIOError' in other.stderr
+        with pytest.raises(io.MeasurementBusy):
+            with io.measurement_slot(tmp_path/'other/coordination.json'):
+                pytest.fail('nested slot acquired')
+    evidence = output/'coordination.json'
+    original = evidence.read_bytes()
+    record = json.loads(original)
+    assert record['attempted_utc'] <= record['acquired_utc'] <= record['finished_utc']
+    with pytest.raises(FileExistsError):
+        with io.measurement_slot(evidence):
+            pytest.fail('existing evidence accepted')
+    assert evidence.read_bytes() == original
+    assert io.MEASUREMENT_LOCK.exists()
+
+
+def test_command_inherits_the_owned_lock_descriptor(modules, tmp_path):
+    io = modules['io']
+    with io.measurement_slot(tmp_path/'run/coordination.json'):
+        fd = io._measurement_fd.get()
+        script = 'import os,sys; assert os.fstat(int(sys.argv[1])).st_ino == os.stat(sys.argv[2]).st_ino'
+        io.Journal(tmp_path/'run/commands', 10).command(
+            [sys.executable, '-c', script, str(fd), io.MEASUREMENT_LOCK], cwd=tmp_path)
+
+
+def test_command_intervals_survive_failure(modules, tmp_path):
+    io = modules['io']
+    journal = io.Journal(tmp_path/'commands', 10)
+    with pytest.raises(io.MeasurementError):
+        journal.command([sys.executable, '-c', 'raise SystemExit(7)'], cwd=tmp_path)
+    record = json.loads((tmp_path/'commands/commands.jsonl').read_text())
+    assert record['returncode'] == 7
+    assert record['started_utc'] <= record['finished_utc']
+
+
+def lifecycle_worker(times=(10, 100, 30, 300)):
+    calls = [{'input_index': i % 2, 'decode_ns': 5, 'preparation': {'entries': 0, 'retained_bytes': 0, 'hits': 0}} for i in range(4)]
+    return {'format': 'zkc.benchmark-worker/0', 'status': 'passed', 'boundary': 'admitted_entry_call',
+        'proof_bytes': 4, 'admission_ns': 3, 'process_peak_rss_bytes': 100, 'proofs': [],
+        'build': {'optimized': True, 'debug_assertions': False}, 'process': {}, 'timer_floor_ns': 1,
+        'diagnostics': {}, 'lifecycle': {'preparation_limits': {'entries':128, 'bytes':8388608, 'default_entries':128, 'default_bytes':8388608}, 'capture_ns': 1, 'admit_ns': 2, 'diagnostics_ns': 7,
+            'peak_rss_before_diagnostics': 80, 'peak_rss_after_diagnostics': 100, 'calls': calls},
+        'samples': [{'phase': 'warmup' if i < 2 else 'sample', 'index': i, 'iterations': 1,
+                     'elapsed_ns': t, 'cpu_ns': t, 'first_call_ns': t} for i, t in enumerate(times)]}
+
+
+@pytest.mark.parametrize('fault', ['missing', 'calls', 'admission', 'decode', 'identity', 'stats'])
+def test_lifecycle_evidence_is_checked(modules, fault):
+    worker = lifecycle_worker()
+    if fault == 'missing': worker['lifecycle'] = None
+    elif fault == 'calls': worker['lifecycle']['calls'].pop()
+    elif fault == 'admission': worker['admission_ns'] = 99
+    elif fault == 'decode': worker['lifecycle']['calls'][0]['decode_ns'] = -1
+    elif fault == 'identity': worker['lifecycle']['calls'][0]['input_index'] = True
+    else: worker['lifecycle']['calls'][0]['preparation'] = {'entries': -1}
+    with pytest.raises(modules['io'].MeasurementError):
+        modules['results'].validate_worker(worker, {'warmups': 2, 'samples': 2, 'iterations': 1}, 'admitted_entry_call')
+
+
+def test_changing_statements_keep_individual_first_visits_and_distributions(modules):
+    job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call'}
+    manifest = {'format': 'zkc.benchmark/0', 'status': 'passed', 'processes': 2,
+                'plan': {'warmups': 2, 'samples': 2, 'iterations': 1}, 'matrix': [job],
+                'results': [job | {'status': 'passed', 'repetition': i, 'worker': lifecycle_worker(times)}
+                            for i, times in enumerate(((10, 100, 30, 300), (20, 200, 50, 500)))]}
+    row = modules['results'].summarize(manifest)[0]
+    assert [v['first_visit_ns']['median'] for v in row['inputs']] == [15, 150]
+    assert [v['ns_per_call']['median'] for v in row['inputs']] == [40, 400]
+    assert row['decode_ns_per_call']['median'] == 5
+
+
+def test_workers_receive_only_declared_environment(modules, monkeypatch):
+    monkeypatch.setenv('ZKC_UNRECORDED_EXPERIMENT', '1')
+    monkeypatch.setenv('PYTHONPATH', '/unrecorded')
+    monkeypatch.setenv('UNRELATED_API_TOKEN', 'secret')
+    monkeypatch.setenv('RAYON_NUM_THREADS', '3')
+    environment = modules['io'].command_environment()
+    assert not {'ZKC_UNRECORDED_EXPERIMENT', 'PYTHONPATH', 'UNRELATED_API_TOKEN'} & environment.keys()
+    assert environment['RAYON_NUM_THREADS'] == '3'
+    assert environment['LC_ALL'] == 'C'
+
+
+@pytest.mark.parametrize('completed', [None, 0, 1, 2])
+def test_warm_refusal_requires_a_successful_preceding_call(modules, tmp_path, completed):
+    executable = tmp_path/'worker'
+    response = {'format': 'zkc.benchmark-worker/0', 'status': 'rejected', 'completed_calls': completed}
+    executable.write_text(f'#!{sys.executable}\nimport json,sys\nprint(json.dumps({response!r}))\nsys.exit(1)\n')
+    executable.chmod(0o755)
+    job = modules['runner'].Job('case', 'zkc', 'verify', executable, {}, tmp_path/'proof', 'test')
+    if completed == 1:
+        modules['runner'].refuse(job, tmp_path/'negative', 5, completed=1)
+    else:
+        with pytest.raises(modules['io'].MeasurementError, match='intended invocation'):
+            modules['runner'].refuse(job, tmp_path/'negative', 5, completed=1)
+
+
+def test_every_run_has_a_generator_owned_incorrect_expectation(modules):
+    root = Path(__file__).resolve().parents[3]
+    for case in modules['coverage'].cases():
+        if case.name in ('fri', 'air', 'bulletproofs', 'machine', 'transcript'):
+            continue
+        program = case.generate(root, root/'unused')
+        assert program.incorrect is not None
+        assert program.incorrect != program.inputs[0]
+        assert program.incorrect.keys() == program.inputs[0].keys()
+
+
+def test_stark_claim_mutation_preserves_framing_and_canonical_coordinates(modules):
+    a, stark = modules['algebra'], modules['stark']
+    root = b'ZKCV\x00\x21' + bytes(32)
+    claim = b'ZKCV\x00\x1b' + (1).to_bytes(4, 'little') + (a.P-1).to_bytes(4, 'little') + bytes(28)
+    proof = b'ZKCPRF00' + bytes(32) + len(root).to_bytes(8, 'little') + root + len(claim).to_bytes(8, 'little') + claim
+    mutated = stark.mutate_claim(proof)
+    assert len(mutated) == len(proof)
+    assert mutated[:-32] == proof[:-32]
+    assert mutated[-32:] == bytes(32)
+    with pytest.raises(ValueError, match='missing extension'):
+        stark.mutate_claim(proof[:40])
+
+
+@pytest.mark.parametrize('observed', ['format', 'binding', 'verification', None])
+def test_semantic_control_cannot_pass_at_the_format_layer(modules, tmp_path, observed):
+    executable = tmp_path/'worker'
+    response = {'format': 'zkc.benchmark-worker/0', 'status': 'rejected', 'refusal': {'class': observed}}
+    executable.write_text(f'#!{sys.executable}\nimport json,sys\nprint(json.dumps({response!r}))\nsys.exit(1)\n')
+    executable.chmod(0o755)
+    job = modules['runner'].Job('case', 'zkc', 'verify', executable, {}, tmp_path/'proof', 'test')
+    if observed == 'verification':
+        modules['runner'].refuse(job, tmp_path/'negative', 5, classes={'verification'})
+    else:
+        with pytest.raises(modules['io'].MeasurementError, match='wrong layer'):
+            modules['runner'].refuse(job, tmp_path/'negative', 5, classes={'verification'})
+
+
+def test_fri_invalid_word_is_not_a_single_position_perturbation(modules, tmp_path):
+    root = Path(__file__).resolve().parents[3]
+    case = next(c for c in modules['coverage'].cases() if c.name == 'fri')
+    program = case.generate(root, tmp_path)
+    valid = program.inputs[0]['witness']['word']
+    invalid = program.invalid_witness['word']
+    assert len(invalid) == len(valid)
+    assert all(x != y for x, y in zip(valid, invalid, strict=True))
+
+
+def test_monero_response_control_refuses_framed_or_noncanonical_layout(modules):
+    mutate = modules['coverage'].library_cases.mutate_response
+    raw = bytes(160)
+    changed = mutate(raw)
+    assert len(changed) == len(raw) and changed[:96] == raw[:96]
+    assert int.from_bytes(changed[96:128], 'little') == 1
+    for invalid in (b'ZKCPRF00'+bytes(152), bytes(96)+b'\xff'*32):
+        with pytest.raises(ValueError, match='raw Monero'):
+            mutate(invalid)
+
+
+def test_comparison_rejects_changed_native_preparation_defaults(modules):
+    from copy import deepcopy
+    job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call'}
+    baseline = {'format': 'zkc.benchmark/0', 'status': 'passed', 'processes': 1,
+                'plan': {'warmups': 2, 'samples': 2, 'iterations': 1}, 'matrix': [job], 'host': {}, 'contracts': {},
+                'results': [job | {'status': 'passed', 'repetition': 0, 'worker': lifecycle_worker()}]}
+    changed = deepcopy(baseline)
+    changed['results'][0]['worker']['lifecycle']['preparation_limits']['default_bytes'] *= 2
+    with pytest.raises(modules['io'].MeasurementError, match='preparation limits differ'):
+        modules['results'].compare(baseline, changed)

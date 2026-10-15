@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import sys
 
-from bench.io import MeasurementError, ROOT, executable, positive_integer
+from bench.io import MeasurementBusy, MeasurementError, ROOT, executable, positive_integer
 from bench.results import compare, publish, validate_manifest
 from bench.runner import run
 from bench.suites import catalog, prepare
@@ -35,6 +35,10 @@ def main(argv=None):
     run_parser.add_argument('--monero-source', type=Path)
     run_parser.add_argument('--case', action='append', choices=[c[0] for c in catalog()])
     run_parser.add_argument('--suite', action='append', choices=sorted({c[1].name for c in catalog()}))
+    run_parser.add_argument('--preset', choices=('smoke', 'stark', 'execution', 'all'), default='all')
+    run_parser.add_argument('--input-count', type=positive_integer, default=1, help='distinct inputs per source proof worker; samples and warmups must cover complete cycles')
+    run_parser.add_argument('--preparation-entries', type=nonnegative, help='lower the source proof store entry bound for saturation controls; byte capacity stays at its default')
+    run_parser.add_argument('--preparation', choices=('enabled', 'disabled', 'both'), default='enabled', help='source proof preparation policy; external comparisons retain their standard policy')
     run_parser.add_argument('--output', type=Path, required=True)
     run_parser.add_argument('--processes', type=positive_integer, default=4)
     run_parser.add_argument('--samples', type=positive_integer, default=5)
@@ -48,7 +52,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         if args.command == 'list':
-            for name, suite, size in catalog(): print(f'{name}\t{suite.name}\t{size}')
+            for name, suite, size in catalog(): print(f'{name}\t{suite.name}\t{json.dumps(size, sort_keys=True)}')
             return 0
         if args.command == 'compare':
             print(json.dumps(compare(json.loads(args.baseline.read_text()), json.loads(args.current.read_text())), indent=2))
@@ -60,6 +64,9 @@ def main(argv=None):
             publish(args.output, document)
             return 0
         return run(args, prepare)
+    except MeasurementBusy as error:
+        print(str(error), file=sys.stderr)
+        return 75
     except (MeasurementError, OSError, ValueError, KeyError) as error:
         print(str(error), file=sys.stderr)
         return 2

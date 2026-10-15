@@ -127,8 +127,9 @@ def cleanup_signals():
 
 
 def run(arguments, *, input=None, text=False, capture_output=False, stdout=None,
-        stderr=None, timeout=None, cwd=None, env=None, check=False, cleanup_grace=GRACE):
-    """The subprocess.run subset used by repository tools, with group cleanup."""
+        stderr=None, timeout=None, cwd=None, env=None, check=False, cleanup_grace=GRACE,
+        pass_fds=()):
+    """Run with group cleanup and optional POSIX descriptor inheritance."""
     if timeout is not None:
         timeout = positive_timeout(timeout)
     cleanup_grace = positive_timeout(cleanup_grace)
@@ -145,7 +146,7 @@ def run(arguments, *, input=None, text=False, capture_output=False, stdout=None,
         # cleanup could replace the timeout with an unrelated Unicode error.
         process = subprocess.Popen(arguments, stdin=subprocess.PIPE if input is not None else None,
                                    stdout=stdout, stderr=stderr, cwd=cwd, env=env,
-                                   start_new_session=(os.name == "posix"))
+                                   start_new_session=(os.name == "posix"), pass_fds=pass_fds)
         try:
             out, err = process.communicate(input, timeout=timeout)
         except BaseException as error:

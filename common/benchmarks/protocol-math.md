@@ -9,6 +9,14 @@ pytest integration modules, build tools, synchronize dependencies or modify
 the selected source trees. Input preparation reuses the maintained example
 scripts and their small adapter dependencies.
 
+For SDK-call measurements, growing trace shapes, dense polynomial workloads and
+changing statements, use the common [execution benchmark suite](README.md).
+The two tools share process journals and the exclusive
+`/tmp/zkc-benchmark-execution.lock`. Each harness acquires the lock itself across
+preparation, timing and validation; do not wrap it in a second acquisition.
+Exit 75 means the slot is busy. Use the same lock for other CPU-heavy builds or
+experiments, and never unlink it. Command start/end times are recorded.
+
 ## Run a comparison
 
 Run from a checkout with Python 3.12 or later. Supply existing executables as
