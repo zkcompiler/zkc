@@ -19,6 +19,7 @@ pub(super) struct Implementation {
     contract: &'static str,
     signature: Signature,
     pub(super) handler: Handler,
+    pub(super) deterministic: bool,
 }
 impl Implementation {
     pub(super) fn signature(&self, binding: &OperationBinding) -> Option<BoundSignature> {
@@ -54,11 +55,12 @@ impl Registry {
             }
         }
     }
-    fn family(
+    fn install_family(
         &mut self,
         implementations: &'static [(&'static str, &'static str)],
         signature: Signature,
         handler: Handler,
+        deterministic: bool,
     ) -> Result<()> {
         for &(identity, contract) in implementations {
             self.insert(
@@ -67,15 +69,33 @@ impl Registry {
                     contract,
                     signature,
                     handler,
+                    deterministic,
                 },
             )?;
         }
         Ok(())
     }
-    fn shaped(
+    fn family(
+        &mut self,
+        rows: &'static [(&'static str, &'static str)],
+        signature: Signature,
+        handler: Handler,
+    ) -> Result<()> {
+        self.install_family(rows, signature, handler, false)
+    }
+    fn pure_family(
+        &mut self,
+        rows: &'static [(&'static str, &'static str)],
+        signature: Signature,
+        handler: Handler,
+    ) -> Result<()> {
+        self.install_family(rows, signature, handler, true)
+    }
+    fn install_shaped(
         &mut self,
         contracts: &'static [crate::bindings::Contract],
         handler: Handler,
+        deterministic: bool,
     ) -> Result<()> {
         for row in contracts {
             for implementation in row.implementations {
@@ -85,11 +105,26 @@ impl Registry {
                         contract: row.name,
                         signature: Signature::Shaped(row, crate::bindings::Selection::Default),
                         handler,
+                        deterministic,
                     },
                 )?;
             }
         }
         Ok(())
+    }
+    fn shaped(
+        &mut self,
+        rows: &'static [crate::bindings::Contract],
+        handler: Handler,
+    ) -> Result<()> {
+        self.install_shaped(rows, handler, false)
+    }
+    fn pure_shaped(
+        &mut self,
+        rows: &'static [crate::bindings::Contract],
+        handler: Handler,
+    ) -> Result<()> {
+        self.install_shaped(rows, handler, true)
     }
     fn alternative(&mut self, row: &Alternative) -> Result<()> {
         let mut entry = self
@@ -109,6 +144,7 @@ impl Registry {
             },
         );
         entry.handler = row.handler.unwrap_or(entry.handler);
+        entry.deterministic &= row.deterministic;
         self.insert(row.identity.into(), entry)
     }
     pub(super) fn implementations(&self) -> Vec<(String, &'static str)> {
@@ -130,6 +166,7 @@ pub(crate) struct Alternative {
     pub(crate) ports: crate::bindings::PortTransform,
     /// Omit for a layout-only alternative to retain the original algorithm.
     pub(crate) handler: Option<Handler>,
+    pub(crate) deterministic: bool,
 }
 pub(super) fn alternatives() -> impl Iterator<Item = &'static Alternative> {
     [
@@ -153,33 +190,34 @@ pub(super) fn installed() -> Result<&'static Registry> {
                 Signature::Custom(crate::relation::signature),
                 relation,
             )?;
-            r.shaped(super::execute::CONTRACTS, basic)?;
-            r.shaped(crate::kernels::arithmetic::CONTRACTS, arithmetic)?;
-            r.shaped(crate::kernels::conversions::CONTRACTS, conversions)?;
-            r.shaped(crate::kernels::curve::CONTRACTS, curve)?;
+            r.pure_shaped(super::execute::CONTRACTS, basic)?;
+            r.shaped(super::execute::PCS_CONTRACTS, basic)?;
+            r.pure_shaped(crate::kernels::arithmetic::CONTRACTS, arithmetic)?;
+            r.pure_shaped(crate::kernels::conversions::CONTRACTS, conversions)?;
+            r.pure_shaped(crate::kernels::curve::CONTRACTS, curve)?;
             r.shaped(crate::kernels::resources::CONTRACTS, resources)?;
-            r.shaped(crate::plonky3::numerical::CONTRACTS, numerical)?;
-            r.family(
+            r.pure_shaped(crate::plonky3::numerical::CONTRACTS, numerical)?;
+            r.pure_family(
                 crate::kernels::encoding::IMPLEMENTATIONS,
                 Signature::Custom(crate::kernels::encoding::signature),
                 encoding,
             )?;
-            r.family(
+            r.pure_family(
                 crate::hash::IMPLEMENTATIONS,
                 Signature::Custom(crate::hash::signature),
                 hash,
             )?;
-            r.family(
+            r.pure_family(
                 crate::kernels::bytes::IMPLEMENTATIONS,
                 Signature::Custom(crate::kernels::bytes::signature),
                 bytes,
             )?;
-            r.family(
+            r.pure_family(
                 crate::kernels::indices::IMPLEMENTATIONS,
                 Signature::Custom(crate::kernels::indices::signature),
                 indices,
             )?;
-            r.family(
+            r.pure_family(
                 crate::external_kernels::IMPLEMENTATIONS,
                 Signature::Custom(crate::external_kernels::signature),
                 external,
@@ -189,17 +227,17 @@ pub(super) fn installed() -> Result<&'static Registry> {
                 Signature::Custom(crate::oracle::signature),
                 oracle,
             )?;
-            r.family(
+            r.pure_family(
                 crate::field_array::IMPLEMENTATIONS,
                 Signature::Custom(crate::field_array::signature),
                 field_array,
             )?;
-            r.family(
+            r.pure_family(
                 crate::sequence::IMPLEMENTATIONS,
                 Signature::Custom(crate::sequence::signature),
                 sequence,
             )?;
-            r.family(
+            r.pure_family(
                 crate::fixed_vector::IMPLEMENTATIONS,
                 Signature::Custom(crate::fixed_vector::signature),
                 fixed_vector,
@@ -213,13 +251,13 @@ pub(super) fn installed() -> Result<&'static Registry> {
                 Signature::Custom(super::resource_unit::signature),
                 super::resource_unit::execute,
             )?;
-            r.family(
+            r.pure_family(
                 super::execute::SPECIAL_IMPLEMENTATIONS,
                 Signature::Custom(crate::bindings::table::relayout),
                 basic,
             )?;
-            r.shaped(crate::kernels::arithmetic::EMBEDDINGS, arithmetic)?;
-            r.shaped(crate::kernels::curve::PAIRINGS, curve)?;
+            r.pure_shaped(crate::kernels::arithmetic::EMBEDDINGS, arithmetic)?;
+            r.pure_shaped(crate::kernels::curve::PAIRINGS, curve)?;
             for row in alternatives() {
                 r.alternative(row)?;
             }

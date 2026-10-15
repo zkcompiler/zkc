@@ -279,6 +279,39 @@ allowances. Provider budgets persist for the whole invocation; each derived
 attempt transcript starts its separately bounded allowance. Callers can lower
 budgets and native hard limits still apply.
 
+## Public computation preparation
+
+An admitted proof deployment owns a bounded store for successful deterministic
+public parameter computations. `NativeDeployment` and `ProofEntry` share this
+store across their invocations; deployment clones share its lifetime. Store
+sharing authorizes visibility of the public parameter access pattern. Hosts with
+separate trust domains must admit separate deployments or reset preparation
+limits to create independent stores. The default
+ceilings are 128 entries and 8 MiB of conservative retained charge.
+`with_preparation_limits` starts an empty store with explicit limits; zero limits
+disable retention. `preparation_stats` exposes entries, retained charge and hits.
+These limits grant no execution capacity and do not change artifact formats.
+
+The Host authorizes only serializable source ports already checked against the
+independent public statement. Local deterministic computations propagate this
+provenance until interaction, participant control, or a private/unknown local
+computation ends the prefix. Neither being the verifier nor equality with a
+public value grants public provenance. Resources and proof bytes are excluded.
+Only small inline scalar parameters key records; public collections can feed
+ordinary computations without being retained as keys.
+
+Reuse requires the exact admitted executable, identical backend policy and
+remaining runtime/backend capacities that dominate the original initial
+allowances. It replays cumulative work and allocation charges, advances frame
+IDs, and installs returned backing through the ordinary live-storage ledger.
+Otherwise execution follows the original body, including failure location,
+partial usage and cleanup. Failed evaluations are never retained. Reaching a
+store ceiling merely prevents another record. A successful fallback replaces
+that key's record with its latest policy/capacity context; no unbounded history
+or eviction of other parameter sets is retained. The generic Runner exposes the
+same mechanism to Hosts that can independently authorize public entry inputs;
+a run Entry does not infer such authorization from participant availability.
+
 ## File adapters and Rust bindings
 
 The CLI and generated bindings use the same named Hosts. The public

@@ -791,6 +791,7 @@ fn independent_same_port_provider_and_missing_owner_are_checked() {
         primary: zkc_runtime::interactive::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Default,
         handler: Some(arithmetic),
+        deterministic: true,
     };
     registry.alternative(&row).unwrap();
     let entry = registry.get(row.identity).unwrap();
@@ -858,6 +859,7 @@ fn fixed_implementations_reject_alternative_registration() {
                     primary: Identity::Bls12381Fr,
                     ports: crate::bindings::PortTransform::Default,
                     handler: None,
+                    deterministic: true,
                 })
                 .unwrap_err()
                 .code,
@@ -877,6 +879,7 @@ fn transcript_alternative_preserves_concrete_observation_policy() {
             primary: Identity::Merlin3Fr64Be,
             ports: crate::bindings::PortTransform::Default,
             handler: None,
+            deterministic: true,
         })
         .unwrap();
     let entry = registry.get("independent/observation").unwrap();
@@ -913,7 +916,8 @@ fn transcript_alternative_preserves_concrete_observation_policy() {
                 original: "independent/observation",
                 primary: Identity::Merlin3Fr64Be,
                 ports: crate::bindings::PortTransform::Default,
-                handler: None
+                handler: None,
+                deterministic: false,
             })
             .unwrap_err()
             .code,
@@ -931,6 +935,7 @@ fn curve_alternative_requires_the_exact_group() {
             primary: Identity::Bn254G1,
             ports: crate::bindings::PortTransform::Default,
             handler: None,
+            deterministic: true,
         })
         .unwrap();
     let entry = registry.get("independent/bn254-add").unwrap();
@@ -973,6 +978,7 @@ fn transcript_alternative_refuses_unsupported_table_payload() {
             primary: Identity::Merlin3Fr64Be,
             ports: crate::bindings::PortTransform::Msb,
             handler: None,
+            deterministic: true,
         })
         .unwrap();
     assert!(

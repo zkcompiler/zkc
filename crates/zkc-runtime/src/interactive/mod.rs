@@ -26,11 +26,13 @@ mod decode;
 mod executable;
 mod model;
 mod native_proof;
+mod preparation;
 mod program;
 mod retention;
 pub use native_proof::{
     ConstructionPlan, NativeProofEntry, NativeProofError, NativeTranscriptEvent, ProofConstruction,
 };
+pub use preparation::{PreparationLimits, PreparationStats, PreparedComputations};
 pub use program::{AssetReference, ProgramAction, ProgramCut, ProgramRole, ProgramState};
 pub use retention::{Backing, Retained};
 mod runner;

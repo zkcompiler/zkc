@@ -134,6 +134,7 @@ impl StorageBackend {
 }
 impl Backend for StorageBackend {
     type Call = ();
+    type Checkpoint = ();
     type Value = Stored;
     type Kernel = crate::interactive::BoundSignature;
     fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {

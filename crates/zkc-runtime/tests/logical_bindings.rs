@@ -669,6 +669,7 @@ impl Value for NoValue {
 struct NoBackend;
 impl Backend for NoBackend {
     type Call = ();
+    type Checkpoint = ();
     type Value = NoValue;
     type Kernel = zkc_runtime::interactive::BoundSignature;
     fn validate_value(&self, value: &NoValue) -> Result<(), BackendError> {

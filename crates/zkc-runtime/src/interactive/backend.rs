@@ -12,6 +12,21 @@ use std::{fmt, sync::Arc};
 /// dropping storage cannot affect backend state or semantic observations.
 /// Untrusted ingress must not select its own implementation of this trait.
 pub trait Value: Clone {
+    /// Canonical key for a small inline parameter, independent of allocation,
+    /// frame and session. Returning Some promises no retained backing or hidden
+    /// authority. Only the Runner's public provenance permits using this key.
+    fn preparation_parameter(&self) -> Option<Vec<u8>> {
+        None
+    }
+
+    /// Self-contained immutable data whose clones may outlive this runner and
+    /// be shared by other backend instances. No arena/session references,
+    /// authority, interior mutation or reference-count-dependent accounting.
+    /// The backend separately certifies the computation and policy context.
+    fn preparation_output(&self) -> bool {
+        false
+    }
+
     /// Pack only the selected payload. Clones copy handles, never authority.
     fn pack_variant(
         _descriptor: Arc<super::VariantDescriptor>,
@@ -254,6 +269,14 @@ pub struct ServiceInvocation<'a> {
 /// no input, frame, resource or setup authority.
 pub trait InstalledKernel {
     fn signature(&self) -> &BoundSignature;
+    /// Fixed inputs, attributes and backend policy determine this operation's
+    /// outputs or refusal. It cannot observe frame identity, resources, time,
+    /// entropy or mutable dependencies. Values, refusal and logical charges must
+    /// not depend on cache warmth or reference counts. The backend checkpoint contract must
+    /// account for all work counters. This is not a promise of totality.
+    fn deterministic(&self) -> bool {
+        false
+    }
 }
 impl InstalledKernel for BoundSignature {
     fn signature(&self) -> &BoundSignature {
@@ -284,6 +307,19 @@ pub trait Backend {
     /// Private backend data for one reached call site. Use `()` when no static
     /// invocation work needs preparation. It carries no resource authority.
     type Call;
+    /// Fixed-size immutable evidence for replaying deterministic computation
+    /// work. It owns no heap allocation, capabilities or mutable dependencies.
+    type Checkpoint: Copy;
+    fn computation_checkpoint(&self) -> Option<Self::Checkpoint> {
+        None
+    }
+    /// Atomically replay only cumulative work, when the current policy and
+    /// remaining backend capacities dominate the recorded initial state.
+    /// False changes nothing. Pure local frame enter/leave remain mandatory;
+    /// nested pure frames have no effects beyond validation under this policy.
+    fn replay_computation(&mut self, _before: Self::Checkpoint, _after: Self::Checkpoint) -> bool {
+        false
+    }
     /// Read-only installation fact. True promises both Boolean constructors
     /// return native.bool/0 values. Runtime validation still checks each value.
     /// Admission checks this before any frame, message or backend transition.

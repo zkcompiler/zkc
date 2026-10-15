@@ -48,6 +48,7 @@ struct Store {
 }
 impl Backend for Store {
     type Call = ();
+    type Checkpoint = ();
     type Value = Datum;
     type Kernel = crate::interactive::BoundSignature;
     fn supports_boolean_literals(&self) -> bool {

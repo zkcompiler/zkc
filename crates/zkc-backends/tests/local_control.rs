@@ -104,6 +104,13 @@ impl Traced {
 }
 impl Backend for Traced {
     type Call = ();
+    type Checkpoint = ComputationCheckpoint;
+    fn computation_checkpoint(&self) -> Option<Self::Checkpoint> {
+        self.inner.computation_checkpoint()
+    }
+    fn replay_computation(&mut self, before: Self::Checkpoint, after: Self::Checkpoint) -> bool {
+        self.inner.replay_computation(before, after)
+    }
     type Value = Value;
     type Kernel = zkc_backends::NativeKernel;
     fn prepare_binding(&self, b: &OperationBinding) -> Option<Self::Kernel> {
@@ -1010,3 +1017,6 @@ fn prepared_calls_match_checked_calls_at_repeated_sites_and_budget_failures() {
         assert_eq!(checked.inner.active_frames(), 0);
     }
 }
+
+#[path = "local_control/preparation.rs"]
+mod preparation;

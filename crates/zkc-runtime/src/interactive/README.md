@@ -23,7 +23,23 @@ attributes. Handlers still own their parsing and execution. Direct backend calls
 use the same kernel body with checked attributes and no cache. Call slots are
 bounded by admitted call sites; an unexecuted site retains no attribute copy.
 Capabilities, current custody, setup authorization and remaining budgets are
-checked at use. No prepared fact crosses to another runner.
+checked at use. These call-site facts stay within their runner.
+
+`PreparedComputations` separately retains successful deterministic public
+computations across invocations of the exact admitted executable. The Host
+explicitly authorizes public entry slots; only independently installed pure
+kernels propagate that provenance. Interaction, participant control and private
+or unknown local computations close the preparation prefix. Small inline scalar
+arguments form keys; returned backing must be fresh relative to the caller.
+No resource, proof input or private session state enters this store.
+
+Reuse preserves the outer frame hooks, cumulative instruction/allocation/work
+charges, subsequent frame IDs and normal output handoff. It requires identical
+native policy and remaining capacities that dominate the original initial
+allowances. Otherwise the original body executes, preserving partial failures
+and cleanup. Backend checkpoints replay only cumulative work; live storage uses
+the Runner's existing ledger. Entries are bounded separately from invocation
+capacity, and only the Runner can publish a successful evaluation.
 
 `Value::has_type` must agree exactly with physical-type equality. Native leaf
 values compare kind, domain and representation without constructing a descriptor;

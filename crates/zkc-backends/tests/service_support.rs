@@ -68,6 +68,7 @@ struct Adapter {
 }
 impl Backend for Adapter {
     type Call = ();
+    type Checkpoint = ();
     type Value = Value;
     type Kernel = zkc_backends::NativeKernel;
     fn service_support(&self, contract: ServiceContract, method: &str) -> Option<ServiceSupport> {

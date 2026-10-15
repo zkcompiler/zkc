@@ -426,6 +426,7 @@ struct Probe {
 }
 impl Backend for Probe {
     type Call = ();
+    type Checkpoint = ();
     type Value = zkc_backends::Value;
     type Kernel = zkc_backends::NativeKernel;
     fn prepare_binding(

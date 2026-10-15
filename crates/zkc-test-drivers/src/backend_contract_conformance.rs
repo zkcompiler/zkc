@@ -11,6 +11,7 @@ use zkc_runtime::interactive::{
 struct AttributeDrift<'a>(&'a NativeBackend);
 impl Backend for AttributeDrift<'_> {
     type Call = ();
+    type Checkpoint = ();
     type Value = <NativeBackend as Backend>::Value;
     type Kernel = zkc_runtime::interactive::BoundSignature;
     fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {

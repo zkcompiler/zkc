@@ -105,6 +105,7 @@ fn observe(
 struct WithoutServices(NativeBackend);
 impl Backend for WithoutServices {
     type Call = ();
+    type Checkpoint = ();
     type Value = Value;
     type Kernel = zkc_backends::NativeKernel;
     fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {
@@ -138,6 +139,7 @@ impl Backend for WithoutServices {
 struct InvalidReply(NativeBackend, bool);
 impl Backend for InvalidReply {
     type Call = ();
+    type Checkpoint = ();
     type Value = Value;
     type Kernel = zkc_backends::NativeKernel;
     fn service_support(
@@ -196,6 +198,7 @@ impl Backend for InvalidReply {
 struct ChangingSignature(NativeBackend, std::cell::Cell<bool>);
 impl Backend for ChangingSignature {
     type Call = ();
+    type Checkpoint = ();
     type Value = Value;
     type Kernel = zkc_backends::NativeKernel;
     fn service_support(

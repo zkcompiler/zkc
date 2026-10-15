@@ -1,5 +1,7 @@
 //! Native backend composition and explicit host-issued capabilities.
 mod call;
+mod preparation;
+pub use preparation::ComputationCheckpoint;
 mod execute;
 pub use call::NativeCall;
 mod policy;
@@ -22,10 +24,14 @@ pub struct NativeKernel {
     handler: registry::Handler,
     read_extent: work::ReadExtent,
     sequence: bool,
+    deterministic: bool,
 }
 impl zkc_runtime::interactive::InstalledKernel for NativeKernel {
     fn signature(&self) -> &zkc_runtime::interactive::BoundSignature {
         &self.signature
+    }
+    fn deterministic(&self) -> bool {
+        self.deterministic
     }
 }
 
@@ -303,6 +309,13 @@ impl NativeBackend {
 }
 impl Backend for NativeBackend {
     type Call = NativeCall;
+    type Checkpoint = ComputationCheckpoint;
+    fn computation_checkpoint(&self) -> Option<Self::Checkpoint> {
+        Some(self.checkpoint())
+    }
+    fn replay_computation(&mut self, before: Self::Checkpoint, after: Self::Checkpoint) -> bool {
+        self.replay(before, after)
+    }
     fn supports_boolean_literals(&self) -> bool {
         true
     }
@@ -370,6 +383,7 @@ impl Backend for NativeBackend {
             handler: implementation.handler,
             read_extent: work::ReadExtent::for_contract(&binding.contract),
             sequence,
+            deterministic: implementation.deterministic,
         })
     }
     fn validate_value(&self, v: &Value) -> Result<()> {

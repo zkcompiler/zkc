@@ -49,6 +49,7 @@ impl Default for Host {
 }
 impl Backend for Host {
     type Call = ();
+    type Checkpoint = ();
     type Value = Value;
     type Kernel = zkc_runtime::interactive::BoundSignature;
     fn supports_boolean_literals(&self) -> bool {

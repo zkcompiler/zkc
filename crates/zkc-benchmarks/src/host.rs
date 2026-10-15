@@ -134,6 +134,10 @@ pub fn run(
     );
     report.admission_ns = Some(admission);
     report.diagnostics = last.native.diagnostics();
+    let prepared = entry.preparation_stats();
+    report.diagnostics["preparation"] = serde_json::json!({
+        "entries": prepared.entries, "retained_bytes": prepared.bytes, "hits": prepared.hits,
+    });
     report.proofs = proofs;
     if job.operation == Operation::Prove {
         std::fs::write(&job.proof, last.native.outcome.unwrap()).map_err(|e| e.to_string())?;

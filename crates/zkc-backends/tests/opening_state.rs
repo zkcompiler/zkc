@@ -621,6 +621,7 @@ struct OutputLimit {
 }
 impl Backend for OutputLimit {
     type Call = ();
+    type Checkpoint = ();
     type Value = Value;
     type Kernel = zkc_backends::NativeKernel;
     fn prepare_binding(

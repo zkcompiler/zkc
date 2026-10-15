@@ -24,7 +24,9 @@ pub mod domains;
 pub mod plonky3;
 pub use plonky3::{KoalaBear, KoalaBearExt8, parse_decimal as parse_koala_bear_decimal};
 
-pub use backend::{EntryPolicy, NativeBackend, NativeCall, NativeKernel, PortConstraint};
+pub use backend::{
+    ComputationCheckpoint, EntryPolicy, NativeBackend, NativeCall, NativeKernel, PortConstraint,
+};
 pub use codec::{
     NativeInputSize, NativeWireError, has_native_wire, native_wire_size, readable_wire,
     requires_setup,

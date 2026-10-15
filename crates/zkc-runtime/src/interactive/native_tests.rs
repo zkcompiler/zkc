@@ -90,6 +90,7 @@ struct Mock {
 }
 impl Backend for Mock {
     type Call = ();
+    type Checkpoint = ();
     type Value = V;
     type Kernel = crate::interactive::BoundSignature;
     fn validate_value(&self, v: &V) -> std::result::Result<(), BackendError> {

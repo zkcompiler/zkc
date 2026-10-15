@@ -1,4 +1,5 @@
 use super::executable::{LocalCode, Operation};
+mod preparation;
 mod values;
 use super::retention::{Charge, Ledger, Retention};
 use super::{Admitted, PhysicalType, admit, backend::*, model::*, transport::*};
@@ -49,6 +50,7 @@ enum Destination {
 /// corresponding explicit methods. Local computation and loops are bounded.
 pub struct Runner<B: Backend> {
     admitted: Admitted,
+    preparation: Option<preparation::Preparation<B>>,
     backend: BackendOwner<B>,
     kernels: Vec<B::Kernel>,
     calls: Vec<Option<B::Call>>,
@@ -145,6 +147,7 @@ impl<B: Backend> Runner<B> {
         };
         let mut runner = Self {
             admitted: admitted.clone(),
+            preparation: None,
             backend: BackendOwner(Some(backend)),
             kernels: Vec::new(),
             calls: Vec::new(),
@@ -667,6 +670,11 @@ impl<B: Backend> Runner<B> {
             let body = execution.body.clone();
             let instruction = &body[execution.pc];
             let origin = execution.frame.origin.clone();
+            if !matches!(instruction, Instruction::Local { .. })
+                && let Some(p) = &mut self.preparation
+            {
+                p.close();
+            }
             match instruction {
                 Instruction::Query {
                     site,
@@ -761,6 +769,7 @@ impl<B: Backend> Runner<B> {
         Ok(())
     }
     fn start_loop(&mut self, instruction: &Instruction) -> Result<()> {
+        self.close_preparation();
         let Instruction::Loop {
             site,
             count,
@@ -939,6 +948,7 @@ impl<B: Backend> Runner<B> {
     /// true transfers the entry tuple through all enclosing loop frames. A
     /// backend or budget failure is a stopped outcome, never a retry result.
     pub fn return_if(&mut self, origin: &Origin, site: &str) -> Result<()> {
+        self.close_preparation();
         let (body, pc) = self.program_control(origin)?;
         let Instruction::ReturnIf {
             site: actual,
@@ -1240,7 +1250,13 @@ impl<B: Backend> Runner<B> {
             },
             code.inputs.clone(),
         );
-        let result = self.run_local_frame(&frame, &prepared.origin, code, args, 1);
+        let public = self.public_computation(function, inputs);
+        let key = if public {
+            Self::computation_key(function, &args)
+        } else {
+            None
+        };
+        let result = self.run_local_frame(&frame, &prepared.origin, code, args, 1, key);
         if let Err(e) = result {
             let context = LocalContext {
                 site: site.clone(),
@@ -1264,6 +1280,9 @@ impl<B: Backend> Runner<B> {
         self.accept_return(values, |runner, values| {
             runner.bind(outputs, values.to_vec(), Retention::Transfer)
         })?;
+        if public {
+            self.public_results(outputs);
+        }
         self.stack.last_mut().expect("local parent").pc += 1;
         self.pending = None;
         Ok(())
@@ -1291,6 +1310,7 @@ impl<B: Backend> Runner<B> {
         body: &LocalCode,
         args: Vec<B::Value>,
         depth: usize,
+        key: Option<super::preparation::Key>,
     ) -> Result<Vec<B::Value>> {
         if self.stack.len() + depth > Limits::STACK_DEPTH {
             return Err(RuntimeError::Limit);
@@ -1298,7 +1318,20 @@ impl<B: Backend> Runner<B> {
         self.can_retain(&args, Retention::Transfer)?;
         self.backend
             .enter_frame_retained(frame, &args, self.ledger.view())?;
-        let result = self.run_local_body(frame, logical_origin, body, args, depth);
+        let reused = key.as_ref().and_then(|key| self.reuse_computation(key));
+        let (result, record) = if let Some(values) = reused {
+            (Ok(values), None)
+        } else {
+            let checkpoint = key.as_ref().and_then(|_| self.begin_computation());
+            let result = self.run_local_body(frame, logical_origin, body, args, depth);
+            let record = match (key, checkpoint, &result) {
+                (Some(key), Some((available, usage, frames, before)), Ok(values)) => {
+                    self.record_computation(key, available, usage, frames, before, values)
+                }
+                _ => None,
+            };
+            (result, record)
+        };
         let (exit, returned) = match &result {
             Ok(values) => (FrameExit::Returned, values.as_slice()),
             Err(_) => (FrameExit::Stopped, &[][..]),
@@ -1312,6 +1345,7 @@ impl<B: Backend> Runner<B> {
                     self.unpin_return(&values);
                     return Err(error.into());
                 }
+                self.publish_computation(record);
                 Ok(values)
             }
             Err(error) => {
@@ -1668,7 +1702,7 @@ impl<B: Backend> Runner<B> {
                 return Err(RuntimeError::Limit);
             }
             let args = self.accept_values(args, frame.inputs.iter().map(|(_, ty)| ty))?;
-            self.run_local_frame(&frame, logical_origin, body, args, depth + 1)
+            self.run_local_frame(&frame, logical_origin, body, args, depth + 1, None)
         })();
         if result.is_err() && self.local_failure.is_none() {
             let site = match frame.origin.path.last() {

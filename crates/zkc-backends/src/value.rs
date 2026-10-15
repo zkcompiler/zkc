@@ -9,7 +9,7 @@ use zkc_runtime::interactive::{
 
 /// Explicit per-value, transport and service-store execution ceilings.
 /// PCS temporary allocation is bounded indirectly by rank, not reserved here.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Policy {
     /// Maximum number of multilinear variables (table length is 2^arity).
     pub max_arity: usize,
@@ -777,6 +777,28 @@ impl Value {
     }
 }
 impl RuntimeValue for Value {
+    fn preparation_output(&self) -> bool {
+        // Serializable native data owns all of its immutable backing. Private
+        // capabilities, keys, opening and oracle states have nonserializable types.
+        self.physical_type().is_serializable()
+    }
+    fn preparation_parameter(&self) -> Option<Vec<u8>> {
+        match self {
+            Self::Bool(value) => Some(vec![u8::from(*value)]),
+            Self::Index(value) => Some(value.to_le_bytes().to_vec()),
+            Self::RistrettoField(value) => Some(value.to_bytes().to_vec()),
+            Self::Field(value) => zkc_arkworks::encode_scalar(value).ok().map(|v| v.to_vec()),
+            Self::Bn254Field(value) => zkc_arkworks::bn254::encode_scalar(value)
+                .ok()
+                .map(|v| v.to_vec()),
+            Self::KoalaBearField(value) => Some(crate::plonky3::encode_scalar(*value).to_vec()),
+            Self::KoalaBearExt8Field(value) => {
+                Some(crate::plonky3::encode_extension(*value).to_vec())
+            }
+            _ => None,
+        }
+    }
+
     fn pack_variant(
         descriptor: Arc<zkc_runtime::interactive::VariantDescriptor>,
         alternative: usize,

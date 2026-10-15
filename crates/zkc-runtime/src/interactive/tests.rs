@@ -201,6 +201,7 @@ impl Mock {
 }
 impl Backend for Mock {
     type Call = ();
+    type Checkpoint = ();
     type Value = V;
     type Kernel = crate::interactive::BoundSignature;
     fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {
@@ -1268,6 +1269,7 @@ impl GroupMock {
 }
 impl Backend for GroupMock {
     type Call = ();
+    type Checkpoint = ();
     type Value = G;
     type Kernel = crate::interactive::BoundSignature;
     fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {
