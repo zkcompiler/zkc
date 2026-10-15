@@ -10,6 +10,7 @@ use zkc::scalar as scalar;
 use zkc::curve as curve;
 use zkc::finite_domain::{range};
 use zkc::sampling;
+use zkc::linear as linear;
 use bulletproofs::inner_product as ip;
 
 pub module transcript;
@@ -225,22 +226,21 @@ fn witness(bits: Vector<F>, masks: Vector<F>, alpha: F, y: F, z: F) -> ip::Witne
   let mask = alpha + scalar::power(y, size + 1) * vec::dot(z_powers, masks);
   return ip::Witness<F>{left: left, right: right, mask: mask};
 }
-fn claim(bases: ip::Bases<G>, statement: Bytes, commitment: Bytes, y: F, z: F) -> G {
+fn claim(bases: ip::Bases<G>, statement: Bytes, commitment: Bytes, y: F, z: F) -> ip::Claim<G> {
   let size = ip::count(bases);
   let d = window(size, z);
   let power = scalar::power(y, size + 1);
   let right = vec::add(vec::fill(z, size), vec::hadamard(d, reverse_weights(size, y)));
-  let mut result = Wire::admit(commitment)
-    + curve::msm(vec::fill<F>(0 - z, size), bases.left)
-    + curve::msm(right, bases.right);
+  let mut rest = linear::term<G>(1, Wire::admit(commitment));
   let mut weight = z * z * power;
   for j in 0..indices::divide(bytes::length(statement), 32) {
-    result = result + Wire::admit(bytes::slice(statement, j * 32, 32)) * weight;
+    rest = linear::append(rest, weight, Wire::admit(bytes::slice(statement, j * 32, 32)));
     weight = weight * z * z;
   }
   let sum_y = vec::sum(vec::scale(vec::geometric(y, size), y));
   let correction = (z * z - z) * sum_y + power * z * vec::sum(d);
-  return result + value_base() * (0 - correction);
+  rest = linear::append(rest, 0 - correction, value_base());
+  return ip::Claim<G>{left: vec::fill<F>(0 - z, size), right: right, rest: rest};
 }
 
 // One explicit attempt. A zero challenge stops; a caller may start a fresh

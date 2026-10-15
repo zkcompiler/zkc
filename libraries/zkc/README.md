@@ -6,7 +6,7 @@ They select no application relation, participant protocol or transcript policy.
 | Family | Modules |
 |---|---|
 | Collections and traversal | `vector`, `indices`, `sequence`, `matrix`, `field_array`, `finite`, `finite_math`, `finite_domain`, `accumulation` |
-| Algebra and polynomials | `scalar`, `curve`, `polynomial`, `multilinear`, `coset`, `opening`, `symbolic`, `boolean` |
+| Algebra and polynomials | `scalar`, `curve`, `linear`, `polynomial`, `multilinear`, `coset`, `opening`, `symbolic`, `boolean` |
 | Commitments and encoding | `oracle`, `bytes`, `encoding`, `proof`, `shake128`, `transcript`, `sampling` |
 
 Names above are under `zkc::`. The [manifest](zkc.toml) captures this family.
@@ -54,6 +54,28 @@ weight. The vector accumulator has the evaluation-domain size, including for
 an empty batch. Callers exclude every rotated opening point from that domain.
 The row form checks the same equation at one authenticated row; the caller
 still supplies authentication, degree checks and acceptance.
+
+## Linear group expressions
+
+`linear::Combination<G>` stores ordered scalar/point terms in private fields.
+`from_terms` checks equal lengths; `zero`, `term`, `append`, `add` and `scale`
+preserve that invariant. `evaluate` uses one ordinary MSM, including for empty,
+repeated, related or identity points. `is_zero` checks one expression; `equal` evaluates the difference of one
+pair of expressions. Independent equations still require separate checks.
+
+```text
+let lhs = linear::from_terms(responses, bases);
+let rhs = linear::append(linear::term<G>(1, commitment), challenge, statement);
+let accepted = linear::equal(lhs, rhs);
+```
+
+Keep coefficients over a known common basis as vectors, add those coefficients,
+and attach the basis once with `from_terms`. `add` concatenates ordered terms; it
+does not discover common bases or prune runtime zero coefficients. Points must
+already be admitted `G` values. Evaluation inherits the selected MSM contract
+and its capacity/timing behavior; the library adds no deferred decoding or
+variable-time permission. These checked records have the same ingress boundary
+as `Table` and `Word` above.
 
 ## Byte assembly
 

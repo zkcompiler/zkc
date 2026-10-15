@@ -1,0 +1,44 @@
+module zkc::linear;
+use zkc::curve as curve;
+use zkc::vector as vec;
+
+// Ordered terms in one group expression. Constructors establish equal lengths;
+// points are already admitted group values, never deferred byte decodings.
+pub struct Combination<G: Group> {
+  coefficients: vec::Vector<G::Scalar>,
+  points: curve::Groups<G>
+}
+
+pub fn zero<G: Group>() -> Combination<G> {
+  return Combination<G>{coefficients: vec::empty<G::Scalar>(), points: curve::empty<G>()};
+}
+pub fn term<G: Group>(coefficient: G::Scalar, point: G) -> Combination<G> {
+  return Combination<G>{coefficients: vec::fill(coefficient, 1),
+    points: curve::append(curve::empty<G>(), point)};
+}
+pub fn from_terms<G: Group>(coefficients: vec::Vector<G::Scalar>, points: curve::Groups<G>)
+    -> Combination<G> {
+  require vec::length(coefficients) == curve::length(points);
+  return Combination<G>{coefficients: coefficients, points: points};
+}
+pub fn add<G: Group>(left: Combination<G>, right: Combination<G>) -> Combination<G> {
+  return Combination<G>{coefficients: vec::concat(left.coefficients, right.coefficients),
+    points: curve::concat(left.points, right.points)};
+}
+pub fn scale<G: Group>(value: Combination<G>, coefficient: G::Scalar) -> Combination<G> {
+  return Combination<G>{coefficients: vec::scale(value.coefficients, coefficient), points: value.points};
+}
+pub fn append<G: Group>(value: Combination<G>, coefficient: G::Scalar, point: G) -> Combination<G> {
+  return Combination<G>{coefficients: vec::append(value.coefficients, coefficient),
+    points: curve::append(value.points, point)};
+}
+pub fn evaluate<G: Group>(value: Combination<G>) -> G {
+  return curve::msm(value.coefficients, value.points);
+}
+pub fn is_zero<G: Group>(value: Combination<G>) -> bool {
+  return !curve::nonidentity(evaluate(value));
+}
+// One exact equation. Independent equations require independent checks.
+pub fn equal<G: Group>(left: Combination<G>, right: Combination<G>) -> bool {
+  return is_zero(add(left, scale(right, 0 - 1)));
+}

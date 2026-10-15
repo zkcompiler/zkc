@@ -7,6 +7,7 @@ use zkc::vector as vec;
 use zkc::scalar as scalar;
 use zkc::indices as indices;
 use zkc::sampling;
+use zkc::linear as linear;
 
 // Wire observations may retain information discarded by point admission.
 // For example, Monero hashes full-curve encodings before multiplying by eight.
@@ -16,6 +17,17 @@ pub interface PointEncoding<G: Group> {
 }
 
 pub struct Bases<G: Group> { pub left: Groups<G>, pub right: Groups<G> }
+// Coordinates over the argument's two bases, plus other admitted point terms.
+// Attaching each basis once lets the verifier combine coordinates before MSM.
+pub struct Claim<G: Group> {
+  pub left: Vector<G::Scalar>,
+  pub right: Vector<G::Scalar>,
+  pub rest: linear::Combination<G>
+}
+pub fn point_claim<G: Group>(bases: Bases<G>, point: G) -> Claim<G> {
+  return Claim<G>{left: vec::fill<G::Scalar>(0, curve::length(bases.left)),
+    right: vec::fill<G::Scalar>(0, curve::length(bases.right)), rest: linear::term<G>(1, point)};
+}
 pub struct Witness<F: Field> { pub left: Vector<F>, pub right: Vector<F>, pub mask: F }
 
 pub fn count<G: Group>(bases: Bases<G>) -> index {
@@ -60,10 +72,13 @@ pub fn fold_coefficients<F: Field>(weights: Vector<F>, low: F, high: F) -> Vecto
 }
 
 // The left fold contributes y^(-i) to original basis element i.
+pub fn left_coefficients<F: Field>(weights: Vector<F>, y: F) -> Vector<F> {
+  return vec::hadamard(weights, vec::geometric(scalar::inverse(y), vec::length(weights)));
+}
+
 pub fn evaluate_bases<G: Group>(bases: Bases<G>, y: G::Scalar,
     weights: (Vector<G::Scalar>, Vector<G::Scalar>)) -> Bases<G> {
-  let inverse_weights = vec::geometric(scalar::inverse(y), count(bases));
-  let left = curve::msm(vec::hadamard(weights.0, inverse_weights), bases.left);
+  let left = curve::msm(left_coefficients(weights.0, y), bases.left);
   let right = curve::msm(weights.1, bases.right);
   return Bases<G>{left: curve::append(curve::empty<G>(), left),
                   right: curve::append(curve::empty<G>(), right)};
@@ -97,15 +112,23 @@ fn responses<F: Field>(witness: Witness<F>, e: F, r: F, s: F, d: F, eta: F) -> (
   return (vec::get(witness.left, 0) * e + r, vec::get(witness.right, 0) * e + s,
     eta + d * e + witness.mask * e * e);
 }
-fn check<G: Group>(bases: Bases<G>, claim: G, value_base: G, mask_base: G,
+fn check<G: Group>(bases: Bases<G>, claim: Claim<G>,
+    weights: (Vector<G::Scalar>, Vector<G::Scalar>), value_base: G, mask_base: G,
     y: G::Scalar, e: G::Scalar, first: G, second: G,
     response: (G::Scalar,G::Scalar,G::Scalar)) -> bool {
-  require count(bases) == 1;
   let (r,s,d) = response;
-  return claim * (e * e) + first * e + second ==
-    curve::get(bases.left, 0) * (e * r)
-    + curve::get(bases.right, 0) * (e * s)
-    + value_base * (r * y * s) + mask_base * d;
+  let folded_left = left_coefficients(weights.0, y);
+  let left = vec::subtract(vec::scale(claim.left, e * e), vec::scale(folded_left, e * r));
+  let right = vec::subtract(vec::scale(claim.right, e * e), vec::scale(weights.1, e * s));
+  // Assemble small terms first, then attach each large basis once.
+  let mut rest = linear::scale(claim.rest, e * e);
+  rest = linear::append(rest, e, first);
+  rest = linear::append(rest, 1, second);
+  rest = linear::append(rest, 0 - r * y * s, value_base);
+  rest = linear::append(rest, 0 - d, mask_base);
+  let dense = linear::add(linear::from_terms(left, bases.left),
+    linear::from_terms(right, bases.right));
+  return linear::is_zero(linear::add(dense, rest));
 }
 
 fn check_shape<G: Group>(bases: Bases<G>, rounds: index, y: G::Scalar) -> () {
@@ -119,21 +142,24 @@ fn check_shape<G: Group>(bases: Bases<G>, rounds: index, y: G::Scalar) -> () {
 }
 
 // Blinded weighted inner-product argument, including its terminal proof.
+// Compose as a child protocol: construct Claim locally from admitted values.
 // Callers establish the commitment represented by claim and witness.
 pub protocol Argument<G: Group, Encoding: PointEncoding<G>, MaxRounds: nat> roles(P,V)
     (basesP: Bases<G> @P, basesV: Bases<G> @V,
      value_baseP: G @P, value_baseV: G @V, mask_baseP: G @P, mask_baseV: G @V,
      yP: G::Scalar @P, yV: G::Scalar @V, witness: Witness<G::Scalar> @P,
-     claim: G @V, rounds: index @(P,V), nonces: Random<G::Scalar> @P,
+     claim: Claim<G> @V, rounds: index @(P,V), nonces: Random<G::Scalar> @P,
      challenges: Random<G::Scalar> @V) -> (accepted: bool @V) {
   check_shape(basesP, rounds, yP);
   check_shape(basesV, rounds, yV);
   require @P vec::length(witness.left) == count(basesP);
   require @P vec::length(witness.right) == count(basesP);
+  require @V vec::length(claim.left) == count(basesV);
+  require @V vec::length(claim.right) == count(basesV);
   let mut basisP = basesP;
   let mut weightsV @V = (vec::fill<G::Scalar>(1, 1), vec::fill<G::Scalar>(1, 1));
   let mut secret = witness;
-  let mut current = claim;
+  let mut rest = claim.rest;
   for round in 0..rounds roles(P,V) max MaxRounds {
     let left_mask = sampling::Nonzero<G::Scalar,32>(nonces);
     let right_mask = sampling::Nonzero<G::Scalar,32>(nonces);
@@ -146,7 +172,8 @@ pub protocol Argument<G: Group, Encoding: PointEncoding<G>, MaxRounds: nat> role
     require @P !(xP == 0);
     let decoded @V = (Encoding::admit(actual.0), Encoding::admit(actual.1));
     let inverse_x @V = scalar::inverse(xV);
-    current = current + decoded.0 * (xV * xV) + decoded.1 * (inverse_x * inverse_x);
+    rest = linear::append(linear::append(rest, xV * xV, decoded.0),
+      inverse_x * inverse_x, decoded.1);
     let nextP @P = fold_bases(basisP, yP, xP);
     let nextV @V = (fold_coefficients(weightsV.0, inverse_x, xV),
       fold_coefficients(weightsV.1, xV, inverse_x));
@@ -168,8 +195,8 @@ pub protocol Argument<G: Group, Encoding: PointEncoding<G>, MaxRounds: nat> role
   let response @P = responses(secret, eP, r, s, d, eta);
   #[site(response)] let received = send P -> V(response);
   let decoded @V = (Encoding::admit(actual.0), Encoding::admit(actual.1));
-  let basisV @V = evaluate_bases(basesV, yV, weightsV);
-  let accepted @V = check(basisV, current, value_baseV, mask_baseV, yV, eV,
+  let final_claim @V = Claim<G>{left: claim.left, right: claim.right, rest: rest};
+  let accepted @V = check(basesV, final_claim, weightsV, value_baseV, mask_baseV, yV, eV,
     decoded.0, decoded.1, received);
   return (accepted = accepted);
 }

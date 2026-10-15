@@ -276,3 +276,33 @@ run Demo=Check;
             assert entry.run(f'rounds-{rounds}-y-{y}', {
                 'challenges': list(map(str, challenges)), 'y': str(y), 'n': str(2**rounds),
             }) == {'result': [True, list(map(str, low)), list(map(str, high))]}
+
+
+@pytest.mark.parametrize('coordinate_error', [0, 1])
+def test_argument_accepts_coordinates_and_rejects_wrong_coordinate(
+        toolchain, journal, directory, coordinate_error):
+    from entry import Entry
+    from source_modules import library_modules
+
+    source = (ROOT / 'common/tests/fixtures/projects/weighted-inner-product/main.zkc').read_text()
+    source = source.replace('module example;', 'module sample;').replace('proof Proof =', 'proof Demo =')
+    source = source.replace('use zkc::encoding as encoding;', 'use zkc::encoding as encoding;\nuse zkc::linear as linear;')
+    start = source.index('fn claim(')
+    end = source.index('\nprotocol Client', start)
+    source = source[:start] + f'''fn claim(b:ip::Bases<G>,y:F,value_base:G,mask_base:G)->ip::Claim<G> {{
+      let n=ip::count(b);
+      let value=6*vec::sum(vec::scale(vec::geometric(y,n),y));
+      let rest=linear::append(linear::term<G>(value,value_base),7,mask_base);
+      return ip::Claim<G>{{left:vec::fill<F>({2 + coordinate_error},n),
+        right:vec::fill<F>(3,n),rest:rest}};
+    }}''' + source[end:]
+    source = source.replace('ip::point_claim(bv,statement)', 'statement')
+    entry = Entry(toolchain, journal, directory, source, library_modules('bulletproofs'))
+    public = journal.write('public.json', {'count': '4', 'right_count': '4', 'rounds': '2', 'y': '3'})
+    witness = journal.write('witness.json', {'witness_count': '4'})
+    proof = directory / 'coordinates.proof'
+    args = [f'--package={entry.package}', f'--sha256={entry.pin}', f'--public={public}']
+    journal.run([toolchain.runtime, '--json', 'prove', *args, f'--witness={witness}', f'--output={proof}'])
+    result = journal.json([toolchain.runtime, '--json', 'verify', *args, f'--proof={proof}'],
+                          refuses='artifact-rejected' if coordinate_error else None)
+    assert result['status'] == ('refused' if coordinate_error else 'accepted')
