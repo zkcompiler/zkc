@@ -52,6 +52,8 @@ import Zkc.Source.Common.Region
 import Zkc.Source.Common.Scalar
 import Zkc.Source.Common.Vocabulary
 import Zkc.Source.Common
+import Zkc.Source.Component
+import Zkc.Source.ComponentCongruence
 import Zkc.Source.Context
 import Zkc.Source.ContextDecoding
 import Zkc.Source.ContextOperations
@@ -63,6 +65,7 @@ import Zkc.Source.Mathematical
 import Zkc.Source.Participant
 import Zkc.Source.Program
 import Zkc.Source.Region
+import Zkc.Source.RegionCongruence
 import Zkc.Source.RegionContracts
 import Zkc.Source.RegionDecoding
 import Zkc.Source.RegionInterpretation
@@ -71,6 +74,8 @@ import Zkc.Source.RoleFamily
 import Zkc.Source.ScalarRegion
 import Zkc.Source.Structure
 import Zkc.Source.Structured.Admission
+import Zkc.Source.Structured.Component
+import Zkc.Source.Structured.ComponentLinking
 import Zkc.Source.Structured.Format
 import Zkc.Source.Structured.Frame
 import Zkc.Source.Structured.Import
@@ -79,9 +84,11 @@ import Zkc.Source.Structured.Linking
 import Zkc.Source.Structured.Meaning
 import Zkc.Source.Structured.Operations
 import Zkc.Source.Structured.Provenance
+import Zkc.Source.Structured.Table
 import Zkc.Source.Structured.Vocabulary
 import Zkc.Specification
 import Tests.CommonRegion
+import Tests.Component
 import Tests.DecimalAdmission
 import Tests.Finite
 import Tests.Machine
@@ -89,6 +96,7 @@ import Tests.ParticipantInterface
 import Tests.RegionCompatibility
 import Tests.RegionDecoding
 import Tests.RegionLaws
+import Tests.StructuredComponents
 import Tests.StructuredLinking
 import Tests.StructuredPrograms
 import Tests.StructuredSource

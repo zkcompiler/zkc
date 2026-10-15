@@ -267,6 +267,12 @@ and table framing, and gives it an owned logical meaning. Conditional contracts
 retain input bounds and ordered output facts. [Structured comparisons](../lean/bridges/structured/README.md) exercise
 direct SSA execution, Lean and selected production Runner cases. This profile
 does not yet import group/service communication or prove native transformations.
+The [optional component foundation](../lean/docs/spec/structured-source.md#optional-component-meaning)
+interprets the same typed helper bodies with optional operands/results and closed
+callbacks, with all-present adequacy and full-table helper equations. Named
+calls preserve per-result availability. This auxiliary model adds neither static
+availability formation nor Math/Local participant dispatch; the native profile
+and format remain unchanged.
 [Formal support](../lean/docs/support.md) states exact experiments and premises.
 Full DSL/compiler/runtime correspondence, production arithmetic/sampling,
 backend correctness and complete protocol security remain open.

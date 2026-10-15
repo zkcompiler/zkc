@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Source.Structured.Import
+public import Zkc.Source.Structured.Table
 public import Zkc.Source.Finite
 public import Mathlib.Algebra.Ring.Defs
 
@@ -32,24 +33,11 @@ def InputsValid {F : Type} {types : List Ty} (values : Values (scalarAssignment 
   ∀ {type} (position : Var types type), ValueValid type (values.get position)
 
 abbrev FunctionMeaning (F : Type) (helper : Helper) :=
-  Values (scalarAssignment F) helper.inputs → Closed (Values (scalarAssignment F) helper.outputs)
+  HelperFunction (scalarAssignment F) closedInterface helper
 
-structure DenotedDefinition (F : Type) where
-  helper : Helper
-  invoke : FunctionMeaning F helper
+abbrev DenotedDefinition (F : Type) := HelperDefinition (scalarAssignment F) closedInterface
 
-abbrev Meanings (F : Type) := List (DenotedDefinition F)
-
-/-- Named invocation checks the complete signature; the checked table constructs
-all implementations. A missing binding has an explicit defensive refusal.
-`Linking` resolves checked declarations to their prefix-interpreted bodies.
-Failed reads and authored stops remain possible within those bodies. -/
-def invoke {F : Type} (table : Meanings F) (helper : Helper) : FunctionMeaning F helper :=
-  match table.find? (fun entry => entry.helper.name == helper.name) with
-  | none => fun _ => .halt .refused
-  | some entry =>
-    if h : entry.helper = helper then h ▸ entry.invoke
-    else fun _ => .halt .refused
+abbrev Meanings (F : Type) := HelperTable (scalarAssignment F) closedInterface
 
 def DomainSpec.denote {F : Type} : (domain : DomainSpec) →
     Values (scalarAssignment F) domain.inputs → Finite.Domain (scalarAssignment F domain.item)

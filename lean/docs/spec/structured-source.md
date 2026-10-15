@@ -118,6 +118,55 @@ ordinary loop form. Stops in nested branches remain valid.
 invariant to the ordered loop. Empty ordinary and conditional loops return the
 initial state without invoking their callback.
 
+## Optional component meaning
+
+`Structured.HelperTable Value interface` owns generic exact-signature lookup.
+The existing `FunctionMeaning`, `DenotedDefinition` and `Meanings` are closed
+scalar specializations, so finite clients keep their original theorem statements.
+`ComponentTables` builds two instances of this table from each stored typed body:
+one closed closure and one optional closure, both capturing the preceding tables.
+It stores no second body and expands no call syntax. `componentTables_closed`
+identifies its closed projection with the original `Payload.meanings`.
+
+`componentOperation` passes optional operands directly into the named component
+closure at `Op.invoke`. Thus `first(x,y)` can return present `x` when `y` is
+absent, including through another named helper. A constant needs no input, and
+different returned components can have different availability. Every other
+operation uses `strictComponent` and the existing closed operation implementation;
+arithmetic cases are shared. Primitive select still needs its condition even
+when both arms agree. Branch, loop and fold execution retains closed callbacks.
+Absent strict operands skip the operation; in particular an absent guard has no
+effect, while a present false guard retains its `reject` stop.
+
+`ComponentTables.adequate_extend` and `adequate_fold` relate invocation in the
+two tables on present input tuples. `Payload.component_present` equates the
+optional execution with the original closed process followed by marking its
+results present, including stops and zero-result computations. Table adequacy
+does not require successful linking; the exact resolution and framing laws do.
+`Payload.component_reference_resolves` proves prefix resolution for every stored
+reference, including dormant callbacks. `component_invoke_declaration` gives the
+captured-prefix equation; `component_invoke_body`, `component_body_view` and
+`component_entry` give full-table equations. `region_component_table_congr`
+requires agreement on both closed and component helper invocations because
+callbacks and strict operations use the closed table.
+
+This interpretation is an auxiliary denotation, not participant dispatch or
+availability formation. The current `Op.invoke` has lost the source distinction
+between Math and Local calls. Applying its optional rule to every invocation
+does not implement Local ownership. A future Local boundary must sequence all
+arguments at its owner, invoke the closed closure and preserve stops; nonowners
+must not execute it. The private adapter test demonstrates this distinction
+without claiming that the admitted operation language records it.
+
+Result dependency summaries and separate requirements for every intermediate
+remain unimplemented. `unused_intermediate_returns` in `Tests.StructuredComponents`
+is a model counterexample to inferring formation from an available output, not
+an admitted multi-role native program. No native format/profile, group vocabulary,
+open protocol import, or eager-versus-demand-driven Math correspondence is added.
+Future group operations can reuse the generic table and optional interpreter,
+but require an explicit value assignment and one closed operation implementation.
+No whole-import or native correspondence follows from all-present adequacy.
+
 ## Compositional contracts
 
 `Structured.region_denote_table_congr` proves that agreeing on the exact helper inventory

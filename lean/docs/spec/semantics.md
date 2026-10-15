@@ -35,6 +35,30 @@ meanings; named helpers retain shared checked bodies, and ordinary control
 passes closed callbacks. Provenance stays in the admitted snapshot instead of
 being inferred from process equality.
 
+`Region.component` is a second interpretation of that same typed body. It changes
+each value to `Option Value`; operation arguments and results are optional tuples,
+while nested callbacks retain the original nonoptional `RegionFunction` type and
+meaning. `strictComponent` sequences all operands and delegates present inputs to
+the original operation. Missing operands produce absent results without running
+that operation. A zero-result operation still runs when its operands are present;
+an explicit `Region.stop` always stops. Named calls can instead pass optional
+tuples directly to a component closure.
+
+`ComponentOperations.Adequate` requires agreement with the original operation on
+every present argument tuple and every closed callback tuple. Under precisely
+this premise, `Region.component_present` proves equality with the complete
+original process followed by marking returned values present. The proof covers
+lexical binds and nested regions, preserves interactions and stops, and assumes
+neither totality nor static availability. It is a change of value assignment;
+the effect translation in `RegionInterpretation` alone does not supply it.
+
+`Region.denote_congr` and `Regions.denote_congr` lift agreement on the stored
+operation inventory to equality of nonoptional meanings. `Region.component_congr`
+requires both nonoptional and component operation agreement on that inventory,
+because callbacks use the nonoptional meaning. The inventory includes dormant
+callbacks and stopped suffixes. These laws provide no availability admission:
+an absent unused intermediate can coexist with a present returned component.
+
 `Source.Finite` defines ordered domain admission and open folds as semantic
 helpers. Admission runs before iteration, even when a loop is empty or a domain
 is otherwise unused. Zip checks both factors before their lengths; product checks
