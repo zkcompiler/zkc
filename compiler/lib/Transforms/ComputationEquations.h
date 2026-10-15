@@ -40,10 +40,9 @@ struct Reduction {
 /// A supported pointwise term, independent of the carried accumulator.
 /// Its body remains borrowed SSA; direct contractions take precedence.
 struct PointwiseReduction {
-  EquationWitness witness;
   MathematicalIdentity combine;
   Elementwise formula;
-  mlir::Value accumulator, term;
+  mlir::Value term;
 };
 struct Bilinear {
   EquationWitness witness;

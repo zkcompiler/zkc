@@ -455,9 +455,7 @@ analyzePointwiseReduction(const ComputationFacts &facts,
   if (!formula)
     return std::nullopt;
   PointwiseReduction result;
-  result.witness = witness(facts.view, facts.view.accesses);
   result.combine = combined.facet->identity;
-  result.accumulator = state;
   result.term = combined.term;
   result.formula = std::move(*formula);
   return result;

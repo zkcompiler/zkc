@@ -261,8 +261,9 @@ admission rules.
 Field-additive folds also compose supported pointwise bodies with native sum.
 The pointwise expression must be independent of recurrent state and use the
 same admitted field-vector domains and total field-ring operations as a
-collection. Invariant field captures are broadcast to the admitted cardinality;
-bounded indexed reads retain their exact container provenance. Every domain,
+collection. Uniform terms are broadcast to the admitted cardinality; mixed
+operations use scalar/vector recipes where available. Bounded indexed reads
+retain their exact container provenance. Every domain,
 including unused zip members, is admitted before payload work. The result adds
 the original seed to the sum, including for an empty domain. Existing direct
 reductions and contractions take precedence. This realization reuses vector

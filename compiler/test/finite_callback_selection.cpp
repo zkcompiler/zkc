@@ -255,7 +255,8 @@ int main() {
   context.loadAllAvailableDialects();
   Cases cases;
   for (StringRef field : {"koala-bear", "bls12-381.fr"})
-    for (StringRef body : {"polynomial", "uniform", "state-dependent"})
+    for (StringRef body : {"polynomial", "commuted", "neutral", "dead-state",
+                           "uniform", "state-dependent"})
       cases.run("pointwise sum " + field + " " + body, [&] {
         std::string text(sourceText);
         const std::string original =
@@ -276,6 +277,22 @@ int main() {
           auto at = replacement.find("%p,%x");
           replacement.replace(at, 5, "%p,%s");
         }
+        if (body == "commuted") {
+          auto at = replacement.find("%s,%term");
+          replacement.replace(at, 8, "%term,%s");
+        }
+        if (body == "neutral") {
+          auto at = replacement.find("%r =");
+          replacement.replace(at, 4, "%combined =");
+          replacement += R"mlir(
+   %one = "algebra.constant"() {value="1"} : ()->!F
+   %r = algebra.field_multiply %combined,%one : (!F,!F)->!F
+)mlir";
+        }
+        if (body == "dead-state")
+          replacement.insert(0, R"mlir(
+   %unused = algebra.field_multiply %s,%s : (!F,!F)->!F
+)mlir");
         text.replace(text.find(original), original.size(), replacement);
         size_t at = 0;
         while ((at = text.find("koala-bear", at)) != std::string::npos) {
@@ -343,6 +360,34 @@ int main() {
                   "broadcast lost its admitted cardinality");
         }
       });
+  cases.run("pointwise indexed sums retain container identity", [&] {
+    std::string text(indexedSourceText);
+    auto at = text.find("   %y = \"data.bounded_at\"");
+    text.erase(at, text.find('\n', at) - at + 1);
+    at = text.find("@update(%state,%x,%y)");
+    text.replace(at, 21, "@update(%state,%x,%x)");
+    at = text.find("   %r = algebra.field_add %state,%p");
+    text.insert(at, "   %term = algebra.field_add %p,%x : (!F,!F)->!F\n");
+    at = text.find("%state,%p :");
+    text.replace(at, 9, "%state,%term");
+    auto source = parseSourceString<ModuleOp>(text, &context);
+    require(bool(source) && succeeded(verify(*source)), "source refused");
+    RealizationWork work;
+    auto candidate = emit(*source, work);
+    require(!hasLoop(selected(*candidate)) && compare(*source, *candidate),
+            "indexed pointwise sum was not checked");
+    bool changed = false;
+    selected(*candidate).walk([&](Operation *operation) {
+      if (!changed &&
+          operation->getName().getStringRef() == "algebra.exec.vector_mul") {
+        operation->setOperand(0, selected(*candidate).getArgument(2));
+        changed = true;
+      }
+    });
+    require(changed && succeeded(verify(*candidate)) &&
+                !compare(*source, *candidate),
+            "equal extents equated different container elements");
+  });
   cases.run("packed scalar projections select a checked dot", [&] {
     std::string text(indexedSourceText);
     auto product = text.find("   %p = algebra.field_multiply %x,%y");

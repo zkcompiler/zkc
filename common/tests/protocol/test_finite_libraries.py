@@ -87,6 +87,47 @@ protocol Run roles(P)(xs:Vector<F>@P,seed:F@P,enabled:bool@P)
     assert stopped['execution']['roles'][0]['after'][1]['cause'][0] == 'explicit'
 
 
+@pytest.mark.parametrize('mode,module', [('fn', 'finite'), ('math fn', 'finite_math')])
+def test_pointwise_sum_dead_state_work_obeys_callback_mode(
+    toolchain, journal, directory, mode, module,
+):
+    source = '''module sample;
+use zkc::vector::{Vector};
+use zkc::FINITE_MODULE as finite;
+domain F=field("koala-bear");
+MODE work(xs:Vector<F>,seed:F)->F{
+ return finite::fold(xs,seed,fn(state,x)=>{
+   let unused=state*state;
+   state+(x*x+x)
+ });
+}
+protocol Run roles(P)(xs:Vector<F>@P,seed:F@P)->(result:F@P){return work(xs,seed);}run Demo=Run;
+'''.replace('FINITE_MODULE', module).replace('MODE', mode)
+    entry = Entry(toolchain, journal, directory, source, [*MODULES, '--no-simplify'])
+    assert entry.run('values', {'xs': ['2', '3'], 'seed': '7'})['result'] == '25'
+    iterations = json.loads(journal.last.stdout)['execution']['roles'][0]['usage']['iterations']
+    assert iterations == (0 if mode == 'math fn' else 2)
+
+
+def test_pointwise_sum_broadcast_uses_result_field_and_index_domain(
+    toolchain, journal, directory,
+):
+    source = '''module sample;
+use zkc::vector::{Vector};
+use zkc::finite_math as finite;
+domain K=field("koala-bear");
+domain F=field("bls12-381.fr");
+math fn work(xs:Vector<K>,seed:F,value:F)->F{
+ return finite::fold(zkc::vector::indices(xs),seed,fn(state,_)=>state+value*value);
+}
+protocol Run roles(P)(xs:Vector<K>@P,seed:F@P,value:F@P)->(result:F@P){return work(xs,seed,value);}run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, [*MODULES, '--no-simplify'])
+    for n in (0, 3):
+        assert entry.run(f'rows-{n}', {'xs': ['2']*n, 'seed': '7', 'value': '3'})['result'] == str(7+9*n)
+        assert json.loads(journal.last.stdout)['execution']['roles'][0]['usage']['iterations'] == 0
+
+
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
 @pytest.mark.parametrize('implicit', [False, True])
 def test_named_finite_libraries_and_explicit_combiner(toolchain, journal, directory, flags, implicit):
