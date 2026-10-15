@@ -20,3 +20,6 @@ zkc-backends.workspace = true
 
 [lints]
 workspace = true
+
+[features]
+execution-counts = ["zkc-runtime/execution-counts"]

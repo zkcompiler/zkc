@@ -160,6 +160,56 @@ proof I/O and observation still affect process time and memory. No caches are
 flushed; preparation and correctness checks can warm system caches. The timer
 floor is recorded and never subtracted.
 
+## Execution counts
+
+For runtime attribution, build a separate worker with execution observations:
+
+```sh
+flock -n -E 75 /tmp/zkc-benchmark-execution.lock \
+  cargo build --release --locked -p zkc-benchmarks --features execution-counts \
+  --target-dir target/counts
+python3 common/benchmarks/run.py run --preset execution --execution-counts \
+  --compiler build/compiler/zkc-compile --runtime target/release/zkc \
+  --worker target/counts/release/zkc-benchmarks \
+  --warmups 0 --samples 2 --processes 2 --output build/experiments/counts
+```
+
+The harness requires the requested feature state and source workloads, permits at
+most 128 calls per worker, and omits timing summaries and comparisons for these
+runs. Raw clock readings remain diagnostic evidence. Default runtime builds have
+zero-sized counters; enabling the Cargo feature adds storage and observation
+work. Counts reveal reached control flow, so they are host diagnostics, not a
+public-information projection.
+
+`lifecycle.calls[].execution_counts` contains fixed event counters and native
+invocations grouped by operation contract. The histogram combines instantiated
+types and implementations of a contract; workload dimensions and captured
+artifacts retain those distinctions. Do not infer a universal cost per call. Snapshot construction happens when
+Host collects completion reports; JSON materialization happens after the SDK
+call. Each participant and attempt contributes once. Reports retain per-input
+first visits and deduplicate equal repeated vectors with their multiplicities.
+`counts_repeatable` compares complete ordered count sequences across processes;
+variation must be explained before fitting a deterministic cost model.
+
+| Counter group | Unit and boundary |
+|---|---|
+| `charged_instructions`, `replayed_instructions` | Successful instruction charges executed directly or replayed from public preparation; their sum equals resource instruction usage |
+| `local_*` | Reached local instructions after a successful charge; `local_release` is an uncharged storage instruction |
+| Native operation histogram, `native_operand_values` | Actual backend invocations and top-level operand values copied into invocation scratch |
+| `created_frames`, `backend_enter_calls`, `backend_leave_calls` | Actual frame construction and attempted backend boundary calls; successful execution balances enters/leaves |
+| `value_validation_calls`, `backend_validation_calls` | Runtime validation and backend validation requests; exclude checks performed internally by a backend |
+| `retention_plan_calls`, `retention_planned_values` | Ledger planning requests and their top-level input values |
+| `retention_commit_values`, `retention_release_values`, `retention_unpin_values` | Top-level ledger references, including return pins and replay; not heap allocations |
+| `computation_reuse_hits` | Successful public computation replay |
+
+Counts include validation and planning performed by explicit Host preflight calls such as delivery checks; they describe the actual Host invocation, not a minimal abstract schedule.
+
+Counts alone do not identify time costs. Use clean release measurements on the
+same artifacts and inputs, and report correlated counters when they cannot
+separate candidate causes. No per-operation clocks or allocator interception are
+installed. Failed Runner initialization has no snapshot; this mode measures
+successful benchmark calls rather than failure profiles.
+
 ## Correctness and evidence
 
 External comparisons cross-verify both directions and check deterministic proof

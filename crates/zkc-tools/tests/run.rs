@@ -287,6 +287,33 @@ fn completed_false_is_an_output_and_roster_is_source_order() {
             .collect::<Vec<_>>(),
         [("Alice", 2, 2), ("Bob", 1, 1)]
     );
+    let mut combined = zkc_runtime::interactive::ExecutionCounts::default();
+    for role in &report.roles {
+        if let Some(counts) = role.execution_counts.json() {
+            let events = &counts["events"];
+            assert_eq!(
+                events["charged_instructions"].as_u64().unwrap()
+                    + events["replayed_instructions"].as_u64().unwrap(),
+                role.usage.unwrap().instructions
+            );
+            assert_eq!(events["backend_enter_calls"], events["backend_leave_calls"]);
+        }
+        combined.merge(&role.execution_counts);
+    }
+    if let Some(counts) = combined.json() {
+        assert_eq!(counts["events"]["created_frames"], 3);
+        assert_eq!(counts["events"]["backend_enter_calls"], 3);
+        assert_eq!(counts["events"]["backend_leave_calls"], 3);
+        assert_eq!(
+            counts["events"]["charged_instructions"].as_u64().unwrap(),
+            report
+                .roles
+                .iter()
+                .map(|r| r.usage.unwrap().instructions)
+                .sum::<u64>()
+        );
+        assert_eq!(counts["operations"], json!({}));
+    }
 }
 #[test]
 fn admission_refuses_coverage_group_and_envelope_mutations() {

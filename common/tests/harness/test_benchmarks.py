@@ -20,7 +20,7 @@ def bench(monkeypatch, tmp_path):
 def report(plan):
     return {'format': 'zkc.benchmark-worker/0', 'status': 'passed', 'boundary': 'test_call',
             'proof_bytes': 3, 'admission_ns': None, 'process_peak_rss_bytes': None,
-            'proofs': [], 'build': {'optimized': True, 'debug_assertions': False}, 'process': {'rayon_num_threads': '1'}, 'timer_floor_ns': 1, 'diagnostics': None, 'lifecycle': None,
+            'proofs': [], 'build': {'optimized': True, 'debug_assertions': False, 'execution_counts': False}, 'process': {'rayon_num_threads': '1'}, 'timer_floor_ns': 1, 'diagnostics': None, 'lifecycle': None,
             'samples': [{'phase': 'warmup' if i < plan['warmups'] else 'sample',
                          'index': i, 'iterations': plan['iterations'], 'elapsed_ns': 100,
                          'cpu_ns': 90, 'first_call_ns': 50}
@@ -44,7 +44,7 @@ def test_statistics_use_processes_not_pooled_calls(bench):
     workers = [report(plan), report(plan)]
     for worker, times in zip(workers, ([999999, 10, 20, 1000], [999999, 30, 40, 50])):
         for sample, time in zip(worker['samples'], times): sample.update(elapsed_ns=time, first_call_ns=min(time, 50))
-    manifest = {'format': 'zkc.benchmark/0', 'status': 'passed', 'processes': 2, 'plan': plan,
+    manifest = {'format': 'zkc.benchmark/0', 'observation': 'timing', 'status': 'passed', 'processes': 2, 'plan': plan,
                 'matrix': [{'case': 'case', 'implementation': 'impl', 'operation': 'verify', 'boundary': 'test_call'}], 'results': [
         {'case': 'case', 'implementation': 'impl', 'operation': 'verify', 'status': 'passed', 'worker': w, 'repetition': i}
         for i, w in enumerate(workers)]}
@@ -80,7 +80,7 @@ def worker(tmp_path, plan, suffix='', response=None):
 
 def arguments(tmp_path):
     return SimpleNamespace(output=tmp_path / 'output', samples=2, warmups=1, iterations=1,
-                           processes=2, seed=17, cpu=None, threads=1, label='test', timeout=1)
+                           execution_counts=False, processes=2, seed=17, cpu=None, threads=1, label='test', timeout=1)
 
 
 def prepared(bench, tmp_path, executable, check=lambda *args: None):
@@ -144,7 +144,7 @@ def completed_manifest():
     plan = {'warmups': 0, 'samples': 1, 'iterations': 1}
     matrix = [{'case': 'case', 'implementation': impl, 'operation': 'verify', 'boundary': 'test_call'}
               for impl in ('left', 'right')]
-    return {'format': 'zkc.benchmark/0', 'status': 'passed', 'processes': 2, 'plan': plan,
+    return {'format': 'zkc.benchmark/0', 'observation': 'timing', 'status': 'passed', 'processes': 2, 'plan': plan,
             'matrix': matrix, 'host': {'cpu': 'one'},
             'contracts': {'case': {'boundaries': {'left': 'test_call', 'right': 'test_call'}}},
             'comparisons': [{'case': 'case', 'operation': 'verify', 'numerator': 'left', 'denominator': 'right'}],

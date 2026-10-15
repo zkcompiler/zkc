@@ -11,3 +11,6 @@ workspace = true
 
 [dev-dependencies]
 zkc-test-support.workspace = true
+
+[features]
+execution-counts = []

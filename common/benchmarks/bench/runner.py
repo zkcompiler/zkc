@@ -24,6 +24,7 @@ class Job:
     backend: dict
     proof: Path
     boundary: str
+    execution_counts: bool = False
 
 
 class Capture:
@@ -80,6 +81,8 @@ def execute_job(job, directory, plan, timeout):
     journal = Journal(directory / 'commands', timeout)
     command = journal.command([job.executable, path], cwd=directory)
     report = validate_worker(read_report(command), plan, job.boundary)
+    require(report['build'].get('execution_counts', False) is job.execution_counts,
+            'worker execution-counts feature differs from the requested observation')
     if job.backend.get('kind') in ('host', 'run'):
         count = len(job.backend['inputs']) if job.backend['kind'] == 'host' else 1
         require([c['input_index'] for c in report['lifecycle']['calls']] ==
@@ -140,6 +143,7 @@ def run_locked(args, prepare):
     manifest = {'format': FORMAT, 'status': 'running', 'phase': 'preparation', 'results': [], 'contracts': {},
                 'plan': {'samples': args.samples, 'warmups': args.warmups, 'iterations': args.iterations},
                 'processes': args.processes, 'seed': args.seed, 'label': args.label,
+                'observation': 'execution_counts' if args.execution_counts else 'timing',
                 'argv': sys.argv, 'host': {}, 'files': capture.files, 'checks': []}
     try:
         if args.cpu is not None:
@@ -152,6 +156,12 @@ def run_locked(args, prepare):
         manifest['threads'] = args.threads
         jobs, check = prepare(args, output, capture, manifest)
         require(jobs, 'empty benchmark matrix')
+        require(all(j.execution_counts == args.execution_counts for j in jobs), 'job observation mismatch')
+        if args.execution_counts:
+            require(all(j.backend.get('kind') in ('host', 'run') for j in jobs),
+                    'execution counts require source workloads')
+            require((args.warmups + args.samples)*args.iterations <= 128,
+                    'execution counts permit at most 128 calls per worker')
         manifest['matrix'] = [{'case': j.case, 'implementation': j.implementation,
                                'operation': j.operation, 'boundary': j.boundary,
                                'executable': str(j.executable), 'backend': j.backend,

@@ -44,7 +44,9 @@ pub fn run(
         })
         .collect::<Result<BTreeMap<_, _>>>()?;
     let groups = entry.interface().input_groups();
-    let mut calls = Vec::with_capacity((job.plan.warmups + job.plan.samples) * job.plan.iterations);
+    let calls = std::cell::RefCell::new(Vec::with_capacity(
+        (job.plan.warmups + job.plan.samples) * job.plan.iterations,
+    ));
     let mut last = None;
     let mut observed = 0;
     let samples = measure(
@@ -69,7 +71,9 @@ pub fn run(
                     },
                 );
             }
-            calls.push(Call::decoded(0, start.elapsed().as_nanos()));
+            calls
+                .borrow_mut()
+                .push(Call::decoded(0, start.elapsed().as_nanos()));
             Ok(RunRequest {
                 session: "benchmark".into(),
                 roles,
@@ -90,6 +94,17 @@ pub fn run(
             ) {
                 return Err(Failure::IncorrectResult);
             }
+            let mut counts = zkc_runtime::interactive::ExecutionCounts::default();
+            for role in &report
+                .native
+                .execution
+                .as_ref()
+                .expect("successful execution")
+                .roles
+            {
+                counts.merge(&role.execution_counts);
+            }
+            calls.borrow_mut().last_mut().unwrap().execution_counts = counts.json();
             observed += 1;
             if observed == (job.plan.warmups + job.plan.samples) * job.plan.iterations {
                 last = Some(report);
@@ -108,7 +123,7 @@ pub fn run(
         preparation_limits: None,
         capture_ns,
         admit_ns,
-        calls,
+        calls: calls.into_inner(),
         diagnostics_ns,
         peak_rss_before_diagnostics: before,
         peak_rss_after_diagnostics: crate::peak_rss(),

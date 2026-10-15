@@ -105,7 +105,7 @@ def lifecycle_worker(times=(10, 100, 30, 300)):
     calls = [{'input_index': i % 2, 'decode_ns': 5, 'preparation': {'entries': 0, 'retained_bytes': 0, 'hits': 0}} for i in range(4)]
     return {'format': 'zkc.benchmark-worker/0', 'status': 'passed', 'boundary': 'admitted_entry_call',
         'proof_bytes': 4, 'admission_ns': 3, 'process_peak_rss_bytes': 100, 'proofs': [],
-        'build': {'optimized': True, 'debug_assertions': False}, 'process': {}, 'timer_floor_ns': 1,
+        'build': {'optimized': True, 'debug_assertions': False, 'execution_counts': False}, 'process': {}, 'timer_floor_ns': 1,
         'diagnostics': {}, 'lifecycle': {'preparation_limits': {'entries':128, 'bytes':8388608, 'default_entries':128, 'default_bytes':8388608}, 'capture_ns': 1, 'admit_ns': 2, 'diagnostics_ns': 7,
             'peak_rss_before_diagnostics': 80, 'peak_rss_after_diagnostics': 100, 'calls': calls},
         'samples': [{'phase': 'warmup' if i < 2 else 'sample', 'index': i, 'iterations': 1,
@@ -127,7 +127,7 @@ def test_lifecycle_evidence_is_checked(modules, fault):
 
 def test_changing_statements_keep_individual_first_visits_and_distributions(modules):
     job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call'}
-    manifest = {'format': 'zkc.benchmark/0', 'status': 'passed', 'processes': 2,
+    manifest = {'format': 'zkc.benchmark/0', 'observation': 'timing', 'status': 'passed', 'processes': 2,
                 'plan': {'warmups': 2, 'samples': 2, 'iterations': 1}, 'matrix': [job],
                 'results': [job | {'status': 'passed', 'repetition': i, 'worker': lifecycle_worker(times)}
                             for i, times in enumerate(((10, 100, 30, 300), (20, 200, 50, 500)))]}
@@ -224,14 +224,13 @@ def test_monero_response_control_refuses_framed_or_noncanonical_layout(modules):
 def test_comparison_rejects_changed_native_preparation_defaults(modules):
     from copy import deepcopy
     job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call'}
-    baseline = {'format': 'zkc.benchmark/0', 'status': 'passed', 'processes': 1,
+    baseline = {'format': 'zkc.benchmark/0', 'observation': 'timing', 'status': 'passed', 'processes': 1,
                 'plan': {'warmups': 2, 'samples': 2, 'iterations': 1}, 'matrix': [job], 'host': {}, 'contracts': {},
                 'results': [job | {'status': 'passed', 'repetition': 0, 'worker': lifecycle_worker()}]}
     changed = deepcopy(baseline)
     changed['results'][0]['worker']['lifecycle']['preparation_limits']['default_bytes'] *= 2
     with pytest.raises(modules['io'].MeasurementError, match='preparation limits differ'):
         modules['results'].compare(baseline, changed)
-
 
 
 def test_air_declares_its_generator_dependency(modules, tmp_path):
@@ -268,3 +267,64 @@ def test_crashed_refusal_reports_the_command_logs(modules, tmp_path):
         io.Journal(tmp_path/'commands', 10).report(
             [sys.executable, '-c', 'raise SystemExit(101)'], cwd=tmp_path,
             status='rejected', refused=True)
+
+
+def counted_manifest():
+    from bench.observations import EVENTS
+    worker = lifecycle_worker()
+    worker['build']['execution_counts'] = True
+    for call in worker['lifecycle']['calls']:
+        call['execution_counts'] = {'events': dict.fromkeys(EVENTS, 0), 'operations': {}}
+    job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call'}
+    return {'format': 'zkc.benchmark/0', 'observation': 'execution_counts', 'status': 'passed',
+            'processes': 1, 'plan': {'warmups': 2, 'samples': 2, 'iterations': 1},
+            'matrix': [job], 'contracts': {},
+            'results': [job | {'status': 'passed', 'repetition': 0, 'worker': worker}]}
+
+
+@pytest.mark.parametrize('fault', ['capability', 'missing', 'negative', 'boolean', 'event', 'histogram', 'frames'])
+def test_execution_count_evidence_refuses_inconsistent_observations(modules, fault):
+    manifest = counted_manifest()
+    worker = manifest['results'][0]['worker']
+    counts = worker['lifecycle']['calls'][0]['execution_counts']
+    if fault == 'capability': worker['build']['execution_counts'] = False
+    elif fault == 'missing': del worker['lifecycle']['calls'][0]['execution_counts']
+    elif fault == 'negative': counts['events']['local_op'] = -1
+    elif fault == 'boolean': counts['events']['local_op'] = True
+    elif fault == 'event': counts['events']['unrecognized'] = 0
+    elif fault == 'histogram': counts['operations']['field.add'] = 1
+    else: counts['events']['backend_enter_calls'] = 1
+    with pytest.raises(modules['io'].MeasurementError):
+        modules['results'].validate_manifest(manifest)
+
+
+def test_execution_counts_publish_no_timing_comparisons(modules, tmp_path):
+    manifest = counted_manifest()
+    modules['results'].publish(tmp_path, manifest)
+    summary = json.loads((tmp_path/'summary.json').read_text())
+    row = summary['rows'][0]
+    assert 'ns_per_call' not in row
+    assert 'first_call_ns' not in row
+    assert summary['comparisons'] == []
+    assert len(row['execution_counts']) == 4
+    assert [(r['input_index'], r['first_visit']) for r in row['execution_counts']] == [(0, True), (1, True), (0, False), (1, False)]
+    assert 'timing comparisons are intentionally omitted' in (tmp_path/'report.md').read_text()
+    with pytest.raises(modules['io'].MeasurementError, match='refuses instrumented'):
+        modules['results'].compare(manifest, manifest)
+    manifest['observation'] = 'timing'
+    with pytest.raises(modules['io'].MeasurementError, match='capability mismatch'):
+        modules['results'].validate_manifest(manifest)
+
+
+def test_count_sequences_expose_process_variation_without_losing_order(modules):
+    from copy import deepcopy
+    manifest = counted_manifest()
+    manifest['processes'] = 2
+    other = deepcopy(manifest['results'][0])
+    other['repetition'] = 1
+    manifest['results'].append(other)
+    assert modules['results'].summarize(manifest)[0]['counts_repeatable']
+    other['worker']['lifecycle']['calls'][2]['execution_counts']['events']['retention_plan_calls'] = 1
+    row = modules['results'].summarize(manifest)[0]
+    assert not row['counts_repeatable']
+    assert len(row['execution_counts']) == 8

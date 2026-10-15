@@ -169,6 +169,7 @@ impl<B: Backend> Runner<B> {
         for value in &evaluation.outputs {
             // Types were checked when this exact executable produced the
             // record. Revalidate the immutable payload under the current backend.
+            self.counts.event(Event::BackendValidate);
             if self.backend.validate_value(value).is_err() {
                 return None;
             }
@@ -179,6 +180,8 @@ impl<B: Backend> Runner<B> {
         {
             return None;
         }
+        self.counts.add(Event::Replay, evaluation.work.instructions);
+        self.counts.event(Event::Reuse);
         self.usage.instructions += evaluation.work.instructions;
         self.usage.iterations += evaluation.work.iterations;
         self.usage.logical_bytes += evaluation.work.logical_bytes;
@@ -186,6 +189,8 @@ impl<B: Backend> Runner<B> {
         self.next_frame = frames;
         // Exactly the normal return handoff: shared backing is pinned; scalar
         // bindings and live value count are installed by the caller, not here.
+        self.counts
+            .add(Event::Retain, evaluation.outputs.len() as u64);
         self.ledger.retain(&evaluation.outputs);
         self.usage.live_value_bytes += bytes;
         cache.hit();

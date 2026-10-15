@@ -1,3 +1,4 @@
+use super::counts::{Counts, Event};
 use super::executable::{LocalCode, Operation};
 mod preparation;
 mod values;
@@ -50,6 +51,7 @@ enum Destination {
 /// corresponding explicit methods. Local computation and loops are bounded.
 pub struct Runner<B: Backend> {
     admitted: Admitted,
+    counts: Counts,
     preparation: Option<preparation::Preparation<B>>,
     backend: BackendOwner<B>,
     kernels: Vec<B::Kernel>,
@@ -147,6 +149,7 @@ impl<B: Backend> Runner<B> {
         };
         let mut runner = Self {
             admitted: admitted.clone(),
+            counts: Counts::new(admitted.executable.bindings.len()),
             preparation: None,
             backend: BackendOwner(Some(backend)),
             kernels: Vec::new(),
@@ -229,6 +232,10 @@ impl<B: Backend> Runner<B> {
     }
     pub fn root_origin(&self) -> &Origin {
         &self.root
+    }
+    /// Snapshot optional instrumentation without exposing participant values.
+    pub fn execution_counts(&self) -> super::ExecutionCounts {
+        self.counts.snapshot(&self.admitted.executable.bindings)
     }
     pub fn usage(&self) -> Usage {
         self.usage
@@ -344,6 +351,7 @@ impl<B: Backend> Runner<B> {
         kind: impl Into<Arc<FrameKind>>,
         inputs: FrameInputs,
     ) -> Frame {
+        self.counts.event(Event::Frame);
         let kind = kind.into();
         self.next_frame += 1; // bounded by instruction/iteration/call ceilings
         let services = if matches!(kind.as_ref(), FrameKind::Loop { .. }) {
@@ -365,6 +373,7 @@ impl<B: Backend> Runner<B> {
         }
     }
     fn validate(&self, value: &B::Value, ty: &PhysicalType, wire: bool) -> Result<()> {
+        self.counts.event(Event::Validate);
         if !value.has_type(ty) {
             return Err(RuntimeError::Payload);
         }
@@ -374,6 +383,7 @@ impl<B: Backend> Runner<B> {
         // An alias of a bound, capability-free immutable value of this type has
         // already passed backend validation; its contents cannot have changed.
         if !self.ledger.validated(value, ty) {
+            self.counts.event(Event::BackendValidate);
             self.backend
                 .validate_value_retained(value, self.ledger.view())?;
         }
@@ -409,6 +419,8 @@ impl<B: Backend> Runner<B> {
         Ok(values)
     }
     fn can_retain(&self, values: &[B::Value], retention: Retention) -> Result<Charge> {
+        self.counts.event(Event::Plan);
+        self.counts.add(Event::PlanValue, values.len() as u64);
         let charge = self
             .ledger
             .plan(values, retention)
@@ -451,6 +463,7 @@ impl<B: Backend> Runner<B> {
     /// allocated bytes as logical work; transfers allocate nothing.
     fn retain(&mut self, values: &[B::Value], retention: Retention) -> Result<()> {
         let charge = self.can_retain(values, retention)?;
+        self.counts.add(Event::Retain, values.len() as u64);
         self.ledger.retain(values);
         self.usage.live_values += values.len();
         self.usage.live_value_bytes += charge.live;
@@ -466,6 +479,7 @@ impl<B: Backend> Runner<B> {
     {
         let mut count = 0;
         let bytes = self.ledger.release(values.inspect(|_| count += 1));
+        self.counts.add(Event::Release, count as u64);
         self.usage.live_values -= count;
         self.usage.live_value_bytes -= bytes;
     }
@@ -533,6 +547,7 @@ impl<B: Backend> Runner<B> {
         // hidden payload store. The parent cannot advance while this frame lives.
         // Borrowed captures share the parent's allocations and add no storage.
         self.retain(&values, retention)?;
+        self.counts.event(Event::Enter);
         if let Err(e) = self
             .backend
             .enter_frame_retained(&frame, &values, self.ledger.view())
@@ -575,6 +590,7 @@ impl<B: Backend> Runner<B> {
             return Err(RuntimeError::Limit);
         }
         self.usage.instructions += 1;
+        self.counts.event(Event::Tick);
         Ok(())
     }
     fn iteration(&mut self) -> Result<()> {
@@ -619,6 +635,7 @@ impl<B: Backend> Runner<B> {
         };
         let mut cleanup_errors = Vec::new();
         while let Some(frame) = self.stack.pop() {
+            self.counts.event(Event::Leave);
             if let Err(e) = self.backend.leave_frame(&frame.frame, exit, &[]) {
                 cleanup_errors.push(e);
             }
@@ -978,6 +995,7 @@ impl<B: Backend> Runner<B> {
             // Ordinary finish would restart a loop. Transfer the actual entry
             // tuple directly instead, using the backend's normal returned-frame
             // custody checks at each boundary.
+            self.counts.add(Event::Retain, values.len() as u64);
             self.ledger.retain(&values);
             self.accept_return(values, |runner, values| {
                 while runner.stack.len() > 1 {
@@ -989,6 +1007,7 @@ impl<B: Backend> Runner<B> {
                     }
                     let execution = runner.stack.pop().expect("enclosing loop");
                     runner.release(execution.env.values());
+                    runner.counts.event(Event::Leave);
                     runner.backend.leave_frame_retained(
                         &execution.frame,
                         FrameExit::Returned,
@@ -1016,6 +1035,7 @@ impl<B: Backend> Runner<B> {
         // The returning environment is still live and validates every value.
         // Preserve shared backing through cleanup, custody checks and the next
         // participant frame just as for a Local region handoff.
+        self.counts.add(Event::Retain, values.len() as u64);
         self.ledger.retain(&values);
         self.accept_return(values, |runner, values| {
             runner.finish_retained(values.to_vec())
@@ -1029,6 +1049,7 @@ impl<B: Backend> Runner<B> {
         if root && self.retain(&values, Retention::Transfer).is_err() {
             // The root has no parent to receive a failed result transfer. Reserve
             // its returned values before reporting successful frame completion.
+            self.counts.event(Event::Leave);
             let cleanup = self
                 .backend
                 .leave_frame(&execution.frame, FrameExit::Stopped, &[]);
@@ -1038,6 +1059,7 @@ impl<B: Backend> Runner<B> {
             }
             return Ok(());
         }
+        self.counts.event(Event::Leave);
         let leave = self.backend.leave_frame_retained(
             &execution.frame,
             FrameExit::Returned,
@@ -1290,6 +1312,7 @@ impl<B: Backend> Runner<B> {
     /// Returned shared backing stays accounted for until its caller installs
     /// the result. The handoff itself adds no binding or inline-storage charge.
     fn unpin_return(&mut self, values: &[B::Value]) {
+        self.counts.add(Event::Unpin, values.len() as u64);
         self.usage.live_value_bytes -= self.ledger.unpin(values);
     }
     fn accept_return<T>(
@@ -1316,6 +1339,7 @@ impl<B: Backend> Runner<B> {
             return Err(RuntimeError::Limit);
         }
         self.can_retain(&args, Retention::Transfer)?;
+        self.counts.event(Event::Enter);
         self.backend
             .enter_frame_retained(frame, &args, self.ledger.view())?;
         let reused = key.as_ref().and_then(|key| self.reuse_computation(key));
@@ -1336,6 +1360,7 @@ impl<B: Backend> Runner<B> {
             Ok(values) => (FrameExit::Returned, values.as_slice()),
             Err(_) => (FrameExit::Stopped, &[][..]),
         };
+        self.counts.event(Event::Leave);
         let leave = self
             .backend
             .leave_frame_retained(frame, exit, returned, self.ledger.view());
@@ -1396,6 +1421,7 @@ impl<B: Backend> Runner<B> {
                     _ => None,
                 };
                 if let Operation::Release(names) = instruction {
+                    self.counts.instruction(instruction);
                     for name in names {
                         // Admission independently excludes resources and future reads.
                         // Removing ordinary immutable storage has no backend effect.
@@ -1403,11 +1429,13 @@ impl<B: Backend> Runner<B> {
                         // The binding's storage stays charged until frame cleanup.
                         // Its ledger entries go now, so a later allocation that
                         // reuses a freed address is charged as fresh storage.
+                        self.counts.event(Event::Release);
                         ghost += self.ledger.release(std::iter::once(&value));
                     }
                     continue;
                 }
                 self.tick()?;
+                self.counts.instruction(instruction);
                 match instruction {
                     Operation::BoolConstant { output, value, .. } => {
                         let value = B::Value::from_control_bool(*value)?;
@@ -1447,6 +1475,7 @@ impl<B: Backend> Runner<B> {
                         outputs,
                     } => {
                         let value = &env[input];
+                        self.counts.event(Event::BackendValidate);
                         self.backend
                             .validate_value_retained(value, self.ledger.view())?;
                         let (descriptor, alternative, mut args) = value.unpack_variant()?;
@@ -1500,6 +1529,7 @@ impl<B: Backend> Runner<B> {
                         // The backend borrows arguments only for this call. Keep
                         // empty slot capacity, never values or capability handles,
                         // between calls. This also restores scratch on failures.
+                        self.counts.add(Event::Operand, inputs.len() as u64);
                         let mut arguments = std::mem::take(&mut self.arguments);
                         arguments.reserve_exact(inputs.len());
                         arguments.extend(inputs.iter().map(|n| env[n].clone()));
@@ -1529,6 +1559,7 @@ impl<B: Backend> Runner<B> {
                             self.charge_logical(read)?;
                             invocation.max_output_bytes = self.output_allowance();
                             invocation.retained = self.ledger.view();
+                            self.counts.operation(binding.index);
                             let values = self.backend.apply_prepared(
                                 &self.kernels[binding.index],
                                 &mut self.calls[*call],
@@ -1675,10 +1706,13 @@ impl<B: Backend> Runner<B> {
             // Each value is already held by this region and validated by this
             // backend. Keep its shared subtree live while dropping the region's
             // bindings; the caller releases this reference on every exit path.
+            self.counts.add(Event::Retain, values.len() as u64);
             self.ledger.retain(values);
         }
         // Ghost charges survive physical release, including on every early error.
-        let released = self.ledger.release(env.values());
+        let released = self
+            .ledger
+            .release(env.values().inspect(|_| self.counts.event(Event::Release)));
         self.usage.live_values -= local_count;
         self.usage.live_value_bytes -= released + ghost;
         result

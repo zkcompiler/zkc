@@ -218,6 +218,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             assert_eq!(report.cleanup_errors, ["native-proof-live-resource-units"]);
             continue;
         }
+        let deployment_bytes = deployment.clone();
         let deployment = admitted.unwrap();
         let inputs = json!(["zkc.native-proof-inputs/0", [], [], "", [], "0"]);
         let report = crate::proof::tests::execute(
@@ -299,10 +300,54 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             .outcome
             .is_ok()
         );
+        if handling == "consume" {
+            // Three completed false trials exercise aggregation independently
+            // of successful one-shot proving and verification above.
+            let mut program: Json = serde_json::from_str(&candidate).unwrap();
+            program[2][0][4][2][3] = json!(false);
+            let mut repeated: Json = serde_json::from_str(&deployment_bytes).unwrap();
+            let candidate = program.to_string();
+            repeated[4] = json!(candidate);
+            repeated[5] = json!(hash(candidate.as_bytes()));
+            let bytes = serde_json::to_vec(&repeated).unwrap();
+            let repeated =
+                NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
+                    .unwrap();
+            let policy = AttemptPolicy {
+                completion: 1,
+                rng: vec![],
+                limits: zkc_runtime::attempt::Limits {
+                    attempts: 3,
+                    proof_bytes: MAX_PROOF_BYTES,
+                },
+                work: repeated.capacity.work,
+                values: repeated.capacity.values,
+            };
+            let report = execute(&repeated, &inputs, Invocation::Attempts(&policy)).unwrap();
+            assert!(report.outcome.is_err());
+            assert_eq!(report.attempts.len(), 3);
+            assert!(report.attempts.iter().all(|a| a.decision == Ok(false)));
+            if let Some(counts) = report.execution_counts.json() {
+                assert_eq!(counts["events"]["created_frames"], 6);
+                assert_eq!(counts["events"]["backend_enter_calls"], 6);
+                assert_eq!(counts["events"]["backend_leave_calls"], 6);
+                assert_eq!(counts["operations"]["resource_unit.create"], 3);
+                assert_eq!(counts["operations"]["resource_unit.consume"], 3);
+                assert_eq!(
+                    report.usage.instructions,
+                    report
+                        .attempts
+                        .iter()
+                        .map(|a| a.usage.instructions)
+                        .sum::<u64>()
+                );
+            }
+        }
     }
 }
 fn cleanup_report(outcome: Result<Vec<u8>>) -> NativeProofReport {
     NativeProofReport {
+        execution_counts: Default::default(),
         outputs: outcome
             .as_ref()
             .ok()
@@ -454,5 +499,19 @@ fn execute(
     invocation: crate::proof::Invocation<'_>,
 ) -> Result<crate::proof::NativeProofReport> {
     let input = crate::proof::ProofInputs::decode(deployment, input, invocation)?;
-    deployment.execute(&input, invocation)
+    let report = deployment.execute(&input, invocation)?;
+    if let Some(counts) = report.execution_counts.json() {
+        if !counts["events"].as_object().unwrap().is_empty() {
+            assert_eq!(
+                counts["events"]["charged_instructions"].as_u64().unwrap()
+                    + counts["events"]["replayed_instructions"].as_u64().unwrap(),
+                report.usage.instructions
+            );
+            assert_eq!(
+                counts["events"]["backend_enter_calls"],
+                counts["events"]["backend_leave_calls"]
+            );
+        }
+    }
+    Ok(report)
 }

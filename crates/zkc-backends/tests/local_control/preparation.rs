@@ -660,3 +660,41 @@ fn empty_results_still_need_space_for_record_and_map_storage() {
     }
     assert_eq!(cache.stats(), Default::default());
 }
+
+#[test]
+fn execution_counts_distinguish_replayed_work_from_actual_calls() {
+    let admitted = admit_supplied(&generated(), &ark_backend(None)).unwrap();
+    let cache = PreparedComputations::new(&admitted, PreparationLimits::default());
+    for warm in [false, true] {
+        let mut runner = Runner::new(
+            &admitted,
+            "main",
+            "P",
+            "session",
+            ark_backend(None),
+            vec![Value::Index(8), f(7)],
+        )
+        .unwrap_or_else(|e| panic!("{}", e.error));
+        runner.prepare_computations(cache.clone(), &[0, 1]).unwrap();
+        loop {
+            match runner.poll() {
+                Action::Local(action) => runner.execute_local(&action.cut).unwrap(),
+                Action::Returned(_) => break,
+                other => panic!("unexpected action: {other:?}"),
+            }
+        }
+        if let Some(counts) = runner.execution_counts().json() {
+            let e = &counts["events"];
+            let charged = e["charged_instructions"].as_u64().unwrap();
+            let replayed = e["replayed_instructions"].as_u64().unwrap();
+            assert_eq!(charged + replayed, runner.usage().instructions);
+            assert_eq!(replayed, if warm { 2 } else { 0 });
+            assert_eq!(e["computation_reuse_hits"], u64::from(warm));
+            assert_eq!(e["local_op"], u64::from(!warm));
+            assert_eq!(e["backend_enter_calls"], 2);
+            assert_eq!(e["backend_leave_calls"], 2);
+            assert_eq!(cache.stats().hits, u64::from(warm));
+        }
+        assert_eq!(runner.backend().active_frames(), 0);
+    }
+}

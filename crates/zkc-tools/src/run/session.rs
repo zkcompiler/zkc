@@ -250,6 +250,7 @@ pub fn run<B: WireBackend, H: Hooks<B>>(
             return refuse(FailureKind::Limit, "output-allocation", inputs);
         }
         rows.push(RoleReport {
+            execution_counts: Default::default(),
             role: role.entry.role.clone(),
             before: State::NotStarted,
             usage: None,
@@ -818,6 +819,7 @@ impl<B: WireBackend> Execution<B> {
                     row.cancelled = true;
                 }
                 row.after = State::inspect(runner);
+                row.execution_counts = runner.execution_counts();
             }
         }
         for (slot, row) in self.slots.iter().zip(&mut self.report.roles) {

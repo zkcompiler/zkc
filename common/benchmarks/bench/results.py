@@ -5,6 +5,7 @@ import math
 import statistics
 
 from .io import require, write_json
+from .observations import validate_counts, summarize_counts
 
 FORMAT = 'zkc.benchmark/0'
 
@@ -49,6 +50,12 @@ def validate_worker(report, plan, boundary):
             and build.get('opt_level') in ('1', '2', '3', 's', 'z')),
             'benchmark worker must be built with optimization')
     require(build.get('debug_assertions') is False, 'benchmark worker must disable debug assertions')
+    counted = build.get('execution_counts', False)
+    require(type(counted) is bool, 'invalid execution counts capability')
+    if boundary in ('admitted_entry_call', 'admitted_run_call'):
+        require('execution_counts' in build, 'missing runtime observation capability')
+    require(not counted or boundary in ('admitted_entry_call', 'admitted_run_call'),
+            'execution counts require a source workload')
     lifecycle = report['lifecycle']
     if boundary in ('admitted_entry_call', 'admitted_run_call'):
         require(isinstance(lifecycle, dict), 'missing Host lifecycle measurements')
@@ -72,13 +79,16 @@ def validate_worker(report, plan, boundary):
         require(isinstance(calls, list) and len(calls) == len(values)*plan['iterations'], 'incomplete lifecycle calls')
         for call in calls:
             require(isinstance(call, dict) and {'input_index', 'decode_ns'} <= call.keys()
-                    and not (call.keys() - {'input_index', 'decode_ns', 'preparation'}), 'invalid lifecycle call')
+                    and not (call.keys() - {'input_index', 'decode_ns', 'preparation', 'execution_counts'}), 'invalid lifecycle call')
             require(type(call['input_index']) is int and call['input_index'] >= 0
                     and type(call['decode_ns']) is int and call['decode_ns'] >= 0, 'invalid lifecycle call values')
             if boundary == 'admitted_entry_call':
                 require('preparation' in call, 'missing preparation statistics')
             if 'preparation' in call:
                 validate_preparation(call['preparation'])
+            require(('execution_counts' in call) == counted, 'call observation capability mismatch')
+            if counted:
+                validate_counts(call['execution_counts'])
         count = len({c['input_index'] for c in calls})
         require([c['input_index'] for c in calls] == [i % count for i in range(len(calls))], 'invalid lifecycle input order')
         if count > 1:
@@ -92,7 +102,7 @@ def validate_manifest(manifest):
     require(isinstance(manifest, dict) and manifest.get('format') == FORMAT, 'unknown benchmark format')
     require(not (set(manifest) - {'format', 'status', 'phase', 'results', 'contracts', 'plan', 'processes',
                 'seed', 'label', 'argv', 'host', 'files', 'checks', 'matrix', 'schedule', 'compilation',
-                'cli', 'source', 'harness', 'comparisons', 'threads', 'references', 'error'}), 'unknown manifest fields')
+                'cli', 'source', 'harness', 'comparisons', 'threads', 'references', 'error', 'observation'}), 'unknown manifest fields')
     require(manifest.get('status') in ('passed', 'failed', 'interrupted', 'running'), 'unknown benchmark status')
     require(isinstance(manifest.get('error', ''), str), 'invalid failure description')
     matrix, results = manifest.get('matrix', []), manifest.get('results')
@@ -104,6 +114,7 @@ def validate_manifest(manifest):
         require(isinstance(result.get('error', ''), str), 'invalid failure description')
         require(type(result.get('repetition')) is int and result['repetition'] >= 0
                 and result.get('status') in ('failed', 'measured', 'passed'), 'invalid measurement state')
+    require(manifest.get('observation') in ('timing', 'execution_counts'), 'invalid observation mode')
     if manifest['status'] != 'passed':
         return
     processes, plan = manifest.get('processes'), manifest.get('plan')
@@ -129,6 +140,8 @@ def validate_manifest(manifest):
         require(key in expected and key not in seen, 'unexpected or duplicate measurement')
         seen.add(key)
         validate_worker(result.get('worker'), plan, expected[key])
+        require(result['worker']['build'].get('execution_counts', False) is (manifest['observation'] == 'execution_counts'),
+                'manifest observation capability mismatch')
     require(seen == expected.keys(), 'incomplete successful measurement matrix')
 
 
@@ -153,6 +166,12 @@ def summarize(manifest):
         if manifest['status'] == 'passed' and len(results) == manifest['processes'] and all(
                 r['status'] == 'passed' for r in results):
             row['status'] = 'passed'
+            if manifest['observation'] == 'execution_counts':
+                row['execution_counts'] = summarize_counts(results)
+                sequences = [[(c['input_index'], c['execution_counts']) for c in r['worker']['lifecycle']['calls']] for r in results]
+                row['counts_repeatable'] = all(s == sequences[0] for s in sequences[1:])
+                rows.append(row)
+                continue
             medians = [statistics.median(s['elapsed_ns']/s['iterations'] for s in r['worker']['samples']
                                         if s['phase'] == 'sample') for r in results]
             row['ns_per_call'] = distribution(medians)
@@ -214,6 +233,14 @@ def publish(directory, manifest):
                                'mad_ns': row.get('ns_per_call', {}).get('mad'),
                                'proof_bytes': (row.get('proof_bytes') or {}).get('median'),
                                'peak_rss_bytes': (row.get('process_peak_rss_bytes') or {}).get('median')})
+    if manifest['observation'] == 'execution_counts':
+        lines = ['# Execution counts', '', f"Run status: **{manifest['status']}**.", '',
+                 'Instrumented execution: timing comparisons are intentionally omitted.',
+                 'See summary.json for distinct count vectors, input identities, first visits and multiplicities.',
+                 'counts_repeatable compares complete ordered count sequences across processes; false requires investigation before fitting a deterministic cost model.',
+                 'Raw commands, outputs, diagnostics and incidental clock readings remain in manifest.json.', '']
+        (directory / 'report.md').write_text('\n'.join(lines))
+        return
     lines = ['# Execution measurements', '', f"Run status: **{manifest['status']}**.", '',
              'Repeated-call times are medians of process medians; ranges span those process medians.',
              'First call is the first invocation, including the first warmup when warmups are enabled.', '',
@@ -300,7 +327,7 @@ def publish(directory, manifest):
 
 def paired_comparisons(manifest):
     validate_manifest(manifest)
-    if manifest['status'] != 'passed': return []
+    if manifest['status'] != 'passed' or manifest['observation'] == 'execution_counts': return []
     values = {(r['case'], r['implementation'], r['operation'], r['repetition']):
               statistics.median(s['elapsed_ns']/s['iterations'] for s in r['worker']['samples'] if s['phase'] == 'sample')
               for r in manifest['results'] if r['status'] == 'passed'}
@@ -320,6 +347,7 @@ def paired_comparisons(manifest):
 def compare(baseline, current):
     for document in (baseline, current):
         validate_manifest(document)
+        require(document['observation'] == 'timing', 'timing comparison refuses instrumented execution')
         require(document.get('status') == 'passed',
                 'comparison requires two successful complete runs')
     for name in ('contracts', 'plan', 'processes', 'host'):

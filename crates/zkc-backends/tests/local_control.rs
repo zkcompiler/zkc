@@ -182,10 +182,48 @@ fn execute<B: Backend<Value = Value>>(
             Action::Local(a) => r.execute_local(&a.cut).unwrap(),
             Action::Returned(v) => {
                 let u = r.usage();
+                if let Some(counts) = r.execution_counts().json() {
+                    let e = &counts["events"];
+                    assert_eq!(
+                        e["retention_commit_values"].as_u64().unwrap(),
+                        e["retention_release_values"].as_u64().unwrap()
+                            + e["retention_unpin_values"].as_u64().unwrap()
+                            + u.live_values as u64
+                    );
+                    assert_eq!(
+                        e["charged_instructions"].as_u64().unwrap()
+                            + e["replayed_instructions"].as_u64().unwrap(),
+                        u.instructions
+                    );
+                    assert_eq!(e["backend_enter_calls"], e["backend_leave_calls"]);
+                    assert_eq!(
+                        counts["operations"]
+                            .as_object()
+                            .unwrap()
+                            .values()
+                            .map(|v| v.as_u64().unwrap())
+                            .sum::<u64>(),
+                        e["local_op"].as_u64().unwrap()
+                    );
+                }
                 return (Ok(v), u, r.into_backend());
             }
             Action::Stopped(s) => {
                 let u = r.usage();
+                if let Some(counts) = r.execution_counts().json() {
+                    let e = &counts["events"];
+                    assert_eq!(
+                        e["retention_commit_values"].as_u64().unwrap(),
+                        e["retention_release_values"].as_u64().unwrap()
+                            + e["retention_unpin_values"].as_u64().unwrap()
+                            + u.live_values as u64
+                    );
+                    assert_eq!(
+                        e["charged_instructions"].as_u64().unwrap()
+                            + e["replayed_instructions"].as_u64().unwrap(),
+                        u.instructions
+                    );
+                }
                 return (Err(s), u, r.into_backend());
             }
             other => panic!("unexpected {other:?}"),
