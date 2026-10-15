@@ -273,6 +273,12 @@ callbacks, with all-present adequacy and full-table helper equations. Named
 calls preserve per-result availability. This auxiliary model adds neither static
 availability formation nor Math/Local participant dispatch; the native profile
 and format remain unchanged.
+Two [scalar inlining pairs](../lean/bridges/structured/README.md#scalar-inlining-pairs)
+have universal model equalities between exact original and actual prepared
+exports: Schnorr response and multilinear Sumcheck claim update. A reusable
+region law preserves helper stops and suffixes; exact regeneration and native
+SSA comparisons test the executable boundary. These pair-specific proofs do
+not establish general compiler pass correctness.
 [Formal support](../lean/docs/support.md) states exact experiments and premises.
 Full DSL/compiler/runtime correspondence, production arithmetic/sampling,
 backend correctness and complete protocol security remain open.

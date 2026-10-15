@@ -15,7 +15,9 @@ independent execution and negative controls.
 The separate [structured bridge](bridges/structured/README.md) retains shared
 helpers, multiple results, finite folds and Local control in a bounded immutable
 single-participant profile, with proved declaration linking and compositional
-helper-table laws.
+helper-table laws. Its [scalar inlining pairs](bridges/structured/README.md#scalar-inlining-pairs)
+prove exact original/prepared model equality for authored response and claim
+computations using checked body contracts and a reusable inlining law.
 
 ## Architecture
 

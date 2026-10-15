@@ -79,6 +79,7 @@ import Zkc.Source.Structured.ComponentLinking
 import Zkc.Source.Structured.Format
 import Zkc.Source.Structured.Frame
 import Zkc.Source.Structured.Import
+import Zkc.Source.Structured.Inlining
 import Zkc.Source.Structured.Laws
 import Zkc.Source.Structured.Linking
 import Zkc.Source.Structured.Meaning
@@ -97,6 +98,7 @@ import Tests.RegionCompatibility
 import Tests.RegionDecoding
 import Tests.RegionLaws
 import Tests.StructuredComponents
+import Tests.StructuredInlining
 import Tests.StructuredLinking
 import Tests.StructuredPrograms
 import Tests.StructuredSource
@@ -124,6 +126,13 @@ import ZkcExamples.NativePrograms.Variants.SchnorrReorderedData
 import ZkcExamples.NativePrograms.Variants.SumcheckHelpersData
 import ZkcExamples.NativePrograms.Variants.SumcheckHornerData
 import ZkcExamples.NativePrograms.Variants.SumcheckWrongResidualData
+import ZkcExamples.Structured.SchnorrResponse
+import ZkcExamples.Structured.SchnorrResponseCandidateData
+import ZkcExamples.Structured.SchnorrResponseMutatedData
+import ZkcExamples.Structured.SchnorrResponseOriginalData
+import ZkcExamples.Structured.SumcheckClaim
+import ZkcExamples.Structured.SumcheckClaimCandidateData
+import ZkcExamples.Structured.SumcheckClaimOriginalData
 import ZkcExamples.Structured.TotalState
 import ZkcExamples.Structured.TotalStateData
 import ZkcExamples.Structured.UnitState

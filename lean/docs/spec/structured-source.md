@@ -175,6 +175,18 @@ loops and fold predicates; unrelated bindings cannot affect the computation.
 The inventory is derived from the same typed body used by the meaning. The law
 does not require helpers to return normally.
 
+`Structured.inline_invoke` replaces a helper invocation by
+`Region.bind (body.rename arguments.get) next` under an explicit equation
+between lookup and body denotation for every actual argument tuple. Renaming
+supplies the actual operands, and binding retains ordered helper results above
+the caller's environment. Equality concerns the complete `PIR.Proc`: a stopping
+body bypasses the suffix, and a returning body runs that same suffix, including
+its stops. The result signature may be empty. The premise is a process equation,
+not a totality assumption or permission to erase effects.
+`Payload.inline_body_view` discharges it from exact declaration membership and
+raw body equality using the existing linking and table-frame laws. These are
+laws of the owned region model, not correctness of a native inlining pass.
+
 `Region.Contract` states immediate return under an explicit input premise and
 relates ordered outputs to the original environment. Contracts compose through
 lexical binding, can strengthen premises and weaken conclusions, and transport
@@ -223,7 +235,14 @@ not become fuel parameters in semantic theorems.
 
 The first clients concern the actual total-state and unit-state finite native
 fixtures. Their complete model equations distinguish ordered multiple results
-and stopping zero-result folds. Schnorr and the multilinear Sumcheck library are the subsequent
+and stopping zero-result folds. `SchnorrResponse.original_eq_candidate` and
+`SumcheckClaim.original_eq_candidate` additionally prove equality of the exact
+exported original and prepared candidate models for two authored scalar Entries,
+for all inputs in a chosen `CommRing F` with `DecidableEq F`. Named checked-body
+contracts connect the actual subjects to their arithmetic; the response proof
+uses `inline_invoke`. An admitted subtraction mutation has a concrete integer
+counterexample. These scalar computations do not import the interactive
+protocols. Schnorr and the multilinear Sumcheck library are the subsequent
 whole-protocol targets described in the
 [design](../design/structured-native-import.md); the current single-participant
 profile does not import their group/service communication.

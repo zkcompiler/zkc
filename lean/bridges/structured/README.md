@@ -108,6 +108,71 @@ nonempty list aborts exactly when its predicate enables the zero-result step.
 Both are parametric in the scalar commutative ring. They are equations for the
 actual admitted constructor subjects; no finite test enumeration supplies them.
 
+## Scalar inlining pairs
+
+Two tiny authored single-role Entries retain mathematical helpers in their
+original native MLIR:
+
+| Subject | Scalar contract | Helper structure |
+|---|---|---|
+| [`schnorr-response.zkc`](fixtures/schnorr-response.zkc) | `nonce + challenge * secret` | One response helper |
+| [`sumcheck-claim.zkc`](fixtures/sumcheck-claim.zkc) | `(1-r) * a0 + r * a1` | One claim helper calling the same weighted-product helper twice |
+
+The Sumcheck source uses the ring-equivalent expanded expression
+`a0 - r*a0 + r*a1`. This avoids the decimal-literal parser's current kernel
+reduction limitation; admission is unchanged. Both computations are scalar
+ingredients of protocols, without group operations or interactive security
+claims.
+
+[`SchnorrResponse`](../../ZkcExamples/Structured/SchnorrResponse.lean) and
+[`SumcheckClaim`](../../ZkcExamples/Structured/SumcheckClaim.lean) prove complete
+process equality between each exact imported original and the actual prepared
+candidate, for every input in any `CommRing F` with `DecidableEq F`. Each client
+uses named checked-body contracts. The response proof applies
+`Structured.inline_invoke`, whose lookup/body premise covers every actual tuple;
+it preserves stops and the caller's suffix without a totality assumption.
+The controls in `Tests.StructuredInlining` cover stopping and returning
+zero-result helpers, suffix stops, retained caller values, repeated arguments
+and ordered multiple results.
+
+The retained mutation changes only the prepared response entry's addition to
+subtraction. It passes native formation and Lean admission. The kernel proves
+that `(nonce, challenge, secret) = (2, 3, 5)` returns `17` in the original model
+and `-13` in the mutated integer model.
+
+After building Lean and the existing native tools, reproduce from the root:
+
+```sh
+python3 lean/bridges/structured/inlining.py \
+  --compiler build/compiler/zkc-compile \
+  --optimizer build/compiler/zkc-opt \
+  --reference build/compiler/test/zkc-structured_reference-test \
+  --report build/experiments/structured-inlining/report.json
+```
+
+This focused sibling reuses the bridge driver. It runs `language-emit` and
+`language-interface`, then the actual
+`--zkc-prepare-protocol="simplify=false optimize-finite=false"` command. It
+exports both sides with `protocol-structured`, independently admits them,
+compares exact retained MLIR/JSON/constructor bytes, and rechecks the proof
+sources. Candidate snapshots use the format's `original` tag because each
+export describes its supplied native input; their input is the retained
+prepared MLIR. The entry contains no helper calls, although dormant helper
+declarations remain in the module.
+
+Default finite comparisons use four boundary/example tuples and sixteen seeded
+full-size scalar tuples per subject, through both direct native SSA and Lean
+execution. The admitted mutation is also compared. Reports retain commands,
+outputs, source and tool hashes, toolchain, affinity and thread settings. The
+existing `just test-lean-native` scope includes this sibling. Host-level lock
+coordination belongs to the invoking validation session.
+
+`--write-fixtures` intentionally replaces the retained native subjects, exports
+and constructor data. It never generates or changes semantic proofs; review
+the changed subject and its checked body equations. These files follow the
+`TotalStateData` pattern as actual proof subjects. Research logs and executable
+copies remain in the selected report directory under `build/experiments`.
+
 These model equations and finite native comparisons are separate evidence.
 The writer, parser and renderer are tested executable boundaries. This package
 does not prove C++ export correctness, frontend translation, native lowering,
