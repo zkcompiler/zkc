@@ -28,7 +28,7 @@ abbrev language : Language where
   result _ := .datum
   condition := .condition
 
-abbrev services : Services ValueSort where
+abbrev services : Participant.Services ValueSort where
   Op := Unit
   arguments _ := [.handle, .datum]
   result _ := .datum
@@ -48,7 +48,7 @@ abbrev inputs {Γ : List ValueSort} (values : Values (fun sort => Option (meanin
     Environment (fun sort => Option (meaning.Value sort)) Γ :=
   values.get
 
-abbrev actions := interface Nat language services meaning.Value
+abbrev actions := Participant.interface Nat ValueSort services meaning.Value
 
 -- An empty input context needs no invented value. Empty rosters remain an
 -- admission concern: lowering and denotation do not silently admit a program.

@@ -59,6 +59,33 @@ model never derives agreement merely from their shared source port name.
 
 ## Effects and observations
 
+`Source.Participant` owns the role/type-parametric action interface and the
+shared open rules used by both `Common.Program.denote` and
+`Common.participantMeaning`. Their callers compose returned components with the
+remaining program; shared rules preserve the actual action continuations.
+
+- `exchange` stops `incomplete` when the sender lacks its operand. Otherwise it
+  sends that value and returns the same sender component. At the receiver it
+  consumes an independent actual reply, regardless of the local operand. Other
+  roles return an absent component. Sender precedence also defines coincident
+  endpoints, although Common admission rejects them.
+- `query` requires every ordered argument only at its owner. Missing owned
+  arguments stop `incomplete`; a successful call returns the actual reply at the
+  service's exact declared result type. Other roles return an absent component
+  without querying. A service tag does not select a sampling distribution.
+- `guard` takes an optional Boolean. At its owner, absence stops `incomplete`,
+  false stops `reject`, and true continues. Other roles continue without an
+  action or stop. Common supplies its mathematical condition policy by mapping
+  the local condition into this Boolean boundary.
+- `restrict` retains a selected optional component or hides it. It cannot create
+  an absent component and emits no action or stop. Common uses the same rule for
+  lowered restrictions and the imported program's final output-role filter.
+
+Participant contracts and handlers name `Participant.Action` and
+`Participant.interface` directly. Mathematical value meanings and service
+behavior remain separate parameters. These rules define no joint scheduler,
+honest-peer equality or randomness assumption.
+
 `PIR.Proc` is a well-founded interaction tree with returned values, terminal stops and
 typed requests whose continuations consume actual replies. A handler maps an
 operation and state to its outcome, successor state and ordered events. `run`

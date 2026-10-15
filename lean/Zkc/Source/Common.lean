@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Source.Participant
 public import Zkc.Source.Mathematical.Projection
 
 @[expose] public section
@@ -16,12 +17,7 @@ set_option autoImplicit false
 
 namespace Zkc.Source.Common
 
-structure Services (Ty : Type) where
-  Op : Type
-  arguments : Op → List Ty
-  result : Op → Ty
-
-inductive Program (Role : Type) (language : Language) (services : Services language.Ty) :
+inductive Program (Role : Type) (language : Language) (services : Participant.Services language.Ty) :
     List language.Ty → language.Ty → Type where
   | ret {Γ ty} (value : Var Γ ty) : Program Role language services Γ ty
   | calculate {Γ ty result} (body : Mathematical.Block Role language Γ result)
@@ -38,54 +34,25 @@ inductive Program (Role : Type) (language : Language) (services : Services langu
       (args : Operands Γ types) (next : Program Role language services Γ ty) :
       Program Role language services Γ ty
 
-inductive Action (Role : Type) (language : Language) (services : Services language.Ty)
-    (Value : language.Ty → Type) where
-  | send {ty} (site : String) (receiver : Role) (value : Value ty)
-  | receive (ty : language.Ty) (site : String) (sender : Role)
-  | query (site : String) (op : services.Op) (args : Values Value (services.arguments op))
-
-abbrev interface (Role : Type) (language : Language) (services : Services language.Ty)
-    (Value : language.Ty → Type) : PIR.Signature where
-  Op := Action Role language services Value
-  Reply
-    | .send .. => Unit
-    | .receive ty .. => Value ty
-    | .query _ op _ => Value (services.result op)
-
-variable {Role : Type} [DecidableEq Role] {language : Language} {services : Services language.Ty}
+variable {Role : Type} [DecidableEq Role] {language : Language} {services : Participant.Services language.Ty}
 
 def Program.denote (meaning : Mathematical.Meaning language)
     (condition : meaning.Value language.condition → Bool) (self : Role) {Γ ty} :
     Program Role language services Γ ty →
       Environment (fun sort => Option (meaning.Value sort)) Γ →
-        PIR.Proc (interface Role language services meaning.Value) (Option (meaning.Value ty))
+        PIR.Proc (Participant.interface Role language.Ty services meaning.Value) (Option (meaning.Value ty))
   | .ret value, env => .done (env value)
   | .calculate body next, env =>
       next.denote meaning condition self (env.push (body.evalAt meaning self env))
   | .exchange site sender receiver value next, env =>
-      if sender = self then
-        match env value with
-        | none => .halt .incomplete
-        | some sent => .call (.send site receiver sent) fun _ =>
-            next.denote meaning condition self (env.push (some sent))
-      else if receiver = self then
-        .call (.receive _ site sender) fun received =>
-          next.denote meaning condition self (env.push (some received))
-      else next.denote meaning condition self (env.push none)
+      (Participant.exchange self sender receiver site (env value)).bind fun received =>
+        next.denote meaning condition self (env.push received)
   | .query site owner op args next, env =>
-      if owner = self then
-        match RoleFamily.sequence (args.eval env) with
-        | none => .halt .incomplete
-        | some values => .call (.query site op values) fun value =>
-            next.denote meaning condition self (env.push (some value))
-      else next.denote meaning condition self (env.push none)
+      (Participant.query self owner site op (args.eval env)).bind fun value =>
+        next.denote meaning condition self (env.push value)
   | .guard _ owner ref next, env =>
-      if owner = self then
-        match env ref with
-        | none => .halt .incomplete
-        | some value => if condition value then next.denote meaning condition self env
-                        else .halt .reject
-      else next.denote meaning condition self env
+      (Participant.guard self owner ((env ref).map condition)).bind fun _ =>
+        next.denote meaning condition self env
   | .statement _ _ _ next, env => next.denote meaning condition self env
 
 /-- The surrounding open process consumes the exact projected mathematical

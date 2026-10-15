@@ -25,7 +25,7 @@ parameter keeps the selected role in the dialect even when a descriptor has no
 role-dependent fields. Statement metadata remains in the syntax even though its
 runtime interpretation is the identity. -/
 inductive ParticipantOp (Role : Type) (language : Language)
-    (services : Services language.Ty) (self : Role) where
+    (services : Participant.Services language.Ty) (self : Role) where
   | mathematical (op : language.Op)
   | restrict (sort : language.Ty) (selected : Bool)
   | exchange (sort : language.Ty) (site : String) (sender receiver : Role)
@@ -34,7 +34,7 @@ inductive ParticipantOp (Role : Type) (language : Language)
   | statement (types : List language.Ty) (relation : String) (selectors : List Role)
 
 abbrev participantDialect (Role : Type) (language : Language)
-    (services : Services language.Ty) (self : Role) : Dialect where
+    (services : Participant.Services language.Ty) (self : Role) : Dialect where
   Ty := language.Ty
   Op := ParticipantOp Role language services self
   arguments
@@ -51,7 +51,7 @@ abbrev participantDialect (Role : Type) (language : Language)
   regions _ := []
 
 variable {Role : Type} [DecidableEq Role] {language : Language}
-    {services : Services language.Ty}
+    {services : Participant.Services language.Ty}
 
 /-- Only the owner requires query arguments (including any service handle).
 Receivers use the actual reply, independently of their local sender operand.
@@ -59,36 +59,21 @@ Missing mathematical components remain values; owned action inputs may stop. -/
 def participantMeaning (meaning : Mathematical.Meaning language)
     (condition : meaning.Value language.condition → Bool) (self : Role) :
     RegionMeaning (participantDialect Role language services self)
-      (interface Role language services meaning.Value) where
+      (Participant.interface Role language.Ty services meaning.Value) where
   Value := fun sort => Option (meaning.Value sort)
   operation
     | .mathematical op, args, .nil =>
         .done (Values.singleton ((RoleFamily.sequence args).map (meaning.operation op)))
     | .restrict _ selected, .cons value .nil, .nil =>
-        .done (Values.singleton (if selected then value else none))
+        .done (Values.singleton (Participant.restrict selected value))
     | .exchange _ site sender receiver, .cons value .nil, .nil =>
-        if sender = self then
-          match value with
-          | none => .halt .incomplete
-          | some sent => .call (.send site receiver sent) fun _ =>
-              .done (Values.singleton (some sent))
-        else if receiver = self then
-          .call (.receive _ site sender) fun received =>
-            .done (Values.singleton (some received))
-        else .done (Values.singleton none)
+        (Participant.exchange self sender receiver site value).bind fun received =>
+          .done (Values.singleton received)
     | .query site owner op, args, .nil =>
-        if owner = self then
-          match RoleFamily.sequence args with
-          | none => .halt .incomplete
-          | some values => .call (.query site op values) fun value =>
-              .done (Values.singleton (some value))
-        else .done (Values.singleton none)
+        (Participant.query self owner site op args).bind fun value =>
+          .done (Values.singleton value)
     | .guard _ owner, .cons value .nil, .nil =>
-        if owner = self then
-          match value with
-          | none => .halt .incomplete
-          | some value => if condition value then .done .nil else .halt .reject
-        else .done .nil
+        (Participant.guard self owner (value.map condition)).bind fun _ => .done .nil
     | .statement .., _, .nil => .done .nil
 
 /-- A small structural adapter into the Common operation profile. Mathematical
@@ -154,38 +139,22 @@ theorem Program.denote_toRegion (meaning : Mathematical.Meaning language)
       exact ih _
   | exchange site sender receiver value next ih =>
       simp only [toRegion, Region.denote, participantMeaning, Values.singleton,
-        Operands.eval, Regions.denote, denote]
-      split
-      · cases env value with
-        | none => rfl
-        | some sent =>
-          simp only [PIR.Proc.bind]
-          congr 1; funext reply; exact ih _
-      · split
-        · simp only [PIR.Proc.bind]
-          congr 1; funext reply; exact ih _
-        · exact ih _
+        Operands.eval, Regions.denote, denote, PIR.Proc.bind_assoc, PIR.Proc.bind]
+      congr 1
+      funext received
+      exact ih _
   | query site owner op args next ih =>
-      simp only [toRegion, Region.denote, participantMeaning, Regions.denote, denote]
-      split
-      · cases RoleFamily.sequence (args.eval env) with
-        | none => rfl
-        | some values =>
-          simp only [PIR.Proc.bind]
-          congr 1; funext reply; exact ih _
-      · exact ih _
+      simp only [toRegion, Region.denote, participantMeaning, Regions.denote, denote,
+        PIR.Proc.bind_assoc, PIR.Proc.bind]
+      congr 1
+      funext value
+      exact ih _
   | guard site owner ref next ih =>
       simp only [toRegion, Region.denote, participantMeaning, Values.singleton,
-        Operands.eval, Regions.denote, denote]
-      split
-      · cases env ref with
-        | none => rfl
-        | some value =>
-          simp only []
-          split
-          · exact ih _
-          · rfl
-      · exact ih _
+        Operands.eval, Regions.denote, denote, PIR.Proc.bind_assoc, PIR.Proc.bind]
+      congr 1
+      funext reply
+      exact ih _
   | statement relation selectors args next ih => exact ih _
 
 /-- Exact deterministic execution, including all handler stops, state and events.
@@ -194,7 +163,7 @@ theorem Program.run_toRegion (meaning : Mathematical.Meaning language)
     (condition : meaning.Value language.condition → Bool) (self : Role) {Γ ty}
     (program : Program Role language services Γ ty)
     (env : Environment (fun sort => Option (meaning.Value sort)) Γ)
-    {S E : Type} (handler : PIR.Handler (interface Role language services meaning.Value) S E)
+    {S E : Type} (handler : PIR.Handler (Participant.interface Role language.Ty services meaning.Value) S E)
     (state : S) :
     ((program.toRegion self).denote (participantMeaning meaning condition self) env).run
         handler state =
@@ -209,7 +178,7 @@ theorem Program.runM_toRegion {m : Type → Type} [Monad m]
     (condition : meaning.Value language.condition → Bool) (self : Role) {Γ ty}
     (program : Program Role language services Γ ty)
     (env : Environment (fun sort => Option (meaning.Value sort)) Γ)
-    {S E : Type} (handler : PIR.MonadHandler m (interface Role language services meaning.Value) S E)
+    {S E : Type} (handler : PIR.MonadHandler m (Participant.interface Role language.Ty services meaning.Value) S E)
     (state : S) :
     ((program.toRegion self).denote (participantMeaning meaning condition self) env).runM
         handler state =
@@ -238,9 +207,6 @@ theorem Imported.denote_toRegion (imported : Imported)
   simp only [toRegion, Region.denote, Program.denote_toRegion, Imported.denote,
     PIR.Proc.bind_assoc]
   congr 1
-  funext value
-  simp [PIR.Proc.bind, participantMeaning, Regions.denote, Operands.eval,
-    Values.singleton, Environment.prepend, Environment.push]
 
 end Native
 end Zkc.Source.Common

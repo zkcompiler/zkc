@@ -25,11 +25,19 @@ remain intact.
 See [structured computations](design/structured-computations.md) for ownership,
 formation, examples and the native correspondence boundary.
 
+`Zkc.Source.Participant` owns typed sends, receives and service queries, together
+with the shared exchange, query, guard and restriction rules over optional
+components. It depends on typed contexts, role families and process semantics,
+without a mathematical language or scalar vocabulary. `Common.Program.denote`
+and `Common.participantMeaning` both compose these rules; action consumers name
+the same `Participant` interface directly. Services declare argument and result
+types while handlers supply behavior and sampling policy.
+
 `Zkc.Source.Mathematical` supplies a typed language/meaning interface. Role-local
-programs use that interface and typed services. `Zkc.Source.Common` instantiates
-a deliberately bounded native scalar profile. A mathematical dialect can supply
-another language and interpretation; this does not require putting every dialect
-in one untyped universal evaluator.
+programs combine mathematical interpretations with those participant rules.
+`Zkc.Source.Common` instantiates a deliberately bounded native scalar profile.
+A mathematical dialect can supply another language and interpretation; this
+does not require putting every dialect in one untyped universal evaluator.
 
 `Zkc.Protocols` owns mathematical experiments and reusable verifier contracts.
 It may use generic source semantics; source semantics may not import protocols.

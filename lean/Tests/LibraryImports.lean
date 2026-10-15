@@ -60,6 +60,7 @@ import Zkc.Source.Format
 import Zkc.Source.Interpretation
 import Zkc.Source.Mathematical.Projection
 import Zkc.Source.Mathematical
+import Zkc.Source.Participant
 import Zkc.Source.Program
 import Zkc.Source.Region
 import Zkc.Source.RegionContracts
@@ -84,6 +85,7 @@ import Tests.CommonRegion
 import Tests.DecimalAdmission
 import Tests.Finite
 import Tests.Machine
+import Tests.ParticipantInterface
 import Tests.RegionCompatibility
 import Tests.RegionDecoding
 import Tests.RegionLaws

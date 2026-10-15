@@ -27,7 +27,7 @@ variable {F G : Type} [Field F] [DecidableEq F]
     [AddCommGroup G] [Module F G] [DecidableEq G]
 
 abbrev meaning := scalarMeaning F G
-abbrev actions := interface Nat language services (ScalarValue F G)
+abbrev actions := Participant.interface Nat Ty services (ScalarValue F G)
 
 def verifierInputs (base key : G) (challengeService : Nat) :
     Values (fun ty => Option (ScalarValue F G ty)) SchnorrData.snapshot.inputs :=

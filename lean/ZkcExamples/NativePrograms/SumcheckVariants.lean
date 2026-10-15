@@ -42,7 +42,13 @@ theorem helpers_correspondence (coefficients : Zkc.Protocols.Sumcheck.Common.Coe
   change (helpersImport.program.denote (scalarMeaning F F) id 1
     (Sumcheck.verifierInputs coefficients claim service).get).bind PIR.Proc.done = _
   rw [PIR.Proc.bind_done]
-  rfl
+  repeat' first
+    | (apply PIR.Proc.call_congr; intro reply)
+    | (change (if _ then _ else _ : PIR.Proc _ _).bind _ = _
+       rw [PIR.Proc.bind_ite]
+       simp only [↓reduceIte])
+    | rfl
+    | fail_if_no_progress congr 1
 
 open Zkc.Protocols.Sumcheck.Common
 
@@ -74,7 +80,13 @@ theorem horner_correspondence (coefficients : Coefficients F) (claim : F) (servi
     change (hornerImport.program.denote (scalarMeaning F F) id 1
       (Sumcheck.verifierInputs coefficients claim service).get).bind PIR.Proc.done = _
     rw [PIR.Proc.bind_done]
-    rfl
+    repeat' first
+      | (apply PIR.Proc.call_congr; intro reply)
+      | (change (if _ then _ else _ : PIR.Proc _ _).bind _ = _
+         rw [PIR.Proc.bind_ite]
+         simp only [↓reduceIte])
+      | rfl
+      | fail_if_no_progress congr 1
   rw [source, horner_arithmetic]
   rfl
 
