@@ -65,7 +65,7 @@ def test_shared_slot_is_exclusive_fail_fast_and_preserves_evidence(modules, tmp_
         code = ('import fcntl,sys; f=open(sys.argv[1],"a"); '
                 'fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB)')
         other = subprocess.run([sys.executable, '-c', code, io.MEASUREMENT_LOCK], capture_output=True)
-        assert other.returncode != 0 and b'BlockingIOError' in other.stderr
+        assert other.returncode > 0 and b'BlockingIOError' in other.stderr
         with pytest.raises(io.MeasurementBusy):
             with io.measurement_slot(tmp_path/'other/coordination.json'):
                 pytest.fail('nested slot acquired')
