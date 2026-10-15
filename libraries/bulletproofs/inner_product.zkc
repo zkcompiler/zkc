@@ -41,7 +41,7 @@ pub fn cross<G: Group>(bases: Bases<G>, witness: Witness<G::Scalar>,
   return (left, right);
 }
 
-// Both roles use precisely this fold, including the asymmetric y weight.
+// Dense basis fold, including the asymmetric y weight.
 pub fn fold_bases<G: Group>(bases: Bases<G>, y: G::Scalar, x: G::Scalar) -> Bases<G> {
   let (g0, g1) = curve::split(bases.left);
   let (h0, h1) = curve::split(bases.right);
@@ -50,6 +50,23 @@ pub fn fold_bases<G: Group>(bases: Bases<G>, y: G::Scalar, x: G::Scalar) -> Base
   let left = g0 * inverse_x + g1 * (x * inverse_power);
   let right = h0 * x + h1 * inverse_x;
   return Bases<G>{left: left, right: right};
+}
+
+// Extend the coefficients of consecutive binary folds in original basis order.
+// Each existing coefficient branches into its low and high child.
+pub fn fold_coefficients<F: Field>(weights: Vector<F>, low: F, high: F) -> Vector<F> {
+  return vec::transpose(vec::concat(vec::scale(weights, low), vec::scale(weights, high)),
+    2, vec::length(weights));
+}
+
+// The left fold contributes y^(-i) to original basis element i.
+pub fn evaluate_bases<G: Group>(bases: Bases<G>, y: G::Scalar,
+    weights: (Vector<G::Scalar>, Vector<G::Scalar>)) -> Bases<G> {
+  let inverse_weights = vec::geometric(scalar::inverse(y), count(bases));
+  let left = curve::msm(vec::hadamard(weights.0, inverse_weights), bases.left);
+  let right = curve::msm(weights.1, bases.right);
+  return Bases<G>{left: curve::append(curve::empty<G>(), left),
+                  right: curve::append(curve::empty<G>(), right)};
 }
 
 pub fn fold_witness<F: Field>(witness: Witness<F>, y: F, x: F,
@@ -114,7 +131,7 @@ pub protocol Argument<G: Group, Encoding: PointEncoding<G>, MaxRounds: nat> role
   require @P vec::length(witness.left) == count(basesP);
   require @P vec::length(witness.right) == count(basesP);
   let mut basisP = basesP;
-  let mut basisV = basesV;
+  let mut weightsV @V = (vec::fill<G::Scalar>(1, 1), vec::fill<G::Scalar>(1, 1));
   let mut secret = witness;
   let mut current = claim;
   for round in 0..rounds roles(P,V) max MaxRounds {
@@ -131,9 +148,10 @@ pub protocol Argument<G: Group, Encoding: PointEncoding<G>, MaxRounds: nat> role
     let inverse_x @V = scalar::inverse(xV);
     current = current + decoded.0 * (xV * xV) + decoded.1 * (inverse_x * inverse_x);
     let nextP @P = fold_bases(basisP, yP, xP);
-    let nextV @V = fold_bases(basisV, yV, xV);
+    let nextV @V = (fold_coefficients(weightsV.0, inverse_x, xV),
+      fold_coefficients(weightsV.1, xV, inverse_x));
     basisP = nextP;
-    basisV = nextV;
+    weightsV = nextV;
     secret = fold_witness(secret, yP, xP, left_mask, right_mask);
   }
   let r = sampling::Nonzero<G::Scalar,32>(nonces);
@@ -150,6 +168,7 @@ pub protocol Argument<G: Group, Encoding: PointEncoding<G>, MaxRounds: nat> role
   let response @P = responses(secret, eP, r, s, d, eta);
   #[site(response)] let received = send P -> V(response);
   let decoded @V = (Encoding::admit(actual.0), Encoding::admit(actual.1));
+  let basisV @V = evaluate_bases(basesV, yV, weightsV);
   let accepted @V = check(basisV, current, value_baseV, mask_baseV, yV, eV,
     decoded.0, decoded.1, received);
   return (accepted = accepted);

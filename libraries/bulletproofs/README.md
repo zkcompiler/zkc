@@ -9,7 +9,7 @@ operations, byte encodings, Keccak-256 and managed randomness.
 
 | Module | Exports and use |
 |---|---|
-| `bulletproofs::inner_product` | `Bases<G>`, `Witness<F>`, `PointEncoding<G>` and `Argument<G,Encoding,MaxRounds>`; `count` reports basis length; `cross`, `fold_bases` and `fold_witness` expose the shared reduction equations |
+| `bulletproofs::inner_product` | `Bases<G>`, `Witness<F>`, `PointEncoding<G>` and `Argument<G,Encoding,MaxRounds>`; `count` reports basis length; `cross`, `fold_bases` and `fold_witness` expose the dense reduction equations; `fold_coefficients` and `evaluate_bases` expose their coefficient form |
 | `bulletproofs::monero` | `Range`, `Monero`, `commit`, `dimensions`, `generators`, `value_base`, `mask_base`, `Wire`, `G`, `F`; `initial_transcript` and `hash_scalar` supply the concrete hash-chain helpers |
 | `bulletproofs::monero::transcript` | `Provider`: the concrete Keccak/scalar hash chain |
 | `bulletproofs::monero::codec` | `Codec`: complete `BulletproofPlus` serialization and exact scalar admission |
@@ -18,8 +18,9 @@ operations, byte encodings, Keccak-256 and managed randomness.
 opening `C = sum(a_i G_i) + sum(b_i H_i) + sum(y^(i+1) a_i b_i) H + alpha B`.
 Its basis length must be `2^rounds`, with `rounds <= MaxRounds` and nonzero `y`.
 The caller establishes the statement and supplies suitable independent generators.
-The terminal blinding step is part of the argument. Prover and verifier call the
-same basis fold; each retains its own received challenges and messages.
+The terminal blinding step is part of the argument. The prover folds dense bases. The verifier expands scalar coefficients and
+evaluates the two final bases with multi-scalar multiplication. Both implement
+the same equations; each retains its own received challenges and messages.
 `PointEncoding` separates raw transcript observations from admitted group points.
 
 `Range` specializes this argument to 1..16 unsigned 64-bit amounts. Counts pad

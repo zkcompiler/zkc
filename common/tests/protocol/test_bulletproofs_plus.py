@@ -217,3 +217,62 @@ def test_nonzero_blinding_consumes_rejected_candidates(toolchain, journal, direc
         assert json.loads(report.stdout)['status'] == 'refused'
         assert diagnostics['stop']['kind'] == 'Explicit("reject")'
         assert not proof.exists()
+
+
+@pytest.mark.parametrize('group,field', [
+    ('bls12-381.g1', 'bls12-381.fr'),
+    ('ristretto255.group', 'ristretto255.scalar'),
+    ('edwards25519.prime', 'ristretto255.scalar'),
+])
+def test_coefficient_bases_match_dense_folds(toolchain, journal, directory, group, field):
+    from entry import Entry
+    from source_modules import library_modules
+
+    source = '''module sample;
+use bulletproofs::inner_product as ip;
+use zkc::vector as vec;
+use zkc::curve as curve;
+use zkc::scalar as scalar;
+use zkc::finite_domain::{range};
+domain G = group("GROUP");
+domain F = field("FIELD");
+fn compare(challenges:vec::Vector<F>,y:F,n:index) {
+  let g=curve::generator<G>();
+  // Related points and identities exercise algebra only, not generator security.
+  let left=curve::collect(range(0,n),fn(i)=>g*scalar::from_index<F>(i*i));
+  let right=curve::collect(range(0,n),fn(i)=>g*(0-scalar::from_index<F>(i+7)));
+  let original=ip::Bases<G>{left:left,right:right};
+  let mut dense=original;
+  let mut weights=(vec::fill<F>(1,1),vec::fill<F>(1,1));
+  for i in 0..vec::length(challenges) {
+    let x=vec::get(challenges,i);
+    let inverse=scalar::inverse(x);
+    dense=ip::fold_bases(dense,y,x);
+    weights=(ip::fold_coefficients(weights.0,inverse,x),
+      ip::fold_coefficients(weights.1,x,inverse));
+  }
+  let evaluated=ip::evaluate_bases(original,y,weights);
+  return (curve::get(dense.left,0)==curve::get(evaluated.left,0)
+    && curve::get(dense.right,0)==curve::get(evaluated.right,0),weights.0,weights.1);
+}
+protocol Check roles(P)(challenges:vec::Vector<F>@P,y:F@P,n:index@P)
+ ->(result:(bool,vec::Vector<F>,vec::Vector<F>)@P) {
+  return compare(challenges,y,n);
+}
+run Demo=Check;
+'''.replace('GROUP', group).replace('FIELD', field)
+    entry = Entry(toolchain, journal, directory, source,
+                  library_modules('bulletproofs'))
+    order = (2**252 + 27742317777372353535851937790883648493 if field.startswith('ristretto')
+             else 52435875175126190479447740508185965837690552500527637822603658699938581184513)
+    for rounds in range(5):
+        challenges = [2, 3, 5, 7][:rounds]
+        low, high = [1], [1]
+        for x in challenges:
+            inverse = pow(x, -1, order)
+            low = [v * factor % order for v in low for factor in (inverse, x)]
+            high = [v * factor % order for v in high for factor in (x, inverse)]
+        for y in (1, 3, order-1):
+            assert entry.run(f'rounds-{rounds}-y-{y}', {
+                'challenges': list(map(str, challenges)), 'y': str(y), 'n': str(2**rounds),
+            }) == {'result': [True, list(map(str, low)), list(map(str, high))]}
