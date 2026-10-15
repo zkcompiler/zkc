@@ -196,30 +196,54 @@ impl From<FrameData> for Frame {
 }
 impl std::fmt::Debug for Frame {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let FrameData {
+            id,
+            parent,
+            role,
+            origin,
+            kind,
+            inputs,
+            services,
+        } = self.0.as_ref();
         f.debug_struct("Frame")
-            .field("id", &self.0.id)
-            .field("parent", &self.0.parent)
-            .field("role", &self.0.role)
-            .field("origin", &self.0.origin)
-            .field("kind", &self.0.kind)
-            .field("inputs", &self.0.inputs)
-            .field("services", &self.0.services)
+            .field("id", id)
+            .field("parent", parent)
+            .field("role", role)
+            .field("origin", origin)
+            .field("kind", kind)
+            .field("inputs", inputs)
+            .field("services", services)
             .finish()
     }
 }
 impl Frame {
     /// Compare the boundary used for active-frame custody. Sharing immutable
     /// metadata proves equality; independently allocated equal frames still
-    /// match. Service declarations are checked separately at entry.
+    /// match. This compares id, parent, role, origin, kind and flat inputs.
+    /// It does not authorize entry or service use: service declarations are
+    /// excluded here and require their separate entry authority checks.
     #[inline]
     pub fn same_boundary(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0)
-            || (self.id() == other.id()
-                && self.parent() == other.parent()
-                && self.role() == other.role()
-                && self.origin() == other.origin()
-                && self.kind() == other.kind()
-                && self.inputs() == other.inputs())
+        if Arc::ptr_eq(&self.0, &other.0) {
+            return true;
+        }
+        // Exhaustive destructuring requires an explicit custody decision when
+        // adding metadata. Service authority is not part of this predicate.
+        let FrameData {
+            id,
+            parent,
+            role,
+            origin,
+            kind,
+            inputs,
+            services: _,
+        } = self.0.as_ref();
+        *id == other.id()
+            && *parent == other.parent()
+            && role.as_str() == other.role()
+            && origin == other.origin()
+            && kind.as_ref() == other.kind()
+            && inputs == other.inputs()
     }
 
     /// Entry declarations, inherited read-only by structured loop frames.
@@ -553,11 +577,20 @@ mod domain_tests {
         assert!(!Arc::ptr_eq(&first.0, &equal.0));
         assert!(first.same_boundary(&clone));
         assert!(first.same_boundary(&equal));
-        assert!(format!("{first:?}").starts_with("Frame { id: FrameId(3),"));
+        assert_eq!(
+            format!("{first:?}"),
+            concat!(
+                "Frame { id: FrameId(3), parent: Some(FrameId(1)), role: \"P\", ",
+                "origin: Origin { session: \"s\", entry: \"main\", instance: \"root\", path: [] }, ",
+                "kind: Local { site: \"round\", function: \"local\" }, ",
+                "inputs: FrameInputs { explicit: [], captures: [] }, services: [] }"
+            )
+        );
 
         let mutations: &[fn(&mut FrameData)] = &[
             |v| v.id = FrameId(4),
             |v| v.parent = None,
+            |v| v.parent = Some(FrameId(2)),
             |v| v.role = "V".into(),
             |v| v.origin.session = "other".into(),
             |v| v.origin.entry = "other".into(),
@@ -624,6 +657,28 @@ mod domain_tests {
             assert!(!frames[0].same_boundary(&changed));
             frames.push(changed);
         }
+        for iteration in [2, 3] {
+            let mut data = frame_data("local");
+            data.kind = FrameKind::Loop {
+                site: "loop".into(),
+                iteration,
+            }
+            .into();
+            frames.push(data.into());
+        }
+        let index = PhysicalType::parse("index@native.index/0").unwrap();
+        let boolean = PhysicalType::parse("bool@native.bool/0").unwrap();
+        for inputs in [
+            vec![("x".into(), index.clone())],
+            vec![("y".into(), index.clone())],
+            vec![("x".into(), boolean.clone())],
+            vec![("x".into(), index.clone()), ("y".into(), boolean.clone())],
+            vec![("y".into(), boolean), ("x".into(), index)],
+        ] {
+            let mut data = frame_data("local");
+            data.inputs = inputs.into();
+            frames.push(data.into());
+        }
         for a in &frames {
             for b in &frames {
                 assert_eq!(a.same_boundary(b), old(a, b));
@@ -632,7 +687,7 @@ mod domain_tests {
     }
 
     #[test]
-    fn frame_boundary_uses_flat_inputs_and_checks_services_separately() {
+    fn frame_boundary_uses_flat_inputs_and_excludes_services() {
         let ty = PhysicalType::parse("index@native.index/0").unwrap();
         let inputs = vec![("x".into(), ty.clone()), ("capture".into(), ty)];
         let mut a = frame_data("local");
