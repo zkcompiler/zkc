@@ -52,14 +52,24 @@ Expected<json::Value> sort(Type type) {
     if (vector.getDomain() == "bls12-381.fr")
       return json::Array{"vector", vector.getDomain()};
   }
+  if (auto group = dyn_cast<algebra::GroupType>(type)) {
+    if (group.getDomain() == "bls12-381.g1")
+      return json::Array{"group", group.getDomain()};
+  }
+  if (auto service = dyn_cast<protocol_ir::ServiceReferenceType>(type)) {
+    if (service.getContract() == "random.bls12-381.fr/0")
+      return json::Array{"service", service.getContract()};
+  }
   return error("structured-source-type");
 }
 
-Expected<json::Array> sorts(TypeRange types) {
+Expected<json::Array> sorts(TypeRange types, bool services = false) {
   if (types.size() > signatureLimit)
     return error("structured-source-limit");
   json::Array result;
   for (Type type : types) {
+    if (!services && isa<protocol_ir::ServiceReferenceType>(type))
+      return error("structured-source-service");
     auto encoded = sort(type);
     if (!encoded)
       return encoded.takeError();
@@ -115,7 +125,7 @@ class Exporter {
   protocol_ir::ProtocolModuleOp unit;
   protocol_ir::MathematicalOp selected;
   SymbolTable symbols;
-  StringRef role;
+  ArrayAttr roles;
   Operation *definition = nullptr;
   llvm::StringSet<> sites;
   llvm::DenseMap<Operation *, SmallVector<Operation *>> dependencies;
@@ -143,19 +153,30 @@ class Exporter {
     return attr.getValue();
   }
 
-  Error scopes(protocol_ir::MathematicalOp function) {
-    auto oneRole = [&](ArrayAttr values) {
-      return values.size() == 1 &&
-             values[0] == StringAttr::get(unit.getContext(), role);
-    };
-    if (!oneRole(function.getRoles()))
+  bool hasRole(StringRef role) const {
+    return roles &&
+           llvm::is_contained(roles, StringAttr::get(roles.getContext(), role));
+  }
+
+  json::Array names(ArrayAttr values) {
+    json::Array result;
+    for (Attribute value : values)
+      result.push_back(cast<StringAttr>(value).getValue());
+    return result;
+  }
+
+  Expected<json::Array> interface(protocol_ir::MathematicalOp function) {
+    roles = function.getRoles();
+    // Native verification owns uniqueness, nonempty scopes and port shape.
+    if (roles.empty() || roles.size() > 16)
       return error("structured-source-role");
-    for (ArrayAttr scopes :
-         {function.getInputRoles(), function.getOutputRoles()})
-      for (Attribute scope : scopes)
-        if (!oneRole(cast<ArrayAttr>(scope)))
-          return error("structured-source-role");
-    return Error::success();
+    json::Array inputs, outputs;
+    for (Attribute scope : function.getInputRoles())
+      inputs.push_back(names(cast<ArrayAttr>(scope)));
+    for (Attribute scope : function.getOutputRoles())
+      outputs.push_back(names(cast<ArrayAttr>(scope)));
+    return json::Array{"protocol", names(roles), std::move(inputs),
+                       std::move(outputs)};
   }
 
   Expected<json::Array> fold(Operation &op) {
@@ -199,6 +220,50 @@ class Exporter {
       if (auto e = attributes(op, {}))
         return std::move(e);
       return json::Array{fieldOpcode, field()};
+    }
+    if (isa<algebra::GroupIdentityOp, algebra::GroupAddOp,
+            algebra::GroupScaleOp, algebra::GroupEqualOp>(op)) {
+      if (auto e = attributes(op, {}))
+        return std::move(e);
+      bool identity = isa<algebra::GroupIdentityOp>(op);
+      auto group = cast<algebra::GroupType>(
+          identity ? op.getResult(0).getType() : op.getOperand(0).getType());
+      StringRef opcode = identity                         ? "group.identity"
+                         : isa<algebra::GroupAddOp>(op)   ? "group.add"
+                         : isa<algebra::GroupEqualOp>(op) ? "group.equal"
+                                                          : "group.scale";
+      json::Array result{opcode, group.getDomain()};
+      if (isa<algebra::GroupScaleOp>(op))
+        result.push_back(
+            cast<algebra::FieldType>(op.getOperand(1).getType()).getDomain());
+      return result;
+    }
+    if (auto restrict = dyn_cast<protocol_ir::RestrictRolesOp>(op)) {
+      if (auto e = attributes(op, {"roles"}))
+        return std::move(e);
+      return json::Array{"restrict", names(restrict.getRoles())};
+    }
+    if (auto exchange = dyn_cast<protocol_ir::ExchangeOp>(op)) {
+      if (auto e = attributes(op, {"sender", "receiver", "site"}))
+        return std::move(e);
+      return json::Array{"exchange", exchange.getSender(),
+                         exchange.getReceiver()};
+    }
+    if (auto query = dyn_cast<protocol_ir::QueryOp>(op)) {
+      if (auto e = attributes(op, {"owner", "method", "site"}))
+        return std::move(e);
+      auto result = dyn_cast<algebra::FieldType>(op.getResult(0).getType());
+      if (query.getMethod() != "draw" || op.getNumOperands() != 1 || !result ||
+          result.getDomain() != "bls12-381.fr")
+        return error("structured-source-service");
+      return json::Array{"draw", query.getOwner(), result.getDomain()};
+    }
+    if (auto statement = dyn_cast<protocol_ir::StatementOp>(op)) {
+      if (auto e = attributes(op, {"relation", "selectors", "acceptance"}))
+        return std::move(e);
+      return json::Array{"statement", statement.getRelation(),
+                         names(statement.getSelectors()),
+                         statement.getAcceptance()};
     }
     if (auto constant = dyn_cast<arith::ConstantOp>(op)) {
       if (auto e = attributes(op, {"value"}))
@@ -276,7 +341,7 @@ class Exporter {
         return error("structured-source-reference");
       if (participant) {
         auto ownerRole = op.getAttrOfType<StringAttr>("role");
-        if (!ownerRole || ownerRole.getValue() != role)
+        if (owner != "protocol" || !ownerRole || !hasRole(ownerRole.getValue()))
           return error("structured-source-role");
         return json::Array{"local_call", *callee, ownerRole.getValue()};
       }
@@ -295,7 +360,7 @@ class Exporter {
       if (auto e = attributes(op, {"site", "owner"}))
         return std::move(e);
       auto guardOwner = op.getAttrOfType<StringAttr>("owner");
-      if (owner != "protocol" || !guardOwner || guardOwner.getValue() != role)
+      if (owner != "protocol" || !guardOwner || !hasRole(guardOwner.getValue()))
         return error("structured-source-role");
       return json::Array{"guard", guardOwner.getValue()};
     }
@@ -379,7 +444,7 @@ class Exporter {
       }
       if (++instructions > instructionLimit)
         return error("structured-source-limit");
-      auto inputs = sorts(op.getOperandTypes());
+      auto inputs = sorts(op.getOperandTypes(), isa<protocol_ir::QueryOp>(op));
       if (!inputs)
         return inputs.takeError();
       auto results = sorts(op.getResultTypes());
@@ -389,7 +454,10 @@ class Exporter {
       if (!desc)
         return desc.takeError();
       StringRef occurrence;
-      if (op.hasAttr("site")) {
+      if (op.hasAttr("site") ||
+          isa<protocol_ir::ExchangeOp, protocol_ir::QueryOp,
+              protocol_ir::GuardOp, protocol_ir::LocalCallOp, local::ApplyOp,
+              local::LocalIfOp, local::LocalForOp, local::BoolConstantOp>(op)) {
         auto checked = site(op);
         if (!checked)
           return checked.takeError();
@@ -531,7 +599,7 @@ class Exporter {
     auto type = signature(op);
     if (!type)
       return error("structured-source-region");
-    auto inputs = sorts(type.getInputs());
+    auto inputs = sorts(type.getInputs(), owner == "protocol");
     if (!inputs)
       return inputs.takeError();
     auto outputs = sorts(type.getResults());
@@ -557,9 +625,14 @@ class Exporter {
                          std::move((*refs)[1]),
                          std::move((*refs)[2])};
     }
-    if (auto protocol = dyn_cast<protocol_ir::MathematicalOp>(op))
-      if (auto e = scopes(protocol))
-        return std::move(e);
+    json::Array ports;
+    roles = {};
+    if (auto protocol = dyn_cast<protocol_ir::MathematicalOp>(op)) {
+      auto encoded = interface(protocol);
+      if (!encoded)
+        return encoded.takeError();
+      ports = std::move(*encoded);
+    }
     json::Array preconditions;
     if (op.hasAttr("data.preconditions")) {
       auto attrs = op.getAttrOfType<ArrayAttr>("data.preconditions");
@@ -610,6 +683,7 @@ class Exporter {
                        *visible,
                        std::move(*inputs),
                        std::move(*outputs),
+                       std::move(ports),
                        std::move(preconditions),
                        std::move(origin),
                        std::move(*body)};
@@ -655,12 +729,9 @@ public:
       : unit(unit), selected(selected), symbols(unit) {}
 
   Expected<json::Value> run(StringRef bytes) {
-    if (selected.getRoles().size() != 1)
-      return error("structured-source-role");
-    role = cast<StringAttr>(selected.getRoles()[0]).getValue();
     if (auto e = attributes(*unit, {"profile"}))
       return std::move(e);
-    json::Array domains, definitions;
+    json::Array domains, relations, definitions;
     for (Operation &op : unit.getBody().front()) {
       // MLIR permits an empty quoted symbol. The wire vocabulary uses the
       // empty string only for absent predicates and sites, never a declaration.
@@ -677,6 +748,28 @@ public:
         if (!encoded)
           return encoded.takeError();
         domains.push_back(std::move(*encoded));
+      } else if (auto declaration = dyn_cast<relation::DeclareOp>(op)) {
+        if (relations.size() == 128)
+          return error("structured-source-limit");
+        if (auto e =
+                attributes(op, {"sym_name", "sym_visibility", "kind", "key",
+                                "revision", "signature", "purposes"}))
+          return std::move(e);
+        auto visible = visibility(op);
+        if (!visible)
+          return visible.takeError();
+        auto type = declaration.getSignature();
+        auto inputs = sorts(type.getInputs());
+        if (!inputs)
+          return inputs.takeError();
+        auto outputs = sorts(type.getResults());
+        if (!outputs)
+          return outputs.takeError();
+        relations.push_back(
+            json::Array{"relation", declaration.getSymName(), *visible,
+                        declaration.getKind(), declaration.getKey(),
+                        declaration.getRevision(), std::move(*inputs),
+                        std::move(*outputs), names(declaration.getPurposes())});
       } else {
         if (definitions.size() == 128)
           return error("structured-source-limit");
@@ -688,11 +781,35 @@ public:
     }
     if (auto e = closure())
       return std::move(e);
+    // Multi-role Math finite work needs separate partial-component semantics.
+    // Follow only Math calls: owned Local finite work keeps its closed ABI.
+    llvm::DenseSet<Operation *> checked;
+    std::function<Error(Operation *)> scalarMath =
+        [&](Operation *function) -> Error {
+      if (!checked.insert(function).second)
+        return Error::success();
+      for (Operation &op : function->getRegion(0).front()) {
+        if (isa<algebra::FiniteFoldOp, data::BoundedAtOp>(op))
+          return error("structured-source-multirole-math");
+        if (auto call = dyn_cast<func::CallOp>(op))
+          if (auto e = scalarMath(symbols.lookup(call.getCallee())))
+            return e;
+      }
+      return Error::success();
+    };
+    for (auto protocol :
+         unit.getBody().front().getOps<protocol_ir::MathematicalOp>())
+      if (protocol.getRoles().size() > 1)
+        if (auto e = scalarMath(protocol))
+          return std::move(e);
     auto digest = SHA256::hash(arrayRefFromStringRef(bytes));
-    return json::Array{
-        "zkc.structured-source/0", "original", "sha256:" + toHex(digest, true),
-        selected.getSymName(),     role,       std::move(domains),
-        std::move(definitions)};
+    return json::Array{"zkc.structured-source/0",
+                       "original",
+                       "sha256:" + toHex(digest, true),
+                       selected.getSymName(),
+                       std::move(domains),
+                       std::move(relations),
+                       std::move(definitions)};
   }
 };
 } // namespace

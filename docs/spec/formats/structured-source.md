@@ -6,10 +6,10 @@ declarations. It performs no preparation, participant projection, finite
 selection or realization. `original` names this export boundary; it does not
 prove how an externally supplied module was produced.
 
-The selected `protocol.func` has exactly one participant. Every input and output
-scope is that participant. The complete unit is checked: supported unused
+Each `protocol.func` retains its own ordered participant roster and port scopes.
+The complete unit is checked: supported unused
 definitions are retained, and unsupported definitions are refused. Symbol names
-are nonempty and unique across functions and domains. Helper references form an acyclic
+are nonempty and unique across functions, domains and relations. Helper references form an acyclic
 graph; helpers cannot call the selected root. The independent
 [formal admission contract](../../../lean/docs/spec/structured-source.md)
 defines the Lean interpretation.
@@ -19,7 +19,7 @@ defines the Lean interpretation.
 The current format is an exact tagged array, `zkc.structured-source/0`:
 
 ```text
-[format, "original", source-sha256, entry-name, participant, domains, definitions]
+[format, "original", source-sha256, entry-name, domains, relations, definitions]
 ```
 
 `source-sha256` is `sha256:` followed by 64 lowercase hexadecimal digits, hashing
@@ -34,9 +34,17 @@ are refused.
 | `["index"]` | unsigned 64-bit index |
 | `["field", domain]` | nominal scalar field |
 | `["vector", domain]` | immutable vector over that field |
+| `["group", domain]` | nominal group |
+| `["service", contract]` | owner-local reusable service reference |
 
-The initial domain is `bls12-381.fr`. Groups, services, communication, affine
-resources, variants, matrices, general arrays, arbitrary kernels and other
+The admitted domains are `bls12-381.fr` and `bls12-381.g1`, whose associated
+scalar field is `bls12-381.fr`. The only service contract is
+`random.bls12-381.fr/0`, with method `draw`. Services occur only at protocol
+input roots and as the actual query handle operand. The native
+[service contract](../runtime/services.md) requires singleton ownership and
+permits same-owner root aliases; services cannot be selected, restricted,
+exchanged, returned, passed to Math/Local helpers, or bound as statement data.
+Affine resources, variants, matrices, general arrays, arbitrary kernels and other
 unlisted operations require a separately specified extension.
 
 ## Declarations
@@ -46,7 +54,13 @@ unlisted operations require a separately specified extension.
 ["domain", name, input-types, ["indices", container-argument, 0]]
 
 ["function", name, kind, visibility, input-types, output-types,
- preconditions, origin, body]
+ interface, preconditions, origin, body]
+
+interface := ["protocol", role-names, input-scopes, output-scopes]  # protocol
+           | []                                                  # math/local
+
+["relation", name, visibility, kind, key, revision,
+ input-types, output-types, purposes]
 
 ["finite", name, visibility, input-types, output-types,
  domain-name, step-name, predicate-name]
@@ -59,7 +73,21 @@ Elements yield one field value; indices yield one index. Only axis zero is
 supported.
 
 Function `kind` is `protocol`, `math` or `local`; visibility is `public` or
-`private`. Math preconditions are exact arrays
+`private`. Each protocol has 1 to 16 unique nonempty native role strings. Every
+port has a nonempty scope drawn from that protocol's own roster; scope counts
+match the signature. Owner references are local to that roster, including in
+unused protocols. The writer retains native names without reconstructing
+authored names or imposing the selected root's roster on other definitions.
+
+Relations are non-callable metadata, retained even when unused. The declaration's
+`kind`, `key` and `revision` are opaque exact strings. Native verification checks
+their validity and consistency, the ordered signature, and each input purpose
+(`parameter`, `statement`, or `witness`). A relation has one Boolean result.
+Retaining a Math formula and a relation does not associate them: generated symbol
+names are not formula bindings. Any such association requires the separately
+checked language interface.
+
+Math preconditions are exact arrays
 `["index_bound", index-argument, container-argument, 0]`. Other relation
 annotations are refused. Protocol and Math origin is `[]`; Local origin is
 `[origin-name, [[key, value], ...]]`, preserving the ordered `logical_origin`
@@ -106,7 +134,8 @@ An unconditional stop in a loop body uses `for`; `for_condition` requires a
 condition terminator. Nested branches in either form may still stop.
 
 Pure mathematical instructions have empty sites. Local call/control instructions retain
-their actual required sites. Nonempty sites are unique within a definition,
+their actual required sites, as do exchanges, draws and guards. Restrictions and
+statements have empty sites. Nonempty sites are unique within a definition,
 including nested regions. Stop reasons are `reject`, `abort`, `exhausted`,
 `incomplete` and `refused`.
 
@@ -117,6 +146,10 @@ including nested regions. Stop reasons are `reject`, `abort`, `exhausted`,
 | `["field.constant", domain, decimal-string]` | canonical scalar constant |
 | `["field.add" / "field.subtract" / "field.multiply", domain]` | two fields to one field |
 | `["field.equal", domain]` | two fields to Boolean |
+| `["group.identity", group]` | group identity |
+| `["group.add", group]` | two groups to group |
+| `["group.scale", group, field]` | group then associated scalar field to group |
+| `["group.equal", group]` | two groups to Boolean |
 | `["bool.constant", value]` | Boolean constant |
 | `["bool.and" / "bool.or" / "bool.xor" / "bool.equal" / "bool.not_equal"]` | two Booleans to Boolean |
 | `["select", type]` | Boolean and two equal-typed values to that type |
@@ -128,22 +161,33 @@ including nested regions. Stop reasons are `reject`, `abort`, `exhausted`,
 | `["if"]` | Local conditional over closed captures |
 | `["for"]` / `["for_condition"]` | Local counted control |
 | `["guard", participant]` | Protocol guard with exact owner; false rejects |
+| `["restrict", role-names]` | same value restricted to the retained scope |
+| `["exchange", sender, receiver]` | sender alias and independent receiver value |
+| `["draw", owner, field]` | query the actual service handle operand; one field result |
+| `["statement", relation, selectors, acceptance-index]` | ordered entry operands; zero results |
 
 Every operand, result and region interface is checked against the selected
 descriptor and referenced declaration. A same-typed result permutation can be
 a valid different program. It is preserved rather than classified as a type
 error. A bound for a different same-typed vector does not authorize a read.
 
+A statement's selectors are actual native role strings, one per operand. Native
+verification checks that each operand is an entry argument available at its
+selector, with the exact relation input signature. The acceptance index selects
+a Boolean result of the enclosing protocol; zero and nonzero indices are
+preserved. A statement does not evaluate a relation, assert satisfaction, or
+identify different participants' copies of an acceptance result.
+
 Ownership is checked independently of operand types:
 
 | Body kind | Admitted instructions |
 |---|---|
-| Protocol | Pure field/Boolean operations, select, Math call, Algebra fold, Local call, Protocol guard |
-| Math | Pure field/Boolean operations, select, bounded read, Math call, Algebra fold |
+| Protocol | Pure field/group/Boolean operations, select, Math call, Algebra fold, Local call, guard, restrict, exchange, draw, statement |
+| Math | Pure field/group/Boolean operations, select, bounded read, Math call, Algebra fold |
 | Local | Boolean constant, Local apply, conditional and counted control |
 
 The descriptor can represent selection of any admitted value type. The current
-native mathematical verifier admits Boolean and scalar-field selection in this
+native mathematical verifier admits Boolean, scalar-field and group selection in this
 profile; vector and index selection are not yet native export paths.
 
 Only Local bodies may end in an explicit stop. A guard retains the owner of
@@ -151,11 +195,75 @@ the original `protocol.guard`; projected `local.guard` is outside this source
 stage. Local mathematical computation through realization/bindings is not yet
 part of this import profile.
 
+Multi-role protocols cannot use Math folds or bounded reads, including through
+retained Math helpers. Those combinations require additional partial-component
+semantics. Existing single-role finite programs and owned Local finite work
+remain supported. Math calls propagate each input's availability through the
+actual helper body: `first(x,y) = x` does not require `y` at the same participant.
+Native verification also checks availability of unused intermediate expressions.
+Local calls require all inputs at their owner, execute there even with zero
+results, and do not execute at other participants. Restriction and declared
+output scopes never erase preceding effects or stops.
+
 ## Limits and evidence
+
+The independent native SSA test executable retains its closed invocation:
+`zkc-structured_reference-test FILE SYMBOL INPUTS_JSON`. Its single-role scalar
+and finite inputs and outputs are unchanged. Open executions use a distinct
+command and exact request:
+
+```text
+zkc-structured_reference-test open FILE SYMBOL REQUEST_JSON
+["zkc.structured-open-request/0", role, inputs, replies, step-capacity]
+
+request := ["send", site, sender, receiver, type, value]
+         | ["receive", site, sender, receiver, type]
+         | ["draw", site, owner, contract, handle, field]
+reply := ["reply", exact-request, response]
+response := ["unit"] | ["value", value] | ["stop", reason]
+
+["zkc.structured-open-result/0", outcome, records, reply-position]
+outcome := ["returned", optional-outputs] | ["stopped", reason, site]
+record := ["request", reply-position, request]
+        | ["reply", reply-position, response]
+        | ["stop", reason, site, reply-position]
+```
+
+Inputs occupy the original ordered ports; `null` is an absent component. The
+selected participant's input scopes mask inputs, and output scopes filter results
+after execution. Boolean values are JSON Booleans; field, group, index and service
+values are canonical decimal strings; vectors are arrays of field strings.
+Field and group test values use the existing BLS scalar modulus
+`52435875175126190479447740508185965837690552500527637822603658699938581184513`.
+The group is explicitly the additive test model over that modulus, not native
+BLS points. Service handles are concrete natural numbers bounded to u64. Equal
+handles at supplied roots must have the same owner; same-owner aliases remain
+equal and are queried in order. These integers do not authenticate native roots.
+
+Send expects a unit reply and retains the sent component locally. Receive and
+draw expect a typed value. Missing replies stop `incomplete`; mismatched requests
+or responses stop `refused` without consuming that reply. Valid scripted stops
+consume their reply. Records retain exact requests, accepted replies and stops.
+Positions are zero based; the final position counts consumed replies. Unused
+suffix replies remain unconsumed. Every reply row must have the three-field
+`reply` envelope with array-valued request and response; action equality and
+response typing are checked when the reply is reached. Native Local stops and
+failed owner guards retain their sites. Nonowners skip those operations.
+
+The reference interprets original native SSA and retained helper bodies using
+one evaluation core, without the structured exporter or serialized coordinates.
+Math operands remain optional through calls; primitives execute when their
+operands are present. Its eager Math execution needs a totality premise before
+comparison with native demand-driven projection for potentially failing Math.
+Native verification remains authoritative for formation. The reference bounds
+step capacity to 1..1000000, replies to 4096, request and replay-record bytes to 1 MiB, vector
+length to 4096 and loop bounds to 2^20; evaluation depth is 64. Capacity failures
+are explicit `structured-reference-capacity` diagnostics, not simulated native
+stops. This is bounded test evidence, not an interpreter correctness theorem.
 
 The writer bounds source bytes to 16 MiB, the complete exported file (including
 its final newline) to 1 MiB, strings
-to 512 UTF-8 bytes, domains and definitions to 128 each, signatures to 512
+to 512 UTF-8 bytes, domains, relations and definitions to 128 each, signatures to 512
 positions and total instructions to 4096. The instruction count includes nested
 bodies and one fold per finite declaration; it excludes terminators and domain
 constructors. Lexical JSON and region nesting are bounded by 64. Helper reference

@@ -30,7 +30,7 @@ def table(snapshot):
 
 
 def instructions(definition):
-    return definition[8][1]
+    return definition[9][1]
 
 
 def simple(declarations='', body='', result='%flag'):
@@ -48,16 +48,17 @@ with case('original-total-state-and-exact-ssa-order'):
     assert len(data) == 7
     assert data[:2] == ['zkc.structured-source/0', 'original']
     assert data[2] == 'sha256:' + hashlib.sha256(total.encode()).hexdigest()
-    assert data[3:5] == ['main', 'P']
-    assert data[5] == [['domain', 'items', [vector], ['indices', 0, 0]]]
+    assert data[3] == 'main' and data[5] == []
+    assert table(data)['main'][6] == ['protocol', ['P'], [['P'], ['P'], ['P']], [['P'], ['P']]]
+    assert data[4] == [['domain', 'items', [vector], ['indices', 0, 0]]]
     defs = table(data)
     assert list(defs) == ['step', 'main']
     assert defs['step'][2:4] == ['math', 'private']
-    assert defs['step'][6:8] == [[['index_bound', 2, 3, 0]], []]
-    assert defs['step'][8] == ['block', [
+    assert defs['step'][7:9] == [[['index_bound', 2, 3, 0]], []]
+    assert defs['step'][9] == ['block', [
         [['bounded_at', 'bls12-381.fr'], [3, 2], [field], [], '']
     ], ['return', [2, 0]]]
-    assert defs['main'][8] == ['block', [
+    assert defs['main'][9] == ['block', [
         [['fold', 'items', 'step', ''], [0, 1, 2], [field, field], [], '']
     ], ['return', [0, 1]]]
     assert export(total + '\n')[2] != data[2]
@@ -65,22 +66,22 @@ with case('original-total-state-and-exact-ssa-order'):
 with case('original-unit-state-keeps-zero-result-effects-and-origin'):
     data = export(unit)
     defs = table(data)
-    assert data[5] == [['domain', 'items', [vector], ['elements', 0]]]
+    assert data[4] == [['domain', 'items', [vector], ['elements', 0]]]
     assert defs['fold'] == ['finite', 'fold', 'public', [vector, boolean], [],
                             'items', 'step', 'predicate']
-    assert defs['step'][7:] == [['step', []], ['block', [], ['stop', 'abort', 'body_stop']]]
-    assert defs['predicate'][8][2] == ['return', [2]]
-    assert defs['work'][8] == ['block', [
+    assert defs['step'][8:] == [['step', []], ['block', [], ['stop', 'abort', 'body_stop']]]
+    assert defs['predicate'][9][2] == ['return', [2]]
+    assert defs['work'][9] == ['block', [
         [['apply', 'fold'], [0, 1], [], [], 'fold']
     ], ['return', [1]]]
     assert instructions(defs['main'])[0][0] == ['local_call', 'work', 'P']
 
 with case('semantic-mutations-remain-distinct-accepted-subjects'):
     reversed_data = export(total.replace('func.return %b,%v', 'func.return %v,%b'))
-    assert table(reversed_data)['step'][8][2] == ['return', [0, 2]]
-    assert table(export(unit.replace('reason="abort"', 'reason="reject"')))['step'][8][2][1] == 'reject'
+    assert table(reversed_data)['step'][9][2] == ['return', [0, 2]]
+    assert table(export(unit.replace('reason="abort"', 'reason="reject"')))['step'][9][2][1] == 'reject'
     normal = unit.replace('"local.stop"() {site="body_stop",reason="abort"} : ()->()', 'local.return')
-    assert table(export(normal))['step'][8][2] == ['return', []]
+    assert table(export(normal))['step'][9][2] == ['return', []]
 
 with case('nested-multi-result-and-zero-result-conditionals'):
     data = export((fixtures / 'structured-source/nested-controls.mlir').read_text())
@@ -99,7 +100,7 @@ with case('nested-multi-result-and-zero-result-conditionals'):
 
 with case('ordinary-and-conditional-for-exact-captures-and-zero-state'):
     defs = table(export(loops, symbol='entry'))
-    assert defs['swap'][7] == ['original_swap', [['Field', 'bls12-381.fr'], ['Group', 'bls12-381.g1']]]
+    assert defs['swap'][8] == ['original_swap', [['Field', 'bls12-381.fr'], ['Group', 'bls12-381.g1']]]
     ops = instructions(defs['control'])
     loop = ops[0]
     assert loop[0] == ['for'] and loop[1] == [4, 5, 0, 1, 2, 3, 6]
@@ -119,7 +120,7 @@ with case('ordinary-and-conditional-for-exact-captures-and-zero-state'):
     assert conditional[3][0][2][2] == ['condition', [5, 2, 1, 3, 4, 5]]
     assert ops[3][0] == ops[4][0] == ['apply', 'swap']
     assert ops[3][1] == [0, 1] and ops[4][1] == [8, 9]
-    assert defs['control'][8][2] == ['return', [2, 1]]
+    assert defs['control'][9][2] == ['return', [2, 1]]
 
 with case('stop-only-loop-keeps-enclosing-output-abi'):
     stopped = loops.replace('"local.yield"(%next#1,%next#0,%left,%right,%flag) : (!F,!F,!F,!F,i1)->()',
@@ -146,13 +147,13 @@ with case('math-vocabulary-and-shared-multi-result-helper'):
     assert all(op[4] == '' for op in ops)
     calls = instructions(defs['main'])
     assert calls[0][1] == [0, 1, 2] and calls[1][1] == [3, 2, 4]
-    assert defs['main'][8][2] == ['return', [2, 0, 3, 1]]
+    assert defs['main'][9][2] == ['return', [2, 0, 3, 1]]
 
 with case('unused-definitions-retained-and-names-not-special'):
     dead = 'func.func private @unused(%x:i1) -> i1 { return %x : i1 }'
     data = export(simple(dead).replace('sym_name="main"', 'sym_name="alternate"'), symbol='alternate')
     assert list(table(data)) == ['unused', 'alternate']
-    assert table(data)['unused'][8] == ['block', [], ['return', [0]]]
+    assert table(data)['unused'][9] == ['block', [], ['return', [0]]]
 
 with case('domain-extra-formals-and-selected-container-retained'):
     changed = total.replace('^entry(%xs:!V):', '^entry(%other:!V,%xs:!V):').replace(
@@ -162,8 +163,8 @@ with case('domain-extra-formals-and-selected-container-retained'):
     changed = changed.replace('"algebra.finite_fold"(%xs,%a,%b)', '"algebra.finite_fold"(%xs,%xs,%a,%b)').replace(
         ': (!V,!F,!F)->(!F,!F)', ': (!V,!V,!F,!F)->(!F,!F)')
     data = export(changed)
-    assert data[5][0][2:] == [[vector, vector], ['indices', 1, 0]]
-    assert table(data)['step'][6] == [['index_bound', 2, 4, 0]]
+    assert data[4][0][2:] == [[vector, vector], ['indices', 1, 0]]
+    assert table(data)['step'][7] == [['index_bound', 2, 4, 0]]
 
 with case('local-boolean-constant-site-retained'):
     changed = unit.replace('local.return %enabled : i1',
@@ -200,10 +201,10 @@ for name, source, code in [
     ('unused-math-attribute', simple('func.func private @dead(%x:i1) -> i1 attributes {unexpected=true} { return %x : i1 }'), 'structured-source-original'),
     ('math-operation-attribute', simple(body='%x = arith.xori %flag,%flag {unexpected=true} : i1'), 'structured-source-original'),
     ('extra-domain-constructor', total.replace('%d = "data.domain_indices"', '%extra = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>\n%d = "data.domain_indices"'), 'structured-source-domain'),
-    ('unsupported-type', simple('func.func private @dead(%x:!algebra.group<"bls12-381.g1">) -> !algebra.group<"bls12-381.g1"> { return %x : !algebra.group<"bls12-381.g1"> }'), 'structured-source-type'),
+    ('unsupported-type', simple('func.func private @dead(%x:!algebra.group<"bn254.g1">) -> !algebra.group<"bn254.g1"> { return %x : !algebra.group<"bn254.g1"> }'), 'structured-source-type'),
     ('unsupported-index-literal', simple('func.func private @dead() -> ui64 { %x = "data.index"() {value="0"} : ()->ui64\n return %x : ui64 }'), 'structured-source-operation'),
     ('unsupported-comparison', simple(body='%x = arith.cmpi ult,%flag,%flag : i1'), 'structured-source-original'),
-    ('multirole-root', simple().replace('roles=["P"]', 'roles=["P","Q"]', 1), 'structured-source-role'),
+    ('role-count-limit', simple().replace('roles=["P"]', 'roles=[' + ','.join(json.dumps(x) for x in ['P'] + [f'R{i}' for i in range(16)]) + ']', 1), 'structured-source-role'),
     ('long-name', simple().replace('sym_name="main"', 'sym_name="' + 'x' * 513 + '"'), 'structured-source-limit'),
     ('empty-symbol', simple('func.func private @""(%x:i1) -> i1 { return %x : i1 }'), 'structured-source-symbol'),
     ('used-empty-symbol', simple('func.func private @""(%x:i1) -> i1 { return %x : i1 }',
@@ -224,8 +225,8 @@ with case('strict-command-options'):
 indexed = (fixtures / 'structured-source/indexed-helper.mlir').read_text()
 with case('bounded-read-preconditions-instantiated-through-helper'):
     defs = table(export(indexed))
-    assert defs['read'][6] == [['index_bound', 1, 0, 0]]
-    assert defs['step'][6] == [['index_bound', 1, 2, 0]]
+    assert defs['read'][7] == [['index_bound', 1, 0, 0]]
+    assert defs['step'][7] == [['index_bound', 1, 2, 0]]
     assert instructions(defs['step'])[0] == [['call', 'read'], [2, 1], [field], [], '']
 
 with case('same-typed-wrong-container-at-call'):
@@ -233,7 +234,7 @@ with case('same-typed-wrong-container-at-call'):
 
 with case('native-origin-bindings-retained-exactly'):
     changed = unit.replace('logical_origin=["work",[]]', 'logical_origin=["work",[["Field","bls12-381.fr"]]]')
-    assert table(export(changed))['work'][7] == ['work', [['Field', 'bls12-381.fr']]]
+    assert table(export(changed))['work'][8] == ['work', [['Field', 'bls12-381.fr']]]
 
 with case('guard-native-verification-precedes-export-profile'):
     changed = unit.replace('local.return %enabled : i1', 'local.guard %enabled {site="check"}\nlocal.return %enabled : i1')
@@ -251,14 +252,16 @@ with case('unsupported-affine-helper-signature'):
     helper = 'local.func @resource(%s:!local.capability<"rng:bls12-381.fr">) -> !local.capability<"rng:bls12-381.fr"> attributes {logical_origin=["resource",[]]} { local.return %s : !local.capability<"rng:bls12-381.fr"> }'
     export(simple(helper), 'structured-source-type')
 
-with case('unsupported-service-input'):
-    source = simple().replace('^entry(%flag:i1)', '^entry(%flag:i1,%service:!protocol.service_ref<"random.bls12-381.fr/0">)').replace(
-        'function_type=(i1)->i1', 'function_type=(i1,!protocol.service_ref<"random.bls12-381.fr/0">)->i1').replace(
+with case('unsupported-service-contract'):
+    source = simple().replace('^entry(%flag:i1)', '^entry(%flag:i1,%service:!protocol.service_ref<"random.bn254.fr/0">)').replace(
+        'function_type=(i1)->i1', 'function_type=(i1,!protocol.service_ref<"random.bn254.fr/0">)->i1').replace(
         'input_roles=[["P"]]', 'input_roles=[["P"],["P"]]')
     export(source, 'structured-source-type')
 
-with case('communication-profile-refused'):
-    export((fixtures / 'mathematical/schnorr-services.mlir').read_text(), 'structured-source-role')
+with case('communication-and-statement-retained'):
+    data = export((fixtures / 'mathematical/schnorr-services.mlir').read_text())
+    assert len(data[5]) == 1
+    assert instructions(table(data)['main'])[0][0] == ['statement', 'schnorr_relation', ['Bob', 'Bob', 'Alice'], 0]
 
 with case('unsupported-static-relation-annotation'):
     helper = 'func.func private @equal(%a:!algebra.field_vector<"bls12-381.fr">,%b:!algebra.field_vector<"bls12-381.fr">) -> i1 attributes {data.preconditions=[#data.equal_extent<0,0,1,0>]} { %yes = arith.constant true\n return %yes : i1 }'
@@ -279,7 +282,7 @@ with case('maximum-instruction-and-reference-coordinate'):
     body = '\n'.join(f'%x{i} = arith.xori %flag,%flag : i1' for i in range(4096))
     data = export(simple(body=body))
     assert len(instructions(table(data)['main'])) == 4096
-    assert table(data)['main'][8][2] == ['return', [4096]]
+    assert table(data)['main'][9][2] == ['return', [4096]]
 
 with case('reference-coordinate-limit-with-multiple-results'):
     helper = 'func.func private @pair(%x:i1) -> (i1,i1) { return %x,%x : i1,i1 }'
@@ -343,7 +346,7 @@ with case('exact-file-byte-limit-includes-final-newline'):
 with case('all-native-stop-reasons-preserved'):
     for reason in ['abort', 'reject', 'exhausted', 'incomplete', 'refused']:
         defs = table(export(unit.replace('reason="abort"', 'reason="' + reason + '"')))
-        assert defs['step'][8][2] == ['stop', reason, 'body_stop']
+        assert defs['step'][9][2] == ['stop', reason, 'body_stop']
 
 with case('only-protocol-root-can-be-selected'):
     export(total, 'structured-source-symbol', 'step')
@@ -360,21 +363,21 @@ with case('ordinary-zero-result-local-helper-sharing'):
     changed = changed.replace('local.apply @fold(%xs,%enabled) {site="fold"} : (!V,i1)->()',
                               'local.apply @empty(%enabled) {site="first"} : (i1)->()\nlocal.apply @empty(%enabled) {site="second"} : (i1)->()')
     defs = table(export(changed))
-    assert defs['empty'][8] == ['block', [], ['return', []]]
+    assert defs['empty'][9] == ['block', [], ['return', []]]
     assert instructions(defs['work']) == [
         [['apply', 'empty'], [1], [], [], 'first'],
         [['apply', 'empty'], [1], [], [], 'second']]
-    assert defs['work'][8][2] == ['return', [1]]
+    assert defs['work'][9][2] == ['return', [1]]
 
 with case('origin-binding-order-is-subject-data'):
     changed = loops.replace('[["Field","bls12-381.fr"],["Group","bls12-381.g1"]]',
                             '[["Group","bls12-381.g1"],["Field","bls12-381.fr"]]')
     defs = table(export(changed, symbol='entry'))
-    assert defs['swap'][7] == ['original_swap', [['Group', 'bls12-381.g1'], ['Field', 'bls12-381.fr']]]
+    assert defs['swap'][8] == ['original_swap', [['Group', 'bls12-381.g1'], ['Field', 'bls12-381.fr']]]
 
 with case('original-protocol-guard-retains-owner-and-site'):
     guarded = (fixtures / 'structured-source/guards.mlir').read_text()
-    body = table(export(guarded))['main'][8]
+    body = table(export(guarded))['main'][9]
     assert body[1][0] == [['guard', 'P'], [0], [], [], 'check']
 
 with case('precondition-count-boundary'):

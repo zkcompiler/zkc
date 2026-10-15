@@ -16,6 +16,7 @@
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Support/raw_ostream.h"
+#include <functional>
 #include <memory>
 #include <variant>
 #include <vector>
@@ -29,6 +30,8 @@ constexpr unsigned maxDepth = 64, maxSignature = 512, maxOperations = 4096;
 constexpr uint64_t maxSteps = 1000000, maxLoopBound = 1 << 20;
 constexpr size_t maxVector = 4096;
 constexpr StringLiteral fieldDomain = "bls12-381.fr";
+constexpr StringLiteral groupDomain = "bls12-381.g1";
+constexpr StringLiteral randomContract = "random.bls12-381.fr/0";
 
 const APInt &modulus() {
   static const APInt value(512,
@@ -58,6 +61,10 @@ bool valueType(Type type) {
     return field.getDomain() == fieldDomain;
   if (auto vector = dyn_cast<algebra::FieldVectorType>(type))
     return vector.getDomain() == fieldDomain;
+  if (auto group = dyn_cast<algebra::GroupType>(type))
+    return group.getDomain() == groupDomain;
+  if (auto service = dyn_cast<protocol_ir::ServiceReferenceType>(type))
+    return service.getContract() == randomContract;
   return false;
 }
 
@@ -68,6 +75,14 @@ enum class Kind {
   Subtract,
   Multiply,
   Equal,
+  GroupIdentity,
+  GroupAdd,
+  GroupScale,
+  GroupEqual,
+  Restrict,
+  Exchange,
+  Draw,
+  Statement,
   BoolConstant,
   And,
   Or,
@@ -98,6 +113,14 @@ Kind kind(Operation &op) {
       .Case("algebra.field_subtract", Kind::Subtract)
       .Case("algebra.field_multiply", Kind::Multiply)
       .Case("algebra.field_equal", Kind::Equal)
+      .Case("algebra.group_identity", Kind::GroupIdentity)
+      .Case("algebra.group_add", Kind::GroupAdd)
+      .Case("algebra.group_scale", Kind::GroupScale)
+      .Case("algebra.group_equal", Kind::GroupEqual)
+      .Case("protocol.restrict_roles", Kind::Restrict)
+      .Case("protocol.exchange", Kind::Exchange)
+      .Case("protocol.query", Kind::Draw)
+      .Case("protocol.statement", Kind::Statement)
       .Cases({"arith.constant", "local.bool_constant"}, Kind::BoolConstant)
       .Case("arith.andi", Kind::And)
       .Case("arith.ori", Kind::Or)
@@ -135,6 +158,8 @@ Error attributeBounds(Attribute attr, unsigned depth = 0) {
   if (depth > maxDepth)
     return error("structured-reference-capacity", "attribute depth");
   if (auto text = dyn_cast<StringAttr>(attr)) {
+    if (!json::isUTF8(text.getValue()))
+      return error("structured-reference-unsupported", "invalid UTF-8");
     if (text.getValue().size() > 512)
       return error("structured-reference-capacity", "string length");
   } else if (auto symbol = dyn_cast<SymbolRefAttr>(attr)) {
@@ -175,7 +200,8 @@ class Admission {
     if (!target ||
         (target->getName().getStringRef() != expected &&
          !(expected == "local.func" && attribute == "callee" &&
-           kind(op) == Kind::Apply && isa<local::FiniteFoldOp>(target))))
+           (kind(op) == Kind::Apply || kind(op) == Kind::LocalCall) &&
+           isa<local::FiniteFoldOp>(target))))
       return error("structured-reference-symbol", name.getValue());
     dependencies[&owner].push_back(target);
     if (attribute == "callee") {
@@ -208,10 +234,11 @@ class Admission {
                                                    : 0u))
       return error("structured-reference-unsupported", "region count");
     for (Type type : op.getOperandTypes())
-      if (!valueType(type))
+      if (!valueType(type) ||
+          (isa<protocol_ir::ServiceReferenceType>(type) && code != Kind::Draw))
         return error("structured-reference-unsupported", "operand type");
     for (Type type : op.getResultTypes())
-      if (!valueType(type))
+      if (!valueType(type) || isa<protocol_ir::ServiceReferenceType>(type))
         return error("structured-reference-unsupported", "result type");
     switch (code) {
     case Kind::FieldConstant: {
@@ -271,6 +298,18 @@ class Admission {
       return attributes(op, {"site"});
     case Kind::Guard:
       return attributes(op, {"site", "owner"});
+    case Kind::Restrict:
+      return attributes(op, {"roles"});
+    case Kind::Exchange:
+      return attributes(op, {"site", "sender", "receiver"});
+    case Kind::Draw:
+      if (cast<protocol_ir::QueryOp>(op).getMethod() != "draw" ||
+          op.getNumOperands() != 1 || op.getNumResults() != 1 ||
+          !isa<algebra::FieldType>(op.getResult(0).getType()))
+        return error("structured-reference-unsupported", "service method");
+      return attributes(op, {"site", "owner", "method"});
+    case Kind::Statement:
+      return attributes(op, {"relation", "selectors", "acceptance"});
     case Kind::Stop:
       if (auto failure = attributes(op, {"site", "reason"}))
         return failure;
@@ -407,8 +446,36 @@ public:
       : unit(unit), symbols(unit) {}
 
   Error check() {
-    unsigned domains = 0, definitions = 0;
+    unsigned domains = 0, definitions = 0, relations = 0;
+    if (auto failure = attributes(*unit, {"profile"}))
+      return failure;
     for (Operation &op : unit.getBody().front()) {
+      auto name = op.getAttrOfType<StringAttr>("sym_name");
+      if (!name || name.getValue().empty())
+        return error("structured-reference-symbol");
+      for (auto attr : op.getAttrs())
+        if (auto failure = attributeBounds(attr.getValue()))
+          return failure;
+      if (auto visibility = op.getAttrOfType<StringAttr>("sym_visibility"))
+        if (visibility != "private" && visibility != "public")
+          return error("structured-reference-unsupported", "visibility");
+      if (auto declaration = dyn_cast<relation::DeclareOp>(op)) {
+        if (++relations > 128)
+          return error("structured-reference-capacity", "relations");
+        if (auto failure =
+                attributes(op, {"sym_name", "sym_visibility", "kind", "key",
+                                "revision", "signature", "purposes"}))
+          return failure;
+        auto type = declaration.getSignature();
+        if (type.getNumInputs() > maxSignature ||
+            type.getNumResults() > maxSignature)
+          return error("structured-reference-capacity", "relation signature");
+        for (Type t :
+             llvm::concat<const Type>(type.getInputs(), type.getResults()))
+          if (!valueType(t) || isa<protocol_ir::ServiceReferenceType>(t))
+            return error("structured-reference-unsupported", "relation type");
+        continue;
+      }
       bool isDomain = isa<data::DomainOp>(op);
       bool finite = isa<local::FiniteFoldOp>(op);
       if (!isDomain && !finite &&
@@ -422,18 +489,15 @@ public:
           type.getNumResults() > maxSignature)
         return error("structured-reference-capacity", "function signature");
       for (Type input : type.getInputs())
-        if (!valueType(input))
+        if (!valueType(input) ||
+            (isa<protocol_ir::ServiceReferenceType>(input) &&
+             !isa<protocol_ir::MathematicalOp>(op)))
           return error("structured-reference-unsupported", "input type");
       if (!isDomain)
         for (Type output : type.getResults())
-          if (!valueType(output))
+          if (!valueType(output) ||
+              isa<protocol_ir::ServiceReferenceType>(output))
             return error("structured-reference-unsupported", "output type");
-      for (auto attr : op.getAttrs())
-        if (auto failure = attributeBounds(attr.getValue()))
-          return failure;
-      if (auto visibility = op.getAttrOfType<StringAttr>("sym_visibility"))
-        if (visibility != "private" && visibility != "public")
-          return error("structured-reference-unsupported", "visibility");
       if (isDomain) {
         if (auto failure = domain(op))
           return failure;
@@ -455,19 +519,17 @@ public:
                 attributes(op, {"sym_name", "sym_visibility", "function_type",
                                 "roles", "input_roles", "output_roles"}))
           return failure;
-        if (protocol.getRoles().size() != 1)
-          return error("structured-reference-unsupported", "multiple roles");
-        for (auto scopes :
-             {protocol.getInputRoles(), protocol.getOutputRoles()})
-          for (Attribute scope : scopes)
-            if (scope != protocol.getRoles())
-              return error("structured-reference-unsupported", "role scope");
+        if (protocol.getRoles().empty() || protocol.getRoles().size() > 16)
+          return error("structured-reference-unsupported", "role count");
       } else if (isa<func::FuncOp>(op)) {
         if (auto failure =
                 attributes(op, {"sym_name", "sym_visibility", "function_type",
                                 "data.preconditions"}))
           return failure;
-        if (auto conditions = op.getAttrOfType<ArrayAttr>("data.preconditions"))
+        if (auto conditions =
+                op.getAttrOfType<ArrayAttr>("data.preconditions")) {
+          if (conditions.size() > maxSignature)
+            return error("structured-reference-capacity", "preconditions");
           for (Attribute attr : conditions) {
             auto bound = dyn_cast<data::IndexBoundAttr>(attr);
             if (!bound || bound.getAxis() != 0 ||
@@ -478,6 +540,7 @@ public:
                     type.getInput(bound.getContainerArg())))
               return error("structured-reference-unsupported", "precondition");
           }
+        }
       } else if (auto failure =
                      attributes(op, {"sym_name", "sym_visibility",
                                      "function_type", "logical_origin"})) {
@@ -494,6 +557,27 @@ public:
       if (!checked)
         return checked.takeError();
     }
+    llvm::DenseSet<Operation *> checked;
+    std::function<Error(Operation *)> scalarMath =
+        [&](Operation *function) -> Error {
+      if (!checked.insert(function).second)
+        return Error::success();
+      for (Operation &op : function->getRegion(0).front()) {
+        if (kind(op) == Kind::Fold || kind(op) == Kind::At)
+          return error("structured-reference-unsupported",
+                       "multi-role Math finite work");
+        if (kind(op) == Kind::Call)
+          if (auto failure = scalarMath(
+                  symbols.lookup(cast<func::CallOp>(op).getCallee())))
+            return failure;
+      }
+      return Error::success();
+    };
+    for (auto protocol :
+         unit.getBody().front().getOps<protocol_ir::MathematicalOp>())
+      if (protocol.getRoles().size() > 1)
+        if (auto failure = scalarMath(protocol))
+          return failure;
     return Error::success();
   }
 };
@@ -503,12 +587,18 @@ struct Domain {
   Vector container;
   bool indices;
 };
-using Datum = std::variant<bool, uint64_t, APInt, Vector, Domain>;
+// monostate is an absent participant component, never a missing SSA binding.
+using Datum =
+    std::variant<std::monostate, bool, uint64_t, APInt, Vector, Domain>;
 using Values = std::vector<Datum>;
+bool present(const Datum &value) {
+  return !std::holds_alternative<std::monostate>(value);
+}
 struct Outcome {
   Kind terminator = Kind::Return;
   Values values;
   std::string reason;
+  std::string site = {};
   bool stopped() const { return terminator == Kind::Stop; }
 };
 
@@ -541,13 +631,14 @@ Expected<Datum> decode(Type type, const json::Value &input) {
   auto text = input.getAsString();
   if (!text)
     return error("structured-reference-input", "expected decimal string");
-  bool field = isa<algebra::FieldType>(type);
+  bool field = isa<algebra::FieldType, algebra::GroupType>(type);
   auto value = decimal(*text, field, "structured-reference-input");
   if (!value)
     return value.takeError();
   if (field)
     return Datum(std::move(*value));
-  if (type.isUnsignedInteger(64))
+  if (type.isUnsignedInteger(64) ||
+      isa<protocol_ir::ServiceReferenceType>(type))
     return Datum(value->getZExtValue());
   return error("structured-reference-unsupported", "input type");
 }
@@ -559,6 +650,8 @@ std::string digits(const APInt &value) {
 }
 
 Expected<json::Value> encode(const Datum &value) {
+  if (!present(value))
+    return json::Value(nullptr);
   if (auto boolean = std::get_if<bool>(&value))
     return json::Value(*boolean);
   if (auto index = std::get_if<uint64_t>(&value))
@@ -576,11 +669,14 @@ Expected<json::Value> encode(const Datum &value) {
 }
 
 bool matches(Type type, const Datum &value) {
+  if (!present(value))
+    return true;
   if (type.isSignlessInteger(1))
     return std::holds_alternative<bool>(value);
-  if (type.isUnsignedInteger(64))
+  if (type.isUnsignedInteger(64) ||
+      isa<protocol_ir::ServiceReferenceType>(type))
     return std::holds_alternative<uint64_t>(value);
-  if (isa<algebra::FieldType>(type))
+  if (isa<algebra::FieldType, algebra::GroupType>(type))
     return std::holds_alternative<APInt>(value);
   if (isa<algebra::FieldVectorType>(type))
     return std::holds_alternative<Vector>(value);
@@ -590,9 +686,26 @@ bool matches(Type type, const Datum &value) {
 class Reference {
   SymbolTable symbols;
   uint64_t steps = 0;
+  uint64_t capacity = maxSteps;
+  bool open = false;
+  StringRef self;
+  const json::Array *replies = nullptr;
+  size_t replyPosition = 0;
+  json::Array records;
+  size_t recordBytes = 2;
+
+  Error record(json::Array event) {
+    json::Value value(std::move(event));
+    size_t size = printJson(value).size() + (records.empty() ? 0 : 1);
+    if (size > 1024 * 1024 - recordBytes)
+      return error("structured-reference-capacity", "replay record bytes");
+    recordBytes += size;
+    records.push_back(std::move(value));
+    return Error::success();
+  }
 
   Error tick(unsigned depth) {
-    if (depth > maxDepth || ++steps > maxSteps)
+    if (depth > maxDepth || ++steps > capacity)
       return error("structured-reference-capacity",
                    "evaluation steps or depth");
     return Error::success();
@@ -622,6 +735,9 @@ class Reference {
             callee->getAttrOfType<ArrayAttr>("data.preconditions"))
       for (Attribute attr : conditions) {
         auto bound = cast<data::IndexBoundAttr>(attr);
+        if (!present(args[bound.getIndexArg()]) ||
+            !present(args[bound.getContainerArg()]))
+          continue;
         if (std::get<uint64_t>(args[bound.getIndexArg()]) >=
             std::get<Vector>(args[bound.getContainerArg()])->size())
           return error("structured-reference-bounds", "helper precondition");
@@ -689,6 +805,118 @@ class Reference {
     return state;
   }
 
+  bool inScope(ArrayAttr scope) const {
+    return llvm::is_contained(scope, StringAttr::get(scope.getContext(), self));
+  }
+
+  Outcome absent(Operation &op) {
+    return {Kind::Return, Values(op.getNumResults(), std::monostate{}), {}};
+  }
+
+  Outcome stopped(Operation &op, StringRef reason) {
+    auto site = op.getAttrOfType<StringAttr>("site");
+    return {Kind::Stop, {}, reason.str(), site ? site.getValue().str() : ""};
+  }
+
+  json::Array messageType(Type type) {
+    if (type.isSignlessInteger(1))
+      return json::Array{"bool"};
+    if (type.isUnsignedInteger(64))
+      return json::Array{"index"};
+    if (auto field = dyn_cast<algebra::FieldType>(type))
+      return json::Array{"field", field.getDomain()};
+    if (auto group = dyn_cast<algebra::GroupType>(type))
+      return json::Array{"group", group.getDomain()};
+    return json::Array{"vector",
+                       cast<algebra::FieldVectorType>(type).getDomain()};
+  }
+
+  Expected<Outcome> replay(Operation &op, json::Array action, Type replyType) {
+    if (!open)
+      return error("structured-reference-input", "open command required");
+    json::Value request(std::move(action));
+    if (auto failure = record(json::Array{"request", replyPosition, request}))
+      return std::move(failure);
+    if (replyPosition == replies->size())
+      return stopped(op, "incomplete");
+    const auto &reply = *(*replies)[replyPosition].getAsArray();
+    const auto &response = *reply[2].getAsArray();
+    if (reply[1] != request)
+      return stopped(op, "refused");
+    Outcome result;
+    if (response.size() == 2 && response[0].getAsString() == "stop" &&
+        response[1].getAsString() &&
+        llvm::is_contained(ArrayRef<StringRef>{"reject", "abort", "exhausted",
+                                               "incomplete", "refused"},
+                           *response[1].getAsString())) {
+      result = stopped(op, *response[1].getAsString());
+    } else if (!replyType && response.size() == 1 &&
+               response[0].getAsString() == "unit") {
+      result = Outcome{};
+    } else if (replyType && response.size() == 2 &&
+               response[0].getAsString() == "value") {
+      auto value = decode(replyType, response[1]);
+      if (!value) {
+        // A malformed value is a refused reply; exhausting the reference's
+        // resource bound remains a diagnostic, not a protocol stop.
+        auto failure = handleErrors(value.takeError(), [](const Refusal &e) {
+          return e.code == "structured-reference-input"
+                     ? Error::success()
+                     : error(e.code, e.detail);
+        });
+        if (failure)
+          return std::move(failure);
+        return stopped(op, "refused");
+      }
+      result.values.push_back(std::move(*value));
+    } else {
+      return stopped(op, "refused");
+    }
+    if (auto failure = record(json::Array{"reply", replyPosition, reply[2]}))
+      return std::move(failure);
+    ++replyPosition;
+    return result;
+  }
+
+  Expected<Outcome> interaction(Operation &op, ArrayRef<Datum> args) {
+    if (auto exchange = dyn_cast<protocol_ir::ExchangeOp>(op)) {
+      Type type = op.getResult(0).getType();
+      if (self == exchange.getSender()) {
+        if (!present(args[0]))
+          return stopped(op, "incomplete");
+        auto value = encode(args[0]);
+        if (!value)
+          return value.takeError();
+        auto result =
+            replay(op,
+                   json::Array{"send", exchange.getSite(), exchange.getSender(),
+                               exchange.getReceiver(), messageType(type),
+                               std::move(*value)},
+                   {});
+        if (result && !result->stopped())
+          result->values.push_back(args[0]);
+        return result;
+      }
+      if (self == exchange.getReceiver())
+        return replay(op,
+                      json::Array{"receive", exchange.getSite(),
+                                  exchange.getSender(), exchange.getReceiver(),
+                                  messageType(type)},
+                      type);
+      return absent(op);
+    }
+    auto query = cast<protocol_ir::QueryOp>(op);
+    if (self != query.getOwner())
+      return absent(op);
+    if (!present(args[0]))
+      return stopped(op, "incomplete");
+    return replay(
+        op,
+        json::Array{"draw", query.getSite(), query.getOwner(), randomContract,
+                    std::to_string(std::get<uint64_t>(args[0])), fieldDomain},
+        op.getResult(0).getType());
+  }
+
   Expected<Outcome> evaluate(Operation &op, ArrayRef<Datum> args,
                              unsigned depth) {
     Kind code = kind(op);
@@ -699,14 +927,39 @@ class Reference {
     case Kind::DomainYield:
       return Outcome{code, Values(args.begin(), args.end()), {}};
     case Kind::Stop:
-      return Outcome{Kind::Stop, {}, cast<local::StopOp>(op).getReason().str()};
+      return stopped(op, cast<local::StopOp>(op).getReason());
     case Kind::Guard:
-      return std::get<bool>(args[0]) ? Outcome{}
-                                     : Outcome{Kind::Stop, {}, "reject"};
+      if (op.getAttrOfType<StringAttr>("owner").getValue() != self)
+        return Outcome{};
+      if (!present(args[0]))
+        return stopped(op, "incomplete");
+      return std::get<bool>(args[0]) ? Outcome{} : stopped(op, "reject");
     case Kind::Call:
-    case Kind::Apply:
-    case Kind::LocalCall:
+      // Do not sequence Math arguments: an ignored absent input is legal.
       return invoke(target(op, "callee"), args, depth + 1);
+    case Kind::LocalCall:
+      if (op.getAttrOfType<StringAttr>("role").getValue() != self)
+        return absent(op);
+      [[fallthrough]];
+    case Kind::Apply:
+      if (!llvm::all_of(args, present))
+        return stopped(op, "incomplete");
+      return invoke(target(op, "callee"), args, depth + 1);
+    case Kind::Statement:
+      return Outcome{}; // Retained metadata, not relation evaluation.
+    case Kind::Restrict:
+      return inScope(cast<protocol_ir::RestrictRolesOp>(op).getRoles())
+                 ? Outcome{Kind::Return, Values(args.begin(), args.end()), {}}
+                 : absent(op);
+    case Kind::Exchange:
+    case Kind::Draw:
+      return interaction(op, args);
+    default:
+      break;
+    }
+    if (!llvm::all_of(args, present))
+      return absent(op);
+    switch (code) {
     case Kind::Fold:
       return fold(op, args, op.getNumResults(), depth);
     case Kind::If:
@@ -753,6 +1006,9 @@ class Reference {
       result.values.emplace_back(std::move(*parsed));
       break;
     }
+    case Kind::GroupIdentity:
+      result.values.emplace_back(APInt(512, 0));
+      break;
     case Kind::BoolConstant:
       result.values.emplace_back(
           !cast<IntegerAttr>(op.getAttr("value")).getValue().isZero());
@@ -760,13 +1016,16 @@ class Reference {
     case Kind::Add:
     case Kind::Subtract:
     case Kind::Multiply:
-    case Kind::Equal: {
+    case Kind::Equal:
+    case Kind::GroupAdd:
+    case Kind::GroupScale:
+    case Kind::GroupEqual: {
       const APInt &a = std::get<APInt>(args[0]), &b = std::get<APInt>(args[1]);
-      if (code == Kind::Equal)
+      if (code == Kind::Equal || code == Kind::GroupEqual)
         result.values.emplace_back(a == b);
       // Both operands are < p < 2^255. 512 bits hold the full product and
       // the addition/subtraction intermediates before exact reduction.
-      else if (code == Kind::Add)
+      else if (code == Kind::Add || code == Kind::GroupAdd)
         result.values.emplace_back((a + b).urem(modulus()));
       else if (code == Kind::Subtract)
         result.values.emplace_back((a + modulus() - b).urem(modulus()));
@@ -855,30 +1114,89 @@ class Reference {
 public:
   explicit Reference(Operation *unit) : symbols(unit) {}
   Expected<json::Value> run(protocol_ir::MathematicalOp source,
-                            const json::Array &request) {
+                            const json::Array &request, bool openRequest) {
+    open = openRequest;
+    const json::Array *arguments = &request;
+    if (open) {
+      if (request.size() != 5 ||
+          request[0].getAsString() != "zkc.structured-open-request/0" ||
+          !request[1].getAsString() || !request[2].getAsArray() ||
+          !request[3].getAsArray() || !request[4].getAsUINT64())
+        return error("structured-reference-input", "open request shape");
+      self = *request[1].getAsString();
+      arguments = request[2].getAsArray();
+      replies = request[3].getAsArray();
+      capacity = *request[4].getAsUINT64();
+      if (!capacity || capacity > maxSteps || replies->size() > maxOperations)
+        return error("structured-reference-capacity", "request capacity");
+      for (const json::Value &reply : *replies) {
+        auto row = reply.getAsArray();
+        if (!row || row->size() != 3 || (*row)[0].getAsString() != "reply" ||
+            !(*row)[1].getAsArray() || !(*row)[2].getAsArray())
+          return error("structured-reference-input", "reply shape");
+      }
+    } else {
+      if (source.getRoles().size() != 1)
+        return error("structured-reference-input", "open command required");
+      self = cast<StringAttr>(source.getRoles()[0]).getValue();
+    }
+    if (!inScope(source.getRoles()))
+      return error("structured-reference-input", "unknown participant");
     auto type = source.getFunctionType();
-    if (request.size() != type.getNumInputs())
+    if (arguments->size() != type.getNumInputs())
       return error("structured-reference-input", "input arity");
     Values inputs;
-    for (auto [type, input] : llvm::zip(type.getInputs(), request)) {
+    llvm::DenseMap<uint64_t, StringRef> serviceOwners;
+    for (auto [i, type, input] :
+         llvm::enumerate(type.getInputs(), *arguments)) {
+      if (open && input.getAsNull()) {
+        inputs.emplace_back(std::monostate{});
+        continue;
+      }
       auto value = decode(type, input);
       if (!value)
         return value.takeError();
-      inputs.push_back(std::move(*value));
+      auto scope = cast<ArrayAttr>(source.getInputRoles()[i]);
+      if (isa<protocol_ir::ServiceReferenceType>(type)) {
+        auto owner = cast<StringAttr>(scope[0]).getValue();
+        auto [found, inserted] =
+            serviceOwners.try_emplace(std::get<uint64_t>(*value), owner);
+        if (!inserted && found->second != owner)
+          return error("structured-reference-input",
+                       "cross-owner service alias");
+      }
+      inputs.push_back(inScope(scope) ? std::move(*value)
+                                      : Datum(std::monostate{}));
     }
     auto result = invoke(source, inputs, 1);
     if (!result)
       return result.takeError();
-    if (result->stopped())
-      return json::Value(json::Array{"stopped", result->reason});
+    if (result->stopped()) {
+      if (!open)
+        return json::Value(json::Array{"stopped", result->reason});
+      if (auto failure = record(
+              json::Array{"stop", result->reason, result->site, replyPosition}))
+        return std::move(failure);
+      return json::Value(
+          json::Array{"zkc.structured-open-result/0",
+                      json::Array{"stopped", result->reason, result->site},
+                      std::move(records), replyPosition});
+    }
     json::Array outputs;
-    for (const Datum &value : result->values) {
-      auto output = encode(value);
+    for (auto [i, value] : llvm::enumerate(result->values)) {
+      auto output = encode(inScope(cast<ArrayAttr>(source.getOutputRoles()[i]))
+                               ? value
+                               : Datum(std::monostate{}));
       if (!output)
         return output.takeError();
       outputs.push_back(std::move(*output));
     }
-    return json::Value(json::Array{"returned", std::move(outputs)});
+    json::Value outcome(json::Array{"returned", std::move(outputs)});
+    if (!open)
+      return outcome;
+    return json::Value(json::Array{"zkc.structured-open-result/0",
+                                   std::move(outcome), std::move(records),
+                                   replyPosition});
   }
 };
 
@@ -907,14 +1225,16 @@ int main(int argc, char **argv) {
     errs() << toString(std::move(failure)) << '\n';
     return 1;
   };
-  if (argc != 4)
+  bool open = argc == 5 && StringRef(argv[1]) == "open";
+  if (argc != (open ? 5 : 4))
     return fail(error("structured-reference-arguments"));
-  auto source = input(argv[1], 16 * 1024 * 1024);
+  unsigned offset = open ? 1 : 0;
+  auto source = input(argv[1 + offset], 16 * 1024 * 1024);
   if (!source)
     return fail(source.takeError());
   if (!mlirNestingWithinLimit(*source, maxDepth))
     return fail(error("structured-reference-capacity", "MLIR nesting"));
-  auto request = input(argv[3], 1024 * 1024);
+  auto request = input(argv[3 + offset], 1024 * 1024);
   if (!request)
     return fail(request.takeError());
   auto parsed = parseNaturalJson(*request, 1024 * 1024, maxDepth,
@@ -941,10 +1261,10 @@ int main(int argc, char **argv) {
   if (auto failure = Admission(unit).check())
     return fail(std::move(failure));
   SymbolTable symbols(unit);
-  auto selected = symbols.lookup<protocol_ir::MathematicalOp>(argv[2]);
+  auto selected = symbols.lookup<protocol_ir::MathematicalOp>(argv[2 + offset]);
   if (!selected)
-    return fail(error("structured-reference-symbol", argv[2]));
-  auto result = Reference(unit).run(selected, *array);
+    return fail(error("structured-reference-symbol", argv[2 + offset]));
+  auto result = Reference(unit).run(selected, *array, open);
   if (!result)
     return fail(result.takeError());
   outs() << printJson(*result) << '\n';
