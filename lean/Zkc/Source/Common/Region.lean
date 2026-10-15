@@ -12,17 +12,20 @@ calculations and their lexical scopes are represented structurally. The supplied
 mathematical meaning, services and condition policy are exactly those of Common.
 This is an equality between Lean processes, not a native execution or security
 theorem, and does not extend the native scalar format. Role-specific lowering
-partly resolves locality; its meaning must be selected for the same role.
+partly resolves locality. The operation type retains the selected participant,
+so the resulting region cannot use another participant's meaning.
 -/
 
 set_option autoImplicit false
 
 namespace Zkc.Source.Common
 
-/-- Typed leaf descriptors for one participant's projection. Statement metadata
-remains in the syntax even though its runtime interpretation is the identity. -/
+/-- Typed leaf descriptors for one participant's projection. The nominal `self`
+parameter keeps the selected role in the dialect even when a descriptor has no
+role-dependent fields. Statement metadata remains in the syntax even though its
+runtime interpretation is the identity. -/
 inductive ParticipantOp (Role : Type) (language : Language)
-    (services : Services language.Ty) where
+    (services : Services language.Ty) (self : Role) where
   | mathematical (op : language.Op)
   | restrict (sort : language.Ty) (selected : Bool)
   | exchange (sort : language.Ty) (site : String) (sender receiver : Role)
@@ -31,9 +34,9 @@ inductive ParticipantOp (Role : Type) (language : Language)
   | statement (types : List language.Ty) (relation : String) (selectors : List Role)
 
 abbrev participantDialect (Role : Type) (language : Language)
-    (services : Services language.Ty) : Dialect where
+    (services : Services language.Ty) (self : Role) : Dialect where
   Ty := language.Ty
-  Op := ParticipantOp Role language services
+  Op := ParticipantOp Role language services self
   arguments
     | .mathematical op => language.arguments op
     | .restrict sort _ | .exchange sort .. => [sort]
@@ -55,7 +58,7 @@ Receivers use the actual reply, independently of their local sender operand.
 Missing mathematical components remain values; owned action inputs may stop. -/
 def participantMeaning (meaning : Mathematical.Meaning language)
     (condition : meaning.Value language.condition → Bool) (self : Role) :
-    RegionMeaning (participantDialect Role language services)
+    RegionMeaning (participantDialect Role language services self)
       (interface Role language services meaning.Value) where
   Value := fun sort => Option (meaning.Value sort)
   operation
@@ -92,7 +95,7 @@ def participantMeaning (meaning : Mathematical.Meaning language)
 projection's separate reference adapter does not need a generic dialect embedding. -/
 def lowerCalculation (self : Role) {Γ ty} :
     Mathematical.Block Role language Γ ty →
-      Region (participantDialect Role language services) Γ [ty]
+      Region (participantDialect Role language services self) Γ [ty]
   | .ret value => .ret (Values.singleton value)
   | .letOp op args next => .letOp (.mathematical op) args .nil (lowerCalculation self next)
   | .restrict (selected := sort) scope value next =>
@@ -121,7 +124,7 @@ theorem denote_lowerCalculation (meaning : Mathematical.Meaning language)
 /-- Lower every current scalar constructor without hiding an entire program or
 calculation in an operation. Bind retains the caller context and suffix once. -/
 def Program.toRegion (self : Role) {Γ ty} : Program Role language services Γ ty →
-    Region (participantDialect Role language services) Γ [ty]
+    Region (participantDialect Role language services self) Γ [ty]
   | .ret value => .ret (Values.singleton value)
   | .calculate body next => .bind (lowerCalculation self body) (next.toRegion self)
   | .exchange (sent := sort) site sender receiver value next =>
@@ -219,7 +222,7 @@ namespace Native
 /-- Preserve the import carrier's final output-role filter as an ordinary
 restriction after execution, so hidden outputs do not skip actions or stops. -/
 def Imported.toRegion (imported : Imported) (self : Nat) :
-    Region (participantDialect Nat Native.language Native.services) imported.snapshot.inputs
+    Region (participantDialect Nat Native.language Native.services self) imported.snapshot.inputs
       [imported.snapshot.result] :=
   .bind (imported.program.toRegion self)
     (.letOp (.restrict imported.snapshot.result (decide (self ∈ imported.snapshot.outputRoles)))

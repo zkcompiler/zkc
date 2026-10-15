@@ -74,8 +74,11 @@ def Snapshot.shapeValid (snapshot : Snapshot) : Bool :=
   let sites := snapshot.instructions.filterMap Instruction.site
   sites.length = sites.eraseDups.length
 
-/-- A checked program retains its original declaration and exact actual body.
-The native source hash is evidence metadata, never a proof premise by itself. -/
+/-- The carrier returned by `Snapshot.check`, retaining declaration, body and
+scopes. Constructing this structure alone does not prove admission. Certificates
+bind it to successful checking through `Zkc.Verification.Imported` or an explicit
+checking equation. The native source hash is evidence metadata, never a proof
+premise by itself. -/
 structure Imported where
   snapshot : Snapshot
   program : Program Nat language services snapshot.inputs snapshot.result

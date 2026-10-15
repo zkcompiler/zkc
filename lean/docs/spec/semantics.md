@@ -25,6 +25,9 @@ The existing single-result `Source.Program` remains an independent reference
 profile with the exact bridge `Program.denote_toRegion`. The participant profile
 and admitted scalar imports have the corresponding `Common` bridges, retaining
 the final output-role restriction as well as all actions and stops.
+`Common.ParticipantOp` and its dialect are indexed by the selected participant.
+A region lowered for one participant cannot be interpreted by another
+participant's meaning without an explicit change of representation.
 
 `Source.Finite` defines ordered domain admission and open folds as semantic
 helpers. Admission runs before iteration, even when a loop is empty or a domain
@@ -62,6 +65,10 @@ all handlers, replies, stops, final states and events, and compose under bind.
 This is intentionally stronger than final-result agreement. It can reject an
 optimization that changes observable actions even when outputs coincide. Such a
 case needs a separately stated observation/refinement interface and proof.
+Process equality does not preserve static source admission, relation annotations
+or artifact identity: those are not runtime interactions. A transformation
+certificate must bind both actual subjects and establish their required static
+contracts separately from its dynamic equation.
 
 ## Observation budgets and unbounded behavior
 

@@ -49,6 +49,15 @@ A finite fold can use an accumulator tuple, dynamic domain values and a body wit
 explicit item and capture inputs. These are operation contracts over the same
 carrier. They need no new protocol-specific structural constructor.
 
+The scalar reference adapter captures the whole caller context to keep its
+correspondence simple. Repeated control bindings can therefore have quadratic
+operand counts despite linear structural node counts. Native import should
+preserve the native capture interface and validate its order and types, rather
+than copy the entire SSA environment. Any closure conversion needs its own
+checked map. Dropping a declared capture is a separate transformation with
+availability, ownership and execution obligations; unused does not imply
+erasable. The generic carrier already supports smaller interfaces.
+
 `Region.bind body next` composes a separately authored lexical subcomputation
 without distributing `next` through its returning leaves. It shares the caller
 context with `body`; it is distinct from an operation's closed callback interface.
@@ -124,7 +133,8 @@ projection now directly creates canonical regions and preserves component
 values, availability, locality, empty event lists and monadic execution. Optional
 components remain explicit; absent values receive no invented default. Projection
 partly resolves locality while constructing a term. Its equation pairs a projection
-for a role with the meaning for that same role; mixing those roles is not covered.
+for a role with that role's input environment. The mathematical meaning itself
+is role-independent: the projected restrictions already record the selection.
 
 `Common.Program` remains the bounded global/participant reference and scalar
 native-import consumer. `Common.Program.toRegion` lowers all six constructors to
@@ -135,8 +145,12 @@ input. `Native.Imported.toRegion` also retains the import carrier's final output
 role restriction after execution, so an unavailable output does not skip actions
 or stops. Deterministic and monadic execution equations follow from this bridge.
 Fresh receive continuations, sender-side aliases, service ownership and existing
-security contracts are preserved. As with mathematical projection, participant
-lowering and its meaning must use the same role.
+security contracts are preserved. The participant operation type and dialect
+retain the selected role as a nominal parameter. A projection for one role
+cannot use another role's meaning accidentally. This keeps the projected
+representation and all operation meanings tied to one participant without adding
+a wrapper around the generic carrier. It does not authenticate an external role
+assignment; the importer still owns that admission.
 
 These reference profiles carry different obligations and do not become a second
 compiler SSA representation. They remain reference authoring/admission interfaces,
@@ -197,13 +211,31 @@ control retains that distinction. Binary zip uses `.refused` for a mismatch in
 this model. An importer must account for the native diagnostic policy explicitly.
 The structural decoder alone authenticates neither an artifact nor a resolver.
 
+Import at the boundary whose correctness is being studied. Native preparation
+already performs finite algorithm selection even when scalar simplification is
+disabled. A prepared snapshot can support proofs about subsequent execution and
+projection, but cannot validate an earlier selection without its retained source
+and actual candidate. Native Local control already uses isolated bodies and
+explicit captures; the adapter must check its specific argument/yield maps,
+including unchanged loop captures and affine state roots, before normalizing them.
+
 A transformation theorem should state its admitted inputs and chosen observation.
 Exact process equality is reusable for transformations that preserve all actions;
 it is intentionally too strong for changing a transcript or resource protocol.
+It is also independent of static source contracts. Statement annotations have
+no runtime effect, and an unused rejected mathematical definition can have the
+same dynamic process as an admitted source without that definition. Transformation
+validation must bind both actual artifacts, check the relevant static contracts,
+and then establish the selected dynamic equation. `Region.Equivalent` establishes
+only the last of those obligations.
 Native frame entry/cleanup, affine services and instruction capacity can require
 an execution relation over actual state and observations. Those policies must not
 be silently erased by translating an abstract callback. Likewise, changing an
 admission requires a proof about its stop behavior, even for unused values.
+In particular, appending cleanup with `Proc.bind` skips it on a stop. Catching
+syntactic halts still does not catch a stop produced by a handler. Native cleanup
+and its failure precedence therefore belong to the execution adapter, rather
+than an assumed meaning of lexical binding.
 
 A complete imported verifier consumer can compose the canonical process equation
 with an existing contract. It still needs actual relation, arithmetic, sampling,

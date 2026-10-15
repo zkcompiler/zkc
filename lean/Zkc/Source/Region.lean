@@ -41,6 +41,8 @@ theorem Region.rename_comp {Γ Δ Ξ out} (region : Region dialect Γ out)
   | nil => trivial
   | cons body tail bodyIH tailIH => trivial
 
+/-- Equality of dynamic processes under one meaning. Static source admission,
+relation annotations and external artifact identity require separate contracts. -/
 def Region.Equivalent (meaning : RegionMeaning dialect interface) {Γ out}
     (left right : Region dialect Γ out) : Prop :=
   ∀ env, left.denote meaning env = right.denote meaning env

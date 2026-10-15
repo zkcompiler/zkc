@@ -173,6 +173,13 @@ example : (calculated.toRegion 0).denote (localMeaning 0)
 example : (calculated.toRegion 1).denote (localMeaning 1)
     (inputs (.cons (some 30) (.cons (some 40) .nil))) = .done (Values.singleton none) := rfl
 
+-- The selected participant is part of the dialect, not a convention between
+-- lowering and interpretation. The old API returned some 7 for this mismatch.
+example : True := by
+  fail_if_success
+    have := (calculated.toRegion 0).denote (localMeaning 1)
+  trivial
+
 example : (calculated.toRegion 0).denote (localMeaning 0)
     (inputs (.cons (some 3) (.cons none .nil))) = .done (Values.singleton none) := rfl
 
@@ -196,6 +203,23 @@ example : emptyRestriction.check [0, 1] (fun _ _ => true) = false := rfl
 
 example : (emptyRestriction.toRegion 0).denote (localMeaning 0)
     (inputs (Values.singleton (some 3))) = .done (Values.singleton (some 3)) := rfl
+
+-- Exact dynamic meaning does not identify static source contracts. Changing a
+-- relation annotation preserves the entire process, and removing an unused
+-- restriction can turn a rejected source into an admitted source.
+def anotherRelation : Common.Program Nat language services [.datum, .datum] .datum :=
+  .statement "another-relation" [0, 1]
+    (.cons .here (.cons (.there .here) .nil)) (.ret .here)
+
+example (self : Nat) : Region.Equivalent (localMeaning self)
+    (annotated.toRegion self) (anotherRelation.toRegion self) := by intro env; rfl
+
+def withoutRestriction : Common.Program Nat language services [.datum] .datum := .ret .here
+
+example (self : Nat) : Region.Equivalent (localMeaning self)
+    (emptyRestriction.toRegion self) (withoutRestriction.toRegion self) := by intro env; rfl
+
+example : withoutRestriction.check [0, 1] (fun _ _ => true) = true := rfl
 
 def roundTrip : Common.Program Nat language services [.datum] .datum :=
   .exchange "out" 0 1 .here (.exchange "in" 1 0 .here (.ret .here))
@@ -246,6 +270,13 @@ variable {F G : Type} [Field F] [DecidableEq F]
 
 set_option maxRecDepth 10000
 set_option maxHeartbeats 2000000
+
+-- Imported output filtering is tied to the same role as action interpretation.
+example : True := by
+  fail_if_success
+    have := (Schnorr.imported.toRegion 0).denote
+      (participantMeaning (scalarMeaning F G) id 1)
+  trivial
 
 -- This uses the actual checked native scalar carrier and its retained site
 -- names, independent receive replies and concrete challenge-service operand.
