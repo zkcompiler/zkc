@@ -34,8 +34,10 @@ Operation callbacks are closed over their declared inputs. A control descriptor 
 captured values as ordinary operation operands and explicitly supplies them when
 invoking a callback. Renaming the enclosing context changes those operands and
 the suffix; it leaves the closed body unchanged. This is an explicit-capture
-normal form. Importing native regions with implicit captures will require a
-checked capture map and closure-conversion correspondence.
+normal form. Current zkc native regions are isolated with explicit captures.
+Their adapter must check the actual capture maps, generated control inputs,
+yield forwarding and helper identities. A future profile with implicit captures
+would additionally need checked closure conversion.
 
 For example, the scalar reference adapter uses these signatures:
 
@@ -172,8 +174,8 @@ This checks Lean structural formation. Operation descriptors and their selected
 meanings still need resolution at the external boundary.
 
 The native scalar export schema and its existing readers stay in their current
-bounded profile. This package supplies no general MLIR decoder, native
-closure-conversion proof, runtime/provider theorem or cryptographic reduction.
+bounded profile. This package supplies no general MLIR decoder, structured native
+import correspondence, runtime/provider theorem or cryptographic reduction.
 
 ## Stress cases and follow-up work
 
@@ -188,7 +190,7 @@ bridge through a real Lake path dependency.
 
 | Next use | Foundation supplied here | Remaining obligation |
 |---|---|---|
-| Prepared native import | Typed result/region signatures, explicit captures, strict formation | Emit/import real closure and helper identity; prove or delimit native correspondence; enforce resource limits at the external boundary |
+| Prepared native import | Typed result/region signatures, explicit captures, strict formation | Import actual capture maps, control/yield interfaces and helper identities; prove or delimit native correspondence; enforce resource limits at the external boundary |
 | Actual transformation validation | Contextual equality, shared binding, operation contracts, ordered finite admission | Relate actual source/candidate artifacts and prove each native transformation under its preconditions |
 | Complete verifier consumers | Full open-process semantics and bridges for maintained verifier references | Connect the complete imported endpoint to a reusable verifier contract and its security assumptions |
 
