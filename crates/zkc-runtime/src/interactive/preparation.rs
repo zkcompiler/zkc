@@ -9,6 +9,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+// Include a sparsely occupied map node and the record's Arc header. Charging
+// only the occupied key/value slot would miss the node's reserved storage.
+const RECORD_OVERHEAD: usize = 1024;
+
 /// Separate retained preparation storage; it grants no execution capacity.
 #[derive(Clone, Copy, Debug)]
 pub struct PreparationLimits {
@@ -34,12 +38,14 @@ pub struct PreparationStats {
 /// retention. No cache contents or authority are accepted from artifact text.
 pub struct PreparedComputations<B: Backend> {
     pub(super) executable: Arc<Executable>,
+    limits: PreparationLimits,
     shared: Arc<Mutex<Store<B>>>,
 }
 impl<B: Backend> Clone for PreparedComputations<B> {
     fn clone(&self) -> Self {
         Self {
             executable: self.executable.clone(),
+            limits: self.limits,
             shared: self.shared.clone(),
         }
     }
@@ -52,14 +58,26 @@ impl<B: Backend> std::fmt::Debug for PreparedComputations<B> {
     }
 }
 struct Store<B: Backend> {
-    limits: PreparationLimits,
-    stats: PreparationStats,
+    bytes: usize,
+    hits: u64,
     entries: BTreeMap<Key, (usize, Arc<Evaluation<B>>)>,
 }
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) struct Key {
     pub function: String,
     pub parameters: Vec<Vec<u8>>,
+}
+impl Key {
+    fn retained_bytes(&self) -> Option<usize> {
+        let bytes = self.function.capacity().checked_add(
+            self.parameters
+                .capacity()
+                .checked_mul(std::mem::size_of::<Vec<u8>>())?,
+        );
+        self.parameters
+            .iter()
+            .fold(bytes, |n, p| n?.checked_add(p.capacity()))
+    }
 }
 /// A successful execution under these *initial remaining* allowances proves
 /// sufficient capacity for the same computation with dominating allowances.
@@ -113,19 +131,38 @@ impl<B: Backend> PreparedComputations<B> {
     pub fn new(admitted: &Admitted, limits: PreparationLimits) -> Self {
         Self {
             executable: admitted.executable.clone(),
+            limits,
             shared: Arc::new(Mutex::new(Store {
-                limits,
-                stats: PreparationStats::default(),
+                bytes: 0,
+                hits: 0,
                 entries: BTreeMap::new(),
             })),
         }
     }
     pub fn stats(&self) -> PreparationStats {
-        self.shared.lock().unwrap_or_else(|p| p.into_inner()).stats
-    }
-    pub(super) fn can_record(&self) -> bool {
         let store = self.shared.lock().unwrap_or_else(|p| p.into_inner());
-        store.limits.entries != 0 && store.limits.bytes != 0
+        PreparationStats {
+            entries: store.entries.len(),
+            bytes: store.bytes,
+            hits: store.hits,
+        }
+    }
+    pub(super) fn enabled(&self) -> bool {
+        self.limits.entries != 0 && self.limits.bytes != 0
+    }
+    fn metadata_bytes(key: &Key) -> Option<usize> {
+        // Conservative fixed record and BTreeMap node overhead, plus owned keys.
+        RECORD_OVERHEAD
+            .checked_add(std::mem::size_of::<Evaluation<B>>())?
+            .checked_add(key.retained_bytes()?)
+    }
+    pub(super) fn can_record(&self, key: &Key) -> bool {
+        let store = self.shared.lock().unwrap_or_else(|p| p.into_inner());
+        let previous = store.entries.get(key);
+        let retained = store.bytes - previous.map_or(0, |(bytes, _)| *bytes);
+        (previous.is_some() || store.entries.len() < self.limits.entries)
+            && Self::metadata_bytes(key)
+                .is_some_and(|bytes| bytes <= self.limits.bytes.saturating_sub(retained))
     }
     pub(super) fn get(&self, key: &Key) -> Option<Arc<Evaluation<B>>> {
         self.shared
@@ -137,51 +174,41 @@ impl<B: Backend> PreparedComputations<B> {
     }
     pub(super) fn hit(&self) {
         let mut store = self.shared.lock().unwrap_or_else(|p| p.into_inner());
-        store.stats.hits = store.stats.hits.saturating_add(1);
+        store.hits = store.hits.saturating_add(1);
     }
     pub(super) fn insert(&self, key: Key, evaluation: Evaluation<B>) {
         // Conservative payload plus all owned record/key/container metadata.
         // Checkpoints have fixed, inline size by Backend's checkpoint contract.
-        let metadata = 512usize
-            .checked_add(std::mem::size_of::<Evaluation<B>>())
-            .and_then(|n| n.checked_add(key.function.len()))
-            .and_then(|n| {
-                n.checked_add(
-                    key.parameters
-                        .len()
-                        .checked_mul(std::mem::size_of::<Vec<u8>>())?,
-                )
-            })
-            .and_then(|n| {
-                n.checked_add(
-                    evaluation
-                        .outputs
-                        .len()
-                        .checked_mul(std::mem::size_of::<B::Value>())?,
-                )
-            });
-        let bytes = key
-            .parameters
-            .iter()
-            .fold(metadata, |n, p| n?.checked_add(p.len()));
+        let bytes = Self::metadata_bytes(&key).and_then(|n| {
+            n.checked_add(
+                evaluation
+                    .outputs
+                    .capacity()
+                    .checked_mul(std::mem::size_of::<B::Value>())?,
+            )
+        });
         let bytes = evaluation
             .outputs
             .iter()
             .fold(bytes, |n, v| n?.checked_add(v.retained_bytes()));
         let Some(bytes) = bytes else { return };
         let mut store = self.shared.lock().unwrap_or_else(|p| p.into_inner());
-        let previous = store.entries.get(&key).map_or(0, |(bytes, _)| *bytes);
-        let retained = store.stats.bytes - previous;
-        if (previous == 0 && store.entries.len() >= store.limits.entries)
-            || bytes > store.limits.bytes.saturating_sub(retained)
+        let previous = store.entries.get(&key);
+        let retained = store.bytes - previous.map_or(0, |(bytes, _)| *bytes);
+        // Repeat the bounded publication check: another Runner may have filled
+        // the store since the recording preflight.
+        if (previous.is_none() && store.entries.len() >= self.limits.entries)
+            || bytes > self.limits.bytes.saturating_sub(retained)
         {
             return;
         }
         // A successful fallback refreshes this parameter's execution context.
         // This avoids permanently pinning the first role/policy/capacity without
         // growing a per-key history or introducing another admission algorithm.
-        store.entries.insert(key, (bytes, Arc::new(evaluation)));
-        store.stats.bytes = retained + bytes;
-        store.stats.entries = store.entries.len();
+        let replaced = store.entries.insert(key, (bytes, Arc::new(evaluation)));
+        store.bytes = retained + bytes;
+        drop(store);
+        // Releasing a large result must not hold up other invocations.
+        drop(replaced);
     }
 }

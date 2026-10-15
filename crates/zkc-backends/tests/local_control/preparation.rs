@@ -503,3 +503,160 @@ fn untaken_impure_branch_permanently_closes_public_preparation() {
         assert_eq!(cache.stats().hits, if impure { 0 } else { 2 });
     }
 }
+
+#[test]
+fn mixed_parameters_and_storage_limits_preserve_cold_results() {
+    let admitted = admit_supplied(&generated(), &ark_backend(None)).unwrap();
+    for limits in [
+        PreparationLimits {
+            entries: 0,
+            bytes: 8192,
+        },
+        PreparationLimits {
+            entries: 4,
+            bytes: 0,
+        },
+        PreparationLimits {
+            entries: 4,
+            bytes: 1,
+        },
+        PreparationLimits {
+            entries: 1,
+            bytes: 8192,
+        },
+        PreparationLimits::default(),
+    ] {
+        let cache = PreparedComputations::new(&admitted, limits);
+        let empty = PreparedComputations::new(
+            &admitted,
+            PreparationLimits {
+                entries: 0,
+                bytes: 0,
+            },
+        );
+        // Exceed the default entry count, then revisit keys that were and were
+        // not retained. Both the scalar parameter and output dimension change.
+        for i in (0..140).chain(0..140) {
+            let n = 1 + i % 5;
+            let run = |store| {
+                invoke(
+                    &admitted,
+                    store,
+                    ark_backend(None),
+                    vec![Value::Index(n), f(i + 1)],
+                    &[0, 1],
+                    Default::default(),
+                    Default::default(),
+                )
+            };
+            let (cached, usage, backend) = run(&cache);
+            let (cold, cold_usage, cold_backend) = run(&empty);
+            for (a, b) in cached.unwrap().iter().zip(&cold.unwrap()) {
+                let (Value::Vector(a), Value::Vector(b)) = (a, b) else {
+                    panic!("vectors")
+                };
+                assert_eq!(a, b);
+            }
+            assert_eq!(usage, cold_usage);
+            assert_eq!(
+                backend.external_work_spent(),
+                cold_backend.external_work_spent()
+            );
+            assert_eq!(
+                backend.sequence_work_spent(),
+                cold_backend.sequence_work_spent()
+            );
+            assert_eq!(backend.ring_work_spent(), cold_backend.ring_work_spent());
+            assert_eq!(backend.active_frames(), 0);
+            let stats = cache.stats();
+            assert!(stats.entries <= limits.entries);
+            assert!(stats.bytes <= limits.bytes);
+        }
+        if limits.entries == 0 || limits.bytes <= 1 {
+            assert_eq!(cache.stats(), Default::default());
+        } else {
+            assert_eq!(cache.stats().entries, limits.entries.min(140));
+            assert!(cache.stats().hits > 0);
+        }
+    }
+}
+
+#[test]
+fn repeated_calls_do_not_alias_distinct_live_allocations() {
+    let mut program: Json = serde_json::from_slice(&generated()).unwrap();
+    let body = program[3][0][6].as_array_mut().unwrap();
+    body.insert(
+        1,
+        json!([
+            "local",
+            "again",
+            "local",
+            ["n", "x"],
+            ["second0", "second1"]
+        ]),
+    );
+    body[2] = json!(["return", ["result0", "second0"]]);
+    let admitted =
+        admit_supplied(&serde_json::to_vec(&program).unwrap(), &ark_backend(None)).unwrap();
+    let cache = PreparedComputations::new(&admitted, PreparationLimits::default());
+    let empty = PreparedComputations::new(
+        &admitted,
+        PreparationLimits {
+            entries: 0,
+            bytes: 0,
+        },
+    );
+    let run = |store| {
+        invoke(
+            &admitted,
+            store,
+            ark_backend(None),
+            vec![Value::Index(16), f(7)],
+            &[0, 1],
+            Default::default(),
+            Default::default(),
+        )
+    };
+    let (_, expected_usage, _) = run(&empty);
+    for _ in 0..4 {
+        let (values, usage, backend) = run(&cache);
+        let values = values.unwrap();
+        let [Value::Vector(first), Value::Vector(second)] = values.as_slice() else {
+            panic!("vectors")
+        };
+        assert_eq!(first, second);
+        assert!(!std::sync::Arc::ptr_eq(first, second));
+        assert_eq!(usage, expected_usage);
+        assert_eq!(backend.active_frames(), 0);
+    }
+    assert!(cache.stats().hits > 0);
+}
+
+#[test]
+fn empty_results_still_need_space_for_record_and_map_storage() {
+    let bytes = candidate(json!([]), json!([]), json!([["return", []]]));
+    let admitted = admit_supplied(&bytes, &ark_backend(None)).unwrap();
+    let cache = PreparedComputations::new(
+        &admitted,
+        PreparationLimits {
+            entries: 1,
+            bytes: 1024,
+        },
+    );
+    // A sparse map node, record and owned key exceed this allowance even
+    // without any output payload. Retention must fall back to ordinary execution.
+    for _ in 0..2 {
+        let (result, _, backend) = invoke(
+            &admitted,
+            &cache,
+            ark_backend(None),
+            vec![],
+            &[],
+            Default::default(),
+            Default::default(),
+        );
+        assert!(result.unwrap().is_empty());
+        assert_eq!(backend.active_frames(), 0);
+    }
+    assert_eq!(cache.stats(), Default::default());
+}

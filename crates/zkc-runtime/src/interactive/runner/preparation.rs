@@ -5,6 +5,9 @@ use crate::interactive::preparation::{Available, Evaluation, Key, cumulative_del
 use crate::interactive::{PreparationStats, PreparedComputations};
 use std::collections::{BTreeSet, HashSet};
 
+const MAX_PARAMETERS: usize = 16;
+const MAX_PARAMETER_BYTES: usize = 512;
+
 pub(super) struct Preparation<B: Backend> {
     cache: PreparedComputations<B>,
     public: BTreeSet<String>,
@@ -86,7 +89,7 @@ impl<B: Backend> Runner<B> {
             }
             public.insert(name.clone());
         }
-        if !cache.can_record() {
+        if !cache.enabled() {
             self.preparation = None;
             return Ok(());
         }
@@ -102,7 +105,7 @@ impl<B: Backend> Runner<B> {
     }
     pub(super) fn close_preparation(&mut self) {
         if let Some(p) = &mut self.preparation {
-            p.open = false;
+            p.close();
         }
     }
     pub(super) fn public_computation(&mut self, code: &LocalCode, inputs: &[String]) -> bool {
@@ -123,14 +126,14 @@ impl<B: Backend> Runner<B> {
         }
     }
     pub(super) fn computation_key(function: &str, args: &[B::Value]) -> Option<Key> {
-        if args.len() > 16 {
+        if args.len() > MAX_PARAMETERS {
             return None;
         }
         let parameters: Vec<_> = args
             .iter()
             .map(Value::preparation_parameter)
             .collect::<Option<_>>()?;
-        if parameters.iter().map(Vec::len).sum::<usize>() > 512 {
+        if parameters.iter().map(Vec::len).sum::<usize>() > MAX_PARAMETER_BYTES {
             return None;
         }
         Some(Key {
@@ -230,7 +233,13 @@ impl<B: Backend> Runner<B> {
             },
         ))
     }
-    pub(super) fn begin_computation(&self) -> Option<(Available, Usage, u64, B::Checkpoint)> {
+    pub(super) fn begin_computation(
+        &self,
+        key: &Key,
+    ) -> Option<(Available, Usage, u64, B::Checkpoint)> {
+        if !self.preparation.as_ref()?.cache.can_record(key) {
+            return None;
+        }
         Some((
             self.available(),
             self.usage,

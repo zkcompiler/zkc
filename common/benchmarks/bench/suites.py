@@ -168,7 +168,8 @@ def prepare_case(args, output, capture, manifest, name, protocol, size, package)
         for mutation, value in [('truncated', proof[:-1]), ('trailing', proof+b'\x00')]:
             bad = directory / f'{job.implementation}-{mutation}.proof'
             bad.write_bytes(value)
-            refuse(replace(job, proof=bad), directory / f'{job.implementation}-{mutation}', args.timeout)
+            refuse(replace(job, proof=bad), directory / f'{job.implementation}-{mutation}',
+                   args.timeout, truncated=mutation == 'truncated')
         refuse(replace(job, backend=job.backend | {'public': str(directory / 'changed.json')}),
                directory / f'{job.implementation}-changed', args.timeout)
     # CLI execution is retained as a different, separately named boundary.
@@ -193,7 +194,7 @@ def prepare_case(args, output, capture, manifest, name, protocol, size, package)
     return jobs, gate
 
 
-def refuse(job, directory, timeout):
+def refuse(job, directory, timeout, *, truncated=False):
     directory.mkdir(parents=True)
     path = directory / 'request.json'
     write_json(path, {'format': 'zkc.benchmark-job/0', 'backend': job.backend, 'operation': 'verify',
@@ -201,5 +202,6 @@ def refuse(job, directory, timeout):
     record = Journal(directory / 'commands', timeout).command([job.executable, path], cwd=directory, expected=None)
     require(record['returncode'] > 0, 'negative control was accepted or crashed')
     report = json.loads(Path(record['stdout']).read_text())
+    allowed = {'rejected', 'input-bounds'} if truncated else {'rejected'}
     require(isinstance(report, dict) and report.get('format') == 'zkc.benchmark-worker/0'
-            and report.get('status') == 'rejected', 'negative control failed outside verification')
+            and report.get('status') in allowed, 'negative control failed outside verification')

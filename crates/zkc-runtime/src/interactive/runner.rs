@@ -1322,7 +1322,7 @@ impl<B: Backend> Runner<B> {
         let (result, record) = if let Some(values) = reused {
             (Ok(values), None)
         } else {
-            let checkpoint = key.as_ref().and_then(|_| self.begin_computation());
+            let checkpoint = key.as_ref().and_then(|key| self.begin_computation(key));
             let result = self.run_local_body(frame, logical_origin, body, args, depth);
             let record = match (key, checkpoint, &result) {
                 (Some(key), Some((available, usage, frames, before)), Ok(values)) => {

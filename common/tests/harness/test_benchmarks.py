@@ -232,17 +232,19 @@ def test_proof_identity_gate_spans_independent_workers(bench, tmp_path, randomiz
     with pytest.raises(bench.io.MeasurementError): gate.observe(second)
 
 
-@pytest.mark.parametrize('status', ['rejected', 'failed'])
-def test_negative_gate_requires_structured_rejection(bench, tmp_path, status):
+@pytest.mark.parametrize('status', ['rejected', 'input-bounds', 'failed'])
+@pytest.mark.parametrize('truncated', [False, True])
+def test_negative_gate_requires_structured_rejection(bench, tmp_path, status, truncated):
     executable = tmp_path/'worker'
     value = {'format': 'zkc.benchmark-worker/0', 'status': status, 'error': 'resource limit'}
     executable.write_text(f'#!{sys.executable}\nimport json,sys\nprint(json.dumps({value!r}))\nsys.exit(1)\n')
     executable.chmod(0o755)
     job = bench.runner.Job('case', 'reference', 'verify', executable, {}, tmp_path/'proof', 'test_call')
-    if status == 'rejected': bench.suites.refuse(job, tmp_path/'negative', 1)
+    if status == 'rejected' or truncated and status == 'input-bounds':
+        bench.suites.refuse(job, tmp_path/'negative', 1, truncated=truncated)
     else:
         with pytest.raises(bench.io.MeasurementError, match='outside verification'):
-            bench.suites.refuse(job, tmp_path/'negative', 1)
+            bench.suites.refuse(job, tmp_path/'negative', 1, truncated=truncated)
 
 
 def test_pairs_are_adjacent_and_order_alternates(bench, tmp_path):

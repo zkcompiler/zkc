@@ -9,9 +9,6 @@ use zkc_tools::entry::{
 fn rejection(error: Option<&str>, stop: Option<&StopKind>) -> bool {
     match stop {
         Some(StopKind::Explicit(reason)) => reason == "reject",
-        // The byte kernel uses this code for an out-of-range read, including
-        // a truncated proof. Resource and work limits have distinct codes.
-        Some(StopKind::Backend(error)) => error.code == "refused:bytes-bounds",
         None => error == Some("artifact-rejected"),
         _ => false,
     }
@@ -92,13 +89,15 @@ pub fn run(
         },
         |report| {
             if !report.is_success() {
-                let rejected = job.operation == Operation::Verify
+                let clean = job.operation == Operation::Verify
                     && !report.native.cancelled
                     && report.native.cleanup_errors.is_empty()
-                    && report.output_error.is_none()
+                    && report.output_error.is_none();
+                let stop = report.native.stop.as_ref().map(|stop| &stop.kind);
+                let rejected = clean
                     && rejection(
                         report.native.outcome.as_ref().err().map(String::as_str),
-                        report.native.stop.as_ref().map(|stop| &stop.kind),
+                        stop,
                     );
                 let detail = format!(
                     "{:?}; {}",
@@ -107,6 +106,12 @@ pub fn run(
                 );
                 return Err(if rejected {
                     Failure::Rejected(detail)
+                } else if clean
+                    && matches!(stop, Some(StopKind::Backend(error)) if error.code == "refused:bytes-bounds")
+                {
+                    // This code alone does not identify a proof read. Keep it
+                    // distinct: only the harness's truncation control permits it.
+                    Failure::InputBounds(detail)
                 } else {
                     Failure::Failed(detail)
                 });
@@ -157,7 +162,7 @@ mod tests {
         assert!(!rejection(None, Some(&StopKind::Limit)));
         assert!(!rejection(None, Some(&StopKind::Cancelled)));
         assert!(!rejection(None, Some(&StopKind::Explicit("other".into()))));
-        assert!(rejection(
+        assert!(!rejection(
             None,
             Some(&StopKind::Backend(BackendError::new(
                 "refused:bytes-bounds"

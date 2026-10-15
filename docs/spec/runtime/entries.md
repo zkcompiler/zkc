@@ -287,7 +287,8 @@ store across their invocations; deployment clones share its lifetime. Store
 sharing authorizes visibility of the public parameter access pattern. Hosts with
 separate trust domains must admit separate deployments or reset preparation
 limits to create independent stores. The default
-ceilings are 128 entries and 8 MiB of conservative retained charge.
+ceilings are 128 entries and 8 MiB of conservative retained charge, including
+record metadata, owned key/output capacity and output backing.
 `with_preparation_limits` starts an empty store with explicit limits; zero limits
 disable retention. `preparation_stats` exposes entries, retained charge and hits.
 These limits grant no execution capacity and do not change artifact formats.

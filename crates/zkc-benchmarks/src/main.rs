@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 pub enum Failure {
     Failed(String),
     Rejected(String),
+    InputBounds(String),
 }
 type Result<T, E = Failure> = std::result::Result<T, E>;
 impl From<String> for Failure {
@@ -172,6 +173,7 @@ fn main() {
             let (status, error) = match error {
                 Failure::Failed(error) => ("failed", error),
                 Failure::Rejected(error) => ("rejected", error),
+                Failure::InputBounds(error) => ("input-bounds", error),
             };
             println!(
                 "{}",

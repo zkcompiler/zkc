@@ -120,8 +120,11 @@ the control bytes on every call, including CLI execution. Randomized provers mus
 not repeat a proof across controls, CLI calls or workers. A failed gate, timeout, crash, missing sample or changed
 captured input invalidates the run's timing summaries and ratios. Partial evidence
 remains available; failures are never dropped from a favorable aggregate.
-Timed verifiers consume the same reference-produced proof bytes. Negative controls
-require proof rejection; an unrelated execution or resource-limit failure does not pass.
+Timed verifiers consume the same reference-produced proof bytes. Changed statements
+and trailing bytes require explicit rejection. Truncation also permits the native
+bounded-byte-read refusal, recorded separately as `input-bounds`; that code alone
+does not identify which buffer was read. No other execution or resource-limit
+failure passes a negative control.
 
 Each output directory contains:
 
