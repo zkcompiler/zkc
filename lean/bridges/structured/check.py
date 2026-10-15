@@ -328,6 +328,79 @@ def provenance_cases(suite, fixtures):
                              '"algebra.finite_fold"(%xs, %ys, %seed)'), "finite-bound"))
 
 
+def boundary_cases(suite, unit_text):
+    def simple(helpers="", body="", result="%flag"):
+        return '''module { "protocol.module"() ({
+''' + helpers + '''
+"protocol.func"() ({ ^entry(%flag:i1):
+''' + body + '\n"protocol.return"(' + result + ''') : (i1)->()
+}) {sym_name="main",function_type=(i1)->i1,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }'''
+
+    def instruction_boundary():
+        body = '\n'.join(f'%x{i} = arith.xori %flag,%flag : i1' for i in range(4096))
+        subject = suite.export('maximum-instructions', simple(body=body))
+        suite.compare(subject, 'maximum-instructions', [True], returned(True))
+        suite.refuse_native('excess-instructions', simple(body=body + '\n%x4096 = arith.xori %flag,%flag : i1'),
+                            'structured-source-limit')
+    suite.case('exact-instruction-limit-has-independent-reference', instruction_boundary)
+
+    def finite_instruction_boundary():
+        def source(count):
+            body = '\n'.join(f'%x{i} = arith.xori %flag,%flag : i1' for i in range(count))
+            helper = 'func.func private @padding(%flag:i1) -> i1 {\n' + body + '\nreturn %flag : i1\n}'
+            return unit_text.replace(' local.func private @step', helper + '\n local.func private @step', 1)
+        # The fixture contributes one finite declaration and two call sites.
+        subject = suite.export('maximum-finite-instructions', source(4093))
+        suite.compare(subject, 'maximum-finite-instructions', [[], False], returned(False))
+        excessive = source(4094)
+        suite.refuse_native('excess-finite-instructions', excessive, 'structured-source-limit')
+        original = suite.directory / 'excess-finite-instructions.mlir'
+        request = subject[1].parent / 'maximum-finite-instructions.inputs.json'
+        number = len(suite.commands)
+        suite.command('reference-finite-instruction-limit',
+                      [suite.tools['reference'], original, 'main', request], success=False)
+        assert 'structured-reference-capacity' in (
+            suite.directory / f'command-{number:04d}.stderr').read_text()
+    suite.case('finite-declaration-counts-domain-and-terminators-do-not', finite_instruction_boundary)
+
+    def file_boundary():
+        inputs = ','.join(f'%a{i}:i1' for i in range(512))
+        outputs = ','.join(['i1'] * 512)
+        values = ','.join(f'%a{i}' for i in range(512))
+        names = [f'h{i}' for i in range(93)]
+        def source():
+            return simple('\n'.join(f'func.func private @{name}({inputs}) -> ({outputs}) '
+                                    f'{{ return {values} : {outputs} }}' for name in names))
+        baseline = suite.export('file-size-baseline', source())
+        padding = 1024 * 1024 - len(baseline[1].read_bytes())
+        assert 0 <= padding <= sum(512 - len(name) for name in names)
+        for i, name in enumerate(names):
+            size = min(padding, 512 - len(name))
+            names[i] += 'x' * size
+            padding -= size
+        exact = suite.export('maximum-file-bytes', source())
+        assert len(exact[1].read_bytes()) == 1024 * 1024
+        suite.compare(exact, 'maximum-file-bytes', [True], returned(True))
+        names[-1] += 'y'
+        assert len(names[-1]) <= 512
+        suite.refuse_native('excess-file-bytes', source(), 'structured-source-limit')
+    suite.case('exact-file-limit-is-readable-in-lean', file_boundary)
+
+    for name in ['증명_α_🙂', 'line\nfeed']:
+        # MLIR byte escapes are independent of JSON and Lean escaping.
+        symbol = '@"' + ''.join(f'\\{byte:02X}' for byte in name.encode()) + '"'
+        def renamed(name=name, symbol=symbol):
+            subject = suite.export('unicode-' + str(len(name)), simple(
+                f'func.func private {symbol}(%x:i1) -> i1 {{ return %x : i1 }}',
+                f'%r = func.call {symbol}(%flag) : (i1)->i1', '%r'))
+            assert definition(subject[2], name)[1] == name
+            suite.compare(subject, 'unicode-identity', [True], returned(True))
+            rendered = constructors.render(subject[2], 'UnicodeData')
+            (subject[1].parent / 'Data.lean').write_text(rendered)
+        suite.case('native-unicode-helper-' + str(len(name)), renamed)
+
+
 def run_cases(suite):
     finite = ROOT / "compiler/test/fixtures/finite"
     total_text = (finite / "total-state.mlir").read_text()
@@ -378,6 +451,7 @@ def run_cases(suite):
             if "runtime" in suite.tools:
                 suite.case(name + "-runner", lambda s=compiled, n=name, v=values, e=expected: suite.native(s, n, v, e))
     provenance_cases(suite, structured)
+    boundary_cases(suite, unit_text)
     guarded = suite.export("guarded", (structured / "guards.mlir").read_text())
     for enabled in (False, True):
         expected = returned(True) if enabled else ["stopped", "reject"]

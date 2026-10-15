@@ -16,30 +16,43 @@ structure CheckedDefinition where
   raw : RawRegion Ty Op
   body : Region dialect inputs outputs
   formed : raw.elaborate (dialect := dialect) inputs outputs = .ok body
-  dependencies : List String
-  instructionCount : Nat
 
 theorem CheckedDefinition.exactBody (definition : CheckedDefinition) :
     definition.body.erase = definition.raw :=
   RawRegion.erase_of_elaborate (dialect := dialect) definition.raw definition.formed
 
+/-- Dependency authority is the formed operation tree, not separately recorded
+names. This includes references in every nested callback and suffix. -/
+def CheckedDefinition.helpers (definition : CheckedDefinition) : List Helper :=
+  definition.raw.operations.flatMap Op.helpers
+
+theorem CheckedDefinition.helpers_eq_body (definition : CheckedDefinition) :
+    definition.helpers = definition.body.erase.operations.flatMap Op.helpers := by
+  rw [definition.exactBody]
+  rfl
+
+def CheckedDefinition.dependencies (definition : CheckedDefinition) : List String :=
+  definition.helpers.map (·.name)
+
+def CheckedDefinition.instructionCount (definition : CheckedDefinition) : Nat :=
+  definition.raw.operations.length
+
 def checkDefinition (snapshot : Snapshot) (domains : List DomainSpec)
     (summaries : IdentitySummaries) (definition : Definition) : Except String CheckedDefinition := do
-  let (raw, state) ← match definition with
+  let raw ← match definition with
     | .function f =>
       (lowerBlock snapshot domains summaries f.kind 64 f.inputs
-        (f.preconditions.map fun bound => (bound.index, bound.container)) .function f.body).run {}
+        (f.preconditions.map fun bound => (bound.index, bound.container)) .function f.body).run' {}
     | .finite f => do
       let spec ← resolveFold snapshot domains .local f.domain f.step f.predicate
         f.inputs f.outputs (List.range f.inputs.length) []
-      let dependencies := [f.step] ++ if f.predicate.isEmpty then [] else [f.predicate]
       let raw : RawRegion Ty Op := .letOp (.fold spec) (List.range f.inputs.length)
         f.outputs .nil (.ret (List.range f.outputs.length))
-      pure (raw, { dependencies, instructions := 1 : LowerState })
+      pure raw
   match formed : raw.elaborate (dialect := dialect) definition.inputs definition.outputs with
   | .error _ => throw "structured-formation"
   | .ok body => return ⟨definition.name, definition.inputs, definition.outputs,
-      raw, body, formed, state.dependencies, state.instructions⟩
+      raw, body, formed⟩
 
 structure OrderedDefinition where
   definition : CheckedDefinition
@@ -91,8 +104,6 @@ def check_payload (snapshot : Snapshot) : Except String Payload := do
   let definitions ← snapshot.definitions.mapM (checkDefinition snapshot domains summaries)
   if (definitions.map (·.instructionCount)).foldl (· + ·) 0 > 4096 then
     throw "structured-instruction-limit"
-  if (definitions.map (·.dependencies.length)).foldl (· + ·) 0 > 100000 then
-    throw "structured-reference-visits"
   let ordered ← orderDefinitions definitions.length definitions []
   let definitions := ordered.map (·.definition)
   return ⟨definitions, ← findEntry snapshot.entry definitions⟩

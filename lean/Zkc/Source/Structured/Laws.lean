@@ -135,6 +135,36 @@ theorem denoteLoop_zero (state captures : List Ty)
   simp [denoteLoop, Nat.sub_eq_zero_of_le empty, Finite.execute, Finite.Domain.admit,
     Finite.admitThen, Finite.fold]
 
+/-- A counted callback may be proved under a reachable-state invariant. Its
+ordered state and unchanged captures are separate parts of the interface. -/
+theorem denoteLoop_reference (state captures : List Ty)
+    (body : RegionFunction (scalarAssignment F) closedInterface
+      (.index :: (state ++ captures), state ++ captures))
+    (lower upper : Nat) (initial : Values (scalarAssignment F) state)
+    (captured : Values (scalarAssignment F) captures)
+    (reference : Values (scalarAssignment F) state → Nat → Values (scalarAssignment F) state)
+    (valid : Values (scalarAssignment F) state → Prop) (start : valid initial)
+    (law : ∀ current index, index ∈ List.range' lower (upper - lower) → valid current →
+      invokeCallback body (.cons index (current.append captured)) =
+        .done ((reference current index).append captured) ∧ valid (reference current index)) :
+    denoteLoop state captures body lower upper initial captured =
+      .done ((List.range' lower (upper - lower)).foldl reference initial) := by
+  simp only [denoteLoop, Finite.execute, Finite.Domain.admit, Finite.admitThen]
+  apply Finite.fold_total_on _ reference valid _ initial start
+  intro current index member invariant
+  obtain ⟨equation, preserved⟩ := law current index member invariant
+  exact ⟨by simp [equation, PIR.Proc.bind, Values.split_append], preserved⟩
+
+theorem denoteConditionalLoop_zero (state captures : List Ty)
+    (body : RegionFunction (scalarAssignment F) closedInterface
+      (.index :: (state ++ captures), .boolean :: (state ++ captures)))
+    (lower upper : Nat) (empty : upper ≤ lower)
+    (initial : Values (scalarAssignment F) state)
+    (captured : Values (scalarAssignment F) captures) :
+    denoteConditionalLoop state captures body lower upper initial captured = .done initial := by
+  simp [denoteConditionalLoop, Nat.sub_eq_zero_of_le empty, Finite.execute,
+    Finite.Domain.admit, Finite.admitThen, Finite.fold, PIR.Proc.bind]
+
 theorem boundedAt_exact [CommRing F] [DecidableEq F] (table : Meanings F)
     (domain : String) (container : List F) (index : Nat) (value : F)
     (read : container[index]? = some value) :

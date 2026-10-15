@@ -56,6 +56,11 @@ elaboration. Well-formed result permutations
 and changed stop reasons are accepted as different programs. Malformed dormant
 bodies, cycles, unsupported vocabulary, extra fields, invalid references and
 wrong same-typed containers/captures are refused.
+Boundary cases also compare exactly 4096 instructions and a complete 1 MiB
+export, including its final newline. The reference counts stored instructions
+in the same units as the format; its dynamic execution budget is separate.
+Used Unicode and newline-containing helper names traverse native export,
+independent import and evaluation without renaming.
 
 Runner comparison observes ordered outputs, completed versus stopped execution,
 the stop class, and empty active-frame/live-resource counts for these bounded
@@ -83,6 +88,17 @@ python3 lean/bridges/structured/snapshot.py \
 The renderer emits data only. Admission and semantic equations are separate
 kernel-checked declarations. Changing a fixture requires reviewing those
 equations, rather than merely updating an identity string.
+UTF-8 names remain data inside escaped Lean string literals. The independent
+renderer check compiles generated declarations and compares their exact Unicode
+codepoints in the kernel, including controls, quotes, backslashes, multibyte
+length boundaries and text resembling Lean declarations:
+
+```sh
+python3 lean/checks/check_structured_renderer.py
+```
+
+This check runs in `just test-lean`. It does not turn the renderer into a proved
+translator.
 
 `TotalState.process_eq_checked_reference` proves the ordered pair fold for
 arbitrary lists, including refusal outside the unsigned-index domain.

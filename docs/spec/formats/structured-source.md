@@ -9,7 +9,7 @@ prove how an externally supplied module was produced.
 The selected `protocol.func` has exactly one participant. Every input and output
 scope is that participant. The complete unit is checked: supported unused
 definitions are retained, and unsupported definitions are refused. Symbol names
-are unique across functions and domains. Helper references form an acyclic
+are nonempty and unique across functions and domains. Helper references form an acyclic
 graph; helpers cannot call the selected root. The independent
 [formal admission contract](../../../lean/docs/spec/structured-source.md)
 defines the Lean interpretation.
@@ -102,6 +102,8 @@ regions from captures to result types. A `for` body takes
 body yields a leading Boolean followed by state and captures. Continuing
 captures must be the identical input values, accounting for the prefix of body
 results. Type equality alone does not establish forwarding.
+An unconditional stop in a loop body uses `for`; `for_condition` requires a
+condition terminator. Nested branches in either form may still stop.
 
 Pure mathematical instructions have empty sites. Local call/control instructions retain
 their actual required sites. Nonempty sites are unique within a definition,
@@ -140,6 +142,10 @@ Ownership is checked independently of operand types:
 | Math | Pure field/Boolean operations, select, bounded read, Math call, Algebra fold |
 | Local | Boolean constant, Local apply, conditional and counted control |
 
+The descriptor can represent selection of any admitted value type. The current
+native mathematical verifier admits Boolean and scalar-field selection in this
+profile; vector and index selection are not yet native export paths.
+
 Only Local bodies may end in an explicit stop. A guard retains the owner of
 the original `protocol.guard`; projected `local.guard` is outside this source
 stage. Local mathematical computation through realization/bindings is not yet
@@ -147,11 +153,14 @@ part of this import profile.
 
 ## Limits and evidence
 
-The writer bounds source bytes to 16 MiB, the exported JSON to 1 MiB, strings
+The writer bounds source bytes to 16 MiB, the complete exported file (including
+its final newline) to 1 MiB, strings
 to 512 UTF-8 bytes, domains and definitions to 128 each, signatures to 512
-positions and total instructions to 4096. Lexical JSON and region nesting are
-bounded by 64. The independent reader additionally bounds helper reference
-depth and stored dependency edges; shared calls are not expanded for admission.
+positions and total instructions to 4096. The instruction count includes nested
+bodies and one fold per finite declaration; it excludes terminators and domain
+constructors. Lexical JSON and region nesting are bounded by 64. Helper reference
+depth is bounded by 64. References are derived from stored instructions, with
+at most two helper references per instruction; shared calls are not expanded for admission.
 See the formal contract. All failures
 produce diagnostics rather than a partial successful snapshot.
 

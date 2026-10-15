@@ -82,6 +82,17 @@ def Op.regions : Op → List (List Ty × List Ty)
       [(.index :: (state ++ captures), .boolean :: (state ++ captures))]
   | _ => []
 
+/-- The exact helper interfaces used by an operation's meaning. Both fold
+callbacks remain dependencies even when a domain is empty at runtime. -/
+def Op.helpers : Op → List Helper
+  | .invoke helper => [helper]
+  | .fold spec => spec.stepHelper ::
+      (if spec.predicate.isEmpty then [] else [spec.predicateHelper])
+  | .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
+    .fieldEqual .. | .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor |
+    .booleanEqual | .booleanNotEqual | .select .. | .boundedAt .. |
+    .branch .. | .loop .. | .loopCondition .. | .guard => []
+
 abbrev dialect : Dialect := ⟨Ty, Op, Op.arguments, Op.results, Op.regions⟩
 
 end Zkc.Source.Structured

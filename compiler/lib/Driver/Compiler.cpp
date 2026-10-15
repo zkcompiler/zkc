@@ -351,11 +351,15 @@ int zkc::runCompiler(int argc, char **argv,
     if (!mlirNestingWithinLimit(*text))
       return fail(error("mlir-depth-limit"));
     mlir::MLIRContext context(registry);
+    if (mode == "protocol-structured") {
+      auto result = protocol::exportStructuredSource(*text, symbol, context);
+      if (!result)
+        return fail(result.takeError());
+      outs() << *result;
+      return 0;
+    }
     if (sourceExport) {
-      auto result =
-          mode == "protocol-structured"
-              ? protocol::exportStructuredSource(*text, symbol, context)
-              : protocol::exportCommonSource(*text, symbol, context);
+      auto result = protocol::exportCommonSource(*text, symbol, context);
       if (!result)
         return fail(result.takeError());
       outs() << printJson(*result) << '\n';

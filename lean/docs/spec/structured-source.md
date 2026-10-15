@@ -21,6 +21,10 @@ provenance, capture forwarding and acyclic dependencies. Each function body is
 lowered to the shared `RawRegion` and formed by `RawRegion.elaborate`. A finite
 declaration lowers to an owned fold using its exact declaration ABI. Each checked
 body is stored once; calls retain named references instead of expanding syntax.
+Dependency lists and instruction counts are derived from the formed operation
+tree, including every callback and suffix. `CheckedDefinition.helpers_eq_body`
+ties the helper inventory to the erasure of that same typed body. There is no
+separately maintained dependency log.
 
 `Imported snapshot` uses the common `Verification.Imported` carrier. Its check
 witness ties the resulting program to that exact snapshot.
@@ -34,7 +38,8 @@ is total.
 
 A bound records an exact index/container pair. Result binding shifts both
 positions. Conservative result-to-input summaries follow direct returns,
-reordered or repeated outputs, shared Math calls and identical select arms.
+reordered or repeated outputs, shared Math calls and select arms with the same
+known canonical identity. Two unknown origins never establish identity.
 Each Math helper is summarized once after its callees, without expanding calls.
 Admission normalizes operand identities through these summaries; unknown results
 receive fresh identities. The summary algorithm is a computational check;
@@ -44,12 +49,16 @@ cannot declare bound premises in this profile.
 Math preconditions are local assumptions, instantiated and discharged at every
 call. An indices domain supplies the bound for its selected vector in the
 step's `S / I / A / C` interface, including another invariant formal supplied
-with the exact same SSA value. Mutable state is not assumed invariant across
+with the same proven value identity, including helper-return aliases. Mutable state is not assumed invariant across
 iterations. Matching types or equal lengths do not identify vector contents.
 
 Math cannot contain an authored stop or invoke Local code. Local code may stop, including during
 a zero-result call. The profile admits only immutable Boolean, index, scalar
 and vector values. It makes no affine ownership claim.
+Operation ownership is checked explicitly for each body kind, following the
+native format's ownership table. The independent model supports vector and
+index selection, although the current native mathematical verifier does not
+yet admit those selection types.
 
 ## Owned meaning
 
@@ -79,6 +88,11 @@ iteration, the predicate precedes each selected step, false preserves current
 state, and a stop bypasses the suffix. `boundedAt` is a checked read; an invalid
 index refuses rather than returning an arbitrary default. Counted loops retain
 their state/capture split and conditional completion flag.
+An unconditional stop cannot replace a condition terminator; it belongs to the
+ordinary loop form. Stops in nested branches remain valid.
+`denoteLoop_reference` transfers a callback equation under a reachable-state
+invariant to the ordered loop. Empty ordinary and conditional loops return the
+initial state without invoking their callback.
 
 ## Tools and practical bounds
 
@@ -100,9 +114,13 @@ A run returns `["returned", typed-values]` or `["stopped", reason]`.
 Import, input and evaluation-capacity refusals have a nonzero tool exit; they
 are distinct from successfully reporting a semantic stop.
 
-Admission bounds snapshot bytes to 1 MiB, strings to 512 bytes, domains and
+The file reader bounds complete snapshot bytes to 1 MiB, including whitespace.
+Admission bounds strings to 512 UTF-8 bytes, domains and
 definitions to 128 each, signatures to 512, instructions and references to
-4096, nesting and helper depth to 64, and stored dependency edges to 100000.
+4096, and nesting and helper depth to 64. Terminators and domain constructors do
+not count as instructions; each finite declaration contributes one fold.
+The helper inventory has at most two references per stored instruction, so it
+needs no additional edge budget.
 Shared call trees are not expanded during admission. The separate CLI work
 estimate can refuse an admitted helper DAG whose execution would be too large.
 The CLI has additional input and evaluation limits so a valid mathematical

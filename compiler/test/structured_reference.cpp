@@ -296,7 +296,11 @@ class Admission {
       defined.insert(argument);
     }
     for (Operation &op : body) {
-      if (++operations > maxOperations || op.getNumOperands() > maxOperations ||
+      // Structural instructions exclude terminators. Interpreter work has a
+      // separate budget and still charges every executed native operation.
+      if ((!op.hasTrait<OpTrait::IsTerminator>() &&
+           ++operations > maxOperations) ||
+          op.getNumOperands() > maxSignature ||
           op.getNumResults() > maxSignature)
         return error("structured-reference-capacity",
                      "operations or signature");
@@ -370,9 +374,6 @@ class Admission {
     if (code == Kind::Indices &&
         cast<IntegerAttr>(constructor.getAttr("axis")).getInt() != 0)
       return error("structured-reference-unsupported", "domain axis");
-    operations += 2;
-    if (operations > maxOperations)
-      return error("structured-reference-capacity", "domain operations");
     return Error::success();
   }
 
@@ -439,6 +440,8 @@ public:
         continue;
       }
       if (finite) {
+        if (++operations > maxOperations)
+          return error("structured-reference-capacity", "finite instructions");
         if (auto failure =
                 attributes(op, {"sym_name", "sym_visibility", "function_type",
                                 "domain", "step", "predicate"}))

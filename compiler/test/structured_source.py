@@ -205,6 +205,9 @@ for name, source, code in [
     ('unsupported-comparison', simple(body='%x = arith.cmpi ult,%flag,%flag : i1'), 'structured-source-original'),
     ('multirole-root', simple().replace('roles=["P"]', 'roles=["P","Q"]', 1), 'structured-source-role'),
     ('long-name', simple().replace('sym_name="main"', 'sym_name="' + 'x' * 513 + '"'), 'structured-source-limit'),
+    ('empty-symbol', simple('func.func private @""(%x:i1) -> i1 { return %x : i1 }'), 'structured-source-symbol'),
+    ('used-empty-symbol', simple('func.func private @""(%x:i1) -> i1 { return %x : i1 }',
+                                '%r = func.call @""(%flag) : (i1)->i1', '%r'), 'structured-source-symbol'),
     ('depth-limit', 'module {' * 66 + '}' * 66, 'mlir-depth-limit'),
     ('instruction-limit', simple(body='\n'.join(f'%x{i} = arith.xori %flag,%flag : i1' for i in range(4097))), 'structured-source-limit'),
     ('definition-limit', simple('\n'.join(f'func.func private @h{i}(%x:i1) -> i1 {{ return %x : i1 }}' for i in range(128))), 'structured-source-limit'),
@@ -315,6 +318,27 @@ with case('snapshot-byte-limit'):
     values = ','.join(f'%a{i}' for i in range(512))
     helpers = '\n'.join(f'func.func private @h{i}({args}) -> ({results}) {{ return {values} : {results} }}' for i in range(110))
     export(simple(helpers), 'structured-source-limit')
+
+with case('exact-file-byte-limit-includes-final-newline'):
+    args = ','.join(f'%a{i}:i1' for i in range(512))
+    results = ','.join(['i1'] * 512)
+    values = ','.join(f'%a{i}' for i in range(512))
+    names = [f'h{i}' for i in range(93)]
+    def sized_source():
+        return simple('\n'.join(f'func.func private @{name}({args}) -> ({results}) '
+                                f'{{ return {values} : {results} }}' for name in names))
+    base = commands.source('protocol-structured', sized_source(), '--symbol=main')
+    padding = 1024 * 1024 - len(base.encode())
+    assert 0 <= padding <= sum(512 - len(name) for name in names)
+    for i, name in enumerate(names):
+        size = min(padding, 512 - len(name))
+        names[i] += 'x' * size
+        padding -= size
+    exact = commands.source('protocol-structured', sized_source(), '--symbol=main')
+    assert exact.endswith('\n') and len(exact.encode()) == 1024 * 1024
+    names[-1] += 'y'
+    assert len(names[-1]) <= 512
+    export(sized_source(), 'structured-source-limit')
 
 with case('all-native-stop-reasons-preserved'):
     for reason in ['abort', 'reject', 'exhausted', 'incomplete', 'refused']:

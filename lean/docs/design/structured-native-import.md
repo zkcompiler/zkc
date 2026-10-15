@@ -110,6 +110,21 @@ before using Math totality to justify eliminating or moving calls. They should
 precede a generic native realization theorem; finite Runner comparisons remain
 regression evidence for that later boundary.
 
+The checked operation tree is the authority for helper references and instruction
+counts. Deriving that inventory after formation avoids a second mutable list
+that can drift when a new operation or region is added. The inventory includes
+the full helper signature and is proved equal to the typed body's erasure.
+The next lookup proof should expose uniqueness and predecessor membership for
+the ordered declaration table, then connect each reference to its actual body.
+
+Keep identity analysis separate from typed formation. Its proof needs an explicit
+environment invariant: positions with the same known origin denote the same
+value, and each retained index/container fact holds for those values. Calls
+transfer that invariant through return summaries; folds discharge bounds using
+domain items and invariant arguments/captures. A totality theorem must quantify
+over valid inputs satisfying the function's declared preconditions. Merely
+moving this analysis after formation would not prove these semantic properties.
+
 The next whole-protocol extension should preserve open interaction and explicit
 participant bindings for Schnorr, then add the matching quadratic Sumcheck native
 subject and interactive repetition. These extensions reuse this declaration and

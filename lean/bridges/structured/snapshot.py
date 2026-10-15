@@ -18,9 +18,18 @@ def record(value, size):
 
 
 def text(value):
-    if not isinstance(value, str) or len(value) > 512 or any(not 32 <= ord(c) <= 126 for c in value):
-        raise ValueError("renderer requires printable ASCII strings of at most 512 bytes")
-    return json.dumps(value)
+    if not isinstance(value, str) or len(value.encode("utf-8")) > 512:
+        raise ValueError("expected a UTF-8 string of at most 512 bytes")
+    # JSON's backspace/form-feed escapes are not Lean escapes. Render each
+    # character once, so literal backslashes cannot turn into escape prefixes.
+    escapes = {'"': r'\"', '\\': r'\\', '\n': r'\n', '\r': r'\r', '\t': r'\t'}
+    def character(char):
+        if char in escapes:
+            return escapes[char]
+        if ord(char) < 32 or ord(char) == 127:
+            return f"\\u{ord(char):04x}"
+        return char
+    return '"' + ''.join(character(char) for char in value) + '"'
 
 
 def nat(value):

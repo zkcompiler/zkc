@@ -146,7 +146,6 @@ def resolveFold (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
 
 structure LowerState where
   sites : List String := []
-  dependencies : List String := []
   instructions : Nat := 0
 
 abbrev LowerM := StateT LowerState (Except String)
@@ -158,18 +157,28 @@ def recordSite (site : String) (required : Bool) : LowerM Unit := do
     if state.sites.contains site then throw "structured-duplicate-site"
     modify fun state => { state with sites := site :: state.sites }
 
-def recordDependency (name : String) : LowerM Unit :=
-  modify fun state => { state with dependencies := name :: state.dependencies }
+/-- Instruction ownership is independent of which facts happen to be available.
+In particular, acquiring a bound cannot authorize a Protocol-level read. -/
+def Descriptor.admittedIn (descriptor : Descriptor) (kind : Kind) : Bool :=
+  match descriptor with
+  | .booleanConstant _ => true
+  | .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
+    .fieldEqual .. | .booleanAnd | .booleanOr | .booleanXor | .booleanEqual |
+    .booleanNotEqual | .select .. | .call .. | .fold .. => kind != .local
+  | .boundedAt .. => kind == .math
+  | .localCall .. | .guard .. => kind == .protocol
+  | .apply .. | .branch | .loop | .loopCondition => kind == .local
 
 def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
     (context : List Ty) (facts : Facts) (identities : List Nat)
     (descriptor : Descriptor) (operands : List Nat)
     (results : List Ty) (site : String) : LowerM Op := do
   if !validRefs operands || !validTypes results then throw "structured-instruction-limit"
-  if kind == .local then
-    match descriptor with
-    | .booleanConstant _ | .apply _ | .branch | .loop | .loopCondition => pure ()
-    | _ => throw "structured-local-operation"
+  if !descriptor.admittedIn kind then
+    throw (match kind with
+      | .local => "structured-local-operation"
+      | .math => "structured-math-operation"
+      | .protocol => "structured-protocol-operation")
   let argumentTypes ← typesAt context operands
   let factOperands := operands.map fun index => identities[index]?.getD index
   let required := match descriptor with
@@ -187,7 +196,6 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
       | .finite _ => throw "structured-call-kind"
       | .function _ => pure ()
     if !discharge facts factOperands callee.preconditions then throw "structured-call-premise"
-    recordDependency name
     pure (Op.invoke ⟨name, callee.inputs, callee.outputs⟩)
   let checkField := fun (d : String) =>
     if d == scalarDomain then pure () else (throw "structured-field-domain" : LowerM Unit)
@@ -218,28 +226,20 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
       return .boundedAt d
     | _ => throw "structured-bounded-at-arguments"
   | .call name => resolveCall name .math true
-  | .apply name =>
-    if kind != .local then throw "structured-local-operation"
-    resolveCall name .local false
+  | .apply name => resolveCall name .local false
   | .localCall name owner =>
-    if kind != .protocol || owner != snapshot.role then throw "structured-local-owner"
+    if owner != snapshot.role then throw "structured-local-owner"
     resolveCall name .local true
   | .fold domain step predicate =>
-    if kind == .local then throw "structured-algebra-fold-kind"
     let spec ← resolveFold snapshot domains .math domain step predicate argumentTypes results factOperands facts
-    recordDependency step
-    if !predicate.isEmpty then recordDependency predicate
     return .fold spec
-  | .branch =>
-    if kind != .local then throw "structured-local-operation"
-    return .branch (argumentTypes.drop 1) results
+  | .branch => return .branch (argumentTypes.drop 1) results
   | .loop | .loopCondition =>
-    if kind != .local then throw "structured-local-operation"
     if argumentTypes.length < 2 + results.length then throw "structured-loop-arguments"
     let captures := argumentTypes.drop (2 + results.length)
     return if descriptor == .loop then .loop results captures else .loopCondition results captures
   | .guard owner =>
-    if kind != .protocol || owner != snapshot.role then throw "structured-guard-owner"
+    if owner != snapshot.role then throw "structured-guard-owner"
     return .guard
 
 inductive ExitKind where
@@ -252,6 +252,7 @@ def lowerTerminator (kind : Kind) (expected : ExitKind) (terminal : Terminator) 
   | .stop reason site =>
     if kind == .math then throw "structured-math-stop"
     if kind != .local then throw "structured-local-stop"
+    if expected == .condition then throw "structured-terminator-kind"
     recordSite site true
     return .stop reason
   | .ret refs | .yield refs | .condition refs =>
@@ -306,8 +307,9 @@ def lowerInstructions (snapshot : Snapshot) (domains : List DomainSpec)
       pure (inputs, outputs, raw)
     let rawBodies := bodies.foldr (fun (inputs, outputs, body) rest =>
       RawRegions.cons inputs outputs body rest) .nil
-    let resultOrigins := (resultIdentities summaries descriptor operands results.length).zipIdx.map
-      fun (source, result) => match source.bind (identities[·]?) with
+    let operandOrigins := operands.map fun index => identities[index]?
+    let resultOrigins := (resultIdentities summaries descriptor operandOrigins results.length).zipIdx.map
+      fun (source, result) => match source with
         | some original => original + results.length
         | none => result
     let next ← lowerInstructions snapshot domains summaries kind child exitKind terminal

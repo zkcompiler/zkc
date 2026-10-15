@@ -146,6 +146,21 @@ def stateBound : Snapshot := snapshot [
     (.block [.instruction (.fold "items" "step" "") [0, 0] [vector] [] ""] (.ret [0]))]
   [⟨"items", [vector], .indices 0 0⟩]
 
+/-- Both a helper summary and its caller must compare canonical identities,
+while an unrelated same-typed vector must remain distinct at either boundary. -/
+def selectedBound (wrongHelper wrongCaller : Bool) : Snapshot := snapshot [
+  function "echo" .math [vector] [vector] (.block [] (.ret [0])),
+  function "choose" .math [vector, vector, .boolean] [vector]
+    (.block [.instruction (.call "echo") [0] [vector] [] "",
+      .instruction (.select vector) [3, 0, if wrongHelper then 2 else 1] [vector] [] ""] (.ret [0])),
+  function "step" .math [field, .index, vector, vector, .boolean] [field]
+    (.block [.instruction (.call "choose") [2, 3, 4] [vector] [] "",
+      .instruction (.select vector) [5, 0, if wrongCaller then 4 else 3] [vector] [] "",
+      .instruction (.boundedAt scalarDomain) [0, 3] [field] [] ""] (.ret [0])) [⟨1, 2, 0⟩],
+  function "main" .protocol [vector, vector, .boolean, field] [field]
+    (.block [.instruction (.fold "items" "step" "") [0, 3, 1, 2] [field] [] ""] (.ret [0]))]
+  [⟨"items", [vector], .indices 0 0⟩]
+
 def dependencyChain (length copies : Nat) : Snapshot :=
   let helpers := (List.range length).map fun n =>
     let name := "helper" ++ toString n
@@ -203,6 +218,12 @@ def run : IO Unit := do
     [vec [11, 13], vec [], scalar 5] == .ok (returned [scalar 13]))
   test "distinct-domain-capture-refused" (refused (aliasedCapture false) "structured-fold-premise")
   test "initial-state-equality-is-not-invariant" (refused stateBound "structured-fold-premise")
+  for flag in [false, true] do
+    test "select-known-alias-through-helper-and-caller" (evaluate (selectedBound false false)
+      [vec [11, 13], vec [], boolean flag, scalar 7] == .ok (returned [scalar 13]))
+  for (helper, caller) in [(true, false), (false, true), (true, true)] do
+    test "select-unrelated-container-refused" (refused (selectedBound helper caller)
+      "structured-bounded-at-premise")
   test "static-budget-counts-finite-declaration" (!unit.instructionsWithin 2 && unit.instructionsWithin 3)
   test "oversized-math-refused-before-summary" (refused (snapshot [
     function "oversized" .math [] []
@@ -225,6 +246,23 @@ def run : IO Unit := do
   test "reference-depth" (refused (dependencyChain 65 1) "structured-reference-depth")
   test "shared-dag-is-not-expanded-for-admission" ((check (dependencyChain 17 2)).isOk)
   test "reference-depth-boundary" ((check (dependencyChain 64 1)).isOk)
+  test "declaration-order-does-not-change-fold" (evaluate
+    {unit with definitions := unit.definitions.reverse} [vec [2], boolean true] == .ok (stopped "abort"))
+  let hiddenCycle := snapshot [
+    function "main" .protocol [] [] (.block [] (.ret [])),
+    function "hidden" .local [.boolean] [] (.block [.instruction .branch [0] []
+      [.region [] [] (.block [.instruction (.apply "again") [] [] [] "call"] (.yield [])),
+       .region [] [] (.block [] (.yield []))] "branch"] (.ret [])),
+    function "again" .local [] [] (.block [
+      .instruction (.booleanConstant false) [] [.boolean] [] "false",
+      .instruction (.apply "hidden") [0] [] [] "back"] (.ret []))]
+  test "nested-dormant-helper-cycle" (refused hiddenCycle "structured-helper-cycle")
+  let inventory := (check unit).toOption.map fun program =>
+    program.payload.definitions.map fun definition =>
+      (definition.name, definition.dependencies, definition.instructionCount)
+  test "dependencies-derived-from-formed-bodies" (inventory == some [
+    ("step", [], 0), ("predicate", [], 0), ("fold", ["step", "predicate"], 1),
+    ("work", ["fold"], 1), ("main", ["work"], 1)])
   test "direct-wrong-container" (refused (snapshot [
     function "main" .protocol [] [] (.block [] (.ret [])),
     function "bad" .math [.index, vector, vector] [field]
@@ -257,7 +295,27 @@ def run : IO Unit := do
     "structured-local-owner")
   test "math-local-invoke" (refused (snapshot [function "work" .local [] [] (.block [] (.ret [])),
     function "main" .protocol [] [] (.block [] (.ret [])),
-    function "bad" .math [] [] (.block [.instruction (.apply "work") [] [] [] ""] (.ret []))]) "structured-site")
+    function "bad" .math [] [] (.block [.instruction (.apply "work") [] [] [] ""] (.ret []))])
+    "structured-math-operation")
+  test "protocol-read-ownership" (refused (snapshot [
+    function "main" .protocol [vector, .index] [field]
+      (.block [.instruction (.boundedAt scalarDomain) [0, 1] [field] [] ""] (.ret [0]))])
+    "structured-protocol-operation")
+  test "conditional-loop-unconditional-stop-refused" (refused (localProgram
+    [.index, .index, .boolean] [.boolean]
+    (.block [.instruction .loopCondition [0, 1, 2] [.boolean]
+      [.region [.index, .boolean] [.boolean, .boolean]
+        (.block [] (.stop .abort "stop"))] "loop"] (.ret [0]))) "structured-terminator-kind")
+  let nestedStop := localProgram [.index, .index, .boolean] [.boolean]
+    (.block [.instruction .loopCondition [0, 1, 2] [.boolean]
+      [.region [.index, .boolean] [.boolean, .boolean]
+        (.block [.instruction .branch [1] []
+          [.region [] [] (.block [] (.stop .abort "stop")),
+           .region [] [] (.block [] (.yield []))] "branch"] (.condition [1, 1]))] "loop"] (.ret [0]))
+  test "conditional-loop-nested-stop" (evaluate nestedStop [index 0, index 3, boolean true] ==
+    .ok (stopped "abort"))
+  test "conditional-loop-nested-continue" (evaluate nestedStop [index 0, index 3, boolean false] ==
+    .ok (returned [boolean false]))
   test "loop-capture-forwarding" ((check (loop false false)).isOk)
   test "loop-wrong-capture" (refused (loop false true) "structured-capture-forwarding")
   test "loop-zero" (evaluate (loop false false) [index 5, index 2, boolean false, boolean true] ==

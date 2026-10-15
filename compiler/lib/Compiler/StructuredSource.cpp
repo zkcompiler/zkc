@@ -620,10 +620,9 @@ class Exporter {
     // short path must still count its whole suffix on a later, longer path.
     llvm::DenseMap<Operation *, unsigned> heights;
     llvm::DenseSet<Operation *> active;
-    unsigned visits = 0;
     std::function<Expected<unsigned>(Operation *, unsigned)> visit =
         [&](Operation *op, unsigned depth) -> Expected<unsigned> {
-      if (++visits > 100000 || depth > depthLimit)
+      if (depth > depthLimit)
         return error("structured-source-limit");
       if (auto found = heights.find(op); found != heights.end())
         return found->second;
@@ -663,6 +662,11 @@ public:
       return std::move(e);
     json::Array domains, definitions;
     for (Operation &op : unit.getBody().front()) {
+      // MLIR permits an empty quoted symbol. The wire vocabulary uses the
+      // empty string only for absent predicates and sites, never a declaration.
+      if (auto name = op.getAttrOfType<StringAttr>("sym_name");
+          name && name.getValue().empty())
+        return error("structured-source-symbol");
       definition = &op;
       sites.clear();
       dependencies.try_emplace(&op);
@@ -693,7 +697,7 @@ public:
 };
 } // namespace
 
-Expected<json::Value> exportStructuredSource(StringRef bytes, StringRef name,
+Expected<std::string> exportStructuredSource(StringRef bytes, StringRef name,
                                              MLIRContext &context) {
   if (bytes.size() > 16 * 1024 * 1024 || !mlirNestingWithinLimit(bytes))
     return error("structured-source-limit");
@@ -715,8 +719,12 @@ Expected<json::Value> exportStructuredSource(StringRef bytes, StringRef name,
   auto exported = Exporter(unit, selected).run(bytes);
   if (!exported)
     return exported.takeError();
-  if (!boundedWire(*exported) || printJson(*exported).size() > 1024 * 1024)
+  if (!boundedWire(*exported))
     return error("structured-source-limit");
-  return exported;
+  // Own framing and its byte budget together: callers emit these exact bytes.
+  auto serialized = printJson(*exported) + '\n';
+  if (serialized.size() > 1024 * 1024)
+    return error("structured-source-limit");
+  return serialized;
 }
 } // namespace zkc::protocol

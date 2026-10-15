@@ -16,20 +16,21 @@ structure IdentitySummary where
 
 abbrev IdentitySummaries := List IdentitySummary
 
-/-- Each known result names an operand's original SSA position. No arithmetic,
-fold result, or changing loop state is identified with an input. -/
+/-- Transfer already canonical operand identities. `none` means unknown, so two
+unknown select arms are never evidence of equality. No arithmetic, fold result,
+or changing loop state is identified with an input. -/
 def resultIdentities (summaries : IdentitySummaries) (descriptor : Descriptor)
-    (operands : List Nat) (resultCount : Nat) : List (Option Nat) :=
+    (operands : List (Option Nat)) (resultCount : Nat) : List (Option Nat) :=
   match descriptor with
   | .call name =>
     match summaries.find? (·.name == name) with
     | some summary =>
       (List.range resultCount).map fun result =>
-        (summary.outputs[result]?.bind id).bind fun input => operands[input]?
+        (summary.outputs[result]?.bind id).bind fun input => operands[input]?.bind id
     | none => List.replicate resultCount none
   | .select _ =>
     match operands with
-    | [_, left, right] =>
+    | [_, some left, some right] =>
       if left == right && resultCount == 1 then [some left]
       else List.replicate resultCount none
     | _ => List.replicate resultCount none
@@ -40,8 +41,8 @@ def Function.identitySummary (summaries : IdentitySummaries) (function : Functio
   let .block instructions terminal := function.body
   let origins := instructions.foldl (fun origins instruction =>
     let .instruction descriptor operands results _ _ := instruction
-    let forwarded := (resultIdentities summaries descriptor operands results.length).map fun input =>
-      input.bind fun index => origins[index]?.bind id
+    let operandOrigins := operands.map fun index => origins[index]?.bind id
+    let forwarded := resultIdentities summaries descriptor operandOrigins results.length
     forwarded ++ origins) ((List.range function.inputs.length).map some)
   let outputs := match terminal with
     | .ret refs => refs.map fun index => origins[index]?.bind id

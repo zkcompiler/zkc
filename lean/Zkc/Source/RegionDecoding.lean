@@ -46,6 +46,19 @@ def RawRegions.length {Ty Op : Type} : RawRegions Ty Op → Nat
   | .nil => 0
   | .cons _ _ _ tail => tail.length + 1
 
+mutual
+  /-- All stored operations, including dormant callbacks and stopped suffixes.
+  Calls remain single operations; this traversal does not expand their targets. -/
+  def RawRegion.operations {Ty Op : Type} : RawRegion Ty Op → List Op
+    | .ret _ | .stop _ => []
+    | .letOp op _ _ bodies next => op :: (bodies.operations ++ next.operations)
+    | .bind _ body next => body.operations ++ next.operations
+
+  def RawRegions.operations {Ty Op : Type} : RawRegions Ty Op → List Op
+    | .nil => []
+    | .cons _ _ body rest => body.operations ++ rest.operations
+end
+
 variable {dialect : Dialect}
 
 mutual
