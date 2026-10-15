@@ -188,7 +188,8 @@ artifacts retain those distinctions. Do not infer a universal cost per call. Sna
 Host collects completion reports; JSON materialization happens after the SDK
 call. Each participant and attempt contributes once. Reports retain per-input
 first visits and deduplicate equal repeated vectors with their multiplicities.
-`counts_repeatable` compares complete ordered count sequences across processes;
+`counts_repeatable` compares complete ordered count sequences across processes
+(`null` with only one process);
 variation must be explained before fitting a deterministic cost model.
 
 | Counter group | Unit and boundary |

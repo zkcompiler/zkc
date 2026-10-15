@@ -305,6 +305,7 @@ def test_execution_counts_publish_no_timing_comparisons(modules, tmp_path):
     row = summary['rows'][0]
     assert 'ns_per_call' not in row
     assert 'first_call_ns' not in row
+    assert row['counts_repeatable'] is None
     assert summary['comparisons'] == []
     assert len(row['execution_counts']) == 4
     assert [(r['input_index'], r['first_visit']) for r in row['execution_counts']] == [(0, True), (1, True), (0, False), (1, False)]

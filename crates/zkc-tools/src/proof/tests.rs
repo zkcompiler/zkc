@@ -500,18 +500,18 @@ fn execute(
 ) -> Result<crate::proof::NativeProofReport> {
     let input = crate::proof::ProofInputs::decode(deployment, input, invocation)?;
     let report = deployment.execute(&input, invocation)?;
-    if let Some(counts) = report.execution_counts.json() {
-        if !counts["events"].as_object().unwrap().is_empty() {
-            assert_eq!(
-                counts["events"]["charged_instructions"].as_u64().unwrap()
-                    + counts["events"]["replayed_instructions"].as_u64().unwrap(),
-                report.usage.instructions
-            );
-            assert_eq!(
-                counts["events"]["backend_enter_calls"],
-                counts["events"]["backend_leave_calls"]
-            );
-        }
+    if let Some(counts) = report.execution_counts.json()
+        && !counts["events"].as_object().unwrap().is_empty()
+    {
+        assert_eq!(
+            counts["events"]["charged_instructions"].as_u64().unwrap()
+                + counts["events"]["replayed_instructions"].as_u64().unwrap(),
+            report.usage.instructions
+        );
+        assert_eq!(
+            counts["events"]["backend_enter_calls"],
+            counts["events"]["backend_leave_calls"]
+        );
     }
     Ok(report)
 }

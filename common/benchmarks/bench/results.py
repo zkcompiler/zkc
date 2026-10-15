@@ -169,7 +169,7 @@ def summarize(manifest):
             if manifest['observation'] == 'execution_counts':
                 row['execution_counts'] = summarize_counts(results)
                 sequences = [[(c['input_index'], c['execution_counts']) for c in r['worker']['lifecycle']['calls']] for r in results]
-                row['counts_repeatable'] = all(s == sequences[0] for s in sequences[1:])
+                row['counts_repeatable'] = all(s == sequences[0] for s in sequences[1:]) if len(sequences) > 1 else None
                 rows.append(row)
                 continue
             medians = [statistics.median(s['elapsed_ns']/s['iterations'] for s in r['worker']['samples']
@@ -237,7 +237,7 @@ def publish(directory, manifest):
         lines = ['# Execution counts', '', f"Run status: **{manifest['status']}**.", '',
                  'Instrumented execution: timing comparisons are intentionally omitted.',
                  'See summary.json for distinct count vectors, input identities, first visits and multiplicities.',
-                 'counts_repeatable compares complete ordered count sequences across processes; false requires investigation before fitting a deterministic cost model.',
+                 'counts_repeatable compares complete ordered count sequences across processes (null with one process); false requires investigation before fitting a deterministic cost model.',
                  'Raw commands, outputs, diagnostics and incidental clock readings remain in manifest.json.', '']
         (directory / 'report.md').write_text('\n'.join(lines))
         return
