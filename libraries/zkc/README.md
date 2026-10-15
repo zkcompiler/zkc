@@ -79,6 +79,10 @@ as `Table` and `Word` above.
 
 ## Byte assembly
 
+`encoding::index_uleb128(value)` emits the shortest unsigned LEB128 encoding
+of any `index`, including zero and the full u64 maximum. Its length depends on
+the integer. It selects no transcript framing or transport format.
+
 `bytes::repeat(byte, count)` creates padding and `bytes::join(Sequence<Bytes>)`
 assembles ordered fragments without repeatedly copying their growing prefix.
 `encoding::fields_be`, `fields_le` and `groups_compressed` encode collections

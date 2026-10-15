@@ -103,7 +103,12 @@ all calls and output writing. It must not be confused with the per-call timer.
 No attempt is made to flush filesystem or CPU caches. Compilation, negative controls
 and preparation checks can warm system caches before timed workers. Upstream Monero
 initializes generator and multiexponentiation tables once per process; first-call
-timing includes that cost, while repeated calls reuse those tables.
+timing includes that cost, while repeated calls reuse those tables. The native
+ProofEntry also retains bounded successful deterministic public-prefix results
+across calls. Its diagnostics report preparation entries, retained bytes and
+hits; logical work charges remain unchanged. Repeated parameters can therefore
+benefit from preparation while the first call and a fresh CLI process cannot.
+Report first-call and repeated-call results separately.
 
 ## Correctness and evidence
 

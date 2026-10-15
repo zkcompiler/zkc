@@ -59,6 +59,7 @@ def Data_BoundedMatrixAtOp : Op<DataDialect, "bounded_matrix_at", [Pure, Declare
   let results = (outs AnyType:$output);
   let hasVerifier = 1;
 }
+def EncodingIndexUleb128ExecOp : KernelOp<DataDialect, "exec.encoding_index_uleb128", [OpEncodingIndexUleb128]>;
 def BytesRepeatExecOp : KernelOp<DataDialect, "exec.bytes_repeat", [OpBytesRepeat]>;
 def BytesJoinExecOp : KernelOp<DataDialect, "exec.bytes_join", [OpBytesJoin]>;
 def BytesEmptyExecOp : KernelOp<DataDialect, "exec.bytes_empty", [OpBytesEmpty]>;

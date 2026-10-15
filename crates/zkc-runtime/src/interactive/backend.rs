@@ -269,6 +269,7 @@ pub struct ServiceInvocation<'a> {
 /// no input, frame, resource or setup authority.
 pub trait InstalledKernel {
     fn signature(&self) -> &BoundSignature;
+    /// Read-only installation fact, stable for the Runner's lifetime.
     /// Fixed inputs, attributes and backend policy determine this operation's
     /// outputs or refusal. It cannot observe frame identity, resources, time,
     /// entropy or mutable dependencies. Values, refusal and logical charges must

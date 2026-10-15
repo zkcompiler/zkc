@@ -64,3 +64,26 @@ run Demo=Run;
                for path in (ROOT / 'libraries/zkc').glob('*.zkc')]
     entry = Entry(toolchain, journal, directory, source, modules)
     assert entry.run('groups', {})['ok'] is True
+
+
+@pytest.mark.parametrize('flags', [(), ('--no-simplify', '--release-storage')])
+def test_unsigned_leb128_encoding(toolchain, journal, directory, flags):
+    from source_modules import library_modules
+
+    source = '''module sample;
+use zkc::encoding as encoding;
+use zkc::bytes::{Bytes};
+protocol Run roles(P)(value:index@P)->(bytes:Bytes@P) {
+  return encoding::index_uleb128(value);
+}
+run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, (*library_modules('zkc'), *flags))
+    values = [0, 1, 300, 624485, 2**64-1]
+    values += [value for bit in range(7, 64, 7) for value in (2**bit-1, 2**bit, 2**bit+1)]
+    for value in values:
+        # Independent positional definition: extract seven-bit digits by index.
+        length = max(1, (value.bit_length()+6)//7)
+        expected = [(value >> (7*i) & 127) | (128 if i+1 < length else 0)
+                    for i in range(length)]
+        assert entry.run(f'index-{value}', {'value': str(value)})['bytes'] == expected

@@ -3,6 +3,9 @@ use zkc::bytes::{Bytes};
 use zkc::vector::{Vector};
 use zkc::curve::{Groups};
 
+// Unique shortest unsigned LEB128. Length/timing depend on the input integer.
+pub fn index_uleb128(value: index) -> Bytes = primitive("encoding.index_uleb128");
+
 // Ordered concatenation of each element's exact scalar encoding, without a length prefix.
 pub fn fields_be<F: Field>(values: Vector<F>) -> Bytes = primitive("encoding.fields_be");
 pub fn fields_le<F: Field>(values: Vector<F>) -> Bytes = primitive("encoding.fields_le");

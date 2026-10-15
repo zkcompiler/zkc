@@ -6,16 +6,20 @@ use zkc_runtime::interactive::{
 };
 
 pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
-    use Type::{Bool, Bytes, Field, Group, Groups, Vector};
-    let [domain] = binding.arguments.as_slice() else {
-        return None;
+    use Type::{Bool, Bytes, Field, Group, Groups, Index, Vector};
+    let (identity, provider) = match binding.arguments.as_slice() {
+        [] => (Identity::None, "native"),
+        [domain] => {
+            let identity = Identity::parse(domain).ok()?;
+            (identity, identity.provider()?)
+        }
+        _ => return None,
     };
-    let identity = Identity::parse(domain).ok()?;
-    let provider = identity.provider()?;
     if binding.implementation != format!("{provider}/{}", binding.contract) {
         return None;
     }
     let (inputs, outputs): (&[Type], &[Type]) = match (binding.contract.as_str(), identity) {
+        ("encoding.index_uleb128", Identity::None) => (&[Index], &[Bytes]),
         ("encoding.field_be", Identity::Bls12381Fr)
         | ("encoding.field_le", Identity::Ristretto255Scalar) => (&[Field], &[Bytes]),
         ("encoding.fields_be", Identity::Bls12381Fr)
@@ -100,6 +104,25 @@ pub(crate) fn apply(
         }
     }
     match (name, args) {
+        ("encoding.index_uleb128", [Value::Index(value)]) => {
+            // u64 needs at most ten bytes. Compute into bounded stack storage,
+            // then preflight its single immutable allocation before publishing.
+            let mut encoded = [0u8; 10];
+            let mut remaining = *value;
+            let mut length = 0;
+            loop {
+                let byte = (remaining & 0x7f) as u8;
+                remaining >>= 7;
+                encoded[length] = byte | if remaining == 0 { 0 } else { 0x80 };
+                length += 1;
+                if remaining == 0 {
+                    break;
+                }
+            }
+            policy.bytes(length)?;
+            policy.output(size(length, 1)?, available)?;
+            Ok(vec![Value::Bytes(encoded[..length].into())])
+        }
         ("encoding.fields_be", [Value::Vector(values)]) => {
             policy.vector(values.len())?;
             encode_collection(values, policy, available, || Ok(()), field_be)
@@ -138,7 +161,7 @@ pub(crate) fn apply(
             policy.bytes(32)?;
             policy.output(size(32, 1)?, available)?;
             let bytes = field_be(value)?;
-            Ok(vec![Value::Bytes(bytes.to_vec().into())])
+            Ok(vec![Value::Bytes(bytes.as_slice().into())])
         }
         ("encoding.field_from_be", [Value::Bytes(bytes)]) => {
             policy.output(1024, available)?;
@@ -166,7 +189,7 @@ pub(crate) fn apply(
         ("encoding.field_le", [Value::RistrettoField(value)]) => {
             policy.bytes(32)?;
             policy.output(size(32, 1)?, available)?;
-            Ok(vec![Value::Bytes(value.to_bytes().to_vec().into())])
+            Ok(vec![Value::Bytes(value.to_bytes().as_slice().into())])
         }
         ("encoding.field_from_le", [Value::Bytes(bytes)]) => {
             policy.output(1024, available)?;
@@ -196,7 +219,7 @@ pub(crate) fn apply(
             policy.bytes(32)?;
             policy.output(size(32, 1)?, available)?;
             budget.charge_units(256)?;
-            Ok(vec![Value::Bytes(point.to_bytes().to_vec().into())])
+            Ok(vec![Value::Bytes(point.to_bytes().as_slice().into())])
         }
         (
             "encoding.group_from_compressed" | "encoding.group_decode_cofactor",
@@ -231,7 +254,7 @@ pub(crate) fn apply(
             policy.bytes(48)?;
             policy.output(size(48, 1)?, available)?;
             Ok(vec![Value::Bytes(
-                point.to_bytes().map_err(ark)?.to_vec().into(),
+                point.to_bytes().map_err(ark)?.as_slice().into(),
             )])
         }
         ("encoding.group_from_compressed", [Value::Bytes(bytes)]) => {
@@ -249,6 +272,7 @@ pub(crate) fn apply(
 }
 
 pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
+    ("native/encoding.index_uleb128", "encoding.index_uleb128"),
     ("arkworks/encoding.fields_be", "encoding.fields_be"),
     ("dalek/encoding.fields_le", "encoding.fields_le"),
     (
@@ -326,6 +350,116 @@ mod tests {
             &mut Default::default(),
         )
         .unwrap()
+    }
+    #[test]
+    fn unsigned_leb128_is_minimal_over_the_full_index_domain() {
+        let run = |value| {
+            let output = apply(
+                "encoding.index_uleb128",
+                Identity::None,
+                &[Value::Index(value)],
+                &[],
+                &Policy::default(),
+                usize::MAX,
+                &mut Default::default(),
+            )
+            .unwrap();
+            let Value::Bytes(bytes) = &output[0] else {
+                panic!("bytes")
+            };
+            bytes.to_vec()
+        };
+        assert_eq!(run(0), [0]);
+        assert_eq!(run(127), [127]);
+        assert_eq!(run(128), [0x80, 0x01]);
+        assert_eq!(run(300), [0xac, 0x02]);
+        assert_eq!(run(624485), [0xe5, 0x8e, 0x26]);
+        assert_eq!(
+            run(u64::MAX),
+            [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 1]
+        );
+        let mut values = vec![0, 1, u64::MAX];
+        for bit in (7..64).step_by(7) {
+            values.extend([(1u64 << bit) - 1, 1u64 << bit, (1u64 << bit) + 1]);
+        }
+        for value in values {
+            let bytes = run(value);
+            assert!((1..=10).contains(&bytes.len()));
+            assert!(bytes[..bytes.len() - 1].iter().all(|b| b & 0x80 != 0));
+            assert_eq!(bytes.last().unwrap() & 0x80, 0);
+            assert!(bytes.len() == 1 || *bytes.last().unwrap() != 0);
+            let decoded = bytes
+                .iter()
+                .enumerate()
+                .fold(0u64, |n, (i, b)| n | (u64::from(b & 0x7f) << (i * 7)));
+            assert_eq!(decoded, value);
+        }
+    }
+    #[test]
+    fn unsigned_leb128_keeps_exact_binding_and_capacity_checks() {
+        let mut binding = OperationBinding {
+            contract: "encoding.index_uleb128".into(),
+            arguments: vec![],
+            implementation: "native/encoding.index_uleb128".into(),
+        };
+        assert!(signature(&binding).is_some());
+        binding.arguments.push("bls12-381.fr".into());
+        assert!(signature(&binding).is_none());
+        binding.arguments.clear();
+        binding.implementation = "arkworks/encoding.index_uleb128".into();
+        assert!(signature(&binding).is_none());
+        binding.arguments.push("bls12-381.fr".into());
+        assert!(signature(&binding).is_none()); // right provider, wrong domain arity
+        binding.arguments.clear();
+        binding.contract = "encoding.field_be".into();
+        binding.implementation = "native/encoding.field_be".into();
+        assert!(signature(&binding).is_none()); // a domain codec still needs its domain
+        let run = |args: &[Value], attributes: &[String], policy: &Policy, available| {
+            apply(
+                "encoding.index_uleb128",
+                Identity::None,
+                args,
+                attributes,
+                policy,
+                available,
+                &mut Default::default(),
+            )
+        };
+        let args = [Value::Index(u64::MAX)];
+        let allowance = size(10, 1).unwrap();
+        assert!(run(&args, &[], &Policy::default(), allowance).is_ok());
+        assert_eq!(
+            run(&args, &[], &Policy::default(), allowance - 1)
+                .unwrap_err()
+                .code,
+            "exhausted:output-bytes"
+        );
+        assert_eq!(
+            run(
+                &args,
+                &[],
+                &Policy {
+                    max_wire_bytes: 9,
+                    ..Default::default()
+                },
+                usize::MAX
+            )
+            .unwrap_err()
+            .code,
+            "exhausted:wire-bytes"
+        );
+        assert_eq!(
+            run(&args, &["extra".into()], &Policy::default(), usize::MAX)
+                .unwrap_err()
+                .code,
+            "refused:encoding-attributes"
+        );
+        assert_eq!(
+            run(&[Value::Bool(true)], &[], &Policy::default(), usize::MAX)
+                .unwrap_err()
+                .code,
+            "refused:encoding-operands"
+        );
     }
     #[test]
     fn collection_encodings_match_scalar_codecs_in_order() {

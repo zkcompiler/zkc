@@ -3,6 +3,11 @@ use super::*;
 use Type::*;
 pub(super) const CONTRACTS: &[Contract] = &[
     Contract::new(
+        "encoding.index_uleb128",
+        (&[Index], &[Bytes], AttributeRule::None),
+    )
+    .implemented_by(&["native/encoding.index_uleb128"]),
+    Contract::new(
         "encoding.fields_be",
         (&[Vector], &[Bytes], AttributeRule::None),
     )
@@ -81,6 +86,9 @@ fn resolve(
     binding: &OperationBinding,
     contract: &Contract,
 ) -> Result<KernelSignature<LogicalType>> {
+    if binding.contract == "encoding.index_uleb128" {
+        return index::resolve(binding, contract);
+    }
     let primary = support::primary(binding)?;
     let group = matches!(
         binding.contract.as_str(),
@@ -110,6 +118,9 @@ fn select(
     logical: &KernelSignature<LogicalType>,
     selection: Selection,
 ) -> Result<BoundSignature> {
+    if binding.contract == "encoding.index_uleb128" {
+        return default_ports(binding, logical, selection);
+    }
     let primary = support::primary(binding)?;
     let allowed = match binding.contract.as_str() {
         "encoding.field_le"

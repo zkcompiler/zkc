@@ -456,3 +456,50 @@ fn native_work_and_later_lower_capacity_use_the_same_accounting() {
     );
     assert_eq!(cache.stats().hits, 2);
 }
+
+#[test]
+fn untaken_impure_branch_permanently_closes_public_preparation() {
+    let mut program: Json = serde_json::from_slice(&choose()).unwrap();
+    let outputs = program[2][0][3].clone();
+    program[2].as_array_mut().unwrap().push(json!([
+        "function",
+        "closed",
+        [],
+        outputs,
+        [
+            ["bool_constant", "literal", "result", true],
+            ["return", ["result"]]
+        ],
+        ["closed", []]
+    ]));
+    program[3][0][6]
+        .as_array_mut()
+        .unwrap()
+        .insert(1, json!(["local", "later", "closed", [], ["later_answer"]]));
+    let admitted =
+        admit_supplied(&serde_json::to_vec(&program).unwrap(), &ark_backend(None)).unwrap();
+    for impure in [false, true] {
+        let cache = PreparedComputations::new(&admitted, PreparationLimits::default());
+        for _ in 0..2 {
+            let mut backend = Traced::new(ark_backend(None));
+            backend.nondeterministic = impure.then_some("bool.not");
+            let mut runner = Runner::new(
+                &admitted,
+                "main",
+                "P",
+                "session",
+                backend,
+                vec![Value::Bool(true), Value::Bool(true)],
+            )
+            .unwrap_or_else(|e| panic!("{}", e.error));
+            runner.prepare_computations(cache.clone(), &[0, 1]).unwrap();
+            let (result, _, backend) = execute(runner);
+            assert!(matches!(result.unwrap()[0], Value::Bool(true)));
+            assert!(backend.events.iter().all(|event| event[0] != "unselected"));
+        }
+        // The second, closed function is pure. It can only be retained if the
+        // first function's untaken arm did not end the public prefix.
+        assert_eq!(cache.stats().entries, if impure { 0 } else { 2 });
+        assert_eq!(cache.stats().hits, if impure { 0 } else { 2 });
+    }
+}

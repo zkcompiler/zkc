@@ -129,6 +129,7 @@ the generic source signature does not promise support for every field or group.
 
 | Operation | Inputs | Outputs | Interpretation |
 |---|---|---|---|
+| `index_uleb128` | `index` | `Bytes` | Unique shortest unsigned LEB128 of a u64 |
 | `field_be<F>` | `F` | `Bytes` | Canonical 32-byte big-endian integer |
 | `field_from_be<F>` | `Bytes` | `(bool, F)` | Exact width and integer below the scalar modulus |
 | `field_reduce_be<F>` | `Bytes` | `F` | Big-endian integer reduced modulo the scalar modulus |
@@ -137,6 +138,17 @@ the generic source signature does not promise support for every field or group.
 | `field_reduce_le<F>` | `Bytes` | `F` | Little-endian integer reduced modulo the scalar order |
 | `group_compressed<G>` | `G` | `Bytes` | Canonical compressed point: 48-byte BLS G1 or 32-byte Edwards |
 | `group_from_compressed<G>` | `Bytes` | `(bool, G)` | Exact width, canonical encoding and prime-order subgroup check |
+
+`index_uleb128` encodes the [unsigned 64-bit index](../language/definitions.md)
+using low seven-bit groups first, setting bit `0x80` on every byte except the
+last. Zero is `[0]`; the maximum u64 is nine `0xff` bytes followed by `0x01`.
+There are no redundant leading groups. The native implementation has no domain
+arguments. Its loop count and output size depend on encoded length; it adds no
+constant-time execution guarantee. The at-most-ten-byte stack encoding precedes
+wire-size and `256 + n` output-capacity checks, then one immutable allocation. Normal
+operand and result charges apply, without a separate external-work debit.
+Failure publishes no partial bytes. This explicit ordered operation does not
+choose transcript framing or provide a decoder.
 
 `fields_be(Vector<F>)`, `fields_le(Vector<F>)` and
 `groups_compressed(Groups<G>)` concatenate the corresponding scalar encodings

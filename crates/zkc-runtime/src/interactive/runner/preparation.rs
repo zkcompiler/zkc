@@ -7,7 +7,6 @@ use std::collections::{BTreeSet, HashSet};
 
 pub(super) struct Preparation<B: Backend> {
     cache: PreparedComputations<B>,
-    functions: BTreeSet<String>,
     public: BTreeSet<String>,
     open: bool,
 }
@@ -91,17 +90,8 @@ impl<B: Backend> Runner<B> {
             self.preparation = None;
             return Ok(());
         }
-        let functions = self
-            .admitted
-            .executable
-            .functions
-            .iter()
-            .filter(|(_, f)| deterministic(&f.body, &self.kernels))
-            .map(|(name, _)| name.clone())
-            .collect();
         self.preparation = Some(Preparation {
             cache,
-            functions,
             public,
             open: true,
         });
@@ -115,13 +105,16 @@ impl<B: Backend> Runner<B> {
             p.open = false;
         }
     }
-    pub(super) fn public_computation(&mut self, function: &str, inputs: &[String]) -> bool {
+    pub(super) fn public_computation(&mut self, code: &LocalCode, inputs: &[String]) -> bool {
         let Some(p) = &mut self.preparation else {
             return false;
         };
-        p.open &= self.stack.len() == 1
-            && p.functions.contains(function)
-            && inputs.iter().all(|n| p.public.contains(n));
+        // Classify only reached public code; unrelated participants and unused
+        // library bodies need no inspection.
+        p.open = p.open
+            && self.stack.len() == 1
+            && inputs.iter().all(|n| p.public.contains(n))
+            && deterministic(code, &self.kernels);
         p.open
     }
     pub(super) fn public_results(&mut self, outputs: &[String]) {

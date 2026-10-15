@@ -1250,7 +1250,7 @@ impl<B: Backend> Runner<B> {
             },
             code.inputs.clone(),
         );
-        let public = self.public_computation(function, inputs);
+        let public = self.public_computation(code, inputs);
         let key = if public {
             Self::computation_key(function, &args)
         } else {

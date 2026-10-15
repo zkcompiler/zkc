@@ -203,3 +203,4 @@ bytes.join 0
 encoding.fields_be 0
 encoding.fields_le 0
 encoding.groups_compressed 0
+encoding.index_uleb128 0

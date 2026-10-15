@@ -87,6 +87,7 @@ constexpr ContractRow contractRows[] = {
     {"index.mod", Native, Compatibility::Independent},
     {"index.equal", Native, Compatibility::Independent},
     {"index.less", Native, Compatibility::Independent},
+    {"encoding.index_uleb128", Native, Compatibility::Independent},
     {"encoding.fields_be", Arkworks, Compatibility::Nominal, "bls12-381.fr"},
     {"encoding.fields_le", Dalek, Compatibility::Nominal,
      "ristretto255.scalar"},

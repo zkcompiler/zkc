@@ -348,8 +348,14 @@ fn numerical(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Resul
 fn encoding(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
     crate::kernels::encoding::apply(
         &i.binding.declaration().contract,
-        Identity::parse(&i.binding.declaration().arguments[0])
-            .map_err(|_| crate::refused("encoding-domain"))?,
+        i.binding
+            .declaration()
+            .arguments
+            .first()
+            .map(|domain| Identity::parse(domain))
+            .transpose()
+            .map_err(|_| crate::refused("encoding-domain"))?
+            .unwrap_or(Identity::None),
         args,
         i.attributes,
         &b.core.policy,

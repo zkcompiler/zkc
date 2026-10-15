@@ -4,8 +4,8 @@ use serde_json::{Value as Json, json};
 use zkc_backends::*;
 use zkc_runtime::interactive::Identity;
 use zkc_runtime::interactive::{
-    Action, Backend, BackendError, ErrorCode, Frame, FrameExit, Invocation, Limits,
-    OperationBinding, PathElement, Runner, StopKind, Usage, ValueBudget, admit_supplied,
+    Action, Backend, BackendError, ErrorCode, Frame, FrameExit, InstalledKernel, Invocation,
+    Limits, OperationBinding, PathElement, Runner, StopKind, Usage, ValueBudget, admit_supplied,
 };
 
 fn candidate(ports: Json, outputs: Json, body: Json) -> Vec<u8> {
@@ -88,6 +88,7 @@ struct Traced {
     prepared: std::cell::RefCell<Vec<OperationBinding>>,
     substitute: Option<OperationBinding>,
     fail_leave: Option<u64>,
+    nondeterministic: Option<&'static str>,
 }
 impl Traced {
     fn new(inner: NativeBackend) -> Self {
@@ -99,12 +100,28 @@ impl Traced {
             prepared: Default::default(),
             substitute: None,
             fail_leave: None,
+            nondeterministic: None,
         }
+    }
+}
+struct TracedKernel {
+    inner: NativeKernel,
+    deterministic: bool,
+}
+impl InstalledKernel for TracedKernel {
+    fn signature(&self) -> &zkc_runtime::interactive::BoundSignature {
+        self.inner.signature()
+    }
+    fn deterministic(&self) -> bool {
+        self.deterministic
     }
 }
 impl Backend for Traced {
     type Call = ();
     type Checkpoint = ComputationCheckpoint;
+    fn supports_boolean_literals(&self) -> bool {
+        self.inner.supports_boolean_literals()
+    }
     fn computation_checkpoint(&self) -> Option<Self::Checkpoint> {
         self.inner.computation_checkpoint()
     }
@@ -112,13 +129,17 @@ impl Backend for Traced {
         self.inner.replay_computation(before, after)
     }
     type Value = Value;
-    type Kernel = zkc_backends::NativeKernel;
+    type Kernel = TracedKernel;
     fn prepare_binding(&self, b: &OperationBinding) -> Option<Self::Kernel> {
         self.prepared.borrow_mut().push(b.clone());
         if self.blocked.as_deref() == Some(&b.contract) {
             None
         } else {
-            self.inner.prepare_binding(b)
+            self.inner.prepare_binding(b).map(|inner| TracedKernel {
+                deterministic: inner.deterministic()
+                    && self.nondeterministic != Some(b.contract.as_str()),
+                inner,
+            })
         }
     }
     fn validate_value(&self, v: &Value) -> Result<(), BackendError> {
@@ -150,7 +171,7 @@ impl Backend for Traced {
             let other = self.inner.prepare_binding(binding).unwrap();
             return self.inner.apply(&other, i, args);
         }
-        self.inner.apply(kernel, i, args)
+        self.inner.apply(&kernel.inner, i, args)
     }
 }
 fn execute<B: Backend<Value = Value>>(

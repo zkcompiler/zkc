@@ -89,6 +89,7 @@ constexpr ExpectedMapping expected[] = {
      "crypto.exec.encoding_group_decode_cofactor"},
     {"encoding.cryptonote_map", "crypto.exec.encoding_cryptonote_map"},
     {"hash.keccak256", "crypto.exec.keccak256"},
+    {"encoding.index_uleb128", "data.exec.encoding_index_uleb128"},
     {"encoding.fields_be", "crypto.exec.encoding_fields_be"},
     {"encoding.fields_le", "crypto.exec.encoding_fields_le"},
     {"encoding.groups_compressed", "crypto.exec.encoding_groups_compressed"},

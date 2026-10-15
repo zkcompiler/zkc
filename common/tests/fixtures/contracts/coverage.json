@@ -144,6 +144,7 @@
       "pcs.equal"
     ],
     "nullary": [
+      "encoding.index_uleb128",
       "bytes.repeat",
       "bytes.join",
       "bytes.empty",

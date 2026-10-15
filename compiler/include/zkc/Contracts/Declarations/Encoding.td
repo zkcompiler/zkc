@@ -59,3 +59,7 @@ def EncodingGroupsCompressedDomain : ZKC_Root<"T", GroupDomain>;
 def OpEncodingGroupsCompressed : ZKC_Operation<"encoding.groups_compressed", [EncodingGroupsCompressedDomain],
     [ZKC_Apply<TypeGroups, [EncodingGroupsCompressedDomain]>],
     [ZKC_Apply<TypeBytes, []>], []> { int ordinal = 189; }
+
+// Shortest unsigned LEB128 of an entire u64 index; zero emits one byte.
+def OpEncodingIndexUleb128 : ZKC_Operation<"encoding.index_uleb128", [],
+    [ZKC_Apply<TypeIndex, []>], [ZKC_Apply<TypeBytes, []>], []> { int ordinal = 190; }

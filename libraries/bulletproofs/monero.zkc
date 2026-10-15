@@ -108,21 +108,6 @@ pub fn value_base() -> G {
 }
 pub fn mask_base() -> G { return curve::generator<G>(); }
 
-fn varint(value: index) -> Bytes {
-  let mut result = bytes::empty();
-  let mut remaining = value;
-  let mut done = false;
-  for _ in 0..10 {
-    if !done {
-      let final_byte = indices::less(remaining, 128);
-      let byte = indices::remainder(remaining, 128) + if final_byte { 0 } else { 128 };
-      result = bytes::append(result, byte);
-      remaining = indices::divide(remaining, 128);
-      done = final_byte;
-    }
-  }
-  return result;
-}
 fn mapped(preimage: Bytes) -> G {
   return encoding::cryptonote_map(bytes::keccak256(bytes::keccak256(preimage)));
 }
@@ -154,9 +139,9 @@ pub fn generators(size: index) -> ip::Bases<G> {
     let begin = block * 64;
     let end = if indices::less(size, begin + 64) { size } else { begin + 64 };
     let gs = curve::collect(range(begin, end),
-      fn(i) => mapped(bytes::concat(prefix, varint(2 * i + 1))));
+      fn(i) => mapped(bytes::concat(prefix, encoding::index_uleb128(2 * i + 1))));
     let hs = curve::collect(range(begin, end),
-      fn(i) => mapped(bytes::concat(prefix, varint(2 * i))));
+      fn(i) => mapped(bytes::concat(prefix, encoding::index_uleb128(2 * i))));
     left = curve::concat(left, gs);
     right = curve::concat(right, hs);
   }
