@@ -1,4 +1,5 @@
 #include "../lib/Transforms/MathematicalSupport.h"
+#include "../lib/Transforms/RealizationEmission.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
@@ -253,6 +254,95 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
+  for (StringRef field : {"koala-bear", "bls12-381.fr"})
+    for (StringRef body : {"polynomial", "uniform", "state-dependent"})
+      cases.run("pointwise sum " + field + " " + body, [&] {
+        std::string text(sourceText);
+        const std::string original =
+            "   %r = func.call @wrapped(%s,%x) : (!F,!F)->!F";
+        std::string replacement;
+        if (body == "uniform")
+          replacement = R"mlir(
+   %term = "algebra.constant"() {value="7"} : ()->!F
+   %r = algebra.field_add %s,%term : (!F,!F)->!F
+)mlir";
+        else
+          replacement = R"mlir(
+   %p = func.call @wrapped(%x,%x) : (!F,!F)->!F
+   %term = algebra.field_add %p,%x : (!F,!F)->!F
+   %r = algebra.field_add %s,%term : (!F,!F)->!F
+)mlir";
+        if (body == "state-dependent") {
+          auto at = replacement.find("%p,%x");
+          replacement.replace(at, 5, "%p,%s");
+        }
+        text.replace(text.find(original), original.size(), replacement);
+        size_t at = 0;
+        while ((at = text.find("koala-bear", at)) != std::string::npos) {
+          text.replace(at, 10, field.str());
+          at += field.size();
+        }
+        auto source = parseSourceString<ModuleOp>(text, &context);
+        require(bool(source) && succeeded(verify(*source)), "source refused");
+        RealizationWork work;
+        auto candidate = emit(*source, work);
+        require(hasLoop(selected(*candidate)) == (body == "state-dependent"),
+                "pointwise state independence was not respected");
+        if (body == "state-dependent")
+          return;
+        require(compare(*source, *candidate),
+                "pointwise candidate did not independently compare");
+        RealizationWork disabled;
+        require(hasLoop(selected(*emit(*source, disabled, false))),
+                "disabled selection did not retain ordered execution");
+        RealizationWork bounded;
+        bounded.lanes = 0;
+        require(hasLoop(selected(*emit(*source, bounded))),
+                "lane capacity lost checked ordered fallback");
+        auto malformed = copy(*candidate);
+        bool changed = false;
+        selected(*malformed).walk([&](Operation *operation) {
+          if (!changed &&
+              operation->getName().getStringRef() == "algebra.exec.field_add") {
+            operation->setOperand(0, operation->getOperand(1));
+            changed = true;
+          }
+        });
+        require(changed && !compare(*source, *malformed),
+                "wrong seed survived independent pointwise comparison");
+        malformed = copy(*candidate);
+        changed = false;
+        selected(*malformed).walk([&](Operation *operation) {
+          if (body == "polynomial" && !changed &&
+              operation->getName().getStringRef() ==
+                  "algebra.exec.vector_add") {
+            operation->setOperand(1, operation->getOperand(0));
+            changed = true;
+          }
+        });
+        if (body == "polynomial")
+          require(changed && !compare(*source, *malformed),
+                  "wrong pointwise term survived independent comparison");
+        if (body == "uniform") {
+          malformed = copy(*candidate);
+          Operation *fill = nullptr;
+          selected(*malformed).walk([&](Operation *operation) {
+            if (operation->getName().getStringRef() ==
+                "algebra.exec.vector_fill")
+              fill = operation;
+          });
+          require(fill != nullptr, "uniform term did not use a broadcast");
+          OpBuilder builder(fill);
+          RealizationEmitter emitter(unit(*malformed), "wrong_cardinality_");
+          auto *one = emitter.emit(builder, fill->getLoc(), "wrong_cardinality",
+                                   {"index.constant", {}, ""}, {},
+                                   fill->getOperand(1).getType(), {"1"});
+          fill->setOperand(1, one->getResult(0));
+          require(succeeded(verify(*malformed)) &&
+                      !compare(*source, *malformed),
+                  "broadcast lost its admitted cardinality");
+        }
+      });
   cases.run("packed scalar projections select a checked dot", [&] {
     std::string text(indexedSourceText);
     auto product = text.find("   %p = algebra.field_multiply %x,%y");

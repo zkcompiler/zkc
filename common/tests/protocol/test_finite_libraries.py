@@ -11,6 +11,82 @@ ROOT = Path(__file__).resolve().parents[3]
 MODULES = library_modules('zkc')
 
 
+@pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--no-finite-bulk']])
+def test_pointwise_sums_preserve_seeds_cardinality_and_captures(
+    toolchain, journal, directory, flags,
+):
+    source = '''module sample;
+use zkc::vector::{Vector,indexing []};
+use zkc::finite as finite;
+use zkc::finite_math as total;
+use zkc::finite_domain as domains;
+domain F=field("koala-bear");
+math fn indexed_sum(xs:Vector<F>)->F{
+ return total::sum(zkc::vector::indices(xs),fn(i)=>xs[i]*xs[i]+xs[i]);
+}
+fn work(xs:Vector<F>,unused:Vector<F>,seed:F,scale:F)->(F,F,F,F){
+ let rows=domains::zip(xs,unused);
+ let polynomial=finite::fold(rows,seed,fn(state,(x,_))=>state+(x*x+x));
+ let uniform=finite::fold(rows,seed,fn(state,_)=>state+scale*scale);
+ let indexed=indexed_sum(xs);
+ let captured=finite::sum(rows,fn((x,_))=>(x-scale)*(x+scale)+scale);
+ return(polynomial,uniform,indexed,captured);
+}
+protocol Run roles(P)(xs:Vector<F>@P,unused:Vector<F>@P,seed:F@P,scale:F@P)
+ ->(result:(F,F,F,F)@P){return work(xs,unused,seed,scale);}run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
+    modulus = 2**31 - 2**24 + 1
+    for n in (0, 1, 17):
+        xs = [(i*73+modulus-1) % modulus for i in range(n)]
+        seed, scale = modulus-7, modulus-3
+        polynomial = sum(x*x+x for x in xs)
+        expected = [seed+polynomial, seed+n*scale*scale, polynomial,
+                    sum((x-scale)*(x+scale)+scale for x in xs)]
+        inputs = {'xs': list(map(str, xs)), 'unused': ['9']*n,
+                  'seed': str(seed), 'scale': str(scale)}
+        assert entry.run(f'rows-{n}', inputs)['result'] == [str(x % modulus) for x in expected]
+        iterations = json.loads(journal.last.stdout)['execution']['roles'][0]['usage']['iterations']
+        assert iterations == (4*n if '--no-finite-bulk' in flags else 0)
+        refused = entry.run(f'mismatched-{n}', inputs | {'unused': ['9']*(n+1)},
+                            refuses='entry-run-incomplete')
+        assert 'rejected:require' in json.dumps(refused)
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--no-finite-bulk']])
+def test_pointwise_reduction_keeps_partial_and_recurrent_bodies_ordered(
+    toolchain, journal, directory, flags,
+):
+    source = '''module sample;
+use zkc::vector::{Vector};
+use zkc::finite as finite;
+domain F=field("koala-bear");
+fn inverse(x:F)->F=primitive("field.inverse");
+fn work(xs:Vector<F>,seed:F,enabled:bool)->(F,F){
+ let recurrent=finite::fold(xs,seed,fn(state,x)=>state+(state*x+x));
+ let partial=finite::fold(xs,seed,fn(state,x)=>{
+   let unused=inverse(x);
+   require enabled;
+   state+(x*x+x)
+ });
+ return(recurrent,partial);
+}
+protocol Run roles(P)(xs:Vector<F>@P,seed:F@P,enabled:bool@P)
+ ->(result:(F,F)@P){return work(xs,seed,enabled);}run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
+    assert entry.run('empty', {'xs': [], 'seed': '7', 'enabled': False})['result'] == ['7', '7']
+    assert entry.run('values', {'xs': ['2', '3'], 'seed': '7', 'enabled': True})['result'] == ['95', '25']
+    report = json.loads(journal.last.stdout)
+    assert report['execution']['roles'][0]['usage']['iterations'] == 4
+    inverse = entry.run('unused-partial', {'xs': ['0'], 'seed': '7', 'enabled': False},
+                        refuses='entry-run-incomplete')
+    assert 'refused:zero-inverse' in json.dumps(inverse)
+    stopped = entry.run('explicit-stop', {'xs': ['1'], 'seed': '7', 'enabled': False},
+                        refuses='entry-run-incomplete')
+    assert stopped['execution']['roles'][0]['after'][1]['cause'][0] == 'explicit'
+
+
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
 @pytest.mark.parametrize('implicit', [False, True])
 def test_named_finite_libraries_and_explicit_combiner(toolchain, journal, directory, flags, implicit):

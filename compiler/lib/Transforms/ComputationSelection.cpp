@@ -81,6 +81,7 @@ ComputationSelection selectComputation(finite::Computation computation,
     return selection;
   }
   if (!selection.equations.bilinear && !selection.equations.reduction &&
+      !selection.equations.pointwiseReduction &&
       !selection.equations.elementwise) {
     return selection;
   }
@@ -107,6 +108,15 @@ ComputationSelection selectComputation(finite::Computation computation,
         selectReduction(*selection.equations.reduction, recipes);
     if (selection.reduction)
       selection.kind = RealizationKind::Reduction;
+  } else if (selection.equations.pointwiseReduction) {
+    const auto &equation = *selection.equations.pointwiseReduction;
+    if (laneRecipesAvailable(computation.helper->getRegion(0).front(),
+                             equation.formula, recipes)) {
+      selection.pointwiseReduction =
+          recipes.reduction(equation.combine, {}, ReductionForm::Direct);
+      if (selection.pointwiseReduction)
+        selection.kind = RealizationKind::PointwiseReduction;
+    }
   } else if (selection.equations.elementwise &&
              laneRecipesAvailable(computation.helper->getRegion(0).front(),
                                   *selection.equations.elementwise, recipes))

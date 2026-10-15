@@ -10,7 +10,13 @@ namespace zkc::mathematical {
 bool canReplacePayload(const finite::ComputationView &view);
 bool canReplaceNestedContraction(const finite::ComputationView &view);
 
-enum class RealizationKind { Ordered, Bilinear, Reduction, Elementwise };
+enum class RealizationKind {
+  Ordered,
+  Bilinear,
+  Reduction,
+  PointwiseReduction,
+  Elementwise
+};
 struct SelectedReduction {
   const ReductionRecipe *recipe = nullptr;
   llvm::SmallVector<unsigned> inputs;
@@ -24,6 +30,7 @@ struct ComputationSelection {
   std::optional<finite::ComputationView> view;
   ComputationEquations equations;
   std::optional<SelectedReduction> reduction;
+  const ReductionRecipe *pointwiseReduction = nullptr;
   const MatrixContractionRecipe *matrix = nullptr;
 };
 /// Choose among installed logical algorithms; analysis supplies legal
