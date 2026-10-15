@@ -1,5 +1,37 @@
 # PIR semantics
 
+## Local structured computations
+
+`Source.Dialect` declares operand types, ordered result types and closed region
+input/output signatures. `Region` binds ordered result tuples before the retained
+caller context. The empty result list is valid and does not remove an operation.
+`bind` stores its continuation once. Region bodies see only declared inputs;
+operation operands and contracts explicitly transmit captured values.
+
+`RegionMeaning` interprets operations and effectful callbacks into `PIR.Proc`.
+Its contracts determine callback execution and failure behavior. Pointwise process
+equality lifts through nested bodies and shared suffixes. Translating effects
+requires the explicit operation compatibility law in `RegionMeaning.Translation`.
+`Region.Total` is a sufficient predicate over this same syntax: its per-operation
+premises and callback premises prove immediate return without interactions or
+stopping. Native memory annotations do not establish this property.
+
+`RegionDecoding` checks reference indices, result annotations, intermediate bind
+types and exact closed region signatures, including dormant bodies. Typed erasure
+roundtrips for all regions; successful formation preserves all raw structure.
+This establishes structural formation in Lean; the
+external operation resolver and native-to-Lean correspondence remain separate.
+The existing single-result `Source.Program` remains an independent reference
+profile with the exact bridge `Program.denote_toRegion`. The participant profile
+and admitted scalar imports have the corresponding `Common` bridges, retaining
+the final output-role restriction as well as all actions and stops.
+
+`Source.Finite` defines ordered domain admission and open folds as semantic
+helpers. Admission runs before iteration, even when a loop is empty or a domain
+is otherwise unused. Zip checks both factors before their lengths; product checks
+both factors even for an empty outer list. Its replacement laws preserve the
+first stop and retain admission around any pure mathematical equation.
+
 ## Mathematical and participant layers
 
 A `Language` has sorts and typed operations. A mathematical `Meaning` assigns a

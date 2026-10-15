@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Source.Common.Vocabulary
-public import Zkc.Source.Decoding
+public import Zkc.Source.ContextDecoding
 
 @[expose] public section
 

@@ -12,6 +12,19 @@ assumptions; it never invents independent randomness or multiplies error bounds.
 ## Package boundaries
 
 `Zkc.Semantics` defines effects, execution, refinement and continuation laws.
+`Zkc.Source.Structure` defines the canonical local compiler carrier: intrinsically
+typed regions with ordered result lists, closed region inputs and shared binding.
+`RegionMeaning` supplies operation contracts; its interpretation returns the same
+open processes. Contextual equality, semantic totality and explicitly compatible
+higher-order effect translation are reusable laws over this carrier.
+`ScalarRegion` bridges the maintained single-result `Source.Program` reference
+profile. Mathematical projection directly produces canonical regions.
+`Common.Region` lowers the participant profile and admitted scalar programs with
+proved full-process equations; their bounded contracts and security consumers
+remain intact.
+See [structured computations](design/structured-computations.md) for ownership,
+formation, examples and the native correspondence boundary.
+
 `Zkc.Source.Mathematical` supplies a typed language/meaning interface. Role-local
 programs use that interface and typed services. `Zkc.Source.Common` instantiates
 a deliberately bounded native scalar profile. A mathematical dialect can supply

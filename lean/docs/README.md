@@ -14,6 +14,8 @@ that all native behavior already has a Lean model.
 - [Ring expressions](spec/ring-expressions.md): retained Clean/AIR connection.
 - [Support](support.md): theorem scope, assumptions and tested boundaries.
 - [Dependencies](dependencies.md): exact pins and compatibility decisions.
+- [Structured computations](design/structured-computations.md): canonical multi-result
+  regions, explicit captures, operation contracts and reference-profile bridges.
 - [Research design](design/protocol-verification.md): questions, choices and
   evaluation criteria for extending the implemented architecture.
 - [Native bridge](../bridges/common/README.md): differential and proof-request tests.

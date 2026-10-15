@@ -15,10 +15,12 @@ independent execution and negative controls.
 
 ## Architecture
 
-- `Zkc`: typed mathematics and role-local PIR semantics, exact refinement,
+- `Zkc`: typed mathematics and role-local PIR semantics, a shared multi-result
+  [structured carrier](docs/design/structured-computations.md), exact refinement,
   specification certificates, protocol contracts and finite security models.
 - `ZkcExamples`: actual imported programs, equivalent source forms, composed
-  residual/opening clients and a downstream custom property.
+  residual/opening clients, effectful structured endpoint examples and a
+  downstream custom property.
 - `ZkcTools`: executable scalar reference, header parser and declaration audit.
 - [Security integration](integrations/arklib/README.md): optional ArkLib/VCVio
   consumers. The core does not import these libraries.

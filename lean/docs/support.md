@@ -6,6 +6,8 @@ They do not certify arbitrary DSL programs or the full native lowering pipeline.
 | Surface | Maintained claim | Explicit boundary |
 |---|---|---|
 | Core execution | Typed mathematical/role-local programs; exact process refinement; shared-state sequential composition; machine prefix/resumption and finite-process completion | General native loops and external waiting are not imported by the scalar profile |
+| Structured source | Multi-result closed callbacks and lexical binding; strict formation in both directions; scalar/mathematical/participant/import bridges; contextual equality, totality and compatible effect translation | Independent Lean carrier; no general native structured importer or native transformation theorem |
+| Ordered finite semantics | Admission-preserving effectful folds, product/zip laws and conditional pure replacement | Evaluated mathematical domains; native capacity, failure diagnostics and domain lowering require their own correspondence |
 | Scalar import | Checked admission and source-specific open-process correspondence for actual exports | Native exporter, interface resolver and constructor rendering are reviewed/tested, not universally proved |
 | Schnorr | Imported verifier completeness, two-transcript special soundness and custom invalid-equation rejection | Algebraic group/module interpretation; no discrete-log hardness reduction or whole native prover proof |
 | VCVio Schnorr | Equality for every event on commitment, fixed honest challenge, response and actual verifier outcome under uniform nonce/response sampling | One-session honest-verifier simulation; no malicious-verifier, concurrent or Fiat–Shamir theorem |
