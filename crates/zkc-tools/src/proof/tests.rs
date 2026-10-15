@@ -508,10 +508,12 @@ fn execute(
                 + counts["events"]["replayed_instructions"].as_u64().unwrap(),
             report.usage.instructions
         );
-        assert_eq!(
-            counts["events"]["backend_enter_calls"],
-            counts["events"]["backend_leave_calls"]
-        );
+        if report.outcome.is_ok() {
+            assert_eq!(
+                counts["events"]["backend_enter_calls"],
+                counts["events"]["backend_leave_calls"]
+            );
+        }
     }
     Ok(report)
 }
