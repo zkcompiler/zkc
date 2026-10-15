@@ -294,8 +294,12 @@ proofs do not establish general compiler pass correctness.
 [Formal support](../lean/docs/support.md) states exact experiments and premises.
 The independent [multilinear Sumcheck foundation](../lean/docs/spec/multilinear-sumcheck.md)
 proves arbitrary-length table restriction, endpoint-message and residual-to-full
-discharge laws, including empty rounds. It adds no structured protocol import,
-native correspondence or multilinear security theorem.
+discharge laws, including empty rounds. It adds no structured protocol import
+or native correspondence. The [optional multilinear security adapter](../lean/docs/spec/multilinear-sumcheck-security.md)
+connects these contracts to ArkLib's causal degree-one interaction, proving
+complete `n / |F|` and partial residual `k / |F|` bounds and honest completeness.
+These results bind the verifier's fixed table and fresh uniform mathematical
+challenges; they do not yet transfer to the native library execution.
 Full DSL/compiler/runtime correspondence, production arithmetic/sampling,
 backend correctness and complete protocol security remain open.
 [Assurance](assurance.md) distinguishes these evidence boundaries.

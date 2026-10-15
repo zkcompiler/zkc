@@ -15,7 +15,10 @@ that all native behavior already has a Lean model.
   finite folds and closed Local control.
 - [Ring expressions](spec/ring-expressions.md): retained Clean/AIR connection.
 - [Multilinear Sumcheck](spec/multilinear-sumcheck.md): independent ordered table,
-  endpoint-message and residual/discharge laws; no source or security connection.
+  endpoint-message and residual/discharge laws.
+- [Multilinear interactive security](spec/multilinear-sumcheck-security.md): optional
+  ArkLib degree-one adapters, complete/residual bounds and honest completeness;
+  no structured source or native correspondence.
 - [Support](support.md): theorem scope, assumptions and tested boundaries.
 - [Dependencies](dependencies.md): exact pins and compatibility decisions.
 - [Structured computations](design/structured-computations.md): canonical multi-result

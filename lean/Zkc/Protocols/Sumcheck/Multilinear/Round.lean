@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Polynomial.Multilinear.Restriction
+public import Zkc.Polynomial.Multilinear.Marginal
 public import Mathlib.Tactic.NoncommRing
 
 @[expose] public section
@@ -41,6 +41,13 @@ theorem evaluate_honestMessage [Ring F] (table : Table F (n + 1)) (r : F) :
     evaluate (honestMessage table) r = booleanSum (fixFirst table r) :=
   (booleanSum_fixFirst table r).symm
 
+theorem honestMessage_sumRemaining [Add F] {remaining count : Nat} (table : Table F (remaining + (count + 1))) :
+    honestMessage (sumRemaining remaining (count + 1) table) = honestMessage table := by
+  change (booleanSum (sumRemaining remaining count (half table false)),
+    booleanSum (sumRemaining remaining count (half table true))) = _
+  rw [booleanSum_sumRemaining, booleanSum_sumRemaining]
+  rfl
+
 /-- Each role uses its own challenge. Faithful message delivery alone does not
 identify the verifier's next claim with the prover's residual sum. -/
 theorem role_local_update [Ring F] (table : Table F (n + 1))
@@ -64,7 +71,7 @@ theorem honest_update [Ring F] (table : Table F (n + 1)) (received : Message F)
   subst proverChallenge
   exact (evaluate_honestMessage table verifierChallenge).symm
 
-/-- The next optional adapter can use `C a0 + C (a1-a0) * X`.
+/-- The optional polynomial adapter uses `C a0 + C (a1-a0) * X`.
 This equation is independent of any polynomial/security package. -/
 theorem evaluate_affine [Ring F] (message : Message F) (r : F) :
     evaluate message r = message.1 + r * (message.2 - message.1) := by

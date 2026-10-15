@@ -3,6 +3,13 @@ import ZkcSecurity.ArkLib.Sumcheck.Bridge
 import ZkcSecurity.ArkLib.Sumcheck.Domain
 import ZkcSecurity.ArkLib.Sumcheck.Execution
 import ZkcSecurity.ArkLib.Sumcheck.Message
+import ZkcSecurity.ArkLib.Sumcheck.Multilinear.Completeness
+import ZkcSecurity.ArkLib.Sumcheck.Multilinear.Message
+import ZkcSecurity.ArkLib.Sumcheck.Multilinear.Protocol
+import ZkcSecurity.ArkLib.Sumcheck.Multilinear.Residual
+import ZkcSecurity.ArkLib.Sumcheck.Multilinear.Soundness
+import ZkcSecurity.ArkLib.Sumcheck.Multilinear.Table
+import ZkcSecurity.ArkLib.Sumcheck.Multilinear
 import ZkcSecurity.ArkLib.Sumcheck.Soundness
 import ZkcSecurity.ArkLib.Sumcheck.Statement
 import ZkcSecurity.ArkLib.Sumcheck.Strategy
@@ -12,3 +19,4 @@ import ZkcSecurity.Examples.Sumcheck
 import ZkcSecurity.Examples.Variants
 import ZkcSecurity.VCVio.Schnorr
 import TestsSecurity.Compatibility
+import TestsSecurity.MultilinearSumcheck

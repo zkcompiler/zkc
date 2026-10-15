@@ -34,6 +34,15 @@ example : extension 2 table ![2, 0] ≠ 9 := by decide +kernel
 example : ResidualClaim (n := 2) 0 table Fin.elim0 6 := by unfold ResidualClaim; decide +kernel
 example : check [0, 1, 2, 3] (Fin.elim0 : Fin 0 → ℚ) 6 = false := by decide +kernel
 
+-- Marginalizing the suffix preserves the ordered residual truth in the core.
+example : extension 1 (sumRemaining 1 1 table) ![2] = 9 := by
+  rw [extension_sumRemaining]
+  decide +kernel
+
+example : booleanSum (sumRemaining 2 0 table) = 6 := by
+  rw [booleanSum_sumRemaining]
+  decide +kernel
+
 -- Faithful round messages do not identify independent challenge deliveries.
 example : evaluate (honestMessage table) 2 = 9 := by decide +kernel
 example : booleanSum (fixFirst table 7) = 29 := by decide +kernel

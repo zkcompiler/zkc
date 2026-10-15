@@ -21,8 +21,10 @@ prove exact original/prepared model equality for authored response and claim
 computations using checked body contracts and a reusable inlining law.
 The [multilinear Sumcheck foundation](docs/spec/multilinear-sumcheck.md) separately
 proves ordered table restriction, endpoint-message and residual/discharge laws
-for arbitrary round counts. Its model is independent of source import and the
-optional degree-two Sumcheck security examples.
+for arbitrary round counts. The [optional multilinear security adapter](docs/spec/multilinear-sumcheck-security.md)
+proves complete and residual interactive bounds through ArkLib's degree-one
+protocol. Both remain independent of structured source import and zkc native
+execution; the imported degree-two examples retain their separate scope.
 
 ## Architecture
 

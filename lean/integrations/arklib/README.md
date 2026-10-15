@@ -13,6 +13,14 @@ ArkLib's native interactive theorem to actual PIR execution; `randomized_soundne
 allows an arbitrary private distribution of causal strategies. The bound is
 `4 / |F|` for the selected two-round quadratic public-polynomial verifier.
 
+[`ArkLib/Sumcheck/Multilinear`](../../docs/spec/multilinear-sumcheck-security.md)
+separately connects the general MSB table and endpoint contracts to degree-one
+ArkLib messages and its causal `Native.Core` interaction. It proves complete
+`n / |F|` and partial residual `k / |F|` bounds for arbitrary effectful prover
+strategies, plus honest completeness for arbitrary challenges. Its all-point
+table-oracle realization and checked public-table observation are proved.
+This adapter has no PIR, structured-source or zkc native correspondence.
+
 `VCVio/Schnorr` proves perfect honest-verifier simulation of the public transcript
 and actual verifier result. The simulator uses only the public key and a uniform
 response. Challenges are fixed independently of nonces. It does not prove
@@ -23,6 +31,7 @@ Only `propext`, `Classical.choice` and `Quot.sound` are allowed. Unrelated upstr
 `sorry` declarations are not claims of this package. `clients/ArkLib.lean` in the
 core package exercises reuse from an independent Lake package.
 
-The Python [proof-request bridge](../../bridges/common/README.md) exposes these
-consumers through explicit requests. Neither successful sampling tests nor the
+The Python [proof-request bridge](../../bridges/common/README.md) exposes the
+imported scalar consumers through explicit requests. The multilinear API is
+currently a standalone mathematical consumer. Neither successful sampling tests nor the
 mere presence of a library dependency replaces the connection proofs.

@@ -4,6 +4,7 @@ import Zkc.Algebra.RingExpression
 import Zkc.Polynomial.BooleanCube
 import Zkc.Polynomial.Coordinates
 import Zkc.Polynomial.Layout
+import Zkc.Polynomial.Multilinear.Marginal
 import Zkc.Polynomial.Multilinear.Prefix
 import Zkc.Polynomial.Multilinear.Restriction
 import Zkc.Polynomial.Multilinear

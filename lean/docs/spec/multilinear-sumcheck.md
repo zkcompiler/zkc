@@ -14,6 +14,7 @@ The existing quadratic Sumcheck and factor-opening contracts remain separate.
 |---|---|
 | `Zkc.Polynomial.Multilinear.Restriction` | Existing `Table`, ordered `half` and `booleanSum`, `fixFirst`, exact-length `ofList?`, extension and vector-sum laws |
 | `Zkc.Polynomial.Multilinear.Prefix` | `fixPrefix`, ordered extension and remaining-sum laws, complete restriction |
+| `Zkc.Polynomial.Multilinear.Marginal` | `sumRemaining`, total preservation, commutation with restriction, extension as residual sum |
 | `Zkc.Protocols.Sumcheck.Multilinear.Round` | `Message = F × F`, `boundary`, `evaluate`, `honestMessage`, explicit delivery laws |
 | `Zkc.Protocols.Sumcheck.Multilinear.Reduction` | `ResidualClaim`, mathematical `check`, complete discharge and public-input agreement |
 
@@ -55,6 +56,15 @@ The equivalence to the source's right-multiplication helper and the extension
 laws use a commutative ring, matching the existing `extension` assumption.
 The executable mathematical checker additionally needs decidable equality.
 No foundation theorem requires a finite field, characteristic bound or sampling.
+
+`sumRemaining n k table` retains the first `k` Boolean coordinates and sums
+the remaining `n` coordinates using the existing concatenation. Its total
+equals the original total (`booleanSum_sumRemaining`, requiring only addition).
+`fixFirst_sumRemaining` commutes with restriction over a ring, and
+`extension_sumRemaining` identifies its extension at `point` with
+`booleanSum (fixPrefix k table point)` over a commutative ring. The round law
+`honestMessage_sumRemaining` preserves the endpoint pair using only addition.
+These are core table laws; no security backend is required.
 
 For the honest endpoint pair `a = honestMessage T`:
 
@@ -119,38 +129,28 @@ point appends, service identity and successor state. Full source import still
 needs vector split/sum/map, shape/index arithmetic, helper composition, folds,
 open operations and repetition. No whole-Sumcheck kernel is assumed here.
 
-## Next optional integration
+## Optional integration and next source seam
+
+The [optional multilinear security package](multilinear-sumcheck-security.md)
+now proves the degree-one endpoint interpretation, explicit Boolean-assignment
+MLE/table agreement, ordered restriction and table-oracle realization. It uses
+ArkLib `Native.Core.execute_transport` with arbitrary effectful continuations
+and public abort, then applies `Native.execute_soundness` for the complete
+`N / |F|` bound. Honest completeness allows arbitrary challenges. A proved
+marginal table gives partial residual soundness `k / |F|` without a new partial
+executor or padding the challenge point. These security results belong to the
+optional package; core imports remain dependency independent.
 
 The owning optional manifest pins ArkLib
 `db7005f84a9dbad7ff2abbbb4e8feeeac6f4dfd8` and VCVio
-`d606eab018ab87bf4a0a6ac7b6d2da4fedfa53b0`. Core imports remain independent.
-The next package should:
+`d606eab018ab87bf4a0a6ac7b6d2da4fedfa53b0`. Its exact quantitative assumptions and
+oracle/observation boundaries are specified in the linked document.
 
-1. Map `Message F` to `C a0 + C (a1-a0) * X`, prove degree at most one,
-   pointwise evaluation equality using `evaluate_affine`, and Boolean boundary
-   equality using `evaluate_zero`/`evaluate_one`. This needs no division by two.
-2. Realize `Table F N` using ArkLib's `MvPolynomial.MLE` on explicitly converted
-   Boolean assignments. Prove agreement with `extension`, `booleanSum`, and
-   prefix restriction. Do not assume `MLE'`'s flat-index convention matches
-   this package's MSB order. `MLE_mem_restrictDegree` supplies the upstream
-   per-coordinate degree-one fact once the realization is connected.
-3. Instantiate `Sumcheck.Interaction.Native.Core` with `M = F × F` and this
-   `evaluate`. `Core.execute_transport` in `Interaction/Protocol.lean:290–303`
-   requires pointwise evaluation equality and equality of original-oracle
-   views. It retains arbitrary effectful prover continuations, including the
-   response to public abort. Connect the selected acceptance event through the
-   forthcoming `PIR.Proc` interface; do not equate unlike raw traces.
-4. Apply `Native.execute_soundness` in
-   `Interaction/ProtocolSoundness.lean:201–214` only after those connections.
-   It requires `[Field F] [Fintype F] [DecidableEq F] [SampleableType F]`, an
-   injective Boolean domain, a fixed realized degree-bounded original oracle,
-   a false initial relation, `start + count = N`, and the actual causal prover
-   strategy with reached fresh uniform challenges. Setting degree one gives
-   `count / |F|`. Partial reduction needs a separate induction using
-   `MultivariateRound.uniform_successor_soundness` (:40–49); the full theorem
-   alone is not a partial-reduction result.
-
-None of these security connections is a theorem of this foundation package.
+The remaining source seam is an explicit `PIR.Proc` contract and handler theorem
+for the actual two ordered scalar receives, boundary guard, reached fresh
+challenge, role-local delivery, counts and stops. The selected observation must
+agree with the optional experiment; unlike raw traces must not be equated.
+This foundation and its optional consumer do not establish that correspondence.
 
 ## Regression coverage
 

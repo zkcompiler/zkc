@@ -16,7 +16,8 @@ They do not certify arbitrary DSL programs or the full native lowering pipeline.
 | Structured Schnorr | Actual Interactive, Helpers and Reordered source contracts over arbitrary scalar/group values; exact prover process for Interactive; EarlyChallenge contract refutation | Named helpers and dormant formula retained; no inferred relation binding, native BLS/RNG correspondence or availability soundness theorem |
 | VCVio Schnorr | Equality for every event on commitment, fixed honest challenge, response and actual verifier outcome under uniform nonce/response sampling | Handwritten honest-prover strategy with the imported verifier outcome; no compiled-prover correspondence, malicious-verifier, concurrent or Fiat–Shamir theorem |
 | ArkLib Sumcheck | Actual imported two-round degree-two verifier acceptance on a false public sum claim is at most `4 / |F|` | Finite field; reached fresh uniform queries; causal coefficient-message strategies, including arbitrary private probabilistic mixtures chosen before verifier draws |
-| [Multilinear Sumcheck mathematics](spec/multilinear-sumcheck.md) | Arbitrary-length ordered prefix restriction, endpoint-message laws, explicit delivery agreements, residual truth and complete public-table discharge, including zero rounds | Independent scalar-table model over rings; no structured source import, native correspondence, process-order theorem or degree-one security adapter |
+| [Multilinear Sumcheck mathematics](spec/multilinear-sumcheck.md) | Arbitrary-length ordered prefix restriction and suffix marginalization, endpoint-message laws, explicit delivery agreements, residual truth and complete public-table discharge, including zero rounds | Independent scalar-table model over rings; core has no optional security dependencies |
+| [Multilinear interactive security](spec/multilinear-sumcheck-security.md) | Complete `n / |F|` and partial residual `k / |F|` bounds, degree-one endpoint/table transport, checked public-table observation, and honest completeness | Fixed verifier table/false initial sum; finite field and fresh uniform challenges; arbitrary causal effectful ArkLib strategies; exact original or derived marginal oracle; no PIR/source/native correspondence |
 | Public factor openings | Imported composed verifier bound `4 / |F|`; generic conditional bound `4 / |F| + epsilon` | Public polynomial factor checks prove zero opening error; PCS binding/extractability needs a separate opening theorem |
 | Authored DSL target | Imported Schnorr relation denotes discrete-log; two accepting imported verifier transcripts yield a witness accepted by that relation | Bounded scalar formula adapter and tested interface selector binding |
 | Clean | Admitted lookup/channel-free flat AIR export preserves constraints and selected source specification; native control fixture retained | Finite rows/field/ring interpretation; native agreement is differential, not decoder correctness |
@@ -32,8 +33,11 @@ relation bodies, wrong subjects and forbidden axioms.
 The optional security package invokes ArkLib's
 `Sumcheck.Interaction.Native.execute_soundness`. Its adapter constructs degree-
 bounded messages and the public polynomial oracle, proves all evaluation/domain
-laws and equality of accepted-event computations. No source-specific connection
-law is assumed. VCVio's uniform-event transport proves Schnorr's simulator law.
+laws and equality of accepted-event computations. The quadratic adapter connects
+an imported scalar verifier; the arbitrary-round multilinear adapter connects
+independent table contracts and ArkLib's causal interaction, with source and
+native correspondence still separate. VCVio's uniform-event transport proves
+Schnorr's simulator law.
 Some unrelated upstream declarations contain `sorry`; the transitive axioms of
 owned claimed results are audited separately and must use only Lean's standard
 three axioms. A build of all upstream sources is not asserted.

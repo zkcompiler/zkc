@@ -54,3 +54,12 @@ theorem multilinearResidualMeaning {F : Type} [CommRing F] {n k : Nat}
       Zkc.Polynomial.cubeSum n (fun suffix => Zkc.Polynomial.Multilinear.extension
         (n + k) table (Zkc.Polynomial.Quadratic.point k point suffix)) = claim :=
   Zkc.Protocols.Sumcheck.Multilinear.residualClaim_iff table point claim
+
+/-- Marginal-table laws are available to core-only consumers. -/
+theorem multilinearMarginalMeaning {F : Type} [CommRing F] {n k : Nat}
+    (table : Zkc.Polynomial.Multilinear.Table F (n + k)) (point : Fin k → F) :
+    Zkc.Polynomial.Multilinear.extension k
+      (Zkc.Polynomial.Multilinear.sumRemaining n k table) point =
+      Zkc.Polynomial.Multilinear.booleanSum
+        (Zkc.Polynomial.Multilinear.fixPrefix k table point) :=
+  Zkc.Polynomial.Multilinear.extension_sumRemaining table point
