@@ -14,7 +14,8 @@ The [native bridge](bridges/common/README.md) tests the selected boundary with
 independent execution and negative controls.
 The separate [structured bridge](bridges/structured/README.md) retains shared
 helpers, multiple results, finite folds and Local control in a bounded immutable
-single-participant profile.
+single-participant profile, with proved declaration linking and compositional
+helper-table laws.
 
 ## Architecture
 

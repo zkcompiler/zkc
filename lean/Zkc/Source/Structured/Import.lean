@@ -17,9 +17,20 @@ structure CheckedDefinition where
   body : Region dialect inputs outputs
   formed : raw.elaborate (dialect := dialect) inputs outputs = .ok body
 
+def CheckedDefinition.helper (definition : CheckedDefinition) : Helper :=
+  ⟨definition.name, definition.inputs, definition.outputs⟩
+
 theorem CheckedDefinition.exactBody (definition : CheckedDefinition) :
     definition.body.erase = definition.raw :=
   RawRegion.erase_of_elaborate (dialect := dialect) definition.raw definition.formed
+
+/-- Recover a typed body from its exact raw tree without unfolding admission. -/
+theorem CheckedDefinition.body_eq_of_raw (definition : CheckedDefinition)
+    (body : Region dialect definition.inputs definition.outputs)
+    (same : definition.raw = body.erase) : definition.body = body := by
+  have formed := definition.formed
+  rw [same, Region.elaborate_erase (dialect := dialect) body] at formed
+  exact (Except.ok.inj formed).symm
 
 /-- Dependency authority is the formed operation tree, not separately recorded
 names. This includes references in every nested callback and suffix. -/
@@ -75,9 +86,32 @@ def orderDefinitions : Nat → List CheckedDefinition → List OrderedDefinition
     orderDefinitions remaining (pending.filter (·.name != next.name))
       (ordered ++ [⟨next, depth⟩])
 
+/-- Every reference resolves with its complete signature in the strict prefix.
+Names remain unique even for declarations with different types. The traversal
+also checks references in dormant callbacks through `CheckedDefinition.helpers`.
+-/
+def DeclarationsLinked (available : List Helper) : List CheckedDefinition → Prop
+  | [] => True
+  | definition :: rest =>
+      definition.name ∉ available.map (·.name) ∧
+      (∀ helper ∈ definition.helpers, helper ∈ available) ∧
+      DeclarationsLinked (definition.helper :: available) rest
+
+instance declarationsLinkedDecidable (available : List Helper) (definitions : List CheckedDefinition) :
+    Decidable (DeclarationsLinked available definitions) :=
+  match definitions with
+  | [] => isTrue trivial
+  | definition :: rest =>
+    let _ := declarationsLinkedDecidable (definition.helper :: available) rest
+    inferInstanceAs (Decidable
+      (definition.name ∉ available.map (·.name) ∧
+       (∀ helper ∈ definition.helpers, helper ∈ available) ∧
+       DeclarationsLinked (definition.helper :: available) rest))
+
 structure Payload where
   definitions : List CheckedDefinition
   entryIndex : Fin definitions.length
+  linked : DeclarationsLinked [] definitions
 
 def Payload.entry (payload : Payload) : CheckedDefinition :=
   payload.definitions.get payload.entryIndex
@@ -87,6 +121,13 @@ def findEntry (name : String) (definitions : List CheckedDefinition) :
   let index := definitions.findIdx (·.name == name)
   if h : index < definitions.length then return ⟨index, h⟩
   else throw "structured-entry"
+
+/-- Independently validate a proposed declaration order and exact signatures.
+The resulting proof is erased at execution time; lookup remains name-based. -/
+def linkPayload (entry : String) (definitions : List CheckedDefinition) : Except String Payload := do
+  if linked : DeclarationsLinked [] definitions then
+    return ⟨definitions, ← findEntry entry definitions, linked⟩
+  else throw "structured-helper-link"
 
 def check_payload (snapshot : Snapshot) : Except String Payload := do
   if !Format.digestValid snapshot.source || !validString snapshot.entry ||
@@ -108,7 +149,7 @@ def check_payload (snapshot : Snapshot) : Except String Payload := do
     throw "structured-instruction-limit"
   let ordered ← orderDefinitions definitions.length definitions []
   let definitions := ordered.map (·.definition)
-  return ⟨definitions, ← findEntry snapshot.entry definitions⟩
+  linkPayload snapshot.entry definitions
 
 structure Program where
   snapshot : Snapshot

@@ -28,11 +28,22 @@ separately maintained dependency log.
 Math-return summaries still order their syntactic call subgraph before admission;
 the formed inventory checks the complete helper graph afterward.
 
+Ordering produces a candidate. `linkPayload` independently checks that every
+declaration name is fresh and every helper signature occurs in its strict
+prefix. `Payload.linked` carries this proposition; `DeclarationsLinked.nodup`
+derives name uniqueness. The check uses complete signatures and includes dormant
+callbacks and stopped suffixes. It does not assume the ordering algorithm is
+correct. Missing, forward, mismatched or duplicate links are refused.
+
 `Imported snapshot` uses the common `Verification.Imported` carrier. Its check
 witness ties the resulting program to that exact snapshot.
 `CheckedDefinition.exactBody` proves that erasure recovers the lowered raw body;
+`CheckedDefinition.body_eq_of_raw` recovers the typed body from exact raw equality;
 `Imported.exactSubject` retains the complete source descriptor. These are
-formation and subject-binding facts. A successful computational bounds check
+formation and subject-binding facts. The linking invariant does not prove that
+ordering preserves the input declaration inventory, or that lowering faithfully
+preserves source metadata and operations. Those are separate correspondence
+obligations. A successful computational bounds check
 does not itself constitute a general theorem that every admitted Math function
 is total.
 
@@ -79,10 +90,17 @@ callbacks are invoked with closed arguments. The owned operations do not
 inspect callback process constructors.
 
 The defensive helper-resolution fallback and failed checked reads both stop
-with `refused`, as does an authored `refused` stop. General theorems ruling out
-the internal cases for admitted valid inputs remain separate obligations.
-Successful admission is a computational check, not a proof of native formation,
-general read safety or Math totality. `check_ok_inversion` states only successful
+with `refused`, as does an authored `refused` stop.
+`Payload.invoke_declaration` resolves any declaration in a checked table to its
+body interpreted against its strict prefix. `Payload.declaration_helpers` gives
+exact prefix membership for all its calls. `Payload.reference_resolves` supplies
+an exact-signature lookup in the captured prefix. `Payload.invoke_body_view`
+exposes a named helper against the complete table using an exact body equation;
+proof clients need not unfold prefix construction or depend on declaration
+indices. These linking laws do not rule out
+failed reads or authored stops inside a resolved body.
+Successful admission supplies a proved linking invariant, but does not prove
+native formation, general read safety or Math totality. `check_ok_inversion` states only successful
 checking and exact subject retention.
 
 Folds use the shared ordered `Finite.execute`: domain admission precedes
@@ -95,6 +113,22 @@ ordinary loop form. Stops in nested branches remain valid.
 `denoteLoop_reference` transfers a callback equation under a reachable-state
 invariant to the ordered loop. Empty ordinary and conditional loops return the
 initial state without invoking their callback.
+
+## Compositional contracts
+
+`Structured.region_denote_table_congr` proves that agreeing on the exact helper inventory
+preserves the complete region process. It covers nested callbacks, branches,
+loops and fold predicates; unrelated bindings cannot affect the computation.
+The inventory is derived from the same typed body used by the meaning. The law
+does not require helpers to return normally.
+
+`Region.Contract` states immediate return under an explicit input premise and
+relates ordered outputs to the original environment. Contracts compose through
+lexical binding, can strengthen premises and weaken conclusions, and transport
+through exact process equality. For a checked read, the premise concerns the
+exact vector and index. Representability, shape and range conditions remain
+visible; an operation annotation is not a proof of unconditional totality.
+These predicates fit the existing `Verification.Certificate` interface.
 
 ## Tools and practical bounds
 
@@ -136,7 +170,7 @@ not become fuel parameters in semantic theorems.
 
 The first clients concern the actual total-state and unit-state finite native
 fixtures. Their complete model equations distinguish ordered multiple results
-and stopping zero-result folds. Schnorr and quadratic Sumcheck are the subsequent
+and stopping zero-result folds. Schnorr and the multilinear Sumcheck library are the subsequent
 whole-protocol targets described in the
 [design](../design/structured-native-import.md); the current single-participant
 profile does not import their group/service communication.

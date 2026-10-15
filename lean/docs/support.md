@@ -7,17 +7,19 @@ They do not certify arbitrary DSL programs or the full native lowering pipeline.
 |---|---|---|
 | Core execution | Typed mathematical/role-local programs; exact process refinement; shared-state sequential composition; machine prefix/resumption and finite-process completion | General native loops and external waiting are not imported by the scalar profile |
 | Structured source | Multi-result closed callbacks and lexical binding; strict formation in both directions; scalar/mathematical/participant/import bridges; contextual equality, totality and compatible effect translation | Shared structural carrier; native transformation correctness requires separate correspondence |
-| Structured native import | Actual original single-participant MLIR with immutable scalar/vector values, shared helpers, finite folds and nested Local control; exact snapshot admission and owned logical meaning | Bounded vocabulary; no group/service communication, affine resources, general Math-totality theorem or proved C++ exporter |
+| Structured native import | Actual original single-participant MLIR with immutable scalar/vector values, shared helpers, finite folds and nested Local control; exact snapshot admission, proved helper linking and table framing, conditional return contracts, and owned logical meaning | Bounded vocabulary; no group/service communication, affine resources, general Math-totality theorem or proved C++ exporter |
 | Ordered finite semantics | Admission-preserving effectful folds, product/zip laws and conditional pure replacement | Evaluated mathematical domains; native capacity, failure diagnostics and domain lowering require their own correspondence |
 | Scalar import | Checked admission and source-specific open-process correspondence for actual exports | Native exporter, interface resolver and constructor rendering are reviewed/tested, not universally proved |
 | Schnorr | Imported verifier completeness, two-transcript special soundness and custom invalid-equation rejection | Algebraic group/module interpretation; no discrete-log hardness reduction or whole native prover proof |
-| VCVio Schnorr | Equality for every event on commitment, fixed honest challenge, response and actual verifier outcome under uniform nonce/response sampling | One-session honest-verifier simulation; no malicious-verifier, concurrent or Fiat–Shamir theorem |
+| VCVio Schnorr | Equality for every event on commitment, fixed honest challenge, response and actual verifier outcome under uniform nonce/response sampling | Handwritten honest-prover strategy with the imported verifier outcome; no compiled-prover correspondence, malicious-verifier, concurrent or Fiat–Shamir theorem |
 | ArkLib Sumcheck | Actual imported two-round degree-two verifier acceptance on a false public sum claim is at most `4 / |F|` | Finite field; reached fresh uniform queries; causal coefficient-message strategies, including arbitrary private probabilistic mixtures chosen before verifier draws |
 | Public factor openings | Imported composed verifier bound `4 / |F|`; generic conditional bound `4 / |F| + epsilon` | Public polynomial factor checks prove zero opening error; PCS binding/extractability needs a separate opening theorem |
 | Authored DSL target | Imported Schnorr relation denotes discrete-log; two accepting imported verifier transcripts yield a witness accepted by that relation | Bounded scalar formula adapter and tested interface selector binding |
 | Clean | Admitted lookup/channel-free flat AIR export preserves constraints and selected source specification; native control fixture retained | Finite rows/field/ring interpretation; native agreement is differential, not decoder correctness |
 
-Source forms include original, helper-based, reordered and Horner implementations.
+Scalar source forms include original, helper-based, reordered and Horner implementations.
+The scalar exporter currently inlines helpers before Lean import. Structured
+helper proofs retain the definitions and invoke checked prefix-linking laws.
 The factor-opening case combines Sumcheck residuals with two subsequent adaptive
 openings. Negative controls include early challenges, wrong residuals/points,
 stale bindings, correlated-coin requests, invalid dormant definitions, false

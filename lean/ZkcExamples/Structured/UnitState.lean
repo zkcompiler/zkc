@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Structured.UnitStateData
-public import Zkc.Source.Structured.Laws
+public import Zkc.Source.Structured.Linking
 
 @[expose] public section
 
@@ -14,8 +14,6 @@ open Zkc.Source Zkc.Source.Structured
 
 set_option maxRecDepth 20000
 set_option maxHeartbeats 4000000
--- Rewriting dependent callback types needs the resolved operation signatures.
-set_option backward.isDefEq.respectTransparency false
 
 /-- The program is computed by admission of the actual exported constructor data. -/
 def program : Program := (check UnitStateData.snapshot).toOption.get (by decide +kernel)
@@ -50,20 +48,25 @@ private def mainBody : Region dialect [vector, .boolean] [.boolean] :=
   .letOp (.invoke workHelper) (.cons .here (.cons (.there .here) .nil))
     .nil (.ret (.cons .here .nil))
 
+private def stepDefinition : CheckedDefinition :=
+  (program.payload.definitions.find? fun definition => definition.name == "step").get
+    (by decide +kernel)
+
+private def predicateDefinition : CheckedDefinition :=
+  (program.payload.definitions.find? fun definition => definition.name == "predicate").get
+    (by decide +kernel)
+
+private def foldDefinition : CheckedDefinition :=
+  (program.payload.definitions.find? fun definition => definition.name == "fold").get
+    (by decide +kernel)
+
+private def workDefinition : CheckedDefinition :=
+  (program.payload.definitions.find? fun definition => definition.name == "work").get
+    (by decide +kernel)
+
 variable {F : Type} [CommRing F] [DecidableEq F]
 
-private def stepHelpers : Meanings F :=
-  [⟨foldSpec.stepHelper, fun args => stepBody.denote (meaning F []) args.get⟩]
-
-private def helpers : Meanings F :=
-  ⟨foldSpec.predicateHelper,
-    fun args => predicateBody.denote (meaning F stepHelpers) args.get⟩ :: stepHelpers
-
-private def foldHelpers : Meanings F :=
-  ⟨foldHelper, fun args => foldBody.denote (meaning F helpers) args.get⟩ :: helpers
-
-private def workHelpers : Meanings F :=
-  ⟨workHelper, fun args => workBody.denote (meaning F foldHelpers) args.get⟩ :: foldHelpers
+private def table : Meanings F := program.payload.meanings F
 
 def inputs (xs : List F) (enabled : Bool) :
     Values (scalarAssignment F) [.vector "bls12-381.fr", .boolean] :=
@@ -72,30 +75,94 @@ def inputs (xs : List F) (enabled : Bool) :
 def outputs (enabled : Bool) : Values (scalarAssignment F) [.boolean] :=
   .cons enabled .nil
 
-def process (xs : List F) (enabled : Bool) := program.denote F (inputs xs enabled)
+/-- Each invocation is justified by the named checked declaration's raw body.
+The complete table is shared by all equations; callers use only these contracts. -/
+private theorem invoke_step (xs : List F) (enabled : Bool) (item : F) :
+    invoke table foldSpec.stepHelper (.cons item (.cons xs (.cons enabled .nil))) =
+      .halt .abort :=
+  program.payload.invoke_body_view stepDefinition (List.get_find?_mem _)
+    stepBody (by rfl) (.cons item (.cons xs (.cons enabled .nil)))
+
+private theorem invoke_predicate (xs : List F) (enabled : Bool) (item : F) :
+    invoke table foldSpec.predicateHelper (.cons item (.cons xs (.cons enabled .nil))) =
+      .done (outputs enabled) :=
+  program.payload.invoke_body_view predicateDefinition (List.get_find?_mem _)
+    predicateBody (by rfl) (.cons item (.cons xs (.cons enabled .nil)))
+
+private theorem invoke_fold (xs : List F) (enabled : Bool) :
+    invoke table foldHelper (inputs xs enabled) =
+      denoteFold table foldSpec (inputs xs enabled) := by
+  have bodyLaw : foldBody.denote (meaning F table) (inputs xs enabled).get =
+      denoteFold table foldSpec (inputs xs enabled) := by
+    simp only [foldBody, Region.denote, meaning, Operands.eval, Regions.denote, inputs,
+      Values.get, operation]
+    trans (denoteFold table foldSpec (inputs xs enabled)).bind .done
+    · congr 1
+      funext result
+      cases result
+      rfl
+    · exact PIR.Proc.bind_done _
+  exact (program.payload.invoke_body_view foldDefinition (List.get_find?_mem _)
+    foldBody (by rfl) (inputs xs enabled)).trans bodyLaw
+
+private theorem invoke_work (xs : List F) (enabled : Bool) :
+    invoke table workHelper (inputs xs enabled) =
+      (denoteFold table foldSpec (inputs xs enabled)).bind
+        (fun _ => .done (outputs enabled)) := by
+  have bodyLaw : workBody.denote (meaning F table) (inputs xs enabled).get =
+      (invoke table foldHelper (inputs xs enabled)).bind
+        (fun _ => .done (outputs enabled)) := by
+    simp only [workBody, Region.denote, meaning, Operands.eval, Regions.denote, inputs,
+      Values.get, operation]
+    dsimp only [Op.results, Values.get, Environment.prepend, Environment.push]
+    congr 1
+    funext result
+    cases result
+    rfl
+  exact (program.payload.invoke_body_view workDefinition (List.get_find?_mem _)
+    workBody (by rfl) (inputs xs enabled)).trans (bodyLaw.trans
+      (congrArg (fun action : Closed (Values (scalarAssignment F) []) =>
+        action.bind fun _ => .done (outputs enabled)) (invoke_fold xs enabled)))
+
+def process (xs : List F) (enabled : Bool) :
+    Closed (Values (scalarAssignment F) [.boolean]) :=
+  program.denote F (inputs xs enabled)
 
 private theorem process_fold (xs : List F) (enabled : Bool) :
     process xs enabled =
-      (denoteFold helpers foldSpec (inputs xs enabled)).bind
+      (denoteFold table foldSpec (inputs xs enabled)).bind
         (fun _ => .done (outputs enabled)) := by
-  change mainBody.denote (meaning F workHelpers) (inputs xs enabled).get = _
-  simp [mainBody, workBody, foldBody, workHelpers, foldHelpers, invoke,
-    Region.denote, Regions.denote, meaning, operation, inputs, outputs,
-    Operands.eval, Values.get, Environment.prepend, Environment.push, PIR.Proc.bind_assoc,
-    PIR.Proc.bind]
-  rfl
+  have bodyLaw : mainBody.denote (meaning F table) (inputs xs enabled).get =
+      invoke table workHelper (inputs xs enabled) := by
+    simp only [mainBody, Region.denote, meaning, Operands.eval, Regions.denote, inputs,
+      Values.get, operation]
+    trans (invoke table workHelper (inputs xs enabled)).bind .done
+    · congr 1
+      funext result
+      cases result with
+      | cons enabled rest => cases rest; rfl
+    · exact PIR.Proc.bind_done _
+  exact (program.payload.denote_body_view mainBody (by rfl) (inputs xs enabled)).trans
+    (bodyLaw.trans (invoke_work xs enabled))
 
 private theorem transition (xs : List F) (enabled : Bool) (item : F)
     (state : Values (scalarAssignment F) []) :
-    foldTransition helpers foldSpec (.cons xs .nil) (.cons enabled .nil) state item =
+    foldTransition table foldSpec (.cons xs .nil) (.cons enabled .nil) state item =
       if enabled then .halt .abort else .done state := by
   cases state
-  cases enabled <;> rfl
+  cases enabled with
+  | false =>
+    exact foldTransition_false table foldSpec (by rfl) (.cons xs .nil)
+      (.cons false .nil) .nil item (invoke_predicate xs false item)
+  | true =>
+    exact (foldTransition_true table foldSpec (by rfl) (.cons xs .nil)
+      (.cons true .nil) .nil item (invoke_predicate xs true item)).trans
+      (invoke_step xs true item)
 
 /-- A zero-state callback still stops; the caller's Boolean is returned only
 when the vector is empty or the predicate disables every step. -/
 def reference (xs : List F) (enabled : Bool) :
-    Closed (Values (scalarAssignment F) program.payload.entry.outputs) :=
+    Closed (Values (scalarAssignment F) [.boolean]) :=
   if enabled && !xs.isEmpty then .halt .abort else .done (outputs enabled)
 
 /-- Complete process equality, including the abort that bypasses the return. -/
@@ -103,7 +170,7 @@ theorem process_eq_reference (xs : List F) (enabled : Bool)
     (lengthValid : xs.length < indexLimit) :
     process xs enabled = reference xs enabled := by
   rw [process_fold]
-  change (denoteFold helpers foldSpec
+  change (denoteFold table foldSpec
     ((Values.cons xs Values.nil).append
       (Values.nil.append (Values.cons enabled Values.nil)))).bind _ = _
   rw [denoteFold_pack]
@@ -112,6 +179,7 @@ theorem process_eq_reference (xs : List F) (enabled : Bool)
         .returned xs := by
     simp [foldSpec, DomainSpec.denote, Finite.Domain.admit, Values.get, lengthValid]
   simp only [Finite.execute, domainAdmitted, Finite.admitThen]
+  dsimp only [DomainSpec.item, scalarAssignment]
   cases enabled with
   | false =>
     rw [Finite.fold_total _ (fun state _ => state) (fun state item => transition xs false item state)]
@@ -120,7 +188,8 @@ theorem process_eq_reference (xs : List F) (enabled : Bool)
     cases xs with
     | nil => rfl
     | cons x xs =>
-      rw [Finite.fold, transition]
+      dsimp only [Finite.fold]
+      rw [transition]
       rfl
 
 /-- Domain failure precedes the predicate, including when it would disable every step. -/
@@ -128,7 +197,7 @@ theorem process_refuses (xs : List F) (enabled : Bool)
     (lengthInvalid : ¬ xs.length < indexLimit) :
     process xs enabled = .halt .refused := by
   rw [process_fold]
-  change (denoteFold helpers foldSpec
+  change (denoteFold table foldSpec
     ((Values.cons xs Values.nil).append
       (Values.nil.append (Values.cons enabled Values.nil)))).bind _ = _
   rw [denoteFold_pack]

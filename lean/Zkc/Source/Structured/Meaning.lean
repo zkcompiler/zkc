@@ -42,7 +42,8 @@ abbrev Meanings (F : Type) := List (DenotedDefinition F)
 
 /-- Named invocation checks the complete signature; the checked table constructs
 all implementations. A missing binding has an explicit defensive refusal.
-Its unreachability for every admitted table is a separate, unproved obligation. -/
+`Linking` resolves checked declarations to their prefix-interpreted bodies.
+Failed reads and authored stops remain possible within those bodies. -/
 def invoke {F : Type} (table : Meanings F) (helper : Helper) : FunctionMeaning F helper :=
   match table.find? (fun entry => entry.helper.name == helper.name) with
   | none => fun _ => .halt .refused
@@ -145,11 +146,10 @@ def operation {F : Type} [CommRing F] [DecidableEq F] (table : Meanings F) :
       denoteConditionalLoop state captures body lower upper initial captured
   | .guard, .cons condition .nil, .nil => if condition then .done .nil else .halt .reject
 
-def meaning (F : Type) [CommRing F] [DecidableEq F] (table : Meanings F) :
+/-- Keep the value assignment visible to dependent clients; operation evaluation
+remains a named definition with its own laws. -/
+abbrev meaning (F : Type) [CommRing F] [DecidableEq F] (table : Meanings F) :
     RegionMeaning dialect closedInterface := ⟨scalarAssignment F, operation table⟩
-
-def CheckedDefinition.helper (definition : CheckedDefinition) : Helper :=
-  ⟨definition.name, definition.inputs, definition.outputs⟩
 
 /-- Each body closes over the previously interpreted prefix, so recursion is
 impossible and helper syntax is never inlined into callers. -/

@@ -62,6 +62,7 @@ import Zkc.Source.Mathematical.Projection
 import Zkc.Source.Mathematical
 import Zkc.Source.Program
 import Zkc.Source.Region
+import Zkc.Source.RegionContracts
 import Zkc.Source.RegionDecoding
 import Zkc.Source.RegionInterpretation
 import Zkc.Source.RegionTotality
@@ -70,8 +71,10 @@ import Zkc.Source.ScalarRegion
 import Zkc.Source.Structure
 import Zkc.Source.Structured.Admission
 import Zkc.Source.Structured.Format
+import Zkc.Source.Structured.Frame
 import Zkc.Source.Structured.Import
 import Zkc.Source.Structured.Laws
+import Zkc.Source.Structured.Linking
 import Zkc.Source.Structured.Meaning
 import Zkc.Source.Structured.Operations
 import Zkc.Source.Structured.Provenance
@@ -83,6 +86,7 @@ import Tests.Machine
 import Tests.RegionCompatibility
 import Tests.RegionDecoding
 import Tests.RegionLaws
+import Tests.StructuredLinking
 import Tests.StructuredPrograms
 import Tests.StructuredSource
 import ZkcExamples.NativePrograms.ContractControls

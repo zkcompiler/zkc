@@ -262,8 +262,9 @@ Native SSA/Lean differential tests cover the admitted finite scalar profile.
 The separate [structured import](spec/formats/structured-source.md) exports
 original single-participant MLIR with immutable BLS scalar/vector values,
 shared helper definitions, finite folds and nested Local control. Lean checks
-the exact snapshot into the common Region carrier and gives it an owned logical
-meaning. [Structured comparisons](../lean/bridges/structured/README.md) exercise
+the exact snapshot into the common Region carrier, proves exact helper linking
+and table framing, and gives it an owned logical meaning. Conditional contracts
+retain input bounds and ordered output facts. [Structured comparisons](../lean/bridges/structured/README.md) exercise
 direct SSA execution, Lean and selected production Runner cases. This profile
 does not yet import group/service communication or prove native transformations.
 [Formal support](../lean/docs/support.md) states exact experiments and premises.

@@ -41,21 +41,23 @@ example.
 
 ### Sumcheck
 
-The first complete endpoint is the maintained two-round quadratic verifier,
-including both early rejection checks, fresh ordered challenges, arbitrary
-causal coefficient messages, and the final evaluation Boolean. Establish its
-existing `Protocols.Sumcheck.Common.VerifierContract`, then reuse completeness
-and the false-claim acceptance bound `4 / |F|` under the stated finite-field and
-independent uniform-challenge premises. Early rejection and returning `false`
-remain different outcomes. The native service is not proved uniform by its tag.
+The next library target is the actual multilinear protocol in
+`libraries/sumcheck/lib.zkc`. Each round sends a pair `(a0, a1)`, checks the
+current claim against `a0 + a1`, obtains a fresh challenge `r`, and updates the
+claim to `(1-r) * a0 + r * a1`. Its runtime round count and repeated interactions
+require an open structured repeat model.
 
-The final parameterized target is an n-round quadratic native verifier matching
-the existing n-round reference, with the polynomial dimension tied to the actual
-round count. It requires an interactive `protocol.repeat` profile and a matching
-native subject. The library's multilinear pair-message protocol and the Lean
-quadratic three-coefficient reference are different protocols. A Local finite
-fold importer does not bridge that difference. ArkLib proof reuse follows the
-appropriate source-to-experiment equation and its real premises.
+`Reduce` returns an evaluation obligation. A separate public-table or opening
+consumer must discharge that obligation before it yields an acceptance claim.
+The full public-table protocol additionally needs structured tuples, vector
+operations and the imported `has_shape` and `fix_prefix` helpers. Count agreement
+and valid native dimensions are explicit premises.
+
+The maintained two-round quadratic scalar verifier and its `4 / |F|` theorem
+remain useful regression clients. They are a different protocol from the
+multilinear pair-message library. Connecting the library to ArkLib requires a
+new pair-to-polynomial adapter and an arbitrary-round causal experiment equation;
+the generic degree-bound theorem alone does not establish that correspondence.
 
 ## Structural and semantic requirements
 
@@ -103,8 +105,7 @@ and use the common region and finite semantics, rather than assuming a source
 correspondence equation.
 
 This establishes a usable import and proof interface for structured immutable
-programs. It also exposes the next proof obligations: checked helper lookup,
-semantic soundness of exact return-identity and bound propagation, and general
+programs. It also exposes the next proof obligations: semantic soundness of exact return-identity and bound propagation, and general
 read safety under an explicit valid-input relation. Those results are needed
 before using Math totality to justify eliminating or moving calls. They should
 precede a generic native realization theorem; finite Runner comparisons remain
@@ -114,8 +115,20 @@ The checked operation tree is the authority for helper references and instructio
 counts. Deriving that inventory after formation avoids a second mutable list
 that can drift when a new operation or region is added. The inventory includes
 the full helper signature and is proved equal to the typed body's erasure.
-The next lookup proof should expose uniqueness and predecessor membership for
-the ordered declaration table, then connect each reference to its actual body.
+The independent linking check now supplies unique declaration names and exact
+signature membership in each strict prefix. Lookup laws expose the corresponding
+body; table-frame laws isolate the helper meanings each region actually uses.
+
+The linker independently validates exact links in the proposed order. It does
+not prove that sorting preserved every input declaration or body; preservation
+and candidate-generation completeness remain separate properties. Proving the
+whole Kahn implementation would couple each lookup client to incidental sorting
+and lowering details. A small decidable predicate instead checks exact helper
+signatures in the preceding declarations and supplies its proof to `Payload`.
+The cost is another bounded traversal of at most 128 declarations and the formed
+helper inventory. Name lookup remains simple; typed declaration indices would
+be worth revisiting if later substitution or linking proofs demonstrate a
+concrete benefit. This check does not prove the exporter or identity analysis.
 
 Keep identity analysis separate from typed formation. Its proof needs an explicit
 environment invariant: positions with the same known origin denote the same
@@ -126,8 +139,8 @@ over valid inputs satisfying the function's declared preconditions. Merely
 moving this analysis after formation would not prove these semantic properties.
 
 The next whole-protocol extension should preserve open interaction and explicit
-participant bindings for Schnorr, then add the matching quadratic Sumcheck native
-subject and interactive repetition. These extensions reuse this declaration and
+participant bindings for Schnorr, then add the actual multilinear Sumcheck
+library and interactive repetition. These extensions reuse this declaration and
 region boundary. They must establish the verifier contracts above before
 transporting the existing security proofs to their imported subjects.
 
