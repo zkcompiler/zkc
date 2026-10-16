@@ -28,9 +28,11 @@ private def formed {inputs outputs : List Ty} (name : String) (kind : HelperKind
 
 private def root {inputs outputs : List Ty} (inputScopes outputScopes : List (List Nat))
     (body : Region protocolDialect inputs outputs) (roles : List String := ["P", "V"]) :
-    CheckedProtocol :=
-  ⟨"main", roles, inputs, outputs, inputScopes, outputScopes,
-    body.erase, body, body.elaborate_erase⟩
+    CheckedProtocol where
+  toProtocolSignature := ⟨"main", roles, inputs, outputs, inputScopes, outputScopes⟩
+  raw := body.erase
+  body := body
+  formed := body.elaborate_erase
 
 private def first : CheckedDefinition := formed "first" .math
   (.ret (.cons .here .nil) : Region dialect [scalar, scalar] [scalar])

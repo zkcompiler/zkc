@@ -121,17 +121,29 @@ theorem wrapper_body_exact : wrapperDefinition.body = wrapperBody := rfl
 def definitions : List CheckedDefinition :=
   [lessDefinition, rowsDefinition, shapeDefinition, tableDefinition, halvesDefinition, interpolateDefinition, mapDefinition, firstDefinition, valuesDefinition, valuesRealizationDefinition, variablesDefinition, variablesRealizationDefinition, widthDefinition, widthRealizationDefinition, wrapperDefinition]
 
-def protocolDefinition : CheckedProtocol :=
-  ⟨"s12h6d61705f6578616d706c65735h4669727374", ["role00000000"], wrapperHelper.inputs, wrapperHelper.outputs,
-    List.replicate 4 [0], List.replicate 3 [0], protocolBody.erase, protocolBody,
-    protocolBody.elaborate_erase⟩
+def protocolSignature : ProtocolSignature where
+  name := "s12h6d61705f6578616d706c65735h4669727374"
+  roles := ["role00000000"]
+  inputs := [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr"]
+  outputs := [.vector "bls12-381.fr", .index, .index]
+  inputScopes := [[0], [0], [0], [0]]
+  outputScopes := [[0], [0], [0]]
+
+def protocolDefinition : CheckedProtocol where
+  toProtocolSignature := protocolSignature
+  raw := protocolBody.erase
+  body := protocolBody
+  formed := protocolBody.elaborate_erase
+
+theorem protocol_signature : protocolDefinition.signature = protocolSignature := rfl
+theorem protocol_raw : protocolDefinition.raw = protocolBody.erase := rfl
 
 def unit : UnitPayload where
   definitions := definitions
   protocols := [protocolDefinition]
   entryIndex := ⟨0, by decide⟩
   linked := by decide +kernel
-  rootsLinked := by decide +kernel
+  protocolsLinked := by decide +kernel
   available := checkUnitAvailability_ok_of_isOk (by decide +kernel)
   realizationClosed := by decide +kernel
   mapClosed := by decide +kernel
@@ -149,9 +161,14 @@ def payload : Payload where
 def program : ClosedProgram := ⟨⟨MapFirstData.snapshot, unit⟩, payload, by rfl⟩
 
 /-- Complete actual-source admission, including both preparation closures. -/
-def imported : ClosedImported MapFirstData.snapshot := ⟨program, rfl⟩
+theorem kernel_admission : checkClosed MapFirstData.snapshot = .ok program := rfl
 
-theorem kernel_admission : checkClosed MapFirstData.snapshot = .ok program := imported.admitted
+def imported : ClosedImported MapFirstData.snapshot := ⟨program, kernel_admission⟩
+
+theorem protocol_member : protocolDefinition ∈ program.subject.payload.protocols :=
+  List.mem_cons_self
+
+theorem protocol_selected : program.subject.payload.entry = protocolDefinition := rfl
 
 theorem exact_subject : program.snapshot = MapFirstData.snapshot := imported.exactSubject
 theorem protocol_exact : program.subject.payload.entry.raw = protocolBody.erase := rfl

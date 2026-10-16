@@ -36,6 +36,14 @@ def validPreparationName (name : String) : Bool :=
       let initial := fun c => ('a' ≤ c && c ≤ 'z') || ('A' ≤ c && c ≤ 'Z') || c == '_'
       initial first && rest.all (fun c => initial c || ('0' ≤ c && c ≤ '9') || c == '.' || c == '-')
 
+/-- Native protocol role and site grammar, separate from flat symbols. -/
+def validProtocolIdentifier (name : String) : Bool :=
+  validString name && match name.toList with
+    | [] => false
+    | first :: rest =>
+      let initial := fun c => ('a' ≤ c && c ≤ 'z') || ('A' ≤ c && c ≤ 'Z') || c == '_'
+      initial first && rest.all (fun c => initial c || ('0' ≤ c && c ≤ '9'))
+
 def validTypes (types : List Ty) : Bool := types.length ≤ 512 && types.all validType
 def validRefs (refs : List Nat) : Bool := refs.length ≤ 512 && refs.all (· ≤ 4096)
 
@@ -86,7 +94,7 @@ def Definition.headerValid (definition : Definition) : Bool :=
   (match definition with
   | .function f =>
     (match f.kind, f.interface with
-      | .protocol, some _ => true
+      | .protocol, some _ => f.visibility == .publicDef && validProtocolIdentifier f.name
       | .math, none | .local, none => true
       | _, _ => false) &&
     (f.kind == .protocol || !(f.inputs ++ f.outputs).any Ty.isService) &&
@@ -110,11 +118,12 @@ def Definition.headerValid (definition : Definition) : Bool :=
 
 /-- Edges are checked against retained variants before semantic helper lowering. -/
 inductive ReferenceEdge where
-  | call | apply | localCall | callback (kind : Kind)
+  | call | apply | localCall | protocolApply | callback (kind : Kind)
   deriving DecidableEq, Repr
 
 def Definition.acceptsEdge (definition : Definition) (edge : ReferenceEdge) : Bool :=
   match edge, definition with
+  | .protocolApply, .function f => f.kind == .protocol && f.visibility == .publicDef
   | .call, .function f => f.kind == .math && f.visibility == .privateDef
   | .apply, .function f | .localCall, .function f => f.kind == .local
   | .apply, .finite _ | .apply, .realization _ | .apply, .map _ => true
@@ -206,7 +215,7 @@ def Descriptor.admittedIn (descriptor : Descriptor) (kind : Kind) : Bool :=
     .booleanNotEqual | .select .. | .call .. | .fold .. |
     .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. => kind != .local
   | .boundedAt .. => kind == .math
-  | .localCall .. | .guard .. | .restrict .. | .exchange .. | .draw .. | .statement .. =>
+  | .protocolApply .. | .localCall .. | .guard .. | .restrict .. | .exchange .. | .draw .. | .statement .. =>
     kind == .protocol
   | .apply .. | .branch | .loop | .loopCondition => kind == .local
 
@@ -316,7 +325,7 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
     | _ => throw "structured-bounded-at-arguments"
   | .call name => resolveCall name .math .call
   | .apply name => resolveCall name .local .apply
-  | .localCall .. => throw "structured-open-operation"
+  | .protocolApply .. | .localCall .. => throw "structured-open-operation"
   | .fold domain step predicate =>
     let spec ← resolveFold snapshot domains .math domain step predicate argumentTypes results factOperands facts
     return .fold spec

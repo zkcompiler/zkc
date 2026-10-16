@@ -226,16 +226,23 @@ def linkPayload (entry : String) (definitions : List CheckedDefinition) : Except
     else throw "structured-root-link"
   else throw "structured-helper-link"
 
-structure CheckedProtocol where
-  name : String
-  roles : List String
-  inputs : List Ty
-  outputs : List Ty
-  inputScopes : List (List Nat)
-  outputScopes : List (List Nat)
+structure CheckedProtocol extends ProtocolSignature where
   raw : RawRegion Ty ProtocolOp
   body : Region protocolDialect inputs outputs
   formed : raw.elaborate (dialect := protocolDialect) inputs outputs = .ok body
+
+def CheckedProtocol.signature (definition : CheckedProtocol) : ProtocolSignature :=
+  definition.toProtocolSignature
+
+theorem CheckedProtocol.exactBody (definition : CheckedProtocol) :
+    definition.body.erase = definition.raw :=
+  RawRegion.erase_of_elaborate (dialect := protocolDialect) definition.raw definition.formed
+
+def CheckedProtocol.protocols (definition : CheckedProtocol) : List ProtocolSignature :=
+  definition.raw.operations.flatMap ProtocolOp.protocols
+
+def CheckedProtocol.dependencies (definition : CheckedProtocol) : List String :=
+  definition.protocols.map (·.name)
 
 def CheckedProtocol.helpers (root : CheckedProtocol) : List Helper :=
   root.raw.operations.flatMap ProtocolOp.helpers

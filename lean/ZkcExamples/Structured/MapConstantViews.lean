@@ -79,16 +79,19 @@ theorem wrapper_signature : wrapperDefinition.helper = wrapperHelper := rfl
 def definitions : List CheckedDefinition :=
   [formulaDefinition, mapDefinition, wrapperDefinition]
 
-def protocolDefinition : CheckedProtocol :=
-  ⟨"s12h6d61705f6578616d706c657312h436f6e7374616e74526f7773", ["role00000000", "role00000001"], wrapperHelper.inputs, wrapperHelper.outputs,
-    List.replicate 3 [0], [[0]], entryBody.erase, entryBody, entryBody.elaborate_erase⟩
+def protocolDefinition : CheckedProtocol where
+  toProtocolSignature := ⟨"s12h6d61705f6578616d706c657312h436f6e7374616e74526f7773", ["role00000000", "role00000001"], wrapperHelper.inputs, wrapperHelper.outputs,
+    List.replicate 3 [0], [[0]]⟩
+  raw := entryBody.erase
+  body := entryBody
+  formed := entryBody.elaborate_erase
 
 def unit : UnitPayload where
   definitions := definitions
   protocols := [protocolDefinition]
   entryIndex := ⟨0, by decide⟩
   linked := by decide +kernel
-  rootsLinked := by decide +kernel
+  protocolsLinked := by decide +kernel
   available := checkUnitAvailability_ok_of_isOk (by decide +kernel)
   realizationClosed := by decide +kernel
   mapClosed := by decide +kernel

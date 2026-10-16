@@ -236,6 +236,32 @@ class Exporter {
     auto field = [&]() {
       return cast<algebra::FieldType>(op.getOperand(0).getType()).getDomain();
     };
+    if (auto application = dyn_cast<protocol_ir::ApplyOp>(op)) {
+      if (auto e = attributes(op, {"callee", "roles", "site"}))
+        return std::move(e);
+      auto callee =
+          symbols.lookup<protocol_ir::MathematicalOp>(application.getCallee());
+      if (owner != "protocol" || !callee || op.getNumRegions())
+        return error("structured-source-reference");
+      auto type = callee.getFunctionType();
+      if (op.getOperandTypes() != type.getInputs() ||
+          op.getResultTypes() != type.getResults() ||
+          application.getRoles().size() != callee.getRoles().size())
+        return error("structured-source-application");
+      llvm::StringSet<> mapped;
+      for (Attribute role : application.getRoles()) {
+        auto name = cast<StringAttr>(role).getValue();
+        if (!hasRole(name) || !mapped.insert(name).second)
+          return error("structured-source-application");
+      }
+      if (!callee.getBody().front().getOps<protocol_ir::StatementOp>().empty())
+        return error("structured-source-application");
+      // Selection is an observation root, not a helper kind. A different,
+      // acyclic protocol may invoke the selected statement-free protocol.
+      dependencies[definition].push_back(callee);
+      return json::Array{"protocol_apply", application.getCallee(),
+                         names(application.getRoles())};
+    }
     if (isa<data::IndexOp, data::EqualOp>(op)) {
       bool constant = isa<data::IndexOp>(op);
       if (owner != "protocol" && owner != "math")
@@ -550,7 +576,8 @@ class Exporter {
       }
       if (++instructions > instructionLimit)
         return error("structured-source-limit");
-      auto inputs = sorts(op.getOperandTypes(), isa<protocol_ir::QueryOp>(op));
+      auto inputs = sorts(op.getOperandTypes(),
+                          isa<protocol_ir::QueryOp, protocol_ir::ApplyOp>(op));
       if (!inputs)
         return inputs.takeError();
       auto results = sorts(op.getResultTypes());
@@ -952,6 +979,59 @@ class Exporter {
     return Error::success();
   }
 
+  Error effectiveSites() {
+    // Native verification already checks its conservative application/Math
+    // expansion budget. Independently check final protocol-site collisions,
+    // without cloning syntax or entering the separate closed helper namespace.
+    uint64_t visits = 0, bytes = 0;
+    llvm::StringSet<> effective;
+    std::function<Error(protocol_ir::MathematicalOp, StringRef, unsigned)>
+        visit = [&](protocol_ir::MathematicalOp function, StringRef prefix,
+                    unsigned depth) -> Error {
+      if (depth > 64)
+        return error("structured-source-limit");
+      for (Operation &op : function.getBody().front()) {
+        if (++visits > 100000)
+          return error("structured-source-limit");
+        auto site = op.getAttrOfType<StringAttr>("site");
+        if (!site)
+          continue;
+        StringRef leaf = site.getValue();
+        auto length = std::to_string(prefix.size());
+        size_t overhead =
+            prefix.empty() ? 0 : 8 + length.size() + prefix.size();
+        if (overhead > 4096 || leaf.size() > 4096 - overhead)
+          return error("structured-source-limit");
+        size_t size = overhead + leaf.size();
+        if (size > 16 * 1024 * 1024 - bytes)
+          return error("structured-source-limit");
+        bytes += size;
+        std::string rendered =
+            prefix.empty()
+                ? leaf.str()
+                : "apply_" + length + "_" + prefix.str() + "_" + leaf.str();
+        if (auto call = dyn_cast<protocol_ir::ApplyOp>(op)) {
+          // Headers disappear, but their rendered labels advance the context
+          // and count toward metadata work. Revisit each static occurrence.
+          if (auto e = visit(
+                  symbols.lookup<protocol_ir::MathematicalOp>(call.getCallee()),
+                  rendered, depth + 1))
+            return e;
+        } else if (!effective.insert(rendered).second) {
+          return error("structured-source-site", "expanded protocol collision");
+        }
+      }
+      return Error::success();
+    };
+    for (auto function :
+         unit.getBody().front().getOps<protocol_ir::MathematicalOp>()) {
+      effective.clear();
+      if (auto e = visit(function, {}, 1))
+        return e;
+    }
+    return Error::success();
+  }
+
 public:
   Exporter(protocol_ir::ProtocolModuleOp unit,
            protocol_ir::MathematicalOp selected)
@@ -1026,6 +1106,8 @@ public:
     if (auto e = closure())
       return std::move(e);
     if (auto e = preparationProfiles())
+      return std::move(e);
+    if (auto e = effectiveSites())
       return std::move(e);
     // Multi-role Math finite work needs separate partial-component semantics.
     // Follow only Math calls: owned Local finite work keeps its closed ABI.

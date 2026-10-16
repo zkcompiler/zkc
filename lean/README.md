@@ -29,6 +29,13 @@ stopped prefixes and strict optional inputs. Complete First/Prefix source equati
 connect contiguous-half interpolation and ordered prefix restriction to the
 independent multilinear list model; independent arithmetic and constant maps
 exercise broadcasts, unused shapes and participant ownership.
+[Retained protocol applications](docs/spec/structured-source.md#retained-protocol-applications)
+use full ordered signatures, exact original-source association and checked
+prefix-captured protocol tables on the same carrier. Immutable root coordinates
+compose positional role substitutions and UTF-8 site prefixes; optional input
+and result masks preserve independent participant values, actual service handles
+and zero-result stops. Whole-unit metadata budgets and effective-site collisions
+are checked independently of runtime observer limits.
 Its [scalar inlining pairs](bridges/structured/README.md#scalar-inlining-pairs)
 prove exact original/prepared model equality for authored response and claim
 computations using checked body contracts and a reusable inlining law.

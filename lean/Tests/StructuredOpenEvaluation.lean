@@ -117,27 +117,27 @@ private def sendBool : Json := arr [.str "send", .str "delivery", .str "P", .str
   wireType .boolean, .bool false]
 private def guardSource : Snapshot := snapshot [
   root [.boolean] [.boolean] [["P"]] [["P"]]
-    (.block [.instruction (.guard "P") [0] [] [] "guard.site"] (.ret [0]))]
+    (.block [.instruction (.guard "P") [0] [] [] "guard_site"] (.ret [0]))]
 private def serviceSource (secondOwner : String := "P") : Snapshot := snapshot [
   root [.service scalarServiceContract, .service scalarServiceContract] [.field scalarDomain]
     [["P"], [secondOwner]] [["P"]]
-    (.block [.instruction (.draw "P" scalarDomain) [0] [.field scalarDomain] [] "draw.site"]
+    (.block [.instruction (.draw "P" scalarDomain) [0] [.field scalarDomain] [] "draw_site"]
       (.ret [0]))]
 private def draw (handle : String) : Json :=
-  strings ["draw", "draw.site", "P", scalarServiceContract, handle, scalarDomain]
+  strings ["draw", "draw_site", "P", scalarServiceContract, handle, scalarDomain]
 private def twoDraws : Snapshot := snapshot [
   root [.service scalarServiceContract] [.field scalarDomain, .field scalarDomain]
     [["P"]] [["P"], ["P"]]
     (.block [
-      .instruction (.draw "P" scalarDomain) [0] [.field scalarDomain] [] "draw.site",
-      .instruction (.draw "P" scalarDomain) [1] [.field scalarDomain] [] "second.site"]
+      .instruction (.draw "P" scalarDomain) [0] [.field scalarDomain] [] "draw_site",
+      .instruction (.draw "P" scalarDomain) [1] [.field scalarDomain] [] "second_site"]
       (.ret [1, 0]))]
 private def nestedLocal : Snapshot := snapshot [
   localHelper "stopper" [.boolean] [] (.block [] (.stop .abort "nested.stop")),
   localHelper "outer" [.boolean] []
     (.block [.instruction (.apply "stopper") [0] [] [] "inner.call"] (.ret [])),
   root [.boolean] [] [["P"]] []
-    (.block [.instruction (.localCall "outer" "P") [0] [] [] "owner.call"] (.ret []))]
+    (.block [.instruction (.localCall "outer" "P") [0] [] [] "owner_call"] (.ret []))]
 private def maskedAfterEffect : Snapshot := snapshot [
   root [.boolean] [.boolean] [["P"]] [["V"]]
     (.block [.instruction (.exchange "P" "V") [0] [.boolean] [] "delivery"] (.ret [0]))]
@@ -146,7 +146,7 @@ private def loopSource : Snapshot := snapshot [
     (.block [.instruction .loop [0, 1] []
       [.region [.index] [] (.block [] (.yield []))] "loop.site"] (.ret [])),
   root [.index, .index] [] [["P"], ["P"]] []
-    (.block [.instruction (.localCall "loop" "P") [0, 1] [] [] "loop.call"] (.ret []))]
+    (.block [.instruction (.localCall "loop" "P") [0, 1] [] [] "loop_call"] (.ret []))]
 private def loopAfterReceive : Snapshot := snapshot [
   localHelper "loop" [.index, .index] []
     (.block [.instruction .loop [0, 1] []
@@ -154,7 +154,7 @@ private def loopAfterReceive : Snapshot := snapshot [
   root [.index, .index] [] [["P", "V"], ["P"]] []
     (.block [
       .instruction (.exchange "P" "V") [1] [.index] [] "bound",
-      .instruction (.localCall "loop" "V") [1, 0] [] [] "loop.call"] (.ret []))]
+      .instruction (.localCall "loop" "V") [1, 0] [] [] "loop_call"] (.ret []))]
 
 def run : IO Unit := do
   let receiver := request "V" [.bool false] [reply receiveBool (value (.bool true))]
@@ -188,15 +188,15 @@ def run : IO Unit := do
     (request "V" [.null] [reply receiveBool (scriptStop "unknown")]))
     (stopped "refused" "delivery" [] (some receiveBool))
   expect "guard site" (runSnapshot guardSource (request "P" [.bool false] []))
-    (stopped "reject" "guard.site")
+    (stopped "reject" "guard_site")
   expect "missing guard" (runSnapshot guardSource (request "P" [.null] []))
-    (stopped "incomplete" "guard.site")
+    (stopped "incomplete" "guard_site")
   expect "unowned guard" (runSnapshot guardSource (request "V" [.bool false] []))
     (returned [.null])
   expect "nested zero-result local stop" (runSnapshot nestedLocal (request "P" [.bool true] []))
     (stopped "abort" "nested.stop")
   expect "missing zero-result local input" (runSnapshot nestedLocal (request "P" [.null] []))
-    (stopped "incomplete" "owner.call")
+    (stopped "incomplete" "owner_call")
   expect "unowned zero-result local" (runSnapshot nestedLocal (request "V" [.bool true] []))
     (returned [])
   expect "output mask after send" (runSnapshot maskedAfterEffect
@@ -210,19 +210,19 @@ def run : IO Unit := do
       (request "P" [.str handle, .str handle] [reply action (value (.str "8"))]))
       (returned [.str "8"] [(action, value (.str "8"))])
   expect "missing draw argument" (runSnapshot serviceSource (request "P" [.null, .null] []))
-    (stopped "incomplete" "draw.site")
+    (stopped "incomplete" "draw_site")
   expect "unowned draw" (runSnapshot serviceSource (request "V" [.null, .null] []))
     (returned [.null])
   let first := draw "17"
-  let second := strings ["draw", "second.site", "P", scalarServiceContract, "17", scalarDomain]
+  let second := strings ["draw", "second_site", "P", scalarServiceContract, "17", scalarDomain]
   let consumed := [(first, value (.str "3"))]
   expect "missing second reply retains consumed prefix" (runSnapshot twoDraws
     (request "P" [.str "17"] [reply first (value (.str "3"))]))
-    (stopped "incomplete" "second.site" consumed (some second))
+    (stopped "incomplete" "second_site" consumed (some second))
   expect "second request mismatch is unconsumed" (runSnapshot twoDraws
     (request "P" [.str "17"]
       [reply first (value (.str "3")), reply first (value (.str "8"))]))
-    (stopped "refused" "second.site" consumed (some second))
+    (stopped "refused" "second_site" consumed (some second))
   expect "two independent service replies" (runSnapshot twoDraws
     (request "P" [.str "17"]
       [reply first (value (.str "3")), reply second (value (.str "8"))]))
@@ -262,8 +262,8 @@ def run : IO Unit := do
     throw (IO.userError "oversized vector accepted")
   let vectorSource := snapshot [root [.vector scalarDomain] [.vector scalarDomain]
     [["P"]] [["V"]] (.block [
-      .instruction (.exchange "P" "V") [0] [.vector scalarDomain] [] "vector.delivery"] (.ret [0]))]
-  let vectorRequest := arr [.str "receive", .str "vector.delivery", .str "P", .str "V",
+      .instruction (.exchange "P" "V") [0] [.vector scalarDomain] [] "vector_delivery"] (.ret [0]))]
+  let vectorRequest := arr [.str "receive", .str "vector_delivery", .str "P", .str "V",
     wireType (.vector scalarDomain)]
   let vectorBoundary := arr (List.replicate 4096 (.str "0"))
   expect "received vector capacity boundary" (runSnapshot vectorSource
@@ -274,10 +274,10 @@ def run : IO Unit := do
       [reply vectorRequest (value (arr (List.replicate 4097 (.str "0"))))]))
   expect "malformed vector value remains semantic refusal" (runSnapshot vectorSource
     (request "V" [.null] [reply vectorRequest (value (arr [.bool false]))]))
-    (stopped "refused" "vector.delivery" [] (some vectorRequest))
+    (stopped "refused" "vector_delivery" [] (some vectorRequest))
   expect "oversized malformed reply shape remains semantic refusal" (runSnapshot vectorSource
     (request "V" [.null] [reply vectorRequest (arr (List.replicate 513 (.str "value")))]))
-    (stopped "refused" "vector.delivery" [] (some vectorRequest))
+    (stopped "refused" "vector_delivery" [] (some vectorRequest))
   let groupRoot := snapshot [root [.group groupDomain] [.group groupDomain]
     [["P"]] [["P"]] (.block [] (.ret [0]))]
   expect "additive group wire value" (runSnapshot groupRoot (request "P" [.str "7"] []))

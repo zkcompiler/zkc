@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Structured.OpenMeaning
+public import Zkc.Source.Structured.ProtocolLinking
 public import Zkc.Source.Structured.ComponentLinking
 
 @[expose] public section
@@ -241,6 +241,23 @@ theorem UnitPayload.component_body_view_as (payload : UnitPayload) (definition :
   subst helper
   exact payload.component_body_view definition member body exactRaw args
 
+theorem CheckedProtocol.observed_body_view_context (root : CheckedProtocol)
+    (body : Region protocolDialect root.inputs root.outputs) (same : root.raw = body.erase)
+    (tables : OpenTables F G) (self : Nat)
+    (inputs : Values (Component (assignment F G)) root.inputs)
+    (protocols : ProtocolTable (assignment F G) (observedInterface F G) := [])
+    (context : ProtocolContext := {}) :
+    root.observed tables self inputs protocols context =
+      (body.denote (participantMeaning tables self protocols context)
+        (maskValues self (context.mapScopes root.inputScopes) inputs).get).bind
+        fun results => .done (maskValues self (context.mapScopes root.outputScopes) results) := by
+  simp only [CheckedProtocol.observed, CheckedProtocol.denoteWith, root.body_eq_of_raw body same]
+  rfl
+
+/-- Flat checked-body convenience uses identity context and an empty protocol table.
+A reached application therefore refuses in this view. Program callers should use
+`Program.observed_body_view` for the full linked table, or
+`CheckedProtocol.observed_body_view_context` with an explicit table and context. -/
 theorem CheckedProtocol.observed_body_view (root : CheckedProtocol)
     (body : Region protocolDialect root.inputs root.outputs) (same : root.raw = body.erase)
     (tables : OpenTables F G) (self : Nat)
@@ -248,27 +265,65 @@ theorem CheckedProtocol.observed_body_view (root : CheckedProtocol)
     root.observed tables self inputs =
       (body.denote (participantMeaning tables self) (maskValues self root.inputScopes inputs).get).bind
         fun results => .done (maskValues self root.outputScopes results) := by
-  simp only [CheckedProtocol.observed, root.body_eq_of_raw body same]
+  simpa only [ProtocolContext.mapScopes_root] using
+    root.observed_body_view_context body same tables self inputs
+
+/-- Selection invokes the exact stored declaration through the linked full table. -/
+theorem Program.observed_entry (program : Program) (self : Nat)
+    (inputs : Values (Component (assignment F G)) program.payload.entry.inputs) :
+    program.observed F G self inputs =
+      program.payload.entry.observed (program.payload.tables F G) self inputs
+        (program.payload.protocolTable F G) :=
+  protocol_invoke_body (observedSites F G) observeAction (program.payload.tables F G)
+    program.payload.protocols program.payload.protocolsLinked program.payload.entry
+    (List.get_mem _ _) {} self inputs
 
 theorem Program.observed_body_view (program : Program)
     (body : Region protocolDialect program.payload.entry.inputs program.payload.entry.outputs)
     (same : program.payload.entry.raw = body.erase) (self : Nat)
     (inputs : Values (Component (assignment F G)) program.payload.entry.inputs) :
     program.observed F G self inputs =
-      (body.denote (participantMeaning (program.payload.tables F G) self)
+      (body.denote (participantMeaning (program.payload.tables F G) self
+        (program.payload.protocolTable F G))
         (maskValues self program.payload.entry.inputScopes inputs).get).bind
-        fun results => .done (maskValues self program.payload.entry.outputScopes results) :=
-  program.payload.entry.observed_body_view body same _ self inputs
+        fun results => .done (maskValues self program.payload.entry.outputScopes results) := by
+  rw [program.observed_entry self inputs,
+    program.payload.entry.observed_body_view_context body same _ self inputs
+      (program.payload.protocolTable F G), ProtocolContext.mapScopes_root,
+    ProtocolContext.mapScopes_root]
 
 theorem Program.participant_body_view (program : Program)
     (body : Region protocolDialect program.payload.entry.inputs program.payload.entry.outputs)
     (same : program.payload.entry.raw = body.erase) (self : Nat)
     (inputs : Values (Component (assignment F G)) program.payload.entry.inputs) :
     program.participant F G self inputs =
-      ((body.denote (participantMeaning (program.payload.tables F G) self)
+      ((body.denote (participantMeaning (program.payload.tables F G) self
+        (program.payload.protocolTable F G))
         (maskValues self program.payload.entry.inputScopes inputs).get).bind
         fun results => .done (maskValues self program.payload.entry.outputScopes results)).interpret forgetSites :=
   congrArg (fun process => process.interpret forgetSites)
     (program.observed_body_view body same self inputs)
+
+/-- Forget only internal marks; qualified action labels remain in the plain table. -/
+theorem Program.participant_direct (program : Program) (self : Nat)
+    (inputs : Values (Component (assignment F G)) program.payload.entry.inputs) :
+    program.participant F G self inputs =
+      (program.payload.entry.body.denote
+        (participantMeaningWith (.silent (participantInterface F G)) (participantActions F G)
+          (program.payload.definitions.foldl
+            (Evaluation.ComponentTables.extend (F := F) (G := G) (.silent (participantInterface F G)))
+            ⟨[], []⟩) self (program.payload.plainProtocolTable F G))
+        (maskValues self program.payload.entry.inputScopes inputs).get).bind
+          (fun results => .done (maskValues self program.payload.entry.outputScopes results)) := by
+  unfold Program.participant Program.observed
+  refine (program.payload.protocolTable_forgetSites (F := F) (G := G)
+    program.payload.entry.signature {} self inputs).trans ?_
+  have body := protocol_invoke_body (.silent (participantInterface F G)) (participantActions F G)
+    (program.payload.definitions.foldl
+      (Evaluation.ComponentTables.extend (.silent (participantInterface F G))) ⟨[], []⟩)
+    program.payload.protocols program.payload.protocolsLinked program.payload.entry
+    (List.get_mem _ _) {} self inputs
+  simpa only [UnitPayload.plainProtocolTable, CheckedProtocol.denoteWith,
+    ProtocolContext.mapScopes_root, CheckedProtocol.signature] using body
 
 end Zkc.Source.Structured

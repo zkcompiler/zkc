@@ -531,7 +531,7 @@ def run : IO Unit := do
       (arr [.str "zkc.structured-open-result/0", arr [.str "stopped", .str "incomplete", .str "work"],
         arr [arr [.str "stop", .str "incomplete", .str "work", toJson (0 : Nat)]], toJson (0 : Nat)])
   test "nonowner map wrapper skips helper and returns absent"
-    (match (protocolOperation mapHelpers 1 (fun _ => pure none)
+    (match (Bounds.protocolOperation mapHelpers [] {} 1 (fun _ => pure none)
         (.localCall ⟨"work", .local, mapSpec.arguments, [vectorTy]⟩ rfl 0 "work")
         [.absent, .absent, .absent] .nil).run {} with
       | .ok (some [.absent], _) => true | _ => false)

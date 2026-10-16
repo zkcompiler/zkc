@@ -98,6 +98,7 @@ enum class Kind {
   At,
   Call,
   Apply,
+  ProtocolApply,
   LocalCall,
   Fold,
   If,
@@ -220,6 +221,7 @@ Kind kind(Operation &op) {
       .Case("data.bounded_at", Kind::At)
       .Case("func.call", Kind::Call)
       .Case("local.apply", Kind::Apply)
+      .Case("protocol.apply", Kind::ProtocolApply)
       .Case("protocol.local_call", Kind::LocalCall)
       .Case("algebra.finite_fold", Kind::Fold)
       .Case("local.if", Kind::If)
@@ -511,12 +513,15 @@ class Admission {
       return error("structured-reference-unsupported", "region count");
     for (Type type : op.getOperandTypes())
       if (!valueType(type) ||
-          (isa<protocol_ir::ServiceReferenceType>(type) && code != Kind::Draw))
+          (isa<protocol_ir::ServiceReferenceType>(type) && code != Kind::Draw &&
+           code != Kind::ProtocolApply))
         return error("structured-reference-unsupported", "operand type");
     for (Type type : op.getResultTypes())
       if (!valueType(type) || isa<protocol_ir::ServiceReferenceType>(type))
         return error("structured-reference-unsupported", "result type");
     switch (code) {
+    case Kind::ProtocolApply:
+      return application(op, owner);
     case Kind::Exec:
       return execution(op, owner);
     case Kind::IndexConstant:
@@ -603,6 +608,10 @@ class Admission {
           op.getNumOperands() != 1 || op.getNumResults() != 1 ||
           !isa<algebra::FieldType>(op.getResult(0).getType()))
         return error("structured-reference-unsupported", "service method");
+      if (auto failure =
+              serviceOrigin(op.getOperand(0), owner,
+                            cast<protocol_ir::QueryOp>(op).getOwner()))
+        return failure;
       return attributes(op, {"site", "owner", "method"});
     case Kind::Statement:
       return attributes(op, {"relation", "selectors", "acceptance"});
@@ -617,6 +626,116 @@ class Admission {
       break;
     default:
       return attributes(op, {});
+    }
+    return Error::success();
+  }
+
+  Error serviceOrigin(Value value, Operation &owner, StringRef expectedOwner) {
+    auto protocol = dyn_cast<protocol_ir::MathematicalOp>(owner);
+    auto argument = dyn_cast<BlockArgument>(value);
+    if (!protocol || !argument ||
+        argument.getOwner() != &protocol.getBody().front())
+      return error("structured-reference-application", "lexical service input");
+    auto scope =
+        cast<ArrayAttr>(protocol.getInputRoles()[argument.getArgNumber()]);
+    if (scope.size() != 1 ||
+        cast<StringAttr>(scope[0]).getValue() != expectedOwner)
+      return error("structured-reference-application", "service owner");
+    return Error::success();
+  }
+
+  Error application(Operation &op, Operation &owner) {
+    if (auto failure = attributes(op, {"callee", "roles", "site"}))
+      return failure;
+    auto caller = dyn_cast<protocol_ir::MathematicalOp>(owner);
+    auto ref = op.getAttrOfType<FlatSymbolRefAttr>("callee");
+    auto callee =
+        ref ? symbols.lookup<protocol_ir::MathematicalOp>(ref.getValue())
+            : protocol_ir::MathematicalOp{};
+    if (!caller || !callee || callee->getParentOp() != caller->getParentOp())
+      return error("structured-reference-symbol",
+                   "protocol application target");
+    auto roles = op.getAttrOfType<ArrayAttr>("roles");
+    auto type = callee.getFunctionType();
+    if (!roles || roles.size() != callee.getRoles().size() ||
+        op.getOperandTypes() != type.getInputs() ||
+        op.getResultTypes() != type.getResults() || op.getNumRegions())
+      return error("structured-reference-application", "full protocol ABI");
+    llvm::DenseSet<Attribute> seen;
+    for (Attribute role : roles)
+      if (!isa<StringAttr>(role) ||
+          !llvm::is_contained(caller.getRoles(), role) ||
+          !seen.insert(role).second)
+        return error("structured-reference-application", "role injection");
+    if (!callee.getBody().front().getOps<protocol_ir::StatementOp>().empty())
+      return error("structured-reference-application", "entry statement");
+    for (auto [i, operand] : llvm::enumerate(op.getOperands())) {
+      if (!isa<protocol_ir::ServiceReferenceType>(operand.getType()))
+        continue;
+      auto scope = cast<ArrayAttr>(callee.getInputRoles()[i]);
+      if (scope.size() != 1)
+        return error("structured-reference-application", "service scope");
+      auto position = llvm::find(callee.getRoles(), scope[0]);
+      if (position == callee.getRoles().end())
+        return error("structured-reference-application", "service role");
+      auto mapped =
+          cast<StringAttr>(roles[position - callee.getRoles().begin()]);
+      if (auto failure = serviceOrigin(operand, owner, mapped.getValue()))
+        return failure;
+    }
+    dependencies[&owner].push_back(callee);
+    return Error::success();
+  }
+
+  Error effectiveSites() {
+    // A separate bounded walk of admitted original SSA, not an exporter receipt
+    // or a production-expanded body. Native formation owns conservative
+    // budgets.
+    struct Frame {
+      protocol_ir::MathematicalOp function;
+      std::string prefix;
+      unsigned depth;
+    };
+    uint64_t remainingVisits = 100000, remainingBytes = 16 * 1024 * 1024;
+    for (auto root :
+         unit.getBody().front().getOps<protocol_ir::MathematicalOp>()) {
+      llvm::StringSet<> effective;
+      SmallVector<Frame> pending{{root, {}, 1}};
+      while (!pending.empty()) {
+        Frame frame = pending.pop_back_val();
+        if (frame.depth > maxDepth)
+          return error("structured-reference-capacity", "application depth");
+        for (Operation &op : frame.function.getBody().front()) {
+          if (!remainingVisits)
+            return error("structured-reference-capacity", "static visits");
+          --remainingVisits;
+          auto site = op.getAttrOfType<StringAttr>("site");
+          if (!site)
+            continue;
+          auto digits = std::to_string(frame.prefix.size());
+          size_t prefixBytes = frame.prefix.empty()
+                                   ? 0
+                                   : 8 + digits.size() + frame.prefix.size();
+          if (prefixBytes > 4096 || site.size() > 4096 - prefixBytes)
+            return error("structured-reference-capacity", "generated site");
+          size_t size = prefixBytes + site.size();
+          if (size > remainingBytes)
+            return error("structured-reference-capacity", "static site bytes");
+          remainingBytes -= size;
+          std::string label;
+          if (!frame.prefix.empty())
+            label = "apply_" + digits + "_" + frame.prefix + "_";
+          label.append(site.getValue().data(), site.size());
+          if (kind(op) == Kind::ProtocolApply) {
+            auto call = cast<protocol_ir::ApplyOp>(op);
+            pending.push_back(
+                {symbols.lookup<protocol_ir::MathematicalOp>(call.getCallee()),
+                 std::move(label), frame.depth + 1});
+          } else if (!effective.insert(label).second) {
+            return error("structured-reference-site", "expanded collision");
+          }
+        }
+      }
     }
     return Error::success();
   }
@@ -888,6 +1007,8 @@ public:
     }
     if (auto failure = preparationClosures())
       return failure;
+    if (auto failure = effectiveSites())
+      return failure;
     llvm::DenseSet<Operation *> checked;
     std::function<Error(Operation *)> scalarMath =
         [&](Operation *function) -> Error {
@@ -1013,6 +1134,29 @@ bool matches(Type type, const Datum &value) {
     return std::holds_alternative<Vector>(value);
   return isa<data::DomainType>(type) && std::holds_alternative<Domain>(value);
 }
+
+// Immutable per-invocation configuration. Root self and replay state never move
+// into a child; closed helper bodies receive no protocol configuration.
+struct ProtocolContext {
+  SmallVector<std::pair<StringRef, StringRef>> roles;
+  std::optional<std::string> applicationPrefix;
+
+  StringRef role(StringRef local) const {
+    for (const auto &[source, root] : roles)
+      if (source == local)
+        return root;
+    llvm_unreachable("admitted protocol role must have a root mapping");
+  }
+
+  std::string site(StringRef raw) const {
+    // The empty string is a synthetic siteless mark, never an apply boundary.
+    if (raw.empty() || !applicationPrefix)
+      return raw.str();
+    const auto &prefix = *applicationPrefix;
+    return "apply_" + std::to_string(prefix.size()) + "_" + prefix + "_" +
+           raw.str();
+  }
+};
 
 class Reference {
   SymbolTable symbols;
@@ -1163,12 +1307,49 @@ class Reference {
     return name ? symbols.lookup(name.getValue()) : nullptr;
   }
 
+  Expected<Outcome> invokeProtocol(protocol_ir::MathematicalOp callee,
+                                   ArrayRef<Datum> args,
+                                   const ProtocolContext &context,
+                                   unsigned depth) {
+    if (auto failure = tick(depth))
+      return failure;
+    auto type = callee.getFunctionType();
+    if (args.size() != type.getNumInputs())
+      return error("structured-reference-signature", "protocol arguments");
+    for (auto [port, value] : llvm::zip(type.getInputs(), args))
+      if (!matches(port, value))
+        return error("structured-reference-signature",
+                     "protocol argument type");
+    if (!inScope(callee.getRoles(), &context))
+      return Outcome{
+          Kind::Return, Values(type.getNumResults(), std::monostate{}), {}};
+    Values inputs(args.begin(), args.end());
+    for (auto [i, scope] : llvm::enumerate(callee.getInputRoles()))
+      if (!inScope(cast<ArrayAttr>(scope), &context))
+        inputs[i] = std::monostate{};
+    auto result = block(callee.getBody().front(), inputs, depth, &context);
+    if (!result || result->stopped())
+      return result;
+    if (result->values.size() != type.getNumResults())
+      return error("structured-reference-signature", "protocol results");
+    for (auto [i, port, value] :
+         llvm::enumerate(type.getResults(), result->values)) {
+      if (!matches(port, value))
+        return error("structured-reference-signature", "protocol result type");
+      if (!inScope(cast<ArrayAttr>(callee.getOutputRoles()[i]), &context))
+        value = std::monostate{};
+    }
+    return result;
+  }
+
   Expected<Outcome> invoke(Operation *callee, ArrayRef<Datum> args,
                            unsigned depth, StringRef invocationSite = {}) {
     if (auto failure = tick(depth))
       return failure;
     if (!callee)
       return error("structured-reference-symbol");
+    if (isa<protocol_ir::MathematicalOp>(callee))
+      return error("structured-reference-symbol", "protocol context required");
     auto type = signature(*callee);
     if (!type || args.size() != type.getNumInputs())
       return error("structured-reference-signature", "call arguments");
@@ -1300,17 +1481,28 @@ class Reference {
     return state;
   }
 
-  bool inScope(ArrayAttr scope) const {
-    return llvm::is_contained(scope, StringAttr::get(scope.getContext(), self));
+  bool inScope(ArrayAttr scope,
+               const ProtocolContext *context = nullptr) const {
+    return llvm::any_of(scope, [&](Attribute role) {
+      auto name = cast<StringAttr>(role).getValue();
+      return self == (context ? context->role(name) : name);
+    });
+  }
+
+  StringRef role(StringRef name, const ProtocolContext *context) const {
+    return context ? context->role(name) : name;
   }
 
   Outcome absent(Operation &op) {
     return {Kind::Return, Values(op.getNumResults(), std::monostate{}), {}};
   }
 
-  Outcome stopped(Operation &op, StringRef reason) {
+  Outcome stopped(Operation &op, StringRef reason,
+                  const ProtocolContext *context = nullptr) {
     auto site = op.getAttrOfType<StringAttr>("site");
-    return {Kind::Stop, {}, reason.str(), site ? site.getValue().str() : ""};
+    StringRef raw = site ? site.getValue() : StringRef{};
+    return {
+        Kind::Stop, {}, reason.str(), context ? context->site(raw) : raw.str()};
   }
 
   json::Array messageType(Type type) {
@@ -1326,25 +1518,26 @@ class Reference {
                        cast<algebra::FieldVectorType>(type).getDomain()};
   }
 
-  Expected<Outcome> replay(Operation &op, json::Array action, Type replyType) {
+  Expected<Outcome> replay(Operation &op, json::Array action, Type replyType,
+                           const ProtocolContext *context) {
     if (!open)
       return error("structured-reference-input", "open command required");
     json::Value request(std::move(action));
     if (auto failure = record(json::Array{"request", replyPosition, request}))
       return std::move(failure);
     if (replyPosition == replies->size())
-      return stopped(op, "incomplete");
+      return stopped(op, "incomplete", context);
     const auto &reply = *(*replies)[replyPosition].getAsArray();
     const auto &response = *reply[2].getAsArray();
     if (reply[1] != request)
-      return stopped(op, "refused");
+      return stopped(op, "refused", context);
     Outcome result;
     if (response.size() == 2 && response[0].getAsString() == "stop" &&
         response[1].getAsString() &&
         llvm::is_contained(ArrayRef<StringRef>{"reject", "abort", "exhausted",
                                                "incomplete", "refused"},
                            *response[1].getAsString())) {
-      result = stopped(op, *response[1].getAsString());
+      result = stopped(op, *response[1].getAsString(), context);
     } else if (!replyType && response.size() == 1 &&
                response[0].getAsString() == "unit") {
       result = Outcome{};
@@ -1361,11 +1554,11 @@ class Reference {
         });
         if (failure)
           return std::move(failure);
-        return stopped(op, "refused");
+        return stopped(op, "refused", context);
       }
       result.values.push_back(std::move(*value));
     } else {
-      return stopped(op, "refused");
+      return stopped(op, "refused", context);
     }
     if (auto failure = record(json::Array{"reply", replyPosition, reply[2]}))
       return std::move(failure);
@@ -1373,54 +1566,59 @@ class Reference {
     return result;
   }
 
-  Expected<Outcome> interaction(Operation &op, ArrayRef<Datum> args) {
+  Expected<Outcome> interaction(Operation &op, ArrayRef<Datum> args,
+                                const ProtocolContext *context) {
+    auto site = [&](StringRef raw) {
+      return context ? context->site(raw) : raw.str();
+    };
     if (auto exchange = dyn_cast<protocol_ir::ExchangeOp>(op)) {
       Type type = op.getResult(0).getType();
-      if (self == exchange.getSender()) {
+      auto sender = role(exchange.getSender(), context);
+      auto receiver = role(exchange.getReceiver(), context);
+      if (self == sender) {
         if (!present(args[0]))
-          return stopped(op, "incomplete");
+          return stopped(op, "incomplete", context);
         auto value = encode(args[0]);
         if (!value)
           return value.takeError();
         auto result =
             replay(op,
-                   json::Array{"send", exchange.getSite(), exchange.getSender(),
-                               exchange.getReceiver(), messageType(type),
-                               std::move(*value)},
-                   {});
+                   json::Array{"send", site(exchange.getSite()), sender,
+                               receiver, messageType(type), std::move(*value)},
+                   {}, context);
         if (result && !result->stopped())
           result->values.push_back(args[0]);
         return result;
       }
-      if (self == exchange.getReceiver())
+      if (self == receiver)
         return replay(op,
-                      json::Array{"receive", exchange.getSite(),
-                                  exchange.getSender(), exchange.getReceiver(),
-                                  messageType(type)},
-                      type);
+                      json::Array{"receive", site(exchange.getSite()), sender,
+                                  receiver, messageType(type)},
+                      type, context);
       return absent(op);
     }
     auto query = cast<protocol_ir::QueryOp>(op);
-    if (self != query.getOwner())
+    auto owner = role(query.getOwner(), context);
+    if (self != owner)
       return absent(op);
     if (!present(args[0]))
-      return stopped(op, "incomplete");
+      return stopped(op, "incomplete", context);
     return replay(
         op,
-        json::Array{"draw", query.getSite(), query.getOwner(), randomContract,
+        json::Array{"draw", site(query.getSite()), owner, randomContract,
                     std::to_string(std::get<uint64_t>(args[0])), fieldDomain},
-        op.getResult(0).getType());
+        op.getResult(0).getType(), context);
   }
 
   Expected<Outcome> evaluate(Operation &op, ArrayRef<Datum> args,
-                             unsigned depth) {
+                             unsigned depth, const ProtocolContext *context) {
     Kind code = kind(op);
     switch (code) {
     case Kind::Exec:
       // Local execution sequences every operand even when all results are
       // discarded. It cannot use the pure absent-component propagation below.
       if (!llvm::all_of(args, present))
-        return stopped(op, "incomplete");
+        return stopped(op, "incomplete", context);
       return execute(op, args);
     case Kind::Return:
     case Kind::Yield:
@@ -1428,34 +1626,52 @@ class Reference {
     case Kind::DomainYield:
       return Outcome{code, Values(args.begin(), args.end()), {}};
     case Kind::Stop:
-      return stopped(op, cast<local::StopOp>(op).getReason());
+      return stopped(op, cast<local::StopOp>(op).getReason(), context);
     case Kind::Guard:
-      if (op.getAttrOfType<StringAttr>("owner").getValue() != self)
+      if (role(op.getAttrOfType<StringAttr>("owner").getValue(), context) !=
+          self)
         return Outcome{};
       if (!present(args[0]))
-        return stopped(op, "incomplete");
-      return std::get<bool>(args[0]) ? Outcome{} : stopped(op, "reject");
+        return stopped(op, "incomplete", context);
+      return std::get<bool>(args[0]) ? Outcome{}
+                                     : stopped(op, "reject", context);
     case Kind::Call:
       // Do not sequence Math arguments: an ignored absent input is legal.
       return invoke(target(op, "callee"), args, depth + 1);
     case Kind::LocalCall:
-      if (op.getAttrOfType<StringAttr>("role").getValue() != self)
+      if (role(op.getAttrOfType<StringAttr>("role").getValue(), context) !=
+          self)
         return absent(op);
       [[fallthrough]];
     case Kind::Apply:
       if (!llvm::all_of(args, present))
-        return stopped(op, "incomplete");
-      return invoke(target(op, "callee"), args, depth + 1,
-                    op.getAttrOfType<StringAttr>("site").getValue());
+        return stopped(op, "incomplete", context);
+      return invoke(
+          target(op, "callee"), args, depth + 1,
+          context
+              ? context->site(op.getAttrOfType<StringAttr>("site").getValue())
+              : op.getAttrOfType<StringAttr>("site").getValue().str());
+    case Kind::ProtocolApply: {
+      auto call = cast<protocol_ir::ApplyOp>(op);
+      auto callee = cast<protocol_ir::MathematicalOp>(target(op, "callee"));
+      ProtocolContext child;
+      child.applicationPrefix = context->site(call.getSite());
+      for (auto [source, replacement] :
+           llvm::zip(callee.getRoles(), call.getRoles()))
+        child.roles.emplace_back(
+            cast<StringAttr>(source).getValue(),
+            context->role(cast<StringAttr>(replacement).getValue()));
+      return invokeProtocol(callee, args, child, depth + 1);
+    }
     case Kind::Statement:
       return Outcome{}; // Retained metadata, not relation evaluation.
     case Kind::Restrict:
-      return inScope(cast<protocol_ir::RestrictRolesOp>(op).getRoles())
+      return inScope(cast<protocol_ir::RestrictRolesOp>(op).getRoles(), context)
                  ? Outcome{Kind::Return, Values(args.begin(), args.end()), {}}
                  : absent(op);
     case Kind::Exchange:
     case Kind::Draw:
-      return interaction(op, args);
+      return interaction(op, args, context);
     default:
       break;
     }
@@ -1586,7 +1802,8 @@ class Reference {
     return result;
   }
 
-  Expected<Outcome> block(Block &body, ArrayRef<Datum> inputs, unsigned depth) {
+  Expected<Outcome> block(Block &body, ArrayRef<Datum> inputs, unsigned depth,
+                          const ProtocolContext *context = nullptr) {
     if (auto failure = tick(depth))
       return failure;
     if (body.getNumArguments() != inputs.size())
@@ -1609,7 +1826,7 @@ class Reference {
           return error("structured-reference-ssa", "missing operand");
         args.push_back(found->second);
       }
-      auto result = evaluate(op, args, depth);
+      auto result = evaluate(op, args, depth, context);
       if (!result || result->stopped() || op.hasTrait<OpTrait::IsTerminator>())
         return result;
       if (op.getNumResults() != result->values.size())
@@ -1684,7 +1901,12 @@ public:
       inputs.push_back(inScope(scope) ? std::move(*value)
                                       : Datum(std::monostate{}));
     }
-    auto result = invoke(source, inputs, 1);
+    ProtocolContext context;
+    for (Attribute role : source.getRoles()) {
+      auto name = cast<StringAttr>(role).getValue();
+      context.roles.emplace_back(name, name);
+    }
+    auto result = invokeProtocol(source, inputs, context, 1);
     if (!result)
       return result.takeError();
     if (result->stopped()) {

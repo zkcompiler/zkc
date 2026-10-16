@@ -102,16 +102,19 @@ def valuesDefinition : CheckedDefinition :=
 def definitions : List CheckedDefinition :=
   [lessDefinition, rowsDefinition, shapeDefinition, tableDefinition, projectionDefinition, realizationDefinition, valuesDefinition]
 
-def protocolDefinition : CheckedProtocol :=
-  ⟨"s12h6d61705f6578616d706c657313h5265616c697a6556616c756573", ["role00000000"], tableTypes, valueTypes,
-    List.replicate 3 [0], [[0]], protocolBody.erase, protocolBody, protocolBody.elaborate_erase⟩
+def protocolDefinition : CheckedProtocol where
+  toProtocolSignature := ⟨"s12h6d61705f6578616d706c657313h5265616c697a6556616c756573", ["role00000000"], tableTypes, valueTypes,
+    List.replicate 3 [0], [[0]]⟩
+  raw := protocolBody.erase
+  body := protocolBody
+  formed := protocolBody.elaborate_erase
 
 def unit : UnitPayload where
   definitions := definitions
   protocols := [protocolDefinition]
   entryIndex := ⟨0, by decide⟩
   linked := by decide +kernel
-  rootsLinked := by decide +kernel
+  protocolsLinked := by decide +kernel
   available := checkUnitAvailability_ok_of_isOk (by decide +kernel)
   realizationClosed := by decide +kernel
   mapClosed := by decide +kernel

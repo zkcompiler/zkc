@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Source.Structured.Operations
+public import Zkc.Source.Structured.ProtocolSignature
 
 @[expose] public section
 
@@ -33,10 +34,12 @@ inductive ProtocolOp where
   | draw (owner : Nat) (field site : String)
   | statement (relation : String) (types : List Ty) (selectors : List String) (acceptance : Nat)
   | mark (site : String)
+  | protocolApply (callee : ProtocolSignature) (roles : List Nat) (site : String)
 
 def ProtocolOp.arguments : ProtocolOp → List Ty
   | .calculate op _ => op.arguments
   | .localCall helper .. => helper.inputs
+  | .protocolApply callee .. => callee.inputs
   | .guard .. => [.boolean]
   | .exchange ty .. | .restrict ty .. => [ty]
   | .draw _ field _ => [.service ("random." ++ field ++ "/0")]
@@ -46,6 +49,7 @@ def ProtocolOp.arguments : ProtocolOp → List Ty
 def ProtocolOp.results : ProtocolOp → List Ty
   | .calculate op _ => op.results
   | .localCall helper .. => helper.outputs
+  | .protocolApply callee .. => callee.outputs
   | .guard .. | .statement .. | .mark _ => []
   | .exchange ty .. | .restrict ty .. => [ty]
   | .draw _ field _ => [.field field]
@@ -55,7 +59,15 @@ def ProtocolOp.helpers : ProtocolOp → List Helper
   | .localCall helper .. => [helper]
   | _ => []
 
+def ProtocolOp.protocols : ProtocolOp → List ProtocolSignature
+  | .protocolApply callee .. => [callee]
+  | _ => []
+
+/-- Current operations have no callbacks; future callbacks use the same carrier. -/
+def ProtocolOp.regions : ProtocolOp → List (List Ty × List Ty)
+  | _ => []
+
 abbrev protocolDialect : Dialect :=
-  ⟨Ty, ProtocolOp, ProtocolOp.arguments, ProtocolOp.results, fun _ => []⟩
+  ⟨Ty, ProtocolOp, ProtocolOp.arguments, ProtocolOp.results, ProtocolOp.regions⟩
 
 end Zkc.Source.Structured

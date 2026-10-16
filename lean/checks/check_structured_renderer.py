@@ -196,6 +196,41 @@ example : (Zkc.Source.Structured.check RenderedPreparations.snapshot).isOk = tru
         except ValueError:
             continue
         raise AssertionError("renderer accepted a malformed preparation record")
+    child = ["function", "child", "protocol", "public", [["bool"]], [["bool"]],
+             ["protocol", ["A", "B"], [["A", "B"]], [["A", "B"]]], [], [],
+             ["block", [], ["return", [0]]]]
+    entry = ["function", "main", "protocol", "public", [["bool"]], [["bool"]],
+             ["protocol", ["P", "V"], [["P", "V"]], [["P", "V"]]], [], [],
+             ["block", [[["protocol_apply", "child", ["V", "P"]], [0],
+                         [["bool"]], [], "nested"]], ["return", [0]]]]
+    application = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
+                   "main", [], [], [], [entry, child]]
+    source = renderer.render(application, "RenderedApplication").replace("module\n\n", "", 1)
+    source += '''
+open Zkc.Source.Structured in
+example : (RenderedApplication.snapshot.definitions[0]?.map fun definition =>
+    match definition with
+    | .function function =>
+      let .block instructions _ := function.body
+      instructions.map fun (.instruction descriptor _ _ _ _) => match descriptor with
+        | .protocolApply callee roles => some (callee, roles)
+        | _ => none
+    | _ => []) = some [some ("child", ["V", "P"])] := by decide +kernel
+example : (Zkc.Source.Structured.check RenderedApplication.snapshot).isOk = true := by
+  decide +kernel
+'''
+    modules.append(source)
+    malformed_applications = [["protocol_apply"], ["protocol_apply", "child"],
+                              ["protocol_apply", "child", ["P"], "extra"],
+                              ["protocol_apply", "child", "P"],
+                              ["protocol_apply", "child", [0]],
+                              ["protocol_apply", 7, ["P"]]]
+    for invalid in malformed_applications:
+        try:
+            renderer.descriptor(invalid)
+        except ValueError:
+            continue
+        raise AssertionError("renderer accepted a malformed protocol application")
     # Imports/section commands from each rendering are legal at the file top
     # only. One import serves all independently named data declarations.
     header = "import Zkc.Source.Structured.Import\nset_option maxRecDepth 4096\n"
@@ -218,6 +253,7 @@ example : (Zkc.Source.Structured.check RenderedPreparations.snapshot).isOk = tru
               "open_metadata_kernel_cases": 3,
               "primitive_metadata_kernel_cases": 3, "obsolete_envelope_refusal_cases": 1,
               "preparation_metadata_kernel_cases": 3, "preparation_refusal_cases": 7,
+              "application_metadata_kernel_cases": 2, "application_refusal_cases": 6,
               "ascii_locale_cli_cases": 1,
               "renderer_sha256": support.lake.sha(Path(renderer.__file__)),
               "subject_sha256": support.lake.sha(path)}

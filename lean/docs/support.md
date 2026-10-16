@@ -9,6 +9,7 @@ They do not certify arbitrary DSL programs or the full native lowering pipeline.
 | Structured source | Multi-result closed callbacks and lexical binding; strict formation in both directions; scalar/mathematical/participant/import bridges; contextual equality, totality and compatible effect translation | Shared structural carrier; native transformation correctness requires separate correspondence |
 | Structured native import | Whole-unit original schema, separate protocol roots and kinded named helpers; explicit scalar/group interpretation, owner-only Local calls, shared participant effects, computational availability and service admission | No general availability soundness, eager/demand correspondence, affine resources, native correctness or relation/formula binding theorem |
 | Optional component semantics | Same typed Region with closed callbacks; generic lookup, optional named Math calls, all-present adequacy, exact resolution and full-table framing; shared scalar/group evaluator | Static availability is a separate computational check; adequacy alone proves neither admission nor native correspondence |
+| Retained protocol applications | Exact original/checked association in both directions; complete-signature linking, contextual prefix/full-table laws, optional call masks, outside-roster skip and effect interpretation | Supported static native profile; no repeat, generic availability/preflight soundness or native execution correspondence |
 | Retained preparations | Exact retained realization/map declarations, whole-unit transitive profile admission, full-ABI realization totality, ordered row/broadcast maps and stopped-prefix laws | Logical model; helper-value formulas require equations for the actual checked table; native resource limits remain separate |
 | Structured helper inlining | Generic invocation/body binding law preserving complete processes and suffixes; exact original/prepared model equality for Schnorr-response and multilinear-claim scalar Entries; admitted arithmetic mutation counterexample | Explicit lookup/body equation and exact retained subjects; no general native pass correctness or interactive protocol security |
 | Ordered finite semantics | Admission-preserving effectful folds, product/zip laws and conditional pure replacement | Evaluated mathematical domains; native capacity, failure diagnostics and domain lowering require their own correspondence |
@@ -79,8 +80,9 @@ The library equations state representation premises explicitly; the independent
 Sequence equation covers all logical inputs. See the
 [source contract](spec/structured-source.md#actual-library-primitive-subjects)
 for exact scope and theorem owners. Retained maps and realizations use that same admission and semantic carrier.
-Protocol application and repetition remain outside this admission profile;
-this extension does not admit the full Sumcheck protocol.
+Retained protocol application has the separate contract below. Repetition,
+conditional completion and construction-start remain outside admission;
+this profile does not admit the full Sumcheck protocol.
 
 The executable reference propagates generated index/vector bounds through the
 checked source before running the existing evaluator. Separate analysis and
@@ -128,3 +130,52 @@ work without changing existing budgets. Empty-row pruning follows the complete
 shape check. This is a logical workload bound, not exact CPU accounting:
 concrete positional list lookup depth is not charged as processor steps. General
 transfer soundness and native resource correspondence remain separate obligations.
+
+## Retained protocol application contracts
+
+A complete six-field signature includes the ordered roster, input/output types
+and input/output scopes. Exact source association exposes both the original
+function and its actual checked lowering; a shared name or signature does not
+establish body identity. Dependency ordering permutes complete checked values.
+From an actual admitted raw application, inversion laws recover its original
+instruction, resolved finite role substitution and statement-free callee check.
+Service operands retain their lexical formal-input index, nominal contract and
+mapped singleton declared owner independently of equal runtime handles.
+Protocol closures capture the strict earlier prefix and use the existing
+Math/Local helper tables, the one typed Region carrier and PIR process semantics.
+
+Generic laws preserve the selected root participant coordinate through nested
+role substitutions and qualify sites using the complete rendered parent and its
+UTF-8 byte length. Calls mask optional inputs and results, skip outsiders even
+with zero outputs, and preserve reached actions and stops. Optional Math
+projections and strict owned Local input sequencing keep their separate contracts.
+Helper internal marks remain raw. Site erasure removes internal observations,
+while qualified send, receive and query labels remain observable.
+
+The complete unchanged Application, ServiceOrder and nested-wrapper snapshots
+have explicit checked candidates and named kernel admission proofs. Application
+proves both participant equations with independent optional inputs and the exact
+observed mark sequence. ServiceOrder proves the ordered process for each role;
+handler equations cover aliased and distinct service handles, independently
+received values, false guards, consumed provider stops and unconsumed mismatches.
+The wrapper preserves the full rendered parent at nested sites. These proofs
+use literal full-signature body views of the admitted source. Source digests and
+finite native comparisons remain separate byte/execution evidence.
+
+Whole-unit native-summary and effective-site checks operate in original source
+order. They enforce existing native all-root constraints, including dormant
+protocols and reachable pure helper calls; this closes a prior independent-reader
+parity gap even in units with no application. These computational checks do not
+prove native traversal correspondence or abstract-preflight soundness. The CLI
+maintains separate analysis, logical-work, typed-reply and observer capacities.
+The effective-site collision check uses the standard ordered string set with an
+exposed ordinary string comparator, allowing concrete source admission proofs
+across module boundaries. Its empty/insert membership laws preserve the earlier
+duplicate criterion. The visit
+cap remains a logical bound, not a CPU-time guarantee.
+
+A flat selected body keeps its closed projection despite valid dormant
+applications. A reachable application refuses that narrower Lean view. Native
+one-role closed execution supports more; paired application comparisons use
+open execution. General availability, eager/demand agreement, native execution,
+provider randomness and security remain separate obligations.

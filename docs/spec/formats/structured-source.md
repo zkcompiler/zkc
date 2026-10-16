@@ -11,7 +11,10 @@ The complete unit is checked: supported unused
 definitions are retained, and unsupported definitions are refused. Symbol names
 are nonempty and unique across functions, domains, relations and operation
 bindings. Helper references form an acyclic
-graph; helpers cannot call the selected root. The independent
+graph; helpers cannot call protocols. Retained protocol applications form their
+own kind of dependency edge in the same complete cycle/depth check. Selection
+does not make a statement-free protocol uncallable from an acyclic sibling.
+The independent
 [formal admission contract](../../../lean/docs/spec/structured-source.md)
 defines the Lean interpretation.
 
@@ -42,8 +45,9 @@ order. There is no cross-category declaration-order field.
 
 The admitted domains are `bls12-381.fr` and `bls12-381.g1`, whose associated
 scalar field is `bls12-381.fr`. The only service contract is
-`random.bls12-381.fr/0`, with method `draw`. Services occur only at protocol
-input roots and as the actual query handle operand. The native
+`random.bls12-381.fr/0`, with method `draw`. Services originate at protocol
+input roots and may be query handles or actual protocol application arguments.
+The native
 [service contract](../runtime/services.md) requires singleton ownership and
 permits same-owner root aliases; services cannot be selected, restricted,
 exchanged, returned, passed to Math/Local helpers, or bound as statement data.
@@ -116,6 +120,10 @@ The native verifier validates binding values against installed and canonical
 static identities. Lean retains these values as opaque metadata and checks their
 shape and uniqueness; it does not independently reproduce that identity registry.
 Math helpers are private.
+Native protocol formation currently permits no explicit `sym_visibility`
+attribute, including an explicit `public`; its retained visibility is the
+default `public`. The general function record does not override that formation
+restriction or impose the Math helper's private-only rule on protocol calls.
 
 A finite declaration represents `local.finite_fold`. The empty predicate name
 means no predicate. There is no implicit Unit leaf for an empty state or result.
@@ -228,6 +236,7 @@ including nested regions. Stop reasons are `reject`, `abort`, `exhausted`,
 | `["call", name]` | ordinary Math helper call |
 | `["apply", name]` | Local function, finite, realization or map declaration call |
 | `["local_call", name, participant]` | Protocol call to an actual Local function with exact owner |
+| `["protocol_apply", name, role-names]` | Retained static protocol application with positional role substitution |
 | `["fold", domain, step, predicate]` | total Algebra fold |
 | `["if"]` | Local conditional over closed captures |
 | `["for"]` / `["for_condition"]` | Local counted control |
@@ -253,7 +262,7 @@ Ownership is checked independently of operand types:
 
 | Body kind | Admitted instructions |
 |---|---|
-| Protocol | Pure index constant/equality and field/group/Boolean operations, select, Math call, Algebra fold, Local call, guard, restrict, exchange, draw, statement |
+| Protocol | Pure index constant/equality and field/group/Boolean operations, select, Math call, Algebra fold, Local call, protocol application, guard, restrict, exchange, draw, statement |
 | Math | Pure index constant/equality and field/group/Boolean operations, select, bounded read, Math call, Algebra fold |
 | Local | Boolean constant, checked primitive execution, Local apply, conditional and counted control |
 
@@ -263,7 +272,8 @@ profile; vector and index selection are not yet native export paths.
 
 Only Local bodies may end in an explicit stop. A guard retains the owner of
 the original `protocol.guard`; projected `local.guard` is outside this source
-stage. Protocol application and protocol repetition remain outside this profile.
+stage. Protocol repetition, conditional entry completion and construction-start
+selection remain outside this profile, including dormant definitions.
 
 Multi-role protocols cannot use Math folds or bounded reads, including through
 retained Math helpers. Those combinations require additional partial-component
@@ -274,6 +284,70 @@ Native verification also checks availability of unused intermediate expressions.
 Local calls require all inputs at their owner, execute there even with zero
 results, and do not execute at other participants. Restriction and declared
 output scopes never erase preceding effects or stops.
+
+## Retained protocol application
+
+The exact native attributes of `protocol.apply` are `callee`, `roles` and `site`.
+The existing instruction row carries its full ordered operands and results, no
+regions, and its nonempty authored site. The descriptor does not duplicate the
+site. The target is a defined protocol in the same unit; `role-names[i]` maps
+its ith local role into the caller roster. The mapping is total and injective
+and may use a proper subset of the caller's roles. The complete ordered ABI and
+all required input availability are checked, including unused inputs. Service
+ports retain their exact contracts, mapped singleton owners and lexical input
+origins. Applications cannot target components containing entry statements.
+All references and bodies are checked even when unused or unreachable from the
+selected root. Ordinary Math/Local and preparation call rules remain unchanged.
+
+The independent SSA reference passes an immutable protocol context: a mapping
+from callee-local roles to root participants and an optional accumulated static
+application prefix. Root self never changes. At a call, role mappings compose
+positionally. The child prefix is the current application site's already
+qualified spelling. With `p(a,s) = "apply_" ++ decimal(UTF8Bytes(a)) ++ "_" ++ a
+++ "_" ++ s`, nested A/B/C renders `p(p(A,B),C)`. Qualifying at the root is
+identity; qualifying the empty synthetic site always yields the empty string.
+Native authored sites themselves are nonempty identifiers.
+
+A participant outside the mapped callee roster skips the body and returns an
+absent tuple of the exact output arity, including zero. Participating calls mask
+optional inputs to the callee interface, evaluate the original body, and mask
+successful outputs. Entry does not strictly demand every optional argument.
+Owned Local calls still demand all arguments, even unused inputs, and a missing
+argument stops at the qualified protocol call site. A reached Local helper stop
+retains its raw helper-local site. Math and Local helper bodies have their own
+unqualified observations. One SSA evaluation core owns all these operations;
+no production expansion or generated execution IR supplies the meaning.
+
+Guard owners, restriction membership, action owners/peers and protocol sites
+use the context. Received values and service handles remain the actual values;
+same-owner aliases preserve one handle and ordered state use. Zero-result calls
+still perform effects and propagate the first stop before the caller continues.
+The existing request/reply records and consumption rules are unchanged.
+
+Original nonempty site uniqueness includes application headers. An additional
+read-only traversal checks effective expanded-site uniqueness for every original
+protocol root, including unused roots. It revisits each application occurrence,
+advances its prefix, and excludes the erased call header from the effective set.
+All ordered protocol categories and owners share one set per root. Protocol Local
+call sites are included; helper-internal sites belong to separate namespaces.
+No reserved `apply_` prefix rule is imposed. A generated collision is refused
+before export or reference execution, without materializing expanded syntax.
+
+This traversal counts every static operation, including site-free work and
+terminators, and bounds total visits over all roots to 100000. Application stack
+depth includes the root and is at most 64. Each rendered label is at most 4096
+UTF-8 bytes; cumulative rendered label work is at most 16 MiB, including erased
+headers. Lengths are checked before concatenation. These limits are separate
+from the 512-byte stored source-string bound and the observer's execution fuel.
+
+Native formation additionally enforces the conservative application/Math
+expansion summaries specified by [composition](../ir/composition.md): boundary
+restrictions, pure helper work, return/header overhead, SSA/role slots, and
+intermediate site lengths all count. A smaller effective-site set cannot replace
+those preflight checks. The native reference and exporter independently check
+effective collisions after native formation; the independent formal reader must
+establish its own budget and effective-site obligations before claiming agreement
+with this admitted native profile. No observer record format is added.
 
 ## Primitive execution
 

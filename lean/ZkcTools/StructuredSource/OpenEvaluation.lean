@@ -134,9 +134,11 @@ def observe {types : List Ty} (roles : List String) (self : Nat) : Nat →
 supplied reply is inspected, including unused suffixes. Malformed replies still
 have their original replay behavior; none can resume with an unbounded value. -/
 def abstractReplies (replies : List ScriptReply) : Bounds.Analysis (List (Ty × Bounds.Value)) := do
+  Bounds.tick
   let mut result := []
   for reply in replies do
     -- Charge scanning even malformed/unused envelopes, independently of runtime work.
+    Bounds.tick
     Bounds.tick (1 + reply.request.compress.utf8ByteSize + reply.response.compress.utf8ByteSize)
     match Structured.Format.array reply.request, Structured.Format.array reply.response with
     | .ok [.str "receive", _, _, _, type], .ok [.str "value", value] =>
@@ -155,6 +157,7 @@ def abstractReplies (replies : List ScriptReply) : Bounds.Analysis (List (Ty × 
 position. Without any typed reply, this receive cannot resume; replay still
 reports its own missing/mismatched response or oversized-value error. -/
 def receiveBounds (replies : List (Ty × Bounds.Value)) (type : Ty) : Bounds.Analysis (Option Bounds.Value) := do
+  Bounds.tick
   let mut bound := none
   for (actual, value) in replies do
     Bounds.tick
@@ -176,14 +179,12 @@ def openPreflight (payload : UnitPayload) (request : OpenRequest)
     (values : OptionalValues payload.entry.inputs) : Except String Unit := do
   let analysis : Bounds.Analysis Unit := do
     let helpers ← Bounds.prepareHelpers payload.definitions
+    let protocols ← Bounds.prepareProtocols helpers payload.protocols
     let replies ← abstractReplies request.replies
     let inputs := optionalAbstractInputs values
     inputs.forM Bounds.checkValue
-    let masked := inputs.zipWith (fun value scope =>
-      if scope.contains request.self then value else .absent) payload.entry.inputScopes
-    let result ← Bounds.region (Bounds.protocolOperation helpers request.self
-      (receiveBounds replies))
-      payload.entry.raw masked
+    let result ← Bounds.invokeProtocolBound protocols payload.entry.signature {} request.self
+      (receiveBounds replies) inputs
     if let some outputs := result then outputs.forM Bounds.outputWork
     return ()
   let _ ← (analysis.run {}).mapError (Bounds.Failure.code true)

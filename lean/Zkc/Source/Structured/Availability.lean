@@ -311,6 +311,21 @@ def operation (summaries : List DependencySummary) (roster : List String)
   | _ => chargeOperations 1
   match op with
   | .calculate op _ => availableCalculation summaries roles op arguments
+  | .protocolApply signature indices _ =>
+    if indices.length != signature.roles.length ||
+        indices.eraseDups.length != indices.length || !indices.all (· < roles) then
+      throw "structured-availability-substitution"
+    if arguments.length != signature.inputs.length ||
+        signature.inputScopes.length != signature.inputs.length ||
+        signature.outputScopes.length != signature.outputs.length then
+      throw "structured-availability-port-scopes"
+    for scope in signature.inputScopes ++ signature.outputScopes do
+      validScope signature.roles.length scope
+    let mappedInputs := signature.inputScopes.map (List.map (fun role => indices[role]?.getD 0))
+    for (requested, supplied) in mappedInputs.zip arguments do
+      if !(← subset requested supplied) then throw "structured-availability-application-input"
+    chargeReplay (signature.outputs.length + 1)
+    return signature.outputScopes.map (List.map (fun role => indices[role]?.getD 0))
   | .localCall helper _ owner _ =>
     noServices helper.inputs
     noServices helper.outputs

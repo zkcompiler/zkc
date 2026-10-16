@@ -68,7 +68,7 @@ def mutateInstruction (mutation : Mutation) : Instruction → Instruction
         operands results regions
         (match mutation with
          | .response => site
-         | .site => if site = SchnorrInteractive.wiring.responseSite then "changed.response" else site)
+         | .site => if site = SchnorrInteractive.wiring.responseSite then "changed_response" else site)
 
 def mutateDefinition (mutation : Mutation) : Definition → Definition
   | .function f =>
@@ -89,6 +89,20 @@ def mutatedSnapshot (mutation : Mutation) : Snapshot :=
 
 def responseProgram : Program :=
   (check (mutatedSnapshot .response)).toOption.get (by decide +kernel)
+
+/-- The original dotted mutation is outside the native identifier profile and
+is now refused by independent admission, before handler execution. -/
+def malformedSiteSnapshot : Snapshot :=
+  { mutatedSnapshot .site with definitions := (mutatedSnapshot .site).definitions.map fun
+      | .function function => .function { function with body := match function.body with
+          | .block instructions terminal => .block (instructions.map fun
+              | .instruction descriptor operands results regions site =>
+                  .instruction descriptor operands results regions
+                    (if site = "changed_response" then "changed.response" else site)) terminal }
+      | definition => definition }
+
+theorem malformed_site_refused : (check malformedSiteSnapshot).isOk = false := by
+  decide +kernel
 
 def siteProgram : Program :=
   (check (mutatedSnapshot .site)).toOption.get (by decide +kernel)
@@ -124,7 +138,7 @@ theorem site_equation (base key : G) (secret : F) (service : Nat) :
       .call (.query SchnorrInteractive.nonceSite scalarDomain (.cons service .nil)) (fun (nonce : F) =>
       .call (.send (ty := .group groupDomain) SchnorrInteractive.wiring.commitmentSite 1 (nonce • base)) (fun _ =>
       .call (.receive (.field scalarDomain) SchnorrInteractive.wiring.deliverySite 1) (fun (challenge : F) =>
-      .call (.send (ty := .field scalarDomain) "changed.response" 1 (nonce + challenge * secret))
+      .call (.send (ty := .field scalarDomain) "changed_response" 1 (nonce + challenge * secret))
         (fun _ => .done none)))) := rfl
 
 set_option smartUnfolding true

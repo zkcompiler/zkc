@@ -7,9 +7,21 @@ public import Zkc.Source.Structured.Meaning
 
 namespace Zkc.Source.Structured
 
+/-- Retained applications have no implicit closed expansion, even for one role. -/
+theorem ProtocolOp.closed_protocolApply (signature : ProtocolSignature)
+    (roles : List Nat) (site : String) :
+    (ProtocolOp.protocolApply signature roles site).closed = .error "structured-open-profile" := rfl
+
+theorem closedRootTree_apply_refused (signature : ProtocolSignature)
+    (roles : List Nat) (site : String) (args : List Nat) (results : List Ty)
+    (next : RawRegion Ty ProtocolOp) :
+    closedRootTree (.letOp (.protocolApply signature roles site) args results .nil next) =
+      .error "structured-open-profile" := rfl
+
 /-- Produce an explicit closed view of an already admitted whole unit.
 Every protocol remains outside the helper table. The stored root is obtained
-only by the checked operation projection of the actual entry tree. -/
+only by the checked operation projection of the actual entry tree. Dormant
+protocols may contain applications; reachable applications are refused. -/
 def Program.closedPayload (program : Program) : Except String Payload := do
   let unit := program.payload
   let root := unit.entry

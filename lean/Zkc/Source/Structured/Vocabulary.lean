@@ -73,6 +73,7 @@ inductive Descriptor where
   | boundedAt (domain : String)
   | call (name : String)
   | apply (name : String)
+  | protocolApply (name : String) (roles : List String)
   | localCall (name owner : String)
   | fold (domain step predicate : String)
   | branch | loop | loopCondition

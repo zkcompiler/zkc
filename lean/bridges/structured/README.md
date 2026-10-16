@@ -308,6 +308,44 @@ These comparisons concern original declarations and their shared structured
 semantics. They do not establish the correctness of native map lowering or
 transport a cryptographic security theorem to production execution.
 
+## Retained protocol applications
+
+`applications.py` retains complete original units for the existing
+`application.zkc` and `service_order.zkc` fixtures, plus a nested service caller.
+The first composes arithmetic protocols with a role permutation. The second
+makes the order of service draws and message delivery observable across a call.
+The nested caller exercises accumulated site qualification.
+
+```sh
+python3 lean/bridges/structured/applications.py \
+  --compiler build/compiler/zkc-compile \
+  --reference build/compiler/test/zkc-structured_reference-test \
+  --lean lean/.lake/build/bin/structured-source \
+  --report build/experiments/structured-applications/report.json
+```
+
+The C++ reference traverses original native SSA with an explicit participant
+mapping and call prefix. Lean independently checks full signatures and builds
+closures over earlier protocol declarations. Calls preserve optional inputs;
+only owned Local helpers impose strict input presence. A participant outside a
+callee's mapped roster skips that call, including a zero-result child that
+would stop for an inside participant. Nested action sites follow the native
+naming rule; helper-internal sites keep their existing namespace.
+
+Independent expectations check arithmetic results, received values, aliased and
+distinct service handles, every reached service/message stop, missing replies,
+and mismatched reply sites. A stateful script supplies the expected handle order;
+its counter values do not come from either tested interpreter. Complete-source
+renaming preserves behavior, while a well-formed arithmetic mutation changes it.
+Malformed snapshot controls exercise the separate reader and are not claimed to
+identify mutated native source bytes. `--write-fixtures` regenerates exact MLIR,
+JSON and transparent Lean data, while semantic proofs remain separately maintained.
+
+This suite compares the original-SSA reference and the Lean observer. The
+production Runner has a separate comparison suite below. These application
+comparisons do not prove native projection, arbitrary provider behavior, or a
+security reduction. Protocol repetition remains outside this retained profile.
+
 ## Native participant observations
 
 The optional [participant comparison](participant.md) binds actual Interactive

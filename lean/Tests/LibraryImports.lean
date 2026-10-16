@@ -82,6 +82,7 @@ import Zkc.Source.ScalarRegion
 import Zkc.Source.Structure
 import Zkc.Source.Structured.Admission
 import Zkc.Source.Structured.Algebra
+import Zkc.Source.Structured.ApplicationMetadata
 import Zkc.Source.Structured.Availability
 import Zkc.Source.Structured.Checked
 import Zkc.Source.Structured.ClosedProfile
@@ -109,7 +110,12 @@ import Zkc.Source.Structured.PreparationAdmission
 import Zkc.Source.Structured.PrimitiveEvaluation
 import Zkc.Source.Structured.PrimitiveLaws
 import Zkc.Source.Structured.Primitives
+import Zkc.Source.Structured.ProtocolAdmission
+import Zkc.Source.Structured.ProtocolContext
+import Zkc.Source.Structured.ProtocolLinking
 import Zkc.Source.Structured.ProtocolOperations
+import Zkc.Source.Structured.ProtocolSignature
+import Zkc.Source.Structured.ProtocolTable
 import Zkc.Source.Structured.Provenance
 import Zkc.Source.Structured.RealizationTotality
 import Zkc.Source.Structured.Table
@@ -126,6 +132,11 @@ import Tests.ParticipantInterface
 import Tests.RegionCompatibility
 import Tests.RegionDecoding
 import Tests.RegionLaws
+import Tests.StructuredApplicationAdmission
+import Tests.StructuredApplicationBounds
+import Tests.StructuredApplicationMetadata
+import Tests.StructuredApplicationSemantics
+import Tests.StructuredApplications
 import Tests.StructuredAvailability
 import Tests.StructuredBounds
 import Tests.StructuredComponents
@@ -140,6 +151,7 @@ import Tests.StructuredParticipant
 import Tests.StructuredPrimitives
 import Tests.StructuredPrograms
 import Tests.StructuredRealizations
+import Tests.StructuredServiceOrder
 import Tests.StructuredSource
 import Tests.StructuredWire
 import ZkcExamples.NativePrograms.ContractControls
@@ -166,6 +178,13 @@ import ZkcExamples.NativePrograms.Variants.SchnorrReorderedData
 import ZkcExamples.NativePrograms.Variants.SumcheckHelpersData
 import ZkcExamples.NativePrograms.Variants.SumcheckHornerData
 import ZkcExamples.NativePrograms.Variants.SumcheckWrongResidualData
+import ZkcExamples.Structured.Application
+import ZkcExamples.Structured.ApplicationBodies
+import ZkcExamples.Structured.ApplicationData
+import ZkcExamples.Structured.ApplicationViews
+import ZkcExamples.Structured.ApplicationWrapper
+import ZkcExamples.Structured.ApplicationWrapperData
+import ZkcExamples.Structured.ApplicationWrapperViews
 import ZkcExamples.Structured.MapCombination
 import ZkcExamples.Structured.MapCombinationData
 import ZkcExamples.Structured.MapCombinationViews
@@ -218,6 +237,11 @@ import ZkcExamples.Structured.SchnorrResponseCandidateData
 import ZkcExamples.Structured.SchnorrResponseMutatedData
 import ZkcExamples.Structured.SchnorrResponseOriginalData
 import ZkcExamples.Structured.SchnorrVariants
+import ZkcExamples.Structured.ServiceOrder
+import ZkcExamples.Structured.ServiceOrderBodies
+import ZkcExamples.Structured.ServiceOrderControls
+import ZkcExamples.Structured.ServiceOrderData
+import ZkcExamples.Structured.ServiceOrderViews
 import ZkcExamples.Structured.SumcheckClaim
 import ZkcExamples.Structured.SumcheckClaimCandidateData
 import ZkcExamples.Structured.SumcheckClaimOriginalData

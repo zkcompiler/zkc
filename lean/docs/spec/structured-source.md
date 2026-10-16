@@ -39,25 +39,33 @@ rosters and scopes, then forms existing `Source.Region` bodies through
 stored per named helper; calls retain names and never expand syntax.
 
 `UnitPayload` separates kinded Math/Local `CheckedDefinition`s from
-`CheckedProtocol` roots. Helpers use `dialect`; roots use `protocolDialect` on
-the same carrier. Root operations resolve role strings to indices in that
-root's roster. Protocol roots cannot occur in a `Helper` signature or helper
-table. The calculation boundary admits only Math references and region-free
-calculations; Local invocation carries a checked Local signature and owner.
+`CheckedProtocol` declarations. Helpers use `dialect`; protocols use
+`protocolDialect` on the same carrier. A `ProtocolSignature` contains all six
+fields: name, ordered roster, ordered input and output types, and resolved input
+and output scopes. Scope order is retained. Protocols never inhabit a `Helper`
+signature or helper table. The calculation boundary admits only Math references
+and region-free calculations; Local invocation carries a checked Local
+signature and owner. Selection chooses an admitted protocol without changing
+its callable kind.
 
 The existing declaration order is a candidate, independently checked by
 `DeclarationsLinked`. Exact signatures include Math/Local kind, ordered inputs
 and ordered outputs, including both finite callbacks. Dormant callbacks and
-stopped suffixes remain dependencies. Roots separately check their references
-against the complete helper table. Identity summaries order their Math call
-subgraph for bound discharge; availability reuses the final checked order and
-introduces no additional sorter.
+stopped suffixes remain dependencies. `ProtocolDeclarationsLinked` additionally
+checks each protocol's exact helper inventory against the complete helper table
+and its complete protocol signatures against the strict earlier protocol prefix.
+All supplied declarations are checked, including dormant callers and cycles.
+Identity summaries order their Math call subgraph for bound discharge;
+availability reuses the final checked orders.
 
 `Imported snapshot` carries successful admission of that exact constructor
 subject. `Imported.exactSubject` and `check_ok_inversion` retain subject identity
 and successful checking. Typed erasure/formation laws recover exact stored
 bodies. These facts do not prove a universal MLIR lowering or exporter theorem,
-or correctness of the candidate ordering algorithm as an inventory transform.
+or native execution correctness. Protocol admission also retains the exact
+association between original protocol functions and checked declarations,
+including resolved scopes and the lowered raw body, in both directions.
+Signature equality alone does not identify an original body.
 
 ## Bounds and availability
 
@@ -84,12 +92,19 @@ profile; owned Local finite/control work remains available in multi-role roots.
 This restriction bounds the partial Math fragment; it is not a proof that eager
 component interpretation equals native demand-driven projection.
 
-Each root checks every requirement, owned operand, nonempty restriction subset
-and declared output scope. Service values originate only at singly owned root
-input ports. Their exact contract is checked at draw, and they cannot be
-selected, restricted, exchanged, returned, passed to helpers or used in
-statements. Handle-alias restrictions belong to the executable request boundary;
-service independence or uniform sampling does not follow from handle identity.
+Each protocol checks every requirement, owned operand, nonempty restriction
+subset and declared output scope. A retained application must supply every
+mapped declared input scope, including unused operands, and its result
+footprints are precisely the mapped declared output scopes. Each callee body is
+checked under its own declared inputs.
+
+Service values originate only at singly owned formal protocol input ports.
+Draw and protocol forwarding check their exact contract and mapped singleton
+owner through the lexical SSA origin. Equal runtime handles do not identify
+lexical ports. Services cannot be selected, restricted, exchanged, returned,
+passed to helpers or used in statements. Same-owner aliases are legal;
+executable alias validation precedes root masking. Service independence or
+uniform sampling does not follow from handle identity.
 
 `UnitPayload.available` records `checkUnitAvailability ... = .ok ()`. This is
 computational admission evidence, **not a general availability-soundness or
@@ -199,8 +214,9 @@ host allocation success or equate native runtime and observer work capacities.
 Callers needing subsequent lengths or index arithmetic must state those bounds.
 The exact Fr/G1 nominal profile remains fixed; a configurable profile is deferred
 until a real second-domain consumer requires it. Multi-role partial Math remains
-restricted as above. Protocol application and protocol repetition remain
-unsupported, including in dormant source closure.
+restricted as above. Retained protocol applications use the same checked
+carrier as described below. Protocol repetition, conditional completion and
+construction-start remain unsupported, including in dormant source closure.
 
 ## Retained realization and map declarations
 
@@ -513,6 +529,96 @@ is retained without inferring an association to that formula. These equations do
 not certify native BLS arithmetic, provider randomness, runtime execution, the
 exporter, authored relation binding, or Fiat–Shamir security.
 
+## Retained protocol applications
+
+The exact five-field instruction row is
+`[["protocol_apply", callee, roles], operands, resultTypes, [], site]`.
+The descriptor has exactly three fields; the eight-slot snapshot envelope is
+unchanged. Admission requires a flat nonempty target, exact ordered full ABI,
+zero regions, a nonempty site, and one caller role for every ordered callee role.
+The substitution is injective and in range. Protocol declaration names, role names and real sites
+use ASCII `[A-Za-z_][A-Za-z0-9_]*` with the separate 512-byte source limit;
+arbitrary flat symbols and the empty synthetic mark have their own rules.
+
+The retained original reference edge must target a public protocol function.
+All protocol headers require the computed public wire visibility. Native
+formation rejects explicit source visibility attributes, including explicit
+public; that distinction is absent from the wire and is not reconstructed by
+Lean. Applied bodies must be statement-free. The selected root may be called
+by another acyclic declaration when it meets those requirements. Signature-only
+lookup cannot authorize a helper, binding or retained preparation declaration
+as a protocol target.
+
+`ProtocolTable` stores closures indexed by the complete six-field signature.
+Each closure captures only its earlier protocol prefix and the complete existing
+Math/Local component tables. A finite fold constructs this table; invocation
+does not expand source or recursively resolve a new body. Missing entries and
+same-name signature mismatches refuse. Exact linkage justifies using a full-table
+body equation for a closure defined with its captured prefix.
+
+`Imported.protocolSource` and `Imported.protocolChecked` expose the exact
+original/check association in both directions; `Imported.protocolPermutation`
+preserves complete checked values and multiplicities. Given actual membership
+in a checked protocol's raw operations, `Imported.protocolApplication` recovers
+the original instruction and resolver result, including lexical formal service
+input indices, nominal contracts and mapped singleton scopes. Its role and
+callee corollaries derive finite role validity and the original statement-free
+callee check. These are admission consequences, independent of runtime handle
+equality and of a general availability-soundness theorem.
+
+`ProtocolContext` stores an optional application prefix and a map from current
+local role indices to selected-root indices. Root self is immutable. Entry
+composes the current role map with the call substitution; all owners, peers,
+restrictions and port scopes use that composed map. Validity requires boundedness
+and injectivity only on the current finite roster, not on arbitrary natural
+indices used by the total function's default.
+
+For nonempty sites, qualification is identity at the root, and beneath prefix
+`a` it is `p(a,s) = "apply_" ++ decimal(a.utf8ByteSize) ++ "_" ++ a ++ "_" ++ s`.
+The empty synthetic site always remains empty. Nested A/B/C therefore renders
+`p(p(A,B),C)`, not `p(A,p(B,C))`. Helper tables keep their raw internal marks;
+only protocol sites are qualified. Actual service handles pass unchanged.
+
+An application outside the mapped callee roster returns absence at every result
+position without invoking the child. This includes the empty result tuple.
+Inside the roster, the closure masks actual optional inputs, denotes its one
+stored `Region`, then masks returned outputs. Entry never sequences all optional
+inputs. Math retains per-result optional behavior; an owned Local call still
+requires all inputs, including unused ones. Missing Local inputs stop at the
+qualified caller mark, while a reached helper's own stop retains its raw mark.
+A zero-result child may perform actions or stop; output arity never erases work.
+`ProtocolOp.regions` supplies typed optional callback meanings to the one
+operation interpreter. Current admitted protocol constructors have no regions;
+future repeat must extend this same carrier.
+
+Static admission has three independent resource checks. Stored-source limits
+and combined helper/protocol dependency depth use leaf depth zero and at most
+64 edges. Native conservative summaries use original instructions and terminators,
+not synthesized marks: at most 64 nodes of expansion depth, 100000 work,
+1000000 operands/results/role selectors, 16 MiB conservative site bytes and a
+4096-byte longest-site bound. Protocol roots are traversed in original snapshot order and share the module totals; ordinary
+Math calls and protocol calls retain distinct accounting.
+
+Effective-site traversal separately visits every original protocol in snapshot order as a root,
+with a fresh collision set but shared cumulative counters. It follows every
+call occurrence, including dormant suffixes. Application headers are rendered,
+charged and checked but are not inserted as effective leaves. Guard, exchange,
+query and Local-call sites share the resulting namespace; helper internals do
+not enter it. Limits are 100000 visits, stack depth 64 including the root,
+4096 UTF-8 bytes per generated label and 16 MiB cumulative rendered labels.
+These checks are independent of self, input values, replies and observer capacity.
+The collision collection is `ApplicationMetadata.SiteSet`, a standard balanced
+set with an exposed ordinary less/equal string comparator. Empty and insertion
+laws preserve exact duplicate membership; module-level kernel controls ensure
+concrete admissions can reduce without importing private library bodies.
+Logical visit limits do not imply a processor-time bound.
+
+The outside-roster equation specifies the retained logical process. Relating it
+to native projection requires demand-slicing evidence and the admitted calculation
+profile; absent inputs alone do not imply absent intermediates because constants
+can produce values. General optional-Math erasure, availability soundness,
+resource-transfer soundness and native refinement remain separate obligations.
+
 ## Participant meaning and observations
 
 `Program.participant` interprets the selected root for a chosen roster index.
@@ -543,7 +649,13 @@ have no closed `denote`. Existing finite clients use `checkClosed` and the
 closed profile's process laws, with the same `F,G` interpretation.
 `ClosedProgram.participant_eq_denote` proves the relation after site erasure,
 with exact port transports and complete singleton scopes certified by the
-closed-profile check itself.
+closed-profile check itself. A reachable retained application refuses the
+closed view with `structured-open-profile`. An application-free selected body
+retains its closed projection even if other dormant protocol declarations
+contain applications; the projected body is independent of the unused table.
+Native one-role closed execution also supports calls; that executable surface
+is wider than this Lean closed projection. Paired application comparisons use
+open execution and record the closed-view refusal separately.
 `Program.participant_direct` derives the plain interpreter from the observed
 one through generic operation, Region and table-fold interpretation laws.
 
@@ -599,8 +711,13 @@ checked source. This includes generated constants, arithmetic, append, helper
 bodies, loops and folds; an input maximum alone is insufficient. Typed received
 values use conservative bounds from all matching reply envelopes, including
 unused suffixes. A reversed array stores the abstract SSA context while ordered
-argument/result tuples retain their list ABI. The preflight never interprets a
-helper by its name and does not replace the typed evaluator.
+argument/result tuples retain their list ABI. Protocol transfers capture their
+strict prefix, compare complete signatures, compose the same root-coordinate
+context and preserve actual optional inputs and mapped masks. An outside call
+returns the abstract absent tuple; no returning path is distinct from a returning
+empty tuple. Typed receives use independent reply envelopes, never the sender's
+operand. The preflight never infers a helper's behavior from its spelling and
+does not replace the typed evaluator.
 
 Separate analysis and expanded logical-work meters each allow 1000000 units;
 generated vectors are capped at 4096 elements. Work includes nodes, selected

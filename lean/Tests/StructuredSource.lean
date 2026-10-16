@@ -26,7 +26,7 @@ def digest : String := "sha256:" ++ String.ofList (List.replicate 64 '0')
 
 def function (name : String) (kind : Kind) (inputs outputs : List Ty) (body : Block)
     (premises : List Bound := []) : Definition :=
-  .function ⟨name, kind, .privateDef, inputs, outputs,
+  .function ⟨name, kind, if kind == .protocol then .publicDef else .privateDef, inputs, outputs,
     if kind == .protocol then some ⟨["P"], inputs.map (fun _ => ["P"]),
       outputs.map (fun _ => ["P"])⟩ else none, premises,
     if kind == .local then some (name, []) else none, body⟩
@@ -175,6 +175,15 @@ def dependencyChain (length copies : Nat) : Snapshot :=
   snapshot (helpers ++ [function "main" .protocol [] []
     (.block [.instruction (.call ("helper" ++ toString (length - 1))) [] [] [] ""] (.ret []))])
 
+/-- Inspect the canonical formation phases separately from native expansion
+budgets. The result is not an admitted Program or a source correspondence claim. -/
+private def dependencyPhases (source : Snapshot) :
+    Except String (List CheckedDefinition × List CheckedProtocol) := do
+  let (domains, headers, summaries) ← checkUnitHeaders source
+  let helpers ← checkUnitHelpers source domains summaries
+  let protocols ← checkUnitProtocols source domains summaries headers helpers
+  return (helpers.map (·.definition), protocols)
+
 -- Kernel checks use reduction, never native_decide or an evaluator oracle.
 theorem total_admitted : (checkClosed total).isOk = true := by decide +kernel
 theorem wrong_call_refused : refused (preconditionCall true) "structured-call-premise" = true := by decide +kernel
@@ -251,7 +260,7 @@ def run : IO Unit := do
     function "cycle" .math [] [] (.block [.instruction (.call "cycle") [] [] [] ""] (.ret []))])
     "structured-helper-cycle")
   test "reference-depth" (refused (dependencyChain 66 1) "structured-reference-depth")
-  test "root-reference-depth" (refused (dependencyChain 65 1) "structured-availability-depth-limit")
+  test "root-reference-depth" (refused (dependencyChain 65 1) "structured-reference-depth")
   let dag := dependencyChain 17 2
   let formedDag : Except String (List CheckedDefinition) := do
     let summaries ← dag.identitySummaries
@@ -262,11 +271,35 @@ def run : IO Unit := do
     | .ok definitions => definitions.length == 17 &&
         (definitions.map (·.instructionCount)).foldl (· + ·) 0 == 32
     | .error _ => false)
-  test "shared-dag-availability-admitted" ((check dag).isOk)
-  test "empty-summary-dag-does-not-expand-operations" ((check (dependencyChain 40 2)).isOk)
-  test "shared-dag-analysis-limit-is-separate" (evaluate (dependencyChain 40 2) [] ==
+  let availableDag : Except String Unit := do
+    let (definitions, protocols) ← dependencyPhases dag
+    checkUnitAvailability definitions protocols
+  test "shared-dag-availability-admitted" availableDag.isOk
+  test "shared-dag-native-work-refused" (refused dag "structured-application-limit")
+  let deepDag := dependencyChain 40 2
+  let availableDeepDag : Except String Unit := do
+    let (definitions, protocols) ← dependencyPhases deepDag
+    checkUnitAvailability definitions protocols
+  test "empty-summary-dag-does-not-expand-operations" availableDeepDag.isOk
+  -- Test the existing abstract phase directly: whole-unit native budgets now
+  -- refuse this Math DAG before execution, while the analysis meter is distinct.
+  let deepAnalysis : Except String Unit := do
+    let (definitions, protocols) ← dependencyPhases deepDag
+    let [root] := protocols | throw "unexpected-test-protocols"
+    let raw ← closedRootTree root.raw
+    let analysis : ZkcTools.StructuredSource.Bounds.Analysis Unit := do
+      let helpers ← ZkcTools.StructuredSource.Bounds.prepareHelpers definitions
+      let _ ← ZkcTools.StructuredSource.Bounds.region
+        (ZkcTools.StructuredSource.Bounds.operation helpers) raw []
+      pure ()
+    (analysis.run' {}).mapError (ZkcTools.StructuredSource.Bounds.Failure.code false)
+  test "shared-dag-analysis-limit-is-separate" (deepAnalysis ==
     .error "structured-bounds-analysis-limit")
-  test "reference-depth-boundary" ((check (dependencyChain 64 1)).isOk)
+  test "empty-summary-dag-native-work-refused"
+    (refused deepDag "structured-application-limit")
+  test "reference-depth-boundary" ((dependencyPhases (dependencyChain 64 1)).isOk)
+  test "native-node-depth-overflow" (refused (dependencyChain 64 1) "structured-application-depth")
+  test "native-node-depth-boundary" ((check (dependencyChain 63 1)).isOk)
   test "declaration-order-does-not-change-fold" (evaluate
     {unit with definitions := unit.definitions.reverse} [vec [2], boolean true] == .ok (stopped "abort"))
   let hiddenCycle := snapshot [

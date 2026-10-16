@@ -92,9 +92,9 @@ theorem ClosedProjection.exists_of_exact {inputs outputs}
   | ret refs => exact ⟨.ret refs, .ret refs⟩
   | stop reason => simp [Region.erase, closedRootTree] at projected
   | letOp op args bodies next bodiesIH nextIH =>
-    cases bodies
     cases op with
     | calculate op allowed =>
+      cases bodies
       by_cases closedValues : op.closedValues = true
       · cases step : closedRootTree next.erase with
         | error error => simp [Region.erase, Regions.erase, closedRootTree, ProtocolOp.closed,
@@ -104,6 +104,7 @@ theorem ClosedProjection.exists_of_exact {inputs outputs}
           exact ⟨_, .calculate op allowed closedValues args relation⟩
       · simp [Region.erase, Regions.erase, closedRootTree, ProtocolOp.closed, closedValues] at projected; cases projected
     | localCall helper kind owner site =>
+      cases bodies
       cases owner with
       | zero =>
         cases step : closedRootTree next.erase with
@@ -114,6 +115,7 @@ theorem ClosedProjection.exists_of_exact {inputs outputs}
           exact ⟨_, .localCall helper kind site args relation⟩
       | succ owner => simp [Region.erase, Regions.erase, closedRootTree, ProtocolOp.closed] at projected; cases projected
     | guard owner site =>
+      cases bodies
       cases owner with
       | zero =>
         cases step : closedRootTree next.erase with
@@ -124,13 +126,15 @@ theorem ClosedProjection.exists_of_exact {inputs outputs}
           exact ⟨_, .guard site args relation⟩
       | succ owner => simp [Region.erase, Regions.erase, closedRootTree, ProtocolOp.closed] at projected; cases projected
     | mark site =>
+      cases bodies
       cases step : closedRootTree next.erase with
       | error error => simp [Region.erase, Regions.erase, closedRootTree, ProtocolOp.closed,
           step, Functor.map, Except.map] at projected; cases projected
       | ok tail =>
         obtain ⟨target, relation⟩ := nextIH tail step
         exact ⟨_, .mark site args relation⟩
-    | exchange | restrict | draw | statement =>
+    | exchange | restrict | draw | statement | protocolApply =>
+      cases bodies
       simp [Region.erase, Regions.erase, closedRootTree, ProtocolOp.closed] at projected; cases projected
   | bind body next bodyIH nextIH =>
     cases first : closedRootTree body.erase with
@@ -232,9 +236,34 @@ theorem ClosedProgram.root_projection (program : ClosedProgram) :
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
+/-- The projected selected tree contains no retained application reference. -/
+theorem ClosedProjection.protocols_empty {inputs outputs}
+    {source : Region protocolDialect inputs outputs} {target : Region dialect inputs outputs}
+    (projection : ClosedProjection source target) :
+    source.erase.operations.flatMap ProtocolOp.protocols = [] := by
+  induction projection <;>
+    simp_all [Region.erase, Regions.erase, RawRegion.operations, RawRegions.operations,
+      ProtocolOp.protocols, List.flatMap_append]
+  all_goals assumption
+
+/-- Dormant declarations may contain applies; only this projected tree is independent. -/
+theorem ClosedProjection.protocol_table_independent {inputs outputs}
+    {source : Region protocolDialect inputs outputs} {target : Region dialect inputs outputs}
+    (projection : ClosedProjection source target) (tables : OpenTables F G)
+    (left right : ProtocolTable (assignment F G) (observedInterface F G))
+    (self : Nat) (context : ProtocolContext := {}) :
+    source.denote (participantMeaning tables self left context) =
+      source.denote (participantMeaning tables self right context) := by
+  apply protocol_region_table_congr
+  · intros; rfl
+  · intros; rfl
+  · intro signature used
+    rw [projection.protocols_empty] at used
+    cases used
+
 private theorem calculation_present (tables : OpenTables F G) (adequate : tables.Adequate)
     (op : Op) (allowed : op.isCalculation = true) (args : Values (assignment F G) op.arguments) :
-    protocolOperation tables 0 (.calculate op allowed) args.present =
+    protocolOperation tables 0 (.calculate op allowed) args.present .nil =
       (Evaluation.operation (observedSites F G) tables.closed op args
         ((calculationBodies op allowed).denote (Evaluation.meaning (observedSites F G) tables.closed))).bind
         fun results => .done results.present := by
@@ -257,7 +286,7 @@ theorem ClosedProjection.denote_present {inputs outputs}
   | ret refs => simp only [Region.denote, Operands.eval_present, PIR.Proc.bind]
   | calculate op allowed closedValues args next ih =>
     change (protocolOperation tables 0 (.calculate op allowed)
-      (args.eval (fun ref => some (env ref)))).bind _ = _
+      (args.eval (fun ref => some (env ref))) .nil).bind _ = _
     rw [show args.eval (fun ref => some (env ref)) = (args.eval env).present from
       Operands.eval_present env args, calculation_present tables adequate]
     simp only [Region.denote, PIR.Proc.bind_assoc, PIR.Proc.bind, Environment.prepend_present]
@@ -277,14 +306,14 @@ theorem ClosedProjection.denote_present {inputs outputs}
     exact ih _
   | guard site args next ih =>
     have operation : ∀ (values : Values (assignment F G) [Ty.boolean]),
-        protocolOperation tables 0 (.guard 0 site) values.present =
+        protocolOperation tables 0 (.guard 0 site) values.present .nil =
         (Evaluation.operation (observedSites F G) tables.closed .guard values .nil).bind
           (fun results => .done results.present) := by
       intro values
       cases values with
       | cons condition rest => cases rest; cases condition <;> rfl
     change (protocolOperation tables 0 (.guard 0 site)
-      (args.eval (fun ref => some (env ref)))).bind _ = _
+      (args.eval (fun ref => some (env ref))) .nil).bind _ = _
     rw [show args.eval (fun ref => some (env ref)) = (args.eval env).present from
       Operands.eval_present env args, operation]
     simp only [Region.denote, PIR.Proc.bind_assoc, PIR.Proc.bind, Environment.prepend_present]
@@ -294,7 +323,7 @@ theorem ClosedProjection.denote_present {inputs outputs}
   | mark site args next ih =>
     cases args
     simp only [Region.denote, participantMeaning, participantMeaningWith, protocolOperationWith, Evaluation.meaning,
-      Evaluation.operation, observedSites, Operands.eval, Regions.denote, PIR.Proc.bind, Environment.prepend]
+      Evaluation.operation, observedSites, Operands.eval, Regions.denote, PIR.Proc.bind, Environment.prepend, qualify_root]
     congr 1
     funext reply
     exact ih _
@@ -327,8 +356,11 @@ theorem ClosedProgram.observed_projected (program : ClosedProgram)
       args.present.get (fun ref => some (args.get ref)) := by
     funext ty ref
     exact Values.get_present args ref
-  unfold Program.observed CheckedProtocol.observed
-  rw [inputScopes, maskValues_single_role, env,
+  rw [program.subject.observed_entry]
+  unfold CheckedProtocol.observed CheckedProtocol.denoteWith
+  dsimp only [CheckedProtocol.signature]
+  simp only [ProtocolContext.mapScopes_root]
+  rw [program.root_projection.protocol_table_independent _ _ [], inputScopes, maskValues_single_role, env,
     program.root_projection.denote_present _ program.subject.payload.tables_adequate,
     PIR.Proc.bind_assoc]
   simp only [PIR.Proc.bind, outputScopes, maskValues_single_role]

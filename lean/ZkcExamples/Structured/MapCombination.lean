@@ -195,7 +195,8 @@ theorem observed_expansion (s : F) (a : List F) (t : F) (b unusedRow : List F) (
       (inputs s a t b unusedRow unusedScalar).present.get (fun ref => some ((inputs s a t b unusedRow unusedScalar).get ref)) := by
     funext type ref
     exact Values.get_present _ _
-  rw [env, owner_projection.denote_present _ program.payload.tables_adequate]
+  rw [owner_projection.protocol_table_independent _ _ [], env,
+    owner_projection.denote_present _ program.payload.tables_adequate]
   set_option smartUnfolding true in
     rw [owner_body]
     simp only [PIR.Proc.bind_assoc, PIR.Proc.bind, output_mask, PIR.Proc.bind_done, observedSites]

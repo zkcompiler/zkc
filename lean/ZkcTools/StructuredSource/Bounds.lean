@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Source.Structured.ClosedProfile
+public import Zkc.Source.Structured.ProtocolContext
 public import Std.Data.HashMap.Basic
 
 @[expose] public section
@@ -83,16 +84,19 @@ def chargeRepeated (amount count : Nat) : Analysis Unit := do
 def visit : Analysis Unit := do tick; charge
 
 def Value.join : Value → Value → Analysis Value
-  | .absent, .absent => pure .absent
-  | .absent, .optional b | .optional b, .absent => pure (.optional b)
-  | .absent, b | b, .absent => pure (.optional b)
-  | .optional a, .optional b | .optional a, b | a, .optional b =>
-      return .optional (← a.join b)
-  | .atom, .atom => pure .atom
-  | .boolean a, .boolean b => pure (.boolean (if a == b then a else none))
-  | .index a, .index b => pure (.index (a.join b))
-  | .vector a, .vector b => pure (.vector (a.join b))
-  | _, _ => throw .unknown
+  | a, b => do
+    tick
+    match a, b with
+    | .absent, .absent => pure .absent
+    | .absent, .optional b | .optional b, .absent => pure (.optional b)
+    | .absent, b | b, .absent => pure (.optional b)
+    | .optional a, .optional b | .optional a, b | a, .optional b =>
+        return .optional (← a.join b)
+    | .atom, .atom => pure .atom
+    | .boolean a, .boolean b => pure (.boolean (if a == b then a else none))
+    | .index a, .index b => pure (.index (a.join b))
+    | .vector a, .vector b => pure (.vector (a.join b))
+    | _, _ => throw .unknown
 
 def join : Env → Env → Analysis Env
   | [], [] => pure []
@@ -160,6 +164,7 @@ Work counts logical operand selections, not the concrete interpreter's context
 steps or CPU instructions. Structural admission bounds remain separate. -/
 def region {O : Type} (transfer : O → Env → RawRegions Ty O → Analysis Result)
     (body : RawRegion Ty O) (args : Env) : Analysis Result := do
+  tick
   regionIn transfer body (← context args)
 
 def value {F G : Type} : (type : Ty) → assignment F G type → Value
@@ -470,40 +475,136 @@ def closed (payload : Payload) (args : Env) : Except Failure (Result × Meter) :
     if let some outputs := result then outputs.forM outputWork
     return result).run {}
 
-/-- Receives use independent reply bounds. Ownership and restriction may remove
-components but cannot substitute the sender's value for a receiver's reply. -/
-def protocolOperation (definitions : Helpers) (self : Nat)
+/-- Abstract protocol closures capture only the preceding checked declarations.
+The reply envelope and immutable root-coordinate context belong to each request. -/
+abbrev ProtocolTransfer := ProtocolContext → Nat →
+  (Ty → Analysis (Option Value)) → Env → Analysis Result
+
+structure ProtocolBoundEntry where
+  signature : ProtocolSignature
+  transfer : ProtocolTransfer
+
+abbrev ProtocolBounds := List ProtocolBoundEntry
+
+def protocolSignatureWork (signature : ProtocolSignature) : Nat :=
+  1 + signature.name.utf8ByteSize +
+    signature.roles.foldl (fun cost role => cost + 1 + role.utf8ByteSize) 0 +
+    signature.inputs.foldl (fun cost type => cost + typeWork type) 0 +
+    signature.outputs.foldl (fun cost type => cost + typeWork type) 0 +
+    signature.inputScopes.foldl (fun cost scope => cost + 1 + scope.length) 0 +
+    signature.outputScopes.foldl (fun cost scope => cost + 1 + scope.length) 0
+
+/-- Compare the first matching name at its complete ABI, roster and scopes.
+Neither lookup nor a transfer can silently truncate an argument/result tuple. -/
+def invokeProtocolBound (protocols : ProtocolBounds) (signature : ProtocolSignature)
+    (context : ProtocolContext) (self : Nat)
+    (received : Ty → Analysis (Option Value)) (args : Env) : Analysis Result := do
+  tick
+  tick (protocolSignatureWork signature + args.length)
+  charge (1 + signature.inputs.length + signature.outputs.length)
+  if args.length != signature.inputs.length then throw .unknown
+  for entry in protocols do
+    tick (1 + entry.signature.name.utf8ByteSize + signature.name.utf8ByteSize)
+    if entry.signature.name == signature.name then
+      tick (protocolSignatureWork entry.signature + protocolSignatureWork signature)
+      if entry.signature != signature then throw .unknown
+      let result ← entry.transfer context self received args
+      if let some outputs := result then
+        tick outputs.length
+        if outputs.length != signature.outputs.length then throw .unknown
+      return result
+  throw .unknown
+
+/-- Mask actual optional components without sequencing them. Scope lookup uses
+root coordinates; the same mask serves direct roots and retained applications. -/
+def maskProtocolValues (context : ProtocolContext) (self : Nat) :
+    List (List Nat) → Env → Analysis Env
+  | scopes, values => do
+    tick
+    match scopes, values with
+    | [], [] => pure []
+    | scope :: scopes, value :: values =>
+      tick (1 + scope.length)
+      let visible := scope.any (fun role => context.roles role == self)
+      return (if visible then value else .absent) ::
+        (← maskProtocolValues context self scopes values)
+    | _, _ => throw .unknown
+
+/-- Receives use independent reply bounds. All owner/scope tests map into root
+coordinates while self stays unchanged. Protocol callbacks retain their own
+optional carrier; they are never reinterpreted as closed helper callbacks. -/
+def protocolOperation (definitions : Helpers) (protocols : ProtocolBounds)
+    (context : ProtocolContext) (self : Nat)
     (received : Ty → Analysis (Option Value)) (op : ProtocolOp) (args : Env)
-    (_bodies : RawRegions Ty ProtocolOp) : Analysis Result := do
+    (bodies : RawRegions Ty ProtocolOp) : Analysis Result := do
   visit
-  tick args.length
+  tick (args.length + op.arguments.length + op.results.length)
+  if args.length != op.arguments.length then throw .unknown
+  -- All admitted current constructors have zero callbacks. Future protocol
+  -- control must dispatch its RawRegions through this contextual transfer.
+  let .nil := bodies | throw .unknown
   match op, args with
   | .calculate op _, _ => operation definitions op args .nil
   | .localCall helper _ owner _, _ =>
-      if self != owner then return some (helper.outputs.map fun _ => .absent)
+      if self != context.roles owner then return some (helper.outputs.map fun _ => .absent)
       if absent args then return none
       operation definitions (.invoke helper) (args.map Value.present) .nil
   | .guard owner _, [condition] =>
-      if self == owner then
+      if self == context.roles owner then
         if condition == .absent || condition.present == .boolean (some false) then return none
       return some []
   | .exchange type sender receiver _, [input] =>
-      if self == sender then
+      if self == context.roles sender then
         if input == .absent then return none
         outputWork input
         return some [input.present]
-      if self == receiver then
+      if self == context.roles receiver then
         let some value ← received type | return none
         outputWork value
         return some [value]
       return some [.absent]
-  | .restrict _ roles, [input] => return some [if roles.contains self then input else .absent]
+  | .restrict _ roles, [input] =>
+      tick roles.length
+      return some [if roles.any (fun role => context.roles role == self) then input else .absent]
   | .draw owner .., _ =>
-      if self != owner then return some [.absent]
+      if self != context.roles owner then return some [.absent]
       if absent args then return none
       return some [.atom]
+  | .protocolApply signature roles site, _ =>
+      tick (1 + roles.length + signature.roles.length + site.utf8ByteSize +
+        (context.applicationPrefix.map String.utf8ByteSize).getD 0)
+      let child := context.enter site roles
+      if !child.contains signature self then return some (signature.outputs.map fun _ => .absent)
+      invokeProtocolBound protocols signature child self received args
   | .statement .., _ | .mark _, [] => return some []
   | _, _ => throw .unknown
+
+/-- The checked dependency order determines each captured strict prefix. This
+fold stores abstract transfers over retained bodies, with no expansion or
+recursive symbol resolver. Preparation and each body entry share one meter. -/
+def prepareProtocols (helpers : Helpers) (definitions : List CheckedProtocol) :
+    Analysis ProtocolBounds := do
+  tick
+  let mut table : ProtocolBounds := []
+  for definition in definitions do
+    tick
+    tick (1 + protocolSignatureWork definition.signature + table.length)
+    if table.length ≥ 128 then throw .unknown
+    for entry in table do
+      tick (1 + entry.signature.name.utf8ByteSize + definition.name.utf8ByteSize)
+      if entry.signature.name == definition.name then throw .unknown
+    if definition.inputScopes.length != definition.inputs.length ||
+        definition.outputScopes.length != definition.outputs.length then throw .unknown
+    let captured := table
+    let transfer : ProtocolTransfer := fun context self received args => do
+      tick
+      let masked ← maskProtocolValues context self definition.inputScopes args
+      let result ← region (protocolOperation helpers captured context self received) definition.raw masked
+      match result with
+      | none => return none
+      | some outputs => return some (← maskProtocolValues context self definition.outputScopes outputs)
+    table := ⟨definition.signature, transfer⟩ :: table
+  return table
 
 end Bounds
 end ZkcTools.StructuredSource

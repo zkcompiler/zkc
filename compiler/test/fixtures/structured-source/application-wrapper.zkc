@@ -1,0 +1,24 @@
+module sample;
+domain Fr = field("bls12-381.fr");
+
+protocol Draw roles(A,B)(left: Random<Fr> @B, right: Random<Fr> @B)
+    -> (p: Fr @A, v: Fr @B) {
+  let a = left.draw();
+  let b = right.draw();
+  let atA = send B -> A(a + b);
+  return (p = atA, v = a + b);
+}
+protocol Run roles(P,V)(go: bool @V, first: Random<Fr> @V, second: Random<Fr> @V)
+    -> (p: Fr @P, v: Fr @V) {
+  let before = first.draw();
+  require @V go;
+  let (p, v) = Draw roles(P,V)(first,second);
+  let after = first.draw();
+  return (p = p, v = before + v + after);
+}
+protocol Outer roles(X,Y)(go: bool @Y, first: Random<Fr> @Y, second: Random<Fr> @Y)
+    -> (x: Fr @X, y: Fr @Y) {
+  let (x, y) = Run roles(X,Y)(go, first, second);
+  return (x = x, y = y);
+}
+run Demo = Outer;

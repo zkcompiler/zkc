@@ -323,8 +323,22 @@ budget (one per retained preparation), and reference depth 64 measured in edges
 with leaf depth zero. Runtime evaluation depth starts at one and remains a
 separate observer limit. Missing-input evidence observes the owned protocol
 Local-call boundary, not a direct optional derived map operation.
-Protocol application/repetition and whole Sumcheck are not
-admitted by this profile. The separately owned
+Retained protocol applications preserve exact operands/results, positional role
+substitution and authored sites. The independent SSA reference uses immutable
+role/prefix context, optional interface masks, actual service handles and ordered
+replies. Both native admissions independently check effective static-site
+collisions without expansion, in addition to native conservative budgets.
+Complete unchanged application/service-order fixtures and a nested wrapper
+exercise this boundary. Protocol repetition, conditional entry completion,
+construction-start selection and whole Sumcheck remain outside this profile.
+The independent Lean model retains application edges on its existing typed
+Region carrier, links complete signatures through prefix-captured tables, and
+checks the same supported static profile independently. Complete source clients
+prove algebraic participant equations and ordered service/receive/stop behavior
+from named kernel admission proofs. Generic availability, abstract-preflight
+soundness and native execution correspondence remain additional obligations;
+the finite comparisons do not discharge those theorems.
+The separately owned
 [structured Lean bridge](../lean/bridges/structured/README.md) records its exact
 reader, model and comparison coverage; native checks alone do not establish
 that bridge's support or prove native transformations.

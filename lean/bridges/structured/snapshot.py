@@ -88,6 +88,9 @@ def descriptor(value):
     if tag == "select":
         record(args, 1)
         return f".select ({ty(args[0])})"
+    if tag == "protocol_apply":
+        callee, roles = record(args, 2)
+        return f".protocolApply {text(callee)} {seq(roles, text)}"
     if tag == "restrict":
         record(args, 1)
         return f".restrict {seq(args[0], text)}"

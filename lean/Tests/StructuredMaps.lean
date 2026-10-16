@@ -17,6 +17,16 @@ private def root : Definition := .function ⟨"main", .protocol, .publicDef, [],
 private def snapshot (definitions : List Definition) : Snapshot :=
   ⟨digest, "main", [], [], [], root :: definitions⟩
 private def admits (definitions : List Definition) : Bool := (check (snapshot definitions)).isOk
+
+-- Isolate the availability boundary: complete admission now also checks the
+-- same combined reference depth earlier, while ordering checked protocols.
+private def availabilityPhase (unit : Snapshot) : Except String Unit := do
+  let (domains, headers, summaries) ← checkUnitHeaders unit
+  let helpers ← checkUnitHelpers unit domains summaries
+  let protocols ← unit.protocolFunctions.mapM fun function =>
+    checkProtocol unit domains summaries function headers
+  checkUnitAvailability (helpers.map (·.definition)) protocols
+
 private def math (name : String) (inputs outputs : List Ty)
     (instructions : List Instruction := []) (returns : List Nat := []) : Definition :=
   .function ⟨name, .math, .privateDef, inputs, outputs, none, [], none,
@@ -202,6 +212,9 @@ private def run : IO Unit := do
         localApply "wrapper" "prepared" ports ports, localCall "wrapper" ports ports]) with
           entry := "other"}
       test "complete-preparation-depth-edges" (match check unit with
+        | .ok _ => depth == 61
+        | .error error => depth == 62 && error == "structured-reference-depth")
+      test "preparation-availability-depth-edges" (match availabilityPhase unit with
         | .ok _ => depth == 61
         | .error error => depth == 62 && error == "structured-availability-depth-limit")
   let nestedRoot := math "nested" [vector, .index] [vector]

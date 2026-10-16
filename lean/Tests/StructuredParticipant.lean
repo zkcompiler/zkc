@@ -15,9 +15,12 @@ private def helper {inputs outputs : List Ty} (name : String) (kind : HelperKind
   ⟨name, kind, inputs, outputs, body.erase, body, body.elaborate_erase⟩
 
 private def root {inputs outputs : List Ty} (inputScopes outputScopes : List (List Nat))
-    (body : Region protocolDialect inputs outputs) : CheckedProtocol :=
-  ⟨"control", ["owner", "receiver"], inputs, outputs, inputScopes, outputScopes,
-    body.erase, body, body.elaborate_erase⟩
+    (body : Region protocolDialect inputs outputs) : CheckedProtocol where
+  toProtocolSignature :=
+    ⟨"control", ["owner", "receiver"], inputs, outputs, inputScopes, outputScopes⟩
+  raw := body.erase
+  body := body
+  formed := body.elaborate_erase
 
 private def first : CheckedDefinition :=
   helper "first" .math (.ret (.cons .here .nil) : Region dialect [scalar, scalar] [scalar])
@@ -190,12 +193,58 @@ theorem output_filter_preserves_stop (x : Option F) :
 
 private def projectionSnapshot : Snapshot :=
   ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [], [], [],
-    [.function ⟨"main", .protocol, .privateDef, [.boolean], [],
+    [.function ⟨"main", .protocol, .publicDef, [.boolean], [],
       some ⟨["P"], [["P"]], []⟩, [], none,
-      .block [.instruction (.guard "P") [0] [] [] "checked-guard"] (.ret [])⟩]⟩
+      .block [.instruction (.guard "P") [0] [] [] "checked_guard"] (.ret [])⟩]⟩
+
+private def projectionSignature : ProtocolSignature :=
+  ⟨"main", ["P"], [.boolean], [], [[0]], []⟩
+
+private def projectionProtocolBody : Region protocolDialect [.boolean] [] :=
+  .letOp (.mark "checked_guard") .nil .nil <|
+  .letOp (.guard 0 "checked_guard") (.cons .here .nil) .nil (.ret .nil)
+
+private def projectionProtocol : CheckedProtocol where
+  toProtocolSignature := projectionSignature
+  raw := projectionProtocolBody.erase
+  body := projectionProtocolBody
+  formed := projectionProtocolBody.elaborate_erase
+
+private def projectionUnit : UnitPayload where
+  definitions := []
+  protocols := [projectionProtocol]
+  entryIndex := ⟨0, by decide⟩
+  linked := by decide +kernel
+  protocolsLinked := by decide +kernel
+  available := rfl
+  realizationClosed := by decide +kernel
+  mapClosed := by decide +kernel
+
+private def projectionClosedBody : Region dialect [.boolean] [] :=
+  .letOp (.mark "checked_guard") .nil .nil <|
+  .letOp .guard (.cons .here .nil) .nil (.ret .nil)
+
+private def projectionRoot : ClosedRoot :=
+  ⟨"main", [.boolean], [], projectionClosedBody.erase, projectionClosedBody,
+    projectionClosedBody.elaborate_erase⟩
+
+private def projectionPayload : Payload where
+  definitions := []
+  entry := projectionRoot
+  linked := by decide +kernel
+  entryLinked := by decide +kernel
 
 private def checkedProjection : ClosedProgram :=
-  (closedImportedOfIsOk projectionSnapshot (by decide +kernel)).program
+  ⟨⟨projectionSnapshot, projectionUnit⟩, projectionPayload, rfl⟩
+
+set_option smartUnfolding false in
+private theorem kernel_admission : checkClosed projectionSnapshot = .ok checkedProjection := rfl
+
+private def projectionImported : ClosedImported projectionSnapshot :=
+  ⟨checkedProjection, kernel_admission⟩
+
+theorem checked_projection_subject : checkedProjection.snapshot = projectionSnapshot :=
+  projectionImported.exactSubject
 
 /-- A concrete whole-unit admission supplies the syntactic projection witness. -/
 theorem checked_projection_exact :
@@ -215,7 +264,7 @@ theorem checked_observed_projection (condition : Bool) :
 set_option maxHeartbeats 1000000 in
 theorem checked_observed_reject :
     checkedProjection.subject.observed F G 0 (.cons (some false) .nil) =
-      .call (.mark "checked-guard") (fun _ => .halt .reject) := rfl
+      .call (.mark "checked_guard") (fun _ => .halt .reject) := rfl
 
 set_option maxHeartbeats 1000000 in
 theorem checked_participant_projection (condition : Bool) :
