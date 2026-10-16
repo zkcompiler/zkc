@@ -45,7 +45,7 @@ def simple(declarations='', body='', result='%flag'):
 
 with case('original-total-state-and-exact-ssa-order'):
     data = export(total)
-    assert len(data) == 8
+    assert len(data) == 9
     assert data[:2] == ['zkc.structured-source/0', 'original']
     assert data[2] == 'sha256:' + hashlib.sha256(total.encode()).hexdigest()
     assert data[3] == 'main' and data[5] == []
@@ -261,7 +261,7 @@ with case('unsupported-service-contract'):
 with case('communication-and-statement-retained'):
     data = export((fixtures / 'mathematical/schnorr-services.mlir').read_text())
     assert len(data[5]) == 1
-    assert instructions(table(data)['main'])[0][0] == ['statement', 'schnorr_relation', ['Bob', 'Bob', 'Alice'], 0]
+    assert instructions(table(data)['main'])[0][0] == ['statement', 'schnorr_relation', ['Bob', 'Bob', 'Alice'], 0, None]
 
 with case('unsupported-static-relation-annotation'):
     helper = 'func.func private @equal(%a:!algebra.field_vector<"bls12-381.fr">,%b:!algebra.field_vector<"bls12-381.fr">) -> i1 attributes {data.preconditions=[#data.equal_extent<0,0,1,0>]} { %yes = arith.constant true\n return %yes : i1 }'

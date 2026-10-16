@@ -15,7 +15,10 @@ private def digest := "sha256:" ++ String.ofList (List.replicate 64 '0')
 private def root : Definition := .function ⟨"main", .protocol, .publicDef, [], [],
   some ⟨["P"], [], []⟩, [], none, .block [] (.ret [])⟩
 private def snapshot (definitions : List Definition) : Snapshot :=
-  ⟨digest, "main", [], [], [], root :: definitions⟩
+  (let contractDefinitions : List Definition := root :: definitions
+   ⟨digest, "main", [], [], [], contractDefinitions,
+    contractDefinitions.filterMap (fun definition =>
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
 private def admits (definitions : List Definition) : Bool := (check (snapshot definitions)).isOk
 
 -- Isolate the availability boundary: complete admission now also checks the

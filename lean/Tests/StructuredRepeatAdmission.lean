@@ -19,8 +19,11 @@ private def protocol (name : String) (inputs outputs : List Ty)
     some ⟨roles, inputScopes, outputScopes⟩, [], none, body⟩
 
 private def unit (definitions : List Definition) : Snapshot :=
-  ⟨"sha256:0000000000000000000000000000000000000000000000000000000000000000",
-    "main", [], [], [], definitions⟩
+  (let contractDefinitions : List Definition := definitions
+   ⟨"sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "main", [], [], [], contractDefinitions,
+    contractDefinitions.filterMap (fun definition =>
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
 
 private def repeatInstruction (maximum : Nat := 2) (roles : List String := ["P"])
     (stateScopes : List (List String) := [["P"]])
@@ -86,12 +89,12 @@ private def reorderedServices : Snapshot :=
 
 private def statement (maximum : Nat) (noInputs : Bool) : Snapshot :=
   let types := if noInputs then [] else [.boolean]
-  let statement := Instruction.instruction (.statement "relation" (if noInputs then [] else ["P"]) 0)
+  let statement := Instruction.instruction (.statement "relation" (if noInputs then [] else ["P"]) 0 none)
     (if noInputs then [] else [2]) [] [] ""
   { unit [root (repeatInstruction maximum ["P"] [["P"]]
       (.block [statement] (.yield [1])) [.index, .boolean, .boolean] [.boolean] [0, 1, 1])] with
     relations := [⟨"relation", .publicDef, "opaque", "key", "revision", types, [.boolean],
-      if noInputs then [] else ["statement"]⟩] }
+      if noInputs then [] else ["statement"], none⟩] }
 
 private def emptyRoot := protocol "main" [] [] [] [] (.block [] (.ret [])) ["P"]
 

@@ -18,5 +18,6 @@ def snapshot : Snapshot where
   relations := []
   bindings := []
   definitions := [.function ⟨"step", .math, .privateDef, [.field "bls12-381.fr", .field "bls12-381.fr", .index, .vector "bls12-381.fr"], [.field "bls12-381.fr", .field "bls12-381.fr"], none, [⟨2, 3, 0⟩], none, (.block [.instruction (.boundedAt "bls12-381.fr") [3, 2] [.field "bls12-381.fr"] [] ""] (.ret [2, 0]))⟩, .function ⟨"main", .protocol, .publicDef, [.vector "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr"], [.field "bls12-381.fr", .field "bls12-381.fr"], some ⟨["P"], [["P"], ["P"], ["P"]], [["P"], ["P"]]⟩, [], none, (.block [.instruction (.fold "items" "step" "") [0, 1, 2] [.field "bls12-381.fr", .field "bls12-381.fr"] [] ""] (.ret [0, 1]))⟩]
+  contracts := [⟨"main", []⟩]
 
 end ZkcExamples.Structured.TotalStateData

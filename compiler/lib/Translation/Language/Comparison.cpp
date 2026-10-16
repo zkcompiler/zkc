@@ -82,6 +82,79 @@ class Comparator {
       failure = error("source.correspondence", message);
     return false;
   }
+  bool contractSelector(mlir::Attribute attr,
+                        const SpecificationSelector &expected, unsigned port) {
+    auto row = mlir::dyn_cast<mlir::ArrayAttr>(attr);
+    if (!charge(1) || !row || row.size() != 3)
+      return fail("contract selector shape differs");
+    auto direction = mlir::dyn_cast<mlir::StringAttr>(row[0]);
+    auto index = mlir::dyn_cast<mlir::IntegerAttr>(row[1]);
+    auto role = mlir::dyn_cast<mlir::StringAttr>(row[2]);
+    return (direction &&
+            direction.getValue() == (expected.output ? "output" : "input") &&
+            index && index.getInt() == port && role &&
+            role.getValue() == nativeRoleName(expected.role)) ||
+           fail("contract selector differs from source layout");
+  }
+  bool contractApplication(const Declaration &owner, mlir::Attribute attr,
+                           const RelationApplication &expected) {
+    auto row = mlir::dyn_cast<mlir::ArrayAttr>(attr);
+    if (!row || row.size() != 2)
+      return fail("contract application shape differs");
+    auto relation = mlir::dyn_cast<mlir::FlatSymbolRefAttr>(row[0]);
+    auto operands = mlir::dyn_cast<mlir::ArrayAttr>(row[1]);
+    if (!relation ||
+        relation.getValue() !=
+            project.declarations()[expected.relation.index].symbol ||
+        !operands)
+      return fail("contract relation differs");
+    unsigned at = 0;
+    for (const auto &operand : expected.operands) {
+      auto slice = take(layouts.select(owner, operand));
+      if (!slice)
+        return false;
+      for (unsigned i = 0; i < slice->layout->leaves.size(); ++i)
+        if (at >= operands.size() ||
+            !contractSelector(operands[at++], operand, slice->offset + i))
+          return fail("contract application native layout differs");
+    }
+    return at == operands.size() || fail("extra contract operands");
+  }
+  bool contracts(const Declaration &owner, mlir::Operation &function) {
+    auto clauses = function.getAttrOfType<mlir::ArrayAttr>("contracts");
+    if (!clauses || clauses.size() != owner.specifications.size())
+      return fail("contract inventory differs");
+    for (auto [attr, expected] : zip(clauses, owner.specifications)) {
+      if (!charge(1))
+        return false;
+      auto row = mlir::dyn_cast<mlir::ArrayAttr>(attr);
+      if (!row || row.size() != 5)
+        return fail("contract clause shape differs");
+      using K = SpecificationClause::Kind;
+      StringRef kind = expected.kind == K::Target   ? "target"
+                       : expected.kind == K::Input  ? "input"
+                       : expected.kind == K::Output ? "output"
+                                                    : "continuation";
+      auto actualKind = mlir::dyn_cast<mlir::StringAttr>(row[0]);
+      auto name = mlir::dyn_cast<mlir::StringAttr>(row[1]);
+      if (!actualKind || actualKind.getValue() != kind || !name ||
+          name.getValue() != expected.name ||
+          !contractApplication(owner, row[2], expected.subject))
+        return fail("contract clause differs");
+      if (expected.residual
+              ? !contractApplication(owner, row[3], *expected.residual)
+              : !mlir::isa<mlir::UnitAttr>(row[3]))
+        return fail("contract residual differs");
+      if (expected.decision) {
+        auto slice = take(layouts.select(owner, *expected.decision));
+        if (!slice ||
+            !contractSelector(row[4], *expected.decision, slice->offset))
+          return fail("contract decision differs");
+      } else if (!mlir::isa<mlir::UnitAttr>(row[4]))
+        return fail("unexpected contract decision");
+    }
+    return true;
+  }
   bool charge(uint64_t n) {
     if (n > remaining) {
       failure = error("source.limit", "comparison work limit exceeded");
@@ -354,12 +427,14 @@ class Comparator {
           next(block, cursor, clause.span, "protocol.statement", operands, 0);
       if (!actual)
         return false;
-      if (!attributes(*actual, {"relation", "selectors", "acceptance"}))
+      if (!attributes(*actual,
+                      {"relation", "selectors", "acceptance", "target"}))
         return fail("selected Entry statement attributes differ");
       auto symbol = actual->getAttrOfType<mlir::FlatSymbolRefAttr>("relation");
       auto output = actual->getAttrOfType<mlir::IntegerAttr>("acceptance");
       if (!symbol || symbol.getValue() != relation.symbol || !output ||
           output.getInt() != acceptance->offset ||
+          !string(*actual, "target", clause.name) ||
           !strings(actual->getAttr("selectors"), selectors))
         return fail("selected Entry statement differs");
     }
@@ -1202,10 +1277,12 @@ public:
         return error("source.correspondence",
                      "definition identity or structure differs");
       SmallVector<StringRef> names =
-          protocol
-              ? std::initializer_list<StringRef>{"sym_name", "function_type",
-                                                 "roles", "input_roles",
-                                                 "output_roles"}
+          protocol ? std::initializer_list<StringRef>{"sym_name",
+                                                      "function_type",
+                                                      "roles",
+                                                      "input_roles",
+                                                      "output_roles",
+                                                      "contracts"}
           : local
               ? std::initializer_list<StringRef>{"sym_name", "function_type",
                                                  "logical_origin"}
@@ -1275,6 +1352,8 @@ public:
       }
       mathematical::Availability availability;
       if (protocol) {
+        if (!contracts(decl, function))
+          return takeFailure();
         std::vector<std::string> roster;
         for (unsigned i = 0; i < decl.roles.size(); ++i)
           roster.push_back(nativeRoleName(i));
@@ -1301,8 +1380,11 @@ public:
         return error("source.correspondence", "omitted relation declaration");
       auto declaration = found->second;
       relations.erase(found);
-      if (!attributes(*declaration, {"sym_name", "kind", "key", "revision",
-                                     "signature", "purposes"}) ||
+      SmallVector<StringRef> attributesExpected{
+          "sym_name", "kind", "key", "revision", "signature", "purposes"};
+      if (decl.relation->kind == RelationDefinition::Kind::Formula)
+        attributesExpected.push_back("formula");
+      if (!attributes(*declaration, attributesExpected) ||
           declaration->getNumRegions() || declaration->getNumOperands() ||
           declaration->getNumResults())
         return error("source.correspondence",
@@ -1341,6 +1423,9 @@ public:
       std::string kind, key, revision;
       switch (definition.kind) {
       case RelationDefinition::Kind::Formula: {
+        if (!declaration.getFormulaAttr() ||
+            declaration.getFormulaAttr().getValue() != formulaSymbol(decl))
+          return error("source.correspondence", "formula helper link differs");
         kind = "zkc.language.formula/0";
         key = decl.symbol;
         auto helper = symbols.getSymbolTable(native).lookup<mlir::func::FuncOp>(

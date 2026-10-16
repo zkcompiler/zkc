@@ -23,7 +23,7 @@ defines the Lean interpretation.
 The current format is an exact tagged array, `zkc.structured-source/0`:
 
 ```text
-[format, "original", source-sha256, entry-name, domains, relations, bindings, definitions]
+[format, "original", source-sha256, entry-name, domains, relations, bindings, definitions, contracts]
 ```
 
 `source-sha256` is `sha256:` followed by 64 lowercase hexadecimal digits, hashing
@@ -31,7 +31,7 @@ the exact supplied MLIR bytes. It identifies those bytes; it is not a proof of
 their semantics or of export correctness. Every record below has the exact
 displayed arity. Unknown tags, extra fields and unrepresented native attributes
 are refused.
-All eight slots are required, including empty tables. Each declaration category preserves its native encounter
+All nine slots are required, including empty tables. Each declaration category preserves its native encounter
 order. There is no cross-category declaration-order field.
 
 | Type | Native interpretation |
@@ -67,7 +67,7 @@ interface := ["protocol", role-names, input-scopes, output-scopes]  # protocol
            | []                                                  # math/local
 
 ["relation", name, visibility, kind, key, revision,
- input-types, output-types, purposes]
+ input-types, output-types, purposes, formula]
 
 ["binding", name, contract, domain-arguments, implementation]
 
@@ -95,9 +95,50 @@ Relations are non-callable metadata, retained even when unused. The declaration'
 `kind`, `key` and `revision` are opaque exact strings. Native verification checks
 their validity and consistency, the ordered signature, and each input purpose
 (`parameter`, `statement`, or `witness`). A relation has one Boolean result.
-Retaining a Math formula and a relation does not associate them: generated symbol
-names are not formula bindings. Any such association requires the separately
-checked language interface.
+`formula` is null or the exact symbol of a defined Math helper in this unit.
+For `kind = "zkc.language.formula/0"` the link is required and its full ordered
+input/output signature must equal the declaration's signature. Other kinds use
+null. A Local function cannot satisfy a Math formula link. Names and hashes do
+not infer this association; the original `relation.declare` owns it. Structural
+association supplies no totality, relation adequacy or security proof.
+
+The `contracts` table has exactly one row `[owner-protocol, clauses]` for every
+exported protocol, including those with no clauses. Missing, repeated, unknown,
+Math and Local owners are refused. Rows follow native protocol encounter order;
+clauses retain declaration order, independently of the selected entry.
+Each owner has at most 512 clauses, and each application at most 512 selectors,
+matching the structured profile's signature bound.
+
+```text
+clause      := [kind, name, subject, residual, decision]
+application := [relation-symbol, [selectors...]]
+selector    := [direction, native-port-index, role]
+```
+
+Kind is `target`, `input`, `output` or `continuation`; names are nonempty,
+unique per owner and at most 512 UTF-8 bytes. Spaces, dots and Unicode are
+permitted in hand-authored clause names. Direction is `input` or `output`. Each selector names an
+actual port and an available role of that owner. An application has exactly
+one selector per native relation input, in ABI order, with exactly matching
+types. Input and continuation subjects select only inputs; output subjects
+select at least one output. Targets may describe either boundary, but an entry
+statement can project only a target over inputs. A continuation requires a
+residual application selecting at least one output; all other residuals are
+null. A decision is null or exactly one available Boolean output selector.
+Targets require decisions, input clauses forbid them, and output/continuation
+clauses may carry them. Unknown tags, extra fields and malformed nulls refuse.
+
+Contracts are declaration metadata, not instructions or predicate evaluations.
+An entry statement may name its exact selected target. That name resolves only
+within the statement's owning protocol, and its relation, input arguments,
+input roles and acceptance index must agree with that target. The selected
+clause supplies the exact decision role. A dormant protocol's matching clause
+cannot satisfy the reference, and a dormant statement does not select the
+export root's target. Without a target name, standalone statements are permitted;
+if their owner has targets, their projection must match at least one. Such an
+unnamed statement supplies no exact selected-target evidence. Component
+application does not turn contracts into entry statements. Its actual body and
+role substitution determine invocation bindings.
 
 Operation bindings are non-callable metadata for `local.binding`, retained and
 checked even when unused. The exact represented native attributes are
@@ -245,7 +286,7 @@ including nested regions. Stop reasons are `reject`, `abort`, `exhausted`,
 | `["restrict", role-names]` | same value restricted to the retained scope |
 | `["exchange", sender, receiver]` | sender alias and independent receiver value |
 | `["draw", owner, field]` | query the actual service handle operand; one field result |
-| `["statement", relation, selectors, acceptance-index]` | ordered entry operands; zero results |
+| `["statement", relation, selectors, acceptance-index, target]` | ordered entry operands; zero results; target is a clause-name string or null |
 
 Every operand, result and region interface is checked against the selected
 descriptor and referenced declaration. A same-typed result permutation can be
@@ -256,8 +297,12 @@ A statement's selectors are actual native role strings, one per operand. Native
 verification checks that each operand is an entry argument available at its
 selector, with the exact relation input signature. The acceptance index selects
 a Boolean result of the enclosing protocol; zero and nonzero indices are
-preserved. A statement does not evaluate a relation, assert satisfaction, or
-identify different participants' copies of an acceptance result.
+preserved. All five descriptor fields are mandatory; there is no four-field
+compatibility form. Source proof selection retains the exact target name,
+distinguishing targets that share the same operand and output indices but select
+different role-local decisions. This does not prove complete source Entry or
+provider correspondence. A statement does not evaluate a relation, assert
+satisfaction, or identify different participants' copies of an acceptance result.
 
 Ownership is checked independently of operand types:
 

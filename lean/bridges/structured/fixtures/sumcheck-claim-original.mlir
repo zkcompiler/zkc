@@ -1,6 +1,6 @@
 "builtin.module"() ({
   "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
-    "protocol.func"() <{function_type = (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">, input_roles = [["role00000000"], ["role00000000"], ["role00000000"]], output_roles = [["role00000000"]], roles = ["role00000000"], sym_name = "s14h73756d636865636b5f636c61696d5h436c61696d"}> ({
+    "protocol.func"() <{contracts = [], function_type = (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">, input_roles = [["role00000000"], ["role00000000"], ["role00000000"]], output_roles = [["role00000000"]], roles = ["role00000000"], sym_name = "s14h73756d636865636b5f636c61696d5h436c61696d"}> ({
     ^bb0(%arg5: !algebra.field<"bls12-381.fr">, %arg6: !algebra.field<"bls12-381.fr">, %arg7: !algebra.field<"bls12-381.fr">):
       %6 = "func.call"(%arg5, %arg6, %arg7) <{callee = @s14h73756d636865636b5f636c61696d5h636c61696d}> : (!algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">, !algebra.field<"bls12-381.fr">) -> !algebra.field<"bls12-381.fr">
       "protocol.return"(%6) : (!algebra.field<"bls12-381.fr">) -> ()

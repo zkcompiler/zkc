@@ -38,12 +38,14 @@ private def helper (name : String) (inputs outputs : List Ty) (body : Block) : D
     labelBlock 32 name body⟩
 private def program (bindings : List Binding) (inputs outputs : List Ty) (body : Block)
     (helpers : List Definition := []) : Snapshot :=
-  ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [], [], bindings,
-    helpers ++ [helper "work" inputs outputs body,
+  (let contractDefinitions : List Definition := helpers ++ [helper "work" inputs outputs body,
       .function ⟨"main", .protocol, .publicDef, inputs, outputs,
         some ⟨["P"], inputs.map (fun _ => ["P"]), outputs.map (fun _ => ["P"])⟩, [], none,
         .block [.instruction (.localCall "work" "P") (List.range inputs.length) outputs [] "work"]
-          (.ret (List.range outputs.length))⟩]⟩
+          (.ret (List.range outputs.length))⟩]
+   ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [], [], bindings, contractDefinitions,
+    contractDefinitions.filterMap (fun definition =>
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
 private def runClosed (source : Snapshot) (inputs : List Json := []) : Except String Json := do
   evaluate (← check source) (arr inputs)
 private def openRequest (inputs : List Json) (replies : List Json := []) : Json :=
@@ -262,13 +264,15 @@ def run : IO Unit := do
 
   let receiveIndex := arr [.str "receive", .str "bound", .str "V", .str "P", wireType .index]
   let reply (request value : Json) := arr [.str "reply", request, arr [.str "value", value]]
-  let receivedLoop : Snapshot := ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'),
-    "main", [], [], constants,
-    [helper "work" [.index] [.index] (.block [constant 0, emptyLoop 0 1] (.ret [1])),
+  let receivedLoop : Snapshot := (let contractDefinitions : List Definition := [helper "work" [.index] [.index] (.block [constant 0, emptyLoop 0 1] (.ret [1])),
      .function ⟨"main", .protocol, .publicDef, [.index], [.index],
        some ⟨["P", "V"], [["V"]], [["P"]]⟩, [], none,
        .block [.instruction (.exchange "V" "P") [0] [.index] [] "bound",
-         .instruction (.localCall "work" "P") [0] [.index] [] "work"] (.ret [0])⟩]⟩
+         .instruction (.localCall "work" "P") [0] [.index] [] "work"] (.ret [0])⟩]
+   ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'),
+    "main", [], [], constants, contractDefinitions,
+    contractDefinitions.filterMap (fun definition =>
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
   let receiveRun (replies : List Json) : Except String Json := do
     evaluateOpen (← check receivedLoop) (openRequest [.null] replies)
   test "received small index executes independently"
@@ -279,14 +283,16 @@ def run : IO Unit := do
     (receiveRun [reply receiveIndex (.str "2"), reply receiveIndex (.str (toString maximum))])
 
   let receiveVector := arr [.str "receive", .str "vector", .str "V", .str "P", wireType vectorTy]
-  let receivedAppend : Snapshot := ⟨receivedLoop.source, "main", [], [],
-    [binding "append" "vector.append" true],
-    [helper "work" [vectorTy, fieldTy] [vectorTy]
+  let receivedAppend : Snapshot := (let contractDefinitions : List Definition := [helper "work" [vectorTy, fieldTy] [vectorTy]
        (.block [exec "vector_append" "append" [0, 1] [vectorTy]] (.ret [0])),
      .function ⟨"main", .protocol, .publicDef, [vectorTy, fieldTy], [vectorTy],
        some ⟨["P", "V"], [["V"], ["P"]], [["P"]]⟩, [], none,
        .block [.instruction (.exchange "V" "P") [0] [vectorTy] [] "vector",
-         .instruction (.localCall "work" "P") [0, 2] [vectorTy] [] "work"] (.ret [0])⟩]⟩
+         .instruction (.localCall "work" "P") [0, 2] [vectorTy] [] "work"] (.ret [0])⟩]
+   ⟨receivedLoop.source, "main", [], [],
+    [binding "append" "vector.append" true], contractDefinitions,
+    contractDefinitions.filterMap (fun definition =>
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
   let receivedAppendRun (n : Nat) : Except String Json := do
     evaluateOpen (← check receivedAppend) (openRequest [.null, .str "0"]
       [reply receiveVector (arr (List.replicate n (.str "0")))])
@@ -294,14 +300,16 @@ def run : IO Unit := do
     [arr (List.replicate 4096 (.str "0"))])
   refusal "received vector-generated length cap" "structured-open-value-limit" (receivedAppendRun 4096)
 
-  let optionalCall (n : Nat) : Snapshot := ⟨receivedLoop.source, "main", [], [], constants,
-    [.function ⟨"ignored", .math, .privateDef, [.index], [.index], none, [], none,
+  let optionalCall (n : Nat) : Snapshot := (let contractDefinitions : List Definition := [.function ⟨"ignored", .math, .privateDef, [.index], [.index], none, [], none,
        .block [.instruction (.indexConstant (toString n)) [] [.index] [] ""] (.ret [0])⟩,
      helper "work" [.index] [] (.block [constant 0, emptyLoop 0 1] (.ret [])),
      .function ⟨"main", .protocol, .publicDef, [.index], [],
        some ⟨["P"], [["P"]], []⟩, [], none,
        .block [.instruction (.call "ignored") [0] [.index] [] "",
-         .instruction (.localCall "work" "P") [0] [] [] "work"] (.ret [])⟩]⟩
+         .instruction (.localCall "work" "P") [0] [] [] "work"] (.ret [])⟩]
+   ⟨receivedLoop.source, "main", [], [], constants, contractDefinitions,
+    contractDefinitions.filterMap (fun definition =>
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
   equal "math helper retains optional dependency precision" (runOpen (optionalCall 2) [.null])
     (arr [.str "zkc.structured-open-result/0", arr [.str "returned", arr []], arr [], toJson (0 : Nat)])
   refusal "math helper with absent unused operand can generate huge bound"

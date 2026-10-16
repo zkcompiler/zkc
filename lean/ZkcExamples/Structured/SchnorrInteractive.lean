@@ -8,9 +8,9 @@ public import ZkcExamples.NativePrograms.Schnorr
 
 @[expose] public section
 
-/-! Actual original-stage library Interactive Schnorr, including its dormant
-formula and relation declaration. The verifier equation is over arbitrary F/G
-and independent typed replies. Relation/formula binding is not inferred. -/
+/-! Actual original-stage library Interactive Schnorr. The participant equations
+reduce definitionally from the admitted body, over arbitrary F/G and independent
+typed replies. SchnorrBinding selects the authored contract and formula. -/
 namespace ZkcExamples.Structured.SchnorrInteractive
 open Zkc.Source Zkc.Source.Structured
 
@@ -35,8 +35,8 @@ theorem root_outside_helpers : program.payload.definitions.all (·.name != progr
 
 abbrev wiring := ZkcExamples.NativePrograms.Schnorr.wiring
 
-/-- The retained formula is an ordinary named Math helper. This handle says
-nothing about an authored association with the separate relation declaration. -/
+/-- The retained formula is an ordinary named Math helper. SchnorrBinding proves
+its authored relation association using the typed admitted contract tables. -/
 def formula : Helper :=
   ⟨"zkf_6d5ed5928b9bea74d6d7736ea8056c9f06e280ffdc4dbcaf2e00bf4f639c1873", .math,
     [.group groupDomain, .group groupDomain, .field scalarDomain], [.boolean]⟩
@@ -78,6 +78,13 @@ theorem process_equation (base key : G) (challengeService : Nat) :
     process (F := F) base key challengeService =
       (Zkc.Protocols.Schnorr.Common.experiment wiring base key challengeService).interpret
         CommonAdapter.embed := by
+  rfl
+
+/-- The full actual returned tuple is retained before projecting the decision. -/
+theorem verifier_outputs_equation (base key : G) (challengeService : Nat) :
+    program.participant F G 1 (verifierInputs base key challengeService) =
+      ((Zkc.Protocols.Schnorr.Common.experiment wiring base key challengeService).interpret
+        CommonAdapter.embed).bind (fun decision => .done (.cons decision .nil)) := by
   rfl
 
 /-- Positional site retained for the nonce draw in this exact imported subject. -/

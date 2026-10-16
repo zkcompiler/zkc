@@ -33,7 +33,7 @@ def check(output, lake):
                  ["protocol", ["P"], [["P"]], [["P"]]], [], [],
                  ["block", [[["call", name], [0], [["bool"]], [], ""]], ["return", [0]]]]
         data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
-                "main", [], [], [], [helper, entry]]
+                "main", [], [], [], [helper, entry], [["main", []]]]
         namespace = f"RenderedCase{index}"
         if index == 4:
             # Exercise the actual CLI under an ASCII locale as well as the
@@ -72,13 +72,13 @@ example : (Zkc.Source.Structured.check {namespace}.snapshot).isOk = true := by
         [["restrict", [name]], [0], [["bool"]], [], ""],
         [["exchange", name, "V"], [0], [["bool"]], [], name],
         [["draw", "V", field[1]], [7], [field], [], "draw"],
-        [["statement", name, [name], 0], [6], [], [], ""],
+        [["statement", name, [name], 0, name], [6], [], [], ""],
     ]
     data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64, "main", [],
-            [["relation", name, "public", name, name, name, [group], [["bool"]], ["statement"]]], [],
+            [["relation", name, "public", name, name, name, [group], [["bool"]], ["statement"], None]], [],
             [["function", "main", "protocol", "public", [group, field, service], [["bool"]],
               ["protocol", [name, "V"], [[name, "V"], [name], ["V"]], [["V"]]], [], [],
-              ["block", operations, ["return", [1]]]]]]
+              ["block", operations, ["return", [1]]]]], [["main", []]]]
     source = renderer.render(data, "RenderedOpen").replace("module\n\n", "", 1)
     points = str([ord(char) for char in name])
     source += f'''
@@ -101,10 +101,65 @@ example : (RenderedOpen.snapshot.definitions[0]?.map fun definition =>
       instructions.map fun (.instruction descriptor _ _ _ _) => match descriptor with
         | .groupIdentity _ => 0 | .groupAdd _ => 1 | .groupScale _ _ => 2
         | .groupEqual _ => 3 | .restrict _ => 4 | .exchange _ _ => 5
-        | .draw _ _ => 6 | .statement _ _ _ => 7 | _ => 99
+        | .draw _ _ => 6 | .statement _ _ _ _ => 7 | _ => 99
     | _ => []) = some [0, 1, 2, 3, 4, 5, 6, 7] := by decide +kernel
+open Zkc.Source.Structured in
+example : (RenderedOpen.snapshot.definitions[0]?.bind fun definition =>
+    match definition with
+    | .function function =>
+      let .block instructions _ := function.body
+      instructions[7]?.bind fun (.instruction descriptor _ _ _ _) => match descriptor with
+        | .statement _ _ _ target => target.map fun name => name.toList.map Char.toNat
+        | _ => none
+    | _ => none) = some {points} := by decide +kernel
 '''
     modules.append(source)
+    # Contract strings go through the same injection-resistant boundary as
+    # executable names. Check exact directions, ports, roles and formula links
+    # with Lean rather than comparing the renderer with itself.
+    contract_name = 'clause_증명"\\\n'
+    contract_data = copy.deepcopy(data)
+    contract_data[5][0][-1] = contract_name
+    contract_data[8] = [["main", [["continuation", contract_name,
+        [name, [["input", 0, name]]],
+        [name, [["output", 0, "V"]]], ["output", 0, "V"]]]]]
+    source = renderer.render(contract_data, "RenderedContracts").replace("module\n\n", "", 1)
+    contract_points = str([ord(char) for char in contract_name])
+    source += f'''
+open Zkc.Source.Structured in
+example : (RenderedContracts.snapshot.relations[0]?.bind fun relation =>
+    relation.formula.map fun name => name.toList.map Char.toNat) =
+    some {contract_points} := by decide +kernel
+open Zkc.Source.Structured in
+example : (RenderedContracts.snapshot.contracts[0]?.bind fun contract =>
+    contract.clauses[0]?.map fun clause =>
+      (clause.kind, clause.name.toList.map Char.toNat,
+       clause.subject.selectors.map fun selector =>
+         (selector.direction, selector.port, selector.role.toList.map Char.toNat),
+       clause.decision)) =
+    some (.continuation, {contract_points}, [(.input, 0, {points})],
+      some ⟨.output, 0, "V"⟩) := by rfl
+'''
+    modules.append(source)
+    malformed_contracts = [
+        (renderer.contract_selector, ["unknown", 0, "P"]),
+        (renderer.contract_selector, ["input", True, "P"]),
+        (renderer.contract_selector, ["input", 0, "P", "extra"]),
+        (renderer.relation_application, ["R", ["input", 0, "P"]]),
+        (renderer.contract_clause, ["assert", "c", ["R", []], None, None]),
+        (renderer.contract_clause, ["target", "c", ["R", []], None]),
+        (renderer.protocol_contract, ["main", [], "extra"]),
+        (renderer.relation, data[5][0][:-1]),
+        (renderer.descriptor, ["statement", "R", [], 0]),
+        (renderer.descriptor, ["statement", "R", [], 0, True]),
+        (renderer.descriptor, ["statement", "R", [], 0, None, "extra"]),
+    ]
+    for render, invalid in malformed_contracts:
+        try:
+            render(invalid)
+        except ValueError:
+            continue
+        raise AssertionError("renderer accepted malformed contract metadata")
     # Parse the full u64 endpoint through Lean's own string/constructor syntax.
     # Admission, rather than the renderer, checks the primitive contract.
     maximum = "18446744073709551615"
@@ -121,7 +176,7 @@ example : (RenderedOpen.snapshot.definitions[0]?.map fun definition =>
                  [["index.equal"], [0, 1], [["bool"]], [], ""],
              ], ["return", [0]]]]
     primitive_data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
-                      "main", [], [], binding_rows, [limit, entry]]
+                      "main", [], [], binding_rows, [limit, entry], [["main", []]]]
     source = renderer.render(primitive_data, "RenderedPrimitives").replace("module\n\n", "", 1)
     source += '''
 example : (RenderedPrimitives.snapshot.bindings.map fun binding =>
@@ -141,7 +196,7 @@ example : (Zkc.Source.Structured.check RenderedPrimitives.snapshot).isOk = true 
   decide +kernel
 '''
     modules.append(source)
-    malformed = [primitive_data[:6] + primitive_data[7:]]  # Obsolete seven-field shape.
+    malformed = [primitive_data[:-1], primitive_data + [[]]]  # Exact current envelope.
     for data in malformed:
         try:
             renderer.render(data, "Rejected")
@@ -168,7 +223,7 @@ example : (Zkc.Source.Structured.check RenderedPrimitives.snapshot).isOk = true 
              ["block", [[["local_call", "work", "P"], [0, 1, 2, 3], [vector], [], "work"]],
               ["return", [0]]]]
     preparation_data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
-                        "main", [], [], [], [identity, formula, realization, mapping, local, entry]]
+                        "main", [], [], [], [identity, formula, realization, mapping, local, entry], [["main", []]]]
     source = renderer.render(preparation_data, "RenderedPreparations").replace("module\n\n", "", 1)
     source += '''
 example : (RenderedPreparations.snapshot.definitions[2]?.bind fun definition =>
@@ -204,7 +259,7 @@ example : (Zkc.Source.Structured.check RenderedPreparations.snapshot).isOk = tru
              ["block", [[["protocol_apply", "child", ["V", "P"]], [0],
                          [["bool"]], [], "nested"]], ["return", [0]]]]
     application = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
-                   "main", [], [], [], [entry, child]]
+                   "main", [], [], [], [entry, child], [["main", []], ["child", []]]]
     source = renderer.render(application, "RenderedApplication").replace("module\n\n", "", 1)
     source += '''
 open Zkc.Source.Structured in
@@ -304,7 +359,9 @@ example : renderedRepeatHeaders {namespace}.snapshot = {expected} := by decide +
         raise AssertionError("renderer accepted an invalid or oversized UTF-8 string")
     report = {"status": "pass", "kernel_cases": len(names), "refusal_cases": 3,
               "open_metadata_kernel_cases": 3,
-              "primitive_metadata_kernel_cases": 3, "obsolete_envelope_refusal_cases": 1,
+              "contract_metadata_kernel_cases": 2,
+              "contract_metadata_refusal_cases": len(malformed_contracts),
+              "primitive_metadata_kernel_cases": 3, "obsolete_envelope_refusal_cases": 2,
               "preparation_metadata_kernel_cases": 3, "preparation_refusal_cases": 7,
               "application_metadata_kernel_cases": 2, "application_refusal_cases": 6,
               "repeat_data_kernel_cases": len(repeat_subjects),

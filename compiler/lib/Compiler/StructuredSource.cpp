@@ -75,6 +75,22 @@ Error attributes(Operation &op, ArrayRef<StringRef> allowed) {
   return Error::success();
 }
 
+// Called only for the dialect-verified, bounded declaration contract layout.
+json::Value contractValue(Attribute attr) {
+  if (isa<UnitAttr>(attr))
+    return nullptr;
+  if (auto text = dyn_cast<StringAttr>(attr))
+    return text.getValue();
+  if (auto symbol = dyn_cast<FlatSymbolRefAttr>(attr))
+    return symbol.getValue();
+  if (auto index = dyn_cast<IntegerAttr>(attr))
+    return index.getInt();
+  json::Array values;
+  for (Attribute value : cast<ArrayAttr>(attr))
+    values.push_back(contractValue(value));
+  return values;
+}
+
 Expected<json::Value> sort(Type type) {
   if (type.isSignlessInteger(1))
     return json::Array{"bool"};
@@ -403,11 +419,15 @@ class Exporter {
       return json::Array{"draw", query.getOwner(), result.getDomain()};
     }
     if (auto statement = dyn_cast<protocol_ir::StatementOp>(op)) {
-      if (auto e = attributes(op, {"relation", "selectors", "acceptance"}))
+      if (auto e =
+              attributes(op, {"relation", "selectors", "acceptance", "target"}))
         return std::move(e);
       return json::Array{"statement", statement.getRelation(),
                          names(statement.getSelectors()),
-                         statement.getAcceptance()};
+                         statement.getAcceptance(),
+                         statement.getTargetAttr()
+                             ? json::Value(statement.getTargetAttr().getValue())
+                             : json::Value(nullptr)};
     }
     if (auto constant = dyn_cast<arith::ConstantOp>(op)) {
       if (auto e = attributes(op, {"value"}))
@@ -868,8 +888,9 @@ class Exporter {
     else if (owner == "local")
       allowed.push_back("logical_origin");
     else if (owner == "protocol")
-      llvm::append_range(
-          allowed, ArrayRef<StringRef>{"roles", "input_roles", "output_roles"});
+      llvm::append_range(allowed,
+                         ArrayRef<StringRef>{"roles", "input_roles",
+                                             "output_roles", "contracts"});
     else if (owner == "finite")
       llvm::append_range(allowed,
                          ArrayRef<StringRef>{"domain", "step", "predicate"});
@@ -1075,7 +1096,7 @@ public:
   Expected<json::Value> run(StringRef bytes) {
     if (auto e = attributes(*unit, {"profile"}))
       return std::move(e);
-    json::Array domains, relations, bindings, definitions;
+    json::Array domains, relations, bindings, definitions, contracts;
     llvm::StringSet<> symbolsSeen;
     for (Operation &op : unit.getBody().front()) {
       // MLIR permits an empty quoted symbol. The wire vocabulary uses the
@@ -1097,9 +1118,9 @@ public:
       } else if (auto declaration = dyn_cast<relation::DeclareOp>(op)) {
         if (relations.size() == 128)
           return error("structured-source-limit");
-        if (auto e =
-                attributes(op, {"sym_name", "sym_visibility", "kind", "key",
-                                "revision", "signature", "purposes"}))
+        if (auto e = attributes(op, {"sym_name", "sym_visibility", "kind",
+                                     "key", "revision", "signature", "purposes",
+                                     "formula"}))
           return std::move(e);
         auto visible = visibility(op);
         if (!visible)
@@ -1111,11 +1132,14 @@ public:
         auto outputs = sorts(type.getResults());
         if (!outputs)
           return outputs.takeError();
-        relations.push_back(
-            json::Array{"relation", declaration.getSymName(), *visible,
-                        declaration.getKind(), declaration.getKey(),
-                        declaration.getRevision(), std::move(*inputs),
-                        std::move(*outputs), names(declaration.getPurposes())});
+        relations.push_back(json::Array{
+            "relation", declaration.getSymName(), *visible,
+            declaration.getKind(), declaration.getKey(),
+            declaration.getRevision(), std::move(*inputs), std::move(*outputs),
+            names(declaration.getPurposes()),
+            declaration.getFormulaAttr()
+                ? json::Value(declaration.getFormulaAttr().getValue())
+                : json::Value(nullptr)});
       } else if (isa<local::OperationBindingOp>(op)) {
         if (bindings.size() == 128)
           return error("structured-source-limit");
@@ -1136,6 +1160,16 @@ public:
         if (!encoded)
           return encoded.takeError();
         definitions.push_back(std::move(*encoded));
+        if (auto protocol = dyn_cast<protocol_ir::MathematicalOp>(op)) {
+          if (protocol.getContractsAttr() &&
+              protocol.getContractsAttr().size() > signatureLimit)
+            return error("structured-source-limit");
+          contracts.push_back(
+              json::Array{protocol.getSymName(),
+                          protocol.getContractsAttr()
+                              ? contractValue(protocol.getContractsAttr())
+                              : json::Value(json::Array{})});
+        }
       }
     }
     if (auto e = closure())
@@ -1177,7 +1211,8 @@ public:
                        std::move(domains),
                        std::move(relations),
                        std::move(bindings),
-                       std::move(definitions)};
+                       std::move(definitions),
+                       std::move(contracts)};
   }
 };
 } // namespace

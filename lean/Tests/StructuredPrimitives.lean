@@ -12,7 +12,10 @@ private def digest := "sha256:" ++ String.ofList (List.replicate 64 '0')
 private def root : Definition := .function ⟨"main", .protocol, .publicDef, [], [],
   some ⟨["P"], [], []⟩, [], none, .block [] (.ret [])⟩
 private def snapshot (bindings : List Binding) (defs : List Definition := [root]) : Snapshot :=
-  ⟨digest, "main", [], [], bindings, defs⟩
+  (let contractDefinitions : List Definition := defs
+   ⟨digest, "main", [], [], bindings, contractDefinitions,
+    contractDefinitions.filterMap (fun definition =>
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
 private def binding (contract : String) (arguments : List String := []) : Binding :=
   ⟨"primitive", contract, arguments, ""⟩
 private def localHelper (op : Descriptor) (inputs outputs : List Ty) (site : String := "exec")
@@ -113,9 +116,9 @@ private def run : IO Unit := do
       binding "field.equal" ["koala-bear"], {binding "index.add" with implementation := "native/index.add"}] do
     test ("invalid-unused:" ++ bad.contract) (!admits [bad] && !(Format.binding (bindingWire bad)).isOk)
   let envelope := [Json.str "zkc.structured-source/0", .str "original", .str digest,
-    .str "main", arr [], arr [], arr [], arr []]
-  test "wire-eight-fields" ((Format.snapshot (arr envelope)).isOk)
-  test "wire-no-old-envelope" (!(Format.snapshot (arr (envelope.take 7))).isOk)
+    .str "main", arr [], arr [], arr [], arr [], arr []]
+  test "wire-nine-fields" ((Format.snapshot (arr envelope)).isOk)
+  test "wire-no-old-envelope" (!(Format.snapshot (arr (envelope.take 8))).isOk)
   test "wire-no-extra-envelope" (!(Format.snapshot (arr (envelope ++ [arr []]))).isOk)
   test "wire-unused-bad-binding" (!(Format.snapshot (arr (envelope.set 6
     (arr [bindingWire (binding "vector.product" [scalarDomain])])))).isOk)

@@ -396,11 +396,14 @@ private def dormantBody : Region protocolDialect [] [] :=
     (.letOp (.protocolApply flatSignature [0] "call") .nil .nil (.ret .nil))
 private def dormant : CheckedProtocol := checked dormantSignature dormantBody
 private def snapshot : Snapshot :=
-  ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "Flat", [], [], [], [
+  (let contractDefinitions : List Definition := [
     .function ⟨"Dormant", .protocol, .publicDef, [], [], some ⟨["A"], [], []⟩, [], none,
       .block [.instruction (.protocolApply "Flat" ["A"]) [] [] [] "call"] (.ret [])⟩,
     .function ⟨"Flat", .protocol, .publicDef, [], [], some ⟨["A"], [], []⟩, [], none,
-      .block [] (.ret [])⟩]⟩
+      .block [] (.ret [])⟩]
+   ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "Flat", [], [], [], contractDefinitions,
+    contractDefinitions.filterMap (fun definition =>
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
 set_option smartUnfolding false in
 private def unit : UnitPayload where
   definitions := []

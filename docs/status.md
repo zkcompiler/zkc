@@ -185,6 +185,19 @@ projects. This does not supply an LSP server or formatter.
 
 Relation and target/input/output/continuation clauses state intent; declarations
 alone add no runtime guard, satisfaction fact or security theorem.
+Original PIR now retains all closed declaration contracts and exact relation
+formula references. Native verification checks ownership, complete Math ABI,
+port types and roles, clause shapes and agreement of an entry statement with
+retained targets. Source proof statements retain the exact selected target name;
+its owned clause supplies the decision role. The logical source interface
+independently checks that selection against the verifier, and native proof
+deployment checks the recovered decision role against its validator.
+The current version-0 [structured export](spec/formats/structured-source.md)
+includes formula links and one contract-table row for every protocol, regardless
+of the selected Entry. Application expansion retains declaration metadata;
+participant projection erases contracts, formula links and selected-target
+references explicitly. This adds
+no runtime predicate evaluation or proof transport through those transforms.
 
 ## Foundation capability map
 
@@ -282,8 +295,8 @@ The open CLI retains request/reply order, stop sites and consumed reply indices;
 its additive scalar test group is not native BLS G1, and evaluator capacity
 thresholds are not equated. The retained actual Interactive Schnorr unit has
 kernel admission, arbitrary scalar/group participant equations and an explicit
-adapter to the existing verifier contract; its dormant formula remains named,
-with no inferred relation binding. The maintained Helpers and Reordered source
+adapter to the existing verifier contract. Its retained target now binds the
+actual formula helper and typed role-local inputs and decision selector. The maintained Helpers and Reordered source
 forms satisfy that same contract through their actual named calls. The admitted
 EarlyChallenge source has a proved query-first process and fails the contract.
 For Interactive, the [honest-prover boundary](../lean/docs/spec/structured-source.md#actual-interactive-schnorr-subject)
@@ -294,6 +307,19 @@ stopped prefixes remain available. The optional public-view theorem transfers
 these source-derived messages to VCVio's simulator for a fixed challenge and
 uniform nonce under a successful reply/send profile. This is a checked-source
 model theorem; native provider laws and joint scheduling remain separate.
+The optional source Sigma adapter also reuses upstream completeness,
+two-transcript special soundness and fresh-challenge honest-verifier simulation
+under its stated sampling and field assumptions. The extracted witness satisfies
+the retained formula; it is not assumed to be the prover's original input.
+
+[Structured contract APIs](../lean/docs/spec/verification.md#structured-contracts)
+recover exact owners, relations, formula links and selectors from admitted
+metadata. Common local derivation and call-substitution laws use the existing
+Region/Proc semantics. Mathematical adequacy, logical parameter sharing and the
+chosen security experiment remain explicit. Entry selection is retained and
+checked separately from reusable component clauses; these APIs do not prove
+compiler/native correspondence or infer undeclared security properties.
+
 Two [scalar inlining pairs](../lean/bridges/structured/README.md#scalar-inlining-pairs)
 have universal model equalities between exact original and actual prepared
 exports: Schnorr response and multilinear Sumcheck claim update. The reusable

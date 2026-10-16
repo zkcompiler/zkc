@@ -96,6 +96,41 @@ input snapshots. Python execution and the selected toolchain remain trusted.
 | New parser refusal controls could count a crash as rejection | Require exit 1 and each reader's exact diagnostic; separately exercise non-refusal exit codes |
 | A repeated successful request inflated the reported source count | Name the metric `verified_requests`; test nested source, request and relation mutations |
 
+## Structured component verification review
+
+The structured contract work was reviewed separately by independent agents and
+Claude. The review focused on actual owner/formula binding, role copies, logical
+parameter authority, call substitution, stopping observations and maintained
+property consumers. Review reports do not replace kernel checks or source
+correspondence proofs.
+
+Several initial designs were simplified or rejected:
+
+- A complete clause inventory with an arbitrary condition could hide the entire
+  desired theorem. The implementation instead records selected typed requests
+  and requires the property consumer's actual execution observation.
+- Automatically treating an input clause as a hypothesis would assume away a
+  false-claim soundness experiment. Request polarity and quantifiers belong to
+  the selected property.
+- Copying runtime operands into authoritative mathematical parameters could
+  replace Sumcheck's fixed table with an adversary's table. Logical assignments
+  and cross-call sharing are explicit.
+- Retaining all target clauses did not identify which target a proof Entry had
+  selected. Original PIR and the snapshot now retain and check that selection.
+- Repeating a handwritten operation tree merely to use a generic derivation adds
+  work. Definitional equations remain direct; structural tactics are used where
+  local mathematical rules remove repeated authoring.
+- A local coupling theorem must state its process and reply relation. The
+  maintained VCVio adapter relates the same process under different handlers and
+  views; it does not establish an arbitrary transformed program's security.
+
+The controls deliberately distinguish closed selected obligations from stronger
+claims they cannot justify. Identity call specifications can satisfy an inventory
+without abstracting behavior; false local premises still need discharge at an
+actual call; a terminal whose predicate is True proves only output availability.
+Explicit invocation labels do not prove dynamic reachability. These distinctions
+are part of the public contract, rather than hidden assumptions of a certificate.
+
 ## Reproduction and further research
 
 The [package guide](../../README.md) gives source-only reproduction and maintained

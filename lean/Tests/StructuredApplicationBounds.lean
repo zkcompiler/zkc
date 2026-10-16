@@ -114,13 +114,16 @@ theorem first_member : first ∈ [first, constant, empty, guarded] := by simp
 /-- A complete original control unit, with forward source declaration order.
 The candidate is normalized independently and admitted once in the kernel. -/
 private def source : Snapshot :=
-  ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "Main", [], [], [], [
+  (let contractDefinitions : List Definition := [
     .function ⟨"Main", .protocol, .publicDef, [.boolean, .boolean], [.boolean],
       some ⟨["A"], [["A"], ["A"]], [["A"]]⟩, [], none,
       .block [.instruction (.protocolApply "First" ["A"]) [0, 1] [.boolean] [] "call"]
         (.ret [0])⟩,
     .function ⟨"First", .protocol, .publicDef, [.boolean, .boolean], [.boolean],
-      some ⟨["A"], [["A"], ["A"]], [["A"]]⟩, [], none, .block [] (.ret [0])⟩]⟩
+      some ⟨["A"], [["A"], ["A"]], [["A"]]⟩, [], none, .block [] (.ret [0])⟩]
+   ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "Main", [], [], [], contractDefinitions,
+    contractDefinitions.filterMap (fun definition =>
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
 private def mainSignature : ProtocolSignature :=
   ⟨"Main", ["A"], [.boolean, .boolean], [.boolean], [[0], [0]], [[0]]⟩
 private def mainBody : Region protocolDialect [.boolean, .boolean] [.boolean] :=

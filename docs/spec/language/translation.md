@@ -64,7 +64,13 @@ preserve the unconditional contract of `local.realize`.
 
 Math helpers become private `func.func` definitions. A selected formula relation
 adds a non-callable `relation.declare` and a private Boolean `func.func`; its exact
-link is retained in the interface. Opaque and captured relations emit declarations
+link is retained as the declaration's `formula` symbol reference and checked
+against the interface. Every closed protocol retains all its `spec` clauses in
+the declaration's verified `contracts` attribute, using the existing native
+layout, independently of the selected Entry. The logical source interface is
+an independently checked projection of that inventory. Only a selected proof
+target adds the existing entry statement, which must agree with a retained
+target. Opaque and captured relations emit declarations
 only. Predicate helpers have no executable symbol uses. Every selected predicate
 undergoes bounded helper expansion and polynomial observation checks on scratch
 copies before interface admission, including unused observations. Ordered helpers become

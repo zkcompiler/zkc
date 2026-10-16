@@ -99,8 +99,9 @@ def descriptor(value):
         record(args, 1)
         return f".restrict {seq(args[0], text)}"
     if tag == "statement":
-        relation_name, selectors, acceptance = record(args, 3)
-        return f".statement {text(relation_name)} {seq(selectors, text)} {nat(acceptance)}"
+        relation_name, selectors, acceptance, target = record(args, 4)
+        return (f".statement {text(relation_name)} {seq(selectors, text)} "
+                f"{nat(acceptance)} ({optional(target, text)})")
     if tag in ("exchange", "draw", "group.scale"):
         record(args, 2)
         name = {"exchange": "exchange", "draw": "draw", "group.scale": "groupScale"}[tag]
@@ -175,11 +176,42 @@ def protocol_interface(value):
 
 
 def relation(value):
-    tag, name, visibility, kind, key, revision, inputs, outputs, purposes = record(value, 9)
+    tag, name, visibility, kind, key, revision, inputs, outputs, purposes, formula = record(value, 10)
     if tag != "relation" or visibility not in ("public", "private"):
         raise ValueError("invalid relation")
     return (f"⟨{text(name)}, .{visibility}Def, {text(kind)}, {text(key)}, {text(revision)}, "
-            f"{seq(inputs, ty)}, {seq(outputs, ty)}, {seq(purposes, text)}⟩")
+            f"{seq(inputs, ty)}, {seq(outputs, ty)}, {seq(purposes, text)}, "
+            f"{optional(formula, text)}⟩")
+
+
+def optional(value, render):
+    return "none" if value is None else f"some ({render(value)})"
+
+
+def contract_selector(value):
+    direction, port, role = record(value, 3)
+    if direction not in ("input", "output"):
+        raise ValueError("invalid contract selector direction")
+    return f"⟨.{direction}, {nat(port)}, {text(role)}⟩"
+
+
+def relation_application(value):
+    name, selectors = record(value, 2)
+    return f"⟨{text(name)}, {seq(selectors, contract_selector)}⟩"
+
+
+def contract_clause(value):
+    kind, name, subject, residual, decision = record(value, 5)
+    if kind not in ("target", "input", "output", "continuation"):
+        raise ValueError("invalid contract clause kind")
+    return (f"⟨.{kind}, {text(name)}, {relation_application(subject)}, "
+            f"{optional(residual, relation_application)}, "
+            f"{optional(decision, contract_selector)}⟩")
+
+
+def protocol_contract(value):
+    owner, clauses = record(value, 2)
+    return f"⟨{text(owner)}, {seq(clauses, contract_clause)}⟩"
 
 
 def primitive_binding(value):
@@ -225,7 +257,7 @@ def definition(value):
 
 
 def render(data, namespace):
-    version, stage, source, entry, domains, relations, bindings, definitions = record(data, 8)
+    version, stage, source, entry, domains, relations, bindings, definitions, contracts = record(data, 9)
     if version != "zkc.structured-source/0" or stage != "original":
         raise ValueError("wrong version or stage")
     if not re.fullmatch(r"(?:[A-Za-z][A-Za-z0-9_]*\.)*[A-Za-z][A-Za-z0-9_]*", namespace):
@@ -250,6 +282,7 @@ def snapshot : Snapshot where
   relations := {seq(relations, relation)}
   bindings := {seq(bindings, primitive_binding)}
   definitions := {seq(definitions, definition)}
+  contracts := {seq(contracts, protocol_contract)}
 
 end {namespace}
 '''

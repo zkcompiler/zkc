@@ -102,7 +102,7 @@ with case('whole-unchanged-application-and-independent-participant-inputs'):
     source, symbol = frontend(root / 'compiler/test/fixtures/language/application.zkc')
     snapshot = export(source, symbol)
     assert snapshot[2] == 'sha256:' + hashlib.sha256(source.encode()).hexdigest()
-    assert len(snapshot) == 8 and len(snapshot[7]) == 4
+    assert len(snapshot) == 9 and len(snapshot[7]) == 4
     calls = [instruction for definition in snapshot[7] for instruction in definition[9][1]
              if instruction[0][0] == 'protocol_apply']
     assert len(calls) == 3

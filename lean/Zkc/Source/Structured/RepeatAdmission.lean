@@ -148,8 +148,9 @@ theorem checkProtocolRoles_repeat {active : List Nat} {spec : RepeatSpec} {site 
   cases h : spec.roles.all active.contains <;> simp [checkProtocolRoles, checkActiveRoles, h] at accepted ⊢
 
 /-- No bound or data-origin choice can make a callback statement admissible. -/
-theorem checkProtocolPlacement_statement (relation : String) (selectors : List String) (acceptance : Nat) :
-    checkProtocolPlacement .repeatYield (.statement relation selectors acceptance) =
+theorem checkProtocolPlacement_statement (relation : String) (selectors : List String) (acceptance : Nat)
+    (target : Option String := none) :
+    checkProtocolPlacement .repeatYield (.statement relation selectors acceptance target) =
       .error "structured-statement-placement" := rfl
 
 

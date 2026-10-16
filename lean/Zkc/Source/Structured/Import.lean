@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Structured.OpenAdmission
+public import Zkc.Source.Structured.ContractAdmission
 public import Zkc.Source.Structured.Availability
 public import Zkc.Source.Structured.ApplicationMetadata
 public import Zkc.Specification
@@ -99,6 +99,7 @@ def checkUnitHeaders (snapshot : Snapshot) :
     throw "structured-service-use"
   let domains ← snapshot.domains.mapM Domain.resolve
   let headers ← collectProtocolHeaders snapshot
+  checkContracts snapshot headers
   let summaries ← snapshot.identitySummaries
   return (domains, headers, summaries)
 

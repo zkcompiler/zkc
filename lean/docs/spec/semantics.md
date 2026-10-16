@@ -16,6 +16,23 @@ requires the explicit operation compatibility law in `RegionMeaning.Translation`
 premises and callback premises prove immediate return without interactions or
 stopping. Native memory annotations do not establish this property.
 
+`Region.Derivation` constructs process correspondence from local operation laws
+over this same typed body. Its indices fix the source region, environment,
+effect interpretation and target process. Return, stop, lexical bind and
+operation constructors cover the stored structure. Each callback is derived
+for every declared input before an operation law may use its translated
+meaning. Pure-return and stopped-prefix rules avoid obligations about unreachable
+suffix executions; they do not remove those suffixes from source admission.
+`Region.Derivation.sound` produces the whole process equation. There is no
+constructor that accepts that equation as its sole premise.
+
+An operation law can still be mathematically substantial: a call, fold or repeat
+must use an appropriate helper theorem or invariant. The derivation does not
+discover these proofs. Its execution corollaries use the existing handler
+semantics and retain returned values, stop causes, residual state and ordered
+events. Property-specific weakening, such as hiding events or bounding only
+acceptance, requires an additional explicit theorem.
+
 `RegionDecoding` checks reference indices, result annotations, intermediate bind
 types and exact closed region signatures, including dormant bodies. Typed erasure
 roundtrips for all regions; successful formation preserves all raw structure.

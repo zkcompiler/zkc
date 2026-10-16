@@ -133,8 +133,11 @@ def descriptor (json : Json) : Except String Descriptor := do
   | [.str "restrict", roles] => return .restrict (← strings roles 16)
   | [.str "exchange", sender, receiver] => return .exchange (← string sender) (← string receiver)
   | [.str "draw", owner, f] => return .draw (← string owner) (← field f)
-  | [.str "statement", relation, selectors, acceptance] =>
-      return .statement (← string relation) (← strings selectors) (← natural acceptance)
+  | [.str "statement", relation, selectors, acceptance, target] =>
+      let target ← match target with
+        | .null => pure none
+        | value => some <$> string value
+      return .statement (← string relation) (← strings selectors) (← natural acceptance) target
   | _ => throw "structured-operation-unsupported"
 
 def terminator (json : Json) : Except String Terminator := do
@@ -209,11 +212,49 @@ def purpose : Json → Except String String
   | .str "witness" => .ok "witness"
   | _ => .error "structured-relation-purpose"
 
+def optional {α : Type} (decode : Json → Except String α) : Json → Except String (Option α)
+  | .null => pure none
+  | value => some <$> decode value
+
+def contractSelector (json : Json) : Except String ContractSelector := do
+  match ← array json with
+  | [direction, port, role] =>
+    let direction ← match direction with
+      | .str "input" => pure ContractDirection.input
+      | .str "output" => pure ContractDirection.output
+      | _ => throw "structured-contract-direction"
+    return ⟨direction, ← natural port, ← string role⟩
+  | _ => throw "structured-contract-selector"
+
+def relationApplication (json : Json) : Except String RelationApplication := do
+  match ← array json with
+  | [relation, selectors] =>
+    return ⟨← string relation, ← (← array selectors).mapM contractSelector⟩
+  | _ => throw "structured-contract-application"
+
+def contractClause (json : Json) : Except String ContractClause := do
+  match ← array json with
+  | [kind, name, subject, residual, decision] =>
+    let kind ← match kind with
+      | .str "target" => pure ContractKind.target
+      | .str "input" => pure ContractKind.input
+      | .str "output" => pure ContractKind.output
+      | .str "continuation" => pure ContractKind.continuation
+      | _ => throw "structured-contract-kind"
+    return ⟨kind, ← string name, ← relationApplication subject,
+      ← optional relationApplication residual, ← optional contractSelector decision⟩
+  | _ => throw "structured-contract-clause"
+
+def protocolContract (json : Json) : Except String ProtocolContract := do
+  match ← array json with
+  | [owner, clauses] => return ⟨← string owner, ← (← array clauses).mapM contractClause⟩
+  | _ => throw "structured-contract"
+
 def relation (json : Json) : Except String Relation := do
   match ← array json with
-  | [.str "relation", name, visible, kind, key, revision, inputs, outputs, purposes] =>
+  | [.str "relation", name, visible, kind, key, revision, inputs, outputs, purposes, formula] =>
       return ⟨← string name, ← visibility visible, ← string kind, ← string key,
-        ← string revision, ← types inputs, ← types outputs, ← (← array purposes).mapM purpose⟩
+        ← string revision, ← types inputs, ← types outputs, ← (← array purposes).mapM purpose, ← optional (fun value => string value) formula⟩
   | _ => throw "structured-relation"
 
 def binding (json : Json) : Except String Binding := do
@@ -246,12 +287,13 @@ def digestValid (source : String) : Bool :=
 
 def snapshot (json : Json) : Except String Snapshot := do
   match ← array json with
-  | [.str "zkc.structured-source/0", .str "original", digest, entry, domains, relations, bindings, definitions] =>
+  | [.str "zkc.structured-source/0", .str "original", digest, entry, domains, relations, bindings, definitions, contracts] =>
     let source ← string digest
     if !digestValid source then throw "structured-source-digest"
     return ⟨source, ← string entry, ← (← array domains 128).mapM domain,
       ← (← array relations 128).mapM relation, ← (← array bindings 128).mapM binding,
-      ← (← array definitions 128).mapM definition⟩
+      ← (← array definitions 128).mapM definition,
+      ← (← array contracts 128).mapM protocolContract⟩
   | _ => throw "structured-envelope"
 
 /-- Lexical limits precede the recursive JSON parser, including inside unused bodies. -/

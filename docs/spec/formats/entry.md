@@ -29,8 +29,10 @@ explicit participant inputs.
 Format is `zkc.framed/0` or `raw.bytes/0`; native shorthand requires framing.
 A programmable record codec uses raw bytes. Independent reading checks these
 choices against the original signature, selected construction closure and
-native statement. Source comparison separately checks that they match the
-selected checked Entry.
+native statement, including its exact `target` clause-name reference. The
+selected clause's decision role must agree with the verifier and acceptance
+selector; equal output indices alone do not establish that agreement. Source
+comparison separately checks that these choices match the selected checked Entry.
 
 `setups` is an array of records with exactly `name` and `inputs`. Each input
 selector has exactly `port` and `path`, using logical input and product-field
@@ -102,7 +104,10 @@ and structure across captures even when nominal names and native leaves agree.
 These identities retain names and printing policy; they are not semantic equivalence.
 The formula helper name is `zkf_` followed by lowercase SHA-256 of the bytes
 `zkc.language.predicate:` concatenated with the native declaration key. Its JSON
-link must equal that derived name. Native formula admission requires a private,
+link must equal the original relation's explicit `formula` symbol reference.
+Canonical source emission uses the derived name; structural original admission
+resolves the exact retained reference without reconstructing it from the key.
+Native formula admission requires a private,
 nonempty body with the declaration's signature and no executable references, then
 checks polynomial observations on bounded detached clones using the original
 helper table. The supplied original is unchanged; limits remain `source.limit`
@@ -130,6 +135,12 @@ schema, rather than supplied again. Relations compare exact logical identities.
 Clauses remain on closed component declarations; original `protocol.apply`
 occurrences own their operand/result and role mappings. There is no separate
 serialized application graph.
+
+The original `protocol.func` owns the complete native clause inventory.
+`readInterface` independently flattens each logical selector through its admitted
+schema and requires exact agreement with that inventory, including kind, name,
+relation, direction, port, role, residual and decision. Omitting, adding or moving
+a clause in the interface cannot change the original declaration's contract.
 
 The standalone `readInterface` API admits original MLIR and checks the interface
 against its exact byte hash, selected protocol, flattened types and participant

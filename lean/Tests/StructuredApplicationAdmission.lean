@@ -14,8 +14,11 @@ private def protocol (name : String) (roles : List String) (inputs outputs : Lis
     some ⟨roles, inputScopes, outputScopes⟩, [], none, body⟩
 
 private def unit (definitions : List Definition) (entry : String := "main") : Snapshot :=
-  ⟨"sha256:0000000000000000000000000000000000000000000000000000000000000000",
-    entry, [], [], [], definitions⟩
+  (let contractDefinitions : List Definition := definitions
+   ⟨"sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    entry, [], [], [], contractDefinitions,
+    contractDefinitions.filterMap (fun definition =>
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
 
 private def child := protocol "child" ["A", "B"] [.boolean, .boolean] [.boolean]
   [["A"], ["B"]] [["A"]] (.block [] (.ret [0]))
@@ -89,12 +92,14 @@ private def subsetFold (calleeRoles : List String) : Snapshot :=
 
 private def statementUnit (called : Bool) : Snapshot :=
   let root := protocol "main" ["P"] [.boolean] [.boolean] [["P"]] [["P"]]
-    (.block [.instruction (.statement "relation" ["P"] 0) [0] [] [] ""] (.ret [0]))
+    (.block [.instruction (.statement "relation" ["P"] 0 none) [0] [] [] ""] (.ret [0]))
   let dormant := protocol "dormant" ["P"] [.boolean] [] [["P"]] []
     (.block [.instruction (.protocolApply "main" ["P"]) [0] [.boolean] [] "apply"] (.ret []))
   { unit (if called then [root, dormant] else [root]) with
+    contracts := [⟨"main", [⟨.target, "claim", ⟨"relation", [⟨.input, 0, "P"⟩]⟩,
+      none, some ⟨.output, 0, "P"⟩⟩]⟩] ++ (if called then [⟨"dormant", []⟩] else [])
     relations := [⟨"relation", .publicDef, "opaque", "key", "rev",
-      [.boolean], [.boolean], ["statement"]⟩] }
+      [.boolean], [.boolean], ["statement"], none⟩] }
 
 private def erasedHeader := unit [
   protocol "main" ["P"] [.boolean] [] [["P"]] []

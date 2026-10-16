@@ -192,10 +192,12 @@ theorem output_filter_preserves_stop (x : Option F) :
     hiddenStopRoot.participant (tables F G) 0 (.cons x .nil) = .halt .abort := rfl
 
 private def projectionSnapshot : Snapshot :=
-  ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [], [], [],
-    [.function ⟨"main", .protocol, .publicDef, [.boolean], [],
+  (let contractDefinitions : List Definition := [.function ⟨"main", .protocol, .publicDef, [.boolean], [],
       some ⟨["P"], [["P"]], []⟩, [], none,
-      .block [.instruction (.guard "P") [0] [] [] "checked_guard"] (.ret [])⟩]⟩
+      .block [.instruction (.guard "P") [0] [] [] "checked_guard"] (.ret [])⟩]
+   ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [], [], [], contractDefinitions,
+    contractDefinitions.filterMap (fun definition =>
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
 
 private def projectionSignature : ProtocolSignature :=
   ⟨"main", ["P"], [.boolean], [], [[0]], []⟩

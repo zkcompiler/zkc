@@ -3,6 +3,7 @@ module
 public import Zkc.Source.Structured.Association
 public import ZkcExamples.Structured.SumcheckSourceData
 public import ZkcExamples.Structured.SumcheckSourceBodies
+public import ZkcExamples.Structured.SumcheckRelationContract
 
 @[expose] public section
 
@@ -186,17 +187,47 @@ theorem run_signature : runDefinition.signature = runSignature := rfl
 theorem run_raw : runDefinition.raw = runBody.erase := rfl
 theorem run_body : runDefinition.body = runBody := rfl
 
+def sumAddDefinition : CheckedDefinition :=
+  ⟨SumcheckRelationContract.addHelper.name, SumcheckRelationContract.addHelper.kind,
+    SumcheckRelationContract.addHelper.inputs, SumcheckRelationContract.addHelper.outputs,
+    SumcheckRelationContract.addBody.erase, SumcheckRelationContract.addBody,
+    SumcheckRelationContract.addBody.elaborate_erase⟩
+
+def sumStepDefinition : CheckedDefinition :=
+  ⟨SumcheckRelationContract.foldSpec.stepHelper.name, SumcheckRelationContract.foldSpec.stepHelper.kind,
+    SumcheckRelationContract.foldSpec.stepHelper.inputs, SumcheckRelationContract.foldSpec.stepHelper.outputs,
+    SumcheckRelationContract.stepBody.erase, SumcheckRelationContract.stepBody,
+    SumcheckRelationContract.stepBody.elaborate_erase⟩
+
+def sumTotalDefinition : CheckedDefinition :=
+  ⟨SumcheckRelationContract.totalHelper.name, SumcheckRelationContract.totalHelper.kind,
+    SumcheckRelationContract.totalHelper.inputs, SumcheckRelationContract.totalHelper.outputs,
+    SumcheckRelationContract.totalBody.erase, SumcheckRelationContract.totalBody,
+    SumcheckRelationContract.totalBody.elaborate_erase⟩
+
+def sumFormulaDefinition : CheckedDefinition :=
+  ⟨SumcheckRelationContract.sumHelper.name, SumcheckRelationContract.sumHelper.kind,
+    SumcheckRelationContract.sumHelper.inputs, SumcheckRelationContract.sumHelper.outputs,
+    SumcheckRelationContract.sumBody.erase, SumcheckRelationContract.sumBody,
+    SumcheckRelationContract.sumBody.elaborate_erase⟩
+
+def tableSumFormulaDefinition : CheckedDefinition :=
+  ⟨SumcheckRelationContract.tableSumHelper.name, SumcheckRelationContract.tableSumHelper.kind,
+    SumcheckRelationContract.tableSumHelper.inputs, SumcheckRelationContract.tableSumHelper.outputs,
+    SumcheckRelationContract.tableSumBody.erase, SumcheckRelationContract.tableSumBody,
+    SumcheckRelationContract.tableSumBody.elaborate_erase⟩
+
 def definitions : List CheckedDefinition :=
-  [lessDefinition, rowsDefinition, shapeDefinition, tableDefinition, widthDefinition, variablesDefinition, emptyDefinition, halvesDefinition, sumsDefinition, interpolateDefinition, mapDefinition, firstDefinition, appendDefinition, stepDefinition, foldStepDefinition, foldDefinition, foldWrapperDefinition, prefixDefinition, valuesDefinition, valuesRealizationDefinition, checkTableDefinition, checkDefinition]
+  [sumAddDefinition, sumStepDefinition, sumTotalDefinition, sumFormulaDefinition, lessDefinition, rowsDefinition, shapeDefinition, tableDefinition, valuesDefinition, valuesRealizationDefinition, tableSumFormulaDefinition, widthDefinition, variablesDefinition, emptyDefinition, halvesDefinition, sumsDefinition, interpolateDefinition, mapDefinition, firstDefinition, appendDefinition, stepDefinition, foldStepDefinition, foldDefinition, foldWrapperDefinition, prefixDefinition, checkTableDefinition, checkDefinition]
 
 def ordered : List OrderedDefinition :=
-  [⟨lessDefinition, 0⟩, ⟨rowsDefinition, 1⟩, ⟨shapeDefinition, 2⟩, ⟨tableDefinition, 3⟩, ⟨widthDefinition, 0⟩, ⟨variablesDefinition, 0⟩, ⟨emptyDefinition, 0⟩, ⟨halvesDefinition, 1⟩, ⟨sumsDefinition, 2⟩, ⟨interpolateDefinition, 0⟩, ⟨mapDefinition, 1⟩, ⟨firstDefinition, 2⟩, ⟨appendDefinition, 0⟩, ⟨stepDefinition, 3⟩, ⟨foldStepDefinition, 4⟩, ⟨foldDefinition, 5⟩, ⟨foldWrapperDefinition, 6⟩, ⟨prefixDefinition, 7⟩, ⟨valuesDefinition, 0⟩, ⟨valuesRealizationDefinition, 1⟩, ⟨checkTableDefinition, 8⟩, ⟨checkDefinition, 9⟩]
+  [⟨sumAddDefinition, 0⟩, ⟨sumStepDefinition, 1⟩, ⟨sumTotalDefinition, 2⟩, ⟨sumFormulaDefinition, 3⟩, ⟨lessDefinition, 0⟩, ⟨rowsDefinition, 1⟩, ⟨shapeDefinition, 2⟩, ⟨tableDefinition, 3⟩, ⟨valuesDefinition, 0⟩, ⟨valuesRealizationDefinition, 1⟩, ⟨tableSumFormulaDefinition, 3⟩, ⟨widthDefinition, 0⟩, ⟨variablesDefinition, 0⟩, ⟨emptyDefinition, 0⟩, ⟨halvesDefinition, 1⟩, ⟨sumsDefinition, 2⟩, ⟨interpolateDefinition, 0⟩, ⟨mapDefinition, 1⟩, ⟨firstDefinition, 2⟩, ⟨appendDefinition, 0⟩, ⟨stepDefinition, 3⟩, ⟨foldStepDefinition, 4⟩, ⟨foldDefinition, 5⟩, ⟨foldWrapperDefinition, 6⟩, ⟨prefixDefinition, 7⟩, ⟨checkTableDefinition, 8⟩, ⟨checkDefinition, 9⟩]
 
 def headers : List ProtocolSignature := [runSignature, reduceSignature]
 
-def domains : List DomainSpec := [MapPrefixBodies.foldSpec.domain]
+def domains : List DomainSpec := [SumcheckRelationContract.foldSpec.domain, MapPrefixBodies.foldSpec.domain]
 
-def summaries : IdentitySummaries := [⟨"zkl_b24070c290f19cb73c9bf60789c151de579891e3f86a4f1dba90347711916b33", [some 0]⟩, ⟨"zkl_42fb42b1768a8f815f169ffa0a26ad784504be546e5429d75560cbdb446518b5", [none]⟩, ⟨"zkl_b68fce120956aac980e5e44b80eb16c2f94dc93ad6a8f6349ef7e1b217505a94", [some 1]⟩, ⟨"zkl_d1a35db6ce1dd3faf44d81ee2d033b68f50349356a0525683219ffff3d77f275", [some 2]⟩]
+def summaries : IdentitySummaries := [⟨"zkl_42fb42b1768a8f815f169ffa0a26ad784504be546e5429d75560cbdb446518b5", [none]⟩, ⟨"zkl_b68fce120956aac980e5e44b80eb16c2f94dc93ad6a8f6349ef7e1b217505a94", [some 1]⟩, ⟨"zkl_d1a35db6ce1dd3faf44d81ee2d033b68f50349356a0525683219ffff3d77f275", [some 2]⟩, ⟨"zkf_654a0e58b11e83f398996b9e830df00890bec0f8dc08a65c5750d6d9c759b643", [none]⟩, ⟨"zkl_b24070c290f19cb73c9bf60789c151de579891e3f86a4f1dba90347711916b33", [some 0]⟩, ⟨"finite_zkl_487d3a841d53a741e8ad1c8bce36b7f95af6b76cba6787c9779c9253587ea90e_s1_body", [none]⟩, ⟨"zkl_3fc17a64a5bb6e75192d0a1362e9954f0d434a10d0f93e319db6b516835a1005", [none]⟩, ⟨"zkf_116f3285742dd1275b8149c69b78a6713cd6256a8af715be7c346da1c793a766", [none]⟩, ⟨"zkl_487d3a841d53a741e8ad1c8bce36b7f95af6b76cba6787c9779c9253587ea90e", [none]⟩]
 
 def unit : UnitPayload where
   definitions := definitions
@@ -210,11 +241,14 @@ def unit : UnitPayload where
 
 def program : Program := ⟨SumcheckSourceData.snapshot, unit⟩
 
+set_option maxRecDepth 1024 in
 theorem headers_checked : checkUnitHeaders SumcheckSourceData.snapshot =
     .ok (domains, headers, summaries) := rfl
 
+set_option maxRecDepth 1024 in
 theorem helpers_checked : checkUnitHelpers SumcheckSourceData.snapshot domains summaries = .ok ordered := rfl
 
+set_option maxRecDepth 1024 in
 theorem run_checked :
     checkProtocol SumcheckSourceData.snapshot domains summaries
       SumcheckSourceData.snapshot.protocolFunctions[0] headers = .ok runDefinition := rfl

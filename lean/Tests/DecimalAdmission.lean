@@ -24,11 +24,14 @@ example : Format.decimal "1" = .ok 1 := rfl
 example : Common.Native.Format.decimal (.str "1") = .ok 1 := rfl
 
 private def constantSnapshot : Snapshot :=
-  ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [], [], [], [
+  (let contractDefinitions : List Definition := [
     .function ⟨"main", .protocol, .publicDef, [], [.field scalarDomain],
       some ⟨["P"], [], [["P"]]⟩, [], none,
       .block [.instruction (.fieldConstant scalarDomain "123") []
-        [.field scalarDomain] [] ""] (.ret [0])⟩]⟩
+        [.field scalarDomain] [] ""] (.ret [0])⟩]
+   ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [], [], [], contractDefinitions,
+    contractDefinitions.filterMap (fun definition =>
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
 
 private def constantProgram : ClosedProgram :=
   (checkClosed constantSnapshot).toOption.get (by decide +kernel)

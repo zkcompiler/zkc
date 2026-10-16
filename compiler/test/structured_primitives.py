@@ -106,7 +106,7 @@ with case('all-fifteen-exact-bindings-and-descriptors'):
     for contract, (inputs, outputs) in catalogue.items():
         parameters = [str(maximum)] if contract == 'index.constant' else []
         snapshot = export(primitive(contract, parameters))
-        assert len(snapshot) == 8 and snapshot[4:6] == [[], []]
+        assert len(snapshot) == 9 and snapshot[4:6] == [[], []]
         assert snapshot[6] == [['binding', 'operation', contract,
                                 [] if contract.startswith('index.') else ['bls12-381.fr'], '']]
         work = snapshot[7][0]

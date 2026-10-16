@@ -167,8 +167,10 @@ sample while exposing a different first action.
 `SchnorrInteractive` proves equations for both participants of the retained
 library-derived source, and connects the verifier through an explicit effect
 adapter to its reusable Schnorr contract. The dormant relation declaration and
-Math formula are both retained; their association is not inferred from generated
-names. These source equations keep received values and stopping continuations.
+Math formula are both retained with an explicit checked formula symbol. The
+contract table retains every protocol's clauses, including empty inventories.
+`SchnorrBinding` uses this metadata to select the actual target's ports, roles,
+decision and formula body. These source equations keep received values and stopping continuations.
 They do not establish that the native runtime or provider implements them.
 
 `open_protocol.py --write-fixtures` regenerates each retained MLIR, JSON and

@@ -73,7 +73,7 @@ def resolveProtocolOp (snapshot : Snapshot) (domains : List DomainSpec)
     if inputScopes[input]? != some [owner] then throw "structured-service-owner"
     if arguments != [.service scalarServiceContract] then throw "structured-service-contract"
     return .draw owner field site
-  | .statement relation selectors acceptance =>
+  | .statement relation selectors acceptance target =>
     if !site.isEmpty then throw "structured-pure-site"
     recordSite site false
     let some declaration := snapshot.relations.find? (·.name == relation) |
@@ -86,6 +86,24 @@ def resolveProtocolOp (snapshot : Snapshot) (domains : List DomainSpec)
       let selected ← role selector
       let some (some input) := origins[operand]? | throw "structured-statement-input"
       if !(inputScopes[input]?.getD []).contains selected then throw "structured-statement-selector"
+    let selectedInputs ← (operands.zip selectors).mapM fun (operand, selector) => do
+      let some (some input) := origins[operand]? | throw "structured-statement-input"
+      pure (ContractSelector.mk .input input selector)
+    let targets := (snapshot.contracts.filter (·.owner == function.name)).flatMap
+      (fun contract => contract.clauses.filter (·.kind == .target))
+    let projectionMatches := fun clause : ContractClause =>
+        clause.subject == ⟨relation, selectedInputs⟩ &&
+        match clause.decision with
+        | some decision => decision.direction == .output && decision.port == acceptance
+        | none => false
+    -- Match native original-PIR admission: a standalone statement is allowed;
+    -- when targets are declared its projection must agree with one of them.
+    match target with
+    | some name =>
+      if !(targets.any fun clause => clause.name == name && projectionMatches clause) then
+        throw "structured-statement-contract"
+    | none =>
+      if !targets.isEmpty && !targets.any projectionMatches then throw "structured-statement-contract"
     return .statement relation arguments selectors acceptance
   | _ =>
     let op ← resolveOp snapshot domains .protocol context facts identities descriptor operands results site

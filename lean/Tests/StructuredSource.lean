@@ -33,7 +33,10 @@ def function (name : String) (kind : Kind) (inputs outputs : List Ty) (body : Bl
     if kind == .local then some (name, []) else none, body⟩
 
 def snapshot (definitions : List Definition) (domains : List Domain := []) : Snapshot :=
-  ⟨digest, "main", domains, [], [], definitions⟩
+  (let contractDefinitions : List Definition := definitions
+   ⟨digest, "main", domains, [], [], contractDefinitions,
+    contractDefinitions.filterMap (fun definition =>
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
 
 def totalStep (returned : List Nat := [2, 0]) (container : Nat := 3)
     (premises : List Bound := [⟨2, 3, 0⟩]) : Definition :=

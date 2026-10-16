@@ -686,7 +686,7 @@ def wire_controls(suite, identity, effect, masked, nested_service):
         refuse(f"wire-yield-scope-max{maximum}", bad, "structured-repeat-yield-scope")
 
         bad, row = fresh()
-        row[3][0][2][1] = [[["statement", "missing", ["P"], 0], [2], [], [], ""]]
+        row[3][0][2][1] = [[["statement", "missing", ["P"], 0, None], [2], [], [], ""]]
         refuse(f"wire-statement-placement-max{maximum}", bad, "structured-statement-placement")
         bad, row = fresh()
         row[3][0][2][1] = [[["bool.constant", True], [], [["bool"]], [], ""],

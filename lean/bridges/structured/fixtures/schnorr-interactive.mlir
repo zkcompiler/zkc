@@ -1,6 +1,6 @@
 "builtin.module"() ({
   "protocol.module"() <{profile = #protocol.profile<protocol>}> ({
-    "protocol.func"() <{function_type = (!algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">, !protocol.service_ref<"random.bls12-381.fr/0">, !protocol.service_ref<"random.bls12-381.fr/0">) -> i1, input_roles = [["role00000000", "role00000001"], ["role00000000", "role00000001"], ["role00000000"], ["role00000000"], ["role00000001"]], output_roles = [["role00000001"]], roles = ["role00000000", "role00000001"], sym_name = "zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad"}> ({
+    "protocol.func"() <{contracts = [["target", "knowledge", [@zkl_dcbf81f97f37c181fef011e003f8b5e033842ddeccb04c1dea551fb7bf94978f, [["input", 0, "role00000001"], ["input", 1, "role00000001"], ["input", 2, "role00000000"]]], unit, ["output", 0, "role00000001"]]], function_type = (!algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">, !protocol.service_ref<"random.bls12-381.fr/0">, !protocol.service_ref<"random.bls12-381.fr/0">) -> i1, input_roles = [["role00000000", "role00000001"], ["role00000000", "role00000001"], ["role00000000"], ["role00000000"], ["role00000001"]], output_roles = [["role00000001"]], roles = ["role00000000", "role00000001"], sym_name = "zkl_0b89849acf95dbecb929c216aef6f53085c353bcfe48c36ad4489eda36af65ad"}> ({
     ^bb0(%arg3: !algebra.group<"bls12-381.g1">, %arg4: !algebra.group<"bls12-381.g1">, %arg5: !algebra.field<"bls12-381.fr">, %arg6: !protocol.service_ref<"random.bls12-381.fr/0">, %arg7: !protocol.service_ref<"random.bls12-381.fr/0">):
       %2 = "protocol.query"(%arg6) <{method = "draw", owner = "role00000000", site = "s0"}> : (!protocol.service_ref<"random.bls12-381.fr/0">) -> !algebra.field<"bls12-381.fr">
       %3 = "algebra.group_scale"(%arg3, %2) : (!algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">) -> !algebra.group<"bls12-381.g1">
@@ -25,7 +25,7 @@
       %1 = "algebra.group_equal"(%arg1, %0) : (!algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">) -> i1
       "func.return"(%1) : (i1) -> ()
     }) : () -> ()
-    "relation.declare"() <{key = "zkl_dcbf81f97f37c181fef011e003f8b5e033842ddeccb04c1dea551fb7bf94978f", kind = "zkc.language.formula/0", purposes = ["parameter", "statement", "witness"], revision = "562e2f862c031123f999b0c041b1ea57c7a97193fe8859de83ce2a0b8932117c", signature = (!algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">) -> i1, sym_name = "zkl_dcbf81f97f37c181fef011e003f8b5e033842ddeccb04c1dea551fb7bf94978f"}> : () -> ()
+    "relation.declare"() <{formula = @zkf_6d5ed5928b9bea74d6d7736ea8056c9f06e280ffdc4dbcaf2e00bf4f639c1873, key = "zkl_dcbf81f97f37c181fef011e003f8b5e033842ddeccb04c1dea551fb7bf94978f", kind = "zkc.language.formula/0", purposes = ["parameter", "statement", "witness"], revision = "562e2f862c031123f999b0c041b1ea57c7a97193fe8859de83ce2a0b8932117c", signature = (!algebra.group<"bls12-381.g1">, !algebra.group<"bls12-381.g1">, !algebra.field<"bls12-381.fr">) -> i1, sym_name = "zkl_dcbf81f97f37c181fef011e003f8b5e033842ddeccb04c1dea551fb7bf94978f"}> : () -> ()
   }) : () -> ()
 }) : () -> ()
 

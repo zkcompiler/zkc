@@ -191,13 +191,13 @@ theorem wrapper_sender_actual_handles_and_root_peer :
   rfl
 
 theorem reduction_complete_counts :
-    SumcheckReduceData.snapshot.definitions.length = 16 ∧
-      SumcheckReduceViews.unit.definitions.length = 14 ∧
+    SumcheckReduceData.snapshot.definitions.length = 20 ∧
+      SumcheckReduceViews.unit.definitions.length = 18 ∧
       SumcheckReduceViews.unit.protocols.length = 2 := by decide +kernel
 
 theorem sumcheck_complete_counts :
-    SumcheckSourceData.snapshot.definitions.length = 24 ∧
-      SumcheckSourceViews.unit.definitions.length = 22 ∧
+    SumcheckSourceData.snapshot.definitions.length = 29 ∧
+      SumcheckSourceViews.unit.definitions.length = 27 ∧
       SumcheckSourceViews.unit.protocols.length = 2 := by decide +kernel
 
 /-- A same-signature original-body mutation cannot reuse the old checked tree.

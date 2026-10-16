@@ -17,7 +17,7 @@ ZKC_MATH_OPERATION(func::CallOp, Application, Context::Protocol | Context::Helpe
 ZKC_MATH_OPERATION(func::ReturnOp, Control, Context::Helper)
 ZKC_MATH_OPERATION(protocol_ir::MathematicalReturnOp, Control, Context::Protocol)
 ZKC_MATH_OPERATION(protocol_ir::RestrictRolesOp, Control, Context::Protocol, "roles")
-ZKC_MATH_OPERATION(protocol_ir::StatementOp, Declaration, Context::Protocol, "relation", "selectors", "acceptance")
+ZKC_MATH_OPERATION(protocol_ir::StatementOp, Declaration, Context::Protocol, "relation", "selectors", "acceptance", "target")
 ZKC_MATH_OPERATION(protocol_ir::ExchangeOp, Action, Context::Protocol, "site", "sender", "receiver")
 ZKC_MATH_OPERATION(protocol_ir::GuardOp, Action, Context::Protocol, "site", "owner")
 ZKC_MATH_OPERATION(protocol_ir::FinishIfOp, Action, Context::Protocol | Context::Participant, "site", "owner")

@@ -80,14 +80,17 @@ private def wireRequest (role : String) (inputs : List Json) (replies : List Jso
     (capacity : Nat := workLimit) : Json :=
   arr [.str "zkc.structured-open-request/0", .str role, arr inputs, arr replies, toJson capacity]
 private def source (maximum : Nat) : Snapshot :=
-  ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "Main", [], [], [], [
+  (let contractDefinitions : List Definition := [
     .function ⟨"Main", .protocol, .publicDef, [.index, .boolean, .boolean], [.boolean],
       some ⟨["P", "Q"], [["P"], ["P"], ["P"]], [["P"]]⟩, [], none,
       .block [.instruction (.protocolRepeat 1 maximum ["P"] [["P"]])
         [0, 1, 2] [.boolean]
         [.region [.index, .boolean, .boolean] [.boolean]
           (.block [.instruction (.guard "P") [2] [] [] "gate"] (.yield [1]))]
-        "repeat"] (.ret [0])⟩]⟩
+        "repeat"] (.ret [0])⟩]
+   ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "Main", [], [], [], contractDefinitions,
+    contractDefinitions.filterMap (fun definition =>
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
 private def runSource (maximum : Nat) (request : Json) : Except String Json := do
   evaluateOpen (← check (source maximum)) request
 private def returned (values : List Json) : Json :=
@@ -100,7 +103,7 @@ private def receivedVector (size : Nat) : ScriptReply :=
     arr [.str "value", arr (List.replicate size (.str "0"))]⟩
 
 private def serviceSource : Snapshot :=
-  ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "Main", [], [], [], [
+  (let contractDefinitions : List Definition := [
     .function ⟨"Main", .protocol, .publicDef, [.index, .service scalarServiceContract], [],
       some ⟨["P", "Q"], [["P"], ["P"]], []⟩, [], none,
       .block [
@@ -109,7 +112,10 @@ private def serviceSource : Snapshot :=
           [.region [.index, .service scalarServiceContract] []
             (.block [.instruction (.draw "P" scalarDomain) [1] [fieldType] [] "draw"]
               (.yield []))] "repeat",
-        .instruction (.draw "P" scalarDomain) [2] [fieldType] [] "suffix"] (.ret [])⟩]⟩
+        .instruction (.draw "P" scalarDomain) [2] [fieldType] [] "suffix"] (.ret [])⟩]
+   ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "Main", [], [], [], contractDefinitions,
+    contractDefinitions.filterMap (fun definition =>
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
 private def drawRequest (site : String) : Json :=
   arr [.str "draw", .str site, .str "P", .str scalarServiceContract, .str "7", .str scalarDomain]
 private def drawReply (site : String) (response : Json) : Json :=

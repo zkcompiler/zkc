@@ -63,13 +63,15 @@ def TableInteractionsOp : KernelOp<RelationDialect, "exec.table_interactions", [
 def TableInteractionOp : KernelOp<RelationDialect, "exec.table_interaction", [OpRelationTableInteraction]>;
 def TableRecordPointsOp : KernelOp<RelationDialect, "exec.table_record_points", [OpRelationTableRecordPoints]>;
 
-// A supplied predicate contract. It has no callable interface or body.
-def DeclareOp : Op<RelationDialect, "declare", [Symbol]> {
-  let summary = "External relation identity and ordered logical input purposes";
+// A predicate declaration. A formula reference is metadata, not a call.
+def DeclareOp : Op<RelationDialect, "declare", [Symbol,
+    DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
+  let summary = "Relation identity, input purposes and optional Math definition";
   let arguments = (ins SymbolNameAttr:$sym_name,
     OptionalAttr<StrAttr>:$sym_visibility,
     StrAttr:$kind, StrAttr:$key, StrAttr:$revision,
-    TypeAttrOf<FunctionType>:$signature, StrArrayAttr:$purposes);
+    TypeAttrOf<FunctionType>:$signature, StrArrayAttr:$purposes,
+    OptionalAttr<FlatSymbolRefAttr>:$formula);
   let hasVerifier = 1;
   let assemblyFormat = "$sym_name attr-dict";
 }

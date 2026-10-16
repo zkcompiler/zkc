@@ -373,6 +373,10 @@ int main() {
       "relation.declare"() <{sym_name="Claim", kind="vendor.claim/0", key="key", revision="0",
         signature=(i1,i1)->i1, purposes=["statement","witness"]}> : ()->()
     )");
+        const auto emptyContracts = native;
+        native.insert(native.find("      function_type"), R"(
+      contracts = [["target", "proof", [@Claim, [["input", 1 : i64, "role00000000"], ["output", 0 : i64, "role00000001"]]], unit, ["output", 0 : i64, "role00000001"]]],
+)");
         auto value = document();
         (*value.getAsObject())["original"] =
             toHex(SHA256::hash(arrayRefFromStringRef(native)), true);
@@ -423,7 +427,9 @@ int main() {
         shape(value)["constructible"] = false;
         auto clauses = std::move(*protocol(value).getArray("clauses"));
         protocol(value)["clauses"] = json::Array{};
-        take(readInterface(native, zkc::printJson(value)));
+        (*value.getAsObject())["original"] =
+            toHex(SHA256::hash(arrayRefFromStringRef(emptyContracts)), true);
+        take(readInterface(emptyContracts, zkc::printJson(value)));
         auto *operand = clauses.front()
                             .getAsObject()
                             ->getObject("subject")
@@ -432,6 +438,8 @@ int main() {
                             .getAsObject();
         (*operand)["path"] = json::Array{1, 0};
         protocol(value)["clauses"] = std::move(clauses);
+        (*value.getAsObject())["original"] =
+            toHex(SHA256::hash(arrayRefFromStringRef(native)), true);
         refuses(readInterface(native, zkc::printJson(value)),
                 "source.interface");
         auto limited = Limits{};

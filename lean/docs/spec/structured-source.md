@@ -7,7 +7,7 @@ logical meaning. Source/native correspondence is a separate boundary.
 ## Checked subject
 
 `Structured.Snapshot` retains source identity, selected entry, all domains,
-relations, bindings and definitions, exact function kinds, per-protocol rosters and port
+relations, bindings, definitions and protocol contracts, exact function kinds, per-protocol rosters and port
 scopes, visibility, origins, preconditions, sites and ordered operands/results.
 There is one current strict wire schema. The reader rejects unknown tags, extra
 fields, objects and noncanonical numeric tokens, including in unused bodies.
@@ -15,8 +15,8 @@ Canonical decimals use the shared bounded ASCII-digit fold, which reduces in
 the Lean kernel. Parsing JSON and matching an export digest to MLIR remain
 executable boundaries.
 
-Bindings are separate noncallable metadata in the exact eight-slot envelope
-`[format, original, digest, entry, domains, relations, bindings, definitions]`.
+Bindings are separate noncallable metadata in the exact nine-slot envelope
+`[format, original, digest, entry, domains, relations, bindings, definitions, contracts]`.
 Each row is `["binding", name, contract, arguments, implementation]`. All rows,
 including unused rows, are checked. Names match ASCII
 `[A-Za-z_][A-Za-z0-9_.-]*`, occupy at most 256 bytes and share the domain,
@@ -26,12 +26,27 @@ field default or compatibility reader. Binding names cannot be called or
 selected as roots, domains or callbacks.
 
 Relations are noncallable metadata. Their input types, Boolean result, purposes,
-kind, key and revision are retained. A statement checks exact entry operands,
-role selectors and the Boolean acceptance-result index. It does not evaluate a
-relation or identify different participants' acceptance values. The association
-between a relation and a formula is absent from this MLIR and is not inferred
-from symbol spelling. Logical-origin binding values also remain opaque metadata;
+kind, key, revision and optional formula symbol are retained. A relation of kind
+`zkc.language.formula/0` must name an existing private Math helper with exactly
+the relation's input and output types. Other relation kinds must omit this link.
+Admission checks the link; it does not prove totality or mathematical adequacy.
+A statement retains its relation, exact entry operands, role selectors,
+Boolean acceptance-result index and optional target name. A named target must
+resolve to the containing protocol's retained target clause and agree with that
+projection; the clause also fixes the decision participant. Without a name,
+a standalone statement has no exact selected-Entry evidence. When targets are
+present, its projection must still match a retained target. A statement evaluates
+no relation and does not identify different participants' acceptance values.
+Logical-origin binding values remain opaque metadata;
 Lean checks their shape, size, nonemptiness and key uniqueness.
+
+The contract table contains exactly one row per protocol, including protocols
+with no clauses. Missing, duplicate and non-protocol owners are refused.
+`ContractAdmission` checks all clauses, including dormant components: clause
+names, input/output direction, relation ABI, available role-local selectors,
+residuals and Boolean decisions. It does not infer a property or a theorem from
+the presence of a clause. The [verification specification](verification.md#structured-contracts)
+defines the independent semantic interpretation and proof obligations.
 
 `check` resolves kinds, signatures, exact bound provenance, capture forwarding,
 rosters and scopes, then forms existing `Source.Region` bodies through
@@ -246,7 +261,7 @@ unsupported, including in dormant source closure.
 
 ## Retained realization and map declarations
 
-The eight-slot envelope retains two additional definition variants, in original
+The nine-slot envelope retains two additional definition variants, in original
 encounter order:
 
 ```text
@@ -616,7 +631,7 @@ exporter, authored relation binding, or Fiat–Shamir security.
 
 The exact five-field instruction row is
 `[["protocol_apply", callee, roles], operands, resultTypes, [], site]`.
-The descriptor has exactly three fields; the eight-slot snapshot envelope is
+The descriptor has exactly three fields; the nine-slot snapshot envelope is
 unchanged. Admission requires a flat nonempty target, exact ordered full ABI,
 zero regions, a nonempty site, and one caller role for every ordered callee role.
 The substitution is injective and in range. Protocol declaration names, role names and real sites
@@ -717,7 +732,7 @@ resource-transfer soundness and native refinement remain separate obligations.
 
 The descriptor is exactly
 `["protocol_repeat", carried, maximum, roles, carried_roles]` in the existing
-five-field instruction and eight-slot snapshot envelope. `carried` is a natural
+five-field instruction and nine-slot snapshot envelope. `carried` is a natural
 at most 512; `maximum` is a natural at most 1048576. The first operand is the
 count. The next `carried` operands are state, and the remaining operands are
 immutable captures. Ordered result types equal the state types. There is exactly

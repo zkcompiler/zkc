@@ -3,6 +3,7 @@ import Zkc.Source.Structured.Import
 open Zkc.Source Zkc.Source.Structured
 
 namespace Tests.StructuredOpenAdmission
+set_option smartUnfolding false
 set_option maxRecDepth 20000
 set_option maxHeartbeats 4000000
 
@@ -15,7 +16,10 @@ private def root (inputs outputs : List Ty) (inputScopes outputScopes : List (Li
   .function ⟨"main", .protocol, .publicDef, inputs, outputs,
     some ⟨roles, inputScopes, outputScopes⟩, [], none, body⟩
 private def unit (definitions : List Definition) (relations : List Relation := []) : Snapshot :=
-  ⟨"sha256:0000000000000000000000000000000000000000000000000000000000000000", "main", [], relations, [], definitions⟩
+  (let contractDefinitions : List Definition := definitions
+   ⟨"sha256:0000000000000000000000000000000000000000000000000000000000000000", "main", [], relations, [], contractDefinitions,
+    contractDefinitions.filterMap (fun definition =>
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
 private def accepted (snapshot : Snapshot) : Bool := (check snapshot).isOk
 private def first := math "first" [.boolean, .boolean] [.boolean] (.block [] (.ret [0]))
 private def relay := math "relay" [.boolean, .boolean] [.boolean]
@@ -101,21 +105,31 @@ example : accepted (unit [drawing "P" ["P"], math "service-helper" [service] [] 
 example : accepted (unit [root [.service "unknown"] [] [["P"]] [] (.block [] (.ret []))]) = false := by decide +kernel
 
 private def relation : Relation := ⟨"relation", .publicDef, "opaque-kind", "opaque-key", "rev",
-  [.boolean], [.boolean], ["statement"]⟩
+  [.boolean], [.boolean], ["statement"], none⟩
 private def statementRoot := root [.boolean] [.boolean] [["P"]] [["P"]]
-  (.block [.instruction (.statement "relation" ["P"] 0) [0] [] [] ""] (.ret [0]))
-example : accepted (unit [statementRoot] [relation]) = true := by decide +kernel
+  (.block [.instruction (.statement "relation" ["P"] 0 none) [0] [] [] ""] (.ret [0]))
+private def statementSource : Snapshot :=
+  { unit [statementRoot] [relation] with contracts := [⟨"main", [
+    ⟨.target, "claim", ⟨"relation", [⟨.input, 0, "P"⟩]⟩, none, some ⟨.output, 0, "P"⟩⟩]⟩] }
+example : accepted statementSource = true := by rfl
+example : accepted (unit [statementRoot] [relation]) = true := by rfl
+example : accepted { statementSource with contracts := [⟨"main", [
+    ⟨.input, "premise", ⟨"relation", [⟨.input, 0, "P"⟩]⟩, none, none⟩]⟩] } = true := by rfl
+example : accepted { statementSource with
+    contracts := [⟨"main", [
+      ⟨.target, "claim", ⟨"other", [⟨.input, 0, "P"⟩]⟩, none, some ⟨.output, 0, "P"⟩⟩]⟩]
+    relations := [relation, {relation with name := "other"}] } = false := by rfl
 example : accepted (unit [statementRoot]) = false := by decide +kernel
 example : accepted (unit [statementRoot] [{relation with purposes := []}]) = false := by decide +kernel
 example : accepted (unit [statementRoot] [{relation with purposes := ["unknown"]}]) = false := by decide +kernel
 example : accepted (unit [statementRoot] [{relation with outputs := []}]) = false := by decide +kernel
 example : accepted (unit [statementRoot] [{relation with name := "main"}]) = false := by decide +kernel
 example : accepted (unit [root [.boolean] [.boolean] [["P"]] [["P"]]
-    (.block [.instruction (.statement "relation" ["V"] 0) [0] [] [] ""] (.ret [0]))] [relation]) = false := by decide +kernel
+    (.block [.instruction (.statement "relation" ["V"] 0 none) [0] [] [] ""] (.ret [0]))] [relation]) = false := by decide +kernel
 example : accepted (unit [root [.boolean] [.boolean] [["P"]] [["P"]]
     (.block [.instruction (.booleanConstant true) [] [.boolean] [] "",
-      .instruction (.statement "relation" ["P"] 0) [0] [] [] ""] (.ret [0]))] [relation]) = false := by decide +kernel
+      .instruction (.statement "relation" ["P"] 0 none) [0] [] [] ""] (.ret [0]))] [relation]) = false := by decide +kernel
 example : accepted (unit [root [.boolean] [.boolean] [["P"]] [["P"]]
-    (.block [.instruction (.statement "relation" ["P"] 1) [0] [] [] ""] (.ret [0]))] [relation]) = false := by decide +kernel
+    (.block [.instruction (.statement "relation" ["P"] 1 none) [0] [] [] ""] (.ret [0]))] [relation]) = false := by decide +kernel
 
 end Tests.StructuredOpenAdmission

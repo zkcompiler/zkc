@@ -99,7 +99,7 @@ map_args = [['2', '7'], ['11', '13'], ['8', '9'], '3']
 
 with case('exact-original-declaration-records-and-full-projection-abi'):
     snapshot = export(mapped)
-    assert len(snapshot) == 8
+    assert len(snapshot) == 9
     row = next(row for row in snapshot[7] if row[1] == 'mapped')
     assert row == ['map', 'mapped', [vector_type] * 3 + [field_type],
                    [vector_type], 'formula', [True, True, True, False]]

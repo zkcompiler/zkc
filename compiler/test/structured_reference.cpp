@@ -642,7 +642,7 @@ class Admission {
         return failure;
       return attributes(op, {"site", "owner", "method"});
     case Kind::Statement:
-      return attributes(op, {"relation", "selectors", "acceptance"});
+      return attributes(op, {"relation", "selectors", "acceptance", "target"});
     case Kind::Stop:
       if (auto failure = attributes(op, {"site", "reason"}))
         return failure;
@@ -952,11 +952,23 @@ public:
       if (auto declaration = dyn_cast<relation::DeclareOp>(op)) {
         if (++relations > 128)
           return error("structured-reference-capacity", "relations");
-        if (auto failure =
-                attributes(op, {"sym_name", "sym_visibility", "kind", "key",
-                                "revision", "signature", "purposes"}))
+        if (auto failure = attributes(op, {"sym_name", "sym_visibility", "kind",
+                                           "key", "revision", "signature",
+                                           "purposes", "formula"}))
           return failure;
         auto type = declaration.getSignature();
+        auto formula = declaration.getFormulaAttr();
+        if ((declaration.getKind() == "zkc.language.formula/0") !=
+            bool(formula))
+          return error("structured-reference-contract", "formula presence");
+        if (formula) {
+          auto *target = SymbolTable::lookupSymbolIn(unit, formula);
+          auto helper = dyn_cast_or_null<func::FuncOp>(target);
+          if (!helper || helper.isExternal() ||
+              helper.getFunctionType() != type)
+            return error("structured-reference-contract",
+                         "formula kind or ABI");
+        }
         if (type.getNumInputs() > maxSignature ||
             type.getNumResults() > maxSignature)
           return error("structured-reference-capacity", "relation signature");
@@ -1014,9 +1026,12 @@ public:
         continue;
       }
       if (auto protocol = dyn_cast<protocol_ir::MathematicalOp>(op)) {
-        if (auto failure =
-                attributes(op, {"sym_name", "sym_visibility", "function_type",
-                                "roles", "input_roles", "output_roles"}))
+        if (protocol.getContractsAttr() &&
+            protocol.getContractsAttr().size() > maxSignature)
+          return error("structured-reference-capacity", "contract clauses");
+        if (auto failure = attributes(
+                op, {"sym_name", "sym_visibility", "function_type", "roles",
+                     "input_roles", "output_roles", "contracts"}))
           return failure;
         if (protocol.getRoles().empty() || protocol.getRoles().size() > 16)
           return error("structured-reference-unsupported", "role count");

@@ -7,6 +7,7 @@ public import ZkcExamples.Structured.SumcheckVerifierPrelude
 public import ZkcExamples.Structured.SumcheckVerifierProcess
 public import ZkcExamples.Structured.SumcheckVerifierTerminal
 public import Zkc.Semantics.Boundary
+public import Zkc.Source.Structured.ContractComposition
 
 @[expose] public section
 
@@ -56,37 +57,74 @@ def childInputs (claim : Option F) (count service : Option Nat) :
     Values (Component (assignment F G)) SumcheckSourceBodies.reduceSignature.inputs :=
   .cons none (.cons none (.cons none (.cons claim (.cons count (.cons service .nil)))))
 
+/-- The call and terminal suffix are recovered from the actual source tree. -/
+abbrev reduceCall : CallOccurrence SumcheckSourceBodies.runBody :=
+  (callInventory SumcheckSourceBodies.runBody).get ⟨0, by decide⟩
+
+/-- Evaluated verifier environment after the actual root prefix. The foreign
+Table construction contributes absent outputs; the caller's V inputs survive. -/
+def callEnvironment (rawV : Option (List F)) (claim : Option F) (count service : Option Nat) :
+    Environment (Component (assignment F G)) reduceCall.callSite.context :=
+    Environment.prepend (Environment.prepend (Environment.prepend
+      (Environment.prepend (Environment.prepend
+        (sourceRootInputs (G := G) rawV claim count service).get .nil)
+        (.cons (some 1) .nil)) .nil)
+      (Values.absent (assignment F G) SumcheckSourceBodies.tableHelper.outputs)) .nil
+
+private theorem denote_forgetSites (ctx : ProtocolContext) (self : Nat)
+    {Γ out : List Ty} (body : Region protocolDialect Γ out)
+    (environment : Environment (Component (assignment F G)) Γ) :
+    (body.denote (participantMeaning (unit.tables F G) self
+      (unit.protocolTable F G) ctx) environment).interpret forgetSites =
+    body.denote (participantMeaningWith (.silent _) (participantActions F G)
+      (SumcheckVerifierHelpers.plainHelpers unit) self
+      (unit.plainProtocolTable F G) ctx) environment :=
+  participant_denote_interpret forgetSites observedSites_forgetSites
+    observeAction_forgetSites (Evaluation.ComponentTables.fold_forgetSites unit.definitions)
+    self body environment unit.protocolTable_forgetSites ctx
+
+-- Inventory projections and the literal verifier body have definitionally equal ABIs.
+set_option backward.isDefEq.respectTransparency false in
 private theorem run_body_expansion
-    (tables : Evaluation.ComponentTables F G (participantInterface F G))
-    (protocols : ProtocolTable (assignment F G) (participantInterface F G))
     (ctx : ProtocolContext) (self : Nat) (verifier : self = ctx.roles 1)
     (separate : ctx.roles 0 ≠ self)
     (rawV : Option (List F)) (claim : Option F) (count service : Option Nat) :
     SumcheckSourceBodies.runBody.denote
-      (participantMeaningWith (.silent _) (participantActions F G) tables self protocols ctx)
+      (participantMeaningWith (.silent _) (participantActions F G)
+        (SumcheckVerifierHelpers.plainHelpers unit) self (unit.plainProtocolTable F G) ctx)
       (sourceRootInputs rawV claim count service).get =
-    (invokeProtocol protocols SumcheckSourceBodies.reduceSignature
+    (invokeProtocol (unit.plainProtocolTable F G) SumcheckSourceBodies.reduceSignature
       (ctx.enter "label_726564756365" [0, 1]) self (childInputs claim count service)).bind fun result =>
-        (Participant.owned self self (invoke tables.closed SumcheckHelperBodies.checkHelper)
+        (Participant.owned self self
+          (invoke (SumcheckVerifierHelpers.plainHelpers unit).closed SumcheckHelperBodies.checkHelper)
           (.cons rawV (.cons (result.get (.there (.there (.there (.there .here)))))
             (.cons (result.get (.there (.there (.there (.there (.there .here)))))) .nil)))).bind
               fun checked => .done (.cons (checked.get .here) .nil) := by
   subst self
   change (Participant.owned (ctx.roles 1) (ctx.roles 0)
-    (invoke tables.closed SumcheckSourceBodies.tableHelper)
+    (invoke (SumcheckVerifierHelpers.plainHelpers unit).closed SumcheckSourceBodies.tableHelper)
     (.cons rawV (.cons count (.cons (some 1) .nil)))).bind _ = _
   rw [Participant.owned_other _ _ separate]
-  have active : (ctx.enter "label_726564756365" [0, 1]).contains
-      SumcheckSourceBodies.reduceSignature (ctx.roles 1) = true := by
+  let environment : Environment (Component (assignment F G)) reduceCall.callSite.context :=
+    callEnvironment rawV claim count service
+  have active : (ctx.enter reduceCall.callSite.site reduceCall.callSite.roles).contains
+      reduceCall.callSite.signature (ctx.roles 1) = true := by
     apply (ProtocolContext.contains_iff _ _ _).mpr
     exact ⟨1, by decide, rfl⟩
-  change (if (ctx.enter "label_726564756365" [0, 1]).contains
-      SumcheckSourceBodies.reduceSignature (ctx.roles 1) then
-      invokeProtocol protocols SumcheckSourceBodies.reduceSignature
-        (ctx.enter "label_726564756365" [0, 1]) (ctx.roles 1) (childInputs claim count service)
-    else .done (Values.absent (assignment F G) SumcheckSourceBodies.reduceSignature.outputs)).bind _ = _
-  rw [active]
-  simp only [↓reduceIte]
+  change reduceCall.application.denote
+    (participantMeaningWith (.silent _) (participantActions F G)
+      (SumcheckVerifierHelpers.plainHelpers unit) (ctx.roles 1)
+      (unit.plainProtocolTable F G) ctx) environment = _
+  rw [← denote_forgetSites]
+  refine (unit.protocolApply_interpret_substitute (out := [.boolean]) reduceDefinition reduce_member
+    reduceCall.callSite.signature rfl (SumcheckVerifierBodies.reduceBody 2) reduce_raw
+    reduceCall.callSite.roles reduceCall.callSite.site ctx (ctx.roles 1)
+    reduceCall.callSite.operands reduceCall.continuation.2 environment active forgetSites _
+    (denote_forgetSites _ _ (SumcheckVerifierBodies.reduceBody 2) _)).trans ?_
+  simp only [denote_forgetSites (F := F) (G := G)]
+  rw [reduce_invoke_plain (F := F) (G := G)]
+  unfold SumcheckVerifierPrelude.reduceDenote
+  simp only [PIR.Proc.bind_assoc, PIR.Proc.bind]
   congr 1
   funext result
   cases result with | cons a rest =>
@@ -97,8 +135,10 @@ private theorem run_body_expansion
             cases rest with | cons f rest =>
               cases rest
               change (Participant.owned (ctx.roles 1) (ctx.roles 1)
-                (invoke tables.closed SumcheckHelperBodies.checkHelper)
-                (.cons rawV (.cons e (.cons f .nil)))).bind _ = _
+                (invoke (SumcheckVerifierHelpers.plainHelpers unit).closed SumcheckHelperBodies.checkHelper)
+                (.cons rawV (.cons _ (.cons _ .nil)))).bind _ = _
+              simp only [maskValues, ProtocolContext.mapScopes, List.map_cons, List.map_nil,
+                ProtocolContext.enter, Participant.restrict]
               congr 1
               funext checked
               cases checked with
@@ -135,7 +175,7 @@ theorem root_context_expansion (ctx : ProtocolContext) (self : Nat)
       (sourceRootInputs rawV claim count service)).get).bind
       (fun result => .done
         (maskValues self (ctx.mapScopes SumcheckSourceBodies.runSignature.outputScopes) result)) = _
-  rw [inputs, run_body_expansion _ _ ctx self verifier separate]
+  rw [inputs, run_body_expansion ctx self verifier separate]
   have finish (result : Values (Component (assignment F G)) [.boolean]) :
       maskValues self (ctx.mapScopes SumcheckSourceBodies.runSignature.outputScopes)
         (.cons (result.get .here) .nil) = result := by

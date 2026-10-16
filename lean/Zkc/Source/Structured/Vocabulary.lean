@@ -83,7 +83,7 @@ inductive Descriptor where
   | restrict (roles : List String)
   | exchange (sender receiver : String)
   | draw (owner field : String)
-  | statement (relation : String) (selectors : List String) (acceptance : Nat)
+  | statement (relation : String) (selectors : List String) (acceptance : Nat) (target : Option String)
   deriving DecidableEq, Repr
 
 inductive Terminator where
@@ -181,8 +181,8 @@ inductive Definition where
   | map (value : MapDeclaration)
   deriving Repr
 
-/-- Non-callable declaration metadata. These strings do not identify a Math
-formula or assert that a retained statement satisfies the relation. -/
+/-- Retained relation metadata. A formula link identifies source, not totality
+or a proof that a protocol satisfies the relation. -/
 structure Relation where
   name : String
   visibility : Visibility
@@ -192,6 +192,39 @@ structure Relation where
   inputs : List Ty
   outputs : List Ty
   purposes : List String
+  formula : Option String := none
+  deriving DecidableEq, Repr
+
+inductive ContractDirection where
+  | input | output
+  deriving DecidableEq, Repr
+
+structure ContractSelector where
+  direction : ContractDirection
+  port : Nat
+  role : String
+  deriving DecidableEq, Repr
+
+structure RelationApplication where
+  relation : String
+  selectors : List ContractSelector
+  deriving DecidableEq, Repr
+
+inductive ContractKind where
+  | target | input | output | continuation
+  deriving DecidableEq, Repr
+
+structure ContractClause where
+  kind : ContractKind
+  name : String
+  subject : RelationApplication
+  residual : Option RelationApplication
+  decision : Option ContractSelector
+  deriving DecidableEq, Repr
+
+structure ProtocolContract where
+  owner : String
+  clauses : List ContractClause
   deriving DecidableEq, Repr
 
 structure Snapshot where
@@ -201,6 +234,7 @@ structure Snapshot where
   relations : List Relation
   bindings : List Binding
   definitions : List Definition
+  contracts : List ProtocolContract := []
   deriving Repr
 
 def Definition.name : Definition → String

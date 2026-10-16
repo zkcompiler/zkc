@@ -10,6 +10,7 @@
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
+#include "zkc/Dialect/Protocol/Contracts.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Protocol/Semantics.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
@@ -728,7 +729,8 @@ public:
       if ((reference || !policy->shared) && env.values[arg].count() != 1)
         return refuse(program, "owner-local inputs require exactly one owner");
     }
-    if (failed(body(block, env)))
+    if (failed(protocol_ir::verifyContracts(program, symbols)) ||
+        failed(body(block, env)))
       return failure();
     for (auto [value, attr] :
          zip(block.back().getOperands(), program.getOutputRoles())) {

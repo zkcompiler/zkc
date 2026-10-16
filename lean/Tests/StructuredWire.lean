@@ -26,7 +26,7 @@ private def ports : Json := arr [
 private def relationFields : List Json := [
   .str "relation", .str "Proof", .str "public", .str "opaque.kind",
   .str "opaque/key:007", .str "revision:0009", arr [fieldTy, groupTy, groupTy],
-  arr [boolTy], strings ["parameter", "statement", "witness"]]
+  arr [boolTy], strings ["parameter", "statement", "witness"], .null]
 
 private def instruction (op : Json) (operands : List Nat := [])
     (results : List Json := []) (regions : List Json := []) (site : String := "") : Json :=
@@ -48,7 +48,7 @@ private def rootFields : List Json := [
     instruction (strings ["exchange", "Prover", "Verifier"]) [0] [boolTy] [] "send.é",
     instruction (strings ["draw", "Verifier", scalarDomain]) [7] [fieldTy] [] "draw/1",
     instruction (arr [.str "statement", .str "Proof", strings ["Verifier", "Prover"],
-      toJson (1 : Nat)]) [1, 0]],
+      toJson (1 : Nat), .null]) [1, 0]],
 ]
 
 private def localOrigin : Json := arr [.str "authored::origin", arr [
@@ -77,7 +77,7 @@ private def finiteFields : List Json := [
 
 private def envelope (domains relations definitions : List Json) : Json :=
   arr [.str "zkc.structured-source/0", .str "original", .str digest, .str "main",
-    arr domains, arr relations, empty, arr definitions]
+    arr domains, arr relations, empty, arr definitions, empty]
 
 private def subject : Json := envelope [arr domainFields]
   [arr relationFields, arr (relationFields.set 1 (.str "Unused"))]
@@ -101,7 +101,11 @@ example : Format.type (strings ["service", scalarServiceContract]) =
 example : Format.descriptor (strings ["group.scale", groupDomain, scalarDomain]) =
     .ok (.groupScale groupDomain scalarDomain) := rfl
 example : Format.descriptor (arr [.str "statement", .str "Proof", strings ["V", "P"],
-    toJson (1 : Nat)]) = .ok (.statement "Proof" ["V", "P"] 1) := rfl
+    toJson (1 : Nat), .null]) = .ok (.statement "Proof" ["V", "P"] 1 none) := rfl
+example : Format.descriptor (arr [.str "statement", .str "Proof", strings ["V", "P"],
+    toJson (1 : Nat), .str "chosen"]) = .ok (.statement "Proof" ["V", "P"] 1 (some "chosen")) := rfl
+example : Format.descriptor (arr [.str "statement", .str "Proof", strings ["V", "P"],
+    toJson (1 : Nat)]) = .error "structured-operation-unsupported" := rfl
 
 private def run : IO Unit := do
   let count ← IO.mkRef (0 : Nat)
@@ -121,7 +125,7 @@ private def run : IO Unit := do
     check "domain-retained" (snapshot.domains == [⟨"items", [.vector scalarDomain], .indices 0 0⟩])
     check "relation-exact" (snapshot.relations.head? == some ⟨"Proof", .publicDef, "opaque.kind",
       "opaque/key:007", "revision:0009", [.field scalarDomain, .group groupDomain, .group groupDomain],
-      [.boolean], ["parameter", "statement", "witness"]⟩)
+      [.boolean], ["parameter", "statement", "witness"], none⟩)
     match snapshot.definitions with
     | [.function root, .function other, .function localFn, .function mathFn, .finite finite] =>
       check "protocol-interface-order" (root.interface == some ⟨["Prover", "Verifier"],
@@ -153,7 +157,7 @@ private def run : IO Unit := do
           (.restrict ["Verifier", "Prover"], [0], [.boolean], 0, ""),
           (.exchange "Prover" "Verifier", [0], [.boolean], 0, "send.é"),
           (.draw "Verifier" scalarDomain, [7], [.field scalarDomain], 0, "draw/1"),
-          (.statement "Proof" ["Verifier", "Prover"] 1, [1, 0], [], 0, "")])
+          (.statement "Proof" ["Verifier", "Prover"] 1 none, [1, 0], [], 0, "")])
     | _ => check "definition-variants" false
 
   -- Every supported descriptor and type checks exact arity, including old ones.
@@ -170,7 +174,7 @@ private def run : IO Unit := do
     strings ["fold", "items", "step", ""], strings ["if"], strings ["for"],
     strings ["for_condition"], strings ["guard", "P"], arr [.str "restrict", strings ["P", "V"]],
     strings ["exchange", "P", "V"], strings ["draw", "V", scalarDomain],
-    arr [.str "statement", .str "Proof", strings ["P", "V"], toJson (0 : Nat)]]
+    arr [.str "statement", .str "Proof", strings ["P", "V"], toJson (0 : Nat), .null]]
   for op in descriptors do
     check s!"descriptor-valid: {op.compress}" (succeeds (Format.descriptor op))
     if let .arr fields := op then
@@ -218,11 +222,11 @@ private def run : IO Unit := do
       ("restrict-not-array", strings ["restrict", "P"], "structured-array"),
       ("restrict-empty-name", arr [.str "restrict", strings [""]], "structured-string"),
       ("restrict-role-capacity", arr [.str "restrict", strings (List.replicate 17 "P")], "structured-list-limit"),
-      ("statement-selector-shape", arr [.str "statement", .str "R", .str "P", toJson (0 : Nat)], "structured-array"),
-      ("statement-acceptance-string", arr [.str "statement", .str "R", empty, .str "0"], "structured-natural"),
-      ("statement-acceptance-bool", arr [.str "statement", .str "R", empty, .bool false], "structured-natural"),
-      ("statement-acceptance-limit", arr [.str "statement", .str "R", empty, toJson (4097 : Nat)], "structured-number-limit"),
-      ("statement-empty-relation", arr [.str "statement", .str "", empty, toJson (0 : Nat)], "structured-string"),
+      ("statement-selector-shape", arr [.str "statement", .str "R", .str "P", toJson (0 : Nat), .null], "structured-array"),
+      ("statement-acceptance-string", arr [.str "statement", .str "R", empty, .str "0", .null], "structured-natural"),
+      ("statement-acceptance-bool", arr [.str "statement", .str "R", empty, .bool false, .null], "structured-natural"),
+      ("statement-acceptance-limit", arr [.str "statement", .str "R", empty, toJson (4097 : Nat), .null], "structured-number-limit"),
+      ("statement-empty-relation", arr [.str "statement", .str "", empty, toJson (0 : Nat), .null], "structured-string"),
       ("bool-not-boolean", arr [.str "bool.constant", toJson (1 : Nat)], "structured-operation-unsupported")
     ] do
     check label (hasError (Format.descriptor value) code)
@@ -262,13 +266,13 @@ private def run : IO Unit := do
       [.str "zkc.structured-source/1", .str "original", .str digest, .str "main", empty, empty, empty],
       [.str "zkc.structured-source/0", .str "projected", .str digest, .str "main", empty, empty, empty],
       [.str "zkc.structured-source/0", .str "original", .str digest, .str "main", empty, empty],
-      [.str "zkc.structured-source/0", .str "original", .str digest, .str "main", empty, empty, empty, empty, empty]] do
+      [.str "zkc.structured-source/0", .str "original", .str digest, .str "main", empty, empty, empty, empty, empty, empty]] do
     check "envelope-tag-or-arity" (hasError (decode (arr envelopeFields)) "structured-envelope")
   for badDigest in ["sha256:" ++ String.ofList (List.replicate 64 'A'),
       "sha256:" ++ String.ofList (List.replicate 64 'g'), "sha256:0", "SHA256:" ++
         String.ofList (List.replicate 64 '0')] do
     check "digest-canonical" (hasError (decode (arr [.str "zkc.structured-source/0",
-      .str "original", .str badDigest, .str "main", empty, empty, empty, empty])) "structured-source-digest")
+      .str "original", .str badDigest, .str "main", empty, empty, empty, empty, empty])) "structured-source-digest")
 
   -- Bounded shapes apply to all declarations, even unused metadata and bodies.
   for (label, value) in [

@@ -57,6 +57,32 @@ subtree instantiates those consumers. `ZkcClean` remains a separate relation
 adapter. Module-header checks and declaration dependency audits enforce these
 boundaries, including proof bodies and generated/private declarations.
 
+## Structured proof construction
+
+Retained declaration contracts and explicit formula links belong to original
+PIR and the independently admitted snapshot. They do not change executable
+participant operations. Selected-Entry metadata refers to the canonical owned
+target clause; component contracts remain reusable at ordinary protocol calls.
+
+`Structured.ContractBinding`, `ContractBoundary` and `ContractMeaning` connect
+those declarations to typed port/role selections and actual formula invocation.
+Logical assignments are scoped by owner and explicit invocation labels; those
+labels do not prove dynamic reachability. A shared interpretation
+environment fixes opaque relation meanings. `ContractExecution` projects
+boundaries from actual outcomes, preserving absent participants and stops.
+
+`Source.RegionDerivation` and its tactics derive process correspondence from the
+same typed body using local rules. `Structured.ContractCalls` enumerates lexical
+calls; `ContractComposition` proves actual callee substitution and continuation
+laws. `ContractObligations` records selected mathematical uses, residual or
+terminal requests and call coverage. It does not select a security experiment.
+Optional library consumers supply that experiment and its proved transport.
+
+The [design rationale](design/protocol-verification.md) explains why structural
+proof construction, logical interpretation and property application have separate
+owners. [Verification](spec/verification.md#structured-contracts) defines their
+proof obligations.
+
 ## Reuse and composition
 
 A source certificate proves exact equality of an open process, including all
