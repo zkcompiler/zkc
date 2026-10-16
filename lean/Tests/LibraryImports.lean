@@ -127,6 +127,11 @@ import Zkc.Source.Structured.Interpretation
 import Zkc.Source.Structured.Laws
 import Zkc.Source.Structured.Limits
 import Zkc.Source.Structured.Linking
+import Zkc.Source.Structured.LogicalChecking
+import Zkc.Source.Structured.LogicalContext
+import Zkc.Source.Structured.LogicalInstantiation
+import Zkc.Source.Structured.LogicalTranslation
+import Zkc.Source.Structured.LogicalTransport
 import Zkc.Source.Structured.MapEvaluation
 import Zkc.Source.Structured.MapLaws
 import Zkc.Source.Structured.Meaning
