@@ -90,27 +90,15 @@ pub(super) struct Counts {
     #[cfg(feature = "execution-counts")]
     operations: Vec<std::cell::Cell<u64>>,
 }
-impl Default for Counts {
-    fn default() -> Self {
+impl Counts {
+    pub fn new(bindings: usize) -> Self {
+        #[cfg(not(feature = "execution-counts"))]
+        let _ = bindings;
         Self {
             #[cfg(feature = "execution-counts")]
             events: std::array::from_fn(|_| std::cell::Cell::new(0)),
             #[cfg(feature = "execution-counts")]
-            operations: Vec::new(),
-        }
-    }
-}
-impl Counts {
-    pub fn new(bindings: usize) -> Self {
-        #[cfg(feature = "execution-counts")]
-        return Self {
             operations: (0..bindings).map(|_| std::cell::Cell::new(0)).collect(),
-            ..Self::default()
-        };
-        #[cfg(not(feature = "execution-counts"))]
-        {
-            let _ = bindings;
-            Self::default()
         }
     }
 
