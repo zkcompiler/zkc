@@ -4,14 +4,9 @@ public import Zkc.Source.Structured.Import
 
 @[expose] public section
 
-/-! Constructor data from the retained actual MLIR export of the repacked
-Reduction fixture, bridges/structured/fixtures/sumcheck-repacked. Only the root's
-port order differs from SumcheckReduceData; its child Reduce and every helper
-are identical. Regenerate from the repository root with
-`zkc-compile language-emit` and `language-interface` (`--source-format=zkc
---entry=example::Reduction` and the project's modules), `zkc-compile
-protocol-structured` for the interface's protocol, then
-bridges/structured/snapshot.py. Admission and semantic proofs are separate. -/
+/-! Constructor data from the retained actual MLIR export.
+Regenerate with bridges/structured/snapshot.py; admission and semantic proofs
+are separate. The native bridge checks exact regeneration against the source. -/
 
 namespace ZkcExamples.Structured.SumcheckRepackedData
 open Zkc.Source.Structured
