@@ -23,8 +23,21 @@ The `Causal` modules additionally prove unconditional acceptance domination for
 stop-aware joint phases using existing PIR Execution records, including terminal
 work and ordered LOW/HIGH receives. `VCVio/Execution` supplies reusable reachable
 full-distribution replacement and value-returning transport. Canonical structured
-round examples instantiate local query/checker laws; the actual imported
-Sumcheck/Reduce bridge and zkc native correspondence remain separate work.
+round examples instantiate local query/checker laws and retain their explicit
+reachable-state premises.
+
+`VCVio/StructuredUniform` constructs a
+[uniform query service](../../docs/spec/uniform-query-service.md) around arbitrary
+structured receive/send handlers. Its laws preserve complete executions at every
+state and refuse unconfigured site/domain/handle tuples. The Sumcheck example
+owns its source-qualified route and general-count full-distribution transport.
+`Examples/CausalSumcheck/SourceVerifier` proves the complete admitted Sumcheck
+returned-true bound and Reduction's external-table residual-observation bound,
+both `n / |F|` for every count. The actual roots execute at most two and four
+rounds respectively; excess counts refuse and contribute zero mass. The concrete
+service discharges query and route premises for arbitrary network/callbacks and
+all initial states. Reduction has no Boolean acceptance checker.
+[Support](../../docs/support.md) records scope and validation.
 
 `VCVio/Schnorr` proves perfect honest-verifier simulation of the public transcript
 and actual verifier result. The simulator uses only the public key and a uniform
@@ -44,6 +57,14 @@ their handwritten honest strategy and imported verifier contracts.
 Only `propext`, `Classical.choice` and `Quot.sound` are allowed. Unrelated upstream
 `sorry` declarations are not claims of this package. `clients/ArkLib.lean` in the
 core package exercises reuse from an independent Lake package.
+The actual-root bounds use the empty parent context and verifier role 1;
+the process transport permits arbitrary contexts and role mappings.
+
+`clients/UniformComposition.lean` separately reuses the concrete service,
+general-count process bounds and both actual imported-root bounds.
+From the repository root, `python3 lean/checks/check_clients.py --with-arklib`
+checks Main, ArkLib and UniformComposition as separate Lake consumers, including
+their declaration audits. Without the flag it checks only Main.
 
 The Python [proof-request bridge](../../bridges/common/README.md) exposes the
 imported scalar consumers through explicit requests. The multilinear API is

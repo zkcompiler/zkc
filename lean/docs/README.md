@@ -20,6 +20,9 @@ that all native behavior already has a Lean model.
   ArkLib degree-one adapters, stop-aware causal completion, local distribution
   contracts, complete/residual bounds and honest completeness;
   canonical structured examples, with imported Sumcheck and native correspondence separate.
+- [Uniform query service](spec/uniform-query-service.md): a concrete structured
+  handler with exact all-state query, pass-through and refusal laws, plus
+  general-count Sumcheck process transport and actual imported-root bounds.
 - [Support](support.md): theorem scope, assumptions and tested boundaries.
 - [Dependencies](dependencies.md): exact pins and compatibility decisions.
 - [Structured computations](design/structured-computations.md): canonical multi-result

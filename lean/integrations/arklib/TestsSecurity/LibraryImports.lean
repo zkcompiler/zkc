@@ -20,8 +20,11 @@ import ZkcSecurity.ArkLib.Sumcheck.Strategy
 import ZkcSecurity.Examples.CausalSumcheck.CalculatedRound
 import ZkcSecurity.Examples.CausalSumcheck.DistributionalRound
 import ZkcSecurity.Examples.CausalSumcheck.ExactRound
+import ZkcSecurity.Examples.CausalSumcheck.Iteration
 import ZkcSecurity.Examples.CausalSumcheck.Operations
+import ZkcSecurity.Examples.CausalSumcheck.SourceVerifier
 import ZkcSecurity.Examples.CausalSumcheck.Terminal
+import ZkcSecurity.Examples.CausalSumcheck.UniformService
 import ZkcSecurity.Examples.Schnorr
 import ZkcSecurity.Examples.StructuredSchnorr
 import ZkcSecurity.Examples.StructuredSchnorrHonestView
@@ -29,9 +32,13 @@ import ZkcSecurity.Examples.Sumcheck
 import ZkcSecurity.Examples.Variants
 import ZkcSecurity.VCVio.Execution
 import ZkcSecurity.VCVio.Schnorr
+import ZkcSecurity.VCVio.StructuredUniform
 import TestsSecurity.CausalSumcheck.Contracts
 import TestsSecurity.CausalSumcheck.Execution
 import TestsSecurity.CausalSumcheck.Handlers
+import TestsSecurity.CausalSumcheck.Iteration
 import TestsSecurity.CausalSumcheck.Phases
+import TestsSecurity.CausalSumcheck.SourceVerifier
+import TestsSecurity.CausalSumcheck.UniformService
 import TestsSecurity.Compatibility
 import TestsSecurity.MultilinearSumcheck
