@@ -329,8 +329,17 @@ role/prefix context, optional interface masks, actual service handles and ordere
 replies. Both native admissions independently check effective static-site
 collisions without expansion, in addition to native conservative budgets.
 Complete unchanged application/service-order fixtures and a nested wrapper
-exercise this boundary. Protocol repetition, conditional entry completion,
-construction-start selection and whole Sumcheck remain outside this profile.
+exercise this boundary. Retained protocol repeats use one isolated callback,
+optional scoped state and immutable captures in the existing SSA reference.
+Independent controls cover unchanged repeat/nested-repeat sources, service
+aliasing and query order across iterations, nested applications, independent
+participant counts and received values, and whole-body refusal at maximum zero.
+Complete original Reduction and Sumcheck captures are admitted, including their
+helper closures; their full symbolic source equations remain separate work.
+Effective sites and repeat depth traverse applications without unrolling source
+maxima. Native affine resource controls remain outside the structured type model.
+Conditional entry completion and construction-start selection remain outside
+this profile.
 The independent Lean model retains application edges on its existing typed
 Region carrier, links complete signatures through prefix-captured tables, and
 checks the same supported static profile independently. Complete source clients

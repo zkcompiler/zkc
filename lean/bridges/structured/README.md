@@ -344,7 +344,45 @@ JSON and transparent Lean data, while semantic proofs remain separately maintain
 This suite compares the original-SSA reference and the Lean observer. The
 production Runner has a separate comparison suite below. These application
 comparisons do not prove native projection, arbitrary provider behavior, or a
-security reduction. Protocol repetition remains outside this retained profile.
+security reduction. Retained scoped repeats are covered by the suite below.
+
+## Retained scoped repeats
+
+`repeats.py` re-emits the complete original `repeat.zkc`, `repeat_nested.zkc`,
+service Demo/Nested, Reduction and Sumcheck entries. Project manifests select
+both Sumcheck module closures. Original MLIR, snapshot JSON and the six
+maintained Lean Data files must match byte-for-byte; this driver never rewrites
+fixtures. Frontend participant names and positional interfaces are preserved.
+
+```sh
+python3 lean/bridges/structured/repeats.py \
+  --compiler build/compiler/zkc-compile \
+  --reference build/compiler/test/zkc-structured_reference-test \
+  --lean lean/.lake/build/bin/structured-source \
+  --report build/experiments/structured-repeats/report.json
+```
+
+`OpenSuite` compares actual original SSA with the independently admitted Lean
+observer and explicit Python expectations. Cases separate participant inputs,
+counts, received values and service draws; exercise captured values, carried
+state masks, nested callbacks, ordered service aliases, static action names,
+missing input, bounds, guards, stopped prefixes and unused replies. Complete
+same-name source and arithmetic changes must change observed behavior.
+Independent MSB-first table arithmetic supplies the zero-, one- and two-round
+Reduction/Sumcheck expectations, including false claims and guard rejection.
+
+Malformed wire controls test the independent reader. Their copied digest does
+not assert identity with mutated native source bytes. Native affine values
+outside Lean `Ty` are explicitly skipped. Native closed repeat execution and
+its intentional formal closed-profile refusal are recorded separately.
+Renderer checks construct data and inspect it with the kernel; they do not
+produce semantic proofs or duplicate whole Sumcheck admission checks.
+
+The suite is registered in `lean-native`. Receipts retain exact source and tool
+hashes without requiring Git. `--native-only` supports development while the
+formal CLI is unavailable and reports `native-only`, never a paired pass.
+These finite comparisons establish neither universal exporter/native
+correspondence nor symbolic Sumcheck or security theorems.
 
 ## Native participant observations
 

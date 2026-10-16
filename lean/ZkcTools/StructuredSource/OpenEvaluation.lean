@@ -173,7 +173,9 @@ def optionalAbstractInputs {types : List Ty} : OptionalValues types → Bounds.E
     (value.elim .absent (Bounds.value type)) :: optionalAbstractInputs rest
 
 /-- Preflight runs before process construction, including eager ranges inside
-Local callbacks. Unknown branches, loop prefixes and all typed replies remain
+Local callbacks and retained protocol repeats. Repeat callbacks keep their
+optional captures, root context and preceding protocol table. Unknown branches,
+loop prefixes (even before a definite stop) and all typed replies remain
 conservative; capacity failures do not become semantic stops. -/
 def openPreflight (payload : UnitPayload) (request : OpenRequest)
     (values : OptionalValues payload.entry.inputs) : Except String Unit := do

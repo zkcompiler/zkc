@@ -533,27 +533,24 @@ def maskProtocolValues (context : ProtocolContext) (self : Nat) :
 /-- Receives use independent reply bounds. All owner/scope tests map into root
 coordinates while self stays unchanged. Protocol callbacks retain their own
 optional carrier; they are never reinterpreted as closed helper callbacks. -/
-def protocolOperation (definitions : Helpers) (protocols : ProtocolBounds)
+partial def protocolOperation (definitions : Helpers) (protocols : ProtocolBounds)
     (context : ProtocolContext) (self : Nat)
     (received : Ty → Analysis (Option Value)) (op : ProtocolOp) (args : Env)
     (bodies : RawRegions Ty ProtocolOp) : Analysis Result := do
   visit
   tick (args.length + op.arguments.length + op.results.length)
   if args.length != op.arguments.length then throw .unknown
-  -- All admitted current constructors have zero callbacks. Future protocol
-  -- control must dispatch its RawRegions through this contextual transfer.
-  let .nil := bodies | throw .unknown
-  match op, args with
-  | .calculate op _, _ => operation definitions op args .nil
-  | .localCall helper _ owner _, _ =>
+  match op, args, bodies with
+  | .calculate op _, _, .nil => operation definitions op args .nil
+  | .localCall helper _ owner _, _, .nil =>
       if self != context.roles owner then return some (helper.outputs.map fun _ => .absent)
       if absent args then return none
       operation definitions (.invoke helper) (args.map Value.present) .nil
-  | .guard owner _, [condition] =>
+  | .guard owner _, [condition], .nil =>
       if self == context.roles owner then
         if condition == .absent || condition.present == .boolean (some false) then return none
       return some []
-  | .exchange type sender receiver _, [input] =>
+  | .exchange type sender receiver _, [input], .nil =>
       if self == context.roles sender then
         if input == .absent then return none
         outputWork input
@@ -563,21 +560,50 @@ def protocolOperation (definitions : Helpers) (protocols : ProtocolBounds)
         outputWork value
         return some [value]
       return some [.absent]
-  | .restrict _ roles, [input] =>
+  | .restrict _ roles, [input], .nil =>
       tick roles.length
       return some [if roles.any (fun role => context.roles role == self) then input else .absent]
-  | .draw owner .., _ =>
+  | .draw owner .., _, .nil =>
       if self != context.roles owner then return some [.absent]
       if absent args then return none
       return some [.atom]
-  | .protocolApply signature roles site, _ =>
+  | .protocolApply signature roles site, _, .nil =>
       tick (1 + roles.length + signature.roles.length + site.utf8ByteSize +
         (context.applicationPrefix.map String.utf8ByteSize).getD 0)
       let child := context.enter site roles
       if !child.contains signature self then return some (signature.outputs.map fun _ => .absent)
       invokeProtocolBound protocols signature child self received args
-  | .statement .., _ | .mark _, [] => return some []
-  | _, _ => throw .unknown
+  | .repeat spec _, count :: rest, .cons inputs outputs body .nil =>
+      tick (inputs.foldl (fun cost type => cost + typeWork type) 0 +
+        outputs.foldl (fun cost type => cost + typeWork type) 0 + spec.roles.length)
+      if inputs != op.arguments || outputs != spec.state then throw .unknown
+      if !spec.roles.any (fun role => context.roles role == self) then
+        return some (spec.state.map fun _ => .absent)
+      -- Only the present count branch can return. Missing captures remain
+      -- optional; a reached strict operation decides whether they are needed.
+      if count.present == .absent then return none
+      let .index bounds := count.present | throw .unknown
+      if bounds.lower > bounds.upper then throw .unknown
+      if bounds.lower > spec.maximum then return none
+      -- This cap limits abstract exploration only. Concrete excessive counts
+      -- are refused by the process, never truncated to this many iterations.
+      let count := min bounds.upper spec.maximum
+      let initial ← maskProtocolValues context self spec.stateScopes
+        (rest.take spec.state.length)
+      let captures := rest.drop spec.state.length
+      charge (2 * count) -- reserve range allocation/traversal before callback entry
+      let result ← iterate (fun index current => do
+        let masked ← maskProtocolValues context self spec.stateScopes current
+        let callbackArgs ← prepend masked captures
+        let returned ← region (protocolOperation definitions protocols context self received)
+          body (.index (exact index) :: callbackArgs)
+        match returned with
+        | none => return none
+        | some values =>
+          return some (← maskProtocolValues context self spec.stateScopes values)) count 0 initial
+      return some result
+  | .statement .., _, .nil | .mark _, [], .nil => return some []
+  | _, _, _ => throw .unknown
 
 /-- The checked dependency order determines each captured strict prefix. This
 fold stores abstract transfers over retained bodies, with no expansion or

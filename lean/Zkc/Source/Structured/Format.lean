@@ -120,6 +120,9 @@ def descriptor (json : Json) : Except String Descriptor := do
   | [.str "call", name] => return .call (← string name)
   | [.str "apply", name] => return .apply (← string name)
   | [.str "protocol_apply", name, roles] => return .protocolApply (← string name) (← strings roles 16)
+  | [.str "protocol_repeat", carried, maximum, roles, stateScopes] =>
+      return .protocolRepeat (← natural carried 512) (← natural maximum 1048576)
+        (← strings roles 16) (← scopes stateScopes)
   | [.str "local_call", name, role] => return .localCall (← string name) (← string role)
   | [.str "fold", domain, step, predicate] =>
       return .fold (← string domain) (← string step) (← string predicate true)

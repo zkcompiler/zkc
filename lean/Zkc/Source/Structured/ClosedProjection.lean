@@ -133,6 +133,10 @@ theorem ClosedProjection.exists_of_exact {inputs outputs}
       | ok tail =>
         obtain ⟨target, relation⟩ := nextIH tail step
         exact ⟨_, .mark site args relation⟩
+    | «repeat» spec site =>
+      cases bodies with
+      | cons body rest =>
+        simp [Region.erase, Regions.erase, closedRootTree] at projected
     | exchange | restrict | draw | statement | protocolApply =>
       cases bodies
       simp [Region.erase, Regions.erase, closedRootTree, ProtocolOp.closed] at projected; cases projected

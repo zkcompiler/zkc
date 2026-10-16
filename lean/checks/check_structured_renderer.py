@@ -231,6 +231,59 @@ example : (Zkc.Source.Structured.check RenderedApplication.snapshot).isOk = true
         except ValueError:
             continue
         raise AssertionError("renderer accepted a malformed protocol application")
+    # Retain the six complete original payloads. These kernel checks inspect
+    # constructor data only; full admission belongs to the formal clients.
+    repeat_subjects = [
+        ("repeat", "Repeat", 2, 4, 2),
+        ("repeat-nested", "RepeatNested", 1, 3, 1),
+        ("repeat-service", "RepeatService", 2, 3, 2),
+        ("repeat-service-wrapper", "RepeatServiceWrapper", 2, 3, 2),
+        ("sumcheck-reduce", "SumcheckReduce", 6, 4, 2),
+        ("sumcheck-source", "SumcheckSource", 6, 2, 2),
+    ]
+    modules.append('''
+open Zkc.Source.Structured in
+private def renderedRepeatHeaders (snapshot : Snapshot) :=
+  snapshot.definitions.flatMap fun definition => match definition with
+    | .function function =>
+      let .block instructions _ := function.body
+      instructions.filterMap fun (.instruction descriptor _ _ _ _) => match descriptor with
+        | .protocolRepeat carried maximum roles scopes => some (carried, maximum, roles, scopes)
+        | _ => none
+    | _ => []
+''')
+    for stem, name, carried, maximum, role_count in repeat_subjects:
+        data = json.loads((HERE / f"bridges/structured/fixtures/{stem}.json").read_text())
+        namespace = f"ZkcExamples.Structured.{name}Data"
+        rendered = renderer.render(data, namespace)
+        maintained = HERE / f"ZkcExamples/Structured/{name}Data.lean"
+        assert rendered.encode("utf-8") == maintained.read_bytes(), maintained
+        roster = [f"role{i:08x}" for i in range(role_count)]
+        scopes = [[roster[0]]] * (carried - 2) + [[roster[1]], [roster[1]]] if carried == 6 else [[r] for r in roster]
+        source = rendered.replace("module\n\n", "", 1)
+        expected = f"[({carried}, {maximum}, {json.dumps(roster)}, {json.dumps(scopes)})]"
+        source += f'''
+example : renderedRepeatHeaders {namespace}.snapshot = {expected} := by decide +kernel
+'''
+        modules.append(source)
+    malformed_repeats = [
+        ["protocol_repeat", 1, True, ["P"], [["P"]]],
+        ["protocol_repeat", 1, -1, ["P"], [["P"]]],
+        ["protocol_repeat", 1, 1048577, ["P"], [["P"]]],
+        ["protocol_repeat", True, 0, ["P"], [["P"]]],
+        ["protocol_repeat", -1, 0, ["P"], [["P"]]],
+        ["protocol_repeat", 513, 0, ["P"], [["P"]]],
+        ["protocol_repeat", 1, 0, ["P"]],
+        ["protocol_repeat", 1, 0, ["P"], [["P"]], "extra"],
+        ["protocol_repeat", 1, 0, [0], [["P"]]],
+        ["protocol_repeat", 1, 0, ["P"], ["P"]],
+    ]
+    for invalid in malformed_repeats:
+        try:
+            renderer.descriptor(invalid)
+        except ValueError:
+            continue
+        raise AssertionError("renderer accepted a malformed protocol repeat")
     # Imports/section commands from each rendering are legal at the file top
     # only. One import serves all independently named data declarations.
     header = "import Zkc.Source.Structured.Import\nset_option maxRecDepth 4096\n"
@@ -254,6 +307,8 @@ example : (Zkc.Source.Structured.check RenderedApplication.snapshot).isOk = true
               "primitive_metadata_kernel_cases": 3, "obsolete_envelope_refusal_cases": 1,
               "preparation_metadata_kernel_cases": 3, "preparation_refusal_cases": 7,
               "application_metadata_kernel_cases": 2, "application_refusal_cases": 6,
+              "repeat_data_kernel_cases": len(repeat_subjects),
+              "repeat_descriptor_refusal_cases": len(malformed_repeats),
               "ascii_locale_cli_cases": 1,
               "renderer_sha256": support.lake.sha(Path(renderer.__file__)),
               "subject_sha256": support.lake.sha(path)}

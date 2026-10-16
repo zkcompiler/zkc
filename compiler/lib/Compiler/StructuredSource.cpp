@@ -21,6 +21,9 @@ namespace {
 constexpr unsigned signatureLimit = 512;
 constexpr unsigned instructionLimit = 4096;
 constexpr unsigned depthLimit = 64;
+constexpr uint64_t staticVisitLimit = 100000;
+constexpr size_t effectiveSiteByteLimit = 4096;
+constexpr uint64_t staticSiteByteLimit = 16 * 1024 * 1024;
 
 // This profile is deliberately smaller than the installed native catalogue.
 // Catalogue resolution below still owns nominal arguments, full ordered ports,
@@ -236,6 +239,21 @@ class Exporter {
     auto field = [&]() {
       return cast<algebra::FieldType>(op.getOperand(0).getType()).getDomain();
     };
+    if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(op)) {
+      // Native formation already checked nested active rosters and state
+      // scopes.
+      if (auto e = attributes(
+              op, {"site", "carried", "maximum", "roles", "carried_roles"}))
+        return std::move(e);
+      if (owner != "protocol")
+        return error("structured-source-operation");
+      json::Array scopes;
+      for (Attribute scope : repeat.getCarriedRoles())
+        scopes.push_back(names(cast<ArrayAttr>(scope)));
+      return json::Array{"protocol_repeat", repeat.getCarried(),
+                         repeat.getMaximum(), names(repeat.getRoles()),
+                         std::move(scopes)};
+    }
     if (auto application = dyn_cast<protocol_ir::ApplyOp>(op)) {
       if (auto e = attributes(op, {"callee", "roles", "site"}))
         return std::move(e);
@@ -559,14 +577,15 @@ class Exporter {
               "block", std::move(encoded),
               json::Array{"stop", reason.getValue(), *occurrence}};
         }
-        bool valid = terminator == "return"
-                         ? (owner == "math" ? isa<func::ReturnOp>(op)
-                            : owner == "local"
-                                ? isa<local::ReturnOp>(op)
-                                : isa<protocol_ir::MathematicalReturnOp>(op))
-                     : terminator == "condition"
-                         ? isa<local::LocalConditionOp>(op)
-                         : isa<local::LocalYieldOp>(op);
+        bool valid =
+            terminator == "return"
+                ? (owner == "math" ? isa<func::ReturnOp>(op)
+                   : owner == "local"
+                       ? isa<local::ReturnOp>(op)
+                       : isa<protocol_ir::MathematicalReturnOp>(op))
+            : terminator == "condition" ? isa<local::LocalConditionOp>(op)
+            : owner == "protocol"       ? isa<protocol_ir::ProtocolYieldOp>(op)
+                                        : isa<local::LocalYieldOp>(op);
         if (!valid || op.getOperandTypes() != outputs)
           return error("structured-source-region");
         if (auto e = attributes(op, {}))
@@ -577,7 +596,8 @@ class Exporter {
       if (++instructions > instructionLimit)
         return error("structured-source-limit");
       auto inputs = sorts(op.getOperandTypes(),
-                          isa<protocol_ir::QueryOp, protocol_ir::ApplyOp>(op));
+                          isa<protocol_ir::QueryOp, protocol_ir::ApplyOp,
+                              protocol_ir::RepeatOp>(op));
       if (!inputs)
         return inputs.takeError();
       auto results = sorts(op.getResultTypes());
@@ -590,8 +610,9 @@ class Exporter {
       if (op.hasAttr("site") ||
           op.getName().getStringRef().starts_with("algebra.exec.") ||
           isa<protocol_ir::ExchangeOp, protocol_ir::QueryOp,
-              protocol_ir::GuardOp, protocol_ir::LocalCallOp, local::ApplyOp,
-              local::LocalIfOp, local::LocalForOp, local::BoolConstantOp>(op)) {
+              protocol_ir::GuardOp, protocol_ir::LocalCallOp,
+              protocol_ir::RepeatOp, local::ApplyOp, local::LocalIfOp,
+              local::LocalForOp, local::BoolConstantOp>(op)) {
         auto checked = site(op);
         if (!checked)
           return checked.takeError();
@@ -600,8 +621,9 @@ class Exporter {
       json::Array regions;
       if (op.getNumRegions()) {
         bool loop = isa<local::LocalForOp>(op);
-        if ((!loop && !isa<local::LocalIfOp>(op)) ||
-            op.getNumRegions() != (loop ? 1u : 2u))
+        bool repeat = isa<protocol_ir::RepeatOp>(op);
+        if ((!loop && !repeat && !isa<local::LocalIfOp>(op)) ||
+            op.getNumRegions() != (loop || repeat ? 1u : 2u))
           return error("structured-source-region");
         for (Region &nested : op.getRegions()) {
           if (!llvm::hasSingleElement(nested) || nested.front().empty())
@@ -610,7 +632,11 @@ class Exporter {
           SmallVector<Type> expectedInputs;
           SmallVector<Type> expectedOutputs(op.getResultTypes());
           StringRef end = "yield";
-          if (loop) {
+          if (repeat) {
+            // The count operand becomes the induction argument; state and
+            // immutable captures retain their ordered types, not their SSA.
+            llvm::append_range(expectedInputs, op.getOperandTypes());
+          } else if (loop) {
             expectedInputs.push_back(
                 IntegerType::get(unit.getContext(), 64, IntegerType::Unsigned));
             llvm::append_range(expectedInputs,
@@ -639,7 +665,7 @@ class Exporter {
           }
           if (inner.getArgumentTypes() != TypeRange(expectedInputs))
             return error("structured-source-region");
-          auto in = sorts(expectedInputs);
+          auto in = sorts(expectedInputs, repeat);
           if (!in)
             return in.takeError();
           auto out = sorts(expectedOutputs);
@@ -985,13 +1011,13 @@ class Exporter {
     // without cloning syntax or entering the separate closed helper namespace.
     uint64_t visits = 0, bytes = 0;
     llvm::StringSet<> effective;
-    std::function<Error(protocol_ir::MathematicalOp, StringRef, unsigned)>
-        visit = [&](protocol_ir::MathematicalOp function, StringRef prefix,
-                    unsigned depth) -> Error {
-      if (depth > 64)
+    std::function<Error(Block &, StringRef, unsigned, unsigned)> visit =
+        [&](Block &body, StringRef prefix, unsigned applicationDepth,
+            unsigned repeatDepth) -> Error {
+      if (applicationDepth > depthLimit || repeatDepth > depthLimit)
         return error("structured-source-limit");
-      for (Operation &op : function.getBody().front()) {
-        if (++visits > 100000)
+      for (Operation &op : body) {
+        if (++visits > staticVisitLimit)
           return error("structured-source-limit");
         auto site = op.getAttrOfType<StringAttr>("site");
         if (!site)
@@ -1000,10 +1026,11 @@ class Exporter {
         auto length = std::to_string(prefix.size());
         size_t overhead =
             prefix.empty() ? 0 : 8 + length.size() + prefix.size();
-        if (overhead > 4096 || leaf.size() > 4096 - overhead)
+        if (overhead > effectiveSiteByteLimit ||
+            leaf.size() > effectiveSiteByteLimit - overhead)
           return error("structured-source-limit");
         size_t size = overhead + leaf.size();
-        if (size > 16 * 1024 * 1024 - bytes)
+        if (size > staticSiteByteLimit - bytes)
           return error("structured-source-limit");
         bytes += size;
         std::string rendered =
@@ -1014,19 +1041,27 @@ class Exporter {
           // Headers disappear, but their rendered labels advance the context
           // and count toward metadata work. Revisit each static occurrence.
           if (auto e = visit(
-                  symbols.lookup<protocol_ir::MathematicalOp>(call.getCallee()),
-                  rendered, depth + 1))
+                  symbols.lookup<protocol_ir::MathematicalOp>(call.getCallee())
+                      .getBody()
+                      .front(),
+                  rendered, applicationDepth + 1, repeatDepth))
             return e;
         } else if (!effective.insert(rendered).second) {
           return error("structured-source-site", "expanded protocol collision");
         }
+        if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(op))
+          // A repeat header survives expansion. Its body has the same static
+          // prefix and is visited once, even when maximum is zero.
+          if (auto e = visit(repeat.getBody().front(), prefix, applicationDepth,
+                             repeatDepth + 1))
+            return e;
       }
       return Error::success();
     };
     for (auto function :
          unit.getBody().front().getOps<protocol_ir::MathematicalOp>()) {
       effective.clear();
-      if (auto e = visit(function, {}, 1))
+      if (auto e = visit(function.getBody().front(), {}, 1, 0))
         return e;
     }
     return Error::success();
@@ -1116,7 +1151,11 @@ public:
         [&](Operation *function) -> Error {
       if (!checked.insert(function).second)
         return Error::success();
-      for (Operation &op : function->getRegion(0).front()) {
+      SmallVector<Operation *> operations;
+      function->getRegion(0).walk<WalkOrder::PreOrder>(
+          [&](Operation *op) { operations.push_back(op); });
+      for (Operation *operation : operations) {
+        Operation &op = *operation;
         if (isa<algebra::FiniteFoldOp, data::BoundedAtOp>(op))
           return error("structured-source-multirole-math");
         if (auto call = dyn_cast<func::CallOp>(op))

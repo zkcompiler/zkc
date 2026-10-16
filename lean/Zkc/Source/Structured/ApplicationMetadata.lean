@@ -3,7 +3,6 @@ module
 public import Zkc.Source.Structured.ProtocolAdmission
 public import Zkc.Source.Structured.ProtocolContext
 public import Std.Data.TreeSet.Lemmas
-public import Init.Data.String.Lemmas.StringOrder
 
 @[expose] public section
 
@@ -44,7 +43,7 @@ def terminatorCost : Terminator → SourceCost
 def instructionCost (instruction : Instruction) : SourceCost :=
   let .instruction descriptor operands results _ site := instruction
   let selectors := match descriptor with
-    | .protocolApply _ roles | .restrict roles => roles.length
+    | .protocolApply _ roles | .protocolRepeat _ _ roles _ | .restrict roles => roles.length
     | _ => 0
   ⟨some descriptor, operands.length + results.length, selectors, site⟩
 
@@ -246,25 +245,52 @@ theorem renderSite_overlong (sitePrefix : Option String) (site : String) (before
   rw [renderSite_run]
   simp [nonempty, overlong]
 
-/-- Every original protocol is visited at every occurrence. Headers are charged
-and become the next sitePrefix, but only surviving leaf labels enter the root set. -/
-def visitProtocol (snapshot : Snapshot) : Nat → Option String → Function → SiteM Unit
-  | 0, _, _ => throw "structured-effective-site-depth"
-  | depth + 1, sitePrefix, function => do
-    let .block instructions _ := function.body
-    for .instruction descriptor _ _ _ site in instructions do
+/-- Walk stored blocks, sharing visits and the collision namespace. Repeat
+headers survive and do not introduce a prefix. Application headers are charged
+but erased, and the callee is visited at its qualified prefix. -/
+def visitBlock (application : Nat → Option String → Function → SiteM Unit)
+    (snapshot : Snapshot) : Nat → Nat → Option String → Block → SiteM Unit
+  | 0, _, _, _ => throw "structured-region-depth"
+  | stored + 1, nesting, sitePrefix, .block instructions terminal => do
+    for .instruction descriptor _ _ regions site in instructions do
       chargeVisit
-      if !site.isEmpty then
-        let rendered ← renderSite sitePrefix site
-        match descriptor with
-        | .protocolApply name _ =>
-          let .function callee ← lookupDefinition snapshot name | throw "structured-call-kind"
-          visitProtocol snapshot depth (some rendered) callee
-        | _ =>
+      let rendered ← if site.isEmpty then pure "" else renderSite sitePrefix site
+      match descriptor with
+      | .protocolApply name _ =>
+        let .function callee ← lookupDefinition snapshot name | throw "structured-call-kind"
+        application nesting (some rendered) callee
+      | _ =>
+        if !site.isEmpty then
           let state ← get
           if state.seen.contains rendered then throw "structured-effective-site-collision"
           set { state with seen := state.seen.insert rendered }
+      let nested ← match descriptor with
+        | .protocolRepeat .. => do
+          if nesting >= 64 then throw "structured-repeat-depth"
+          pure (nesting + 1)
+        | _ => pure nesting
+      for .region _ _ body in regions do
+        visitBlock application snapshot stored nested sitePrefix body
     chargeVisit
+    match terminal with
+    | .stop _ site =>
+      if !site.isEmpty then
+        let rendered ← renderSite sitePrefix site
+        let state ← get
+        if state.seen.contains rendered then throw "structured-effective-site-collision"
+        set { state with seen := state.seen.insert rendered }
+    | _ => pure ()
+
+/-- Application frame capacity and expanded repeat nesting are independent.
+Entering an application resets stored-block capacity, but preserves nesting. -/
+def visitProtocolWith (snapshot : Snapshot) : Nat → Nat → Option String → Function → SiteM Unit
+  | 0, _, _, _ => throw "structured-effective-site-depth"
+  | frames + 1, nesting, sitePrefix, function =>
+    visitBlock (visitProtocolWith snapshot frames) snapshot 64 nesting sitePrefix function.body
+
+def visitProtocol (snapshot : Snapshot) (frames : Nat) (sitePrefix : Option String)
+    (function : Function) : SiteM Unit :=
+  visitProtocolWith snapshot frames 0 sitePrefix function
 
 end ApplicationMetadata
 

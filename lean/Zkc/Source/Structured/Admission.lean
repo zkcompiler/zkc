@@ -215,7 +215,7 @@ def Descriptor.admittedIn (descriptor : Descriptor) (kind : Kind) : Bool :=
     .booleanNotEqual | .select .. | .call .. | .fold .. |
     .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. => kind != .local
   | .boundedAt .. => kind == .math
-  | .protocolApply .. | .localCall .. | .guard .. | .restrict .. | .exchange .. | .draw .. | .statement .. =>
+  | .protocolApply .. | .protocolRepeat .. | .localCall .. | .guard .. | .restrict .. | .exchange .. | .draw .. | .statement .. =>
     kind == .protocol
   | .apply .. | .branch | .loop | .loopCondition => kind == .local
 
@@ -325,7 +325,7 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
     | _ => throw "structured-bounded-at-arguments"
   | .call name => resolveCall name .math .call
   | .apply name => resolveCall name .local .apply
-  | .protocolApply .. | .localCall .. => throw "structured-open-operation"
+  | .protocolApply .. | .protocolRepeat .. | .localCall .. => throw "structured-open-operation"
   | .fold domain step predicate =>
     let spec ← resolveFold snapshot domains .math domain step predicate argumentTypes results factOperands facts
     return .fold spec

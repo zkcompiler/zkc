@@ -454,9 +454,6 @@ with case('entry-statement-cannot-be-rebound-as-component'):
 for name, body in [
     ('completion', '"protocol.finish_if"(%go) {owner="P",site="finish"} : (i1)->()'),
     ('construction-start', '"protocol.construction_start"() {roles=["P","Q"],site="start"} : ()->()'),
-    ('repeat', '''%n = "data.index"() {value="0"} : ()->ui64
-      "protocol.repeat"(%n) ({ ^round(%i:ui64): "protocol.yield"() : ()->()
-      }) {site="loop",roles=["P","Q"],carried=0:i64,maximum=3:i64,carried_roles=[]} : (ui64)->()'''),
 ]:
     with case('unused-unsupported-' + name):
         source = module(protocol('main'), protocol('dormant', body))

@@ -23,6 +23,16 @@ theorem Op.calculation_no_regions (op : Op) (allowed : op.isCalculation = true) 
     op.regions = [] := by
   cases op <;> simp_all [Op.isCalculation, Op.regions]
 
+/-- The retained callback receives induction, state and immutable captures in
+that order. Roles and scopes use the containing protocol's coordinates. -/
+structure RepeatSpec where
+  state : List Ty
+  captures : List Ty
+  roles : List Nat
+  stateScopes : List (List Nat)
+  maximum : Nat
+  deriving DecidableEq, Repr
+
 /-- Protocol roots have their own operation family, on the same Region carrier.
 Role indices are resolved against the containing root's roster, never global. -/
 inductive ProtocolOp where
@@ -35,11 +45,13 @@ inductive ProtocolOp where
   | statement (relation : String) (types : List Ty) (selectors : List String) (acceptance : Nat)
   | mark (site : String)
   | protocolApply (callee : ProtocolSignature) (roles : List Nat) (site : String)
+  | repeat (spec : RepeatSpec) (site : String)
 
 def ProtocolOp.arguments : ProtocolOp → List Ty
   | .calculate op _ => op.arguments
   | .localCall helper .. => helper.inputs
   | .protocolApply callee .. => callee.inputs
+  | .repeat spec _ => .index :: (spec.state ++ spec.captures)
   | .guard .. => [.boolean]
   | .exchange ty .. | .restrict ty .. => [ty]
   | .draw _ field _ => [.service ("random." ++ field ++ "/0")]
@@ -50,6 +62,7 @@ def ProtocolOp.results : ProtocolOp → List Ty
   | .calculate op _ => op.results
   | .localCall helper .. => helper.outputs
   | .protocolApply callee .. => callee.outputs
+  | .repeat spec _ => spec.state
   | .guard .. | .statement .. | .mark _ => []
   | .exchange ty .. | .restrict ty .. => [ty]
   | .draw _ field _ => [.field field]
@@ -63,8 +76,9 @@ def ProtocolOp.protocols : ProtocolOp → List ProtocolSignature
   | .protocolApply callee .. => [callee]
   | _ => []
 
-/-- Current operations have no callbacks; future callbacks use the same carrier. -/
+/-- Repeat has one isolated callback on the shared typed carrier. -/
 def ProtocolOp.regions : ProtocolOp → List (List Ty × List Ty)
+  | .repeat spec _ => [(.index :: (spec.state ++ spec.captures), spec.state)]
   | _ => []
 
 abbrev protocolDialect : Dialect :=

@@ -32,8 +32,8 @@ def text(value):
     return '"' + ''.join(character(char) for char in value) + '"'
 
 
-def nat(value):
-    if type(value) is not int or not 0 <= value <= 4096:
+def nat(value, limit=4096):
+    if type(value) is not int or not 0 <= value <= limit:
         raise ValueError("invalid bounded natural")
     return str(value)
 
@@ -88,6 +88,10 @@ def descriptor(value):
     if tag == "select":
         record(args, 1)
         return f".select ({ty(args[0])})"
+    if tag == "protocol_repeat":
+        carried, maximum, roles, scopes = record(args, 4)
+        return (f".protocolRepeat {nat(carried, 512)} {nat(maximum, 1048576)} "
+                f"{seq(roles, text)} {seq(scopes, lambda scope: seq(scope, text))}")
     if tag == "protocol_apply":
         callee, roles = record(args, 2)
         return f".protocolApply {text(callee)} {seq(roles, text)}"

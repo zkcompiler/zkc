@@ -7,6 +7,14 @@ maintains independent research models and checks.
 
 ## Selecting checks
 
+Retained structured protocol changes use the compiler's `structured-source`,
+`structured-applications` and `structured-repeats` CTest cases. The repeat case
+captures complete original sources and interfaces, checks optional participant
+execution and exact refusals, and exercises native preparation, projection,
+Math lowering and physical export. Runner integration and the native affine
+resource suites provide separate evidence; reference agreement is not a
+production correctness theorem.
+
 | Change | Command | Scope |
 |---|---|---|
 | Harness, configuration or command wiring | `just test-harness` | Python controls without compiled project tools |

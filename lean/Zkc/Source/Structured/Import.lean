@@ -383,13 +383,14 @@ theorem Imported.protocolSource {snapshot : Snapshot} (imported : Imported snaps
   exact ⟨function, domains, headers, summaries, retained, kind, headerEq, checked,
     (checkProtocol_exact checked).1, (checkProtocol_exact checked).2⟩
 
-/-- Every actual raw application in an imported protocol has an exact original
-instruction and successful full resolver. Lexical service evidence records the
-formal input index, SSA shift, nominal contract and mapped singleton owner. -/
+/-- Callback-free compatibility preserves the exact top-level instruction and
+SSA-offset witness. The explicit flatness premise is checked in the kernel at
+concrete call sites; recursive consumers use protocolApplication_recursive. -/
 theorem Imported.protocolApplication {snapshot : Snapshot} (imported : Imported snapshot)
     {definition : CheckedProtocol} (member : definition ∈ imported.program.payload.protocols)
     {signature : ProtocolSignature} {indices : List Nat} {site : String}
-    (occurs : .protocolApply signature indices site ∈ definition.raw.operations) :
+    (occurs : .protocolApply signature indices site ∈ definition.raw.operations)
+    (flat : definition.raw.operations.all (fun op => op.regions.isEmpty) = true := by decide +kernel) :
     ∃ function domains headers summaries interface instructions terminal offset name roles operands regions,
       .function function ∈ snapshot.definitions ∧ function.kind = .protocol ∧
       checkUnitHeaders snapshot = .ok (domains, headers, summaries) ∧
@@ -409,7 +410,7 @@ theorem Imported.protocolApplication {snapshot : Snapshot} (imported : Imported 
     signatureEq, lowered⟩ := imported.protocolSource member
   obtain ⟨interface, instructions, terminal, offset, name, roles, operands, regions,
     interfaceEq, bodyEq, instruction, siteValid, resolved, services⟩ :=
-    lowerProtocol_application lowered occurs
+    lowerProtocol_application lowered occurs flat
   obtain ⟨originalInterface, originalEq, _, roster, _⟩ := resolveProtocolSignature_fields signatureEq
   have same : originalInterface = interface := Option.some.inj (originalEq.symm.trans interfaceEq)
   subst originalInterface
@@ -417,22 +418,84 @@ theorem Imported.protocolApplication {snapshot : Snapshot} (imported : Imported 
     offset, name, roles, operands, regions, retained, kind, headerEq, checked,
     interfaceEq, roster, bodyEq, instruction, siteValid, resolved, services⟩
 
-/-- Finite role validity follows from admission and actual raw occurrence. The
-range is the caller's complete checked roster, not an assumed resolver context. -/
+/-- Recursive inversion provides an inherited lexical environment with bounded
+original service inputs, exact contracts and mapped owners. This existential
+consequence does not identify the environment of a particular lowering path. -/
+theorem Imported.protocolApplication_source {snapshot : Snapshot} (imported : Imported snapshot)
+    {definition : CheckedProtocol} (member : definition ∈ imported.program.payload.protocols)
+    {signature : ProtocolSignature} {indices : List Nat} {site : String}
+    (occurs : .protocolApply signature indices site ∈ definition.raw.operations) :
+    ∃ function domains headers summaries interface context, ∃ origins : List (Option Nat), ∃ name roles operands regions,
+      .instruction (.protocolApply name roles) operands signature.outputs regions site ∈
+        function.body.storedInstructions ∧
+      .function function ∈ snapshot.definitions ∧ function.kind = .protocol ∧
+      checkUnitHeaders snapshot = .ok (domains, headers, summaries) ∧
+      checkProtocol snapshot domains summaries function headers = .ok definition ∧
+      function.interface = some interface ∧ definition.roles = interface.roles ∧
+      validProtocolIdentifier site = true ∧
+      resolveProtocolApplication snapshot headers interface name roles = .ok (signature, indices) ∧
+      typesAt context operands = .ok signature.inputs ∧
+      (∀ type scope operand, ((type, scope), operand) ∈
+          (signature.inputs.zip signature.inputScopes).zip operands → type.isService = true →
+        ∃ input, origins[operand]? = some (some input) ∧ input < function.inputs.length ∧
+          function.inputs[input]? = some type ∧
+          (scope.map (fun role => indices[role]?.getD 0)).length = 1 ∧
+          definition.inputScopes[input]? = some (scope.map (fun role => indices[role]?.getD 0))) := by
+  obtain ⟨function, domains, headers, summaries, retained, kind, headerEq, checked,
+    signatureEq, lowered⟩ := imported.protocolSource member
+  obtain ⟨interface, context, origins, name, roles, operands, regions, source, interfaceEq, validSite,
+    resolved, types, services⟩ := lowerProtocol_application_source lowered occurs
+  obtain ⟨originalInterface, originalEq, _, roster, _⟩ := resolveProtocolSignature_fields signatureEq
+  have same : originalInterface = interface := Option.some.inj (originalEq.symm.trans interfaceEq)
+  subst originalInterface
+  exact ⟨function, domains, headers, summaries, interface, context, origins, name, roles,
+    operands, regions, source, retained, kind, headerEq, checked, interfaceEq, roster, validSite, resolved, types, services⟩
+
+
+/-- Compatibility consequence retaining the original recursive origin ABI. -/
+theorem Imported.protocolApplication_recursive {snapshot : Snapshot} (imported : Imported snapshot)
+    {definition : CheckedProtocol} (member : definition ∈ imported.program.payload.protocols)
+    {signature : ProtocolSignature} {indices : List Nat} {site : String}
+    (occurs : .protocolApply signature indices site ∈ definition.raw.operations) :
+    ∃ function domains headers summaries interface context, ∃ origins : List (Option Nat), ∃ name roles operands,
+      .function function ∈ snapshot.definitions ∧ function.kind = .protocol ∧
+      checkUnitHeaders snapshot = .ok (domains, headers, summaries) ∧
+      checkProtocol snapshot domains summaries function headers = .ok definition ∧
+      function.interface = some interface ∧ definition.roles = interface.roles ∧
+      validProtocolIdentifier site = true ∧
+      resolveProtocolApplication snapshot headers interface name roles = .ok (signature, indices) ∧
+      typesAt context operands = .ok signature.inputs ∧
+      (∀ type scope operand, ((type, scope), operand) ∈
+          (signature.inputs.zip signature.inputScopes).zip operands → type.isService = true →
+        ∃ input, origins[operand]? = some (some input) ∧ input < function.inputs.length ∧
+          function.inputs[input]? = some type ∧
+          (scope.map (fun role => indices[role]?.getD 0)).length = 1 ∧
+          definition.inputScopes[input]? = some (scope.map (fun role => indices[role]?.getD 0))) := by
+  obtain ⟨function, domains, headers, summaries, retained, kind, headerEq, checked,
+    signatureEq, lowered⟩ := imported.protocolSource member
+  obtain ⟨interface, context, origins, name, roles, operands, interfaceEq, validSite,
+    resolved, types, services⟩ := lowerProtocol_application_recursive lowered occurs
+  obtain ⟨originalInterface, originalEq, _, roster, _⟩ := resolveProtocolSignature_fields signatureEq
+  have same : originalInterface = interface := Option.some.inj (originalEq.symm.trans interfaceEq)
+  subst originalInterface
+  exact ⟨function, domains, headers, summaries, interface, context, origins, name, roles,
+    operands, retained, kind, headerEq, checked, interfaceEq, roster, validSite, resolved, types, services⟩
+
+/-- Finite role validity follows from every admitted raw occurrence, including
+applications inside repeat callbacks. -/
 theorem Imported.protocolApplication_roles {snapshot : Snapshot} (imported : Imported snapshot)
     {definition : CheckedProtocol} (member : definition ∈ imported.program.payload.protocols)
     {signature : ProtocolSignature} {indices : List Nat} {site : String}
     (occurs : .protocolApply signature indices site ∈ definition.raw.operations) :
     indices.length = signature.roles.length ∧
       (∀ role ∈ indices, role < definition.roles.length) ∧ indices.Nodup := by
-  obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, roster, _, _, _, resolved, _⟩ :=
-    imported.protocolApplication member occurs
+  obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, roster, _, resolved, _, _⟩ :=
+    imported.protocolApplication_recursive member occurs
   rw [roster]
   exact resolveProtocolApplication_roles resolved
 
-/-- An admitted application resolves to an exact original function whose source
-instruction list passes the statement-free check. No source-body property is
-inferred merely from a matching signature. -/
+/-- The actual resolved source callee passes the statement-free source check;
+this is not inferred from its signature, and includes calls inside callbacks. -/
 theorem Imported.protocolApplication_callee {snapshot : Snapshot} (imported : Imported snapshot)
     {definition : CheckedProtocol} (member : definition ∈ imported.program.payload.protocols)
     {signature : ProtocolSignature} {indices : List Nat} {site : String}
@@ -444,8 +507,8 @@ theorem Imported.protocolApplication_callee {snapshot : Snapshot} (imported : Im
       function.body = .block instructions terminal ∧
       instructions.any (fun (.instruction descriptor _ _ _ _) =>
         match descriptor with | .statement .. => true | _ => false) = false := by
-  obtain ⟨_, _, _, _, _, _, _, _, name, _, _, _, _, _, _, _, _, _, _, _, _, resolved, _⟩ :=
-    imported.protocolApplication member occurs
+  obtain ⟨_, _, _, _, _, _, _, name, _, _, _, _, _, _, _, _, _, resolved, _, _⟩ :=
+    imported.protocolApplication_recursive member occurs
   obtain ⟨function, instructions, terminal, lookup, edge, signatureEq, _, bodyEq, statements, _⟩ :=
     resolveProtocolApplication_source resolved
   exact ⟨name, function, instructions, terminal, lookup, edge, signatureEq, bodyEq, statements⟩
@@ -485,6 +548,44 @@ theorem Imported.protocolChecked {snapshot : Snapshot} (imported : Imported snap
   refine ⟨domains, headers, summaries, headerEq, definition, present, checked, ?_⟩
   intro other _ evidence
   exact Except.ok.inj (evidence.symm.trans checked)
+
+/-- Every resolved callee's complete stored source body is statement-free.
+Top-level freedom comes from the application resolver; callback freedom comes
+from that original declaration's successful lowering in the complete unit. -/
+theorem Imported.protocolApplication_callee_statementFree {snapshot : Snapshot}
+    (imported : Imported snapshot) {definition : CheckedProtocol}
+    (member : definition ∈ imported.program.payload.protocols)
+    {signature : ProtocolSignature} {indices : List Nat} {site : String}
+    (occurs : .protocolApply signature indices site ∈ definition.raw.operations) :
+    ∃ name function,
+      lookupDefinition snapshot name = .ok (.function function) ∧
+      (Definition.function function).acceptsEdge .protocolApply = true ∧
+      resolveProtocolSignature function = .ok signature ∧
+      function.body.storedInstructions.any Instruction.isStatement = false := by
+  obtain ⟨name, function, instructions, terminal, lookup, edge, signatureEq, bodyEq, topFree⟩ :=
+    imported.protocolApplication_callee member occurs
+  have retained : .function function ∈ snapshot.definitions := by
+    unfold lookupDefinition requireSome at lookup
+    cases found : snapshot.definitions.find? (·.name == name) with
+    | none => simp [found] at lookup
+    | some original =>
+      simp only [found] at lookup
+      cases Except.ok.inj lookup
+      exact List.mem_of_find?_eq_some found
+  have kind : function.kind = .protocol := by
+    have valid : function.kind = .protocol ∧ function.visibility = .publicDef := by
+      simpa only [Definition.acceptsEdge, Bool.and_eq_true, beq_iff_eq] using edge
+    exact valid.1
+  obtain ⟨domains, headers, summaries, _, checked, _, admitted, _⟩ :=
+    imported.protocolChecked retained kind
+  have lowered := (checkProtocol_exact admitted).2
+  refine ⟨name, function, lookup, edge, signatureEq, lowerProtocol_statementFree lowered ?_⟩
+  rw [bodyEq, Block.topLevelInstructions]
+  simp only [List.any_eq_false] at topFree ⊢
+  intro instruction present
+  have absent := topFree instruction present
+  cases instruction with
+  | instruction descriptor _ _ _ _ => cases descriptor <;> first | rfl | exact absent
 
 theorem Imported.protocolSelection {snapshot : Snapshot} (imported : Imported snapshot) :
     imported.program.payload.entry.name = snapshot.entry := by

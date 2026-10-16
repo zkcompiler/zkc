@@ -1,5 +1,16 @@
 import ZkcExamples.Structured.TotalState
 import ZkcExamples.Structured.UnitState
+import ZkcExamples.Structured.RepeatViews
+import ZkcExamples.Structured.RepeatNestedViews
+import ZkcExamples.Structured.RepeatServiceViews
+import ZkcExamples.Structured.RepeatServiceWrapperViews
+import ZkcExamples.Structured.RepeatLaws
+import ZkcExamples.Structured.RepeatNestedLaws
+import ZkcExamples.Structured.RepeatServiceLaws
+import ZkcExamples.Structured.RepeatServiceWrapperLaws
+import ZkcExamples.Structured.SumcheckReduceViews
+import ZkcExamples.Structured.SumcheckSourceViews
+import Zkc.Source.Structured.RepeatLaws
 import ZkcExamples.NativePrograms.CustomProperty
 import ZkcExamples.NativePrograms.FactorHorner
 import Zkc.Specification
@@ -45,6 +56,39 @@ noncomputable def importedTotalStateEquation :=
 
 noncomputable def importedUnitStateEquation :=
   @ZkcExamples.Structured.UnitState.process_eq_reference
+
+/-- Complete retained subjects are usable through the normal package boundary.
+The two large subjects expose admission independently of later Sumcheck laws. -/
+noncomputable def importedRepeatAdmission :=
+  @ZkcExamples.Structured.RepeatViews.kernel_admission
+
+noncomputable def importedNestedRepeatAdmission :=
+  @ZkcExamples.Structured.RepeatNestedViews.kernel_admission
+
+noncomputable def importedRepeatServiceAdmission :=
+  @ZkcExamples.Structured.RepeatServiceViews.kernel_admission
+
+noncomputable def importedRepeatServiceWrapperAdmission :=
+  @ZkcExamples.Structured.RepeatServiceWrapperViews.kernel_admission
+
+noncomputable def importedReductionAdmission :=
+  @ZkcExamples.Structured.SumcheckReduceViews.kernel_admission
+
+noncomputable def importedFullSumcheckAdmission :=
+  @ZkcExamples.Structured.SumcheckSourceViews.kernel_admission
+
+/-- Downstream users consume complete process laws without importing tests. -/
+noncomputable def importedRepeatIndependentCounts :=
+  @ZkcExamples.Structured.RepeatLaws.independent_counts
+
+noncomputable def importedNestedRepeatEquation :=
+  @ZkcExamples.Structured.RepeatNestedLaws.repeated_addition
+
+noncomputable def importedRepeatServiceEquation :=
+  @ZkcExamples.Structured.RepeatServiceLaws.contextual_verifier
+
+noncomputable def importedMappedRepeatServiceEquation :=
+  @ZkcExamples.Structured.RepeatServiceWrapperLaws.observed_sender
 
 /-- The mathematical multilinear API is independently consumable without an
 optional security dependency or an imported Sumcheck subject. -/

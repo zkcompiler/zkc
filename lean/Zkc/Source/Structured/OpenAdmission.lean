@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Structured.ProtocolAdmission
+public import Zkc.Source.Structured.RepeatAdmission
 
 @[expose] public section
 
@@ -25,6 +25,9 @@ def resolveProtocolOp (snapshot : Snapshot) (domains : List DomainSpec)
   let arguments ← typesAt context operands
   let role := resolveRole interface.roles
   match descriptor with
+  | .protocolRepeat carried maximum roles stateScopes =>
+    recordSite site true
+    return .repeat (← resolveRepeatSpec interface arguments results carried maximum roles stateScopes) site
   | .protocolApply name roles =>
     recordSite site true
     let (signature, indices) ← resolveProtocolApplication snapshot headers interface name roles
@@ -89,41 +92,90 @@ def resolveProtocolOp (snapshot : Snapshot) (domains : List DomainSpec)
     if allowed : op.isCalculation = true then return .calculate op allowed
     else throw "structured-protocol-operation"
 
-/-- Protocol roots have no nested regions in this profile. Their SSA and typed
-formation are still the shared RawRegion/Region formation, not a second IR. -/
-def lowerProtocolInstructions (snapshot : Snapshot) (domains : List DomainSpec)
+/-- A callback lowerer receives a fresh isolated context and explicit lexical
+origins. It shares the enclosing definition's site state. -/
+abbrev ProtocolChild := List Ty → List (Option Nat) → Facts → List Nat → Block →
+  LowerM (RawRegion Ty ProtocolOp)
+
+/-- Lower the stored singleton callback. Every other operation has no regions. -/
+def lowerProtocolRegions (child : ProtocolChild) (op : ProtocolOp)
+    (operands : List Nat) (origins : List (Option Nat)) (facts : Facts)
+    (identities : List Nat) (regions : List WireRegion) : LowerM (RawRegions Ty ProtocolOp) := do
+  match op with
+  | .repeat spec _ =>
+    let [.region inputs outputs body] := regions | throw "structured-protocol-region"
+    if inputs != .index :: (spec.state ++ spec.captures) || outputs != spec.state then
+      throw "structured-protocol-signature"
+    let raw ← child inputs (repeatOrigins spec operands origins)
+      (repeatFacts spec operands identities facts) spec.roles body
+    return .cons inputs outputs raw .nil
+  | _ =>
+    if !regions.isEmpty then throw "structured-protocol-region"
+    return .nil
+
+/-- The ordinary instruction spine is shared by roots and repeat callbacks.
+The callback's maximum never participates in this traversal. -/
+def lowerProtocolInstructionsWith (snapshot : Snapshot) (domains : List DomainSpec)
     (summaries : IdentitySummaries) (function : Function) (headers : List ProtocolSignature)
-    (interface : ProtocolInterface)
-    (scopes : List (List Nat)) (terminal : Terminator) :
+    (interface : ProtocolInterface) (scopes : List (List Nat)) (child : ProtocolChild)
+    (exitKind : ProtocolExit) (active : List Nat) (terminal : Terminator) :
     List Ty → List (Option Nat) → Facts → List Nat → List Instruction →
       LowerM (RawRegion Ty ProtocolOp)
   | _, _, _, _, [] => do
-    let .ret refs := terminal | throw "structured-protocol-terminator"
+    let refs ← match exitKind, terminal with
+      | .entryReturn, .ret refs | .repeatYield, .yield refs => pure refs
+      | _, _ => throw "structured-protocol-terminator"
     if !validRefs refs then throw "structured-reference-limit"
     return .ret refs
   | context, origins, facts, identities, .instruction descriptor operands results regions site :: rest => do
-    if !regions.isEmpty then throw "structured-protocol-region"
+    checkProtocolPlacement exitKind descriptor
     let op ← resolveProtocolOp snapshot domains function headers interface scopes context origins facts identities
       descriptor operands results site
+    checkProtocolRoles active op
+    let bodies ← lowerProtocolRegions child op operands origins facts identities regions
     let operandOrigins := operands.map fun index => identities[index]?
     let resultOrigins := (resultIdentities summaries descriptor operandOrigins results.length).zipIdx.map
       fun (source, result) => match source with
         | some original => original + results.length
         | none => result
-    let next ← lowerProtocolInstructions snapshot domains summaries function headers interface scopes terminal
+    let next ← lowerProtocolInstructionsWith snapshot domains summaries function headers interface scopes
+      child exitKind active terminal
       (results ++ context) (List.replicate results.length none ++ origins)
       (facts.shift results.length) (resultOrigins ++ identities.map (· + results.length)) rest
-    return .letOp (.mark site) [] [] .nil (.letOp op operands results .nil next)
+    return .letOp (.mark site) [] [] .nil (.letOp op operands results bodies next)
+
+/-- Compatibility entry for callback-free instruction spines. Recursive source
+admission uses lowerProtocolBlock with this same instruction traversal. The
+parent application's external proof API retains this entry and its inversion. -/
+def lowerProtocolInstructions (snapshot : Snapshot) (domains : List DomainSpec)
+    (summaries : IdentitySummaries) (function : Function) (headers : List ProtocolSignature)
+    (interface : ProtocolInterface) (scopes : List (List Nat)) (terminal : Terminator)
+    (context : List Ty) (origins : List (Option Nat)) (facts : Facts)
+    (identities : List Nat) (instructions : List Instruction) : LowerM (RawRegion Ty ProtocolOp) :=
+  lowerProtocolInstructionsWith snapshot domains summaries function headers interface scopes
+    (fun _ _ _ _ _ => throw "structured-protocol-region") .entryReturn
+    (List.range interface.roles.length) terminal context origins facts identities instructions
+
+/-- Stored depth is admission capacity, independent of iteration count. -/
+def lowerProtocolBlock (snapshot : Snapshot) (domains : List DomainSpec)
+    (summaries : IdentitySummaries) (function : Function) (headers : List ProtocolSignature)
+    (interface : ProtocolInterface) (scopes : List (List Nat)) :
+    Nat → ProtocolExit → List Ty → List (Option Nat) → Facts → List Nat → Block →
+      LowerM (RawRegion Ty ProtocolOp)
+  | 0, _, _, _, _, _, _ => throw "structured-region-depth"
+  | depth + 1, exitKind, context, origins, facts, active, .block instructions terminal =>
+    lowerProtocolInstructionsWith snapshot domains summaries function headers interface scopes
+      (lowerProtocolBlock snapshot domains summaries function headers interface scopes depth .repeatYield)
+      exitKind active terminal context origins facts (List.range context.length) instructions
 
 /-- The sole body lowering is separate from the full header phase for reusable proofs. -/
 def lowerProtocol (snapshot : Snapshot) (domains : List DomainSpec)
     (summaries : IdentitySummaries) (headers : List ProtocolSignature)
     (function : Function) (signature : ProtocolSignature) : Except String (RawRegion Ty ProtocolOp) := do
   let some interface := function.interface | throw "structured-protocol-interface"
-  let .block instructions terminal := function.body
-  (lowerProtocolInstructions snapshot domains summaries function headers interface
-    signature.inputScopes terminal function.inputs ((List.range function.inputs.length).map some) []
-    (List.range function.inputs.length) instructions).run' {}
+  (lowerProtocolBlock snapshot domains summaries function headers interface signature.inputScopes
+    64 .entryReturn function.inputs ((List.range function.inputs.length).map some) []
+    (List.range interface.roles.length) function.body).run' {}
 
 def formProtocol (signature : ProtocolSignature) (raw : RawRegion Ty ProtocolOp) :
     Except String CheckedProtocol :=
@@ -184,9 +236,116 @@ private theorem lowerM_bind_ok {α β : Type} {action : LowerM α} {next : α �
     refine ⟨result.1, result.2, rfl, ?_⟩
     simpa only [StateT.run, h, bind, Except.bind] using accepted
 
-/-- Every retained raw application comes from an actual original instruction.
-The witness records the exact resolver state and lexical origin environment:
-every preceding result contributes `none`; initial input origins are retained. -/
+theorem lowerProtocolRegions_application_origin {child : ProtocolChild} {op : ProtocolOp}
+    {operands : List Nat} {origins : List (Option Nat)} {facts : Facts} {identities : List Nat}
+    {regions : List WireRegion} {initial final : LowerState} {bodies : RawRegions Ty ProtocolOp}
+    (accepted : lowerProtocolRegions child op operands origins facts identities regions initial =
+      .ok (bodies, final))
+    {signature : ProtocolSignature} {indices : List Nat} {site : String}
+    (occurs : .protocolApply signature indices site ∈ bodies.operations) :
+    ∃ spec repeatSite inputs outputs body raw,
+      op = .repeat spec repeatSite ∧ regions = [.region inputs outputs body] ∧
+      child inputs (repeatOrigins spec operands origins) (repeatFacts spec operands identities facts)
+        spec.roles body initial = .ok (raw, final) ∧
+      .protocolApply signature indices site ∈ raw.operations := by
+  cases op <;> simp only [lowerProtocolRegions] at accepted
+  all_goals
+    dsimp only [StateT.run, bind, StateT.bind, pure, StateT.pure, throw, throwThe,
+      MonadExceptOf.throw, StateT.lift, Except.bind, Except.pure, Function.comp_apply] at accepted
+    repeat' first | contradiction | split at accepted
+  all_goals first
+    | (cases accepted; simp [RawRegions.operations] at occurs)
+    | skip
+  obtain ⟨raw, middle, lowered, output⟩ := lowerM_bind_ok accepted
+  cases Except.ok.inj output
+  simp only [RawRegions.operations, List.append_nil] at occurs
+  exact ⟨_, _, _, _, _, raw, rfl, rfl, lowered, occurs⟩
+
+/-- One spine inversion either finds the original application instruction or
+exposes the actual isolated callback lowering that contains it. -/
+theorem lowerProtocolInstructionsWith_application_origin {snapshot : Snapshot} {domains : List DomainSpec}
+    {summaries : IdentitySummaries} {function : Function} {headers : List ProtocolSignature}
+    {interface : ProtocolInterface} {scopes : List (List Nat)} {child : ProtocolChild}
+    {exitKind : ProtocolExit} {active : List Nat} {terminal : Terminator}
+    {context : List Ty} {origins : List (Option Nat)} {facts : Facts} {identities : List Nat}
+    {instructions : List Instruction} {initial final : LowerState} {raw : RawRegion Ty ProtocolOp}
+    (accepted : (lowerProtocolInstructionsWith snapshot domains summaries function headers interface scopes
+      child exitKind active terminal context origins facts identities instructions) initial = .ok (raw, final))
+    {signature : ProtocolSignature} {indices : List Nat} {site : String}
+    (occurs : .protocolApply signature indices site ∈ raw.operations) :
+    ∃ offset context' facts' identities' before after descriptor operands results regions sourceSite,
+      .instruction descriptor operands results regions sourceSite ∈ instructions ∧
+      ((resolveProtocolOp snapshot domains function headers interface scopes context'
+          (List.replicate offset none ++ origins) facts' identities'
+          descriptor operands results sourceSite) before =
+            .ok (.protocolApply signature indices site, after) ∨
+       ∃ spec repeatSite inputs outputs body callback bodyBefore bodyAfter,
+        (resolveProtocolOp snapshot domains function headers interface scopes context'
+          (List.replicate offset none ++ origins) facts' identities'
+          descriptor operands results sourceSite) before = .ok (.repeat spec repeatSite, after) ∧
+        regions = [.region inputs outputs body] ∧
+        child inputs (repeatOrigins spec operands (List.replicate offset none ++ origins))
+          (repeatFacts spec operands identities' facts') spec.roles body bodyBefore =
+            .ok (callback, bodyAfter) ∧
+        .protocolApply signature indices site ∈ callback.operations ∧
+        .repeat spec repeatSite ∈ raw.operations) := by
+  induction instructions generalizing context origins facts identities initial final raw with
+  | nil =>
+    simp only [lowerProtocolInstructionsWith] at accepted
+    dsimp only [StateT.run, bind, StateT.bind, pure, StateT.pure, throw, throwThe,
+      MonadExceptOf.throw, StateT.lift, Except.bind, Except.pure, Function.comp_apply] at accepted
+    repeat' first
+      | contradiction
+      | split at accepted
+      | (dsimp only [StateT.run, bind, StateT.bind, pure, StateT.pure, throw, throwThe,
+          MonadExceptOf.throw, StateT.lift, Except.bind, Except.pure, Function.comp_apply] at accepted
+         first | contradiction | split at accepted)
+    all_goals cases accepted; simp [RawRegion.operations] at occurs
+  | cons instruction rest ih =>
+    cases instruction with
+    | instruction descriptor operands results regions sourceSite =>
+      simp only [lowerProtocolInstructionsWith] at accepted
+      obtain ⟨_, middle, _, accepted⟩ := lowerM_bind_ok accepted
+      obtain ⟨op, resolvedState, resolved, accepted⟩ := lowerM_bind_ok accepted
+      obtain ⟨_, bodyState, _, accepted⟩ := lowerM_bind_ok accepted
+      obtain ⟨bodies, nextState, loweredBodies, accepted⟩ := lowerM_bind_ok accepted
+      obtain ⟨next, last, lowered, output⟩ := lowerM_bind_ok accepted
+      have same : (.letOp (.mark sourceSite) [] [] .nil
+          (.letOp op operands results bodies next) : RawRegion Ty ProtocolOp) = raw :=
+        congrArg Prod.fst (Except.ok.inj output)
+      subst raw
+      simp only [RawRegion.operations, RawRegions.operations, List.nil_append,
+        List.mem_cons, List.mem_append] at occurs
+      rcases occurs with impossible | sameOp | inBody | inNext
+      · cases impossible
+      · subst op
+        exact ⟨0, context, facts, identities, middle, resolvedState, descriptor, operands,
+          results, regions, sourceSite, List.mem_cons_self, Or.inl resolved⟩
+      · obtain ⟨spec, repeatSite, inputs, outputs, body, callback, sameOp, sameRegions,
+          childEq, childOccurs⟩ := lowerProtocolRegions_application_origin loweredBodies inBody
+        subst op
+        exact ⟨0, context, facts, identities, middle, resolvedState, descriptor, operands,
+          results, regions, sourceSite, List.mem_cons_self,
+          Or.inr ⟨spec, repeatSite, inputs, outputs, body, callback, bodyState, nextState,
+            resolved, sameRegions, childEq, childOccurs, by
+              simp [RawRegion.operations, RawRegions.operations]⟩⟩
+      · obtain ⟨offset, ctx, fs, ids, before, after, desc, args, outs, bodies, s, member, equation⟩ :=
+          ih lowered inNext
+        refine ⟨offset + results.length, ctx, fs, ids, before, after, desc, args, outs,
+          bodies, s, List.mem_cons_of_mem _ member, ?_⟩
+        simp only [← List.replicate_append_replicate, List.append_assoc]
+        rcases equation with direct | ⟨spec, repeatSite, inputs, outputs, body, callback,
+          bodyBefore, bodyAfter, resolved, sameRegions, childEq, childOccurs, parentOccurs⟩
+        · exact Or.inl direct
+        · exact Or.inr ⟨spec, repeatSite, inputs, outputs, body, callback, bodyBefore,
+            bodyAfter, resolved, sameRegions, childEq, childOccurs, by
+              simp only [RawRegion.operations, RawRegions.operations, List.nil_append,
+                List.mem_cons, List.mem_append]
+              exact Or.inr (Or.inr (Or.inr parentOccurs))⟩
+
+
+/-- Callback-free compatibility retains the exact original instruction witness
+and the result-prefix lexical origin equation. -/
 theorem lowerProtocolInstructions_application_origin {snapshot : Snapshot} {domains : List DomainSpec}
     {summaries : IdentitySummaries} {function : Function} {headers : List ProtocolSignature}
     {interface : ProtocolInterface} {scopes : List (List Nat)} {terminal : Terminator}
@@ -202,38 +361,90 @@ theorem lowerProtocolInstructions_application_origin {snapshot : Snapshot} {doma
         (List.replicate offset none ++ origins) facts' identities'
         descriptor operands results sourceSite) before =
           .ok (.protocolApply signature indices site, after) := by
-  induction instructions generalizing context origins facts identities initial final raw with
-  | nil =>
-    simp only [lowerProtocolInstructions] at accepted
-    dsimp only [StateT.run, bind, StateT.bind, pure, StateT.pure, throw, throwThe,
-      MonadExceptOf.throw, StateT.lift, Except.bind, Except.pure, Function.comp_apply] at accepted
-    repeat' first | contradiction | split at accepted
-    all_goals cases accepted; simp [RawRegion.operations] at occurs
-  | cons instruction rest ih =>
-    cases instruction with
-    | instruction descriptor operands results regions sourceSite =>
-      simp only [lowerProtocolInstructions] at accepted
-      dsimp only [StateT.run, bind, StateT.bind, pure, StateT.pure, throw, throwThe,
-        MonadExceptOf.throw, StateT.lift, Except.bind, Except.pure, Function.comp_apply] at accepted
-      repeat' first | contradiction | split at accepted
-      obtain ⟨op, middle, resolved, remaining⟩ := lowerM_bind_ok accepted
-      obtain ⟨next, last, lowered, output⟩ := lowerM_bind_ok remaining
-      have same : (.letOp (.mark sourceSite) [] [] .nil
-          (.letOp op operands results .nil next) : RawRegion Ty ProtocolOp) = raw :=
-        congrArg Prod.fst (Except.ok.inj output)
-      subst raw
-      simp only [RawRegion.operations, RawRegions.operations, List.nil_append,
-        List.mem_cons] at occurs
-      rcases occurs with impossible | sameOp | occurs
-      · cases impossible
-      · subst op
-        exact ⟨0, context, facts, identities, initial, middle, descriptor, operands, results,
-          regions, sourceSite, List.mem_cons_self, resolved⟩
-      · obtain ⟨offset, ctx, fs, ids, before, after, desc, args, outs, bodies, s, member, equation⟩ :=
-          ih lowered occurs
-        refine ⟨offset + results.length, ctx, fs, ids, before, after, desc, args, outs,
-          bodies, s, List.mem_cons_of_mem _ member, ?_⟩
-        simpa only [← List.replicate_append_replicate, List.append_assoc] using equation
+  obtain ⟨offset, ctx, fs, ids, before, after, desc, args, outs, bodies, s, member, equation⟩ :=
+    lowerProtocolInstructionsWith_application_origin accepted occurs
+  refine ⟨offset, ctx, fs, ids, before, after, desc, args, outs, bodies, s, member, ?_⟩
+  rcases equation with equation | ⟨spec, repeatSite, inputs, outputs, body, callback,
+    bodyBefore, bodyAfter, _, _, impossible, _, _⟩
+  · exact equation
+  · contradiction
+
+/-- Recursive inversion discharges the child hypothesis on stored depth. Every
+application in the complete raw tree was resolved under an inherited lexical
+origin environment. P may express any invariant stable under result prefixes
+and the service-only repeat capture transformation. -/
+theorem lowerProtocolBlock_application_source {snapshot : Snapshot} {domains : List DomainSpec}
+    {summaries : IdentitySummaries} {function : Function} {headers : List ProtocolSignature}
+    {interface : ProtocolInterface} {scopes : List (List Nat)}
+    (P : List (Option Nat) → Prop)
+    (resultsPreserve : ∀ count origins, P origins → P (List.replicate count none ++ origins))
+    (capturesPreserve : ∀ spec operands origins, P origins → P (repeatOrigins spec operands origins))
+    {depth : Nat} {exitKind : ProtocolExit} {active : List Nat} {body : Block}
+    {context : List Ty} {origins : List (Option Nat)} {facts : Facts}
+    {initial final : LowerState} {raw : RawRegion Ty ProtocolOp}
+    (accepted : lowerProtocolBlock snapshot domains summaries function headers interface scopes
+      depth exitKind context origins facts active body initial = .ok (raw, final))
+    (initialOrigins : P origins)
+    {signature : ProtocolSignature} {indices : List Nat} {site : String}
+    (occurs : .protocolApply signature indices site ∈ raw.operations) :
+    ∃ context' origins' facts' identities' before after descriptor operands results regions sourceSite,
+      .instruction descriptor operands results regions sourceSite ∈ body.storedInstructions ∧
+      P origins' ∧
+      (resolveProtocolOp snapshot domains function headers interface scopes context'
+        origins' facts' identities' descriptor operands results sourceSite) before =
+          .ok (.protocolApply signature indices site, after) := by
+  induction depth generalizing exitKind active body context origins facts initial final raw with
+  | zero => contradiction
+  | succ depth ih =>
+    cases body with
+    | block instructions terminal =>
+      obtain ⟨offset, ctx, fs, ids, before, after, desc, args, outs, bodies, s, member, equation⟩ :=
+        lowerProtocolInstructionsWith_application_origin accepted occurs
+      have inherited := resultsPreserve offset origins initialOrigins
+      rcases equation with equation | ⟨spec, repeatSite, inputs, outputs, body, callback,
+        bodyBefore, bodyAfter, _, sameRegions, lowered, inCallback, _⟩
+      · refine ⟨ctx, _, fs, ids, before, after, desc, args, outs, bodies, s, ?_, inherited, equation⟩
+        rw [Block.storedInstructions]
+        exact List.mem_flatMap.mpr ⟨_, member, by rw [Instruction.storedInstructions]; exact List.mem_cons_self⟩
+      · obtain ⟨ctx', origins', fs', ids', before', after', desc', args', outs', regions',
+          site', source, invariant, resolved⟩ :=
+          ih lowered (capturesPreserve spec args _ inherited) inCallback
+        refine ⟨ctx', origins', fs', ids', before', after', desc', args', outs', regions',
+          site', ?_, invariant, resolved⟩
+        rw [Block.storedInstructions]
+        apply List.mem_flatMap.mpr
+        refine ⟨.instruction desc args outs bodies s, member, ?_⟩
+        simpa only [Instruction.storedInstructions, sameRegions, List.flatMap_cons,
+          List.flatMap_nil, List.append_nil, WireRegion.storedInstructions, List.mem_cons] using
+          (Or.inr source : Instruction.instruction desc' args' outs' regions' site' =
+            Instruction.instruction desc args outs [.region inputs outputs body] s ∨
+            .instruction desc' args' outs' regions' site' ∈ body.storedInstructions)
+
+/-- Compatibility consequence retaining the original origin-only result. -/
+theorem lowerProtocolBlock_application_origin {snapshot : Snapshot} {domains : List DomainSpec}
+    {summaries : IdentitySummaries} {function : Function} {headers : List ProtocolSignature}
+    {interface : ProtocolInterface} {scopes : List (List Nat)}
+    (P : List (Option Nat) → Prop)
+    (resultsPreserve : ∀ count origins, P origins → P (List.replicate count none ++ origins))
+    (capturesPreserve : ∀ spec operands origins, P origins → P (repeatOrigins spec operands origins))
+    {depth : Nat} {exitKind : ProtocolExit} {active : List Nat} {body : Block}
+    {context : List Ty} {origins : List (Option Nat)} {facts : Facts}
+    {initial final : LowerState} {raw : RawRegion Ty ProtocolOp}
+    (accepted : lowerProtocolBlock snapshot domains summaries function headers interface scopes
+      depth exitKind context origins facts active body initial = .ok (raw, final))
+    (initialOrigins : P origins)
+    {signature : ProtocolSignature} {indices : List Nat} {site : String}
+    (occurs : .protocolApply signature indices site ∈ raw.operations) :
+    ∃ context' origins' facts' identities' before after descriptor operands results sourceSite,
+      P origins' ∧
+      (resolveProtocolOp snapshot domains function headers interface scopes context'
+        origins' facts' identities' descriptor operands results sourceSite) before =
+          .ok (.protocolApply signature indices site, after) := by
+  obtain ⟨context', origins', facts', identities', before, after, descriptor, operands,
+    results, _, sourceSite, _, invariant, resolved⟩ :=
+    lowerProtocolBlock_application_source P resultsPreserve capturesPreserve accepted initialOrigins occurs
+  exact ⟨context', origins', facts', identities', before, after, descriptor, operands,
+    results, sourceSite, invariant, resolved⟩
 
 private theorem lowerM_lift_ok {α : Type} {action : Except String α}
     {initial final : LowerState} {value : α}
@@ -367,6 +578,7 @@ private theorem lowerM_run'_ok {α : Type} {action : LowerM α} {initial : Lower
       simpa only [StateT.run', h, Functor.map, Except.map, Except.ok.injEq] using accepted
     exact ⟨result.2, same ▸ rfl⟩
 
+
 private theorem formalInputOrigin {offset length operand input : Nat}
     (origin : (List.replicate offset none ++ (List.range length).map some)[operand]? =
       some (some input)) : operand = offset + input ∧ input < length := by
@@ -382,16 +594,16 @@ private theorem formalInputOrigin {offset length operand input : Nat}
     · rw [List.getElem?_eq_none (by simpa using Nat.le_of_not_gt bound)] at origin
       contradiction
 
-/-- An application in the recursively inventoried lowered tree identifies an
-original source instruction at the same site and a successful application
-resolver. Service operands are shifted original formal inputs, never produced
-results; the mapped owner and nominal contract come from actual checks. -/
+/-- For a callback-free tree, preserve the original top-level instruction and
+SSA-offset service witness. Recursive callbacks use the origin-environment
+inversion below because captures can reorder their original formal inputs. -/
 theorem lowerProtocol_application {snapshot : Snapshot} {domains : List DomainSpec}
     {summaries : IdentitySummaries} {headers : List ProtocolSignature} {function : Function}
     {caller signature : ProtocolSignature} {raw : RawRegion Ty ProtocolOp}
     {indices : List Nat} {site : String}
     (accepted : lowerProtocol snapshot domains summaries headers function caller = .ok raw)
-    (occurs : .protocolApply signature indices site ∈ raw.operations) :
+    (occurs : .protocolApply signature indices site ∈ raw.operations)
+    (flat : raw.operations.all (fun op => op.regions.isEmpty) = true) :
     ∃ interface instructions terminal offset name roles operands regions,
       function.interface = some interface ∧ function.body = .block instructions terminal ∧
       .instruction (.protocolApply name roles) operands signature.outputs regions site ∈ instructions ∧
@@ -411,15 +623,203 @@ theorem lowerProtocol_application {snapshot : Snapshot} {domains : List DomainSp
       simp only [lowerProtocol, interfaceEq, bodyEq] at accepted
       obtain ⟨final, lowered⟩ := lowerM_run'_ok accepted
       obtain ⟨offset, context, facts, identities, before, after, descriptor, operands,
-        results, regions, sourceSite, member, resolved⟩ := lowerProtocolInstructions_application_origin lowered occurs
+        results, regions, sourceSite, member, resolved⟩ :=
+          lowerProtocolInstructionsWith_application_origin lowered occurs
+      have direct : (resolveProtocolOp snapshot domains function headers interface caller.inputScopes
+          context (List.replicate offset none ++ (List.range function.inputs.length).map some)
+          facts identities descriptor operands results sourceSite) before =
+            .ok (.protocolApply signature indices site, after) := by
+        rcases resolved with direct | ⟨spec, repeatSite, inputs, outputs, body, callback,
+          bodyBefore, bodyAfter, _, _, _, _, inTree⟩
+        · exact direct
+        · have impossible := List.all_eq_true.mp flat (.repeat spec repeatSite) inTree
+          contradiction
       obtain ⟨name, roles, rfl, rfl, validSite, application, _, rfl, services⟩ :=
-        resolveProtocolOp_application resolved
+        resolveProtocolOp_application direct
       refine ⟨interface, instructions, terminal, offset, name, roles, operands, regions,
         rfl, rfl, member, validSite, application, ?_⟩
       intro type scope operand present service
       obtain ⟨input, origin, contract, singleton, owner⟩ := services type scope operand present service
       obtain ⟨position, bounded⟩ := formalInputOrigin origin
       exact ⟨input, position, bounded, contract, singleton, owner⟩
+
+
+/-- Complete-tree inversion keeps the actual callback origin environment.
+Captured services still name bounded inputs of the enclosing protocol, with
+exact nominal contract and mapped singleton owner checked at the application. -/
+theorem lowerProtocol_application_source {snapshot : Snapshot} {domains : List DomainSpec}
+    {summaries : IdentitySummaries} {headers : List ProtocolSignature} {function : Function}
+    {caller signature : ProtocolSignature} {raw : RawRegion Ty ProtocolOp}
+    {indices : List Nat} {site : String}
+    (accepted : lowerProtocol snapshot domains summaries headers function caller = .ok raw)
+    (occurs : .protocolApply signature indices site ∈ raw.operations) :
+    ∃ interface context, ∃ origins : List (Option Nat), ∃ name roles operands regions,
+      .instruction (.protocolApply name roles) operands signature.outputs regions site ∈
+        function.body.storedInstructions ∧
+      function.interface = some interface ∧ validProtocolIdentifier site = true ∧
+      resolveProtocolApplication snapshot headers interface name roles = .ok (signature, indices) ∧
+      typesAt context operands = .ok signature.inputs ∧
+      (∀ type scope operand, ((type, scope), operand) ∈
+          (signature.inputs.zip signature.inputScopes).zip operands → type.isService = true →
+        ∃ input, origins[operand]? = some (some input) ∧ input < function.inputs.length ∧
+          function.inputs[input]? = some type ∧
+          (scope.map (fun role => indices[role]?.getD 0)).length = 1 ∧
+          caller.inputScopes[input]? = some (scope.map (fun role => indices[role]?.getD 0))) := by
+  cases interfaceEq : function.interface with
+  | none => simp [lowerProtocol, interfaceEq] at accepted
+  | some interface =>
+    simp only [lowerProtocol, interfaceEq] at accepted
+    obtain ⟨final, lowered⟩ := lowerM_run'_ok accepted
+    let P := fun origins : List (Option Nat) =>
+      ∀ input, some input ∈ origins → input < function.inputs.length
+    have resultPreserves : ∀ count origins, P origins → P (List.replicate count none ++ origins) := by
+      intro count origins h input member
+      rcases List.mem_append.mp member with fresh | old
+      · simp at fresh
+      · exact h input old
+    have capturePreserves : ∀ spec operands origins, P origins → P (repeatOrigins spec operands origins) := by
+      intro spec operands origins h input member
+      have inherited := repeatOrigins_inherited spec operands origins member
+      rcases List.mem_cons.mp inherited with impossible | old
+      · contradiction
+      · exact h input old
+    have initial : P ((List.range function.inputs.length).map some) := by
+      intro input member
+      simpa using member
+    obtain ⟨context, origins, facts, identities, before, after, descriptor, operands,
+      results, regions, sourceSite, source, bounded, resolved⟩ :=
+        lowerProtocolBlock_application_source P resultPreserves capturePreserves lowered initial occurs
+    obtain ⟨name, roles, rfl, rfl, validSite, application, types, rfl, services⟩ :=
+      resolveProtocolOp_application resolved
+    refine ⟨interface, context, origins, name, roles, operands, regions, source, rfl, validSite, application, types, ?_⟩
+    intro type scope operand present service
+    obtain ⟨input, origin, contract, singleton, owner⟩ := services type scope operand present service
+    exact ⟨input, origin, bounded input (List.mem_of_getElem? origin), contract, singleton, owner⟩
+
+
+
+
+/-- Compatibility consequence without the original instruction projection. -/
+theorem lowerProtocol_application_recursive {snapshot : Snapshot} {domains : List DomainSpec}
+    {summaries : IdentitySummaries} {headers : List ProtocolSignature} {function : Function}
+    {caller signature : ProtocolSignature} {raw : RawRegion Ty ProtocolOp}
+    {indices : List Nat} {site : String}
+    (accepted : lowerProtocol snapshot domains summaries headers function caller = .ok raw)
+    (occurs : .protocolApply signature indices site ∈ raw.operations) :
+    ∃ interface context, ∃ origins : List (Option Nat), ∃ name roles operands,
+      function.interface = some interface ∧ validProtocolIdentifier site = true ∧
+      resolveProtocolApplication snapshot headers interface name roles = .ok (signature, indices) ∧
+      typesAt context operands = .ok signature.inputs ∧
+      (∀ type scope operand, ((type, scope), operand) ∈
+          (signature.inputs.zip signature.inputScopes).zip operands → type.isService = true →
+        ∃ input, origins[operand]? = some (some input) ∧ input < function.inputs.length ∧
+          function.inputs[input]? = some type ∧
+          (scope.map (fun role => indices[role]?.getD 0)).length = 1 ∧
+          caller.inputScopes[input]? = some (scope.map (fun role => indices[role]?.getD 0))) := by
+  obtain ⟨interface, context, origins, name, roles, operands, _, _, interfaceEq,
+    validSite, application, types, services⟩ := lowerProtocol_application_source accepted occurs
+  exact ⟨interface, context, origins, name, roles, operands, interfaceEq,
+    validSite, application, types, services⟩
+
+/-- A successful callback lowerer checks every stored region. -/
+theorem lowerProtocolRegions_statementFree {child : ProtocolChild} {op : ProtocolOp}
+    {operands : List Nat} {origins : List (Option Nat)} {facts : Facts} {identities : List Nat}
+    {regions : List WireRegion} {initial final : LowerState} {bodies : RawRegions Ty ProtocolOp}
+    (childrenFree : ∀ {inputs origins facts active body initial final raw},
+      child inputs origins facts active body initial = .ok (raw, final) →
+        body.storedInstructions.any Instruction.isStatement = false)
+    (accepted : lowerProtocolRegions child op operands origins facts identities regions initial =
+      .ok (bodies, final)) :
+    (regions.flatMap WireRegion.storedInstructions).any Instruction.isStatement = false := by
+  cases op <;> simp only [lowerProtocolRegions] at accepted
+  all_goals
+    dsimp only [StateT.run, bind, StateT.bind, pure, StateT.pure, throw, throwThe,
+      MonadExceptOf.throw, StateT.lift, Except.bind, Except.pure, Function.comp_apply] at accepted
+    repeat' first | contradiction | split at accepted
+  all_goals first
+    | (cases accepted; simp_all)
+    | skip
+  obtain ⟨raw, middle, lowered, output⟩ := lowerM_bind_ok accepted
+  simpa only [List.flatMap_cons, List.flatMap_nil, List.append_nil, WireRegion.storedInstructions]
+    using childrenFree lowered
+
+/-- Entry statements require the explicit top-level hypothesis; callbacks are
+statement-free by their exit-mode placement check, independently of maximum. -/
+theorem lowerProtocolInstructionsWith_statementFree
+    {snapshot : Snapshot} {domains : List DomainSpec} {summaries : IdentitySummaries}
+    {function : Function} {headers : List ProtocolSignature} {interface : ProtocolInterface}
+    {scopes : List (List Nat)} {child : ProtocolChild} {exitKind : ProtocolExit}
+    {active : List Nat} {terminal : Terminator} {context : List Ty}
+    {origins : List (Option Nat)} {facts : Facts} {identities : List Nat}
+    {instructions : List Instruction} {initial final : LowerState} {raw : RawRegion Ty ProtocolOp}
+    (childrenFree : ∀ {inputs origins facts active body initial final raw},
+      child inputs origins facts active body initial = .ok (raw, final) →
+        body.storedInstructions.any Instruction.isStatement = false)
+    (topFree : exitKind = .entryReturn → instructions.any Instruction.isStatement = false)
+    (accepted : lowerProtocolInstructionsWith snapshot domains summaries function headers interface scopes
+      child exitKind active terminal context origins facts identities instructions initial = .ok (raw, final)) :
+    (instructions.flatMap Instruction.storedInstructions).any Instruction.isStatement = false := by
+  induction instructions generalizing context origins facts identities initial final raw with
+  | nil => rfl
+  | cons instruction rest ih =>
+    cases instruction with
+    | instruction descriptor operands results regions site =>
+      simp only [lowerProtocolInstructionsWith] at accepted
+      obtain ⟨_, middle, placed, accepted⟩ := lowerM_bind_ok accepted
+      obtain ⟨op, resolvedState, _, accepted⟩ := lowerM_bind_ok accepted
+      obtain ⟨_, bodyState, _, accepted⟩ := lowerM_bind_ok accepted
+      obtain ⟨bodies, nextState, loweredBodies, accepted⟩ := lowerM_bind_ok accepted
+      obtain ⟨next, last, lowered, _⟩ := lowerM_bind_ok accepted
+      have headFree : Instruction.isStatement (.instruction descriptor operands results regions site) = false := by
+        cases exitKind with
+        | entryReturn => exact (Bool.or_eq_false_iff.mp (topFree rfl)).1
+        | repeatYield =>
+          have placement := lowerM_lift_ok placed
+          cases descriptor <;> first | rfl | (simp [checkProtocolPlacement] at placement)
+      have tailFree := ih (fun h => (Bool.or_eq_false_iff.mp (topFree h)).2) lowered
+      have regionsFree := lowerProtocolRegions_statementFree childrenFree loweredBodies
+      simpa only [List.flatMap_cons, Instruction.storedInstructions, List.cons_append,
+        List.any_cons, List.any_append, headFree, regionsFree, Bool.false_or] using tailFree
+
+/-- Callback statement-freeness follows from recursive successful lowering. -/
+theorem lowerProtocolBlock_statementFree {snapshot : Snapshot} {domains : List DomainSpec}
+    {summaries : IdentitySummaries} {function : Function} {headers : List ProtocolSignature}
+    {interface : ProtocolInterface} {scopes : List (List Nat)}
+    {depth : Nat} {exitKind : ProtocolExit} {active : List Nat} {body : Block}
+    {context : List Ty} {origins : List (Option Nat)} {facts : Facts}
+    {initial final : LowerState} {raw : RawRegion Ty ProtocolOp}
+    (accepted : lowerProtocolBlock snapshot domains summaries function headers interface scopes
+      depth exitKind context origins facts active body initial = .ok (raw, final))
+    (topFree : exitKind = .entryReturn →
+      body.topLevelInstructions.any Instruction.isStatement = false) :
+    body.storedInstructions.any Instruction.isStatement = false := by
+  induction depth generalizing exitKind active body context origins facts initial final raw with
+  | zero => contradiction
+  | succ depth ih =>
+    cases body with
+    | block instructions terminal =>
+      rw [Block.storedInstructions]
+      apply lowerProtocolInstructionsWith_statementFree (topFree := topFree) (accepted := accepted)
+      intro inputs origins facts active body initial final raw lowered
+      exact ih lowered (by intro impossible; cases impossible)
+
+/-- Full stored statement-freeness of a lowered protocol whose entry is
+statement-free. Applications separately establish that entry hypothesis. -/
+theorem lowerProtocol_statementFree {snapshot : Snapshot} {domains : List DomainSpec}
+    {summaries : IdentitySummaries} {headers : List ProtocolSignature} {function : Function}
+    {signature : ProtocolSignature} {raw : RawRegion Ty ProtocolOp}
+    (accepted : lowerProtocol snapshot domains summaries headers function signature = .ok raw)
+    (topFree : function.body.topLevelInstructions.any Instruction.isStatement = false) :
+    function.body.storedInstructions.any Instruction.isStatement = false := by
+  cases interfaceEq : function.interface with
+  | none => simp [lowerProtocol, interfaceEq] at accepted
+  | some interface =>
+    simp only [lowerProtocol, interfaceEq, StateT.run', Functor.map,
+      Except.map] at accepted
+    split at accepted
+    · contradiction
+    · rename_i result lowered
+      exact lowerProtocolBlock_statementFree lowered (fun _ => topFree)
 
 /-- Closed value profile. Group values retain the same explicit F/G assignment;
 service capabilities remain at the open boundary. -/

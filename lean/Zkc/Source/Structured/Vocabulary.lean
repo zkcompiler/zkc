@@ -74,6 +74,8 @@ inductive Descriptor where
   | call (name : String)
   | apply (name : String)
   | protocolApply (name : String) (roles : List String)
+  | protocolRepeat (carried maximum : Nat) (roles : List String)
+      (scopes : List (List String))
   | localCall (name owner : String)
   | fold (domain step predicate : String)
   | branch | loop | loopCondition
@@ -103,6 +105,28 @@ mutual
     | region (inputs outputs : List Ty) (body : Block)
     deriving Repr
 end
+
+mutual
+  /-- Original instructions in stored preorder, including every callback. This
+  projection records source syntax only; dependency authority remains the formed
+  tree's existing recursive operation inventory. -/
+  def Block.storedInstructions : Block → List Instruction
+    | .block instructions _ => instructions.flatMap Instruction.storedInstructions
+
+  def Instruction.storedInstructions : Instruction → List Instruction
+    | instruction@(.instruction _ _ _ regions _) =>
+      instruction :: regions.flatMap WireRegion.storedInstructions
+
+  def WireRegion.storedInstructions : WireRegion → List Instruction
+    | .region _ _ body => body.storedInstructions
+end
+
+def Block.topLevelInstructions : Block → List Instruction
+  | .block instructions _ => instructions
+
+def Instruction.isStatement : Instruction → Bool
+  | .instruction (.statement ..) _ _ _ _ => true
+  | _ => false
 
 /-- Native participant names and ordered port scopes belong to each protocol.
 The decoder retains them verbatim; admission resolves names against this roster. -/

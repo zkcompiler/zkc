@@ -101,6 +101,11 @@ theorem protocolOperation_table_congr {I : PIR.Signature}
     cases args with
     | cons value rest => cases rest; rfl
   | mark => cases args; rfl
+  | «repeat» spec site =>
+    cases args with
+    | cons count values =>
+      cases callbacks with
+      | cons body rest => cases rest; rfl
   | draw | statement => rfl
 
 theorem protocol_region_table_congr {I : PIR.Signature}

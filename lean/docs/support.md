@@ -9,7 +9,8 @@ They do not certify arbitrary DSL programs or the full native lowering pipeline.
 | Structured source | Multi-result closed callbacks and lexical binding; strict formation in both directions; scalar/mathematical/participant/import bridges; contextual equality, totality and compatible effect translation | Shared structural carrier; native transformation correctness requires separate correspondence |
 | Structured native import | Whole-unit original schema, separate protocol roots and kinded named helpers; explicit scalar/group interpretation, owner-only Local calls, shared participant effects, computational availability and service admission | No general availability soundness, eager/demand correspondence, affine resources, native correctness or relation/formula binding theorem |
 | Optional component semantics | Same typed Region with closed callbacks; generic lookup, optional named Math calls, all-present adequacy, exact resolution and full-table framing; shared scalar/group evaluator | Static availability is a separate computational check; adequacy alone proves neither admission nor native correspondence |
-| Retained protocol applications | Exact original/checked association in both directions; complete-signature linking, contextual prefix/full-table laws, optional call masks, outside-roster skip and effect interpretation | Supported static native profile; no repeat, generic availability/preflight soundness or native execution correspondence |
+| Retained protocol applications | Exact original/checked association in both directions; complete-signature linking, contextual prefix/full-table laws, optional call masks, outside-roster skip and effect interpretation | Supported static native profile; no generic availability/preflight soundness or native execution correspondence |
+| Retained protocol repeats | Scoped optional state on the existing finite fold; effect interpretation, shifted iteration, masked-state replacement, first-stop effects and contextual table framing; exact complete-source admission | Natural count refusal precedes range construction; no general bounds/availability soundness or native capacity correspondence |
 | Retained preparations | Exact retained realization/map declarations, whole-unit transitive profile admission, full-ABI realization totality, ordered row/broadcast maps and stopped-prefix laws | Logical model; helper-value formulas require equations for the actual checked table; native resource limits remain separate |
 | Structured helper inlining | Generic invocation/body binding law preserving complete processes and suffixes; exact original/prepared model equality for Schnorr-response and multilinear-claim scalar Entries; admitted arithmetic mutation counterexample | Explicit lookup/body equation and exact retained subjects; no general native pass correctness or interactive protocol security |
 | Ordered finite semantics | Admission-preserving effectful folds, product/zip laws and conditional pure replacement | Evaluated mathematical domains; native capacity, failure diagnostics and domain lowering require their own correspondence |
@@ -80,9 +81,10 @@ The library equations state representation premises explicitly; the independent
 Sequence equation covers all logical inputs. See the
 [source contract](spec/structured-source.md#actual-library-primitive-subjects)
 for exact scope and theorem owners. Retained maps and realizations use that same admission and semantic carrier.
-Retained protocol application has the separate contract below. Repetition,
-conditional completion and construction-start remain outside admission;
-this profile does not admit the full Sumcheck protocol.
+Retained protocol application and scoped repetition have separate contracts
+below. Conditional completion and construction-start remain outside admission.
+Full Sumcheck source admission is separate from its symbolic participant equations
+and security consumer.
 
 The executable reference propagates generated index/vector bounds through the
 checked source before running the existing evaluator. Separate analysis and
@@ -137,8 +139,10 @@ A complete six-field signature includes the ordered roster, input/output types
 and input/output scopes. Exact source association exposes both the original
 function and its actual checked lowering; a shared name or signature does not
 establish body identity. Dependency ordering permutes complete checked values.
-From an actual admitted raw application, inversion laws recover its original
-instruction, resolved finite role substitution and statement-free callee check.
+From an actual admitted raw application, recursive inversion recovers its lexical
+resolver environment, finite role substitution and statement-free callee check.
+For a callback-free body, the flat consequence also recovers top-level instruction
+membership and the single SSA offset.
 Service operands retain their lexical formal-input index, nominal contract and
 mapped singleton declared owner independently of equal runtime handles.
 Protocol closures capture the strict earlier prefix and use the existing
@@ -179,3 +183,56 @@ applications. A reachable application refuses that narrower Lean view. Native
 one-role closed execution supports more; paired application comparisons use
 open execution. General availability, eager/demand agreement, native execution,
 provider randomness and security remain separate obligations.
+
+## Retained protocol repeat contracts
+
+The original repeat descriptor and its single yield-terminated callback lower to
+one `ProtocolOp.repeat` in the existing typed Region. Callback availability,
+native summaries, effective sites and application/repeat nesting are checked
+recursively, including dormant and maximum-zero bodies. Immutable service
+captures retain their lexical input origins; data captures and carried state do
+not acquire service origins. Imported application inversion gives an existential
+inherited environment with bounded original input contracts and mapped owners;
+concrete origin-transfer and process equations identify actual operand routing.
+Its flat-source consequence states the
+additional callback-free premise explicitly. Recursive source-instruction
+membership and full nested callee statement-freeness are also kernel consequences
+of admission; the actual service callback consumes these consequences.
+
+`denoteRepeat` uses `Finite.execute`. An outside participant returns absent state
+immediately; an active participant with no count stops incomplete, and any natural
+count above the maximum stops refused before range construction. Zero returns the
+masked initial state without demanding captures. Each reached callback receives
+its fresh induction index, masked optional state and unchanged optional captures;
+every successful yield is masked again. Context, root participant, actual service
+handles and the captured protocol table remain fixed. Repeat adds no site prefix.
+
+`RepeatLaws` proves shifted successor/split equations, reached-state replacement,
+output masking and immutable captures. Its stopping equations preserve earlier
+events, effects of the first stopping callback and the residual handler state,
+while bypassing later iterations and outer continuations. Effect interpretation
+commutes with repeat; existing contextual table and suffix laws extend through
+the retained callback. These laws permit arbitrary effects and replies without
+equating independently supplied participant values.
+
+The reached-state invariant records the actual protocol phase. A generic
+embedding law transports effectful smaller states into the optional state tuple;
+the index-independent range-fold law then gives `PIR.repeatN`. Both participant
+equations for the original repeat source use these laws without count expansion.
+
+The unchanged `repeat.zkc` and `repeat_nested.zkc` subjects have full checked-tree
+views and process equations, including independent participant counts and the
+nested repeated-addition result. The repeated service subject and its three-role
+wrapper retain actual aliased or distinct handles, query/send order, zero-count
+behavior, reached stops and nested mapped peer/site labels. The complete original
+Reduction and Sumcheck units have kernel admission and exact source association;
+their full participant equations and security connection are subsequent work.
+
+The executable preflight reuses `Bounds.iterate` and joins all explored prefixes.
+`none` denotes no returning path, while `some []` is a returning empty result.
+Capping an abstract interval by the maximum bounds exploration only; it does not
+truncate logical execution. Planned iteration work is charged before callback
+analysis, with existing analysis/work/observer capacities unchanged. These
+controls do not prove analysis soundness or processor costs. Retained admission
+at effective depth 64 can still exceed native preparation correspondence
+capacity; measured wire depths 11/12 describe one fixture, not a universal limit.

@@ -3,6 +3,7 @@ module
 public import Zkc.Source.Structured.Interpretation
 public import Zkc.Source.Participant
 public import Zkc.Source.Structured.ProtocolTable
+public import Zkc.Source.Structured.Repeat
 
 @[expose] public section
 
@@ -97,11 +98,14 @@ def protocolOperationWith {I : PIR.Signature} (observations : SiteObservations I
     (actions : PIR.OperationInterpretation (participantInterface F G) I)
     (tables : Evaluation.ComponentTables F G I) (self : Nat)
     (op : ProtocolOp) (args : Values (Component (assignment F G)) op.arguments)
-    (_callbacks : Values (RegionFunction (Component (assignment F G)) I) op.regions)
+    (callbacks : Values (RegionFunction (Component (assignment F G)) I) op.regions)
     (protocols : ProtocolTable (assignment F G) I := [])
     (context : ProtocolContext := {}) :
     PIR.Proc I (Values (Component (assignment F G)) op.results) :=
   match op, args with
+  | .repeat spec _, .cons count values =>
+    let parts := Values.split spec.state values
+    denoteRepeat spec context self count parts.1 parts.2 (callbacks.get .here)
   | .calculate op allowed, args =>
     Evaluation.componentOperation observations tables op args (op.calculationRegions allowed)
   | .localCall helper _ owner _, args =>
@@ -171,6 +175,14 @@ theorem protocolOperationWith_interpret {I J : PIR.Signature}
       (process.interpret leftActions).interpret operations = process.interpret rightActions :=
     PIR.Proc.interpret_interchange leftActions operations rightActions actions process
   cases op with
+  | «repeat» spec site =>
+    cases args with
+    | cons count values =>
+      cases callbacks with
+      | cons body rest =>
+        cases rest
+        exact denoteRepeat_interpret operations spec context self count
+          (Values.split spec.state values).1 (Values.split spec.state values).2 body
   | calculate op allowed =>
     cases callbacks
     have translated := Evaluation.componentOperation_interpret operations sites tables op args
@@ -273,16 +285,6 @@ theorem Evaluation.ComponentTables.fold_forgetSites (definitions : List CheckedD
       (definitions.foldl (Evaluation.ComponentTables.extend (F := F) (G := G)
         (.silent (participantInterface F G))) ⟨[], []⟩) :=
   Evaluation.ComponentTables.fold_interpret forgetSites observedSites_forgetSites (.empty _) definitions
-
-/-- Scopes hide supplied inputs before work and returned components after work.
-They do not discard preceding effects or stops. -/
-def maskValues {Value : Ty → Type} (self : Nat) :
-    {types : List Ty} → List (List Nat) → Values (Component Value) types →
-      Values (Component Value) types
-  | [], _, .nil => .nil
-  | _ :: _, scopes, .cons value rest =>
-    .cons (Participant.restrict ((scopes.headD []).contains self) value)
-      (maskValues self scopes.tail rest)
 
 /-- One body denotation, with optional input and output masks at this context. -/
 def CheckedProtocol.denoteWith {I : PIR.Signature}
@@ -414,47 +416,6 @@ theorem CheckedProtocol.participant_body_view (root : CheckedProtocol)
   simp only [CheckedProtocol.participant, CheckedProtocol.observed, CheckedProtocol.denoteWith,
     ProtocolContext.mapScopes_root, root.body_eq_of_raw body same]
   rfl
-
-/-- Hiding components never creates a value and preserves the complete ABI. -/
-theorem maskValues_absent {Value : Ty → Type} (self : Nat)
-    (types : List Ty) (scopes : List (List Nat)) :
-    maskValues self scopes (Values.absent Value types) = Values.absent Value types := by
-  induction types generalizing scopes with
-  | nil => rfl
-  | cons ty types ih =>
-    simp only [Values.absent, maskValues, ih]
-    congr 1
-    simp [Participant.restrict]
-
-theorem maskValues_idempotent {Value : Ty → Type} {types : List Ty}
-    (self : Nat) (scopes : List (List Nat)) (values : Values (Component Value) types) :
-    maskValues self scopes (maskValues self scopes values) = maskValues self scopes values := by
-  induction values generalizing scopes with
-  | nil => rfl
-  | cons value rest ih =>
-    simp only [maskValues, ih]
-    congr 1
-    unfold Participant.restrict
-    split <;> rfl
-
-theorem maskValues_commute {Value : Ty → Type} {types : List Ty}
-    (self : Nat) (left right : List (List Nat)) (values : Values (Component Value) types) :
-    maskValues self left (maskValues self right values) =
-      maskValues self right (maskValues self left values) := by
-  induction values generalizing left right with
-  | nil => rfl
-  | cons value rest ih =>
-    simp only [maskValues, ih]
-    congr 1
-    unfold Participant.restrict
-    split <;> split <;> rfl
-
-theorem maskValues_enter {Value : Ty → Type} {types : List Ty}
-    (self : Nat) (context : ProtocolContext) (site : String) (roles : List Nat)
-    (scopes : List (List Nat)) (values : Values (Component Value) types) :
-    maskValues self ((context.enter site roles).mapScopes scopes) values =
-      maskValues self (context.mapScopes (scopes.map (List.map (roleSubstitution roles)))) values := by
-  rw [ProtocolContext.mapScopes_enter]
 
 theorem apply_outside {I : PIR.Signature} (observations : SiteObservations I)
     (actions : PIR.OperationInterpretation (participantInterface F G) I)

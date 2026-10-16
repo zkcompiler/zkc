@@ -18,10 +18,18 @@ theorem closedRootTree_apply_refused (signature : ProtocolSignature)
     closedRootTree (.letOp (.protocolApply signature roles site) args results .nil next) =
       .error "structured-open-profile" := rfl
 
+/-- A repeat callback is outside the closed profile even at maximum zero.
+The callback-tree diagnostic precedes the operation projection diagnostic. -/
+theorem closedRootTree_repeat_refused (spec : RepeatSpec) (site : String)
+    (args : List Nat) (results inputs outputs : List Ty)
+    (body next : RawRegion Ty ProtocolOp) (rest : RawRegions Ty ProtocolOp) :
+    closedRootTree (.letOp (.repeat spec site) args results
+      (.cons inputs outputs body rest) next) = .error "structured-protocol-region" := rfl
+
 /-- Produce an explicit closed view of an already admitted whole unit.
 Every protocol remains outside the helper table. The stored root is obtained
 only by the checked operation projection of the actual entry tree. Dormant
-protocols may contain applications; reachable applications are refused. -/
+protocols may contain applications and repeats; reachable ones are refused. -/
 def Program.closedPayload (program : Program) : Except String Payload := do
   let unit := program.payload
   let root := unit.entry

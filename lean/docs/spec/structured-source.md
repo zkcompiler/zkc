@@ -215,8 +215,9 @@ Callers needing subsequent lengths or index arithmetic must state those bounds.
 The exact Fr/G1 nominal profile remains fixed; a configurable profile is deferred
 until a real second-domain consumer requires it. Multi-role partial Math remains
 restricted as above. Retained protocol applications use the same checked
-carrier as described below. Protocol repetition, conditional completion and
-construction-start remain unsupported, including in dormant source closure.
+carrier as described below. Retained protocol repetition uses optional scoped
+state on that carrier. Conditional completion and construction-start remain
+unsupported, including in dormant source closure.
 
 ## Retained realization and map declarations
 
@@ -559,12 +560,23 @@ body equation for a closure defined with its captured prefix.
 `Imported.protocolSource` and `Imported.protocolChecked` expose the exact
 original/check association in both directions; `Imported.protocolPermutation`
 preserves complete checked values and multiplicities. Given actual membership
-in a checked protocol's raw operations, `Imported.protocolApplication` recovers
-the original instruction and resolver result, including lexical formal service
-input indices, nominal contracts and mapped singleton scopes. Its role and
+in a checked protocol's raw operations, `Imported.protocolApplication_recursive`
+provides an inherited lexical environment in which each service operand names
+a bounded original input with the exact nominal contract and mapped singleton
+owner. This existential consequence does not identify the environment at a
+particular lowering path or distinguish two same-contract, same-owner inputs.
+Concrete origin-transfer equations and participant process equations establish
+that more specific routing. Its role and
 callee corollaries derive finite role validity and the original statement-free
-callee check. These are admission consequences, independent of runtime handle
+callee check. `Imported.protocolApplication_source` also identifies the actual
+instruction in the original body's recursive `storedInstructions` inventory.
+`Imported.protocolApplication_callee_statementFree` proves that the resolved
+callee's entire stored body, including nested callbacks, contains no statement.
+These are admission consequences, independent of runtime handle
 equality and of a general availability-soundness theorem.
+`Imported.protocolApplication` retains the flat-source instruction/SSA-offset
+consequence under an explicit callback-free premise. Recursive admission supports
+reordered service captures without asserting one global offset.
 
 `ProtocolContext` stores an optional application prefix and a map from current
 local role indices to selected-root indices. Root self is immutable. Entry
@@ -588,8 +600,8 @@ requires all inputs, including unused ones. Missing Local inputs stop at the
 qualified caller mark, while a reached helper's own stop retains its raw mark.
 A zero-result child may perform actions or stop; output arity never erases work.
 `ProtocolOp.regions` supplies typed optional callback meanings to the one
-operation interpreter. Current admitted protocol constructors have no regions;
-future repeat must extend this same carrier.
+operation interpreter. Repeat contributes one such callback; applications use
+the existing captured protocol table.
 
 Static admission has three independent resource checks. Stored-source limits
 and combined helper/protocol dependency depth use leaf depth zero and at most
@@ -618,6 +630,112 @@ to native projection requires demand-slicing evidence and the admitted calculati
 profile; absent inputs alone do not imply absent intermediates because constants
 can produce values. General optional-Math erasure, availability soundness,
 resource-transfer soundness and native refinement remain separate obligations.
+
+## Retained protocol repeats
+
+The descriptor is exactly
+`["protocol_repeat", carried, maximum, roles, carried_roles]` in the existing
+five-field instruction and eight-slot snapshot envelope. `carried` is a natural
+at most 512; `maximum` is a natural at most 1048576. The first operand is the
+count. The next `carried` operands are state, and the remaining operands are
+immutable captures. Ordered result types equal the state types. There is exactly
+one isolated callback with inputs `index :: (state ++ captures)`, results
+`state`, and a `yield` terminator. Entry protocols still end with `return`.
+The callback induction input replaces the outer count; using the original count
+inside the body requires a separate explicit capture. No outer SSA reference
+is implicitly available in the isolated callback.
+
+`RepeatSpec` retains state and capture types, the resolved ordered roster,
+ordered state scopes and maximum. `ProtocolOp.repeat` stores this specification
+and its header site. The callback is an ordinary typed `Region`, interpreted
+through the same optional region meaning, root participant coordinate and
+captured helper/protocol tables. There is no expanded repeat source or second
+concrete evaluator.
+
+Admission checks the entire callback even when maximum is zero or the
+declaration is dormant. The roster must be a nonempty duplicate-free subset of
+the enclosing active roles. The count must be available at every participating
+role. Each state scope must be nonempty, contained in the roster, and available
+both initially and at yield. Capture footprints are intersected with the roster
+and must remain nonempty. Service types may be immutable captures but cannot
+be carried state or yielded results. A copyable capture can replace a state
+component when its type and footprint satisfy that component's contract.
+
+Callback input origins distinguish lexical authority from data facts. Induction,
+state and nonservice captures have no protocol-entry input origin. Only a
+service capture preserves its original lexical input identity, contract and
+owner through nested capture/application layers. Immutable data facts are
+checked separately; neither an induction value nor mutable state inherits an
+unjustified equality to the original count or initial value. A nested statement
+always refuses with `structured-statement-placement`, including an operand-free
+statement or a body with maximum zero. Clearing data origins alone is not this
+placement check. Statements inside an applied declaration retain the separate
+`structured-applied-statement` rule.
+
+Protocol roots currently begin with no bound facts and introduce no protocol
+preconditions. The generic capture-fact transfer rebases only facts about
+explicitly captured immutable values; it grants no additional admitted source
+capability or state/induction invariant.
+
+The repeat-specific static diagnostics distinguish `structured-repeat-role`
+(an operation escapes the active roster), `structured-repeat-count-scope`,
+`structured-repeat-state-scope`, `structured-repeat-capture-scope`,
+`structured-repeat-yield-scope`, and `structured-repeat-depth`. ABI, callback
+shape and exit failures reuse `structured-protocol-signature`,
+`structured-protocol-region` and `structured-protocol-terminator`. Each reader
+reports its own first failing boundary; native generated-parent diagnostics need
+not equal a Lean raw-wire diagnostic.
+
+Write `M` for `maskValues self (context.mapScopes spec.stateScopes)` and
+`active` for membership of `self` in the context-mapped repeat roster. The
+logical operation obeys these cases:
+
+- Outside the roster, return an entirely absent state tuple immediately.
+- Inside with an absent count, stop `incomplete`.
+- Inside with a present natural count above maximum, stop `refused` before
+  constructing the range or demanding any capture.
+- Inside with count zero, return `M(initial)` without invoking the callback.
+- Inside with admitted count `n`, execute the existing finite range `0..n-1`
+  from `M(initial)`. Each callback receives `some index :: (M(state) ++ captures)`;
+  mask every successful yielded state before the next iteration and return.
+
+The count refusal applies to every logical natural, including values at least
+`2^64`. Native u64 wire admission is a separate boundary. There is no semantic
+fuel, overflow alternative or count truncation. Mixed-role state keeps each
+component optional; sequencing the whole tuple would incorrectly demand values
+owned by other participants. Missing captures are demanded only by reached
+strict operations. The same optional captures and actual service handles are
+passed to every reached iteration.
+
+Iteration preserves ordered effects. A stop retains earlier effects and the
+handler state reached at that stop; later iterations and the outer suffix do
+not execute. Zero results do not erase callback effects or stopping. Shifted
+residual iteration uses `List.range' start count` after the original count has
+been admitted, with no reset of the induction index or renewed count check.
+Interpretation and framing use the existing finite execution and `PIR.Proc`
+laws. Erasing internal marks preserves the process equation while action labels
+remain externally visible.
+
+The lowered repeat header mark remains observable outside the roster and at
+zero count. Repeat adds no site prefix or per-iteration namespace. Nested
+applications qualify sites with the same top-down renderer as ordinary calls.
+Static availability, dependency inventories, native summaries and effective-site
+checks descend into the stored callback without unrolling it. Summary selector
+cost counts the repeat roster, not its state-scope selectors. Effective-site
+traversal inserts the surviving repeat header and descends at the unchanged
+prefix, including maximum-zero bodies. Expanded repeat nesting is checked
+across application edges. Stored JSON depth, expansion depth and executable
+preparation capacity are distinct limits; no fixed repeat-count threshold is
+implied by the JSON depth limit.
+
+Complete original units retain all declarations and their original order.
+The existing whole raw-tree equality and checked-body erasure identify every
+nested callback; signature equality alone is insufficient. The complete
+Reduction and Sumcheck source subjects have an admission/association boundary
+separate from their full symbolic participant equations and security consumers.
+Current scalar/vector/service types do not model the native affine resource
+root policy. Admission, finite comparisons and these logical equations do not
+prove availability soundness, native refinement or cryptographic security.
 
 ## Participant meaning and observations
 
@@ -650,9 +768,11 @@ closed profile's process laws, with the same `F,G` interpretation.
 `ClosedProgram.participant_eq_denote` proves the relation after site erasure,
 with exact port transports and complete singleton scopes certified by the
 closed-profile check itself. A reachable retained application refuses the
-closed view with `structured-open-profile`. An application-free selected body
-retains its closed projection even if other dormant protocol declarations
-contain applications; the projected body is independent of the unused table.
+closed view with `structured-open-profile`. A reachable repeat has a nonempty
+callback tuple and refuses earlier with `structured-protocol-region`, including
+maximum zero. A selected body free of applications and repeats retains its
+closed projection even if other dormant protocol declarations contain them;
+the projected body is independent of the unused table.
 Native one-role closed execution also supports calls; that executable surface
 is wider than this Lean closed projection. Paired application comparisons use
 open execution and record the closed-view refusal separately.
@@ -718,6 +838,19 @@ returns the abstract absent tuple; no returning path is distinct from a returnin
 empty tuple. Typed receives use independent reply envelopes, never the sender's
 operand. The preflight never infers a helper's behavior from its spelling and
 does not replace the typed evaluator.
+
+Repeat preflight reuses conservative `Bounds.iterate`. An outside participant
+returns abstract absent state without analyzing callback execution. An absent
+active count or an interval whose lower bound exceeds maximum has no returning
+path. Otherwise `min(upper, maximum)` bounds abstract exploration only; concrete
+counts above maximum still stop `refused`. The analysis masks initial and
+yielded state and preserves optional captures and the captured protocol table.
+It joins the initial state and analyzed prefixes, even when a callback has no
+returning path, and may analyze later abstract steps. These joins can include
+states unreachable at a known positive count. No-return (`none`) remains
+distinct from a successful empty state (`some []`). Planned traversal work is
+charged before callback analysis; existing work, vector and reply limits apply.
+These conservative controls are not a transfer-soundness or CPU-cost theorem.
 
 Separate analysis and expanded logical-work meters each allow 1000000 units;
 generated vectors are capped at 4096 elements. Work includes nodes, selected

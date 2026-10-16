@@ -31,6 +31,9 @@ using namespace zkc;
 namespace {
 constexpr unsigned maxDepth = 64, maxSignature = 512, maxOperations = 4096;
 constexpr uint64_t maxSteps = 1000000, maxLoopBound = 1 << 20;
+constexpr uint64_t maxStaticVisits = 100000;
+constexpr size_t maxEffectiveSiteBytes = 4096;
+constexpr uint64_t maxStaticSiteBytes = 16 * 1024 * 1024;
 constexpr size_t maxVector = 4096;
 constexpr StringLiteral fieldDomain = "bls12-381.fr";
 constexpr StringLiteral groupDomain = "bls12-381.g1";
@@ -99,6 +102,7 @@ enum class Kind {
   Call,
   Apply,
   ProtocolApply,
+  ProtocolRepeat,
   LocalCall,
   Fold,
   If,
@@ -222,13 +226,14 @@ Kind kind(Operation &op) {
       .Case("func.call", Kind::Call)
       .Case("local.apply", Kind::Apply)
       .Case("protocol.apply", Kind::ProtocolApply)
+      .Case("protocol.repeat", Kind::ProtocolRepeat)
       .Case("protocol.local_call", Kind::LocalCall)
       .Case("algebra.finite_fold", Kind::Fold)
       .Case("local.if", Kind::If)
       .Case("local.for", Kind::For)
       .Case("protocol.guard", Kind::Guard)
       .Cases({"func.return", "local.return", "protocol.return"}, Kind::Return)
-      .Case("local.yield", Kind::Yield)
+      .Cases({"local.yield", "protocol.yield"}, Kind::Yield)
       .Case("local.condition", Kind::Condition)
       .Case("local.stop", Kind::Stop)
       .Case("data.domain_elements", Kind::Elements)
@@ -507,19 +512,42 @@ class Admission {
         code == Kind::Indices || code == Kind::DomainYield)
       return error("structured-reference-unsupported",
                    op.getName().getStringRef());
-    if (op.getNumRegions() != (code == Kind::If    ? 2u
-                               : code == Kind::For ? 1u
-                                                   : 0u))
+    if (op.getNumRegions() !=
+        (code == Kind::If                                    ? 2u
+         : code == Kind::For || code == Kind::ProtocolRepeat ? 1u
+                                                             : 0u))
       return error("structured-reference-unsupported", "region count");
     for (Type type : op.getOperandTypes())
       if (!valueType(type) ||
           (isa<protocol_ir::ServiceReferenceType>(type) && code != Kind::Draw &&
-           code != Kind::ProtocolApply))
+           code != Kind::ProtocolApply && code != Kind::ProtocolRepeat))
         return error("structured-reference-unsupported", "operand type");
     for (Type type : op.getResultTypes())
       if (!valueType(type) || isa<protocol_ir::ServiceReferenceType>(type))
         return error("structured-reference-unsupported", "result type");
     switch (code) {
+    case Kind::ProtocolRepeat: {
+      if (auto failure = attributes(
+              op, {"site", "carried", "maximum", "roles", "carried_roles"}))
+        return failure;
+      auto repeat = cast<protocol_ir::RepeatOp>(op);
+      // These I64Attr getters are unsigned: bounds and arity reject negative
+      // encodings. Native formation already checked nested rosters/state
+      // scopes.
+      if (!isa<protocol_ir::MathematicalOp>(owner) ||
+          repeat.getMaximum() > maxLoopBound ||
+          repeat.getCarried() != op.getNumResults() ||
+          op.getNumOperands() <= op.getNumResults() ||
+          !op.getOperand(0).getType().isUnsignedInteger(64) ||
+          !llvm::hasSingleElement(repeat.getBody()))
+        return error("structured-reference-signature", "protocol repeat");
+      Block &body = repeat.getBody().front();
+      if (body.empty() || body.getArgumentTypes() != op.getOperandTypes() ||
+          !isa<protocol_ir::ProtocolYieldOp>(body.back()) ||
+          body.back().getOperandTypes() != op.getResultTypes())
+        return error("structured-reference-signature", "protocol callback");
+      break;
+    }
     case Kind::ProtocolApply:
       return application(op, owner);
     case Kind::Exec:
@@ -633,6 +661,20 @@ class Admission {
   Error serviceOrigin(Value value, Operation &owner, StringRef expectedOwner) {
     auto protocol = dyn_cast<protocol_ir::MathematicalOp>(owner);
     auto argument = dyn_cast<BlockArgument>(value);
+    // Only immutable service captures carry lexical entry-port identity.
+    // Index and state arguments never acquire the origin of their initials.
+    unsigned depth = 0;
+    while (argument &&
+           isa<protocol_ir::RepeatOp>(argument.getOwner()->getParentOp())) {
+      auto repeat =
+          cast<protocol_ir::RepeatOp>(argument.getOwner()->getParentOp());
+      unsigned position = argument.getArgNumber();
+      if (++depth > maxDepth || position <= repeat.getNumResults() ||
+          position >= repeat.getNumOperands() ||
+          !isa<protocol_ir::ServiceReferenceType>(argument.getType()))
+        return error("structured-reference-application", "service capture");
+      argument = dyn_cast<BlockArgument>(repeat.getInputs()[position]);
+    }
     if (!protocol || !argument ||
         argument.getOwner() != &protocol.getBody().front())
       return error("structured-reference-application", "lexical service input");
@@ -692,20 +734,23 @@ class Admission {
     // or a production-expanded body. Native formation owns conservative
     // budgets.
     struct Frame {
-      protocol_ir::MathematicalOp function;
+      Block *body;
       std::string prefix;
-      unsigned depth;
+      unsigned applicationDepth;
+      unsigned repeatDepth;
     };
-    uint64_t remainingVisits = 100000, remainingBytes = 16 * 1024 * 1024;
+    uint64_t remainingVisits = maxStaticVisits,
+             remainingBytes = maxStaticSiteBytes;
     for (auto root :
          unit.getBody().front().getOps<protocol_ir::MathematicalOp>()) {
       llvm::StringSet<> effective;
-      SmallVector<Frame> pending{{root, {}, 1}};
+      SmallVector<Frame> pending{{&root.getBody().front(), {}, 1, 0}};
       while (!pending.empty()) {
         Frame frame = pending.pop_back_val();
-        if (frame.depth > maxDepth)
-          return error("structured-reference-capacity", "application depth");
-        for (Operation &op : frame.function.getBody().front()) {
+        if (frame.applicationDepth > maxDepth || frame.repeatDepth > maxDepth)
+          return error("structured-reference-capacity",
+                       "application or repeat depth");
+        for (Operation &op : *frame.body) {
           if (!remainingVisits)
             return error("structured-reference-capacity", "static visits");
           --remainingVisits;
@@ -716,7 +761,8 @@ class Admission {
           size_t prefixBytes = frame.prefix.empty()
                                    ? 0
                                    : 8 + digits.size() + frame.prefix.size();
-          if (prefixBytes > 4096 || site.size() > 4096 - prefixBytes)
+          if (prefixBytes > maxEffectiveSiteBytes ||
+              site.size() > maxEffectiveSiteBytes - prefixBytes)
             return error("structured-reference-capacity", "generated site");
           size_t size = prefixBytes + site.size();
           if (size > remainingBytes)
@@ -729,11 +775,17 @@ class Admission {
           if (kind(op) == Kind::ProtocolApply) {
             auto call = cast<protocol_ir::ApplyOp>(op);
             pending.push_back(
-                {symbols.lookup<protocol_ir::MathematicalOp>(call.getCallee()),
-                 std::move(label), frame.depth + 1});
+                {&symbols.lookup<protocol_ir::MathematicalOp>(call.getCallee())
+                      .getBody()
+                      .front(),
+                 std::move(label), frame.applicationDepth + 1,
+                 frame.repeatDepth});
           } else if (!effective.insert(label).second) {
             return error("structured-reference-site", "expanded collision");
           }
+          if (auto repeat = dyn_cast<protocol_ir::RepeatOp>(op))
+            pending.push_back({&repeat.getBody().front(), frame.prefix,
+                               frame.applicationDepth, frame.repeatDepth + 1});
         }
       }
     }
@@ -1014,14 +1066,19 @@ public:
         [&](Operation *function) -> Error {
       if (!checked.insert(function).second)
         return Error::success();
-      for (Operation &op : function->getRegion(0).front()) {
-        if (kind(op) == Kind::Fold || kind(op) == Kind::At)
-          return error("structured-reference-unsupported",
-                       "multi-role Math finite work");
-        if (kind(op) == Kind::Call)
-          if (auto failure = scalarMath(
-                  symbols.lookup(cast<func::CallOp>(op).getCallee())))
-            return failure;
+      SmallVector<Block *> pending{&function->getRegion(0).front()};
+      while (!pending.empty()) {
+        for (Operation &op : *pending.pop_back_val()) {
+          if (kind(op) == Kind::Fold || kind(op) == Kind::At)
+            return error("structured-reference-unsupported",
+                         "multi-role Math finite work");
+          if (kind(op) == Kind::Call)
+            if (auto failure = scalarMath(
+                    symbols.lookup(cast<func::CallOp>(op).getCallee())))
+              return failure;
+          for (Region &region : op.getRegions())
+            pending.push_back(&region.front());
+        }
       }
       return Error::success();
     };
@@ -1662,6 +1719,41 @@ class Reference {
             cast<StringAttr>(source).getValue(),
             context->role(cast<StringAttr>(replacement).getValue()));
       return invokeProtocol(callee, args, child, depth + 1);
+    }
+    case Kind::ProtocolRepeat: {
+      auto repeat = cast<protocol_ir::RepeatOp>(op);
+      if (!inScope(repeat.getRoles(), context))
+        return absent(op);
+      if (!present(args[0]))
+        return stopped(op, "incomplete", context);
+      uint64_t count = std::get<uint64_t>(args[0]);
+      if (count > uint64_t(repeat.getMaximum()))
+        return stopped(op, "refused", context);
+      size_t carried = op.getNumResults();
+      auto initial = args.slice(1, carried);
+      auto captures = args.drop_front(1 + carried);
+      Outcome state{Kind::Return, Values(initial.begin(), initial.end()), {}};
+      auto mask = [&]() {
+        for (auto [i, scope] : llvm::enumerate(repeat.getCarriedRoles()))
+          if (!inScope(cast<ArrayAttr>(scope), context))
+            state.values[i] = std::monostate{};
+      };
+      mask();
+      for (uint64_t index = 0; index < count; ++index) {
+        if (auto failure = tick(depth))
+          return failure;
+        Values inputs{Datum(index)};
+        llvm::append_range(inputs, state.values);
+        llvm::append_range(inputs, captures);
+        auto next = block(repeat.getBody().front(), inputs, depth + 1, context);
+        if (!next || next->stopped())
+          return next;
+        if (next->terminator != Kind::Yield || next->values.size() != carried)
+          return error("structured-reference-signature", "protocol yield");
+        state.values = std::move(next->values);
+        mask();
+      }
+      return state;
     }
     case Kind::Statement:
       return Outcome{}; // Retained metadata, not relation evaluation.

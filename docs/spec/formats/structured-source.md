@@ -237,6 +237,7 @@ including nested regions. Stop reasons are `reject`, `abort`, `exhausted`,
 | `["apply", name]` | Local function, finite, realization or map declaration call |
 | `["local_call", name, participant]` | Protocol call to an actual Local function with exact owner |
 | `["protocol_apply", name, role-names]` | Retained static protocol application with positional role substitution |
+| `["protocol_repeat", carried, maximum, roles, carried_roles]` | Retained protocol repetition with one isolated optional-state callback |
 | `["fold", domain, step, predicate]` | total Algebra fold |
 | `["if"]` | Local conditional over closed captures |
 | `["for"]` / `["for_condition"]` | Local counted control |
@@ -262,7 +263,7 @@ Ownership is checked independently of operand types:
 
 | Body kind | Admitted instructions |
 |---|---|
-| Protocol | Pure index constant/equality and field/group/Boolean operations, select, Math call, Algebra fold, Local call, protocol application, guard, restrict, exchange, draw, statement |
+| Protocol | Pure index constant/equality and field/group/Boolean operations, select, Math call, Algebra fold, Local call, protocol application and repetition, guard, restrict, exchange, draw, entry statement |
 | Math | Pure index constant/equality and field/group/Boolean operations, select, bounded read, Math call, Algebra fold |
 | Local | Boolean constant, checked primitive execution, Local apply, conditional and counted control |
 
@@ -272,7 +273,7 @@ profile; vector and index selection are not yet native export paths.
 
 Only Local bodies may end in an explicit stop. A guard retains the owner of
 the original `protocol.guard`; projected `local.guard` is outside this source
-stage. Protocol repetition, conditional entry completion and construction-start
+stage. Conditional entry completion and construction-start
 selection remain outside this profile, including dormant definitions.
 
 Multi-role protocols cannot use Math folds or bounded reads, including through
@@ -348,6 +349,88 @@ those preflight checks. The native reference and exporter independently check
 effective collisions after native formation; the independent formal reader must
 establish its own budget and effective-site obligations before claiming agreement
 with this admitted native profile. No observer record format is added.
+
+## Retained protocol repetition
+
+The exact attributes of `protocol.repeat` are `site`, `carried`, `maximum`,
+`roles` and `carried_roles`. The descriptor stores the latter four in that order;
+the required nonempty site stays in the instruction row. `carried` and `maximum`
+are JSON numbers. Native formation requires a nonnegative carried count equal
+to the result count, smaller than the operand count, and a maximum in
+0..1048576. The operands are `(count, state, captures)` with an unsigned-64 count.
+Results have exactly the initial state types. There is one isolated callback:
+
+```text
+[index :: state-types ++ capture-types, state-types,
+ ["block", instructions, ["yield", state-references]]]
+```
+
+Callback argument zero is induction, distinct from the outer count. An authored
+use of that count requires an explicit capture. Only `protocol.yield` terminates
+this callback; it yields state alone. Every callback is checked, even at maximum
+zero, after a stopping instruction or in a dormant definition. Free outer SSA
+references, nested statements and wrong callback interfaces are refused.
+Native structural and scope errors diagnose `mathematical-formation` before
+export or reference admission; parser/MLIR invariant failures can precede it.
+Extra repeat/body attributes are refused by native `mathematical-formation`
+before the structured whitelists. A nested statement or return fails the MLIR
+parent invariant first, reported as `structured-source-original` or independent
+`structured-reference-source`.
+These wrapper identifiers alone do not identify which verification layer
+refused. Native controls also check the actual invariant message in both tools.
+A callback ending with `local.stop` instead reaches `mathematical-formation`
+because it does not yield the carried interface.
+
+The repeat roster is a nonempty subset of the enclosing active roster. Count
+availability covers it. Every state scope is nonempty, contained in that roster,
+and available both initially and at yield. Capture availability intersects the
+roster nontrivially. Nested applications, repeats and action owners cannot widen
+it. Services are immutable captures, never state or results. Their lexical
+origins follow the exact capture operands through nested callbacks to the
+containing protocol's original service ports. Data captures do not become entry
+ports; a statement cannot bind them. A copyable capture may replace a state
+value at yield when its type and scope meet that slot's requirements.
+
+The independent SSA reference retains the current role context and application
+prefix. Outside the mapped repeat roster it returns an absent result tuple,
+without inspecting count or captures, even when a present count exceeds maximum.
+Inside, missing count stops `incomplete` at the qualified header; a count above
+maximum stops `refused`. Wire inputs outside u64 are decoder errors, not a reached
+overflow stop. Otherwise execution
+starts with masked initial state and calls the original callback at indices
+0 through count-1, passing that state and the unchanged captures. Every
+successful yield is masked to `carried_roles`. Zero returns masked initial state
+without invoking the callback. Optional state/captures are demanded only by
+reached strict operations. Zero-state repeats still perform their body effects.
+Stops preserve prior reply consumption and suppress later iterations and the
+outer suffix. Actual service handles and shared provider state are not reset.
+
+Each role uses its own count and received values. The native joint driver's
+separate count-agreement check is not part of this per-role reference meaning.
+The native Runner's source-bound failure is `loop-count-bound`; its resource
+failures and the reference's `structured-reference-capacity` remain separate.
+Earlier ordered actions remain before a zero repeat. Comparing eager pure
+capture calculations with demand-driven native projection still requires the
+existing totality and observation premises.
+
+Repeat contributes no application prefix or iteration suffix. Its header and
+body sites share the definition's stored namespace and the root's effective
+namespace. Static traversal visits each body once per application occurrence,
+including at maximum zero, and retains the header. It charges all body operations
+and terminators against the existing 100000 visits, 4096 label bytes and 16 MiB
+label-work bounds. Effective repeat depth is at most 64 and is carried through
+application edges; violations diagnose `structured-source-limit` or independent
+`structured-reference-capacity`. The native expansion re-verification enforces
+its own `mathematical-formation` depth and collision obligations. Lexical JSON
+depth 64 is a distinct wire-profile bound, not permission for 64 stored nested
+callbacks. Reference-graph depth, application summary depth and observer depth
+retain their existing definitions.
+
+Complete unchanged repeat and nested-repeat sources, an ordinary service-order
+wrapper, and the complete original Reduction/Sumcheck units can be exported and
+admitted. Their native reference observations are bounded evidence. Full
+Sumcheck symbolic equations, affine resource models and production correspondence
+are separate obligations; no protocol-specific intrinsic supplies their meaning.
 
 ## Primitive execution
 

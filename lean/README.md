@@ -36,6 +36,13 @@ compose positional role substitutions and UTF-8 site prefixes; optional input
 and result masks preserve independent participant values, actual service handles
 and zero-result stops. Whole-unit metadata budgets and effective-site collisions
 are checked independently of runtime observer limits.
+[Retained protocol repeats](docs/spec/structured-source.md#retained-protocol-repeats)
+use one isolated callback on that same carrier. Optional state is masked at entry
+and every yield; immutable captures preserve actual service handles. Count
+admission precedes range construction, and zero count skips the callback.
+The repeat package separates generic process laws, complete original client
+equations, and full Reduction/Sumcheck source admission from the later Sumcheck
+participant equations and security consumer.
 Its [scalar inlining pairs](bridges/structured/README.md#scalar-inlining-pairs)
 prove exact original/prepared model equality for authored response and claim
 computations using checked body contracts and a reusable inlining law.

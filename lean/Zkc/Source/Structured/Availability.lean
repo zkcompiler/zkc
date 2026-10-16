@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Structured.Checked
+public import Zkc.Source.Structured.RepeatAdmission
 
 @[expose] public section
 
@@ -275,7 +275,8 @@ def available (roles : Nat) (arguments : List Footprint) (footprint : Footprint)
     pure (scope.filter operand.contains)) (List.range roles)
 
 def availableCalculation (summaries : List DependencySummary) (roles : Nat)
-    (op : Op) (arguments : List Footprint) : Analysis (List Footprint) := do
+    (op : Op) (arguments : List Footprint) (active : List Nat := List.range roles) :
+    Analysis (List Footprint) := do
   noServices op.arguments
   noServices op.results
   match op with
@@ -284,11 +285,11 @@ def availableCalculation (summaries : List DependencySummary) (roles : Nat)
     if roles > 1 && summary.partial then throw "structured-availability-partial-math"
     if summary.depth + 1 > 64 then throw "structured-availability-depth-limit"
     for footprint in summary.requirements do
-      if (← available roles arguments footprint).isEmpty then
+      if ((← available roles arguments footprint).filter active.contains).isEmpty then
         throw "structured-availability-requirement"
     summary.results.mapM fun footprint => do
       chargeReplay 1
-      available roles arguments footprint
+      return (← available roles arguments footprint).filter active.contains
   | _ =>
     match op with
     | .fold _ | .boundedAt _ =>
@@ -298,19 +299,48 @@ def availableCalculation (summaries : List DependencySummary) (roles : Nat)
       let summary ← findSummary summaries helper
       if summary.depth + 1 > 64 then throw "structured-availability-depth-limit"
     chargeReplay arguments.length
-    let scope ← available roles arguments (List.range arguments.length)
+    let scope := (← available roles arguments (List.range arguments.length)).filter active.contains
     if scope.isEmpty then throw "structured-availability-requirement"
     chargeReplay op.results.length
     return List.replicate op.results.length scope
 
+/-- Callback footprints include the roster index, declared state scopes and
+incoming capture footprints intersected with that roster, in exact ABI order. -/
+def repeatInputs (roles : Nat) (spec : RepeatSpec) (arguments : List Footprint) :
+    Analysis (List Footprint) := do
+  validScope roles spec.roles
+  if arguments.length != 1 + spec.state.length + spec.captures.length ||
+      spec.stateScopes.length != spec.state.length then
+    throw "structured-availability-port-scopes"
+  noServices spec.state
+  let count :: remaining := arguments | throw "structured-availability-operand"
+  if !(← subset spec.roles count) then throw "structured-repeat-count-scope"
+  for (scope, supplied) in spec.stateScopes.zip (remaining.take spec.state.length) do
+    validScope roles scope
+    if !(← subset scope spec.roles) || !(← subset scope supplied) then
+      throw "structured-repeat-state-scope"
+  let captures ← (remaining.drop spec.state.length).mapM fun supplied => do
+    chargeReplay (1 + supplied.length * (spec.roles.length + 1))
+    let scope := supplied.filter spec.roles.contains
+    if scope.isEmpty then throw "structured-repeat-capture-scope"
+    return scope
+  chargeReplay (1 + spec.state.length + captures.length)
+  return spec.roles :: (spec.stateScopes ++ captures)
+
 def operation (summaries : List DependencySummary) (roster : List String)
-    (op : ProtocolOp) (arguments : List Footprint) : Analysis (List Footprint) := do
+    (op : ProtocolOp) (arguments : List Footprint)
+    (active : List Nat := List.range roster.length) : Analysis (List Footprint) := do
   let roles := roster.length
+  -- Full-roster transfer retains the original operation-specific diagnostics.
+  if active != List.range roles then checkProtocolRoles active op
   match op with
   | .mark _ => pure ()
   | _ => chargeOperations 1
   match op with
-  | .calculate op _ => availableCalculation summaries roles op arguments
+  | .calculate op _ => availableCalculation summaries roles op arguments active
+  | .repeat .. =>
+    -- The region traversal must inspect the callback before exporting scopes.
+    throw "structured-protocol-region"
   | .protocolApply signature indices _ =>
     if indices.length != signature.roles.length ||
         indices.eraseDups.length != indices.length || !indices.all (· < roles) then
@@ -363,21 +393,37 @@ def operation (summaries : List DependencySummary) (roster : List String)
     return []
   | .mark _ => return []
 
-def protocolRegion (summaries : List DependencySummary) (roster : List String) {context outputs : List Ty} :
+def protocolRegionWith (summaries : List DependencySummary) (roster : List String)
+    (active : List Nat) {context outputs : List Ty} :
     Region protocolDialect context outputs → Environment → Analysis (List Footprint)
   | .ret values, environment => do
     chargeOperations 1
     operands environment values
   | .stop _, _ => throw "structured-availability-protocol-stop"
+  | .letOp (.repeat spec _) arguments (.cons body .nil) next, environment => do
+    chargeOperations 1
+    checkActiveRoles active spec.roles
+    let inputs ← repeatInputs roster.length spec (← operands environment arguments)
+    let yielded ← protocolRegionWith summaries roster spec.roles body (extendEnvironment #[] inputs)
+    if yielded.length != spec.stateScopes.length then throw "structured-availability-port-scopes"
+    for (requested, supplied) in spec.stateScopes.zip yielded do
+      if !(← subset requested supplied) then throw "structured-repeat-yield-scope"
+    chargeReplay spec.stateScopes.length
+    protocolRegionWith summaries roster active next (extendEnvironment environment spec.stateScopes)
   | .letOp op arguments _ next, environment => do
-    let results ← operation summaries roster op (← operands environment arguments)
+    let results ← operation summaries roster op (← operands environment arguments) active
     chargeReplay results.length
-    protocolRegion summaries roster next (extendEnvironment environment results)
+    protocolRegionWith summaries roster active next (extendEnvironment environment results)
   | .bind body next, environment => do
     chargeOperations 1
-    let results ← protocolRegion summaries roster body environment
+    let results ← protocolRegionWith summaries roster active body environment
     chargeReplay results.length
-    protocolRegion summaries roster next (extendEnvironment environment results)
+    protocolRegionWith summaries roster active next (extendEnvironment environment results)
+
+def protocolRegion (summaries : List DependencySummary) (roster : List String)
+    {context outputs : List Ty} (body : Region protocolDialect context outputs)
+    (environment : Environment) : Analysis (List Footprint) :=
+  protocolRegionWith summaries roster (List.range roster.length) body environment
 
 def checkRoot (summaries : List DependencySummary) (root : CheckedProtocol) : Analysis Unit := do
   if root.roles.isEmpty then throw "structured-availability-scope"
