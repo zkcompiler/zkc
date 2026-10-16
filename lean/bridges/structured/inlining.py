@@ -17,6 +17,8 @@ import snapshot
 
 FIXTURES = Path(__file__).parent / "fixtures"
 EXAMPLES = ROOT / "lean/ZkcExamples/Structured"
+# Lake may rebuild imported modules before it checks a proof; allow for that.
+LAKE_TIMEOUT = 1800
 SUBJECTS = (
     ("schnorr-response", "schnorr_response", "SchnorrResponse"),
     ("sumcheck-claim", "sumcheck_claim", "SumcheckClaim"),
@@ -86,9 +88,9 @@ def subject_cases(suite, stem, module, proof):
     # Refresh imported constructor objects before elaborating the proof source.
     # In particular, --write-fixtures must not prove an older cached subject.
     suite.command(f"{stem}:build-proof", [suite.args.lake, "--dir", ROOT / "lean",
-        "build", f"ZkcExamples.Structured.{proof}"])
+        "build", f"ZkcExamples.Structured.{proof}"], timeout=LAKE_TIMEOUT)
     suite.command(f"{stem}:kernel-proof", [suite.args.lake, "--dir", ROOT / "lean",
-        "env", "lean", EXAMPLES / f"{proof}.lean"])
+        "env", "lean", EXAMPLES / f"{proof}.lean"], timeout=LAKE_TIMEOUT)
     suite.sources.append({"proof": str((EXAMPLES / f"{proof}.lean").relative_to(ROOT)),
                           "sha256": digest(EXAMPLES / f"{proof}.lean")})
 
@@ -96,7 +98,7 @@ def subject_cases(suite, stem, module, proof):
 def run_cases(suite):
     args = suite.args
     write_json(suite.directory / "environment.json", {
-        "affinity": sorted(os.sched_getaffinity(0)),
+        "affinity": sorted(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None,
         "threads": {key: os.environ.get(key) for key in
                     ("LEAN_NUM_THREADS", "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS")},
         "toolchain": suite.command("lean-version", [args.lake, "--dir", ROOT / "lean",

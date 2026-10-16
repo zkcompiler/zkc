@@ -658,7 +658,8 @@ The writer bounds source bytes to 16 MiB, the complete exported file (including
 its final newline) to 1 MiB, strings
 to 512 UTF-8 bytes (binding names to 256 ASCII bytes), domains, relations,
 bindings and definitions to 128 each, signatures to 512
-positions and total instructions to 4096. The instruction count includes nested
+positions and total instructions to 4096. Operand references index the lexical
+value list and are also at most 4096. The instruction count includes nested
 bodies and one derived instruction per finite, realization or map declaration;
 it excludes terminators and domain
 constructors. The independent native reference enforces the same 4096-instruction
@@ -669,7 +670,7 @@ native readers. A preparation-to-Math-helper reference contributes one edge,
 as do calls to Local wrappers and preparations. References are derived from
 stored instructions, with at most two helper references per instruction; shared
 calls are not expanded for admission.
-See the formal contract. All failures
+See the [formal contract](../../../lean/docs/spec/structured-source.md). All failures
 produce diagnostics rather than a partial successful snapshot.
 
 Export and independent import check a deliberately limited logical profile.

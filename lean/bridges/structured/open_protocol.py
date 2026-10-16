@@ -84,7 +84,7 @@ class OpenSuite(Suite):
 
 
 def component_cases(suite):
-    source = (FIXTURES / "structured-source/open-components.mlir").read_text()
+    source = (FIXTURES / "structured-source/open-components.mlir").read_text(encoding="utf-8")
     subject = suite.export("components", source)
     for role, inputs, expected in [
         ("P", ["11", "99"], ["11", "11", None, "5"]),
@@ -126,7 +126,7 @@ def component_cases(suite):
 
 
 def service_cases(suite):
-    subject = suite.export("services", (FIXTURES / "structured-source/open-services.mlir").read_text())
+    subject = suite.export("services", (FIXTURES / "structured-source/open-services.mlir").read_text(encoding="utf-8"))
     for second in ("17", "29"):
         actions = [["draw", site, "P", SERVICE, handle, FIELD]
                    for site, handle in zip(("first", "second"), ("17", second))]
@@ -163,7 +163,7 @@ def service_cases(suite):
 
 
 def group_cases(suite):
-    subject = suite.export("groups", (FIXTURES / "structured-source/open-groups.mlir").read_text())
+    subject = suite.export("groups", (FIXTURES / "structured-source/open-groups.mlir").read_text(encoding="utf-8"))
     for label, role, inputs, outputs in [
         ("scale", "V", ["7", "3"], ["21", False]),
         ("identity-scale", "V", ["7", "1"], ["7", True]),
@@ -229,7 +229,7 @@ module { "protocol.module"() ({
 
 
 def wire_cases(suite):
-    subject = suite.export("wire-services", (FIXTURES / "structured-source/open-services.mlir").read_text())
+    subject = suite.export("wire-services", (FIXTURES / "structured-source/open-services.mlir").read_text(encoding="utf-8"))
     mutations = []
     def changed(label, action):
         data = copy.deepcopy(subject[2])

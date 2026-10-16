@@ -154,7 +154,7 @@ def complete_sources(suite):
     for stem, namespace, entry, source in SUBJECTS:
         modules, _ = source_modules(ROOT / source)
         subject = suite.authored(stem, entry, modules, (stem, namespace))
-        interface = json.loads((subject[1].parent / "interface.json").read_text())
+        interface = json.loads((subject[1].parent / "interface.json").read_text(encoding="utf-8"))
         assert interface["original"] == subject[2][2].removeprefix("sha256:")
         assert interface["protocol"] == subject[2][3]
         suite.case(stem + "-complete-fixture-bytes", lambda: None)
@@ -191,7 +191,7 @@ def repeat_cases(suite, subject):
     failure_prefixes(suite, subject, "repeat-V", v, ["2", None, "100", True, "9"], sends, (2, 3))
     failure_prefixes(suite, subject, "repeat-P", p, ["2", "10", None, None, None], receives, (1,))
     # Preserve all declarations and names. Reachable arithmetic must be read.
-    source = subject[0].read_text()
+    source = subject[0].read_text(encoding="utf-8")
     assert source.count('"algebra.field_add"') == 2
     changed = suite.export("repeat-same-name-arithmetic", source.replace('"algebra.field_add"',
                            '"algebra.field_multiply"'), subject[2][3])
@@ -219,8 +219,8 @@ def nested_cases(suite, subject):
     # A complete authored same-name change, before frontend emission.
     original = ROOT / SUBJECTS[1][3]
     changed = suite.directory / "changed-repeat-nested.zkc"
-    text = original.read_text(); assert "result = result + x" in text
-    changed.write_text(text.replace("result = result + x", "result = result * x"))
+    text = original.read_text(encoding="utf-8"); assert "result = result + x" in text
+    changed.write_text(text.replace("result = result + x", "result = result * x"), encoding="utf-8")
     variant = suite.authored("nested-same-name-source", "sample::Demo", {"sample": changed})
     assert variant[2][3] == subject[2][3] and variant[2][2] != subject[2][2]
     observe(suite, variant, "nested-same-name-source-result", p, ["2", "2", "3"], [], returned(["243"]))
@@ -531,7 +531,7 @@ def cyclic_roles_cases(suite):
 
 
 def profile_cases(suite):
-    original = (ROOT / "compiler/test/fixtures/finite/total-state.mlir").read_text()
+    original = (ROOT / "compiler/test/fixtures/finite/total-state.mlir").read_text(encoding="utf-8")
     start = original.index('"protocol.func"')
     prefix = original[:start]
     suffix = original[original.rindex('}) {profile='):]
@@ -570,7 +570,7 @@ def profile_cases(suite):
 def closed_boundary(suite, subject):
     # Native closed execution requires a single-role entry. Keep the complete
     # handwritten original and change only that interface roster.
-    source = subject[0].read_text()
+    source = subject[0].read_text(encoding="utf-8")
     assert 'roles=["P", "Q"]' in source
     subject = suite.export("closed-repeat-profile", source.replace('roles=["P", "Q"]', 'roles=["P"]'))
 

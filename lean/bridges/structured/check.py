@@ -171,7 +171,7 @@ class Suite:
         if errors:
             raise next((error for error in errors if isinstance(error, KeyboardInterrupt)), errors[0])
 
-    def command(self, label, argv, success=True):
+    def command(self, label, argv, success=True, timeout=60):
         start = time.monotonic()
         number = len(self.commands)
         prefix = self.directory / f"command-{number:04d}"
@@ -179,7 +179,7 @@ class Suite:
         self.commands.append(record)
         try:
             result = subprocess.run(list(map(str, argv)), cwd=ROOT, capture_output=True,
-                                    encoding="utf-8", timeout=60)
+                                    encoding="utf-8", timeout=timeout)
         except subprocess.TimeoutExpired as error:
             record["error"] = f"{type(error).__name__}: {error}"
             for suffix, output in ((".stdout", error.stdout), (".stderr", error.stderr)):

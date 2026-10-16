@@ -230,7 +230,7 @@ module { "protocol.module"() ({
 
 
 def partial_math_cases(suite):
-    source = (ROOT / "compiler/test/fixtures/finite/total-state.mlir").read_text()
+    source = (ROOT / "compiler/test/fixtures/finite/total-state.mlir").read_text(encoding="utf-8")
     fold = ('"algebra.finite_fold"(%xs,%a,%b) {domain=@items,step=@step} '
             ': (!V,!F,!F)->(!F,!F)')
     wrapper = '''"protocol.func"() ({

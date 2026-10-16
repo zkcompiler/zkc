@@ -157,7 +157,7 @@ class Suite(structured.Suite):
         import evidence
         self.evidence = evidence
         self.detail = dict(format="zkc.participant-comparison/0", cases=[], controls=[],
-                           affinity=sorted(os.sched_getaffinity(0)),
+                           affinity=sorted(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None,
                            threads={k: os.environ.get(k) for k in ("CARGO_BUILD_JOBS", "RAYON_NUM_THREADS", "OMP_NUM_THREADS")},
                            scope="sampled native endpoint values, prefixes and operational residual state")
         # Shared run publishes running before allocation, Git or tool copies.
@@ -401,7 +401,7 @@ class Suite(structured.Suite):
                     for complete in (False,True):
                         fault=dict(action=i,mode=("complete-" if complete else "")+mode)
                         self.case(schnorr,f"wire-{role}-{i}-{fault['mode']}",role,inputs[role],receives[role],plans[role],fault=fault)
-        services=self.subject("services",(ROOT / "compiler/test/fixtures/structured-source/open-services.mlir").read_text())
+        services=self.subject("services",(ROOT / "compiler/test/fixtures/structured-source/open-services.mlir").read_text(encoding="utf-8"))
         for label,values,plan,fault,want in [
             ("alias",["17","17",True],[provider("17",[3,8,11])],None,["3","8",None]),
             ("distinct",["17","29",True],[provider("17",[3,11]),provider("29",[8,19])],None,["3","8",None]),
@@ -413,9 +413,9 @@ class Suite(structured.Suite):
         self.negative_controls(schnorr,services)
 
     def negative_controls(self, subject, services):
-        changed=subject["original"].read_text().replace('"algebra.field_multiply"','"algebra.field_add"',1)
-        require(changed != subject["original"].read_text(),"source mutation target")
-        path=subject["folder"] / "changed-source.mlir"; path.write_text(changed)
+        changed=subject["original"].read_text(encoding="utf-8").replace('"algebra.field_multiply"','"algebra.field_add"',1)
+        require(changed != subject["original"].read_text(encoding="utf-8"),"source mutation target")
+        path=subject["folder"] / "changed-source.mlir"; path.write_text(changed, encoding="utf-8")
         fresh=json.loads(self.command("mutated-source:export",[self.tools["compiler"],"protocol-structured",path,"--symbol="+subject["snapshot"][3]]))
         fresh[2]=subject["snapshot"][2]
         self.evidence.atomic_json(subject["folder"] / "copied-provenance.json",fresh)
@@ -423,7 +423,7 @@ class Suite(structured.Suite):
         self.control("actual-source-mutation-copied-provenance",lambda:bind_snapshot(path,subject["snapshot"],fresh))
         self.control("snapshot-body-copied-provenance",lambda:bind_snapshot(subject["original"],fresh,subject["snapshot"]))
         row=next(r for r in self.detail["cases"] if r["name"].startswith("honest-") and r["status"]=="Pass")
-        native=json.loads(Path(row["observation"]).read_text()); request=json.loads(Path(row["request"]).read_text()); source=request["expected"]
+        native=json.loads(Path(row["observation"]).read_text(encoding="utf-8")); request=json.loads(Path(row["request"]).read_text(encoding="utf-8")); source=request["expected"]
         changed_bundle=json.loads(self.command("mutated-source:bundle",[self.tools["compiler"],"protocol-bundle",path,"--entry="+subject["snapshot"][3],"--no-simplify"]))
         changed_candidate=subject["folder"] / "changed-candidate.json"
         changed_candidate.write_text(changed_bundle["candidate"],encoding="utf-8")
@@ -453,21 +453,21 @@ class Suite(structured.Suite):
             record=dict(name=label,status="Pass",observed=status,passed=True,kind="control")
             self.detail["controls"].append(record);self.checks.append(record)
         verifier=next(r for r in self.detail["cases"] if r["name"].startswith("honest-") and r["outcome"]==["returned",[True]])
-        bad=json.loads(Path(verifier["request"]).read_text());bad["fault"]=dict(action=0,mode="modulus")
+        bad=json.loads(Path(verifier["request"]).read_text(encoding="utf-8"));bad["fault"]=dict(action=0,mode="modulus")
         target=subject["folder"] / "fault-modulus-on-group.json";self.evidence.atomic_json(target,bad)
         observed=json.loads(self.command("fault-modulus-on-group",[self.tools["native"],subject["candidate"],target],accepted=(1,)))
         require(observed["status"]=="HarnessFailure","scalar fault on group must fail configuration")
         record=dict(name="fault-modulus-on-group",status="Pass",observed="HarnessFailure",passed=True,kind="control")
         self.detail["controls"].append(record);self.checks.append(record)
         service_case=next(r for r in self.detail["cases"] if r["name"]=="distinct" and r["status"]=="Pass")
-        wrong_root=json.loads(Path(service_case["request"]).read_text())
+        wrong_root=json.loads(Path(service_case["request"]).read_text(encoding="utf-8"))
         wrong_root["binding"]["queries"]["first"]=1
         target=services["folder"] / "wrong-projection-root.json";self.evidence.atomic_json(target,wrong_root)
         observed=json.loads(self.command("wrong-projection-root",[self.tools["native"],services["candidate"],target],accepted=(1,)))
         require(observed["status"]=="Mismatch" and observed["detail"]=="query original root binding","valid but wrong original root must mismatch")
         record=dict(name="wrong-projection-root",status="Pass",observed="Mismatch",passed=True,kind="control")
         self.detail["controls"].append(record);self.checks.append(record)
-        unreachable=json.loads(Path(service_case["request"]).read_text())
+        unreachable=json.loads(Path(service_case["request"]).read_text(encoding="utf-8"))
         unreachable["request"][3][0][2]=["stop","abort"]
         unreachable["request"][3][1][2]=["stop","refused"]
         unreachable["fault"]=dict(action=1,mode="malformed-reply")
