@@ -43,6 +43,7 @@ def test_coverage_has_matched_forms_and_independent_stark_dimensions(modules):
             assert programs[0].inputs == programs[1].inputs == programs[2].inputs
     air = [c.shape for c in cases if c.name == 'air']
     assert len({s['height'] for s in air if s['width'] == 1}) >= 3
+    assert all(any(s['height'] >= 1024 and s['width'] == width for s in air) for width in (1, 4))
     assert len({s['width'] for s in air if s['height'] == 32 and s['evaluation_size'] == 128}) >= 3
     assert len({s['evaluation_size'] for s in air if s['height'] == 32 and s['width'] == 4}) >= 2
 
@@ -125,8 +126,14 @@ def test_lifecycle_evidence_is_checked(modules, fault):
         modules['results'].validate_worker(worker, {'warmups': 2, 'samples': 2, 'iterations': 1}, 'admitted_entry_call')
 
 
-@pytest.mark.parametrize('fault', ['entries', 'bytes', 'hits', 'zero_entries', 'zero_bytes'])
-def test_saved_worker_preparation_must_respect_its_contract(modules, fault):
+@pytest.mark.parametrize('fault,diagnostic', [
+    ('entries', 'preparation exceeded its resource contract'),
+    ('bytes', 'preparation exceeded its resource contract'),
+    ('hits', 'preparation hits moved backwards'),
+    ('zero_entries', 'disabled preparation retained state'),
+    ('zero_bytes', 'disabled preparation retained state'),
+])
+def test_saved_worker_preparation_must_respect_its_contract(modules, fault, diagnostic):
     worker = lifecycle_worker()
     limits = worker['lifecycle']['preparation_limits']
     stats = worker['lifecycle']['calls'][0]['preparation']
@@ -137,8 +144,25 @@ def test_saved_worker_preparation_must_respect_its_contract(modules, fault):
         limits[fault.removeprefix('zero_')] = 0
         for call in worker['lifecycle']['calls']:
             call['preparation']['hits'] = 1
-    with pytest.raises(modules['io'].MeasurementError):
+    with pytest.raises(modules['io'].MeasurementError, match=diagnostic):
         modules['results'].validate_worker(worker, {'warmups': 2, 'samples': 2, 'iterations': 1}, 'admitted_entry_call')
+
+
+@pytest.mark.parametrize('entries,capacity,accepted', [
+    (512, 64 << 20, True), (128, 8 << 20, False),
+    (512, 8 << 20, False), (128, 64 << 20, False),
+])
+def test_selected_limits_allow_retention_above_native_defaults(modules, entries, capacity, accepted):
+    worker = lifecycle_worker()
+    worker['lifecycle']['preparation_limits'].update(entries=entries, bytes=capacity)
+    for call in worker['lifecycle']['calls']:
+        call['preparation'].update(entries=200, retained_bytes=9 << 20)
+    plan = {'warmups': 2, 'samples': 2, 'iterations': 1}
+    if accepted:
+        modules['results'].validate_worker(worker, plan, 'admitted_entry_call')
+    else:
+        with pytest.raises(modules['io'].MeasurementError, match='preparation exceeded its resource contract'):
+            modules['results'].validate_worker(worker, plan, 'admitted_entry_call')
 
 
 @pytest.mark.parametrize('entries,capacity,enabled', [
