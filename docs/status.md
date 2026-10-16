@@ -185,14 +185,14 @@ projects. This does not supply an LSP server or formatter.
 
 Relation and target/input/output/continuation clauses state intent; declarations
 alone add no runtime guard, satisfaction fact or security theorem.
-Original PIR now retains all closed declaration contracts and exact relation
+Original PIR retains all closed declaration contracts and exact relation
 formula references. Native verification checks ownership, complete Math ABI,
 port types and roles, clause shapes and agreement of an entry statement with
 retained targets. Source proof statements retain the exact selected target name;
 its owned clause supplies the decision role. The logical source interface
 independently checks that selection against the verifier, and native proof
 deployment checks the recovered decision role against its validator.
-The current version-0 [structured export](spec/formats/structured-source.md)
+The version-0 [structured export](spec/formats/structured-source.md)
 includes formula links and one contract-table row for every protocol, regardless
 of the selected Entry. Application expansion retains declaration metadata;
 participant projection erases contracts, formula links and selected-target
@@ -273,133 +273,25 @@ The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retain
 PIR programs, proves open-process contracts, and applies selected ArkLib/VCVio
 security results. Its named DSL target path also checks an authored relation body.
 Native SSA/Lean differential tests cover the admitted finite scalar profile.
-The separate [structured import](spec/formats/structured-source.md) retains
-original whole units, with kinded named helpers and separate protocol roots on
-the shared Region carrier. Lean independently checks exact metadata, signatures,
-helper linking, role scopes, service provenance and computational availability.
-Its scalar/group evaluator is parameterized by an explicit ring/module model;
-participant effects use actual handles and independent receives. Math helpers
-propagate optional inputs through named component closures, while owned Local
-calls sequence all inputs and preserve zero-result stops. Closed finite clients
-use an explicit checked closed view of the same admitted subject and uniform
-scalar/group meanings.
-The [component laws](../lean/docs/spec/structured-source.md#shared-mathematical-and-component-meaning)
-prove all-present adequacy and full-table framing without duplicating helper
-bodies or arithmetic implementations. Static formation records per-result
-footprints and every intermediate requirement separately. The first multi-role
-profile refuses transitive Math folds and checked reads; no general availability
-soundness or eager/demand projection theorem is claimed.
-[Structured comparisons](../lean/bridges/structured/README.md) distinguish
-logical equations, direct SSA comparisons and selected production Runner cases.
-The open CLI retains request/reply order, stop sites and consumed reply indices;
-its additive scalar test group is not native BLS G1, and evaluator capacity
-thresholds are not equated. The retained actual Interactive Schnorr unit has
-kernel admission, arbitrary scalar/group participant equations and an explicit
-adapter to the existing verifier contract. Its retained target now binds the
-actual formula helper and typed role-local inputs and decision selector. The maintained Helpers and Reordered source
-forms satisfy that same contract through their actual named calls. The admitted
-EarlyChallenge source has a proved query-first process and fails the contract.
-For Interactive, the [honest-prover boundary](../lean/docs/spec/structured-source.md#actual-interactive-schnorr-subject)
-extracts actual ordered send observations into a causal strategy and proves
-acceptance under equal bases, the verifier-key witness relation and honest
-delivery, with the unused prover key unconstrained. Exact
-stopped prefixes remain available. The optional public-view theorem transfers
-these source-derived messages to VCVio's simulator for a fixed challenge and
-uniform nonce under a successful reply/send profile. This is a checked-source
-model theorem; native provider laws and joint scheduling remain separate.
-The optional source Sigma adapter also reuses upstream completeness,
-two-transcript special soundness and fresh-challenge honest-verifier simulation
-under its stated sampling and field assumptions. The extracted witness satisfies
-the retained formula; it is not assumed to be the prover's original input.
+The separate [structured import](spec/formats/structured-source.md) exports
+original protocol-stage units: shared helpers, protocol roots, retained contracts
+and formula links, checked primitives, maps and realizations, protocol
+applications and repeats. The native exporter and an independent C++ SSA
+reference check this profile, including the 4096-instruction admission budget,
+reference depth 64 and effective-site collisions. The
+[structured bridge](../lean/bridges/structured/README.md) compares native SSA
+evaluation, Lean replay and selected Runner cases; it does not prove native
+transformations. Native affine resources, conditional entry completion and
+construction-start selection are outside this profile.
 
-[Structured contract APIs](../lean/docs/spec/verification.md#structured-contracts)
-recover exact owners, relations, formula links and selectors from admitted
-metadata. Common local derivation and call-substitution laws use the existing
-Region/Proc semantics. Mathematical adequacy, logical parameter sharing and the
-chosen security experiment remain explicit. Entry selection is retained and
-checked separately from reusable component clauses; these APIs do not prove
-compiler/native correspondence or infer undeclared security properties.
-
-Two [scalar inlining pairs](../lean/bridges/structured/README.md#scalar-inlining-pairs)
-have universal model equalities between exact original and actual prepared
-exports: Schnorr response and multilinear Sumcheck claim update. The reusable
-region law preserves complete helper processes and suffixes; regeneration and
-native SSA comparisons test these executable boundaries. These pair-specific
-proofs do not establish general compiler pass correctness.
-The native exporter also retains non-callable operation bindings in its exact
-schema and admits fifteen checked Local index/vector/field primitives, alongside
-pure index constant/equality. Unused bindings and dormant bodies are checked.
-Ordinary wrappers capture unchanged multilinear shape/table/halves closures and
-an independent vector/integer example without source slicing. The independent
-SSA reference checks arithmetic/shape stops and ordered vector results separately
-from observer capacity.
-Original realizations and Fr scalar-ring maps are retained as distinct
-declarations. The independent native SSA reference checks all transitive helpers
-and evaluates them through its existing Math interpreter, with ordered row shape
-checks and strict owned Local calls. Whole unchanged `multilinear::fix_first`
-and `fix_prefix` closures use ordinary authored wrappers; an independent Fr
-linear combination checks broadcasts and unused rows. Initial realization
-closures exclude finite work and bounded reads; maps exclude other fields,
-including the library's KoalaBear Ext8 Combination. Native preparation's Ring
-limits and generated guard sites remain a separate correspondence boundary.
-The [formal helper contracts](../lean/docs/spec/structured-source.md#reusable-sumcheck-helper-contracts)
-derive map and finite-prefix laws from exact members of each checked helper list.
-The shared Sumcheck body laws preserve malformed-input and stop distinctions and
-connect public check to the independent multilinear checker over commutative rings.
-These source-model equations do not establish native correspondence or security.
-Native formation owns malformed map ABI/mask/helper and transitive ring-fragment
-refusals before either structured reader runs its redundant checks. Independent
-controls instead observe the Fr-only restriction, the 4096-instruction admission
-budget (one per retained preparation), and reference depth 64 measured in edges
-with leaf depth zero. Runtime evaluation depth starts at one and remains a
-separate observer limit. Missing-input evidence observes the owned protocol
-Local-call boundary, not a direct optional derived map operation.
-Retained protocol applications preserve exact operands/results, positional role
-substitution and authored sites. The independent SSA reference uses immutable
-role/prefix context, optional interface masks, actual service handles and ordered
-replies. Both native admissions independently check effective static-site
-collisions without expansion, in addition to native conservative budgets.
-Complete unchanged application/service-order fixtures and a nested wrapper
-exercise this boundary. Retained protocol repeats use one isolated callback,
-optional scoped state and immutable captures in the existing SSA reference.
-Independent controls cover unchanged repeat/nested-repeat sources, service
-aliasing and query order across iterations, nested applications, independent
-participant counts and received values, and whole-body refusal at maximum zero.
-Complete original Reduction and Sumcheck captures are admitted, including their
-helper closures. Their [source-only verifier equations](../lean/docs/spec/structured-source.md#source-only-sumcheck-verifier)
-now connect the exact complete bodies to plain participant processes at retained
-maxima 4 and 2 respectively. They preserve independent V inputs, actual query
-replies, optional-input order and stopped prefixes. Source composes its actual
-terminal checker with the multilinear table equation; Reduction returns a
-residual obligation. These are ring/module process results, with no frontend or
-exporter correctness, native execution, sampling, honest P completeness or
-cryptographic security claim.
-Effective sites and repeat depth traverse applications without unrolling source
-maxima. Native affine resource controls remain outside the structured type model.
-Conditional entry completion and construction-start selection remain outside
-this profile.
-The independent Lean model retains application edges on its existing typed
-Region carrier, links complete signatures through prefix-captured tables, and
-checks the same supported static profile independently. Complete source clients
-prove algebraic participant equations and ordered service/receive/stop behavior
-from named kernel admission proofs. Generic availability, abstract-preflight
-soundness and native execution correspondence remain additional obligations;
-the finite comparisons do not discharge those theorems.
-The separately owned
-[structured Lean bridge](../lean/bridges/structured/README.md) records its exact
-reader, model and comparison coverage; native checks alone do not establish
-that bridge's support or prove native transformations.
-[Formal support](../lean/docs/support.md) states exact experiments and premises.
-The independent [multilinear Sumcheck foundation](../lean/docs/spec/multilinear-sumcheck.md)
-proves arbitrary-length table restriction, endpoint-message and residual-to-full
-discharge laws, including empty rounds. It adds no structured protocol import
-or native correspondence. The [optional multilinear security adapter](../lean/docs/spec/multilinear-sumcheck-security.md)
-connects these contracts to ArkLib's causal degree-one interaction, proving
-complete `n / |F|` and partial residual `k / |F|` bounds and honest completeness.
-These results bind the verifier's fixed table and fresh uniform mathematical
-challenges. The [uniform query service](../lean/docs/spec/uniform-query-service.md#actual-imported-roots)
-applies them to the actual admitted `Sumcheck` and `Reduce` roots exported from
-the library source; native library execution remains outside these bounds.
+Lean independently checks each structured export's metadata, signatures, helper
+linking, role scopes, service provenance and computational availability, and
+proves its process equations on the shared Region carrier.
+[Formal support](../lean/docs/support.md) states exact experiments and premises,
+including the Interactive Schnorr contracts and Sigma properties, two inlining
+pairs checked against actual prepared exports, and `n / |F|` Sumcheck bounds on
+the actual admitted roots under a uniform query service. No general
+availability-soundness or native execution-correspondence theorem is claimed.
 Full DSL/compiler/runtime correspondence, production arithmetic/sampling,
 backend correctness and complete protocol security remain open.
 [Assurance](assurance.md) distinguishes these evidence boundaries.
