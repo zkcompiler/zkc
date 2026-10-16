@@ -7,7 +7,7 @@ They do not certify arbitrary DSL programs or the full native lowering pipeline.
 |---|---|---|
 | Core execution | Typed mathematical/role-local programs; exact process refinement; shared-state sequential composition; machine prefix/resumption and finite-process completion | General native loops and external waiting are not imported by the scalar profile |
 | Structured source | Multi-result closed callbacks and lexical binding; strict formation in both directions; scalar/mathematical/participant/import bridges; contextual equality, totality and compatible effect translation | Shared structural carrier; native transformation correctness requires separate correspondence |
-| [Structured native import](spec/structured-source.md) | Whole-unit original schema, separate protocol roots and kinded named helpers; explicit scalar/group interpretation, owner-only Local calls, shared participant effects, computational availability and service admission; retained formula links, declaration contracts and exact named Entry selections | No general availability soundness, eager/demand correspondence, affine resources or native correctness theorem |
+| [Structured native import](spec/structured-source.md) | Whole-unit original schema, separate protocol roots and kinded named helpers; explicit scalar/group interpretation, owner-only Local calls, shared participant effects, computational availability and service admission; retained formula links, declaration contracts and exact named Entry selections; process equations for the actual [finite fold fixtures](#finite-fold-subjects) | No general availability soundness, eager/demand correspondence, affine resources or native correctness theorem |
 | [Structured contract binding](spec/verification.md#structured-contracts) | Actual formula invocation, typed port/role selection, owner/invocation-scoped logical assignments, shared opaque interpretations and formula-domain translation; actual-outcome boundary projection | Purpose labels do not choose quantifiers or authority. Opaque meanings and logical instantiations are explicit; no security theorem follows from metadata or an inventory |
 | Structural proof construction | Source-indexed derivation soundness with local operation/callback laws; exhaustive lexical call inventory and generic checked-callee substitution preserving masks, stops, state and continuations | Local mathematical laws and loop/callback proofs remain required; selected requests do not discover undeclared intentions or prove the exporter correct |
 | Structural authoring automation | `bind_contract` recovers retained owners, formula helpers and typed selectors; `derive_region` composes local laws over the actual checked body, including callbacks and lexical binds | Kernel-checked proof construction; unsupported mathematics remains a goal. Direct body projection is the default; materializing large views or proofs can be expensive |
@@ -71,6 +71,18 @@ The [structured bridge](../bridges/structured/README.md) separately compares
 full-size BLS12-381 scalar values with direct SSA execution and selected production
 Runner cases. Those finite comparisons do not establish native executable
 soundness, randomness or transcript encoding.
+
+## Finite fold subjects
+
+`TotalState` and `UnitState` admit the actual `finite/total-state.mlir` and
+`finite/unit-state.mlir` exports by computing `checkClosed` on their transparent
+constructor data. `TotalState.process_eq_checked_reference` proves that the
+imported process returns the ordered pair fold for every input list, and
+`UnitState.process_eq_checked_reference` proves that an admitted nonempty list
+aborts exactly when its predicate enables the zero-result step. Lists of length
+at least `2^64` stop `exhausted` in both. The equations hold over every
+`CommRing F` with `AddCommGroup G` and `Module F G`, for all vectors and scalar
+and Boolean inputs; no finite test enumeration supplies them.
 
 ## Library primitive subjects
 
@@ -364,8 +376,11 @@ before receiving the commitment. Its exact process equation proves that it
 cannot satisfy that contract, independently of any scripted test replies.
 
 The separate dormant formula remains a named Math closure, with closed and
-all-present component equations for arbitrary values. The exact relation record
-is retained without inferring an association to that formula.
+all-present component equations for arbitrary values. The retained relation
+record names it through an explicit checked formula symbol, and the contract
+table retains every protocol's clauses. `ZkcExamples.Structured.SchnorrBinding`
+uses this metadata to select the actual target's ports, roles, decision and
+formula body; no association is inferred from names.
 
 ## Source-only Sumcheck verifier
 

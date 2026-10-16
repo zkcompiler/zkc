@@ -226,12 +226,8 @@ python3 lean/checks/check_structured_renderer.py
 This check runs in `just test-lean`. It does not turn the renderer into a proved
 translator.
 
-`TotalState.process_eq_checked_reference` proves the ordered pair fold for
-arbitrary lists, including refusal outside the unsigned-index domain.
-`UnitState.process_eq_checked_reference` proves the complete result: an admitted
-nonempty list aborts exactly when its predicate enables the zero-result step.
-Both are parametric in the scalar commutative ring. They are equations for the
-actual admitted constructor subjects; no finite test enumeration supplies them.
+[Formal support](../../docs/support.md#finite-fold-subjects) states the proved
+process equations for both subjects.
 
 ## Open participants
 
@@ -254,14 +250,8 @@ Entries exercise both roles, altered replies, helper factoring, declaration
 permutation and an early-challenge mutation. The latter can accept the same
 sample while exposing a different first action.
 
-`SchnorrInteractive` proves equations for both participants of the retained
-library-derived source, and connects the verifier through an explicit effect
-adapter to its reusable Schnorr contract. The dormant relation declaration and
-Math formula are both retained with an explicit checked formula symbol. The
-contract table retains every protocol's clauses, including empty inventories.
-`SchnorrBinding` uses this metadata to select the actual target's ports, roles,
-decision and formula body. These source equations keep received values and stopping continuations.
-They do not establish that the native runtime or provider implements them.
+[Formal support](../../docs/support.md#interactive-schnorr) states the proved
+equations for these Schnorr subjects.
 
 `open_protocol.py --write-fixtures` regenerates each retained MLIR, JSON and
 constructor-data subject. As for the closed suite, semantic proofs are maintained

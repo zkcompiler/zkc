@@ -101,7 +101,8 @@ ports and scopes. Named component and clause constructors reject missing or
 ambiguous references. The actual source and helper bodies remain projections
 from the imported subject.
 
-For example, the Schnorr adapter recovers these records:
+For example, the Schnorr adapter in `ZkcExamples.Structured.SchnorrBinding`
+recovers these records:
 
 ```lean
 def owner : ContractBinding imported := by bind_contract

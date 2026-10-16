@@ -9,7 +9,7 @@ experiment assumptions and theorem application tied together?
 ## Chosen structure
 
 Retain contracts at the original-PIR boundary and derive behavioral proofs from
-the existing typed `Region`. The region denotes one role-local open process in
+the typed `Region`. The region denotes one role-local open process in
 `PIR.Proc`. Relation interpretation and property-specific library adapters use
 that same subject. The [verification specification](../spec/verification.md#structured-contracts)
 owns the detailed interfaces; [support](../support.md) states theorem scope.
@@ -37,19 +37,19 @@ acceptance bounds and simulation, which have different quantifiers.
 
 ### Source syntax and proof authoring
 
-The existing `relation` and `spec` forms remain because they express the facts
-that compilation must retain: an actual predicate body, its argument order,
-participant-local ports, and the intended target or residual. Their current
-spelling is not an architectural requirement. In particular, an `input` clause
-describes an input relation; a false-claim soundness experiment may refute that
-relation rather than assume it.
+The `relation` and `spec` forms exist because they express the facts that
+compilation must retain: an actual predicate body, its argument order,
+participant-local ports, and the intended target or residual. Their spelling is
+not an architectural requirement. In particular, an `input` clause describes an
+input relation; a false-claim soundness experiment may refute that relation
+rather than assume it.
 
-Proof authoring currently uses Lean. An adapter supplies a mathematical
+Proofs are authored in Lean. An adapter supplies a mathematical
 interpretation, local adequacy laws and an experiment; deterministic binding
 data can be recovered from the retained declarations. This separates semantic
-choices from indices and duplicated source structure. A later verification
+choices from indices and duplicated source structure. A verification
 declaration in `.zkc` could select these adapters and instantiate their typed
-parameters, but it should elaborate to these same obligations. Library names,
+parameters; it would elaborate to these same obligations. Library names,
 annotations and successful elaboration cannot replace the corresponding proofs.
 
 ### Alternatives and the automation boundary
@@ -58,11 +58,11 @@ annotations and successful elaboration cannot replace the corresponding proofs.
 |---|---|---|
 | Recognize a complete exported protocol | Optional automation for familiar small programs | Factoring and syntactic changes can break recognition; arbitrary semantic equivalence is not decidable |
 | Generate both programs and proofs from a restricted language | A possible frontend for verified component libraries | Introduces another translation boundary and can restrict custom implementations |
-| Prove local component contracts and instantiate actual calls | Reuse behavior across callers and source arrangements | Each new implementation still needs a local correspondence proof |
-| Derive obligations over the existing typed Region | Recover binding and composition mechanically | Mathematical invariants, domains and experiment choices remain explicit |
+| Prove local component contracts and instantiate actual calls | Reuse behavior across callers and source arrangements | Each implementation needs its own local correspondence proof |
+| Derive obligations over the typed Region | Recover binding and composition mechanically | Mathematical invariants, domains and experiment choices remain explicit |
 
 The implementation combines the last two approaches. This preserves one
-execution semantics and lets recognition or future syntax elaborate into the
+execution semantics and lets recognition or added source syntax elaborate into the
 same checked evidence. The automation boundary is practical: recover source
 identity, selectors and structural composition; ask the author for mathematical
 laws and the experiment they intend to prove.
@@ -94,11 +94,11 @@ of both bodies would not provide.
 A proof-producing tactic recovers the structural spine from the admitted tree.
 Its candidate is checked by Lean; unsupported mathematics remains a goal. This
 is intentionally narrower than discovering invariants or deciding arbitrary
-program equivalence. A new language that generates both code and library proofs
-could provide a convenient restricted frontend later, but would still need this
-underlying correspondence boundary.
+program equivalence. A separate language that generates both code and library
+proofs could serve as a restricted frontend, but it would need this same
+correspondence boundary.
 
-The bounded scalar generator remains useful for its reviewed source vocabulary.
+The bounded scalar generator serves its reviewed source vocabulary.
 It is a client of explicit proof requests, not the definition of all possible
 contracts or theorems. Likewise, a supplied whole-program equality is a useful
 final certificate only after its derivation is available; wrapping that equality
@@ -123,7 +123,7 @@ Reusing input index zero in two components does not share their parameters.
 Explicit instantiation can share one table or one extracted witness when the
 property requires it. Opaque relation meanings are fixed once per experiment,
 so repeated uses of one declaration cannot choose unrelated predicates.
-The current coordinates are logical labels. A theorem about dynamic invocation
+The coordinates are logical labels. A theorem about dynamic invocation
 reachability must additionally connect those labels to the actual execution.
 
 ### Failure and observation are part of the interface
@@ -146,7 +146,7 @@ establish what the chosen property actually observes.
 ### Theoretical basis and limits
 
 [Interaction Trees](https://arxiv.org/abs/1906.00046) demonstrates compositional
-reasoning with events, continuations and handlers. zkc uses its existing finite
+reasoning with events, continuations and handlers. zkc uses its own finite
 process model; it does not adopt the paper's coinductive semantics or claim
 support for arbitrary nontermination.
 [Dijkstra Monads for All](https://arxiv.org/abs/1903.01237) explains how distinct
@@ -184,8 +184,8 @@ reconstructed independently of candidate aliases.
 
 ### Generic relation authoring
 
-Generic formula relations already give reusable source libraries an inspectable
-predicate. Opaque relations currently require a fixed logical signature. The
+Generic formula relations give reusable source libraries an inspectable
+predicate. Opaque relations require a fixed logical signature. The
 Sumcheck residual therefore uses a typed external Lean request: it names the
 fixed original table and reads the actual returned point and value. Moving that
 request into a source-authored generic continuation is useful follow-up work,
@@ -197,15 +197,15 @@ including arguments absent from the native ABI. Source emission and independent
 source comparison must derive the same identity; exact logical schemas and
 purposes must still agree. Repeated uses of one instance need one interpretation.
 Distinct declarations treated as aliases need explicit coherence, which the
-current per-declaration relation environment does not infer.
+per-declaration relation environment does not infer.
 
-A bounded extension can emit closed instances through the existing relation
-carrier. Automatic proof-library selection from standalone exports additionally
-needs checked family/argument provenance and logical ABI information. A digest
-alone cannot recover those arguments or establish a theorem's applicability.
-Evaluate the extension by replacing the maintained Sumcheck external residual
-with an actual retained continuation and consuming its equivalence in the same
-final probability bound. Merely retaining another annotation is insufficient.
+A bounded extension can emit closed instances through the relation carrier.
+Automatic proof-library selection from standalone exports additionally needs
+checked family/argument provenance and logical ABI information. A digest alone
+cannot recover those arguments or establish a theorem's applicability. Evaluate
+the extension by replacing the maintained Sumcheck external residual with an
+actual retained continuation and consuming its equivalence in the same final
+probability bound. Merely retaining another annotation is insufficient.
 
 ### Further semantic coverage
 
