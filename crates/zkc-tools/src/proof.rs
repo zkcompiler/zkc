@@ -634,6 +634,7 @@ impl NativeDeployment {
             Ok(values)
         })();
         let mut report = NativeProofReport {
+            execution_counts: Default::default(),
             outputs: None,
             outcome: Ok(Vec::new()),
             binding: hex(&binding),
@@ -733,6 +734,7 @@ impl NativeDeployment {
                         }
                     }
                     report.usage = runner.usage();
+                    report.execution_counts = runner.execution_counts();
                     report.return_at = runner.early_return().map(|(o, s)| (o.clone(), s.into()));
                     backend = runner.into_backend();
                 }
@@ -816,6 +818,7 @@ fn budget(value: &Json) -> Result<u64> {
     Ok(n)
 }
 pub struct NativeProofReport {
+    pub execution_counts: zkc_runtime::interactive::ExecutionCounts,
     pub outcome: Result<Vec<u8>>,
     /// Successful copyable results indexed by their original protocol output
     /// port. Absent on rejection, stop, refusal or cleanup failure. Private

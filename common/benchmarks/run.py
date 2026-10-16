@@ -48,6 +48,7 @@ def main(argv=None):
     run_parser.add_argument('--seed', type=int, default=0)
     run_parser.add_argument('--cpu', type=nonnegative)
     run_parser.add_argument('--timeout', type=positive_integer, default=300)
+    run_parser.add_argument('--execution-counts', action='store_true', help='require an instrumented source worker; report execution counts without timing comparisons')
     run_parser.add_argument('--label', default='current')
     args = parser.parse_args(argv)
     try:

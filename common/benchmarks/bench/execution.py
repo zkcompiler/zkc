@@ -88,7 +88,7 @@ def prepare_case(args, output, capture, manifest, case):
     base = {'package': str(package), 'sha256': digest(package)}
     if not program.proof:
         backend = base | {'kind': 'run', 'roles': files[0], 'accept_role': 'P'}
-        job = Job(case.identifier, 'zkc', 'run', args.worker, backend, directory/'unused', boundary)
+        job = Job(case.identifier, 'zkc', 'run', args.worker, backend, directory/'unused', boundary, execution_counts=args.execution_counts)
         execute_job(job, directory/'control', CONTROL, args.timeout)
         # The generator supplies a typed incorrect expectation for its own domain.
         require(program.incorrect is not None, 'run workload needs an incorrect-result control')
@@ -123,7 +123,7 @@ def prepare_case(args, output, capture, manifest, case):
 def proof_jobs(args, capture, directory, name, base, files, program, proof_format):
     require(proof_format in ('raw.bytes/0', 'zkc.framed/0'), 'unknown proof format for refusal controls')
     backend = base | {'kind': 'host', 'inputs': files, 'preparation': True, 'preparation_entries': args.preparation_entries}
-    prototype = Job(name, 'zkc', 'prove', args.worker, backend, directory/'proof.bin', 'admitted_entry_call')
+    prototype = Job(name, 'zkc', 'prove', args.worker, backend, directory/'proof.bin', 'admitted_entry_call', execution_counts=args.execution_counts)
     # Generate a candidate for every statement, outside the measurement schedule.
     for index, inputs in enumerate(files):
         job = replace(prototype, backend=backend | {'inputs': [inputs]})

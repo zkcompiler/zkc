@@ -40,6 +40,8 @@ def prepare(args, output, capture, manifest):
     elif args.preset == 'stark':
         selected = [c for c in selected if c[1].name in ('air', 'fri', 'polynomial', 'extension', 'transcript', 'machine')]
     require(selected, 'selection contains no cases')
+    if args.execution_counts:
+        require(all(not isinstance(c[1], Protocol) for c in selected), 'execution counts require source workloads')
     controls = [c for c in selected if not isinstance(c[1], Protocol)]
     selected = [c for c in selected if isinstance(c[1], Protocol)]
     suites = {c[1].name: c[1] for c in selected}

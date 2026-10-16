@@ -13,6 +13,8 @@ pub struct Call {
     pub input_index: usize,
     pub decode_ns: u128,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution_counts: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub preparation: Option<Preparation>,
 }
 impl Call {
@@ -20,6 +22,7 @@ impl Call {
         Self {
             input_index,
             decode_ns,
+            execution_counts: None,
             preparation: None,
         }
     }

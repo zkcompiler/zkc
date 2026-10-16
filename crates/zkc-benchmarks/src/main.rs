@@ -117,7 +117,8 @@ impl Report {
             proofs: Vec::new(),
             build: json!({"compiler":env!("BENCH_RUSTC"), "profile":env!("BENCH_PROFILE"),
                 "opt_level":env!("BENCH_OPT_LEVEL"), "target":env!("BENCH_TARGET"),
-                "debug_assertions":cfg!(debug_assertions)}),
+                "debug_assertions":cfg!(debug_assertions),
+                "execution_counts":zkc_runtime::interactive::ExecutionCounts::ENABLED}),
             process: Value::Null,
             timer_floor_ns: 0,
         }
@@ -162,6 +163,11 @@ fn run() -> Result<Report> {
         return Err("unknown benchmark job format".into());
     }
     request.plan.validate()?;
+    if zkc_runtime::interactive::ExecutionCounts::ENABLED
+        && (request.plan.warmups + request.plan.samples) * request.plan.iterations > 128
+    {
+        return Err("execution counts permit at most 128 calls per worker".into());
+    }
     let mut report = match &request.backend {
         Backend::Host {
             package,

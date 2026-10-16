@@ -214,6 +214,7 @@ pub fn run(
             if let Some(proof) = proofs.last_mut() {
                 proof["input_index"] = json!(index);
             }
+            calls.borrow_mut().last_mut().unwrap().execution_counts = report.native.execution_counts.json();
             let stats = preparation_stats(&entry);
             *prior.borrow_mut() = stats.clone();
             calls.borrow_mut().last_mut().unwrap().preparation = Some(stats);
