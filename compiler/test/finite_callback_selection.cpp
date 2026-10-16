@@ -340,14 +340,20 @@ int main() {
                 "lane capacity lost checked ordered fallback");
         auto malformed = copy(*candidate);
         bool changed = false;
+        Value seed = selected(*malformed).getArgument(1);
         selected(*malformed).walk([&](Operation *operation) {
           if (!changed &&
               operation->getName().getStringRef() == "algebra.exec.field_add") {
-            operation->setOperand(0, operation->getOperand(1));
-            changed = true;
+            for (unsigned i = 0; i < 2; ++i)
+              if (operation->getOperand(i) == seed) {
+                operation->setOperand(i, operation->getOperand(1 - i));
+                changed = true;
+                break;
+              }
           }
         });
-        require(changed && !compare(*source, *malformed),
+        require(changed && succeeded(verify(*malformed)) &&
+                    !compare(*source, *malformed),
                 "wrong seed survived independent pointwise comparison");
         malformed = copy(*candidate);
         changed = false;
