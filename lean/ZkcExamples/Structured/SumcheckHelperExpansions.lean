@@ -1,5 +1,7 @@
 module
 
+public import Zkc.Source.DeriveRegion
+public import Zkc.Source.Structured.DerivationRules
 public import ZkcExamples.Structured.SumcheckHelperBodies
 
 @[expose] public section
@@ -44,20 +46,12 @@ def checkInputs (xs point : List F) (claim : F) :
 def messageResult (low high : F) : Values (assignment F G) [scalar, scalar] :=
   .cons low (.cons high .nil)
 
-set_option backward.isDefEq.respectTransparency false in
-set_option linter.unusedSimpArgs false in
 /-- Literal split, low sum, high sum. The input triple is arbitrary. -/
 theorem sums_expansion (table : Meanings F G) (xs : List F) (dimension columns : Nat) :
     sumsBody.denote (meaning F G table) (inputs xs dimension columns).get =
       (invoke table halvesHelper (inputs xs dimension columns)).bind fun halves =>
         .done (messageResult (halves.get .here).sum (halves.get (.there .here)).sum) := by
-  simp only [sumsBody, inputs, messageResult, Region.denote, meaning, Evaluation.meaning,
-    Evaluation.operation, Operands.eval, Regions.denote, Values.get_cons, Values.get,
-    prepend_empty, prepend_one, prepend_two, prepend_three, Environment.prepend,
-    Environment.push, SiteObservations.closed, SiteObservations.silent, PIR.Proc.bind,
-    Primitive.evaluate, primitiveOutcome, ← List.sum_eq_foldl]
-
-  rfl
+  derive_process using (exact vectorSum_law _ _ _ _)
 
 set_option backward.isDefEq.respectTransparency false in
 set_option linter.unusedSimpArgs false in

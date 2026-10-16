@@ -146,4 +146,18 @@ syntax (name := deriveRegion) "derive_region" " using " "(" tacticSeq ")" : tact
 elab_rules : tactic
   | `(tactic| derive_region using ($solver:tacticSeq)) => DeriveRegion.run solver
 
+/-- Prove a body's whole process equation `body.denote meaning env = target` by
+structural derivation. Each operation occurrence uses the first applicable
+supplied local law, or else its own meaning unchanged; the derived process must
+be definitionally equal to the stated target. -/
+syntax (name := deriveProcess) "derive_process" (" using " "(" tacticSeq ")")? : tactic
+macro_rules
+  | `(tactic| derive_process) => `(tactic|
+      (refine Zkc.Source.Region.Derivation.sound_identity ?_
+       derive_region using (apply Zkc.Source.RegionMeaning.OperationLaw.identity; rfl)))
+  | `(tactic| derive_process using ($laws:tacticSeq)) => `(tactic|
+      (refine Zkc.Source.Region.Derivation.sound_identity ?_
+       derive_region using
+         (first | ($laws) | (apply Zkc.Source.RegionMeaning.OperationLaw.identity; rfl))))
+
 end Zkc.Source
