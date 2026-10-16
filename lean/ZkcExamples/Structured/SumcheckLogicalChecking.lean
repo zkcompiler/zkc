@@ -56,6 +56,23 @@ theorem residual_export_checks :
       .ok ⟨tableContext 1, [residualAtom 0 1, initialAtom 1]⟩ := by
   rfl
 
+/-- The repacked root's export names the same identities with the repacked
+ports, and checks to the transported atoms. -/
+theorem repacked_export_checks :
+    checkContext (Value := assignment F G) resolution repackedRoot.protocol.signature
+      ⟨[.library (tableIdentity 1)],
+        [⟨residualIdentity 0 1, [.binder 0, .observed .output 0 1, .observed .output 1 1]⟩,
+         ⟨sumIdentity 1, [.binder 0, .observed .input 0 1]⟩]⟩ =
+      .ok ⟨tableContext 1, [rootMap.atom (residualAtom 0 1), rootMap.atom (initialAtom 1)]⟩ := by
+  rfl
+
+/-- The retained root's export does not check against the repacked root: its
+port positions now name P's residual values, not V's point. -/
+theorem retained_export_refused_at_repacked :
+    checkContext (Value := assignment F G) resolution repackedRoot.protocol.signature
+      (residualExport 0 1) = .error (.observationMismatch .output 2 1) := by
+  rfl
+
 /-- A generic identity applied at the wrong static instance: the exported sum
 over arity two is applied to a binder of arity one. -/
 theorem ill_scoped_instance_refused :

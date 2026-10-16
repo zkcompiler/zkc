@@ -7,7 +7,7 @@ public import Zkc.Source.Structured.LogicalInstantiation
 /-! Transport of logical contexts under a port repacking.
 
 A port map sends every port of one signature to a port of another with the
-same type and the same participant scope. Observations and legacy
+same type and the same participant scope; a repacking is an injective one. Observations and legacy
 selector-named slots move along the map; lexical binders do not move at all.
 Consequently every atom over binders and observations holds on the repacked
 subject exactly when it holds on the original one at the pulled-back boundary:
@@ -17,7 +17,9 @@ set_option autoImplicit false
 namespace Zkc.Source.Structured.Logical
 open Zkc.Source Zkc.Source.Structured
 
-/-- A port repacking with unchanged roles and scopes. -/
+/-- A port map: every source port is read from a target port of the same type
+and scope, with the same number of roles. A repacking is an injective port
+map; transport below does not need injectivity, so it holds for any map. -/
 structure PortMap (source target : ProtocolSignature) where
   roles : source.roles.length = target.roles.length
   input : Renaming source.inputs target.inputs

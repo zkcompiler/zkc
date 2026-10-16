@@ -204,23 +204,6 @@ def lowerApplication {owner : ContractBinding imported} {application : RelationA
   ⟨.inr binding.relation.index,
     lowerSelectors binding.relation.declaration.purposes binding.selectors⟩
 
-/-- An explicitly authored assertion: ordered terms and a meaning supplied by
-its author. Unlike vocabulary atoms it shares meaning with nothing else. -/
-structure Assertion (V : Vocabulary) (Value : Ty → Type) (signature : ProtocolSignature)
-    (context : List (LogicalType V.Sorts)) where
-  types : List (LogicalType V.Sorts)
-  arguments : Values (Term V Value signature context) types
-
-def Assertion.Holds {owner : ContractBinding imported} {invocation : InvocationCoordinate}
-    {context : List (LogicalType V.Sorts)}
-    (assertion : Assertion V Value owner.protocol.signature context)
-    (meaning : Values interpretation.Denote assertion.types → Prop)
-    (protocolContext : ProtocolContext)
-    (boundary : BoundaryValuation Value owner.protocol.inputs owner.protocol.outputs)
-    (store : Store interpretation owner invocation context) : Prop :=
-  ∃ arguments, readTerms interpretation protocolContext boundary store assertion.arguments = some arguments ∧
-    meaning arguments
-
 end Zkc.Source.Structured.Logical
 
 namespace Zkc.Source.Structured.Logical
@@ -375,8 +358,9 @@ theorem lowerOutputs_read (protocolContext : ProtocolContext)
     cases first <;> cases others <;> rfl
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
-/-- An existing external terminal is an authored assertion over the same store:
-its parameter sources and output observations become terms in order. -/
+/-- An existing external terminal reads lowered terms of the same store: its
+parameter sources and output observations become terms in order, and its
+experiment-authored meaning is applied to their values. -/
 theorem _root_.Zkc.Source.Structured.ExternalTerminal.holds_iff_lowered (terminal : ExternalTerminal owner F G)
     (protocolContext : ProtocolContext)
     (boundary : BoundaryValuation (assignment F G) owner.protocol.inputs owner.protocol.outputs)

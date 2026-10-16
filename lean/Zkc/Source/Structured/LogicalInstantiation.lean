@@ -132,29 +132,6 @@ theorem inherit_composes {parent child grandchild : List (LogicalType V.Sorts)}
   subst callee
   rfl
 
-/-- Selector substitution at the actual call with the logical argument kept
-outside runtime ports: the binder is the caller's, the output is the callee's
-actual returned component at the composed role. -/
-theorem inherited_output {parent child : List (LogicalType V.Sorts)} {invocation : InvocationCoordinate}
-    (call : CheckedApplication callee Γ) (rename : Renaming child parent)
-    (legacy : AssignmentInstantiation Value call) (iterations : call.Iterations)
-    (protocolContext : ProtocolContext)
-    (callerBoundary : BoundaryValuation Value call.caller.protocol.inputs call.caller.protocol.outputs)
-    (store : Store interpretation call.caller invocation parent)
-    (environment : Nat → Environment (Component Value) Γ)
-    (returned : Nat → Values (Component Value) callee.protocol.outputs)
-    {type : Ty} (selector : BoundarySelector callee.protocol.signature type)
-    (ref : Var callee.protocol.outputs type) (selected : selector.port = .output ref) :
-    (Term.observed (V := V) (context := child) selector).read interpretation
-        (protocolContext.enter call.site call.roles) (call.boundary protocolContext environment returned)
-        (instantiate call (inherit call rename legacy) iterations protocolContext callerBoundary store) =
-      let self := protocolContext.roles (roleSubstitution call.roles selector.role)
-      Participant.restrict
-        (((protocolContext.mapScopes (callee.protocol.outputScopes.map
-          (List.map (roleSubstitution call.roles))))[ref.index]?.getD []).contains self)
-        ((returned self).get ref) :=
-  call.output_substitution protocolContext environment returned selector ref selected
-
 /-! Substitution of binders within one owner. A renaming may identify binders
 (contraction), so it maps an independent context onto a shared one; the
 converse identification is never implied. -/

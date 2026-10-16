@@ -236,7 +236,9 @@ theorem shared_extraction (firstBase secondBase firstKey secondKey firstCommit s
     firstCommit secondCommit firstChallenge secondChallenge firstResponse secondResponse distinct
     firstAccept secondAccept)
 
-/-- Two separate Schnorr extractions fill the independent context only. -/
+/-- Two separate Schnorr extractions fill the independent context; they give
+no common witness, and `independent_without_common_witness` shows that none
+need exist. -/
 theorem independent_extraction (firstBase secondBase firstKey secondKey firstCommit secondCommit : G)
     (firstChallenge secondChallenge : F) (firstResponses secondResponses : F × F)
     (distinct : firstChallenge ≠ secondChallenge)
@@ -253,9 +255,35 @@ theorem independent_extraction (firstBase secondBase firstKey secondKey firstCom
       (Zkc.Protocols.Schnorr.extract_public_key secondBase secondKey secondCommit firstChallenge
         secondChallenge secondResponses.1 secondResponses.2 distinct secondAccept.1 secondAccept.2).symm⟩
 
+/-- The extraction premises are satisfiable: honest Chaum–Pedersen transcripts
+with one nonce and two distinct challenges accept, and extraction returns the
+honest witness. -/
+theorem honest_shared_extraction (firstBase secondBase : G) (witness nonce : F) :
+    SharedHolds firstBase secondBase (witness • firstBase) (witness • secondBase)
+      (((nonce + 0 * witness) - (nonce + 1 * witness)) / (0 - 1)) ∧
+    ((nonce + 0 * witness) - (nonce + 1 * witness)) / (0 - 1) = witness := by
+  refine ⟨shared_extraction firstBase secondBase _ _ (nonce • firstBase) (nonce • secondBase) 0 1
+    (nonce + 0 * witness) (nonce + 1 * witness) zero_ne_one
+    (SchnorrSharedWitness.complete firstBase secondBase witness nonce 0)
+    (SchnorrSharedWitness.complete firstBase secondBase witness nonce 1), ?_⟩
+  simp
+
+/-- Independent honest transcripts, one nonce per relation, satisfy the
+premises of `independent_extraction`. -/
+theorem honest_independent_extraction (firstBase secondBase : G)
+    (first second firstNonce secondNonce : F) :
+    IndependentHolds firstBase secondBase (first • firstBase) (second • secondBase)
+      (((firstNonce + 0 * first) - (firstNonce + 1 * first)) / (0 - 1))
+      (((secondNonce + 0 * second) - (secondNonce + 1 * second)) / (0 - 1)) :=
+  independent_extraction firstBase secondBase _ _ (firstNonce • firstBase) (secondNonce • secondBase) 0 1
+    (firstNonce + 0 * first, firstNonce + 1 * first) (secondNonce + 0 * second, secondNonce + 1 * second)
+    zero_ne_one
+    ⟨Zkc.Protocols.Schnorr.response_equation .., Zkc.Protocols.Schnorr.response_equation ..⟩
+    ⟨Zkc.Protocols.Schnorr.response_equation .., Zkc.Protocols.Schnorr.response_equation ..⟩
+
 /-- Over the rationals, the independent context is satisfiable for keys zero
 and one at base one, while no single witness satisfies the shared context. -/
-theorem independent_not_shared :
+theorem independent_without_common_witness :
     IndependentHolds (F := ℚ) (G := ℚ) 1 1 0 1 0 1 ∧
       ¬ ∃ witness : ℚ, SharedHolds (F := ℚ) (G := ℚ) 1 1 0 1 witness := by
   constructor

@@ -99,7 +99,8 @@ def residualAtom (remaining count : Nat) :
   ⟨.residual remaining count, .cons (Term.binder (polynomial (remaining + count)))
     (.cons (.observed residualRootPoint) (.cons (.observed residualRootValue) .nil))⟩
 
-/-- The logical table occupies no port of either subject. -/
+/-- A library sort is never a native port type. This is a constructor fact of the
+carrier, true for every sort and signature; the root is shown for concreteness. -/
 theorem table_sort_has_no_port (dimension : Nat) :
     (LogicalType.sort (TableSort.table dimension) : LogicalType vocabulary.Sorts) ∉
         reductionRoot.protocol.inputs.map LogicalType.native ∧
@@ -284,7 +285,7 @@ def repackedInput (claim : F) (count : Nat) (proverDimension : Option Nat)
     (some handle)⟩
 
 omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
-/-- The no-port gate on the actual exports: the transported residual atom over
+/-- Transport on the actual exports: the transported residual atom over
 any returned repacked boundary is the retained residual atom over the retained
 root's return of the same V values, with the same binder and the unchanged
 `Residual` predicate. P's outputs are never read. -/
@@ -318,9 +319,11 @@ def residualAt (remaining count : Nat)
     (.cons (.observed residualRootPoint) (.cons (.observed residualRootValue) .nil))⟩
 
 omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
-/-- Exchanging the residual's binder needs exactly the unproved equality of
-the two tables: with it the requests agree, and nothing weaker is used. -/
-theorem other_binder_requires_equality (remaining count : Nat)
+/-- Exchanging the residual's binder is justified by an equality of the two
+tables, which must be supplied: nothing in the context relates two binders.
+Equality is sufficient, not necessary (two tables may agree at one point);
+`wrong_binder_at_actual_root` shows that without it the requests can differ. -/
+theorem equal_tables_agree (remaining count : Nat)
     (first second : Table F (remaining + count)) (same : second = first)
     (boundary : BoundaryValuation (assignment F G) reductionRoot.protocol.inputs reductionRoot.protocol.outputs) :
     (residualAt remaining count (independent (remaining + count))).Holds (interpretation F G) {} boundary
@@ -368,20 +371,31 @@ theorem representation_satisfiable (count : Nat) :
 
 /-! ### Inline clause and companion meaning lower into one context -/
 
-/-- An explicit view from a flat runtime vector to a table of fixed arity. -/
-def decoded (dimension : Nat) (raw : List F) :
+/-- P's flat table input at the retained root. -/
+def rootValues : BoundarySelector reductionRoot.protocol.signature vector :=
+  ⟨.input .here, ⟨0, by decide⟩, by decide⟩
+
+/-- An explicit view from P's runtime vector to a table of fixed arity: the
+term an honest-agreement request would compare with the binder. -/
+def decoded (dimension : Nat) :
     Term vocabulary (assignment F G) reductionRoot.protocol.signature (tableContext dimension)
       (.sort (.table dimension)) :=
   Term.view (V := vocabulary) (Value := assignment F G) (signature := reductionRoot.protocol.signature)
-    (context := tableContext dimension) (TableView.decode dimension) (.supplied raw)
+    (context := tableContext dimension) (TableView.decode dimension) (.observed rootValues)
 
 omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
-/-- The view reads exactly the table the vector represents, and nothing for a
-vector of the wrong length; it never consults the binder. -/
-theorem decoded_read (dimension : Nat) (raw : List F) (context : ProtocolContext)
-    (boundary : BoundaryValuation (assignment F G) reductionRoot.protocol.inputs reductionRoot.protocol.outputs)
+/-- The view reads exactly the table P's vector represents; it never consults
+the binder. At V's boundary P's vector is absent, so V observes no table. -/
+theorem decoded_read (dimension : Nat) (raw : List F) (count handle : Nat)
+    (outcome : PIR.Outcome (Values (Component (assignment F G)) reductionRoot.protocol.outputs))
     (tables : Store (interpretation F G) reductionRoot rootInvocation (tableContext dimension)) :
-    (decoded dimension raw).read (interpretation F G) context boundary tables = ofList? dimension raw := rfl
+    (decoded dimension).read (interpretation F G) {}
+        ((⟨{}, 0, SumcheckReduceVerifier.reduceRootInputs (some raw) (some dimension) none none none⟩ :
+          ComponentInput reductionRoot F G).boundary outcome) tables = ofList? dimension raw ∧
+    (decoded dimension).read (interpretation F G) {}
+        ((reductionRootInput (some raw) (some dimension) (0 : F) count handle).boundary outcome) tables =
+      none := by
+  constructor <;> rfl
 
 /-- Lowering the retained `initial_sum` clause of Reduce with the existing
 fixed-table assignment reads the same truth as the library atom over the
@@ -418,5 +432,34 @@ theorem inline_initial_lowers_at_call (claim : F) (count handle : Nat) (outcome)
     (by rw [List.length_ofFn]; decide) claim _ _
     (reductionCall.boundaryOfOutcome_input {} 1 _ outcome reductionClaim
       (.there (.there (.there .here))) rfl rfl)
+
+/-! ### Substitution at the actual public Sumcheck call -/
+
+omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
+/-- At the actual checked call from public Sumcheck into Reduce, the table
+binder passes to the callee unchanged, and the store's legacy view is exactly
+the existing instantiation that inherits the public table parameter. -/
+theorem binder_through_public_call (raw : List F) (dimension : Nat) (table : Table F dimension)
+    (context : ProtocolContext)
+    (boundary : BoundaryValuation (assignment F G) publicOwner.protocol.inputs publicOwner.protocol.outputs) :
+    (instantiate (interpretation := interpretation F G) SumcheckContractInstantiation.publicReductionCall
+        (inherit SumcheckContractInstantiation.publicReductionCall (fun ref => ref)
+          (SumcheckContractInstantiation.inheritPublicTable dimension))
+        SumcheckContractInstantiation.noIterations context boundary
+        (Store.extend (owner := publicOwner) (invocation := rootInvocation)
+          (context := tableContext dimension) (fixedPublic raw)
+          (.cons table .nil))).get (.binder (polynomial dimension)) = some table ∧
+    (instantiate (interpretation := interpretation F G) SumcheckContractInstantiation.publicReductionCall
+        (inherit SumcheckContractInstantiation.publicReductionCall (fun ref => ref)
+          (SumcheckContractInstantiation.inheritPublicTable dimension))
+        SumcheckContractInstantiation.noIterations context boundary
+        (Store.extend (owner := publicOwner) (invocation := rootInvocation)
+          (context := tableContext dimension) (fixedPublic raw)
+          (.cons table .nil))).legacy =
+      (SumcheckContractInstantiation.inheritPublicTable dimension).apply
+        SumcheckContractInstantiation.noIterations context boundary (fixedPublic raw) := by
+  constructor
+  · rfl
+  · rw [inherit_legacy, Store.legacy_extend]
 
 end ZkcExamples.Structured.SumcheckLogicalContext

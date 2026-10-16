@@ -273,44 +273,6 @@ theorem repacked_bound [Fintype F] [SampleableType F]
       proverDimension proverValues (some handle)]
     simp [PIR.Proc.runM, repackedRequest, ComponentInput.returnedEvent]
 
-/-- The premise of `retained_bound` is satisfiable, and the bound needs the
-residual's binder to be the refuted one. Over the rationals with zero rounds, the
-initial atom over `first` is refuted while the residual request over the other
-table `second` holds on the actual returned execution under every handler. -/
-theorem other_binder_unbounded {S E : Type}
-    (handler : PIR.MonadHandler ProbComp (participantInterface (ℚ) (ℚ)) S E)
-    (handle : Nat) (s : S) :
-    let first : Table (ℚ) (0 + 0) := fun _ => 0
-    let second : Table (ℚ) (0 + 0) := fun _ => 1
-    ¬ (initialAtom (0 + 0)).Holds (interpretation (ℚ) (ℚ)) {}
-        ((reductionRootInput (G := ℚ) none none 1 0 handle).boundary (.stopped .incomplete))
-        (store (owner := reductionRoot) (invocation := rootInvocation) first) ∧
-    mass (do
-      let execution ← ((reductionRootInput (G := ℚ) none none 1 0 handle).process.interpret
-        forgetSites).runM handler s
-      pure (retainedRequest 0 0 second (reductionRootInput none none 1 0 handle) execution.outcome)) = 1 := by
-  intro first second
-  constructor
-  · rw [false_initial_iff]
-    change (1 : ℚ) ≠ 0
-    exact one_ne_zero
-  · change mass (do
-      let execution ← PIR.Proc.runM
-        (A := Values (Component (assignment (ℚ) (ℚ))) SumcheckReduceBodies.runSignature.outputs) handler
-        (SumcheckReduceViews.program.participant (ℚ) (ℚ) 1
-          (SumcheckReduceVerifier.reduceRootInputs none none (some 1) (some 0) (some handle))) s
-      pure (retainedRequest 0 0 second (reductionRootInput none none 1 0 handle) execution.outcome)) = 1
-    rw [SumcheckReduceVerifier.verifier_zero]
-    simp only [PIR.Proc.runM, pure_bind]
-    have holds : retainedRequest 0 0 second (reductionRootInput (G := ℚ) none none 1 0 handle)
-        (.returned (SumcheckReduceVerifier.reduceRootResults (some [], some 1))) := by
-      refine (residual_iff 0 0 second none none 1 handle _).mpr ?_
-      refine ⟨Fin.elim0, rfl, ?_⟩
-      rw [Zkc.Protocols.Sumcheck.Multilinear.residualClaim_zero]
-      rfl
-    simp only [holds]
-    simp [mass]
-
 section ConcreteField
 
 local instance : Fact (Nat.Prime 5) := ⟨by decide⟩
@@ -358,6 +320,65 @@ theorem zero_table_bounds {S E : Type}
         ((1 : Nat) : ENNReal) / Fintype.card (ZMod 5) :=
   ⟨retained_bound network before after none none 0 1 _ 1 handle (zero_table_refuted handle).1 s,
     repacked_bound network before after none none 0 1 _ 1 handle (zero_table_refuted handle).2 s⟩
+
+/-- The bound needs the residual's binder to be the refuted one. Over `ZMod 5`
+with zero rounds, the initial atom over `first` is refuted, yet the request
+over the other table `second` holds with mass one on the actual retained and
+repacked roots under every handler, exceeding the would-be bound `0 / 5`. -/
+theorem other_binder_unbounded {S E : Type}
+    (handler : PIR.MonadHandler ProbComp (participantInterface (ZMod 5) (ZMod 5)) S E)
+    (handle : Nat) (s : S) :
+    let first : Table (ZMod 5) (0 + 0) := fun _ => 0
+    let second : Table (ZMod 5) (0 + 0) := fun _ => 1
+    ¬ (initialAtom (0 + 0)).Holds (interpretation (ZMod 5) (ZMod 5)) {}
+        ((reductionRootInput (G := ZMod 5) none none 1 0 handle).boundary (.stopped .incomplete))
+        (store (owner := reductionRoot) (invocation := rootInvocation) first) ∧
+    ¬ mass (do
+      let execution ← ((reductionRootInput (G := ZMod 5) none none 1 0 handle).process.interpret
+        forgetSites).runM handler s
+      pure (retainedRequest 0 0 second (reductionRootInput none none 1 0 handle) execution.outcome)) ≤
+        ((0 : Nat) : ENNReal) / Fintype.card (ZMod 5) ∧
+    ¬ mass (do
+      let execution ← ((repackedInput (G := ZMod 5) 1 0 none none handle).process.interpret
+        forgetSites).runM handler s
+      pure (repackedRequest 0 0 second (repackedInput 1 0 none none handle) execution.outcome)) ≤
+        ((0 : Nat) : ENNReal) / Fintype.card (ZMod 5) := by
+  intro first second
+  have holds : Residual 0 0 second [] 1 := by
+    refine ⟨Fin.elim0, rfl, ?_⟩
+    rw [Zkc.Protocols.Sumcheck.Multilinear.residualClaim_zero]
+    rfl
+  refine ⟨?_, ?_, ?_⟩
+  · rw [false_initial_iff]
+    change (1 : ZMod 5) ≠ 0
+    decide
+  · change ¬ mass (do
+      let execution ← PIR.Proc.runM
+        (A := Values (Component (assignment (ZMod 5) (ZMod 5))) SumcheckReduceBodies.runSignature.outputs)
+        handler (SumcheckReduceViews.program.participant (ZMod 5) (ZMod 5) 1
+          (SumcheckReduceVerifier.reduceRootInputs none none (some 1) (some 0) (some handle))) s
+      pure (retainedRequest 0 0 second (reductionRootInput none none 1 0 handle) execution.outcome)) ≤ _
+    rw [SumcheckReduceVerifier.verifier_zero]
+    simp only [PIR.Proc.runM, pure_bind]
+    have request : retainedRequest 0 0 second (reductionRootInput (G := ZMod 5) none none 1 0 handle)
+        (.returned (SumcheckReduceVerifier.reduceRootResults (some [], some 1))) :=
+      (residual_iff 0 0 second none none 1 handle _).mpr holds
+    simp only [request]
+    simp [mass]
+  · change ¬ mass (do
+      let execution ← PIR.Proc.runM
+        (A := Values (Component (assignment (ZMod 5) (ZMod 5))) SumcheckRepackedBodies.runSignature.outputs)
+        handler (SumcheckRepackedViews.program.participant (ZMod 5) (ZMod 5) 1
+          (SumcheckRepackedVerifier.rootInputs (some 1) (some 0) none none (some handle))) s
+      pure (repackedRequest 0 0 second (repackedInput 1 0 none none handle) execution.outcome)) ≤ _
+    rw [SumcheckRepackedVerifier.verifier_optional, SumcheckVerifierPrelude.admittedRounds_zero]
+    simp only [PIR.Proc.bind, PIR.Proc.runM, pure_bind]
+    have request : repackedRequest 0 0 second (repackedInput (G := ZMod 5) 1 0 none none handle)
+        (.returned (SumcheckRepackedVerifier.rootResults (some [], some 1))) :=
+      (repacked_residual_iff 0 0 second 1 none none handle _).mpr
+        ((residual_iff 0 0 second none none 1 handle _).mpr holds)
+    simp only [request]
+    simp [mass]
 
 end ConcreteField
 
