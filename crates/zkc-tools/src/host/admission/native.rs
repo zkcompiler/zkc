@@ -14,7 +14,11 @@ pub(crate) fn check_native_data(
     match request {
         InputValue::Wire(bytes) => capacity.check_wire(bytes.len()),
         InputValue::WireFile { .. } => Ok(()),
-        InputValue::Native(value) => Input::native_value(ty.clone(), value, None).map(|_| ()),
+        InputValue::Native(value) => Input::native_value(ty.clone(), value, None, None).map(|_| ()),
+        InputValue::Prepared(data) => {
+            capacity.check_wire(data.canonical_bytes().len())?;
+            Input::native_value(ty.clone(), data.value(), None, None).map(|_| ())
+        }
         InputValue::Variant {
             alternative,
             payload,
@@ -51,16 +55,8 @@ impl<'a> Admission<'a> {
         request: &'a InputValue,
         selected: Option<Arc<VerifierKey>>,
     ) -> Result<usize> {
-        match request {
-            InputValue::Native(value) => self.add(Input::native_value(ty, value, selected)?),
-            InputValue::Wire(bytes) => self.native_wire(backend, ty, bytes.as_slice(), selected),
-            InputValue::WireFile { file, sha256 } => {
-                let bytes = self.file_wire(file, sha256, backend.policy().max_wire_bytes)?;
-                self.native_wire(backend, ty, bytes, selected)
-            }
-            InputValue::Variant { .. } => self.native_variant(backend, ty, request, selected),
-            _ => Err("native-input-private".into()),
-        }
+        let (input, _) = self.plan(backend, ty, request, selected)?;
+        self.add(input)
     }
     /// Canonical public binding and shared-input comparison traverse a loaded
     /// value once more. Reserve that work before loading any invocation data.
@@ -68,16 +64,6 @@ impl<'a> Admission<'a> {
         self.work(self.inputs[id].1)
     }
 
-    pub fn native_variant(
-        &mut self,
-        backend: &NativeBackend,
-        ty: PhysicalType,
-        request: &'a InputValue,
-        selected: Option<Arc<VerifierKey>>,
-    ) -> Result<usize> {
-        let (input, _) = self.plan(backend, ty, request, selected)?;
-        self.add(input)
-    }
     fn plan(
         &mut self,
         backend: &NativeBackend,
@@ -87,8 +73,15 @@ impl<'a> Admission<'a> {
     ) -> Result<(Input<'a>, NativeInputSize)> {
         self.work(1)?;
         match request {
+            InputValue::Prepared(data) => self.plan_wire(
+                backend,
+                ty,
+                Cow::Borrowed(data.canonical_bytes()),
+                Some(data.value()),
+                selected,
+            ),
             InputValue::Native(value) => {
-                let input = Input::native_value(ty, value, selected)?;
+                let input = Input::native_value(ty, value, selected, None)?;
                 self.work(value.retained_bytes())?;
                 let size = backend
                     .measure_native_input(value)
@@ -96,35 +89,11 @@ impl<'a> Admission<'a> {
                 Ok((input, size))
             }
             InputValue::Wire(bytes) => {
-                self.work(bytes.len())?;
-                let size = backend
-                    .measure_native_wire(&ty, bytes)
-                    .map_err(|e| e.to_string())?;
-                Ok((
-                    Input::NativeWire {
-                        ty,
-                        bytes: Cow::Borrowed(bytes),
-                        estimate: size.retained_bytes(),
-                        selected,
-                    },
-                    size,
-                ))
+                self.plan_wire(backend, ty, Cow::Borrowed(bytes), None, selected)
             }
             InputValue::WireFile { file, sha256 } => {
                 let bytes = self.file_wire(file, sha256, backend.policy().max_wire_bytes)?;
-                self.work(bytes.len())?;
-                let size = backend
-                    .measure_native_wire(&ty, &bytes)
-                    .map_err(|e| e.to_string())?;
-                Ok((
-                    Input::NativeWire {
-                        ty,
-                        bytes: Cow::Owned(bytes),
-                        estimate: size.retained_bytes(),
-                        selected,
-                    },
-                    size,
-                ))
+                self.plan_wire(backend, ty, Cow::Owned(bytes), None, selected)
             }
             InputValue::Variant {
                 alternative,
@@ -167,6 +136,30 @@ impl<'a> Admission<'a> {
             _ => Err("native-input-private".into()),
         }
     }
+    pub(super) fn plan_wire(
+        &mut self,
+        backend: &NativeBackend,
+        ty: PhysicalType,
+        bytes: Cow<'a, [u8]>,
+        prepared: Option<&'a Value>,
+        selected: Option<Arc<VerifierKey>>,
+    ) -> Result<(Input<'a>, NativeInputSize)> {
+        self.work(bytes.len())?;
+        let size = backend
+            .measure_native_wire(&ty, &bytes)
+            .map_err(|e| e.to_string())?;
+        let input = if let Some(value) = prepared {
+            Input::native_value(ty, value, selected, Some(size.retained_bytes()))?
+        } else {
+            Input::NativeWire {
+                ty,
+                bytes,
+                estimate: size.retained_bytes(),
+                selected,
+            }
+        };
+        Ok((input, size))
+    }
 }
 
 pub(super) fn check(backend: &NativeBackend, input: &Input<'_>) -> Result<()> {
@@ -180,7 +173,7 @@ pub(super) fn check(backend: &NativeBackend, input: &Input<'_>) -> Result<()> {
             }
             Ok(())
         }
-        _ => Ok(()),
+        Input::NativeWire { .. } | Input::Key { .. } | Input::Ready(_) => Ok(()),
     }
 }
 pub(super) fn load(backend: &NativeBackend, input: Input<'_>) -> Result<Value> {
@@ -229,6 +222,8 @@ pub(super) fn load(backend: &NativeBackend, input: Input<'_>) -> Result<Value> {
                 .map_err(|e| e.to_string())?;
             Ok(value)
         }
-        _ => unreachable!("only immutable data is planned as variant payload"),
+        Input::Key { .. } | Input::Ready(_) => {
+            unreachable!("only immutable data is planned as variant payload")
+        }
     }
 }

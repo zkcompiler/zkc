@@ -9,7 +9,7 @@ use zkc_runtime::interactive::{
 
 /// Explicit per-value, transport and service-store execution ceilings.
 /// PCS temporary allocation is bounded indirectly by rank, not reserved here.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Policy {
     /// Maximum number of multilinear variables (table length is 2^arity).
     pub max_arity: usize,
@@ -777,6 +777,28 @@ impl Value {
     }
 }
 impl RuntimeValue for Value {
+    fn preparation_output(&self) -> bool {
+        // Serializable native data owns all of its immutable backing. Private
+        // capabilities, keys, opening and oracle states have nonserializable types.
+        self.physical_type().is_serializable()
+    }
+    fn preparation_parameter(&self) -> Option<Vec<u8>> {
+        match self {
+            Self::Bool(value) => Some(vec![u8::from(*value)]),
+            Self::Index(value) => Some(value.to_le_bytes().to_vec()),
+            Self::RistrettoField(value) => Some(value.to_bytes().to_vec()),
+            Self::Field(value) => zkc_arkworks::encode_scalar(value).ok().map(|v| v.to_vec()),
+            Self::Bn254Field(value) => zkc_arkworks::bn254::encode_scalar(value)
+                .ok()
+                .map(|v| v.to_vec()),
+            Self::KoalaBearField(value) => Some(crate::plonky3::encode_scalar(*value).to_vec()),
+            Self::KoalaBearExt8Field(value) => {
+                Some(crate::plonky3::encode_extension(*value).to_vec())
+            }
+            _ => None,
+        }
+    }
+
     fn pack_variant(
         descriptor: Arc<zkc_runtime::interactive::VariantDescriptor>,
         alternative: usize,
@@ -827,6 +849,74 @@ impl RuntimeValue for Value {
         Ok(Self::Index(index))
     }
 
+    fn has_type(&self, expected: &PhysicalType) -> bool {
+        match self {
+            Self::Sequence(v) => v.physical_type() == expected,
+            Self::FieldArray(v) => v.physical_type() == expected,
+            Self::FixedVector(v) => v.physical_type() == expected,
+            Self::Variant(v) => v.physical_type() == expected,
+            Self::Bn254Field(..)
+            | Self::Bn254Vector(..)
+            | Self::Bn254Polynomial(..)
+            | Self::Bn254Round(..)
+            | Self::Bn254Matrix(..)
+            | Self::Bn254G1(..)
+            | Self::Bn254G1Vector(..)
+            | Self::Bn254G2(..)
+            | Self::Bn254Gt(..)
+            | Self::Bn254G2Vector(..)
+            | Self::OracleRoot(..)
+            | Self::OraclePath(..)
+            | Self::OracleState(..)
+            | Self::OracleRoots(..)
+            | Self::OracleStates(..)
+            | Self::Index(..)
+            | Self::Indices(..)
+            | Self::Bytes(..)
+            | Self::Shake128State(..)
+            | Self::Matrix(..)
+            | Self::RistrettoMatrix(..)
+            | Self::KoalaBearMatrix(..)
+            | Self::KoalaBearExt8Matrix(..)
+            | Self::KoalaBearExt8Field(..)
+            | Self::KoalaBearExt8Vector(..)
+            | Self::KoalaBearExt8Polynomial(..)
+            | Self::KoalaBearExt8Round(..)
+            | Self::KoalaBearField(..)
+            | Self::KoalaBearVector(..)
+            | Self::KoalaBearPolynomial(..)
+            | Self::KoalaBearRound(..)
+            | Self::Vector(..)
+            | Self::Polynomial(..)
+            | Self::RistrettoField(..)
+            | Self::RistrettoVector(..)
+            | Self::RistrettoPolynomial(..)
+            | Self::RistrettoRound(..)
+            | Self::EdwardsGroup(..)
+            | Self::EdwardsGroups(..)
+            | Self::RistrettoGroup(..)
+            | Self::RistrettoGroups(..)
+            | Self::FrDiagonal(..)
+            | Self::RistrettoDiagonal(..)
+            | Self::Field(..)
+            | Self::Table(..)
+            | Self::TableMsb(..)
+            | Self::Point(..)
+            | Self::Round(..)
+            | Self::Bool(..)
+            | Self::Commitment(..)
+            | Self::OpeningState(..)
+            | Self::Proof(..)
+            | Self::ProverKey(..)
+            | Self::VerifierKey(..)
+            | Self::Curve(..)
+            | Self::Groups(..) => {
+                let (kind, identity, representation) = self.type_identity();
+                expected.is_leaf(kind, identity, representation)
+            }
+            _ => self.physical_type() == *expected,
+        }
+    }
     fn physical_type(&self) -> PhysicalType {
         if let Self::Sequence(value) = self {
             return value.physical_type().clone();

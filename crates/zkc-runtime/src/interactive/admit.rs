@@ -14,6 +14,7 @@ fn err(code: ErrorCode, detail: impl Into<String>) -> AdmissionError {
 pub struct Admitted {
     pub(crate) program: Arc<Program>,
     bytes: Arc<[u8]>,
+    pub(super) executable: Arc<super::executable::Executable>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EntryRole {
@@ -53,7 +54,7 @@ impl Admitted {
     /// Whether this artifact requires the native Boolean constructor, including
     /// retained unused definitions. This is separate from bound kernel names.
     pub fn requires_boolean_literals(&self) -> bool {
-        requires_boolean_literals(&self.program)
+        self.executable.requires_boolean_literals
     }
 }
 
@@ -62,21 +63,20 @@ impl Admitted {
 pub fn admit_supplied<B: Backend>(bytes: &[u8], backend: &B) -> Result<Admitted> {
     let program = decode::physical(bytes)?;
     validate(&program)?;
-    installed(&program, backend)?;
+    let executable = super::executable::prepare(&program);
+    installed(&program, &executable, backend)?;
     Ok(Admitted {
+        executable: Arc::new(executable),
         program: Arc::new(program),
         bytes: Arc::from(bytes),
     })
 }
-fn requires_boolean_literals(p: &Program) -> bool {
-    p.functions.values().any(|f| {
-        LocalInstruction::walk(&f.body)
-            .iter()
-            .any(|op| matches!(op, LocalInstruction::BoolConstant { .. }))
-    })
-}
-pub(crate) fn installed<B: Backend>(p: &Program, backend: &B) -> Result<()> {
-    if requires_boolean_literals(p) && !backend.supports_boolean_literals() {
+pub(crate) fn installed<B: Backend>(
+    p: &Program,
+    executable: &super::executable::Executable,
+    backend: &B,
+) -> Result<Vec<B::Kernel>> {
+    if executable.requires_boolean_literals && !backend.supports_boolean_literals() {
         return Err(err(ErrorCode::Backend, "native-boolean-unsupported"));
     }
     for participant in p.participants.values() {
@@ -96,20 +96,22 @@ pub(crate) fn installed<B: Backend>(p: &Program, backend: &B) -> Result<()> {
             }
         }
     }
-    for f in p.functions.values() {
-        for op in LocalInstruction::walk(&f.body) {
-            if let LocalInstruction::Op { binding, .. } = op {
-                let actual = backend.binding_signature(binding.declaration());
-                if actual.as_ref() != Some(binding.signature()) {
-                    return Err(err(
-                        ErrorCode::Backend,
-                        format!("installed signature mismatch: {}", binding.implementation()),
-                    ));
-                }
-            }
-        }
-    }
-    Ok(())
+    use super::InstalledKernel;
+    executable
+        .bindings
+        .iter()
+        .map(|binding| {
+            let actual = backend
+                .prepare_binding(binding.declaration())
+                .filter(|k| k.signature() == binding.signature());
+            actual.ok_or_else(|| {
+                err(
+                    ErrorCode::Backend,
+                    format!("installed signature mismatch: {}", binding.implementation()),
+                )
+            })
+        })
+        .collect()
 }
 #[derive(Clone)]
 struct Binding {

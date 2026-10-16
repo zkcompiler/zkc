@@ -50,6 +50,79 @@ fn native_values_match_wire_execution_without_decoding_or_request_borrow() {
 }
 
 #[test]
+fn prepared_data_reuses_decode_but_preserves_invocation_charges() {
+    use crate::execution::PreparedData;
+    let (raw, _) = fixture("bool");
+    let capacity = crate::execution::Capacity::default();
+    let prepared = PreparedData::from_value(Value::Bool(false), capacity).unwrap();
+    let wire = request(|| InputValue::Wire(prepared.canonical_bytes().to_vec()));
+    let cached = request(|| InputValue::Prepared(prepared.clone()));
+    let host = self::host(&raw, HostLimits::default());
+    let expected = host.prepare_typed(&wire).unwrap().execute().json();
+    crate::host::admission::DECODE_COUNT.set(0);
+    for _ in 0..3 {
+        assert_eq!(
+            host.prepare_typed(&cached).unwrap().execute().json(),
+            expected
+        );
+    }
+    assert_eq!(crate::host::admission::DECODE_COUNT.get(), 0);
+    for budget in [0, 1, 6, 7, 256, 1024, 4096] {
+        let mut limits = HostLimits::default();
+        limits.capacity.values.total_bytes = budget;
+        let bounded = self::host(&raw, limits);
+        let error = |r: &RunInputs| bounded.prepare_typed(r).err();
+        assert_eq!(error(&wire), error(&cached), "loading budget {budget}");
+    }
+    let wrong = PreparedData::from_value(Value::Index(0), capacity).unwrap();
+    assert_eq!(
+        refusal(&host, &request(|| wrong.clone().into())),
+        "native-input-type"
+    );
+    let mut limits = HostLimits::default();
+    limits.capacity.wire_bytes = prepared.canonical_bytes().len() - 1;
+    let bounded = self::host(&raw, limits);
+    assert_eq!(refusal(&bounded, &cached), refusal(&bounded, &wire));
+}
+
+#[test]
+fn prepared_collections_respect_the_current_policy() {
+    use crate::execution::PreparedData;
+    for value in [
+        Value::Vector(vec![zkc_backends::Scalar::from(7); 16].into()),
+        Value::RistrettoGroups(vec![zkc_backends::RistrettoPoint::default(); 16].into()),
+        Value::table(&[zkc_backends::Scalar::from(7); 16], &Default::default()).unwrap(),
+    ] {
+        let (raw, _) = fixture(&value.physical_type().logical().spelling());
+        let native = request(|| InputValue::from(value.clone()));
+        assert!(
+            host(&raw, HostLimits::default())
+                .prepare_typed(&native)
+                .is_ok()
+        );
+        let prepared = PreparedData::from_value(value, Default::default()).unwrap();
+        let wire = request(|| InputValue::Wire(prepared.canonical_bytes().to_vec()));
+        let cached = request(|| prepared.clone().into());
+        for restriction in 0..4 {
+            let mut limits = HostLimits::default();
+            match restriction {
+                0 => limits.capacity.elements = 15,
+                1 => limits.capacity.groups = 15,
+                2 => limits.capacity.value_bytes = 1,
+                _ => limits.capacity.values.live_bytes = 1,
+            }
+            let bounded = host(&raw, limits);
+            let a = bounded.prepare_typed(&wire).err();
+            let b = bounded.prepare_typed(&cached).err();
+            assert_eq!(a, b, "restriction {restriction}");
+            if restriction >= 2 {
+                assert!(a.is_some());
+            }
+        }
+    }
+}
+
+#[test]
 fn typed_requests_preserve_structure_capacity_and_resource_refusals() {
     let (raw, _) = fixture("bool");
     let host = host(&raw, HostLimits::default());
@@ -79,10 +152,7 @@ fn typed_requests_preserve_structure_capacity_and_resource_refusals() {
     let mut limits = HostLimits::default();
     limits.capacity.value_bytes = 0;
     let bounded = self::host(&raw, limits);
-    assert_eq!(
-        refusal(&bounded, &inputs),
-        "native-wire-backend:exhausted:output-bytes"
-    );
+    assert_eq!(refusal(&bounded, &inputs), "native-wire-limit");
     let mut limits = HostLimits::default();
     limits.capacity.wire_bytes = 6;
     let bounded = self::host(&raw, limits);
@@ -473,6 +543,30 @@ fn compound_inputs_share_native_wire_layout_and_preserve_nested_data() {
         host.prepare_typed(&native).unwrap().execute().json(),
         report.json()
     );
+    let prepared = crate::execution::PreparedData::from_value(data, Capacity::default()).unwrap();
+    crate::host::admission::DECODE_COUNT.set(0);
+    let reused = self::request(|| prepared.clone().into());
+    assert_eq!(
+        host.prepare_typed(&reused).unwrap().execute().json(),
+        report.json()
+    );
+    let leaf =
+        crate::execution::PreparedData::from_value(Value::Bool(true), Capacity::default()).unwrap();
+    let nested = self::request(|| InputValue::Variant {
+        alternative: 0,
+        payload: vec![
+            InputValue::Variant {
+                alternative: 1,
+                payload: vec![leaf.clone().into()],
+            },
+            Value::Index(9).into(),
+        ],
+    });
+    assert_eq!(
+        host.prepare_typed(&nested).unwrap().execute().json(),
+        report.json()
+    );
+    assert_eq!(crate::host::admission::DECODE_COUNT.get(), 0);
 }
 
 #[test]

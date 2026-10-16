@@ -1,0 +1,72 @@
+module example;
+use sumcheck::{Sumcheck};
+use zkc::vector::{Vector};
+use zkc::bytes::{Bytes};
+use zkc::scalar::{from_index};
+use zkc::encoding as encoding;
+use zkc::shake128 as shake;
+use zkc::proof::{Stream};
+use spongefish as spongefish;
+domain F = field("bls12-381.fr");
+
+protocol Statement roles(P,V)
+    (values: Vector<F> @(P,V), claim: F @(P,V), rounds: index @(P,V),
+     tag: Bytes @(P,V), session: Bytes @(P,V), challenges: Random<F> @V)
+    -> (accepted: bool @V) {
+  #[site(sum)] let accepted = Sumcheck<F,20>(values, claim, rounds, challenges);
+  return accepted;
+}
+interface Transcript {
+  type State: Copy + Drop;
+  fn initialize() -> State effects(stop, opaque);
+  fn start(t: State, values: Vector<F>, claim: F, rounds: index, tag: Bytes, session: Bytes) -> State effects(stop, opaque);
+  fn pair(t: State, value: (F,F)) -> State effects(stop, opaque);
+  fn draw(t: State) -> (State,F) effects(stop, opaque);
+}
+module Provider: Transcript {
+  type State: Copy + Drop = builtin("shake128_state");
+  fn initialize() -> State { return State(shake::init()); }
+  fn start(t: State, values: Vector<F>, claim: F, rounds: index, tag: Bytes, session: Bytes) -> State {
+    let mut state = spongefish::observe_scalars(spongefish::initialize(tag, session), values);
+    state = spongefish::observe_scalar(state, claim);
+    state = spongefish::observe_scalar(state, from_index<F>(rounds));
+    return State(state);
+  }
+  fn pair(t: State, value: (F,F)) -> State {
+    let state = spongefish::observe_scalar(unpack(t), value.0);
+    return State(spongefish::observe_scalar(state, value.1));
+  }
+  fn draw(t: State) -> (State,F) {
+    let (state, value) = spongefish::challenge<F>(unpack(t));
+    return (State(state), value);
+  }
+}
+construction Benchmark for Statement {
+  transcript Provider;
+  replace challenges;
+  format Stream;
+  on start(t, values, claim, rounds, tag, session) {
+    return Provider::start(t, values, claim, rounds, tag, session);
+  }
+  on message sum.reduce.round(t, value) { return Provider::pair(t, value); }
+  on query sum.reduce.challenge(t) { return Provider::draw(t); }
+  on message sum.reduce.delivery(t, value) { return t; }
+  on encode sum.reduce.round(r, value) {
+    let chunk = zkc::bytes::concat(encoding::field_be(value.0), encoding::field_be(value.1));
+    return Stream::append(r, chunk);
+  }
+  on receive sum.reduce.round(r, proof) { return Stream::take(r, 64); }
+  on decode sum.reduce.round(chunk) {
+    let (ok0, a) = encoding::field_from_be<F>(zkc::bytes::slice(chunk, 0, 32));
+    let (ok1, b) = encoding::field_from_be<F>(zkc::bytes::slice(chunk, 32, 32));
+    require ok0 && ok1;
+    return (a, b);
+  }
+}
+proof Proof = Statement {
+  prover P;
+  verifier V;
+  public { values, claim, rounds, tag, session };
+  accept accepted;
+  construction Benchmark;
+}

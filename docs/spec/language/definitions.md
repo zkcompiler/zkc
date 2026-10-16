@@ -1493,7 +1493,7 @@ have no native leaves; its result must also pass the bounded interface reader.
 | Declarations; source or emitted operations | 10,000; 100,000 |
 | Static instances; aggregate leaves/array length | 4096; 1024 |
 | Natural monomials; factors per monomial | 1024; 64 |
-| Charged work per phase | 4,000,000 |
+| Charged work per phase | 8,000,000 |
 | Emitted MLIR; interface JSON | 16 MiB; 4 MiB |
 | Encoded symbol; diagnostic path bytes | 4096 each |
 | Active notation descriptor keys per environment; delimiter holes | 4096; 64 |

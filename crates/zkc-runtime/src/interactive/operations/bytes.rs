@@ -2,6 +2,12 @@
 use super::*;
 use Type::*;
 pub(super) const CONTRACTS: &[Contract] = &[
+    Contract::new(
+        "bytes.repeat",
+        (&[Index, Index], &[Bytes], AttributeRule::None),
+    )
+    .implemented_by(&["native/bytes.repeat"]),
+    Contract::custom("bytes.join").implemented_by(&["native/bytes.join"]),
     Contract::new("bytes.empty", (&[], &[Bytes], AttributeRule::None))
         .implemented_by(&["native/bytes.empty"]),
     Contract::new(
@@ -34,6 +40,19 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
     physical_error: "uninstalled byte operation binding",
     physical_only: false,
     contracts: CONTRACTS,
-    resolve: index::resolve,
+    resolve: |binding, contract| {
+        if binding.contract != "bytes.join" {
+            return index::resolve(binding, contract);
+        }
+        if !binding.arguments.is_empty() {
+            return Err(support::failure());
+        }
+        let bytes = LogicalType::new(Bytes, Identity::None)?;
+        Ok(KernelSignature {
+            inputs: vec![LogicalType::sequence(bytes.clone())?],
+            outputs: vec![bytes],
+            attributes: AttributeRule::None,
+        })
+    },
     select: default_ports,
 };

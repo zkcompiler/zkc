@@ -12,6 +12,8 @@ runCommand "zkc-source-boundaries" { } ''
   test -f ${sources.compilerTests}/common/tests/fixtures/projects/scoped-computations/main.zkc
   test ! -e ${sources.compilerTests}/common/tests/run.py
   test -f ${sources.rust}/crates/zkc-tools/Cargo.toml
+  test -f ${sources.rust}/crates/zkc-benchmarks/Cargo.toml
+  test -f ${sources.format}/common/benchmarks/monero.cpp
   test ! -e ${sources.rust}/scripts
   test ! -e ${sources.rust}/compiler
   test ! -e ${sources.rust}/common/tests

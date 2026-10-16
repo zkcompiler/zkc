@@ -167,7 +167,10 @@ struct LiteralAdapter {
     active: usize,
 }
 impl zkc_runtime::interactive::Backend for LiteralAdapter {
+    type Call = ();
+    type Checkpoint = ();
     type Value = WrongBoolean;
+    type Kernel = zkc_runtime::interactive::BoundSignature;
     fn supports_boolean_literals(&self) -> bool {
         self.installed
     }
@@ -197,6 +200,7 @@ impl zkc_runtime::interactive::Backend for LiteralAdapter {
     }
     fn apply(
         &mut self,
+        _kernel: &Self::Kernel,
         _: &zkc_runtime::interactive::Invocation<'_>,
         _: &[WrongBoolean],
     ) -> Result<Vec<WrongBoolean>, zkc_runtime::interactive::BackendError> {

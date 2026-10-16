@@ -27,4 +27,5 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] =
         primary: zkc_runtime::interactive::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Default,
         handler: Some(crate::backend::registry::pairwise),
+        deterministic: true,
     }];

@@ -220,20 +220,15 @@ impl NativeBackend {
             .map_err(NativeWireError::Backend)
     }
     /// Bound native input retention before expensive payload decoding. This
-    /// uses byte lengths and, for recursive/bulk encodings, shape scans.
+    /// uses byte lengths and, for recursive/bulk encodings, shape scans;
+    /// complete-value collection limits also apply to the measured counts.
     /// Callers must still decode and check complete framing and values.
     pub fn native_input_retained_bytes(
         &self,
         ty: &PhysicalType,
         bytes: &[u8],
     ) -> Result<usize, NativeWireError> {
-        if table_type(ty) || frame(ty).is_some() && !ty.has_native_array_frame() {
-            // These branches select supported serializable types. Their
-            // retention failures are quota failures, as in native decoding.
-            return Value::typed_wire_retained_bytes_bound(ty.clone(), bytes.len(), self.policy())
-                .map_err(|_| NativeWireError::Limit);
-        }
-        structured::retained(self, ty, bytes)
+        Ok(self.measure_native_wire(ty, bytes)?.retained_bytes())
     }
     /// Raw Bytes transport borrows its payload without a tag, length prefix or
     /// deployment header. The transport checks its buffer limit before copying.

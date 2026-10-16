@@ -425,12 +425,15 @@ struct Probe {
     checked: bool,
 }
 impl Backend for Probe {
+    type Call = ();
+    type Checkpoint = ();
     type Value = zkc_backends::Value;
-    fn binding_signature(
+    type Kernel = zkc_backends::NativeKernel;
+    fn prepare_binding(
         &self,
         binding: &zkc_runtime::interactive::OperationBinding,
-    ) -> Option<zkc_runtime::interactive::BoundSignature> {
-        self.inner.binding_signature(binding)
+    ) -> Option<Self::Kernel> {
+        self.inner.prepare_binding(binding)
     }
     fn validate_value(&self, v: &Self::Value) -> Result<(), BackendError> {
         self.inner.validate_value(v)
@@ -451,6 +454,7 @@ impl Backend for Probe {
     }
     fn apply(
         &mut self,
+        kernel: &Self::Kernel,
         i: &Invocation<'_>,
         a: &[Self::Value],
     ) -> Result<Vec<Self::Value>, BackendError> {
@@ -460,7 +464,7 @@ impl Backend for Probe {
             .contract
             .starts_with("transcript.native.indexed.")
         {
-            return self.inner.apply(i, a);
+            return self.inner.apply(kernel, i, a);
         }
         if !self.checked {
             self.checked = true;
@@ -468,7 +472,7 @@ impl Backend for Probe {
                 let mut hidden = a.to_vec();
                 hidden[0] = self.hidden.clone();
                 assert_eq!(
-                    self.inner.apply(i, &hidden).unwrap_err().code,
+                    self.inner.apply(kernel, i, &hidden).unwrap_err().code,
                     "refused:capability-out-of-view"
                 );
                 let wrong_frame = Invocation {
@@ -476,7 +480,7 @@ impl Backend for Probe {
                     ..*i
                 };
                 assert_eq!(
-                    self.inner.apply(&wrong_frame, a).unwrap_err().code,
+                    self.inner.apply(kernel, &wrong_frame, a).unwrap_err().code,
                     "refused:inactive-frame"
                 );
                 // The active local frame cannot close its active ancestor.
@@ -502,14 +506,14 @@ impl Backend for Probe {
                     max_output_bytes: 0,
                     ..*i
                 };
-                return self.inner.apply(&small, a);
+                return self.inner.apply(kernel, &small, a);
             } else {
                 // A later backend failure does not undo completed transcript state.
-                self.inner.apply(i, a)?;
+                self.inner.apply(kernel, i, a)?;
                 return Err(BackendError::new("refused:injected-after-transition"));
             }
         }
-        self.inner.apply(i, a)
+        self.inner.apply(kernel, i, a)
     }
 }
 #[test]

@@ -12,6 +12,7 @@ pub mod cli;
 /// Shared operational capacity, immutable input values and prover material.
 pub mod execution {
     pub use crate::host::capacity::Capacity;
+    pub use crate::host::data::PreparedData;
     pub use crate::host::input_file::InputFile;
     pub use crate::host::material::ProverMaterial;
     pub use crate::host::request::InputValue;

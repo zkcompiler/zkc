@@ -119,6 +119,18 @@ impl ProofReport {
     }
 }
 impl ProofEntry {
+    /// Set deployment-owned public computation storage. Zero limits disable it.
+    pub fn with_preparation_limits(
+        mut self,
+        limits: zkc_runtime::interactive::PreparationLimits,
+    ) -> Self {
+        self.native = self.native.with_preparation_limits(limits);
+        self
+    }
+    pub fn preparation_stats(&self) -> zkc_runtime::interactive::PreparationStats {
+        self.native.preparation_stats()
+    }
+
     pub fn with_ring_work_limit(mut self, limit: u64) -> Result<Self> {
         self.native = self.native.with_ring_work_limit(limit)?;
         Ok(self)

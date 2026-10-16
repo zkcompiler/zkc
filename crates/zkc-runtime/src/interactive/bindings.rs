@@ -853,6 +853,27 @@ impl PhysicalType {
     pub fn representation(&self) -> Representation {
         self.representation
     }
+    /// Exact equality with an unparameterized value representation. Structural
+    /// and resource descriptors must be compared by their full physical type.
+    pub fn is_leaf(&self, kind: Type, identity: Identity, representation: Representation) -> bool {
+        let Self {
+            logical:
+                LogicalType {
+                    kind: actual_kind,
+                    identity: actual_identity,
+                    resource_domain,
+                    variant,
+                    structural,
+                },
+            representation: actual_representation,
+        } = self;
+        *actual_kind == kind
+            && *actual_identity == identity
+            && *actual_representation == representation
+            && resource_domain.is_none()
+            && variant.is_none()
+            && structural.is_none()
+    }
     pub fn is_affine(&self) -> bool {
         !self.logical.is_duplicable()
     }
@@ -923,7 +944,7 @@ impl PhysicalType {
 
 /// Declaration selected by the compiler. Resolution below checks its contents;
 /// constructing this record does not install a new contract or implementation.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct OperationBinding {
     pub contract: String,
     pub arguments: Vec<String>,

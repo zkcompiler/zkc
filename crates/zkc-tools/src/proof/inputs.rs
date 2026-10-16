@@ -201,7 +201,7 @@ pub(super) fn prepare(
             crate::host::admission::check_native_data(&ty, input, host.capacity)?;
         }
     }
-    let mut root = json!([
+    let root = json!([
         "zkc.native-proof-binding/0",
         "sha256",
         host.descriptor[2],
@@ -296,7 +296,7 @@ pub(super) fn prepare(
         }
         let ty = PhysicalType::default_for(port.logical.clone()).map_err(|e| e.to_string())?;
         let id = admission.native_data(&backend, ty, input, selected(port.original))?;
-        if !matches!(input, InputValue::Wire(_)) {
+        if input.wire_bytes().is_none() {
             admission.charge_encoding(id)?;
         }
         public_ids.insert(port.original, id);
@@ -338,7 +338,8 @@ pub(super) fn prepare(
             input => {
                 // Reuse only identical bytes or the same pinned open descriptor.
                 let same_source = match (public_requests.get(&port.original), input) {
-                    (Some(InputValue::Wire(a)), InputValue::Wire(b)) => {
+                    (Some(a), b) if a.wire_bytes().is_some() && b.wire_bytes().is_some() => {
+                        let (a, b) = (a.wire_bytes().unwrap(), b.wire_bytes().unwrap());
                         if a != b {
                             return Err("native-proof-shared-public-input".into());
                         }
@@ -367,7 +368,7 @@ pub(super) fn prepare(
                     admission.native_data(&backend, ty.clone(), input, selected(port.original))?
                 };
                 if public_requests.contains_key(&port.original) && !same {
-                    if !matches!(input, InputValue::Wire(_)) {
+                    if input.wire_bytes().is_none() {
                         admission.charge_encoding(id)?;
                     }
                     shared.push((port.original, id, input));
@@ -404,26 +405,22 @@ pub(super) fn prepare(
     for (port, input) in host.public.iter().zip(&request.public) {
         let bytes = canonical(&backend, &loaded[public_ids[&port.original]], input)?;
         host.capacity.check_wire(bytes.len())?;
-        let mut row = json!([
-            host.entry.validator().role,
-            port.original.to_string(),
-            port.logical.spelling(),
-            ""
-        ]);
-        // Bound cumulative hex expansion before allocating binding strings. Typed
-        // requests have not passed through the positional JSON tree's byte cap.
-        root_size = bytes
-            .len()
-            .checked_mul(2)
-            .and_then(|n| n.checked_add(logical::tree_size(&row).ok()?))
-            .and_then(|n| n.checked_add(root_size))
+        // Account for the complete row before retaining its canonical bytes.
+        // Hex is a borrowed logical string; it never allocates an intermediate.
+        let original = port.original.to_string();
+        let spelling = port.logical.spelling();
+        let row = [
+            logical::Tree::Text(&host.entry.validator().role),
+            logical::Tree::Text(&original),
+            logical::Tree::Text(&spelling),
+            logical::Tree::Hex(&bytes),
+        ];
+        root_size = logical::Tree::Array(&row)
+            .prepare()
+            .ok()
+            .and_then(|row| root_size.checked_add(row.size()))
             .filter(|n| *n <= logical::TreeLimits::BYTES)
             .ok_or("tree-limit")?;
-        row[3] = json!(hex(&bytes));
-        root[8]
-            .as_array_mut()
-            .expect("binding public rows")
-            .push(row);
         public_bytes.insert(port.original, bytes);
     }
     for (original, id, input) in shared {
@@ -431,13 +428,40 @@ pub(super) fn prepare(
             return Err("native-proof-shared-public-input".into());
         }
     }
-    let root = logical::encode_tree(&root).map_err(|e| e.to_string())?;
-    if host.entry.transcript().is_some()
-        && (root.len() > policy.max_wire_bytes || root.len() > isize::MAX as usize)
-    {
-        return Err("native-capacity-wire".into());
+    let labels: Vec<_> = host
+        .public
+        .iter()
+        .map(|port| (port.original.to_string(), port.logical.spelling()))
+        .collect();
+    let rows: Vec<_> = host
+        .public
+        .iter()
+        .zip(&labels)
+        .map(|(port, (index, ty))| {
+            [
+                logical::Tree::Text(&host.entry.validator().role),
+                logical::Tree::Text(index),
+                logical::Tree::Text(ty),
+                logical::Tree::Hex(&public_bytes[&port.original]),
+            ]
+        })
+        .collect();
+    let rows: Vec<_> = rows.iter().map(|row| logical::Tree::Array(row)).collect();
+    let mut fields: Vec<_> = root
+        .as_array()
+        .expect("binding root")
+        .iter()
+        .map(logical::Tree::Json)
+        .collect();
+    fields[8] = logical::Tree::Array(&rows);
+    let encoding = logical::Tree::Array(&fields)
+        .prepare()
+        .map_err(|e| e.to_string())?;
+    let retain_root = host.entry.transcript().is_some();
+    if retain_root {
+        host.capacity.check_wire(encoding.size())?;
     }
-    let binding = Sha256::digest(&root).into();
+    let (root, binding) = encode_binding(&encoding, retain_root)?;
     Ok(Prepared {
         backend,
         loaded,
@@ -452,12 +476,95 @@ fn canonical<'a>(
     value: &Value,
     input: &'a InputValue,
 ) -> Result<std::borrow::Cow<'a, [u8]>> {
-    Ok(match input {
-        InputValue::Wire(bytes) => std::borrow::Cow::Borrowed(bytes.as_slice()),
-        _ => std::borrow::Cow::Owned(
+    Ok(match input.wire_bytes() {
+        Some(bytes) => std::borrow::Cow::Borrowed(bytes),
+        None => std::borrow::Cow::Owned(
             backend
                 .encode_native_value(value)
                 .map_err(|e| e.to_string())?,
         ),
     })
+}
+
+// A digest and optional transcript buffer consume one canonical stream. The
+// buffer is reserved before writing and is unpublished until encoding finishes.
+fn encode_binding(encoding: &logical::Encoding<'_>, retain: bool) -> Result<(Vec<u8>, [u8; 32])> {
+    struct Sink {
+        bytes: Vec<u8>,
+        hash: Sha256,
+        retain: bool,
+    }
+    impl std::io::Write for Sink {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.hash.update(bytes);
+            if self.retain {
+                self.bytes.extend_from_slice(bytes);
+            }
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut sink = Sink {
+        bytes: Vec::new(),
+        hash: Sha256::new(),
+        retain,
+    };
+    if retain {
+        sink.bytes
+            .try_reserve_exact(encoding.size())
+            .map_err(|_| "tree-allocation")?;
+    }
+    encoding.write(&mut sink).expect("reserved binding sink");
+    Ok((sink.bytes, sink.hash.finalize().into()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retained_and_hash_only_bindings_match_the_independent_vector() {
+        let vector: Json = serde_json::from_str(include_str!(
+            "../../../zkc-test-support/fixtures/native-proof-binding.json"
+        ))
+        .unwrap();
+        let expected = unhex(&vector["encoded_hex"]).unwrap();
+        let encoding = logical::Tree::Json(&vector["tree"]).prepare().unwrap();
+        for retain in [true, false] {
+            let (bytes, digest) = encode_binding(&encoding, retain).unwrap();
+            assert_eq!(hex(&digest), vector["sha256"]);
+            assert_eq!(bytes, if retain { expected.as_slice() } else { &[] });
+        }
+        // Exercise the mixed public-row composition too. The JSON spelling
+        // takes the Text path; the borrowed row must expand Hex identically.
+        for n in [0, 1, 511, 512, 513, 1024] {
+            let wire: Vec<_> = (0..n).map(|i| i as u8).collect();
+            let mut tree = vector["tree"].clone();
+            tree[8] = json!([["V", "0", "bytes", hex(&wire)]]);
+            let expected = logical::encode_tree(&tree).unwrap();
+            let row = [
+                logical::Tree::Text("V"),
+                logical::Tree::Text("0"),
+                logical::Tree::Text("bytes"),
+                logical::Tree::Hex(&wire),
+            ];
+            let rows = [logical::Tree::Array(&row)];
+            let mut fields: Vec<_> = tree
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(logical::Tree::Json)
+                .collect();
+            fields[8] = logical::Tree::Array(&rows);
+            let encoding = logical::Tree::Array(&fields).prepare().unwrap();
+            assert_eq!(encoding.size(), expected.len());
+            for retain in [true, false] {
+                let (bytes, digest) = encode_binding(&encoding, retain).unwrap();
+                assert_eq!(digest, <[u8; 32]>::from(Sha256::digest(&expected)));
+                assert_eq!(bytes, if retain { expected.as_slice() } else { &[] });
+            }
+        }
+    }
 }

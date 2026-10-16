@@ -33,3 +33,11 @@ def OpBytesEqual : ZKC_Operation<"bytes.equal", [],
     [ZKC_Apply<TypeBytes, []>, ZKC_Apply<TypeBytes, []>], [ZKC_Apply<TypeBool, []>], []> {
   int ordinal = 167;
 }
+
+def OpBytesRepeat : ZKC_Operation<"bytes.repeat", [],
+    [ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndex, []>],
+    [ZKC_Apply<TypeBytes, []>], []> { int ordinal = 185; }
+def BytesJoinElement : ZKC_Apply<TypeBytes, []>;
+def OpBytesJoin : ZKC_Operation<"bytes.join", [BytesJoinElement],
+    [ZKC_Apply<TypeSequence, [BytesJoinElement]>],
+    [ZKC_Apply<TypeBytes, []>], []> { int ordinal = 186; }

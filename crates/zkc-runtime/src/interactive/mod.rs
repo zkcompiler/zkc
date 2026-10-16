@@ -23,13 +23,16 @@ pub use structural::{
 };
 pub use variant::{VariantAlternative, VariantDescriptor};
 mod decode;
+mod executable;
 mod model;
 mod native_proof;
+mod preparation;
 mod program;
 mod retention;
 pub use native_proof::{
     ConstructionPlan, NativeProofEntry, NativeProofError, NativeTranscriptEvent, ProofConstruction,
 };
+pub use preparation::{PreparationLimits, PreparationStats, PreparedComputations};
 pub use program::{AssetReference, ProgramAction, ProgramCut, ProgramRole, ProgramState};
 pub use retention::{Backing, Retained};
 mod runner;
@@ -37,8 +40,8 @@ mod transport;
 
 pub use admit::{Admitted, EntryRole, admit_supplied};
 pub use backend::{
-    Backend, BackendError, Frame, FrameExit, FrameId, FrameKind, Invocation, ServiceInvocation,
-    Value,
+    Backend, BackendError, Frame, FrameExit, FrameId, FrameInputs, FrameKind, InstalledKernel,
+    Invocation, ServiceInvocation, Value,
 };
 pub use bindings::{
     BoundSignature, Identity, LogicalType, OperationBinding, PhysicalType, Representation,

@@ -16,13 +16,20 @@ set(MONERO_FILES
   contrib/epee/src/memwipe.c contrib/epee/src/mlocker.cpp
   external/easylogging++/easylogging++.cc)
 list(TRANSFORM MONERO_FILES PREPEND "${MONERO_SOURCE}/")
-add_executable(monero-reference reference.cpp ${MONERO_FILES})
-target_include_directories(monero-reference PRIVATE
+add_library(monero-primitives STATIC ${MONERO_FILES})
+target_include_directories(monero-primitives PUBLIC
   "${MONERO_SOURCE}/src" "${MONERO_SOURCE}/src/ringct"
   "${MONERO_SOURCE}/contrib/epee/include" "${MONERO_SOURCE}/external/easylogging++"
   ${Boost_INCLUDE_DIRS} ${RAPIDJSON_INCLUDE_DIR})
-target_compile_definitions(monero-reference PRIVATE
+target_compile_definitions(monero-primitives PUBLIC
   AUTO_INITIALIZE_EASYLOGGINGPP ELPP_DISABLE_LOGS PERF_TIMER_DISABLED)
-target_compile_options(monero-reference PRIVATE -ffunction-sections -fdata-sections)
+target_compile_options(monero-primitives PRIVATE -ffunction-sections -fdata-sections)
+target_link_libraries(monero-primitives PUBLIC PkgConfig::SODIUM pthread)
+add_executable(monero-reference reference.cpp)
+target_link_libraries(monero-reference PRIVATE monero-primitives)
 target_link_options(monero-reference PRIVATE -Wl,--gc-sections -Wl,--wrap=_ZN3rct5skGenEv)
-target_link_libraries(monero-reference PRIVATE PkgConfig::SODIUM pthread)
+
+# The benchmark retains upstream randomness and has no replay linker wrapper.
+add_executable(monero-benchmark ../../../benchmarks/monero.cpp)
+target_link_libraries(monero-benchmark PRIVATE monero-primitives)
+target_link_options(monero-benchmark PRIVATE -Wl,--gc-sections)

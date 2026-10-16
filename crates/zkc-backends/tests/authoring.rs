@@ -89,11 +89,14 @@ struct Divergent {
     input: bool,
 }
 impl Backend for Divergent {
+    type Call = ();
+    type Checkpoint = ();
     type Value = Value;
+    type Kernel = zkc_runtime::interactive::BoundSignature;
     fn validate_value(&self, _: &Value) -> Result<(), BackendError> {
         unreachable!()
     }
-    fn binding_signature(&self, _: &OperationBinding) -> Option<BoundSignature> {
+    fn prepare_binding(&self, _: &OperationBinding) -> Option<Self::Kernel> {
         Some(BoundSignature {
             inputs: if self.input {
                 vec![PhysicalType::parse("vector:bls12-381.fr@arkworks.fr-vector/0").unwrap()]
@@ -117,7 +120,12 @@ impl Backend for Divergent {
     fn leave_frame(&mut self, _: &Frame, _: FrameExit, _: &[Value]) -> Result<(), BackendError> {
         unreachable!()
     }
-    fn apply(&mut self, _: &Invocation<'_>, _: &[Value]) -> Result<Vec<Value>, BackendError> {
+    fn apply(
+        &mut self,
+        _kernel: &Self::Kernel,
+        _: &Invocation<'_>,
+        _: &[Value],
+    ) -> Result<Vec<Value>, BackendError> {
         unreachable!()
     }
 }

@@ -200,8 +200,11 @@ impl Mock {
     }
 }
 impl Backend for Mock {
+    type Call = ();
+    type Checkpoint = ();
     type Value = V;
-    fn binding_signature(&self, binding: &OperationBinding) -> Option<BoundSignature> {
+    type Kernel = crate::interactive::BoundSignature;
+    fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {
         let mut signature = binding.signature().ok()?;
         if self.wrong_signature {
             signature.outputs = vec![];
@@ -260,6 +263,7 @@ impl Backend for Mock {
     }
     fn apply(
         &mut self,
+        _kernel: &Self::Kernel,
         invocation: &Invocation<'_>,
         arguments: &[V],
     ) -> Result<Vec<V>, BackendError> {
@@ -1264,8 +1268,11 @@ impl GroupMock {
     }
 }
 impl Backend for GroupMock {
+    type Call = ();
+    type Checkpoint = ();
     type Value = G;
-    fn binding_signature(&self, binding: &OperationBinding) -> Option<BoundSignature> {
+    type Kernel = crate::interactive::BoundSignature;
+    fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {
         binding.signature().ok()
     }
     fn validate_value(&self, value: &G) -> Result<(), BackendError> {
@@ -1308,7 +1315,12 @@ impl Backend for GroupMock {
         }
         Ok(())
     }
-    fn apply(&mut self, i: &Invocation<'_>, args: &[G]) -> Result<Vec<G>, BackendError> {
+    fn apply(
+        &mut self,
+        _kernel: &Self::Kernel,
+        i: &Invocation<'_>,
+        args: &[G],
+    ) -> Result<Vec<G>, BackendError> {
         for arg in args {
             if let G::Nonce(generation) = arg {
                 if *generation != self.generation || !self.frames.last().unwrap().1 {

@@ -2,6 +2,67 @@ use serde_json::json;
 use zkc_runtime::{interactive::Limits, logical::*};
 
 #[test]
+fn borrowed_stream_matches_independent_grammar_and_short_writes() {
+    use std::io::{self, Write};
+    struct Short(Vec<u8>);
+    impl Write for Short {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            let n = bytes.len().min(3);
+            self.0.extend_from_slice(&bytes[..n]);
+            Ok(n)
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            panic!("caller owns flush")
+        }
+    }
+    // Independent grammar, deliberately not encode_tree as the oracle.
+    fn reference(value: &serde_json::Value, out: &mut Vec<u8>) {
+        if let Some(text) = value.as_str() {
+            out.push(0);
+            out.extend_from_slice(&(text.len() as u64).to_le_bytes());
+            out.extend_from_slice(text.as_bytes());
+        } else {
+            let array = value.as_array().unwrap();
+            out.push(1);
+            out.extend_from_slice(&(array.len() as u64).to_le_bytes());
+            for value in array {
+                reference(value, out);
+            }
+        }
+    }
+    for n in [0, 1, 255, 511, 512, 513, 8192] {
+        let bytes: Vec<_> = (0..n).map(|i| i as u8).collect();
+        let nested = json!(["é", ["", "end"]]);
+        let nodes = [
+            Tree::Text("binding"),
+            Tree::Json(&nested),
+            Tree::Hex(&bytes),
+        ];
+        let encoding = Tree::Array(&nodes).prepare().unwrap();
+        let expected = json!(["binding", nested, zkc_test_support::hex(&bytes)]);
+        let mut reference_bytes = Vec::new();
+        reference(&expected, &mut reference_bytes);
+        assert_eq!(encoding.size(), reference_bytes.len());
+        assert_eq!(encoding.to_vec().unwrap(), reference_bytes);
+        let mut sink = Short(Vec::new());
+        encoding.write(&mut sink).unwrap();
+        assert_eq!(sink.0, reference_bytes);
+    }
+    // The complete preflight refuses a late malformed child before any writes.
+    let invalid = json!(["valid", false]);
+    assert_eq!(Tree::Json(&invalid).prepare().unwrap_err().0, "tree-kind");
+    let bytes = vec![0; (TreeLimits::BYTES - 9) / 2];
+    assert!(Tree::Hex(&bytes).prepare().is_ok());
+    assert!(Tree::Hex(&vec![0; bytes.len() + 1]).prepare().is_err());
+    let encoding = Tree::Text("abc").prepare().unwrap();
+    let mut sink = &mut [0u8; 10][..];
+    assert_eq!(
+        encoding.write(&mut sink).unwrap_err().kind(),
+        io::ErrorKind::WriteZero
+    );
+}
+
+#[test]
 fn independent_known_answers_and_no_json_spelling_dependence() {
     assert_eq!(
         zkc_test_support::hex(&encode_tree(&json!("é")).unwrap()),

@@ -2500,6 +2500,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "zkc-benchmarks"
+version = "0.0.0"
+dependencies = [
+ "ark-bls12-381",
+ "ark-ff",
+ "ark-serialize",
+ "rustix",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "spongefish 0.7.4",
+ "zkc-runtime",
+ "zkc-tools",
+]
+
+[[package]]
 name = "zkc-runtime"
 version = "0.0.0"
 dependencies = [

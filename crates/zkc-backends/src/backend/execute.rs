@@ -129,7 +129,7 @@ impl NativeBackend {
 
 /// Independent native port facts, also used for exact implementation assembly.
 pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
-    use crate::bindings::{control, pcs, poly};
+    use crate::bindings::{control, poly};
     use zkc_runtime::interactive::{AttributeRule, Type::*};
     &[
         control::operation("bool.and", &[Bool, Bool], &[Bool], AttributeRule::None)
@@ -174,6 +174,13 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             AttributeRule::None,
         )
         .implemented_by(&["arkworks/poly.append_point"]),
+    ]
+};
+// Setup-dependent operations are installed separately from pure mathematics.
+pub(crate) const PCS_CONTRACTS: &[crate::bindings::Contract] = {
+    use crate::bindings::pcs;
+    use zkc_runtime::interactive::{AttributeRule, Type::*};
+    &[
         pcs::operation(
             "pcs.commit",
             &[ProverKey, Table],
@@ -214,6 +221,7 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
         primary: zkc_runtime::interactive::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Msb,
         handler: None,
+        deterministic: true,
     },
     crate::backend::registry::Alternative {
         identity: "arkworks-msb/poly.product_round",
@@ -221,6 +229,7 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
         primary: zkc_runtime::interactive::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Msb,
         handler: None,
+        deterministic: true,
     },
     crate::backend::registry::Alternative {
         identity: "arkworks-msb/poly.fold",
@@ -228,6 +237,7 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
         primary: zkc_runtime::interactive::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Msb,
         handler: None,
+        deterministic: true,
     },
     crate::backend::registry::Alternative {
         identity: "arkworks-msb/poly.evaluate",
@@ -235,6 +245,7 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
         primary: zkc_runtime::interactive::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Msb,
         handler: None,
+        deterministic: true,
     },
     crate::backend::registry::Alternative {
         identity: "arkworks-msb/poly.empty_point",
@@ -242,6 +253,7 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
         primary: zkc_runtime::interactive::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Msb,
         handler: None,
+        deterministic: true,
     },
     crate::backend::registry::Alternative {
         identity: "arkworks-msb/poly.append_point",
@@ -249,6 +261,7 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
         primary: zkc_runtime::interactive::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Msb,
         handler: None,
+        deterministic: true,
     },
     crate::backend::registry::Alternative {
         identity: "arkworks-msb/poly.boundary",
@@ -256,6 +269,7 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
         primary: zkc_runtime::interactive::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Msb,
         handler: None,
+        deterministic: true,
     },
     crate::backend::registry::Alternative {
         identity: "arkworks-msb/poly.round_evaluate",
@@ -263,5 +277,6 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
         primary: zkc_runtime::interactive::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Msb,
         handler: None,
+        deterministic: true,
     },
 ];

@@ -51,6 +51,15 @@ every actual result use against the selected port and algebraic contract. Declar
 publication. [Preservation](verification.md) checks the materialized operations,
 conversions and operands separately from proposal validation.
 
+Contraction discovery visits ordered SSA blocks inside local control flow as
+well as function bodies. A producer and all consumers must remain in the same
+block; views cannot cross a branch, become loop state or escape through a return.
+Operations keep their original order, including checks between consumers.
+Candidate discovery enumerates applicable installed implementations by identity;
+policy can reorder or withhold them. Registration order grants no preference.
+Adding implementations can change an automatically selected artifact, whose
+recorded physical choices determine execution costs and limits.
+
 ## Execution and evidence
 
 The emitted `zkc.program/0` executes through the shared Runner. Logical data,

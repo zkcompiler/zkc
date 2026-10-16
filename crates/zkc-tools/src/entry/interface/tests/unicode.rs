@@ -655,6 +655,44 @@ fn proof_request(interface: &Interface, producer: bool) -> ProofRequest {
     }
 }
 #[test]
+fn prepared_public_data_uses_the_named_entry_schema_and_fresh_invocations() {
+    use crate::execution::{InputValue, PreparedData};
+    let (doc, artifact) = proof_fixture();
+    let options = ProofOptions {
+        binding: BindingPolicy::AllowAuthored,
+        ..Default::default()
+    };
+    let entry =
+        ProofEntry::admit(package(&doc, &artifact), options, SetupAuthority::default()).unwrap();
+    let material =
+        PreparedData::from_value(zkc_backends::Value::Bool(true), options.capacity).unwrap();
+    let ordinary = entry.prove(proof_request(entry.interface(), true)).unwrap();
+    assert!(ordinary.is_success());
+    let proof = ordinary.native.outcome.unwrap();
+    for producer in [true, false, false] {
+        let mut request = proof_request(entry.interface(), producer);
+        request.public.insert(
+            "公開".into(),
+            entry::Value::from(InputValue::Prepared(material.clone())),
+        );
+        if !producer {
+            crate::host::admission::DECODE_COUNT.set(0);
+        }
+        let report = if producer {
+            entry.prove(request).unwrap()
+        } else {
+            entry.verify(request, &proof).unwrap()
+        };
+        assert!(report.is_success(), "{:?}", report.native.outcome);
+        if producer {
+            assert_eq!(report.native.outcome.unwrap(), proof);
+        } else {
+            assert_eq!(crate::host::admission::DECODE_COUNT.get(), 0);
+        }
+    }
+}
+
+#[test]
 fn unicode_proof_requests_bind_the_selected_prover_and_verifier_roster_indices() {
     let (doc, artifact) = proof_fixture();
     let code = entry::bindings::rust(&package(&doc, &artifact)).unwrap();

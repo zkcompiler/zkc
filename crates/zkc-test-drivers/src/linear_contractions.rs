@@ -1,5 +1,5 @@
 //! Execute compiler-exported shared contractions with the unmodified native Runner.
-//! Usage: linear_contractions PROGRAM.json field|group
+//! Usage: linear_contractions PROGRAM.json field|group [direct|if|for]
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, RistrettoScalar, Scalar, Value};
 use zkc_runtime::interactive::{Action, Runner, StopKind, admit_supplied};
@@ -84,6 +84,7 @@ fn main() {
         Some("group") => true,
         _ => panic!("expected field or group"),
     };
+    let control = arguments.next().unwrap_or_else(|| "direct".into());
     assert!(arguments.next().is_none(), "unexpected argument");
 
     let mut successful = runner(&bytes, group, true, false);
@@ -107,7 +108,11 @@ fn main() {
         }
     }
     // One local call, four kernels and the local/participant returns.
-    assert_eq!(successful.usage().instructions, 7);
+    if control == "direct" {
+        assert_eq!(successful.usage().instructions, 7);
+    } else {
+        assert!(successful.usage().instructions > 7);
+    }
     assert_eq!(successful.backend().active_frames(), 0);
 
     // Only the second reduction has mismatched lengths. The false guard must
@@ -124,14 +129,25 @@ fn main() {
         assert_eq!(stop.role, "P");
         // Direct kernel failures identify the containing local call. Error codes
         // and instruction counts distinguish the guard from the second reduction.
-        assert_eq!(stop.site.as_deref(), Some("work"));
+        let site = if control == "direct" {
+            "work"
+        } else if allowed {
+            "second"
+        } else {
+            "between"
+        };
+        assert_eq!(stop.site.as_deref(), Some(site));
         let local = stop.local.as_ref().expect("local failure context");
         assert_eq!(local.site, "work");
         assert!(!local.function.is_empty());
         assert!(stop.cleanup_errors.is_empty());
         assert_eq!(stopped.backend().active_frames(), 0);
         let usage = stopped.usage();
-        assert_eq!(usage.instructions, instructions);
+        if control == "direct" {
+            assert_eq!(usage.instructions, instructions);
+        } else {
+            assert!(usage.instructions > instructions);
+        }
         assert_eq!(usage.live_values, 0);
         assert_eq!(usage.live_value_bytes, 0);
         assert!(matches!(stopped.poll(), Action::Stopped(again) if again == stop));

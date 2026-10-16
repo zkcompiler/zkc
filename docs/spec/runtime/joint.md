@@ -338,6 +338,10 @@ roundtrip is required for an in-process value. Native elements must satisfy thei
 upstream cryptographic library invariants; unchecked scalar constructors cannot
 be used to import invalid field representations. Untrusted bytes use `Wire`,
 whose decoder checks canonical encoding and element validity.
+`InputValue::Prepared` reuses immutable `PreparedData` under the same
+[data preparation and per-call admission contract](proofs.md#typed-invocation-inputs).
+It is also valid inside a variant payload. Reuse does not remove current type,
+policy, setup or loading-budget checks.
 
 `InputValue::Variant` names an active alternative by index and supplies its
 ordered immutable payload requests. The admitted native type supplies the full

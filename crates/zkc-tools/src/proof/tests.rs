@@ -244,14 +244,12 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
             "../../../zkc-test-support/fixtures/native-proof-binding.json"
         ))
         .unwrap();
-        assert_eq!(hex(&prepared.root), vector["encoded_hex"]);
-        assert_eq!(hash(&prepared.root), vector["sha256"]);
-        assert_eq!(
-            prepared.root.len(),
-            vector["bytes"].as_u64().unwrap() as usize
-        );
+        assert!(prepared.root.is_empty()); // No managed transcript consumes it.
+        assert_eq!(hex(&prepared.binding), vector["sha256"]);
         assert_eq!(hex(&proof[8..40]), vector["sha256"]);
-        let root = logical::decode_tree(&prepared.root).unwrap();
+        let encoded = unhex(&vector["encoded_hex"]).unwrap();
+        assert_eq!(encoded.len(), vector["bytes"].as_u64().unwrap() as usize);
+        let root = logical::decode_tree(&encoded).unwrap();
         assert_eq!(root, vector["tree"]);
         assert_eq!(root[0], "zkc.native-proof-binding/0");
         // Bind the complete current invocation, including its context and arity.

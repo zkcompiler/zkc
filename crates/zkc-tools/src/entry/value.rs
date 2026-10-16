@@ -79,7 +79,10 @@ pub(super) fn flatten(schema: &Schema, value: Value, out: &mut Vec<InputValue>) 
         ) => {
             if !matches!(
                 value,
-                InputValue::Native(_) | InputValue::Wire(_) | InputValue::WireFile { .. }
+                InputValue::Native(_)
+                    | InputValue::Wire(_)
+                    | InputValue::WireFile { .. }
+                    | InputValue::Prepared(_)
             ) {
                 return Err("entry-input-kind".into());
             }

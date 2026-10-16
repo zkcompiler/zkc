@@ -6,18 +6,27 @@ use zkc_runtime::interactive::{
 };
 
 pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
-    use Type::{Bool, Bytes, Field, Group};
-    let [domain] = binding.arguments.as_slice() else {
-        return None;
+    use Type::{Bool, Bytes, Field, Group, Groups, Index, Vector};
+    let (identity, provider) = match binding.arguments.as_slice() {
+        [] => (Identity::None, "native"),
+        [domain] => {
+            let identity = Identity::parse(domain).ok()?;
+            (identity, identity.provider()?)
+        }
+        _ => return None,
     };
-    let identity = Identity::parse(domain).ok()?;
-    let provider = identity.provider()?;
     if binding.implementation != format!("{provider}/{}", binding.contract) {
         return None;
     }
     let (inputs, outputs): (&[Type], &[Type]) = match (binding.contract.as_str(), identity) {
+        ("encoding.index_uleb128", Identity::None) => (&[Index], &[Bytes]),
         ("encoding.field_be", Identity::Bls12381Fr)
         | ("encoding.field_le", Identity::Ristretto255Scalar) => (&[Field], &[Bytes]),
+        ("encoding.fields_be", Identity::Bls12381Fr)
+        | ("encoding.fields_le", Identity::Ristretto255Scalar) => (&[Vector], &[Bytes]),
+        ("encoding.groups_compressed", Identity::Bls12381G1 | Identity::Edwards25519Prime) => {
+            (&[Groups], &[Bytes])
+        }
         ("encoding.field_from_be", Identity::Bls12381Fr)
         | ("encoding.field_from_le", Identity::Ristretto255Scalar) => (&[Bytes], &[Bool, Field]),
         ("encoding.field_reduce_be", Identity::Bls12381Fr)
@@ -33,7 +42,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         _ => return None,
     };
     let port = |kind| {
-        let domain = if matches!(kind, Field | Group) {
+        let domain = if matches!(kind, Field | Group | Vector | Groups) {
             identity
         } else {
             Identity::None
@@ -45,6 +54,36 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         outputs: outputs.iter().copied().map(port).collect::<Option<_>>()?,
         attributes: AttributeRule::None,
     })
+}
+
+fn field_be(value: &Scalar) -> Result<[u8; 32]> {
+    let mut bytes = zkc_arkworks::encode_scalar(value).map_err(ark)?;
+    bytes.reverse();
+    Ok(bytes)
+}
+
+// Ordered, fixed-width scalar encodings with no framing or transcript effects.
+// Preflight the whole output before allocation; a failed element publishes no
+// partial byte string. Vec-to-Arc conversion can temporarily retain both copies.
+fn encode_collection<T, const WIDTH: usize>(
+    values: &[T],
+    policy: &Policy,
+    available: usize,
+    preflight: impl FnOnce() -> Result<()>,
+    encode: impl Fn(&T) -> Result<[u8; WIDTH]>,
+) -> Result<Vec<Value>> {
+    let length = values
+        .len()
+        .checked_mul(WIDTH)
+        .ok_or_else(|| crate::exhausted("size-overflow"))?;
+    policy.bytes(length)?;
+    policy.output(size(length, 2)?, available)?;
+    preflight()?;
+    let mut bytes = crate::kernels::arithmetic::reserve(length)?;
+    for value in values {
+        bytes.extend_from_slice(&encode(value)?);
+    }
+    Ok(vec![Value::Bytes(bytes.into())])
 }
 
 pub(crate) fn apply(
@@ -65,12 +104,64 @@ pub(crate) fn apply(
         }
     }
     match (name, args) {
+        ("encoding.index_uleb128", [Value::Index(value)]) => {
+            // u64 needs at most ten bytes. Compute into bounded stack storage,
+            // then preflight its single immutable allocation before publishing.
+            let mut encoded = [0u8; 10];
+            let mut remaining = *value;
+            let mut length = 0;
+            loop {
+                let byte = (remaining & 0x7f) as u8;
+                remaining >>= 7;
+                encoded[length] = byte | if remaining == 0 { 0 } else { 0x80 };
+                length += 1;
+                if remaining == 0 {
+                    break;
+                }
+            }
+            policy.bytes(length)?;
+            policy.output(size(length, 1)?, available)?;
+            Ok(vec![Value::Bytes(encoded[..length].into())])
+        }
+        ("encoding.fields_be", [Value::Vector(values)]) => {
+            policy.vector(values.len())?;
+            encode_collection(values, policy, available, || Ok(()), field_be)
+        }
+        ("encoding.fields_le", [Value::RistrettoVector(values)]) => {
+            policy.vector(values.len())?;
+            encode_collection(
+                values,
+                policy,
+                available,
+                || Ok(()),
+                |value| Ok(value.to_bytes()),
+            )
+        }
+        ("encoding.groups_compressed", [Value::Groups(values)]) => {
+            policy.groups(values.len())?;
+            encode_collection(
+                values,
+                policy,
+                available,
+                || Ok(()),
+                |value| value.to_bytes().map_err(ark),
+            )
+        }
+        ("encoding.groups_compressed", [Value::EdwardsGroups(values)]) => {
+            policy.dalek_groups(values.len())?;
+            encode_collection(
+                values,
+                policy,
+                available,
+                || budget.charge_units((values.len() as u64).saturating_mul(256)),
+                |value| Ok(value.to_bytes()),
+            )
+        }
         ("encoding.field_be", [Value::Field(value)]) => {
             policy.bytes(32)?;
             policy.output(size(32, 1)?, available)?;
-            let mut bytes = zkc_arkworks::encode_scalar(value).map_err(ark)?;
-            bytes.reverse();
-            Ok(vec![Value::Bytes(bytes.to_vec().into())])
+            let bytes = field_be(value)?;
+            Ok(vec![Value::Bytes(bytes.as_slice().into())])
         }
         ("encoding.field_from_be", [Value::Bytes(bytes)]) => {
             policy.output(1024, available)?;
@@ -98,7 +189,7 @@ pub(crate) fn apply(
         ("encoding.field_le", [Value::RistrettoField(value)]) => {
             policy.bytes(32)?;
             policy.output(size(32, 1)?, available)?;
-            Ok(vec![Value::Bytes(value.to_bytes().to_vec().into())])
+            Ok(vec![Value::Bytes(value.to_bytes().as_slice().into())])
         }
         ("encoding.field_from_le", [Value::Bytes(bytes)]) => {
             policy.output(1024, available)?;
@@ -128,7 +219,7 @@ pub(crate) fn apply(
             policy.bytes(32)?;
             policy.output(size(32, 1)?, available)?;
             budget.charge_units(256)?;
-            Ok(vec![Value::Bytes(point.to_bytes().to_vec().into())])
+            Ok(vec![Value::Bytes(point.to_bytes().as_slice().into())])
         }
         (
             "encoding.group_from_compressed" | "encoding.group_decode_cofactor",
@@ -163,7 +254,7 @@ pub(crate) fn apply(
             policy.bytes(48)?;
             policy.output(size(48, 1)?, available)?;
             Ok(vec![Value::Bytes(
-                point.to_bytes().map_err(ark)?.to_vec().into(),
+                point.to_bytes().map_err(ark)?.as_slice().into(),
             )])
         }
         ("encoding.group_from_compressed", [Value::Bytes(bytes)]) => {
@@ -181,6 +272,17 @@ pub(crate) fn apply(
 }
 
 pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
+    ("native/encoding.index_uleb128", "encoding.index_uleb128"),
+    ("arkworks/encoding.fields_be", "encoding.fields_be"),
+    ("dalek/encoding.fields_le", "encoding.fields_le"),
+    (
+        "arkworks/encoding.groups_compressed",
+        "encoding.groups_compressed",
+    ),
+    (
+        "dalek/encoding.groups_compressed",
+        "encoding.groups_compressed",
+    ),
     ("dalek/encoding.field_le", "encoding.field_le"),
     ("dalek/encoding.field_from_le", "encoding.field_from_le"),
     ("dalek/encoding.field_reduce_le", "encoding.field_reduce_le"),
@@ -249,6 +351,297 @@ mod tests {
         )
         .unwrap()
     }
+    #[test]
+    fn unsigned_leb128_is_minimal_over_the_full_index_domain() {
+        let run = |value| {
+            let output = apply(
+                "encoding.index_uleb128",
+                Identity::None,
+                &[Value::Index(value)],
+                &[],
+                &Policy::default(),
+                usize::MAX,
+                &mut Default::default(),
+            )
+            .unwrap();
+            let Value::Bytes(bytes) = &output[0] else {
+                panic!("bytes")
+            };
+            bytes.to_vec()
+        };
+        assert_eq!(run(0), [0]);
+        assert_eq!(run(127), [127]);
+        assert_eq!(run(128), [0x80, 0x01]);
+        assert_eq!(run(300), [0xac, 0x02]);
+        assert_eq!(run(624485), [0xe5, 0x8e, 0x26]);
+        assert_eq!(
+            run(u64::MAX),
+            [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 1]
+        );
+        let mut values = vec![0, 1, u64::MAX];
+        for bit in (7..64).step_by(7) {
+            values.extend([(1u64 << bit) - 1, 1u64 << bit, (1u64 << bit) + 1]);
+        }
+        for value in values {
+            let bytes = run(value);
+            assert!((1..=10).contains(&bytes.len()));
+            assert!(bytes[..bytes.len() - 1].iter().all(|b| b & 0x80 != 0));
+            assert_eq!(bytes.last().unwrap() & 0x80, 0);
+            assert!(bytes.len() == 1 || *bytes.last().unwrap() != 0);
+            let decoded = bytes
+                .iter()
+                .enumerate()
+                .fold(0u64, |n, (i, b)| n | (u64::from(b & 0x7f) << (i * 7)));
+            assert_eq!(decoded, value);
+        }
+    }
+    #[test]
+    fn unsigned_leb128_keeps_exact_binding_and_capacity_checks() {
+        let mut binding = OperationBinding {
+            contract: "encoding.index_uleb128".into(),
+            arguments: vec![],
+            implementation: "native/encoding.index_uleb128".into(),
+        };
+        assert!(signature(&binding).is_some());
+        binding.arguments.push("bls12-381.fr".into());
+        assert!(signature(&binding).is_none());
+        binding.arguments.clear();
+        binding.implementation = "arkworks/encoding.index_uleb128".into();
+        assert!(signature(&binding).is_none());
+        binding.arguments.push("bls12-381.fr".into());
+        assert!(signature(&binding).is_none()); // right provider, wrong domain arity
+        binding.arguments.clear();
+        binding.contract = "encoding.field_be".into();
+        binding.implementation = "native/encoding.field_be".into();
+        assert!(signature(&binding).is_none()); // a domain codec still needs its domain
+        let run = |args: &[Value], attributes: &[String], policy: &Policy, available| {
+            apply(
+                "encoding.index_uleb128",
+                Identity::None,
+                args,
+                attributes,
+                policy,
+                available,
+                &mut Default::default(),
+            )
+        };
+        let args = [Value::Index(u64::MAX)];
+        let allowance = size(10, 1).unwrap();
+        assert!(run(&args, &[], &Policy::default(), allowance).is_ok());
+        assert_eq!(
+            run(&args, &[], &Policy::default(), allowance - 1)
+                .unwrap_err()
+                .code,
+            "exhausted:output-bytes"
+        );
+        assert_eq!(
+            run(
+                &args,
+                &[],
+                &Policy {
+                    max_wire_bytes: 9,
+                    ..Default::default()
+                },
+                usize::MAX
+            )
+            .unwrap_err()
+            .code,
+            "exhausted:wire-bytes"
+        );
+        assert_eq!(
+            run(&args, &["extra".into()], &Policy::default(), usize::MAX)
+                .unwrap_err()
+                .code,
+            "refused:encoding-attributes"
+        );
+        assert_eq!(
+            run(&[Value::Bool(true)], &[], &Policy::default(), usize::MAX)
+                .unwrap_err()
+                .code,
+            "refused:encoding-operands"
+        );
+    }
+    #[test]
+    fn collection_encodings_match_scalar_codecs_in_order() {
+        let cases = [
+            (
+                "encoding.fields_be",
+                "encoding.field_be",
+                Identity::Bls12381Fr,
+                Value::Vector(
+                    vec![
+                        Scalar::from(0u64),
+                        Scalar::from(0x1234u64),
+                        -Scalar::from(1u64),
+                    ]
+                    .into(),
+                ),
+                vec![
+                    Value::Field(Scalar::from(0u64)),
+                    Value::Field(Scalar::from(0x1234u64)),
+                    Value::Field(-Scalar::from(1u64)),
+                ],
+            ),
+            (
+                "encoding.fields_le",
+                "encoding.field_le",
+                Identity::Ristretto255Scalar,
+                Value::RistrettoVector(
+                    vec![crate::RistrettoScalar::ZERO, crate::RistrettoScalar::ONE].into(),
+                ),
+                vec![
+                    Value::RistrettoField(crate::RistrettoScalar::ZERO),
+                    Value::RistrettoField(crate::RistrettoScalar::ONE),
+                ],
+            ),
+            (
+                "encoding.groups_compressed",
+                "encoding.group_compressed",
+                Identity::Bls12381G1,
+                Value::Groups(vec![GroupPoint::identity(), GroupPoint::generator()].into()),
+                vec![
+                    Value::Curve(GroupPoint::identity()),
+                    Value::Curve(GroupPoint::generator()),
+                ],
+            ),
+            (
+                "encoding.groups_compressed",
+                "encoding.group_compressed",
+                Identity::Edwards25519Prime,
+                Value::EdwardsGroups(
+                    vec![
+                        crate::EdwardsPrime::identity(),
+                        crate::EdwardsPrime::generator(),
+                    ]
+                    .into(),
+                ),
+                vec![
+                    Value::EdwardsGroup(crate::EdwardsPrime::identity()),
+                    Value::EdwardsGroup(crate::EdwardsPrime::generator()),
+                ],
+            ),
+        ];
+        for (bulk, scalar, identity, values, elements) in cases {
+            let mut expected = vec![];
+            for value in elements {
+                let encoded = apply(
+                    scalar,
+                    identity,
+                    &[value],
+                    &[],
+                    &Policy::default(),
+                    usize::MAX,
+                    &mut Default::default(),
+                )
+                .unwrap();
+                let Value::Bytes(bytes) = &encoded[0] else {
+                    panic!("bytes")
+                };
+                expected.extend_from_slice(bytes);
+            }
+            let limit = size(expected.len(), 2).unwrap();
+            let encoded = apply(
+                bulk,
+                identity,
+                std::slice::from_ref(&values),
+                &[],
+                &Policy::default(),
+                limit,
+                &mut Default::default(),
+            )
+            .unwrap();
+            assert!(matches!(&encoded[0], Value::Bytes(b) if b.as_ref() == expected));
+            assert_eq!(
+                apply(
+                    bulk,
+                    identity,
+                    std::slice::from_ref(&values),
+                    &[],
+                    &Policy::default(),
+                    limit - 1,
+                    &mut Default::default()
+                )
+                .unwrap_err()
+                .code,
+                "exhausted:output-bytes"
+            );
+            let policy = Policy {
+                max_wire_bytes: expected.len() - 1,
+                ..Default::default()
+            };
+            assert_eq!(
+                apply(
+                    bulk,
+                    identity,
+                    &[values],
+                    &[],
+                    &policy,
+                    usize::MAX,
+                    &mut Default::default()
+                )
+                .unwrap_err()
+                .code,
+                "exhausted:wire-bytes"
+            );
+        }
+        for (op, value) in [
+            ("encoding.fields_be", Value::Vector(vec![].into())),
+            ("encoding.fields_le", Value::RistrettoVector(vec![].into())),
+            ("encoding.groups_compressed", Value::Groups(vec![].into())),
+            (
+                "encoding.groups_compressed",
+                Value::EdwardsGroups(vec![].into()),
+            ),
+        ] {
+            let encoded = apply(
+                op,
+                Identity::None,
+                &[value],
+                &[],
+                &Policy::default(),
+                256,
+                &mut Default::default(),
+            )
+            .unwrap();
+            assert!(matches!(&encoded[0], Value::Bytes(b) if b.is_empty()));
+        }
+    }
+
+    #[test]
+    fn collection_output_preflight_precedes_external_work() {
+        let values = [Value::EdwardsGroups(
+            vec![crate::EdwardsPrime::generator(); 2].into(),
+        )];
+        let mut budget = crate::external_kernels::Budget {
+            limit: 511,
+            spent: 0,
+        };
+        let invoke = |available, budget: &mut crate::external_kernels::Budget| {
+            apply(
+                "encoding.groups_compressed",
+                Identity::Edwards25519Prime,
+                &values,
+                &[],
+                &Policy::default(),
+                available,
+                budget,
+            )
+        };
+        assert_eq!(
+            invoke(383, &mut budget).unwrap_err().code,
+            "exhausted:output-bytes"
+        );
+        assert_eq!(budget.spent, 0);
+        assert_eq!(
+            invoke(384, &mut budget).unwrap_err().code,
+            "exhausted:external-work-limit"
+        );
+        assert_eq!(budget.spent, 0);
+        budget.limit = 512;
+        assert!(invoke(384, &mut budget).is_ok());
+        assert_eq!(budget.spent, 512);
+    }
+
     #[test]
     fn little_endian_scalars_are_canonical_and_reduction_is_explicit() {
         use crate::RistrettoScalar as S;

@@ -6,6 +6,7 @@ members = [
   "crates/zkc-backends",
   "crates/zkc-test-support",
   "crates/zkc-test-drivers",
+  "crates/zkc-benchmarks",
 ]
 default-members = ["crates/zkc-tools"]
 resolver = "3"

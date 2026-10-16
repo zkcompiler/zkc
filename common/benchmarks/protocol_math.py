@@ -2,31 +2,32 @@
 """Measure complete source protocols with explicitly selected, already built tools.
 
 Only this tool's output directory is written. No builds or dependency downloads
-are performed. See README.md for measurement boundaries and reproduction.
+are performed. See protocol-math.md for measurement boundaries and reproduction.
 """
 
 import argparse
 from collections import Counter, defaultdict
 import csv
-from datetime import datetime, timezone
-import hashlib
 import json
 import os
 from pathlib import Path
 import platform
 import re
-import shlex
 import shutil
 import statistics
 import subprocess
 import sys
-import time
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts'))
-from processes import positive_timeout, run  # noqa: E402
+from processes import positive_timeout  # noqa: E402
 sys.path.insert(0, str(ROOT / 'common/tests/support'))
 from project import project_inputs  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from bench.io import (  # noqa: E402
+    Journal, MeasurementError, digest, executable, identity,
+    positive_integer, require, write_json)
 
 FORMAT = 'zkc.protocol-measurement/0'
 P = 2130706433
@@ -36,82 +37,6 @@ COUNTERS = ('instructions', 'iterations', 'logical_bytes', 'total_value_bytes',
             'ring_work', 'external_work')
 EXIT_COUNTERS = ('live_values', 'live_value_bytes', 'live_resource_units',
                  'retained_output_units')
-
-
-class MeasurementError(Exception):
-    pass
-
-
-def require(condition, message):
-    if not condition:
-        raise MeasurementError(message)
-
-
-def write_json(path, value):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, indent=2, sort_keys=True) + '\n')
-
-
-def digest(path):
-    with path.open('rb') as stream:
-        return hashlib.file_digest(stream, 'sha256').hexdigest()
-
-
-def identity(path):
-    return {'path': str(path), 'sha256': digest(path), 'bytes': path.stat().st_size,
-            'mtime_ns': path.stat().st_mtime_ns}
-
-
-class Journal:
-    """Retain each process invocation, including failures, timeouts and interrupts."""
-
-    def __init__(self, directory, timeout):
-        self.directory, self.timeout = directory, timeout
-        self.directory.mkdir(parents=True, exist_ok=True)
-        self.sequence = 0
-
-    def command(self, argv, *, cwd, stdout=None, expected=0):
-        argv = list(map(str, argv))
-        number = self.sequence
-        self.sequence += 1
-        stdout = stdout or self.directory / f'{number:04d}.stdout'
-        stderr = self.directory / f'{number:04d}.stderr'
-        environment = {'LC_ALL': 'C', 'PYTHONHASHSEED': '0', 'PYTHONDONTWRITEBYTECODE': '1'}
-        record = {'argv': argv, 'shell': shlex.join(argv), 'cwd': str(cwd),
-                  'environment_overrides': environment, 'timeout_seconds': self.timeout,
-                  'stdout': str(stdout), 'stderr': str(stderr),
-                  'started_utc': datetime.now(timezone.utc).isoformat(), 'returncode': None}
-        out = err = b''
-        start = time.perf_counter()
-        try:
-            # Pipe capture wakes on EOF. File-backed subprocess.wait(timeout=...)
-            # polls and can dominate these short runs with its sleep intervals.
-            result = run(argv, cwd=cwd, env=os.environ | environment, capture_output=True,
-                         timeout=self.timeout)
-            out, err = result.stdout, result.stderr
-            record['returncode'] = result.returncode
-        except BaseException as error:
-            out, err = getattr(error, 'stdout', None) or b'', getattr(error, 'stderr', None) or b''
-            record['error'] = f'{type(error).__name__}: {error}'
-            raise
-        finally:
-            record['wall_seconds'] = time.perf_counter() - start
-            stdout.write_bytes(out)
-            stderr.write_bytes(err)
-            with (self.directory / 'commands.jsonl').open('a') as stream:
-                stream.write(json.dumps(record) + '\n')
-        if expected is not None:
-            require(result.returncode == expected,
-                    f'command exited {result.returncode}; see {stderr} and {stdout}')
-        return record
-
-    def report(self, argv, *, cwd, status, refused=False):
-        record = self.command(argv, cwd=cwd, expected=None)
-        report = json.loads(Path(record['stdout']).read_text())
-        code = record['returncode']
-        require((code > 0 if refused else code == 0) and report.get('status') == status,
-                f'expected {status}, exit={code}; see {record["stdout"]}')
-        return report, record
 
 
 def case_catalog():
@@ -462,20 +387,6 @@ def write_summary_csv(path, groups, status):
                 writer.writerow(cell | {'metric': metric} | statistics)
 
 
-def executable(value):
-    path = Path(value).expanduser().resolve()
-    if not path.is_file() or not os.access(path, os.X_OK):
-        raise argparse.ArgumentTypeError(f'explicit executable does not exist: {path}')
-    return path
-
-
-def positive_integer(value):
-    number = int(value)
-    if number < 1:
-        raise argparse.ArgumentTypeError('expected a positive integer')
-    return number
-
-
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--baseline-source', required=True, type=Path)
@@ -524,6 +435,8 @@ def main(argv=None):
         result['tool_source'] = identity(Path(__file__).resolve())
         shutil.copyfile(__file__, output / 'protocol_math.py')
         shutil.copyfile(ROOT / 'scripts/processes.py', output / 'processes.py')
+        shutil.copytree(Path(__file__).parent / 'bench', output / 'bench',
+                        ignore=shutil.ignore_patterns('__pycache__'))
         result['process_helper'] = identity(ROOT / 'scripts/processes.py')
         cpuinfo = Path('/proc/cpuinfo')
         if cpuinfo.is_file():

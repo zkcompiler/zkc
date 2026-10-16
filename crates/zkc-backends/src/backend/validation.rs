@@ -1,10 +1,10 @@
 //! Shared entry, operand and result checks for every native kernel.
 use super::EntryPolicy;
-use crate::{Policy, Result, Value, ark, exhausted, refused};
+use crate::{Policy, Result, Value, exhausted, refused};
 use crate::{SetupRegistry, resource::Resources};
 use std::collections::HashSet;
 use zkc_runtime::interactive::{
-    AttributeRule, Frame, FrameKind, Invocation, Retained, Type, Value as RuntimeValue,
+    Frame, FrameKind, Invocation, Retained, Type, Value as RuntimeValue,
 };
 
 pub(super) struct Core {
@@ -238,23 +238,23 @@ impl Core {
         Ok(())
     }
     /// Pure entry constraints; missing values are only pending resource roots.
-    pub(super) fn check_entry_values(
+    pub(super) fn check_entry_values<'a>(
         &self,
-        inputs: &[(String, zkc_runtime::interactive::PhysicalType)],
+        inputs: impl Iterator<Item = &'a (String, zkc_runtime::interactive::PhysicalType)> + Clone,
         values: &[Option<&Value>],
     ) -> Result<()> {
-        if inputs.len() != values.len() {
+        if inputs.clone().count() != values.len() {
             return Err(refused("frame-arguments"));
         }
         if let Some(n) = self.entry.arity {
             self.policy.arity(n)?;
         }
         for name in self.entry.ports.keys() {
-            if !inputs.iter().any(|(n, _)| n == name) {
+            if !inputs.clone().any(|(n, _)| n == name) {
                 return Err(refused("entry-constraint-port"));
             }
         }
-        for ((port, ty), v) in inputs.iter().zip(values) {
+        for ((port, ty), v) in inputs.zip(values) {
             if v.is_none() && !matches!(ty.kind(), Type::Rng | Type::Nonce | Type::Transcript) {
                 return Err(refused("entry-preparation-value"));
             }
@@ -301,7 +301,10 @@ impl Core {
             if !self.entry.domain.matches(frame) {
                 return Err(refused("entry-domain"));
             }
-            self.check_entry_values(frame.inputs(), &args.iter().map(Some).collect::<Vec<_>>())?;
+            self.check_entry_values(
+                frame.inputs().iter(),
+                &args.iter().map(Some).collect::<Vec<_>>(),
+            )?;
         }
         self.resources.enter(frame, args)
     }
@@ -310,6 +313,7 @@ impl Core {
         i: &Invocation<'_>,
         args: &[Value],
         signature: &zkc_runtime::interactive::BoundSignature,
+        call: Option<&mut Option<super::NativeCall>>,
     ) -> Result<()> {
         if i.binding.signature() != signature
             || i.binding.implementation() != i.kernel
@@ -317,95 +321,14 @@ impl Core {
             || args
                 .iter()
                 .zip(&signature.inputs)
-                .any(|(v, t)| v.physical_type() != *t)
+                .any(|(v, t)| !v.has_type(t))
         {
             return Err(refused("kernel-operands"));
         }
-        match signature.attributes {
-            AttributeRule::None if i.attributes.is_empty() => (),
-            AttributeRule::Unsigned64
-                if i.attributes.len() == 1
-                    && i.attributes[0]
-                        .parse::<u64>()
-                        .is_ok_and(|n| n.to_string() == i.attributes[0]) => {}
-            AttributeRule::NaturalIndex if i.attributes.len() == 1 => {
-                zkc_runtime::logical::natural_index(&i.attributes[0])
-                    .map_err(|_| refused("kernel-attributes"))?;
-            }
-            AttributeRule::NaturalIndices
-                if i.attributes
-                    .iter()
-                    .all(|a| zkc_runtime::logical::natural_index(a).is_ok()) => {}
-            AttributeRule::ScatterShape
-                if !i.attributes.is_empty()
-                    && i.attributes
-                        .iter()
-                        .all(|a| zkc_runtime::logical::natural_index(a).is_ok()) => {}
-            AttributeRule::Bn254Decimals => {
-                for literal in i.attributes {
-                    crate::parse_bn254_decimal(literal).map_err(ark)?;
-                }
-            }
-            AttributeRule::Bn254Decimal if i.attributes.len() == 1 => {
-                crate::parse_bn254_decimal(&i.attributes[0]).map_err(ark)?;
-            }
-            AttributeRule::FieldDecimals => {
-                for literal in i.attributes {
-                    zkc_arkworks::parse_decimal(literal).map_err(ark)?;
-                }
-            }
-            AttributeRule::RistrettoDecimals => {
-                for literal in i.attributes {
-                    crate::parse_ristretto_decimal(literal)?;
-                }
-            }
-            AttributeRule::KoalaBearDecimals => {
-                for literal in i.attributes {
-                    let _ = crate::plonky3::parse_decimal(literal)?;
-                }
-            }
-            AttributeRule::MatrixIdentity | AttributeRule::AssetIdentity
-                if i.attributes.len() == 1
-                    && i.attributes[0].len() == 64
-                    && i.attributes[0]
-                        .bytes()
-                        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) => {}
-            AttributeRule::MatrixDimensions
-                if i.attributes.len() == 2
-                    && i.attributes.iter().all(|a| {
-                        zkc_runtime::logical::natural_index(a).is_ok_and(|n| n <= 65536)
-                    }) => {}
-            AttributeRule::MatrixShape
-                if i.attributes.len() == 3
-                    && i.attributes
-                        .iter()
-                        .all(|a| zkc_runtime::logical::natural_index(a).is_ok())
-                    && matches!(i.attributes[2].as_str(), "0" | "1") => {}
-            AttributeRule::KoalaBearDecimal if i.attributes.len() == 1 => {
-                let _ = crate::plonky3::parse_decimal(&i.attributes[0])?;
-            }
-            AttributeRule::RistrettoDecimal if i.attributes.len() == 1 => {
-                crate::parse_ristretto_decimal(&i.attributes[0])?;
-            }
-            AttributeRule::NativeMessageTemplate => {
-                zkc_runtime::logical::native_origin_template(i.attributes, "message")
-                    .map_err(|_| refused("kernel-attributes"))?;
-            }
-            // The query's source method separates field and index transitions.
-            AttributeRule::NativeChallengeTemplate | AttributeRule::NativeIndexTemplate => {
-                let method = if signature.attributes == AttributeRule::NativeIndexTemplate {
-                    "index"
-                } else {
-                    "draw"
-                };
-                zkc_runtime::logical::native_query_template(i.attributes, method)
-                    .map_err(|_| refused("kernel-attributes"))?;
-            }
-
-            AttributeRule::FieldDecimal if i.attributes.len() == 1 => {
-                zkc_arkworks::parse_decimal(&i.attributes[0]).map_err(ark)?;
-            }
-            _ => return Err(refused("kernel-attributes")),
+        if let Some(call) = call {
+            super::NativeCall::prepare(call, signature.attributes, i.attributes)?;
+        } else {
+            super::NativeCall::check(signature.attributes, i.attributes)?;
         }
         for v in args {
             self.validate_retained(v, i.retained)?;
@@ -423,7 +346,7 @@ impl Core {
             || values
                 .iter()
                 .zip(&i.binding.signature().outputs)
-                .any(|(v, t)| v.physical_type() != *t)
+                .any(|(v, t)| !v.has_type(t))
         {
             return Err(refused("kernel-output-type"));
         }

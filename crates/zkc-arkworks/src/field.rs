@@ -1,6 +1,6 @@
 use crate::{Error, Scalar};
 use ark_ff::{BigInt, PrimeField};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use ark_serialize::CanonicalSerialize;
 
 /// Compressed canonical Fr encoding size (little-endian integer, below p).
 pub const SCALAR_BYTES: usize = 32;
@@ -16,18 +16,7 @@ pub fn encode_scalar(value: &Scalar) -> Result<[u8; SCALAR_BYTES], Error> {
 
 /// Decode exactly one canonical scalar. No reduction of noncanonical integers.
 pub fn decode_scalar(bytes: &[u8]) -> Result<Scalar, Error> {
-    if bytes.len() != SCALAR_BYTES {
-        return Err(Error::InvalidEncoding);
-    }
-    let mut input = bytes;
-    let value = Scalar::deserialize_compressed(&mut input).map_err(|_| Error::InvalidEncoding)?;
-    if !input.is_empty() {
-        return Err(Error::InvalidEncoding);
-    }
-    if encode_scalar(&value)?.as_slice() != bytes {
-        return Err(Error::NonCanonicalEncoding);
-    }
-    Ok(value)
+    crate::codec::read_field(bytes)
 }
 
 /// Parse a canonical unsigned base-ten integer in `[0, p)` without reduction.

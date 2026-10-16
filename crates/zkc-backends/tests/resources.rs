@@ -166,12 +166,15 @@ struct Probe {
     exit_order_probe: bool,
 }
 impl Backend for Probe {
+    type Call = ();
+    type Checkpoint = ();
     type Value = Value;
-    fn binding_signature(
+    type Kernel = zkc_backends::NativeKernel;
+    fn prepare_binding(
         &self,
         binding: &zkc_runtime::interactive::OperationBinding,
-    ) -> Option<zkc_runtime::interactive::BoundSignature> {
-        self.inner.binding_signature(binding)
+    ) -> Option<Self::Kernel> {
+        self.inner.prepare_binding(binding)
     }
     fn validate_value(&self, v: &Value) -> Result<(), BackendError> {
         self.inner.validate_value(v)
@@ -227,7 +230,12 @@ impl Backend for Probe {
         }
         self.inner.leave_frame(f, e, v)
     }
-    fn apply(&mut self, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>, BackendError> {
+    fn apply(
+        &mut self,
+        kernel: &Self::Kernel,
+        i: &Invocation<'_>,
+        args: &[Value],
+    ) -> Result<Vec<Value>, BackendError> {
         if self.output_failure {
             let invocation = Invocation {
                 frame: i.frame,
@@ -239,12 +247,12 @@ impl Backend for Probe {
                 logical_origin: i.logical_origin,
                 retained: i.retained,
             };
-            return self.inner.apply(&invocation, args);
+            return self.inner.apply(kernel, &invocation, args);
         }
         if !self.leave_failure {
             let error = self
                 .inner
-                .apply(i, std::slice::from_ref(&self.hidden))
+                .apply(kernel, i, std::slice::from_ref(&self.hidden))
                 .unwrap_err();
             self.findings.lock().unwrap().push(error.code);
             let root = self.root.as_ref().unwrap();
@@ -258,12 +266,14 @@ impl Backend for Probe {
                 logical_origin: i.logical_origin,
                 retained: i.retained,
             };
-            self.findings
-                .lock()
-                .unwrap()
-                .push(self.inner.apply(&invocation, args).unwrap_err().code);
+            self.findings.lock().unwrap().push(
+                self.inner
+                    .apply(kernel, &invocation, args)
+                    .unwrap_err()
+                    .code,
+            );
         }
-        self.inner.apply(i, args)
+        self.inner.apply(kernel, i, args)
     }
 }
 fn nested_program() -> Vec<u8> {
