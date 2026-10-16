@@ -316,9 +316,9 @@ Its transitive Math fragment is
 region-free: admitted Fr arithmetic/equality, G1 operations/equality, pure index
 constant/equality, Boolean operations, supported selection, Math calls and
 positional returns. No finite operation, bounded read, exec, Local control or
-helper precondition is admitted in that closure. Totality is a semantic theorem
-about the actual checked closure; this operation list and native effect
-annotations are admission conditions, not that theorem.
+helper precondition is admitted in that closure. Totality is a separate semantic
+theorem about the actual checked closure; neither this operation list nor a
+native effect annotation proves it.
 
 Formation validates the shared typed operations. The checked raw preparation
 profile and selected helper closure are the single operation/type authority;
