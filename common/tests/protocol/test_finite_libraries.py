@@ -12,6 +12,28 @@ MODULES = library_modules('zkc')
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--no-finite-bulk']])
+@pytest.mark.parametrize('field', ['koala-bear', 'bls12-381.fr'])
+def test_neutral_pointwise_sums_preserve_the_seed(toolchain, journal, directory, flags, field):
+    source = f'''module sample;
+use zkc::vector::{{Vector}};
+use zkc::finite as finite;
+domain F=field("{field}");
+fn work(xs:Vector<F>,seed:F)->(F,F,F,F){{
+ let a=finite::fold(xs,seed,fn(s,x)=>s+0*1);
+ let b=finite::fold(xs,seed,fn(s,x)=>s+1*0);
+ let c=finite::fold(xs,seed,fn(s,x)=>s+(0+0));
+ let d=finite::fold(xs,seed,fn(s,x)=>s+(0*1+1*0));
+ return(a,b,c,d);
+}}
+protocol Run roles(P)(xs:Vector<F>@P,seed:F@P)->(result:(F,F,F,F)@P){{return work(xs,seed);}}
+run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
+    for n in (0, 3):
+        assert entry.run(f'rows-{n}', {'xs': ['2']*n, 'seed': '7'})['result'] == ['7']*4
+
+
+@pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--no-finite-bulk']])
 def test_pointwise_sums_preserve_seeds_cardinality_and_captures(
     toolchain, journal, directory, flags,
 ):

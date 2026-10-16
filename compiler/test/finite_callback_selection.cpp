@@ -256,7 +256,8 @@ int main() {
   Cases cases;
   for (StringRef field : {"koala-bear", "bls12-381.fr"})
     for (StringRef body : {"polynomial", "commuted", "neutral", "dead-state",
-                           "uniform", "state-dependent"})
+                           "uniform", "zero-left", "zero-right", "zero-add",
+                           "zero-composed", "state-dependent"})
       cases.run("pointwise sum " + field + " " + body, [&] {
         std::string text(sourceText);
         const std::string original =
@@ -273,6 +274,27 @@ int main() {
    %term = algebra.field_add %p,%x : (!F,!F)->!F
    %r = algebra.field_add %s,%term : (!F,!F)->!F
 )mlir";
+        if (body.starts_with("zero-")) {
+          replacement = R"mlir(
+   %zero = "algebra.constant"() {value="0"} : ()->!F
+   %one = "algebra.constant"() {value="1"} : ()->!F
+)mlir";
+          if (body == "zero-add")
+            replacement +=
+                "   %term = algebra.field_add %zero,%zero : (!F,!F)->!F\n";
+          else if (body == "zero-composed")
+            replacement += R"mlir(
+   %left = algebra.field_multiply %zero,%one : (!F,!F)->!F
+   %right = algebra.field_multiply %one,%zero : (!F,!F)->!F
+   %term = algebra.field_add %left,%right : (!F,!F)->!F
+)mlir";
+          else
+            replacement +=
+                "   %term = algebra.field_multiply " +
+                std::string(body == "zero-left" ? "%zero,%one" : "%one,%zero") +
+                " : (!F,!F)->!F\n";
+          replacement += "   %r = algebra.field_add %s,%term : (!F,!F)->!F\n";
+        }
         if (body == "state-dependent") {
           auto at = replacement.find("%p,%x");
           replacement.replace(at, 5, "%p,%s");
