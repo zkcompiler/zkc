@@ -329,3 +329,17 @@ def test_count_sequences_expose_process_variation_without_losing_order(modules):
     row = modules['results'].summarize(manifest)[0]
     assert not row['counts_repeatable']
     assert len(row['execution_counts']) == 8
+
+
+
+def test_failed_count_report_keeps_run_and_cell_errors(modules, tmp_path):
+    manifest = counted_manifest()
+    manifest['status'] = 'failed'
+    manifest['error'] = 'measurement interrupted'
+    manifest['results'][0].update(status='failed', error='worker refused input')
+    modules['results'].publish(tmp_path, manifest)
+    text = (tmp_path/'report.md').read_text()
+    assert 'measurement interrupted' in text
+    assert 'worker refused input' in text
+    assert 'No comparison is published' in text
+    assert json.loads((tmp_path/'summary.json').read_text())['comparisons'] == []

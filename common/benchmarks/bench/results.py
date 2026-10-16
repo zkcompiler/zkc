@@ -239,6 +239,7 @@ def publish(directory, manifest):
                  'See summary.json for distinct count vectors, input identities, first visits and multiplicities.',
                  'counts_repeatable compares complete ordered count sequences across processes (null with one process); false requires investigation before fitting a deterministic cost model.',
                  'Raw commands, outputs, diagnostics and incidental clock readings remain in manifest.json.', '']
+        lines += failure_lines(manifest)
         (directory / 'report.md').write_text('\n'.join(lines))
         return
     lines = ['# Execution measurements', '', f"Run status: **{manifest['status']}**.", '',
@@ -314,15 +315,21 @@ def publish(directory, manifest):
         value = row['ratio']
         lines.append(f"| {row['case']} | {row['operation']} | {row['numerator']} / {row['denominator']} | "
                      f"{value['median']:.3f} | {value['min']:.3f}–{value['max']:.3f} |")
+    lines += failure_lines(manifest)
+    lines += ['', 'See `manifest.json` for inputs, build identities, raw results and command journal paths.', '']
+    (directory / 'report.md').write_text('\n'.join(lines))
+
+
+def failure_lines(manifest):
+    lines = []
     if manifest['status'] != 'passed':
         lines += ['', '## Incomplete or failed evidence', '',
-                  'No timing comparison is published for this run.', '', manifest.get('error', '')]
+                  'No comparison is published for this run.', '', manifest.get('error', '')]
         for result in manifest['results']:
             if result['status'] != 'passed':
                 lines.append(f"- {result['case']} / {result['implementation']} / {result['operation']} / "
                              f"process {result['repetition']}: {result.get('error', result['status'])}")
-    lines += ['', 'See `manifest.json` for inputs, build identities, raw results and command journal paths.', '']
-    (directory / 'report.md').write_text('\n'.join(lines))
+    return lines
 
 
 def paired_comparisons(manifest):
