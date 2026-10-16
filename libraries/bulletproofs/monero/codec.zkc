@@ -33,6 +33,7 @@ pub module Codec: ProofCodec {
     require bytes::length(left) == 32 * rounds;
     require bytes::length(right) == 32 * rounds;
     let header = bytes::concat(bytes::concat(a,terminal_bytes),response_bytes);
+    // dimensions bounds rounds by 10, so the counts occupy one byte each.
     let count = encoding::index_uleb128(rounds);
     return bytes::concat(bytes::concat(bytes::concat(bytes::concat(header,count),left),count),right);
   }

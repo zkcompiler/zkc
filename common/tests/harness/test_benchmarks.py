@@ -272,3 +272,17 @@ def test_worker_must_observe_requested_settings(bench, tmp_path, monkeypatch, se
     manifest = json.loads((args.output/'manifest.json').read_text())
     assert len(manifest['results']) == 4
     assert all(r['status'] == 'failed' and 'differs' in r['error'] for r in manifest['results'])
+
+
+@pytest.mark.parametrize('document', [[], {'format': 'zkc.benchmark/0', 'status': 'passed'},
+    {'format': 'zkc.benchmark/0', 'status': 'failed', 'results': None},
+    {'format': 'zkc.benchmark/0', 'status': 'interrupted', 'results': [], 'matrix': [None]}])
+def test_report_rejects_malformed_evidence_before_creating_output(bench, tmp_path, document, capsys):
+    from harness import load
+    cli = load('benchmark_report_cli', 'common/benchmarks/run.py')
+    source = tmp_path/'bad.json'
+    source.write_text(json.dumps(document))
+    output = tmp_path/'report'
+    assert cli.main(['report', str(source), '--output', str(output)]) == 2
+    assert not output.exists()
+    assert 'Traceback' not in capsys.readouterr().err

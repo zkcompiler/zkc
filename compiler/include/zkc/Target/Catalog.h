@@ -28,6 +28,8 @@ const CandidateCatalog &installedCandidates();
 
 /// Enumerate applicable diagonal implementations by identity, independent of
 /// registration order, within this build's installed domains and contracts.
+/// Lexical implementation identity is the deterministic default preference;
+/// a CandidateCatalog may supply its own candidate ordering.
 /// This supplies candidates, not installation authority; physical plan
 /// validation still resolves against the installed implementation catalog.
 std::vector<std::string>

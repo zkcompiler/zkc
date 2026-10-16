@@ -54,6 +54,14 @@ def validate_manifest(manifest):
                 'seed', 'label', 'argv', 'host', 'files', 'checks', 'matrix', 'schedule', 'compilation',
                 'cli', 'source', 'harness', 'comparisons', 'threads', 'references', 'error'}), 'unknown manifest fields')
     require(manifest.get('status') in ('passed', 'failed', 'interrupted', 'running'), 'unknown benchmark status')
+    matrix, results = manifest.get('matrix', []), manifest.get('results')
+    require(isinstance(matrix, list) and isinstance(results, list), 'invalid measurement collections')
+    for record in [*matrix, *results]:
+        require(isinstance(record, dict) and all(isinstance(record.get(name), str) and record[name]
+                for name in ('case', 'implementation', 'operation')), 'invalid measurement identity')
+    for result in results:
+        require(type(result.get('repetition')) is int and result['repetition'] >= 0
+                and result.get('status') in ('failed', 'measured', 'passed'), 'invalid measurement state')
     if manifest['status'] != 'passed':
         return
     processes, plan = manifest.get('processes'), manifest.get('plan')
@@ -118,9 +126,9 @@ def summarize(manifest):
 
 
 def publish(directory, manifest):
-    write_json(directory / 'manifest.json', manifest)
     rows = summarize(manifest)
     comparisons = paired_comparisons(manifest)
+    write_json(directory / 'manifest.json', manifest)
     write_json(directory / 'summary.json', {'format': FORMAT, 'status': manifest['status'], 'rows': rows,
                                            'comparisons': comparisons})
     with (directory / 'summary.csv').open('w', newline='') as stream:

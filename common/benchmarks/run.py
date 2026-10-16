@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 from bench.io import MeasurementError, ROOT, executable, positive_integer
-from bench.results import compare, publish
+from bench.results import compare, publish, validate_manifest
 from bench.runner import run
 from bench.suites import catalog, prepare
 
@@ -55,7 +55,7 @@ def main(argv=None):
             return 0
         if args.command == 'report':
             document = json.loads(args.manifest.read_text())
-            if document.get('format') != 'zkc.benchmark/0': raise ValueError('unknown benchmark format')
+            validate_manifest(document)
             args.output.mkdir(parents=True, exist_ok=False)
             publish(args.output, document)
             return 0
