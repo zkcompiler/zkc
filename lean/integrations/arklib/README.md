@@ -26,6 +26,11 @@ full-distribution replacement and value-returning transport. Canonical structure
 round examples instantiate local query/checker laws and retain their explicit
 reachable-state premises.
 
+`VCVio.Execution.runM_sameDist` lifts per-operation distribution equality through
+arbitrary value-adaptive processes, retaining outcome, state and ordered events.
+It does not equate a handler's internal oracle-query cost. Query-sensitive security
+consumers require their own resource connection.
+
 `VCVio/StructuredUniform` constructs a
 [uniform query service](../../docs/spec/uniform-query-service.md) around arbitrary
 structured receive/send handlers. Its laws preserve complete executions at every
@@ -67,6 +72,7 @@ checks Main, ArkLib and UniformComposition as separate Lake consumers, including
 their declaration audits. Without the flag it checks only Main.
 
 The Python [proof-request bridge](../../bridges/common/README.md) exposes the
-imported scalar consumers through explicit requests. The multilinear API is
-currently a standalone mathematical consumer. Neither successful sampling tests nor the
-mere presence of a library dependency replaces the connection proofs.
+imported scalar consumers through explicit requests. The multilinear mathematical
+API and its admitted-source uniform-service clients are Lean consumers; they are
+not exposed by that scalar request interface. Neither sampling tests nor the
+presence of a library dependency replaces the connection proofs.

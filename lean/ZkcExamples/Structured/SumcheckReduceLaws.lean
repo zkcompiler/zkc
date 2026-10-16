@@ -6,7 +6,7 @@ public import Zkc.Source.Structured.OpenLaws
 @[expose] public section
 
 /-! Entire-source association and the actual six-slot return permutation.
-Full Sumcheck helper/participant equations and security belong to the next gate. -/
+The helper/participant contracts and optional security consumers build on these laws. -/
 namespace ZkcExamples.Structured.SumcheckReduceLaws
 open Zkc.Source Zkc.Source.Structured SumcheckReduceBodies SumcheckReduceViews
 
@@ -81,7 +81,7 @@ theorem map_root_selected : mapDeclaration.spec.helper ∈
     preparationHelpers .map unit.definitions := imported.mapRootSelected map_retained
 
 theorem map_member : mapDefinition ∈ unit.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_self))))))))))
+  by structured_mem
 
 /-- Transport the literal full helper ABI into this complete source's own table. -/
 theorem map_body_view {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
@@ -94,7 +94,7 @@ theorem map_body_view {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
     mapBody map_raw args
 
 theorem first_member : firstDefinition ∈ unit.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_self)))))))))))
+  by structured_mem
 
 /-- Transport the literal full helper ABI into this complete source's own table. -/
 theorem first_body_view {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
@@ -107,7 +107,7 @@ theorem first_body_view {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
     firstBody first_raw args
 
 theorem values_member : valuesDefinition ∈ unit.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_self)))))))))))))
+  by structured_mem
 
 /-- Transport the literal full helper ABI into this complete source's own table. -/
 theorem values_body_view {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]

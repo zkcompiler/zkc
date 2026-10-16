@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Structured.Checked
+public import Zkc.Source.Structured.CheckedData
 public import Zkc.Source.Structured.Evaluation
 
 @[expose] public section

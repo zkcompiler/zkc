@@ -39,6 +39,15 @@ programs combine mathematical interpretations with those participant rules.
 A mathematical dialect can supply another language and interpretation; this
 does not require putting every dialect in one untyped universal evaluator.
 
+The structured profile keeps formed evidence in `Structured.CheckedData`:
+exact signatures, raw bodies, typed regions and their erasure equations.
+`Meaning`, component interpretation and participant semantics depend on these
+records without importing the JSON reader or source admission. `Formation`
+forms raw regions and retains typed diagnostic causes. `Checked` and the
+admission modules own lowering, declaration ordering, preparation selection and
+profile checks. Dependency tests enforce this separation for participant
+semantics and the optional VCVio uniform-service adapter.
+
 `Zkc.Protocols` owns mathematical experiments and reusable verifier contracts.
 It may use generic source semantics; source semantics may not import protocols.
 `ZkcExamples.NativePrograms` owns particular native exports and correspondence

@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Source.Structured.Association
 public import ZkcExamples.Structured.SumcheckSourceData
 public import ZkcExamples.Structured.SumcheckSourceBodies
 
@@ -279,7 +280,7 @@ theorem exact_subject : program.snapshot = SumcheckSourceData.snapshot := import
 
 theorem reduce_member : reduceDefinition ∈ unit.protocols := List.mem_cons_self
 
-theorem run_member : runDefinition ∈ unit.protocols := List.mem_cons_of_mem _ (List.mem_cons_self)
+theorem run_member : runDefinition ∈ unit.protocols := by structured_mem
 
 theorem entry_selection : unit.entry = runDefinition := rfl
 theorem entry_signature : program.payload.entry.signature = runSignature := rfl

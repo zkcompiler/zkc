@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Source.Structured.Association
 public import ZkcExamples.Structured.MapPrefixData
 public import ZkcExamples.Structured.MapPrefixBodies
 public import Zkc.Source.Structured.ClosedProjection
@@ -201,7 +202,7 @@ theorem kernel_admission : checkClosed MapPrefixData.snapshot = .ok program := r
 def imported : ClosedImported MapPrefixData.snapshot := ⟨program, kernel_admission⟩
 
 theorem protocol_member : protocolDefinition ∈ program.subject.payload.protocols :=
-  List.mem_cons_self
+  by structured_mem
 
 theorem protocol_selected : program.subject.payload.entry = protocolDefinition := rfl
 
@@ -216,64 +217,64 @@ theorem singleton_projection : ClosedProjection protocolBody entryBody :=
   .mark "s0" .nil (.localCall wrapperHelper rfl "s0" _ (.ret _))
 
 theorem less_member : lessDefinition ∈ program.payload.definitions :=
-  List.mem_cons_self
+  by structured_mem
 
 theorem rows_member : rowsDefinition ∈ program.payload.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_self)
+  by structured_mem
 
 theorem shape_member : shapeDefinition ∈ program.payload.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_self))
+  by structured_mem
 
 theorem table_member : tableDefinition ∈ program.payload.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_self)))
+  by structured_mem
 
 theorem halves_member : halvesDefinition ∈ program.payload.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_self))))
+  by structured_mem
 
 theorem interpolate_member : interpolateDefinition ∈ program.payload.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_self)))))
+  by structured_mem
 
 theorem map_member : mapDefinition ∈ program.payload.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_self))))))
+  by structured_mem
 
 theorem first_member : firstDefinition ∈ program.payload.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_self)))))))
+  by structured_mem
 
 theorem step_member : stepDefinition ∈ program.payload.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_self))))))))
+  by structured_mem
 
 theorem foldStep_member : foldStepDefinition ∈ program.payload.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_self)))))))))
+  by structured_mem
 
 theorem fold_member : foldDefinition ∈ program.payload.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_self))))))))))
+  by structured_mem
 
 theorem foldWrapper_member : foldWrapperDefinition ∈ program.payload.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_self)))))))))))
+  by structured_mem
 
 theorem prefix_member : prefixDefinition ∈ program.payload.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_self))))))))))))
+  by structured_mem
 
 theorem values_member : valuesDefinition ∈ program.payload.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_self)))))))))))))
+  by structured_mem
 
 theorem valuesRealization_member : valuesRealizationDefinition ∈ program.payload.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_self))))))))))))))
+  by structured_mem
 
 theorem variables_member : variablesDefinition ∈ program.payload.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_self)))))))))))))))
+  by structured_mem
 
 theorem variablesRealization_member : variablesRealizationDefinition ∈ program.payload.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_self))))))))))))))))
+  by structured_mem
 
 theorem width_member : widthDefinition ∈ program.payload.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_self)))))))))))))))))
+  by structured_mem
 
 theorem widthRealization_member : widthRealizationDefinition ∈ program.payload.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_self))))))))))))))))))
+  by structured_mem
 
 theorem wrapper_member : wrapperDefinition ∈ program.payload.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_self)))))))))))))))))))
+  by structured_mem
 
 /-- The same complete subject also carries the ordinary whole-unit admission. -/
 def subjectImported : Imported MapPrefixData.snapshot := imported.subject
@@ -284,7 +285,7 @@ def mapDeclaration : MapDeclaration :=
     MapFirstBodies.mapSpec.helperName, MapFirstBodies.mapSpec.rowwise⟩
 
 theorem map_retained : Definition.map mapDeclaration ∈ MapPrefixData.snapshot.definitions :=
-  List.mem_cons_self
+  by structured_mem
 
 theorem map_derived : mapDefinition.raw = mapDeclaration.raw := rfl
 
@@ -297,7 +298,7 @@ def widthRealizationDeclaration : RealizationDeclaration :=
 
 theorem widthRealization_retained : Definition.realization widthRealizationDeclaration ∈
     MapPrefixData.snapshot.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_self)
+  by structured_mem
 
 theorem widthRealization_derived : widthRealizationDefinition.raw = widthRealizationDeclaration.raw := rfl
 
@@ -310,7 +311,7 @@ def variablesRealizationDeclaration : RealizationDeclaration :=
 
 theorem variablesRealization_retained : Definition.realization variablesRealizationDeclaration ∈
     MapPrefixData.snapshot.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_self))
+  by structured_mem
 
 theorem variablesRealization_derived : variablesRealizationDefinition.raw = variablesRealizationDeclaration.raw := rfl
 
@@ -323,7 +324,7 @@ def valuesRealizationDeclaration : RealizationDeclaration :=
 
 theorem valuesRealization_retained : Definition.realization valuesRealizationDeclaration ∈
     MapPrefixData.snapshot.definitions :=
-  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_self)))
+  by structured_mem
 
 theorem valuesRealization_derived : valuesRealizationDefinition.raw = valuesRealizationDeclaration.raw := rfl
 

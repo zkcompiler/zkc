@@ -1,6 +1,7 @@
 module
 
 public import ZkcExamples.Structured.MapFirstContracts
+public import ZkcExamples.Structured.MapProjectionContracts
 public import ZkcExamples.Structured.MapPrefixLaws
 
 @[expose] public section
@@ -101,19 +102,14 @@ set_option backward.isDefEq.respectTransparency false in
 theorem values_equation (xs : List F) (dimension columns : Nat) :
     invoke (closedMeanings (F := F) (G := G) definitions) valuesHelper (inputs xs dimension columns) =
       .done (.cons xs .nil) :=
-  (bodies.values.invoke linked (inputs xs dimension columns)).trans
-    (MapSourceExpansions.first_values _ xs dimension columns)
+  MapProjectionContracts.values_equation linked bodies.values xs dimension columns
 
 set_option backward.isDefEq.respectTransparency false in
 theorem valuesRealization_equation (xs : List F) (dimension columns : Nat) :
     invoke (closedMeanings (F := F) (G := G) definitions) valuesRealizationHelper (inputs xs dimension columns) =
-      .done (.cons xs .nil) := by
-  rw [bodies.valuesRealization.invoke linked]
-  dsimp only [inputs, vector]
-  rw [MapSourceExpansions.first_valuesRealization]
-  change (invoke (closedMeanings (F := F) (G := G) definitions) valuesHelper (inputs xs dimension columns)).bind _ = _
-  rw [values_equation linked bodies]
-  rfl
+      .done (.cons xs .nil) :=
+  MapProjectionContracts.valuesRealization_equation linked bodies.values bodies.valuesRealization
+    xs dimension columns
 
 /-- First and Prefix associations refer to this list; no other table is equated to it. -/
 theorem laws_of_bodies (firstBodies : MapFirstContracts.Bodies definitions) :

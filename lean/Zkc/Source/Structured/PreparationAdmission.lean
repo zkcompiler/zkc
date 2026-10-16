@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Source.Structured.Admission
+public import Zkc.Source.Structured.CheckedData
 
 @[expose] public section
 
@@ -108,3 +109,35 @@ def preparationAllowed (profile : PreparationProfile) : RawRegion Ty Op → Bool
   | _ => false
 
 end Zkc.Source.RawRegion
+
+namespace Zkc.Source.Structured
+
+/-- Compute a selected Math closure inside the existing declaration order.
+An unrelated Local body or partial Math helper is never given a total profile. -/
+def preparationHelpers (profile : PreparationProfile) (definitions : List CheckedDefinition) :
+    List Helper :=
+  definitions.foldl (fun selected definition =>
+    if definition.kind == .math && profile.typesAllowed definition.inputs &&
+        profile.typesAllowed definition.outputs && definition.raw.preparationAllowed profile &&
+        definition.helpers.all selected.contains then definition.helper :: selected
+    else selected) []
+
+/-- Structural closure evidence over the original checked table. The semantic
+implication is a separate theorem; this proposition makes no execution claim. -/
+def PreparationClosed (profile : PreparationProfile) (definitions : List CheckedDefinition)
+    (selected : List Helper) : Prop :=
+  (∀ helper ∈ selected, helper ∈ definitions.map CheckedDefinition.helper) ∧
+  ∀ definition ∈ definitions, definition.helper ∈ selected →
+    definition.kind = .math ∧ definition.raw.preparationAllowed profile = true ∧
+    ∀ helper ∈ definition.helpers, helper ∈ selected
+
+instance preparationClosedDecidable (profile : PreparationProfile)
+    (definitions : List CheckedDefinition) (selected : List Helper) :
+    Decidable (PreparationClosed profile definitions selected) :=
+  inferInstanceAs (Decidable
+    ((∀ helper ∈ selected, helper ∈ definitions.map CheckedDefinition.helper) ∧
+    ∀ definition ∈ definitions, definition.helper ∈ selected →
+      definition.kind = .math ∧ definition.raw.preparationAllowed profile = true ∧
+      ∀ helper ∈ definition.helpers, helper ∈ selected))
+
+end Zkc.Source.Structured

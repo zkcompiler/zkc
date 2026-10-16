@@ -177,12 +177,6 @@ def lowerProtocol (snapshot : Snapshot) (domains : List DomainSpec)
     64 .entryReturn function.inputs ((List.range function.inputs.length).map some) []
     (List.range interface.roles.length) function.body).run' {}
 
-def formProtocol (signature : ProtocolSignature) (raw : RawRegion Ty ProtocolOp) :
-    Except String CheckedProtocol :=
-  match formed : raw.elaborate (dialect := protocolDialect) signature.inputs signature.outputs with
-  | .error _ => .error "structured-formation"
-  | .ok body => .ok ⟨signature, raw, body, formed⟩
-
 /-- Check a complete protocol using the supplied full header table. The empty
 default is an application-free convenience: every retained application then
 fails header resolution. Whole-unit admission always supplies all headers. -/
@@ -192,16 +186,6 @@ def checkProtocol (snapshot : Snapshot) (domains : List DomainSpec)
   let signature ← resolveProtocolSignature function
   let raw ← lowerProtocol snapshot domains summaries headers function signature
   formProtocol signature raw
-
-/-- Successful formation preserves both the complete signature and the exact tree. -/
-theorem formProtocol_exact {signature : ProtocolSignature} {raw : RawRegion Ty ProtocolOp}
-    {checked : CheckedProtocol} (accepted : formProtocol signature raw = .ok checked) :
-    checked.signature = signature ∧ checked.raw = raw := by
-  unfold formProtocol at accepted
-  split at accepted
-  · contradiction
-  · cases Except.ok.inj accepted
-    exact ⟨rfl, rfl⟩
 
 /-- Generic source association includes resolved scopes and the actual lowering equation. -/
 theorem checkProtocol_exact {snapshot : Snapshot} {domains : List DomainSpec}

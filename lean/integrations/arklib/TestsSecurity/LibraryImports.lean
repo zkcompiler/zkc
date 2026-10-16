@@ -42,3 +42,4 @@ import TestsSecurity.CausalSumcheck.SourceVerifier
 import TestsSecurity.CausalSumcheck.UniformService
 import TestsSecurity.Compatibility
 import TestsSecurity.MultilinearSumcheck
+import TestsSecurity.StructuredSemanticDependencies

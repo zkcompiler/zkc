@@ -1,5 +1,6 @@
 import Zkc.Source.Structured.Laws
 import Zkc.Source.Structured.ClosedProfile
+import Zkc.Source.Structured.ModelAdmission
 import ZkcTools.StructuredSource.Evaluation
 import Lean
 
@@ -175,14 +176,11 @@ def dependencyChain (length copies : Nat) : Snapshot :=
   snapshot (helpers ++ [function "main" .protocol [] []
     (.block [.instruction (.call ("helper" ++ toString (length - 1))) [] [] [] ""] (.ret []))])
 
-/-- Inspect the canonical formation phases separately from native expansion
-budgets. The result is not an admitted Program or a source correspondence claim. -/
+/-- Inspect a fully linked model without the native expansion policy. -/
 private def dependencyPhases (source : Snapshot) :
     Except String (List CheckedDefinition × List CheckedProtocol) := do
-  let (domains, headers, summaries) ← checkUnitHeaders source
-  let helpers ← checkUnitHelpers source domains summaries
-  let protocols ← checkUnitProtocols source domains summaries headers helpers
-  return (helpers.map (·.definition), protocols)
+  let payload ← checkFormedPayload source
+  return (payload.definitions, payload.protocols)
 
 -- Kernel checks use reduction, never native_decide or an evaluator oracle.
 theorem total_admitted : (checkClosed total).isOk = true := by decide +kernel
@@ -276,6 +274,13 @@ def run : IO Unit := do
     checkUnitAvailability definitions protocols
   test "shared-dag-availability-admitted" availableDag.isOk
   test "shared-dag-native-work-refused" (refused dag "structured-application-limit")
+  test "shared-dag-model-admitted" (checkFormedPayload dag).isOk
+  let missingEntry := { dag with entry := "missing" }
+  test "native-budget-precedes-entry-refusal"
+    (refused missingEntry "structured-application-limit")
+  test "model-still-checks-entry" (match checkFormedPayload missingEntry with
+    | .error code => code == "structured-entry"
+    | .ok _ => false)
   let deepDag := dependencyChain 40 2
   let availableDeepDag : Except String Unit := do
     let (definitions, protocols) ← dependencyPhases deepDag

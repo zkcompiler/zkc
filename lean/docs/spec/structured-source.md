@@ -38,6 +38,13 @@ rosters and scopes, then forms existing `Source.Region` bodies through
 `RawRegion.elaborate`. There is no additional source IR. One checked body is
 stored per named helper; calls retain names and never expand syntax.
 
+`formDefinitionDiagnostic` and `formProtocolDiagnostic` expose raw formation
+failures as a declaration name and the exact `RegionFormationError`. The
+`formDefinition` and `formProtocol` adapters retain the stable
+`structured-formation` refusal code. Diagnostic display text is bounded; the
+stored cause remains exact. These in-process APIs do not change the wire schema
+or bypass lowering and profile admission.
+
 `UnitPayload` separates kinded Math/Local `CheckedDefinition`s from
 `CheckedProtocol` declarations. Helpers use `dialect`; protocols use
 `protocolDialect` on the same carrier. A `ProtocolSignature` contains all six
@@ -66,6 +73,24 @@ or native execution correctness. Protocol admission also retains the exact
 association between original protocol functions and checked declarations,
 including resolved scopes and the lowered raw body, in both directions.
 Signature equality alone does not identify an original body.
+
+For authored typed views, `BodyIn.of_mem` packages membership of the actual
+checked declaration, full helper-signature equality and raw-body equality.
+`exact_body declaration` constructs these obligations with list constructors
+and kernel-checked definitional equality. It does not trust a name or digest,
+or normalize admission of the whole unit. `BodyIn.perm` transports association
+across a declaration permutation; valid linking of the reordered calls remains
+a separate obligation.
+
+`checkFormedPayload`, provided by the `Structured.ModelAdmission` module, is an
+opt-in bounded checker returning the same `UnitPayload` without native
+application-expansion budgets. It retains stored-source limits, role and
+service rules, linking, availability, effective-site identity and that traversal's
+capacity limits. `check_payload_ok_iff` proves that standard admission succeeds
+with exactly the same payload iff this checker succeeds and native budgets pass.
+The standard `check` and CLI retain their existing refusal order. A small shared
+helper DAG can pass model admission while exceeding the expanded native work
+budget. Authored repeat maxima still constrain execution in both paths.
 
 ## Bounds and availability
 

@@ -57,9 +57,12 @@ proves complete and residual interactive bounds through ArkLib's degree-one
 protocol, including stop-aware joint phases and reachable full-distribution
 transport. Canonical structured one-round examples use actual typed calculation
 results and local handler laws. The source-only verifier uses the foundation's
-terminal table laws. Transferring these security bounds to the imported roots
-and establishing native execution correspondence are separate obligations;
-the imported degree-two examples retain their separate scope.
+terminal table laws. The optional
+[uniform-service composition](docs/spec/uniform-query-service.md#actual-imported-roots)
+transfers the bounds to the actual admitted Sumcheck and Reduction roots under
+explicit sampling, table and observation assumptions. Native execution
+correspondence remains separate; the imported degree-two examples retain their
+own scope.
 For the actual Interactive Schnorr subject,
 [honest-prover observations](docs/spec/structured-source.md#actual-interactive-schnorr-subject)
 now supply a causal strategy from ordered source sends, with explicit successful

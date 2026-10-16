@@ -84,8 +84,10 @@ import Zkc.Source.Structure
 import Zkc.Source.Structured.Admission
 import Zkc.Source.Structured.Algebra
 import Zkc.Source.Structured.ApplicationMetadata
+import Zkc.Source.Structured.Association
 import Zkc.Source.Structured.Availability
 import Zkc.Source.Structured.Checked
+import Zkc.Source.Structured.CheckedData
 import Zkc.Source.Structured.ClosedProfile
 import Zkc.Source.Structured.ClosedProjection
 import Zkc.Source.Structured.CommonAdapter
@@ -93,6 +95,7 @@ import Zkc.Source.Structured.Component
 import Zkc.Source.Structured.ComponentLinking
 import Zkc.Source.Structured.Evaluation
 import Zkc.Source.Structured.Format
+import Zkc.Source.Structured.Formation
 import Zkc.Source.Structured.Frame
 import Zkc.Source.Structured.Import
 import Zkc.Source.Structured.Inlining
@@ -102,6 +105,7 @@ import Zkc.Source.Structured.Linking
 import Zkc.Source.Structured.MapEvaluation
 import Zkc.Source.Structured.MapLaws
 import Zkc.Source.Structured.Meaning
+import Zkc.Source.Structured.ModelAdmission
 import Zkc.Source.Structured.OpenAdmission
 import Zkc.Source.Structured.OpenLaws
 import Zkc.Source.Structured.OpenMeaning
@@ -142,9 +146,11 @@ import Tests.StructuredApplicationBounds
 import Tests.StructuredApplicationMetadata
 import Tests.StructuredApplicationSemantics
 import Tests.StructuredApplications
+import Tests.StructuredAssociations
 import Tests.StructuredAvailability
 import Tests.StructuredBounds
 import Tests.StructuredComponents
+import Tests.StructuredFormation
 import Tests.StructuredInlining
 import Tests.StructuredLinking
 import Tests.StructuredMapClients
@@ -160,6 +166,7 @@ import Tests.StructuredRepeatAdmission
 import Tests.StructuredRepeatBounds
 import Tests.StructuredRepeatClients
 import Tests.StructuredRepeatSemantics
+import Tests.StructuredSemanticDependencies
 import Tests.StructuredServiceOrder
 import Tests.StructuredSource
 import Tests.StructuredSumcheckVerifier
@@ -210,6 +217,7 @@ import ZkcExamples.Structured.MapConstantData
 import ZkcExamples.Structured.MapConstantViews
 import ZkcExamples.Structured.MapContractInstances
 import ZkcExamples.Structured.MapFirst
+import ZkcExamples.Structured.MapFirstAssociations
 import ZkcExamples.Structured.MapFirstBodies
 import ZkcExamples.Structured.MapFirstContracts
 import ZkcExamples.Structured.MapFirstData
@@ -217,6 +225,7 @@ import ZkcExamples.Structured.MapFirstLaws
 import ZkcExamples.Structured.MapFirstTable
 import ZkcExamples.Structured.MapFirstViews
 import ZkcExamples.Structured.MapPrefix
+import ZkcExamples.Structured.MapPrefixAssociations
 import ZkcExamples.Structured.MapPrefixBodies
 import ZkcExamples.Structured.MapPrefixContracts
 import ZkcExamples.Structured.MapPrefixData
@@ -224,6 +233,7 @@ import ZkcExamples.Structured.MapPrefixFold
 import ZkcExamples.Structured.MapPrefixLaws
 import ZkcExamples.Structured.MapPrefixTable
 import ZkcExamples.Structured.MapPrefixViews
+import ZkcExamples.Structured.MapProjectionContracts
 import ZkcExamples.Structured.MapSourceExpansions
 import ZkcExamples.Structured.PrimitiveContracts
 import ZkcExamples.Structured.PrimitiveExpansions

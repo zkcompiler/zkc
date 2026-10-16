@@ -1,4 +1,5 @@
 import Zkc.Source.Structured.Import
+import Zkc.Source.Structured.ModelAdmission
 import ZkcExamples.Structured.ApplicationData
 import ZkcExamples.Structured.ServiceOrderData
 import ZkcExamples.Structured.ServiceOrderViews
@@ -32,6 +33,9 @@ private def call (name site : String) : Instruction :=
   .instruction (.protocolApply name ["P"]) [] [] [] site
 
 private def accepted (snapshot : Snapshot) := (check snapshot).isOk
+
+private def refusal {α : Type} (result : Except String α) (expected : String) : Bool :=
+  match result with | .error code => code == expected | .ok _ => false
 
 private def changedFunction (definition : Definition) (change : Function → Function) : Definition :=
   match definition with | .function function => .function (change function) | other => other
@@ -227,6 +231,8 @@ def run : IO Unit := do
     ("service aliases legal", accepted (unit [serviceCaller [0, 0], serviceChild])),
     ("service owner independent of handle", !accepted (unit [serviceCaller [0, 1], serviceChild])),
     ("effective generated collision", !accepted (collision "apply_1_a_b")),
+    ("model retains site identity", refusal (checkFormedPayload (collision "apply_1_a_b"))
+      "structured-effective-site-collision"),
     ("generated-looking label harmless", accepted (collision "apply_1_a_c")),
     ("source namespace duplicate", !accepted (unit [empty "main" [call "child" "a", call "child" "a"], empty "child"])),
     ("structured 64 edges accepted", structuredOnly (chain 65)),
@@ -234,6 +240,10 @@ def run : IO Unit := do
     ("native depth 64", (checkNativeApplicationBudgets (chain 64)).isOk),
     ("native depth 65", !(checkNativeApplicationBudgets (chain 65)).isOk),
     ("whole-unit depth 65", !accepted (chain 65)),
+    ("native depth refusal precedes site traversal", refusal (check (chain 65))
+      "structured-application-depth"),
+    ("model retains site traversal capacity", refusal (checkFormedPayload (chain 65))
+      "structured-effective-site-depth"),
     ("native work 100000", (checkNativeApplicationBudgets (nativeWork 999)).isOk),
     ("native work 100001", !(checkNativeApplicationBudgets (nativeWork 1000)).isOk),
     ("metadata visits shared across roots", !(checkEffectiveProtocolSites

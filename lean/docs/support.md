@@ -24,7 +24,7 @@ They do not certify arbitrary DSL programs or the full native lowering pipeline.
 | [Uniform Sumcheck composition](spec/uniform-query-service.md#actual-imported-roots) | One arbitrary-count full Execution distribution transport; concrete-service `n / |F|` bounds for every count of actual admitted Sumcheck returned-true results and Reduction residual observations; actual runtime maxima 2 and 4 with zero mass on excess; actual-root finite-field controls and generic client | Root empty context, verifier role 1 and peer 0; process transport permits arbitrary contexts; arbitrary network, callbacks and all initial states; decoded rawV and false V claim for Sumcheck; external original Table F(remaining+n) and false initial claim for Reduction, with arbitrary optional P inputs; exact exported-snapshot association in the independent plain participant model, without a frontend/native/provider theorem; Reduction has no Boolean acceptance checker |
 | ArkLib Sumcheck | Actual imported two-round degree-two verifier acceptance on a false public sum claim is at most `4 / |F|` | Finite field; reached fresh uniform queries; causal coefficient-message strategies, including arbitrary private probabilistic mixtures chosen before verifier draws |
 | [Multilinear Sumcheck mathematics](spec/multilinear-sumcheck.md) | Arbitrary-length ordered prefix restriction and suffix marginalization, endpoint-message laws, explicit delivery agreements, residual truth and complete public-table discharge, including zero rounds | Independent scalar-table model over rings; core has no optional security dependencies |
-| [Multilinear interactive security](spec/multilinear-sumcheck-security.md) | Complete `n / |F|` and partial residual `k / |F|` bounds, degree-one endpoint/table transport, checked public-table observation, and honest completeness | Fixed verifier table/false initial sum; finite field and fresh uniform challenges; arbitrary causal effectful ArkLib strategies; exact original or derived marginal oracle; imported source/native correspondence remains separate |
+| [Multilinear interactive security](spec/multilinear-sumcheck-security.md) | Complete `n / |F|` and partial residual `k / |F|` bounds, degree-one endpoint/table transport, checked public-table observation, and honest completeness | Fixed verifier table/false initial sum; finite field and fresh uniform challenges; arbitrary causal effectful ArkLib strategies; exact original or derived marginal oracle; imported-root connection is supplied by the uniform-service consumer; native correspondence remains separate |
 | Stop-aware causal Sumcheck | General n-round acceptance domination, full/raw/residual bounds and zero-round terminal stops; reusable full Execution distribution replacement on reached states; canonical structured one-round bound with actual calculated values | Explicit fresh uniform phases, false fixed claim, complete local state/event query laws and terminal mathematics; canonical fragments are examples, not the imported Sumcheck body; no native/provider correspondence |
 | Public factor openings | Imported composed verifier bound `4 / |F|`; generic conditional bound `4 / |F| + epsilon` | Public polynomial factor checks prove zero opening error; PCS binding/extractability needs a separate opening theorem |
 | Authored DSL target | Imported Schnorr relation denotes discrete-log; two accepting imported verifier transcripts yield a witness accepted by that relation | Bounded scalar formula adapter and tested interface selector binding |
@@ -43,9 +43,10 @@ The optional security package invokes ArkLib's
 bounded messages and the public polynomial oracle, proves all evaluation/domain
 laws and equality of accepted-event computations. The quadratic adapter connects
 an imported scalar verifier; the arbitrary-round multilinear adapter connects
-independent table contracts and ArkLib's causal interaction, with source and
-native correspondence still separate. VCVio's uniform-event transport proves
-Schnorr's simulator law.
+independent table contracts and ArkLib's causal interaction. The uniform-service
+composition additionally connects the admitted Sumcheck and Reduction roots to
+those bounds under the assumptions listed above. Native correspondence remains
+separate. VCVio's uniform-event transport proves Schnorr's simulator law.
 Some unrelated upstream declarations contain `sorry`; the transitive axioms of
 owned claimed results are audited separately and must use only Lean's standard
 three axioms. A build of all upstream sources is not asserted.

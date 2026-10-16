@@ -184,6 +184,24 @@ theorem SameDist.follow_congr {S E A B : Type}
     (follow_congr_of_reaches other invariant left right
       ((same.reaches_iff invariant).mp reachable) localLaw)
 
+/-- Per-operation distribution laws lift through every value-adaptive process.
+The complete outcome, residual state and ordered events are preserved. Internal
+oracle queries of a handler are not counted by this observation. -/
+theorem runM_sameDist (left right : PIR.MonadHandler ProbComp I S E)
+    (localLaw : ∀ action state, SameDist (left action state) (right action state))
+    (process : PIR.Proc I A) (state : S) :
+    SameDist (process.runM left state) (process.runM right state) := by
+  induction process generalizing state with
+  | done value => exact SameDist.refl _
+  | halt why => exact SameDist.refl _
+  | call action continuation ih =>
+    change SameDist
+      (left action state >>= fun e => e.followM (fun reply s => (continuation reply).runM left s))
+      (right action state >>= fun e => e.followM (fun reply s => (continuation reply).runM right s))
+    exact SameDist.follow_congr (localLaw action state) (fun _ _ => True) _ _
+      (by intro e he value returned; trivial)
+      (fun reply s _ => ih reply s)
+
 /-- Prefix-local replacement of a phase through a full state/event continuation.
 No law is required on stopped branches or states outside the prefix support. -/
 theorem replace_after_prefix {S E A B C : Type} [MeasurableSpace C]

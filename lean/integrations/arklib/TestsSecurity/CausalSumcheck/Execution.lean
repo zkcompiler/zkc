@@ -52,4 +52,23 @@ theorem checker_from_proc (stop : Bool) (p : PIR.Proc Interface Nat) (s : Nat) :
   have : a = 0 := of_decide_eq_true ha
   omega
 
+/-- This implementation consumes an additional hidden random draw. It has the
+same Execution distribution, but does not have the same oracle-query cost. -/
+def sampledHandler (stop : Bool) : PIR.MonadHandler ProbComp Interface Nat String := fun op s => do
+  let _ ← ($ᵗ Bool)
+  handler stop op s
+
+theorem sampled_handler_law (stop : Bool) (op : Interface.Op) (s : Nat) :
+    SameDist (sampledHandler stop op s) (handler stop op s) := by
+  let : MeasurableSpace (PIR.Execution Nat String (Interface.Reply op)) := ⊤
+  unfold SameDist sampledHandler
+  exact OracleComp.evalDist_bind_const _ _
+
+/-- Arbitrary continuations preserve the complete observed execution, including
+the stopped prefix; no unfolding of the particular caller is needed. -/
+theorem sampled_handler_context {A : Type} (stop : Bool)
+    (process : PIR.Proc Interface A) (s : Nat) :
+    SameDist (process.runM (sampledHandler stop) s) (process.runM (handler stop) s) :=
+  runM_sameDist _ _ (sampled_handler_law stop) process s
+
 end TestsSecurity.CausalSumcheck.Execution
