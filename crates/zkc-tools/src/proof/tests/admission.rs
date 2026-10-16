@@ -202,6 +202,90 @@ fn request(producer: bool, decision: bool, public: bool) -> ProofInputs {
     }
 }
 
+fn deployment_with_preparation(private: bool) -> Json {
+    let mut value = deployment();
+    let mut program: Json = serde_json::from_str(value[4].as_str().unwrap()).unwrap();
+    let boolean = "bool@native.bool/0";
+    for (role, function) in [(0, "prepare_p"), (1, "prepare_v")] {
+        program[2].as_array_mut().unwrap().push(json!([
+            "function",
+            function,
+            [["x", boolean]],
+            [boolean],
+            [["return", ["x"]]],
+            [function, []]
+        ]));
+        let input = if role == 0 && private { "b" } else { "public" };
+        program[3][role][6].as_array_mut().unwrap().insert(
+            0,
+            json!(["local", "prepare", function, [input], ["prepared"]]),
+        );
+    }
+    value[4] = json!(program.to_string());
+    seal(&mut value);
+    value
+}
+
+#[test]
+fn host_authorizes_only_statement_ports_for_computation_reuse() {
+    use crate::execution::{Capacity, PreparedData};
+    let host = admit(&deployment_with_preparation(false)).unwrap();
+    let mut inputs = request(true, true, true);
+    // Equal canonical data retains authority even when public and role inputs
+    // use different representations. Equality alone cannot authorize a witness.
+    inputs.public[0] = PreparedData::from_value(Value::Bool(true), Capacity::default())
+        .unwrap()
+        .into();
+    let cold = host.execute(&inputs, Invocation::Prove).unwrap();
+    assert!(cold.outcome.is_ok());
+    assert_eq!(host.preparation_stats().entries, 1);
+    let hits = host.preparation_stats().hits;
+    let warm = host.execute(&inputs, Invocation::Prove).unwrap();
+    assert_eq!(host.preparation_stats().hits, hits + 1);
+    assert_eq!(cold.outcome, warm.outcome);
+    assert_eq!(cold.binding, warm.binding);
+    assert_eq!(cold.usage, warm.usage);
+    assert_eq!(cold.external_work, warm.external_work);
+    assert!(cold.cleanup_errors.is_empty() && warm.cleanup_errors.is_empty());
+
+    let proof = warm.outcome.unwrap();
+    let verifier = request(false, true, true);
+    let cold = host.execute(&verifier, Invocation::Verify(&proof)).unwrap();
+    assert!(cold.outcome.is_ok());
+    assert_eq!(host.preparation_stats().entries, 2);
+    let hits = host.preparation_stats().hits;
+    let warm = host.execute(&verifier, Invocation::Verify(&proof)).unwrap();
+    assert_eq!(host.preparation_stats().hits, hits + 1);
+    assert_eq!(cold.outcome, warm.outcome);
+    assert_eq!(cold.binding, warm.binding);
+    assert_eq!(cold.usage, warm.usage);
+    for report in [&cold, &warm] {
+        assert!(matches!(
+            report.outputs.as_ref().unwrap()[&3],
+            Value::Bool(true)
+        ));
+        assert!(report.cleanup_errors.is_empty());
+    }
+    inputs.inputs[2] = InputValue::Native(Box::new(Value::Bool(false)));
+    assert_eq!(
+        host.execute(&inputs, Invocation::Prove).err().unwrap(),
+        "native-proof-shared-public-input"
+    );
+
+    let private = admit(&deployment_with_preparation(true)).unwrap();
+    for _ in 0..2 {
+        assert!(
+            private
+                .execute(&request(true, true, true), Invocation::Prove)
+                .unwrap()
+                .outcome
+                .is_ok()
+        );
+    }
+    assert_eq!(private.preparation_stats().entries, 0);
+    assert_eq!(private.preparation_stats().hits, 0);
+}
+
 #[test]
 fn prepared_public_data_preserves_binding_and_statement_authority() {
     use crate::execution::{Capacity, PreparedData};
