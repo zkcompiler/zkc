@@ -1,5 +1,11 @@
 # PIR semantics
 
+These semantics define the typed mathematics, participants, effects,
+observations and refinement shared by every imported model. Admission and
+process equations concern the imported Lean constructors; the
+[bridges](../../bridges/common/README.md) test their agreement with native
+execution, and [formal support](../support.md) records the scope of each claim.
+
 ## Local structured computations
 
 `Source.Dialect` declares operand types, ordered result types and closed region
@@ -28,7 +34,7 @@ constructor that accepts that equation as its sole premise.
 
 An operation law can still be mathematically substantial: a call, fold or repeat
 must use an appropriate helper theorem or invariant. The derivation does not
-discover these proofs. Its execution corollaries use the existing handler
+discover these proofs. Its execution corollaries use the handler
 semantics and retain returned values, stop causes, residual state and ordered
 events. Property-specific weakening, such as hiding events or bounding only
 acceptance, requires an additional explicit theorem.
@@ -36,9 +42,8 @@ acceptance, requires an additional explicit theorem.
 `RegionDecoding` checks reference indices, result annotations, intermediate bind
 types and exact closed region signatures, including dormant bodies. Typed erasure
 roundtrips for all regions; successful formation preserves all raw structure.
-This establishes structural formation in Lean; the
-external operation resolver and native-to-Lean correspondence remain separate.
-The existing single-result `Source.Program` remains an independent reference
+Each import profile supplies its own operation resolution.
+The single-result `Source.Program` is an independent reference
 profile with the exact bridge `Program.denote_toRegion`. The participant profile
 and admitted scalar imports have the corresponding `Common` bridges, retaining
 the final output-role restriction as well as all actions and stops.
@@ -93,7 +98,6 @@ Lean type to each sort and an interpretation to every operation. Group operation
 can be interpreted in a module over a field; different native nominal domains
 must not be silently equated. The scalar proof-request profile checks domain
 assignments explicitly because its chosen field/group interpretation is uniform.
-The native provider implementing those domains is a separate obligation.
 
 A source context indexes the type of every reference. Elaboration constructs a
 well-typed program or refuses it. Values available to participants are optional:
@@ -145,9 +149,9 @@ The optional `ZkcSecurity.VCVio.Execution` module supplies full-distribution
 and reachable-prefix composition for this same `runM`/`followM`, including
 value-returning trusted work and conservative Boolean checker laws. It compares
 complete output records, not reply marginals. Its support transfer relies on
-VCVio's pinned uniform-oracle semantics; the core remains independent of that
+VCVio's pinned uniform-oracle semantics; the core is independent of that
 package. See the [causal security contracts](multilinear-sumcheck-security.md#local-distribution-and-computed-value-contracts)
-for an actual structured-operation example and its remaining imported-source boundary.
+for an actual structured-operation example.
 
 `ExactRefinement p q` contains equality of their open processes. Its laws preserve
 all handlers, replies, stops, final states and events, and compose under bind.
@@ -172,17 +176,7 @@ prefix to the full finite execution. `eventually_finishes` proves that every
 fixed total handler reaches the same complete result at some finite budget.
 It does not assert a uniform depth across all reply-dependent continuations or
 a finite number of branches when the reply type is infinite.
-The current scalar exporter admits finite straight-line bodies with bounded
-static helper inlining. It does not export general native loops or recursion.
+The scalar profile admits finite straight-line bodies with bounded static
+helper inlining, without general native loops or recursion.
 A partial external-reply/waiting scheduler is not supplied by the total-handler
 model; it requires a separately specified interface.
-
-## Adequacy boundary
-
-Successful typed admission proves facts about the imported constructors. The
-native exporter and JSON-to-constructor renderer are independently tested,
-reviewed boundaries. The C++ reference interprets retained SSA directly; Lean
-interprets the exported program. Differential comparisons cover requests,
-replies, states, results and stop prefixes over Z/97. This detects discrepancies
-in the admitted profile, not a universal compiler correctness theorem or a
-production group/sampling implementation proof.

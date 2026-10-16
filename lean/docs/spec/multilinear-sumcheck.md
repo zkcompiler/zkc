@@ -4,25 +4,26 @@
 for the scalar multilinear library in
 [`libraries/sumcheck/lib.zkc`](../../../libraries/sumcheck/lib.zkc).
 It models endpoint messages, ordered table restriction, residual truth and
-complete public-table discharge. It does not import this source, define its
-open process, or establish native correspondence or interactive security.
-The existing quadratic Sumcheck and factor-opening contracts remain separate.
+complete public-table discharge without importing that source or defining its
+open process. The quadratic Sumcheck and factor-opening contracts are separate
+models.
 
 ## Representation and modules
 
 | Module | Owned interface |
 |---|---|
-| `Zkc.Polynomial.Multilinear.Restriction` | Existing `Table`, ordered `half` and `booleanSum`, `fixFirst`, exact-length `ofList?`, extension and vector-sum laws |
+| `Zkc.Polynomial.Multilinear.Restriction` | Ordered `half` and `booleanSum` over `Table`, `fixFirst`, exact-length `ofList?`, extension and vector-sum laws |
 | `Zkc.Polynomial.Multilinear.Prefix` | `fixPrefix`, ordered extension and remaining-sum laws, complete restriction |
 | `Zkc.Polynomial.Multilinear.Marginal` | `sumRemaining`, total preservation, commutation with restriction, extension as residual sum |
 | `Zkc.Protocols.Sumcheck.Multilinear.Round` | `Message = F × F`, `boundary`, `evaluate`, `honestMessage`, explicit delivery laws |
 | `Zkc.Protocols.Sumcheck.Multilinear.Reduction` | `ResidualClaim`, mathematical `check`, complete discharge and public-input agreement |
 
-`Table F n` is the existing function `(Fin n → Bool) → F`. Its first coordinate
-is the most significant bit of the existing `index`. A low half fixes that
-coordinate to `false`; a high half fixes it to `true`. `ofVector`, `vertex`, and
-`extension` retain their original meanings. There is no second indexing scheme
-or conversion to the quadratic security model.
+`Table F n` is the function type `(Fin n → Bool) → F` of
+`Zkc.Polynomial.Multilinear`. Its first coordinate is the most significant bit
+of that module's `index`. A low half fixes that coordinate to `false`; a high
+half fixes it to `true`. `ofVector`, `vertex` and `extension` are that module's
+definitions. There is no second indexing scheme or conversion to the quadratic
+security model.
 
 `fixFirst : Table F (n+1) → F → Table F n` enforces residual shape intrinsically.
 For tail vertex `b`, it returns `(1-r)*T(false::b) + r*T(true::b)`.
@@ -30,8 +31,8 @@ For tail vertex `b`, it returns `(1-r)*T(false::b) + r*T(true::b)`.
 `low + (high-low)*r`. `fixFirst_zero` and `fixFirst_one` select the two halves.
 
 `fixPrefix k : Table F (n+k) → (Fin k → F) → Table F n` consumes the point
-from first coordinate to last. `Quadratic.point` is reused solely as the
-existing generic coordinate concatenation operation: its `k` coordinates come
+from first coordinate to last. `Quadratic.point` is used solely as the
+generic coordinate concatenation operation: its `k` coordinates come
 before the `n` suffix coordinates, despite the arity being written `n+k`.
 `extension_fixPrefix_coordinates` identifies this operation with list append
 under explicit list-length hypotheses. No point is reversed for storage layout.
@@ -53,12 +54,12 @@ monoid; `booleanSum_add` needs only an additive commutative semigroup, and
 `booleanSum_scale` a nonunital nonassociative semiring. Restriction, endpoint
 evaluation and honest update use a ring, including noncommutative rings.
 The equivalence to the source's right-multiplication helper and the extension
-laws use a commutative ring, matching the existing `extension` assumption.
+laws use a commutative ring, matching the assumption of `extension`.
 The executable mathematical checker additionally needs decidable equality.
 No foundation theorem requires a finite field, characteristic bound or sampling.
 
 `sumRemaining n k table` retains the first `k` Boolean coordinates and sums
-the remaining `n` coordinates using the existing concatenation. Its total
+the remaining `n` coordinates using the same concatenation. Its total
 equals the original total (`booleanSum_sumRemaining`, requiring only addition).
 `fixFirst_sumRemaining` commutes with restriction over a ring, and
 `extension_sumRemaining` identifies its extension at `point` with
@@ -115,21 +116,22 @@ not supply those agreements. A malicious-prover security consumer should bind
 the verifier's fixed statement, rather than assume an adversary's table agrees.
 
 The pair algebra accepts arbitrary pair values. There is no process constructor
-that silently makes received values equal to sent values. A later `PIR.Proc`
-contract must preserve the source order: receive both endpoints, guard the
+that silently makes received values equal to sent values. A `PIR.Proc`
+contract for the source must preserve its order: receive both endpoints, guard the
 boundary, draw `cv`, deliver a separate `cp`, and update each role locally.
 The actual lowering uses two ordered scalar receives for the pair. Keep both
 in the source-facing contract, including the intermediate state and possible
 stops. A strategy or handler may aggregate them into an endpoint pair through
 an explicit correspondence lemma; atomic receipt is not the same effect tree.
 
-The independent process package must also retain local count checks, maximum
+That process contract must also retain local count checks, maximum
 failure distinct from authored rejection, the original table guards, ordered
 point appends, service identity and successor state. The
-[structured import](structured-source.md#source-only-sumcheck-verifier) admits
+[structured import](structured-source.md) admits
 the complete library `Sumcheck` and `Reduce` sources, including vector
-operations, helper composition, folds, protocol applications and repetition.
-No whole-Sumcheck kernel is assumed here.
+operations, helper composition, folds, protocol applications and repetition;
+[formal support](../support.md#source-only-sumcheck-verifier) records their
+verifier equations. No whole-Sumcheck kernel is assumed.
 
 ## Optional security integration
 
@@ -139,9 +141,9 @@ MLE/table agreement, ordered restriction and table-oracle realization. It uses
 ArkLib `Native.Core.execute_transport` with arbitrary effectful continuations
 and public abort, then applies `Native.execute_soundness` for the complete
 `N / |F|` bound. Honest completeness allows arbitrary challenges. A proved
-marginal table gives partial residual soundness `k / |F|` without a new partial
+marginal table gives partial residual soundness `k / |F|` without a separate partial
 executor or padding the challenge point. These security results belong to the
-optional package; core imports remain dependency independent.
+optional package; core imports are independent of it.
 
 [Dependencies](../dependencies.md) record the pinned ArkLib and VCVio revisions.
 The linked security document specifies the exact quantitative assumptions and
@@ -152,20 +154,3 @@ bounds to the admitted `Sumcheck` and `Reduce` roots. The connection keeps the
 two ordered scalar receives, boundary guard, reached fresh challenge,
 role-local delivery, counts and stops, and it relates only selected
 observations; unlike raw traces are never equated.
-
-## Regression coverage
-
-`Tests.MultilinearSumcheck` is included in the full core declaration audit and
-Lake test library. It checks endpoint/coefficient confusion, pair reversal,
-MSB coordinate order, incomplete versus complete obligations, unequal role
-points, unequal public tables, exact shape and zero rounds. A standalone client
-in `clients/Main.lean` consumes the arbitrary-dimensional residual theorem.
-
-The early-challenge control proves over any field, for `2*r-1 ≠ 0`, that
-`(r/(2*r-1), (r-1)/(2*r-1))` has boundary one and evaluates to zero at `r`.
-Over F97 the excluded challenge is exactly 49; any boundary-one pair evaluates
-to 49 at that exceptional challenge. Thus a pair chosen after learning the
-challenge can falsify the intended zero-table claim at every other challenge.
-This is an algebraic counterexample to a misplaced ordering premise, not a
-finite security proof. Concrete checks use kernel reduction (`decide +kernel`),
-and general laws use ordinary proof terms; no native decision axiom is used.

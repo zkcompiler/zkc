@@ -173,16 +173,12 @@ programs. Audit transitive proof dependencies rather than upstream build warning
 Differential execution compares complete observable prefixes using an independent
 native SSA interpreter; it supplements but never replaces theorem checking.
 
-The architectural review asks whether generic consumers import particular
-examples and whether each new source requires duplicating every theorem. The
-semantic review examines role-local availability, termination, observation
-budgets, state and stop distinctions. The proof-chain review reconstructs all
-source-to-game equalities and external theorem premises. The generator review
-reconstructs the requested subject independently of candidate aliases.
-Independent read-only agents also reviewed the foundations and external theorem
-candidates; this does not constitute a human external audit.
-The [implementation review](review.md) records the reviewed boundaries, findings
-and their resolutions.
+Architecturally, generic consumers must not import particular examples, and a
+new source must not require duplicating every theorem. Semantically, role-local
+availability, termination, observation budgets, state and stop distinctions
+must stay explicit. Every source-to-game equality and external theorem premise
+must be reconstructible, and a generator's requested subject must be
+reconstructed independently of candidate aliases.
 
 ## What remains open beyond the implemented profile
 

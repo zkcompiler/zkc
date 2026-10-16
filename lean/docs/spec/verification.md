@@ -1,5 +1,12 @@
 # Explicit verification specifications
 
+This page specifies how authored intent, retained contracts and Lean property
+consumers combine into theorems about imported subjects. Lean checks admission,
+proof terms and the stated mathematical assumptions; native name and selector
+resolution, source comparison and regeneration are tested boundaries, and
+compilation, physical layouts, providers, encoding, Fiat–Shamir and PCS
+composition need separate correspondence results when a claim includes them.
+
 ## Structured contracts
 
 The structured path retains contracts on original protocol declarations and
@@ -41,11 +48,11 @@ coordinate.
 It supplies typed parameter and witness values. Statement selectors read the
 role-local execution boundary. Repeated uses in one invocation share the same
 assignments. Different owners and coordinates require explicit transport or
-repacking; this type discipline does not prove that an invocation was reached.
-A coordinate can record call occurrences and repeat iterations.
+repacking. A coordinate can record call occurrences and repeat iterations.
 An explicit instantiation maps callee logical parameters and witnesses to caller
-values, supplied mathematical values or unavailable slots. This mapping does
-not prove that a claimed loop iteration was reached.
+values, supplied mathematical values or unavailable slots. Neither a coordinate
+nor an instantiation proves that the invocation or iteration it names was
+reached.
 
 Purpose labels do not choose quantifiers, secrecy, randomness or an adversary
 model. Honest completeness can require a witness to agree with the prover's
@@ -81,7 +88,7 @@ clause supports both; it does not choose either theorem automatically.
 
 For a new component, the author supplies relations and relevant boundaries in
 `.zkc`, reusable local mathematical/process laws in Lean, and an explicit
-property adapter when an existing one does not fit. Structural derivation and
+property adapter when no available one fits. Structural derivation and
 call substitution reuse the common machinery. The structured interfaces are
 Lean APIs; the bounded CLI generator below has its own smaller supported profile.
 
@@ -132,8 +139,7 @@ local operation laws and callback derivations. The `derive_region` tactic walks
 that typed tree and leaves mathematical laws as ordinary Lean goals. Callback
 rules quantify over their inputs. `region_view%` projects a constructor view
 from an admitted body; the kernel checks its definitional equality to that body.
-Neither mechanism proves the frontend or exporter correct. Simple definitional
-equalities can continue to use `rfl` without a derivation tree.
+Simple definitional equalities can use `rfl` without a derivation tree.
 
 After process correspondence, deterministic handler simulation or optional
 VCVio coupling transports execution properties. The maintained local coupling
@@ -162,7 +168,7 @@ specification can satisfy the inventory without abstracting behavior, and an
 external terminal whose predicate is `True` establishes only output availability.
 
 `ComponentInput` fixes the actual checked invocation, context, participant and
-inputs. Its execution uses the existing process and handler. Boundary projection
+inputs. Its execution uses the ordinary participant process and handler. Boundary projection
 reads the real outcome, masks inputs and leaves other participants' copies
 absent. Stopped outcomes have no returned outputs. Selected-decision laws
 connect a role-local Boolean read to a returned execution event. A security
@@ -180,7 +186,7 @@ residual bound with a continuation. It requires every accepting continuation
 execution to imply the child's residual predicate, for every returned child
 value and every intermediate state. Initial-state checks alone are insufficient
 because the child may change state. Stops on either side contribute no acceptance;
-the rule needs no losslessness assumption. Its events currently depend on returned
+the rule needs no losslessness assumption. Its events depend on returned
 values; state- or trace-dependent events need a corresponding stronger rule.
 
 The maintained Sumcheck caller uses this rule on its actual linked child and
@@ -189,15 +195,39 @@ returned tuples, including missing values, malformed lengths and capacity stops.
 The child implementation proves its own residual bound separately. A replacement
 child satisfying that same bound can reuse the caller theorem unchanged.
 
-### Trust boundary
+### Prover strategies from checked sends
 
-Lean checks source admission, proof terms and the stated mathematical assumptions.
-Retained original-PIR data identifies the model being proved about. Native
-source comparison and regeneration are tested boundaries, not a universal Lean
-proof of the frontend or exporter. Compilation, physical layouts, providers,
-encoding, Fiat–Shamir and PCS composition need separate correspondence results
-when a claim includes them. This architecture supports those connections
-without asserting that every compiler transformation is already verified.
+An honest-prover property can take its messages from the actual checked prover
+process instead of a handwritten strategy. For Interactive Schnorr,
+`SchnorrHonestProver.replyHandler` runs the prover's participant process with
+`PIR.Proc.run`. It answers the nonce query and the challenge receive with fixed
+replies, acknowledges the commitment and response sends, checks the domain,
+site, peer and service handle of every action, refuses any other action, and
+logs each action in order. The handler is deterministic for its fixed inputs:
+any sampling happens outside the run, and the nonce reply does not depend on the
+challenge.
+
+`extract` accepts only a successful run whose log is exactly a query, a send, a
+receive and a send at the expected sites, and returns the two sent values. It
+neither checks nor recomputes the response formula. A stopped, reordered or
+extended trace yields no messages, and no message is decoded from a prefix.
+
+`strategyOf` packages these observations as a `Common.Strategy`: the commitment
+observed in the run with challenge zero and, for each challenge, the response
+observed in the run with that challenge. It requires successful extraction for
+every challenge and supplies no fallback value. The constructor alone asserts
+neither causal timing nor that every run sends the same commitment. Using it as
+an honest strategy requires theorems about the actual source showing that the
+commitment is sent before the challenge is received, that the run prefix
+through that receive does not depend on the reply, and that every fixed
+challenge completes.
+
+`Common.transcriptHandler` delivers the strategy's messages to the actual
+checked verifier. Prover and verifier inputs are separate arguments, and no
+mechanism makes the participants' copies equal. The optional
+`StructuredSchnorrHonestView.sourceView` is the resulting public view: the
+observed commitment and response, the fixed challenge and the verifier's actual
+outcome under honest delivery.
 
 ## Bounded scalar requests
 
@@ -211,12 +241,12 @@ to the chosen contract. No security result is selected from a clause's name.
 `bridges/common/requests/schnorr-dsl.json` is an executable example of
 `zkc.verification-spec/0`. It binds named DSL inputs and the challenge service,
 selects the `knowledge` target, and asks for the discrete-log relation adapter.
-The current named target adapter supports scalar Schnorr/discrete-log. Other
+The named target adapter covers scalar Schnorr/discrete-log. Other
 contracts use the lower-level `zkc.proof-request/0` schema. Additional named
 relation adapters need proved body/selector connections; an opaque relation
 cannot pass by claiming that it is discrete-log.
 
-The current constructor renderer accepts nonempty printable ASCII identifiers
+The constructor renderer accepts nonempty printable ASCII identifiers
 and strings up to 512 bytes and checks exact constructor arities. Native and
 Lean JSON interfaces can admit a wider string repertoire; that does not imply
 the bounded proof generator supports it.
@@ -227,8 +257,7 @@ scalar native layouts. It exports the relation's actual formula function from
 the same retained native source. Lean proves that admitted function denotes
 `key = secret • base`. The generated `target_special_soundness` theorem then
 connects two accepting executions of the actual imported verifier to a witness
-accepted by the actual imported relation. Native name/selector resolution is a
-reviewed and tested boundary, not a kernel proof of the DSL compiler.
+accepted by the actual imported relation.
 
 ## Contract proof and property application
 
@@ -266,7 +295,7 @@ The typed `Zkc.Verification` API is more general than the bounded generator.
 An author can define a new contract, property, consumer or proved adapter in a
 Lean module. `ZkcExamples.NativePrograms.CustomProperty` applies a new rejection
 consumer to an actual imported source via `Certificate.verify`, without changing
-the compiler or existing contract. CLI support for an extension registers its
+the compiler or the contract it consumes. CLI support for an extension registers its
 reviewed input schema and consumer; automatic correspondence may require new
 normalization lemmas. Failure to find a proof is not a counterexample to safety.
 
@@ -282,5 +311,4 @@ source export, request, certificate and dependency-manifest identities, the exac
 properties/consumers/experiments, premises, target correspondence where present,
 and remaining external boundaries. Receipts are reproducibility records, not
 signed proof objects or runtime authorization. Recheck retained Lean certificates
-with the recorded manifests. Source hashes identify inputs; they establish no
-compiler, cryptographic-provider, Fiat–Shamir, PCS or whole-prover correctness.
+with the recorded manifests. Source hashes identify inputs.

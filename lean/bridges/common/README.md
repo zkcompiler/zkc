@@ -164,5 +164,7 @@ python3 lean/bridges/common/intent_tests.py \
 
 These controls include false relation bodies with the expected names/selectors,
 wrong-relation certificates, wrong target operands, explicit refusal diagnostics,
-and external consumer reuse. Generic extensions can use the typed Lean
+and external consumer reuse. Reader refusal controls require exit status 1 with
+the expected diagnostic, and request controls require the expected receipt code;
+a crash or signal termination never counts as a refusal. Generic extensions can use the typed Lean
 `Certificate`/`Consumer` API without changing this bounded registry.

@@ -1,9 +1,12 @@
 # Uniform queries for structured participants
 
 `ZkcSecurity.VCVio.StructuredUniform` defines a concrete optional
-`ProbComp` handler at the structured participant boundary. It uses the existing
-`PIR.MonadHandler`, `PIR.Execution` and `VCVio.Execution.freshQuery`.
-Generic execution semantics remain independent of this source interface.
+`ProbComp` handler at the structured participant boundary. It uses
+`PIR.MonadHandler`, `PIR.Execution` and `VCVio.Execution.freshQuery`; generic
+execution semantics are independent of this source interface. This is a
+service construction in the independent mathematical model: native RNG,
+provider dispatch, exporter/frontend correctness, concurrent scheduling and
+Fiat–Shamir correspondence are separate claims.
 
 ## Constructor and exact route selection
 
@@ -15,7 +18,7 @@ typed values. Its query branch is never called.
 Each configured port is a tuple of qualified action site, nominal field domain,
 and actual service handle. A matching query executes `freshQuery` with the
 callbacks selected by that tuple. An unmatched query returns `stopped refused`
-with the unchanged state and no events. All field domains have the existing
+with the unchanged state and no events. All field domains have the
 structured assignment `F`; this constructor does not introduce heterogeneous
 field interpretations. Tuple membership selects a single implementation;
 list order or duplicates cannot create competing query clauses.
@@ -53,7 +56,7 @@ Sampling does not invent a logging event; such an event belongs to a callback.
 
 `ZkcSecurity.Examples.CausalSumcheck.Iteration` imports the shared module
 `ZkcExamples.Structured.SumcheckVerifierProcess` and its
-`SumcheckVerifierLaws.roundPresent` definition. It constructs the existing `Causal.Strategy` from the
+`SumcheckVerifierLaws.roundPresent` definition. It constructs a `Causal.Strategy` from the
 two actual qualified receives and the actual send. HIGH receives LOW's updated
 state and returns its own reply. The guard precedes service preparation and
 sampling. The source normal form appends the sampled value and interpolates
@@ -66,7 +69,7 @@ substitutions use invariant `True`; no reachable-only obligation remains.
 `repeat_uniform_distribution` discharges that local law with the constructor.
 
 `repeat_uniform_publicTable_soundness` and
-`repeat_uniform_residual_soundness` specialize the existing causal bounds to
+`repeat_uniform_residual_soundness` specialize the stop-aware causal bounds to
 this shared process, installing the singleton route internally. They bound
 the decoded public-table observation and the external original-table residual
 observation by `n / |F|`. Callbacks and network actions may stop; the mass is
@@ -125,8 +128,6 @@ uniform measure; `SampleableType.evalDist_uniformSample` exports that law.
 `SampleableType/NativeMeasure.lean` derives singleton and finite-event counting
 laws. The [dependency baseline](../dependencies.md) records the tested pins.
 
-This is a service construction in the independent mathematical model. A
-symbolic service name does not confer its law on another handler. Native RNG,
-provider dispatch, exporter/frontend correctness, concurrent scheduling and
-Fiat–Shamir correspondence remain separate obligations. Imported-root bounds
-add exact exported-snapshot association and source equations to this service law.
+A symbolic service name does not confer its law on another handler.
+Imported-root bounds add exact exported-snapshot association and source
+equations to this service law.

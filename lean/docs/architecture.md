@@ -51,7 +51,8 @@ semantics and the optional VCVio uniform-service adapter.
 `Zkc.Protocols` owns mathematical experiments and reusable verifier contracts.
 It may use generic source semantics; source semantics may not import protocols.
 `ZkcExamples.NativePrograms` owns particular native exports and correspondence
-proofs. `ZkcSecurity` owns optional external consumers and connection laws;
+proofs; the library is named `ZkcExamples` so that it cannot collide with an
+upstream package's `Examples` library. `ZkcSecurity` owns optional external consumers and connection laws;
 its generic adapters do not import particular source examples. Its `Examples`
 subtree instantiates those consumers. `ZkcClean` remains a separate relation
 adapter. Module-header checks and declaration dependency audits enforce these
