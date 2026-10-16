@@ -190,9 +190,9 @@ bridge through a real Lake path dependency.
 
 | Next use | Foundation supplied here | Remaining obligation |
 |---|---|---|
-| Prepared native import | Typed result/region signatures, explicit captures, strict formation | Import actual capture maps, control/yield interfaces and helper identities; prove or delimit native correspondence; enforce resource limits at the external boundary |
+| Original-stage native import | Typed result/region signatures, explicit captures, strict formation | Native correspondence of preparation, projection and lowering; resource limits at the external boundary |
 | Actual transformation validation | Contextual equality, shared binding, operation contracts, ordered finite admission | Relate actual source/candidate artifacts and prove each native transformation under its preconditions |
-| Complete verifier consumers | Full open-process semantics and bridges for maintained verifier references | Connect the complete imported endpoint to a reusable verifier contract and its security assumptions |
+| Complete verifier consumers | Full open-process semantics and bridges for maintained verifier references | Protocol families beyond the maintained Schnorr and Sumcheck consumers |
 
 Role projection and constructions remain separate obligations. Fiat–Shamir
 changes interactions and needs stated interpretation/coupling/reduction laws;

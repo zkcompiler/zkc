@@ -452,8 +452,9 @@ These are helper source-model equations, not native execution correspondence or
 an interactive/Fiat–Shamir security result.
 
 `SumcheckReduceAssociations` and `SumcheckSourceAssociations` supply membership,
-complete signatures and entire raw trees for every helper in their own imported
-units: 14 and 22 respectively. Their protocol inventories retain the original
+complete signatures and entire raw trees for the 14 and 22 non-formula helpers
+of their imported units, which contain 18 and 27 definitions;
+`SumcheckContractBindings` associates the formula helpers. Their protocol inventories retain the original
 run/reduce signatures and bodies, repeat maxima 4 and 2, and application contexts
 `s3` and `label_726564756365`. The named header/helper/protocol/metadata
 checks and `Imported` witnesses establish the whole-source association. Shared

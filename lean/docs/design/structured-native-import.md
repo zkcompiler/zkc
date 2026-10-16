@@ -91,11 +91,12 @@ evidence does not discharge those external obligations for the public-view theor
 
 ### Sumcheck
 
-The next library target is the actual multilinear protocol in
+The library target is the multilinear protocol in
 `libraries/sumcheck/lib.zkc`. Each round sends a pair `(a0, a1)`, checks the
 current claim against `a0 + a1`, obtains a fresh challenge `r`, and updates the
-claim to `(1-r) * a0 + r * a1`. Its runtime round count and repeated interactions
-require an open structured repeat model.
+claim to `(1-r) * a0 + r * a1`.
+[Retained protocol repeats](../spec/structured-source.md#retained-protocol-repeats)
+admit its runtime round count and repeated interactions.
 
 `Reduce` returns an evaluation obligation. A separate public-table or opening
 consumer must discharge that obligation before it yields an acceptance claim.
@@ -107,12 +108,12 @@ and valid native dimensions are explicit premises.
 
 The maintained two-round quadratic scalar verifier and its `4 / |F|` theorem
 remain useful regression clients. They are a different protocol from the
-multilinear pair-message library. Connecting the library to ArkLib requires a
-source-specific arbitrary-round causal experiment equation. The independent
+multilinear pair-message library. The independent
 [multilinear foundation](../spec/multilinear-sumcheck.md) and
-[optional security adapter](../spec/multilinear-sumcheck-security.md) now prove
-the table laws and complete/residual interactive bounds. Their mathematical
-contracts do not yet establish that equation for the actual library source.
+[optional security adapter](../spec/multilinear-sumcheck-security.md) prove
+the table laws and complete/residual interactive bounds.
+[Uniform queries](../spec/uniform-query-service.md#actual-imported-roots) supply
+the source-specific causal experiment equation for the admitted library roots.
 
 ## Structural and semantic requirements
 
@@ -122,7 +123,7 @@ root-owned random-service handles. Closed Math/Local helpers remain separate fro
 open roots. Math uses optional named closures; Local calls sequence all arguments
 and run only at their owner. Finite/control work remains available in closed
 Local bodies. Multi-role roots refuse transitive Math folds and checked reads;
-affine resources and general interactive repetition remain future work.
+the profile admits no affine resources.
 
 Both dialects instantiate the existing Source.Region. One evaluator uses explicit
 F/G and lawful module operations; SiteObservations abstracts only internal source
@@ -215,13 +216,10 @@ domain items and invariant arguments/captures. A totality theorem must quantify
 over valid inputs satisfying the function's declared preconditions. Merely
 moving this analysis after formation would not prove these semantic properties.
 
-The next whole-protocol extension adds the actual multilinear Sumcheck library
-and interactive repetition. Availability admission already substitutes both
-per-result dependencies and each intermediate requirement over the checked helper
-order, with incremental budgets. A general availability-soundness/presence theorem
-and a native demand-projection relation remain separate obligations. These extensions reuse this declaration and
-region boundary. They must establish the verifier contracts above before
-transporting the existing security proofs to their imported subjects.
+Availability admission substitutes both per-result dependencies and each
+intermediate requirement over the checked helper order, with incremental
+budgets. A general availability-soundness/presence theorem and a native
+demand-projection relation remain separate obligations.
 
 ## Evidence boundaries
 
@@ -258,5 +256,5 @@ An indexed finite-fold invariant belongs to `Source.Finite`; it applies callback
 equations only at reached states/indices, which is necessary for bounded doubling
 in the shape helper. The source import boundary retains original bytes, digest,
 constructor subject and kernel admission separately from the resulting equations.
-The full Sumcheck source still requires map/realization, composed protocol calls
-and repetition; primitive admission does not discharge those obligations.
+The full Sumcheck source additionally uses retained maps, protocol applications
+and repeats, specified in [structured source](../spec/structured-source.md).

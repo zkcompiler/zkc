@@ -9,8 +9,9 @@ public import ZkcExamples.Structured.MapPrefixContracts
 namespace ZkcExamples.Structured.SumcheckReduceAssociations
 open Zkc.Source Zkc.Source.Structured SumcheckReduceViews
 
-/-! Every helper of the complete original unit has its own membership, full
-signature and raw-tree witness. The imported admission phases remain in Views;
+/-! Every non-formula helper of the complete original unit has its own
+membership, full signature and raw-tree witness; `SumcheckContractBindings`
+associates the formula helpers. The imported admission phases remain in Views;
 none of these facts equates this unit's meanings with another source table. -/
 
 theorem less_member : lessDefinition ∈ unit.definitions :=

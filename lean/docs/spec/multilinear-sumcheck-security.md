@@ -295,28 +295,19 @@ The standalone client consumes complete, residual and stop-aware phase bounds,
 plus the local distribution composition API. Core imports
 remain independent of ArkLib/VCVio, and existing quadratic/factor examples remain.
 
-The next imported-source adapter must connect the admitted Sumcheck/Reduce
-`PIR.Proc` bodies to these causal phases and handler contracts. The actual source receives **two ordered scalars**;
-it must preserve the intermediate state and possible stops, aggregate them
-before the verifier challenge, and prove the selected observation equivalence.
-It must not equate that source effect tree with an atomic pair receive.
+[Uniform queries](uniform-query-service.md#actual-imported-roots) connect these
+phases to the admitted `Sumcheck` and `Reduce` roots for an arbitrary adversarial
+network handler and every initial state. The source receives each endpoint pair
+as two ordered scalar receives, and the iteration module builds the causal
+strategy from those receives while retaining intermediate state and stops.
 
-The next source-security gate must derive reached-state freshness for an
-arbitrary adversarial receive/send handler composed with an explicit uniform
-query service. The honest handler is only a positive regression. That composition
-proof must retain private state, ordered events, stops and history invariants,
-then discharge the full local query law and the actual terminal checker's value
-law. Neither a uniform reply marginal nor an honest-only handler theorem closes
-this adversarial gate. Compatibility with the retained application/repeat API
-does not supply the imported Sumcheck source-security bridge.
-
-Role-local received challenges remain distinct from sent/query values until
-an explicit delivery theorem relates them. Public field, table, count, maximum,
-service and role agreement, dynamic count failure, source shape guards and
-native capacity belong to that boundary. Whole-function helper/vector/fold/
-repeat lowering and original-oracle realization must be proved or explicitly
-assumed there; no special Sumcheck kernel is provided. Native.Core in this
-document is ArkLib's mathematical interface, not zkc native execution.
+Role-local received challenges remain distinct from sent or queried values until
+an explicit delivery theorem relates them. The imported-root theorems state the
+table, decoding, count and false-claim premises they use. Native capacity,
+providers and the lowering of helpers, vectors, folds and repeats below the
+original stage are outside these results; no special Sumcheck kernel is
+provided. Native.Core in this document is ArkLib's mathematical interface, not
+zkc native execution.
 
 No result here establishes production field arithmetic, a CSPRNG/provider,
 Fiat–Shamir, transcript encoding, retries/grinding, PCS binding, extraction or

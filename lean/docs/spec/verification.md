@@ -157,7 +157,9 @@ clause. An external terminal names its typed inputs, nonempty output selection
 and meaning; it is explicitly an additional property request, not an invented
 source clause. Each leaf needs a proof. `SelectedObligations` also records
 requests for every lexical call. These records organize proof construction;
-completeness of an inventory alone proves no security property.
+completeness of an inventory alone proves no security property. An identity call
+specification can satisfy the inventory without abstracting behavior, and an
+external terminal whose predicate is `True` establishes only output availability.
 
 `ComponentInput` fixes the actual checked invocation, context, participant and
 inputs. Its execution uses the existing process and handler. Boundary projection

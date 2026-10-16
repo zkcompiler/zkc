@@ -251,9 +251,7 @@ These model equations and finite native comparisons are separate evidence.
 The writer, parser and renderer are tested executable boundaries. This package
 does not prove C++ export correctness, frontend translation, native lowering,
 production arithmetic/sampling or runtime capacity equivalence. The source-level
-Schnorr theorem has its own algebraic and interaction assumptions. Repeated
-multilinear Sumcheck additionally requires protocol calls and repetition in the
-checked source profile.
+Schnorr theorem has its own algebraic and interaction assumptions.
 
 ## Primitive bindings and unchanged library helpers
 

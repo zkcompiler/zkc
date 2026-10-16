@@ -125,14 +125,16 @@ an explicit correspondence lemma; atomic receipt is not the same effect tree.
 
 The independent process package must also retain local count checks, maximum
 failure distinct from authored rejection, the original table guards, ordered
-point appends, service identity and successor state. Full source import still
-needs vector split/sum/map, shape/index arithmetic, helper composition, folds,
-open operations and repetition. No whole-Sumcheck kernel is assumed here.
+point appends, service identity and successor state. The
+[structured import](structured-source.md#source-only-sumcheck-verifier) admits
+the complete library `Sumcheck` and `Reduce` sources, including vector
+operations, helper composition, folds, protocol applications and repetition.
+No whole-Sumcheck kernel is assumed here.
 
-## Optional integration and next source seam
+## Optional security integration
 
 The [optional multilinear security package](multilinear-sumcheck-security.md)
-now proves the degree-one endpoint interpretation, explicit Boolean-assignment
+proves the degree-one endpoint interpretation, explicit Boolean-assignment
 MLE/table agreement, ordered restriction and table-oracle realization. It uses
 ArkLib `Native.Core.execute_transport` with arbitrary effectful continuations
 and public abort, then applies `Native.execute_soundness` for the complete
@@ -141,16 +143,15 @@ marginal table gives partial residual soundness `k / |F|` without a new partial
 executor or padding the challenge point. These security results belong to the
 optional package; core imports remain dependency independent.
 
-The owning optional manifest pins ArkLib
-`db7005f84a9dbad7ff2abbbb4e8feeeac6f4dfd8` and VCVio
-`d606eab018ab87bf4a0a6ac7b6d2da4fedfa53b0`. Its exact quantitative assumptions and
-oracle/observation boundaries are specified in the linked document.
+[Dependencies](../dependencies.md) record the pinned ArkLib and VCVio revisions.
+The linked security document specifies the exact quantitative assumptions and
+oracle/observation boundaries.
 
-The remaining source seam is an explicit `PIR.Proc` contract and handler theorem
-for the actual two ordered scalar receives, boundary guard, reached fresh
-challenge, role-local delivery, counts and stops. The selected observation must
-agree with the optional experiment; unlike raw traces must not be equated.
-This foundation and its optional consumer do not establish that correspondence.
+[Uniform queries](uniform-query-service.md#actual-imported-roots) connect these
+bounds to the admitted `Sumcheck` and `Reduce` roots. The connection keeps the
+two ordered scalar receives, boundary guard, reached fresh challenge,
+role-local delivery, counts and stops, and it relates only selected
+observations; unlike raw traces are never equated.
 
 ## Regression coverage
 
