@@ -62,4 +62,37 @@ theorem stopped_child_terminal (raw : List F) (claim : F) (count handle : Nat)
   have contradiction := absent.symm.trans pointRead
   cases contradiction
 
+/-- The call-boundary bound's source-relation premise is satisfiable: a false
+public claim refutes the retained relation at the actual child boundary. -/
+theorem child_refutation_inhabited
+    (environment : RelationEnvironment SumcheckSourceViews.imported SumcheckContractControls.F SumcheckContractControls.F) :
+    (childRefutation (G := SumcheckContractControls.F) (sourceEnvironment := environment)
+      ([0, 0, 0, 0] : List SumcheckContractControls.F) 1 2 0 (.stopped .incomplete)).Proof := by
+  have translation := public_translation (G := SumcheckContractControls.F) (sourceEnvironment := environment)
+    ([0, 0, 0, 0] : List SumcheckContractControls.F) 1 2 0 (.stopped .incomplete) (by decide)
+  refine child_refutation _ _ _ _ _ ?_ translation
+  intro holds
+  have equal : (1 : SumcheckContractControls.F) = ([0, 0, 0, 0] : List SumcheckContractControls.F).sum :=
+    ((publicUse (G := SumcheckContractControls.F) (sourceEnvironment := environment)
+      ([0, 0, 0, 0] : List SumcheckContractControls.F) 1 2 0 (.stopped .incomplete)).equivalence
+        translation).mp holds
+  exact absurd equal (by decide)
+
+/-- The reduction request's refutation premise is satisfiable at the actual
+Reduce input clause, with the formula law and its capacity domain. -/
+theorem reduction_refutation_inhabited
+    (environment : RelationEnvironment SumcheckReduceViews.imported SumcheckContractControls.F SumcheckContractControls.F) :
+    (reductionRefutation (G := SumcheckContractControls.F) (reductionEnvironment := environment)
+      ([0, 0, 0, 0] : List SumcheckContractControls.F) 2 1 2 0).Meaning := by
+  have translation : (reductionUse (G := SumcheckContractControls.F) (reductionEnvironment := environment)
+      ([0, 0, 0, 0] : List SumcheckContractControls.F) 2 1 2 0 (.stopped .incomplete)).Translation :=
+    ⟨reduction_formula_law,
+      show ([0, 0, 0, 0] : List SumcheckContractControls.F).length < indexLimit by decide⟩
+  intro holds
+  have equal : (1 : SumcheckContractControls.F) = ([0, 0, 0, 0] : List SumcheckContractControls.F).sum :=
+    ((reductionUse (G := SumcheckContractControls.F) (reductionEnvironment := environment)
+      ([0, 0, 0, 0] : List SumcheckContractControls.F) 2 1 2 0 (.stopped .incomplete)).equivalence
+        translation).mp holds
+  exact absurd equal (by decide)
+
 end ZkcExamples.Structured.SumcheckContractBoundaryControls
