@@ -1670,8 +1670,13 @@ json::Value attributeValue(Attribute value) {
     return json::Array{"string", text.getValue().str()};
   if (auto symbol = dyn_cast<FlatSymbolRefAttr>(value))
     return json::Array{"symbol", symbol.getValue().str()};
+  if (auto flag = dyn_cast<BoolAttr>(value))
+    return json::Array{"bool", flag.getValue()};
+  // Unsigned integer types print unsigned; signless and signed print signed.
   if (auto integer = dyn_cast<IntegerAttr>(value))
-    return json::Array{"integer", toString(integer.getValue(), 10, true)};
+    return json::Array{"integer",
+                       toString(integer.getValue(), 10,
+                                !integer.getType().isUnsignedInteger())};
   if (auto array = dyn_cast<ArrayAttr>(value);
       array && all_of(array, [](Attribute a) { return isa<StringAttr>(a); })) {
     json::Array strings;
@@ -1744,7 +1749,8 @@ public:
       if (++work > 4096 || instructions.size() > 2048)
         return error("constructed-participant-limit");
       StringRef name = op.getName().getStringRef();
-      if (name == "protocol.finish" || name == "local.return") {
+      // A participant finishes; an expanded helper returns to its caller.
+      if (name == (depth ? "local.return" : "protocol.finish")) {
         if (&op != &block.back())
           return error("constructed-participant-return");
         SmallVector<unsigned> returned;
@@ -1786,8 +1792,7 @@ public:
       if (!(name.starts_with("algebra.") || name.starts_with("arith.") ||
             name.starts_with("crypto.") || name.starts_with("data.") ||
             name == "protocol.receive" || name == "protocol.send" ||
-            name == "protocol.service_query" || name == "local.bool_constant" ||
-            name == "local.index_constant"))
+            name == "protocol.service_query" || name == "local.bool_constant"))
         return error("constructed-participant-operation", name);
       auto declaration = binding(op);
       if (!declaration)
