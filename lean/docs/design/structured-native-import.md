@@ -135,6 +135,21 @@ The independent linking check now supplies unique declaration names and exact
 signature membership in each strict prefix. Lookup laws expose the corresponding
 body; table-frame laws isolate the helper meanings each region actually uses.
 
+The [scalar inlining clients](../../bridges/structured/README.md#scalar-inlining-pairs)
+now exercise this interface on two actual authored Entries. Schnorr response
+computes `nonce + challenge * secret`. The multilinear claim client computes
+`(1 - r) * a0 + r * a1` in any commutative ring, through the authored expression
+`weighted(a0, 1 - r) + weighted(a1, r)`. The two calls share a nested helper;
+the decimal literal and both exact bodies have kernel-checked admission witnesses.
+
+Each proof concerns the retained native original and the actual output of
+`zkc-opt --zkc-prepare-protocol="simplify=false optimize-finite=false"`.
+The reusable inlining law preserves the complete helper process and suffix;
+it does not use a Math-totality assumption. The source/candidate equation is
+specific to each pair, with checked named body contracts. Regeneration compares
+native bytes, exports and transparent constructor data. No universal optimizer,
+exporter or frontend correspondence follows from these checks.
+
 The linker independently validates exact links in the proposed order. It does
 not prove that sorting preserved every input declaration or body; preservation
 and candidate-generation completeness remain separate properties. Proving the

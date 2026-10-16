@@ -121,6 +121,28 @@ There is no separate scalar arithmetic or unsupported-sort fallback.
 The independent model retains its existing vector/index select controls, which
 are not currently native mathematical export paths.
 
+## Helper inlining and selected transformations
+
+`Evaluation.inline_invoke` replaces a helper invocation by
+`Region.bind (body.rename arguments.get) next` under an explicit equation
+between lookup and body denotation for every actual argument tuple. It applies
+to the shared scalar/group evaluator, any effect interface and site observations.
+Binding retains ordered helper results above the caller environment. Equality
+concerns the complete `PIR.Proc`: a stopping body bypasses the suffix, and a
+returning body runs that same suffix, including its stops. Empty result lists
+are supported. The premise is a process equation, not a totality assumption.
+The closed `Structured.inline_invoke` wrapper and `Payload.inline_body_view`
+reuse this law, exact declaration membership, linking and table-frame laws.
+
+`SchnorrResponse.original_eq_candidate` and
+`SumcheckClaim.original_eq_candidate` prove equality of exact exported original
+and prepared candidate models for two authored scalar Entries. Checked body
+contracts connect the imported subjects to their arithmetic over an arbitrary
+commutative ring; an admitted subtraction mutation has a concrete counterexample.
+These are selected model equations with retained source evidence, not correctness
+of a native optimizer for every input. The scalar clients do not by themselves
+establish an interactive protocol theorem.
+
 ## Actual Interactive Schnorr subject
 
 `ZkcExamples.Structured.SchnorrInteractive` kernel-admits the retained whole-unit

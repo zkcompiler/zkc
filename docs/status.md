@@ -285,6 +285,12 @@ adapter to the existing verifier contract; its dormant formula remains named,
 with no inferred relation binding. The maintained Helpers and Reordered source
 forms satisfy that same contract through their actual named calls. The admitted
 EarlyChallenge source has a proved query-first process and fails the contract.
+Two [scalar inlining pairs](../lean/bridges/structured/README.md#scalar-inlining-pairs)
+have universal model equalities between exact original and actual prepared
+exports: Schnorr response and multilinear Sumcheck claim update. The reusable
+region law preserves complete helper processes and suffixes; regeneration and
+native SSA comparisons test these executable boundaries. These pair-specific
+proofs do not establish general compiler pass correctness.
 [Formal support](../lean/docs/support.md) states exact experiments and premises.
 Full DSL/compiler/runtime correspondence, production arithmetic/sampling,
 backend correctness and complete protocol security remain open.
