@@ -203,4 +203,38 @@ theorem entry_body (table : Meanings F G) (xs : List F) (dimension columns : Nat
       | cons c rest => cases rest; rfl
   simp only [eta, PIR.Proc.bind_done]
 
+/-- Actual finite domain and callback ABI, including the full captured point. -/
+def FoldStepLaw (table : Meanings F G) : Prop :=
+  ∀ (xs : List F) (dimension columns : Nat) (r : F) (point : List F),
+    invoke table foldStepHelper (.cons xs (.cons dimension (.cons columns (.cons r (.cons point .nil))))) =
+      invoke table firstHelper (firstInputs xs dimension columns r)
+
+set_option backward.isDefEq.respectTransparency false in
+/-- Reusable complete finite-body equation, not merely a fold over an ideal helper. -/
+theorem finite_prefix_generic_body (table : Meanings F G) (first : FirstLaw table)
+    (step : FoldStepLaw table) (xs : List F) (dimension columns : Nat) (point : List F)
+    (shape : HasShape xs dimension columns) (vectorBound : xs.length < indexLimit) :
+    foldBody.denote (meaning F G table)
+      (Values.cons point (.cons xs (.cons dimension (.cons columns .nil)))).get =
+      if point.length < indexLimit then
+        if point.length ≤ dimension then
+          .done (inputs (restrictPrefixValues xs point) (dimension - point.length) columns)
+        else .halt .reject
+      else .halt .exhausted := by
+  rw [fold_body]
+  change Evaluation.denoteFold table foldSpec
+    ((Values.cons point Values.nil).append ((inputs xs dimension columns).append Values.nil)) = _
+  rw [Evaluation.denoteFold_pack, Finite.execute, domain_admit]
+  split
+  · simp only [Finite.admitThen]
+    have transition : Evaluation.foldTransition table foldSpec (.cons point .nil) .nil =
+        fun (state : Values (assignment F G) [vector, .index, .index]) r =>
+          invoke table firstHelper (state.append (.cons r .nil)) := by
+      funext state r
+      cases state with | cons xs rest => cases rest with | cons n rest => cases rest with
+        | cons w rest => cases rest; exact step xs n w r point
+    rw [transition]
+    exact fold_restriction table first xs dimension columns point shape vectorBound
+  · rfl
+
 end ZkcExamples.Structured.MapPrefixLaws

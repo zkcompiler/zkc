@@ -316,6 +316,11 @@ linear combination checks broadcasts and unused rows. Initial realization
 closures exclude finite work and bounded reads; maps exclude other fields,
 including the library's KoalaBear Ext8 Combination. Native preparation's Ring
 limits and generated guard sites remain a separate correspondence boundary.
+The [formal helper contracts](../lean/docs/spec/structured-source.md#reusable-sumcheck-helper-contracts)
+derive map and finite-prefix laws from exact members of each checked helper list.
+The shared Sumcheck body laws preserve malformed-input and stop distinctions and
+connect public check to the independent multilinear checker over commutative rings.
+These source-model equations do not establish native correspondence or security.
 Native formation owns malformed map ABI/mask/helper and transitive ring-fragment
 refusals before either structured reader runs its redundant checks. Independent
 controls instead observe the Fr-only restriction, the 4096-instruction admission

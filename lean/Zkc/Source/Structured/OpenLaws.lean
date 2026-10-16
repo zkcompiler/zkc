@@ -29,6 +29,23 @@ theorem UnitPayload.tables_closed (payload : UnitPayload) :
       payload.definitions.foldl (Evaluation.extendMeanings (observedSites F G)) [] :=
   Evaluation.ComponentTables.closed_fold (observedSites F G) _ _
 
+/-- Erasing site effects from this unit's helper invocation gives the closed
+fold lifted into participant effects. Both folds use the same stored definitions. -/
+theorem UnitPayload.closed_invoke_forgetSites (payload : UnitPayload) (helper : Helper)
+    (args : Values (assignment F G) helper.inputs) :
+    (invoke (payload.tables F G).closed helper args).interpret forgetSites =
+      (invoke (payload.definitions.foldl
+        (Evaluation.extendMeanings (F := F) (G := G) SiteObservations.closed) [])
+        helper args).interpret (closedLift (I := participantInterface F G)) := by
+  calc
+    _ = invoke (payload.definitions.foldl
+        (Evaluation.ComponentTables.extend (F := F) (G := G)
+          (.silent (participantInterface F G))) ⟨[], []⟩).closed helper args :=
+      (Evaluation.ComponentTables.fold_forgetSites payload.definitions).closed helper args
+    _ = _ := by
+      rw [Evaluation.ComponentTables.closed_fold]
+      exact (Evaluation.foldMeanings_closedLift payload.definitions helper args).symm
+
 theorem UnitPayload.closed_lookup (payload : UnitPayload) (helper : Helper)
     (present : helper ∈ payload.definitions.map CheckedDefinition.helper) :
     ∃ entry : HelperDefinition (assignment F G) (observedInterface F G),
@@ -169,15 +186,9 @@ theorem UnitPayload.closed_invoke_body (payload : UnitPayload) (definition : Che
     invoke (payload.tables F G).closed definition.helper args =
       definition.body.denote (Evaluation.meaning (observedSites F G)
         (payload.tables F G).closed) args.get := by
-  obtain ⟨before, after, split⟩ := List.mem_iff_append.mp member
-  rw [payload.closed_invoke_declaration before definition after split]
-  refine congrFun (Evaluation.region_denote_table_congr (observedSites F G)
-    (before.foldl (Evaluation.extendMeanings (observedSites F G)) [])
-    (payload.tables F G).closed definition.body ?_) args.get
-  intro helper used
-  exact payload.closed_prefix_agrees before (definition :: after) split helper
-    (payload.declaration_helpers before definition after split helper
-      (by simpa only [definition.helpers_eq_body] using used))
+  rw [payload.tables_closed]
+  exact Evaluation.definitions_invoke_body (observedSites F G)
+    payload.definitions payload.linked definition member args
 
 /-- Full-table optional invocation frames both the closed and component tables. -/
 theorem UnitPayload.component_invoke_body (payload : UnitPayload) (definition : CheckedDefinition)
@@ -206,7 +217,9 @@ theorem UnitPayload.closed_body_view (payload : UnitPayload) (definition : Check
     (exactRaw : definition.raw = body.erase) (args : Values (assignment F G) definition.inputs) :
     invoke (payload.tables F G).closed definition.helper args =
       body.denote (Evaluation.meaning (observedSites F G) (payload.tables F G).closed) args.get := by
-  rw [payload.closed_invoke_body definition member args, definition.body_eq_of_raw body exactRaw]
+  rw [payload.tables_closed]
+  exact Evaluation.definitions_invoke_body_view_as (observedSites F G)
+    payload.definitions payload.linked definition member definition.helper rfl body exactRaw args
 
 theorem UnitPayload.component_body_view (payload : UnitPayload) (definition : CheckedDefinition)
     (member : definition ∈ payload.definitions) (body : Region dialect definition.inputs definition.outputs)
@@ -226,8 +239,9 @@ theorem UnitPayload.closed_body_view_as (payload : UnitPayload) (definition : Ch
     (args : Values (assignment F G) helper.inputs) :
     invoke (payload.tables F G).closed helper args =
       body.denote (Evaluation.meaning (observedSites F G) (payload.tables F G).closed) args.get := by
-  subst helper
-  exact payload.closed_body_view definition member body exactRaw args
+  rw [payload.tables_closed]
+  exact Evaluation.definitions_invoke_body_view_as (observedSites F G)
+    payload.definitions payload.linked definition member helper signature body exactRaw args
 
 /-- The same explicit-ABI transport preserves optional component semantics. -/
 theorem UnitPayload.component_body_view_as (payload : UnitPayload) (definition : CheckedDefinition)

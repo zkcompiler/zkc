@@ -195,4 +195,50 @@ theorem HasShape.halves {A : Type} {xs : List A} {dimension columns : Nat}
     hasShape_of_length _ _ _ shape.1 (by have := shape.2.1; omega) high,
     List.take_append_drop _ _⟩
 
+set_option backward.isDefEq.respectTransparency false in
+/-- Checked integer inputs, unlike arbitrary mathematical Nat, are u64 values. -/
+theorem less_generic_body_all (table : Meanings F G) (a b : Nat) :
+    lessBody.denote (meaning F G table) (Values.cons a (.cons b .nil)).get =
+      if a < indexLimit ∧ b < indexLimit then .done (boolResult (decide (a < b)))
+      else .halt .refused := by
+  simp only [lessBody, Region.denote, meaning,
+    Evaluation.meaning, Evaluation.operation, Operands.eval, Regions.denote,
+    Values.get_cons, Values.get, Environment.prepend, Environment.push,
+    SiteObservations.closed, SiteObservations.silent, Primitive.evaluate, checkedIndices,
+    PIR.Proc.bind]
+  split <;> rfl
+
+def LessAllLaw (table : Meanings F G) : Prop :=
+  ∀ a b : Nat, invoke table lessHelper (.cons a (.cons b .nil)) =
+    if a < indexLimit ∧ b < indexLimit then .done (boolResult (decide (a < b)))
+    else .halt .refused
+
+omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
+set_option backward.isDefEq.respectTransparency false in
+theorem lessAll_bounded (table : Meanings F G) (law : LessAllLaw table) : LessLaw table := by
+  intro a b ha hb
+  rw [law, ite_eq_left ⟨ha,hb⟩]
+
+
+/-- A representable scalar table cannot encode 64 or more binary dimensions. -/
+theorem dimension_bound_of_length {A : Type} (xs : List A) (dimension : Nat)
+    (vectorBound : xs.length < indexLimit) (length : xs.length = 2 ^ dimension) :
+    dimension < 64 := by
+  by_contra large
+  have power : 2 ^ 64 ≤ 2 ^ dimension := Nat.pow_le_pow_right (by decide) (by omega)
+  rw [← length] at power
+  exact (Nat.not_lt_of_ge power) vectorBound
+
+/-- On representable scalar vectors, the success shape has no extra dimension premise. -/
+theorem hasShape_iff_length {A : Type} (xs : List A) (dimension : Nat)
+    (vectorBound : xs.length < indexLimit) :
+    HasShape xs dimension 1 ↔ xs.length = 2 ^ dimension := by
+  constructor
+  · intro shape
+    simpa only [Nat.mul_one] using shape.length
+  · intro length
+    exact hasShape_of_length xs dimension 1 (by decide)
+      (dimension_bound_of_length xs dimension vectorBound length)
+      (by simpa only [Nat.mul_one] using length)
+
 end ZkcExamples.Structured.PrimitiveLibrary

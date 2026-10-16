@@ -170,6 +170,58 @@ theorem payload_prefix_agrees (payload : Payload)
   simp only [payloadMeanings, split, List.foldl_append]
   exact (invoke_foldl_other observations _ after helper different).symm
 
+/-- A linked definition list supplies the body equation under any site observation.
+The stored closure uses its own prefix; linking preserves all referenced helpers. -/
+theorem definitions_invoke_body (definitions : List CheckedDefinition)
+    (linked : DeclarationsLinked [] definitions) (definition : CheckedDefinition)
+    (member : definition ∈ definitions)
+    (arguments : Values (assignment F G) definition.inputs) :
+    invoke (definitions.foldl (extendMeanings observations) []) definition.helper arguments =
+      definition.body.denote
+        (meaning observations (definitions.foldl (extendMeanings observations) [])) arguments.get := by
+  obtain ⟨before, after, split⟩ := List.mem_iff_append.mp member
+  have linking := linked
+  rw [split] at linking
+  have tail := (DeclarationsLinked.append [] before (definition :: after)).mp linking |>.2
+  have different : ∀ other ∈ after, other.name ≠ definition.helper.name := by
+    intro other present
+    exact tail.2.2.fresh List.mem_cons_self present
+  have stored : invoke (definitions.foldl (extendMeanings observations) []) definition.helper arguments =
+      definition.body.denote (meaning observations
+        (before.foldl (extendMeanings observations) [])) arguments.get := by
+    simp only [split, List.foldl_append, List.foldl_cons]
+    rw [invoke_foldl_other observations _ after definition.helper different]
+    exact invoke_extended observations _ definition arguments
+  rw [stored]
+  refine congrFun (region_denote_table_congr observations
+    (before.foldl (extendMeanings observations) [])
+    (definitions.foldl (extendMeanings observations) []) definition.body ?_) arguments.get
+  intro helper used
+  have present : helper ∈ before.reverse.map CheckedDefinition.helper ++ [] :=
+    tail.2.1 helper (by simpa only [definition.helpers_eq_body] using used)
+  have fresh : ∀ other ∈ definition :: after, other.name ≠ helper.name := by
+    intro other member
+    exact tail.fresh present member
+  simp only [split, List.foldl_append]
+  exact (invoke_foldl_other observations _ (definition :: after) helper fresh).symm
+
+set_option backward.isDefEq.respectTransparency false in
+/-- Membership, the full signature and the entire raw tree identify a body view.
+No closed entry or equality with another client's table is required. -/
+theorem definitions_invoke_body_view_as (definitions : List CheckedDefinition)
+    (linked : DeclarationsLinked [] definitions) (definition : CheckedDefinition)
+    (member : definition ∈ definitions) (helper : Helper)
+    (signature : definition.helper = helper)
+    (body : Region dialect helper.inputs helper.outputs)
+    (exactRaw : definition.raw = body.erase)
+    (arguments : Values (assignment F G) helper.inputs) :
+    invoke (definitions.foldl (extendMeanings observations) []) helper arguments =
+      body.denote (meaning observations
+        (definitions.foldl (extendMeanings observations) [])) arguments.get := by
+  subst helper
+  rw [definitions_invoke_body observations definitions linked definition member arguments,
+    definition.body_eq_of_raw body exactRaw]
+
 /-- A declaration body can be reasoned about in the complete checked table.
 Its original closure still uses its strict prefix; framing proves they agree
 on every referenced helper. This removes ordering details from proof clients. -/
@@ -177,15 +229,8 @@ theorem payload_invoke_body (payload : Payload) (definition : CheckedDefinition)
     (member : definition ∈ payload.definitions)
     (arguments : Values (assignment F G) definition.inputs) :
     invoke (payloadMeanings observations payload) definition.helper arguments =
-      definition.body.denote (meaning observations (payloadMeanings observations payload)) arguments.get := by
-  obtain ⟨before, after, split⟩ := List.mem_iff_append.mp member
-  rw [payload_invoke_declaration observations payload before definition after split]
-  refine congrFun (region_denote_table_congr observations
-    (before.foldl (extendMeanings observations) []) (payloadMeanings observations payload) definition.body ?_) arguments.get
-  intro helper used
-  have present := payload.declaration_helpers before definition after split helper
-    (by simpa only [definition.helpers_eq_body] using used)
-  exact payload_prefix_agrees observations payload before (definition :: after) split helper present
+      definition.body.denote (meaning observations (payloadMeanings observations payload)) arguments.get :=
+  definitions_invoke_body observations payload.definitions payload.linked definition member arguments
 
 /-- Combine name-independent membership with an exact body view. -/
 theorem payload_invoke_body_view (payload : Payload) (definition : CheckedDefinition)
@@ -194,8 +239,9 @@ theorem payload_invoke_body_view (payload : Payload) (definition : CheckedDefini
     (exactRaw : definition.raw = body.erase)
     (arguments : Values (assignment F G) definition.inputs) :
     invoke (payloadMeanings observations payload) definition.helper arguments =
-      body.denote (meaning observations (payloadMeanings observations payload)) arguments.get := by
-  rw [payload_invoke_body observations payload definition member arguments, definition.body_eq_of_raw body exactRaw]
+      body.denote (meaning observations (payloadMeanings observations payload)) arguments.get :=
+  definitions_invoke_body_view_as observations payload.definitions payload.linked
+    definition member definition.helper rfl body exactRaw arguments
 
 /-- An explicit literal ABI can be connected to a retained checked definition by
 a named signature theorem without reducing its admission again at each use. -/
@@ -205,9 +251,9 @@ theorem payload_invoke_body_view_as (payload : Payload) (definition : CheckedDef
     (body : Region dialect helper.inputs helper.outputs) (exactRaw : definition.raw = body.erase)
     (arguments : Values (assignment F G) helper.inputs) :
     invoke (payloadMeanings observations payload) helper arguments =
-      body.denote (meaning observations (payloadMeanings observations payload)) arguments.get := by
-  subst helper
-  exact payload_invoke_body_view observations payload definition member body exactRaw arguments
+      body.denote (meaning observations (payloadMeanings observations payload)) arguments.get :=
+  definitions_invoke_body_view_as observations payload.definitions payload.linked
+    definition member helper signature body exactRaw arguments
 
 /-- The checked closed root is interpreted directly in the complete helper table. -/
 theorem payload_denote_entry (payload : Payload)
@@ -232,5 +278,32 @@ theorem payload_denote_body (payload : Payload)
   payload_denote_body_view observations payload body exactRaw arguments
 
 end Evaluation
+
+/-- Association with an actual member, including its full ABI and entire body tree. -/
+def BodyIn (definitions : List CheckedDefinition) (helper : Helper)
+    (body : Region dialect helper.inputs helper.outputs) : Prop :=
+  ∃ definition, definition ∈ definitions ∧ definition.helper = helper ∧
+    definition.raw = body.erase
+
+/-- The existing evaluator's closed fold of this definition list. -/
+abbrev closedMeanings {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
+    [DecidableEq F] [DecidableEq G] (definitions : List CheckedDefinition) : Meanings F G :=
+  definitions.foldl (Evaluation.extendMeanings SiteObservations.closed) []
+
+variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
+  [DecidableEq F] [DecidableEq G]
+
+set_option backward.isDefEq.respectTransparency false in
+/-- No intended helper result is stored in the association. -/
+theorem BodyIn.invoke {definitions : List CheckedDefinition} {helper : Helper}
+    {body : Region dialect helper.inputs helper.outputs}
+    (association : BodyIn definitions helper body)
+    (linked : DeclarationsLinked [] definitions)
+    (arguments : Values (assignment F G) helper.inputs) :
+    invoke (closedMeanings (F := F) (G := G) definitions) helper arguments =
+      body.denote (meaning F G (closedMeanings (F := F) (G := G) definitions)) arguments.get := by
+  obtain ⟨definition, member, signature, exactRaw⟩ := association
+  exact Evaluation.definitions_invoke_body_view_as SiteObservations.closed
+    definitions linked definition member helper signature body exactRaw arguments
 
 end Zkc.Source.Structured

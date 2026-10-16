@@ -17,6 +17,10 @@ import Zkc.Specification
 import Zkc.Source.Common.Region
 import Zkc.Source.Region
 import Zkc.Protocols.Sumcheck.Multilinear
+import ZkcExamples.Structured.MapContractInstances
+import ZkcExamples.Structured.SumcheckHelperBridge
+import ZkcExamples.Structured.SumcheckSourceContracts
+import ZkcExamples.Structured.SumcheckReduceContracts
 
 /-! An independent Lake consumer of an actual imported source certificate and
 an independently authored typed property. No external security package is needed. -/
@@ -107,3 +111,26 @@ theorem multilinearMarginalMeaning {F : Type} [CommRing F] {n k : Nat}
       Zkc.Polynomial.Multilinear.booleanSum
         (Zkc.Polynomial.Multilinear.fixPrefix k table point) :=
   Zkc.Polynomial.Multilinear.extension_sumRemaining table point
+
+/-- A downstream client derives helper laws from exact members of its own list. -/
+noncomputable def reusableFirstContracts :=
+  @ZkcExamples.Structured.MapFirstContracts.laws_of_bodies
+
+noncomputable def reusablePrefixContracts :=
+  @ZkcExamples.Structured.MapPrefixContracts.laws_of_bodies
+
+noncomputable def importedMapPrefixContracts :=
+  @ZkcExamples.Structured.MapPrefixContractsInstance.prefix_laws
+
+noncomputable def publicHelperMathematicalCheck :=
+  @ZkcExamples.Structured.SumcheckHelperLaws.check_mathematical
+
+/-- Two complete original helper inventories instantiate the generic contracts independently. -/
+noncomputable def originalReductionMessage :=
+  @ZkcExamples.Structured.SumcheckReduceContracts.sums_honestMessage
+
+noncomputable def originalSumcheckPlainCheck :=
+  @ZkcExamples.Structured.SumcheckSourceContracts.check_plain
+
+noncomputable def originalSumcheckOptionalWidth :=
+  @ZkcExamples.Structured.SumcheckSourceContracts.width_components

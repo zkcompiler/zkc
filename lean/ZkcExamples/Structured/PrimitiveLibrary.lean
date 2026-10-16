@@ -163,4 +163,36 @@ theorem halves_body (table : Meanings F G) (less : LessLaw table)
       Evaluation.invokeCallback, show 0 < indexLimit by decide +kernel]
 
 
+set_option backward.isDefEq.respectTransparency false in
+/-- Source halves refuses an unrepresentable dimension before the positive guard. -/
+theorem halves_dimension_refused (table : Meanings F G) (less : LessAllLaw table)
+    (xs : List F) (dimension columns : Nat) (invalid : ¬ dimension < indexLimit) :
+    PrimitiveHalvesViews.halvesBody.denote (meaning F G table) (inputs xs dimension columns).get = .halt .refused := by
+  dsimp only [inputs, vector]
+  rw [PrimitiveExpansions.halves_body]
+  have comparison := less 0 dimension
+  simp only [show 0 < indexLimit by decide +kernel, true_and, invalid, ite_false] at comparison
+  simp only [Primitive.evaluate, show 0 < indexLimit by decide +kernel, ite_true,
+    primitiveOutcome, PIR.Proc.bind, Values.get_cons, Values.get, Environment.push,
+    comparison]
+
+set_option backward.isDefEq.respectTransparency false in
+/-- No raw table triple is excluded; width is unused and vector split has its own guard. -/
+theorem halves_generic_body_all (table : Meanings F G) (less : LessAllLaw table)
+    (xs : List F) (dimension columns : Nat) :
+    PrimitiveHalvesViews.halvesBody.denote (meaning F G table) (inputs xs dimension columns).get =
+      if dimension < indexLimit then
+        if 0 < dimension then
+          if 0 < xs.length ∧ xs.length % 2 = 0 then
+            .done (.cons (xs.take (xs.length / 2)) (.cons (xs.drop (xs.length / 2)) .nil))
+          else .halt .refused
+        else .halt .reject
+      else .halt .refused := by
+  by_cases h : dimension < indexLimit
+  · rw [ite_eq_left h]
+    exact halves_body table (lessAll_bounded table less) xs dimension columns h
+  · rw [ite_eq_right h]
+    exact halves_dimension_refused table less xs dimension columns h
+
+
 end ZkcExamples.Structured.PrimitiveLibrary

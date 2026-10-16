@@ -374,6 +374,63 @@ independent model. They do not establish native lowering correctness or a full
 Sumcheck protocol theorem. Source-site observations, finite bridge comparison,
 resource preflight and security theorems remain separate evidence.
 
+## Reusable Sumcheck helper contracts
+
+`Evaluation.definitions_invoke_body_view_as` accepts a linked definition list,
+membership, the full helper signature and the complete raw tree under arbitrary
+site observations. Captured-prefix lookup and restricted region congruence derive
+its full-table equation. Existing Payload and UnitPayload APIs retain their
+contracts. `UnitPayload.closed_invoke_forgetSites` relates the observed helper
+invocation to the same definitions' closed fold using the existing site erasure
+and closed lifting interpretations.
+The same Linking owner provides `BodyIn`, its invocation theorem and the
+`closedMeanings` abbreviation, so exact association does not require an example import.
+
+`MapFirstContracts` and `MapPrefixContracts` package exact associations in small
+propositions and derive the library laws once per client's own table. First needs
+only its shared arithmetic/shape/map closure. Prefix additionally retains the full
+finite callback ABI, including the captured point, arbitrary column widths,
+ordered restriction, initial point-length admission and reached zero-dimension
+rejection. `MapContractInstances` instantiates these constructors independently
+for the complete First and Prefix sources.
+
+`SumcheckHelperLaws` gives exact body equations for ordered half sums, checkTable
+and public check. Sums checks dimension representation and positive/even splitting;
+it does not check columns or vector length. Public check returns false for malformed
+representable scalar shape without demanding checkTable. Its valid branch invokes
+the associated callback. Point-length exhaustion, large-dimension false, reached
+vector-length exhaustion and constructor rejection remain distinct. Append succeeds
+without a length premise; a subsequent checked length may exhaust.
+
+The mathematical bridge requires only a CommRing. Sums agrees with the endpoint
+message for decoded positive-dimensional tables at any columns value, given the
+checked dimension bound. For representable scalar vectors, HasShape is equivalent
+to length `2^n`; decoding plus vector representability derives `n < 64`. Public
+check agrees with `Sumcheck.Multilinear.check` on valid and malformed inputs under
+vector/point representation bounds, retaining the full MSB-first evaluation.
+These are helper source-model equations, not native execution correspondence or
+an interactive/Fiat–Shamir security result.
+
+`SumcheckReduceAssociations` and `SumcheckSourceAssociations` supply membership,
+complete signatures and entire raw trees for every helper in their own imported
+units: 14 and 22 respectively. Their protocol inventories retain the original
+run/reduce signatures and bodies, repeat maxima 4 and 2, and application contexts
+`s3` and `label_726564756365`. The named header/helper/protocol/metadata
+checks and `Imported` witnesses establish the whole-source association. Shared
+helper aliases alone are not independent evidence of source identity.
+
+`SumcheckReduceContracts` derives First, sums, empty/append and projections from
+its actual table. Reduction has no prefix or terminal checker. The separate
+`SumcheckSourceContracts` also derives Prefix, checkTable and public check;
+`checkTable_body` discharges the callback from that same imported table.
+`check_mathematical` is the actual public-helper equation and `check_plain`
+projects its observed lookup through `forgetSites`. Optional projection equations
+retain the selected component without demanding unrelated missing operands.
+`check_all` combines every raw-input case in source order, including point-length
+exhaustion, the large-dimension false branch and reached vector-length exhaustion.
+The source verifier loop and security connection are separate consumers of these
+helper laws; checker correctness has no sums-completion premise.
+
 ## Actual library primitive subjects
 
 `PrimitiveShapeData`, `PrimitiveTableData` and `PrimitiveHalvesData` retain fresh

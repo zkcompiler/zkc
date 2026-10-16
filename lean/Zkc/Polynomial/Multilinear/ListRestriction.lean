@@ -193,4 +193,58 @@ theorem restrictPrefixValues_complete (values fixed : List F)
   simp only [Fin.val_zero, List.getElem?_cons_zero, vertex] at entry
   rw [singleton, Option.some.inj entry, fixPrefix_complete]
 
+omit [CommRing F] in
+set_option backward.isDefEq.respectTransparency false in
+/-- The low contiguous half is the MSB=false mathematical half, without padding. -/
+theorem decode_low_half (xs : List F) (table : Table F (n+1))
+    (decoded : ofList? (n+1) xs = some table) :
+    ofList? n (xs.take (xs.length / 2)) = some (half table false) := by
+  have size := ofList?_length xs table decoded
+  have middle : xs.length / 2 = 2 ^ n := by rw [size, Nat.pow_succ]; omega
+  have lowSize : (xs.take (xs.length / 2)).length = 2 ^ n := by
+    rw [List.length_take, middle, Nat.min_eq_left]
+    rw [size, Nat.pow_succ]; omega
+  unfold ofList? at decoded ⊢
+  rw [dite_eq_left lowSize]
+  split at decoded
+  · cases Option.some.inj decoded
+    congr 1
+    funext bits
+    simp only [ofVector, half, index, Fin.cons_zero, Bool.false_eq_true, ite_false,
+      Nat.zero_add, List.getElem_take]
+    rfl
+  · contradiction
+
+omit [CommRing F] in
+set_option backward.isDefEq.respectTransparency false in
+/-- The high contiguous half is the MSB=true mathematical half. -/
+theorem decode_high_half (xs : List F) (table : Table F (n+1))
+    (decoded : ofList? (n+1) xs = some table) :
+    ofList? n (xs.drop (xs.length / 2)) = some (half table true) := by
+  have size := ofList?_length xs table decoded
+  have middle : xs.length / 2 = 2 ^ n := by rw [size, Nat.pow_succ]; omega
+  have highSize : (xs.drop (xs.length / 2)).length = 2 ^ n := by
+    rw [List.length_drop, middle, size, Nat.pow_succ]; omega
+  unfold ofList? at decoded ⊢
+  rw [dite_eq_left highSize]
+  split at decoded
+  · cases Option.some.inj decoded
+    congr 1
+    funext bits
+    simp only [ofVector, half, index, Fin.cons_zero, ite_true, List.getElem_drop, middle]
+    rfl
+  · contradiction
+
+set_option backward.isDefEq.respectTransparency false in
+/-- This is the existing MSB MLE at the actual complete point, not a constant formula. -/
+theorem complete_prefix_sum (xs point : List F) (table : Table F (0 + point.length))
+    (decoded : ofList? (0 + point.length) xs = some table) :
+    (restrictPrefixValues xs point).sum =
+      extension (0 + point.length) table (coordinates (0 + point.length) point) := by
+  rw [restrictPrefixValues_complete xs point table decoded, List.sum_singleton]
+  have empty : (Fin.elim0 : Fin 0 → F) = coordinates 0 [] := by
+    funext i; exact Fin.elim0 i
+  rw [empty, point_coordinates (n := 0) point.length point [] rfl rfl, List.append_nil]
+
+
 end Zkc.Polynomial.Multilinear
