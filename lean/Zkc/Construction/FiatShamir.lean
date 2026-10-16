@@ -130,16 +130,34 @@ abbrev Actions (F G : Type) := Participant.interface Nat Ty services (ScalarValu
 
 /-- Deployment facts that fix occurrence identities: original entry, role
 roster, producer and validator positions, the replaced service's original input
-index in canonical decimal, and the ordered query/delivery sites. -/
+index and contract, and the ordered query/delivery sites. -/
 structure Context where
   entry : String
   roles : List String
   producer : Nat
   validator : Nat
-  service : String
+  service : Nat
+  contract : String
   suite : String
   draws : List (String × String)
   deriving DecidableEq, Repr
+
+/-- One decimal digit; larger arguments spell `9`. -/
+def decimalDigit : Nat → String
+  | 0 => "0" | 1 => "1" | 2 => "2" | 3 => "3" | 4 => "4"
+  | 5 => "5" | 6 => "6" | 7 => "7" | 8 => "8" | _ => "9"
+
+/-- The canonical decimal spelling of an index below `10000`, as used in native
+service port names. It is built from literals so that kernel evaluation reduces
+it. -/
+def decimal (index : Nat) : String :=
+  if index < 10 then decimalDigit index
+  else if index < 100 then decimalDigit (index / 10) ++ decimalDigit (index % 10)
+  else if index < 1000 then
+    decimalDigit (index / 100) ++ decimalDigit (index / 10 % 10) ++ decimalDigit (index % 10)
+  else
+    decimalDigit (index / 1000 % 10) ++ decimalDigit (index / 100 % 10) ++
+      decimalDigit (index / 10 % 10) ++ decimalDigit (index % 10)
 
 namespace Context
 
@@ -148,9 +166,11 @@ def role (context : Context) (index : Nat) : String := context.roles.getD index 
 def message (context : Context) (site : String) (sender receiver : Nat) : Origin :=
   .message context.entry site (context.role sender) (context.role receiver)
 
-def query (context : Context) (site field : String) : Origin :=
-  .query context.entry site ("input_" ++ context.service)
-    ("random." ++ field ++ "/0") (context.role context.validator)
+/-- The selected query's occurrence names the replaced service's original port
+and contract, which the original export fixes. -/
+def query (context : Context) (site : String) : Origin :=
+  .query context.entry site ("input_" ++ decimal context.service) context.contract
+    (context.role context.validator)
 
 end Context
 
@@ -161,8 +181,8 @@ variable {m : Type → Type} [Monad m]
 selected challenge. Receives read the proof in order and absorb the decoded
 message; a decoding failure refuses without consuming. Every query is answered
 by `challenge` on the history ending with its occurrence, which is absorbed. A
-send to the producer is absorbed and produces no proof data. Returns the
-outcome and the unread proof suffix. -/
+send is absorbed with its message occurrence and produces no proof data. Returns
+the outcome and the unread proof suffix. -/
 def transform {A : Type} (context : Context) (challenge : History F G → m F) :
     PIR.Proc (Actions F G) A → History F G → Proof F G → m (PIR.Outcome A × Proof F G)
   | .done value, _, proof => pure (.returned value, proof)
@@ -175,8 +195,8 @@ def transform {A : Type} (context : Context) (challenge : History F G → m F) :
           | some value => transform context challenge (next value)
               (history ++ [.message (context.message site sender context.validator) payload]) rest
           | none => pure (.stopped .refused, payload :: rest)
-  | .call (.query site field _) next, history, proof => do
-      let event := Event.challenge (context.query site field)
+  | .call (.query site _ _) next, history, proof => do
+      let event := Event.challenge (context.query site)
       let answer ← challenge (history ++ [event])
       transform context challenge (next answer) (history ++ [event]) proof
   | .call (.send (ty := ty) site receiver sent) next, history, proof =>
@@ -318,8 +338,9 @@ def checkStep (context : Context) (state : CheckState) (instruction : Instructio
   | .challenge suite field origin, [current, coordinates], .none =>
       match context.draws[state.drawn]? with
       | some (site, delivery) =>
-          if suite = context.suite ∧ current = state.current ∧
-              origin = context.query site field ∧ state.sorts[coordinates]? = some .indices ∧
+          if suite = context.suite ∧ current = state.current ∧ origin = context.query site ∧
+              "random." ++ field ++ "/0" = context.contract ∧
+              state.sorts[coordinates]? = some .indices ∧
               instruction.results = [.data (.field field), .transcript context.suite] then
             some ⟨state.sorts ++ [.data (.field field), .transcript context.suite], fresh + 1,
               .observe fresh (context.message delivery context.validator context.producer),

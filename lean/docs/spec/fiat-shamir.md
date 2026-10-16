@@ -22,13 +22,14 @@ occurrence.
   with `refused` and consumes nothing.
 - A query is answered by `challenge` on the history followed by the query's
   occurrence, which is then absorbed.
-- A send to the producer is absorbed and produces no proof data.
+- A send is absorbed with its message occurrence and produces no proof data.
 
 The result is the validator's outcome and the unread proof suffix. Occurrence
 origins come from a `Context`: original entry, role roster, producer and
-validator positions, the replaced service's original input index and the policy's
-ordered query/delivery sites. They are the flat native origin templates of the
-native [occurrence encoding](../../../docs/spec/ir/construction.md#native-occurrence-encoding),
+validator positions, the replaced service's original input index and contract,
+and the policy's ordered query/delivery sites. They are the flat native origin
+templates of the native
+[occurrence encoding](../../../docs/spec/ir/construction.md#native-occurrence-encoding),
 whose canonical bytes the bridge decodes and re-encodes exactly.
 
 ## Constructed programs
@@ -54,25 +55,47 @@ transcript values are computed as inert histories.
 
 ## The rule
 
-`check context participant` accepts exactly when:
+`check context participant` walks the instructions with the current transcript
+state, the one observation that must come next (if any) and the number of
+challenges so far. It accepts exactly when:
 
 - the inputs are data followed by one host transcript of the context's suite;
-- every received message is observed next, on the current transcript state,
-  with its message occurrence (producer to validator) and the received value;
-- every challenge has no observation pending, reads the current state, carries
-  the next selected query occurrence and is followed by the observation of its
-  delivery (validator to producer) with the answer;
-- coordinates are flat, calculations read data of their declared sorts, and
-  every other operation, including sends and unsupported ones, is refused;
+- a receive has no observation pending, its schema is its site and its peer the
+  producer, and it yields one scalar value; the next transcript operation must
+  observe that value on the current state with its message occurrence
+  (producer to validator);
+- a challenge has no observation pending, reads the current state, carries the
+  next selected query occurrence, produces the replaced service's field and the
+  successor state; the next transcript operation must observe its answer with
+  the delivery occurrence (validator to producer);
+- an observation is exactly the pending one, on the current suite, and yields
+  the successor state;
+- coordinate constructions (`indices.empty`) may appear anywhere; each
+  transcript operation reads one of them;
+- a calculation has no observation pending and reads data of its declared
+  argument sorts, producing its declared result sort;
+- every other operation, including sends and unsupported ones, is refused;
 - every selected draw occurs, nothing remains pending, the last returned value
   is the final state, and the other returned values are data matching the
   declared outputs.
 
+The rule is narrower than the native construction, which may keep
+calculations between a draw and its delivery: such programs are refused here,
+and `spec` places each delivery immediately after its query.
+
 `checkExport original participant` additionally derives the context from the
-original entry's roster and the exported policy, and requires the policy to
-publish exactly the validator's data inputs, in original order. The host's
-binding absorbs those values, so a policy omitting the statement is refused.
-Only the installed native construction with one replaced service is admitted.
+original entry's roster, the exported policy and the replaced service's
+contract. It requires the policy to publish exactly the validator's data
+inputs, in original order, which must be the exported validator's data inputs
+with the same sorts; the replaced service must be a validator service input,
+and every challenge must produce that service's field. The host's binding
+absorbs those values, so a policy omitting the statement is refused. Only the
+installed native construction with one replaced service and distinct selected
+draws is admitted. The
+query and delivery sites, the acceptance index and the framing come from the
+policy and are not compared with the original by the rule; the per-compile
+equation between the interactive reading and the original validator
+(`spec_equation` below) establishes that correspondence.
 
 `check_sound` proves, for every accepted program, every lawful monad, challenge
 function, data input, initial history, service handle and proof:
@@ -131,7 +154,9 @@ Sigma instance.
 - Random oracle: the suite's challenge on an absorbed history is a uniformly
   random function of that history, shared by the prover and final verification.
   Canonical value and occurrence encodings are injective, so typed histories
-  stand for absorbed bytes.
+  stand for absorbed bytes. The suite reduces 64 squeezed bytes to a field
+  element, which is close to, not exactly, uniform; the model treats it as
+  exactly uniform.
 - Binding: the host initializes the transcript with exactly the authorized
   context and the policy's public inputs.
 - Transport: proof bytes decode canonically to the typed messages in order.
@@ -140,6 +165,9 @@ Sigma instance.
   mathematical meanings. The field and group are mathematical; no discrete-log
   hardness is assumed or used.
 
-The theorem is fixed-statement knowledge extraction. It bounds no running time,
-covers no adaptive statement choice, zero knowledge or other suites, and makes
-no claim about Merlin or BLS12-381 implementations.
+The theorem is fixed-statement knowledge extraction: the statement and the
+initial history are fixed before the prover runs. The bound does not depend on
+what the host absorbs, so statement binding carries no weight in it; binding
+matters when the prover chooses the statement adaptively, which is not covered.
+The theorem bounds no running time, covers no zero knowledge or other suites,
+and makes no claim about Merlin or BLS12-381 implementations.

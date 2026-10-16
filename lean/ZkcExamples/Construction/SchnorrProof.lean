@@ -76,10 +76,12 @@ theorem context_admitted : exportContext SchnorrProofData.snapshot participant =
   rfl
 
 /-- The derived context: entry, roster, producer and validator positions, the
-replaced service input `4`, the suite and the selected query/delivery sites. -/
+replaced service input `4` and its contract, the suite and the selected
+query/delivery sites. -/
 theorem context_eq : context =
-    ⟨SchnorrProofData.snapshot.entry, ["role00000000", "role00000001"], wiring.prover, 1, "4",
-      participant.policy.suite, [(wiring.challengeSite, wiring.deliverySite)]⟩ := by
+    ⟨SchnorrProofData.snapshot.entry, ["role00000000", "role00000001"], wiring.prover, 1, 4,
+      "random.bls12-381.fr/0", participant.policy.suite,
+      [(wiring.challengeSite, wiring.deliverySite)]⟩ := by
   rfl
 
 set_option smartUnfolding true in

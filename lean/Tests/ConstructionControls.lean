@@ -84,7 +84,7 @@ def challengeAt (origin : Origin) : Participant :=
 /-- The challenge carries the delivery's site instead of the query's. -/
 theorem wrongChallengeSite_rejected :
     checkExport original (challengeAt (SchnorrProof.context.query
-      SchnorrProof.wiring.deliverySite "bls12-381.fr")) = false := by
+      SchnorrProof.wiring.deliverySite)) = false := by
   decide +kernel
 
 /-- The challenge is labelled as a UniformIndex request. -/
@@ -137,6 +137,88 @@ theorem unsupported_rejected :
 /-- A policy selecting no draw cannot account for the constructed challenge. -/
 theorem noChallenge_rejected :
     checkExport original { actual with policy := { actual.policy with draws := [] } } = false := by
+  decide +kernel
+
+/-! Further clauses of the rule, one mutation each. -/
+
+/-- The policy selects the same draw twice. -/
+theorem duplicateDraw_rejected :
+    checkExport original { actual with policy := { actual.policy with
+      draws := actual.policy.draws ++ actual.policy.draws } } = false := by
+  decide +kernel
+
+/-- The policy selects a second draw that the export never challenges. -/
+theorem missingChallenge_rejected :
+    checkExport original { actual with policy := { actual.policy with
+      draws := actual.policy.draws ++ [("label_6368616c6c656e6765", "label_726573706f6e7365_0")] } } =
+      false := by
+  decide +kernel
+
+/-- A second challenge with no selected draw left. -/
+theorem extraChallenge_rejected :
+    checkExport original (modify actual 10 fun _ =>
+      ⟨exported 4 |>.operation, [13, 12], [.data (.field "bls12-381.fr"),
+        .transcript "merlin3.bls12-381.fr64be/0"]⟩) = false := by
+  decide +kernel
+
+/-- An observation with nothing pending absorbs extra data. -/
+theorem extraObservation_rejected :
+    checkExport original (modify actual 10 fun _ =>
+      ⟨exported 9 |>.operation, [13, 11, 12], [.transcript "merlin3.bls12-381.fr64be/0"]⟩) =
+      false := by
+  decide +kernel
+
+/-- A calculation runs before the received commitment is observed. -/
+theorem calculationBeforeObservation_rejected :
+    checkExport original (modify actual 1 fun _ =>
+      ⟨.calculate (.groupAdd "bls12-381.g1"), [0, 0], [.data (.group "bls12-381.g1")]⟩) = false := by
+  decide +kernel
+
+/-- A calculation reads the host transcript. -/
+theorem calculationReadsTranscript_rejected :
+    checkExport original (modify actual 10 fun instruction =>
+      { instruction with operands := [2, 11] }) = false := by
+  decide +kernel
+
+/-- The commitment is received from the validator itself. -/
+theorem wrongPeer_rejected :
+    checkExport original (modify actual 0 fun _ =>
+      ⟨.receive "label_636f6d6d69746d656e74_0" "label_636f6d6d69746d656e74_0" "role00000001"
+        (.group "bls12-381.g1"), [], [.data (.group "bls12-381.g1")]⟩) = false := by
+  decide +kernel
+
+/-- The commitment's schema differs from its site. -/
+theorem wrongSchema_rejected :
+    checkExport original (modify actual 0 fun _ =>
+      ⟨.receive "label_636f6d6d69746d656e74_0" "label_726573706f6e7365_0" "role00000000"
+        (.group "bls12-381.g1"), [], [.data (.group "bls12-381.g1")]⟩) = false := by
+  decide +kernel
+
+/-- The challenge produces another field than the replaced service's. -/
+theorem wrongChallengeField_rejected :
+    checkExport original (modify actual 4 fun instruction =>
+      { instruction with
+        operation := .challenge "merlin3.bls12-381.fr64be/0" "bls12-381.fq"
+          (SchnorrProof.context.query SchnorrProof.wiring.challengeSite),
+        results := [.data (.field "bls12-381.fq"), .transcript "merlin3.bls12-381.fr64be/0"] }) =
+      false := by
+  decide +kernel
+
+/-- The last returned value is the decision, not the final transcript. -/
+theorem dataReturnedLast_rejected :
+    checkExport original { actual with returned := [13, 17] } = false := by
+  decide +kernel
+
+/-- The policy replaces the prover's nonce service instead of the validator's. -/
+theorem proverService_rejected :
+    checkExport original { actual with policy := { actual.policy with services := [3] } } =
+      false := by
+  decide +kernel
+
+/-- The exported data inputs differ from the published validator inputs. -/
+theorem wrongInputSort_rejected :
+    checkExport original { actual with inputs := [.data (.field "bls12-381.fr"),
+      .data (.group "bls12-381.g1"), .transcript "merlin3.bls12-381.fr64be/0"] } = false := by
   decide +kernel
 
 end Tests.ConstructionControls

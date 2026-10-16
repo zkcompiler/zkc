@@ -272,8 +272,8 @@ or protocol equivalence.
 The [transcript-construction bridge](../lean/bridges/construction/README.md)
 exports the compiled Schnorr proof Entry's checked validator
 ([format](spec/formats/constructed-participant.md)). Lean checks its transcript
-construction against the original export and proves Fiat–Shamir knowledge
-soundness for it in the random-oracle model, under the
+construction against the original export and proves fixed-statement
+Fiat–Shamir knowledge soundness for it in the random-oracle model, under the
 [named assumptions](../lean/docs/spec/fiat-shamir.md#named-assumptions). Other
 Entries, suites and programmable constructions have no such check.
 

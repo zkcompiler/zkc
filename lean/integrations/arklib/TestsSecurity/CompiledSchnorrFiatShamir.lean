@@ -72,14 +72,15 @@ theorem compiled_rejects_trailing_message : evalWithAnswerFn (fixed 4)
         [.group groupDomain 3, .field fieldDomain (3 + 4 * 2), .field fieldDomain 0]) = false := by
   decide +kernel
 
-/-- The challenge history binds the statement: the honest proof for `key` is
-accepted when only its own history answers `4`, while the same proof against the
-statement `3` asks elsewhere and is rejected. -/
+/-- The challenge history binds the statement. The proof `(3, 3 + 4 * 3)` is valid
+for the statement `3` exactly at challenge `4`: it is accepted when the history
+for statement `3` answers `4`, and rejected when only the history for `key`
+does. -/
 theorem statement_bound :
-    evalWithAnswerFn (pointed (challengeHistory (initial application base key)))
-        (verify application base key (3, 3 + 4 * 2)) = true ∧
+    evalWithAnswerFn (pointed (challengeHistory (initial application base 3)))
+        (verify application base 3 (3, 3 + 4 * 3)) = true ∧
       evalWithAnswerFn (pointed (challengeHistory (initial application base key)))
-        (verify application base 3 (3, 3 + 4 * 2)) = false := by
+        (verify application base 3 (3, 3 + 4 * 3)) = false := by
   decide +kernel
 
 /-- The challenge history binds the application context. -/

@@ -24,10 +24,13 @@ Named assumptions, beyond the checked equations:
   uniformly random function of that history, shared by the prover and final
   verification and queried by the prover at any history (`historyOracle`).
   Canonical value and occurrence encodings are injective, so typed histories
-  stand for the absorbed bytes.
+  stand for the absorbed bytes; the suite's reduction of squeezed bytes to a
+  field element is treated as exactly uniform.
 * Binding. The host initializes the transcript with exactly the authorized
   public context and the policy's public inputs (`initial`); the check proves the
-  policy publishes every validator data input, including the statement.
+  policy publishes every validator data input, including the statement. The
+  fixed-statement bound below does not depend on this binding; it matters for
+  adaptively chosen statements, which are not covered.
 * Transport. Proof bytes decode canonically to the typed messages, in order.
 * Native correctness. The export reproduces the checked candidate, and native
   field, group and transcript kernels implement their mathematical meanings.
@@ -54,7 +57,7 @@ def commitmentOrigin : Origin :=
 
 /-- The challenge occurrence fixed by the checked context. -/
 def challengeOrigin : Origin :=
-  SchnorrProof.context.query SchnorrProof.wiring.challengeSite fieldDomain
+  SchnorrProof.context.query SchnorrProof.wiring.challengeSite
 
 section Routing
 variable {F G : Type}

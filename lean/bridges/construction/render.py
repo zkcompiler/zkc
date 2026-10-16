@@ -2,10 +2,12 @@
 """Render a `zkc.constructed-participant/0` export as transparent Lean data.
 
 This is a tested data boundary. Operations are classified by exact name,
-operation binding and attribute set; anything else is retained as an
-unsupported operation for the Lean rule to refuse. Occurrence origins are
-decoded from their canonical bytes and re-encoded exactly. No proof is
-generated here and no meaning is assigned to any operation.
+operation binding and attribute set. An unrecognized operation is retained as
+unsupported for the Lean rule to refuse; a recognized operation with another
+shape, an unknown type or a malformed origin refuses the whole export.
+Occurrence origins are decoded from their canonical bytes and re-encoded
+exactly. No proof is generated here and no meaning is assigned to any
+operation.
 """
 
 import argparse
@@ -136,7 +138,8 @@ def attributes(value):
         name, attribute = record(item, 2)
         require(isinstance(name, str) and name not in result, "duplicate or invalid attribute")
         kind, payload = record(attribute, 2)
-        require(kind in ("string", "symbol", "integer", "strings", "text"), "unknown attribute kind")
+        require(kind in ("string", "symbol", "integer", "bool", "strings", "text"),
+                "unknown attribute kind")
         result[name] = (kind, payload)
     return result
 
@@ -197,7 +200,7 @@ def policy(value):
     require(version == "zkc.native-proof-policy/0", "wrong policy version")
     pairs = [record(pair, 2) for pair in draws]
     return (f"⟨{text(entry)}, {text(producer)}, {text(validator)}, {decimal(acceptance)}, {text(suite)}, "
-            f"{seq(services, lambda value: text(str(int(decimal(value)))))}, {seq(public, decimal)}, "
+            f"{seq(services, decimal)}, {seq(public, decimal)}, "
             f"{seq(pairs, lambda pair: f'({text(pair[0])}, {text(pair[1])})')}, {text(framing)}, {text(construction)}⟩")
 
 

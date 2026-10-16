@@ -224,7 +224,7 @@ theorem checkFrom_sound (context : Context) (challenge : History F G → m F) (h
                   simp only [drawnEq] at stepped
                   split at stepped
                   · rename_i conditions
-                    obtain ⟨_, currentRef, originEq, _, _⟩ := conditions
+                    obtain ⟨_, currentRef, originEq, _, _, _⟩ := conditions
                     cases stepped
                     rw [pendingEq] at pending
                     subst currentRef originEq absorbed
@@ -233,7 +233,7 @@ theorem checkFrom_sound (context : Context) (challenge : History F G → m F) (h
                     congr 1
                     funext answer
                     refine next _ _ _ accepted ?_
-                    refine ⟨by simp [length], current ++ [.challenge (context.query site field)],
+                    refine ⟨by simp [length], current ++ [.challenge (context.query site)],
                       ?_, ⟨.field field answer, ?_, by simp⟩⟩
                     · unfold transcriptAt
                       simp [length]

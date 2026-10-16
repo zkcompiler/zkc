@@ -158,8 +158,12 @@ class Driver:
         path = self.output / "FreshExport.lean"
         path.write_text(source, encoding="utf-8")
         result = self.run([self.args.lake, "env", "lean", path], cwd=ROOT / "lean", name="lean-rule")
-        self.check("lean-rule", "'actual_accepted' depends on axioms" in result.stdout
-                   and "sorryAx" not in result.stdout, result.stdout[-400:])
+        marker = "'actual_accepted' depends on axioms: ["
+        axioms = result.stdout.split(marker, 1)[1].split("]", 1)[0] if marker in result.stdout else None
+        allowed = {"propext", "Classical.choice", "Quot.sound"}
+        self.check("lean-rule", axioms is not None
+                   and {name.strip() for name in axioms.split(",") if name.strip()} <= allowed,
+                   result.stdout[-400:])
         return list(mutations)
 
     def native_refusal(self, candidate, exported):
@@ -170,7 +174,9 @@ class Driver:
         # The second participant is the validator; its challenge reads its host transcript.
         prefix, rest = lines[calls[1]].split("local.call @_transcript_4(", 1)
         lines[calls[1]] = prefix + "local.call @_transcript_4(%arg2" + rest[rest.index(")"):]
-        refusals = {"challenge-before-commitment": "\n".join(lines) + "\n"}
+        # Each mutation names the native refusal and diagnostic it must produce.
+        refusals = {"challenge-before-commitment": ("\n".join(lines) + "\n", "native-proof-candidate",
+                                                    "affine participant value reused")}
 
         challenge = next(item for item in exported[7]
                          if item[0] == "crypto.exec.indexed_transcript_challenge")
@@ -178,19 +184,19 @@ class Driver:
         tree, _ = constructed.decode_tree(bytes.fromhex(hex_text))
         tree[4][2] = exported[3][8][0][1]
         self.check("native-origin-present", candidate.count(hex_text) == 1)
-        refusals["wrong-domain-separator"] = candidate.replace(
-            hex_text, constructed.encode_tree(tree).hex())
+        refusals["wrong-domain-separator"] = (candidate.replace(
+            hex_text, constructed.encode_tree(tree).hex()), "native-proof-correspondence", "")
 
         reasons = {}
-        for name, text in refusals.items():
+        for name, (text, code, detail) in refusals.items():
             path = self.output / f"candidate-{name}.mlir"
             path.write_text(text)
             result = self.run([self.args.compiler, "protocol-constructed-participant",
                                self.output / "source.mlir", self.output / "policy.json", path],
                               expect=None, name=f"native-refusal:{name}")
             reason = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else ""
-            self.check(f"native-refusal:{name}", result.returncode != 0 and reason.startswith("native-proof"),
-                       result.stderr[-400:])
+            self.check(f"native-refusal:{name}", result.returncode != 0 and reason == code
+                       and detail in result.stderr, result.stderr[-400:])
             reasons[name] = reason
         return reasons
 

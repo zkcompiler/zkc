@@ -69,15 +69,14 @@ structure Instruction where
 
 /-- The native deployment policy exactly as exported: entry, producer and
 validator roles, acceptance index, suite, replaced services, public inputs,
-ordered query/delivery site pairs, framing and construction selector. Replaced
-services keep their canonical decimal spelling, which occurrence origins use. -/
+ordered query/delivery site pairs, framing and construction selector. -/
 structure Policy where
   entry : String
   producer : String
   validator : String
   acceptance : Nat
   suite : String
-  services : List String
+  services : List Nat
   publicInputs : List Nat
   draws : List (String × String)
   format : String

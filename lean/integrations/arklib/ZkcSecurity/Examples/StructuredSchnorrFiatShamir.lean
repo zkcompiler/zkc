@@ -16,8 +16,10 @@ relation with the stated probability. The query budget counts every prover
 oracle call, including repeated keys; the added one is final verification.
 
 This theorem is about the Fiat–Shamir transform of the imported interactive
-verifier. The compiled non-interactive verifier is connected to it by the
-transcript-construction rule in `CompiledSchnorrFiatShamir`.
+verifier. The compiled non-interactive verifier is treated separately in
+`CompiledSchnorrFiatShamir`, through the transcript-construction rule and the
+Proof Entry's own import; both reach VCVio's Schnorr Sigma protocol, here by
+`sigma_eq`.
 -/
 
 namespace ZkcSecurity.Examples.StructuredSchnorrFiatShamir
