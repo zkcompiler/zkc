@@ -62,7 +62,7 @@ def test_post_consume_exhaustion_and_cancellation_have_different_residuals():
 
 
 def test_projection_indices_are_read_and_checked_against_scopes():
-    snapshot = ["zkc.structured-source/0", "original", "sha256:unused", "main", [], [], [
+    snapshot = ["zkc.structured-source/0", "original", "sha256:unused", "main", [], [], [], [
         ["function", "main", "protocol", "public", [["bool"], ["service", "random.bls12-381.fr/0"]],
          [["bool"]], ["protocol", ["V"], [["V"], ["V"]], [["V"]]], [], [],
          ["block", [[["draw", "V", "bls12-381.fr"], [1], [["field", "bls12-381.fr"]], [], "draw"]], ["return", [0]]]]]]
