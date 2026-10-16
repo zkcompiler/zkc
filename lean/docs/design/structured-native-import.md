@@ -46,6 +46,42 @@ proves the shared contract for Helpers and Reordered. Its admitted EarlyChalleng
 unit queries before receiving the commitment; an exact first-action observation
 refutes the shared contract for this counterexample.
 
+`SchnorrHonestProver` supplies the missing honest-prover source connection for
+Interactive alone. It logs the actual typed actions with `PIR.Proc.run`, then
+decodes the commitment and response sends from the complete successful trace.
+The handler fixes the nonce and independent challenge replies and acknowledges
+sends; the decoder preserves exact sites, domains, endpoints, service handle
+and order. It has no arithmetic oracle or fallback messages. The imported
+process equation proves extraction success and the derived response formula.
+
+The complete-trace decoder is deliberately partial. Total `messages` is specific
+to this proved successful source profile. Selecting a commitment observation at
+challenge zero is sound because the source equation places that send before the
+receive, the request prefix is independent of the reply, and all challenge runs
+complete. The supplied-strategy theorem ties every challenge response back to
+the same source run. Sampling happens outside the deterministic handler, with
+the same nonce supplied across these runs. The stopped-prefix equations cover
+the nonce and challenge reply points; the decoder returns `none` on every stop
+and does not extract partial messages. Sends succeed in the selected profile.
+This is sufficient for `Common.Strategy`; generalizing it
+would need an actual second consumer and its causal/stopping obligations.
+There is no new executor, replay oracle or generic `ProverContract`.
+
+Completeness keeps separate participant inputs and explicit sufficient equal-copy
+premises. The prover's key is unused, so equal keys are stronger than necessary;
+an accepting mismatched local key control prevents reading this as a necessity
+or an enforcement result. Other concrete input/delivery controls reject, and
+synthetic kernel-admitted constructor mutations expose changed response values
+and changed send sites without borrowing the original source digest. The changed
+source response also reaches the unchanged checked verifier and is rejected.
+
+`StructuredSchnorrHonestView` then transports the actual source-derived public
+view to the existing optional VCVio consumer with fixed challenge and uniform
+nonce. The original generic `honestView` and earlier verifier-only clients remain
+handwritten-strategy theorems. The new theorem concerns the selected checked
+constructor source and its public view under successful replies/honest delivery;
+exact native bytes, provider randomness and joint execution remain external.
+
 ### Sumcheck
 
 The next library target is the actual multilinear protocol in

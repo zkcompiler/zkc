@@ -23,6 +23,8 @@ that all native behavior already has a Lean model.
 - [Dependencies](dependencies.md): exact pins and compatibility decisions.
 - [Structured computations](design/structured-computations.md): canonical multi-result
   regions, explicit captures, operation contracts and reference-profile bridges.
+- [Structured native import](design/structured-native-import.md): checked subjects,
+  participant contracts and source-derived honest-prover observations.
 - [Research design](design/protocol-verification.md): questions, choices and
   evaluation criteria for extending the implemented architecture.
 - [Native bridge](../bridges/common/README.md): differential and proof-request tests.

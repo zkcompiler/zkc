@@ -80,6 +80,9 @@ theorem process_equation (base key : G) (challengeService : Nat) :
         CommonAdapter.embed := by
   rfl
 
+/-- Positional site retained for the nonce draw in this exact imported subject. -/
+def nonceSite : String := "s0"
+
 def proverInputs (base key : G) (secret : F) (nonceService : Nat) :
     Values (Component (assignment F G)) program.payload.entry.inputs :=
   .cons (some base) (.cons (some key) (.cons (some secret)
@@ -94,7 +97,7 @@ def proverProcess (base key : G) (secret : F) (nonceService : Nat) :
 output. Its local key copy is not identified with the verifier's key. -/
 theorem prover_equation (base key : G) (secret : F) (nonceService : Nat) :
     proverProcess base key secret nonceService =
-      .call (.query "s0" scalarDomain (.cons nonceService .nil)) (fun (nonce : F) =>
+      .call (.query nonceSite scalarDomain (.cons nonceService .nil)) (fun (nonce : F) =>
       .call (.send (ty := .group groupDomain) wiring.commitmentSite 1 (nonce • base)) (fun _ =>
       .call (.receive (.field scalarDomain) wiring.deliverySite 1) (fun (challenge : F) =>
       .call (.send (ty := .field scalarDomain) wiring.responseSite 1 (nonce + challenge * secret))

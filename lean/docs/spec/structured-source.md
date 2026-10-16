@@ -151,8 +151,63 @@ requests and independent reply continuations. The verifier equation is the
 existing Common Schnorr experiment through an explicit effect embedding; a proved
 left inverse gives its `VerifierContract`, completeness and special soundness.
 The optional `StructuredSchnorr` security consumer applies the existing VCVio
-honest-view theorem to that contract. No honest-delivery premise supplies the
-source equality.
+honest-view theorem, with its handwritten honest strategy, to that contract.
+No honest-delivery premise supplies the source equality.
+
+`ZkcExamples.Structured.SchnorrHonestProver` additionally obtains both messages
+from the actual Interactive prover's ordered send observations. Its
+`replyHandler` uses the existing `PIR.Proc.run`, supplies fixed nonce/challenge
+replies, acknowledges the two sends, checks domains/sites/peers/service handle,
+and logs each actual action. `extract` accepts only a successful `none` result
+with exactly the query/send/receive/send shape. It reads the two send payloads;
+it does not check or construct the response formula. Stopped, reordered and
+extended traces yield no messages. The algebraic `messages_eq` is proved from
+the imported `prover_equation`, not assumed in the message definition.
+The handler is deterministic for its fixed inputs: any sampling happens outside
+the run, and its nonce reply does not inspect the challenge parameter.
+
+`strategy` selects the commitment observed with reference challenge zero and
+the response observed for each supplied challenge. This retrospective extraction
+is justified for this source by `execution_eq`, `prefix_independent` and
+`commitment_independent`: the commitment precedes the independent challenge
+reply, the prefix through the receive request is identical for all replies, and
+every fixed challenge completes under the selected successful profile.
+`strategy_supplied` identifies both fields with the actual run for every
+challenge. There is no generic causal adapter for arbitrary processes here.
+
+`accepts` delivers this strategy to the actual checked verifier through
+`Common.transcriptHandler`. Prover/verifier input copies are independent
+arguments; equal bases/keys and the witness relation are explicit sufficient
+premises. They are stronger than necessary: this prover ignores its local key,
+and particular degenerate inputs can also accept. These premises express no
+enforcement mechanism. `nonce_stopped` and `challenge_stopped` preserve the
+exact reached prefixes for every stop reason at those two reply points.
+`extract_stopped` proves the decoder returns `none` for every stopped run; there
+is no decoder for messages in a prefix. Send acknowledgements succeed and all
+owned inputs are supplied in this profile. Send failures and missing owned
+inputs are outside these specialized prefix theorems. The existing verifier
+delivery handler selects replies by type; matching source sites are certified
+by the process equations and extraction, not by a joint routing model.
+No arbitrary provider law or joint scheduler is assumed or proved.
+
+The optional `StructuredSchnorrHonestView.sourceView` consists of the observed
+commitment/response, fixed challenge and actual verifier outcome under honest
+delivery. `sourceView_eq_honestView` transfers it to the existing VCVio view;
+`source_honest_verifier_zero_knowledge` samples a uniform nonce with the
+challenge fixed outside that sampling, and equates every public-view event to
+the existing uniform-response simulator. The simulator takes the public key
+without a witness. The private query trace is not part of this public view;
+neither the service tag nor handle identity establishes native randomness.
+
+`SchnorrHonestProverControls` retains concrete wrong-verifier-key,
+mismatched-base and bad-delivery counterexamples, as well as an accepting
+unused-prover-key mismatch. Its changed
+response arithmetic and changed response site are separately kernel-admitted
+constructor variants with synthetic source markers, not fresh native exports
+or subjects identified by the original digest. Changed arithmetic changes the
+extracted response, and delivery of those changed source sends to the unchanged
+checked verifier is rejected; the changed site refuses extraction. Decoder
+controls also reject reversed and extended traces.
 
 `SchnorrVariants` kernel-admits the retained Helpers, Reordered and EarlyChallenge
 units. Full-table equations expose the Helpers form's named response and

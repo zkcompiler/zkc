@@ -153,6 +153,8 @@ import ZkcExamples.NativePrograms.Variants.SumcheckHornerData
 import ZkcExamples.NativePrograms.Variants.SumcheckWrongResidualData
 import ZkcExamples.Structured.SchnorrEarlyChallengeData
 import ZkcExamples.Structured.SchnorrHelpersData
+import ZkcExamples.Structured.SchnorrHonestProver
+import ZkcExamples.Structured.SchnorrHonestProverControls
 import ZkcExamples.Structured.SchnorrInteractive
 import ZkcExamples.Structured.SchnorrInteractiveData
 import ZkcExamples.Structured.SchnorrReorderedData

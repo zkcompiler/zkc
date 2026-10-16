@@ -286,6 +286,13 @@ adapter to the existing verifier contract; its dormant formula remains named,
 with no inferred relation binding. The maintained Helpers and Reordered source
 forms satisfy that same contract through their actual named calls. The admitted
 EarlyChallenge source has a proved query-first process and fails the contract.
+For Interactive, the [honest-prover boundary](../lean/docs/spec/structured-source.md#actual-interactive-schnorr-subject)
+extracts actual ordered send observations into a causal strategy and proves
+acceptance under explicit consistent public copies and honest delivery. Exact
+stopped prefixes remain available. The optional public-view theorem transfers
+these source-derived messages to VCVio's simulator for a fixed challenge and
+uniform nonce under a successful reply/send profile. This is a checked-source
+model theorem; native provider laws and joint scheduling remain separate.
 Two [scalar inlining pairs](../lean/bridges/structured/README.md#scalar-inlining-pairs)
 have universal model equalities between exact original and actual prepared
 exports: Schnorr response and multilinear Sumcheck claim update. The reusable

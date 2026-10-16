@@ -15,6 +15,7 @@ import ZkcSecurity.ArkLib.Sumcheck.Statement
 import ZkcSecurity.ArkLib.Sumcheck.Strategy
 import ZkcSecurity.Examples.Schnorr
 import ZkcSecurity.Examples.StructuredSchnorr
+import ZkcSecurity.Examples.StructuredSchnorrHonestView
 import ZkcSecurity.Examples.Sumcheck
 import ZkcSecurity.Examples.Variants
 import ZkcSecurity.VCVio.Schnorr
