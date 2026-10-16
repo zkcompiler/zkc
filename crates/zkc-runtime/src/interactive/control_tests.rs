@@ -179,6 +179,18 @@ fn conditional_return_preserves_tuple_and_unwinds_only_reached_frames() {
             [1, 7]
         );
         assert_eq!(r.usage().iterations, if nested { 2 } else { 0 });
+        if let Some(counts) = r.execution_counts().json() {
+            let e = &counts["events"];
+            assert_eq!(e["charged_instructions"], r.usage().instructions);
+            assert_eq!(e["backend_enter_calls"], if nested { 3 } else { 1 });
+            assert_eq!(e["backend_leave_calls"], e["backend_enter_calls"]);
+            assert_eq!(
+                e["retention_commit_values"].as_u64().unwrap(),
+                e["retention_release_values"].as_u64().unwrap()
+                    + e["retention_unpin_values"].as_u64().unwrap()
+                    + r.usage().live_values as u64
+            );
+        }
         let (origin, site) = r.early_return().unwrap();
         assert_eq!(site, "exit");
         assert_eq!(origin.path.len(), if nested { 2 } else { 0 });

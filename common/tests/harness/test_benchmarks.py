@@ -9,9 +9,10 @@ import pytest
 
 
 @pytest.fixture
-def bench(monkeypatch):
+def bench(monkeypatch, tmp_path):
     root = Path(__file__).resolve().parents[3]
     monkeypatch.syspath_prepend(str(root / 'common/benchmarks'))
+    monkeypatch.setattr(importlib.import_module('bench.io'), 'MEASUREMENT_LOCK', tmp_path / 'lock')
     return SimpleNamespace(**{name: importlib.import_module(f'bench.{name}')
                               for name in ('io', 'results', 'runner', 'suites')})
 
@@ -19,7 +20,7 @@ def bench(monkeypatch):
 def report(plan):
     return {'format': 'zkc.benchmark-worker/0', 'status': 'passed', 'boundary': 'test_call',
             'proof_bytes': 3, 'admission_ns': None, 'process_peak_rss_bytes': None,
-            'proofs': [], 'build': {'optimized': True, 'debug_assertions': False}, 'process': {'rayon_num_threads': '1'}, 'timer_floor_ns': 1, 'diagnostics': None,
+            'proofs': [], 'build': {'optimized': True, 'debug_assertions': False, 'execution_counts': False}, 'process': {'rayon_num_threads': '1'}, 'timer_floor_ns': 1, 'diagnostics': None, 'lifecycle': None,
             'samples': [{'phase': 'warmup' if i < plan['warmups'] else 'sample',
                          'index': i, 'iterations': plan['iterations'], 'elapsed_ns': 100,
                          'cpu_ns': 90, 'first_call_ns': 50}
@@ -43,7 +44,7 @@ def test_statistics_use_processes_not_pooled_calls(bench):
     workers = [report(plan), report(plan)]
     for worker, times in zip(workers, ([999999, 10, 20, 1000], [999999, 30, 40, 50])):
         for sample, time in zip(worker['samples'], times): sample.update(elapsed_ns=time, first_call_ns=min(time, 50))
-    manifest = {'format': 'zkc.benchmark/0', 'status': 'passed', 'processes': 2, 'plan': plan,
+    manifest = {'format': 'zkc.benchmark/0', 'observation': 'timing', 'status': 'passed', 'processes': 2, 'plan': plan,
                 'matrix': [{'case': 'case', 'implementation': 'impl', 'operation': 'verify', 'boundary': 'test_call'}], 'results': [
         {'case': 'case', 'implementation': 'impl', 'operation': 'verify', 'status': 'passed', 'worker': w, 'repetition': i}
         for i, w in enumerate(workers)]}
@@ -79,7 +80,7 @@ def worker(tmp_path, plan, suffix='', response=None):
 
 def arguments(tmp_path):
     return SimpleNamespace(output=tmp_path / 'output', samples=2, warmups=1, iterations=1,
-                           processes=2, seed=17, cpu=None, threads=1, label='test', timeout=1)
+                           execution_counts=False, processes=2, seed=17, cpu=None, threads=1, label='test', timeout=1)
 
 
 def prepared(bench, tmp_path, executable, check=lambda *args: None):
@@ -143,7 +144,7 @@ def completed_manifest():
     plan = {'warmups': 0, 'samples': 1, 'iterations': 1}
     matrix = [{'case': 'case', 'implementation': impl, 'operation': 'verify', 'boundary': 'test_call'}
               for impl in ('left', 'right')]
-    return {'format': 'zkc.benchmark/0', 'status': 'passed', 'processes': 2, 'plan': plan,
+    return {'format': 'zkc.benchmark/0', 'observation': 'timing', 'status': 'passed', 'processes': 2, 'plan': plan,
             'matrix': matrix, 'host': {'cpu': 'one'},
             'contracts': {'case': {'boundaries': {'left': 'test_call', 'right': 'test_call'}}},
             'comparisons': [{'case': 'case', 'operation': 'verify', 'numerator': 'left', 'denominator': 'right'}],
@@ -190,14 +191,14 @@ def test_invalid_produced_proof_invalidates_all_timings(bench, tmp_path, fault):
     plan = {'samples': 2, 'warmups': 1, 'iterations': 1}
     executable = tmp_path/'prover'
     executable.write_text(f'''#!{sys.executable}
-import json,sys
+import hashlib,json,sys
 from pathlib import Path
 request=json.loads(Path(sys.argv[1]).read_text())
 report={report(plan)!r}
 for i in range(3):
     path=Path(request['proof']).with_name(str(i)+'.proof')
     path.write_bytes(bytes([0 if {fault!r} == 'cached' else i])*3)
-    report['proofs'].append({{'path': str(path)}})
+    report['proofs'].append({{'path': str(path), 'bytes': 3, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}})
 Path(request['proof']).write_bytes(path.read_bytes())
 print(json.dumps(report))
 ''')
@@ -205,7 +206,7 @@ print(json.dumps(report))
     def prepare(args, output, capture, manifest):
         manifest['contracts'] = {'case': {'randomized_prover': True}}
         gate = bench.suites.ProofChecks(True)
-        def check(job, proof, directory):
+        def check(job, proof, directory, input_index):
             if fault == 'check': raise bench.io.MeasurementError('independent proof rejected')
             if fault == 'unexpected': raise TypeError('unexpected adapter error')
             gate.observe(proof)
@@ -299,3 +300,33 @@ def test_failure_descriptions_are_checked_before_publication(bench, cell, error)
         document['error'] = error
     with pytest.raises(bench.io.MeasurementError, match='invalid failure description'):
         bench.results.validate_manifest(document)
+
+
+@pytest.mark.parametrize('fault', [None, 'missing-size', 'missing-digest', 'bad-digest', 'wrong-size'])
+def test_proof_artifacts_require_their_own_size_and_digest(bench, tmp_path, fault):
+    plan = {'samples': 1, 'warmups': 0, 'iterations': 1}
+    executable = tmp_path/'prover'
+    executable.write_text(f'''#!{sys.executable}
+import hashlib,json,sys
+from pathlib import Path
+request=json.loads(Path(sys.argv[1]).read_text())
+report={report(plan)!r}
+path=Path(request['proof']).with_suffix('.0.proof')
+path.write_bytes(b'abc')
+Path(request['proof']).write_bytes(b'abc')
+artifact={{'path':str(path),'bytes':3,'sha256':hashlib.sha256(b'abc').hexdigest()}}
+fault={fault!r}
+if fault=='missing-size': artifact.pop('bytes')
+if fault=='missing-digest': artifact.pop('sha256')
+if fault=='bad-digest': artifact['sha256']='0'*64
+if fault=='wrong-size': artifact['bytes']=4
+report['proofs']=[artifact]
+print(json.dumps(report))
+''')
+    executable.chmod(0o755)
+    job = bench.runner.Job('case', 'test', 'prove', executable, {}, tmp_path/'unused', 'test_call')
+    if fault is None:
+        assert bench.runner.execute_job(job, tmp_path/'run', plan, 5)['worker']['proofs'][0]['bytes'] == 3
+    else:
+        with pytest.raises(bench.io.MeasurementError, match='proof'):
+            bench.runner.execute_job(job, tmp_path/'run', plan, 5)

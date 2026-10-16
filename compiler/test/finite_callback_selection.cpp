@@ -1,4 +1,5 @@
 #include "../lib/Transforms/MathematicalSupport.h"
+#include "../lib/Transforms/RealizationEmission.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
@@ -253,6 +254,168 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
+  for (StringRef field : {"koala-bear", "bls12-381.fr"})
+    for (StringRef body : {"polynomial", "commuted", "neutral", "dead-state",
+                           "uniform", "zero-left", "zero-right", "zero-add",
+                           "zero-composed", "state-dependent"})
+      cases.run("pointwise sum " + field + " " + body, [&] {
+        std::string text(sourceText);
+        const std::string original =
+            "   %r = func.call @wrapped(%s,%x) : (!F,!F)->!F";
+        std::string replacement;
+        if (body == "uniform")
+          replacement = R"mlir(
+   %term = "algebra.constant"() {value="7"} : ()->!F
+   %r = algebra.field_add %s,%term : (!F,!F)->!F
+)mlir";
+        else
+          replacement = R"mlir(
+   %p = func.call @wrapped(%x,%x) : (!F,!F)->!F
+   %term = algebra.field_add %p,%x : (!F,!F)->!F
+   %r = algebra.field_add %s,%term : (!F,!F)->!F
+)mlir";
+        if (body.starts_with("zero-")) {
+          replacement = R"mlir(
+   %zero = "algebra.constant"() {value="0"} : ()->!F
+   %one = "algebra.constant"() {value="1"} : ()->!F
+)mlir";
+          if (body == "zero-add")
+            replacement +=
+                "   %term = algebra.field_add %zero,%zero : (!F,!F)->!F\n";
+          else if (body == "zero-composed")
+            replacement += R"mlir(
+   %left = algebra.field_multiply %zero,%one : (!F,!F)->!F
+   %right = algebra.field_multiply %one,%zero : (!F,!F)->!F
+   %term = algebra.field_add %left,%right : (!F,!F)->!F
+)mlir";
+          else
+            replacement +=
+                "   %term = algebra.field_multiply " +
+                std::string(body == "zero-left" ? "%zero,%one" : "%one,%zero") +
+                " : (!F,!F)->!F\n";
+          replacement += "   %r = algebra.field_add %s,%term : (!F,!F)->!F\n";
+        }
+        if (body == "state-dependent") {
+          auto at = replacement.find("%p,%x");
+          replacement.replace(at, 5, "%p,%s");
+        }
+        if (body == "commuted") {
+          auto at = replacement.find("%s,%term");
+          replacement.replace(at, 8, "%term,%s");
+        }
+        if (body == "neutral") {
+          auto at = replacement.find("%r =");
+          replacement.replace(at, 4, "%combined =");
+          replacement += R"mlir(
+   %one = "algebra.constant"() {value="1"} : ()->!F
+   %r = algebra.field_multiply %combined,%one : (!F,!F)->!F
+)mlir";
+        }
+        if (body == "dead-state")
+          replacement.insert(0, R"mlir(
+   %unused = algebra.field_multiply %s,%s : (!F,!F)->!F
+)mlir");
+        text.replace(text.find(original), original.size(), replacement);
+        size_t at = 0;
+        while ((at = text.find("koala-bear", at)) != std::string::npos) {
+          text.replace(at, 10, field.str());
+          at += field.size();
+        }
+        auto source = parseSourceString<ModuleOp>(text, &context);
+        require(bool(source) && succeeded(verify(*source)), "source refused");
+        RealizationWork work;
+        auto candidate = emit(*source, work);
+        require(hasLoop(selected(*candidate)) == (body == "state-dependent"),
+                "pointwise state independence was not respected");
+        if (body == "state-dependent")
+          return;
+        require(compare(*source, *candidate),
+                "pointwise candidate did not independently compare");
+        RealizationWork disabled;
+        require(hasLoop(selected(*emit(*source, disabled, false))),
+                "disabled selection did not retain ordered execution");
+        RealizationWork bounded;
+        bounded.lanes = 0;
+        require(hasLoop(selected(*emit(*source, bounded))),
+                "lane capacity lost checked ordered fallback");
+        auto malformed = copy(*candidate);
+        bool changed = false;
+        Value seed = selected(*malformed).getArgument(1);
+        selected(*malformed).walk([&](Operation *operation) {
+          if (!changed &&
+              operation->getName().getStringRef() == "algebra.exec.field_add") {
+            for (unsigned i = 0; i < 2; ++i)
+              if (operation->getOperand(i) == seed) {
+                operation->setOperand(i, operation->getOperand(1 - i));
+                changed = true;
+                break;
+              }
+          }
+        });
+        require(changed && succeeded(verify(*malformed)) &&
+                    !compare(*source, *malformed),
+                "wrong seed survived independent pointwise comparison");
+        malformed = copy(*candidate);
+        changed = false;
+        selected(*malformed).walk([&](Operation *operation) {
+          if (body == "polynomial" && !changed &&
+              operation->getName().getStringRef() ==
+                  "algebra.exec.vector_add") {
+            operation->setOperand(1, operation->getOperand(0));
+            changed = true;
+          }
+        });
+        if (body == "polynomial")
+          require(changed && !compare(*source, *malformed),
+                  "wrong pointwise term survived independent comparison");
+        if (body == "uniform") {
+          malformed = copy(*candidate);
+          Operation *fill = nullptr;
+          selected(*malformed).walk([&](Operation *operation) {
+            if (operation->getName().getStringRef() ==
+                "algebra.exec.vector_fill")
+              fill = operation;
+          });
+          require(fill != nullptr, "uniform term did not use a broadcast");
+          OpBuilder builder(fill);
+          RealizationEmitter emitter(unit(*malformed), "wrong_cardinality_");
+          auto *one = emitter.emit(builder, fill->getLoc(), "wrong_cardinality",
+                                   {"index.constant", {}, ""}, {},
+                                   fill->getOperand(1).getType(), {"1"});
+          fill->setOperand(1, one->getResult(0));
+          require(succeeded(verify(*malformed)) &&
+                      !compare(*source, *malformed),
+                  "broadcast lost its admitted cardinality");
+        }
+      });
+  cases.run("pointwise indexed sums retain container identity", [&] {
+    std::string text(indexedSourceText);
+    auto at = text.find("   %y = \"data.bounded_at\"");
+    text.erase(at, text.find('\n', at) - at + 1);
+    at = text.find("@update(%state,%x,%y)");
+    text.replace(at, 21, "@update(%state,%x,%x)");
+    at = text.find("   %r = algebra.field_add %state,%p");
+    text.insert(at, "   %term = algebra.field_add %p,%x : (!F,!F)->!F\n");
+    at = text.find("%state,%p :");
+    text.replace(at, 9, "%state,%term");
+    auto source = parseSourceString<ModuleOp>(text, &context);
+    require(bool(source) && succeeded(verify(*source)), "source refused");
+    RealizationWork work;
+    auto candidate = emit(*source, work);
+    require(!hasLoop(selected(*candidate)) && compare(*source, *candidate),
+            "indexed pointwise sum was not checked");
+    bool changed = false;
+    selected(*candidate).walk([&](Operation *operation) {
+      if (!changed &&
+          operation->getName().getStringRef() == "algebra.exec.vector_mul") {
+        operation->setOperand(0, selected(*candidate).getArgument(2));
+        changed = true;
+      }
+    });
+    require(changed && succeeded(verify(*candidate)) &&
+                !compare(*source, *candidate),
+            "equal extents equated different container elements");
+  });
   cases.run("packed scalar projections select a checked dot", [&] {
     std::string text(indexedSourceText);
     auto product = text.find("   %p = algebra.field_multiply %x,%y");

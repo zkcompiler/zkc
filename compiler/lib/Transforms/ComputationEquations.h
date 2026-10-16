@@ -18,6 +18,10 @@ struct EquationWitness {
   llvm::SmallVector<mlir::Operation *> admission;
   llvm::SmallVector<finite::ArgumentReference> environment;
 };
+struct Elementwise {
+  /// Scalar indexed reads that the lane emitter replaces by their container.
+  llvm::DenseMap<mlir::Value, mlir::Value> lookups;
+};
 struct Reduction {
   EquationWitness witness;
   MathematicalIdentity combine;
@@ -33,15 +37,18 @@ struct Reduction {
   mlir::Value accumulator, term;
   mlir::Operation *combiner = nullptr;
 };
+/// A supported pointwise term, independent of the carried accumulator.
+/// Its body remains borrowed SSA; direct contractions take precedence.
+struct PointwiseReduction {
+  MathematicalIdentity combine;
+  Elementwise formula;
+  mlir::Value term;
+};
 struct Bilinear {
   EquationWitness witness;
   mlir::Value matrix, left, right;
 };
 
-struct Elementwise {
-  /// Scalar indexed reads that the lane emitter replaces by their container.
-  llvm::DenseMap<mlir::Value, mlir::Value> lookups;
-};
 /// Common lane classification for an existing scalar SSA block. Every
 /// instruction is inspected, including unused instructions. indices maps an
 /// enumerated index to the exact captured container it traverses. Other exact
@@ -57,6 +64,7 @@ matchMapProduct(mlir::Block &formula, llvm::ArrayRef<bool> rowwise);
 
 struct ComputationEquations {
   std::optional<Reduction> reduction;
+  std::optional<PointwiseReduction> pointwiseReduction;
   std::optional<Elementwise> elementwise;
   std::optional<Bilinear> bilinear;
 };

@@ -48,6 +48,8 @@ def execute(scope, args):
              f"--junit-xml={reports / (scope + '.xml')}"])
     elif scope == "rust":
         run(["cargo", "test", "--workspace", "--locked", "--all-features", "--no-fail-fast"])
+        # Keep the feature-off collector's zero-cost contract in the maintained lane.
+        run(["cargo", "test", "--locked", "-p", "zkc-runtime", "--lib", "execution_counts"])
     elif scope == "compiler":
         compiler_directory(args.profile)
         run(["ctest", "--preset", args.profile, "--output-junit", reports / "ctest.xml"], cwd=ROOT / "compiler")
@@ -142,6 +144,8 @@ def execute(scope, args):
         run([sys.executable, "scripts/format.py"])
         run(["cargo", "clippy", "--workspace", "--locked", "--all-targets",
              "--all-features", "--", "-D", "warnings"])
+        run(["cargo", "clippy", "--locked", "-p", "zkc-runtime", "--all-targets",
+             "--", "-D", "warnings"])
 
 
 def main():

@@ -35,6 +35,7 @@ observedChoice(mathematical::RealizationKind kind) {
   case Kind::Bilinear:
     return Choice::Bilinear;
   case Kind::Reduction:
+  case Kind::PointwiseReduction:
     return Choice::Reduction;
   case Kind::Elementwise:
     return Choice::Elementwise;
@@ -334,7 +335,8 @@ class Realizer {
   }
   Expected<mathematical::LaneRealizationResult>
   elementwise(Block &body, const ComputationView &view,
-              const mathematical::Elementwise &equation, ValueRange entry) {
+              const mathematical::Elementwise &equation, ValueRange entry,
+              Type vector, Value output = {}) {
     Value root = view.iteration[view.root].descriptor;
     llvm::DenseMap<Value, mathematical::LaneInput> inputs;
     for (const auto &access : view.accesses)
@@ -344,7 +346,6 @@ class Realizer {
       inputs[capture.formal] = {entry[capture.input], false};
     for (auto [lookup, container] : equation.lookups)
       inputs[lookup] = {inputs.lookup(container).value, true};
-    auto vector = computation.signature.getResult(0);
     SmallVector<std::string> args{
         cast<algebra::FieldType>(elementType(vector)).getDomain().str()};
     return mathematical::realizeLanes(
@@ -352,7 +353,8 @@ class Realizer {
         [&](StringRef contract, ValueRange operands, Type output,
             ArrayRef<std::string> parameters) {
           return emit(contract, operands, output, args, parameters);
-        });
+        },
+        output);
   }
   SmallVector<Value> apply(CallbackRole role, CallbackValues actuals) {
     auto callback = readCallback(computation, role);
@@ -569,16 +571,37 @@ public:
                resultType, col->get->arguments);
       return SmallVector<Value>{result};
     }
-    if (selection.kind == mathematical::RealizationKind::Elementwise) {
+    if (selection.kind == mathematical::RealizationKind::Elementwise ||
+        selection.kind == mathematical::RealizationKind::PointwiseReduction) {
+      const auto *reduction = selection.pointwiseReduction;
+      Type resultType = computation.signature.getResult(0);
+      Type vector = reduction
+                        ? Type(algebra::FieldVectorType::get(
+                              resultType.getContext(),
+                              cast<algebra::FieldType>(resultType).getDomain()))
+                        : resultType;
+      const auto &formula =
+          reduction ? selection.equations.pointwiseReduction->formula
+                    : *selection.equations.elementwise;
+      Value term =
+          reduction ? selection.equations.pointwiseReduction->term : Value();
       auto result =
           elementwise(selectionComputation.helper->getRegion(0).front(), *view,
-                      *selection.equations.elementwise, entry);
+                      formula, entry, vector, term);
       if (!result) {
         diagnostics::emit(source->emitOpError(), result.takeError());
         return failure();
       }
       if (result->status == mathematical::LaneRealizationStatus::Realized) {
-        return SmallVector<Value>{result->value};
+        Value value = result->value;
+        if (reduction) {
+          SmallVector<std::string> args{
+              cast<algebra::FieldType>(resultType).getDomain().str()};
+          value = emit(reduction->target, value, resultType, args);
+          value = emit(reduction->combiner, {initial.front(), value},
+                       resultType, args);
+        }
+        return SmallVector<Value>{value};
       }
       if (observation)
         observation->selection(source, mathematical::DecisionFamily::Lanes,

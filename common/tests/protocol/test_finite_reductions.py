@@ -234,6 +234,34 @@ BINDER_SUM = MAP_SUM.replace(
     'return ∑ ((x,y),_) in zip(zip(a,b),unused),x*y;')
 
 
+def test_pointwise_sum_has_checked_bulk_and_ordered_resource_choices(
+    toolchain, journal, directory,
+):
+    source = BINDER_SUM.replace('unused),x*y;', 'unused),(x*x+y);')
+    entries = {name: Entry(toolchain, journal, subdirectory(directory, name), source, flags)
+               for name, flags in [('bulk', []), ('ordered', ['--no-finite-bulk'])]}
+    n = 1024
+    inputs = {'a': decimal_values([2]*n), 'b': decimal_values([3]*n),
+              'unused': decimal_values([7]*n)}
+    usage = {}
+    for name, entry in entries.items():
+        report = run_report(entry, f'{name}-usage', inputs)
+        usage[name] = report['execution']['roles'][0]['usage']
+        assert entry.run(f'{name}-value', inputs)['result'] == str(7*n)
+    assert usage['bulk']['iterations'] == 0
+    assert usage['ordered']['iterations'] == n
+    assert usage['bulk']['instructions'] < usage['ordered']['instructions']
+    journal.write('pointwise-resource-ledgers.json', usage)
+    ceiling = (usage['bulk']['instructions'] + usage['ordered']['instructions']) // 2
+    capacity = journal.write('between-instruction-charges.json', [
+        'zkc.native-capacity/0', '65536', '4096', '16777216', '67108864',
+        [str(ceiling), '100000', '4294967296'], ['67108864', '268435456']])
+    assert run_report(entries['bulk'], 'limited-bulk', inputs, capacity)['status'] == 'executed'
+    refused = run_report(entries['ordered'], 'limited-ordered', inputs, capacity,
+                         refuses='entry-run-incomplete')
+    assert refused['execution']['roles'][0]['after'][1]['cause'] == ['limit']
+
+
 @pytest.mark.parametrize('extra', [[], ['--no-simplify'], ['--release-storage']])
 def test_fusion_preserves_values_and_guards_with_different_resource_charges(
     toolchain, journal, directory, extra,

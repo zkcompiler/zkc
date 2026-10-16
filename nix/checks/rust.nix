@@ -17,6 +17,7 @@ tools.overrideAttrs (old: {
     runHook preCheck
     ${environment.checks}
     cargo clippy --workspace --locked --offline --all-targets --all-features -- -D warnings
+    cargo clippy --locked --offline -p zkc-runtime --all-targets -- -D warnings
     python3 common/tests/run.py rust
     runHook postCheck
   '';

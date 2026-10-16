@@ -2284,3 +2284,73 @@ fn asset_references_cover_called_functions_and_every_local_region() {
             .all(|role| role.actions.len() == 5)
     );
 }
+
+#[test]
+fn execution_counts_follow_calls_without_advancing_pending_execution() {
+    let j = one(
+        json!([add_fn()]),
+        json!([["x", "field"]]),
+        json!(["field"]),
+        json!([
+            ["local", "first", "add", ["x", "x"], ["y"]],
+            ["local", "second", "add", ["y", "x"], ["z"]],
+            ["return", ["z"]]
+        ]),
+    );
+    let mut r = runner(&j, "P", Mock::new(), vec![V::Field(4)]);
+    let pending = r.poll();
+    let before = r.execution_counts();
+    for _ in 0..3 {
+        assert_eq!(r.poll(), pending);
+        assert_eq!(r.execution_counts(), before);
+    }
+    local(&mut r);
+    local(&mut r);
+    assert_eq!(r.poll(), Action::Returned(vec![V::Field(12)]));
+    let snapshot = r.execution_counts();
+    assert_eq!(snapshot.json().is_some(), ExecutionCounts::ENABLED);
+    if let Some(counts) = snapshot.json() {
+        let e = &counts["events"];
+        assert_eq!(e["charged_instructions"], r.usage().instructions);
+        assert_eq!(e["replayed_instructions"], 0);
+        assert_eq!(e["local_op"], 2);
+        assert_eq!(e["native_operand_values"], 4);
+        assert_eq!(e["local_return"], 2);
+        assert_eq!(e["created_frames"], 3);
+        assert_eq!(e["backend_enter_calls"], 3);
+        assert_eq!(e["backend_leave_calls"], 3);
+        assert_eq!(
+            counts["operations"]
+                .as_object()
+                .unwrap()
+                .values()
+                .map(|v| v.as_u64().unwrap())
+                .sum::<u64>(),
+            2
+        );
+    } else {
+        assert_eq!(std::mem::size_of::<ExecutionCounts>(), 0);
+        assert_eq!(std::mem::size_of::<super::counts::Counts>(), 0);
+    }
+}
+
+#[test]
+fn execution_counts_include_early_stop_cleanup() {
+    let j = one(
+        json!([["function", "check", [], [], [["stop", "stop", "reject"]]]]),
+        json!([]),
+        json!([]),
+        json!([["local", "check", "check", [], []], ["return", []]]),
+    );
+    let mut r = runner(&j, "P", Mock::new(), vec![]);
+    local(&mut r);
+    assert!(matches!(r.poll(), Action::Stopped(_)));
+    assert!(r.backend().frames.is_empty());
+    if let Some(counts) = r.execution_counts().json() {
+        let e = &counts["events"];
+        assert_eq!(e["charged_instructions"], r.usage().instructions);
+        assert_eq!(e["local_stop"], 1);
+        assert_eq!(e["backend_enter_calls"], 2);
+        assert_eq!(e["backend_leave_calls"], 2);
+    }
+}

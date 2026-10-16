@@ -258,6 +258,19 @@ work or multi-result group helpers remain valid ordered computations until the
 independent group reader covers them. These are selection limits, not new source
 admission rules.
 
+Field-additive folds also compose supported pointwise bodies with native sum.
+The pointwise expression must be independent of recurrent state and use the
+same admitted field-vector domains and total field-ring operations as a
+collection. Uniform terms are broadcast to the admitted cardinality; mixed
+operations use scalar/vector recipes where available. Bounded indexed reads
+retain their exact container provenance. Every domain,
+including unused zip members, is admitted before payload work. The result adds
+the original seed to the sum, including for an empty domain. Existing direct
+reductions and contractions take precedence. This realization reuses vector
+operations and the independent finite reader; it introduces no new operation or
+runtime fallback. Intermediate vectors have the ordinary resource charges, so
+ordered and bulk execution need not exhaust the same capacity.
+
 The analysis retains all constructors in admission order separately from the
 items of the returned descriptor, and retains every helper instruction even
 when no bulk equation applies. Reduction, elementwise and bilinear selection

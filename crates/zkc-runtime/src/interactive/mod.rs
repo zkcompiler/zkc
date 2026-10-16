@@ -35,6 +35,8 @@ pub use native_proof::{
 pub use preparation::{PreparationLimits, PreparationStats, PreparedComputations};
 pub use program::{AssetReference, ProgramAction, ProgramCut, ProgramRole, ProgramState};
 pub use retention::{Backing, Retained};
+mod counts;
+pub use counts::ExecutionCounts;
 mod runner;
 mod transport;
 

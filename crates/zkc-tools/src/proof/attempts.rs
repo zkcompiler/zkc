@@ -24,6 +24,7 @@ pub struct AttemptPolicy {
 
 #[derive(Debug)]
 pub struct AttemptRecord {
+    pub execution_counts: zkc_runtime::interactive::ExecutionCounts,
     pub attempt: u64,
     /// Returned decision or fatal execution/cleanup failure, never private outputs.
     pub decision: Result<bool>,
@@ -247,6 +248,7 @@ impl Session<'_> {
         let mut invocation_inputs = inputs.to_vec();
         let mut transcript = None;
         let mut record = AttemptRecord {
+            execution_counts: Default::default(),
             attempt,
             decision: Ok(false),
             usage: Usage::default(),
@@ -360,6 +362,7 @@ impl Session<'_> {
                         record.return_at =
                             runner.early_return().map(|(o, s)| (o.clone(), s.into()));
                         record.usage = runner.usage();
+                        record.execution_counts = runner.execution_counts();
                         record.messages = produced.messages;
                         record.bytes = produced.bytes;
                         cancelled |= produced.cancelled.is_some();
@@ -528,6 +531,9 @@ pub(super) fn execute(
     report.messages = state.records.iter().map(|r| r.messages).sum();
     report.bytes = state.records.iter().map(|r| r.bytes).sum();
     report.usage = state.usage;
+    for record in &state.records {
+        report.execution_counts.merge(&record.execution_counts);
+    }
     report.attempts = state.records;
     report.cleanup_errors = state.cleanup;
     report.cancelled = state.cancelled;

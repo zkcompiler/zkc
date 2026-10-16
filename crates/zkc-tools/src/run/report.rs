@@ -211,6 +211,7 @@ pub struct RoleReport<V> {
     pub role: String,
     pub before: State,
     pub usage: Option<Usage>,
+    pub execution_counts: zkc_runtime::interactive::ExecutionCounts,
     pub observation: Observation,
     pub cancelled: bool,
     pub after: State,

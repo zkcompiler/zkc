@@ -16,6 +16,10 @@ sha2.workspace = true
 spongefish-074 = { workspace = true, features = ["sha3", "ark-ec", "std"] }
 zkc-tools.workspace = true
 zkc-runtime.workspace = true
+zkc-backends.workspace = true
 
 [lints]
 workspace = true
+
+[features]
+execution-counts = ["zkc-runtime/execution-counts"]

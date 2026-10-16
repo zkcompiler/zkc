@@ -176,8 +176,11 @@ impl PartialEq for FrameInputs {
 impl Eq for FrameInputs {}
 
 /// Runtime-minted boundary. Only the actual argument view crosses into a child.
-#[derive(Clone, Debug)]
-pub struct Frame {
+#[derive(Clone)]
+pub struct Frame(Arc<FrameData>);
+
+/// Constructed completely before publishing an immutable runtime boundary.
+pub(crate) struct FrameData {
     pub(crate) id: FrameId,
     pub(crate) parent: Option<FrameId>,
     pub(crate) role: String,
@@ -186,30 +189,89 @@ pub struct Frame {
     pub(crate) inputs: FrameInputs,
     pub(crate) services: Vec<super::ServicePort>,
 }
+impl From<FrameData> for Frame {
+    fn from(data: FrameData) -> Self {
+        Self(Arc::new(data))
+    }
+}
+impl std::fmt::Debug for Frame {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let FrameData {
+            id,
+            parent,
+            role,
+            origin,
+            kind,
+            inputs,
+            services,
+        } = self.0.as_ref();
+        f.debug_struct("Frame")
+            .field("id", id)
+            .field("parent", parent)
+            .field("role", role)
+            .field("origin", origin)
+            .field("kind", kind)
+            .field("inputs", inputs)
+            .field("services", services)
+            .finish()
+    }
+}
 impl Frame {
+    /// Compare the boundary used for active-frame custody. Sharing immutable
+    /// metadata proves equality; independently allocated equal frames still
+    /// match. This compares id, parent, role, origin, kind and flat inputs.
+    /// It does not authorize entry or service use: service declarations are
+    /// excluded here and require their separate entry authority checks.
+    #[inline]
+    pub fn same_boundary(&self, other: &Self) -> bool {
+        if Arc::ptr_eq(&self.0, &other.0) {
+            return true;
+        }
+        // Exhaustive destructuring requires an explicit custody decision when
+        // adding metadata. Service authority is not part of this predicate.
+        let FrameData {
+            id,
+            parent,
+            role,
+            origin,
+            kind,
+            inputs,
+            services: _,
+        } = self.0.as_ref();
+        *id == other.id()
+            && *parent == other.parent()
+            && role.as_str() == other.role()
+            && origin == other.origin()
+            && kind.as_ref() == other.kind()
+            && inputs == other.inputs()
+    }
+
     /// Entry declarations, inherited read-only by structured loop frames.
     /// Their input_index refers to the entry interface, never child inputs.
     /// Only Entry may acquire leases; a loop borrows its active entry authority.
     pub fn services(&self) -> &[super::ServicePort] {
-        &self.services
+        &self.0.services
     }
     pub fn id(&self) -> FrameId {
-        self.id
+        self.0.id
     }
     pub fn parent(&self) -> Option<FrameId> {
-        self.parent
+        self.0.parent
     }
     pub fn role(&self) -> &str {
-        &self.role
+        &self.0.role
     }
     pub fn origin(&self) -> &Origin {
-        &self.origin
+        &self.0.origin
     }
     pub fn kind(&self) -> &FrameKind {
-        &self.kind
+        &self.0.kind
     }
     pub fn inputs(&self) -> &FrameInputs {
-        &self.inputs
+        &self.0.inputs
+    }
+    pub(crate) fn shared_kind(&self) -> Arc<FrameKind> {
+        self.0.kind.clone()
     }
 }
 
@@ -236,8 +298,8 @@ impl Invocation<'_> {
         let binding = self.binding.declaration();
         serde_json::to_vec(&serde_json::json!([
             "zkc.local-domain/0",
-            self.frame.origin.json(),
-            self.frame.role,
+            self.frame.origin().json(),
+            self.frame.role(),
             match self.frame.kind() {
                 FrameKind::Local { site, .. } => Some(site),
                 _ => None,
@@ -448,7 +510,9 @@ pub trait Backend {
 #[cfg(test)]
 mod domain_tests {
     use super::*;
-    use crate::interactive::{LogicalOrigin, OperationBinding};
+    use crate::interactive::{
+        LogicalOrigin, OperationBinding, PathElement, ServiceContract, ServicePort,
+    };
 
     #[test]
     fn frame_inputs_share_capture_storage_and_compare_flat_order() {
@@ -467,8 +531,8 @@ mod domain_tests {
         assert!(!first.is_empty());
     }
 
-    fn frame(function: &str) -> Frame {
-        Frame {
+    fn frame_data(function: &str) -> FrameData {
+        FrameData {
             id: FrameId(3),
             parent: Some(FrameId(1)),
             role: "P".into(),
@@ -488,6 +552,159 @@ mod domain_tests {
         }
     }
 
+    fn frame(function: &str) -> Frame {
+        frame_data(function).into()
+    }
+
+    #[test]
+    fn frame_sharing_preserves_boundary_equality() {
+        fn send_sync<T: Send + Sync>() {}
+        send_sync::<Frame>();
+        // The former backend predicate is the value-based oracle, independent
+        // of the new fast path and of where metadata is allocated.
+        let old = |a: &Frame, b: &Frame| {
+            a.id() == b.id()
+                && a.parent() == b.parent()
+                && a.role() == b.role()
+                && a.origin() == b.origin()
+                && a.kind() == b.kind()
+                && a.inputs() == b.inputs()
+        };
+        let first = frame("local");
+        let clone = first.clone();
+        assert!(Arc::ptr_eq(&first.0, &clone.0));
+        let equal = frame("local");
+        assert!(!Arc::ptr_eq(&first.0, &equal.0));
+        assert!(first.same_boundary(&clone));
+        assert!(first.same_boundary(&equal));
+        assert_eq!(
+            format!("{first:?}"),
+            concat!(
+                "Frame { id: FrameId(3), parent: Some(FrameId(1)), role: \"P\", ",
+                "origin: Origin { session: \"s\", entry: \"main\", instance: \"root\", path: [] }, ",
+                "kind: Local { site: \"round\", function: \"local\" }, ",
+                "inputs: FrameInputs { explicit: [], captures: [] }, services: [] }"
+            )
+        );
+
+        let mutations: &[fn(&mut FrameData)] = &[
+            |v| v.id = FrameId(4),
+            |v| v.parent = None,
+            |v| v.parent = Some(FrameId(2)),
+            |v| v.role = "V".into(),
+            |v| v.origin.session = "other".into(),
+            |v| v.origin.entry = "other".into(),
+            |v| v.origin.instance = "other".into(),
+            |v| v.kind = FrameKind::Entry.into(),
+            |v| {
+                v.kind = FrameKind::Loop {
+                    site: "loop".into(),
+                    iteration: 2,
+                }
+                .into()
+            },
+            |v| {
+                v.kind = FrameKind::Local {
+                    site: "other".into(),
+                    function: "local".into(),
+                }
+                .into()
+            },
+            |v| {
+                v.kind = FrameKind::Local {
+                    site: "round".into(),
+                    function: "other".into(),
+                }
+                .into()
+            },
+            |v| {
+                v.origin.path.push(PathElement::Match {
+                    site: "m".into(),
+                    alternative: "a".into(),
+                })
+            },
+            |v| {
+                v.origin.path.push(PathElement::Conditional {
+                    site: "c".into(),
+                    taken: true,
+                })
+            },
+            |v| {
+                v.origin.path.push(PathElement::For {
+                    site: "f".into(),
+                    index: 7,
+                })
+            },
+            |v| {
+                v.origin.path.push(PathElement::Loop {
+                    site: "l".into(),
+                    iteration: 3,
+                })
+            },
+            |v| {
+                v.inputs = vec![(
+                    "x".into(),
+                    PhysicalType::parse("index@native.index/0").unwrap(),
+                )]
+                .into()
+            },
+        ];
+        let mut frames = vec![first, clone, equal];
+        for change in mutations {
+            let mut data = frame_data("local");
+            change(&mut data);
+            let changed: Frame = data.into();
+            assert!(!frames[0].same_boundary(&changed));
+            frames.push(changed);
+        }
+        for iteration in [2, 3] {
+            let mut data = frame_data("local");
+            data.kind = FrameKind::Loop {
+                site: "loop".into(),
+                iteration,
+            }
+            .into();
+            frames.push(data.into());
+        }
+        let index = PhysicalType::parse("index@native.index/0").unwrap();
+        let boolean = PhysicalType::parse("bool@native.bool/0").unwrap();
+        for inputs in [
+            vec![("x".into(), index.clone())],
+            vec![("y".into(), index.clone())],
+            vec![("x".into(), boolean.clone())],
+            vec![("x".into(), index.clone()), ("y".into(), boolean.clone())],
+            vec![("y".into(), boolean), ("x".into(), index)],
+        ] {
+            let mut data = frame_data("local");
+            data.inputs = inputs.into();
+            frames.push(data.into());
+        }
+        for a in &frames {
+            for b in &frames {
+                assert_eq!(a.same_boundary(b), old(a, b));
+            }
+        }
+    }
+
+    #[test]
+    fn frame_boundary_uses_flat_inputs_and_excludes_services() {
+        let ty = PhysicalType::parse("index@native.index/0").unwrap();
+        let inputs = vec![("x".into(), ty.clone()), ("capture".into(), ty)];
+        let mut a = frame_data("local");
+        a.inputs = inputs.clone().into();
+        let a: Frame = a.into();
+        let mut b = frame_data("local");
+        b.inputs = FrameInputs::with_captures(inputs[..1].to_vec(), inputs[1..].into());
+        b.services.push(ServicePort {
+            name: "random".into(),
+            contract: ServiceContract::RandomBls12381Field,
+            input_index: 0,
+        });
+        let b: Frame = b.into();
+        assert_ne!(a.services(), b.services());
+        assert!(a.same_boundary(&b));
+    }
+
     #[test]
     fn explicit_domains_preserve_semantic_origins_across_physical_selection() {
         let origin = LogicalOrigin {
@@ -505,7 +722,7 @@ mod domain_tests {
         let lsb = binding("arkworks/poly.fold");
         let msb = binding("arkworks-msb/poly.fold");
         let a = frame("generated_lsb");
-        let mut b = frame("generated_msb");
+        let b = frame("generated_msb");
         let domain =
             |frame: &Frame, binding: &ResolvedBinding, origin: &LogicalOrigin, site: &str| {
                 Invocation {
@@ -526,7 +743,9 @@ mod domain_tests {
         let mut other = origin.clone();
         other.definition = "DifferentAlgorithm".into();
         assert_ne!(expected, domain(&b, &msb, &other, "fold"));
-        b.origin.session = "other-session".into();
+        let mut data = frame_data("generated_msb");
+        data.origin.session = "other-session".into();
+        let b: Frame = data.into();
         assert_ne!(expected, domain(&b, &msb, &origin, "fold"));
     }
 
