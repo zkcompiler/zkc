@@ -21,6 +21,7 @@ import ZkcSecurity.Examples.CausalSumcheck.CalculatedRound
 import ZkcSecurity.Examples.CausalSumcheck.DistributionalRound
 import ZkcSecurity.Examples.CausalSumcheck.ExactRound
 import ZkcSecurity.Examples.CausalSumcheck.Iteration
+import ZkcSecurity.Examples.CausalSumcheck.LogicalResidual
 import ZkcSecurity.Examples.CausalSumcheck.Operations
 import ZkcSecurity.Examples.CausalSumcheck.SourceCallBoundaryControls
 import ZkcSecurity.Examples.CausalSumcheck.SourceContracts

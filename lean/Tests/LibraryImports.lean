@@ -276,6 +276,7 @@ import ZkcExamples.Structured.ApplicationViews
 import ZkcExamples.Structured.ApplicationWrapper
 import ZkcExamples.Structured.ApplicationWrapperData
 import ZkcExamples.Structured.ApplicationWrapperViews
+import ZkcExamples.Structured.LogicalContextControls
 import ZkcExamples.Structured.MapCombination
 import ZkcExamples.Structured.MapCombinationData
 import ZkcExamples.Structured.MapCombinationViews
@@ -380,6 +381,8 @@ import ZkcExamples.Structured.SumcheckHelperBodies
 import ZkcExamples.Structured.SumcheckHelperBridge
 import ZkcExamples.Structured.SumcheckHelperExpansions
 import ZkcExamples.Structured.SumcheckHelperLaws
+import ZkcExamples.Structured.SumcheckLogicalChecking
+import ZkcExamples.Structured.SumcheckLogicalContext
 import ZkcExamples.Structured.SumcheckReduceAssociations
 import ZkcExamples.Structured.SumcheckReduceBodies
 import ZkcExamples.Structured.SumcheckReduceContracts
