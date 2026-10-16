@@ -50,7 +50,9 @@ The [multilinear Sumcheck foundation](docs/spec/multilinear-sumcheck.md) separat
 proves ordered table restriction, endpoint-message and residual/discharge laws
 for arbitrary round counts. The [optional multilinear security adapter](docs/spec/multilinear-sumcheck-security.md)
 proves complete and residual interactive bounds through ArkLib's degree-one
-protocol. Both remain independent of structured source import and zkc native
+protocol, including stop-aware joint phases and reachable full-distribution
+transport. Canonical structured one-round examples use actual typed calculation
+results and local handler laws. Both remain independent of structured source import and zkc native
 execution; the imported degree-two examples retain their separate scope.
 For the actual Interactive Schnorr subject,
 [honest-prover observations](docs/spec/structured-source.md#actual-interactive-schnorr-subject)

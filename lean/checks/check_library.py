@@ -22,6 +22,12 @@ def below(name, root):
 
 
 def permitted(owner, dependency):
+    if owner == 'ZkcSecurity.VCVio.Execution' and any(below(dependency, root) for root in (
+            'ZkcSecurity.ArkLib', 'ArkLib', 'ZkcSecurity.Examples', 'Zkc.Protocols', 'Zkc.Source')):
+        return False
+    if below(owner, 'ZkcSecurity.ArkLib.Sumcheck.Multilinear.Causal') and any(
+            below(dependency, root) for root in ('ZkcSecurity.Examples', 'Zkc.Source')):
+        return False
     if below(owner, 'Zkc'):
         if any(below(dependency, root) for root in (
                 'Tests', 'TestsSecurity', 'TestsClean', 'ZkcExamples', 'ZkcTools',

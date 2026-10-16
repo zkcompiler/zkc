@@ -19,7 +19,12 @@ ArkLib messages and its causal `Native.Core` interaction. It proves complete
 `n / |F|` and partial residual `k / |F|` bounds for arbitrary effectful prover
 strategies, plus honest completeness for arbitrary challenges. Its all-point
 table-oracle realization and checked public-table observation are proved.
-This adapter has no PIR, structured-source or zkc native correspondence.
+The `Causal` modules additionally prove unconditional acceptance domination for
+stop-aware joint phases using existing PIR Execution records, including terminal
+work and ordered LOW/HIGH receives. `VCVio/Execution` supplies reusable reachable
+full-distribution replacement and value-returning transport. Canonical structured
+round examples instantiate local query/checker laws; the actual imported
+Sumcheck/Reduce bridge and zkc native correspondence remain separate work.
 
 `VCVio/Schnorr` proves perfect honest-verifier simulation of the public transcript
 and actual verifier result. The simulator uses only the public key and a uniform

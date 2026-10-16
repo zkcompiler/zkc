@@ -124,6 +124,14 @@ threads that state. `runM` does the same in a lawful monad, enabling VCVio
 probabilistic handlers. Rejection, refusal, incompleteness and a returned false
 Boolean remain distinct. A statement annotation has no runtime proof effect.
 
+The optional `ZkcSecurity.VCVio.Execution` module supplies full-distribution
+and reachable-prefix composition for this same `runM`/`followM`, including
+value-returning trusted work and conservative Boolean checker laws. It compares
+complete output records, not reply marginals. Its support transfer relies on
+VCVio's pinned uniform-oracle semantics; the core remains independent of that
+package. See the [causal security contracts](multilinear-sumcheck-security.md#local-distribution-and-computed-value-contracts)
+for an actual structured-operation example and its remaining imported-source boundary.
+
 `ExactRefinement p q` contains equality of their open processes. Its laws preserve
 all handlers, replies, stops, final states and events, and compose under bind.
 This is intentionally stronger than final-result agreement. It can reject an

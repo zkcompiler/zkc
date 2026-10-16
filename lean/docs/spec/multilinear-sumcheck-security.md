@@ -154,6 +154,109 @@ it is not the original higher-dimensional oracle's raw interface. The theorem
 observes residual truth. It neither pads the point nor asserts a complete
 evaluation of the original table. It is not a native `Reduce` correspondence.
 
+## Stop-aware joint execution and completion
+
+`Causal.Phase`, `Causal.Completion` and `Causal.Soundness` connect finite joint
+execution phases to the ordinary endpoint strategy. They reuse `PIR.Execution`
+and `followM`; they are a proof-side family, not a source AST or second process
+evaluator. LOW and HIGH are separate computations. LOW selects HIGH's
+continuation and residual state, so acknowledgments and adaptive second-message
+selection remain explicit. HIGH selects the following service/delivery work.
+
+The order is LOW, HIGH, boundary guard, pre-draw work, fresh `$ᵗ F`, post-draw
+work, challenge delivery, trusted advance, and the next round. Zero rounds run
+a trusted terminal phase before the mathematical observation. Any inner stop
+is nonaccepting, with its actual residual state and ordered observation prefix.
+The phases describe joint execution, including trusted work, rather than only
+adversary actions. A `ProbComp` always returns an Execution record; native
+nontermination is not supplied by this finite model.
+
+Bare participant rejection uses `publicAbort = noOp`.
+`noOp_abort_is_bare` proves this equality through arbitrary probabilistic
+prefixes. A runtime that exposes public abort can instead use the explicit
+callback: `abortAfter_returned` retains both event prefixes and the callback's
+post-state. The already failed guard stays the primary reject reason even when
+the callback stops. `complete` runs that callback in the endpoint `none`
+continuation. Public abort effects do not disappear from the open computation.
+
+`domination` proves an unconditional accepted-event upper bound for arbitrary
+finite n. On stopped branches `complete` supplies dummy endpoints. On completed
+interaction phases it follows the actual computations. The endpoint leaf type
+is Unit, so it cannot retain arbitrary terminal work. Completion therefore
+promises acceptance domination, not equality of traces or of acceptance. The
+chosen completion's strict inequality on a delivery-stop control demonstrates
+this distinction; it is not an impossibility theorem about every completion.
+
+The initial claim may be verifier-private. For each fixed claim the completion
+can hardcode it, because existing soundness quantifies over every endpoint
+strategy for that claim. No future challenge is available before its explicit
+draw. `history_domination` integrates pointwise completion over outer histories;
+it does not establish freshness or independence of a random outer claim.
+Provider laws must hold at each reached history. No P-side table is identified
+with V's table implicitly. `observer_capacity_exclusion` only intersects an
+accepted event with a caller predicate. This differs from an explicit delivery
+stop and never conditions or renormalizes probability.
+
+`endpointGame_execute` proves equality with ArkLib's actual `Native.Core.execute`
+observation. Together with the existing table oracle realization and soundness,
+`phase_soundness` gives n/card(F). `phase_publicTable_soundness` gives the raw
+public-vector form using `check_eq_true_iff`, `booleanSum_ofList?` and
+`publicTable_observation`. `MSBChronology` identifies chronological challenges
+with `List.ofFn` coordinates; its snoc law preserves order. `residual_phase_soundness`
+gives k/card(F) for `ResidualClaim` of the original table, through the proved
+marginal view. `residualTerminal remaining count table` takes both dimensions
+explicitly because their sum alone cannot determine the split. All include zero
+rounds; `zero_round_false_mass` states that case
+explicitly. `malformed_raw_zero` gives zero raw-observation acceptance for an
+incorrect vector length, without a freshness or false-claim premise.
+
+## Local distribution and computed-value contracts
+
+`ZkcSecurity.VCVio.Execution` owns reusable probability laws over existing PIR
+execution. `SameDist` compares full distributions with every output set
+measurable, including outcome, private state and event order. Its equivalence
+and bind laws preserve arbitrary measured suffix observations. `Reaches`
+restricts local laws to supported returned states. The pinned uniform oracle's
+positive-singleton theorem proves `SameDist.support_eq` and `reaches_iff`;
+this transfer is not claimed for arbitrary weighted oracle interpretations.
+`reaches_follow` propagates explicit invariants. `follow_congr_of_reaches`,
+`SameDist.follow_congr` and `replace_follow_prefix` compose local replacement
+without invoking suffixes on stopped prefixes.
+
+The upstream Stateful handler equivalence quantifies over OracleComp clients
+and projects hidden state. These laws instead operate on full PIR Execution
+records, reusing upstream evalDist/bind/support mechanisms without a new
+interpreter. They compare the same state type; a different-state interpretation
+needs its own correspondence.
+
+`runM_bind_transport` transports returned values, not just Unit work.
+`runM_bind_determined` handles effectful trusted work followed by a determined
+value, retaining stops and events. `runM_determined_of_proc` derives the local
+execution law from a Proc-level body equation. `checked_le_of_proc` composes a
+Boolean checker through any prefix, requiring only that true implies the
+mathematical terminal predicate. A conservative checker is sufficient.
+
+`Examples.CausalSumcheck` is a canonical structured regression, not the imported
+Sumcheck body. It uses the current `participantInterface F G`, root-local Nat
+roles, service operands, ownership restriction/masking and explicit site/action
+interpretations. Each operation supplies the actual typed empty callback tuple,
+empty `ProtocolTable`, and identity root `ProtocolContext` to
+`protocolOperationWith`. Self is fixed at root role 1 and its peer at role 0;
+the context's immutable role map and absent application prefix preserve those
+roles and the root site names. This fragment contains no protocol application
+or repeat. Its calculated round consumes actual typed fieldAdd/fieldEqual,
+vectorAppend and interpolation arithmetic results. The retained append helper
+is hand-built and checked through the ordinary helper table, not recognized by
+its name. Terminal work receives the computed point and claim.
+
+`calculatedRound_cut` and `phase_at_cut` prove the exact local decomposition
+through round mark, LOW, HIGH, guard and query mark. Given prefix reachability
+and full local query `SameDist` against `freshQuery` on that invariant,
+`calculatedRound_distribution` proves full round distribution equality.
+`calculatedRound_soundness` and `checked_calculatedRound_soundness` derive the
+one-round bound. Entire-game equality or domination is never a premise. The
+original syntactic query law remains a stronger sufficient regression.
+
 ## Validation and remaining integration boundary
 
 `TestsSecurity.MultilinearSumcheck` exercises endpoint/coefficient distinction,
@@ -168,17 +271,44 @@ It checks that all quantitative typeclass premises are inhabited together.
 True singleton acceptance shows that the false-initial premise is necessary.
 These controls use ordinary proofs and kernel reduction, never `native_decide`.
 
+`TestsSecurity.CausalSumcheck` additionally checks stopped prefixes before HIGH,
+after guard/query/delivery and during terminal work; adaptive HIGH after the
+first acknowledgment; public abort effects; zero rounds; honest mass one;
+constant-provider failure; and the early-LOW attack. In ZMod 2 that actual
+structured handler has uniform query marginal and false-claim acceptance one,
+so it cannot satisfy even the reachable full-distribution contract. A literal
+fresh-HIGH-only sample has mass one half in this control. The bijective sampler
+r ↦ 1-r satisfies the law on the reached false flag and composes through two
+queries; an unreachable constant-provider flag violates the specified law.
+Effectful determined values and Proc-level conservative checker contracts are
+also exercised.
+
 The exhaustive optional audit covers every owned declaration and its transitive
 axioms. Unrelated upstream files contain `sorry`; selected proof dependency
 closures must contain only `propext`, `Classical.choice` and `Quot.sound`.
-The standalone client consumes both complete and residual bounds. Core imports
+Import and declaration guards keep the exact `ZkcSecurity.VCVio.Execution`
+module independent of ArkLib, protocol applications, source syntax and examples;
+the Causal module family cannot depend on source syntax or examples. The rules
+do not restrict `ZkcSecurity.VCVio.Schnorr`'s existing Schnorr protocol dependency.
+Enforcement controls check rejected type/body dependencies and permitted owners.
+The standalone client consumes complete, residual and stop-aware phase bounds,
+plus the local distribution composition API. Core imports
 remain independent of ArkLib/VCVio, and existing quadratic/factor examples remain.
 
-The next process adapter must connect a `PIR.Proc` contract to this causal
-strategy/handler experiment. The actual source receives **two ordered scalars**;
+The next imported-source adapter must connect the admitted Sumcheck/Reduce
+`PIR.Proc` bodies to these causal phases and handler contracts. The actual source receives **two ordered scalars**;
 it must preserve the intermediate state and possible stops, aggregate them
 before the verifier challenge, and prove the selected observation equivalence.
 It must not equate that source effect tree with an atomic pair receive.
+
+The next source-security gate must derive reached-state freshness for an
+arbitrary adversarial receive/send handler composed with an explicit uniform
+query service. The honest handler is only a positive regression. That composition
+proof must retain private state, ordered events, stops and history invariants,
+then discharge the full local query law and the actual terminal checker's value
+law. Neither a uniform reply marginal nor an honest-only handler theorem closes
+this adversarial gate. Compatibility with the retained application/repeat API
+does not supply the imported Sumcheck source-security bridge.
 
 Role-local received challenges remain distinct from sent/query values until
 an explicit delivery theorem relates them. Public field, table, count, maximum,

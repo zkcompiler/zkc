@@ -17,8 +17,9 @@ that all native behavior already has a Lean model.
 - [Multilinear Sumcheck](spec/multilinear-sumcheck.md): independent ordered table,
   endpoint-message and residual/discharge laws.
 - [Multilinear interactive security](spec/multilinear-sumcheck-security.md): optional
-  ArkLib degree-one adapters, complete/residual bounds and honest completeness;
-  no structured source or native correspondence.
+  ArkLib degree-one adapters, stop-aware causal completion, local distribution
+  contracts, complete/residual bounds and honest completeness;
+  canonical structured examples, with imported Sumcheck and native correspondence separate.
 - [Support](support.md): theorem scope, assumptions and tested boundaries.
 - [Dependencies](dependencies.md): exact pins and compatibility decisions.
 - [Structured computations](design/structured-computations.md): canonical multi-result
