@@ -41,8 +41,12 @@ use one isolated callback on that same carrier. Optional state is masked at entr
 and every yield; immutable captures preserve actual service handles. Count
 admission precedes range construction, and zero count skips the callback.
 The repeat package separates generic process laws, complete original client
-equations, and full Reduction/Sumcheck source admission from the later Sumcheck
-participant equations and security consumer.
+equations, and full Reduction/Sumcheck source admission. Their
+[source-only verifier equations](docs/spec/structured-source.md#source-only-sumcheck-verifier)
+now connect the complete originals to ordered plain processes at maximum 2 for
+Source and 4 for Reduction. Source invokes its actual terminal checker; Reduction returns the
+residual point and claim. This proves no sampling, honest prover completeness,
+native execution or cryptographic security claim.
 Its [scalar inlining pairs](bridges/structured/README.md#scalar-inlining-pairs)
 prove exact original/prepared model equality for authored response and claim
 computations using checked body contracts and a reusable inlining law.
@@ -52,8 +56,10 @@ for arbitrary round counts. The [optional multilinear security adapter](docs/spe
 proves complete and residual interactive bounds through ArkLib's degree-one
 protocol, including stop-aware joint phases and reachable full-distribution
 transport. Canonical structured one-round examples use actual typed calculation
-results and local handler laws. Both remain independent of structured source import and zkc native
-execution; the imported degree-two examples retain their separate scope.
+results and local handler laws. The source-only verifier uses the foundation's
+terminal table laws. Transferring these security bounds to the imported roots
+and establishing native execution correspondence are separate obligations;
+the imported degree-two examples retain their separate scope.
 For the actual Interactive Schnorr subject,
 [honest-prover observations](docs/spec/structured-source.md#actual-interactive-schnorr-subject)
 now supply a causal strategy from ordered source sends, with explicit successful

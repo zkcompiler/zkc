@@ -842,6 +842,78 @@ index/vector messages refuses explicitly. Concrete contract use must establish
 that its actual process lies in the supported fragment; the adapter supplies no
 relation binding or security assumption.
 
+## Source-only Sumcheck verifier
+
+The complete retained `SumcheckSourceViews.program` and
+`SumcheckReduceViews.program` have separate plain verifier equations in
+`SumcheckSourceVerifier` and `SumcheckReduceVerifier`. These equations use exact
+full body and ABI associations and each unit's complete ordered helper/protocol
+tables. The original programs have separate kernel admission theorems; admission
+is not an extra premise or dependency of the process equations. Their shared
+literal Reduce body has maximum 2 in Source
+and maximum 4 in Reduction; the actual child return order is `[3, 0, 1, 2, 4, 5]`.
+The six carried slots are P entries,
+P dimension, P width, P point, V point and V claim; the verifier embedding
+leaves the first four absent.
+
+`Zkc.Source.DenotationLaws` provides operation-step proof rules for the existing
+Region interpreter. Its general bind rule retains an arbitrary operation process;
+return, stop and single-action corollaries share the literal continuation through
+an ordered value tuple. The callback proof consumes these generic rules.
+
+| Imported root | Verifier input | Result |
+|---|---|---|
+| Source | Raw V vector, V claim, V count, V service | Actual owned `check(rawV, pointV, currentV)` singleton optional Boolean |
+| Reduction | Optional P vector/dimension, V claim, V count, V service | Absent P outputs, V point and V current claim; no terminal checker |
+
+`SumcheckVerifierLaws.round_optional` derives the callback's whole plain process
+from the actual operations under `self = ctx.roles 1` and
+`ctx.roles 0 ≠ self`. LOW and HIGH are independently received from the mapped
+peer. The calculated guard checks their sum against the current V claim;
+only then is the captured service queried. V sends the actual query reply `cv`,
+appends `cv` through the associated helper, and calculates
+`(1-cv)*lo + cv*hi`. A send acknowledgement has type Unit and does not identify
+`cv` with a separately received P value. Skipped P-owned work never demands its
+absent inputs. Raw values and counts remain independent across participants.
+
+`loop_optional` covers arbitrary finite residual counts and starting indices.
+The full prelude equation separately checks the original optional count and
+retained maximum before any callback. Missing count is incomplete; excess count
+is refused; zero rounds require no service and return the unchanged optional
+claim with an empty V point. Missing claim stops after both receives, false guard
+precedes missing service, and the callback's missing-point branch stops after
+query and delivery. Root initialization and successful rounds preserve point
+presence. Every handler stop preserves its state and ordered event prefix and
+suppresses the remaining iterations. The callback equations retain the root coordinate,
+composed role map and fully qualified action sites throughout repetition.
+
+Both complete roots expose `verifier_context_optional` over their actual plain
+protocol tables under the same distinct mapped-role hypotheses. The ordinary
+root equations specialize these laws to the root context; their
+`verifier_permuted_optional` corollaries retain self0 under the role map `[2,0]`
+and a nonempty outer prefix. Source keeps that same self at its terminal check.
+
+Source preserves the original raw V vector through the loop and invokes its
+actual checker after a returning loop, including at count zero. Missing terminal
+operands stop incomplete. The same actual Source checker has an equation for
+arbitrary raw and point inputs, separate from the root's bounded point invariant.
+Lengths are representable below `2^64`. For present operands, point-length
+overflow stops exhausted first; a representable point length at least 64 returns
+false before checking raw length; otherwise raw-length overflow stops exhausted. Representable
+malformed shape returns false. Valid decoded raw input is checked against the
+ordered multilinear extension. The decoded root predicate explicitly includes
+`point.length = count` alongside extension equality. Successful-return
+length/presence laws derive that dimension from the admitted V count.
+
+These equations concern plain mathematical processes under the stated ring and
+module interpretation; they require no sampling or handler-honesty premise.
+Erasing site marks preserves qualified communication/query labels and does not
+justify arbitrary observed handlers. The results establish neither frontend or
+exporter correctness, native execution or allocation correspondence, production
+BLS arithmetic, service randomness, honest P completeness, interactive security,
+nor Fiat-Shamir security. Optional ArkLib results remain separate.
+
+
 ## Executable bounds and comparison
 
 ```text

@@ -19,6 +19,7 @@ They do not certify arbitrary DSL programs or the full native lowering pipeline.
 | Schnorr | Imported verifier completeness, two-transcript special soundness and custom invalid-equation rejection | Algebraic group/module interpretation; no discrete-log hardness reduction or whole native prover proof |
 | Structured Schnorr | Actual Interactive, Helpers and Reordered verifier contracts over arbitrary scalar/group values; Interactive prover observations supply a causal Strategy, exact stopped prefixes and completeness under equal bases, the verifier-key witness relation and honest delivery; EarlyChallenge contract refutation | Unconstrained unused prover key; successful fixed nonce/challenge replies and send acknowledgements; partial ordered extraction; shared extraction constructor alone asserts no causality; no native execution, joint scheduler, relation binding or availability soundness theorem |
 | VCVio Schnorr | Equality for every public-view event under fixed challenge and uniform nonce/response sampling; Interactive source-derived messages and actual verifier outcome transfer to the existing simulator | Generic and earlier consumers retain the handwritten strategy; new Interactive consumer derives it from checked source sends. No native prover/RNG correspondence, malicious-verifier, concurrent or Fiat–Shamir theorem |
+| [Source-only Sumcheck verifier](spec/structured-source.md#source-only-sumcheck-verifier) | Plain verifier equations for both complete original units, exact maxima 2/4, optional inputs and ordered stops; Source composes its actual terminal with multilinear table equality | Ring/module interpretation; no frontend/exporter or native correctness, sampling, honest P completeness, or cryptographic security claim |
 | ArkLib Sumcheck | Actual imported two-round degree-two verifier acceptance on a false public sum claim is at most `4 / |F|` | Finite field; reached fresh uniform queries; causal coefficient-message strategies, including arbitrary private probabilistic mixtures chosen before verifier draws |
 | [Multilinear Sumcheck mathematics](spec/multilinear-sumcheck.md) | Arbitrary-length ordered prefix restriction and suffix marginalization, endpoint-message laws, explicit delivery agreements, residual truth and complete public-table discharge, including zero rounds | Independent scalar-table model over rings; core has no optional security dependencies |
 | [Multilinear interactive security](spec/multilinear-sumcheck-security.md) | Complete `n / |F|` and partial residual `k / |F|` bounds, degree-one endpoint/table transport, checked public-table observation, and honest completeness | Fixed verifier table/false initial sum; finite field and fresh uniform challenges; arbitrary causal effectful ArkLib strategies; exact original or derived marginal oracle; imported source/native correspondence remains separate |
@@ -55,6 +56,26 @@ The [structured bridge](../bridges/structured/README.md) separately compares
 full-size BLS12-381 scalar values with direct SSA execution and selected production
 Runner cases. Those finite comparisons do not establish native executable
 soundness, randomness or transcript encoding.
+
+## Source-only Sumcheck verifier
+
+The complete Source and Reduction programs are separately kernel admitted.
+Their root equations consume exact full literal bodies and actual helper/protocol
+tables. Shared callback and loop
+laws retain independently received endpoints, the actual service reply, appended
+verifier point, interpolation and stopped prefixes. Source checks its unchanged
+raw V vector; Reduction returns a point and residual claim without a terminal.
+The [owning specification](spec/structured-source.md#source-only-sumcheck-verifier)
+states count admission, optional-input order and terminal representation limits.
+The `Tests.StructuredSumcheckVerifier*` controls consume the actual equations
+over `ZMod 2` and `ZMod 4`, include a nonzero `ZMod 5` append witness, and
+distinguish both raw associations and semantics of changed guards, interpolation,
+append helpers and return maps. Optional/count ordering, independent P/V inputs,
+mapped contexts and later-iteration stops retain complete handler records.
+Re-admitted mutants use the existing checker and participant interpreter. These
+finite executions are controls; the general source equations supply the
+quantified claims. Neither transfers an ArkLib bound or establishes native
+execution or honest prover completeness.
 
 ## Structured primitive contracts
 
@@ -227,8 +248,10 @@ views and process equations, including independent participant counts and the
 nested repeated-addition result. The repeated service subject and its three-role
 wrapper retain actual aliased or distinct handles, query/send order, zero-count
 behavior, reached stops and nested mapped peer/site labels. The complete original
-Reduction and Sumcheck units have kernel admission and exact source association;
-their full participant equations and security connection are subsequent work.
+Reduction and Sumcheck units have kernel admission and exact source association.
+Their [source-only verifier equations](spec/structured-source.md#source-only-sumcheck-verifier)
+compose this boundary with actual arithmetic and optional-input behavior;
+security transfer remains separate.
 
 The executable preflight reuses `Bounds.iterate` and joins all explored prefixes.
 `none` denotes no returning path, while `some []` is a returning empty result.

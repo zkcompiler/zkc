@@ -340,7 +340,14 @@ Independent controls cover unchanged repeat/nested-repeat sources, service
 aliasing and query order across iterations, nested applications, independent
 participant counts and received values, and whole-body refusal at maximum zero.
 Complete original Reduction and Sumcheck captures are admitted, including their
-helper closures; their full symbolic source equations remain separate work.
+helper closures. Their [source-only verifier equations](../lean/docs/spec/structured-source.md#source-only-sumcheck-verifier)
+now connect the exact complete bodies to plain participant processes at retained
+maxima 4 and 2 respectively. They preserve independent V inputs, actual query
+replies, optional-input order and stopped prefixes. Source composes its actual
+terminal checker with the multilinear table equation; Reduction returns a
+residual obligation. These are ring/module process results, with no frontend or
+exporter correctness, native execution, sampling, honest P completeness or
+cryptographic security claim.
 Effective sites and repeat depth traverse applications without unrolling source
 maxima. Native affine resource controls remain outside the structured type model.
 Conditional entry completion and construction-start selection remain outside

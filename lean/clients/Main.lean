@@ -10,6 +10,8 @@ import ZkcExamples.Structured.RepeatServiceLaws
 import ZkcExamples.Structured.RepeatServiceWrapperLaws
 import ZkcExamples.Structured.SumcheckReduceViews
 import ZkcExamples.Structured.SumcheckSourceViews
+import ZkcExamples.Structured.SumcheckSourceVerifier
+import ZkcExamples.Structured.SumcheckReduceVerifier
 import Zkc.Source.Structured.RepeatLaws
 import ZkcExamples.NativePrograms.CustomProperty
 import ZkcExamples.NativePrograms.FactorHorner
@@ -62,7 +64,7 @@ noncomputable def importedUnitStateEquation :=
   @ZkcExamples.Structured.UnitState.process_eq_reference
 
 /-- Complete retained subjects are usable through the normal package boundary.
-The two large subjects expose admission independently of later Sumcheck laws. -/
+The two large subjects expose admission separately from their verifier equations. -/
 noncomputable def importedRepeatAdmission :=
   @ZkcExamples.Structured.RepeatViews.kernel_admission
 
@@ -111,6 +113,55 @@ theorem multilinearMarginalMeaning {F : Type} [CommRing F] {n k : Nat}
       Zkc.Polynomial.Multilinear.booleanSum
         (Zkc.Polynomial.Multilinear.fixPrefix k table point) :=
   Zkc.Polynomial.Multilinear.extension_sumRemaining table point
+
+/-- A downstream consumer can inspect the complete optional-input verifier
+process of each original, without importing tests or a security package. -/
+noncomputable def importedStructuredSumcheckVerifier :=
+  @ZkcExamples.Structured.SumcheckSourceVerifier.verifier_optional
+
+noncomputable def importedStructuredSumcheckChecked :=
+  @ZkcExamples.Structured.SumcheckSourceVerifier.verifier_checked
+
+noncomputable def importedStructuredSumcheckReduction :=
+  @ZkcExamples.Structured.SumcheckReduceVerifier.verifier_optional
+
+/-- Missing active count stops before receiving any prover message. -/
+theorem structuredSumcheckMissingCount {F G : Type}
+    [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
+    (raw : Option (List F)) (claim : Option F) (service : Option Nat) :
+    ZkcExamples.Structured.SumcheckSourceViews.program.participant F G 1
+      (ZkcExamples.Structured.SumcheckSourceVerifier.sourceRootInputs raw claim none service) =
+        .halt .incomplete := by
+  rw [ZkcExamples.Structured.SumcheckSourceVerifier.verifier_optional]
+  rfl
+
+/-- The Reduction root returns its optional claim unchanged at zero rounds,
+with an empty verifier point and no service requirement. -/
+theorem structuredSumcheckReductionZero {F G : Type}
+    [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
+    (claim : Option F) :
+    ZkcExamples.Structured.SumcheckReduceViews.program.participant F G 1
+      (ZkcExamples.Structured.SumcheckReduceVerifier.reduceRootInputs
+        none none claim (some 0) none) =
+          .done (.cons none (.cons none (.cons (some []) (.cons claim .nil)))) := by
+  rw [ZkcExamples.Structured.SumcheckReduceVerifier.verifier_optional]
+  rfl
+
+open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured in
+/-- A mapped caller retains self0 at the actual terminal, even when zero rounds
+need no service. The root and helper tables remain the complete original ones. -/
+theorem structuredSumcheckMappedZero {F G : Type}
+    [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
+    (raw : Option (List F)) (claim : Option F) :
+    invokeProtocol (SumcheckSourceViews.unit.plainProtocolTable F G)
+      SumcheckSourceBodies.runSignature
+      ⟨some "outer", roleSubstitution [2, 0]⟩ 0
+      (SumcheckSourceVerifier.sourceRootInputs raw claim (some 0) none) =
+        SumcheckVerifierTerminal.actualOwnedCheck SumcheckSourceViews.unit 0
+          raw (some []) claim := by
+  rw [SumcheckSourceVerifier.verifier_permuted_optional,
+    SumcheckVerifierPrelude.admittedRounds_zero]
+  rfl
 
 /-- A downstream client derives helper laws from exact members of its own list. -/
 noncomputable def reusableFirstContracts :=
