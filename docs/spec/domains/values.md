@@ -172,14 +172,23 @@ unsigned byte elements and one runtime extent. This grants neither numeric
 interpretation nor finite-operation admission. Bytes do not imply an integer,
 field or point encoding.
 
-`zkc::bytes` exports `empty`, `append`, `concat`, `slice`, `at`, `length` and
-`equal`. `append` checks that its index operand is in 0..255. `slice` takes a
+`zkc::bytes` exports `empty`, `repeat`, `append`, `concat`, `join`, `slice`, `at`,
+`length` and `equal`. `append` checks that its index operand is in 0..255. `slice` takes a
 start and length; the complete interval must be in bounds, including an empty
-slice. No operation truncates, wraps or pads. Output allocation and byte limits
+slice. No operation implicitly truncates, wraps or pads. Output allocation and byte limits
 are checked before copying. Byte storage is charged by its byte length, not by
 the numerical-element limit. Readable input/output uses JSON arrays of integers
 in 0..255. [Native message framing](../formats/messages.md) remains separate
 from the byte payload.
+
+`repeat(byte, count)` checks the byte even when count is zero, then returns
+exactly count copies. `join(parts: Sequence<Bytes>)` concatenates fragments in
+order; an empty sequence produces empty bytes. It checks fragments in order,
+checked total length, wire and output allowances before allocating. Neither
+operation adds framing or transcript observations. Native allocation and work
+charges follow the [capacity contract](../runtime/capacity.md#byte-construction).
+These authored operations have their own charge boundaries;
+replacing a scalar loop does not promise identical exhaustion behavior.
 
 ## Checked indices
 

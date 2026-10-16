@@ -217,6 +217,24 @@ can construct `RoleInputs`, `RunRequest` and `ProofRequest` directly and invoke
 `RunEntry` or `ProofEntry`. Their preparation, native execution and authority
 checks are shared with the CLI. Both provide `check_inputs` without execution.
 
+Applications making repeated calls can retain immutable input data explicitly:
+
+```rust,ignore
+use zkc_tools::execution::{Capacity, InputValue, PreparedData};
+
+let public = PreparedData::from_value(native_value, Capacity::default())?;
+// Reuse this handle when constructing each call's named input map.
+request.public.insert("values".into(), InputValue::Prepared(public.clone()).into());
+let report = entry.prove(request)?;
+```
+
+`from_wire(type, bytes, capacity)` imports canonical bytes instead. Preparation
+retains decoded data and its encoding; `retained_bytes()` reports that payload
+cost. Each call still checks its current limits and input authority and creates
+fresh execution resources. Keep private values as `InputValue::Native` when
+encoding them would be unnecessary. This process-local API adds no cache files
+or implicit CLI reuse.
+
 The nested `execution` diagnostics and Rust `native` report retain native labels;
 logical result maps retain source names.
 

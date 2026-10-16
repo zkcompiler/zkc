@@ -1,0 +1,6 @@
+format = "zkc.project/0"
+[modules]
+example = "main.zkc"
+[dependencies]
+sumcheck = "../../../../libraries/sumcheck"
+spongefish = "../../../../libraries/spongefish"

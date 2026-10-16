@@ -4,9 +4,11 @@ The frozen vector is from Spongefish 0.7.4, arkworks 0.6, BLS12-381 G1,
 SHAKE128, protocol "schnorr proof", session "spongefish examples", secret 7
 and typed nonce 11. Both native framing and raw external proofs use the CLI.
 """
+import hashlib
 from pathlib import Path
 
 import pytest
+from entry import Entry
 from source_modules import library_modules
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -201,3 +203,51 @@ def test_private_snapshot_containers_and_byte_relation_metadata(toolchain, journ
                   f'--witness={witness}', f'--output={proof}'])
     assert journal.json([toolchain.runtime, '--json', 'verify', *args,
                           f'--proof={proof}'])['status'] == 'accepted'
+
+
+@pytest.mark.parametrize('flags', [(), ('--no-simplify', '--release-storage')])
+def test_bulk_observation_preserves_order_and_empty_cursor(toolchain, journal, directory, flags):
+    source = '''module sample;
+use spongefish as transcript;
+use zkc::bytes as bytes;
+use zkc::vector::{Vector, length, get};
+domain F=field("bls12-381.fr");
+fn check(values:Vector<F>,prior:index)->(F,F,F,F) {
+  let mut state=transcript::initialize(bytes::empty(),bytes::empty());
+  for i in 0..prior { let (next,_) = transcript::challenge<F>(state); state=next; }
+  let mut scalar=state;
+  for i in 0..length(values) { scalar=transcript::observe_scalar(scalar,get(values,i)); }
+  let bulk=transcript::observe_scalars(state,values);
+  let (scalar,a)=transcript::challenge<F>(scalar);
+  let (bulk,b)=transcript::challenge<F>(bulk);
+  let (_,c)=transcript::challenge<F>(scalar);
+  let (_,d)=transcript::challenge<F>(bulk);
+  return (a,b,c,d);
+}
+protocol Run roles(P)(values:Vector<F>@P,prior:index@P)
+  ->(scalar_first:F@P,bulk_first:F@P,scalar_next:F@P,bulk_next:F@P) {
+  let (scalar_first,bulk_first,scalar_next,bulk_next)=check(values,prior);
+  return(scalar_first=scalar_first,bulk_first=bulk_first,
+         scalar_next=scalar_next,bulk_next=bulk_next);
+}
+run Demo=Run;
+'''
+    entry = Entry(toolchain, journal, directory, source,
+                  (*flags, *library_modules('spongefish')))
+    # Independent SHAKE model for scalar observations; no upstream slice API.
+    session = hashlib.shake_128(b'fiat-shamir/session-id'.ljust(168, b'\0')).digest(32)
+    initialized = bytes(200) + session
+    modulus = 52435875175126190479447740508185965837690552500527637822603658699938581184513
+    for n in (0, 1, 16, 256):
+        values = [i * 19 + 5 for i in range(n)]
+        absorbed = initialized + b''.join(v.to_bytes(32, 'big') for v in values)
+        for prior in (0, 1, 2):
+            result = entry.run(f'observe-{n}-{prior}', {
+                'values': list(map(str, values)), 'prior': prior,
+            })
+            offset = 0 if n else prior * 64
+            output = hashlib.shake_128(absorbed).digest(offset + 128)[offset:]
+            expected = [int.from_bytes(output[i:i + 64], 'big') % modulus for i in (0, 64)]
+            for prefix in ('scalar', 'bulk'):
+                assert int(result[f'{prefix}_first']) == expected[0]
+                assert int(result[f'{prefix}_next']) == expected[1]

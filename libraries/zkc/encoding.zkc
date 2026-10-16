@@ -1,5 +1,15 @@
 module zkc::encoding;
 use zkc::bytes::{Bytes};
+use zkc::vector::{Vector};
+use zkc::curve::{Groups};
+
+// Unique shortest unsigned LEB128. Length/timing depend on the input integer.
+pub fn index_uleb128(value: index) -> Bytes = primitive("encoding.index_uleb128");
+
+// Ordered concatenation of each element's exact scalar encoding, without a length prefix.
+pub fn fields_be<F: Field>(values: Vector<F>) -> Bytes = primitive("encoding.fields_be");
+pub fn fields_le<F: Field>(values: Vector<F>) -> Bytes = primitive("encoding.fields_le");
+pub fn groups_compressed<G: Group>(values: Groups<G>) -> Bytes = primitive("encoding.groups_compressed");
 
 pub fn field_be<F: Field>(value: F) -> Bytes = primitive("encoding.field_be");
 pub fn field_from_be<F: Field>(value: Bytes) -> (bool, F) = primitive("encoding.field_from_be");

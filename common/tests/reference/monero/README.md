@@ -25,7 +25,9 @@ cmp build/experiments/monero-fixtures/edwards-map.json crates/zkc-backends/tests
 
 Set `CMAKE_PREFIX_PATH` and `PKG_CONFIG_PATH` when the dependencies are outside
 standard paths. The wrapper relies on the Linux C++ symbol for `rct::skGen`;
-do not enable interprocedural optimization. No build downloads dependencies.
+do not enable interprocedural optimization. No build downloads dependencies. The same build also provides `monero-benchmark`,
+which uses ordinary upstream randomness and the [benchmark worker](../../../benchmarks/README.md)
+contract. Only `monero-reference` links the replay wrapper.
 The reproduction script rejects modified or differently pinned upstream sources.
 
 `monero-reference prove COUNT PREFIX PATTERN` produces the proof, original `V`

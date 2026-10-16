@@ -6,7 +6,7 @@ the resulting `zkc.program/0` with the generic runtime. The public library separ
 | Owner | Responsibility |
 |---|---|
 | `project` | Manifest discovery, source maps, Entry selection, standard paths, template plans and bounded compiler invocation |
-| `execution` | Shared `Capacity`, `InputValue` and immutable `ProverMaterial` |
+| `execution` | Shared `Capacity`, `InputValue`, immutable `PreparedData` and authenticated `ProverMaterial` |
 | `entry` | Authenticated packages, named input binding, execution and generated Rust data bindings |
 | `run` | Authenticated run bundles, role preparation, scheduling, transport and bounded reports |
 | `proof` | Independently admitted producer/verifier deployments, public binding, proof execution, attempts and setup authority |

@@ -70,13 +70,31 @@ the one-million-transition ceiling. Attempt policy admission precedes request
 parsing, material loading and entropy issuance.
 
 Public values are independently authorized by the caller. Ordinary public and
-private data use shared `InputValue::Native`, `Wire` or `Variant` constructors.
+private data use shared `InputValue::Native`, `Wire`, `Prepared` or `Variant` constructors.
 Native values retain upstream library invariants and undergo the same complete
 physical type, installed profile, setup and entry checks as decoded data.
 Public verifier keys require canonical wire bytes and independently installed
 pins. A role's unit `VerifierKey` declaration selects its admitted public key;
 a prover key uses its separate authenticated material constructor. Foreign
 capabilities or key handles cannot enter through ordinary native data.
+
+`PreparedData::from_wire` decodes a canonical native frame once;
+`from_value` validates and encodes native data once. Both retain immutable data
+and its exact physical type and wire bytes under an explicit `Capacity`.
+The handle shares storage across clones and exposes its retained payload size,
+including the wire copy. Its lifetime belongs to the application. Preparation
+does not authorize a statement, import setup keys, issue capabilities or retain
+transcript state. Setup-dependent values use the setup owner's APIs.
+For these native data profiles, physical type and value determine canonical
+bytes. Invocation domains and capacity restrict admission, not encoding; a
+context-dependent codec needs a separate preparation contract before reuse.
+
+Each use still checks the declared physical type, current policy and selected
+setup. Prepared and ordinary wire inputs use the same framing measurements and
+loading charges, including when nested inside variants. One recursive planner
+charges each input node, each wire scan or native measurement, and retained
+estimates; each operand occurrence is charged even if storage is shared.
+Reuse avoids repeated cryptographic decoding and canonical serialization.
 
 `ProverMaterial::from_bytes` imports immutable proving material against a complete
 material fingerprint and the supplied verifier key. Import alone grants no
@@ -103,7 +121,11 @@ operand must have the same canonical bytes as its independently supplied public
 value. Mismatch returns `native-proof-shared-public-input` before execution.
 Wire requests retain exact-byte agreement and reuse the matching admitted public
 value. Additional native encoding work is reserved before loading, and binding
-hex expansion is bounded before allocating its strings. Invocation loading
+hex expansion is bounded before encoding. A borrowed logical-tree view preflights
+the complete grammar and limits, then streams the same canonical bytes to SHA-256
+and, for managed transcripts, the retained initialization buffer. Authored jobs
+retain the digest without allocating that buffer. Encoding changes neither the
+binding root nor the transcript absorption policy. Invocation loading
 capacity and per-attempt execution budgets are distinct: a valid request may
 load successfully and then report an execution limit at its first attempt.
 

@@ -12,8 +12,19 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
     {
         return None;
     }
+    if binding.contract == "bytes.join" {
+        let bytes = LogicalType::new(Bytes, Identity::None).ok()?;
+        return Some(KernelSignature {
+            inputs: vec![
+                PhysicalType::default_for(LogicalType::sequence(bytes.clone()).ok()?).ok()?,
+            ],
+            outputs: vec![PhysicalType::default_for(bytes).ok()?],
+            attributes: AttributeRule::None,
+        });
+    }
     let (inputs, outputs): (&[Type], &[Type]) = match binding.contract.as_str() {
         "bytes.empty" => (&[], &[Bytes]),
+        "bytes.repeat" => (&[Index, Index], &[Bytes]),
         "bytes.append" => (&[Bytes, Index], &[Bytes]),
         "bytes.concat" => (&[Bytes, Bytes], &[Bytes]),
         "bytes.slice" => (&[Bytes, Index, Index], &[Bytes]),
@@ -65,6 +76,42 @@ pub(crate) fn apply(
     };
     let output = match (name, args) {
         ("bytes.empty", []) => copy(&[], &[])?,
+        ("bytes.repeat", [Index(byte), Index(count)]) => {
+            let byte = u8::try_from(*byte).map_err(|_| refused("bytes-element"))?;
+            let count = usize::try_from(*count).map_err(|_| exhausted("size-overflow"))?;
+            policy.bytes(count)?;
+            policy.output(size(count, 2)?, available)?;
+            let mut out = crate::kernels::arithmetic::reserve(count)?;
+            out.resize(count, byte);
+            Bytes(out.into())
+        }
+        ("bytes.join", [Value::Sequence(parts)]) => {
+            let bytes =
+                LogicalType::new(Type::Bytes, Identity::None).expect("installed bytes type");
+            if parts.physical_type().logical().sequence_element() != Some(&bytes) {
+                return Err(refused("bytes-operands"));
+            }
+            // Check every fragment and the total before allocating or copying.
+            let length = parts.iter().try_fold(0usize, |total, part| {
+                let Bytes(part) = part else {
+                    return Err(refused("bytes-operands"));
+                };
+                policy.bytes(part.len())?;
+                total
+                    .checked_add(part.len())
+                    .ok_or_else(|| exhausted("size-overflow"))
+            })?;
+            policy.bytes(length)?;
+            policy.output(size(length, 2)?, available)?;
+            let mut out = crate::kernels::arithmetic::reserve(length)?;
+            for part in parts.iter() {
+                let Bytes(part) = part else {
+                    unreachable!("checked fragment")
+                };
+                out.extend_from_slice(part);
+            }
+            Bytes(out.into())
+        }
         ("bytes.append", [Bytes(a), Index(b)]) => {
             let byte = u8::try_from(*b).map_err(|_| refused("bytes-element"))?;
             copy(a, &[byte])?
@@ -96,6 +143,8 @@ pub(crate) fn apply(
 
 pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
     ("native/bytes.empty", "bytes.empty"),
+    ("native/bytes.repeat", "bytes.repeat"),
+    ("native/bytes.join", "bytes.join"),
     ("native/bytes.append", "bytes.append"),
     ("native/bytes.concat", "bytes.concat"),
     ("native/bytes.slice", "bytes.slice"),
@@ -115,6 +164,97 @@ mod tests {
     }
     fn run(name: &str, args: &[Value]) -> Result<Vec<Value>> {
         apply(name, args, &[], &Policy::default(), usize::MAX)
+    }
+
+    #[test]
+    fn bulk_bytes_preserve_order_and_preflight_limits() {
+        for (byte, count) in [(0, 0), (255, 1), (128, 1024)] {
+            let out = run("bytes.repeat", &[Value::Index(byte), Value::Index(count)]).unwrap();
+            assert!(
+                matches!(&out[0], Value::Bytes(v) if v.as_ref() == vec![byte as u8; count as usize])
+            );
+        }
+        // Even zero copies must not legitimize an invalid byte.
+        assert_eq!(
+            run("bytes.repeat", &[Value::Index(256), Value::Index(0)])
+                .unwrap_err()
+                .code,
+            "refused:bytes-element"
+        );
+        assert!(run("bytes.repeat", &[Value::Index(0), Value::Index(u64::MAX)]).is_err());
+        let ty = LogicalType::new(Type::Bytes, Identity::None).unwrap();
+        for parts in [
+            vec![],
+            vec![bytes(&[]), bytes(&[1, 255]), bytes(&[]), bytes(&[0])],
+        ] {
+            let expected: Vec<_> = parts
+                .iter()
+                .flat_map(|v| match v {
+                    Value::Bytes(b) => b.to_vec(),
+                    _ => unreachable!(),
+                })
+                .collect();
+            let parts = Value::Sequence(
+                crate::Sequence::new(ty.clone(), parts, &Policy::default()).unwrap(),
+            );
+            let out = run("bytes.join", std::slice::from_ref(&parts)).unwrap();
+            assert!(matches!(&out[0], Value::Bytes(v) if v.as_ref() == expected));
+            let limit = size(expected.len(), 2).unwrap();
+            assert!(
+                apply(
+                    "bytes.join",
+                    std::slice::from_ref(&parts),
+                    &[],
+                    &Policy::default(),
+                    limit
+                )
+                .is_ok()
+            );
+            assert_eq!(
+                apply("bytes.join", &[parts], &[], &Policy::default(), limit - 1)
+                    .unwrap_err()
+                    .code,
+                "exhausted:output-bytes"
+            );
+        }
+        let parts = Value::Sequence(
+            crate::Sequence::new(ty, vec![bytes(&[1, 2]), bytes(&[3, 4])], &Policy::default())
+                .unwrap(),
+        );
+        let policy = Policy {
+            max_wire_bytes: 3,
+            ..Default::default()
+        };
+        assert_eq!(
+            apply("bytes.join", &[parts], &[], &policy, usize::MAX)
+                .unwrap_err()
+                .code,
+            "exhausted:wire-bytes"
+        );
+        assert_eq!(
+            apply(
+                "bytes.repeat",
+                &[Value::Index(0), Value::Index(4)],
+                &[],
+                &policy,
+                usize::MAX
+            )
+            .unwrap_err()
+            .code,
+            "exhausted:wire-bytes"
+        );
+        let wrong = Value::Sequence(
+            crate::Sequence::new(
+                LogicalType::parse("index").unwrap(),
+                vec![],
+                &Policy::default(),
+            )
+            .unwrap(),
+        );
+        assert_eq!(
+            run("bytes.join", &[wrong]).unwrap_err().code,
+            "refused:bytes-operands"
+        );
     }
 
     #[test]

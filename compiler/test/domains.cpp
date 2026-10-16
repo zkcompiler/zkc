@@ -539,7 +539,8 @@ void installedBindings() {
                     (operation.name == "encoding.group_decode_cofactor" ||
                      operation.name == "encoding.cryptonote_map")
                 ? "edwards25519.prime"
-            : sort == "Field" && (operation.name == "encoding.field_le" ||
+            : sort == "Field" && (operation.name == "encoding.fields_le" ||
+                                  operation.name == "encoding.field_le" ||
                                   operation.name == "encoding.field_from_le" ||
                                   operation.name == "encoding.field_reduce_le")
                 ? "ristretto255.scalar"

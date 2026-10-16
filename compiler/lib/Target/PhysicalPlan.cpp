@@ -1,4 +1,5 @@
 #include "PhysicalPlan.h"
+#include "mlir/IR/RegionKindInterface.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Dialect/Bindings.h"
@@ -547,7 +548,7 @@ Expected<SmallVector<OperationIndex>> checkAllUses(Operation *op,
   auto producer = dyn_cast<DiagonalProducerInterface>(op);
   if (!function || function.isDeclaration() ||
       !hasSingleElement(function.getBody()) ||
-      op->getParentOp() != function.getOperation() || !producer)
+      mayBeGraphRegion(*op->getParentRegion()) || !producer)
     return error("binding-contraction");
   auto production = producer.getDiagonalProducerRoles();
   if (!production || production->result >= op->getNumResults() ||
@@ -587,7 +588,6 @@ Expected<SmallVector<OperationIndex>> checkAllUses(Operation *op,
     locate(failureLocation, user);
     auto consumer = dyn_cast<DiagonalContractionInterface>(user);
     if (!consumer || user->getBlock() != op->getBlock() ||
-        user->getParentOp() != function.getOperation() ||
         !op->isBeforeInBlock(user))
       return error("binding-contraction");
     auto contraction = consumer.getDiagonalContractionRoles();

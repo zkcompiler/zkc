@@ -7,14 +7,13 @@ use zkc::shake128 as shake;
 use zkc::shake128::{State};
 use zkc::encoding as encoding;
 use zkc::indices::{less};
+use zkc::vector as vector;
 
 // Spongefish 0.7.4 StdHash initialization. Tags are bytes supplied by the
 // application; the protocol identifier occupies a full SHAKE128 rate block.
 fn pad(value: Bytes, width: index) -> Bytes {
   require !less(width, bytes::length(value));
-  let mut result = value;
-  for _ in bytes::length(value)..width { result = bytes::append(result, 0); }
-  return result;
+  return bytes::concat(value, bytes::repeat(0, width - bytes::length(value)));
 }
 fn session_tag() -> Bytes {
   // ASCII "fiat-shamir/session-id".
@@ -56,6 +55,11 @@ pub fn observe_point<G: Group>(state: State, value: G) -> State {
 }
 pub fn observe_scalar<F: Field>(state: State, value: F) -> State {
   return shake::absorb(state, encoding::field_be(value));
+}
+// An empty collection performs no observation, including after a squeeze.
+pub fn observe_scalars<F: Field>(state: State, values: vector::Vector<F>) -> State {
+  return if vector::length(values) == 0 { state }
+    else { shake::absorb(state, encoding::fields_be(values)) };
 }
 pub fn challenge<F: Field>(state: State) -> (State, F) {
   let (next, sampled) = shake::squeeze(state, 64);

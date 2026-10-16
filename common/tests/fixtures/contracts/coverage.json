@@ -2,6 +2,8 @@
   "profile": "zkc.contract-conformance-coverage",
   "operations": {
     "field": [
+      "encoding.fields_be",
+      "encoding.fields_le",
       "encoding.field_be",
       "encoding.field_from_be",
       "encoding.field_reduce_be",
@@ -99,6 +101,7 @@
       "vector.equal"
     ],
     "group": [
+      "encoding.groups_compressed",
       "encoding.group_compressed",
       "encoding.group_from_compressed",
       "encoding.group_decode_cofactor",
@@ -141,6 +144,9 @@
       "pcs.equal"
     ],
     "nullary": [
+      "encoding.index_uleb128",
+      "bytes.repeat",
+      "bytes.join",
       "bytes.empty",
       "bytes.append",
       "bytes.concat",

@@ -63,7 +63,7 @@ struct Limits {
   // Parse depth also bounds constructed type/natural operator trees.
   uint64_t parseDepth = 64, expressionDepth = 64;
   uint64_t importDepth = 64, callDepth = 64;
-  uint64_t declarations = 10000, operations = 100000, work = 4000000;
+  uint64_t declarations = 10000, operations = 100000, work = 8000000;
   uint64_t irBytes = 16777216, symbolBytes = 4096;
   uint64_t notationDescriptors = 4096, notationHoles = 64;
   uint64_t notationInspectionBytes = 8388608;

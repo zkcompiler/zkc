@@ -77,6 +77,7 @@ let
       ".clang-format"
       "compiler"
       "common/tests/consumer"
+      "common/benchmarks/monero.cpp"
     ];
     sdk.paths = pytest ++ [
       "common/tests/consumer/test_discovery.py"

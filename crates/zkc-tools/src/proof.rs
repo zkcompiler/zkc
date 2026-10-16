@@ -26,8 +26,8 @@ use zkc_backends::{
 };
 use zkc_runtime::{
     interactive::{
-        EntryRole, Identity, LogicalType, NativeProofEntry, PhysicalType, Runner, Type,
-        admit_supplied,
+        EntryRole, Identity, LogicalType, NativeProofEntry, PhysicalType, PreparationLimits,
+        PreparationStats, PreparedComputations, Runner, Type, admit_supplied,
     },
     logical,
 };
@@ -58,6 +58,7 @@ pub struct NativeDeployment {
     capacity: Capacity,
     setups: SetupAuthority,
     entry: NativeProofEntry,
+    preparation: PreparedComputations<NativeBackend>,
     source: String,
     descriptor: Json,
     format: ProofFormat,
@@ -359,6 +360,10 @@ impl NativeDeployment {
             external_work_limit: NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
             capacity: Capacity::default(),
             setups,
+            preparation: PreparedComputations::new(
+                proof_entry.admitted(),
+                PreparationLimits::default(),
+            ),
             entry: proof_entry,
             source,
             descriptor: envelope[2].clone(),
@@ -366,6 +371,39 @@ impl NativeDeployment {
             public,
             maps,
         })
+    }
+    /// Bound public computation storage independently of invocation capacity.
+    /// Reconfiguration starts a new empty store; clones otherwise share it.
+    pub fn with_preparation_limits(mut self, limits: PreparationLimits) -> Self {
+        self.preparation = PreparedComputations::new(self.entry.admitted(), limits);
+        self
+    }
+    pub fn preparation_stats(&self) -> PreparationStats {
+        self.preparation.stats()
+    }
+    fn prepared_call<T>(
+        &self,
+        runner: &mut Runner<NativeBackend>,
+        role: &EntryRole,
+        call: impl FnOnce(&mut Runner<NativeBackend>) -> ArtifactReport<T>,
+    ) -> ArtifactReport<T> {
+        // Source-port correspondence and canonical public agreement were
+        // checked at admission/input loading. Neither role nor value equality
+        // grants publicity to proof bytes, resources or private inputs.
+        let public = self.maps[&role.role]
+            .data
+            .iter()
+            .zip(&role.inputs)
+            .enumerate()
+            .filter_map(|(index, (port, (_, ty)))| {
+                (ty.is_serializable() && self.public.iter().any(|p| p.original == port.original))
+                    .then_some(index)
+            })
+            .collect::<Vec<_>>();
+        // Preparation is optional. Any unsupported setup leaves the ordinary
+        // execution path intact; no public values are inferred on failure.
+        let _ = runner.prepare_computations(self.preparation.clone(), &public);
+        call(runner)
     }
     /// Select invocation capacity independently of deployment/proof bytes.
     pub fn with_capacity(mut self, capacity: Capacity) -> Result<Self> {
@@ -651,12 +689,14 @@ impl NativeDeployment {
                 Ok(mut runner) => {
                     match proof {
                         None => {
-                            let produced = driver::produce_native(
-                                &mut runner,
-                                &binding,
-                                self.transport(),
-                                MAX_PROOF_BYTES,
-                            );
+                            let produced = self.prepared_call(&mut runner, role, |runner| {
+                                driver::produce_native(
+                                    runner,
+                                    &binding,
+                                    self.transport(),
+                                    MAX_PROOF_BYTES,
+                                )
+                            });
                             retain_driver_stop(&mut report, &produced);
                             report.outcome = produced
                                 .outcome
@@ -670,13 +710,15 @@ impl NativeDeployment {
                             report.cancelled = produced.cancelled.is_some();
                         }
                         Some(proof) => {
-                            let validated = driver::validate_native(
-                                &mut runner,
-                                proof,
-                                &binding,
-                                self.transport(),
-                                self.entry.acceptance(),
-                            );
+                            let validated = self.prepared_call(&mut runner, role, |runner| {
+                                driver::validate_native(
+                                    runner,
+                                    proof,
+                                    &binding,
+                                    self.transport(),
+                                    self.entry.acceptance(),
+                                )
+                            });
                             retain_driver_stop(&mut report, &validated);
                             report.outcome = validated
                                 .outcome

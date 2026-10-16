@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import pytest
+from source_modules import library_modules
 
 from test_constructions import SOURCE, reject_deployment
 from test_record_codecs import CODEC
@@ -195,12 +196,9 @@ def test_native_root_can_delegate_to_an_explicit_managed_child(toolchain, journa
     '''
     source = directory / 'main.zkc'
     source.write_text(text)
-    modules = {'sample': source}
-    modules.update({f'zkc::{name}': root / f'libraries/zkc/{name}.zkc'
-                    for name in ['bytes', 'encoding', 'transcript']})
     package = directory / 'proof.zkpkg'
     compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                             *[f'--module={name}={path}' for name, path in modules.items()],
+                             *library_modules('zkc', overrides={'sample': source}),
                              'sample::Composed', f'--output={package}', *flags])
     public = journal.write('public.json', {'public': '5'})
     witness = journal.write('witness.json', {'secret': '7'})

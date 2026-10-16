@@ -668,7 +668,10 @@ impl Value for NoValue {
 }
 struct NoBackend;
 impl Backend for NoBackend {
+    type Call = ();
+    type Checkpoint = ();
     type Value = NoValue;
+    type Kernel = zkc_runtime::interactive::BoundSignature;
     fn validate_value(&self, value: &NoValue) -> Result<(), BackendError> {
         match *value {}
     }
@@ -678,7 +681,12 @@ impl Backend for NoBackend {
     fn leave_frame(&mut self, _: &Frame, _: FrameExit, _: &[NoValue]) -> Result<(), BackendError> {
         unreachable!()
     }
-    fn apply(&mut self, _: &Invocation<'_>, _: &[NoValue]) -> Result<Vec<NoValue>, BackendError> {
+    fn apply(
+        &mut self,
+        _kernel: &Self::Kernel,
+        _: &Invocation<'_>,
+        _: &[NoValue],
+    ) -> Result<Vec<NoValue>, BackendError> {
         unreachable!()
     }
 }

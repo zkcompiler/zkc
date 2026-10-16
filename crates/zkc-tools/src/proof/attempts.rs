@@ -341,11 +341,17 @@ impl Session<'_> {
                         Err(failed.error.to_string())
                     }
                     Ok(mut runner) => {
-                        let produced = driver::produce_native(
+                        let produced = self.deployment.prepared_call(
                             &mut runner,
-                            self.binding,
-                            self.deployment.transport(),
-                            self.plan.policy.limits.proof_bytes,
+                            self.deployment.entry.producer(),
+                            |runner| {
+                                driver::produce_native(
+                                    runner,
+                                    self.binding,
+                                    self.deployment.transport(),
+                                    self.plan.policy.limits.proof_bytes,
+                                )
+                            },
                         );
                         record.stop = produced.stop().cloned();
                         if let Some(stop) = &record.stop {

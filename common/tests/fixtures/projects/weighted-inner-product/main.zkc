@@ -44,7 +44,7 @@ protocol Client roles(P,V)
     right: vec::fill<F>(3,witness_count),mask: 7};
   let statement @V = claim(bv,y,valueV,maskV);
   let accepted = ip::Argument<G,Wire,4>(bp,bv,valueP,valueV,maskP,maskV,
-    y,y,witness,statement,rounds,nonces,challenges);
+    y,y,witness,ip::point_claim(bv,statement),rounds,nonces,challenges);
   return (accepted = accepted);
 }
 proof Proof = Client {

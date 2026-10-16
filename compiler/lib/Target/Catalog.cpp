@@ -10,7 +10,9 @@ namespace zkc::target {
 namespace {
 // Facets identify the contraction port; exact installed descriptors identify
 // its available implementation. Representation spelling grants no provider.
-Expected<BindingApplication> diagonalAlternative(BindingApplication source) {
+Expected<std::vector<BindingApplication>>
+diagonalAlternatives(BindingApplication source,
+                     const ImplementationCatalog &catalog) {
   source.implementation.clear();
   auto logical = resolveBinding(source, false);
   if (!logical)
@@ -29,8 +31,8 @@ Expected<BindingApplication> diagonalAlternative(BindingApplication source) {
       port.kind, port.identity, "diagonal");
   if (!representation || !isDiagonalRepresentation(representation->identity))
     return error("binding-contraction");
-  const ImplementationDescriptor *selected = nullptr;
-  for (const auto &entry : installedImplementations().all()) {
+  std::vector<BindingApplication> candidates;
+  for (const auto &entry : catalog.all()) {
     if (entry.contract != source.contract)
       continue;
     for (const auto &override : entry.representations) {
@@ -38,15 +40,37 @@ Expected<BindingApplication> diagonalAlternative(BindingApplication source) {
           override.identity != representation->identity ||
           override.port != index || override.output != producer)
         continue;
-      if (selected)
-        return error("binding-contraction");
-      selected = &entry;
+      auto candidate = source;
+      candidate.implementation = entry.identity;
+      candidates.push_back(std::move(candidate));
+      break;
     }
   }
-  if (!selected)
+  // Installed-domain registration order is not a preference policy.
+  llvm::sort(candidates, [](const auto &a, const auto &b) {
+    return a.implementation < b.implementation;
+  });
+  return candidates;
+}
+
+Expected<BoundOperation> resolveDiagonal(const BindingApplication &application,
+                                         const ImplementationCatalog &catalog) {
+  // Full Contracts admission precedes any diagonal-specific checks. In
+  // particular, nominal arguments and backend realization remain mandatory.
+  auto installed = resolveBinding(application, true, catalog);
+  if (!installed)
+    return installed.takeError();
+  const auto *facts = operationContracts(application.contract);
+  if (!facts || bool(facts->diagonalMap) == bool(facts->linearContraction))
     return error("binding-contraction");
-  source.implementation = selected->identity;
-  return source;
+  const bool producer = facts->diagonalMap.has_value();
+  const auto &ports = producer ? installed->outputs : installed->inputs;
+  unsigned index = producer ? facts->diagonalMap->result
+                            : facts->linearContraction->valuesOperand;
+  if (index >= ports.size() ||
+      !isDiagonalRepresentation(ports[index].representation))
+    return error("binding-contraction");
+  return installed;
 }
 
 class InstalledCandidates final : public CandidateCatalog {
@@ -79,37 +103,31 @@ public:
 } // namespace
 std::vector<std::string> CandidateCatalog::diagonalImplementations(
     const BindingApplication &application) const {
-  auto candidate = diagonalAlternative(application);
-  if (!candidate) {
-    consumeError(candidate.takeError());
+  return diagonalCandidates(application, installedImplementations());
+}
+std::vector<std::string>
+diagonalCandidates(const BindingApplication &application,
+                   const ImplementationCatalog &catalog) {
+  auto candidates = diagonalAlternatives(application, catalog);
+  if (!candidates) {
+    consumeError(candidates.takeError());
     return {};
   }
-  auto installed = resolveDiagonalImplementation(*candidate);
-  if (!installed) {
-    consumeError(installed.takeError());
-    return {};
+  std::vector<std::string> result;
+  for (const auto &candidate : *candidates) {
+    auto installed = resolveDiagonal(candidate, catalog);
+    if (!installed) {
+      consumeError(installed.takeError());
+      continue;
+    }
+    result.push_back(candidate.implementation);
   }
-  return {candidate->implementation};
+  return result;
 }
 
 Expected<BoundOperation>
 resolveDiagonalImplementation(const BindingApplication &application) {
-  // Full Contracts admission precedes any diagonal-specific checks. In
-  // particular, nominal arguments and backend realization remain mandatory.
-  auto installed = resolveBinding(application, true);
-  if (!installed)
-    return installed.takeError();
-  const auto *facts = operationContracts(application.contract);
-  if (!facts || bool(facts->diagonalMap) == bool(facts->linearContraction))
-    return error("binding-contraction");
-  const bool producer = facts->diagonalMap.has_value();
-  const auto &ports = producer ? installed->outputs : installed->inputs;
-  unsigned index = producer ? facts->diagonalMap->result
-                            : facts->linearContraction->valuesOperand;
-  if (index >= ports.size() ||
-      !isDiagonalRepresentation(ports[index].representation))
-    return error("binding-contraction");
-  return installed;
+  return resolveDiagonal(application, installedImplementations());
 }
 
 const CandidateCatalog &installedCandidates() {

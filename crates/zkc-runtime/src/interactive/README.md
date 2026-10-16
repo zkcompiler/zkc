@@ -3,7 +3,63 @@
 `admit_supplied` accepts exactly `zkc.program/0`. It validates all retained
 functions, participant bodies, entries and operation declarations before asking
 the backend to confirm installed signatures. `Admitted` retains the exact bytes
-and immutable typed model. Artifact text cannot install backend code.
+and immutable typed model. Admission also prepares local code with positional
+operands, static region layouts and distinct operation bindings. This internal
+layout introduces no artifact format or second execution semantics. Every source
+instruction retains its original work, failure and frame boundary. Artifact text
+cannot install backend code.
+
+Prepared code is shared between runners. Each runner independently obtains
+`Backend::Kernel` handles through `prepare_binding` on the backend it owns, and
+compares their installed signatures before entering any frame. A handle resolves
+static code and signature facts; actual values, attributes, policy, setup,
+resources and remaining budgets are checked during execution. Handles do not
+carry state or authority from the backend used for admission.
+
+Each reached call may additionally retain backend-owned `Backend::Call` facts
+in a per-runner slot. The native backend caches successful static attribute
+validation at its original invocation check point, keyed by exact rule and
+attributes. Handlers still own their parsing and execution. Direct backend calls
+use the same kernel body with checked attributes and no cache. Call slots are
+bounded by admitted call sites; an unexecuted site retains no attribute copy.
+Capabilities, current custody, setup authorization and remaining budgets are
+checked at use. These call-site facts stay within their runner.
+
+`PreparedComputations` separately retains successful deterministic public
+computations across invocations of the exact admitted executable. The Host
+explicitly authorizes public entry slots; only independently installed pure
+kernels propagate that provenance. Interaction, participant control and private
+or unknown local computations close the preparation prefix. Small inline scalar
+arguments form keys; returned backing must be fresh relative to the caller.
+No resource, proof input or private session state enters this store.
+
+Reuse preserves the outer frame hooks, cumulative instruction/allocation/work
+charges, subsequent frame IDs and normal output handoff. It requires identical
+native policy and remaining capacities that dominate the original initial
+allowances. Otherwise the original body executes, preserving partial failures
+and cleanup. Backend checkpoints replay only cumulative work; live storage uses
+the Runner's existing ledger. Entries are bounded separately from invocation
+capacity, and only the Runner can publish a successful evaluation.
+
+`Value::has_type` must agree exactly with physical-type equality. Native leaf
+values compare kind, domain and representation without constructing a descriptor;
+structural and resource values compare their complete descriptors. This query
+does not establish value validity or authority. Runner acceptance checks actual
+produced values, including backend outputs, before retaining or publishing them.
+
+`FrameInputs` retains explicit ports and a shared capture suffix. Variant arms
+share that suffix instead of copying every capture into every arm. Child regions
+also share their parent's immutable call metadata. Type
+descriptors remain shared and static metadata is bounded by the admitted source
+counts. Local value slots grow only after retention succeeds; declarations in an
+unexecuted suffix reserve no value storage. Storage release leaves vacant slots
+and preserves the existing conservative charges until frame exit.
+
+Each runner reuses one argument buffer across kernel calls. Its capacity grows
+only to the largest reached argument list, bounded by admitted port limits.
+All value handles are cleared after each call, including failures; only empty
+storage survives between instructions. This changes allocation, not operand
+work or retention charges.
 
 An entry maps roles to flat participant definitions. Participants contain local
 calls, service queries, messages, bounded value-counted loops and returns.

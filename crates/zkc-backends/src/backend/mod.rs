@@ -1,5 +1,9 @@
 //! Native backend composition and explicit host-issued capabilities.
+mod call;
+mod preparation;
+pub use preparation::ComputationCheckpoint;
 mod execute;
+pub use call::NativeCall;
 mod policy;
 pub(crate) mod registry;
 mod resource_unit;
@@ -11,6 +15,25 @@ pub use policy::{EntryPolicy, PortConstraint};
 use validation::Core;
 use zkc_arkworks::{Metadata, VerifierKey};
 use zkc_runtime::interactive::{Backend, Frame, FrameExit, Invocation};
+
+/// Immutable implementation selection, independently resolved by this backend.
+/// Dynamic policy, inputs, resource custody and work limits are checked at use.
+pub struct NativeKernel {
+    declaration: zkc_runtime::interactive::OperationBinding,
+    signature: zkc_runtime::interactive::BoundSignature,
+    handler: registry::Handler,
+    read_extent: work::ReadExtent,
+    sequence: bool,
+    deterministic: bool,
+}
+impl zkc_runtime::interactive::InstalledKernel for NativeKernel {
+    fn signature(&self) -> &zkc_runtime::interactive::BoundSignature {
+        &self.signature
+    }
+    fn deterministic(&self) -> bool {
+        self.deterministic
+    }
+}
 
 /// Production Arkworks/Dalek field, group, PCS and challenge adapter. Private committed originals are
 /// explicit values owned by the caller/runtime, never held in a backend map.
@@ -26,6 +49,25 @@ pub struct NativeBackend {
     implementations: &'static registry::Registry,
 }
 impl NativeBackend {
+    fn invoke(
+        &mut self,
+        kernel: &NativeKernel,
+        call: Option<&mut Option<NativeCall>>,
+        i: &Invocation<'_>,
+        args: &[Value],
+    ) -> Result<Vec<Value>> {
+        self.core.resources.active(i.frame)?;
+        if kernel.declaration != *i.binding.declaration() {
+            return Err(crate::refused("kernel-binding"));
+        }
+        if kernel.sequence {
+            self.sequence_work.charge(args, i.retained)?;
+        }
+        self.core.invoke(i, args, &kernel.signature, call)?;
+        let outputs = (kernel.handler)(self, i, args)?;
+        self.core.outputs(i, args, outputs)
+    }
+
     pub fn with_relation_assets(mut self, assets: crate::relation::Registry) -> Result<Self> {
         if self.active_frames() != 0 {
             return Err(crate::refused("relation-active-backend"));
@@ -60,13 +102,13 @@ impl NativeBackend {
         }
         for ((_, ty), value) in role.inputs.iter().zip(values) {
             if let Some(value) = value {
-                if value.physical_type() != *ty {
+                if !value.has_type(ty) {
                     return Err(crate::refused("input-type"));
                 }
                 self.core.validate(value)?;
             }
         }
-        self.core.check_entry_values(&role.inputs, values)
+        self.core.check_entry_values(role.inputs.iter(), values)
     }
 
     /// Bound cumulative sequence work: `3 * (1 + examined operand nodes)` per
@@ -266,10 +308,19 @@ impl NativeBackend {
     }
 }
 impl Backend for NativeBackend {
+    type Call = NativeCall;
+    type Checkpoint = ComputationCheckpoint;
+    fn computation_checkpoint(&self) -> Option<Self::Checkpoint> {
+        Some(self.checkpoint())
+    }
+    fn replay_computation(&mut self, before: Self::Checkpoint, after: Self::Checkpoint) -> bool {
+        self.replay(before, after)
+    }
     fn supports_boolean_literals(&self) -> bool {
         true
     }
     type Value = Value;
+    type Kernel = NativeKernel;
     fn service_support(
         &self,
         contract: zkc_runtime::interactive::ServiceContract,
@@ -314,13 +365,26 @@ impl Backend for NativeBackend {
         }
     }
 
-    fn binding_signature(
+    fn prepare_binding(
         &self,
         binding: &zkc_runtime::interactive::OperationBinding,
-    ) -> Option<zkc_runtime::interactive::BoundSignature> {
-        self.implementations
-            .get(&binding.implementation)?
-            .signature(binding)
+    ) -> Option<NativeKernel> {
+        let implementation = self.implementations.get(&binding.implementation)?;
+        let signature = implementation.signature(binding)?;
+        // Traversal charging belongs to the operation contract. Observing a
+        // sequence through a transcript retains that operation's own budget.
+        let sequence = binding.contract == "bytes.join"
+            || crate::sequence::IMPLEMENTATIONS
+                .iter()
+                .any(|(_, contract)| *contract == binding.contract);
+        Some(NativeKernel {
+            declaration: binding.clone(),
+            signature,
+            handler: implementation.handler,
+            read_extent: work::ReadExtent::for_contract(&binding.contract),
+            sequence,
+            deterministic: implementation.deterministic,
+        })
     }
     fn validate_value(&self, v: &Value) -> Result<()> {
         self.core.validate(v)
@@ -381,26 +445,29 @@ impl Backend for NativeBackend {
         }
         validation.and(cleanup)
     }
-    fn operand_work(&self, i: &Invocation<'_>, args: &[Value]) -> Option<u64> {
-        work::operand_work(&i.binding.declaration().contract, args)
+    fn operand_work(
+        &self,
+        kernel: &NativeKernel,
+        _i: &Invocation<'_>,
+        args: &[Value],
+    ) -> Option<u64> {
+        kernel.read_extent.bytes(args)
     }
-    fn apply(&mut self, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
-        self.core.resources.active(i.frame)?;
-        let implementation = self
-            .implementations
-            .get(i.binding.implementation())
-            .ok_or_else(|| crate::refused("kernel-binding"))?;
-        let signature = implementation
-            .signature(i.binding.declaration())
-            .ok_or_else(|| crate::refused("kernel-binding"))?;
-        if crate::sequence::IMPLEMENTATIONS
-            .iter()
-            .any(|(_, contract)| *contract == i.binding.declaration().contract)
-        {
-            self.sequence_work.charge(args, i.retained)?;
-        }
-        self.core.invoke(i, args, &signature)?;
-        let outputs = (implementation.handler)(self, i, args)?;
-        self.core.outputs(i, args, outputs)
+    fn apply(
+        &mut self,
+        kernel: &NativeKernel,
+        i: &Invocation<'_>,
+        args: &[Value],
+    ) -> Result<Vec<Value>> {
+        self.invoke(kernel, None, i, args)
+    }
+    fn apply_prepared(
+        &mut self,
+        kernel: &NativeKernel,
+        call: &mut Option<NativeCall>,
+        i: &Invocation<'_>,
+        args: &[Value],
+    ) -> Result<Vec<Value>> {
+        self.invoke(kernel, Some(call), i, args)
     }
 }

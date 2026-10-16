@@ -217,3 +217,92 @@ def test_nonzero_blinding_consumes_rejected_candidates(toolchain, journal, direc
         assert json.loads(report.stdout)['status'] == 'refused'
         assert diagnostics['stop']['kind'] == 'Explicit("reject")'
         assert not proof.exists()
+
+
+@pytest.mark.parametrize('group,field', [
+    ('bls12-381.g1', 'bls12-381.fr'),
+    ('ristretto255.group', 'ristretto255.scalar'),
+    ('edwards25519.prime', 'ristretto255.scalar'),
+])
+def test_coefficient_bases_match_dense_folds(toolchain, journal, directory, group, field):
+    from entry import Entry
+    from source_modules import library_modules
+
+    source = '''module sample;
+use bulletproofs::inner_product as ip;
+use zkc::vector as vec;
+use zkc::curve as curve;
+use zkc::scalar as scalar;
+use zkc::finite_domain::{range};
+domain G = group("GROUP");
+domain F = field("FIELD");
+fn compare(challenges:vec::Vector<F>,y:F,n:index) {
+  let g=curve::generator<G>();
+  // Related points and identities exercise algebra only, not generator security.
+  let left=curve::collect(range(0,n),fn(i)=>g*scalar::from_index<F>(i*i));
+  let right=curve::collect(range(0,n),fn(i)=>g*(0-scalar::from_index<F>(i+7)));
+  let original=ip::Bases<G>{left:left,right:right};
+  let mut dense=original;
+  let mut weights=(vec::fill<F>(1,1),vec::fill<F>(1,1));
+  for i in 0..vec::length(challenges) {
+    let x=vec::get(challenges,i);
+    let inverse=scalar::inverse(x);
+    dense=ip::fold_bases(dense,y,x);
+    weights=(ip::fold_coefficients(weights.0,inverse,x),
+      ip::fold_coefficients(weights.1,x,inverse));
+  }
+  let evaluated=ip::evaluate_bases(original,y,weights);
+  return (curve::get(dense.left,0)==curve::get(evaluated.left,0)
+    && curve::get(dense.right,0)==curve::get(evaluated.right,0),weights.0,weights.1);
+}
+protocol Check roles(P)(challenges:vec::Vector<F>@P,y:F@P,n:index@P)
+ ->(result:(bool,vec::Vector<F>,vec::Vector<F>)@P) {
+  return compare(challenges,y,n);
+}
+run Demo=Check;
+'''.replace('GROUP', group).replace('FIELD', field)
+    entry = Entry(toolchain, journal, directory, source,
+                  library_modules('bulletproofs'))
+    order = (2**252 + 27742317777372353535851937790883648493 if field.startswith('ristretto')
+             else 52435875175126190479447740508185965837690552500527637822603658699938581184513)
+    for rounds in range(5):
+        challenges = [2, 3, 5, 7][:rounds]
+        low, high = [1], [1]
+        for x in challenges:
+            inverse = pow(x, -1, order)
+            low = [v * factor % order for v in low for factor in (inverse, x)]
+            high = [v * factor % order for v in high for factor in (x, inverse)]
+        for y in (1, 3, order-1):
+            assert entry.run(f'rounds-{rounds}-y-{y}', {
+                'challenges': list(map(str, challenges)), 'y': str(y), 'n': str(2**rounds),
+            }) == {'result': [True, list(map(str, low)), list(map(str, high))]}
+
+
+@pytest.mark.parametrize('coordinate_error', [0, 1])
+def test_argument_accepts_coordinates_and_rejects_wrong_coordinate(
+        toolchain, journal, directory, coordinate_error):
+    from entry import Entry
+    from source_modules import library_modules
+
+    source = (ROOT / 'common/tests/fixtures/projects/weighted-inner-product/main.zkc').read_text()
+    source = source.replace('module example;', 'module sample;').replace('proof Proof =', 'proof Demo =')
+    source = source.replace('use zkc::encoding as encoding;', 'use zkc::encoding as encoding;\nuse zkc::linear as linear;')
+    start = source.index('fn claim(')
+    end = source.index('\nprotocol Client', start)
+    source = source[:start] + f'''fn claim(b:ip::Bases<G>,y:F,value_base:G,mask_base:G)->ip::Claim<G> {{
+      let n=ip::count(b);
+      let value=6*vec::sum(vec::scale(vec::geometric(y,n),y));
+      let rest=linear::append(linear::term<G>(value,value_base),7,mask_base);
+      return ip::Claim<G>{{left:vec::fill<F>({2 + coordinate_error},n),
+        right:vec::fill<F>(3,n),rest:rest}};
+    }}''' + source[end:]
+    source = source.replace('ip::point_claim(bv,statement)', 'statement')
+    entry = Entry(toolchain, journal, directory, source, library_modules('bulletproofs'))
+    public = journal.write('public.json', {'count': '4', 'right_count': '4', 'rounds': '2', 'y': '3'})
+    witness = journal.write('witness.json', {'witness_count': '4'})
+    proof = directory / 'coordinates.proof'
+    args = [f'--package={entry.package}', f'--sha256={entry.pin}', f'--public={public}']
+    journal.run([toolchain.runtime, '--json', 'prove', *args, f'--witness={witness}', f'--output={proof}'])
+    result = journal.json([toolchain.runtime, '--json', 'verify', *args, f'--proof={proof}'],
+                          refuses='artifact-rejected' if coordinate_error else None)
+    assert result['status'] == ('refused' if coordinate_error else 'accepted')

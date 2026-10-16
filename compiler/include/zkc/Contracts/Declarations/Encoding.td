@@ -44,3 +44,22 @@ def EncodingCryptonoteMapDomain : ZKC_Root<"G", GroupDomain>;
 def OpEncodingCryptonoteMap : ZKC_Operation<"encoding.cryptonote_map", [EncodingCryptonoteMapDomain],
     [ZKC_Apply<TypeBytes, []>],
     [ZKC_Apply<TypeGroup, [EncodingCryptonoteMapDomain]>], []> { int ordinal = 183; }
+
+def EncodingFieldsBeDomain : ZKC_Root<"T", FieldDomain>;
+def OpEncodingFieldsBe : ZKC_Operation<"encoding.fields_be", [EncodingFieldsBeDomain],
+    [ZKC_Apply<TypeVector, [EncodingFieldsBeDomain]>],
+    [ZKC_Apply<TypeBytes, []>], []> { int ordinal = 187; }
+
+def EncodingFieldsLeDomain : ZKC_Root<"T", FieldDomain>;
+def OpEncodingFieldsLe : ZKC_Operation<"encoding.fields_le", [EncodingFieldsLeDomain],
+    [ZKC_Apply<TypeVector, [EncodingFieldsLeDomain]>],
+    [ZKC_Apply<TypeBytes, []>], []> { int ordinal = 188; }
+
+def EncodingGroupsCompressedDomain : ZKC_Root<"T", GroupDomain>;
+def OpEncodingGroupsCompressed : ZKC_Operation<"encoding.groups_compressed", [EncodingGroupsCompressedDomain],
+    [ZKC_Apply<TypeGroups, [EncodingGroupsCompressedDomain]>],
+    [ZKC_Apply<TypeBytes, []>], []> { int ordinal = 189; }
+
+// Shortest unsigned LEB128 of an entire u64 index; zero emits one byte.
+def OpEncodingIndexUleb128 : ZKC_Operation<"encoding.index_uleb128", [],
+    [ZKC_Apply<TypeIndex, []>], [ZKC_Apply<TypeBytes, []>], []> { int ordinal = 190; }

@@ -102,6 +102,7 @@ own manifests and toolchains. LLZK remains separate from the main compiler proce
 
 | Task | Owner |
 |---|---|
+| Measure protocol performance | [Benchmarks](../../common/benchmarks/README.md) |
 | Configure paths, parallelism and reports | [Configuration](configuration.md) |
 | Locate components and dependency rules | [Repository layout](layout.md) |
 | Add operations, passes or backends | [Extensions](extensions.md) |

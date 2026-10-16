@@ -620,12 +620,15 @@ struct OutputLimit {
     bytes: usize,
 }
 impl Backend for OutputLimit {
+    type Call = ();
+    type Checkpoint = ();
     type Value = Value;
-    fn binding_signature(
+    type Kernel = zkc_backends::NativeKernel;
+    fn prepare_binding(
         &self,
         binding: &zkc_runtime::interactive::OperationBinding,
-    ) -> Option<zkc_runtime::interactive::BoundSignature> {
-        self.inner.binding_signature(binding)
+    ) -> Option<Self::Kernel> {
+        self.inner.prepare_binding(binding)
     }
     fn validate_value(&self, v: &Value) -> Result<(), BackendError> {
         self.inner.validate_value(v)
@@ -636,8 +639,14 @@ impl Backend for OutputLimit {
     fn leave_frame(&mut self, f: &Frame, e: FrameExit, args: &[Value]) -> Result<(), BackendError> {
         self.inner.leave_frame(f, e, args)
     }
-    fn apply(&mut self, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>, BackendError> {
+    fn apply(
+        &mut self,
+        kernel: &Self::Kernel,
+        i: &Invocation<'_>,
+        args: &[Value],
+    ) -> Result<Vec<Value>, BackendError> {
         self.inner.apply(
+            kernel,
             &Invocation {
                 max_output_bytes: i.max_output_bytes.min(self.bytes),
                 ..*i
