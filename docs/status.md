@@ -259,20 +259,32 @@ The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retain
 PIR programs, proves open-process contracts, and applies selected ArkLib/VCVio
 security results. Its named DSL target path also checks an authored relation body.
 Native SSA/Lean differential tests cover the admitted finite scalar profile.
-The separate [structured import](spec/formats/structured-source.md) exports
-original single-participant MLIR with immutable BLS scalar/vector values,
-shared helper definitions, finite folds and nested Local control. Lean checks
-the exact snapshot into the common Region carrier, proves exact helper linking
-and table framing, and gives it an owned logical meaning. Conditional contracts
-retain input bounds and ordered output facts. [Structured comparisons](../lean/bridges/structured/README.md) exercise
-direct SSA execution, Lean and selected production Runner cases. This profile
-does not yet import group/service communication or prove native transformations.
-The [optional component foundation](../lean/docs/spec/structured-source.md#optional-component-meaning)
-interprets the same typed helper bodies with optional operands/results and closed
-callbacks, with all-present adequacy and full-table helper equations. Named
-calls preserve per-result availability. This auxiliary model adds neither static
-availability formation nor Math/Local participant dispatch; the native profile
-and format remain unchanged.
+The separate [structured import](spec/formats/structured-source.md) retains
+original whole units, with kinded named helpers and separate protocol roots on
+the shared Region carrier. Lean independently checks exact metadata, signatures,
+helper linking, role scopes, service provenance and computational availability.
+Its scalar/group evaluator is parameterized by an explicit ring/module model;
+participant effects use actual handles and independent receives. Math helpers
+propagate optional inputs through named component closures, while owned Local
+calls sequence all inputs and preserve zero-result stops. Closed finite clients
+use an explicit checked closed view of the same admitted subject and uniform
+scalar/group meanings.
+The [component laws](../lean/docs/spec/structured-source.md#shared-mathematical-and-component-meaning)
+prove all-present adequacy and full-table framing without duplicating helper
+bodies or arithmetic implementations. Static formation records per-result
+footprints and every intermediate requirement separately. The first multi-role
+profile refuses transitive Math folds and checked reads; no general availability
+soundness or eager/demand projection theorem is claimed.
+[Structured comparisons](../lean/bridges/structured/README.md) distinguish
+logical equations, direct SSA comparisons and selected production Runner cases.
+The open CLI retains request/reply order, stop sites and consumed reply indices;
+its additive scalar test group is not native BLS G1, and evaluator capacity
+thresholds are not equated. The retained actual Interactive Schnorr unit has
+kernel admission, arbitrary scalar/group participant equations and an explicit
+adapter to the existing verifier contract; its dormant formula remains named,
+with no inferred relation binding. The maintained Helpers and Reordered source
+forms satisfy that same contract through their actual named calls. The admitted
+EarlyChallenge source has a proved query-first process and fails the contract.
 [Formal support](../lean/docs/support.md) states exact experiments and premises.
 Full DSL/compiler/runtime correspondence, production arithmetic/sampling,
 backend correctness and complete protocol security remain open.

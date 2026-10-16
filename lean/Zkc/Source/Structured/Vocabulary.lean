@@ -10,12 +10,15 @@ execution and structural formation use the shared `RawRegion` and `Region`. -/
 namespace Zkc.Source.Structured
 
 def scalarDomain : String := "bls12-381.fr"
+def groupDomain : String := "bls12-381.g1"
+def scalarServiceContract : String := "random.bls12-381.fr/0"
 def scalarModulus : Nat :=
   52435875175126190479447740508185965837690552500527637822603658699938581184513
 def indexLimit : Nat := 2 ^ 64
 
 inductive Ty where
   | boolean | index | field (domain : String) | vector (domain : String)
+  | group (domain : String) | service (contract : String)
   deriving DecidableEq, Repr, Inhabited
 
 inductive Kind where
@@ -49,6 +52,10 @@ inductive Descriptor where
   | fieldSubtract (domain : String)
   | fieldMultiply (domain : String)
   | fieldEqual (domain : String)
+  | groupIdentity (group : String)
+  | groupAdd (group : String)
+  | groupScale (group field : String)
+  | groupEqual (group : String)
   | booleanConstant (value : Bool)
   | booleanAnd | booleanOr | booleanXor | booleanEqual | booleanNotEqual
   | select (type : Ty)
@@ -59,6 +66,10 @@ inductive Descriptor where
   | fold (domain step predicate : String)
   | branch | loop | loopCondition
   | guard (owner : String)
+  | restrict (roles : List String)
+  | exchange (sender receiver : String)
+  | draw (owner field : String)
+  | statement (relation : String) (selectors : List String) (acceptance : Nat)
   deriving DecidableEq, Repr
 
 inductive Terminator where
@@ -81,12 +92,21 @@ mutual
     deriving Repr
 end
 
+/-- Native participant names and ordered port scopes belong to each protocol.
+The decoder retains them verbatim; admission resolves names against this roster. -/
+structure ProtocolInterface where
+  roles : List String
+  inputScopes : List (List String)
+  outputScopes : List (List String)
+  deriving DecidableEq, Repr
+
 structure Function where
   name : String
   kind : Kind
   visibility : Visibility
   inputs : List Ty
   outputs : List Ty
+  interface : Option ProtocolInterface
   preconditions : List Bound
   origin : Option (String × List (String × String))
   body : Block
@@ -107,11 +127,24 @@ inductive Definition where
   | finite (value : FiniteDeclaration)
   deriving Repr
 
+/-- Non-callable declaration metadata. These strings do not identify a Math
+formula or assert that a retained statement satisfies the relation. -/
+structure Relation where
+  name : String
+  visibility : Visibility
+  kind : String
+  key : String
+  revision : String
+  inputs : List Ty
+  outputs : List Ty
+  purposes : List String
+  deriving DecidableEq, Repr
+
 structure Snapshot where
   source : String
   entry : String
-  role : String
   domains : List Domain
+  relations : List Relation
   definitions : List Definition
   deriving Repr
 

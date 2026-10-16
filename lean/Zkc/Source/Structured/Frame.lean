@@ -14,13 +14,16 @@ table well-formedness, or native execution assumption is needed.
 
 namespace Zkc.Source.Structured
 
-variable {F : Type}
+namespace Evaluation
+
+variable {F G : Type} {interface : PIR.Signature}
+variable (observations : SiteObservations interface)
 
 /-- A fold consults its step and, only when present, its predicate helper. -/
-theorem foldTransition_table_congr (left right : Meanings F) (spec : FoldSpec)
+theorem foldTransition_table_congr (left right : HelperTable (assignment F G) interface) (spec : FoldSpec)
     (agree : ∀ helper ∈ (Op.fold spec).helpers, invoke left helper = invoke right helper)
-    (arguments : Values (scalarAssignment F) spec.domain.inputs)
-    (captures : Values (scalarAssignment F) spec.captures) :
+    (arguments : Values (assignment F G) spec.domain.inputs)
+    (captures : Values (assignment F G) spec.captures) :
     foldTransition left spec arguments captures = foldTransition right spec arguments captures := by
   have step := agree spec.stepHelper (by simp [Op.helpers])
   funext state item
@@ -33,25 +36,25 @@ theorem foldTransition_table_congr (left right : Meanings F) (spec : FoldSpec)
     simp only [foldTransition, present, Bool.false_eq_true, ↓reduceIte, predicate, step]
 
 /-- Fold framing preserves domain admission, predicate stops and ordered state. -/
-theorem denoteFold_table_congr (left right : Meanings F) (spec : FoldSpec)
+theorem denoteFold_table_congr (left right : HelperTable (assignment F G) interface) (spec : FoldSpec)
     (agree : ∀ helper ∈ (Op.fold spec).helpers, invoke left helper = invoke right helper) :
     denoteFold left spec = denoteFold right spec := by
   funext values
   simp only [denoteFold, foldTransition_table_congr left right spec agree]
 
 /-- With the same callback meanings, an operation observes only its helpers. -/
-theorem operation_table_congr [CommRing F] [DecidableEq F]
-    (left right : Meanings F) (op : Op)
+theorem operation_table_congr [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
+    (left right : HelperTable (assignment F G) interface) (op : Op)
     (agree : ∀ helper ∈ op.helpers, invoke left helper = invoke right helper) :
-    operation left op = operation right op := by
+    operation observations left op = operation observations right op := by
   cases op with
-  | fieldConstant | booleanConstant =>
+  | fieldConstant | booleanConstant | groupIdentity | mark =>
     funext arguments callbacks
     cases arguments
     cases callbacks
     rfl
   | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
-      booleanXor | booleanEqual | booleanNotEqual | boundedAt =>
+      booleanXor | booleanEqual | booleanNotEqual | boundedAt | groupAdd | groupScale | groupEqual =>
     funext arguments callbacks
     cases arguments with
     | cons a rest =>
@@ -95,31 +98,33 @@ theorem operation_table_congr [CommRing F] [DecidableEq F]
     cases arguments with
     | cons condition rest => cases rest; cases callbacks; rfl
 
-variable [CommRing F] [DecidableEq F]
+variable [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
 
 /-- Agreement over the erased inventory preserves the whole region meaning,
 including every nested callback, branch and loop. -/
-theorem region_denote_table_congr (left right : Meanings F) {Γ out : List Ty}
+theorem region_denote_table_congr (left right : HelperTable (assignment F G) interface) {Γ out : List Ty}
     (region : Region dialect Γ out)
     (agree : ∀ helper ∈ region.erase.operations.flatMap Op.helpers,
       invoke left helper = invoke right helper) :
-    region.denote (meaning F left) = region.denote (meaning F right) := by
+    region.denote (meaning observations left) = region.denote (meaning observations right) := by
   apply Region.denote_congr
   intro op member
-  apply operation_table_congr
+  apply operation_table_congr observations
   intro helper used
   exact agree helper (List.mem_flatMap.mpr ⟨op, member, used⟩)
 
 /-- Callback-list framing uses the same exact erased inventory as region framing. -/
-theorem regions_denote_table_congr (left right : Meanings F) {signatures}
+theorem regions_denote_table_congr (left right : HelperTable (assignment F G) interface) {signatures}
     (bodies : Regions dialect signatures)
     (agree : ∀ helper ∈ bodies.erase.operations.flatMap Op.helpers,
       invoke left helper = invoke right helper) :
-    bodies.denote (meaning F left) = bodies.denote (meaning F right) := by
+    bodies.denote (meaning observations left) = bodies.denote (meaning observations right) := by
   apply Regions.denote_congr
   intro op member
-  apply operation_table_congr
+  apply operation_table_congr observations
   intro helper used
   exact agree helper (List.mem_flatMap.mpr ⟨op, member, used⟩)
+
+end Evaluation
 
 end Zkc.Source.Structured

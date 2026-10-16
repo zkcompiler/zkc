@@ -22,6 +22,12 @@ def validString (value : String) (empty : Bool := false) : Bool :=
 def validType : Ty → Bool
   | .boolean | .index => true
   | .field d | .vector d => d == scalarDomain
+  | .group d => d == groupDomain
+  | .service contract => contract == scalarServiceContract
+def Ty.isService : Ty → Bool
+  | .service _ => true
+  | _ => false
+
 def validTypes (types : List Ty) : Bool := types.length ≤ 512 && types.all validType
 def validRefs (refs : List Nat) : Bool := refs.length ≤ 512 && refs.all (· ≤ 4096)
 
@@ -71,6 +77,12 @@ def Definition.headerValid (definition : Definition) : Bool :=
   definition.preconditions.all (Bound.valid definition.inputs) &&
   (match definition with
   | .function f =>
+    (match f.kind, f.interface with
+      | .protocol, some _ => true
+      | .math, none | .local, none => true
+      | _, _ => false) &&
+    (f.kind == .protocol || !(f.inputs ++ f.outputs).any Ty.isService) &&
+    !f.outputs.any Ty.isService &&
     (f.kind != .math || f.visibility == .privateDef) &&
     (f.kind == .math || f.preconditions.isEmpty) &&
     (match f.kind, f.origin with
@@ -80,7 +92,8 @@ def Definition.headerValid (definition : Definition) : Bool :=
     | .local, none => false
     | _, none => true
     | _, some _ => false)
-  | .finite f => validString f.domain && validString f.step && validString f.predicate true)
+  | .finite f => !(f.inputs ++ f.outputs).any Ty.isService &&
+    validString f.domain && validString f.step && validString f.predicate true)
 
 def lookupDefinition (snapshot : Snapshot) (name : String) : Except String Definition :=
   requireSome (snapshot.definitions.find? (·.name == name)) "structured-unknown-helper"
@@ -122,7 +135,11 @@ def resolveFold (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
   let domain ← lookupDomain domains domainName
   if argumentTypes.length < domain.inputs.length + state.length then throw "structured-fold-arguments"
   let captures := argumentTypes.drop (domain.inputs.length + state.length)
-  let spec : FoldSpec := ⟨domain, state, captures, stepName, predicateName⟩
+  let helperKind ← match kind with
+    | .math => pure HelperKind.math
+    | .local => pure HelperKind.local
+    | .protocol => throw "structured-fold-kind"
+  let spec : FoldSpec := ⟨domain, state, captures, stepName, predicateName, helperKind⟩
   if argumentTypes != spec.arguments then throw "structured-fold-arguments"
   let step ← lookupDefinition snapshot stepName
   if step.kind != kind || step.visibility != .privateDef ||
@@ -163,9 +180,11 @@ def Descriptor.admittedIn (descriptor : Descriptor) (kind : Kind) : Bool :=
   | .booleanConstant _ => true
   | .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
     .fieldEqual .. | .booleanAnd | .booleanOr | .booleanXor | .booleanEqual |
-    .booleanNotEqual | .select .. | .call .. | .fold .. => kind != .local
+    .booleanNotEqual | .select .. | .call .. | .fold .. |
+    .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. => kind != .local
   | .boundedAt .. => kind == .math
-  | .localCall .. | .guard .. => kind == .protocol
+  | .localCall .. | .guard .. | .restrict .. | .exchange .. | .draw .. | .statement .. =>
+    kind == .protocol
   | .apply .. | .branch | .loop | .loopCondition => kind == .local
 
 def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
@@ -195,7 +214,11 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
       | .finite _ => throw "structured-call-kind"
       | .function _ => pure ()
     if !discharge facts factOperands callee.preconditions then throw "structured-call-premise"
-    pure (Op.invoke ⟨name, callee.inputs, callee.outputs⟩)
+    let helperKind ← match expected with
+      | .math => pure HelperKind.math
+      | .local => pure HelperKind.local
+      | .protocol => throw "structured-call-kind"
+    pure (Op.invoke ⟨name, helperKind, callee.inputs, callee.outputs⟩)
   let checkField := fun (d : String) =>
     if d == scalarDomain then pure () else (throw "structured-field-domain" : LowerM Unit)
   match descriptor with
@@ -208,6 +231,18 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
   | .fieldSubtract d => checkField d; return .fieldSubtract d
   | .fieldMultiply d => checkField d; return .fieldMultiply d
   | .fieldEqual d => checkField d; return .fieldEqual d
+  | .groupIdentity d =>
+    if d != groupDomain then throw "structured-group-domain"
+    return .groupIdentity d
+  | .groupAdd d =>
+    if d != groupDomain then throw "structured-group-domain"
+    return .groupAdd d
+  | .groupScale g f =>
+    if g != groupDomain || f != scalarDomain then throw "structured-group-domain"
+    return .groupScale g f
+  | .groupEqual d =>
+    if d != groupDomain then throw "structured-group-domain"
+    return .groupEqual d
   | .booleanConstant value => return .booleanConstant value
   | .booleanAnd => return .booleanAnd
   | .booleanOr => return .booleanOr
@@ -215,7 +250,7 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
   | .booleanEqual => return .booleanEqual
   | .booleanNotEqual => return .booleanNotEqual
   | .select type =>
-    if !validType type then throw "structured-type-unsupported"
+    if !validType type || type.isService then throw "structured-type-unsupported"
     return .select type
   | .boundedAt d =>
     checkField d
@@ -226,9 +261,7 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
     | _ => throw "structured-bounded-at-arguments"
   | .call name => resolveCall name .math true
   | .apply name => resolveCall name .local false
-  | .localCall name owner =>
-    if owner != snapshot.role then throw "structured-local-owner"
-    resolveCall name .local true
+  | .localCall .. => throw "structured-open-operation"
   | .fold domain step predicate =>
     let spec ← resolveFold snapshot domains .math domain step predicate argumentTypes results factOperands facts
     return .fold spec
@@ -237,9 +270,8 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
     if argumentTypes.length < 2 + results.length then throw "structured-loop-arguments"
     let captures := argumentTypes.drop (2 + results.length)
     return if descriptor == .loop then .loop results captures else .loopCondition results captures
-  | .guard owner =>
-    if owner != snapshot.role then throw "structured-guard-owner"
-    return .guard
+  | .guard .. | .restrict .. | .exchange .. | .draw .. | .statement .. =>
+    throw "structured-open-operation"
 
 inductive ExitKind where
   | function | yield | condition
@@ -253,7 +285,7 @@ def lowerTerminator (kind : Kind) (expected : ExitKind) (terminal : Terminator) 
     if kind != .local then throw "structured-local-stop"
     if expected == .condition then throw "structured-terminator-kind"
     recordSite site true
-    return .stop reason
+    return .letOp (.mark site) [] [] .nil (.stop reason)
   | .ret refs | .yield refs | .condition refs =>
     if !validRefs refs then throw "structured-reference-limit"
     let actual := match terminal with
@@ -312,7 +344,8 @@ def lowerInstructions (snapshot : Snapshot) (domains : List DomainSpec)
     let next ← lowerInstructions snapshot domains summaries kind child exitKind terminal
       (results ++ context) (facts.shift results.length)
       (resultOrigins ++ identities.map (· + results.length)) rest
-    return .letOp op operands results rawBodies next
+    let node := RawRegion.letOp op operands results rawBodies next
+    return if kind == .math then node else .letOp (.mark site) [] [] .nil node
 
 def lowerBlock (snapshot : Snapshot) (domains : List DomainSpec)
     (summaries : IdentitySummaries) (kind : Kind) :

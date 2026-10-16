@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.RoleFamily
+public import Zkc.Source.Component
 public import Zkc.Semantics.Execution
 
 @[expose] public section
@@ -75,5 +75,30 @@ def guard (self owner : Role) (condition : Option Bool) :
 /-- Selection can hide an existing component but cannot create one. -/
 def restrict {A : Type} (selected : Bool) (value : Option A) : Option A :=
   if selected then value else none
+
+/-- Owned closed work requires every argument, including for zero results.
+Other participants skip the work entirely. The rule is independent of the
+effect interface, so closed callbacks can retain internal observations. -/
+def owned {I : PIR.Signature} {inputs outputs : List Ty}
+    (self owner : Role) (work : Values Value inputs → PIR.Proc I (Values Value outputs))
+    (args : Values (Component Value) inputs) : PIR.Proc I (Values (Component Value) outputs) :=
+  if owner = self then
+    match RoleFamily.sequence args with
+    | none => .halt .incomplete
+    | some values => (work values).bind fun results => .done results.present
+  else .done (Values.absent Value outputs)
+
+theorem owned_other {I : PIR.Signature} {inputs outputs : List Ty}
+    (self owner : Role) (different : owner ≠ self)
+    (work : Values Value inputs → PIR.Proc I (Values Value outputs))
+    (args : Values (Component Value) inputs) :
+    owned self owner work args = .done (Values.absent Value outputs) := by
+  simp [owned, different]
+
+theorem owned_present {I : PIR.Signature} {inputs outputs : List Ty}
+    (self : Role) (work : Values Value inputs → PIR.Proc I (Values Value outputs))
+    (args : Values Value inputs) :
+    owned self self work args.present = (work args).bind fun results => .done results.present := by
+  simp [owned]
 
 end Zkc.Source.Participant

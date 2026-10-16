@@ -1,236 +1,232 @@
 # Structured native import
 
 The [native export contract](../../../docs/spec/formats/structured-source.md)
-owns `zkc.structured-source/0`. This page owns its independent Lean admission and
-logical meaning. It complements the scalar importer; neither silently changes
-the other's vocabulary or scope.
+owns `zkc.structured-source/0`. This page owns independent Lean admission and
+logical meaning. Source/native correspondence is a separate boundary.
 
 ## Checked subject
 
-`Zkc.Source.Structured.Snapshot` retains source identity, selected entry and
-participant, every domain and definition, visibility, origins, preconditions,
-sites, operand positions and ordered results. `Format` reads exact tagged arrays
-and rejects unknown tags, extra fields, JSON objects, noncanonical numeric tokens
-and unsupported vocabulary, including in dormant bodies.
-Canonical decimal constants use a bounded ASCII-digit fold shared with the
-scalar importer. This computation reduces in the Lean kernel, so admission of
-constructor snapshots containing constants can be proved without native
-evaluation. JSON parsing and export correspondence remain separate boundaries.
-Logical-origin binding values remain opaque retained metadata. Their membership
-in the native identity language is checked by the native verifier; Lean checks
-the pair structure, lengths, nonemptiness and key uniqueness.
+`Structured.Snapshot` retains source identity, selected entry, all domains,
+relations and definitions, exact function kinds, per-protocol rosters and port
+scopes, visibility, origins, preconditions, sites and ordered operands/results.
+There is one current strict wire schema. The reader rejects unknown tags, extra
+fields, objects and noncanonical numeric tokens, including in unused bodies.
+Canonical decimals use the shared bounded ASCII-digit fold, which reduces in
+the Lean kernel. Parsing JSON and matching an export digest to MLIR remain
+executable boundaries.
 
-`check` independently resolves types, helper kinds and signatures, exact bound
-provenance, capture forwarding and acyclic dependencies. Each function body is
-lowered to the shared `RawRegion` and formed by `RawRegion.elaborate`. A finite
-declaration lowers to an owned fold using its exact declaration ABI. Each checked
-body is stored once; calls retain named references instead of expanding syntax.
-Dependency lists and instruction counts are derived from the formed operation
-tree, including every callback and suffix. `CheckedDefinition.helpers_eq_body`
-ties the helper inventory to the erasure of that same typed body. There is no
-separately maintained dependency log.
-Math-return summaries still order their syntactic call subgraph before admission;
-the formed inventory checks the complete helper graph afterward.
+Relations are noncallable metadata. Their input types, Boolean result, purposes,
+kind, key and revision are retained. A statement checks exact entry operands,
+role selectors and the Boolean acceptance-result index. It does not evaluate a
+relation or identify different participants' acceptance values. The association
+between a relation and a formula is absent from this MLIR and is not inferred
+from symbol spelling. Logical-origin binding values also remain opaque metadata;
+Lean checks their shape, size, nonemptiness and key uniqueness.
 
-Ordering produces a candidate. `linkPayload` independently checks that every
-declaration name is fresh and every helper signature occurs in its strict
-prefix. `Payload.linked` carries this proposition; `DeclarationsLinked.nodup`
-derives name uniqueness. The check uses complete signatures and includes dormant
-callbacks and stopped suffixes. It does not assume the ordering algorithm is
-correct. Missing, forward, mismatched or duplicate links are refused.
+`check` resolves kinds, signatures, exact bound provenance, capture forwarding,
+rosters and scopes, then forms existing `Source.Region` bodies through
+`RawRegion.elaborate`. There is no additional source IR. One checked body is
+stored per named helper; calls retain names and never expand syntax.
 
-`Imported snapshot` uses the common `Verification.Imported` carrier. Its check
-witness ties the resulting program to that exact snapshot.
-`CheckedDefinition.exactBody` proves that erasure recovers the lowered raw body;
-`CheckedDefinition.body_eq_of_raw` recovers the typed body from exact raw equality;
-`Imported.exactSubject` retains the complete source descriptor. These are
-formation and subject-binding facts. The linking invariant does not prove that
-ordering preserves the input declaration inventory, or that lowering faithfully
-preserves source metadata and operations. Those are separate correspondence
-obligations. A successful computational bounds check
-does not itself constitute a general theorem that every admitted Math function
-is total.
+`UnitPayload` separates kinded Math/Local `CheckedDefinition`s from
+`CheckedProtocol` roots. Helpers use `dialect`; roots use `protocolDialect` on
+the same carrier. Root operations resolve role strings to indices in that
+root's roster. Protocol roots cannot occur in a `Helper` signature or helper
+table. The calculation boundary admits only Math references and region-free
+calculations; Local invocation carries a checked Local signature and owner.
 
-## Static bounds
+The existing declaration order is a candidate, independently checked by
+`DeclarationsLinked`. Exact signatures include Math/Local kind, ordered inputs
+and ordered outputs, including both finite callbacks. Dormant callbacks and
+stopped suffixes remain dependencies. Roots separately check their references
+against the complete helper table. Identity summaries order their Math call
+subgraph for bound discharge; availability reuses the final checked order and
+introduces no additional sorter.
 
-A bound records an exact index/container pair. Result binding shifts both
-positions. Conservative result-to-input summaries follow direct returns,
-reordered or repeated outputs, shared Math calls and select arms with the same
-known canonical identity. Two unknown origins never establish identity.
-Each Math helper is summarized once after its callees, without expanding calls.
-Admission normalizes operand identities through these summaries; unknown results
-receive fresh identities. The summary algorithm is a computational check;
-its general semantic preservation theorem remains a separate obligation.
-Local control regions start without facts because Local definitions
-cannot declare bound premises in this profile.
-Math preconditions are local assumptions, instantiated and discharged at every
-call. An indices domain supplies the bound for its selected vector in the
-step's `S / I / A / C` interface, including another invariant formal supplied
-with the same proven value identity, including helper-return aliases. Mutable state is not assumed invariant across
-iterations. Matching types or equal lengths do not identify vector contents.
+`Imported snapshot` carries successful admission of that exact constructor
+subject. `Imported.exactSubject` and `check_ok_inversion` retain subject identity
+and successful checking. Typed erasure/formation laws recover exact stored
+bodies. These facts do not prove a universal MLIR lowering or exporter theorem,
+or correctness of the candidate ordering algorithm as an inventory transform.
 
-Math cannot contain an authored stop or invoke Local code. Local code may stop, including during
-a zero-result call. The profile admits only immutable Boolean, index, scalar
-and vector values. It makes no affine ownership claim.
-Operation ownership is checked explicitly for each body kind, following the
-native format's ownership table. The independent model supports vector and
-index selection, although the current native mathematical verifier does not
-yet admit those selection types.
+## Bounds and availability
 
-## Owned meaning
+Bound facts identify exact index/container positions. Result binding shifts
+both positions. `IdentitySummaries` follows returned-input aliases and select
+arms with the same known identity; two unknown origins never prove equality.
+Math preconditions must be discharged at each call. An indices domain supplies
+the bound for its selected vector in the `S / I / A / C` interface. Mutable state
+is not assumed invariant across iterations; equal lengths do not identify
+vector contents. Local regions begin without Math bound premises.
 
-`Meaning` assigns the nominal field explicitly to a commutative ring `F`,
-indices to natural numbers and vectors to lists. The command-line runner uses
-the actual BLS12-381 scalar modulus:
+`Availability` is a separate formed-tree analysis. Math summaries retain one
+dependency footprint per result and individual requirements for every
+intermediate computation. Named calls substitute both collections through their
+actual arguments. A forwarded output can ignore an absent unused input;
+constants have empty dependencies. An unused mixed-owner calculation still
+fails admission. `select(c,x,x)` still requires `c`. Independent requirements
+are checked individually, so calculations at distinct participants need not
+share a single owner. Zero-result calls do not discard requirements.
 
-```text
-52435875175126190479447740508185965837690552500527637822603658699938581184513
-```
+The first multi-role profile refuses Math folds and checked reads, including
+transitively through named calls. Singleton roots keep the existing finite
+profile; owned Local finite/control work remains available in multi-role roots.
+This restriction bounds the partial Math fragment; it is not a proof that eager
+component interpretation equals native demand-driven projection.
 
-The meaning is a closed `PIR.Proc`, preserving returned ordered values and all
-stop reasons. Named helpers resolve through an acyclic table of already
-interpreted checked bodies; semantics has no arbitrary recursion fuel. Region
-callbacks are invoked with closed arguments. The owned operations do not
-inspect callback process constructors.
+Each root checks every requirement, owned operand, nonempty restriction subset
+and declared output scope. Service values originate only at singly owned root
+input ports. Their exact contract is checked at draw, and they cannot be
+selected, restricted, exchanged, returned, passed to helpers or used in
+statements. Handle-alias restrictions belong to the executable request boundary;
+service independence or uniform sampling does not follow from handle identity.
 
-The defensive helper-resolution fallback and failed checked reads both stop
-with `refused`, as does an authored `refused` stop.
-`Payload.invoke_declaration` resolves any declaration in a checked table to its
-body interpreted against its strict prefix. `Payload.declaration_helpers` gives
-exact prefix membership for all its calls. `Payload.reference_resolves` supplies
-an exact-signature lookup in the captured prefix. `Payload.invoke_body_view`
-exposes a named helper against the complete table using an exact body equation;
-proof clients need not unfold prefix construction or depend on declaration
-indices. These linking laws do not rule out
-failed reads or authored stops inside a resolved body.
-Successful admission supplies a proved linking invariant, but does not prove
-native formation, general read safety or Math totality. `check_ok_inversion` states only successful
-checking and exact subject retention.
+`UnitPayload.available` records `checkUnitAvailability ... = .ok ()`. This is
+computational admission evidence, **not a general availability-soundness or
+presence theorem**. In particular, denotation alone never licenses admission.
+The rejected unused-intermediate controls are model counterexamples, not newly
+admitted native programs.
 
-Folds use the shared ordered `Finite.execute`: domain admission precedes
-iteration, the predicate precedes each selected step, false preserves current
-state, and a stop bypasses the suffix. `boundedAt` is a checked read; an invalid
-index refuses rather than returning an arbitrary default. Counted loops retain
-their state/capture split and conditional completion flag.
-An unconditional stop cannot replace a condition terminator; it belongs to the
-ordinary loop form. Stops in nested branches remain valid.
-`denoteLoop_reference` transfers a callback equation under a reachable-state
-invariant to the ordered loop. Empty ordinary and conditional loops return the
-initial state without invoking their callback.
+## Shared mathematical and component meaning
 
-## Optional component meaning
+`assignment F G` maps Boolean/index/field/vector/group/service sorts to
+`Bool`, `Nat`, `F`, `List F`, `G`, and `Nat`. Admission permits exactly the
+BLS12-381 scalar and G1 nominal tags and the corresponding random-service
+contract. The evaluator uses explicit `CommRing F`, `AddCommGroup G`,
+`Module F G` and decidable equality laws. Group scaling is scalar action with
+group operand first in the source. No arbitrary group is silently equated to
+its scalar field.
 
-`Structured.HelperTable Value interface` owns generic exact-signature lookup.
-The existing `FunctionMeaning`, `DenotedDefinition` and `Meanings` are closed
-scalar specializations, so finite clients keep their original theorem statements.
-`ComponentTables` builds two instances of this table from each stored typed body:
-one closed closure and one optional closure, both capturing the preceding tables.
-It stores no second body and expands no call syntax. `componentTables_closed`
-identifies its closed projection with the original `Payload.meanings`.
+`Evaluation` implements scalar, group, Boolean and finite/control operations
+once. The generic `HelperTable Value interface` checks exact signatures;
+closures capture their already interpreted prefix. `ComponentTables` builds
+closed and optional closures from the same body. Math calls pass optional tuples
+directly to their named optional closure. Other operations delegate to the
+existing evaluator after operand sequencing. Nested callbacks retain their
+nonoptional meaning through `Region.component`.
 
-`componentOperation` passes optional operands directly into the named component
-closure at `Op.invoke`. Thus `first(x,y)` can return present `x` when `y` is
-absent, including through another named helper. A constant needs no input, and
-different returned components can have different availability. Every other
-operation uses `strictComponent` and the existing closed operation implementation;
-arithmetic cases are shared. Primitive select still needs its condition even
-when both arms agree. Branch, loop and fold execution retains closed callbacks.
-Absent strict operands skip the operation; in particular an absent guard has no
-effect, while a present false guard retains its `reject` stop.
+All-present adequacy preserves the complete process, including stops, nested
+callbacks and zero/multiple results. Generic frame laws require both closed and
+component agreement because callbacks use closed meanings. Prefix linking and
+full-table equations exclude missing/mismatched lookup fallback for checked
+references; they do not exclude legitimate reads or stops in a callee.
 
-`ComponentTables.adequate_extend` and `adequate_fold` relate invocation in the
-two tables on present input tuples. `Payload.component_present` equates the
-optional execution with the original closed process followed by marking its
-results present, including stops and zero-result computations. Table adequacy
-does not require successful linking; the exact resolution and framing laws do.
-`Payload.component_reference_resolves` proves prefix resolution for every stored
-reference, including dormant callbacks. `component_invoke_declaration` gives the
-captured-prefix equation; `component_invoke_body`, `component_body_view` and
-`component_entry` give full-table equations. `region_component_table_congr`
-requires agreement on both closed and component helper invocations because
-callbacks and strict operations use the closed table.
+Folds use `Finite.execute`: domain admission precedes iteration, predicate
+precedes step, false preserves state, and stopping bypasses the suffix. Checked
+reads refuse invalid indices. Counted loops retain state/capture packing and
+conditional completion. The logical semantics has no depth fuel. Existing
+finite theorem families use the same explicit `F,G` assignment and evaluator.
+`SiteObservations` abstracts only internal marks; arithmetic is pure and shared.
+There is no separate scalar arithmetic or unsupported-sort fallback.
+The independent model retains its existing vector/index select controls, which
+are not currently native mathematical export paths.
 
-This interpretation is an auxiliary denotation, not participant dispatch or
-availability formation. The current `Op.invoke` has lost the source distinction
-between Math and Local calls. Applying its optional rule to every invocation
-does not implement Local ownership. A future Local boundary must sequence all
-arguments at its owner, invoke the closed closure and preserve stops; nonowners
-must not execute it. The private adapter test demonstrates this distinction
-without claiming that the admitted operation language records it.
+## Actual Interactive Schnorr subject
 
-Result dependency summaries and separate requirements for every intermediate
-remain unimplemented. `unused_intermediate_returns` in `Tests.StructuredComponents`
-is a model counterexample to inferring formation from an available output, not
-an admitted multi-role native program. No native format/profile, group vocabulary,
-open protocol import, or eager-versus-demand-driven Math correspondence is added.
-Future group operations can reuse the generic table and optional interpreter,
-but require an explicit value assignment and one closed operation implementation.
-No whole-import or native correspondence follows from all-present adequacy.
+`ZkcExamples.Structured.SchnorrInteractive` kernel-admits the retained whole-unit
+constructor data. Its arbitrary `F,G` equations expose each participant's actual
+requests and independent reply continuations. The verifier equation is the
+existing Common Schnorr experiment through an explicit effect embedding; a proved
+left inverse gives its `VerifierContract`, completeness and special soundness.
+The optional `StructuredSchnorr` security consumer applies the existing VCVio
+honest-view theorem to that contract. No honest-delivery premise supplies the
+source equality.
 
-## Compositional contracts
+`SchnorrVariants` kernel-admits the retained Helpers, Reordered and EarlyChallenge
+units. Full-table equations expose the Helpers form's named response and
+verification closures. Helpers and Reordered satisfy the same verifier contract;
+the reordered equation uses group commutativity. EarlyChallenge instead queries
+before receiving the commitment. Its exact process equation proves that it
+cannot satisfy that contract, independently of any scripted test replies.
 
-`Structured.region_denote_table_congr` proves that agreeing on the exact helper inventory
-preserves the complete region process. It covers nested callbacks, branches,
-loops and fold predicates; unrelated bindings cannot affect the computation.
-The inventory is derived from the same typed body used by the meaning. The law
-does not require helpers to return normally.
+The separate dormant formula remains a named Math closure, with closed and
+all-present component equations for arbitrary values. The exact relation record
+is retained without inferring an association to that formula. These equations do
+not certify native BLS arithmetic, provider randomness, runtime execution, the
+exporter, authored relation binding, or Fiat–Shamir security.
 
-`Region.Contract` states immediate return under an explicit input premise and
-relates ordered outputs to the original environment. Contracts compose through
-lexical binding, can strengthen premises and weaken conclusions, and transport
-through exact process equality. For a checked read, the premise concerns the
-exact vector and index. Representability, shape and range conditions remain
-visible; an operation annotation is not a proof of unconditional totality.
-These predicates fit the existing `Verification.Certificate` interface.
+## Participant meaning and observations
 
-## Tools and practical bounds
+`Program.participant` interprets the selected root for a chosen roster index.
+Input scopes mask supplied values before evaluation; output scopes filter
+returned values after all work. Shared scopes do not equate participant copies.
+`Participant.exchange` sends and retains the sender's value, receives an
+independent typed reply at the receiver, and produces absence elsewhere.
+`Participant.query` uses the actual service handle operand. `Participant.guard`
+checks its optional condition only at its owner.
+
+`Participant.owned` sequences every input at the owner, invokes the **closed**
+Local closure and preserves stopping even for zero results. Missing owned inputs
+stop `incomplete`. Nonowners skip the call. Optional Local helper closures are
+not used for protocol dispatch.
+
+`Op.mark` and `ProtocolOp.mark` retain internal site observations before protocol/Local
+instructions and explicit Local stops. Math bodies do not insert marks; their
+source operations have no nonempty stop sites in the admitted profile. `Program.observed` exposes these to the
+scripted observer. `forgetSites` erases only those observations to obtain the
+ordinary participant process; `PIR.Stop` itself does not carry a site. Provider
+requests, replies and stops remain ordered. Internal marks consume no scripted
+reply and are absent from the external request/reply trace.
+
+`ClosedProgram` is an explicit checked closed projection of an admitted root.
+It carries `subject.closedPayload = .ok payload`, retains the same subject, and
+keeps its projected root separate from helper closures. Arbitrary `Program`s
+have no closed `denote`. Existing finite clients use `checkClosed` and the
+closed profile's process laws, with the same `F,G` interpretation.
+`ClosedProgram.participant_eq_denote` proves the relation after site erasure,
+with exact port transports and complete singleton scopes certified by the
+closed-profile check itself.
+`Program.participant_direct` derives the plain interpreter from the observed
+one through generic operation, Region and table-fold interpretation laws.
+
+`CommonAdapter` embeds the existing Common effect fragment and proves that
+projection after embedding preserves the entire process. Projection of extra
+index/vector messages refuses explicitly. Concrete contract use must establish
+that its actual process lies in the supported fragment; the adapter supplies no
+relation binding or security assumption.
+
+## Executable bounds and comparison
 
 ```text
 structured-source check SNAPSHOT.json
 structured-source run SNAPSHOT.json INPUTS.json
+structured-source open SNAPSHOT.json REQUEST.json
 ```
 
-Inputs are an ordered array of typed values:
+Closed runs retain the existing typed input/output arrays. Open requests and
+results follow the native schema: optional ordered inputs, selected role,
+scripted replies, full request/reply/stop records, stop site and consumed reply
+index. Missing replies stop `incomplete`; mismatches stop `refused` without
+consuming the mismatching reply; valid scripted stops consume their reply.
+Unused script suffixes remain unconsumed.
+An oversized received vector is an observer capacity error; a malformed reply
+shape or element type remains an unconsumed semantic refusal.
 
-```text
-["bool", value]
-["index", unsigned-number]
-["field", "bls12-381.fr", canonical-decimal-string]
-["vector", "bls12-381.fr", [canonical-decimal-strings...]]
-```
+The CLI chooses `F = G = ZMod scalarModulus`, an explicit additive test group.
+This is not native BLS G1 semantics. Typed arbitrary-group equations protect
+distinctions that commutative scalar test arithmetic cannot detect.
 
-A run returns `["returned", typed-values]` or `["stopped", reason]`.
-Import, input and evaluation-capacity refusals have a nonzero tool exit; they
-are distinct from successfully reporting a semantic stop.
+Source bytes are capped at 16 MiB, request bytes at 1 MiB; strings at 512 UTF-8
+bytes; domains, relations and definitions at 128 each; signatures at 512;
+source instructions/references at 4096; nesting/helper depth at 64. Stored
+internal marks add no source instructions. Availability allows 100000 stored
+traversal nodes, with separate 1000000 dependency and participant-replay budgets
+across the whole unit. SSA footprints use indexed persistent arrays; helper
+argument tuples retain their bounded list lookup costs. Summary substitution,
+requirement expansion and footprint unions are charged incrementally before
+construction. Reusing a checked Local summary does not charge hypothetical
+dynamic call expansion. These are representation-aware admission policies,
+not exact allocation or runtime complexity bounds; persistent array copies and
+native bit-vector analysis need not have identical costs. Source-size bounds
+alone do not bound transitive requirement expansion.
 
-The file reader bounds complete snapshot bytes to 1 MiB, including whitespace.
-Admission bounds strings to 512 UTF-8 bytes, domains and
-definitions to 128 each, signatures to 512, instructions and references to
-4096, and nesting and helper depth to 64. Terminators and domain constructors do
-not count as instructions; each finite declaration contributes one fold.
-The helper inventory has at most two references per stored instruction, so it
-needs no additional edge budget.
-Input instruction preflight bounds work before summarization. The formed-body
-count separately checks the resulting IR, so future lowering cannot silently
-exceed that limit by introducing operations.
-Shared call trees are not expanded during admission. The separate CLI work
-estimate can refuse an admitted helper DAG whose execution would be too large.
-The CLI has additional input and evaluation limits so a valid mathematical
-program need not be executed with unbounded host resources. These limits do
-not become fuel parameters in semantic theorems.
+Executable work bounds are separate from fuel-free denotation. The Lean observer
+and native SSA evaluator count different work, so their exact exhaustion
+thresholds are not equated. Comparisons of outcomes, traces, sites and consumed
+replies use sufficient capacities; capacity refusals are tested separately.
 
-## Verification scope
-
-The first clients concern the actual total-state and unit-state finite native
-fixtures. Their complete model equations distinguish ordered multiple results
-and stopping zero-result folds. Schnorr and the multilinear Sumcheck library are the subsequent
-whole-protocol targets described in the
-[design](../design/structured-native-import.md); the current single-participant
-profile does not import their group/service communication.
-
-Native parsing/formation, C++ export, JSON parsing and transparent constructor
-rendering remain reviewed executable boundaries. The byte digest identifies
-a subject and cannot replace correspondence. Model equations and bounded
-native comparisons establish different claims. Frontend and optimizer
-correctness, participant projection, native cleanup/capacity, production
-arithmetic/sampling and cryptographic security require separate connections.
+Native parsing/formation, C++ export, JSON parsing and constructor rendering
+remain reviewed executable boundaries. Exact logical equations and bounded
+differential comparisons establish different claims. Neither proves native
+transformations, production BLS/RNG behavior, runtime execution, authored
+relation/formula association, or Fiat–Shamir security.

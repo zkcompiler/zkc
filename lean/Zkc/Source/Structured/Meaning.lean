@@ -1,162 +1,62 @@
 module
 
-public import Zkc.Source.Structured.Import
-public import Zkc.Source.Structured.Table
-public import Zkc.Source.Finite
-public import Mathlib.Algebra.Ring.Defs
+public import Zkc.Source.Structured.Checked
+public import Zkc.Source.Structured.Evaluation
 
 @[expose] public section
 
-/-! Owned logical meanings. The nominal BLS scalar domain is explicitly assigned
-to `F`; arithmetic theorems may choose any commutative ring. The CLI chooses
-`ZMod scalarModulus`. No native frames or resource counters are modeled here. -/
+/-! Named helper closures and closed views of the uniform mathematical meaning.
+The arithmetic/control evaluator is shared with open roots. -/
 
+set_option autoImplicit false
 namespace Zkc.Source.Structured
 
-def closedInterface : PIR.Signature := ⟨Empty, fun value => nomatch value⟩
-abbrev Closed (A : Type) := PIR.Proc closedInterface A
-
-/-- Explicit interpretation of the admitted nominal domain in a chosen ring.
-Indices are naturals with the unsigned invariant below, not wrapping integers. -/
-abbrev scalarAssignment (F : Type) : Ty → Type
-  | .boolean => Bool
-  | .index => Nat
-  | .field _ => F
-  | .vector _ => List F
-
-def ValueValid {F : Type} : (type : Ty) → scalarAssignment F type → Prop
-  | .boolean, _ | .field _, _ => True
+def ValueValid {F G : Type} : (type : Ty) → assignment F G type → Prop
+  | .boolean, _ | .field _, _ | .group _, _ | .service _, _ => True
   | .index, value => value < indexLimit
   | .vector _, values => values.length < indexLimit
 
-def InputsValid {F : Type} {types : List Ty} (values : Values (scalarAssignment F) types) : Prop :=
+def InputsValid {F G : Type} {types : List Ty} (values : Values (assignment F G) types) : Prop :=
   ∀ {type} (position : Var types type), ValueValid type (values.get position)
 
-abbrev FunctionMeaning (F : Type) (helper : Helper) :=
-  HelperFunction (scalarAssignment F) closedInterface helper
+namespace Evaluation
 
-abbrev DenotedDefinition (F : Type) := HelperDefinition (scalarAssignment F) closedInterface
-
-abbrev Meanings (F : Type) := HelperTable (scalarAssignment F) closedInterface
-
-def DomainSpec.denote {F : Type} : (domain : DomainSpec) →
-    Values (scalarAssignment F) domain.inputs → Finite.Domain (scalarAssignment F domain.item)
-  | ⟨_, _, _, container, true⟩, arguments =>
-      .check ((arguments.get container).length < indexLimit) .refused
-        (.elements (List.range (arguments.get container).length))
-  | ⟨_, _, _, container, false⟩, arguments =>
-      .check ((arguments.get container).length < indexLimit) .refused
-        (.elements (arguments.get container))
-
-
-/-- Predicate is invoked before step, on I/A/C. False preserves the entire
-current state. The step receives S/I/A/C, including zero-length S and C. -/
-def foldTransition {F : Type} (table : Meanings F) (spec : FoldSpec)
-    (arguments : Values (scalarAssignment F) spec.domain.inputs)
-    (captures : Values (scalarAssignment F) spec.captures)
-    (state : Values (scalarAssignment F) spec.state)
-    (item : scalarAssignment F spec.domain.item) : Closed (Values (scalarAssignment F) spec.state) :=
-  let callbackArguments := Values.cons item (arguments.append captures)
-  let enabled : Closed (Values (scalarAssignment F) [.boolean]) :=
-    if spec.predicate.isEmpty then .done (.cons true .nil)
-    else invoke table spec.predicateHelper callbackArguments
-  enabled.bind fun result =>
-    if result.get .here then invoke table spec.stepHelper (state.append callbackArguments)
-    else .done state
-
-def denoteFold {F : Type} (table : Meanings F) (spec : FoldSpec)
-    (values : Values (scalarAssignment F) spec.arguments) :
-    Closed (Values (scalarAssignment F) spec.state) :=
-  let (arguments, rest) := values.split spec.domain.inputs
-  let (initial, captures) := rest.split spec.state
-  Finite.execute (spec.domain.denote arguments) (foldTransition table spec arguments captures) initial
-
-/-- Closed callback invocation adapter; the operation observes only returned
-values and stopping, and never inspects callback process constructors. -/
-def invokeCallback {F : Type} {inputs outputs : List Ty}
-    (callback : RegionFunction (scalarAssignment F) closedInterface (inputs, outputs))
-    (arguments : Values (scalarAssignment F) inputs) :
-    Closed (Values (scalarAssignment F) outputs) := callback arguments
-
-def denoteLoop {F : Type} (state captures : List Ty)
-    (body : RegionFunction (scalarAssignment F) closedInterface
-      (.index :: (state ++ captures), state ++ captures))
-    (lower upper : Nat) (initial : Values (scalarAssignment F) state)
-    (captured : Values (scalarAssignment F) captures) : Closed (Values (scalarAssignment F) state) :=
-  Finite.execute (.elements (List.range' lower (upper - lower)))
-    (fun current index =>
-      (invokeCallback body (.cons index (current.append captured))).bind fun results =>
-        .done (results.split state).1) initial
-
-def denoteConditionalLoop {F : Type} (state captures : List Ty)
-    (body : RegionFunction (scalarAssignment F) closedInterface
-      (.index :: (state ++ captures), .boolean :: (state ++ captures)))
-    (lower upper : Nat) (initial : Values (scalarAssignment F) state)
-    (captured : Values (scalarAssignment F) captures) : Closed (Values (scalarAssignment F) state) :=
-  (Finite.execute (.elements (List.range' lower (upper - lower)))
-    (fun (current : Bool × Values (scalarAssignment F) state) index =>
-      if current.1 then
-        (invokeCallback body (.cons index (current.2.append captured))).bind fun results =>
-          match results with
-          | .cons continuing rest => .done (continuing, (rest.split state).1)
-      else .done current) (true, initial)).bind fun result => .done result.2
-
-def operation {F : Type} [CommRing F] [DecidableEq F] (table : Meanings F) :
-    (op : Op) → Values (scalarAssignment F) op.arguments →
-    Values (RegionFunction (scalarAssignment F) closedInterface) op.regions →
-    Closed (Values (scalarAssignment F) op.results)
-  | .fieldConstant _ value, .nil, .nil => .done (.cons (value : F) .nil)
-  | .fieldAdd _, .cons a (.cons b .nil), .nil => .done (.cons (a + b) .nil)
-  | .fieldSubtract _, .cons a (.cons b .nil), .nil => .done (.cons (a - b) .nil)
-  | .fieldMultiply _, .cons a (.cons b .nil), .nil => .done (.cons (a * b) .nil)
-  | .fieldEqual _, .cons a (.cons b .nil), .nil => .done (.cons (decide (a = b)) .nil)
-  | .booleanConstant value, .nil, .nil => .done (.cons value .nil)
-  | .booleanAnd, .cons a (.cons b .nil), .nil => .done (.cons (a && b) .nil)
-  | .booleanOr, .cons a (.cons b .nil), .nil => .done (.cons (a || b) .nil)
-  | .booleanXor, .cons a (.cons b .nil), .nil => .done (.cons (xor a b) .nil)
-  | .booleanEqual, .cons a (.cons b .nil), .nil => .done (.cons (a == b) .nil)
-  | .booleanNotEqual, .cons a (.cons b .nil), .nil => .done (.cons (a != b) .nil)
-  | .select _, .cons condition (.cons yes (.cons no .nil)), .nil =>
-      .done (.cons (if condition then yes else no) .nil)
-  | .boundedAt _, .cons container (.cons index .nil), .nil =>
-      match container[index]? with
-      | some value => .done (.cons value .nil)
-      | none => .halt .refused
-  | .invoke helper, args, .nil => invoke table helper args
-  | .fold spec, args, .nil => denoteFold table spec args
-  | .branch _ _, .cons condition captures, .cons yes (.cons no .nil) =>
-      invokeCallback (if condition then yes else no) captures
-  | .loop state captures, .cons lower (.cons upper rest), .cons body .nil =>
-      let (initial, captured) := rest.split state
-      denoteLoop state captures body lower upper initial captured
-  | .loopCondition state captures, .cons lower (.cons upper rest), .cons body .nil =>
-      let (initial, captured) := rest.split state
-      denoteConditionalLoop state captures body lower upper initial captured
-  | .guard, .cons condition .nil, .nil => if condition then .done .nil else .halt .reject
-
-/-- Keep the value assignment visible to dependent clients; operation evaluation
-remains a named definition with its own laws. -/
-abbrev meaning (F : Type) [CommRing F] [DecidableEq F] (table : Meanings F) :
-    RegionMeaning dialect closedInterface := ⟨scalarAssignment F, operation table⟩
+variable {F G : Type} {interface : PIR.Signature}
+variable [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
 
 /-- Each body closes over the previously interpreted prefix, so recursion is
 impossible and helper syntax is never inlined into callers. -/
-def extendMeanings {F : Type} [CommRing F] [DecidableEq F]
-    (table : Meanings F) (definition : CheckedDefinition) : Meanings F :=
-  ⟨definition.helper, fun values => definition.body.denote (meaning F table) values.get⟩ :: table
+def extendMeanings (observations : SiteObservations interface)
+    (table : Meanings F G interface) (definition : CheckedDefinition) :
+    Meanings F G interface :=
+  ⟨definition.helper, fun values =>
+    definition.body.denote (meaning observations table) values.get⟩ :: table
 
-def Payload.meanings (payload : Payload) (F : Type) [CommRing F] [DecidableEq F] : Meanings F :=
-  payload.definitions.foldl extendMeanings []
+def payloadMeanings (observations : SiteObservations interface) (payload : Payload) :
+    Meanings F G interface :=
+  payload.definitions.foldl (extendMeanings observations) []
 
-def Payload.denote (payload : Payload) (F : Type) [CommRing F] [DecidableEq F]
-    (inputs : Values (scalarAssignment F) payload.entry.inputs) :
-    Closed (Values (scalarAssignment F) payload.entry.outputs) :=
-  invoke (payload.meanings F) payload.entry.helper inputs
+def payloadDenote (observations : SiteObservations interface) (payload : Payload)
+    (inputs : Values (assignment F G) payload.entry.inputs) :
+    PIR.Proc interface (Values (assignment F G) payload.entry.outputs) :=
+  payload.entry.body.denote (meaning observations (payloadMeanings observations payload)) inputs.get
 
-def Program.denote (program : Program) (F : Type) [CommRing F] [DecidableEq F]
-    (inputs : Values (scalarAssignment F) program.payload.entry.inputs) :
-    Closed (Values (scalarAssignment F) program.payload.entry.outputs) :=
-  program.payload.denote F inputs
+end Evaluation
+
+abbrev Meanings (F G : Type) := Evaluation.Meanings F G closedInterface
+
+abbrev meaning (F G : Type) [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] :=
+  Evaluation.meaning (F := F) (G := G) SiteObservations.closed
+
+def Payload.meanings (payload : Payload) (F G : Type)
+    [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] : Meanings F G :=
+  Evaluation.payloadMeanings SiteObservations.closed payload
+
+def Payload.denote (payload : Payload) (F G : Type)
+    [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
+    (inputs : Values (assignment F G) payload.entry.inputs) :
+    Closed (Values (assignment F G) payload.entry.outputs) :=
+  Evaluation.payloadDenote SiteObservations.closed payload inputs
 
 def closedOutcome {A : Type} : Closed A → PIR.Outcome A
   | .done value => .returned value

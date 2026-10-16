@@ -11,7 +11,7 @@ private def first (ty : Ty) : Region dialect [ty, ty] [ty] :=
   .ret (.cons .here .nil)
 
 private def relay (ty : Ty) : Region dialect [ty, ty] [ty] :=
-  .letOp (.invoke ⟨"first", [ty, ty], [ty]⟩)
+  .letOp (.invoke ⟨"first", .math, [ty, ty], [ty]⟩)
     (.cons .here (.cons (.there .here) .nil)) .nil (.ret (.cons .here .nil))
 
 private abbrev calls {Value : Ty → Type} {interface : PIR.Signature}
@@ -30,11 +30,11 @@ private def componentCalls {Value : Ty → Type} {interface : PIR.Signature}
 private def tables (Value : Ty → Type) (interface : PIR.Signature) (ty : Ty) :
     HelperTable (Component Value) interface :=
   let firstEntry : HelperDefinition (Component Value) interface :=
-    ⟨⟨"first", [ty, ty], [ty]⟩, fun args =>
+    ⟨⟨"first", .math, [ty, ty], [ty]⟩, fun args =>
       (first ty).component (calls ([] : HelperTable Value interface))
         (componentCalls [] []) args.get⟩
   let relayEntry : HelperDefinition (Component Value) interface :=
-    ⟨⟨"relay", [ty, ty], [ty]⟩, fun args =>
+    ⟨⟨"relay", .math, [ty, ty], [ty]⟩, fun args =>
       (relay ty).component (calls ([] : HelperTable Value interface))
         (componentCalls [] [firstEntry]) args.get⟩
   [relayEntry, firstEntry]
@@ -43,7 +43,7 @@ private def tables (Value : Ty → Type) (interface : PIR.Signature) (ty : Ty) :
 relay captures the earlier closure, not its syntax. -/
 theorem named_first {Value : Ty → Type} (interface : PIR.Signature) (ty : Ty)
     (x y : Option (Value ty)) :
-    invoke (tables Value interface ty) ⟨"relay", [ty, ty], [ty]⟩ (.cons x (.cons y .nil)) =
+    invoke (tables Value interface ty) ⟨"relay", .math, [ty, ty], [ty]⟩ (.cons x (.cons y .nil)) =
       .done (.cons x .nil) := by
   dsimp only [tables]
   rw [invoke_cons_same]
@@ -53,7 +53,14 @@ theorem named_first {Value : Ty → Type} (interface : PIR.Signature) (ty : Ty)
 
 /-- The generic lookup still checks the whole signature after finding a name. -/
 theorem exact_signature {Value : Ty → Type} (interface : PIR.Signature) (ty : Ty) :
-    invoke (tables Value interface ty) ⟨"first", [], []⟩ .nil = .halt .refused := by
+    invoke (tables Value interface ty) ⟨"first", .math, [], []⟩ .nil = .halt .refused := by
+  simp [tables, invoke]
+
+/-- Matching names and port types do not permit changing the helper kind. -/
+theorem exact_kind {Value : Ty → Type} (interface : PIR.Signature) (ty : Ty)
+    (x y : Option (Value ty)) :
+    invoke (tables Value interface ty) ⟨"first", .local, [ty, ty], [ty]⟩
+      (.cons x (.cons y .nil)) = .halt .refused := by
   simp [tables, invoke]
 
 end Tests.Component

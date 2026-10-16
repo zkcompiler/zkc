@@ -35,18 +35,45 @@ def field (json : Json) : Except String String := do
   if name != scalarDomain then throw "structured-field-domain"
   return name
 
+def group (json : Json) : Except String String := do
+  let name ← string json
+  if name != groupDomain then throw "structured-group-domain"
+  return name
+
+def service (json : Json) : Except String String := do
+  let name ← string json
+  if name != scalarServiceContract then throw "structured-service-contract"
+  return name
+
 def type (json : Json) : Except String Ty := do
   match ← array json with
   | [.str "bool"] => return .boolean
   | [.str "index"] => return .index
   | [.str "field", name] => return .field (← field name)
   | [.str "vector", name] => return .vector (← field name)
+  | [.str "group", name] => return .group (← group name)
+  | [.str "service", name] => return .service (← service name)
   | _ => throw "structured-type-unsupported"
 
 def types (json : Json) : Except String (List Ty) := do
   (← array json).mapM type
 def refs (json : Json) : Except String (List Nat) := do
   (← array json).mapM natural
+
+def strings (json : Json) (limit : Nat := 512) : Except String (List String) := do
+  (← array json limit).mapM string
+
+def scopes (json : Json) : Except String (List (List String)) := do
+  (← array json).mapM (fun scope => strings scope 16)
+
+/-- Shape and capacity only: roster uniqueness, scope membership and signature
+alignment are checked by semantic admission, including for unused protocols. -/
+def interface (json : Json) : Except String (Option ProtocolInterface) := do
+  match ← array json with
+  | [] => return none
+  | [.str "protocol", roles, inputs, outputs] =>
+      return some ⟨← strings roles 16, ← scopes inputs, ← scopes outputs⟩
+  | _ => throw "structured-interface"
 
 def descriptor (json : Json) : Except String Descriptor := do
   match ← array json with
@@ -59,6 +86,10 @@ def descriptor (json : Json) : Except String Descriptor := do
   | [.str "field.subtract", d] => return .fieldSubtract (← field d)
   | [.str "field.multiply", d] => return .fieldMultiply (← field d)
   | [.str "field.equal", d] => return .fieldEqual (← field d)
+  | [.str "group.identity", g] => return .groupIdentity (← group g)
+  | [.str "group.add", g] => return .groupAdd (← group g)
+  | [.str "group.scale", g, f] => return .groupScale (← group g) (← field f)
+  | [.str "group.equal", g] => return .groupEqual (← group g)
   | [.str "bool.constant", .bool b] => return .booleanConstant b
   | [.str "bool.and"] => return .booleanAnd
   | [.str "bool.or"] => return .booleanOr
@@ -76,6 +107,11 @@ def descriptor (json : Json) : Except String Descriptor := do
   | [.str "for"] => return .loop
   | [.str "for_condition"] => return .loopCondition
   | [.str "guard", owner] => return .guard (← string owner)
+  | [.str "restrict", roles] => return .restrict (← strings roles 16)
+  | [.str "exchange", sender, receiver] => return .exchange (← string sender) (← string receiver)
+  | [.str "draw", owner, f] => return .draw (← string owner) (← field f)
+  | [.str "statement", relation, selectors, acceptance] =>
+      return .statement (← string relation) (← strings selectors) (← natural acceptance)
   | _ => throw "structured-operation-unsupported"
 
 def terminator (json : Json) : Except String Terminator := do
@@ -144,11 +180,24 @@ def origin (json : Json) : Except String (Option (String × List (String × Stri
     return some (← string name, bindings)
   | _ => throw "structured-origin"
 
+def purpose : Json → Except String String
+  | .str "parameter" => .ok "parameter"
+  | .str "statement" => .ok "statement"
+  | .str "witness" => .ok "witness"
+  | _ => .error "structured-relation-purpose"
+
+def relation (json : Json) : Except String Relation := do
+  match ← array json with
+  | [.str "relation", name, visible, kind, key, revision, inputs, outputs, purposes] =>
+      return ⟨← string name, ← visibility visible, ← string kind, ← string key,
+        ← string revision, ← types inputs, ← types outputs, ← (← array purposes).mapM purpose⟩
+  | _ => throw "structured-relation"
+
 def definition (json : Json) : Except String Definition := do
   match ← array json with
-  | [.str "function", name, mode, visible, inputs, outputs, premises, source, body] =>
+  | [.str "function", name, mode, visible, inputs, outputs, ports, premises, source, body] =>
     return .function ⟨← string name, ← kind mode, ← visibility visible,
-      ← types inputs, ← types outputs, ← (← array premises).mapM bound,
+      ← types inputs, ← types outputs, ← interface ports, ← (← array premises).mapM bound,
       ← origin source, ← block 64 body⟩
   | [.str "finite", name, visible, inputs, outputs, domain, step, predicate] =>
     return .finite ⟨← string name, ← visibility visible, ← types inputs, ← types outputs,
@@ -161,16 +210,16 @@ def digestValid (source : String) : Bool :=
 
 def snapshot (json : Json) : Except String Snapshot := do
   match ← array json with
-  | [.str "zkc.structured-source/0", .str "original", digest, entry, role, domains, definitions] =>
+  | [.str "zkc.structured-source/0", .str "original", digest, entry, domains, relations, definitions] =>
     let source ← string digest
     if !digestValid source then throw "structured-source-digest"
-    return ⟨source, ← string entry, ← string role,
-      ← (← array domains 128).mapM domain, ← (← array definitions 128).mapM definition⟩
+    return ⟨source, ← string entry, ← (← array domains 128).mapM domain,
+      ← (← array relations 128).mapM relation, ← (← array definitions 128).mapM definition⟩
   | _ => throw "structured-envelope"
 
 /-- Lexical limits precede the recursive JSON parser, including inside unused bodies. -/
-def parse (text : String) : Except String Json := do
-  if text.utf8ByteSize > 1024 * 1024 then throw "byte-limit"
+def parse (text : String) (byteLimit : Nat := 16 * 1024 * 1024) : Except String Json := do
+  if text.utf8ByteSize > byteLimit then throw "byte-limit"
   let mut depth := 0
   let mut quoted := false
   let mut escaped := false
@@ -186,6 +235,6 @@ def parse (text : String) : Except String Json := do
       depth := depth + 1
       if depth > 64 then throw "depth-limit"
     else if char == ']' then depth := depth - 1
-  Source.Format.parse (1024 * 1024) text |>.mapError Source.Format.Error.code
+  Source.Format.parse byteLimit text |>.mapError Source.Format.Error.code
 
 end Zkc.Source.Structured.Format

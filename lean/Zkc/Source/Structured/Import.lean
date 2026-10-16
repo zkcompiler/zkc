@@ -1,159 +1,64 @@
 module
 
-public import Zkc.Source.Structured.Admission
+public import Zkc.Source.Structured.OpenAdmission
+public import Zkc.Source.Structured.Availability
 public import Zkc.Specification
 
 @[expose] public section
 
 namespace Zkc.Source.Structured
 
-/-- One formed body per declaration. Its exact lowered tree is retained, while
-the full original metadata remains in `Program.snapshot`. -/
-structure CheckedDefinition where
-  name : String
-  inputs : List Ty
-  outputs : List Ty
-  raw : RawRegion Ty Op
-  body : Region dialect inputs outputs
-  formed : raw.elaborate (dialect := dialect) inputs outputs = .ok body
-
-def CheckedDefinition.helper (definition : CheckedDefinition) : Helper :=
-  ⟨definition.name, definition.inputs, definition.outputs⟩
-
-theorem CheckedDefinition.exactBody (definition : CheckedDefinition) :
-    definition.body.erase = definition.raw :=
-  RawRegion.erase_of_elaborate (dialect := dialect) definition.raw definition.formed
-
-/-- Recover a typed body from its exact raw tree without unfolding admission. -/
-theorem CheckedDefinition.body_eq_of_raw (definition : CheckedDefinition)
-    (body : Region dialect definition.inputs definition.outputs)
-    (same : definition.raw = body.erase) : definition.body = body := by
-  have formed := definition.formed
-  rw [same, Region.elaborate_erase (dialect := dialect) body] at formed
-  exact (Except.ok.inj formed).symm
-
-/-- Dependency authority is the formed operation tree, not separately recorded
-names. This includes references in every nested callback and suffix. -/
-def CheckedDefinition.helpers (definition : CheckedDefinition) : List Helper :=
-  definition.raw.operations.flatMap Op.helpers
-
-theorem CheckedDefinition.helpers_eq_body (definition : CheckedDefinition) :
-    definition.helpers = definition.body.erase.operations.flatMap Op.helpers := by
-  rw [definition.exactBody]
-  rfl
-
-def CheckedDefinition.dependencies (definition : CheckedDefinition) : List String :=
-  definition.helpers.map (·.name)
-
-def CheckedDefinition.instructionCount (definition : CheckedDefinition) : Nat :=
-  definition.raw.operations.length
-
-def checkDefinition (snapshot : Snapshot) (domains : List DomainSpec)
-    (summaries : IdentitySummaries) (definition : Definition) : Except String CheckedDefinition := do
-  let raw ← match definition with
-    | .function f =>
-      (lowerBlock snapshot domains summaries f.kind 64 f.inputs
-        (f.preconditions.map fun bound => (bound.index, bound.container)) .function f.body).run' {}
-    | .finite f => do
-      let spec ← resolveFold snapshot domains .local f.domain f.step f.predicate
-        f.inputs f.outputs (List.range f.inputs.length) []
-      let raw : RawRegion Ty Op := .letOp (.fold spec) (List.range f.inputs.length)
-        f.outputs .nil (.ret (List.range f.outputs.length))
-      pure raw
-  match formed : raw.elaborate (dialect := dialect) definition.inputs definition.outputs with
-  | .error _ => throw "structured-formation"
-  | .ok body => return ⟨definition.name, definition.inputs, definition.outputs,
-      raw, body, formed⟩
-
-structure OrderedDefinition where
-  definition : CheckedDefinition
-  depth : Nat
-
-/-- Kahn ordering over the stored definitions. The recursion bound is the number
-of declarations, not evaluation fuel. Shared dependencies are never expanded. -/
-def orderDefinitions : Nat → List CheckedDefinition → List OrderedDefinition →
-    Except String (List OrderedDefinition)
-  | _, [], ordered => .ok ordered
-  | 0, _ :: _, _ => .error "structured-helper-cycle"
-  | remaining + 1, pending, ordered => do
-    let ready := pending.find? fun definition =>
-      definition.dependencies.all fun name => ordered.any (·.definition.name == name)
-    let some next := ready | throw "structured-helper-cycle"
-    let dependencies : List OrderedDefinition ← next.dependencies.mapM fun name =>
-      requireSome (ordered.find? (·.definition.name == name)) "structured-helper-resolution"
-    let depth : Nat := (dependencies.map (·.depth + 1)).foldl max 0
-    if depth > 64 then throw "structured-reference-depth"
-    orderDefinitions remaining (pending.filter (·.name != next.name))
-      (ordered ++ [⟨next, depth⟩])
-
-/-- Every reference resolves with its complete signature in the strict prefix.
-Names remain unique even for declarations with different types. The traversal
-also checks references in dormant callbacks through `CheckedDefinition.helpers`.
--/
-def DeclarationsLinked (available : List Helper) : List CheckedDefinition → Prop
-  | [] => True
-  | definition :: rest =>
-      definition.name ∉ available.map (·.name) ∧
-      (∀ helper ∈ definition.helpers, helper ∈ available) ∧
-      DeclarationsLinked (definition.helper :: available) rest
-
-instance declarationsLinkedDecidable (available : List Helper) (definitions : List CheckedDefinition) :
-    Decidable (DeclarationsLinked available definitions) :=
-  match definitions with
-  | [] => isTrue trivial
-  | definition :: rest =>
-    let _ := declarationsLinkedDecidable (definition.helper :: available) rest
-    inferInstanceAs (Decidable
-      (definition.name ∉ available.map (·.name) ∧
-       (∀ helper ∈ definition.helpers, helper ∈ available) ∧
-       DeclarationsLinked (definition.helper :: available) rest))
-
-structure Payload where
+structure UnitPayload where
   definitions : List CheckedDefinition
-  entryIndex : Fin definitions.length
+  protocols : List CheckedProtocol
+  entryIndex : Fin protocols.length
   linked : DeclarationsLinked [] definitions
+  rootsLinked : ∀ root ∈ protocols, ∀ helper ∈ root.helpers,
+    helper ∈ definitions.map CheckedDefinition.helper
+  available : checkUnitAvailability definitions protocols = .ok ()
 
-def Payload.entry (payload : Payload) : CheckedDefinition :=
-  payload.definitions.get payload.entryIndex
+def UnitPayload.entry (payload : UnitPayload) : CheckedProtocol :=
+  payload.protocols.get payload.entryIndex
 
-def findEntry (name : String) (definitions : List CheckedDefinition) :
-    Except String (Fin definitions.length) := do
-  let index := definitions.findIdx (·.name == name)
-  if h : index < definitions.length then return ⟨index, h⟩
-  else throw "structured-entry"
-
-/-- Independently validate a proposed declaration order and exact signatures.
-The resulting proof is erased at execution time; lookup remains name-based. -/
-def linkPayload (entry : String) (definitions : List CheckedDefinition) : Except String Payload := do
-  if linked : DeclarationsLinked [] definitions then
-    return ⟨definitions, ← findEntry entry definitions, linked⟩
-  else throw "structured-helper-link"
-
-def check_payload (snapshot : Snapshot) : Except String Payload := do
-  if !Format.digestValid snapshot.source || !validString snapshot.entry ||
-      !validString snapshot.role then throw "structured-identity"
-  if snapshot.domains.length > 128 || snapshot.definitions.length > 128 then
-    throw "structured-table-limit"
-  let names := snapshot.domains.map (·.name) ++ snapshot.definitions.map (·.name)
+def check_payload (snapshot : Snapshot) : Except String UnitPayload := do
+  if !Format.digestValid snapshot.source || !validString snapshot.entry then
+    throw "structured-identity"
+  if snapshot.domains.length > 128 || snapshot.relations.length > 128 ||
+      snapshot.definitions.length > 128 then throw "structured-table-limit"
+  let names := snapshot.domains.map (·.name) ++ snapshot.relations.map (·.name) ++
+    snapshot.definitions.map (·.name)
   if names.eraseDups.length != names.length then throw "structured-duplicate-symbol"
-  if !snapshot.definitions.all Definition.headerValid then throw "structured-header"
+  if !snapshot.definitions.all Definition.headerValid || !snapshot.relations.all Relation.valid then
+    throw "structured-header"
   if !snapshot.instructionsWithin 4096 then throw "structured-instruction-limit"
-  let entry ← lookupDefinition snapshot snapshot.entry
-  if entry.kind != .protocol then throw "structured-entry-kind"
+  if snapshot.domains.any (fun domain => domain.inputs.any Ty.isService) then
+    throw "structured-service-use"
   let domains ← snapshot.domains.mapM Domain.resolve
   let summaries ← snapshot.identitySummaries
-  let definitions ← snapshot.definitions.mapM (checkDefinition snapshot domains summaries)
-  -- Preflight bounds work on input syntax before summarization. This bounds
-  -- the actual formed IR; future lowering may introduce additional operations.
-  if (definitions.map (·.instructionCount)).foldl (· + ·) 0 > 4096 then
-    throw "structured-instruction-limit"
+  let definitions ← (snapshot.definitions.filter (·.kind != .protocol)).mapM
+    (checkDefinition snapshot domains summaries)
   let ordered ← orderDefinitions definitions.length definitions []
   let definitions := ordered.map (·.definition)
-  linkPayload snapshot.entry definitions
+  let functions := snapshot.definitions.filterMap fun definition => match definition with
+    | .function f => if f.kind == .protocol then some f else none
+    | .finite _ => none
+  let protocols ← functions.mapM (checkProtocol snapshot domains summaries)
+  if linked : DeclarationsLinked [] definitions then
+    if rootsLinked : ∀ root ∈ protocols, ∀ helper ∈ root.helpers,
+        helper ∈ definitions.map CheckedDefinition.helper then
+      let entryIndex := protocols.findIdx (·.name == snapshot.entry)
+      if entryPresent : entryIndex < protocols.length then
+        match available : checkUnitAvailability definitions protocols with
+        | .error code => throw code
+        | .ok () => return ⟨definitions, protocols, ⟨entryIndex, entryPresent⟩,
+            linked, rootsLinked, available⟩
+      else throw "structured-entry"
+    else throw "structured-root-link"
+  else throw "structured-helper-link"
 
 structure Program where
   snapshot : Snapshot
-  payload : Payload
+  payload : UnitPayload
 
 def check (snapshot : Snapshot) : Except String Program :=
   match check_payload snapshot with
@@ -172,7 +77,7 @@ def importedOfIsOk (snapshot : Snapshot) (accepted : (check snapshot).isOk = tru
   | .ok program => ⟨program, result⟩
   | .error error => False.elim (by simp [result, Except.isOk, Except.toBool] at accepted)
 
-theorem check_parts (snapshot : Snapshot) (payload : Payload)
+theorem check_parts (snapshot : Snapshot) (payload : UnitPayload)
     (accepted : check_payload snapshot = .ok payload) :
     check snapshot = .ok ⟨snapshot, payload⟩ := by
   simp [check, accepted]

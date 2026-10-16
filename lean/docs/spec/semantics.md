@@ -28,6 +28,10 @@ the final output-role restriction as well as all actions and stops.
 `Common.ParticipantOp` and its dialect are indexed by the selected participant.
 A region lowered for one participant cannot be interpreted by another
 participant's meaning without an explicit change of representation.
+Structured protocol roots instead use a role-agnostic dialect: role indices are
+resolved within each root, and the meaning receives the chosen participant.
+Closed helper dialects have no protocol effects, and roots never enter helper
+closure tables.
 
 The [structured native profile](structured-source.md) resolves an actual export
 into this same `Region` carrier. Its operation family owns signatures and
@@ -85,7 +89,7 @@ model never derives agreement merely from their shared source port name.
 
 `Source.Participant` owns the role/type-parametric action interface and the
 shared open rules used by both `Common.Program.denote` and
-`Common.participantMeaning`. Their callers compose returned components with the
+`Common.participantMeaning`, and by structured roots. Their callers compose returned components with the
 remaining program; shared rules preserve the actual action continuations.
 
 - `exchange` stops `incomplete` when the sender lacks its operand. Otherwise it
@@ -101,6 +105,9 @@ remaining program; shared rules preserve the actual action continuations.
   false stops `reject`, and true continues. Other roles continue without an
   action or stop. Common supplies its mathematical condition policy by mapping
   the local condition into this Boolean boundary.
+- `owned` sequences all arguments only at its owner and runs closed work even
+  with zero results. Missing owned arguments stop `incomplete`; nonowners skip
+  the work. Stopping and callbacks remain those of the supplied closed process.
 - `restrict` retains a selected optional component or hides it. It cannot create
   an absent component and emits no action or stop. Common uses the same rule for
   lowered restrictions and the imported program's final output-role filter.

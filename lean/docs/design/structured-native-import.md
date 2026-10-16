@@ -25,19 +25,26 @@ cannot supply a semantic oracle.
 
 ### Schnorr
 
-The first complete endpoint is the verifier of the helper-based Schnorr DSL
-Entry. Its open process receives a commitment, queries the actual challenge
+The first endpoint is the actual library Interactive Schnorr original-stage
+unit, together with the maintained Helpers and Reordered forms. Its open process
+receives a commitment, queries the actual challenge
 service, sends the challenge, receives an independent response, and returns the
 Schnorr equation's Boolean result. This equation must hold for arbitrary replies
 and stopping prefixes, with the public inputs and service binding explicit.
 
-Establish `Protocols.Schnorr.Common.VerifierContract` once for this imported
-subject. Its existing consumers then give perfect completeness and special
-soundness. The maintained VCVio honest-view consumer is a subsequent target once
-the corresponding source-view equation is established. Native group arithmetic,
+`ZkcExamples.Structured.SchnorrInteractive` kernel-admits the actual unit and
+proves both participants' process equations. Its explicit effect adapter supplies
+`Protocols.Schnorr.Common.VerifierContract`; the existing consumers give perfect
+completeness and special soundness, and the optional VCVio consumer uses the same
+contract. The dormant named DLog formula has its own full-table equation; its
+association with the retained relation is not inferred. Native group arithmetic,
 probabilistic knowledge extraction, and Fiat–Shamir require further arguments.
-Schnorr tests helper sharing and participant binding; it is not a finite-loop
-example.
+Interactive tests participant binding and metadata. Its formula is dormant; the
+Helpers form exercises named calls, while split-scope `first` controls distinguish
+faithful component calls from an all-input approximation. `SchnorrVariants`
+proves the shared contract for Helpers and Reordered. Its admitted EarlyChallenge
+unit queries before receiving the commitment; an exact first-action observation
+refutes the shared contract for this counterexample.
 
 ### Sumcheck
 
@@ -49,24 +56,33 @@ require an open structured repeat model.
 
 `Reduce` returns an evaluation obligation. A separate public-table or opening
 consumer must discharge that obligation before it yields an acceptance claim.
-The full public-table protocol additionally needs structured tuples, vector
-operations and the imported `has_shape` and `fix_prefix` helpers. Count agreement
+The full public-table protocol additionally needs vector operations and the
+imported `has_shape` and `fix_prefix` helpers. Source records already flatten into
+ports; each pair message becomes two ordered scalar exchanges, so no tuple-valued
+action or new carrier is required. Count agreement
 and valid native dimensions are explicit premises.
 
 The maintained two-round quadratic scalar verifier and its `4 / |F|` theorem
 remain useful regression clients. They are a different protocol from the
 multilinear pair-message library. Connecting the library to ArkLib requires a
-new pair-to-polynomial adapter and an arbitrary-round causal experiment equation;
+new library polynomial adapter and an arbitrary-round causal experiment equation;
 the generic degree-bound theorem alone does not establish that correspondence.
 
 ## Structural and semantic requirements
 
-The initial maintained import profile has one participant, immutable Booleans,
-unsigned indices, BLS12-381 scalar values and vectors, closed helpers, finite
-folds and nested Local control. It deliberately refuses group and service
-values, communication, affine resources and general interactive repetition.
-The complete Schnorr and Sumcheck goals above guide later extensions; they are
-not completion claims for this infrastructure package.
+The maintained whole-unit profile has per-root participants/scopes, immutable
+Booleans, unsigned indices, nominal BLS12-381 scalar/vector/group values, and
+root-owned random-service handles. Closed Math/Local helpers remain separate from
+open roots. Math uses optional named closures; Local calls sequence all arguments
+and run only at their owner. Finite/control work remains available in closed
+Local bodies. Multi-role roots refuse transitive Math folds and checked reads;
+affine resources and general interactive repetition remain future work.
+
+Both dialects instantiate the existing Source.Region. One evaluator uses explicit
+F/G and lawful module operations; SiteObservations abstracts only internal source
+marks. Generic operation/Region/table naturality gives site erasure and closed
+lifting. The checked closed view has a semantic correspondence at the same value
+assignment, with complete one-role port scopes certified by the closed view.
 
 - Preserve ordered result tuples, including no results. A zero-result operation
   can still stop or interact.
@@ -138,9 +154,11 @@ domain items and invariant arguments/captures. A totality theorem must quantify
 over valid inputs satisfying the function's declared preconditions. Merely
 moving this analysis after formation would not prove these semantic properties.
 
-The next whole-protocol extension should preserve open interaction and explicit
-participant bindings for Schnorr, then add the actual multilinear Sumcheck
-library and interactive repetition. These extensions reuse this declaration and
+The next whole-protocol extension adds the actual multilinear Sumcheck library
+and interactive repetition. Availability admission already substitutes both
+per-result dependencies and each intermediate requirement over the checked helper
+order, with incremental budgets. A general availability-soundness/presence theorem
+and a native demand-projection relation remain separate obligations. These extensions reuse this declaration and
 region boundary. They must establish the verifier contracts above before
 transporting the existing security proofs to their imported subjects.
 

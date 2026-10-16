@@ -1,8 +1,8 @@
-import Zkc.Source.Structured.Meaning
+import Zkc.Source.Structured.ClosedProfile
 import Zkc.Source.Common.Format
 
-/-! Constant admission must reduce under the kernel, including the original
-structured checker. Runtime parsing and a native decision oracle are not used
+/-! Constant admission must reduce under the kernel, including the structured
+closed-profile checker. Runtime parsing and a native decision oracle are not used
 to construct these admission proofs. -/
 
 set_option maxRecDepth 10000
@@ -24,16 +24,20 @@ example : Format.decimal "1" = .ok 1 := rfl
 example : Common.Native.Format.decimal (.str "1") = .ok 1 := rfl
 
 private def constantSnapshot : Snapshot :=
-  ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", "P", [], [
-    .function ⟨"main", .protocol, .publicDef, [], [.field scalarDomain], [], none,
+  ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [], [], [
+    .function ⟨"main", .protocol, .publicDef, [], [.field scalarDomain],
+      some ⟨["P"], [], [["P"]]⟩, [], none,
       .block [.instruction (.fieldConstant scalarDomain "123") []
         [.field scalarDomain] [] ""] (.ret [0])⟩]⟩
 
-private def constantProgram : Program :=
-  (check constantSnapshot).toOption.get (by decide +kernel)
+private def constantProgram : ClosedProgram :=
+  (checkClosed constantSnapshot).toOption.get (by decide +kernel)
 
-example (F : Type) [CommRing F] [DecidableEq F] :
-    constantProgram.denote F .nil = .done (.cons (123 : F) .nil) := rfl
+-- Direct reduction keeps the dependent admission computation small.
+set_option smartUnfolding false in
+example (F G : Type) [CommRing F] [AddCommGroup G] [Module F G]
+    [DecidableEq F] [DecidableEq G] :
+    constantProgram.denote F G .nil = .done (.cons (123 : F) .nil) := rfl
 
 private def run : IO Unit := do
   let check (label : String) (passed : Bool) : IO Unit :=

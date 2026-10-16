@@ -6,9 +6,19 @@ public import Zkc.Source.Structured.Vocabulary
 
 namespace Zkc.Source.Structured
 
-/-- Resolved signature from the checked declaration table, never wire authority. -/
+inductive HelperKind where
+  | math | local
+  deriving DecidableEq, Repr
+
+def HelperKind.toKind : HelperKind → Kind
+  | .math => .math
+  | .local => .local
+
+/-- Resolved signature from the checked declaration table, never wire authority.
+Protocol roots cannot be represented by this signature. -/
 structure Helper where
   name : String
+  kind : HelperKind
   inputs : List Ty
   outputs : List Ty
   deriving DecidableEq, Repr
@@ -29,18 +39,23 @@ structure FoldSpec where
   captures : List Ty
   step : String
   predicate : String
+  kind : HelperKind
 
 def FoldSpec.arguments (fold : FoldSpec) : List Ty :=
   fold.domain.inputs ++ (fold.state ++ fold.captures)
 def FoldSpec.stepHelper (fold : FoldSpec) : Helper :=
-  ⟨fold.step, fold.state ++ (fold.domain.item :: (fold.domain.inputs ++ fold.captures)), fold.state⟩
+  ⟨fold.step, fold.kind, fold.state ++ (fold.domain.item :: (fold.domain.inputs ++ fold.captures)), fold.state⟩
 def FoldSpec.predicateHelper (fold : FoldSpec) : Helper :=
-  ⟨fold.predicate, fold.domain.item :: (fold.domain.inputs ++ fold.captures), [.boolean]⟩
+  ⟨fold.predicate, fold.kind, fold.domain.item :: (fold.domain.inputs ++ fold.captures), [.boolean]⟩
 
 inductive Op where
   | fieldConstant (domain : String) (value : Nat)
   | fieldAdd (domain : String) | fieldSubtract (domain : String)
   | fieldMultiply (domain : String) | fieldEqual (domain : String)
+  | groupIdentity (domain : String)
+  | groupAdd (domain : String)
+  | groupScale (group field : String)
+  | groupEqual (domain : String)
   | booleanConstant (value : Bool)
   | booleanAnd | booleanOr | booleanXor | booleanEqual | booleanNotEqual
   | select (type : Ty)
@@ -51,10 +66,14 @@ inductive Op where
   | loop (state captures : List Ty)
   | loopCondition (state captures : List Ty)
   | guard
+  /-- Internal observation only; erased by the ordinary closed interpretation. -/
+  | mark (site : String)
 
 def Op.arguments : Op → List Ty
-  | .fieldConstant .. | .booleanConstant .. => []
+  | .fieldConstant .. | .booleanConstant .. | .groupIdentity .. | .mark .. => []
   | .fieldAdd d | .fieldSubtract d | .fieldMultiply d | .fieldEqual d => [.field d, .field d]
+  | .groupAdd d | .groupEqual d => [.group d, .group d]
+  | .groupScale g f => [.group g, .field f]
   | .booleanAnd | .booleanOr | .booleanXor | .booleanEqual | .booleanNotEqual => [.boolean, .boolean]
   | .select ty => [.boolean, ty, ty]
   | .boundedAt d => [.vector d, .index]
@@ -66,14 +85,15 @@ def Op.arguments : Op → List Ty
 
 def Op.results : Op → List Ty
   | .fieldConstant d _ | .fieldAdd d | .fieldSubtract d | .fieldMultiply d | .boundedAt d => [.field d]
+  | .groupIdentity d | .groupAdd d | .groupScale d _ => [.group d]
   | .fieldEqual _ | .booleanConstant _ | .booleanAnd | .booleanOr | .booleanXor |
-    .booleanEqual | .booleanNotEqual => [.boolean]
+    .booleanEqual | .booleanNotEqual | .groupEqual _ => [.boolean]
   | .select ty => [ty]
   | .invoke helper => helper.outputs
   | .fold spec => spec.state
   | .branch _ outputs => outputs
   | .loop state _ | .loopCondition state _ => state
-  | .guard => []
+  | .guard | .mark _ => []
 
 def Op.regions : Op → List (List Ty × List Ty)
   | .branch captures outputs => [(captures, outputs), (captures, outputs)]
@@ -91,7 +111,8 @@ def Op.helpers : Op → List Helper
   | .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
     .fieldEqual .. | .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor |
     .booleanEqual | .booleanNotEqual | .select .. | .boundedAt .. |
-    .branch .. | .loop .. | .loopCondition .. | .guard => []
+    .branch .. | .loop .. | .loopCondition .. | .guard | .mark .. |
+    .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. => []
 
 abbrev dialect : Dialect := ⟨Ty, Op, Op.arguments, Op.results, Op.regions⟩
 

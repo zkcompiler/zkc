@@ -1,4 +1,5 @@
 import Zkc.Source.Structured.Laws
+import Zkc.Source.Structured.ClosedProfile
 import ZkcTools.StructuredSource.Evaluation
 import Lean
 
@@ -7,6 +8,8 @@ binding/proofs are owned by the structured bridge, not these unit tests. -/
 
 set_option maxRecDepth 10000
 set_option maxHeartbeats 4000000
+-- Direct reduction avoids repeatedly unfolding the dependent admission equations.
+set_option smartUnfolding false
 
 namespace StructuredSourceTests
 open Lean Zkc.Source Zkc.Source.Structured
@@ -23,11 +26,13 @@ def digest : String := "sha256:" ++ String.ofList (List.replicate 64 '0')
 
 def function (name : String) (kind : Kind) (inputs outputs : List Ty) (body : Block)
     (premises : List Bound := []) : Definition :=
-  .function ⟨name, kind, .privateDef, inputs, outputs, premises,
+  .function ⟨name, kind, .privateDef, inputs, outputs,
+    if kind == .protocol then some ⟨["P"], inputs.map (fun _ => ["P"]),
+      outputs.map (fun _ => ["P"])⟩ else none, premises,
     if kind == .local then some (name, []) else none, body⟩
 
 def snapshot (definitions : List Definition) (domains : List Domain := []) : Snapshot :=
-  ⟨digest, "main", "P", domains, definitions⟩
+  ⟨digest, "main", domains, [], definitions⟩
 
 def totalStep (returned : List Nat := [2, 0]) (container : Nat := 3)
     (premises : List Bound := [⟨2, 3, 0⟩]) : Definition :=
@@ -171,11 +176,11 @@ def dependencyChain (length copies : Nat) : Snapshot :=
     (.block [.instruction (.call ("helper" ++ toString (length - 1))) [] [] [] ""] (.ret []))])
 
 -- Kernel checks use reduction, never native_decide or an evaluator oracle.
-theorem total_admitted : (check total).isOk = true := by decide +kernel
+theorem total_admitted : (checkClosed total).isOk = true := by decide +kernel
 theorem wrong_call_refused : refused (preconditionCall true) "structured-call-premise" = true := by decide +kernel
 theorem wrong_capture_refused : refused (loop false true) "structured-capture-forwarding" = true := by decide +kernel
 
-def totalImported : Imported total := importedOfIsOk total total_admitted
+def totalImported : ClosedImported total := closedImportedOfIsOk total total_admitted
 
 theorem total_exact_subject : totalImported.program.snapshot = total :=
   totalImported.exactSubject
@@ -184,7 +189,7 @@ run_cmd do
   for name in [`StructuredSourceTests.total_admitted, `StructuredSourceTests.wrong_call_refused,
       `StructuredSourceTests.wrong_capture_refused, `StructuredSourceTests.total_exact_subject,
       ``check_ok_inversion, ``CheckedDefinition.exactBody,
-      ``denoteFold_reference, ``foldTransition_false, ``invoke_extended, ``boundedAt_exact] do
+      ``Evaluation.denoteFold_reference, ``Evaluation.foldTransition_false, ``Evaluation.invoke_extended, ``Evaluation.boundedAt_exact] do
     for axiomName in ← Lean.collectAxioms name do
       unless [``propext, ``Classical.choice, ``Quot.sound].contains axiomName do
         throwError "unexpected axiom in {name}: {axiomName}"
@@ -205,7 +210,9 @@ def run : IO Unit := do
   test "unit-abort" (evaluate unit [vec [11], boolean true] == .ok (stopped "abort"))
   test "changed-stop" (evaluate (unit .reject) [vec [11], boolean true] == .ok (stopped "reject"))
   test "sharing" (evaluate shared [scalar 11, scalar 19] == .ok (returned [scalar 11, scalar 19]))
-  test "one-stored-helper" (match check shared with | .ok p => p.payload.definitions.length == 2 | _ => false)
+  test "one-stored-helper" (match check shared with
+    | .ok p => p.payload.definitions.length == 1 && p.payload.protocols.length == 1
+    | _ => false)
   test "call-premise-positive" (evaluate (preconditionCall false) [vec [11, 13], scalar 5, vec [29, 31]] ==
     .ok (returned [scalar 13]))
   test "same-type-wrong-container" (refused (preconditionCall true) "structured-call-premise")
@@ -243,8 +250,22 @@ def run : IO Unit := do
   test "cycle" (refused (snapshot [function "main" .protocol [] [] (.block [] (.ret [])),
     function "cycle" .math [] [] (.block [.instruction (.call "cycle") [] [] [] ""] (.ret []))])
     "structured-helper-cycle")
-  test "reference-depth" (refused (dependencyChain 65 1) "structured-reference-depth")
-  test "shared-dag-is-not-expanded-for-admission" ((check (dependencyChain 17 2)).isOk)
+  test "reference-depth" (refused (dependencyChain 66 1) "structured-reference-depth")
+  test "root-reference-depth" (refused (dependencyChain 65 1) "structured-availability-depth-limit")
+  let dag := dependencyChain 17 2
+  let formedDag : Except String (List CheckedDefinition) := do
+    let summaries ← dag.identitySummaries
+    let definitions ← (dag.definitions.filter (·.kind != .protocol)).mapM
+      (checkDefinition dag [] summaries)
+    return (← orderDefinitions definitions.length definitions []).map (·.definition)
+  test "shared-dag-is-not-expanded-for-formation" (match formedDag with
+    | .ok definitions => definitions.length == 17 &&
+        (definitions.map (·.instructionCount)).foldl (· + ·) 0 == 32
+    | .error _ => false)
+  test "shared-dag-availability-admitted" ((check dag).isOk)
+  test "empty-summary-dag-does-not-expand-operations" ((check (dependencyChain 40 2)).isOk)
+  test "shared-dag-runtime-limit-is-separate" (evaluate (dependencyChain 40 2) [] ==
+    .error "structured-evaluation-work-limit")
   test "reference-depth-boundary" ((check (dependencyChain 64 1)).isOk)
   test "declaration-order-does-not-change-fold" (evaluate
     {unit with definitions := unit.definitions.reverse} [vec [2], boolean true] == .ok (stopped "abort"))
@@ -261,8 +282,8 @@ def run : IO Unit := do
     program.payload.definitions.map fun definition =>
       (definition.name, definition.dependencies, definition.instructionCount)
   test "dependencies-derived-from-formed-bodies" (inventory == some [
-    ("step", [], 0), ("predicate", [], 0), ("fold", ["step", "predicate"], 1),
-    ("work", ["fold"], 1), ("main", ["work"], 1)])
+    ("step", [], 1), ("predicate", [], 0), ("fold", ["step", "predicate"], 1),
+    ("work", ["fold"], 2)])
   test "direct-wrong-container" (refused (snapshot [
     function "main" .protocol [] [] (.block [] (.ret [])),
     function "bad" .math [.index, vector, vector] [field]
@@ -274,25 +295,29 @@ def run : IO Unit := do
     function "read" .math [field] [field] (.block [] (.ret [0])),
     function "main" .protocol [.boolean] [field]
       (.block [.instruction (.call "read") [0] [field] [] ""] (.ret [0]))]) "structured-formation")
+  test "wrong-helper-kind" (refused (snapshot [
+    function "helper" .local [] [] (.block [] (.ret [])),
+    function "main" .protocol [] []
+      (.block [.instruction (.call "helper") [] [] [] ""] (.ret []))]) "structured-call-kind")
   test "definition-limit" (refused (dependencyChain 128 1) "structured-table-limit")
   test "missing-local-origin" (refused (snapshot [
-    .function ⟨"bad", .local, .privateDef, [], [], [], none, .block [] (.ret [])⟩,
+    .function ⟨"bad", .local, .privateDef, [], [], none, [], none, .block [] (.ret [])⟩,
     function "main" .protocol [] [] (.block [] (.ret []))]) "structured-header")
   test "protocol-stop-refused" (refused (snapshot [
-    function "main" .protocol [] [] (.block [] (.stop .abort "stop"))]) "structured-local-stop")
+    function "main" .protocol [] [] (.block [] (.stop .abort "stop"))]) "structured-protocol-terminator")
   test "public-math-refused" (refused (snapshot [
-    .function ⟨"helper", .math, .publicDef, [], [], [], none, .block [] (.ret [])⟩,
+    .function ⟨"helper", .math, .publicDef, [], [], none, [], none, .block [] (.ret [])⟩,
     function "main" .protocol [] [] (.block [] (.ret []))]) "structured-header")
   for bindings in [[("N", "7"), ("N", "8")], [("N", "")]] do
     test "invalid-origin-bindings-refused" (refused (snapshot [
-      .function ⟨"helper", .local, .privateDef, [], [], [], some ("template", bindings),
+      .function ⟨"helper", .local, .privateDef, [], [], none, [], some ("template", bindings),
         .block [] (.ret [])⟩,
       function "main" .protocol [] [] (.block [] (.ret []))]) "structured-header")
   test "duplicate-symbol" (refused {total with definitions := total.definitions ++ [totalRoot]}
     "structured-duplicate-symbol")
   test "wrong-owner" (refused (snapshot [function "work" .local [] [] (.block [] (.ret [])),
     function "main" .protocol [] [] (.block [.instruction (.localCall "work" "V") [] [] [] "call"] (.ret []))])
-    "structured-local-owner")
+    "structured-role")
   test "math-local-invoke" (refused (snapshot [function "work" .local [] [] (.block [] (.ret [])),
     function "main" .protocol [] [] (.block [] (.ret [])),
     function "bad" .math [] [] (.block [.instruction (.apply "work") [] [] [] ""] (.ret []))])
@@ -343,7 +368,7 @@ def run : IO Unit := do
   test "guard-reject" (evaluate guarded [boolean false] == .ok (stopped "reject"))
   test "guard-return" (evaluate guarded [boolean true] == .ok (returned []))
   test "guard-wrong-owner" (refused (snapshot [function "main" .protocol [.boolean] []
-    (.block [.instruction (.guard "V") [0] [] [] "guard"] (.ret []))]) "structured-guard-owner")
+    (.block [.instruction (.guard "V") [0] [] [] "guard"] (.ret []))]) "structured-role")
   test "local-field-arithmetic-refused" (refused (localProgram [field, field] [field]
     (.block [.instruction (.fieldAdd scalarDomain) [0, 1] [field] [] ""] (.ret [0])))
     "structured-local-operation")

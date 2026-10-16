@@ -54,73 +54,6 @@ theorem DeclarationsLinked.nodup {available : List Helper}
         definition.helper :: available) member same
     · exact ih linked.2.2
 
-variable {F : Type} [CommRing F] [DecidableEq F]
-
-/-- Adding a declaration with a different name leaves an existing lookup intact. -/
-theorem invoke_extend_other (table : Meanings F) (definition : CheckedDefinition)
-    (helper : Helper) (different : definition.name ≠ helper.name) :
-    invoke (extendMeanings table definition) helper = invoke table helper := by
-  simp [invoke, extendMeanings, CheckedDefinition.helper, different]
-
-theorem invoke_foldl_other (table : Meanings F) (definitions : List CheckedDefinition)
-    (helper : Helper) (different : ∀ definition ∈ definitions, definition.name ≠ helper.name) :
-    invoke (definitions.foldl extendMeanings table) helper = invoke table helper := by
-  induction definitions generalizing table with
-  | nil => rfl
-  | cons definition rest ih =>
-    rw [List.foldl_cons, ih _ (fun d member => different d (List.mem_cons_of_mem _ member))]
-    exact invoke_extend_other table definition helper (different _ List.mem_cons_self)
-
-private theorem find_foldl_other (table : Meanings F) (definitions : List CheckedDefinition)
-    (name : String) (different : ∀ definition ∈ definitions, definition.name ≠ name) :
-    (definitions.foldl extendMeanings table).find? (fun entry => entry.helper.name == name) =
-      table.find? (fun entry => entry.helper.name == name) := by
-  induction definitions generalizing table with
-  | nil => rfl
-  | cons definition rest ih =>
-    rw [List.foldl_cons, ih _ (fun d member => different d (List.mem_cons_of_mem _ member))]
-    simp [extendMeanings, CheckedDefinition.helper, different _ List.mem_cons_self]
-
-/-- Successful exact-signature lookup in the table built from a checked prefix.
-The returned implementation may still stop when its body is evaluated. -/
-theorem linked_lookup {definitions : List CheckedDefinition}
-    (linked : DeclarationsLinked [] definitions) (helper : Helper)
-    (present : helper ∈ definitions.map CheckedDefinition.helper) :
-    ∃ entry : DenotedDefinition F,
-      (definitions.foldl extendMeanings []).find? (fun entry => entry.helper.name == helper.name) =
-        some entry ∧ entry.helper = helper := by
-  obtain ⟨definition, member, same⟩ := List.mem_map.mp present
-  obtain ⟨before, after, split⟩ := List.mem_iff_append.mp member
-  rw [split] at linked ⊢
-  have tail := (DeclarationsLinked.append [] before (definition :: after)).mp linked |>.2
-  have different : ∀ other ∈ after, other.name ≠ definition.helper.name := by
-    intro other member
-    exact tail.2.2.fresh List.mem_cons_self member
-  subst helper
-  simp only [List.foldl_append, List.foldl_cons]
-  rw [find_foldl_other _ after definition.helper.name different]
-  exact ⟨⟨definition.helper, fun args => definition.body.denote
-    (meaning F (before.foldl extendMeanings [])) args.get⟩, by simp [extendMeanings], rfl⟩
-
-/-- Resolve a declaration in its full checked table to its body interpreted in
-its own prefix. Later declarations cannot shadow or change that closure. -/
-theorem Payload.invoke_declaration (payload : Payload)
-    (before : List CheckedDefinition) (definition : CheckedDefinition)
-    (suffix : List CheckedDefinition)
-    (split : payload.definitions = before ++ definition :: suffix)
-    (arguments : Values (scalarAssignment F) definition.inputs) :
-    invoke (payload.meanings F) definition.helper arguments =
-      definition.body.denote (meaning F (before.foldl extendMeanings [])) arguments.get := by
-  have linked := payload.linked
-  rw [split] at linked
-  have tail := (DeclarationsLinked.append [] before (definition :: suffix)).mp linked |>.2
-  have different : ∀ other ∈ suffix, other.name ≠ definition.helper.name := by
-    intro other member
-    exact tail.2.2.fresh List.mem_cons_self member
-  simp only [Payload.meanings, split, List.foldl_append, List.foldl_cons]
-  rw [invoke_foldl_other _ suffix definition.helper different]
-  exact invoke_extended _ definition arguments
-
 /-- Admission validates every helper's exact signature, including those in
 nested callbacks. Clients need not evaluate the checker to use the property. -/
 theorem Payload.declaration_helpers (payload : Payload)
@@ -133,28 +66,99 @@ theorem Payload.declaration_helpers (payload : Payload)
   have tail := (DeclarationsLinked.append [] before (definition :: suffix)).mp linked |>.2
   simpa using tail.2.1
 
+namespace Evaluation
+
+variable {F G : Type} {interface : PIR.Signature}
+variable [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
+variable (observations : SiteObservations interface)
+
+/-- Adding a declaration with a different name leaves an existing lookup intact. -/
+theorem invoke_extend_other (table : HelperTable (assignment F G) interface) (definition : CheckedDefinition)
+    (helper : Helper) (different : definition.name ≠ helper.name) :
+    invoke (extendMeanings observations table definition) helper = invoke table helper := by
+  simp [invoke, extendMeanings, CheckedDefinition.helper, different]
+
+theorem invoke_foldl_other (table : HelperTable (assignment F G) interface) (definitions : List CheckedDefinition)
+    (helper : Helper) (different : ∀ definition ∈ definitions, definition.name ≠ helper.name) :
+    invoke (definitions.foldl (extendMeanings observations) table) helper = invoke table helper := by
+  induction definitions generalizing table with
+  | nil => rfl
+  | cons definition rest ih =>
+    rw [List.foldl_cons, ih _ (fun d member => different d (List.mem_cons_of_mem _ member))]
+    exact invoke_extend_other observations table definition helper (different _ List.mem_cons_self)
+
+private theorem find_foldl_other (table : HelperTable (assignment F G) interface) (definitions : List CheckedDefinition)
+    (name : String) (different : ∀ definition ∈ definitions, definition.name ≠ name) :
+    (definitions.foldl (extendMeanings observations) table).find? (fun entry => entry.helper.name == name) =
+      table.find? (fun entry => entry.helper.name == name) := by
+  induction definitions generalizing table with
+  | nil => rfl
+  | cons definition rest ih =>
+    rw [List.foldl_cons, ih _ (fun d member => different d (List.mem_cons_of_mem _ member))]
+    simp [extendMeanings, CheckedDefinition.helper, different _ List.mem_cons_self]
+
+/-- Successful exact-signature lookup in the table built from a checked prefix.
+The returned implementation may still stop when its body is evaluated. -/
+theorem linked_lookup {definitions : List CheckedDefinition}
+    (linked : DeclarationsLinked [] definitions) (helper : Helper)
+    (present : helper ∈ definitions.map CheckedDefinition.helper) :
+    ∃ entry : HelperDefinition (assignment F G) interface,
+      (definitions.foldl (extendMeanings observations) []).find? (fun entry => entry.helper.name == helper.name) =
+        some entry ∧ entry.helper = helper := by
+  obtain ⟨definition, member, same⟩ := List.mem_map.mp present
+  obtain ⟨before, after, split⟩ := List.mem_iff_append.mp member
+  rw [split] at linked ⊢
+  have tail := (DeclarationsLinked.append [] before (definition :: after)).mp linked |>.2
+  have different : ∀ other ∈ after, other.name ≠ definition.helper.name := by
+    intro other member
+    exact tail.2.2.fresh List.mem_cons_self member
+  subst helper
+  simp only [List.foldl_append, List.foldl_cons]
+  rw [find_foldl_other observations _ after definition.helper.name different]
+  exact ⟨⟨definition.helper, fun args => definition.body.denote
+    (meaning observations (before.foldl (extendMeanings observations) [])) args.get⟩, by simp [extendMeanings], rfl⟩
+
+/-- Resolve a declaration in its full checked table to its body interpreted in
+its own prefix. Later declarations cannot shadow or change that closure. -/
+theorem payload_invoke_declaration (payload : Payload)
+    (before : List CheckedDefinition) (definition : CheckedDefinition)
+    (suffix : List CheckedDefinition)
+    (split : payload.definitions = before ++ definition :: suffix)
+    (arguments : Values (assignment F G) definition.inputs) :
+    invoke (payloadMeanings observations payload) definition.helper arguments =
+      definition.body.denote (meaning observations (before.foldl (extendMeanings observations) [])) arguments.get := by
+  have linked := payload.linked
+  rw [split] at linked
+  have tail := (DeclarationsLinked.append [] before (definition :: suffix)).mp linked |>.2
+  have different : ∀ other ∈ suffix, other.name ≠ definition.helper.name := by
+    intro other member
+    exact tail.2.2.fresh List.mem_cons_self member
+  simp only [payloadMeanings, split, List.foldl_append, List.foldl_cons]
+  rw [invoke_foldl_other observations _ suffix definition.helper different]
+  exact invoke_extended observations _ definition arguments
+
 /-- Every helper referenced by a declaration resolves in that declaration's
 captured prefix. This is the precise exclusion of the linking fallback. -/
-theorem Payload.reference_resolves (payload : Payload)
+theorem payload_reference_resolves (payload : Payload)
     (before : List CheckedDefinition) (definition : CheckedDefinition)
     (after : List CheckedDefinition)
     (split : payload.definitions = before ++ definition :: after)
     (helper : Helper) (used : helper ∈ definition.helpers) :
-    ∃ entry : DenotedDefinition F,
-      (before.foldl extendMeanings []).find? (fun entry => entry.helper.name == helper.name) =
+    ∃ entry : HelperDefinition (assignment F G) interface,
+      (before.foldl (extendMeanings observations) []).find? (fun entry => entry.helper.name == helper.name) =
         some entry ∧ entry.helper = helper := by
   have linked := payload.linked
   rw [split] at linked
-  exact linked_lookup ((DeclarationsLinked.append [] before (definition :: after)).mp linked).1
+  exact linked_lookup observations ((DeclarationsLinked.append [] before (definition :: after)).mp linked).1
     helper (payload.declaration_helpers before definition after split helper used)
 
 /-- Extending a checked prefix preserves every helper already defined there. -/
-theorem Payload.prefix_agrees (payload : Payload)
+theorem payload_prefix_agrees (payload : Payload)
     (before after : List CheckedDefinition)
     (split : payload.definitions = before ++ after)
     (helper : Helper) (present : helper ∈ before.map CheckedDefinition.helper) :
-    invoke (before.foldl extendMeanings ([] : Meanings F)) helper =
-      invoke (payload.meanings F) helper := by
+    invoke (before.foldl (extendMeanings observations) ([] : HelperTable (assignment F G) interface)) helper =
+      invoke (payloadMeanings observations payload) helper := by
   have linked := payload.linked
   rw [split] at linked
   have tail := (DeclarationsLinked.append [] before after).mp linked |>.2
@@ -163,64 +167,58 @@ theorem Payload.prefix_agrees (payload : Payload)
   have different : ∀ definition ∈ after, definition.name ≠ helper.name := by
     intro definition member
     exact tail.fresh available member
-  simp only [Payload.meanings, split, List.foldl_append]
-  exact (invoke_foldl_other _ after helper different).symm
+  simp only [payloadMeanings, split, List.foldl_append]
+  exact (invoke_foldl_other observations _ after helper different).symm
 
 /-- A declaration body can be reasoned about in the complete checked table.
 Its original closure still uses its strict prefix; framing proves they agree
 on every referenced helper. This removes ordering details from proof clients. -/
-theorem Payload.invoke_body (payload : Payload) (definition : CheckedDefinition)
+theorem payload_invoke_body (payload : Payload) (definition : CheckedDefinition)
     (member : definition ∈ payload.definitions)
-    (arguments : Values (scalarAssignment F) definition.inputs) :
-    invoke (payload.meanings F) definition.helper arguments =
-      definition.body.denote (meaning F (payload.meanings F)) arguments.get := by
+    (arguments : Values (assignment F G) definition.inputs) :
+    invoke (payloadMeanings observations payload) definition.helper arguments =
+      definition.body.denote (meaning observations (payloadMeanings observations payload)) arguments.get := by
   obtain ⟨before, after, split⟩ := List.mem_iff_append.mp member
-  rw [payload.invoke_declaration before definition after split]
-  refine congrFun (region_denote_table_congr
-    (before.foldl extendMeanings []) (payload.meanings F) definition.body ?_) arguments.get
+  rw [payload_invoke_declaration observations payload before definition after split]
+  refine congrFun (region_denote_table_congr observations
+    (before.foldl (extendMeanings observations) []) (payloadMeanings observations payload) definition.body ?_) arguments.get
   intro helper used
   have present := payload.declaration_helpers before definition after split helper
     (by simpa only [definition.helpers_eq_body] using used)
-  exact payload.prefix_agrees before (definition :: after) split helper present
+  exact payload_prefix_agrees observations payload before (definition :: after) split helper present
 
 /-- Combine name-independent membership with an exact body view. -/
-theorem Payload.invoke_body_view (payload : Payload) (definition : CheckedDefinition)
+theorem payload_invoke_body_view (payload : Payload) (definition : CheckedDefinition)
     (member : definition ∈ payload.definitions)
     (body : Region dialect definition.inputs definition.outputs)
     (exactRaw : definition.raw = body.erase)
-    (arguments : Values (scalarAssignment F) definition.inputs) :
-    invoke (payload.meanings F) definition.helper arguments =
-      body.denote (meaning F (payload.meanings F)) arguments.get := by
-  rw [payload.invoke_body definition member arguments, definition.body_eq_of_raw body exactRaw]
+    (arguments : Values (assignment F G) definition.inputs) :
+    invoke (payloadMeanings observations payload) definition.helper arguments =
+      body.denote (meaning observations (payloadMeanings observations payload)) arguments.get := by
+  rw [payload_invoke_body observations payload definition member arguments, definition.body_eq_of_raw body exactRaw]
 
-/-- Expose the entry in the complete table, whose unrelated declarations are
-ignored by the helper-table frame law. -/
-theorem Payload.denote_body_view (payload : Payload)
+/-- The checked closed root is interpreted directly in the complete helper table. -/
+theorem payload_denote_entry (payload : Payload)
+    (arguments : Values (assignment F G) payload.entry.inputs) :
+    payloadDenote observations payload arguments = payload.entry.body.denote
+      (meaning observations (payloadMeanings observations payload)) arguments.get := rfl
+
+theorem payload_denote_body_view (payload : Payload)
     (body : Region dialect payload.entry.inputs payload.entry.outputs)
     (exactRaw : payload.entry.raw = body.erase)
-    (arguments : Values (scalarAssignment F) payload.entry.inputs) :
-    payload.denote F arguments = body.denote (meaning F (payload.meanings F)) arguments.get :=
-  payload.invoke_body_view payload.entry (List.get_mem _ _) body exactRaw arguments
+    (arguments : Values (assignment F G) payload.entry.inputs) :
+    payloadDenote observations payload arguments =
+      body.denote (meaning observations (payloadMeanings observations payload)) arguments.get := by
+  rw [payload_denote_entry, payload.entry.body_eq_of_raw body exactRaw]
 
-/-- The entry's body is interpreted against precisely the declarations before it. -/
-theorem Payload.denote_entry (payload : Payload)
-    (arguments : Values (scalarAssignment F) payload.entry.inputs) :
-    payload.denote F arguments = payload.entry.body.denote
-      (meaning F ((payload.definitions.take payload.entryIndex.val).foldl extendMeanings []))
-      arguments.get := by
-  apply payload.invoke_declaration (payload.definitions.take payload.entryIndex.val)
-    payload.entry (payload.definitions.drop (payload.entryIndex.val + 1))
-  simp [Payload.entry, List.get_eq_getElem, List.getElem_cons_drop]
-
-/-- A source client supplies only the exact raw body equation. It need not unfold
-formation, ordering or the complete table to expose the computation. -/
-theorem Payload.denote_body (payload : Payload)
+theorem payload_denote_body (payload : Payload)
     (body : Region dialect payload.entry.inputs payload.entry.outputs)
     (exactRaw : payload.entry.raw = body.erase)
-    (arguments : Values (scalarAssignment F) payload.entry.inputs) :
-    payload.denote F arguments = body.denote
-      (meaning F ((payload.definitions.take payload.entryIndex.val).foldl extendMeanings []))
-      arguments.get := by
-  rw [payload.denote_entry, payload.entry.body_eq_of_raw body exactRaw]
+    (arguments : Values (assignment F G) payload.entry.inputs) :
+    payloadDenote observations payload arguments =
+      body.denote (meaning observations (payloadMeanings observations payload)) arguments.get :=
+  payload_denote_body_view observations payload body exactRaw arguments
+
+end Evaluation
 
 end Zkc.Source.Structured
