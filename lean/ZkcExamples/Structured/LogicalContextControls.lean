@@ -29,9 +29,9 @@ def boundedVocabulary : Vocabulary where
   Predicates := BoundedPredicate
   Views := Empty
   sortIdentity
-    | .polynomial bound => ⟨"polynomial::Bounded", [.domain "bls12-381.fr", .nat bound]⟩
+    | .polynomial bound => ⟨"polynomial::logic::Bounded", [.domain "bls12-381.fr", .nat bound]⟩
   predicateIdentity
-    | .degreeAtMost bound => ⟨"polynomial::DegreeAtMost", [.domain "bls12-381.fr", .nat bound]⟩
+    | .degreeAtMost bound => ⟨"polynomial::logic::DegreeAtMost", [.domain "bls12-381.fr", .nat bound]⟩
   viewIdentity := fun view => nomatch view
   arguments
     | .degreeAtMost bound => [.sort (.polynomial bound)]
@@ -81,15 +81,15 @@ def boundedResolution : Resolution boundedVocabulary :=
 is bounded by one, although both carriers are coefficient lists. -/
 theorem phantom_bound_refused :
     checkContext (Value := assignment Int Int) boundedResolution owner.protocol.signature
-      ⟨[.library ⟨"polynomial::Bounded", [.domain "bls12-381.fr", .nat 2]⟩],
-        [⟨⟨"polynomial::DegreeAtMost", [.domain "bls12-381.fr", .nat 1]⟩, [.binder 0]⟩]⟩ =
+      ⟨[.library ⟨"polynomial::logic::Bounded", [.domain "bls12-381.fr", .nat 2]⟩],
+        [⟨⟨"polynomial::logic::DegreeAtMost", [.domain "bls12-381.fr", .nat 1]⟩, [.binder 0]⟩]⟩ =
       .error (.sortMismatch 0) := by
   rfl
 
 theorem matching_bound_checks :
     checkContext (Value := assignment Int Int) boundedResolution owner.protocol.signature
-      ⟨[.library ⟨"polynomial::Bounded", [.domain "bls12-381.fr", .nat 1]⟩],
-        [⟨⟨"polynomial::DegreeAtMost", [.domain "bls12-381.fr", .nat 1]⟩, [.binder 0]⟩]⟩ =
+      ⟨[.library ⟨"polynomial::logic::Bounded", [.domain "bls12-381.fr", .nat 1]⟩],
+        [⟨⟨"polynomial::logic::DegreeAtMost", [.domain "bls12-381.fr", .nat 1]⟩, [.binder 0]⟩]⟩ =
       .ok ⟨[.sort (.polynomial 1)], [boundedAtom 1]⟩ := by
   rfl
 

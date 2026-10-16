@@ -20,11 +20,11 @@ set_option maxRecDepth 20000
 instance : DecidableEq vocabulary.Sorts := inferInstanceAs (DecidableEq TableSort)
 
 def tableIdentity (dimension : Nat) : Identity :=
-  ⟨"zkc::multilinear::Table", [.domain "bls12-381.fr", .nat dimension]⟩
+  ⟨"zkc::multilinear::logic::Polynomial", [.domain "bls12-381.fr", .nat dimension]⟩
 def sumIdentity (dimension : Nat) : Identity :=
-  ⟨"sumcheck::Sum", [.domain "bls12-381.fr", .nat dimension]⟩
+  ⟨"sumcheck::logic::Sum", [.domain "bls12-381.fr", .nat dimension]⟩
 def residualIdentity (remaining count : Nat) : Identity :=
-  ⟨"zkc::multilinear::Evaluation", [.domain "bls12-381.fr", .nat remaining, .nat count]⟩
+  ⟨"zkc::multilinear::logic::Evaluates", [.domain "bls12-381.fr", .nat remaining, .nat count]⟩
 
 def sortCandidate (identity : Identity) : Option TableSort :=
   match identity.statics with
@@ -84,16 +84,16 @@ theorem wrong_observation_refused :
 /-- An identity without its static arity names no instance. -/
 theorem missing_static_argument_refused :
     checkContext (Value := assignment F G) resolution reductionRoot.protocol.signature
-      ⟨[.library ⟨"zkc::multilinear::Table", [.domain "bls12-381.fr"]⟩], []⟩ =
-      .error (.unknownSort ⟨"zkc::multilinear::Table", [.domain "bls12-381.fr"]⟩) := by
+      ⟨[.library ⟨"zkc::multilinear::logic::Polynomial", [.domain "bls12-381.fr"]⟩], []⟩ =
+      .error (.unknownSort ⟨"zkc::multilinear::logic::Polynomial", [.domain "bls12-381.fr"]⟩) := by
   rfl
 
 /-- A candidate with the right shape but another declaration is not accepted. -/
 theorem foreign_declaration_refused :
     checkContext (Value := assignment F G) resolution reductionRoot.protocol.signature
-      ⟨[.library (tableIdentity 1)], [⟨⟨"sumcheck::Other", [.domain "bls12-381.fr", .nat 1]⟩,
+      ⟨[.library (tableIdentity 1)], [⟨⟨"sumcheck::logic::Other", [.domain "bls12-381.fr", .nat 1]⟩,
         [.binder 0, .observed .input 2 1]⟩]⟩ =
-      .error (.unknownPredicate ⟨"sumcheck::Other", [.domain "bls12-381.fr", .nat 1]⟩) := by
+      .error (.unknownPredicate ⟨"sumcheck::logic::Other", [.domain "bls12-381.fr", .nat 1]⟩) := by
   rfl
 
 theorem arity_mismatch_refused :

@@ -44,13 +44,13 @@ def vocabulary : Vocabulary where
   Predicates := TablePredicate
   Views := TableView
   sortIdentity
-    | .table dimension => ⟨"zkc::multilinear::Table", [.domain "bls12-381.fr", .nat dimension]⟩
+    | .table dimension => ⟨"zkc::multilinear::logic::Polynomial", [.domain "bls12-381.fr", .nat dimension]⟩
   predicateIdentity
-    | .sum dimension => ⟨"sumcheck::Sum", [.domain "bls12-381.fr", .nat dimension]⟩
+    | .sum dimension => ⟨"sumcheck::logic::Sum", [.domain "bls12-381.fr", .nat dimension]⟩
     | .residual remaining count =>
-      ⟨"zkc::multilinear::Evaluation", [.domain "bls12-381.fr", .nat remaining, .nat count]⟩
+      ⟨"zkc::multilinear::logic::Evaluates", [.domain "bls12-381.fr", .nat remaining, .nat count]⟩
   viewIdentity
-    | .decode dimension => ⟨"zkc::multilinear::table", [.domain "bls12-381.fr", .nat dimension, .nat 1]⟩
+    | .decode dimension => ⟨"zkc::multilinear::logic::decode", [.domain "bls12-381.fr", .nat dimension, .nat 1]⟩
   arguments
     | .sum dimension => [.sort (.table dimension), .native scalar]
     | .residual remaining count => [.sort (.table (remaining + count)), .native vector, .native scalar]
