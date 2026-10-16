@@ -80,7 +80,7 @@ impl<B: Backend> Runner<B> {
         for &index in public_inputs {
             let (name, ty) = entry
                 .frame
-                .inputs
+                .inputs()
                 .iter()
                 .nth(index)
                 .ok_or_else(|| BackendError::new("computation-public-input"))?;
