@@ -286,3 +286,16 @@ def test_report_rejects_malformed_evidence_before_creating_output(bench, tmp_pat
     assert cli.main(['report', str(source), '--output', str(output)]) == 2
     assert not output.exists()
     assert 'Traceback' not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize('cell', [False, True])
+@pytest.mark.parametrize('error', [None, [], {}])
+def test_failure_descriptions_are_checked_before_publication(bench, cell, error):
+    document = {'format': 'zkc.benchmark/0', 'status': 'failed', 'results': []}
+    if cell:
+        document['results'] = [{'case': 'x', 'implementation': 'zkc', 'operation': 'run',
+                                'status': 'failed', 'repetition': 0, 'error': error}]
+    else:
+        document['error'] = error
+    with pytest.raises(bench.io.MeasurementError, match='invalid failure description'):
+        bench.results.validate_manifest(document)

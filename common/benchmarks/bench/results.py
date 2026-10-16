@@ -54,12 +54,14 @@ def validate_manifest(manifest):
                 'seed', 'label', 'argv', 'host', 'files', 'checks', 'matrix', 'schedule', 'compilation',
                 'cli', 'source', 'harness', 'comparisons', 'threads', 'references', 'error'}), 'unknown manifest fields')
     require(manifest.get('status') in ('passed', 'failed', 'interrupted', 'running'), 'unknown benchmark status')
+    require(isinstance(manifest.get('error', ''), str), 'invalid failure description')
     matrix, results = manifest.get('matrix', []), manifest.get('results')
     require(isinstance(matrix, list) and isinstance(results, list), 'invalid measurement collections')
     for record in [*matrix, *results]:
         require(isinstance(record, dict) and all(isinstance(record.get(name), str) and record[name]
                 for name in ('case', 'implementation', 'operation')), 'invalid measurement identity')
     for result in results:
+        require(isinstance(result.get('error', ''), str), 'invalid failure description')
         require(type(result.get('repetition')) is int and result['repetition'] >= 0
                 and result.get('status') in ('failed', 'measured', 'passed'), 'invalid measurement state')
     if manifest['status'] != 'passed':
