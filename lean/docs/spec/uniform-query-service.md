@@ -118,7 +118,7 @@ source equations retain missing inputs, malformed checks, count refusal and
 overflow behavior. The headline bounds use present V inputs and internally
 discharge count admission; they do not make excess counts executable.
 
-## Probability interpretation and scope
+## Probability interpretation
 
 The owning optional manifests pin VCVio to
 `d606eab018ab87bf4a0a6ac7b6d2da4fedfa53b0`.

@@ -214,7 +214,8 @@ extended trace yields no messages, and no message is decoded from a prefix.
 
 `strategyOf` packages these observations as a `Common.Strategy`: the commitment
 observed in the run with challenge zero and, for each challenge, the response
-observed in the run with that challenge. It requires successful extraction for
+observed in the run with that challenge. All these runs receive the same nonce
+reply. It requires successful extraction for
 every challenge and supplies no fallback value. The constructor alone asserts
 neither causal timing nor that every run sends the same commitment. Using it as
 an honest strategy requires theorems about the actual source showing that the

@@ -464,7 +464,10 @@ and combined helper/protocol dependency depth use leaf depth zero and at most
 not synthesized marks: at most 64 nodes of expansion depth, 100000 work,
 1000000 operands/results/role selectors, 16 MiB conservative site bytes and a
 4096-byte longest-site bound. Protocol roots are traversed in original snapshot order and share the module totals; ordinary
-Math calls and protocol calls retain distinct accounting.
+Math calls and protocol calls retain distinct accounting. These whole-unit
+checks apply the native all-root constraints to every unit, including units
+without applications, and cover dormant protocols and reachable pure helper
+calls.
 
 Effective-site traversal separately visits every original protocol in snapshot order as a root,
 with a fresh collision set but shared cumulative counters. It follows every
@@ -541,15 +544,15 @@ not equal a Lean raw-wire diagnostic.
 
 Write `M` for `maskValues self (context.mapScopes spec.stateScopes)` and
 `active` for membership of `self` in the context-mapped repeat roster. The
-logical operation obeys these cases:
+logical operation `denoteRepeat` obeys these cases:
 
 - Outside the roster, return an entirely absent state tuple immediately.
 - Inside with an absent count, stop `incomplete`.
 - Inside with a present natural count above maximum, stop `refused` before
   constructing the range or demanding any capture.
 - Inside with count zero, return `M(initial)` without invoking the callback.
-- Inside with admitted count `n`, execute the finite range `0..n-1`
-  from `M(initial)`. Each callback receives `some index :: (M(state) ++ captures)`;
+- Inside with admitted count `n`, execute the finite range `0..n-1` with
+  `Finite.execute` from `M(initial)`. Each callback receives `some index :: (M(state) ++ captures)`;
   mask every successful yielded state before the next iteration and return.
 
 The count refusal applies to every logical natural, including values at least

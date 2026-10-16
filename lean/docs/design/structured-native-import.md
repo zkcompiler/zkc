@@ -46,48 +46,20 @@ proves the shared contract for Helpers and Reordered. Its admitted EarlyChalleng
 unit queries before receiving the commitment; an exact first-action observation
 refutes the shared contract for this counterexample.
 
-`SchnorrHonestProver` supplies the missing honest-prover source connection for
-Interactive alone. It logs the actual typed actions with `PIR.Proc.run`, then
-decodes the commitment and response sends from the complete successful trace.
-The handler fixes the nonce and independent challenge replies and acknowledges
-sends; the decoder preserves exact sites, domains, endpoints, service handle
-and order. It has no arithmetic oracle or fallback messages. The imported
-process equation proves extraction success and the derived response formula.
-
-The complete-trace decoder is deliberately partial. Total `messages` is specific
-to this proved successful source profile. Selecting a commitment observation at
-challenge zero is sound because the source equation places that send before the
-receive, the request prefix is independent of the reply, and all challenge runs
-complete. The supplied-strategy theorem ties every challenge response back to
-the same source run. Sampling happens outside the deterministic handler, with
-the same nonce supplied across these runs. The stopped-prefix equations cover
-the nonce and challenge reply points; the decoder returns `none` on every stop
-and does not extract partial messages. Sends succeed in the selected profile.
-The small `strategyOf` constructor is shared by the original source and the
-admitted response mutation. Each supplies its actual executions and a proof of
-successful extraction for every challenge; the constructor has no fallback.
-It packages observations into `Common.Strategy` without asserting that arbitrary
-runs are causal. The original source's prefix and supplied-strategy theorems
-remain separate, and the mutation's concrete process equation justifies its use.
-There is no new executor, replay oracle or generic `ProverContract`.
-
-Completeness keeps separate participant inputs and requires only equal bases
-and `verifierKey = secret • verifierBase`. The prover's local key is unused and
-unconstrained; the accepting mismatched-key control applies this theorem directly.
-Other concrete input/delivery controls reject, and
-synthetic kernel-admitted constructor mutations expose changed response values
-and changed send sites without borrowing the original source digest. The changed
-source response also reaches the unchanged checked verifier and is rejected.
-
-`StructuredSchnorrHonestView` then transports the actual source-derived public
-view to the existing optional VCVio consumer with fixed challenge and uniform
-nonce. The original generic `honestView` and earlier verifier-only clients remain
-handwritten-strategy theorems. The new theorem concerns the selected checked
-constructor source and its public view under successful replies/honest delivery;
-exact native bytes, provider randomness and joint execution remain external.
-The separate [native participant probe](../../bridges/structured/participant.md)
-compares selected source-bound executions and stopping observations. Its bounded
-evidence does not discharge those external obligations for the public-view theorem.
+The Interactive prover's honest strategy is decoded from its actual checked
+process instead of being written by hand or produced by a separate executor,
+replay oracle or generic `ProverContract`. The decoder is deliberately partial
+and reads only complete successful traces, so a stopped or partial run yields
+no messages. Taking the commitment from one reference run is sound only because
+the source sends it before receiving the challenge, its prefix does not depend
+on the reply, and every challenge completes. The shared strategy constructor
+therefore asserts no causality itself; each use rests on its source's process
+equation. The
+[verification specification](../spec/verification.md#prover-strategies-from-checked-sends)
+defines the construction, and [support](../support.md#interactive-schnorr)
+states what is proved about it. The separate
+[native participant probe](../../bridges/structured/participant.md) compares
+selected source-bound executions and stopping observations as bounded evidence.
 
 ### Sumcheck
 
@@ -119,11 +91,13 @@ the source-specific causal experiment equation for the admitted library roots.
 
 The maintained whole-unit profile has per-root participants/scopes, immutable
 Booleans, unsigned indices, nominal BLS12-381 scalar/vector/group values, and
-root-owned random-service handles. Closed Math/Local helpers remain separate from
-open roots. Math uses optional named closures; Local calls sequence all arguments
-and run only at their owner. Finite/control work remains available in closed
-Local bodies. Multi-role roots refuse transitive Math folds and checked reads;
-the profile admits no affine resources.
+root-owned random-service handles. The nominal profile is exactly BLS12-381 Fr
+and G1; a configurable profile is deferred until a consumer needs a second
+domain. Closed Math/Local helpers remain separate from open roots. Math uses
+optional named closures; Local calls sequence all arguments and run only at
+their owner. Finite/control work remains available in closed Local bodies.
+Multi-role roots refuse transitive Math folds and checked reads; the profile
+admits no affine resources.
 
 Both dialects instantiate the existing Source.Region. One evaluator uses explicit
 F/G and lawful module operations; SiteObservations abstracts only internal source

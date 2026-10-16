@@ -130,7 +130,9 @@ reordered inputs, stale bindings, changed equations/effect order, a copied
 positive identity, unsupported PCS/Fiat–Shamir claims, incorrect coin models and
 deliberately corrupted expression candidates, commands and comments in proposals,
 changed generator inputs, valid expressions for a different program, proof-budget
-exhaustion and JSON parser bounds. The ordinary bridge additionally
+exhaustion and JSON parser bounds. Its report counts `verified_requests`, one
+per verified request rather than per distinct source, separately from property
+instances and unresolved controls. The ordinary bridge additionally
 checks expanded/Horner composed sources, both opening failures, wrong points
 and residuals, and stopped prefixes at every reached action. These executions
 use Z/97; symbolic certificates quantify over the stated fields/modules.

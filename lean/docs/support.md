@@ -263,9 +263,8 @@ received values, false guards, consumed provider stops and unconsumed mismatches
 The wrapper preserves the full rendered parent at nested sites. These proofs
 use literal full-signature body views of the admitted source.
 
-The outside-roster equation describes the retained logical process. Relating it
-to native projection requires demand-slicing evidence and the admitted
-calculation profile.
+Relating the outside-roster equation to native projection requires
+demand-slicing evidence and the admitted calculation profile.
 
 ## Protocol repeat subjects
 
@@ -312,7 +311,9 @@ No honest-delivery premise supplies the source equality.
 `ZkcExamples.Structured.SchnorrHonestProver` obtains both prover messages from
 the actual Interactive prover's ordered sends, as the
 [verification specification](spec/verification.md#prover-strategies-from-checked-sends)
-defines. The algebraic `messages_eq` is proved from the imported
+defines. `extract_execution` proves that extraction succeeds for this source,
+so the total `messages` function exists only for this proved successful
+profile. The algebraic `messages_eq` is proved from the imported
 `prover_equation`, not assumed in the message definition. `execution_eq`,
 `prefix_independent` and `commitment_independent` justify extracting the
 strategy after the fact for this source: the commitment precedes the
@@ -323,8 +324,9 @@ actual run for every challenge. The original `strategy` and the admitted
 response mutation's `responseStrategy` use the same constructor. There is no
 generic causal adapter for arbitrary processes.
 
-`accepts` delivers this strategy to the actual checked verifier. Its premises
-are `proverBase = verifierBase` and `verifierKey = secret • verifierBase`. The
+`accepts` proves that the actual checked verifier accepts the delivered
+messages of this strategy. Its premises are `proverBase = verifierBase` and
+`verifierKey = secret • verifierBase`. The
 prover key is unconstrained because the source does not inspect it. These
 premises express no enforcement mechanism. `nonce_stopped` and
 `challenge_stopped` preserve the exact reached prefixes for every stop reason at
