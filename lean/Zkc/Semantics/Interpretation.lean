@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Semantics.Execution
+public import Zkc.Semantics.MonadExecution
 
 @[expose] public section
 
@@ -101,6 +102,45 @@ theorem run_interpret (operations : OperationInterpretation I J)
     congr 1
     funext reply last
     exact ih reply last
+
+/-- Monadic staging preserves the entire inner execution, including stopping
+state and event prefixes. Outer effects retain their selected monad semantics;
+this theorem asserts neither normalization nor recovery from outer errors. -/
+theorem runM_interpret {m : Type → Type} [Monad m] [LawfulMonad m]
+    (operations : OperationInterpretation I J) (backend : MonadHandler m J S E)
+    (source : Proc I A) (state : S) :
+    (source.interpret operations).runM backend state =
+      source.runM (fun op s => (operations op).runM backend s) state := by
+  induction source generalizing state with
+  | done value => rfl
+  | halt why => rfl
+  | call op next ih =>
+    simp only [interpret, runM_bind, runM]
+    congr 1
+    funext result
+    rcases result with ⟨outcome, residual, events⟩
+    cases outcome with
+    | stopped why => rfl
+    | returned value =>
+      simp only [Execution.followM]
+      rw [ih]
+
+/-- A distributional provider-state interpretation composes with program
+interpretation using the existing local state law. Contexts receive replies,
+not the hidden state sampled by `expandState`. -/
+theorem runM_interpret_expand {m : Type → Type} [Monad m] [LawfulMonad m]
+    {T : Type} (operations : OperationInterpretation I J) (expandState : S → m T)
+    (sourceHandler : MonadHandler m I S E) (backend : MonadHandler m J T E)
+    (law : ∀ op s, (expandState s >>= (operations op).runM backend) =
+      (sourceHandler op s >>= Execution.expand expandState))
+    (source : Proc I A) (state : S) :
+    (expandState state >>= (source.interpret operations).runM backend) =
+      (source.runM sourceHandler state >>= Execution.expand expandState) := by
+  have same : (source.interpret operations).runM backend =
+      source.runM (fun op s => (operations op).runM backend s) :=
+    funext (runM_interpret operations backend source)
+  rw [same]
+  exact runM_expand expandState sourceHandler _ law source state
 
 /-- A checked component may choose a different private state representation.
 The per-operation simulation is an explicit premise; structural interface

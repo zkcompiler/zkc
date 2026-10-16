@@ -1,0 +1,23 @@
+module nested_control;
+domain F = field("bls12-381.fr");
+
+protocol Nested roles(P,V)
+    (outer:index@(P,V), inner:index@(P,V), value:F@(P,V), challenges:Random<F>@V)
+    -> (ok:bool@V) {
+  let expected = value + value;
+  for _ in 0..outer roles(P,V) max 2 {
+    for _ in 0..inner roles(P,V) max 2 {
+      #[site(message)] let received = send P->V(expected);
+      require @V received == expected;
+      #[site(challenge)] let challenge = challenges.draw();
+      #[site(delivery)] let delivered = send V->P(challenge);
+    }
+  }
+  for _ in 0..inner roles(P,V) max 2 {
+    #[site(final_message)] let final_value = send P->V(expected);
+    require @V final_value == expected;
+  }
+  return value == value;
+}
+
+run Demo=Nested;

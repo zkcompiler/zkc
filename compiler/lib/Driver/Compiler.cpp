@@ -73,6 +73,7 @@ int zkc::runCompiler(int argc, char **argv,
            "[--release-storage] [--fuse-vector-reductions] [--no-finite-bulk]\n"
            "  protocol-construct-proof FILE.mlir POLICY "
            "[--fuse-vector-reductions] [--no-finite-bulk]\n"
+           "  protocol-constructed-lean FILE.mlir POLICY CANDIDATE.mlir\n"
            "  protocol-check-proof FILE.mlir POLICY CANDIDATE.mlir "
            "[--fuse-vector-reductions] [--no-finite-bulk]\n\n"
            "Relation data (binary R1CS or canonical JSON):\n"
@@ -100,7 +101,7 @@ int zkc::runCompiler(int argc, char **argv,
   };
   StringRef mode(argv[1]);
   if (mode == "protocol-proof" || mode == "protocol-construct-proof" ||
-      mode == "protocol-check-proof") {
+      mode == "protocol-check-proof" || mode == "protocol-constructed-lean") {
     if (argc < 4)
       return fail(error("native-proof-options"));
     auto source = readInput(argv[2], 16 * 1024 * 1024);
@@ -134,7 +135,8 @@ int zkc::runCompiler(int argc, char **argv,
       outs() << compiled->deployment << '\n';
       return 0;
     }
-    bool check = mode == "protocol-check-proof";
+    bool check =
+        mode == "protocol-check-proof" || mode == "protocol-constructed-lean";
     const int required = check ? 5 : 4;
     MathematicalSelectionPolicy mathematicalSelection;
     std::set<std::string> seen;
@@ -169,6 +171,14 @@ int zkc::runCompiler(int argc, char **argv,
           mlir::parseSourceString<mlir::ModuleOp>(*bytes, &context);
       if (!candidate)
         return fail(error("native-proof-candidate"));
+      if (mode == "protocol-constructed-lean") {
+        auto exported = exportConstructedSource(*original, *candidate, *source,
+                                                *policy, mathematicalSelection);
+        if (!exported)
+          return fail(exported.takeError());
+        outs() << printJson(*exported) << '\n';
+        return 0;
+      }
       if (auto e = checkNativeProof(*original, *candidate, *policy,
                                     mathematicalSelection))
         return fail(std::move(e));

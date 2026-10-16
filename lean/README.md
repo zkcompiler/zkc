@@ -4,7 +4,10 @@ This package proves claims about **actual imported scalar PIR programs**. The
 compiler exports a retained program; Lean checks its typed admission and proves
 its open-process contract. Separate consumers derive explicitly selected
 properties, including ArkLib interactive Sumcheck soundness and VCVio Schnorr
-honest-verifier simulation. A named DSL verification specification can also
+honest-verifier simulation. The constructed-participant bridge additionally
+connects selected native Schnorr and two-round Sumcheck bodies to Fiat–Shamir
+security experiments under explicit ideal transcript interpretations.
+A named DSL verification specification can also
 connect an authored `spec` target to its imported mathematical relation body.
 
 The [formal reference](docs/README.md) defines the models. [Support](docs/support.md)
@@ -54,6 +57,16 @@ premises, source/request/certificate identities and dependency manifest identity
 An unsupported contract or an unproved correspondence remains `unresolved`.
 The [verification specification](docs/spec/verification.md) explains author input,
 proof generation, checked subjects and extension points.
+
+For constructed programs, the separate
+[FS request specification](docs/spec/fs-verification.md) selects the transcript
+model, adversary, observation and security consumer. Its pipeline retains and
+rechecks the actual native policy and candidate, proves the imported body's
+equation, and checks the requested security theorem. The native suite descriptor
+remains distinct from the ideal model; a successful receipt does not certify
+Merlin, Host initialization, proof-byte decoding or the whole native executable.
+The [construction bridge](bridges/constructed/README.md) documents the exporter
+and independent execution controls.
 
 For an isolated build from exact dependency source checkouts, with no prior
 project or dependency Lean objects:

@@ -1,0 +1,11 @@
+module bounded;
+domain F=field("bls12-381.fr");
+protocol Repeated roles(P,V)(rounds:index@(P,V),value:F@P,challenges:Random<F>@V)->(ok:bool@V){
+  for _ in 0..rounds roles(P,V) max 2 {
+    #[site(message)] let m=send P->V(value);
+    #[site(challenge)] let c=challenges.draw();
+    #[site(delivery)] let d=send V->P(c);
+  }
+  return true;
+}
+run Demo=Repeated;

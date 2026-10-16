@@ -1,0 +1,37 @@
+module constructed_codec;
+use zkc::proof::{Stream};
+use zkc::encoding as encoding;
+domain G = group("bls12-381.g1");
+domain F = field("bls12-381.fr");
+
+protocol Schnorr roles(P,V)
+    (base:G@(P,V), point:G@(P,V), secret:F@P, nonce:F@P,
+     challenges:Random<F>@V) -> (accepted:bool@V) {
+  #[site(commitment)] let commitment = send P -> V(base * nonce);
+  #[site(challenge)] let challenge = challenges.draw();
+  #[site(delivery)] let received = send V -> P(challenge);
+  #[site(response)] let response = send P -> V(nonce + received * secret);
+  return base * response == commitment + point * challenge;
+}
+construction Encoded for Schnorr {
+  base fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
+  format Stream;
+  on encode commitment(r,value) {return Stream::append(r,encoding::group_compressed(value));}
+  on encode response(r,value) {return Stream::append(r,encoding::field_be(value));}
+  on receive commitment(r,proof) {return Stream::take(r,48);}
+  on receive response(r,proof) {return Stream::take(r,32);}
+  on decode commitment(chunk) {
+    let(valid,value) = encoding::group_from_compressed<G>(chunk);
+    require valid;
+    return value;
+  }
+  on decode response(chunk) {
+    let(valid,value) = encoding::field_from_be<F>(chunk);
+    require valid;
+    return value;
+  }
+}
+proof Packed = Schnorr {
+  prover P; verifier V; public {base,point}; accept accepted;
+  construction Encoded;
+}

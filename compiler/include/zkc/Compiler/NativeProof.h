@@ -52,6 +52,15 @@ llvm::Error
 checkNativeProof(mlir::ModuleOp source, mlir::ModuleOp candidate,
                  const NativeProofPolicy &policy,
                  MathematicalSelectionPolicy mathematicalSelection = {});
+/// Export an actual checked unsimplified verifier, including selected Local
+/// bodies and primitive state/results. Native exporter correctness and
+/// primitive interpretation remain explicit boundaries of this bounded Lean
+/// bridge.
+llvm::Expected<llvm::json::Value>
+exportConstructedSource(mlir::ModuleOp source, mlir::ModuleOp candidate,
+                        llvm::StringRef originalBytes,
+                        const NativeProofPolicy &policy,
+                        MathematicalSelectionPolicy mathematicalSelection = {});
 /// Request service-based occurrence selection inside the owned compiler
 /// context. The policy fixes every choice except draws, which must be empty.
 struct NativeProofSelection {

@@ -47,3 +47,15 @@ profile, including in unused replay entries. Negative zero, fractional or
 exponent tokens and malformed JSON are refused before execution. Strings retain
 their contents. This admission policy is distinct from an executed malformed
 reply, which yields an explicit refused stop.
+
+Constructed participants use the separate
+[actual constructed admission](constructed-source.md) profile, which retains
+selected Local bodies, provider/codec actions and complete state successors.
+The scalar common-source profile does not acquire those semantics implicitly.
+
+The optional [quadratic Sumcheck restoration consumer](sumcheck-restoration.md)
+uses the maintained imported-verifier contract for acceptance correspondence.
+Its canonical replay and full-prefix early-stop experiments have explicitly
+different query/state observations. The constructed-body consumer additionally
+requires a proved equation for the actual constructed import under its fixed
+scalar/full-prefix interpretation.

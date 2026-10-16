@@ -50,10 +50,13 @@ structure Codec (α : Type) where
 def natural : Json → Except Error Nat
   | .num ⟨.ofNat value, 0⟩ => .ok value
   | _ => .error .natural
-def string (json : Json) : Except Error String := json.getStr?.mapError (fun _ => .string)
+def string : Json → Except Error String
+  | .str value => .ok value
+  | _ => .error .string
 
-def array (json : Json) : Except Error (List Json) :=
-  json.getArr?.map Array.toList |>.mapError (fun _ => .shape)
+def array : Json → Except Error (List Json)
+  | .arr values => .ok values.toList
+  | _ => .error .shape
 
 def stop : Codec PIR.Stop where
   encode

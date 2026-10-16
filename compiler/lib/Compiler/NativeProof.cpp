@@ -25,6 +25,7 @@
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/MathExtras.h"
+#include "llvm/Support/SHA256.h"
 #include <map>
 #include <set>
 using namespace llvm;
@@ -1620,5 +1621,386 @@ Error checkNativeProof(ModuleOp source, ModuleOp candidate,
           OperationEquivalence::IgnoreLocations))
     return error("native-proof-correspondence");
   return Error::success();
+}
+} // namespace zkc
+
+namespace zkc {
+namespace {
+std::string constructedPrint(Type value) {
+  std::string text;
+  raw_string_ostream out(text);
+  value.print(out);
+  return text;
+}
+std::string constructedPrint(Attribute value) {
+  std::string text;
+  raw_string_ostream out(text);
+  if (value)
+    value.print(out);
+  return text;
+}
+std::string constructedPrint(Operation *value) {
+  std::string text;
+  raw_string_ostream out(text);
+  value->print(out, OpPrintingFlags().printGenericOpForm());
+  return text;
+}
+std::string constructedHash(StringRef text) {
+  auto digest = SHA256::hash(arrayRefFromStringRef(text));
+  return "sha256:" + toHex(digest, true);
+}
+json::Array constructedTypes(TypeRange types) {
+  json::Array result;
+  for (Type type : types)
+    result.push_back(constructedPrint(type));
+  return result;
+}
+
+// The exporter reads the supplied, independently checked candidate. It never
+// reconstructs an expected participant or substitutes a mathematical reference.
+class ConstructedExporter {
+  SymbolTable symbols;
+  llvm::DenseMap<Value, unsigned> references;
+  json::Array instructions, handlers;
+  std::optional<json::Value> control;
+  llvm::StringSet<> retainedHandlers;
+  unsigned work = 0, instructionCount = 0;
+  bool stopped = false;
+
+  void emit(json::Value instruction) {
+    instructions.push_back(std::move(instruction));
+    ++instructionCount;
+  }
+  json::Value finishBody(ArrayRef<unsigned> returned) {
+    if (control) {
+      auto result = std::move(*control);
+      control.reset();
+      return result;
+    }
+    json::Array values;
+    for (unsigned index : returned)
+      values.push_back(index);
+    return json::Array{"flat", std::move(instructions), std::move(values)};
+  }
+
+  Expected<unsigned> reference(Value value) {
+    auto found = references.find(value);
+    if (found == references.end())
+      return error("constructed-source-reference");
+    return found->second;
+  }
+  void push() {
+    for (auto &entry : references)
+      ++entry.second;
+  }
+  Expected<SmallVector<unsigned>> body(Block &block, TypeRange outputs,
+                                       unsigned depth, StringRef origin,
+                                       Block::iterator start,
+                                       bool allowControl) {
+    if (depth > 64)
+      return error("constructed-source-limit");
+    for (auto current = start; current != block.end(); ++current) {
+      Operation &op = *current;
+      if (++work > 4096 || instructionCount > 2048)
+        return error("constructed-source-limit");
+      StringRef name = op.getName().getStringRef();
+      if (name == "local.return" || name == "func.return" ||
+          name == "protocol.finish" || name == "protocol.yield") {
+        SmallVector<unsigned> result;
+        for (Value value : op.getOperands()) {
+          auto index = reference(value);
+          if (!index)
+            return index.takeError();
+          result.push_back(*index);
+        }
+        return result;
+      }
+      if (name == "local.call" || name == "func.call") {
+        auto callee = op.getAttrOfType<FlatSymbolRefAttr>("callee");
+        auto *helper = callee ? symbols.lookup(callee.getValue()) : nullptr;
+        if (!helper || helper->getNumRegions() != 1 ||
+            !llvm::hasSingleElement(helper->getRegion(0)))
+          return error("constructed-source-handler");
+        if (retainedHandlers.insert(callee.getValue()).second) {
+          std::string text = constructedPrint(helper);
+          handlers.push_back(
+              json::Array{callee.getValue(), constructedHash(text), text});
+        }
+        auto &nested = helper->getRegion(0).front();
+        if (nested.getNumArguments() != op.getNumOperands())
+          return error("constructed-source-handler");
+        // Read all actuals before rebinding formals (including repeated calls).
+        SmallVector<unsigned> actuals;
+        for (Value actual : op.getOperands()) {
+          auto index = reference(actual);
+          if (!index)
+            return index.takeError();
+          actuals.push_back(*index);
+        }
+        for (auto [formal, index] : zip(nested.getArguments(), actuals))
+          references[formal] = index;
+        std::string path = origin.str() + "/" + callee.getValue().str();
+        if (auto site = op.getAttrOfType<StringAttr>("site"))
+          path += ":" + site.str();
+        auto returned = body(nested, op.getResultTypes(), depth + 1, path,
+                             nested.begin(), false);
+        if (!returned)
+          return returned.takeError();
+        if (stopped)
+          return SmallVector<unsigned>{};
+        if (returned->size() != op.getNumResults())
+          return error("constructed-source-handler");
+        for (auto [value, index] : zip(op.getResults(), *returned))
+          references[value] = index;
+        continue;
+      }
+      if (name == "local.stop") {
+        auto reason = op.getAttrOfType<StringAttr>("reason");
+        if (!reason ||
+            (reason != "reject" && reason != "abort" && reason != "exhausted" &&
+             reason != "incomplete" && reason != "refused"))
+          return error("constructed-source-stop");
+        emit(json::Array{"stop", reason.getValue(),
+                         constructedPrint(op.getAttrDictionary())});
+        stopped = true;
+        return SmallVector<unsigned>{};
+      }
+      // Local source `require` lowers to this exact zero-result guard. General
+      // branching remains outside the bounded profile; neither arm is guessed.
+      if (name == "local.if" && op.getNumOperands() == 1 &&
+          !op.getNumResults() && op.getNumRegions() == 2 &&
+          hasSingleElement(op.getRegion(0)) &&
+          hasSingleElement(op.getRegion(1))) {
+        auto &yes = op.getRegion(0).front(), &no = op.getRegion(1).front();
+        if (!yes.getNumArguments() && !no.getNumArguments() &&
+            hasSingleElement(yes) && hasSingleElement(no) &&
+            yes.front().getName().getStringRef() == "local.yield" &&
+            !yes.front().getNumOperands() &&
+            no.front().getName().getStringRef() == "local.stop" &&
+            no.front().getAttrOfType<StringAttr>("reason") == "reject") {
+          auto index = reference(op.getOperand(0));
+          if (!index)
+            return index.takeError();
+          emit(json::Array{"guard", *index, constructedPrint(&op)});
+          continue;
+        }
+      }
+      if (name == "protocol.loop" && allowControl) {
+        auto maximum = op.getAttrOfType<IntegerAttr>("maximum");
+        auto carried = op.getAttrOfType<IntegerAttr>("carried");
+        auto parameter = op.getAttrOfType<BoolAttr>("parameter");
+        auto countName = op.getAttrOfType<StringAttr>("count");
+        if (!maximum || maximum.getInt() < 0 || maximum.getInt() > 8192 ||
+            !carried || carried.getInt() < 0 || !parameter ||
+            parameter.getValue() || !countName ||
+            !countName.getValue().empty() ||
+            carried.getInt() >= int64_t(op.getNumOperands()) ||
+            op.getNumResults() != unsigned(carried.getInt()) ||
+            op.getNumRegions() != 1 || !hasSingleElement(op.getRegion(0)))
+          return error("constructed-source-loop-profile");
+        auto &iteration = op.getRegion(0).front();
+        if (iteration.getNumArguments() != op.getNumOperands() ||
+            !llvm::equal(iteration.getArgumentTypes(), op.getOperandTypes()) ||
+            !llvm::equal(
+                op.getResultTypes(),
+                TypeRange(op.getOperandTypes()).slice(1, carried.getInt())))
+          return error("constructed-source-loop-ports");
+
+        // Materialize the scalar boundary once. The prefix keeps all actual
+        // effects; only dead tuple containers and duplicate aliases disappear.
+        std::map<unsigned, Type> boundary;
+        for (auto [value, index] : references) {
+          auto [position, inserted] = boundary.emplace(index, value.getType());
+          if (!inserted && position->second != value.getType())
+            return error("constructed-source-loop-alias");
+        }
+        if (boundary.size() > 512)
+          return error("constructed-source-limit");
+        json::Array boundaryTypes, prefixReturns;
+        std::map<unsigned, unsigned> renaming;
+        for (auto [index, type] : boundary) {
+          renaming[index] = boundaryTypes.size();
+          boundaryTypes.push_back(constructedPrint(type));
+          prefixReturns.push_back(index);
+        }
+        json::Value prefix(json::Array{"flat", std::move(instructions),
+                                       std::move(prefixReturns)});
+        instructions = {};
+        for (auto &entry : references)
+          entry.second = renaming.at(entry.second);
+        auto count = reference(op.getOperand(0));
+        if (!count)
+          return count.takeError();
+        json::Array initial, captured;
+        for (auto [index, value] : enumerate(op.getOperands().drop_front())) {
+          auto position = reference(value);
+          if (!position)
+            return position.takeError();
+          (index < unsigned(carried.getInt()) ? initial : captured)
+              .push_back(*position);
+        }
+
+        auto parent = std::move(references);
+        references.clear();
+        for (auto [index, argument] : enumerate(iteration.getArguments()))
+          references[argument] = index;
+        stopped = false;
+        auto yielded = body(iteration, op.getResultTypes(), depth + 1, origin,
+                            iteration.begin(), true);
+        if (!yielded)
+          return yielded.takeError();
+        json::Value loopBody = finishBody(*yielded);
+
+        // Loop completion prepends the actual carried reply. An authored stop
+        // in the body does not statically stop a zero-trip loop or its suffix.
+        references = std::move(parent);
+        for (auto &entry : references)
+          entry.second += op.getNumResults();
+        for (auto [index, result] : enumerate(op.getResults()))
+          references[result] = index;
+        instructions = {};
+        stopped = false;
+        auto returned =
+            body(block, outputs, depth + 1, origin, std::next(current), true);
+        if (!returned)
+          return returned.takeError();
+        json::Value suffix = finishBody(*returned);
+        json::Value loop(json::Array{
+            "loop", maximum.getInt(), *count,
+            constructedTypes(op.getResultTypes()), std::move(initial),
+            constructedTypes(TypeRange(op.getOperandTypes())
+                                 .drop_front(1 + unsigned(carried.getInt()))),
+            std::move(captured), std::move(loopBody), std::move(suffix)});
+        control = json::Array{"sequence", std::move(boundaryTypes),
+                              std::move(prefix), std::move(loop)};
+        return SmallVector<unsigned>{};
+      }
+      if (op.getNumRegions() || op.getNumSuccessors())
+        return error("constructed-source-control", name);
+      if (name == "local.guard") {
+        auto index = reference(op.getOperand(0));
+        if (!index)
+          return index.takeError();
+        emit(json::Array{"guard", *index,
+                         constructedPrint(op.getAttrDictionary())});
+        continue;
+      }
+      // Other regionless operations are primitive leaves, never whole Local
+      // handlers. Their complete signature, attributes and binding are
+      // retained. A consumer must select a meaning for each admitted primitive
+      // explicitly.
+      if (!(name.starts_with("algebra.") || name.starts_with("arith.") ||
+            name.starts_with("crypto.") || name.starts_with("data.") ||
+            name == "protocol.receive" || name == "protocol.send" ||
+            name == "local.bool_constant" || name == "local.index_constant" ||
+            bool(op.getAttrOfType<FlatSymbolRefAttr>("binding"))))
+        return error("constructed-source-operation", name);
+      std::string bindingText;
+      if (auto binding = op.getAttrOfType<FlatSymbolRefAttr>("binding")) {
+        auto *declaration = symbols.lookup(binding.getValue());
+        if (!declaration ||
+            declaration->getName().getStringRef() != "local.binding")
+          return error("constructed-source-binding");
+        bindingText = constructedPrint(declaration);
+      }
+      json::Array args;
+      for (Value operand : op.getOperands()) {
+        auto index = reference(operand);
+        if (!index)
+          return index.takeError();
+        args.push_back(*index);
+      }
+      json::Array primitive{name,
+                            constructedPrint(op.getAttrDictionary()),
+                            bindingText,
+                            origin.str(),
+                            constructedTypes(op.getOperandTypes()),
+                            constructedTypes(op.getResultTypes())};
+      emit(json::Array{"apply", std::move(primitive), std::move(args)});
+      push();
+      if (op.getNumResults() == 1) {
+        references[op.getResult(0)] = 0;
+      } else {
+        // Keep the complete primitive reply before projecting ordered results.
+        // Projection is pure and cannot invent a replacement successor state.
+        for (auto [index, value] : enumerate(op.getResults())) {
+          emit(json::Array{"project", constructedTypes(op.getResultTypes()),
+                           unsigned(index), unsigned(index)});
+          push();
+          references[value] = 0;
+        }
+      }
+    }
+    return error("constructed-source-return");
+  }
+
+public:
+  explicit ConstructedExporter(protocol_ir::ProtocolModuleOp module)
+      : symbols(module) {}
+  Expected<json::Value> run(protocol_ir::ParticipantOp participant,
+                            StringRef source, StringRef candidate,
+                            const NativeProofPolicy &policy) {
+    auto &entry = participant.getBody().front();
+    if (entry.getNumArguments() > 512 ||
+        participant.getFunctionType().getNumResults() > 512)
+      return error("constructed-source-limit");
+    for (auto [index, argument] : enumerate(entry.getArguments()))
+      references[argument] = index;
+    auto returned = body(entry, participant.getFunctionType().getResults(), 0,
+                         participant.getSymName(), entry.begin(), true);
+    if (!returned)
+      return returned.takeError();
+    if (instructionCount > 2048 || handlers.size() > 256)
+      return error("constructed-source-limit");
+    json::Array results;
+    for (unsigned index : *returned)
+      results.push_back(index);
+    auto type = participant.getFunctionType();
+    if (control) {
+      json::Value result(json::Array{
+          "zkc.constructed-control/0", constructedHash(source),
+          constructedHash(candidate), policy.entry, policy.validator,
+          participant.getSymName(), printJson(encodeNativeProofPolicy(policy)),
+          std::move(handlers), constructedTypes(type.getInputs()),
+          constructedTypes(type.getResults()), std::move(*control)});
+      if (printJson(result).size() > 1024 * 1024)
+        return error("constructed-source-limit");
+      return result;
+    }
+    json::Value result(json::Array{
+        "zkc.constructed-source/0", constructedHash(source),
+        constructedHash(candidate), policy.entry, policy.validator,
+        participant.getSymName(), printJson(encodeNativeProofPolicy(policy)),
+        std::move(handlers), constructedTypes(type.getInputs()),
+        constructedTypes(type.getResults()), std::move(instructions),
+        std::move(results)});
+    if (printJson(result).size() > 1024 * 1024)
+      return error("constructed-source-limit");
+    return result;
+  }
+};
+} // namespace
+Expected<json::Value>
+exportConstructedSource(ModuleOp source, ModuleOp candidate,
+                        StringRef originalBytes,
+                        const NativeProofPolicy &policy,
+                        MathematicalSelectionPolicy mathematicalSelection) {
+  if (auto e =
+          checkNativeProof(source, candidate, policy, mathematicalSelection))
+    return std::move(e);
+  auto module = unit(candidate);
+  protocol_ir::ParticipantOp selected;
+  for (auto participant :
+       module.getBody().front().getOps<protocol_ir::ParticipantOp>())
+    if (participant.getInstance() == policy.entry &&
+        participant.getRole() == policy.validator) {
+      if (selected)
+        return error("constructed-source-participant");
+      selected = participant;
+    }
+  if (!selected)
+    return error("constructed-source-participant");
+  return ConstructedExporter(module).run(selected, originalBytes,
+                                         constructedPrint(candidate), policy);
 }
 } // namespace zkc
