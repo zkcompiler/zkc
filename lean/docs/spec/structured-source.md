@@ -18,7 +18,8 @@ the Lean kernel. JSON parsing and the match between an export digest and its
 MLIR are executable steps outside kernel reduction.
 
 Admission accepts at most 16 MiB of source text. Strings have at most 512 UTF-8
-bytes. A unit has at most 128 domains, 128 relations, 128 bindings and 128
+bytes; binding and preparation names have the stricter limits stated with their
+rows. A unit has at most 128 domains, 128 relations, 128 bindings and 128
 definitions. A signature has at most 512 types, and source instructions and
 references are limited to 4096. JSON nesting, region nesting and helper
 dependency depth are each limited to 64. Stored internal marks add no source

@@ -333,9 +333,9 @@ premises express no enforcement mechanism. `nonce_stopped` and
 those two reply points. `extract_stopped` proves the decoder returns `none` for
 every stopped run. Send acknowledgements succeed and all owned inputs are
 supplied in this profile; send failures and missing owned inputs are outside
-these prefix theorems. The verifier delivery handler selects replies by type;
-matching source sites are certified by the process equations and extraction, not
-by a joint routing model. No arbitrary provider law or joint scheduler is
+these prefix theorems. Because delivery to the verifier selects replies by
+type, matching source sites are certified by the process equations and
+extraction, not by a joint routing model. No arbitrary provider law or joint scheduler is
 assumed or proved.
 
 The optional `StructuredSchnorrHonestView.sourceView_eq_honestView` transfers

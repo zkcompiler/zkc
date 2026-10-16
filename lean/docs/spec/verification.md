@@ -223,8 +223,10 @@ commitment is sent before the challenge is received, that the run prefix
 through that receive does not depend on the reply, and that every fixed
 challenge completes.
 
-`Common.transcriptHandler` delivers the strategy's messages to the actual
-checked verifier. Prover and verifier inputs are separate arguments, and no
+`Common.run` executes the actual checked verifier under
+`Common.transcriptHandler`, which answers the verifier's query with the fixed
+challenge and each receive with the strategy's commitment or response according
+to its type. Prover and verifier inputs are separate arguments, and no
 mechanism makes the participants' copies equal. The optional
 `StructuredSchnorrHonestView.sourceView` is the resulting public view: the
 observed commitment and response, the fixed challenge and the verifier's actual
