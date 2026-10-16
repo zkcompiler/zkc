@@ -85,6 +85,9 @@ nonce. The original generic `honestView` and earlier verifier-only clients remai
 handwritten-strategy theorems. The new theorem concerns the selected checked
 constructor source and its public view under successful replies/honest delivery;
 exact native bytes, provider randomness and joint execution remain external.
+The separate [native participant probe](../../bridges/structured/participant.md)
+compares selected source-bound executions and stopping observations. Its bounded
+evidence does not discharge those external obligations for the public-view theorem.
 
 ### Sumcheck
 
@@ -105,8 +108,11 @@ and valid native dimensions are explicit premises.
 The maintained two-round quadratic scalar verifier and its `4 / |F|` theorem
 remain useful regression clients. They are a different protocol from the
 multilinear pair-message library. Connecting the library to ArkLib requires a
-new library polynomial adapter and an arbitrary-round causal experiment equation;
-the generic degree-bound theorem alone does not establish that correspondence.
+source-specific arbitrary-round causal experiment equation. The independent
+[multilinear foundation](../spec/multilinear-sumcheck.md) and
+[optional security adapter](../spec/multilinear-sumcheck-security.md) now prove
+the table laws and complete/residual interactive bounds. Their mathematical
+contracts do not yet establish that equation for the actual library source.
 
 ## Structural and semantic requirements
 
