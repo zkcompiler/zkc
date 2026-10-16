@@ -397,7 +397,9 @@ or native correspondence. The [optional multilinear security adapter](../lean/do
 connects these contracts to ArkLib's causal degree-one interaction, proving
 complete `n / |F|` and partial residual `k / |F|` bounds and honest completeness.
 These results bind the verifier's fixed table and fresh uniform mathematical
-challenges; they do not yet transfer to the native library execution.
+challenges. The [uniform query service](../lean/docs/spec/uniform-query-service.md#actual-imported-roots)
+applies them to the actual admitted `Sumcheck` and `Reduce` roots exported from
+the library source; native library execution remains outside these bounds.
 Full DSL/compiler/runtime correspondence, production arithmetic/sampling,
 backend correctness and complete protocol security remain open.
 [Assurance](assurance.md) distinguishes these evidence boundaries.

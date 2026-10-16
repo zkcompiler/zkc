@@ -1,77 +1,31 @@
 # Protocol verification in Lean
 
-This package proves claims about **actual imported scalar PIR programs**. The
-compiler exports a retained program; Lean checks its typed admission and proves
-its open-process contract. Separate consumers derive explicitly selected
-properties, including ArkLib interactive Sumcheck soundness and VCVio Schnorr
-honest-verifier simulation. A named DSL verification specification can also
-connect an authored `spec` target to its imported mathematical relation body.
+This package holds independent Lean models of zkc programs and proves claims
+about the programs the compiler actually exports. Two imports connect it to the
+compiler: the scalar common-source profile, and the structured profile, which
+admits original protocol-stage PIR with shared helpers, participants, services,
+protocol applications and repeats. Lean checks each import's typed admission
+and proves its open-process contract. Optional packages then apply ArkLib and
+VCVio security theorems to the imported subjects.
 
-The [formal reference](docs/README.md) defines the models. [Support](docs/support.md)
-states exact claims and assumptions. Native compilation, arithmetic, providers
-and the full lowering pipeline are not universally verified by this package.
-The [native bridge](bridges/common/README.md) tests the selected boundary with
-independent execution and negative controls.
-The separate [structured bridge](bridges/structured/README.md) retains shared
-helpers, multiple results, finite folds and Local control, together with explicit
-protocol participants, group values and service interactions. Its bounded
-profile has independent admission, proved declaration linking and compositional
-helper-table laws. Separate checked primitive bindings cover u64 arithmetic and
-ordered Fr-vector operations through that same evaluator; the
-[formal contract](docs/spec/structured-source.md#checked-primitives-and-index-values)
-states range, stopping and capacity boundaries. Complete original library
-Shape/Table/Halves wrappers have [source equations and ordered result contracts](docs/spec/structured-source.md#actual-library-primitive-subjects),
-alongside independent arithmetic/vector and pure-index callers.
-Retained maps and realizations share that typed carrier and checked helper table.
-[Preparation contracts](docs/spec/structured-source.md#retained-realization-and-map-declarations)
-cover full-ABI realization totality, ordered row shapes and broadcasts, empty rows,
-stopped prefixes and strict optional inputs. Complete First/Prefix source equations
-connect contiguous-half interpolation and ordered prefix restriction to the
-independent multilinear list model; independent arithmetic and constant maps
-exercise broadcasts, unused shapes and participant ownership.
-[Retained protocol applications](docs/spec/structured-source.md#retained-protocol-applications)
-use full ordered signatures, exact original-source association and checked
-prefix-captured protocol tables on the same carrier. Immutable root coordinates
-compose positional role substitutions and UTF-8 site prefixes; optional input
-and result masks preserve independent participant values, actual service handles
-and zero-result stops. Whole-unit metadata budgets and effective-site collisions
-are checked independently of runtime observer limits.
-[Retained protocol repeats](docs/spec/structured-source.md#retained-protocol-repeats)
-use one isolated callback on that same carrier. Optional state is masked at entry
-and every yield; immutable captures preserve actual service handles. Count
-admission precedes range construction, and zero count skips the callback.
-The repeat package separates generic process laws, complete original client
-equations, and full Reduction/Sumcheck source admission. Their
-[source-only verifier equations](docs/spec/structured-source.md#source-only-sumcheck-verifier)
-now connect the complete originals to ordered plain processes at maximum 2 for
-Source and 4 for Reduction. Source invokes its actual terminal checker; Reduction returns the
-residual point and claim. This proves no sampling, honest prover completeness,
-native execution or cryptographic security claim.
-Its [scalar inlining pairs](bridges/structured/README.md#scalar-inlining-pairs)
-prove exact original/prepared model equality for authored response and claim
-computations using checked body contracts and a reusable inlining law.
-The [multilinear Sumcheck foundation](docs/spec/multilinear-sumcheck.md) separately
-proves ordered table restriction, endpoint-message and residual/discharge laws
-for arbitrary round counts. The [optional multilinear security adapter](docs/spec/multilinear-sumcheck-security.md)
-proves complete and residual interactive bounds through ArkLib's degree-one
-protocol, including stop-aware joint phases and reachable full-distribution
-transport. Canonical structured one-round examples use actual typed calculation
-results and local handler laws. The source-only verifier uses the foundation's
-terminal table laws. The optional
-[uniform-service composition](docs/spec/uniform-query-service.md#actual-imported-roots)
-transfers the bounds to the actual admitted Sumcheck and Reduction roots under
-explicit sampling, table and observation assumptions. Native execution
-correspondence remains separate; the imported degree-two examples retain their
-own scope.
-For the actual Interactive Schnorr subject,
-[honest-prover observations](docs/spec/structured-source.md#actual-interactive-schnorr-subject)
-now supply a causal strategy from ordered source sends, with explicit successful
-replies, equal bases, the verifier-key witness relation and honest delivery;
-the unused prover key is unconstrained. The optional public
-view theorem transfers these observed messages and the checked verifier outcome
-to the existing simulator under a fixed challenge and uniform nonce. This
-extends the earlier handwritten-strategy consumer in the independent model;
-native provider laws and joint execution remain separate obligations.
+The [formal reference](docs/README.md) defines the models, and
+[support](docs/support.md) states the exact scope and assumptions of each claim.
+Native compilation below the original stage, providers, production arithmetic
+and Fiat–Shamir are outside these claims. The [common](bridges/common/README.md)
+and [structured](bridges/structured/README.md) bridges test the native boundary
+with independent execution and negative controls.
+
+## What is proved
+
+| Subject | Result | Owner |
+|---|---|---|
+| Scalar imports | Admission and open-process contracts of exported scalar programs; Schnorr completeness, special soundness and rejection; the two-round degree-two Sumcheck bound `4 / \|F\|` | [Scalar import](docs/spec/common-source.md), [support](docs/support.md) |
+| Structured import | Independent admission, declaration linking, checked primitives, maps and realizations, protocol applications and repeats | [Structured source](docs/spec/structured-source.md) |
+| Interactive Schnorr | Verifier contracts over the actual export; an honest prover derived from checked sends; VCVio Sigma completeness, special soundness and fresh-challenge simulation | [Schnorr subject](docs/spec/structured-source.md#actual-interactive-schnorr-subject), [security integration](integrations/arklib/README.md) |
+| Multilinear Sumcheck | Table laws for any round count; ArkLib `n / \|F\|` complete and `k / \|F\|` residual bounds | [Mathematics](docs/spec/multilinear-sumcheck.md), [security](docs/spec/multilinear-sumcheck-security.md) |
+| Imported Sumcheck and Reduce | Plain verifier equations; `n / \|F\|` bounds on the actual admitted roots under the uniform query service | [Verifier equations](docs/spec/structured-source.md#source-only-sumcheck-verifier), [uniform queries](docs/spec/uniform-query-service.md#actual-imported-roots) |
+| Authored DSL target | The imported Schnorr relation denotes discrete logarithm; two accepting transcripts yield a witness for it | [Verification](docs/spec/verification.md) |
+| Clean AIR | A flat AIR export preserves its constraints and selected specification | [Clean integration](integrations/clean/README.md) |
 
 ## Architecture
 
@@ -101,6 +55,8 @@ Nix and the `just fetch-lean`, `just test-lean`, `just test-lean-integration`, a
 `just test-lean-native` additionally checks the native import and authored
 specification boundary, including differential execution and negative controls.
 
+### Verify an authored property
+
 From the repository root, after preparing the native compiler and Lean packages:
 
 ```sh
@@ -118,6 +74,8 @@ An unsupported contract or an unproved correspondence remains `unresolved`.
 The [verification specification](docs/spec/verification.md) explains author input,
 proof generation, checked subjects and extension points.
 
+### Reproduce from source
+
 For an isolated build from exact dependency source checkouts, with no prior
 project or dependency Lean objects:
 
@@ -133,3 +91,10 @@ python3 reproduce.py --with-arklib --with-clean \
 Use a fresh output directory. The reproducer records source drift, toolchains,
 builds, audits, standalone consumers and the Clean fixture comparison. Omit cache
 arguments to fetch exact sources. The installed Lean/Std toolchain is trusted.
+
+## Further reading
+
+- Bridges: [common](bridges/common/README.md), [structured](bridges/structured/README.md)
+  and [participant comparison](bridges/structured/participant.md).
+- [Dependencies](docs/dependencies.md) and the
+  [design rationale](docs/design/protocol-verification.md).

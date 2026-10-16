@@ -38,8 +38,8 @@ state and refuse unconfigured site/domain/handle tuples. The Sumcheck example
 owns its source-qualified route and general-count full-distribution transport.
 `Examples/CausalSumcheck/SourceVerifier` proves the complete admitted Sumcheck
 returned-true bound and Reduction's external-table residual-observation bound,
-both `n / |F|` for every count. The actual roots execute at most two and four
-rounds respectively; excess counts refuse and contribute zero mass. The concrete
+both `n / |F|`. The bounds are nontrivial up to the exported maxima of two and
+four rounds; excess counts refuse and contribute zero mass. The concrete
 service discharges query and route premises for arbitrary network/callbacks and
 all initial states. Reduction has no Boolean acceptance checker.
 [Support](../../docs/support.md) records scope and validation.

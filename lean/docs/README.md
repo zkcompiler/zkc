@@ -11,16 +11,14 @@ that all native behavior already has a Lean model.
 - [Verification](spec/verification.md): explicit intent, contracts, consumers,
   authored targets, candidate generation and receipt semantics.
 - [Scalar import](spec/common-source.md): admitted syntax and encoding.
-- [Structured import](spec/structured-source.md): checked native helper tables,
-  finite folds and closed Local control.
+- [Structured import](spec/structured-source.md): checked original protocol-stage
+  programs with shared helpers, participants, services, retained contracts,
+  protocol applications and repeats.
 - [Ring expressions](spec/ring-expressions.md): retained Clean/AIR connection.
 - [Multilinear Sumcheck](spec/multilinear-sumcheck.md): independent ordered table,
   endpoint-message and residual/discharge laws.
 - [Multilinear interactive security](spec/multilinear-sumcheck-security.md): optional
-  ArkLib degree-one adapters, stop-aware causal completion, local distribution
-  contracts, complete/residual bounds and honest completeness;
-  the uniform-service connection supplies actual imported-root bounds while
-  native execution correspondence remains separate.
+  ArkLib adapters with complete and residual bounds and honest completeness.
 - [Uniform query service](spec/uniform-query-service.md): a concrete structured
   handler with exact all-state query, pass-through and refusal laws, plus
   general-count Sumcheck process transport and actual imported-root bounds.

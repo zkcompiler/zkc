@@ -236,8 +236,10 @@ execution law from a Proc-level body equation. `checked_le_of_proc` composes a
 Boolean checker through any prefix, requiring only that true implies the
 mathematical terminal predicate. A conservative checker is sufficient.
 
-`Examples.CausalSumcheck` is a canonical structured regression, not the imported
-Sumcheck body. It uses the current `participantInterface F G`, root-local Nat
+The `Operations`, `ExactRound`, `CalculatedRound`, `DistributionalRound` and
+`Terminal` modules of `Examples.CausalSumcheck` are canonical structured
+regressions, not the imported Sumcheck body; `Iteration`, `UniformService` and
+`SourceVerifier` connect the imported roots. It uses the current `participantInterface F G`, root-local Nat
 roles, service operands, ownership restriction/masking and explicit site/action
 interpretations. Each operation supplies the actual typed empty callback tuple,
 empty `ProtocolTable`, and identity root `ProtocolContext` to

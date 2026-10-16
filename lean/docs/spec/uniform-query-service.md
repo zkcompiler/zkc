@@ -85,8 +85,8 @@ stop. Their observation equations require no provider premise.
 `source_returned_true_bound` bounds the unconditional mass of an actual present
 `true` verifier result by `n / |F|`. It takes the original raw verifier vector,
 its decoding as a table of dimension `n`, a claim different from that vector's
-sum. The bound covers every count: `n ≤ 2` follows the actual rounds, while
-`n > 2` uses the source's refusal and contributes zero mass. The checked
+sum. The bound is nontrivial up to `n ≤ 2`, the exported maximum; for `n > 2`
+the source refuses and contributes zero mass. The checked
 terminal decision includes both
 `point.length = n` and table extension equality. A padded coordinate conversion
 alone is insufficient. Decoding and the admitted count discharge raw-vector
@@ -95,8 +95,8 @@ fact used by the actual source checker law.
 
 `reduction_residual_bound` bounds the unconditional residual-observation mass
 by `n / |F|` for an external original table of dimension `remaining + n`.
-The bound covers every count: the actual root executes at most four rounds,
-and its refusal above four contributes zero mass. Its initial claim differs from that table's Boolean sum.
+The bound is nontrivial up to four rounds, the exported maximum; above four
+the root refuses and contributes zero mass. Its initial claim differs from that table's Boolean sum.
 The observer reads the original verifier point/claim outputs. Prover vector and
 dimension inputs remain arbitrary and optional, with no equality to the external
 table. Reduction has no Boolean checker; this event is not acceptance.

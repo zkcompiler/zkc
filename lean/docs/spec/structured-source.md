@@ -113,7 +113,8 @@ Bound facts identify exact index/container positions. Result binding shifts
 both positions. `IdentitySummaries` follows returned-input aliases and select
 arms with the same known identity; two unknown origins never prove equality.
 Math preconditions must be discharged at each call. An indices domain supplies
-the bound for its selected vector in the `S / I / A / C` interface. Mutable state
+the bound for its selected vector in the state, item, domain-argument and
+capture interface. Mutable state
 is not assumed invariant across iterations; equal lengths do not identify
 vector contents. Local regions begin without Math bound premises.
 
@@ -658,16 +659,16 @@ body equation for a closure defined with its captured prefix.
 `Imported.protocolSource` and `Imported.protocolChecked` expose the exact
 original/check association in both directions; `Imported.protocolPermutation`
 preserves complete checked values and multiplicities. Given actual membership
-in a checked protocol's raw operations, `Imported.protocolApplication_recursive`
+in a checked protocol's raw operations, `Imported.protocolApplication_source`
 provides an inherited lexical environment in which each service operand names
 a bounded original input with the exact nominal contract and mapped singleton
 owner. This existential consequence does not identify the environment at a
 particular lowering path or distinguish two same-contract, same-owner inputs.
 Concrete origin-transfer equations and participant process equations establish
-that more specific routing. Its role and
-callee corollaries derive finite role validity and the original statement-free
-callee check. `Imported.protocolApplication_source` also identifies the actual
-instruction in the original body's recursive `storedInstructions` inventory.
+that more specific routing. The same theorem identifies the actual instruction
+in the original body's recursive `storedInstructions` inventory, and its role
+and callee corollaries derive finite role validity and the original
+statement-free callee check.
 `Imported.protocolApplication_callee_statementFree` proves that the resolved
 callee's entire stored body, including nested callbacks, contains no statement.
 These are admission consequences, independent of runtime handle
