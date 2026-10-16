@@ -26,12 +26,13 @@ def check(output, lake):
              '"\nend Rendered\naxiom injected : False\n--']
     modules = []
     for index, name in enumerate(names):
-        helper = ["function", name, "math", "private", [["bool"]], [["bool"]], [], [],
+        helper = ["function", name, "math", "private", [["bool"]], [["bool"]], [], [], [],
                   ["block", [], ["return", [0]]]]
-        entry = ["function", "main", "protocol", "public", [["bool"]], [["bool"]], [], [],
+        entry = ["function", "main", "protocol", "public", [["bool"]], [["bool"]],
+                 ["protocol", ["P"], [["P"]], [["P"]]], [], [],
                  ["block", [[["call", name], [0], [["bool"]], [], ""]], ["return", [0]]]]
         data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
-                "main", "P", [], [helper, entry]]
+                "main", [], [], [helper, entry]]
         namespace = f"RenderedCase{index}"
         if index == 4:
             # Exercise the actual CLI under an ASCII locale as well as the
@@ -55,6 +56,54 @@ example : (Zkc.Source.Structured.check {namespace}.snapshot).isOk = true := by
   decide +kernel
 '''
         modules.append(source)
+    # Exercise metadata and every new operation constructor independently of
+    # admission. Numeric codepoints are the expected string values; the test
+    # does not use the renderer to construct its own expectation.
+    name = 'opaque_증명"\\\n'
+    field = ["field", "bls12-381.fr"]
+    group = ["group", "bls12-381.g1"]
+    service = ["service", "random.bls12-381.fr/0"]
+    operations = [
+        [["group.identity", group[1]], [], [group], [], ""],
+        [["group.add", group[1]], [0, 0], [group], [], ""],
+        [["group.scale", group[1], field[1]], [0, 2], [group], [], ""],
+        [["group.equal", group[1]], [0, 1], [["bool"]], [], ""],
+        [["restrict", [name]], [0], [["bool"]], [], ""],
+        [["exchange", name, "V"], [0], [["bool"]], [], name],
+        [["draw", "V", field[1]], [7], [field], [], "draw"],
+        [["statement", name, [name], 0], [6], [], [], ""],
+    ]
+    data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64, "main", [],
+            [["relation", name, "public", name, name, name, [group], [["bool"]], ["statement"]]],
+            [["function", "main", "protocol", "public", [group, field, service], [["bool"]],
+              ["protocol", [name, "V"], [[name, "V"], [name], ["V"]], [["V"]]], [], [],
+              ["block", operations, ["return", [1]]]]]]
+    source = renderer.render(data, "RenderedOpen").replace("module\n\n", "", 1)
+    points = str([ord(char) for char in name])
+    source += f'''
+open Zkc.Source.Structured in
+example : (RenderedOpen.snapshot.relations.map fun relation =>
+    (relation.name.toList.map Char.toNat, relation.kind.toList.map Char.toNat,
+     relation.key.toList.map Char.toNat, relation.revision.toList.map Char.toNat)) =
+    [({points}, {points}, {points}, {points})] := by decide +kernel
+open Zkc.Source.Structured in
+example : (RenderedOpen.snapshot.definitions[0]?.bind fun definition =>
+    match definition with
+    | .function function => function.interface.map fun interface =>
+        interface.roles.map (fun role => role.toList.map Char.toNat)
+    | _ => none) = some [{points}, [86]] := by decide +kernel
+open Zkc.Source.Structured in
+example : (RenderedOpen.snapshot.definitions[0]?.map fun definition =>
+    match definition with
+    | .function function =>
+      let .block instructions _ := function.body
+      instructions.map fun (.instruction descriptor _ _ _ _) => match descriptor with
+        | .groupIdentity _ => 0 | .groupAdd _ => 1 | .groupScale _ _ => 2
+        | .groupEqual _ => 3 | .restrict _ => 4 | .exchange _ _ => 5
+        | .draw _ _ => 6 | .statement _ _ _ => 7 | _ => 99
+    | _ => []) = some [0, 1, 2, 3, 4, 5, 6, 7] := by decide +kernel
+'''
+    modules.append(source)
     # Imports/section commands from each rendering are legal at the file top
     # only. One import serves all independently named data declarations.
     header = "import Zkc.Source.Structured.Import\nset_option maxRecDepth 4096\n"
@@ -74,6 +123,7 @@ example : (Zkc.Source.Structured.check {namespace}.snapshot).isOk = true := by
             continue
         raise AssertionError("renderer accepted an invalid or oversized UTF-8 string")
     report = {"status": "pass", "kernel_cases": len(names), "refusal_cases": 3,
+              "open_metadata_kernel_cases": 3,
               "ascii_locale_cli_cases": 1,
               "renderer_sha256": support.lake.sha(Path(renderer.__file__)),
               "subject_sha256": support.lake.sha(path)}

@@ -1,9 +1,10 @@
 # Structured native bridge
 
 This optional bridge imports actual original protocol-profile MLIR with shared
-helpers, finite folds and nested Local control into the common Lean region
-semantics. The first profile is single participant and immutable Boolean,
-unsigned index, BLS12-381 scalar and scalar-vector values. See the
+helpers, finite folds, nested Local control and open protocol roots into the
+common Lean region semantics. Each root retains its own participants and port
+scopes. The checked profile includes Boolean, unsigned index, scalar/vector,
+group and owner-local random-service values. See the
 [native format](../../../docs/spec/formats/structured-source.md),
 [formal contract](../../docs/spec/structured-source.md) and
 [protocol targets](../../docs/design/structured-native-import.md).
@@ -17,6 +18,8 @@ cmake --build build/compiler --target zkc-compile zkc-structured_reference-test 
 (cd lean && lake build)
 python3 lean/bridges/structured/check.py \
   --report build/experiments/structured-source/report.json
+python3 lean/bridges/structured/open_protocol.py \
+  --report build/experiments/structured-open/report.json
 ```
 
 To add production execution comparisons, build `zkc` and supply it explicitly:
@@ -30,10 +33,30 @@ python3 lean/bridges/structured/check.py \
 
 The report records the source revision, deterministic seed, exact commands,
 exported source and snapshot hashes, and retained executable hashes. Each run
-copies its executables before testing. Use separate report directories to keep
-different runs distinct. `--compiler`, `--reference`, `--lean`, `--cases` and
+allocates a fresh directory under `runs/` beside the selected report and copies
+its executables there before testing. The selected report is atomically marked
+`running` before setup, then `pass`, `failed` or `interrupted`; it identifies the
+run directory and its own retained report. Setup failures exit nonzero and
+cannot leave the previous success selected or overwrite its tools.
+`--compiler`, `--reference`, `--lean`, `--cases` and
 `--seed` select explicit tools and generated cases. Failed comparisons retain
 their source, requests and outputs beside the report.
+
+Each run also retains `source-before.tar.gz` and a per-file byte manifest. This
+is a snapshot of **all tracked and nonignored untracked project files**, using
+current working bytes, including modified authored fixtures, proofs, all local
+imports, drivers, manifests and toolchain pins. Deleted tracked paths are
+listed in the manifest. Archived contents are verified against the captured
+bytes. This costs one compressed project tree per run; it avoids a manually
+maintained partial source list. Ignored build outputs, `.git` history and
+external dependency caches are excluded. Reproduction still needs the pinned
+Lean toolchain and external packages from `lake-manifest.json`; this is not a
+hermetic archive of the host or of the native compiler build environment.
+Extract the source archive into an empty directory to recover its working
+tree. Initialize a Git repository and commit the restored tree there before
+rerunning these drivers (Git supplies their source inventory and revision); the retained report still
+identifies the original revision and archived bytes. Build Lean with the pinned
+dependencies and supply the archived native tools through the explicit flags.
 
 ## What is compared
 
@@ -108,9 +131,112 @@ nonempty list aborts exactly when its predicate enables the zero-result step.
 Both are parametric in the scalar commutative ring. They are equations for the
 actual admitted constructor subjects; no finite test enumeration supplies them.
 
+## Open participants
+
+The open suite compares the original native SSA interpreter with the independently
+admitted Lean participant process. Requests retain the selected role, original
+input positions, service handles, exact action sites and a sequence of typed
+replies. Receives use the supplied reply; a common source input does not identify
+values independently supplied to different participants.
+
+The group model in this suite is explicitly the additive scalar group, with
+scalar multiplication interpreted as field multiplication. It tests source
+wiring and ordered interactions; it does not execute BLS12-381 points. The Lean
+process equations separately quantify over a lawful scalar/group module.
+
+Cases include independently available helper results, unused intermediate
+requirements, zero-result Local calls, distinct and aliased service handles,
+guards, every supported stop class, wrong/missing replies, group operations,
+alternate participant rosters and malformed whole-unit metadata. Actual Schnorr
+Entries exercise both roles, altered replies, helper factoring, declaration
+permutation and an early-challenge mutation. The latter can accept the same
+sample while exposing a different first action.
+
+`SchnorrInteractive` proves equations for both participants of the retained
+library-derived source, and connects the verifier through an explicit effect
+adapter to its reusable Schnorr contract. The dormant relation declaration and
+Math formula are both retained; their association is not inferred from generated
+names. These source equations keep received values and stopping continuations.
+They do not establish that the native runtime or provider implements them.
+
+`open_protocol.py --write-fixtures` regenerates each retained MLIR, JSON and
+constructor-data subject. As for the closed suite, semantic proofs are maintained
+separately. The native reference and Lean observer have separate work budgets;
+normal results are compared with sufficient capacity. Missing replay input is
+reported as `incomplete`, an observation of an unfinished interaction rather than
+a claim that a production endpoint has terminated.
+
+## Scalar inlining pairs
+
+Two tiny authored single-role Entries retain mathematical helpers in their
+original native MLIR:
+
+| Subject | Scalar contract | Helper structure |
+|---|---|---|
+| [`schnorr-response.zkc`](fixtures/schnorr-response.zkc) | `nonce + challenge * secret` | One response helper |
+| [`sumcheck-claim.zkc`](fixtures/sumcheck-claim.zkc) | `(1-r) * a0 + r * a1` | One claim helper calling the same weighted-product helper twice |
+
+The Sumcheck source uses `weighted(a0, 1 - r) + weighted(a1, r)`; the decimal
+literal is admitted by kernel reduction. Both computations are scalar
+ingredients of protocols, without group operations or interactive security
+claims.
+
+[`SchnorrResponse`](../../ZkcExamples/Structured/SchnorrResponse.lean) and
+[`SumcheckClaim`](../../ZkcExamples/Structured/SumcheckClaim.lean) prove complete
+process equality between each exact imported original and the actual prepared
+candidate, for every input in any `CommRing F` with `DecidableEq F`. Each client
+uses named checked-body contracts. The response proof applies
+`Structured.inline_invoke`, whose lookup/body premise covers every actual tuple;
+it preserves stops and the caller's suffix without a totality assumption.
+The controls in `Tests.StructuredInlining` cover stopping and returning
+zero-result helpers, suffix stops, retained caller values, repeated arguments
+and ordered multiple results.
+
+The retained mutation changes only the prepared response entry's addition to
+subtraction. It passes native formation and Lean admission. The kernel proves
+that `(nonce, challenge, secret) = (2, 3, 5)` returns `17` in the original model
+and `-13` in the mutated integer model.
+
+After building Lean and the existing native tools, reproduce from the root:
+
+```sh
+python3 lean/bridges/structured/inlining.py \
+  --compiler build/compiler/zkc-compile \
+  --optimizer build/compiler/zkc-opt \
+  --reference build/compiler/test/zkc-structured_reference-test \
+  --report build/experiments/structured-inlining/report.json
+```
+
+This focused sibling reuses the bridge driver. It runs `language-emit` and
+`language-interface`, then the actual
+`--zkc-prepare-protocol="simplify=false optimize-finite=false"` command. It
+exports both sides with `protocol-structured`, independently admits them,
+compares exact retained MLIR/JSON/constructor bytes, and rechecks the proof
+sources. Candidate snapshots use the format's `original` tag because each
+export describes its supplied native input; their input is the retained
+prepared MLIR. The entry contains no helper calls, although dormant helper
+declarations remain in the module.
+
+Default finite comparisons use four boundary/example tuples and sixteen seeded
+full-size scalar tuples per subject, through both direct native SSA and Lean
+execution. The admitted mutation is also compared. Reports retain commands,
+outputs, complete project-source bytes and tool copies with hashes, toolchain,
+affinity and thread settings. The
+existing `just test-lean-native` scope includes this sibling. Host-level lock
+coordination belongs to the invoking validation session.
+
+`--write-fixtures` intentionally replaces the retained native subjects, exports
+and constructor data. It never generates or changes semantic proofs; review
+the changed subject and its checked body equations. These files follow the
+`TotalStateData` pattern as actual proof subjects. Research logs and executable
+copies remain in the run directory under `build/experiments`. Regeneration also
+retains `source-after.tar.gz` so the archive contains the resulting fixture
+bytes as well as the original working sources.
+
 These model equations and finite native comparisons are separate evidence.
 The writer, parser and renderer are tested executable boundaries. This package
 does not prove C++ export correctness, frontend translation, native lowering,
-production arithmetic/sampling, runtime capacity equivalence or protocol
-security. The complete Schnorr and Sumcheck targets require later group,
-communication, service and interactive-control support.
+production arithmetic/sampling or runtime capacity equivalence. The source-level
+Schnorr theorem has its own algebraic and interaction assumptions. Repeated
+multilinear Sumcheck additionally requires protocol calls/repetition and broader
+index/vector operations in the checked source profile.

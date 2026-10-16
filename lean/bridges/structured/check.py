@@ -8,6 +8,7 @@ agreement evidence, not a proof of either compiler boundary.
 
 import argparse
 import copy
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -16,10 +17,15 @@ import shutil
 import subprocess
 import sys
 import time
+from uuid import uuid4
 
 import snapshot as constructors
+from evidence import archive_sources, atomic_json
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / "scripts"))
+from reporting import new_directory  # noqa: E402
+
 FIELD = "bls12-381.fr"
 MODULUS = 52435875175126190479447740508185965837690552500527637822603658699938581184513
 
@@ -66,35 +72,97 @@ def typed_result(types, expected):
 class Suite:
     def __init__(self, args):
         self.args = args
-        self.directory = args.report.resolve().parent
-        self.directory.mkdir(parents=True, exist_ok=True)
+        self.directory = None
         self.commands, self.checks, self.sources = [], [], []
-        self.tools = {}
+        self.tools, self.tool_records = {}, {}
+        self.archives = {}
+        self.revision = None
+        self.identity = str(uuid4())
+        self.started = datetime.now(timezone.utc).isoformat()
+        self.rng = random.Random(args.seed)
+        # Clear any previous success before allocation, copies, Git or commands.
+        # No old archive is changed: all subsequent writes use a fresh directory.
+        self.publish("running")
+
+    def setup(self):
+        self.directory = new_directory(self.args.report.resolve().parent / "runs",
+                                       self.identity, "structured")
+        self.publish("running")
+        if self.args.cases < 1:
+            raise ValueError("--cases must be positive")
+        self.revision = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+        self.archives["before"] = archive_sources(ROOT, self.directory / "source-before")
         tool_dir = self.directory / "tools"
-        tool_dir.mkdir(exist_ok=True)
-        for name in ("compiler", "reference", "lean", "runtime"):
-            source = getattr(args, name)
+        tool_dir.mkdir()
+        for name in ("compiler", "optimizer", "reference", "lean", "runtime"):
+            source = getattr(self.args, name, None)
             if source is None:
                 continue
             source = source.resolve()
             target = tool_dir / name
-            if source != target:
-                shutil.copy2(source, target)
+            shutil.copy2(source, target)
             self.tools[name] = target
-        self.rng = random.Random(args.seed)
+            self.tool_records[name] = {"path": str(target), "sha256": digest(target),
+                                       "source": str(source)}
+
+    def run(self, action):
+        """Own setup and finalization for both structured drivers, including failure."""
+        status = None
+        try:
+            self.setup()
+            action(self)
+            if getattr(self.args, "write_fixtures", False):
+                self.archives["after"] = archive_sources(ROOT, self.directory / "source-after")
+        except BaseException as error:
+            status = "interrupted" if isinstance(error, KeyboardInterrupt) else "failed"
+            self.checks.append({"name": "setup-or-generation", "passed": False,
+                                "error": f"{type(error).__name__}: {error}"})
+            print(error, file=sys.stderr)
+        return self.finish(status)
+
+    def publish(self, status):
+        report = {"format": "zkc.structured-comparison/0", "seed": self.args.seed,
+                  "argv": sys.argv, "cases": self.args.cases,
+                  "run": self.identity, "directory": str(self.directory) if self.directory else None,
+                  "status": status, "startedUtc": self.started,
+                  "revision": self.revision, "tools": self.tool_records,
+                  "sourceArchives": self.archives,
+                  "sources": self.sources, "checks": self.checks, "commands": self.commands,
+                  "scope": "bounded logical outcomes; no native correspondence theorem or resource equivalence"}
+        if status != "running":
+            report["finishedUtc"] = datetime.now(timezone.utc).isoformat()
+        if self.directory is not None:
+            atomic_json(self.directory / "report.json", report)
+        atomic_json(self.args.report, report)
 
     def command(self, label, argv, success=True):
         start = time.monotonic()
-        result = subprocess.run(list(map(str, argv)), cwd=ROOT, capture_output=True,
-                                encoding="utf-8", timeout=60)
         number = len(self.commands)
         prefix = self.directory / f"command-{number:04d}"
+        record = {"label": label, "argv": list(map(str, argv)), "output": str(prefix), "exit": None}
+        self.commands.append(record)
+        try:
+            result = subprocess.run(list(map(str, argv)), cwd=ROOT, capture_output=True,
+                                    encoding="utf-8", timeout=60)
+        except subprocess.TimeoutExpired as error:
+            record["error"] = f"{type(error).__name__}: {error}"
+            for suffix, output in ((".stdout", error.stdout), (".stderr", error.stderr)):
+                # TimeoutExpired may carry bytes even when text mode was requested.
+                path = prefix.with_suffix(suffix)
+                if isinstance(output, bytes):
+                    path.write_bytes(output)
+                else:
+                    path.write_text(output or "", encoding="utf-8")
+            raise
+        except (OSError, subprocess.SubprocessError) as error:
+            record["error"] = f"{type(error).__name__}: {error}"
+            raise
+        finally:
+            record["seconds"] = round(time.monotonic() - start, 4)
+        record["exit"] = result.returncode
         prefix.with_suffix(".stdout").write_text(result.stdout, encoding="utf-8")
         prefix.with_suffix(".stderr").write_text(result.stderr, encoding="utf-8")
-        self.commands.append({"label": label, "argv": list(map(str, argv)),
-                              "exit": result.returncode,
-                              "seconds": round(time.monotonic() - start, 4),
-                              "output": str(prefix)})
         expected = 0 if success else 1
         if result.returncode != expected:
             raise AssertionError(f"{label}: exit {result.returncode}, expected {expected}\n"
@@ -183,7 +251,7 @@ class Suite:
     def changed_body(self, subject):
         _, path, data = subject
         changed = copy.deepcopy(data)
-        terminal = definition(changed, "step")[8][2]
+        terminal = definition(changed, "step")[9][2]
         assert terminal == ["return", [2, 0]], terminal
         terminal[1] = [0, 2]
         candidate = path.parent / "copied-digest-changed-body.json"
@@ -214,9 +282,12 @@ class Suite:
         candidate = json.loads(json.loads(bundle.read_text(encoding="utf-8"))["candidate"])
         ports = candidate[3][0][4]
         entry = definition(data, data[3])
+        roles = entry[6][1]
+        if len(roles) != 1:
+            raise ValueError("closed native comparison requires exactly one participant")
         encoded = [wire(ty, value) for ty, value in zip(entry[4], values, strict=True)]
         request = ["zkc.bundle-inputs/0", "structured-source",
-                   [[data[4], [[str(i), port[1], ["wire", value]]
+                   [[roles[0], [[str(i), port[1], ["wire", value]]
                                for i, (port, value) in enumerate(zip(ports, encoded, strict=True))], []]], []]
         path = snapshot.parent / (label + ".native-inputs.json")
         write_json(path, request)
@@ -236,16 +307,14 @@ class Suite:
             assert endpoint["after"][1]["cause"] == ["explicit", {
                 "omitted_bytes": 0, "text": expected[1]}], report
 
-    def finish(self):
-        report = {"format": "zkc.structured-comparison/0", "seed": self.args.seed,
-                  "revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
-                  "tools": {key: {"path": str(path), "sha256": digest(path)} for key, path in self.tools.items()},
-                  "sources": self.sources, "checks": self.checks, "commands": self.commands,
-                  "scope": "bounded logical outcomes; no native correspondence theorem or resource equivalence"}
-        write_json(self.args.report, report)
+    def finish(self, status=None):
+        if not self.checks:
+            self.checks.append({"name": "suite", "passed": False, "error": "no checks executed"})
         failures = sum(not check["passed"] for check in self.checks)
+        status = status or ("failed" if failures else "pass")
+        self.publish(status)
         print(f"{len(self.checks)} checks, {failures} failures; {self.args.report}")
-        return int(failures != 0)
+        return int(status != "pass")
 
 
 def wire(ty, value):
@@ -311,7 +380,7 @@ def provenance_cases(suite, fixtures):
                 suite.case(name + "-runner", lambda s=subject, n=name, v=values, e=expected:
                            suite.native(s, n, v, e))
     bad = copy.deepcopy(forwarded[2])
-    definition(bad, "forward")[8][2][1][0] = 0
+    definition(bad, "forward")[9][2][1][0] = 0
     suite.case("refuse-forwarded-unrelated-result", lambda: suite.refuse_snapshot(
         "forwarded-unrelated-result", bad, "structured-call-premise"))
     suite.case("native-refuse-forwarded-unrelated-result", lambda: suite.refuse_native(
@@ -319,7 +388,7 @@ def provenance_cases(suite, fixtures):
         forwarded_text.replace("func.return %p#3, %p#1", "func.return %p#0, %p#1"),
         "finite-bound"))
     distinct = copy.deepcopy(aliased[2])
-    definition(distinct, "main")[8][1][0][1][1] = 1
+    definition(distinct, "main")[9][1][0][1][1] = 1
     suite.case("refuse-distinct-domain-actual", lambda: suite.refuse_snapshot(
         "distinct-domain-actual", distinct, "structured-fold-premise"))
     suite.case("native-refuse-distinct-domain-actual", lambda: suite.refuse_native(
@@ -533,33 +602,33 @@ def run_cases(suite):
     for index, replacement, label in [(0, "unknown/0", "format"), (1, "prepared", "stage")]:
         bad = copy.deepcopy(total[2]); bad[index] = replacement
         malformed.append((label, bad))
-    bad = copy.deepcopy(unit[2]); bad[4] = "other"
+    bad = copy.deepcopy(unit[2]); definition(bad, "main")[6][2][0] = ["other"]
     malformed.append(("wrong-role", bad))
-    bad = copy.deepcopy(total[2]); bad[5].append(copy.deepcopy(bad[5][0]))
+    bad = copy.deepcopy(total[2]); bad[4].append(copy.deepcopy(bad[4][0]))
     malformed.append(("duplicate-domain", bad))
-    bad = copy.deepcopy(unit[2]); definition(bad, "work")[8][1][0][0][1] = "missing"
+    bad = copy.deepcopy(unit[2]); definition(bad, "work")[9][1][0][0][1] = "missing"
     malformed.append(("missing-helper", bad))
-    bad = copy.deepcopy(total[2]); definition(bad, "step")[6] = []
+    bad = copy.deepcopy(total[2]); definition(bad, "step")[7] = []
     malformed.append(("missing-index-premise", bad))
-    bad = copy.deepcopy(indexed[2]); definition(bad, "step")[8][1][0][1][0] = 3
+    bad = copy.deepcopy(indexed[2]); definition(bad, "step")[9][1][0][1][0] = 3
     malformed.append(("same-typed-wrong-container-at-call", bad))
-    bad = copy.deepcopy(total[2]); definition(bad, "step")[8][1][0][1][1] = 4096
+    bad = copy.deepcopy(total[2]); definition(bad, "step")[9][1][0][1][1] = 4096
     malformed.append(("out-of-scope-index", bad))
-    bad = copy.deepcopy(unit[2]); definition(bad, "step")[8][2].append("ignored")
+    bad = copy.deepcopy(unit[2]); definition(bad, "step")[9][2].append("ignored")
     malformed.append(("malformed-dormant-stop", bad))
-    bad = copy.deepcopy(total[2]); definition(bad, "main")[8][1][0][0][0] = "unknown"
+    bad = copy.deepcopy(total[2]); definition(bad, "main")[9][1][0][0][0] = "unknown"
     malformed.append(("unknown-operation", bad))
     bad = copy.deepcopy(total[2]); bad.append("ignored")
     malformed.append(("extra-envelope-field", bad))
-    bad = copy.deepcopy(total[2]); definition(bad, "step")[6][0][3] = 1
+    bad = copy.deepcopy(total[2]); definition(bad, "step")[7][0][3] = 1
     malformed.append(("wrong-bound-axis", bad))
-    bad = copy.deepcopy(unit[2]); definition(bad, "work")[8][1][0][0][1] = "work"
+    bad = copy.deepcopy(unit[2]); definition(bad, "work")[9][1][0][0][1] = "work"
     malformed.append(("helper-cycle", bad))
-    bad = copy.deepcopy(total[2]); definition(bad, "step")[8] = ["block", [], ["stop", "abort", "math_stop"]]
+    bad = copy.deepcopy(total[2]); definition(bad, "step")[9] = ["block", [], ["stop", "abort", "math_stop"]]
     malformed.append(("math-stopping-body", bad))
-    bad = copy.deepcopy(total[2]); bad[4] = "x" * 513
+    bad = copy.deepcopy(total[2]); bad[3] = "x" * 513
     malformed.append(("overlong-identity", bad))
-    bad = copy.deepcopy(loops[2]); definition(bad, "control")[8][1][0][3][0][2][2][1][-3:-1] = [6, 5]
+    bad = copy.deepcopy(loops[2]); definition(bad, "control")[9][1][0][3][0][2][2][1][-3:-1] = [6, 5]
     malformed.append(("same-typed-capture-swap", bad))
     for label, bad in malformed:
         suite.case("refuse-" + label, lambda n=label, b=bad: suite.refuse_snapshot(n, b))
@@ -575,15 +644,8 @@ def main():
     parser.add_argument("--seed", type=int, default=73191)
     parser.add_argument("--report", type=Path, required=True)
     args = parser.parse_args()
-    if args.cases < 1:
-        parser.error("--cases must be positive")
     suite = Suite(args)
-    try:
-        run_cases(suite)
-    except (AssertionError, ValueError, OSError, subprocess.SubprocessError) as error:
-        suite.checks.append({"name": "setup-or-generation", "passed": False, "error": str(error)})
-        print(error, file=sys.stderr)
-    return suite.finish()
+    return suite.run(run_cases)
 
 
 if __name__ == "__main__":

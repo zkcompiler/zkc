@@ -50,7 +50,7 @@ def ty(value):
     if value == ["index"]:
         return ".index"
     tag, domain = record(value, 2)
-    if tag not in ("field", "vector"):
+    if tag not in ("field", "vector", "group", "service"):
         raise ValueError("unsupported type")
     return f".{tag} {text(domain)}"
 
@@ -61,6 +61,8 @@ def descriptor(value):
     tag, *args = value
     unary = {"field.add": "fieldAdd", "field.subtract": "fieldSubtract",
              "field.multiply": "fieldMultiply", "field.equal": "fieldEqual",
+             "group.identity": "groupIdentity", "group.add": "groupAdd",
+             "group.equal": "groupEqual",
              "bounded_at": "boundedAt", "call": "call", "apply": "apply", "guard": "guard"}
     nullary = {"bool.and": "booleanAnd", "bool.or": "booleanOr", "bool.xor": "booleanXor",
                "bool.equal": "booleanEqual", "bool.not_equal": "booleanNotEqual",
@@ -79,6 +81,16 @@ def descriptor(value):
     if tag == "select":
         record(args, 1)
         return f".select ({ty(args[0])})"
+    if tag == "restrict":
+        record(args, 1)
+        return f".restrict {seq(args[0], text)}"
+    if tag == "statement":
+        relation_name, selectors, acceptance = record(args, 3)
+        return f".statement {text(relation_name)} {seq(selectors, text)} {nat(acceptance)}"
+    if tag in ("exchange", "draw", "group.scale"):
+        record(args, 2)
+        name = {"exchange": "exchange", "draw": "draw", "group.scale": "groupScale"}[tag]
+        return "." + name + " " + " ".join(text(arg) for arg in args)
     if tag in ("field.constant", "local_call", "fold"):
         record(args, 3 if tag == "fold" else 2)
         name = {"field.constant": "fieldConstant", "local_call": "localCall", "fold": "fold"}[tag]
@@ -139,6 +151,23 @@ def domain(value):
     return f"⟨{text(name)}, {seq(inputs, ty)}, {operation}⟩"
 
 
+def protocol_interface(value):
+    if value == []:
+        return "none"
+    tag, roles, inputs, outputs = record(value, 4)
+    if tag != "protocol":
+        raise ValueError("invalid protocol interface")
+    return f"some ⟨{seq(roles, text)}, {seq(inputs, lambda x: seq(x, text))}, {seq(outputs, lambda x: seq(x, text))}⟩"
+
+
+def relation(value):
+    tag, name, visibility, kind, key, revision, inputs, outputs, purposes = record(value, 9)
+    if tag != "relation" or visibility not in ("public", "private"):
+        raise ValueError("invalid relation")
+    return (f"⟨{text(name)}, .{visibility}Def, {text(kind)}, {text(key)}, {text(revision)}, "
+            f"{seq(inputs, ty)}, {seq(outputs, ty)}, {seq(purposes, text)}⟩")
+
+
 def definition(value):
     if value[0] == "finite":
         _, name, visibility, inputs, outputs, domain_name, step, predicate = record(value, 8)
@@ -146,7 +175,7 @@ def definition(value):
             raise ValueError("invalid visibility")
         return (f".finite ⟨{text(name)}, .{visibility}Def, {seq(inputs, ty)}, {seq(outputs, ty)}, "
                 f"{text(domain_name)}, {text(step)}, {text(predicate)}⟩")
-    tag, name, kind, visibility, inputs, outputs, premises, origin, body = record(value, 9)
+    tag, name, kind, visibility, inputs, outputs, interface, premises, origin, body = record(value, 10)
     if tag != "function" or kind not in ("protocol", "math", "local") or visibility not in ("public", "private"):
         raise ValueError("invalid function header")
     if origin == []:
@@ -158,11 +187,11 @@ def definition(value):
             return f"({text(key)}, {text(value)})"
         origin_text = f"some ({text(origin_name)}, {seq(bindings, binding)})"
     return (f".function ⟨{text(name)}, .{kind}, .{visibility}Def, {seq(inputs, ty)}, "
-            f"{seq(outputs, ty)}, {seq(premises, bound)}, {origin_text}, ({block(body)})⟩")
+            f"{seq(outputs, ty)}, {protocol_interface(interface)}, {seq(premises, bound)}, {origin_text}, ({block(body)})⟩")
 
 
 def render(data, namespace):
-    version, stage, source, entry, role, domains, definitions = record(data, 7)
+    version, stage, source, entry, domains, relations, definitions = record(data, 7)
     if version != "zkc.structured-source/0" or stage != "original":
         raise ValueError("wrong version or stage")
     if not re.fullmatch(r"(?:[A-Za-z][A-Za-z0-9_]*\.)*[A-Za-z][A-Za-z0-9_]*", namespace):
@@ -183,8 +212,8 @@ open Zkc.Source.Structured
 def snapshot : Snapshot where
   source := {text(source)}
   entry := {text(entry)}
-  role := {text(role)}
   domains := {seq(domains, domain)}
+  relations := {seq(relations, relation)}
   definitions := {seq(definitions, definition)}
 
 end {namespace}
