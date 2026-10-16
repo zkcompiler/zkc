@@ -89,20 +89,13 @@ def execute_job(job, directory, plan, timeout):
                 [i % count for i in range((plan['warmups']+plan['samples'])*plan['iterations'])],
                 'worker changed the input schedule')
     if job.backend.get('kind') == 'host':
-        previous_hits = 0
         limit = job.backend.get('preparation_entries')
         limits = report['lifecycle']['preparation_limits']
         limit = limits['default_entries'] if limit is None else limit
-        expected = (limit, limits['default_bytes']) if job.backend['preparation'] else (0, 0)
+        byte_limit = job.backend.get('preparation_bytes')
+        byte_limit = limits['default_bytes'] if byte_limit is None else byte_limit
+        expected = (limit, byte_limit) if job.backend['preparation'] else (0, 0)
         require((limits['entries'], limits['bytes']) == expected, 'preparation limits differ from the request')
-        for call in report['lifecycle']['calls']:
-            stats = call['preparation']
-            require(stats['hits'] >= previous_hits, 'preparation hits moved backwards')
-            previous_hits = stats['hits']
-            require(stats['entries'] <= limits['entries'] and stats['retained_bytes'] <= limits['bytes'],
-                    'preparation exceeded its resource contract')
-            if not job.backend['preparation']:
-                require(all(value == 0 for value in stats.values()), 'disabled preparation retained state')
     if job.operation == 'run':
         require(report['proof_bytes'] == 0, 'run worker reported a proof')
     elif job.operation == 'prove' or job.backend.get('kind') != 'host' or len(job.backend['inputs']) == 1:

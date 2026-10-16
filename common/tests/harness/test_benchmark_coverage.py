@@ -125,6 +125,49 @@ def test_lifecycle_evidence_is_checked(modules, fault):
         modules['results'].validate_worker(worker, {'warmups': 2, 'samples': 2, 'iterations': 1}, 'admitted_entry_call')
 
 
+@pytest.mark.parametrize('fault', ['entries', 'bytes', 'hits', 'zero_entries', 'zero_bytes'])
+def test_saved_worker_preparation_must_respect_its_contract(modules, fault):
+    worker = lifecycle_worker()
+    limits = worker['lifecycle']['preparation_limits']
+    stats = worker['lifecycle']['calls'][0]['preparation']
+    if fault == 'entries': stats['entries'] = limits['entries'] + 1
+    elif fault == 'bytes': stats['retained_bytes'] = limits['bytes'] + 1
+    elif fault == 'hits': stats['hits'] = 1  # The next call cannot have fewer hits.
+    else:
+        limits[fault.removeprefix('zero_')] = 0
+        for call in worker['lifecycle']['calls']:
+            call['preparation']['hits'] = 1
+    with pytest.raises(modules['io'].MeasurementError):
+        modules['results'].validate_worker(worker, {'warmups': 2, 'samples': 2, 'iterations': 1}, 'admitted_entry_call')
+
+
+@pytest.mark.parametrize('entries,capacity,enabled', [
+    (None, None, True), (512, None, True), (None, 64 << 20, True),
+    (512, 64 << 20, True), (0, 0, True), (512, 64 << 20, False),
+])
+@pytest.mark.parametrize('changed_bound', [None, 'entries', 'bytes'])
+def test_worker_must_honor_both_requested_preparation_bounds(modules, tmp_path, entries, capacity, enabled, changed_bound):
+    response = lifecycle_worker()
+    limits = response['lifecycle']['preparation_limits']
+    limits['entries'] = (limits['default_entries'] if entries is None else entries) if enabled else 0
+    limits['bytes'] = (limits['default_bytes'] if capacity is None else capacity) if enabled else 0
+    if changed_bound:
+        limits[changed_bound] += 1
+    executable = tmp_path/'worker'
+    executable.write_text(f'#!{sys.executable}\nimport json\nprint(json.dumps({response!r}))\n')
+    executable.chmod(0o755)
+    backend = {'kind': 'host', 'inputs': [{}, {}], 'preparation': enabled,
+               'preparation_entries': entries, 'preparation_bytes': capacity}
+    job = modules['runner'].Job('case', 'zkc', 'verify', executable, backend,
+                               tmp_path/'proof', 'admitted_entry_call')
+    plan = {'warmups': 2, 'samples': 2, 'iterations': 1}
+    if changed_bound:
+        with pytest.raises(modules['io'].MeasurementError, match='preparation limits differ'):
+            modules['runner'].execute_job(job, tmp_path/'run', plan, 5)
+    else:
+        modules['runner'].execute_job(job, tmp_path/'run', plan, 5)
+
+
 def test_changing_statements_keep_individual_first_visits_and_distributions(modules):
     job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call'}
     manifest = {'format': 'zkc.benchmark/0', 'observation': 'timing', 'status': 'passed', 'processes': 2,
@@ -221,14 +264,15 @@ def test_monero_response_control_refuses_framed_or_noncanonical_layout(modules):
             mutate(invalid)
 
 
-def test_comparison_rejects_changed_native_preparation_defaults(modules):
+@pytest.mark.parametrize('bound', ['entries', 'bytes', 'default_entries', 'default_bytes'])
+def test_comparison_rejects_changed_preparation_bounds(modules, bound):
     from copy import deepcopy
     job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call'}
     baseline = {'format': 'zkc.benchmark/0', 'observation': 'timing', 'status': 'passed', 'processes': 1,
                 'plan': {'warmups': 2, 'samples': 2, 'iterations': 1}, 'matrix': [job], 'host': {}, 'contracts': {},
                 'results': [job | {'status': 'passed', 'repetition': 0, 'worker': lifecycle_worker()}]}
     changed = deepcopy(baseline)
-    changed['results'][0]['worker']['lifecycle']['preparation_limits']['default_bytes'] *= 2
+    changed['results'][0]['worker']['lifecycle']['preparation_limits'][bound] *= 2
     with pytest.raises(modules['io'].MeasurementError, match='preparation limits differ'):
         modules['results'].compare(baseline, changed)
 

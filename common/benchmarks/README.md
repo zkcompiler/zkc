@@ -118,9 +118,13 @@ verification. Every generated proof is checked against its own statement.
 
 `--preparation enabled|disabled|both` selects matched source-proof jobs. Preparation
 costs stay inside SDK calls; entries, retained bytes and hits are observed after
-each call. `--preparation-entries N` lowers the default 128-entry bound for a
-saturation control; the default byte bound and execution capacities stay unchanged.
-It is recorded in the contract, not silently applied to other runs. Workers report the native default and the bounds passed to the Entry. Effective
+each call. `--preparation-entries N` and `--preparation-bytes N` independently
+select the store's entry and byte bounds. Omitting either uses its native default
+(currently 128 entries and 8 MiB). Zero disables retention. These controls permit
+both saturation and larger working-set experiments without changing execution
+capacities or native defaults. Both limits are recorded in the contract; compare
+capacity experiments separately from otherwise matched implementation timings.
+Workers report the native default and the bounds passed to the Entry. Effective
 statistics must respect those bounds; disabled preparation must retain no state.
 Reports include final entries, retained bytes and hits. A bounded store need not
 improve a workload, and hits alone do not establish a timing benefit. The machine fixtures support fixed inputs
