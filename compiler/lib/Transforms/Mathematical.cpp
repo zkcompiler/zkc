@@ -618,8 +618,14 @@ public:
         names.insert(symbol.getValue());
       if ((hasFinite && isa<data::DomainOp, func::FuncOp>(op)) ||
           isa<zkc::relation::DeclareOp, zkc::local::FuncOp,
-              zkc::local::OperationBindingOp>(op))
-        builder.clone(op);
+              zkc::local::OperationBindingOp>(op)) {
+        auto *copy = builder.clone(op);
+        // Participant projection does not retain the original Math closure or
+        // transport declaration contracts. Its statement manifest keeps only
+        // the relation identity and ABI required by executable admission.
+        if (isa<relation::DeclareOp>(copy))
+          copy->removeAttr("formula");
+      }
     }
     SmallVector<Attribute> interfaces;
     for (auto program :
@@ -738,7 +744,8 @@ Error checkFormulaDefinitions(ModuleOp original, uint64_t &remaining) {
     auto declaration = dyn_cast<relation::DeclareOp>(op);
     if (!declaration || declaration.getKind() != "zkc.language.formula/0")
       continue;
-    auto name = relation::formulaSymbol(declaration.getKey());
+    auto reference = declaration.getFormulaAttr();
+    auto name = reference ? reference.getValue().str() : std::string();
     auto helper = table.lookup<func::FuncOp>(name);
     if (declaration.getKey() != declaration.getSymName() || !helper ||
         helper.isExternal() ||
@@ -770,6 +777,9 @@ Error checkFormulaDefinitions(ModuleOp original, uint64_t &remaining) {
       return error("source.limit", "formula symbol use work limit exceeded");
     --remaining;
     if (roots.contains(use.getSymbolRef().getRootReference())) {
+      if (auto declaration = dyn_cast<relation::DeclareOp>(use.getUser());
+          declaration && declaration.getFormulaAttr() == use.getSymbolRef())
+        continue;
       use.getUser()->emitError(
           "specification predicate has executable references");
       return error("target.admission",

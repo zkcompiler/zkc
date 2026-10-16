@@ -1,0 +1,27 @@
+module sample;
+
+relation Equal(statement pair:(bool,bool), witness value:bool) {
+  return pair.0 == value && pair.1 == value;
+}
+
+protocol Step roles(A,B)(pair:(bool,bool)@A,value:bool@B)
+  ->(pair:(bool,bool)@A,value:bool@B,ok:bool@B)
+  spec {
+    target proof=Equal(in.pair,in.value) accept out.ok;
+    input premise=Equal(in.pair,in.value);
+    output result=Equal(out.pair,out.value);
+    continuation reduction=Equal(in.pair,in.value)
+      residual Equal(out.pair,out.value) accept out.ok;
+  }
+{
+  return(pair=pair,value=value,ok=true);
+}
+
+protocol Run roles(P,V)(pair:(bool,bool)@P,value:bool@V)
+  ->(pair:(bool,bool)@P,value:bool@V,ok:bool@V)
+{
+  let (nextPair,nextValue,accepted)=Step roles(P,V)(pair,value);
+  return(pair=nextPair,value=nextValue,ok=accepted);
+}
+
+run Demo=Run;

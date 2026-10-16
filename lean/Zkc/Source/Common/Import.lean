@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Source.Common.Vocabulary
-public import Zkc.Source.Decoding
+public import Zkc.Source.ContextDecoding
 
 @[expose] public section
 
@@ -74,8 +74,11 @@ def Snapshot.shapeValid (snapshot : Snapshot) : Bool :=
   let sites := snapshot.instructions.filterMap Instruction.site
   sites.length = sites.eraseDups.length
 
-/-- A checked program retains its original declaration and exact actual body.
-The native source hash is evidence metadata, never a proof premise by itself. -/
+/-- The carrier returned by `Snapshot.check`, retaining declaration, body and
+scopes. Constructing this structure alone does not prove admission. Certificates
+bind it to successful checking through `Zkc.Verification.Imported` or an explicit
+checking equation. The native source hash is evidence metadata, never a proof
+premise by itself. -/
 structure Imported where
   snapshot : Snapshot
   program : Program Nat language services snapshot.inputs snapshot.result
@@ -119,8 +122,8 @@ theorem inputScopes_get (snapshot : Snapshot)
 def Imported.denote (imported : Imported) (meaning : Mathematical.Meaning language)
     (condition : meaning.Value .boolean → Bool) (self : Nat)
     (inputs : Values (fun ty => Option (meaning.Value ty)) imported.snapshot.inputs) :
-    PIR.Proc (interface Nat language services meaning.Value) (Option (meaning.Value imported.snapshot.result)) :=
+    PIR.Proc (Participant.interface Nat Ty services meaning.Value) (Option (meaning.Value imported.snapshot.result)) :=
   (imported.program.denote meaning condition self inputs.get).bind fun value =>
-    .done (if self ∈ imported.snapshot.outputRoles then value else none)
+    .done (Participant.restrict (decide (self ∈ imported.snapshot.outputRoles)) value)
 
 end Zkc.Source.Common.Native

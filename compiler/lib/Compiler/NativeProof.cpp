@@ -14,6 +14,7 @@
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/Construction.h"
+#include "zkc/Dialect/Protocol/Contracts.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "zkc/Support/Json.h"
@@ -417,9 +418,18 @@ admit(pir::MathematicalOp source, const NativeProofPolicy &policy,
             statement.getInputs().size() != declaration.getPurposes().size())
           return error("native-proof-statement");
         // This two-role deployment selects one validator observation. A
-        // retained relation must designate that same original result.
+        // retained selection must designate that same role-local result.
         if (statement.getAcceptance() != policy.acceptance)
           return error("native-proof-statement-acceptance");
+        if (statement.getTargetAttr()) {
+          auto target = pir::getStatementTarget(statement);
+          auto decision = target ? dyn_cast<ArrayAttr>(target[4]) : ArrayAttr();
+          auto role = decision && decision.size() == 3
+                          ? dyn_cast<StringAttr>(decision[2])
+                          : StringAttr();
+          if (!role || role.getValue() != policy.validator)
+            return error("native-proof-statement-acceptance");
+        }
         for (auto [input, purpose] :
              zip(statement.getInputs(), declaration.getPurposes())) {
           // Formation binds statements to entry arguments. Availability at the

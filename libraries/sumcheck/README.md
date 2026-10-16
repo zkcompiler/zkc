@@ -49,3 +49,62 @@ See the [composed client](../../examples/projects/sumcheck/composed/README.md)
 for two independently discharged reductions and the public-table clients for
 [multilinear](../../examples/projects/sumcheck/README.md) and
 [expression](../../examples/projects/sumcheck/product/README.md) Entries.
+
+## Source relation contracts
+
+The pair-valued `Sumcheck<F, Max>` checks a public table indexed by Boolean vectors,
+using MSB-first variable order. Its `public_sum` target selects V's `values`, V's initial `claim`,
+and V's returned `accepted` Boolean. `Sum<F>` is a total mathematical fold of the
+selected vector. It does not check the vector's shape; decoding and dimension
+are separate obligations of a property consumer and of the executable checker.
+
+`Reduce<F, Max>` returns V's `Evaluation { point, value }` and P's residual table.
+Its `initial_sum` input clause uses `TableSum<F>` over the original table entries.
+That clause is an authored input proposition, not a runtime guard or a claim
+that an adversarial initial statement is true. Purpose `parameter` identifies a
+mathematical argument; it does not assign authority, secrecy, or quantifiers.
+
+A residual security request must fix one original table before interaction and
+reuse it in both the initial sum and the residual predicate:
+
+```
+length(pointV) = rounds
+sum over remaining Boolean variables of originalTable(pointV, suffix) = valueV
+```
+
+For the public wrapper, this fixed table must decode V's input vector. For a
+reduction experiment it may be a typed external parameter; any agreement with
+P's runtime input is an explicit additional premise. A separate existential
+table for each clause, or substitution of P's returned residual for the original
+table, changes the property and can make it vacuous.
+
+The source currently has no formula-backed residual continuation. Dynamic
+prefix restriction uses Local operations; the total mathematical layer cannot
+call those operations. A monomorphic opaque relation can express a continuation
+clause, but the current opaque declaration profile cannot express the generic
+field/table signature of this library.
+The Lean source-contract client therefore exposes an explicit external residual
+request with checked output selectors. A caller needs a terminal discharge
+against that same fixed table before claiming acceptance. This limitation is
+not hidden behind a placeholder source relation or a new compiler primitive.
+
+The formal source adapters concern retained concrete instantiations and retain
+their actual count maxima, malformed-input behavior, stops, and uniform-service
+assumptions. The total source fold's structured interpretation also retains
+finite-domain capacity admission. These interfaces establish no native compiler,
+provider, commitment-opening, or Fiat–Shamir correctness by themselves.
+
+See the [checked contract bindings](../../lean/ZkcExamples/Structured/SumcheckContractBindings.lean),
+[fixed-table call instantiation](../../lean/ZkcExamples/Structured/SumcheckContractInstantiation.lean),
+[complete clause interpretations](../../lean/ZkcExamples/Structured/SumcheckContractInterpretations.lean),
+and [optional source bounds](../../lean/integrations/arklib/ZkcSecurity/Examples/CausalSumcheck/SourceContracts.lean).
+They retain source-formula adequacy and fixed-table assumptions separately from
+probabilistic acceptance and residual truth.
+The public caller's proof uses the child's residual bound through a generic
+probabilistic bind rule. It checks the actual terminal on arbitrary returned
+point/value pairs, so the caller theorem also applies to a replacement child
+with the same returned ABI and residual guarantee. The child's implementation
+and its own bound are proved separately.
+
+The expression-valued variant in `sumcheck::expression` has its existing arena
+semantics and is outside these pair-valued source-contract adapters.

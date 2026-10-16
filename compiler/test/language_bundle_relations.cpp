@@ -433,18 +433,26 @@ int main() {
                       "source.interface", "asset ABI");
     // The optional-table presence formal cannot become an index. The native
     // statement binds the protocol's Boolean input to that formal, so the
-    // retyped declaration is readable only without the statement and its
-    // target selection; that control is admitted first.
+    // retyped declaration is readable only without the statement and the
+    // retained contract that binds the same Boolean input. Remove both to
+    // isolate independent asset-ABI checking; admit that control first.
     auto detached = original.bytes().str();
     auto statement = detached.find("\"protocol.statement\"");
     require(statement != std::string::npos, "native statement missing");
     auto line = detached.rfind('\n', statement);
     detached.erase(line, detached.find('\n', statement) - line);
+    auto contracts = detached.find("contracts = [");
+    require(contracts != std::string::npos, "native contracts missing");
+    auto contractsEnd = detached.find("], function_type", contracts);
+    require(contractsEnd != std::string::npos, "native contract end missing");
+    detached.erase(contracts, contractsEnd + 3 - contracts);
     auto untargeted = [&](StringRef native,
                           function_ref<void(json::Object &)> change) {
       return mutate([&](json::Object &root) {
         root["original"] = digest(native);
         (*root.getObject("job"))["target"] = nullptr;
+        for (auto &protocol : *root.getArray("protocols"))
+          (*protocol.getAsObject())["clauses"] = json::Array{};
         change(root);
       });
     };

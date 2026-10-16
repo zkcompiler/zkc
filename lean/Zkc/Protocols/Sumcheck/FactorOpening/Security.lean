@@ -36,7 +36,7 @@ def received (prover : Strategy F) (first second : F) (position : Nat) : F :=
   else Common.received prover.rounds first position
 
 def transcriptHandler (prover : Strategy F) (first second : F) :
-    PIR.Handler (actions (F := F)) Nat (Action Nat language services (ScalarValue F F))
+    PIR.Handler (actions (F := F)) Nat (Participant.Action Nat Ty services (ScalarValue F F))
   | action@(.send ..), position => ⟨.returned (), position + 1, [action]⟩
   | action@(.query ..), position =>
       ⟨.returned (if position = 3 then first else second), position + 1, [action]⟩

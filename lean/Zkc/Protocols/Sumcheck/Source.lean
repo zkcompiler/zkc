@@ -129,4 +129,19 @@ theorem program_denote (count : Nat) (env : Environment (Value F n) [.accumulato
   rw [repeat_rounds]
   rfl
 
+/-- The complete verifier reference in the canonical multi-result carrier.
+The original polynomial is an explicit capture, retained through every round. -/
+def structuredProgram (count : Nat) :
+    Region (scalarDialect language) [.accumulator, .polynomial] [.boolean] :=
+  (program count).toRegion
+
+/-- The bridge includes the terminal polynomial check and arbitrary message replies. -/
+theorem structuredProgram_denote (count : Nat)
+    (env : Environment (Value F n) [.accumulator, .polynomial]) :
+    (structuredProgram count).denote meaning.regionMeaning env =
+      (rounds count (env .here)).bind (fun accumulator =>
+        .done (Values.singleton (terminal (env (.there .here)) accumulator))) := by
+  rw [structuredProgram, Program.denote_toRegion, program_denote, Proc.bind_assoc]
+  rfl
+
 end Zkc.Protocols.Sumcheck.Source

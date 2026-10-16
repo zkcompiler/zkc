@@ -84,6 +84,42 @@ def execute(scope, args):
              "--reference", compiler / "test/zkc-common_reference-test",
              "--lean", ROOT / "lean/.lake/build/bin/common-source", "--cases", "80",
              "--report", output / "differential.json"])
+        run([sys.executable, ROOT / "lean/bridges/structured/check.py",
+             "--compiler", compiler / "zkc-compile",
+             "--reference", compiler / "test/zkc-structured_reference-test",
+             "--lean", ROOT / "lean/.lake/build/bin/structured-source",
+             "--report", output / "structured/report.json"])
+        run([sys.executable, ROOT / "lean/bridges/structured/open_protocol.py",
+             "--compiler", compiler / "zkc-compile",
+             "--reference", compiler / "test/zkc-structured_reference-test",
+             "--lean", ROOT / "lean/.lake/build/bin/structured-source",
+             "--report", output / "structured-open/report.json"])
+        run([sys.executable, ROOT / "lean/bridges/structured/primitives.py",
+             "--compiler", compiler / "zkc-compile",
+             "--reference", compiler / "test/zkc-structured_reference-test",
+             "--lean", ROOT / "lean/.lake/build/bin/structured-source",
+             "--report", output / "structured-primitives/report.json"])
+        run([sys.executable, ROOT / "lean/bridges/structured/maps.py",
+             "--compiler", compiler / "zkc-compile",
+             "--reference", compiler / "test/zkc-structured_reference-test",
+             "--lean", ROOT / "lean/.lake/build/bin/structured-source",
+             "--report", output / "structured-maps/report.json"])
+        run([sys.executable, ROOT / "lean/bridges/structured/applications.py",
+             "--compiler", compiler / "zkc-compile",
+             "--reference", compiler / "test/zkc-structured_reference-test",
+             "--lean", ROOT / "lean/.lake/build/bin/structured-source",
+             "--report", output / "structured-applications/report.json"])
+        run([sys.executable, ROOT / "lean/bridges/structured/repeats.py",
+             "--compiler", compiler / "zkc-compile",
+             "--reference", compiler / "test/zkc-structured_reference-test",
+             "--lean", ROOT / "lean/.lake/build/bin/structured-source",
+             "--report", output / "structured-repeats/report.json"])
+        run([sys.executable, ROOT / "lean/bridges/structured/inlining.py",
+             "--compiler", compiler / "zkc-compile",
+             "--optimizer", compiler / "zkc-opt",
+             "--reference", compiler / "test/zkc-structured_reference-test",
+             "--lean", ROOT / "lean/.lake/build/bin/structured-source",
+             "--report", output / "structured-inlining/report.json"])
         run([sys.executable, bridge / "verify_tests.py", "--compiler", compiler / "zkc-compile",
              "--output", output / "requests"])
         run([sys.executable, bridge / "intent_tests.py", "--compiler", compiler / "zkc-compile",

@@ -14,7 +14,7 @@ namespace ZkcExamples.NativePrograms.Variants.SumcheckWrongResidualData
 open Zkc.Source.Common.Native
 
 def snapshot : Snapshot where
-  source := "sha256:30c790c6b4d6164ef72e6614018054e0a0a0c704f35fa0484aca8211444f63be"
+  source := "sha256:c92292b9578f7c21b521a52164cd08e36f49131798c78d20249ae7ef1ea9502d"
   symbol := "s14h73756d636865636b5f666f726d7321h57726f6e67526573696475616c50726f746f636f6c"
   roles := ["role00000000", "role00000001"]
   inputs := [.field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .service "random.bls12-381.fr/0"]

@@ -14,7 +14,7 @@ namespace ZkcExamples.NativePrograms.Variants.SchnorrReorderedData
 open Zkc.Source.Common.Native
 
 def snapshot : Snapshot where
-  source := "sha256:bcb11d4df27aa45aebf31de3919e916ecab8a70f47fde2dce825fa579d97913c"
+  source := "sha256:5d2dce9fdda6be74e4b3ae36f81096350a497a4ca7430af239753c5fc22af92e"
   symbol := "s13h7363686e6f72725f666f726d7317h52656f72646572656450726f746f636f6c"
   roles := ["role00000000", "role00000001"]
   inputs := [.group "bls12-381.g1", .group "bls12-381.g1", .field "bls12-381.fr", .service "random.bls12-381.fr/0", .service "random.bls12-381.fr/0"]

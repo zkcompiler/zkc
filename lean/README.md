@@ -1,25 +1,42 @@
 # Protocol verification in Lean
 
-This package proves claims about **actual imported scalar PIR programs**. The
-compiler exports a retained program; Lean checks its typed admission and proves
-its open-process contract. Separate consumers derive explicitly selected
-properties, including ArkLib interactive Sumcheck soundness and VCVio Schnorr
-honest-verifier simulation. A named DSL verification specification can also
-connect an authored `spec` target to its imported mathematical relation body.
+This package holds independent Lean models of zkc programs and proves claims
+about the programs the compiler actually exports. Two imports connect it to the
+compiler: the scalar common-source profile, and the structured profile, which
+admits original protocol-stage PIR with shared helpers, participants, services,
+protocol applications and repeats. Lean checks each import's typed admission
+and proves its open-process contract. Optional packages then apply ArkLib and
+VCVio security theorems to the imported subjects.
 
-The [formal reference](docs/README.md) defines the models. [Support](docs/support.md)
-states exact claims and assumptions. Native compilation, arithmetic, providers
-and the full lowering pipeline are not universally verified by this package.
-The [native bridge](bridges/common/README.md) tests the selected boundary with
-independent execution and negative controls.
+The [formal reference](docs/README.md) defines the models, and
+[support](docs/support.md) states the exact scope and assumptions of each claim.
+Native compilation below the original stage, providers, production arithmetic
+and Fiat–Shamir are outside these claims. The [common](bridges/common/README.md)
+and [structured](bridges/structured/README.md) bridges test the native boundary
+with independent execution and negative controls.
+
+## What is proved
+
+| Subject | Result | Owner |
+|---|---|---|
+| Scalar imports | Admission and open-process contracts of exported scalar programs; Schnorr completeness, special soundness and rejection; the two-round degree-two Sumcheck bound `4 / \|F\|` | [Scalar import](docs/spec/common-source.md), [support](docs/support.md) |
+| Structured import | Independent admission, declaration linking, checked primitives, maps and realizations, protocol applications and repeats | [Structured source](docs/spec/structured-source.md) |
+| Interactive Schnorr | Verifier contracts over the actual export; an honest prover derived from checked sends; VCVio Sigma completeness, special soundness and fresh-challenge simulation | [Schnorr subject](docs/spec/structured-source.md#actual-interactive-schnorr-subject), [security integration](integrations/arklib/README.md) |
+| Multilinear Sumcheck | Table laws for any round count; ArkLib `n / \|F\|` complete and `k / \|F\|` residual bounds | [Mathematics](docs/spec/multilinear-sumcheck.md), [security](docs/spec/multilinear-sumcheck-security.md) |
+| Imported Sumcheck and Reduce | Plain verifier equations; `n / \|F\|` bounds on the actual admitted roots under the uniform query service | [Verifier equations](docs/spec/structured-source.md#source-only-sumcheck-verifier), [uniform queries](docs/spec/uniform-query-service.md#actual-imported-roots) |
+| Authored DSL target | The imported Schnorr relation denotes discrete logarithm; two accepting transcripts yield a witness for it | [Verification](docs/spec/verification.md) |
+| Clean AIR | A flat AIR export preserves its constraints and selected specification | [Clean integration](integrations/clean/README.md) |
 
 ## Architecture
 
-- `Zkc`: typed mathematics and role-local PIR semantics, exact refinement,
+- `Zkc`: typed mathematics and role-local PIR semantics, a shared multi-result
+  [structured carrier](docs/design/structured-computations.md), exact refinement,
   specification certificates, protocol contracts and finite security models.
 - `ZkcExamples`: actual imported programs, equivalent source forms, composed
-  residual/opening clients and a downstream custom property.
-- `ZkcTools`: executable scalar reference, header parser and declaration audit.
+  residual/opening clients, effectful structured endpoint examples and a
+  downstream custom property.
+- `ZkcTools`: executable scalar and structured references, header parser and
+  declaration audit.
 - [Security integration](integrations/arklib/README.md): optional ArkLib/VCVio
   consumers. The core does not import these libraries.
 - [Clean integration](integrations/clean/README.md): isolated finite AIR export
@@ -38,6 +55,8 @@ Nix and the `just fetch-lean`, `just test-lean`, `just test-lean-integration`, a
 `just test-lean-native` additionally checks the native import and authored
 specification boundary, including differential execution and negative controls.
 
+### Verify an authored property
+
 From the repository root, after preparing the native compiler and Lean packages:
 
 ```sh
@@ -55,6 +74,8 @@ An unsupported contract or an unproved correspondence remains `unresolved`.
 The [verification specification](docs/spec/verification.md) explains author input,
 proof generation, checked subjects and extension points.
 
+### Reproduce from source
+
 For an isolated build from exact dependency source checkouts, with no prior
 project or dependency Lean objects:
 
@@ -70,3 +91,10 @@ python3 reproduce.py --with-arklib --with-clean \
 Use a fresh output directory. The reproducer records source drift, toolchains,
 builds, audits, standalone consumers and the Clean fixture comparison. Omit cache
 arguments to fetch exact sources. The installed Lean/Std toolchain is trusted.
+
+## Further reading
+
+- Bridges: [common](bridges/common/README.md), [structured](bridges/structured/README.md)
+  and [participant comparison](bridges/structured/participant.md).
+- [Dependencies](docs/dependencies.md) and the
+  [design rationale](docs/design/protocol-verification.md).

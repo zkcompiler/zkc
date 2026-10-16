@@ -1,0 +1,64 @@
+module primitive_examples;
+use zkc::vector::{Vector, empty, append, length, sum, equal};
+use zkc::indices::{divide, remainder};
+use zkc::multilinear::{Table, has_shape, table, halves};
+domain Fr = field("bls12-381.fr");
+
+protocol Shape roles(P)
+    (entries: Vector<Fr> @P, dimensions: index @P, columns: index @P)
+    -> (valid: bool @P) {
+  let valid @P = has_shape(entries, dimensions, columns);
+  return (valid = valid);
+}
+
+protocol MakeTable roles(P)
+    (entries: Vector<Fr> @P, dimensions: index @P, columns: index @P)
+    -> (checked: Table<Fr> @P) {
+  let checked @P = table(entries, dimensions, columns);
+  return (checked = checked);
+}
+
+protocol TableHalves roles(P)
+    (entries: Vector<Fr> @P, dimensions: index @P, columns: index @P)
+    -> (low: Vector<Fr> @P, high: Vector<Fr> @P) {
+  let checked @P = table(entries, dimensions, columns);
+  let parts @P = halves(checked);
+  return (low = parts.0, high = parts.1);
+}
+
+fn append_summary(values: Vector<Fr>, value: Fr, divisor: index)
+    -> (Vector<Fr>, index, index, index, Fr, bool, bool, Vector<Fr>) {
+  let previous = length(values);
+  let next = previous + 1;
+  let extended = append(values, value);
+  let quotient = divide(next, divisor);
+  let rest = remainder(next, divisor);
+  let recovered = next - 1;
+  let total = sum(extended);
+  let unchanged = equal(values, extended);
+  let single = kernel<Fr>("field.equal", total, value);
+  let initial = empty<Fr>();
+  return (extended, quotient, rest, recovered, total, unchanged, single, initial);
+}
+
+protocol Sequence roles(P)
+    (values: Vector<Fr> @P, value: Fr @P, divisor: index @P)
+    -> (extended: Vector<Fr> @P, quotient: index @P, rest: index @P,
+        recovered: index @P, total: Fr @P, unchanged: bool @P,
+        single: bool @P, initial: Vector<Fr> @P) {
+  let result @P = append_summary(values, value, divisor);
+  return (extended = result.0, quotient = result.1, rest = result.2,
+          recovered = result.3, total = result.4, unchanged = result.5,
+          single = result.6, initial = result.7);
+}
+
+protocol PureIndex roles(P, V) (position: index @P) -> (zero: bool @P) {
+  let zero = position == index<0>();
+  return (zero = zero);
+}
+
+run ShapeEntry = Shape;
+run TableEntry = MakeTable;
+run HalvesEntry = TableHalves;
+run SequenceEntry = Sequence;
+run PureIndexEntry = PureIndex;

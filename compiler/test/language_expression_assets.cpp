@@ -462,6 +462,8 @@ run Demo = Count<Recurrence>;
            {"zkc::curve", file(ZKC_MATH_LIBRARIES "/curve.zkc"), "curve.zkc"},
            {"zkc::finite", file(ZKC_MATH_LIBRARIES "/finite.zkc"),
             "finite.zkc"},
+           {"zkc::finite_math", file(ZKC_MATH_LIBRARIES "/finite_math.zkc"),
+            "finite_math.zkc"},
            {"zkc::sequence", file(ZKC_MATH_LIBRARIES "/sequence.zkc"),
             "sequence.zkc"},
            {"zkc::multilinear", file(ZKC_MATH_LIBRARIES "/multilinear.zkc"),

@@ -111,12 +111,12 @@ Boolean result proves public transcript schedule safety.
 
 ## Formal interpretation and assurance boundary
 
-`Zkc.Source.FiniteControl` treats admitted runtime bounds as a selection from a
-family of existing finite `Region.iterate` terms. It proves count/zero/index
-properties and reuses the selected branch/iteration denotations. Executable
-adapters check bounds before instantiation. No unbounded process constructor is
-added. Structural laws for a fixed typed region do not by themselves prove raw
-frontend elaboration, candidate decoding or native execution correct.
+`Zkc.Source.Region` provides typed operations with explicit callback inputs and
+ordered result lists. Selected operation meanings interpret branches and finite
+iteration; `Zkc.Source.Finite` models ordered domain admission and effectful
+folds. Their laws preserve stopping behavior and interaction order within the
+independent Lean model. They do not establish that native bounds, captures,
+resource policies or executable control implement those meanings.
 
 Independent Lean models and model-specific tools interpret their own region and
 carrier contracts. Their correspondence results are separate from the current

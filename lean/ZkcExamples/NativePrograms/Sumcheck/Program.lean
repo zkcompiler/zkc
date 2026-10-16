@@ -3,6 +3,7 @@ module
 public import ZkcExamples.NativePrograms.SumcheckData
 
 public import Zkc.Protocols.Sumcheck.Common.Program
+public import Mathlib.Tactic.FailIfNoProgress
 
 @[expose] public section
 
@@ -63,7 +64,13 @@ theorem verifier_correspondence (coefficients : Coefficients F) (claim : F) (ser
   change (imported.program.denote (scalarMeaning F F) id 1
     (verifierInputs coefficients claim service).get).bind PIR.Proc.done = _
   rw [PIR.Proc.bind_done]
-  rfl
+  repeat' first
+    | (apply PIR.Proc.call_congr; intro reply)
+    | (change (if _ then _ else _ : PIR.Proc _ _).bind _ = _
+       rw [PIR.Proc.bind_ite]
+       simp only [↓reduceIte])
+    | rfl
+    | fail_if_no_progress congr 1
 
 /-- This certificate is independent of the later choice of property and game. -/
 theorem contract : Zkc.Protocols.Sumcheck.Common.VerifierContract wiring (verifier (F := F)) :=

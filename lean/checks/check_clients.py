@@ -23,13 +23,18 @@ def check(root, output, with_arklib=False, lake="lake"):
     lake = str(Path(lake).absolute())
     output.mkdir(parents=True, exist_ok=False)
     results = {}
-    for kind in (['main', 'arklib'] if with_arklib else ['main']):
-        upstream = root if kind == 'main' else root / 'integrations/arklib'
-        dependency = 'zkc' if kind == 'main' else 'zkc_security'
+    clients = [('main', 'Main.lean', root, 'zkc')]
+    if with_arklib:
+        integration = root / 'integrations/arklib'
+        clients.extend([
+            ('arklib', 'ArkLib.lean', integration, 'zkc_security'),
+            ('uniform', 'UniformComposition.lean', integration, 'zkc_security'),
+        ])
+    for kind, filename, upstream, dependency in clients:
         client = output / kind
         client.mkdir()
         shutil.copy2(root / 'lean-toolchain', client / 'lean-toolchain')
-        source = root / 'clients' / ('Main.lean' if kind == 'main' else 'ArkLib.lean')
+        source = root / 'clients' / filename
         source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
         compiled_source = client / 'Client.lean'
         shutil.copy2(source, compiled_source)

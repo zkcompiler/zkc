@@ -5,10 +5,12 @@ public import Zkc.Semantics.Interaction
 
 @[expose] public section
 
-/-! A finite, intrinsically typed source language.
+/-! The single-result structured reference profile.
 
 Operations supply signatures and meanings. Binding and structured control are
 independent of protocol names, field choices and native storage representations.
+New compiler-structure admission and transformations use `Source.Region`.
+`ScalarRegion` proves a bridge from this independent reference profile.
 An interpretation is trusted mathematical input here; external admission must
 resolve operation references to the interpretation selected by the consumer.
 -/

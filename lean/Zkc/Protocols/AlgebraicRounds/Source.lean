@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Interpretation
+public import Zkc.Source.ScalarRegion
 public import Zkc.Semantics.InterpretationAdmission
 public import Mathlib.Algebra.Ring.Basic
 
@@ -135,6 +135,17 @@ theorem program_denote (count : Nat) (env : Environment (Value F) [.scalar]) :
   simp only [program, Program.denote, roundBody_denote, Environment.push]
   change (repeatN count _ (env .here)).bind Proc.done = _
   rw [Proc.bind_done, repeat_rounds]
+
+
+/-- The maintained round reference lowered to the canonical explicit-capture carrier. -/
+def structuredProgram (count : Nat) : Region (scalarDialect language) [.scalar] [.scalar] :=
+  (program count).toRegion
+
+/-- All messages, challenges and rejected prefixes remain unchanged. -/
+theorem structuredProgram_denote (count : Nat) (env : Environment (Value F) [.scalar]) :
+    (structuredProgram count).denote meaning.regionMeaning env =
+      (rounds count (env .here)).bind (fun value => .done (Values.singleton value)) := by
+  rw [structuredProgram, Program.denote_toRegion, program_denote]
 
 inductive Phase (F : Type) where
   | message (remaining : Nat) (claim : F)

@@ -2,6 +2,7 @@
 #include "zkc/Contracts/NativePolicy.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include <map>
 #include <tuple>
@@ -79,6 +80,26 @@ LogicalResult DeclareOp::verify() {
           emitOpError(), "relation-declaration-purpose",
           "each input requires parameter, statement or witness purpose");
   }
+  return success();
+}
+LogicalResult DeclareOp::verifySymbolUses(SymbolTableCollection &tables) {
+  auto unit = (*this)->getParentOfType<protocol_ir::ProtocolModuleOp>();
+  bool original = unit && unit.getProfile() == protocol_ir::Profile::Protocol;
+  auto formula = getFormulaAttr();
+  if (!formula) {
+    if (original && getKind() == "zkc.language.formula/0")
+      return diagnostics::emit(
+          emitOpError(), "relation-formula",
+          "formula declaration requires an exact helper reference");
+    return success();
+  }
+  auto helper = tables.lookupNearestSymbolFrom<func::FuncOp>(*this, formula);
+  if (!original || getKind() != "zkc.language.formula/0" || !helper ||
+      helper->getParentOp() != (*this)->getParentOp() || helper.isExternal() ||
+      helper.getFunctionType() != getSignature())
+    return diagnostics::emit(emitOpError(), "relation-formula",
+                             "formula must name a defined Math helper with the "
+                             "complete relation ABI");
   return success();
 }
 LogicalResult verifyDeclarationConsistency(ArrayRef<Operation *> units) {
