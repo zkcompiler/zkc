@@ -192,6 +192,34 @@ theorem shared_gives_independent (firstBase secondBase firstKey secondKey : G) (
     IndependentHolds firstBase secondBase firstKey secondKey witness witness :=
   (independent_iff _ _ _ _ _ _).mpr ((shared_iff _ _ _ _ _).mp holds)
 
+/-- Contraction of the two independent binders onto the one shared binder. -/
+def contract : Renaming independent shared := by
+  intro _ ref
+  cases ref with
+  | here => exact .here
+  | there ref => cases ref with
+    | here => exact .here
+    | there ref => nomatch ref
+
+/-- The shared conjunction is the independent one renamed by contraction, so by
+the substitution law it holds exactly when the independent conjunction holds on
+the store read through the contraction. -/
+theorem shared_is_contraction (firstBase secondBase firstKey secondKey : G) (witness : F) :
+    (dlog (F := F) firstBase firstKey (context := independent) .here).rename contract =
+        dlog firstBase firstKey (context := shared) .here ∧
+      (dlog (F := F) secondBase secondKey (context := independent) (.there .here)).rename contract =
+        dlog secondBase secondKey (context := shared) .here ∧
+      (SharedHolds firstBase secondBase firstKey secondKey witness ↔
+        (dlog firstBase firstKey (context := independent) .here).Holds (interpretation F G) {} boundary
+            ((Store.ofValues (interpretation := interpretation F G) (owner := SchnorrBinding.owner)
+              (invocation := rootInvocation) (context := shared) (.cons witness .nil)).precompose contract) ∧
+          (dlog secondBase secondKey (context := independent) (.there .here)).Holds (interpretation F G) {}
+            boundary ((Store.ofValues (interpretation := interpretation F G) (owner := SchnorrBinding.owner)
+              (invocation := rootInvocation) (context := shared) (.cons witness .nil)).precompose contract)) := by
+  refine ⟨rfl, rfl, ?_⟩
+  rw [← Atom.rename_holds, ← Atom.rename_holds]
+  exact Iff.rfl
+
 /-- Joint extraction: two accepting Chaum–Pedersen transcripts with one pair of
 commitments, one response per challenge and distinct challenges yield a single
 witness for the shared context. The witness is new; it is not a prover input. -/

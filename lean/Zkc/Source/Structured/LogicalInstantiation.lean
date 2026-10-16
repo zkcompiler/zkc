@@ -155,4 +155,75 @@ theorem inherited_output {parent child : List (LogicalType V.Sorts)} {invocation
         ((returned self).get ref) :=
   call.output_substitution protocolContext environment returned selector ref selected
 
+/-! Substitution of binders within one owner. A renaming may identify binders
+(contraction), so it maps an independent context onto a shared one; the
+converse identification is never implied. -/
+
+def Term.rename {signature : ProtocolSignature} {source target : List (LogicalType V.Sorts)}
+    (rename : Renaming source target) : {type : LogicalType V.Sorts} →
+      Term V Value signature source type → Term V Value signature target type
+  | _, .key (.binder ref) => .key (.binder (rename ref))
+  | _, .key (.parameter selected) => .key (.parameter selected)
+  | _, .key (.witness selected) => .key (.witness selected)
+  | _, .observed selected => .observed selected
+  | _, .supplied value => .supplied value
+  | _, .unavailable => .unavailable
+  | _, .view code argument => .view code (Term.rename rename argument)
+
+def Terms.rename {signature : ProtocolSignature} {source target : List (LogicalType V.Sorts)}
+    (rename : Renaming source target) : {types : List (LogicalType V.Sorts)} →
+      Values (Term V Value signature source) types → Values (Term V Value signature target) types
+  | _, .nil => .nil
+  | _, .cons first rest => .cons (first.rename rename) (Terms.rename rename rest)
+
+def Atom.rename {signature : ProtocolSignature} {source target : List (LogicalType V.Sorts)}
+    (rename : Renaming source target) (atom : Atom V Value signature source) :
+    Atom V Value signature target :=
+  ⟨atom.predicate, Terms.rename rename atom.arguments⟩
+
+/-- Read a store through a binder renaming; legacy slots are unchanged. -/
+def Store.precompose {owner : ContractBinding imported} {invocation : InvocationCoordinate}
+    {source target : List (LogicalType V.Sorts)} (rename : Renaming source target)
+    (store : Store interpretation owner invocation target) : Store interpretation owner invocation source :=
+  ⟨fun key => match key with
+    | .binder ref => store.get (.binder (rename ref))
+    | .parameter selected => store.get (.parameter selected)
+    | .witness selected => store.get (.witness selected)⟩
+
+section Renaming
+variable {owner : ContractBinding imported} {invocation : InvocationCoordinate}
+  {source target : List (LogicalType V.Sorts)} (rename : Renaming source target)
+  (protocolContext : ProtocolContext)
+  (boundary : BoundaryValuation Value owner.protocol.inputs owner.protocol.outputs)
+  (store : Store interpretation owner invocation target)
+
+theorem Term.rename_read {type : LogicalType V.Sorts}
+    (term : Term V Value owner.protocol.signature source type) :
+    (term.rename rename).read interpretation protocolContext boundary store =
+      term.read interpretation protocolContext boundary (store.precompose rename) := by
+  induction term with
+  | key slot => cases slot <;> rfl
+  | observed selected => rfl
+  | supplied value => rfl
+  | unavailable => rfl
+  | view code argument ih => simp only [Term.rename, Term.read, ih]
+
+theorem Terms.rename_read {types : List (LogicalType V.Sorts)}
+    (terms : Values (Term V Value owner.protocol.signature source) types) :
+    readTerms interpretation protocolContext boundary store (Terms.rename rename terms) =
+      readTerms interpretation protocolContext boundary (store.precompose rename) terms := by
+  induction terms with
+  | nil => rfl
+  | cons first rest ih => simp only [Terms.rename, readTerms, Term.rename_read, ih]
+
+/-- Substitution law: a renamed atom over a store is the original atom over
+the store read through the renaming. -/
+theorem Atom.rename_holds (atom : Atom V Value owner.protocol.signature source) :
+    (atom.rename rename).Holds interpretation protocolContext boundary store ↔
+      atom.Holds interpretation protocolContext boundary (store.precompose rename) := by
+  unfold Atom.Holds Atom.rename
+  rw [Terms.rename_read]
+
+end Renaming
+
 end Zkc.Source.Structured.Logical

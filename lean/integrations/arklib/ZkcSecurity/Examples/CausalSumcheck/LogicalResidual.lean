@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.Examples.CausalSumcheck.SourceVerifier
+public import ZkcSecurity.Examples.CausalSumcheck.SourceContracts
 public import ZkcExamples.Structured.SumcheckLogicalContext
 
 @[expose] public section
@@ -111,6 +111,55 @@ theorem retained_bound [Fintype F] [SampleableType F]
   intro execution
   exact congrArg pure (propext (retained_request_iff remaining count table proverValues proverDimension
     claim handle execution))
+
+/-- The existing Lean-authored request, which decodes a raw vector parameter, is
+the logical request whenever that vector represents the binder's table. -/
+theorem existing_request_iff {environment : RelationEnvironment SumcheckReduceViews.imported F G}
+    (raw : List F) (remaining count : Nat) (table : Table F (remaining + count))
+    (represented : ofList? (remaining + count) raw = some table)
+    (proverValues : Option (List F)) (proverDimension : Option Nat) (claim : F) (handle : Nat)
+    (outcome : PIR.Outcome (Values (Component (assignment F G)) reductionRoot.protocol.outputs)) :
+    SourceContracts.residualRequest (reductionEnvironment := environment) raw remaining count
+        (reductionRootInput proverValues proverDimension claim count handle) outcome ↔
+      retainedRequest remaining count table
+        (reductionRootInput proverValues proverDimension claim count handle) outcome := by
+  cases outcome with
+  | stopped reason => rfl
+  | returned outputs =>
+    exact wrapper_terminal_iff_atom raw remaining count table represented proverValues proverDimension
+      claim handle outputs
+
+/-- The existing source-contract bound is a corollary of the logical one: its
+refuted retained clause gives the refuted logical atom, and its request is the
+logical request, under the representation law it already assumes. -/
+theorem existing_bound_from_logical [Fintype F] [SampleableType F]
+    {environment : RelationEnvironment SumcheckReduceViews.imported F G}
+    (network : PIR.MonadHandler ProbComp (participantInterface F G) S E)
+    (before : Key → Phase S E Unit) (after : Key → F → Phase S E Unit)
+    (proverValues : Option (List F)) (proverDimension : Option Nat)
+    (remaining count : Nat) (raw : List F) (table : Table F (remaining + count))
+    (decoded : ofList? (remaining + count) raw = some table) (claim : F) (handle : Nat)
+    (falseTarget : (reductionRefutation (G := G) (reductionEnvironment := environment)
+      raw (remaining + count) claim count handle).Meaning) (bounded : raw.length < indexLimit) (state : S) :
+    mass (do
+      let execution ← ((reductionRootInput proverValues proverDimension claim count handle).process.interpret
+        forgetSites).runM
+        (withUniformQueries network [queryKey (ProtocolContext.enter {} "s3" [0,1]) handle] before after) state
+      pure (SourceContracts.residualRequest (reductionEnvironment := environment) raw remaining count
+        (reductionRootInput proverValues proverDimension claim count handle) execution.outcome)) ≤
+      (count : ENNReal) / Fintype.card F := by
+  have falseInitial := (false_initial_iff (G := G) remaining count table proverValues proverDimension
+    claim handle).mpr (by
+      rw [booleanSum_ofList? raw table decoded]
+      exact reduction_false_sum raw (remaining + count) claim count handle falseTarget
+        ⟨SumcheckContractBindings.reduction_formula_law, bounded⟩)
+  refine Eq.trans_le ?_ (retained_bound network before after proverValues proverDimension remaining count
+    table claim handle falseInitial state)
+  apply congrArg mass
+  apply bind_congr
+  intro execution
+  exact congrArg pure (propext (existing_request_iff raw remaining count table decoded proverValues
+    proverDimension claim handle execution.outcome))
 
 /-- The same logical request transported to the repacked root's boundary. -/
 def repackedRequest (remaining count : Nat) (table : Table F (remaining + count))
