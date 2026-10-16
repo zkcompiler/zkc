@@ -2,6 +2,7 @@ module
 
 public import ZkcSecurity.Examples.CausalSumcheck.SourceContracts
 public import ZkcExamples.Structured.SumcheckLogicalContext
+public import Mathlib.Algebra.Field.ZMod
 
 @[expose] public section
 
@@ -309,5 +310,55 @@ theorem other_binder_unbounded {S E : Type}
       rfl
     simp only [holds]
     simp [mass]
+
+section ConcreteField
+
+local instance : Fact (Nat.Prime 5) := ⟨by decide⟩
+noncomputable local instance : SampleableType (ZMod 5) := SampleableType.ofFintype _
+
+/-- The refuted initial atom of `retained_bound` and of `repacked_bound` holds
+over `ZMod 5` for the zero table of arity one and claim one. -/
+theorem zero_table_refuted (handle : Nat) :
+    ¬ (initialAtom (0 + 1)).Holds (interpretation (ZMod 5) (ZMod 5)) {}
+        ((reductionRootInput (G := ZMod 5) none none 1 1 handle).boundary (.stopped .incomplete))
+        (store (owner := reductionRoot) (invocation := rootInvocation) (fun _ => (0 : ZMod 5))) ∧
+    ¬ (rootMap.atom (initialAtom (0 + 1))).Holds (interpretation (ZMod 5) (ZMod 5)) {}
+        ((repackedInput (G := ZMod 5) 1 1 none none handle).boundary (.stopped .incomplete))
+        (store (owner := repackedRoot) (invocation := rootInvocation) (fun _ => (0 : ZMod 5))) := by
+  have sum : booleanSum (fun _ => (0 : ZMod 5) : Table (ZMod 5) (0 + 1)) = 0 := by
+    rw [booleanSum_eq_sum]
+    exact Finset.sum_const_zero
+  have different : (1 : ZMod 5) ≠ booleanSum (fun _ => (0 : ZMod 5) : Table (ZMod 5) (0 + 1)) := by
+    rw [sum]
+    decide
+  constructor
+  · exact (false_initial_iff (G := ZMod 5) 0 1 _ none none 1 handle).mpr different
+  · rw [rootMap.atom_holds]
+    rintro ⟨arguments, read, holds⟩
+    cases read
+    exact different holds
+
+/-- Both bounds apply to that concrete instance: probability at most `1 / 5`. -/
+theorem zero_table_bounds {S E : Type}
+    (network : PIR.MonadHandler ProbComp (participantInterface (ZMod 5) (ZMod 5)) S E)
+    (before : Key → Phase S E Unit) (after : Key → ZMod 5 → Phase S E Unit) (handle : Nat) (s : S) :
+    mass (do
+      let execution ← ((reductionRootInput (G := ZMod 5) none none 1 1 handle).process.interpret
+        forgetSites).runM
+        (withUniformQueries network [queryKey (ProtocolContext.enter {} "s3" [0, 1]) handle] before after) s
+      pure (retainedRequest 0 1 (fun _ => (0 : ZMod 5))
+        (reductionRootInput none none 1 1 handle) execution.outcome)) ≤
+        ((1 : Nat) : ENNReal) / Fintype.card (ZMod 5) ∧
+    mass (do
+      let execution ← ((repackedInput (G := ZMod 5) 1 1 none none handle).process.interpret
+        forgetSites).runM
+        (withUniformQueries network [queryKey (ProtocolContext.enter {} "s3" [0, 1]) handle] before after) s
+      pure (repackedRequest 0 1 (fun _ => (0 : ZMod 5))
+        (repackedInput 1 1 none none handle) execution.outcome)) ≤
+        ((1 : Nat) : ENNReal) / Fintype.card (ZMod 5) :=
+  ⟨retained_bound network before after none none 0 1 _ 1 handle (zero_table_refuted handle).1 s,
+    repacked_bound network before after none none 0 1 _ 1 handle (zero_table_refuted handle).2 s⟩
+
+end ConcreteField
 
 end ZkcSecurity.Examples.CausalSumcheck.LogicalResidual

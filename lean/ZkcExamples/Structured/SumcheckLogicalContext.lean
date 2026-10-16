@@ -401,4 +401,22 @@ theorem inline_initial_lowers (raw : List F) (dimension : Nat) (table : Table F 
     reduction_input_holds_iff raw dimension claim context boundary present,
     reduction_truth_iff raw dimension claim bounded, booleanSum_ofList? raw table represented]
 
+/-- The premises of `inline_initial_lowers` hold at the actual Reduce call for a
+two-entry table: V's claim is read from the call's operand, the vector of
+`List.ofFn` represents its table, and its length is below the capacity. -/
+theorem inline_initial_lowers_at_call (claim : F) (count handle : Nat) (outcome)
+    (values : Fin (2 ^ 1) → F)
+    {environment : RelationEnvironment SumcheckReduceViews.imported F G} :
+    (lowerApplication (V := vocabulary) (context := tableContext 1)
+        (reductionInput (reductionEnvironment := environment)).binding).Holds
+      ((interpretation F G).withRelations (relationMeaning environment)) (ProtocolContext.enter {} "s3" [0, 1])
+      (reductionBoundary (G := G) claim count handle outcome)
+      (Store.extend (fixedReduction (invocation := rootInvocation) (List.ofFn values) 1)
+        (.cons (ofVector values) .nil)) ↔
+    claim = booleanSum (ofVector values) :=
+  inline_initial_lowers (List.ofFn values) 1 (ofVector values) (ofList?_ofFn values)
+    (by rw [List.length_ofFn]; decide) claim _ _
+    (reductionCall.boundaryOfOutcome_input {} 1 _ outcome reductionClaim
+      (.there (.there (.there .here))) rfl rfl)
+
 end ZkcExamples.Structured.SumcheckLogicalContext
