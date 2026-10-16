@@ -343,15 +343,18 @@ std::optional<Elementwise>
 analyzeLanes(Block &body, Type field, ValueRange laneArguments,
              const llvm::DenseMap<Value, Value> &lookups,
              const PayloadAnalysis &payload,
-             ArrayRef<ComputationDiagnostic> accessDeclines = {}) {
+             ArrayRef<ComputationDiagnostic> accessDeclines = {},
+             Value yielded = {}, Value state = {}) {
   if (!isa<algebra::FieldType>(field) || body.empty() || !payload.supported ||
       !isa<func::ReturnOp, local::ReturnOp>(body.back()) ||
       body.back().getNumOperands() != 1 ||
       body.back().getOperand(0).getType() != field)
     return std::nullopt;
-  llvm::DenseSet<Value> scalars, lanes;
+  llvm::DenseSet<Value> scalars, lanes, stateDependent;
+  if (state)
+    stateDependent.insert(state);
   for (Value argument : body.getArguments())
-    if (argument.getType() == field)
+    if (argument.getType() == field && argument != state)
       scalars.insert(argument);
   for (Value value : laneArguments) {
     auto argument = dyn_cast<BlockArgument>(value);
@@ -392,24 +395,30 @@ analyzeLanes(Block &body, Type field, ValueRange laneArguments,
             facet->identity))
       return std::nullopt;
     Value left = op->getOperand(0), right = op->getOperand(1);
-    if ((!scalars.contains(left) && !lanes.contains(left)) ||
-        (!scalars.contains(right) && !lanes.contains(right)))
+    if ((!scalars.contains(left) && !lanes.contains(left) &&
+         !stateDependent.contains(left)) ||
+        (!scalars.contains(right) && !lanes.contains(right) &&
+         !stateDependent.contains(right)))
       return std::nullopt;
+    if (stateDependent.contains(left) || stateDependent.contains(right)) {
+      stateDependent.insert(value);
+      continue;
+    }
     (lanes.contains(left) || lanes.contains(right) ? lanes : scalars)
         .insert(value);
   }
-  Value returned = body.back().getOperand(0);
+  Value returned = yielded ? yielded : body.back().getOperand(0);
   if (!lanes.contains(returned) && !scalars.contains(returned))
     return std::nullopt;
   return result;
 }
-std::optional<Elementwise> analyzeElementwise(const ComputationFacts &facts) {
+std::optional<Elementwise> analyzeAlignedLanes(const ComputationFacts &facts,
+                                               Type field, Value yielded = {},
+                                               Value state = {}) {
   const auto &view = facts.view;
   auto c = view.computation;
-  if (!c.collect || c.predicate || !facts.aligned || !view.result ||
-      !isa<algebra::FieldVectorType>(c.signature.getResult(0)))
+  if (c.predicate || !facts.aligned || !view.result)
     return std::nullopt;
-  Type field = elementType(c.signature.getResult(0));
   SmallVector<Value> lanes;
   for (auto [i, item] : enumerate(view.items)) {
     auto *factor = facts.factor(i);
@@ -426,7 +435,30 @@ std::optional<Elementwise> analyzeElementwise(const ComputationFacts &facts) {
             facts.factor(access.item)->getOperand(0)) == access.input)
       lookups[access.value] = facts.inputs[access.input];
   return analyzeLanes(c.helper->getRegion(0).front(), field, lanes, lookups,
-                      facts.payload, view.accessDeclines);
+                      facts.payload, view.accessDeclines, yielded, state);
+}
+std::optional<Elementwise> analyzeElementwise(const ComputationFacts &facts) {
+  auto c = facts.view.computation;
+  if (!c.collect || !isa<algebra::FieldVectorType>(c.signature.getResult(0)))
+    return std::nullopt;
+  return analyzeAlignedLanes(facts, elementType(c.signature.getResult(0)));
+}
+std::optional<PointwiseReduction>
+analyzePointwiseReduction(const ComputationFacts &facts,
+                          const Combine &combined) {
+  if (combined.facet->identity != MathematicalIdentity::FieldAdd ||
+      !facts.extentIteration || facts.missingAccess)
+    return std::nullopt;
+  auto state = facts.view.seeds.front().formal;
+  auto formula =
+      analyzeAlignedLanes(facts, state.getType(), combined.term, state);
+  if (!formula)
+    return std::nullopt;
+  PointwiseReduction result;
+  result.combine = combined.facet->identity;
+  result.term = combined.term;
+  result.formula = std::move(*formula);
+  return result;
 }
 std::optional<Bilinear> analyzeBilinear(const ComputationFacts &facts,
                                         const Combine &combined) {
@@ -574,11 +606,14 @@ ComputationEquations matchComputation(const ComputationView &view,
   if (auto combined = combine(facts)) {
     result.reduction = analyzeReduction(facts, *combined);
     result.bilinear = analyzeBilinear(facts, *combined);
+    if (!result.reduction && !result.bilinear)
+      result.pointwiseReduction = analyzePointwiseReduction(facts, *combined);
   }
   result.elementwise = analyzeElementwise(facts);
   if (work.exhausted)
     return {};
-  if (result.reduction || result.bilinear || result.elementwise)
+  if (result.reduction || result.pointwiseReduction || result.bilinear ||
+      result.elementwise)
     observed = {OptimizationOutcome::success(),
                 view.occurrence,
                 {},
@@ -631,7 +666,8 @@ matchNestedContraction(const ComputationView &structure,
   const auto &child = view->nested.front();
   ComputationDiagnostic childDiagnostic;
   auto equations = matchComputation(child, remaining, &childDiagnostic);
-  if (!equations.reduction && !equations.bilinear && !equations.elementwise)
+  if (!equations.reduction && !equations.pointwiseReduction &&
+      !equations.bilinear && !equations.elementwise)
     observed = childDiagnostic;
   auto call = dyn_cast_or_null<local::ApplyOp>(child.occurrence);
   if (!matrix || !call || child.computation.collect ||

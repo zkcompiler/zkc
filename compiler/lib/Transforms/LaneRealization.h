@@ -42,10 +42,14 @@ struct LaneRealizationResult {
 /// formula. Required maps already charge their complete expanded helpers.
 /// Use the same immutable recipe inventory as selection; emission does not
 /// consult the global inventory or grant the independent reader new premises.
+/// A selected output realizes its dependency slice after admitting the whole
+/// body. Unbound arguments (such as a reduction's state) cannot enter that
+/// slice.
 llvm::Expected<LaneRealizationResult>
 realizeLanes(mlir::Block &formula,
              const llvm::DenseMap<mlir::Value, LaneInput> &inputs,
              mlir::Type vector, mlir::Value length, uint64_t *remaining,
-             const MathematicalRecipes &recipes, LaneEmitter emit);
+             const MathematicalRecipes &recipes, LaneEmitter emit,
+             mlir::Value output = {});
 } // namespace zkc::mathematical
 #endif

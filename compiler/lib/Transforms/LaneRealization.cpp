@@ -12,7 +12,8 @@ namespace zkc::mathematical {
 Expected<LaneRealizationResult>
 realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
              Type vector, Value length, uint64_t *remaining,
-             const MathematicalRecipes &recipes, LaneEmitter emit) {
+             const MathematicalRecipes &recipes, LaneEmitter emit,
+             Value output) {
   auto unsupported = [] {
     return LaneRealizationResult{
         LaneRealizationStatus::Unsupported,
@@ -53,6 +54,18 @@ realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
   auto field = dyn_cast<algebra::FieldType>(finite::elementType(vector));
   if (!field || formula.empty() || formula.back().getNumOperands() != 1)
     return unsupported();
+  Value returned = output ? output : formula.back().getOperand(0);
+  if (returned.getType() != field)
+    return unsupported();
+  // Compute a borrowed SSA slice, but admit every instruction below before
+  // dropping dead work. A reduction's combiner may lie outside this slice.
+  llvm::DenseSet<Value> live{returned};
+  for (Operation &op : llvm::reverse(formula.without_terminator())) {
+    if (op.getNumResults() != 1)
+      return unsupported();
+    if (live.contains(op.getResult(0)) && !inputs.contains(op.getResult(0)))
+      live.insert(op.getOperands().begin(), op.getOperands().end());
+  }
   std::vector<ring::Input> slots;
   std::vector<ring::Node> nodes;
   llvm::DenseMap<Value, uint32_t> meanings;
@@ -80,16 +93,23 @@ realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
       nodes.push_back(ring::Node::literal(field.getDomain().str(), *constant));
       continue;
     }
-    if (op.getNumOperands() != 2 || !meanings.contains(op.getOperand(0)) ||
+    auto *contract = finite::semantics(&op);
+    if (op.getNumOperands() != 2 || !contract ||
+        contract->law.algebra != protocol::ComputationAlgebra::FieldRing ||
+        !contract->law.total || !recipes.lane(contract->identity) ||
+        !is_contained(
+            ArrayRef<MathematicalIdentity>{MathematicalIdentity::FieldAdd,
+                                           MathematicalIdentity::FieldSubtract,
+                                           MathematicalIdentity::FieldMultiply},
+            contract->identity))
+      return unsupported();
+    if (!live.contains(result))
+      continue;
+    if (!meanings.contains(op.getOperand(0)) ||
         !meanings.contains(op.getOperand(1)))
       return unsupported();
     uint32_t left = meanings.lookup(op.getOperand(0)),
              right = meanings.lookup(op.getOperand(1));
-    auto *contract = finite::semantics(&op);
-    if (!contract ||
-        contract->law.algebra != protocol::ComputationAlgebra::FieldRing ||
-        !contract->law.total || !recipes.lane(contract->identity))
-      return unsupported();
     if (contract->identity == MathematicalIdentity::FieldSubtract) {
       nodes.push_back(ring::Node::neg(right));
       right = nodes.size() - 1;
@@ -101,7 +121,6 @@ realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
                         ? ring::Node::mul(left, right)
                         : ring::Node::add(left, right));
   }
-  Value returned = formula.back().getOperand(0);
   if (!meanings.contains(returned))
     return unsupported();
   // Ring arenas contain exactly reachable nodes while their input inventory
@@ -160,10 +179,6 @@ realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
 
   // Only admitted pure ring instructions enter this window. Keep source SSA
   // order, sharing equal labeled nodes without algebraic code motion.
-  llvm::DenseSet<Value> live{returned};
-  for (Operation &op : llvm::reverse(formula.without_terminator()))
-    if (live.contains(op.getResult(0)) && !inputs.contains(op.getResult(0)))
-      live.insert(op.getOperands().begin(), op.getOperands().end());
   llvm::DenseMap<Value, LaneInput> values(inputs);
   llvm::DenseMap<uint32_t, LaneInput> representatives;
   for (auto [value, meaning] : meanings)

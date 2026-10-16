@@ -1136,6 +1136,11 @@ public:
       expected.kind = Meaning::Lane;
     } else {
       auto reduction = terms.reduction(expected.term, state);
+      // Identity normalization can erase an additive zero term completely.
+      // The unchanged state is independently equal to a seeded sum of zeros.
+      if (!reduction && terms.equal(expected.term, state))
+        reduction = std::make_pair(ring::Kind::Add,
+                                   terms.literal(field.getDomain(), "0"));
       if (!reduction)
         return failure();
       auto [combine, payload] = *reduction;
