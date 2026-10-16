@@ -706,6 +706,7 @@ def wire_controls(suite, identity, effect, masked, nested_service):
         child = ["function", "child", "protocol", "public", [], [],
                  ["protocol", ["P", "Q"], [], []], [], [], ["block", [], ["return", []]]]
         bad[7].append(child)
+        bad[8].append(["child", []])
         row[3][0][2][1] = [[["protocol_apply", "child", ["P", "Q"]], [], [], [], "escape"]]
         refuse(f"wire-callback-application-roster-max{maximum}", bad, "structured-repeat-role")
         for target, code in [("missing", "structured-unknown-helper"), ("main", "structured-protocol-cycle")]:
@@ -758,6 +759,7 @@ def wire_controls(suite, identity, effect, masked, nested_service):
         dormant = copy.deepcopy(definition(bad, "main")); dormant[1] = "dormant"
         dormant[9][1][0][3][0][2][2] = ["return", [1]]
         bad[7].append(dormant)
+        bad[8].append(["dormant", []])
         refuse(f"wire-malformed-dormant-max{maximum}", bad, "structured-protocol-terminator")
 
 
