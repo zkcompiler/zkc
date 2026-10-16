@@ -97,12 +97,6 @@ theorem qualify_prefix (captured site : String) (nonempty : site ≠ "") :
       "apply_" ++ toString captured.utf8ByteSize ++ "_" ++ captured ++ "_" ++ site := by
   simp [qualifyProtocolSite, nonempty, protocolSiteDecimal_eq_toString]
 
-/-- Exposed renderer equation for clients that normalize concrete labels. -/
-theorem qualify_prefix_decimal (captured site : String) (nonempty : site ≠ "") :
-    qualifyProtocolSite (some captured) site =
-      "apply_" ++ protocolSiteDecimal captured.utf8ByteSize ++ "_" ++ captured ++ "_" ++ site := by
-  simp [qualifyProtocolSite, nonempty]
-
 /-- Size of the prefix before constructing the qualified label. -/
 def protocolSiteOverhead : Option String → Nat
   | none => 0

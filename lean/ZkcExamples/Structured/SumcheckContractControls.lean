@@ -17,8 +17,6 @@ def originalTable : Table F 1 := fun _ => 0
 def substitutedTable : Table F 1 := fun bits => if bits 0 then 0 else 1
 def receivedResidual (challenge : F) : F := (1 - challenge) * 1 + challenge * 0
 
-theorem received_boundary_passes : (1 : F) = 1 + 0 := by decide
-
 theorem wrong_fixed_table_changes_target :
     ¬ PublicTruth (G := F) ([0, 0] : List F) 1 ∧
       PublicTruth (G := F) ([1, 0] : List F) 1 := by
@@ -42,9 +40,6 @@ theorem fixed_table_acceptance_count :
     ((List.finRange 5).filter fun r =>
       decide (extension 1 originalTable (fun _ => (r.val : F)) = receivedResidual r.val)).length = 1 := by
   decide +kernel
-
-theorem omitted_residual_acceptance_count : ((List.finRange 5).filter fun _ => true).length = 5 := by
-  decide
 
 theorem residual_omitted_cannot_close :
     ¬ TerminalObligation (fun _ : F => True) 0 1 originalTable

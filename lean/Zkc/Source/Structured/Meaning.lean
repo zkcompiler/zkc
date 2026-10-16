@@ -11,14 +11,6 @@ The arithmetic/control evaluator is shared with open roots. -/
 set_option autoImplicit false
 namespace Zkc.Source.Structured
 
-def ValueValid {F G : Type} : (type : Ty) → assignment F G type → Prop
-  | .boolean, _ | .field _, _ | .group _, _ | .service _, _ => True
-  | .index, value => value < indexLimit
-  | .vector _, values => values.length < indexLimit
-
-def InputsValid {F G : Type} {types : List Ty} (values : Values (assignment F G) types) : Prop :=
-  ∀ {type} (position : Var types type), ValueValid type (values.get position)
-
 namespace Evaluation
 
 variable {F G : Type} {interface : PIR.Signature}

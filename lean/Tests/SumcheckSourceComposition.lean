@@ -57,6 +57,4 @@ run_cmd do
   checkDependencies [`ZkcExamples.Structured.SumcheckSourceVerifier]
     [``ZkcExamples.Structured.SumcheckSourceVerifier.reduce_invoke_plain]
 
-#print axioms ZkcExamples.Structured.SumcheckSourceVerifier.verifier_checked
-
 end Tests.SumcheckSourceComposition

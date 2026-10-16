@@ -159,7 +159,13 @@ theorem callback_service_origins :
           function.inputs[input]? = some type ∧
           (scope.map (fun role => [0, 1][role]?.getD 0)).length = 1 ∧
           runDefinition.inputScopes[input]? = some (scope.map (fun role => [0, 1][role]?.getD 0))) :=
-  imported.protocolApplication_recursive run_member callback_application_occurs
+  by
+    obtain ⟨function, domains, headers, summaries, interface, context, origins, name, roles,
+      operands, _, _, retained, kind, headerEq, checked, interfaceEq, roster, validSite, resolved,
+      types, services⟩ := imported.protocolApplication_source run_member callback_application_occurs
+    exact ⟨function, domains, headers, summaries, interface, context, origins, name, roles,
+      operands, retained, kind, headerEq, checked, interfaceEq, roster, validSite, resolved,
+      types, services⟩
 
 /-- Source membership is in the full recursive instruction inventory, at the exact site. -/
 theorem callback_original_instruction :

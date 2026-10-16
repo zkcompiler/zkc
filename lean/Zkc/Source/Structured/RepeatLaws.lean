@@ -163,22 +163,6 @@ theorem loop_run_split {S E : Type} (start first rest : Nat)
         (fun result => (loop spec context self captures body (start + first) rest result).run handler) := by
   rw [loop_split, PIR.run_bind]
 
-/-- Equality of continuations is needed only for values that can actually be
-returned, with all operation replies quantified by the existing boundary model. -/
-private theorem bind_congr_returns {A B : Type} (protocol : PIR.Interaction I)
-    (post : A → protocol.Phase → Prop) (process : PIR.Proc I A) (phase : protocol.Phase)
-    (exits : PIR.Boundary.Returns protocol post process phase)
-    (left right : A → PIR.Proc I B)
-    (same : ∀ value phase, post value phase → left value = right value) :
-    process.bind left = process.bind right := by
-  induction process generalizing phase with
-  | done value => exact same value phase exits
-  | halt reason => rfl
-  | call op next ih =>
-    apply congrArg (PIR.Proc.call op)
-    funext reply
-    exact ih reply _ (exits reply)
-
 /-- Pointwise callback equations on the reached index and state invariant lift
 through arbitrary interacting or stopping bodies. The invariant depends on the
 reached interaction phase, and preservation is required only from a valid state
@@ -208,7 +192,7 @@ theorem loop_congr_on
   | succ count ih =>
     simp only [loop_succ, step, PIR.Proc.bind_assoc, PIR.Proc.bind]
     rw [← same start (Nat.le_refl _) (by omega) state phase initial]
-    apply bind_congr_returns protocol _ _ phase
+    apply PIR.Boundary.bind_congr_returns protocol _ _ phase
       (preserved start (Nat.le_refl _) (by omega) state phase initial)
     intro result nextPhase resultValid
     apply ih (phase := nextPhase) (start := start + 1) (state := _) resultValid

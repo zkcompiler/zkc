@@ -146,7 +146,4 @@ theorem zero_result_stop :
   exact unit.protocolApply_substitute stopDefinition (List.mem_cons_of_mem _ List.mem_cons_self)
     stopSignature rfl stopBody rfl [0, 1] "call" {} 0 .nil _ Values.nil.get (by decide) _ localProof
 
-#print axioms Zkc.Source.Structured.CallSemanticObligations.substitute
-#print axioms Zkc.Source.Structured.UnitPayload.protocolApply_interpret_substitute
-#print axioms zero_result_stop
 end Tests.ContractComposition

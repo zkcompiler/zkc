@@ -93,20 +93,4 @@ example : (target (F := ZMod 3) (G := ZMod 3)).Holds {}
       ZkcExamples.Structured.SchnorrInteractive.accepted_iff]
     simp
 
-#print axioms ZkcExamples.Structured.SchnorrInteractive.process_equation
-#print axioms ZkcExamples.Structured.SchnorrInteractive.prover_equation
-#print axioms target_complete
-#print axioms target_special_soundness
-#print axioms target_formula_law
-#print axioms ZkcExamples.Structured.SchnorrExecution.execute_eq
-#print axioms ZkcExamples.Structured.SchnorrContract.observed_accepts_iff
-#print axioms ZkcExamples.Structured.SchnorrContract.all_obligations
-#print axioms ZkcExamples.Structured.SchnorrContract.every_clause_selected
-#print axioms ZkcExamples.Structured.SchnorrContract.no_protocol_calls
-#print axioms ZkcExamples.Structured.SchnorrContract.extracted_target
-#print axioms ZkcExamples.Structured.SchnorrContract.selected_extraction
-#print axioms ZkcExamples.Structured.SchnorrContract.honest_accepts
-#print axioms ZkcExamples.Structured.SchnorrSharedWitness.extract
-#print axioms ZkcExamples.Structured.SchnorrSharedWitness.independent_not_shared
-
 end Tests.StructuredSchnorrBinding

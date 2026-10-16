@@ -136,11 +136,6 @@ theorem random_call_bound (s : Nat) :
       mass (acceptance handler randomPrefix s (· = true)) :=
   arbitrary_prefix_bound handler randomPrefix s
 
-#print axioms ZkcSecurity.VCVio.Composition.acceptance_bind_le
-#print axioms initial_state_is_insufficient
-#print axioms terminal_premise_is_necessary
-#print axioms random_call_mass
-
 end TestsSecurity.CallComposition
 
 run_cmd do

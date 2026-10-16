@@ -648,20 +648,5 @@ example (args : Values (assignment Int Int) [.boolean, .boolean]) :
 example (args : Values (assignment Int Int) [.boolean, .boolean]) :
     ¬ (opaqueSubject.Holds args ∧ ¬ opaqueResidual.Holds args) := fun both => both.2 both.1
 
-#print axioms FormulaBinding.process_eq_body
-#print axioms FormulaBinding.invokeRelation_body_view
-#print axioms CheckedApplication.selector_substitution
-#print axioms CheckedApplication.input_substitution
-#print axioms CheckedApplication.output_substitution
-#print axioms CheckedApplication.invoke_body
-#print axioms ContractRequests.resolve
-#print axioms ApplicationUse.equivalence
-#print axioms BoundarySelector.returnedSatisfies_decision
-#print axioms CheckedApplication.boundaryOfOutcome_input
-#print axioms CheckedApplication.boundaryOfOutcome_decision
-#print axioms CheckedApplication.componentInput_process
-#print axioms ExternalTerminal.not_holds_stopped
-#print axioms observedResidualRefutation
-
 end
 end Tests.StructuredContracts

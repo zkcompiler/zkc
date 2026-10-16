@@ -13,12 +13,6 @@ run_cmd do
      `Tests.DeriveRegionSchnorr, `Tests.DeriveRegionSumcheck, `Tests.RegionViewControls]
     "DERIVE-REGION-AUDIT-PASS" true
 
-#print axioms Tests.DeriveRegion.obligation_resumed
-#print axioms Tests.DeriveRegionCallbacks.symbolic_repeat
-#print axioms Tests.DeriveRegionNested.nested_callback_open
-#print axioms Tests.DeriveRegionSources.schnorr_formula_reversed
-#print axioms Tests.DeriveRegionSources.sum_formula_automated
-
 open Lean Elab Command in
 run_cmd do
   for name in [``Tests.DeriveRegion.commuted,

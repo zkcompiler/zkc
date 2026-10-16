@@ -180,7 +180,4 @@ theorem sumcheck_reduce_substitution (self : Nat) (context : ProtocolContext)
     sumcheckCall.callSite.roles sumcheckCall.callSite.site context self sumcheckCall.callSite.operands
     sumcheckCall.continuation.2 environment inside forgetSites replacement localLaw
 
-#print axioms sumcheck_reduce_substitution
-#print axioms sumcheck_bound_operationLaw
-#print axioms outer_body_composition
 end Tests.ContractSourceCalls

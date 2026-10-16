@@ -71,10 +71,5 @@ theorem selected_name (binding : EntryContractBinding imported) :
   exact binding.owner.owner_eq.trans
     ((congrArg (fun protocol : CheckedProtocol => protocol.name) binding.selected_root).trans imported.protocolSelection)
 
-/-- The acceptance role is recovered from the uniquely named retained clause.
-It is not reconstructed from the statement's role-free acceptance index. -/
-theorem selected_decision (binding : EntryContractBinding imported) :
-    (binding.owner.clause binding.clauseIndex).decision = some binding.decision := binding.decision_eq
-
 end EntryContractBinding
 end Zkc.Source.Structured

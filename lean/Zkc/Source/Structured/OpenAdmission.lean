@@ -162,18 +162,6 @@ def lowerProtocolInstructionsWith (snapshot : Snapshot) (domains : List DomainSp
       (facts.shift results.length) (resultOrigins ++ identities.map (· + results.length)) rest
     return .letOp (.mark site) [] [] .nil (.letOp op operands results bodies next)
 
-/-- Compatibility entry for callback-free instruction spines. Recursive source
-admission uses lowerProtocolBlock with this same instruction traversal. The
-parent application's external proof API retains this entry and its inversion. -/
-def lowerProtocolInstructions (snapshot : Snapshot) (domains : List DomainSpec)
-    (summaries : IdentitySummaries) (function : Function) (headers : List ProtocolSignature)
-    (interface : ProtocolInterface) (scopes : List (List Nat)) (terminal : Terminator)
-    (context : List Ty) (origins : List (Option Nat)) (facts : Facts)
-    (identities : List Nat) (instructions : List Instruction) : LowerM (RawRegion Ty ProtocolOp) :=
-  lowerProtocolInstructionsWith snapshot domains summaries function headers interface scopes
-    (fun _ _ _ _ _ => throw "structured-protocol-region") .entryReturn
-    (List.range interface.roles.length) terminal context origins facts identities instructions
-
 /-- Stored depth is admission capacity, independent of iteration count. -/
 def lowerProtocolBlock (snapshot : Snapshot) (domains : List DomainSpec)
     (summaries : IdentitySummaries) (function : Function) (headers : List ProtocolSignature)
@@ -346,31 +334,6 @@ theorem lowerProtocolInstructionsWith_application_origin {snapshot : Snapshot} {
               exact Or.inr (Or.inr (Or.inr parentOccurs))⟩
 
 
-/-- Callback-free compatibility retains the exact original instruction witness
-and the result-prefix lexical origin equation. -/
-theorem lowerProtocolInstructions_application_origin {snapshot : Snapshot} {domains : List DomainSpec}
-    {summaries : IdentitySummaries} {function : Function} {headers : List ProtocolSignature}
-    {interface : ProtocolInterface} {scopes : List (List Nat)} {terminal : Terminator}
-    {context : List Ty} {origins : List (Option Nat)} {facts : Facts} {identities : List Nat}
-    {instructions : List Instruction} {initial final : LowerState} {raw : RawRegion Ty ProtocolOp}
-    (accepted : (lowerProtocolInstructions snapshot domains summaries function headers interface scopes
-      terminal context origins facts identities instructions) initial = .ok (raw, final))
-    {signature : ProtocolSignature} {indices : List Nat} {site : String}
-    (occurs : .protocolApply signature indices site ∈ raw.operations) :
-    ∃ offset context' facts' identities' before after descriptor operands results regions sourceSite,
-      .instruction descriptor operands results regions sourceSite ∈ instructions ∧
-      (resolveProtocolOp snapshot domains function headers interface scopes context'
-        (List.replicate offset none ++ origins) facts' identities'
-        descriptor operands results sourceSite) before =
-          .ok (.protocolApply signature indices site, after) := by
-  obtain ⟨offset, ctx, fs, ids, before, after, desc, args, outs, bodies, s, member, equation⟩ :=
-    lowerProtocolInstructionsWith_application_origin accepted occurs
-  refine ⟨offset, ctx, fs, ids, before, after, desc, args, outs, bodies, s, member, ?_⟩
-  rcases equation with equation | ⟨spec, repeatSite, inputs, outputs, body, callback,
-    bodyBefore, bodyAfter, _, _, impossible, _, _⟩
-  · exact equation
-  · contradiction
-
 /-- Recursive inversion discharges the child hypothesis on stored depth. Every
 application in the complete raw tree was resolved under an inherited lexical
 origin environment. P may express any invariant stable under result prefixes
@@ -421,32 +384,6 @@ theorem lowerProtocolBlock_application_source {snapshot : Snapshot} {domains : L
           (Or.inr source : Instruction.instruction desc' args' outs' regions' site' =
             Instruction.instruction desc args outs [.region inputs outputs body] s ∨
             .instruction desc' args' outs' regions' site' ∈ body.storedInstructions)
-
-/-- Compatibility consequence retaining the original origin-only result. -/
-theorem lowerProtocolBlock_application_origin {snapshot : Snapshot} {domains : List DomainSpec}
-    {summaries : IdentitySummaries} {function : Function} {headers : List ProtocolSignature}
-    {interface : ProtocolInterface} {scopes : List (List Nat)}
-    (P : List (Option Nat) → Prop)
-    (resultsPreserve : ∀ count origins, P origins → P (List.replicate count none ++ origins))
-    (capturesPreserve : ∀ spec operands origins, P origins → P (repeatOrigins spec operands origins))
-    {depth : Nat} {exitKind : ProtocolExit} {active : List Nat} {body : Block}
-    {context : List Ty} {origins : List (Option Nat)} {facts : Facts}
-    {initial final : LowerState} {raw : RawRegion Ty ProtocolOp}
-    (accepted : lowerProtocolBlock snapshot domains summaries function headers interface scopes
-      depth exitKind context origins facts active body initial = .ok (raw, final))
-    (initialOrigins : P origins)
-    {signature : ProtocolSignature} {indices : List Nat} {site : String}
-    (occurs : .protocolApply signature indices site ∈ raw.operations) :
-    ∃ context' origins' facts' identities' before after descriptor operands results sourceSite,
-      P origins' ∧
-      (resolveProtocolOp snapshot domains function headers interface scopes context'
-        origins' facts' identities' descriptor operands results sourceSite) before =
-          .ok (.protocolApply signature indices site, after) := by
-  obtain ⟨context', origins', facts', identities', before, after, descriptor, operands,
-    results, _, sourceSite, _, invariant, resolved⟩ :=
-    lowerProtocolBlock_application_source P resultsPreserve capturesPreserve accepted initialOrigins occurs
-  exact ⟨context', origins', facts', identities', before, after, descriptor, operands,
-    results, sourceSite, invariant, resolved⟩
 
 private theorem lowerM_lift_ok {α : Type} {action : Except String α}
     {initial final : LowerState} {value : α}
@@ -697,31 +634,6 @@ theorem lowerProtocol_application_source {snapshot : Snapshot} {domains : List D
     intro type scope operand present service
     obtain ⟨input, origin, contract, singleton, owner⟩ := services type scope operand present service
     exact ⟨input, origin, bounded input (List.mem_of_getElem? origin), contract, singleton, owner⟩
-
-
-
-
-/-- Compatibility consequence without the original instruction projection. -/
-theorem lowerProtocol_application_recursive {snapshot : Snapshot} {domains : List DomainSpec}
-    {summaries : IdentitySummaries} {headers : List ProtocolSignature} {function : Function}
-    {caller signature : ProtocolSignature} {raw : RawRegion Ty ProtocolOp}
-    {indices : List Nat} {site : String}
-    (accepted : lowerProtocol snapshot domains summaries headers function caller = .ok raw)
-    (occurs : .protocolApply signature indices site ∈ raw.operations) :
-    ∃ interface context, ∃ origins : List (Option Nat), ∃ name roles operands,
-      function.interface = some interface ∧ validProtocolIdentifier site = true ∧
-      resolveProtocolApplication snapshot headers interface name roles = .ok (signature, indices) ∧
-      typesAt context operands = .ok signature.inputs ∧
-      (∀ type scope operand, ((type, scope), operand) ∈
-          (signature.inputs.zip signature.inputScopes).zip operands → type.isService = true →
-        ∃ input, origins[operand]? = some (some input) ∧ input < function.inputs.length ∧
-          function.inputs[input]? = some type ∧
-          (scope.map (fun role => indices[role]?.getD 0)).length = 1 ∧
-          caller.inputScopes[input]? = some (scope.map (fun role => indices[role]?.getD 0))) := by
-  obtain ⟨interface, context, origins, name, roles, operands, _, _, interfaceEq,
-    validSite, application, types, services⟩ := lowerProtocol_application_source accepted occurs
-  exact ⟨interface, context, origins, name, roles, operands, interfaceEq,
-    validSite, application, types, services⟩
 
 /-- A successful callback lowerer checks every stored region. -/
 theorem lowerProtocolRegions_statementFree {child : ProtocolChild} {op : ProtocolOp}

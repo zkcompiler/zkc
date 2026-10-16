@@ -295,9 +295,4 @@ theorem unequal_state_representations (selective : Bool) {A : Type}
       (PIR.Related stateRelated (fun e => [e]) observe) :=
   runM_relTriple stateRelated _ _ _ _ (representation_action_law selective) _ _ _ rfl
 
-#print axioms ZkcSecurity.VCVio.Coupling.runM_relTriple
-#print axioms stopped_bit_exact
-#print axioms acceptance_mass
-#print axioms conditional_survival_not_uniform
-#print axioms unequal_state_representations
 end TestsSecurity.LocalCoupling

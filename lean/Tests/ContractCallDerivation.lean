@@ -118,12 +118,6 @@ example : identityDefinition.raw ≠ changedBody.erase := by
   intro same
   cases same
 
-#print axioms Zkc.Source.Structured.UnitPayload.protocolApply_operationLaw
-#print axioms identity_equation
-#print axioms outside_derived
-#print axioms plain_derived
-#print axioms stopped_derived
-
 run_cmd do
   ZkcTools.DeclarationAudit.check
     [`Zkc.Source.Structured.ContractCalls, `Zkc.Source.Structured.ContractComposition]

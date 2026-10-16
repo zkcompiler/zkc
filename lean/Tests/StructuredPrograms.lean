@@ -245,12 +245,4 @@ theorem replacement_preserves_execution {S E : Type} (h : Handler interface S E)
       ((openingWith (openingStepWith true)).denote meaning inputs.get).run h state :=
   congrArg (fun process => process.run h state) (opening_contextual_replacement inputs.get)
 
-#print axioms opening_correspondence
-#print axioms verifier_correspondence
-#print axioms opening_contextual_replacement
-#print axioms independent_receive_counterexample
-#print axioms discarded_admission_cannot_be_erased
-#print axioms repeatedBranches_linear_size
-#print axioms replacement_preserves_execution
-
 end StructuredProgramsTests

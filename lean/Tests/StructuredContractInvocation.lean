@@ -124,6 +124,5 @@ private def callerBoundary : BoundaryValuation (assignment Int Int) callerOwner.
   ⟨fun _ => .cons (some 2) (.cons (some false) .nil), fun _ => .nil⟩
 example : extraValue.read {} callerBoundary callerAssignments = some [3, 4, 3] := rfl
 
-#print axioms CheckedApplication.childInvocation
 end
 end Tests.StructuredContractInvocation

@@ -299,11 +299,4 @@ example {d : Dialect} [DecidableEq d.Ty] {signatures}
     (accepted : raw.elaborate signatures = .ok typed) : typed.erase = raw :=
   RawRegions.erase_of_elaborate raw accepted
 
-#print axioms Zkc.Source.Region.elaborate_erase
-#print axioms Zkc.Source.Regions.elaborate_erase
-#print axioms Zkc.Source.RawRegion.erase_of_elaborate
-#print axioms Zkc.Source.RawRegions.erase_of_elaborate
-#print axioms nested_acceptance_preserves_raw
-#print axioms callbacks_acceptance_preserves_raw
-
 end RegionDecodingTests

@@ -199,16 +199,4 @@ example : (execute (.elements [1, 2]) interactive 0).interpret expand =
 example : (execute (.check false .abort (.elements [1])) interactive 0).interpret expand =
     .halt .abort := rfl
 
-#print axioms Zkc.Source.Finite.interpret_execute
-#print axioms translated_execution
-
-#print axioms Zkc.Source.Finite.fold_total_on
-#print axioms Zkc.Source.Finite.execute_replace_on
-#print axioms Zkc.Source.Finite.execute_product
-#print axioms bounded_replacement
-
-#print axioms Zkc.Source.Finite.execute_total
-#print axioms Zkc.Source.Finite.execute_replace
-#print axioms Zkc.Source.Finite.fold_congr
-#print axioms sum_replacement
 end FiniteTests

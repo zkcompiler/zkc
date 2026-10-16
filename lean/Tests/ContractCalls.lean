@@ -70,6 +70,4 @@ example : (callSites unreachable).map (·.site) = ["after-stop"] := rfl
     throw (IO.userError "incorrect lexical call sites")
   IO.println "ContractCalls: computable lexical inventory controls passed"
 
-#print axioms Zkc.Source.Structured.callInventory_complete
-#print axioms Zkc.Source.Structured.mem_locatedCallSites_iff
 end Tests.ContractCalls

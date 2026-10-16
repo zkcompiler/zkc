@@ -55,6 +55,4 @@ example {Γ : List Ty} (call : CheckedApplication owner Γ) (self : Nat)
       (call.boundaryOfOutcome context self values (.stopped reason)) assignments :=
   ExternalTerminal.not_holds_stopped _ call context self values reason assignments
 
-#print axioms availableTerminal_iff
-
 end Tests.ContractCallRequests

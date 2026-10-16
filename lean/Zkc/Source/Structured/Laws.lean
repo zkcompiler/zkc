@@ -196,7 +196,8 @@ theorem enumerated_index_bound (container : List F) (index : Nat)
   List.mem_range.mp member
 
 /-- The domain input assignment is explicit, including the exact selected vector.
-Other arguments are retained for I/A/C packing but do not select the items. -/
+Other arguments are retained for item, domain-argument and capture packing but
+do not select the items. -/
 theorem indices_admit (name : String) (types : List Ty) (field : String)
     (container : Var types (.vector field)) (arguments : Values (assignment F G) types)
     (representable : (arguments.get container).length < indexLimit) :

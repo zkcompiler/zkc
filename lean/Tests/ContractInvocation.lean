@@ -81,5 +81,4 @@ example {F G : Type} (context : ProtocolContext) (self : Nat)
           (fun returned => .done (maskValues self
             (context.mapScopes Tests.ContractCalls.repeatSpec.stateScopes) returned)) := rfl
 
-#print axioms Zkc.Source.Structured.CheckedApplication.childInvocation_iterations_injective
 end Tests.ContractInvocation

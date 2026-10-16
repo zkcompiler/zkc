@@ -25,8 +25,9 @@ namespace Evaluation
 abbrev Meanings (F G : Type) (interface : PIR.Signature) :=
   HelperTable (assignment F G) interface
 
-/-- Predicate is invoked before step, on I/A/C. False preserves the entire
-current state. The step receives S/I/A/C, including zero-length S and C. -/
+/-- The predicate runs before the step, on the item, domain arguments and
+captures. False preserves the entire current state. The step receives the state,
+item, domain arguments and captures, including zero-length state and captures. -/
 def foldTransition {F G : Type} {interface : PIR.Signature}
     (table : HelperTable (assignment F G) interface) (spec : FoldSpec)
     (arguments : Values (assignment F G) spec.domain.inputs)

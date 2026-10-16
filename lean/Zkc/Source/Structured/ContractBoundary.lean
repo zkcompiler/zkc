@@ -69,13 +69,6 @@ structure LogicalAssignments (Value : Ty → Type) {snapshot : Snapshot} {import
   parameters : (type : Ty) → BoundarySelector owner.protocol.signature type → Option (Value type)
   witnesses : (type : Ty) → BoundarySelector owner.protocol.signature type → Option (Value type)
 
-/-- A family explicitly chooses values for every owner and logical invocation
-label. Values can be shared or rewrapped at another label by an explicit choice;
-the index prevents accidental unification, not semantic reindexing. -/
-abbrev AssignmentFamily (Value : Ty → Type) {snapshot : Snapshot} (imported : Imported snapshot) :=
-  (owner : ContractBinding imported) → (invocation : InvocationCoordinate) →
-    LogicalAssignments Value owner invocation
-
 def eraseSelectors {signature : ProtocolSignature} {types : List Ty} :
     Values (BoundarySelector signature) types → List ContractSelector
   | .nil => []

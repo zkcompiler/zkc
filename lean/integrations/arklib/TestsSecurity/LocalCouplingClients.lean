@@ -87,7 +87,4 @@ theorem zero_result_before_stop (r : Bit) (s : Nat) :
   simp [sendThenStop, Region.denote, Regions.denote, meaning, Operands.eval,
     Values.get, PIR.Proc.bind, PIR.Proc.runM, handler, PIR.Execution.followM]
 
-#print axioms schnorr_coupling
-#print axioms sumcheck_coupling
-#print axioms zero_result_before_stop
 end TestsSecurity.LocalCouplingClients

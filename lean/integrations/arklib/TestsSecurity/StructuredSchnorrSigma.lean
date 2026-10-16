@@ -26,15 +26,4 @@ example (base key : G) (service : Nat) (prover : Zkc.Protocols.Schnorr.Common.St
       .done (.cons true .nil) :=
   extract_relation base key service prover first second distinct acceptFirst acceptSecond
 
-#print axioms commit_eq
-#print axioms SchnorrCheckpoints.prover_cut
-#print axioms SchnorrCheckpoints.prefix_run
-#print axioms SchnorrCheckpoints.resume_run
-#print axioms respond_eq
-#print axioms sigma_eq
-#print axioms complete
-#print axioms extract_relation
-#print axioms extracted_target
-#print axioms fresh_challenge_hvzk
-
 end TestsSecurity.StructuredSchnorrSigma

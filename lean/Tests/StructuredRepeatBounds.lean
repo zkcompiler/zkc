@@ -149,11 +149,6 @@ theorem mapped_callback_raw : mapped.raw =
       (.ret (.cons .here .nil)) :
         Region protocolDialect [.index, vectorType] [vectorType]).erase := rfl
 
-#print axioms iterate_zero
-#print axioms stopped_iteration_prefix
-#print axioms no_return_join_empty
-#print axioms mapped_callback_raw
-
 def run : IO Unit := do
   let failures ← IO.mkRef ([] : List String)
   let count ← IO.mkRef 0

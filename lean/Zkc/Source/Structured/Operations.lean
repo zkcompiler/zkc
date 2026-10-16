@@ -10,10 +10,6 @@ inductive HelperKind where
   | math | local
   deriving DecidableEq, Repr
 
-def HelperKind.toKind : HelperKind → Kind
-  | .math => .math
-  | .local => .local
-
 /-- Resolved signature from the checked declaration table, never wire authority.
 Protocol roots cannot be represented by this signature. -/
 structure Helper where

@@ -9,11 +9,6 @@ run_cmd do
     [`Zkc.Source.RegionDerivation, `Tests.RegionDerivation, `Tests.RegionDerivationControls]
     "REGION-DERIVATION-AUDIT-PASS" true
 
-#print axioms Zkc.Source.Region.Derivation.sound
-#print axioms Tests.RegionDerivation.schnorr_equation
-#print axioms Tests.RegionDerivation.sumcheck_equation
-#print axioms Tests.RegionDerivation.Shape.shape_inspection_law_refused
-
 open Lean Elab Command in
 run_cmd do
   for name in [``Zkc.Source.Region.Derivation.sound,

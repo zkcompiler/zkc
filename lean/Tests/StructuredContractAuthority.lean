@@ -82,6 +82,5 @@ example : True := by
     ⟨.cons [1] (.cons 1 .nil), rfl⟩
   trivial
 
-#print axioms requested
 end
 end Tests.StructuredContractAuthority
