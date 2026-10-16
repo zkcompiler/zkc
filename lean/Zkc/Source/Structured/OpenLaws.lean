@@ -217,6 +217,30 @@ theorem UnitPayload.component_body_view (payload : UnitPayload) (definition : Ch
         (Evaluation.componentOperation (observedSites F G) (payload.tables F G)) args.get := by
   rw [payload.component_invoke_body definition member args, definition.body_eq_of_raw body exactRaw]
 
+/-- Use an explicit helper ABI and named signature evidence, avoiding repeated
+normalization of a concrete admission computation during downstream elaboration. -/
+theorem UnitPayload.closed_body_view_as (payload : UnitPayload) (definition : CheckedDefinition)
+    (member : definition ∈ payload.definitions) (helper : Helper)
+    (signature : definition.helper = helper)
+    (body : Region dialect helper.inputs helper.outputs) (exactRaw : definition.raw = body.erase)
+    (args : Values (assignment F G) helper.inputs) :
+    invoke (payload.tables F G).closed helper args =
+      body.denote (Evaluation.meaning (observedSites F G) (payload.tables F G).closed) args.get := by
+  subst helper
+  exact payload.closed_body_view definition member body exactRaw args
+
+/-- The same explicit-ABI transport preserves optional component semantics. -/
+theorem UnitPayload.component_body_view_as (payload : UnitPayload) (definition : CheckedDefinition)
+    (member : definition ∈ payload.definitions) (helper : Helper)
+    (signature : definition.helper = helper)
+    (body : Region dialect helper.inputs helper.outputs) (exactRaw : definition.raw = body.erase)
+    (args : Values (Component (assignment F G)) helper.inputs) :
+    invoke (payload.tables F G).components helper args =
+      body.component (Evaluation.meaning (observedSites F G) (payload.tables F G).closed)
+        (Evaluation.componentOperation (observedSites F G) (payload.tables F G)) args.get := by
+  subst helper
+  exact payload.component_body_view definition member body exactRaw args
+
 theorem CheckedProtocol.observed_body_view (root : CheckedProtocol)
     (body : Region protocolDialect root.inputs root.outputs) (same : root.raw = body.erase)
     (tables : OpenTables F G) (self : Nat)

@@ -54,8 +54,10 @@ def closedImportedOfIsOk (snapshot : Snapshot) (accepted : (checkClosed snapshot
   | .ok program => ⟨program, result⟩
   | .error error => False.elim (by simp [result, Except.isOk, Except.toBool] at accepted)
 
-theorem ClosedImported.exactSubject {snapshot : Snapshot} (imported : ClosedImported snapshot) :
-    imported.program.snapshot = snapshot := by
+/-- Recover ordinary whole-unit admission from the existing closed admission,
+without evaluating the checker a second time. -/
+def ClosedImported.subject {snapshot : Snapshot} (imported : ClosedImported snapshot) :
+    Imported snapshot := ⟨imported.program.subject, by
   have admitted := imported.admitted
   cases checked : check snapshot with
   | error error => simp [checkClosed, checked] at admitted
@@ -64,8 +66,10 @@ theorem ClosedImported.exactSubject {snapshot : Snapshot} (imported : ClosedImpo
     split at admitted
     · contradiction
     · have same := Except.ok.inj admitted
-      rw [← same]
-      exact (check_ok_inversion checked).1
+      rw [← same]⟩
+
+theorem ClosedImported.exactSubject {snapshot : Snapshot} (imported : ClosedImported snapshot) :
+    imported.program.snapshot = snapshot := imported.subject.exactSubject
 
 def ClosedProgram.denote (program : ClosedProgram) (F G : Type) [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G]
     (inputs : Values (assignment F G) program.payload.entry.inputs) :

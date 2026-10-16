@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Structured.PrimitiveEvaluation
+public import Zkc.Source.Structured.MapEvaluation
 public import Zkc.Source.Finite
 
 @[expose] public section
@@ -114,6 +114,7 @@ def operation {F G : Type} {interface : PIR.Signature}
       | none => .halt .refused
   | .invoke helper, args, .nil => invoke table helper args
   | .fold spec, args, .nil => denoteFold table spec args
+  | .map spec, args, .nil => denoteMap table spec args
   | .branch _ _, .cons condition captures, .cons yes (.cons no .nil) =>
       invokeCallback (if condition then yes else no) captures
   | .loop state captures, .cons lower (.cons upper rest), .cons body .nil =>

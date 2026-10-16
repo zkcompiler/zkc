@@ -133,9 +133,27 @@ structure FiniteDeclaration where
   predicate : String
   deriving Repr
 
+/-- Retained preparation metadata; the shared SSA body is derived at admission. -/
+structure RealizationDeclaration where
+  name : String
+  inputs : List Ty
+  outputs : List Ty
+  helper : String
+  deriving Repr
+
+structure MapDeclaration where
+  name : String
+  inputs : List Ty
+  outputs : List Ty
+  helper : String
+  rowwise : List Bool
+  deriving Repr
+
 inductive Definition where
   | function (value : Function)
   | finite (value : FiniteDeclaration)
+  | realization (value : RealizationDeclaration)
+  | map (value : MapDeclaration)
   deriving Repr
 
 /-- Non-callable declaration metadata. These strings do not identify a Math
@@ -163,20 +181,27 @@ structure Snapshot where
 def Definition.name : Definition → String
   | .function f => f.name
   | .finite f => f.name
+  | .realization f => f.name
+  | .map f => f.name
 def Definition.inputs : Definition → List Ty
   | .function f => f.inputs
   | .finite f => f.inputs
+  | .realization f => f.inputs
+  | .map f => f.inputs
 def Definition.outputs : Definition → List Ty
   | .function f => f.outputs
   | .finite f => f.outputs
+  | .realization f => f.outputs
+  | .map f => f.outputs
 def Definition.kind : Definition → Kind
   | .function f => f.kind
-  | .finite _ => .local
+  | .finite _ | .realization _ | .map _ => .local
 def Definition.visibility : Definition → Visibility
   | .function f => f.visibility
   | .finite f => f.visibility
+  | .realization _ | .map _ => .publicDef
 def Definition.preconditions : Definition → List Bound
   | .function f => f.preconditions
-  | .finite _ => []
+  | .finite _ | .realization _ | .map _ => []
 
 end Zkc.Source.Structured

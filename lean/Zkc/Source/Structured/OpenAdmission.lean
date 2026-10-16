@@ -48,10 +48,7 @@ def resolveProtocolOp (snapshot : Snapshot) (domains : List DomainSpec)
     recordSite site true
     let owner ← role owner
     let callee ← lookupDefinition snapshot name
-    if callee.kind != .local then throw "structured-call-kind"
-    match callee with
-    | .finite _ => throw "structured-call-kind"
-    | .function _ => pure ()
+    if !callee.acceptsEdge .localCall then throw "structured-call-kind"
     return .localCall ⟨name, .local, callee.inputs, callee.outputs⟩ rfl owner site
   | .guard owner =>
     recordSite site true

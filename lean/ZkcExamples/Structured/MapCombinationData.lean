@@ -1,0 +1,22 @@
+module
+
+public import Zkc.Source.Structured.Import
+
+@[expose] public section
+
+/-! Constructor data from the retained actual MLIR export.
+Regenerate with bridges/structured/snapshot.py; admission and semantic proofs
+are separate. The native bridge checks exact regeneration against the source. -/
+
+namespace ZkcExamples.Structured.MapCombinationData
+open Zkc.Source.Structured
+
+def snapshot : Snapshot where
+  source := "sha256:c85ccb18064343f807fea97b69ae0825758fb9763b2dfd37b311c61a4c1cd0b8"
+  entry := "s12h6d61705f6578616d706c657317h4c696e656172436f6d62696e6174696f6e"
+  domains := []
+  relations := []
+  bindings := []
+  definitions := [.map ⟨"zkl_map_69915d69b63fed11da18dc3f9faf1a502e85fc5b9d1dbc28c8d156b3a27304b2", [.field "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"], [.vector "bls12-381.fr"], "s12h6d61705f6578616d706c65736h6c696e656172", [false, true, false, true, true, false]⟩, .function ⟨"s12h6d61705f6578616d706c657317h4c696e656172436f6d62696e6174696f6e", .protocol, .publicDef, [.field "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"], [.vector "bls12-381.fr"], some ⟨["role00000000", "role00000001"], [["role00000000"], ["role00000000"], ["role00000000"], ["role00000000"], ["role00000000"], ["role00000000"]], [["role00000000"]]⟩, [], none, (.block [.instruction (.localCall "s12h6d61705f6578616d706c657311h636f6d62696e6174696f6e" "role00000000") [0, 1, 2, 3, 4, 5] [.vector "bls12-381.fr"] [] "s0"] (.ret [0]))⟩, .function ⟨"s12h6d61705f6578616d706c657311h636f6d62696e6174696f6e", .local, .publicDef, [.field "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"], [.vector "bls12-381.fr"], none, [], some ("s12h6d61705f6578616d706c657311h636f6d62696e6174696f6e", []), (.block [.instruction (.apply "zkl_map_69915d69b63fed11da18dc3f9faf1a502e85fc5b9d1dbc28c8d156b3a27304b2") [0, 1, 2, 3, 4, 5] [.vector "bls12-381.fr"] [] "s0"] (.ret [0]))⟩, .function ⟨"s12h6d61705f6578616d706c65736h6c696e656172", .math, .privateDef, [.field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr"], [.field "bls12-381.fr"], none, [], none, (.block [.instruction (.call "s12h6d61705f6578616d706c65735h7363616c65") [0, 1] [.field "bls12-381.fr"] [] "", .instruction (.call "s12h6d61705f6578616d706c65735h7363616c65") [3, 4] [.field "bls12-381.fr"] [] "", .instruction (.fieldSubtract "bls12-381.fr") [1, 0] [.field "bls12-381.fr"] [] "", .instruction (.fieldConstant "bls12-381.fr" "3") [] [.field "bls12-381.fr"] [] "", .instruction (.fieldAdd "bls12-381.fr") [1, 0] [.field "bls12-381.fr"] [] ""] (.ret [0]))⟩, .function ⟨"s12h6d61705f6578616d706c65735h7363616c65", .math, .privateDef, [.field "bls12-381.fr", .field "bls12-381.fr"], [.field "bls12-381.fr"], none, [], none, (.block [.instruction (.fieldMultiply "bls12-381.fr") [0, 1] [.field "bls12-381.fr"] [] ""] (.ret [0]))⟩]
+
+end ZkcExamples.Structured.MapCombinationData

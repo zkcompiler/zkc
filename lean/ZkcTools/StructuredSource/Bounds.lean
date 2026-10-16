@@ -73,6 +73,13 @@ def charge (amount : Nat := 1) : Analysis Unit := do
   if amount > workLimit - meter.work then throw .work
   set { meter with work := meter.work + amount }
 
+/-- Aggregate work is not a vector length. Check before multiplying, without
+raising either the work budget or the independent per-vector capacity. -/
+def chargeRepeated (amount count : Nat) : Analysis Unit := do
+  let meter ← get
+  if count != 0 && amount > (workLimit - meter.work) / count then throw .work
+  charge (amount * count)
+
 def visit : Analysis Unit := do tick; charge
 
 def Value.join : Value → Value → Analysis Value
@@ -291,6 +298,43 @@ def findHelper (definitions : Helpers) (helper : Helper) : Analysis CheckedDefin
 def booleanBinary (op : Bool → Bool → Bool) (a b : Option Bool) : Value :=
   .boolean (do return op (← a) (← b))
 
+/-- The concrete map collects every row length before its ordered shape test.
+Charge this traversal even for unused rows and eventual mismatches. Broadcasts
+remain in the full argument tuple; they do not contribute a row length. -/
+def mapLengths : List Bool → Env → Analysis (List Interval)
+  | [], [] => pure []
+  | true :: mask, .vector n :: args => do
+      visit
+      if n.lower > n.upper then throw .unknown
+      vectorWork n
+      return n :: (← mapLengths mask args)
+  | false :: mask, .atom :: args => do
+      visit
+      mapLengths mask args
+  | _, _ => throw .unknown
+
+/-- Only successful shape paths contribute a common length. Each row checks
+representability before equality; a disjoint interval ends that prefix before
+later checks. Unknown lengths retain every possible equal, representable shape. -/
+def mapShapeRemaining (common : Interval) : List Interval → Analysis (Option Interval)
+  | [] => pure (some common)
+  | n :: rest => do
+      visit
+      if n.lower > n.upper then throw .unknown
+      if n.lower ≥ indexLimit then return none
+      let next := Interval.mk (max common.lower n.lower)
+        (min common.upper (min n.upper (indexLimit - 1)))
+      if next.lower > next.upper then return none
+      mapShapeRemaining next rest
+
+def mapShape : List Interval → Analysis (Option Interval)
+  | [] => throw .unknown -- admitted maps have at least one row
+  | n :: rest => do
+      visit
+      if n.lower > n.upper then throw .unknown
+      if n.lower ≥ indexLimit then return none
+      mapShapeRemaining ⟨n.lower, min n.upper (indexLimit - 1)⟩ rest
+
 /-- Calls specialize checked acyclic bodies to their arguments. The analysis
 meter is checked at every recursive entry, independently of estimated work. -/
 partial def operation (definitions : Helpers) (op : Op) (args : Env)
@@ -305,15 +349,38 @@ partial def operation (definitions : Helpers) (op : Op) (args : Env)
   | _ =>
     if absent args then
       if let .exec _ := op then return none
+      if let .map _ := op then return none
       return some (op.results.map fun _ => .absent)
     if args.any Value.isOptional then
       let result ← operation definitions op (args.map Value.present) bodies
       if let .exec _ := op then return result
+      if let .map _ := op then return result
       return ← joinResult result (some (op.results.map fun _ => .absent))
     match op, args, bodies with
     | .invoke helper, _, .nil =>
         let definition ← findHelper definitions helper
         region (operation definitions) definition.raw args
+    | .map spec, _, .nil =>
+        let some n ← mapShape (← mapLengths spec.rowwise args) | return none
+        let output ← length n
+        if n.upper == 0 then return some [output]
+        -- Range allocation/traversal, complete row tuple selection/construction,
+        -- and output cons cells. Arity * rows may exceed vectorLimit.
+        chargeRepeated (3 + 2 * args.length) n.upper
+        tick args.length
+        let rowArgs := args.map fun _ => Value.atom
+        let before := (← get).work
+        let result ← operation definitions (.invoke spec.helper) rowArgs .nil
+        let rowWork := (← get).work - before
+        -- All rows have exactly the same abstract scalar arguments. Analyze
+        -- the retained body (including nested helpers) once, and reserve its
+        -- entire logical work for every potential row. Analysis counts only
+        -- the traversal performed here, with no helper result/global cache.
+        chargeRepeated rowWork (n.upper - 1)
+        match result with
+        | some [.atom] => return some [output]
+        | none => return if n.lower == 0 then some [.vector (exact 0)] else none
+        | _ => throw .unknown
     | .exec p, _, .nil => primitive p args
     | .indexConstant n, [], .nil => return some [.index (exact n)]
     | .indexEqual, [.index a, .index b], .nil => return some [compareIndices false a b]

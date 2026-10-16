@@ -33,10 +33,31 @@ def componentOperation (observations : SiteObservations interface) (tables : Com
       | none => .halt .incomplete
       | some values => (primitiveOutcome (primitive.evaluate values)).bind fun result =>
           .done result.present
+  | .map spec, args, .nil =>
+      match RoleFamily.sequence (Value := assignment F G) (types := spec.arguments) args with
+      | none => .halt .incomplete
+      | some values => (denoteMap tables.closed spec values).bind fun result =>
+          .done result.present
   | .invoke helper, args, .nil =>
       if helper.kind = .math then invoke tables.components helper args
       else strictComponent (meaning observations tables.closed) (.invoke helper) args .nil
   | op, args, bodies => strictComponent (meaning observations tables.closed) op args bodies
+
+theorem componentOperation_map_present (observations : SiteObservations interface)
+    (tables : ComponentTables F G interface) (spec : MapSpec)
+    (args : Values (assignment F G) spec.arguments) :
+    componentOperation observations tables (.map spec) args.present .nil =
+      (denoteMap tables.closed spec args).bind (fun result => .done result.present) := by
+  simp only [componentOperation, RoleFamily.sequence_present]
+  rfl
+
+/-- Direct optional maps require every operand, including unused broadcasts. -/
+theorem componentOperation_map_absent (observations : SiteObservations interface)
+    (tables : ComponentTables F G interface) (spec : MapSpec)
+    (args : Values (Component (assignment F G)) spec.arguments)
+    (absent : RoleFamily.sequence args = none) :
+    componentOperation observations tables (.map spec) args .nil = .halt .incomplete := by
+  simp only [componentOperation, absent]
 
 theorem componentOperation_math (observations : SiteObservations interface)
     (tables : ComponentTables F G interface) (helper : Helper) (kind : helper.kind = .math)
@@ -96,6 +117,9 @@ theorem componentOperation_adequate (observations : SiteObservations interface) 
     cases bodies
     simp only [componentOperation, RoleFamily.sequence_present]
     rfl
+  case map spec =>
+    cases bodies
+    exact componentOperation_map_present observations tables spec args
   case invoke helper =>
     cases bodies
     cases helper with

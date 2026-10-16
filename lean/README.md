@@ -22,6 +22,13 @@ ordered Fr-vector operations through that same evaluator; the
 states range, stopping and capacity boundaries. Complete original library
 Shape/Table/Halves wrappers have [source equations and ordered result contracts](docs/spec/structured-source.md#actual-library-primitive-subjects),
 alongside independent arithmetic/vector and pure-index callers.
+Retained maps and realizations share that typed carrier and checked helper table.
+[Preparation contracts](docs/spec/structured-source.md#retained-realization-and-map-declarations)
+cover full-ABI realization totality, ordered row shapes and broadcasts, empty rows,
+stopped prefixes and strict optional inputs. Complete First/Prefix source equations
+connect contiguous-half interpolation and ordered prefix restriction to the
+independent multilinear list model; independent arithmetic and constant maps
+exercise broadcasts, unused shapes and participant ownership.
 Its [scalar inlining pairs](bridges/structured/README.md#scalar-inlining-pairs)
 prove exact original/prepared model equality for authored response and claim
 computations using checked body contracts and a reusable inlining law.

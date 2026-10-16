@@ -9,6 +9,7 @@ They do not certify arbitrary DSL programs or the full native lowering pipeline.
 | Structured source | Multi-result closed callbacks and lexical binding; strict formation in both directions; scalar/mathematical/participant/import bridges; contextual equality, totality and compatible effect translation | Shared structural carrier; native transformation correctness requires separate correspondence |
 | Structured native import | Whole-unit original schema, separate protocol roots and kinded named helpers; explicit scalar/group interpretation, owner-only Local calls, shared participant effects, computational availability and service admission | No general availability soundness, eager/demand correspondence, affine resources, native correctness or relation/formula binding theorem |
 | Optional component semantics | Same typed Region with closed callbacks; generic lookup, optional named Math calls, all-present adequacy, exact resolution and full-table framing; shared scalar/group evaluator | Static availability is a separate computational check; adequacy alone proves neither admission nor native correspondence |
+| Retained preparations | Exact retained realization/map declarations, whole-unit transitive profile admission, full-ABI realization totality, ordered row/broadcast maps and stopped-prefix laws | Logical model; helper-value formulas require equations for the actual checked table; native resource limits remain separate |
 | Structured helper inlining | Generic invocation/body binding law preserving complete processes and suffixes; exact original/prepared model equality for Schnorr-response and multilinear-claim scalar Entries; admitted arithmetic mutation counterexample | Explicit lookup/body equation and exact retained subjects; no general native pass correctness or interactive protocol security |
 | Ordered finite semantics | Admission-preserving effectful folds, product/zip laws and conditional pure replacement | Evaluated mathematical domains; native capacity, failure diagnostics and domain lowering require their own correspondence |
 | Scalar import | Checked admission and source-specific open-process correspondence for actual exports | Native exporter, interface resolver and constructor rendering are reviewed/tested, not universally proved |
@@ -77,8 +78,9 @@ length plus one; no observed Shape/Table/Halves site law is claimed.
 The library equations state representation premises explicitly; the independent
 Sequence equation covers all logical inputs. See the
 [source contract](spec/structured-source.md#actual-library-primitive-subjects)
-for exact scope and theorem owners. Full Sumcheck's maps, realization, protocol
-application and repetition remain outside this admission profile.
+for exact scope and theorem owners. Retained maps and realizations use that same admission and semantic carrier.
+Protocol application and repetition remain outside this admission profile;
+this extension does not admit the full Sumcheck protocol.
 
 The executable reference propagates generated index/vector bounds through the
 checked source before running the existing evaluator. Separate analysis and
@@ -86,3 +88,43 @@ logical-work budgets, conservative branch/loop joins and typed reply envelopes
 can refuse cheap concrete runs. In particular, a valid source equation does not
 imply CLI preflight success. These controls do not prove abstract-transfer
 soundness, exact host costs or agreement with native capacity thresholds.
+
+## Retained map and realization contracts
+
+Retained realizations derive an invocation and positional return from the original
+helper reference. Their checked region-free Math closure has a semantic totality
+proof over the complete ABI, including vector projections, empty results and
+multiple results. The imported-unit theorem requires checked-definition membership
+and exact equality to the retained declaration's derived raw body. It has no
+caller-supplied execution or callee-totality premise. Ordinary Math definitions
+retain their broader existing profile.
+
+Retained maps derive one typed `Op.map` and a positional return. Their root helper
+returns one field value; every operation in the complete transitive Math closure,
+including unused operations and callees, satisfies the scalar-ring profile.
+`MapLaws` checks all row shapes in source order before invoking any row, retains
+scalar broadcast positions, and preserves helper effects and stopped prefixes.
+Empty rows return an empty vector without invoking the helper. Direct optional
+maps require all arguments; Local wrappers retain their existing strict boundary,
+and Math projections retain per-result optionality.
+
+The complete retained First and Prefix source subjects use their own checked
+helper tables and explicit singleton closed projections. First validates the
+table, splits contiguous halves, maps interpolation, subtracts the dimension and
+returns the ordered values/dimension/width triple. Prefix composes those steps in
+point order, including an empty point and rejection of too many coordinates.
+Their arbitrary-width shape results and one-column most-significant-bit-first
+restriction results use the independent list restriction mathematics.
+Independent two-role Combination and ConstantRows
+subjects cover interleaved broadcasts, the formula `s*a-t*b+3`, unused row shapes,
+owner/nonowner behavior and missing unused inputs. RealizeValues proves the
+actual vector projection through its retained realization. Each source equation
+uses exact retained-body views and discharges helper equations through the full
+checked table. These are model-level source contracts, not native execution,
+protocol security or a full Sumcheck source theorem.
+
+The executable map bounds reserve all row-shape work and repeated actual helper
+work without changing existing budgets. Empty-row pruning follows the complete
+shape check. This is a logical workload bound, not exact CPU accounting:
+concrete positional list lookup depth is not charged as processor steps. General
+transfer soundness and native resource correspondence remain separate obligations.

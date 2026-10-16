@@ -77,6 +77,11 @@ theorem operation_table_congr [CommRing F] [AddCommGroup G] [Module F G] [Decida
     funext arguments callbacks
     cases callbacks
     exact congrFun same arguments
+  | map spec =>
+    funext arguments callbacks
+    cases callbacks
+    exact denoteMap_table_congr left right spec
+      (agree spec.helper (by simp [Op.helpers])) arguments
   | fold spec =>
     funext arguments callbacks
     cases callbacks

@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Source.Structured.Component
+public import Zkc.Source.Structured.MapLaws
 public import Zkc.Source.RegionInterpretation
 
 @[expose] public section
@@ -125,6 +126,25 @@ theorem denoteFold_interpret (operations : PIR.OperationInterpretation I J)
     (denoteFold left spec args).interpret operations = denoteFold right spec args := by
   simp only [denoteFold, Finite.interpret_execute, foldTransition_interpret operations tables]
 
+theorem mapRow_interpret (operations : PIR.OperationInterpretation I J)
+    {left : Meanings F G I} {right : Meanings F G J}
+    (tables : HelperTable.Interprets operations left right) (spec : MapSpec)
+    (args : Values (assignment F G) spec.arguments) (index : Nat) :
+    (mapRow left spec args index).interpret operations = mapRow right spec args index := by
+  unfold mapRow
+  cases selected : mapRowArguments spec.field spec.rowwise args index with
+  | none => rfl
+  | some values =>
+    simp only [PIR.Proc.interpret_bind, tables spec.helper values, PIR.Proc.interpret]
+
+theorem denoteMap_interpret (operations : PIR.OperationInterpretation I J)
+    {left : Meanings F G I} {right : Meanings F G J}
+    (tables : HelperTable.Interprets operations left right) (spec : MapSpec)
+    (args : Values (assignment F G) spec.arguments) :
+    (denoteMap left spec args).interpret operations = denoteMap right spec args := by
+  simp only [denoteMap, Finite.interpret_admitThen, PIR.Proc.interpret_bind,
+    mapRows_interpret, mapRow_interpret operations tables, PIR.Proc.interpret]
+
 theorem denoteLoop_interpret (operations : PIR.OperationInterpretation I J)
     (state captures : List Ty)
     (body : RegionFunction (assignment F G) I (.index :: (state ++ captures), state ++ captures))
@@ -204,6 +224,7 @@ theorem operation_interpret (operations : PIR.OperationInterpretation I J)
     cases primitive.evaluate args <;> rfl
   | invoke helper => cases bodies; exact tables helper args
   | fold spec => cases bodies; exact denoteFold_interpret operations tables spec args
+  | map spec => cases bodies; exact denoteMap_interpret operations tables spec args
   | branch =>
     cases args with
     | cons condition captures => cases bodies with
@@ -316,6 +337,15 @@ theorem componentOperation_interpret (operations : PIR.OperationInterpretation I
         cases primitive.evaluate values <;> rfl
       rw [lift]
       rfl
+  case map spec =>
+    cases bodies
+    dsimp only [Op.arguments] at args
+    simp only [componentOperation, RegionFunctions.translate]
+    cases present : RoleFamily.sequence args with
+    | none => rfl
+    | some values =>
+      simp only [PIR.Proc.interpret_bind, denoteMap_interpret operations tables.closed,
+        PIR.Proc.interpret]
   case invoke helper =>
     cases bodies
     by_cases math : helper.kind = .math

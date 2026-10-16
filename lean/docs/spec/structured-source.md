@@ -199,8 +199,163 @@ host allocation success or equate native runtime and observer work capacities.
 Callers needing subsequent lengths or index arithmetic must state those bounds.
 The exact Fr/G1 nominal profile remains fixed; a configurable profile is deferred
 until a real second-domain consumer requires it. Multi-role partial Math remains
-restricted as above. Map/realization declarations, protocol application and
-protocol repetition remain unsupported, including in dormant source closure.
+restricted as above. Protocol application and protocol repetition remain
+unsupported, including in dormant source closure.
+
+## Retained realization and map declarations
+
+The eight-slot envelope retains two additional definition variants, in original
+encounter order:
+
+```text
+["realize", name, inputs, outputs, helper]
+["map", name, inputs, outputs, helper, rowwise]
+```
+
+`RealizationDeclaration` and `MapDeclaration` retain exactly these fields.
+Preparation names obey ASCII `[A-Za-z_][A-Za-z0-9_.-]*` with a 128-byte limit;
+Math helper references use the existing nonempty 512-byte string bound.
+`rowwise` contains JSON Booleans, has the input arity and contains at least one
+true. A number or string is not a wire Boolean. Both variants count toward the
+shared 128-definition limit and each charges one derived operation against the
+4096-instruction limit. Unused declarations, metadata, operations and transitive
+calls remain subject to admission, closure depth and cycle checks.
+
+Reference permission depends on the original retained variant, before deriving
+a semantic Local helper. A Math `call` targets a private defined Math function.
+Local `apply` may target an ordinary Local function, finite declaration,
+realization or map. Protocol `local.call` targets an ordinary Local function
+only. Finite callbacks remain private ordinary functions of the required kind;
+derived preparation helpers do not gain callback permission. A preparation's
+helper must be an exact private Math reference. Selected entries remain
+protocol functions.
+
+Realization requires the declaration's complete input and output ABIs to match
+those of its helper, including vector projections and zero or multiple results.
+Its transitive Math fragment is
+region-free: admitted Fr arithmetic/equality, G1 operations/equality, pure index
+constant/equality, Boolean operations, supported selection, Math calls and
+positional returns. No finite operation, bounded read, exec, Local control or
+helper precondition is admitted in that closure. A semantic totality theorem
+must prove immediate return for the actual checked closure; neither this
+operation list nor a native effect annotation is itself such a proof.
+
+Formation validates the shared typed operations. The checked raw preparation
+profile and selected helper closure are the single operation/type authority;
+ordinary declaration ordering and protocol availability enforce cycles and depth.
+Declaration ordering precedes preparation-profile selection, so an ordering-depth
+failure takes precedence when a unit also has a preparation-profile violation.
+A separate traversal of retained Math declarations checks only that the entire
+closure has no preconditions, since those original premises are not stored in
+`CheckedDefinition`. It supplies no competing operation profile or depth rule.
+Successful whole-unit admission entails `PreparationRootsSelected`; the
+`Imported` inversion lemmas recover the exact selected root signature of every
+retained realization/map. Totality consumers can use that evidence together
+with actual checked-definition membership and its exact raw derivation, without
+supplying a semantic callee-totality assumption or recomputing root membership.
+
+
+Map's root helper has only Fr scalar inputs and exactly one Fr scalar output.
+An input becomes an Fr vector exactly when its mask entry is true, and the map
+has one Fr vector result. Every transitive operation, including dead instructions
+and zero-result calls, must be an Fr constant, add, subtract, multiply, exact
+Math call or return. Nested Math helpers may return zero or multiple Fr scalars;
+the one-result condition applies only to the map root. Equality, selection,
+index/group operations and other fields are excluded even when unused.
+
+Both preparations use the existing typed `Source.Region`, `PIR.Proc` and Math
+helper table. A realization derives one `Op.invoke` with positional operands,
+followed by positional returns. A map derives one typed `Op.map` and return of
+its sole result. `MapSpec` retains the helper name, field and ordered mask; its
+computed helper signature enforces the scalar root ABI. Checked formation and
+raw derivation equations connect each successful `checkDefinition` call to its
+retained declaration. Concrete full-unit clients additionally prove exact raw
+body equalities for their own checked payload; the per-definition equations
+alone do not assert a generic payload/declaration association. The
+original declaration acquires no invented body, site, origin or visibility
+field.
+
+For complete ordered map arguments, the first row length is checked for
+representability below `2^64`. Each later row is then checked for representability
+and equality with the first length, in source argument order. An
+unrepresentable reached length stops `exhausted`; a representable unequal length
+stops `refused` before later shape checks. Only after all rows pass does the map
+invoke its checked helper at indices `0, …, n-1`, supplying every scalar operand
+in its original position, whether selected from a row or broadcast. Unused rows
+still participate in shape validation. Equal empty rows return an empty vector
+without invoking the helper. Process bind preserves every reached helper effect
+and stop prefix; no zip truncation or liveness-based operand removal is implied.
+
+At the model level, direct optional `Op.map` sequences all operands and stops
+`incomplete` if any is absent. Admitted source maps occur in derived Local bodies,
+so their source-visible absence boundary is the owned Local call; direct optional
+map laws also cover raw typed regions used by generic semantics and tests.
+Existing Local helper component invocation retains its own strict wrapper
+behavior, and owned protocol invocation requires all inputs before
+work; nonowners skip it. Math projection remains optional per result and may
+ignore absent unused inputs. These are separate boundaries.
+
+Generic map formula laws require an equation for actual
+`invoke table spec.helper` on every reached complete scalar tuple. Concrete
+clients discharge that premise using their complete checked helper tables and
+exact body views. Helper spelling never supplies a mathematical equation.
+Helper inventory, framing, full-table linking, effect interpretation and
+all-present component laws use the same node and carrier.
+
+Logical lists and u64 representability are separate from observer vector/work
+capacity. Collecting pure row lengths does not perform a representability
+prescan: the stopping decision follows the ordered shape prefix above. Native
+generated `control.require` uses its own rejection spelling; matching it to
+logical `refused` requires an explicit bounded adapter. Internal generated sites
+are not claimed equal to retained source sites.
+
+The executable Bounds transfer intersects all retained row-length intervals and
+charges every length extraction before helper work. On a possible nonempty
+return, it analyzes the actual helper once on the complete scalar atom tuple
+and reserves that helper's logical work for each possible row, including dead
+nested calls. The resulting vector is bounded by the common successful length;
+aggregate tuple work does not consume a different per-vector capacity. Empty
+rows avoid helper work only after all shapes pass. Existing analysis, execution
+and vector limits are unchanged. These are conservative executable transfers,
+not a general bounds-soundness proof. The workload meter counts logical tuple
+selections; it does not count the depth of concrete positional list indexing as
+CPU steps. No wall-time, allocator-cost or native-capacity theorem is asserted.
+
+
+## Actual retained preparation subjects
+
+The complete original `map-callers.zkc` captures are retained as `MapFirstData`,
+`MapPrefixData`, `MapCombinationData`, `MapConstantData` and
+`RealizationValuesData`. Each selected subject includes its whole actual helper
+table. First, Prefix and RealizeValues have the singleton role `P`; their checked
+closed projection is explicit. Combination and ConstantRows retain roles `P,V`
+and use the participant interpretation, including the owner and nonowner cases.
+
+Exact `Views` modules connect typed bodies to retained raw trees. All five
+subjects write out their complete checked payloads so downstream dependent types
+need not rerun admission. Their `kernel_admission`/`imported` equations still
+check equality with the original whole-snapshot checker, including declaration
+order, linking, availability and preparation closures. This is a proof of the
+checked result, not an assumed result cache. Other body consumers can use named
+membership and helper-signature equalities through the explicit-ABI body-view
+lemmas. All value equations use the existing interpreter and actual helper table.
+
+| Subject | Source contract | Assumptions and boundaries |
+| --- | --- | --- |
+| `MapFirst` | Table validation, positive-dimension guard, contiguous split, interpolation map, dimension subtraction and ordered vector/dimension/width result | Logical input lengths and indices satisfy the stated u64 representation premises; invalid shapes and zero dimension reject |
+| `MapPrefix` | Ordered finite composition of First, empty-point identity after table validation, overlong-point rejection and ordered append | Same initial representation premises; point length admission precedes iteration, and its exhaustion is retained |
+| `MapCombination` | Full owner result `zipWith (fun a b => s*a-t*b+3)`, reached source marks, exact shape stops and nonowner skip | Every row, including unused rows, is representable and has the same length for a successful result; every owned input is present |
+| `MapConstant` | Exactly one constant `7` per row, including zero rows, full shape stops and strict owned presence | Unused row shapes and the unused scalar remain required; the nonowner skips the Local call |
+| `RealizationValues` | Actual vector projection through the retained realization and unchanged Local values wrapper, preceded by table validation in the full source | The projection/realization itself needs no vector-size or index premise; source validation and optional/owned boundaries remain explicit |
+
+First's shape theorem preserves arbitrary flattened column widths. For one
+column, its result decodes to `Multilinear.fixFirst` on the leading Boolean
+coordinate. For one column, Prefix's result decodes to `fixPrefix` in the supplied point order,
+using `ListRestriction`'s independent contiguous-half and ordered-fold laws.
+These statements establish most-significant-bit-first table restriction in the
+independent model. They do not establish native lowering correctness or a full
+Sumcheck protocol theorem. Source-site observations, finite bridge comparison,
+resource preflight and security theorems remain separate evidence.
 
 ## Actual library primitive subjects
 

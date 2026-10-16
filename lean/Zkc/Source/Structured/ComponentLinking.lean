@@ -41,6 +41,15 @@ theorem componentOperation_table_congr (left right : ComponentTables F G interfa
     cases bodies
     simp only [componentOperation]
     split <;> rfl
+  case map spec =>
+    funext args bodies
+    cases bodies
+    simp only [componentOperation]
+    split
+    · rfl
+    · exact congrArg (fun process => process.bind (fun results => .done results.present))
+        (denoteMap_table_congr left.closed right.closed spec
+          (closedAgree spec.helper (by simp [Op.helpers])) _)
   case invoke helper =>
     funext args bodies
     cases bodies

@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Source.Structured.Meaning
+public import Zkc.Source.Structured.MapLaws
 
 @[expose] public section
 

@@ -63,6 +63,12 @@ def type (json : Json) : Except String Ty := do
 
 def types (json : Json) : Except String (List Ty) := do
   (← array json).mapM type
+/-- JSON mask elements must be Booleans, including in unused declarations. -/
+def booleans (json : Json) : Except String (List Bool) := do
+  (← array json).mapM fun value => match value with
+    | .bool value => pure value
+    | _ => throw "structured-map-mask"
+
 def refs (json : Json) : Except String (List Nat) := do
   (← array json).mapM natural
 
@@ -224,6 +230,10 @@ def definition (json : Json) : Except String Definition := do
   | [.str "finite", name, visible, inputs, outputs, domain, step, predicate] =>
     return .finite ⟨← string name, ← visibility visible, ← types inputs, ← types outputs,
       ← string domain, ← string step, ← string predicate true⟩
+  | [.str "realize", name, inputs, outputs, helper] =>
+    return .realization ⟨← string name, ← types inputs, ← types outputs, ← string helper⟩
+  | [.str "map", name, inputs, outputs, helper, rowwise] =>
+    return .map ⟨← string name, ← types inputs, ← types outputs, ← string helper, ← booleans rowwise⟩
   | _ => throw "structured-definition"
 
 def digestValid (source : String) : Bool :=

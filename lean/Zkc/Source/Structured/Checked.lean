@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Structured.Admission
+public import Zkc.Source.Structured.PreparationAdmission
 public import Zkc.Source.Structured.ProtocolOperations
 
 @[expose] public section
@@ -48,6 +48,22 @@ def CheckedDefinition.dependencies (definition : CheckedDefinition) : List Strin
 def CheckedDefinition.instructionCount (definition : CheckedDefinition) : Nat :=
   definition.raw.operations.length
 
+/-- Form exactly the supplied raw tree without changing retained signatures. -/
+def formDefinition (definition : Definition) (kind : HelperKind) (raw : RawRegion Ty Op) :
+    Except String CheckedDefinition :=
+  match formed : raw.elaborate (dialect := dialect) definition.inputs definition.outputs with
+  | .error _ => .error "structured-formation"
+  | .ok body => .ok ⟨definition.name, kind, definition.inputs, definition.outputs, raw, body, formed⟩
+
+theorem formDefinition_raw {definition : Definition} {kind : HelperKind} {raw : RawRegion Ty Op}
+    {checked : CheckedDefinition} (accepted : formDefinition definition kind raw = .ok checked) :
+    checked.raw = raw := by
+  unfold formDefinition at accepted
+  split at accepted
+  · contradiction
+  · cases Except.ok.inj accepted
+    rfl
+
 def checkDefinition (snapshot : Snapshot) (domains : List DomainSpec)
     (summaries : IdentitySummaries) (definition : Definition) : Except String CheckedDefinition := do
   let kind ← match definition.kind with
@@ -64,10 +80,37 @@ def checkDefinition (snapshot : Snapshot) (domains : List DomainSpec)
       let raw : RawRegion Ty Op := .letOp (.fold spec) (List.range f.inputs.length)
         f.outputs .nil (.ret (List.range f.outputs.length))
       pure raw
-  match formed : raw.elaborate (dialect := dialect) definition.inputs definition.outputs with
-  | .error _ => throw "structured-formation"
-  | .ok body => return ⟨definition.name, kind, definition.inputs, definition.outputs,
-      raw, body, formed⟩
+    | .realization declaration => do
+      declaration.validate snapshot
+      pure declaration.raw
+    | .map declaration => do
+      declaration.validate snapshot
+      pure declaration.raw
+  formDefinition definition kind raw
+
+/-- The retained declaration determines every derived operand and result index. -/
+theorem checkDefinition_realization_raw {snapshot : Snapshot} {domains : List DomainSpec}
+    {summaries : IdentitySummaries} {declaration : RealizationDeclaration} {checked : CheckedDefinition}
+    (accepted : checkDefinition snapshot domains summaries (.realization declaration) = .ok checked) :
+    checked.raw = declaration.raw := by
+  cases validated : declaration.validate snapshot with
+  | error error => simp [checkDefinition, Definition.kind, validated, Except.bind, Except.pure, pure, bind] at accepted
+  | ok value =>
+    cases value
+    apply formDefinition_raw
+    simpa only [checkDefinition, Definition.kind, validated, Except.bind, Except.pure, pure, bind] using accepted
+
+/-- Map derivation retains the complete ordered input tuple and its sole result. -/
+theorem checkDefinition_map_raw {snapshot : Snapshot} {domains : List DomainSpec}
+    {summaries : IdentitySummaries} {declaration : MapDeclaration} {checked : CheckedDefinition}
+    (accepted : checkDefinition snapshot domains summaries (.map declaration) = .ok checked) :
+    checked.raw = declaration.raw := by
+  cases validated : declaration.validate snapshot with
+  | error error => simp [checkDefinition, Definition.kind, validated, Except.bind, Except.pure, pure, bind] at accepted
+  | ok value =>
+    cases value
+    apply formDefinition_raw
+    simpa only [checkDefinition, Definition.kind, validated, Except.bind, Except.pure, pure, bind] using accepted
 
 structure OrderedDefinition where
   definition : CheckedDefinition
@@ -111,6 +154,34 @@ instance declarationsLinkedDecidable (available : List Helper) (definitions : Li
       (definition.name ∉ available.map (·.name) ∧
        (∀ helper ∈ definition.helpers, helper ∈ available) ∧
        DeclarationsLinked (definition.helper :: available) rest))
+
+/-- Compute a selected Math closure inside the existing declaration order.
+An unrelated Local body or partial Math helper is never given a total profile. -/
+def preparationHelpers (profile : PreparationProfile) (definitions : List CheckedDefinition) :
+    List Helper :=
+  definitions.foldl (fun selected definition =>
+    if definition.kind == .math && profile.typesAllowed definition.inputs &&
+        profile.typesAllowed definition.outputs && definition.raw.preparationAllowed profile &&
+        definition.helpers.all selected.contains then definition.helper :: selected
+    else selected) []
+
+/-- Structural closure evidence over the original checked table. The semantic
+implication is a separate theorem; this proposition makes no execution claim. -/
+def PreparationClosed (profile : PreparationProfile) (definitions : List CheckedDefinition)
+    (selected : List Helper) : Prop :=
+  (∀ helper ∈ selected, helper ∈ definitions.map CheckedDefinition.helper) ∧
+  ∀ definition ∈ definitions, definition.helper ∈ selected →
+    definition.kind = .math ∧ definition.raw.preparationAllowed profile = true ∧
+    ∀ helper ∈ definition.helpers, helper ∈ selected
+
+instance preparationClosedDecidable (profile : PreparationProfile)
+    (definitions : List CheckedDefinition) (selected : List Helper) :
+    Decidable (PreparationClosed profile definitions selected) :=
+  inferInstanceAs (Decidable
+    ((∀ helper ∈ selected, helper ∈ definitions.map CheckedDefinition.helper) ∧
+    ∀ definition ∈ definitions, definition.helper ∈ selected →
+      definition.kind = .math ∧ definition.raw.preparationAllowed profile = true ∧
+      ∀ helper ∈ definition.helpers, helper ∈ selected))
 
 /-- A closed profile root is separate from the named helper table. -/
 structure ClosedRoot where

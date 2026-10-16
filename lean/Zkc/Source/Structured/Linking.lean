@@ -197,6 +197,18 @@ theorem payload_invoke_body_view (payload : Payload) (definition : CheckedDefini
       body.denote (meaning observations (payloadMeanings observations payload)) arguments.get := by
   rw [payload_invoke_body observations payload definition member arguments, definition.body_eq_of_raw body exactRaw]
 
+/-- An explicit literal ABI can be connected to a retained checked definition by
+a named signature theorem without reducing its admission again at each use. -/
+theorem payload_invoke_body_view_as (payload : Payload) (definition : CheckedDefinition)
+    (member : definition ∈ payload.definitions) (helper : Helper)
+    (signature : definition.helper = helper)
+    (body : Region dialect helper.inputs helper.outputs) (exactRaw : definition.raw = body.erase)
+    (arguments : Values (assignment F G) helper.inputs) :
+    invoke (payloadMeanings observations payload) helper arguments =
+      body.denote (meaning observations (payloadMeanings observations payload)) arguments.get := by
+  subst helper
+  exact payload_invoke_body_view observations payload definition member body exactRaw arguments
+
 /-- The checked closed root is interpreted directly in the complete helper table. -/
 theorem payload_denote_entry (payload : Payload)
     (arguments : Values (assignment F G) payload.entry.inputs) :

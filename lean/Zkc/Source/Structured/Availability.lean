@@ -226,6 +226,8 @@ def summarize (summaries : List DependencySummary) (definition : CheckedDefiniti
   let computation : Summarizing (List Footprint) := match definition.kind with
     | .math => mathRegion summaries definition.body initial
     | .local => do
+      -- Realization/map bodies retain Local strictness even when their Math
+      -- helper projects an input or ignores a broadcast operand.
       localRegion summaries definition.body
       chargeDependencies (definition.inputs.length + definition.outputs.length + 1)
       let footprint := List.range definition.inputs.length
@@ -395,5 +397,15 @@ def checkUnitAvailability (definitions : List CheckedDefinition) (roots : List C
   (do
     let summaries ← Availability.analyzeHelpers definitions
     for root in roots do Availability.checkRoot summaries root).run' {}
+
+/-- A Boolean success certificate suffices because availability returns no data.
+Concrete clients can check this certificate directly in the kernel. -/
+theorem checkUnitAvailability_ok_of_isOk {definitions : List CheckedDefinition}
+    {roots : List CheckedProtocol}
+    (accepted : (checkUnitAvailability definitions roots).isOk = true) :
+    checkUnitAvailability definitions roots = .ok () := by
+  cases result : checkUnitAvailability definitions roots with
+  | error code => simp [result, Except.isOk, Except.toBool] at accepted
+  | ok value => cases value; rfl
 
 end Zkc.Source.Structured

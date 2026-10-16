@@ -12,6 +12,8 @@ private def index (n : Nat) : Json := arr [.str "index", toJson n]
 private def field (n : Nat) : Json := arr [.str "field", .str scalarDomain, .str (toString n)]
 private def vector (n : Nat) : Json := arr [.str "vector", .str scalarDomain,
   arr (List.replicate n (.str "0"))]
+private def vectorValues (xs : List Nat) : Json := arr [.str "vector", .str scalarDomain,
+  arr (xs.map (fun n => .str (toString n)))]
 private def returned (xs : List Json) : Json := arr [.str "returned", arr xs]
 private def vectorTy : Ty := .vector scalarDomain
 private def fieldTy : Ty := .field scalarDomain
@@ -82,6 +84,25 @@ private def rawLoop (lo hi : Nat) (body : RawRegion Ty Op := .ret []) : RawRegio
   .letOp (.indexConstant lo) [] [.index] .nil
     (.letOp (.indexConstant hi) [] [.index] .nil
       (.letOp (.loop [] []) [1, 0] [] (.cons [.index] [] body .nil) (.ret [])))
+
+private def mathHelper (name : String) (inputs outputs : List Ty) (body : Block) : Definition :=
+  .function ⟨name, .math, .privateDef, inputs, outputs, none, [], none, body⟩
+
+private def mapProgram (mask : List Bool) (body : Block)
+    (helpers : List Definition := []) : Snapshot :=
+  let spec : MapSpec := ⟨"formula", scalarDomain, mask⟩
+  program [] spec.arguments [vectorTy]
+    (.block [.instruction (.apply "mapping") (List.range mask.length) [vectorTy] [] "map"]
+      (.ret [0]))
+    (helpers ++ [mathHelper "formula" spec.scalarInputs [fieldTy] body,
+      .map ⟨"mapping", spec.arguments, [vectorTy], "formula", mask⟩])
+
+private def constantFormula : Block :=
+  .block [.instruction (.fieldConstant scalarDomain "7") [] [fieldTy] [] ""] (.ret [0])
+
+private def repeatedFormula (count : Nat) : Block :=
+  .block (List.replicate count
+    (.instruction (.fieldAdd scalarDomain) [0, 0] [fieldTy] [] "")) (.ret [0])
 
 /-- Compare the existing interpreter's actual return with abstract membership;
 do not compute expected primitive outputs with a second evaluator. -/
@@ -419,6 +440,154 @@ def run : IO Unit := do
     (raw optionalGuard [.optional (.boolean (some false))]) .work
   test "definitely false guard stops before large suffix"
     (match raw optionalGuard [.boolean (some false)] with | .ok (none, _) => true | _ => false)
+
+  let constantMap := mapProgram [true, true, false] constantFormula
+  let .ok constantPayload := (do (← check constantMap).closedPayload) |
+    throw (IO.userError "constant map must be admitted")
+  let .ok (mapHelpers, _) := (prepareHelpers constantPayload.definitions).run {} |
+    throw (IO.userError "constant map helper index must be prepared")
+  let mapSpec : MapSpec := ⟨"formula", scalarDomain, [true, true, false]⟩
+  let analyzeMap (args : Env) := (operation mapHelpers (.map mapSpec) args .nil).run {}
+  let mapArgs (n : Nat) : Env := [.vector (exact n), .vector (exact n), .atom]
+  for n in [0, 1, 65, 4096] do
+    equal s!"constant map returns every row {n}"
+      (runClosed constantMap [vector n, vector n, field 23])
+      (returned [vectorValues (List.replicate n 7)])
+    test s!"map output length contains successful return {n}"
+      (containsReturn constantMap [vector n, vector n, field 23] == .ok true)
+  refusal "map input 4097 is refused at unchanged decoder boundary" "structured-list-limit"
+    (runClosed constantMap [vector 4097, vector 4097, field 23])
+  rawRefusal "map cannot construct a 4097-element vector" (analyzeMap (mapArgs 4097)) .value
+  for (left, right) in [(2, 1), (0, 1), (1, 0), (4096, 4095)] do
+    equal s!"constant map checks unused row mismatch {left}/{right}"
+      (runClosed constantMap [vector left, vector right, field 23])
+      (arr [.str "stopped", .str "refused"])
+  let wideMap := mapProgram (List.replicate 64 true) (.block [] (.ret [0]))
+  equal "aggregate 64 by 65 row tuple work exceeds vector cap but fits work budget"
+    (runClosed wideMap (List.replicate 64 (vector 65))) (returned [vector 65])
+
+  let orderedMap := mapProgram [false, true, false, true, false]
+    (.block [.instruction (.fieldSubtract scalarDomain) [0, 1] [fieldTy] [] "",
+      .instruction (.fieldSubtract scalarDomain) [3, 4] [fieldTy] [] "",
+      .instruction (.fieldMultiply scalarDomain) [0, 6] [fieldTy] [] "",
+      .instruction (.fieldAdd scalarDomain) [2, 0] [fieldTy] [] ""] (.ret [0]))
+  let orderedInputs := [field 20, vectorValues [1, 2], field 10, vectorValues [3, 4], field 5]
+  equal "broadcasts retain original positional scalar tuple"
+    (runClosed orderedMap orderedInputs) (returned [vectorValues [54, 48]])
+  test "mixed broadcast output is contained" (containsReturn orderedMap orderedInputs == .ok true)
+
+  -- Scalar helper analysis is repeated logically, not traversed once per row.
+  let one := analyzeMap (mapArgs 1)
+  let many := analyzeMap (mapArgs 4096)
+  test "map analysis does not repeat identical helper traversal per row"
+    (match one, many with
+      | .ok (_, a), .ok (some [.vector n], b) =>
+          n == exact 4096 && a.analysis == b.analysis && b.work > 4096 * a.work / 2
+      | _, _ => false)
+  let costlyMap := mapProgram [true] (repeatedFormula 100)
+  equal "nonempty map below aggregate work limit executes helper"
+    (runClosed costlyMap [vector 65]) (returned [vector 65])
+  refusal "map reserves every potential helper invocation" "structured-evaluation-work-limit"
+    (runClosed costlyMap [vector 4096])
+  equal "empty map skips otherwise excessive helper expansion"
+    (runClosed costlyMap [vector 0]) (returned [vector 0])
+  let costlyUnused := mapProgram [true, true] (repeatedFormula 100)
+  equal "mismatch skips otherwise excessive helper expansion"
+    (runClosed costlyUnused [vector 4096, vector 4095]) (arr [.str "stopped", .str "refused"])
+
+  let nestedMap := mapProgram [true]
+    (.block [.instruction (.call "pair") [0] [fieldTy, fieldTy] [] "",
+      .instruction (.call "discard") [2] [] [] "",
+      .instruction (.fieldAdd scalarDomain) [0, 1] [fieldTy] [] ""] (.ret [0]))
+    [mathHelper "pair" [fieldTy] [fieldTy, fieldTy] (.block [] (.ret [0, 0])),
+     mathHelper "discard" [fieldTy] [] (.block [] (.ret []))]
+  equal "nested scalar helpers preserve multiple and zero results"
+    (runClosed nestedMap [vectorValues [3, 8]]) (returned [vectorValues [6, 16]])
+  test "nested scalar helper result is contained"
+    (containsReturn nestedMap [vectorValues [3, 8]] == .ok true)
+  let nestedCostly := mapProgram [true]
+    (.block [.instruction (.call "discard") [0] [] [] ""] (.ret [0]))
+    [mathHelper "discard" [fieldTy] []
+      (.block (List.replicate 100
+        (.instruction (.fieldAdd scalarDomain) [0, 0] [fieldTy] [] "")) (.ret []))]
+  refusal "discarded nested helper work is multiplied" "structured-evaluation-work-limit"
+    (runClosed nestedCostly [vector 4096])
+
+  test "map absence stops before helper or huge continuation"
+    (match (region (operation mapHelpers)
+        (.letOp (.map mapSpec) [0, 1, 2] [vectorTy] .nil (rawLoop 0 maximum))
+        [.vector (exact 0), .vector (exact 0), .absent]).run {} with
+      | .ok (none, _) => true | _ => false)
+  test "optional map returns only the present path"
+    (match analyzeMap [.optional (.vector (exact 2)), .vector (exact 2), .atom] with
+      | .ok (some [.vector n], _) => n == exact 2 | _ => false)
+  test "optional map mismatch cannot reach the continuation"
+    (match (region (operation mapHelpers)
+        (.letOp (.map mapSpec) [0, 1, 2] [vectorTy] .nil (rawLoop 0 maximum))
+        [.optional (.vector (exact 0)), .vector (exact 1), .atom]).run {} with
+      | .ok (none, _) => true | _ => false)
+  for args in [[arr [], arr [], .null], [arr [.str "0"], .null, .str "23"]] do
+    equal "owned Local map call requires even unused inputs" (runOpen constantMap args)
+      (arr [.str "zkc.structured-open-result/0", arr [.str "stopped", .str "incomplete", .str "work"],
+        arr [arr [.str "stop", .str "incomplete", .str "work", toJson (0 : Nat)]], toJson (0 : Nat)])
+  test "nonowner map wrapper skips helper and returns absent"
+    (match (protocolOperation mapHelpers 1 (fun _ => pure none)
+        (.localCall ⟨"work", .local, mapSpec.arguments, [vectorTy]⟩ rfl 0 "work")
+        [.absent, .absent, .absent] .nil).run {} with
+      | .ok (some [.absent], _) => true | _ => false)
+  test "Local invoke absent-output boundary remains distinct from direct map"
+    (match (operation mapHelpers
+        (.invoke ⟨"mapping", .local, mapSpec.arguments, [vectorTy]⟩)
+        [.absent, .absent, .absent] .nil).run {} with
+      | .ok (some [.absent], _) => true | _ => false)
+  rawRefusal "optional Local invoke mismatch retains skipped-call continuation"
+    ((region (operation mapHelpers)
+        (.letOp (.invoke ⟨"mapping", .local, mapSpec.arguments, [vectorTy]⟩)
+          [0, 1, 2] [vectorTy] .nil (rawLoop 0 maximum))
+        [.optional (.vector (exact 0)), .vector (exact 1), .atom]).run {}) .work
+
+  test "uncertain shapes retain every potentially successful common length"
+    (match analyzeMap [.vector ⟨0, 9⟩, .vector ⟨3, 12⟩, .atom] with
+      | .ok (some [.vector n], _) => n == ⟨3, 9⟩ | _ => false)
+  test "unknown row can agree with empty only at zero"
+    (match analyzeMap [.vector (exact 0), .vector ⟨0, 9⟩, .atom] with
+      | .ok (some [.vector n], _) => n == exact 0 | _ => false)
+  test "disjoint shape intervals cannot return"
+    (match analyzeMap [.vector ⟨0, 2⟩, .vector ⟨3, 9⟩, .atom] with
+      | .ok (none, _) => true | _ => false)
+  rawRefusal "row shape must remain a vector"
+    (analyzeMap [.atom, .vector (exact 2), .atom]) .unknown
+  rawRefusal "map broadcast must remain scalar"
+    (analyzeMap [.vector (exact 2), .vector (exact 2), .vector (exact 2)]) .unknown
+  rawRefusal "map requires full original tuple arity"
+    (analyzeMap [.vector (exact 2), .vector (exact 2)]) .unknown
+  for spec in [{mapSpec with helperName := "missing"},
+      {mapSpec with field := "other-field"}, {mapSpec with rowwise := [true]}] do
+    let args := if spec.rowwise.length == 1 then [Value.vector (exact 1)] else mapArgs 1
+    rawRefusal "map checks full helper identity"
+      ((operation mapHelpers (.map spec) args .nil).run {}) .unknown
+  rawRefusal "nonempty map cannot use a Local helper as Math"
+    ((operation mapHelpers (.map {mapSpec with helperName := "mapping"}) (mapArgs 1) .nil).run {})
+    .unknown
+  test "empty rows do not require dynamic helper invocation"
+    (match (operation {} (.map mapSpec) (mapArgs 0) .nil).run {} with
+      | .ok (some [.vector n], _) => n == exact 0 | _ => false)
+  test "known mismatch does not require dynamic helper invocation"
+    (match (operation {} (.map mapSpec)
+        [.vector (exact 0), .vector (exact 1), .atom] .nil).run {} with
+      | .ok (none, _) => true | _ => false)
+  rawRefusal "unknown nonempty shape still checks helper body"
+    ((operation {} (.map mapSpec) [.vector ⟨0, 1⟩, .vector ⟨0, 1⟩, .atom] .nil).run {}) .unknown
+  test "shape mismatch still charges every collected row length"
+    (match (operation {} (.map ⟨"missing", scalarDomain, [true, true, true]⟩)
+        [.vector (exact 0), .vector (exact 1), .vector (exact 4096)] .nil).run {} with
+      | .ok (none, meter) => meter.work ≥ 4096 | _ => false)
+  test "aggregate work can exceed vector capacity"
+    (match (chargeRepeated 64 65).run {} with | .ok (_, meter) => meter.work == 4160 | _ => false)
+  test "zero repeated work does not overflow multiplication"
+    (match (chargeRepeated maximum 0).run {} with | .ok (_, meter) => meter.work == 0 | _ => false)
+  test "aggregate repeated work stops at remaining work budget"
+    (match (chargeRepeated maximum maximum).run {} with | .error .work => true | _ => false)
 
   let failed ← failures.get
   unless failed.isEmpty do

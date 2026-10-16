@@ -238,8 +238,8 @@ The writer, parser and renderer are tested executable boundaries. This package
 does not prove C++ export correctness, frontend translation, native lowering,
 production arithmetic/sampling or runtime capacity equivalence. The source-level
 Schnorr theorem has its own algebraic and interaction assumptions. Repeated
-multilinear Sumcheck additionally requires named maps/realizations and protocol
-calls/repetition in the checked source profile.
+multilinear Sumcheck additionally requires protocol calls and repetition in the
+checked source profile.
 
 ## Primitive bindings and unchanged library helpers
 
@@ -271,6 +271,42 @@ requires review of their semantic proofs; it does not produce a proof. The
 ordinary `lean-native` check includes this suite. Executable capacity checks and
 logical range/shape premises remain separate; passing these finite comparisons
 does not establish universal exporter, native arithmetic or resource correctness.
+
+## Retained maps and realizations
+
+`maps.py` uses five complete original units from
+`compiler/test/fixtures/structured-source/map-callers.zkc` and the unchanged
+standard libraries. The library clients fix the first coordinate of a multilinear
+table, fix an ordered prefix, and extract a validated table's values. Two
+independent clients map an interleaved scalar/vector formula and a constant
+formula with unused row inputs.
+
+```sh
+python3 lean/bridges/structured/maps.py \
+  --compiler build/compiler/zkc-compile \
+  --reference build/compiler/test/zkc-structured_reference-test \
+  --report build/experiments/structured-maps/report.json
+```
+
+Realization retains the exact Math helper and full signature. A map retains its
+scalar helper and row mask; all row lengths are checked before the helper is
+invoked in order. An unused row still constrains shape, and an owned Local call
+requires every argument. Independent expectations use contiguous low/high
+halves, `low + (high - low) * coordinate`, and ordered prefix restriction.
+Asymmetric tables, interleaved arguments, zero dimensions, excessive prefixes,
+shape failures, and missing owner inputs distinguish these rules.
+
+The independent Lean-reader controls mutate retained records directly, including
+Boolean masks, exact record arity, helper signatures and visibility, dormant
+declarations, and a dead transitive call outside the scalar ring fragment.
+Native MLIR formation already rejects many corresponding malformed modules;
+those native failures alone do not test the independent reader's closure check.
+The bridge retains exact source, MLIR, JSON and constructor data using the same
+receipt format as the primitive suite. It is included in `lean-native`.
+
+These comparisons concern original declarations and their shared structured
+semantics. They do not establish the correctness of native map lowering or
+transport a cryptographic security theorem to production execution.
 
 ## Native participant observations
 

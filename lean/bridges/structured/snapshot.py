@@ -184,6 +184,18 @@ def primitive_binding(value):
 
 
 def definition(value):
+    if value[0] == "realize":
+        _, name, inputs, outputs, helper = record(value, 5)
+        return (f".realization ⟨{text(name)}, {seq(inputs, ty)}, {seq(outputs, ty)}, "
+                f"{text(helper)}⟩")
+    if value[0] == "map":
+        _, name, inputs, outputs, helper, rowwise = record(value, 6)
+        def boolean(value):
+            if type(value) is not bool:
+                raise ValueError("invalid map row mask Boolean")
+            return str(value).lower()
+        return (f".map ⟨{text(name)}, {seq(inputs, ty)}, {seq(outputs, ty)}, "
+                f"{text(helper)}, {seq(rowwise, boolean)}⟩")
     if value[0] == "finite":
         _, name, visibility, inputs, outputs, domain_name, step, predicate = record(value, 8)
         if visibility not in ("public", "private"):

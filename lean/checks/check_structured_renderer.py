@@ -2,6 +2,7 @@
 """Check structured constructor strings with Lean's actual parser and kernel."""
 
 import argparse
+import copy
 import importlib.util
 import json
 import os
@@ -147,6 +148,54 @@ example : (Zkc.Source.Structured.check RenderedPrimitives.snapshot).isOk = true 
         except ValueError:
             continue
         raise AssertionError("renderer accepted an obsolete envelope")
+    # Preserve preparation identity and the interleaved scalar/vector mask.
+    # The expected constructors below are independent of the Python renderer.
+    vector = ["vector", field[1]]
+    inputs = [field, vector, field, vector]
+    identity = ["function", "identity", "math", "private", [vector], [vector], [], [], [],
+                ["block", [], ["return", [0]]]]
+    formula = ["function", "formula", "math", "private", [field] * 4, [field], [], [], [],
+               ["block", [], ["return", [0]]]]
+    realization = ["realize", "realized", [vector], [vector], "identity"]
+    mapping = ["map", "mapped", inputs, [vector], "formula", [False, True, False, True]]
+    local = ["function", "work", "local", "private", inputs, [vector], [], [], ["work", []],
+             ["block", [
+                 [["apply", "mapped"], [0, 1, 2, 3], [vector], [], "map"],
+                 [["apply", "realized"], [0], [vector], [], "realize"],
+             ], ["return", [0]]]]
+    entry = ["function", "main", "protocol", "public", inputs, [vector],
+             ["protocol", ["P"], [["P"]] * 4, [["P"]]], [], [],
+             ["block", [[["local_call", "work", "P"], [0, 1, 2, 3], [vector], [], "work"]],
+              ["return", [0]]]]
+    preparation_data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
+                        "main", [], [], [], [identity, formula, realization, mapping, local, entry]]
+    source = renderer.render(preparation_data, "RenderedPreparations").replace("module\n\n", "", 1)
+    source += '''
+example : (RenderedPreparations.snapshot.definitions[2]?.bind fun definition =>
+    match definition with
+    | .realization declaration => some (declaration.name, declaration.helper)
+    | _ => none) = some ("realized", "identity") := by decide +kernel
+example : (RenderedPreparations.snapshot.definitions[3]?.bind fun definition =>
+    match definition with
+    | .map declaration => some (declaration.name, declaration.helper, declaration.rowwise)
+    | _ => none) = some ("mapped", "formula", [false, true, false, true]) := by decide +kernel
+example : (Zkc.Source.Structured.check RenderedPreparations.snapshot).isOk = true := by
+  decide +kernel
+'''
+    modules.append(source)
+    malformed_preparations = []
+    for mask in [[0, 1, 0, 1], [False, "true", False, True], None]:
+        invalid = copy.deepcopy(mapping)
+        invalid[5] = mask
+        malformed_preparations.append(invalid)
+    malformed_preparations.extend([mapping + ["extra"], mapping[:-1],
+                                   realization + ["extra"], realization[:-1]])
+    for invalid in malformed_preparations:
+        try:
+            renderer.definition(invalid)
+        except ValueError:
+            continue
+        raise AssertionError("renderer accepted a malformed preparation record")
     # Imports/section commands from each rendering are legal at the file top
     # only. One import serves all independently named data declarations.
     header = "import Zkc.Source.Structured.Import\nset_option maxRecDepth 4096\n"
@@ -168,6 +217,7 @@ example : (Zkc.Source.Structured.check RenderedPrimitives.snapshot).isOk = true 
     report = {"status": "pass", "kernel_cases": len(names), "refusal_cases": 3,
               "open_metadata_kernel_cases": 3,
               "primitive_metadata_kernel_cases": 3, "obsolete_envelope_refusal_cases": 1,
+              "preparation_metadata_kernel_cases": 3, "preparation_refusal_cases": 7,
               "ascii_locale_cli_cases": 1,
               "renderer_sha256": support.lake.sha(Path(renderer.__file__)),
               "subject_sha256": support.lake.sha(path)}

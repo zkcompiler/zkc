@@ -78,6 +78,8 @@ def mutateDefinition (mutation : Mutation) : Definition → Definition
               .block (instructions.map (mutateInstruction mutation)) terminator }
       else .function f
   | .finite f => .finite f
+  | .realization f => .realization f
+  | .map f => .map f
 
 /-- Synthetic markers intentionally do not reuse the original source digest. -/
 def mutatedSnapshot (mutation : Mutation) : Snapshot :=

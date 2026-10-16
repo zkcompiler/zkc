@@ -23,6 +23,20 @@ structure Helper where
   outputs : List Ty
   deriving DecidableEq, Repr
 
+/-- Scalar Math helper lifted over every rowwise operand in source order. -/
+structure MapSpec where
+  helperName : String
+  field : String
+  rowwise : List Bool
+  deriving DecidableEq, Repr
+
+def MapSpec.scalarInputs (spec : MapSpec) : List Ty :=
+  spec.rowwise.map (fun _ => .field spec.field)
+def MapSpec.arguments (spec : MapSpec) : List Ty :=
+  spec.rowwise.map (fun row => if row then .vector spec.field else .field spec.field)
+def MapSpec.helper (spec : MapSpec) : Helper :=
+  ⟨spec.helperName, .math, spec.scalarInputs, [.field spec.field]⟩
+
 structure DomainSpec where
   name : String
   inputs : List Ty
@@ -65,6 +79,7 @@ inductive Op where
   | boundedAt (domain : String)
   | invoke (helper : Helper)
   | fold (spec : FoldSpec)
+  | map (spec : MapSpec)
   | branch (captures outputs : List Ty)
   | loop (state captures : List Ty)
   | loopCondition (state captures : List Ty)
@@ -85,6 +100,7 @@ def Op.arguments : Op → List Ty
   | .boundedAt d => [.vector d, .index]
   | .invoke helper => helper.inputs
   | .fold spec => spec.arguments
+  | .map spec => spec.arguments
   | .branch captures _ => .boolean :: captures
   | .loop state captures | .loopCondition state captures => .index :: .index :: (state ++ captures)
   | .guard => [.boolean]
@@ -100,6 +116,7 @@ def Op.results : Op → List Ty
   | .select ty => [ty]
   | .invoke helper => helper.outputs
   | .fold spec => spec.state
+  | .map spec => [.vector spec.field]
   | .branch _ outputs => outputs
   | .loop state _ | .loopCondition state _ => state
   | .guard | .mark _ => []
@@ -115,6 +132,7 @@ def Op.regions : Op → List (List Ty × List Ty)
 callbacks remain dependencies even when a domain is empty at runtime. -/
 def Op.helpers : Op → List Helper
   | .invoke helper => [helper]
+  | .map spec => [spec.helper]
   | .fold spec => spec.stepHelper ::
       (if spec.predicate.isEmpty then [] else [spec.predicateHelper])
   | .exec .. | .indexConstant .. | .indexEqual | .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |

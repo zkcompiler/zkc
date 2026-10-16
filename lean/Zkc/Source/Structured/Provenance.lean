@@ -68,11 +68,13 @@ def summarizeIdentities : Nat → List Function → IdentitySummaries →
     summarizeIdentities remaining (pending.filter (·.name != next.name))
       (next.identitySummary summaries :: summaries)
 
+/-- Preparation declarations have Local semantics. Their strict invocation
+boundary must not inherit a Math projection's selective input availability. -/
 def Snapshot.identitySummaries (snapshot : Snapshot) : Except String IdentitySummaries :=
   let functions := snapshot.definitions.filterMap fun definition =>
     match definition with
     | .function function => if function.kind == .math then some function else none
-    | .finite _ => none
+    | .finite _ | .realization _ | .map _ => none
   summarizeIdentities functions.length functions []
 
 end Zkc.Source.Structured

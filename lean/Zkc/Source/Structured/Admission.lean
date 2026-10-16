@@ -28,6 +28,14 @@ def Ty.isService : Ty → Bool
   | .service _ => true
   | _ => false
 
+/-- Native preparation identifiers have a stricter bound than helper symbols. -/
+def validPreparationName (name : String) : Bool :=
+  name.utf8ByteSize ≤ 128 && match name.toList with
+    | [] => false
+    | first :: rest =>
+      let initial := fun c => ('a' ≤ c && c ≤ 'z') || ('A' ≤ c && c ≤ 'Z') || c == '_'
+      initial first && rest.all (fun c => initial c || ('0' ≤ c && c ≤ '9') || c == '.' || c == '-')
+
 def validTypes (types : List Ty) : Bool := types.length ≤ 512 && types.all validType
 def validRefs (refs : List Nat) : Bool := refs.length ≤ 512 && refs.all (· ≤ 4096)
 
@@ -48,13 +56,13 @@ def instructionWorkWithin : Nat → List (List Instruction) → Bool
       instructionWorkWithin remaining (children ++ rest)
 
 def Snapshot.instructionsWithin (snapshot : Snapshot) (limit : Nat) : Bool :=
-  let finiteCount := snapshot.definitions.filterMap (fun definition =>
-    match definition with | .finite _ => some () | _ => none) |>.length
+  let derivedCount := snapshot.definitions.filterMap (fun definition =>
+    match definition with | .function _ => none | _ => some ()) |>.length
   let work := snapshot.definitions.filterMap fun definition =>
     match definition with
     | .function function => let .block instructions _ := function.body; some instructions
-    | .finite _ => none
-  finiteCount ≤ limit && instructionWorkWithin (limit - finiteCount) work
+    | .finite _ | .realization _ | .map _ => none
+  derivedCount ≤ limit && instructionWorkWithin (limit - derivedCount) work
 
 def Domain.resolve (domain : Domain) : Except String DomainSpec := do
   if !validString domain.name || !validTypes domain.inputs then throw "structured-domain"
@@ -93,7 +101,27 @@ def Definition.headerValid (definition : Definition) : Bool :=
     | _, none => true
     | _, some _ => false)
   | .finite f => !(f.inputs ++ f.outputs).any Ty.isService &&
-    validString f.domain && validString f.step && validString f.predicate true)
+    validString f.domain && validString f.step && validString f.predicate true
+  | .realization f => validPreparationName f.name && validString f.helper &&
+    !(f.inputs ++ f.outputs).any Ty.isService
+  | .map f => validPreparationName f.name && validString f.helper &&
+    !(f.inputs ++ f.outputs).any Ty.isService && f.rowwise.length ≤ 512 &&
+    f.rowwise.length == f.inputs.length && f.rowwise.any id)
+
+/-- Edges are checked against retained variants before semantic helper lowering. -/
+inductive ReferenceEdge where
+  | call | apply | localCall | callback (kind : Kind)
+  deriving DecidableEq, Repr
+
+def Definition.acceptsEdge (definition : Definition) (edge : ReferenceEdge) : Bool :=
+  match edge, definition with
+  | .call, .function f => f.kind == .math && f.visibility == .privateDef
+  | .apply, .function f | .localCall, .function f => f.kind == .local
+  | .apply, .finite _ | .apply, .realization _ | .apply, .map _ => true
+  | .callback kind, .function f =>
+    kind != .protocol && f.kind == kind && f.visibility == .privateDef
+  | _, _ => false
+
 
 def lookupDefinition (snapshot : Snapshot) (name : String) : Except String Definition :=
   requireSome (snapshot.definitions.find? (·.name == name)) "structured-unknown-helper"
@@ -142,21 +170,15 @@ def resolveFold (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
   let spec : FoldSpec := ⟨domain, state, captures, stepName, predicateName, helperKind⟩
   if argumentTypes != spec.arguments then throw "structured-fold-arguments"
   let step ← lookupDefinition snapshot stepName
-  if step.kind != kind || step.visibility != .privateDef ||
+  if !step.acceptsEdge (.callback kind) ||
       step.inputs != spec.stepHelper.inputs || step.outputs != state then throw "structured-fold-step"
-  match step with
-  | .finite _ => throw "structured-fold-step"
-  | .function _ => pure ()
   if !dischargeFold facts spec operands state.length step.preconditions then
     throw "structured-fold-premise"
   if !predicateName.isEmpty then
     let predicate ← lookupDefinition snapshot predicateName
-    if predicate.kind != kind || predicate.visibility != .privateDef ||
+    if !predicate.acceptsEdge (.callback kind) ||
         predicate.inputs != spec.predicateHelper.inputs || predicate.outputs != [.boolean] then
       throw "structured-fold-predicate"
-    match predicate with
-    | .finite _ => throw "structured-fold-predicate"
-    | .function _ => pure ()
     if !dischargeFold facts spec operands 0 predicate.preconditions then
       throw "structured-fold-premise"
   return spec
@@ -238,13 +260,10 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
   if kind == .math && !site.isEmpty then throw "structured-math-site"
   if !required && !site.isEmpty then throw "structured-pure-site"
   recordSite site required
-  let resolveCall := fun (name : String) (expected : Kind) (ordinary : Bool) => do
+  let resolveCall := fun (name : String) (expected : Kind) (edge : ReferenceEdge) => do
     let callee ← lookupDefinition snapshot name
-    if callee.kind != expected || name == snapshot.entry then throw "structured-call-kind"
-    if ordinary then
-      match callee with
-      | .finite _ => throw "structured-call-kind"
-      | .function _ => pure ()
+    if !callee.acceptsEdge edge || callee.kind != expected || name == snapshot.entry then
+      throw "structured-call-kind"
     if !discharge facts factOperands callee.preconditions then throw "structured-call-premise"
     let helperKind ← match expected with
       | .math => pure HelperKind.math
@@ -295,8 +314,8 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
       if !facts.contains (index, container) then throw "structured-bounded-at-premise"
       return .boundedAt d
     | _ => throw "structured-bounded-at-arguments"
-  | .call name => resolveCall name .math true
-  | .apply name => resolveCall name .local false
+  | .call name => resolveCall name .math .call
+  | .apply name => resolveCall name .local .apply
   | .localCall .. => throw "structured-open-operation"
   | .fold domain step predicate =>
     let spec ← resolveFold snapshot domains .math domain step predicate argumentTypes results factOperands facts
