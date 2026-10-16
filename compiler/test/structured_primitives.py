@@ -284,12 +284,14 @@ with case('dormant-map-declaration-is-not-filtered'):
     declarations = (f'func.func private @formula(%x:{field}) -> {field} {{ return %x : {field} }}\n'
                     f'algebra.map_realize @dormant = @formula [true] : ({vector})->{vector}\n')
     source = base.replace(binding('index.add'), declarations + binding('index.add'))
-    export(source, refusal='structured-source-operation')
-    run(source, ['1', '2'], refusal='structured-reference-unsupported')
+    snapshot = export(source)
+    assert any(row[1] == 'dormant' for row in snapshot[7])
+    assert run(source, ['1', '2']) == returned(['3'])
     source = source.replace(f'algebra.map_realize @dormant = @formula [true] : ({vector})->{vector}',
                             f'local.realize @dormant = @formula : ({field})->{field}')
-    export(source, refusal='structured-source-operation')
-    run(source, ['1', '2'], refusal='structured-reference-unsupported')
+    snapshot = export(source)
+    assert any(row[1] == 'dormant' for row in snapshot[7])
+    assert run(source, ['1', '2']) == returned(['3'])
 
 with case('strict-dropped-results-and-zero-result-local-stop'):
     for contract, inputs in [('index.div', ['1', '0']), ('vector.split', [[]])]:

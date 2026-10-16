@@ -306,9 +306,21 @@ pure index constant/equality. Unused bindings and dormant bodies are checked.
 Ordinary wrappers capture unchanged multilinear shape/table/halves closures and
 an independent vector/integer example without source slicing. The independent
 SSA reference checks arithmetic/shape stops and ordered vector results separately
-from observer capacity. Maps, realizations, protocol application/repetition and
-whole Sumcheck remain outside this profile. The structured Lean bridge records
-its independently checked reader, model and comparison coverage.
+from observer capacity.
+Original realizations and Fr scalar-ring maps are retained as distinct
+declarations. The independent native SSA reference checks all transitive helpers
+and evaluates them through its existing Math interpreter, with ordered row shape
+checks and strict owned Local calls. Whole unchanged `multilinear::fix_first`
+and `fix_prefix` closures use ordinary authored wrappers; an independent Fr
+linear combination checks broadcasts and unused rows. Initial realization
+closures exclude finite work and bounded reads; maps exclude other fields,
+including the library's KoalaBear Ext8 Combination. Native preparation's Ring
+limits and generated guard sites remain a separate correspondence boundary.
+Protocol application/repetition and whole Sumcheck are not
+admitted by this profile. The separately owned
+[structured Lean bridge](../lean/bridges/structured/README.md) records its exact
+reader, model and comparison coverage; native checks alone do not establish
+that bridge's support or prove native transformations.
 [Formal support](../lean/docs/support.md) states exact experiments and premises.
 The independent [multilinear Sumcheck foundation](../lean/docs/spec/multilinear-sumcheck.md)
 proves arbitrary-length table restriction, endpoint-message and residual-to-full

@@ -69,6 +69,9 @@ interface := ["protocol", role-names, input-scopes, output-scopes]  # protocol
 
 ["finite", name, visibility, input-types, output-types,
  domain-name, step-name, predicate-name]
+
+["realize", name, input-types, output-types, math-helper]
+["map", name, input-types, output-types, math-helper, rowwise]
 ```
 
 A domain body consists of exactly one supported constructor and its matching
@@ -119,6 +122,42 @@ means no predicate. There is no implicit Unit leaf for an empty state or result.
 The [finite ABI](../ir/finite.md) is retained: operands are `A ++ S ++ C`, the
 step receives `S ++ I ++ A ++ C`, and the predicate receives `I ++ A ++ C`.
 Callbacks are private and have the required Math or Local kind.
+
+Realization and map records retain original `local.realize` and
+`algebra.map_realize` declarations. Their exact native attributes are `sym_name`,
+`function_type`, `helper`, and, only for map, `rowwise`. They have no operands,
+results or regions. No visibility, origin, premise, site or function body is
+invented. The helper is an exact flat reference to a private defined Math sibling.
+The wire retains nonempty symbol strings within its 512-byte bound. Native Local
+formation additionally requires preparation names to match ASCII
+`[A-Za-z_][A-Za-z0-9_.-]*` within 128 bytes; the separate binding limit is 256.
+Math helper names retain the ordinary Math symbol bounds. Every declaration is
+checked, including unused ones.
+
+A realization has exactly the helper's full ordered input/output ABI, including
+unused inputs and zero or multiple results. Its derived Local meaning is one
+ordinary invocation of that helper. The original declaration remains distinct
+from the derived body. Initially the entire transitive helper closure must have
+empty preconditions and use only the admitted pure field/group/Boolean/index
+operations, select, Math calls and return. Finite operations and bounded reads
+are refused in this closure even when the native realization is valid. Other
+Math functions retain their existing finite profile.
+
+A map root takes only `bls12-381.fr` scalars and returns exactly one such scalar.
+`rowwise` is a Boolean array with exactly one entry per input and at least one
+true. A true position lifts that scalar to a vector; a false position remains a
+scalar broadcast. The result is one vector. Every transitive instruction,
+including dead calls and unused results, must belong to that field's ring
+fragment: constants, add, subtract, multiply, Math calls and return. Nested
+callees may return zero or multiple scalars; the one-result restriction applies
+only to the root. All helper preconditions are empty. Equality, selection,
+indices, groups, finite operations and other fields are outside this map profile.
+
+Preparation declarations are invoked only by `local.apply` in a Local function.
+`protocol.local_call` requires an actual Local function, so an ordinary wrapper
+is necessary. Math calls cannot invoke preparations. Finite callbacks still
+require actual private functions of the appropriate kind; a derived Local
+meaning does not change the original native kind.
 
 ## Blocks, binding and control
 
@@ -174,8 +213,8 @@ including nested regions. Stop reasons are `reject`, `abort`, `exhausted`,
 | `["select", type]` | Boolean and two equal-typed values to that type |
 | `["bounded_at", domain]` | vector and index to field, with exact bound obligation |
 | `["call", name]` | ordinary Math helper call |
-| `["apply", name]` | Local helper or finite declaration call |
-| `["local_call", name, participant]` | Protocol call to a Local helper with exact owner |
+| `["apply", name]` | Local function, finite, realization or map declaration call |
+| `["local_call", name, participant]` | Protocol call to an actual Local function with exact owner |
 | `["fold", domain, step, predicate]` | total Algebra fold |
 | `["if"]` | Local conditional over closed captures |
 | `["for"]` / `["for_condition"]` | Local counted control |
@@ -211,8 +250,7 @@ profile; vector and index selection are not yet native export paths.
 
 Only Local bodies may end in an explicit stop. A guard retains the owner of
 the original `protocol.guard`; projected `local.guard` is outside this source
-stage. Maps, mathematical realizations, protocol application and protocol
-repetition remain outside this profile.
+stage. Protocol application and protocol repetition remain outside this profile.
 
 Multi-role protocols cannot use Math folds or bounded reads, including through
 retained Math helpers. Those combinations require additional partial-component
@@ -286,6 +324,43 @@ constructor premise. An independent append/count example covers vector and
 integer operations. The complete frontend original is exported without slicing
 or preparation; unsupported dormant native declarations still refuse.
 
+## Map and realization execution
+
+The independent reference invokes the exact retained Math helper through its
+existing SSA evaluator. It does not dispatch a production kernel, extract a
+polynomial for another evaluator, or assign meaning by helper name. Realization
+passes every argument and returns every result in order. Owned Local calls are
+strict even for an unused projection input or a zero-result invocation.
+
+Map first measures the first row length, stopping `exhausted` if it is not below
+2^64. It then visits each remaining row input in argument order, measures and
+checks representability, and stops `refused` at the first unequal length.
+All rows are checked, even when unused by the formula or when the first is empty.
+An earlier mismatch precedes a later unrepresentable length. After that prefix,
+rows are evaluated in increasing order with the complete scalar tuple in original
+argument order, selecting each row element or scalar broadcast. Equal empty rows
+return the empty vector without invoking the helper. Admission has nevertheless
+already checked the entire unit and every helper body.
+
+The derived operation has no authored internal site; shape refusal uses the
+invoking `local.apply` site. Discarding its result cannot discard that stop or
+allow a subsequent interaction. Nonowners skip owned Local work. Native map
+preparation instead inserts `control.require` guards with generated sites and
+backend failure `rejected:require`. Relating that failure to source `refused`
+requires an explicit observation/site mapping; the raw codes and generated
+sites are not equated here.
+
+Ordinary wrappers capture unchanged `multilinear::fix_first` and `fix_prefix`,
+including their table constructor and values/variables/width projections.
+`fix_prefix` uses existing Local finite folds. An independently authored Fr linear
+combination covers ordered broadcasts and unused scalar/row arguments. The native
+library's KoalaBear Ext8 Combination remains outside this Fr-only profile.
+
+Structured admission checks retained SSA, without production formula expansion.
+Native language emission additionally checks expanded Ring eligibility; native
+preparation can reject a handwritten map for Ring depth even after ordinary
+formation succeeds. Structured admission alone does not claim that eligibility.
+
 ## Limits and evidence
 
 The independent native SSA test executable retains its closed invocation:
@@ -346,6 +421,12 @@ equality charge one additional work unit per element; append charges its output
 length. Length itself is constant work. An input/reply longer than 4096, an
 append exceeding that bound, or insufficient observer work produces a capacity
 diagnostic. A malformed typed reply instead stops refused without consuming it.
+Map charges one unit per input position for its shape prefix, its output length,
+the complete tuple arity per row, and existing helper invocation/instruction work.
+Aggregate tuple work is fuel, not a vector-length bound: arity times row count
+may exceed 4096. Charges are checked before construction/allocation without an
+unchecked product. Shape comparisons precede output construction, although
+ingress or observer capacity can prevent observing a semantic outcome.
 The observer's finite vector bound makes the logical unrepresentable-length
 exhaustion branch unreachable; it does not replace it with source refusal.
 
@@ -354,7 +435,8 @@ its final newline) to 1 MiB, strings
 to 512 UTF-8 bytes (binding names to 256 ASCII bytes), domains, relations,
 bindings and definitions to 128 each, signatures to 512
 positions and total instructions to 4096. The instruction count includes nested
-bodies and one fold per finite declaration; it excludes terminators and domain
+bodies and one derived instruction per finite, realization or map declaration;
+it excludes terminators and domain
 constructors. Lexical JSON and region nesting are bounded by 64. Helper reference
 depth is bounded by 64. References are derived from stored instructions, with
 at most two helper references per instruction; shared calls are not expanded for admission.

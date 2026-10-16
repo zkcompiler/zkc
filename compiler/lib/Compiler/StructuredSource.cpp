@@ -140,6 +140,10 @@ StringRef kind(Operation &op) {
     return "local";
   if (isa<local::FiniteFoldOp>(op))
     return "finite";
+  if (isa<local::RealizeOp>(op))
+    return "realize";
+  if (isa<algebra::MapRealizeOp>(op))
+    return "map";
   if (isa<data::DomainOp>(op))
     return "domain";
   return "";
@@ -424,16 +428,22 @@ class Exporter {
                   : participant ? ArrayRef<StringRef>{"callee", "site", "role"}
                                 : ArrayRef<StringRef>{"callee", "site"}))
         return std::move(e);
-      auto callee = reference(op, "callee",
-                              math ? ArrayRef<StringRef>{"math"}
-                                   : ArrayRef<StringRef>{"local", "finite"});
+      if ((math && owner != "math" && owner != "protocol") ||
+          (!math && !participant && owner != "local"))
+        return error("structured-source-reference");
+      auto callee =
+          reference(op, "callee",
+                    math          ? ArrayRef<StringRef>{"math"}
+                    : participant ? ArrayRef<StringRef>{"local"}
+                                  : ArrayRef<StringRef>{"local", "finite",
+                                                        "realize", "map"});
       if (!callee)
         return callee.takeError();
       auto *target = symbols.lookup(*callee);
       auto type = signature(*target);
       if (!type || op.getOperandTypes() != type.getInputs() ||
           op.getResultTypes() != type.getResults() ||
-          (owner == "math" && !math))
+          (math && !cast<func::FuncOp>(target).isPrivate()))
         return error("structured-source-reference");
       if (participant) {
         auto ownerRole = op.getAttrOfType<StringAttr>("role");
@@ -675,7 +685,128 @@ class Exporter {
                        std::move(desc)};
   }
 
+  Expected<json::Value> preparation(Operation &op) {
+    bool map = isa<algebra::MapRealizeOp>(op);
+    StringRef code =
+        map ? "structured-source-map" : "structured-source-realization";
+    if (auto e = attributes(
+            op,
+            map ? ArrayRef<StringRef>{"sym_name", "function_type", "helper",
+                                      "rowwise"}
+                : ArrayRef<StringRef>{"sym_name", "function_type", "helper"}))
+      return std::move(e);
+    if (op.getNumOperands() || op.getNumResults() || op.getNumRegions())
+      return error(code);
+    if (++instructions > instructionLimit)
+      return error("structured-source-limit");
+    auto type = signature(op);
+    if (!type)
+      return error(code);
+    auto inputs = sorts(type.getInputs());
+    if (!inputs)
+      return inputs.takeError();
+    auto outputs = sorts(type.getResults());
+    if (!outputs)
+      return outputs.takeError();
+    auto helperName = reference(op, "helper", {"math"});
+    if (!helperName)
+      return helperName.takeError();
+    auto helper = cast<func::FuncOp>(symbols.lookup(*helperName));
+    if (!helper.isPrivate() || helper.isExternal() ||
+        helper->getParentOp() != op.getParentOp())
+      return error(code, "private sibling helper required");
+    json::Array rowwise;
+    if (map) {
+      auto mask = op.getAttrOfType<DenseBoolArrayAttr>("rowwise");
+      Type field = algebra::FieldType::get(op.getContext(), "bls12-381.fr");
+      Type vector =
+          algebra::FieldVectorType::get(op.getContext(), "bls12-381.fr");
+      if (!mask || mask.size() != type.getNumInputs() ||
+          !llvm::is_contained(mask.asArrayRef(), true) ||
+          type.getNumResults() != 1 || type.getResult(0) != vector ||
+          helper.getFunctionType() !=
+              FunctionType::get(op.getContext(),
+                                SmallVector<Type>(mask.size(), field), {field}))
+        return error(code, "scalar helper ABI or row mask");
+      for (auto [input, row] : llvm::zip(type.getInputs(), mask.asArrayRef())) {
+        if (input != (row ? vector : field))
+          return error(code, "lifted input type");
+        rowwise.push_back(row);
+      }
+    } else if (helper.getFunctionType() != type) {
+      return error(code, "full helper ABI");
+    }
+    json::Array result{map ? "map" : "realize",
+                       SymbolTable::getSymbolName(&op).getValue(),
+                       std::move(*inputs), std::move(*outputs), *helperName};
+    if (map)
+      result.push_back(std::move(rowwise));
+    return result;
+  }
+
+  // Whole-unit bodies have already passed ordinary instruction admission and
+  // cycle/depth checks. These two memoized profiles additionally constrain
+  // every transitive instruction, including unused calls and discarded results.
+  Error preparationProfiles() {
+    llvm::DenseSet<Operation *> totalChecked, ringChecked;
+    std::function<Error(Operation *, bool)> check = [&](Operation *op,
+                                                        bool ring) -> Error {
+      auto &checked = ring ? ringChecked : totalChecked;
+      if (checked.contains(op))
+        return Error::success();
+      StringRef code =
+          ring ? "structured-source-map" : "structured-source-realization";
+      auto helper = dyn_cast<func::FuncOp>(op);
+      if (!helper || helper.isExternal() || !helper.isPrivate() ||
+          helper->getParentOp() != unit.getOperation())
+        return error(code, "private Math closure required");
+      if (auto premises =
+              helper->getAttrOfType<ArrayAttr>("data.preconditions");
+          premises && !premises.empty())
+        return error(code, "helper preconditions");
+      if (ring) {
+        Type field = algebra::FieldType::get(op->getContext(), "bls12-381.fr");
+        auto type = helper.getFunctionType();
+        for (Type port :
+             llvm::concat<const Type>(type.getInputs(), type.getResults()))
+          if (port != field)
+            return error(code, "scalar closure ABI");
+      }
+      for (Operation &instruction : helper.getBody().front()) {
+        if (auto call = dyn_cast<func::CallOp>(instruction)) {
+          if (auto e = check(symbols.lookup(call.getCallee()), ring))
+            return e;
+          continue;
+        }
+        bool allowed = isa<algebra::ConstantFieldOp, algebra::FieldAddOp,
+                           algebra::SubtractFieldOp, algebra::FieldMultiplyOp,
+                           func::ReturnOp>(instruction);
+        if (!ring)
+          allowed |=
+              isa<algebra::FieldEqualOp, algebra::GroupIdentityOp,
+                  algebra::GroupAddOp, algebra::GroupScaleOp,
+                  algebra::GroupEqualOp, data::IndexOp, data::EqualOp,
+                  arith::ConstantOp, arith::AndIOp, arith::OrIOp, arith::XOrIOp,
+                  arith::CmpIOp, arith::SelectOp>(instruction);
+        if (!allowed || instruction.getNumRegions())
+          return error(code, instruction.getName().getStringRef());
+      }
+      checked.insert(op);
+      return Error::success();
+    };
+    for (Operation &op : unit.getBody().front())
+      if (isa<local::RealizeOp, algebra::MapRealizeOp>(op))
+        if (auto e = check(
+                symbols.lookup(
+                    op.getAttrOfType<FlatSymbolRefAttr>("helper").getValue()),
+                isa<algebra::MapRealizeOp>(op)))
+          return e;
+    return Error::success();
+  }
+
   Expected<json::Value> function(Operation &op) {
+    if (isa<local::RealizeOp, algebra::MapRealizeOp>(op))
+      return preparation(op);
     StringRef owner = kind(op);
     SmallVector<StringRef> allowed{"sym_name", "sym_visibility",
                                    "function_type"};
@@ -892,6 +1023,8 @@ public:
       }
     }
     if (auto e = closure())
+      return std::move(e);
+    if (auto e = preparationProfiles())
       return std::move(e);
     // Multi-role Math finite work needs separate partial-component semantics.
     // Follow only Math calls: owned Local finite work keeps its closed ABI.

@@ -20,6 +20,7 @@
 #include <functional>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <variant>
 #include <vector>
 
@@ -168,6 +169,14 @@ struct CheckedPrimitive {
 };
 using PrimitiveMap = llvm::DenseMap<Operation *, CheckedPrimitive>;
 
+enum class PreparationKind { Realize, Map };
+struct CheckedPreparation {
+  PreparationKind kind;
+  func::FuncOp helper;
+  SmallVector<bool> rowwise;
+};
+using PreparationMap = llvm::DenseMap<Operation *, CheckedPreparation>;
+
 bool primitivePorts(TypeRange types, StringRef ports) {
   if (types.size() != ports.size())
     return false;
@@ -272,6 +281,7 @@ class Admission {
   llvm::DenseMap<Operation *, unsigned> heights;
   llvm::DenseMap<Operation *, const PrimitiveSpec *> bindings;
   PrimitiveMap primitives;
+  PreparationMap preparations;
   llvm::StringSet<> sites;
 
   Error binding(Operation &op) {
@@ -355,11 +365,19 @@ class Admission {
     if (!target ||
         (target->getName().getStringRef() != expected &&
          !(expected == "local.func" && attribute == "callee" &&
-           (kind(op) == Kind::Apply || kind(op) == Kind::LocalCall) &&
-           isa<local::FiniteFoldOp>(target))))
+           kind(op) == Kind::Apply &&
+           isa<local::FiniteFoldOp, local::RealizeOp, algebra::MapRealizeOp>(
+               target))))
       return error("structured-reference-symbol", name.getValue());
     dependencies[&owner].push_back(target);
     if (attribute == "callee") {
+      if ((kind(op) == Kind::Apply && !isa<local::FuncOp>(owner)) ||
+          (kind(op) == Kind::LocalCall &&
+           !isa<protocol_ir::MathematicalOp>(owner)) ||
+          (kind(op) == Kind::Call &&
+           (!isa<func::FuncOp, protocol_ir::MathematicalOp>(owner) ||
+            !cast<func::FuncOp>(target).isPrivate())))
+        return error("structured-reference-symbol", "call owner or kind");
       auto type = signature(*target);
       if (!type || op.getOperandTypes() != type.getInputs() ||
           op.getResultTypes() != type.getResults())
@@ -376,6 +394,109 @@ class Admission {
       return failure;
     return reference(op, owner, "predicate", local ? "local.func" : "func.func",
                      true);
+  }
+
+  Error preparation(Operation &op) {
+    bool mapped = isa<algebra::MapRealizeOp>(op);
+    StringRef code = mapped ? "structured-reference-map"
+                            : "structured-reference-realization";
+    SmallVector<StringRef> allowed{"sym_name", "function_type", "helper"};
+    if (mapped)
+      allowed.push_back("rowwise");
+    if (auto failure = attributes(op, allowed))
+      return failure;
+    if (op.getNumOperands() || op.getNumResults() || op.getNumRegions())
+      return error(code, "declaration shape");
+    auto ref = op.getAttrOfType<FlatSymbolRefAttr>("helper");
+    auto helper =
+        ref ? dyn_cast_or_null<func::FuncOp>(symbols.lookup(ref.getValue()))
+            : func::FuncOp{};
+    if (!helper || !helper.isPrivate() || helper.isExternal() ||
+        helper->getParentOp() != op.getParentOp())
+      return error(code, "private sibling Math helper");
+    CheckedPreparation checked{
+        mapped ? PreparationKind::Map : PreparationKind::Realize, helper, {}};
+    auto type = signature(op), scalar = helper.getFunctionType();
+    if (mapped) {
+      auto mask = op.getAttrOfType<DenseBoolArrayAttr>("rowwise");
+      if (!mask || mask.size() != type.getNumInputs() ||
+          !llvm::is_contained(mask.asArrayRef(), true) ||
+          type.getNumResults() != 1 ||
+          !primitivePorts(type.getResults(), "v") ||
+          scalar.getNumInputs() != type.getNumInputs() ||
+          !primitivePorts(scalar.getResults(), "f"))
+        return error(code, "root ABI or row mask");
+      for (unsigned i = 0; i < type.getNumInputs(); ++i) {
+        bool row = mask[i];
+        if (!primitivePorts(TypeRange{type.getInput(i)}, row ? "v" : "f") ||
+            !primitivePorts(TypeRange{scalar.getInput(i)}, "f"))
+          return error(code, "lifted input ABI");
+        checked.rowwise.push_back(row);
+      }
+    } else if (type != scalar) {
+      return error(code, "full realization ABI");
+    }
+    dependencies[&op].push_back(helper);
+    preparations.try_emplace(&op, std::move(checked));
+    return Error::success();
+  }
+
+  Error preparationClosures() {
+    // Separate total and ring caches: passing the former cannot authorize the
+    // latter. Graph cycles/depth and all ordinary bodies were checked first.
+    llvm::DenseSet<Operation *> total, ring;
+    for (Operation &declaration : unit.getBody().front()) {
+      auto found = preparations.find(&declaration);
+      if (found == preparations.end())
+        continue;
+      bool mapped = found->second.kind == PreparationKind::Map;
+      auto &visited = mapped ? ring : total;
+      StringRef code = mapped ? "structured-reference-map"
+                              : "structured-reference-realization";
+      SmallVector<Operation *> pending{found->second.helper};
+      while (!pending.empty()) {
+        auto *current = pending.pop_back_val();
+        if (!visited.insert(current).second)
+          continue;
+        auto helper = dyn_cast<func::FuncOp>(current);
+        if (!helper || !helper.isPrivate() || helper.isExternal() ||
+            helper->getParentOp() != unit.getOperation())
+          return error(code, "private Math closure");
+        auto premises = helper->getAttrOfType<ArrayAttr>("data.preconditions");
+        if (premises && !premises.empty())
+          return error(code, "nonempty helper preconditions");
+        if (mapped) {
+          auto type = helper.getFunctionType();
+          for (Type port :
+               llvm::concat<const Type>(type.getInputs(), type.getResults()))
+            if (!primitivePorts(TypeRange{port}, "f"))
+              return error(code, "non-scalar closure port");
+        }
+        for (Operation &op : helper.getBody().front()) {
+          Kind operation = kind(op);
+          if (operation == Kind::Call) {
+            pending.push_back(
+                symbols.lookup(cast<func::CallOp>(op).getCallee()));
+            continue;
+          }
+          bool allowed =
+              operation == Kind::FieldConstant || operation == Kind::Add ||
+              operation == Kind::Subtract || operation == Kind::Multiply ||
+              operation == Kind::Return;
+          if (!mapped)
+            allowed |= llvm::is_contained(
+                ArrayRef<Kind>{Kind::Equal, Kind::GroupIdentity, Kind::GroupAdd,
+                               Kind::GroupScale, Kind::GroupEqual,
+                               Kind::IndexConstant, Kind::IndexEqual,
+                               Kind::BoolConstant, Kind::And, Kind::Or,
+                               Kind::Xor, Kind::Compare, Kind::Select},
+                operation);
+          if (!allowed || op.getNumRegions())
+            return error(code, op.getName().getStringRef());
+        }
+      }
+    }
+    return Error::success();
   }
 
   Error instruction(Operation &op, Operation &owner) {
@@ -623,6 +744,7 @@ public:
   explicit Admission(protocol_ir::ProtocolModuleOp unit)
       : unit(unit), symbols(unit) {}
   const PrimitiveMap &checkedPrimitives() const { return primitives; }
+  const PreparationMap &checkedPreparations() const { return preparations; }
 
   Error check() {
     unsigned domains = 0, definitions = 0, relations = 0;
@@ -673,7 +795,8 @@ public:
       }
       bool isDomain = isa<data::DomainOp>(op);
       bool finite = isa<local::FiniteFoldOp>(op);
-      if (!isDomain && !finite &&
+      bool prepared = isa<local::RealizeOp, algebra::MapRealizeOp>(op);
+      if (!isDomain && !finite && !prepared &&
           !isa<func::FuncOp, local::FuncOp, protocol_ir::MathematicalOp>(op))
         return error("structured-reference-unsupported",
                      op.getName().getStringRef());
@@ -695,6 +818,14 @@ public:
             return error("structured-reference-unsupported", "output type");
       if (isDomain) {
         if (auto failure = domain(op))
+          return failure;
+        continue;
+      }
+      if (prepared) {
+        if (++operations > maxOperations)
+          return error("structured-reference-capacity",
+                       "preparation instructions");
+        if (auto failure = preparation(op))
           return failure;
         continue;
       }
@@ -753,6 +884,8 @@ public:
       if (!checked)
         return checked.takeError();
     }
+    if (auto failure = preparationClosures())
+      return failure;
     llvm::DenseSet<Operation *> checked;
     std::function<Error(Operation *)> scalarMath =
         [&](Operation *function) -> Error {
@@ -882,6 +1015,7 @@ bool matches(Type type, const Datum &value) {
 class Reference {
   SymbolTable symbols;
   const PrimitiveMap &primitives;
+  const PreparationMap &preparations;
   uint64_t steps = 0;
   uint64_t capacity = maxSteps;
   bool open = false;
@@ -913,6 +1047,15 @@ class Reference {
     // backend allocation law. Check before copying or traversing elements.
     if (count > maxVector || count > capacity - steps)
       return error("structured-reference-capacity", "vector work or length");
+    steps += count;
+    return Error::success();
+  }
+
+  Error argumentWork(size_t count) {
+    // Tuple construction is work, not a vector-length bound. In particular,
+    // arity times rows may exceed maxVector without exceeding observer fuel.
+    if (count > capacity - steps)
+      return error("structured-reference-capacity", "map argument work");
     steps += count;
     return Error::success();
   }
@@ -1019,7 +1162,7 @@ class Reference {
   }
 
   Expected<Outcome> invoke(Operation *callee, ArrayRef<Datum> args,
-                           unsigned depth) {
+                           unsigned depth, StringRef invocationSite = {}) {
     if (auto failure = tick(depth))
       return failure;
     if (!callee)
@@ -1044,9 +1187,19 @@ class Reference {
             std::get<Vector>(args[bound.getContainerArg()])->size())
           return error("structured-reference-bounds", "helper precondition");
       }
-    auto result = isa<local::FiniteFoldOp>(callee)
-                      ? fold(*callee, args, type.getNumResults(), depth)
-                      : block(callee->getRegion(0).front(), args, depth);
+    auto result = [&]() -> Expected<Outcome> {
+      if (auto found = preparations.find(callee); found != preparations.end()) {
+        const auto &checked = found->second;
+        if (!llvm::all_of(args, present))
+          return Outcome{Kind::Stop, {}, "incomplete", invocationSite.str()};
+        if (checked.kind == PreparationKind::Realize)
+          return invoke(checked.helper, args, depth + 1);
+        return map(checked, args, depth, invocationSite);
+      }
+      if (isa<local::FiniteFoldOp>(callee))
+        return fold(*callee, args, type.getNumResults(), depth);
+      return block(callee->getRegion(0).front(), args, depth);
+    }();
     if (!result || result->stopped())
       return result;
     if (result->values.size() != type.getNumResults())
@@ -1055,6 +1208,44 @@ class Reference {
       if (!matches(type, value))
         return error("structured-reference-signature", "call result type");
     return result;
+  }
+
+  Expected<Outcome> map(const CheckedPreparation &checked, ArrayRef<Datum> args,
+                        unsigned depth, StringRef site) {
+    std::optional<size_t> count;
+    for (auto [argument, row] : llvm::zip(args, checked.rowwise)) {
+      if (auto failure = tick(depth))
+        return failure;
+      if (!row)
+        continue;
+      size_t length = std::get<Vector>(argument)->size();
+      // Every stored vector is <=4096: logical length >=2^64 is exhausted,
+      // but cannot be represented by this bounded observer. Compare rows in
+      // source order, including unused rows and the zero-length case.
+      if (count && length != *count)
+        return Outcome{Kind::Stop, {}, "refused", site.str()};
+      count = length;
+    }
+    if (!count)
+      return error("structured-reference-map", "unchecked row mask");
+    if (auto failure = vectorWork(*count))
+      return failure;
+    auto output = std::make_shared<std::vector<APInt>>();
+    output->reserve(*count);
+    for (size_t i = 0; i < *count; ++i) {
+      if (auto failure = argumentWork(args.size()))
+        return failure;
+      Values scalar;
+      scalar.reserve(args.size());
+      for (auto [argument, row] : llvm::zip(args, checked.rowwise))
+        scalar.push_back(row ? Datum((*std::get<Vector>(argument))[i])
+                             : argument);
+      auto value = invoke(checked.helper, scalar, depth + 1);
+      if (!value || value->stopped())
+        return value;
+      output->push_back(std::get<APInt>(value->values[0]));
+    }
+    return Outcome{Kind::Return, {Vector(std::move(output))}, {}};
   }
 
   Expected<Outcome> fold(Operation &op, ArrayRef<Datum> args, unsigned count,
@@ -1252,7 +1443,8 @@ class Reference {
     case Kind::Apply:
       if (!llvm::all_of(args, present))
         return stopped(op, "incomplete");
-      return invoke(target(op, "callee"), args, depth + 1);
+      return invoke(target(op, "callee"), args, depth + 1,
+                    op.getAttrOfType<StringAttr>("site").getValue());
     case Kind::Statement:
       return Outcome{}; // Retained metadata, not relation evaluation.
     case Kind::Restrict:
@@ -1432,8 +1624,9 @@ class Reference {
   }
 
 public:
-  Reference(Operation *unit, const PrimitiveMap &primitives)
-      : symbols(unit), primitives(primitives) {}
+  Reference(Operation *unit, const PrimitiveMap &primitives,
+            const PreparationMap &preparations)
+      : symbols(unit), primitives(primitives), preparations(preparations) {}
   Expected<json::Value> run(protocol_ir::MathematicalOp source,
                             const json::Array &request, bool openRequest) {
     open = openRequest;
@@ -1586,7 +1779,8 @@ int main(int argc, char **argv) {
   auto selected = symbols.lookup<protocol_ir::MathematicalOp>(argv[2 + offset]);
   if (!selected)
     return fail(error("structured-reference-symbol", argv[2 + offset]));
-  auto result = Reference(unit, admission.checkedPrimitives())
+  auto result = Reference(unit, admission.checkedPrimitives(),
+                          admission.checkedPreparations())
                     .run(selected, *array, open);
   if (!result)
     return fail(result.takeError());
