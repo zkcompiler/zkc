@@ -3,9 +3,7 @@ use super::EntryPolicy;
 use crate::{Policy, Result, Value, exhausted, refused};
 use crate::{SetupRegistry, resource::Resources};
 use std::collections::HashSet;
-use zkc_runtime::interactive::{
-    Frame, FrameKind, Invocation, Retained, Type, Value as RuntimeValue,
-};
+use zkc_runtime::vm::{Frame, FrameKind, Invocation, Retained, Type, Value as RuntimeValue};
 
 pub(super) struct Core {
     pub(super) policy: Policy,
@@ -240,7 +238,7 @@ impl Core {
     /// Pure entry constraints; missing values are only pending resource roots.
     pub(super) fn check_entry_values<'a>(
         &self,
-        inputs: impl Iterator<Item = &'a (String, zkc_runtime::interactive::PhysicalType)> + Clone,
+        inputs: impl Iterator<Item = &'a (String, zkc_runtime::vm::PhysicalType)> + Clone,
         values: &[Option<&Value>],
     ) -> Result<()> {
         if inputs.clone().count() != values.len() {
@@ -312,11 +310,10 @@ impl Core {
         &self,
         i: &Invocation<'_>,
         args: &[Value],
-        signature: &zkc_runtime::interactive::BoundSignature,
+        signature: &zkc_runtime::vm::BoundSignature,
         call: Option<&mut Option<super::NativeCall>>,
     ) -> Result<()> {
         if i.binding.signature() != signature
-            || i.binding.implementation() != i.kernel
             || args.len() != signature.inputs.len()
             || args
                 .iter()

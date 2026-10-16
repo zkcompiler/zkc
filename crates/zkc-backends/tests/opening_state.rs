@@ -1,12 +1,12 @@
+use zkc_runtime::interpreter::Runner;
 mod common;
 use common::*;
 use serde_json::json;
 use std::sync::Arc;
 use zkc_backends::*;
-use zkc_runtime::interactive::Identity;
-use zkc_runtime::interactive::{
-    Backend, BackendError, ErrorCode, Frame, FrameExit, Invocation, Runner, Type,
-    Value as RuntimeValue, admit_supplied,
+use zkc_runtime::vm::Identity;
+use zkc_runtime::vm::{
+    Backend, BackendError, ErrorCode, Frame, FrameExit, Invocation, Type, Value as RuntimeValue,
 };
 
 fn keys(n: usize) -> Keys {
@@ -33,14 +33,14 @@ fn open_program() -> Vec<u8> {
 #[test]
 fn exact_contracts_and_wrong_operation_arities_fail_closed() {
     let b = ark_backend(None);
-    let binding = |contract: &str| zkc_runtime::interactive::OperationBinding {
+    let binding = |contract: &str| zkc_runtime::vm::OperationBinding {
         contract: contract.into(),
         arguments: vec!["multilinear.kzg.bls12-381/0".into()],
         implementation: format!("arkworks/{contract}"),
     };
     let commit = b.binding_signature(&binding("pcs.commit")).unwrap();
     let open = b.binding_signature(&binding("pcs.open")).unwrap();
-    let kinds = |types: &[zkc_runtime::interactive::PhysicalType]| {
+    let kinds = |types: &[zkc_runtime::vm::PhysicalType]| {
         types.iter().map(|t| t.kind()).collect::<Vec<_>>()
     };
     assert_eq!(kinds(&commit.inputs), [Type::ProverKey, Type::Table]);
@@ -76,7 +76,13 @@ fn exact_contracts_and_wrong_operation_arities_fail_closed() {
             &[],
         );
         assert_eq!(
-            admit_supplied(&bytes, &b).unwrap_err().code,
+            zkc_runtime::vm::Program::decode(&bytes)
+                .and_then(|program| {
+                    program.check_installation(&b)?;
+                    Ok(program)
+                })
+                .unwrap_err()
+                .code,
             ErrorCode::Signature
         );
     }
@@ -371,7 +377,11 @@ fn state_passes_explicit_local_ports_and_can_be_borrowed_twice() {
     unpassed[3][0][6][0][3] = json!(["p"]);
     unpassed[3][0][6][1][3] = json!(["p"]);
     assert_eq!(
-        admit_supplied(&serde_json::to_vec(&unpassed).unwrap(), &backend)
+        zkc_runtime::vm::Program::decode(&serde_json::to_vec(&unpassed).unwrap())
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
             .unwrap_err()
             .code,
         ErrorCode::Ssa
@@ -413,7 +423,12 @@ fn state_host_admission_checks_key_rank_limits_and_private_pins() {
             .unwrap(),
         )
         .unwrap();
-        let admitted = admit_supplied(&bytes, &backend).unwrap();
+        let admitted = zkc_runtime::vm::Program::decode(&bytes)
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap();
         match Runner::new(
             &admitted,
             "main",
@@ -449,7 +464,12 @@ fn state_host_admission_checks_key_rank_limits_and_private_pins() {
         &[],
     );
     let backend = common::backend().verifier(k.verifier_key().clone()).build();
-    let admitted = admit_supplied(&mixed, &backend).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&mixed)
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
     match Runner::new(
         &admitted,
         "main",
@@ -547,7 +567,11 @@ fn only_host_bound_actual_states_are_inputs_and_private_values_never_have_wire_t
         let mut artifact: serde_json::Value = serde_json::from_slice(&open_program()).unwrap();
         artifact[3][0][6].as_array_mut().unwrap().insert(0, action);
         assert_eq!(
-            admit_supplied(&serde_json::to_vec(&artifact).unwrap(), &backend)
+            zkc_runtime::vm::Program::decode(&serde_json::to_vec(&artifact).unwrap())
+                .and_then(|program| {
+                    program.check_installation(&backend)?;
+                    Ok(program)
+                })
                 .unwrap_err()
                 .code,
             ErrorCode::Type
@@ -624,10 +648,7 @@ impl Backend for OutputLimit {
     type Checkpoint = ();
     type Value = Value;
     type Kernel = zkc_backends::NativeKernel;
-    fn prepare_binding(
-        &self,
-        binding: &zkc_runtime::interactive::OperationBinding,
-    ) -> Option<Self::Kernel> {
+    fn prepare_binding(&self, binding: &zkc_runtime::vm::OperationBinding) -> Option<Self::Kernel> {
         self.inner.prepare_binding(binding)
     }
     fn validate_value(&self, v: &Value) -> Result<(), BackendError> {

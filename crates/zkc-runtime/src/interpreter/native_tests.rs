@@ -1,6 +1,6 @@
 //! Runtime transition controls with a deliberately small, noncryptographic backend.
 use super::*;
-use crate::interactive::{LogicalType, ProgramAction, admit_supplied};
+use crate::vm::{LogicalType, ProgramAction};
 use serde_json::json;
 use std::sync::{
     Arc,
@@ -92,7 +92,7 @@ impl Backend for Mock {
     type Call = ();
     type Checkpoint = ();
     type Value = V;
-    type Kernel = crate::interactive::BoundSignature;
+    type Kernel = crate::vm::BoundSignature;
     fn validate_value(&self, v: &V) -> std::result::Result<(), BackendError> {
         if v.valid {
             Ok(())
@@ -127,10 +127,10 @@ impl Backend for Mock {
         Err(BackendError::new("unexpected-kernel"))
     }
 }
-fn program() -> Admitted {
+fn program() -> Program {
     program_with_type(FIELD)
 }
-fn program_with_type(field: &str) -> Admitted {
+fn program_with_type(field: &str) -> Program {
     let value = json!([
         "zkc.program/0",
         [],
@@ -173,18 +173,38 @@ fn program_with_type(field: &str) -> Admitted {
         ],
         [["entry", "main", [["Alice", "a"], ["Bob", "b"]]]]
     ]);
-    admit_supplied(&serde_json::to_vec(&value).unwrap(), &Mock::default()).unwrap()
+    crate::vm::Program::decode(&serde_json::to_vec(&value).unwrap())
+        .and_then(|program| {
+            program.check_installation(&Mock::default())?;
+            Ok(program)
+        })
+        .unwrap()
 }
 fn receiver() -> Runner<Mock> {
-    Runner::new(
+    receiver_with(
+        Mock::default(),
+        ValueBudget::default(),
+        WorkBudget::default(),
+    )
+}
+fn receiver_with(backend: Mock, values: ValueBudget, work: WorkBudget) -> Runner<Mock> {
+    Runner::new_with_budgets(
         &program(),
         "main",
         "Bob",
         "session",
-        Mock::default(),
+        backend,
         vec![],
+        values,
+        work,
     )
     .unwrap()
+}
+fn instructions(n: u64) -> WorkBudget {
+    WorkBudget {
+        instructions: n,
+        ..WorkBudget::default()
+    }
 }
 fn expose(r: &mut Runner<Mock>) -> Cut {
     match r.poll() {
@@ -354,8 +374,14 @@ fn accepted_receive_stops_have_exact_site_and_preserve_primary_cause() {
         DecodeReason::Scalar,
         DecodeReason::Group,
     ] {
-        let mut r = receiver();
-        r.backend.fail_leave = true;
+        let mut r = receiver_with(
+            Mock {
+                fail_leave: true,
+                ..Mock::default()
+            },
+            ValueBudget::default(),
+            WorkBudget::default(),
+        );
         let cut = expose(&mut r);
         assert_eq!(
             r.complete_receive(&cut, Err(reason)),
@@ -383,18 +409,25 @@ fn accepted_receive_stops_have_exact_site_and_preserve_primary_cause() {
 }
 #[test]
 fn receive_tick_precedes_decode_and_retention_is_a_limit_stop() {
-    let mut r = receiver();
+    let mut r = receiver_with(Mock::default(), ValueBudget::default(), instructions(1));
     let cut = expose(&mut r);
-    r.usage.instructions = Limits::INSTRUCTIONS;
+    // Exercise the boundary check after the VM has spent its remaining work.
+    r.instance.tick().unwrap();
     assert_eq!(
         r.complete_receive(&cut, Err(DecodeReason::Length)),
         Ok(ReceiveCompletion::Stopped)
     );
     assert_eq!(r.stop().unwrap().kind, StopKind::Limit);
-    assert_eq!(r.usage().instructions, Limits::INSTRUCTIONS);
-    let mut r = receiver();
+    assert_eq!(r.usage().instructions, 1);
+    let mut r = receiver_with(
+        Mock::default(),
+        ValueBudget {
+            live_bytes: 0,
+            ..ValueBudget::default()
+        },
+        WorkBudget::default(),
+    );
     let cut = expose(&mut r);
-    r.value_budget.live_bytes = 0;
     assert_eq!(
         r.complete_receive(&cut, Ok(V::field())),
         Ok(ReceiveCompletion::Stopped)
@@ -499,26 +532,26 @@ fn existing_numeric_message_types_keep_value_serialization_checks() {
 
 #[test]
 fn borrowed_poll_exposure_finish_and_send_exhaustion_preserve_stops() {
-    let mut receive = receiver();
-    receive.usage.instructions = Limits::INSTRUCTIONS;
+    let mut receive = receiver_with(Mock::default(), ValueBudget::default(), instructions(0));
     assert!(matches!(receive.poll_ref(), Action::Stopped(stop) if stop.kind == StopKind::Limit));
     assert_eq!(receive.backend().frames, 0);
-    let mut finish = receiver();
+    let mut finish = receiver_with(Mock::default(), ValueBudget::default(), instructions(1));
     let cut = expose(&mut finish);
     finish.complete_receive(&cut, Ok(V::field())).unwrap();
-    finish.usage.instructions = Limits::INSTRUCTIONS;
     assert!(matches!(
         finish.inspect_program().unwrap(),
         ProgramState::Unpolled { kind: None, .. }
     ));
     assert!(matches!(finish.poll_ref(), Action::Stopped(stop) if stop.kind == StopKind::Limit));
-    let mut send = Runner::new(
+    let mut send = Runner::new_with_budgets(
         &program(),
         "main",
         "Alice",
         "session",
         Mock::default(),
         vec![V::field()],
+        ValueBudget::default(),
+        instructions(3),
     )
     .unwrap();
     let Action::Local(local) = send.poll() else {
@@ -526,13 +559,13 @@ fn borrowed_poll_exposure_finish_and_send_exhaustion_preserve_stops() {
     };
     send.execute_local(&local.cut).unwrap();
     let cut = send.poll_ref().cut().unwrap();
-    send.usage.instructions = Limits::INSTRUCTIONS;
+    send.instance.tick().unwrap();
     assert!(send.take_send(&cut).is_err());
     assert_eq!(send.stop().unwrap().kind, StopKind::Limit);
     assert_eq!(send.backend().frames, 0);
 }
 
-fn local_candidate(body: serde_json::Value) -> Admitted {
+fn local_candidate(body: serde_json::Value) -> Program {
     let index = "index@native.index/0";
     let boolean = "bool@native.bool/0";
     let ports = json!([["lo", index], ["hi", index], ["flag", boolean]]);
@@ -555,7 +588,12 @@ fn local_candidate(body: serde_json::Value) -> Admitted {
         ]],
         [["entry", "main", [["Alice", "a"]]]]
     ]);
-    admit_supplied(&serde_json::to_vec(&carrier).unwrap(), &Mock::default()).unwrap()
+    crate::vm::Program::decode(&serde_json::to_vec(&carrier).unwrap())
+        .and_then(|program| {
+            program.check_installation(&Mock::default())?;
+            Ok(program)
+        })
+        .unwrap()
 }
 
 #[test]
@@ -706,8 +744,12 @@ fn protocol_induction_rejects_a_backend_literal_with_the_wrong_type() {
         ]],
         [["entry", "main", [["Alice", "a"]]]]
     ]);
-    let admitted =
-        admit_supplied(&serde_json::to_vec(&carrier).unwrap(), &Mock::default()).unwrap();
+    let admitted = crate::vm::Program::decode(&serde_json::to_vec(&carrier).unwrap())
+        .and_then(|program| {
+            program.check_installation(&Mock::default())?;
+            Ok(program)
+        })
+        .unwrap();
     let mut runner = Runner::new(
         &admitted,
         "main",

@@ -1,3 +1,4 @@
+pub(crate) use super::code::{Body, Instruction, LoopCount, Participant, Ports};
 use super::{PhysicalType, ResolvedBinding};
 use std::{collections::BTreeMap, fmt, sync::Arc};
 
@@ -356,8 +357,6 @@ impl fmt::Display for AdmissionError {
 }
 impl std::error::Error for AdmissionError {}
 
-pub(crate) type Ports = Vec<(String, PhysicalType)>;
-pub(crate) type Body = Arc<[Instruction]>;
 #[derive(Debug)]
 pub(crate) struct Function {
     pub name: String,
@@ -427,69 +426,8 @@ pub(crate) enum LocalInstruction {
     },
     Return(Vec<String>),
 }
-#[derive(Clone, Debug)]
-pub(crate) struct LoopCount {
-    pub value: String,
-    pub maximum: u64,
-    pub induction: String,
-}
 #[derive(Debug)]
-pub(crate) struct Participant {
-    pub services: Vec<super::ServicePort>,
-    pub symbol: String,
-    pub instance: String,
-    pub role: String,
-    pub inputs: Ports,
-    pub outputs: Vec<PhysicalType>,
-    pub body: Body,
-}
-#[derive(Clone, Debug)]
-pub(crate) enum Instruction {
-    Query {
-        site: String,
-        port: String,
-        method: String,
-        inputs: Vec<String>,
-        outputs: Vec<String>,
-    },
-    Local {
-        site: String,
-        function: String,
-        inputs: Vec<String>,
-        outputs: Vec<String>,
-    },
-    Send {
-        site: String,
-        schema: String,
-        peer: String,
-        input: String,
-    },
-    Receive {
-        site: String,
-        schema: String,
-        peer: String,
-        output: String,
-        ty: PhysicalType,
-    },
-    Loop {
-        site: String,
-        count: LoopCount,
-        carried: Vec<(String, String)>,
-        captures: Vec<String>,
-        body: Body,
-        outputs: Vec<String>,
-    },
-    ReturnIf {
-        site: String,
-        condition: String,
-        values: Vec<String>,
-        continuations: Vec<String>,
-    },
-    Yield(Vec<String>),
-    Return(Vec<String>),
-}
-#[derive(Debug)]
-pub(crate) struct Program {
+pub(crate) struct Model {
     pub functions: BTreeMap<String, Arc<Function>>,
     pub participants: BTreeMap<String, Arc<Participant>>,
     pub entries: BTreeMap<String, BTreeMap<String, String>>,

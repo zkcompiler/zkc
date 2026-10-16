@@ -1,9 +1,10 @@
 //! Independent runtime admission and allocation of native Boolean literals.
+use zkc_runtime::interpreter::Runner;
 mod common;
 use common::ark_backend;
 use serde_json::{Value as Json, json};
 use zkc_backends::Value;
-use zkc_runtime::interactive::{Action, Runner, StopKind, ValueBudget, admit_supplied};
+use zkc_runtime::vm::{Action, StopKind, ValueBudget};
 
 fn candidate(value: bool) -> Json {
     json!([
@@ -44,7 +45,12 @@ fn bytes(value: &Json) -> Vec<u8> {
 fn literal_charges_a_step_and_returns_the_exact_boolean() {
     for value in [false, true] {
         let backend = ark_backend(None);
-        let admitted = admit_supplied(&bytes(&candidate(value)), &backend).unwrap();
+        let admitted = zkc_runtime::vm::Program::decode(&bytes(&candidate(value)))
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap();
         let mut runner = Runner::new(&admitted, "main", "P", "session", backend, vec![])
             .unwrap_or_else(|_| panic!("entry"));
         let Action::Local(local) = runner.poll() else {
@@ -65,7 +71,12 @@ fn literal_charges_a_step_and_returns_the_exact_boolean() {
 #[test]
 fn allocation_failure_has_the_literal_site_and_cleans_frames() {
     let backend = ark_backend(None);
-    let admitted = admit_supplied(&bytes(&candidate(true)), &backend).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&bytes(&candidate(true)))
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
     let mut runner = Runner::new_with_value_budget(
         &admitted,
         "main",
@@ -102,8 +113,17 @@ fn allocation_failure_has_the_literal_site_and_cleans_frames() {
 #[test]
 fn formats_shapes_context_and_names_are_independently_checked() {
     let backend = ark_backend(None);
-    let refused =
-        |value: Json| assert!(admit_supplied(&bytes(&value), &backend).is_err(), "{value}");
+    let refused = |value: Json| {
+        assert!(
+            zkc_runtime::vm::Program::decode(&bytes(&value))
+                .and_then(|program| {
+                    program.check_installation(&backend)?;
+                    Ok(program)
+                })
+                .is_err(),
+            "{value}"
+        )
+    };
     let mut unknown_format = candidate(true);
     unknown_format[0] = json!("invalid.program");
     refused(unknown_format);
@@ -147,14 +167,14 @@ fn formats_shapes_context_and_names_are_independently_checked() {
 
 #[derive(Clone, Debug)]
 struct WrongBoolean;
-impl zkc_runtime::interactive::Value for WrongBoolean {
-    fn from_control_bool(_: bool) -> Result<Self, zkc_runtime::interactive::BackendError> {
+impl zkc_runtime::vm::Value for WrongBoolean {
+    fn from_control_bool(_: bool) -> Result<Self, zkc_runtime::vm::BackendError> {
         Ok(Self)
     }
-    fn physical_type(&self) -> zkc_runtime::interactive::PhysicalType {
-        zkc_runtime::interactive::PhysicalType::parse("index@native.index/0").unwrap()
+    fn physical_type(&self) -> zkc_runtime::vm::PhysicalType {
+        zkc_runtime::vm::PhysicalType::parse("index@native.index/0").unwrap()
     }
-    fn validate_serializable(&self) -> Result<(), zkc_runtime::interactive::BackendError> {
+    fn validate_serializable(&self) -> Result<(), zkc_runtime::vm::BackendError> {
         Ok(())
     }
     fn retained_bytes(&self) -> usize {
@@ -166,44 +186,41 @@ struct LiteralAdapter {
     entered: usize,
     active: usize,
 }
-impl zkc_runtime::interactive::Backend for LiteralAdapter {
+impl zkc_runtime::vm::Backend for LiteralAdapter {
     type Call = ();
     type Checkpoint = ();
     type Value = WrongBoolean;
-    type Kernel = zkc_runtime::interactive::BoundSignature;
+    type Kernel = zkc_runtime::vm::BoundSignature;
     fn supports_boolean_literals(&self) -> bool {
         self.installed
     }
-    fn validate_value(
-        &self,
-        _: &WrongBoolean,
-    ) -> Result<(), zkc_runtime::interactive::BackendError> {
+    fn validate_value(&self, _: &WrongBoolean) -> Result<(), zkc_runtime::vm::BackendError> {
         Ok(())
     }
     fn enter_frame(
         &mut self,
-        _: &zkc_runtime::interactive::Frame,
+        _: &zkc_runtime::vm::Frame,
         _: &[WrongBoolean],
-    ) -> Result<(), zkc_runtime::interactive::BackendError> {
+    ) -> Result<(), zkc_runtime::vm::BackendError> {
         self.entered += 1;
         self.active += 1;
         Ok(())
     }
     fn leave_frame(
         &mut self,
-        _: &zkc_runtime::interactive::Frame,
-        _: zkc_runtime::interactive::FrameExit,
+        _: &zkc_runtime::vm::Frame,
+        _: zkc_runtime::vm::FrameExit,
         _: &[WrongBoolean],
-    ) -> Result<(), zkc_runtime::interactive::BackendError> {
+    ) -> Result<(), zkc_runtime::vm::BackendError> {
         self.active -= 1;
         Ok(())
     }
     fn apply(
         &mut self,
         _kernel: &Self::Kernel,
-        _: &zkc_runtime::interactive::Invocation<'_>,
+        _: &zkc_runtime::vm::Invocation<'_>,
         _: &[WrongBoolean],
-    ) -> Result<Vec<WrongBoolean>, zkc_runtime::interactive::BackendError> {
+    ) -> Result<Vec<WrongBoolean>, zkc_runtime::vm::BackendError> {
         unreachable!()
     }
 }
@@ -228,11 +245,21 @@ fn unsupported_adapter_is_refused_before_any_prefix_and_rechecked_on_entry() {
         entered: 0,
         active: 0,
     };
-    let error = admit_supplied(&bytes, &adapter).expect_err("unsupported installation");
-    assert_eq!(error.code, zkc_runtime::interactive::ErrorCode::Backend);
+    let error = zkc_runtime::vm::Program::decode(&bytes)
+        .and_then(|program| {
+            program.check_installation(&adapter)?;
+            Ok(program)
+        })
+        .expect_err("unsupported installation");
+    assert_eq!(error.code, zkc_runtime::vm::ErrorCode::Backend);
     assert!(error.detail.contains("native-boolean-unsupported"));
     assert_eq!(adapter.entered, 0);
-    let admitted = admit_supplied(&bytes, &ark_backend(None)).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap();
     assert!(admitted.requires_boolean_literals());
     let failure = Runner::new(&admitted, "main", "P", "session", adapter, vec![])
         .err()
@@ -247,7 +274,12 @@ fn a_false_adapter_promise_does_not_bypass_runtime_type_validation() {
         entered: 0,
         active: 0,
     };
-    let admitted = admit_supplied(&bytes(&candidate(true)), &adapter).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&bytes(&candidate(true)))
+        .and_then(|program| {
+            program.check_installation(&adapter)?;
+            Ok(program)
+        })
+        .unwrap();
     let mut runner = Runner::new(&admitted, "main", "P", "session", adapter, vec![])
         .unwrap_or_else(|_| panic!("entry"));
     let Action::Local(local) = runner.poll() else {
@@ -260,7 +292,7 @@ fn a_false_adapter_promise_does_not_bypass_runtime_type_validation() {
     assert_eq!(stop.site.as_deref(), Some("make"));
     assert_eq!(
         stop.kind,
-        StopKind::Backend(zkc_runtime::interactive::BackendError::new(
+        StopKind::Backend(zkc_runtime::vm::BackendError::new(
             "runtime-contract:Payload"
         ))
     );
@@ -291,7 +323,12 @@ fn only_the_selected_nested_literal_executes() {
             ["return", ["result"]]
         ]);
         let backend = ark_backend(None);
-        let admitted = admit_supplied(&bytes(&value), &backend).unwrap();
+        let admitted = zkc_runtime::vm::Program::decode(&bytes(&value))
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap();
         let mut runner = Runner::new(&admitted, "main", "P", "session", backend, vec![])
             .unwrap_or_else(|_| panic!("entry"));
         let Action::Local(local) = runner.poll() else {
@@ -314,7 +351,11 @@ fn unused_literal_definitions_are_admitted_and_require_backend_support() {
     value[3][0][5] = json!([]);
     value[3][0][6] = json!([["return", []]]);
     assert!(
-        admit_supplied(&bytes(&value), &ark_backend(None))
+        zkc_runtime::vm::Program::decode(&bytes(&value))
+            .and_then(|program| {
+                program.check_installation(&ark_backend(None))?;
+                Ok(program)
+            })
             .unwrap()
             .requires_boolean_literals()
     );
@@ -323,11 +364,22 @@ fn unused_literal_definitions_are_admitted_and_require_backend_support() {
         entered: 0,
         active: 0,
     };
-    let error = admit_supplied(&bytes(&value), &adapter)
+    let error = zkc_runtime::vm::Program::decode(&bytes(&value))
+        .and_then(|program| {
+            program.check_installation(&adapter)?;
+            Ok(program)
+        })
         .expect_err("unused literal still requires support");
     assert!(error.detail.contains("native-boolean-unsupported"));
     value[2][0][4][0][3] = json!("malformed");
-    assert!(admit_supplied(&bytes(&value), &ark_backend(None)).is_err());
+    assert!(
+        zkc_runtime::vm::Program::decode(&bytes(&value))
+            .and_then(|program| {
+                program.check_installation(&ark_backend(None))?;
+                Ok(program)
+            })
+            .is_err()
+    );
 }
 
 #[test]
@@ -338,7 +390,11 @@ fn native_endpoint_stops_are_not_local_stops() {
     ] {
         let mut value = candidate(true);
         value[3][0][6] = json!([terminal]);
-        let error = admit_supplied(&bytes(&value), &ark_backend(None))
+        let error = zkc_runtime::vm::Program::decode(&bytes(&value))
+            .and_then(|program| {
+                program.check_installation(&ark_backend(None))?;
+                Ok(program)
+            })
             .err()
             .unwrap();
         assert_eq!(error.detail, "unknown participant instruction");
@@ -349,7 +405,7 @@ fn native_endpoint_stops_are_not_local_stops() {
 #[test]
 fn program_service_query_executes_and_releases_its_lease() {
     use zkc_backends::{Scalar, services::ServiceRegistry};
-    use zkc_runtime::interactive::{Action, Runner};
+    use zkc_runtime::vm::Action;
     let registry = ServiceRegistry::new(zkc_backends::Policy::default());
     let root = registry
         .issue_test_tape("P", 1, vec![Scalar::from(17)])
@@ -380,7 +436,12 @@ fn program_service_query_executes_and_releases_its_lease() {
         ]],
         [["entry", "main", [["P", "p"]]]]
     ]);
-    let admitted = admit_supplied(&bytes(&carrier), &backend).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&bytes(&carrier))
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
     let mut runner = Runner::new(&admitted, "main", "P", "session", backend, vec![])
         .unwrap_or_else(|e| panic!("{}", e.error));
     let Action::Query(query) = runner.poll() else {
@@ -400,16 +461,20 @@ fn program_service_query_executes_and_releases_its_lease() {
     );
     let mut unknown_format = carrier;
     unknown_format[0] = json!("invalid.program");
-    let error = admit_supplied(&bytes(&unknown_format), runner.backend())
+    let error = zkc_runtime::vm::Program::decode(&bytes(&unknown_format))
+        .and_then(|program| {
+            program.check_installation(runner.backend())?;
+            Ok(program)
+        })
         .err()
         .unwrap();
-    assert_eq!(error.code, zkc_runtime::interactive::ErrorCode::Record);
+    assert_eq!(error.code, zkc_runtime::vm::ErrorCode::Record);
     assert_eq!(error.detail, "unknown participant module format");
 }
 
 #[test]
 fn program_iteration_exhaustion_preserves_the_attempted_loop_coordinate() {
-    use zkc_runtime::interactive::{PathElement, WorkBudget};
+    use zkc_runtime::vm::{PathElement, WorkBudget};
     let carrier = json!([
         "zkc.program/0",
         [],
@@ -437,8 +502,12 @@ fn program_iteration_exhaustion_preserves_the_attempted_loop_coordinate() {
         ]],
         [["entry", "main", [["P", "p"]]]]
     ]);
-    let admitted =
-        admit_supplied(&serde_json::to_vec(&carrier).unwrap(), &ark_backend(None)).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&carrier).unwrap())
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap();
     for iterations in [0, 1] {
         let mut runner = Runner::new_with_budgets(
             &admitted,

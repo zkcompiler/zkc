@@ -5,9 +5,9 @@
 //! Field arithmetic is supplied through [`Algebra`]; this module owns rows,
 //! scopes, windows, authority, presence and interaction meaning. It makes no
 //! claim about a proof protocol that consumes the relation.
-use crate::interactive::Identity;
 pub use crate::ring::Error;
 use crate::ring::{Expression, Node};
+use crate::vm::Identity;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -1340,7 +1340,7 @@ impl Bundle {
         config: &Configuration,
         instance: &Instance,
         witness: &Witness,
-    ) -> Result<Admitted> {
+    ) -> Result<Program> {
         if [&config.relation, &instance.relation, &witness.relation]
             .iter()
             .any(|r| r.as_str() != self.identity)
@@ -1354,7 +1354,7 @@ impl Bundle {
         if instance.publics.len() != self.publics.len() {
             return Err(Error("bundle-public-shape"));
         }
-        let mut admitted = Admitted {
+        let mut admitted = Program {
             present: vec![false; n],
             heights: vec![0; n],
             work: 0,
@@ -1521,9 +1521,9 @@ impl Bundle {
     }
 }
 
-/// Admitted presence and heights, with the reference evaluator's work bound.
+/// Program presence and heights, with the reference evaluator's work bound.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Admitted {
+pub struct Program {
     pub present: Vec<bool>,
     pub heights: Vec<u32>,
     pub work: u64,

@@ -1,4 +1,4 @@
-use super::{PhysicalType, Representation, backend::Backend, decode, model::*};
+use super::{PhysicalType, Representation, decode, model::*};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -11,10 +11,10 @@ fn err(code: ErrorCode, detail: impl Into<String>) -> AdmissionError {
 
 /// Immutable custody of exactly the checked bytes and derived typed program.
 #[derive(Clone, Debug)]
-pub struct Admitted {
-    pub(crate) program: Arc<Program>,
+pub struct Program {
+    pub(super) program: Arc<Model>,
     bytes: Arc<[u8]>,
-    pub(super) executable: Arc<super::executable::Executable>,
+    pub(crate) executable: Arc<super::code::Executable>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EntryRole {
@@ -25,7 +25,41 @@ pub struct EntryRole {
     pub outputs: Vec<PhysicalType>,
     pub services: Vec<super::ServicePort>,
 }
-impl Admitted {
+impl Program {
+    pub(crate) fn participant(
+        &self,
+        entry: &str,
+        role: &str,
+    ) -> std::result::Result<Arc<super::code::Participant>, super::RuntimeError> {
+        let roles = self
+            .program
+            .entries
+            .get(entry)
+            .ok_or(super::RuntimeError::Entry)?;
+        let symbol = roles.get(role).ok_or(super::RuntimeError::Role)?;
+        Ok(self.program.participants[symbol].clone())
+    }
+    pub(crate) fn function(&self, symbol: &str) -> Arc<super::code::Function> {
+        self.executable.functions[symbol].clone()
+    }
+    /// Decode, structurally admit and prepare an immutable VM program.
+    /// This performs no backend installation and grants no execution authority.
+    pub fn decode(bytes: &[u8]) -> Result<Self> {
+        let program = decode::physical(bytes)?;
+        validate(&program)?;
+        let executable = super::code::prepare(&program);
+        Ok(Program {
+            executable: Arc::new(executable),
+            program: Arc::new(program),
+            bytes: Arc::from(bytes),
+        })
+    }
+
+    /// Optional deployment preflight. Execution independently links its owned
+    /// backend; success here transfers neither handles nor resource authority.
+    pub fn check_installation<B: super::Backend>(&self, backend: &B) -> Result<()> {
+        super::link::install(self, backend).map(|_| ())
+    }
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
     }
@@ -58,61 +92,6 @@ impl Admitted {
     }
 }
 
-/// Admit an independently supplied native program by checking its executable
-/// structure and installed contracts.
-pub fn admit_supplied<B: Backend>(bytes: &[u8], backend: &B) -> Result<Admitted> {
-    let program = decode::physical(bytes)?;
-    validate(&program)?;
-    let executable = super::executable::prepare(&program);
-    installed(&program, &executable, backend)?;
-    Ok(Admitted {
-        executable: Arc::new(executable),
-        program: Arc::new(program),
-        bytes: Arc::from(bytes),
-    })
-}
-pub(crate) fn installed<B: Backend>(
-    p: &Program,
-    executable: &super::executable::Executable,
-    backend: &B,
-) -> Result<Vec<B::Kernel>> {
-    if executable.requires_boolean_literals && !backend.supports_boolean_literals() {
-        return Err(err(ErrorCode::Backend, "native-boolean-unsupported"));
-    }
-    for participant in p.participants.values() {
-        for port in &participant.services {
-            let expected = port.contract.signature("draw").expect("installed method");
-            if !backend
-                .service_support(port.contract, "draw")
-                .is_some_and(|support| {
-                    support.signature == expected
-                        && support.max_retained_bytes <= Limits::VALUE_BYTES
-                })
-            {
-                return Err(err(
-                    ErrorCode::Backend,
-                    "installed service signature mismatch",
-                ));
-            }
-        }
-    }
-    use super::InstalledKernel;
-    executable
-        .bindings
-        .iter()
-        .map(|binding| {
-            let actual = backend
-                .prepare_binding(binding.declaration())
-                .filter(|k| k.signature() == binding.signature());
-            actual.ok_or_else(|| {
-                err(
-                    ErrorCode::Backend,
-                    format!("installed signature mismatch: {}", binding.implementation()),
-                )
-            })
-        })
-        .collect()
-}
 #[derive(Clone)]
 struct Binding {
     ty: PhysicalType,
@@ -691,7 +670,7 @@ fn local_body(
     returned.ok_or_else(|| err(ErrorCode::Terminal, "missing local terminator"))
 }
 struct Check<'a> {
-    program: &'a Program,
+    program: &'a Model,
     role: &'a str,
     instance: &'a str,
     entry_outputs: &'a [PhysicalType],
@@ -881,7 +860,7 @@ impl Check<'_> {
         Ok(())
     }
 }
-fn validate(p: &Program) -> Result<()> {
+fn validate(p: &Model) -> Result<()> {
     for f in p.functions.values() {
         function(f)?;
     }

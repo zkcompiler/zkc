@@ -1,10 +1,11 @@
 #![allow(dead_code, unused_imports)]
+use zkc_runtime::interpreter::Runner;
 mod fixture;
 pub use fixture::*;
 
 use serde_json::{Value as Json, json};
 use zkc_backends::*;
-use zkc_runtime::interactive::{Backend, Runner, Stop, admit_supplied};
+use zkc_runtime::vm::{Backend, Stop};
 
 pub fn f(n: u64) -> Value {
     Value::Field(Scalar::from(n))
@@ -70,7 +71,12 @@ pub fn program(
     .unwrap()
 }
 pub fn load<B: Backend<Value = Value>>(bytes: &[u8], backend: B, inputs: Vec<Value>) -> Runner<B> {
-    let admitted = admit_supplied(bytes, &backend).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(bytes)
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
     Runner::new(&admitted, "main", "P", "session", backend, inputs)
         .unwrap_or_else(|e| panic!("load failed: {}", e.error))
 }
@@ -125,7 +131,7 @@ pub fn transcript_attributes(
 /// Small test-only declaration builder. Domains and implementations are fixed
 /// BLS bindings; this does not accept a serialized closed-profile artifact.
 pub fn participants(mut declarations: Json) -> Result<Vec<u8>, serde_json::Error> {
-    use zkc_runtime::interactive::{LogicalType, OperationBinding, PhysicalType};
+    use zkc_runtime::vm::{LogicalType, OperationBinding, PhysicalType};
     fn physical(kind: &str) -> String {
         if kind.contains('@') {
             return kind.to_owned();

@@ -1,6 +1,6 @@
 use crate::{Policy, Result, Value, exhausted, refused};
 use zkc_arkworks::{Metadata, VerifierKey};
-use zkc_runtime::interactive::Value as RuntimeValue;
+use zkc_runtime::vm::Value as RuntimeValue;
 
 /// Host-authorized public verifier material. Registering keys is an explicit
 /// trust decision; identifiers in peer messages never extend this registry.

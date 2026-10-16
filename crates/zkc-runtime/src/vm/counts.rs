@@ -1,11 +1,11 @@
 //! Optional execution observations, separate from protocol resource charges.
 //! Disabled builds have no counter storage, allocation or collection work.
-use super::executable::Operation;
+use super::code::Operation;
 
 macro_rules! events {
     ($($variant:ident => $name:literal),* $(,)?) => {
         #[derive(Clone, Copy)]
-        pub(super) enum Event { $($variant),* }
+        pub(crate) enum Event { $($variant),* }
         impl Event {
             #[cfg(feature = "execution-counts")]
             const ALL: &[Self] = &[$(Self::$variant),*];
@@ -84,7 +84,7 @@ impl ExecutionCounts {
     }
 }
 
-pub(super) struct Counts {
+pub(crate) struct Counts {
     #[cfg(feature = "execution-counts")]
     events: [std::cell::Cell<u64>; Event::ALL.len()],
     #[cfg(feature = "execution-counts")]

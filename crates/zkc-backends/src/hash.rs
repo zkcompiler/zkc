@@ -10,7 +10,7 @@ use shake::{
     digest::{ExtendableOutput, Update, XofReader},
 };
 use std::{fmt, sync::Arc};
-use zkc_runtime::interactive::{
+use zkc_runtime::vm::{
     AttributeRule, BoundSignature, Identity, KernelSignature, LogicalType, OperationBinding,
     PhysicalType, Type,
 };

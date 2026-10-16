@@ -1,32 +1,22 @@
-use super::counts::{Counts, Event};
-use super::executable::{LocalCode, Operation};
+use crate::vm::code::{LocalCode, Operation};
+use crate::vm::instance::{Instance, Scope};
+mod local;
 mod preparation;
 mod values;
-use super::retention::{Charge, Ledger, Retention};
-use super::{Admitted, PhysicalType, admit, backend::*, model::*, transport::*};
-use super::{ProgramCut, ProgramState};
+use crate::vm::retention::Retention;
+use crate::vm::{ProgramCut, ProgramState};
+use crate::vm::{
+    code::{Body, Instruction, Ports},
+    *,
+};
 use std::{collections::BTreeMap, sync::Arc};
 use values::Values;
-
-// Taking custody out of a runner leaves this empty only while the runner is
-// being destroyed. Ordinary methods always operate on the installed backend.
-struct BackendOwner<B>(Option<B>);
-impl<B> std::ops::Deref for BackendOwner<B> {
-    type Target = B;
-    fn deref(&self) -> &B {
-        self.0.as_ref().expect("runner owns backend")
-    }
-}
-impl<B> std::ops::DerefMut for BackendOwner<B> {
-    fn deref_mut(&mut self) -> &mut B {
-        self.0.as_mut().expect("runner owns backend")
-    }
-}
 
 type Result<T> = std::result::Result<T, RuntimeError>;
 
 struct Execution<V> {
     frame: Frame,
+    scope: Scope,
     body: Body,
     pc: usize,
     env: BTreeMap<String, V>,
@@ -50,22 +40,11 @@ enum Destination {
 /// `poll` exposes a stable action; local/send/receive advance only through their
 /// corresponding explicit methods. Local computation and loops are bounded.
 pub struct Runner<B: Backend> {
-    admitted: Admitted,
-    counts: Counts,
+    instance: Instance<B>,
     preparation: Option<preparation::Preparation<B>>,
-    backend: BackendOwner<B>,
-    kernels: Vec<B::Kernel>,
-    calls: Vec<Option<B::Call>>,
-    arguments: Vec<B::Value>,
-    role: String,
     root: Origin,
     stack: Vec<Execution<B::Value>>,
     pending: Option<Action<B::Value>>,
-    usage: Usage,
-    ledger: Ledger,
-    value_budget: ValueBudget,
-    work_budget: WorkBudget,
-    next_frame: u64,
     local_failure: Option<(String, Origin)>,
     local_cleanup_errors: Vec<BackendError>,
     early_return: Option<(Origin, String)>,
@@ -75,7 +54,7 @@ impl<B: Backend> Runner<B> {
     /// Backend entry admission validates shapes, keys and capabilities.
     /// Loading performs no program instructions.
     pub fn new(
-        admitted: &Admitted,
+        admitted: &Program,
         entry: &str,
         role: &str,
         session: &str,
@@ -97,7 +76,7 @@ impl<B: Backend> Runner<B> {
     /// are valid: they permit only zero-byte payloads. Arithmetic overflow
     /// refuses retention even when the selected budget is `usize::MAX`.
     pub fn new_with_value_budget(
-        admitted: &Admitted,
+        admitted: &Program,
         entry: &str,
         role: &str,
         session: &str,
@@ -122,7 +101,7 @@ impl<B: Backend> Runner<B> {
     /// refuse before initialization, retaining backend custody and zero usage.
     #[allow(clippy::too_many_arguments)]
     pub fn new_with_budgets(
-        admitted: &Admitted,
+        admitted: &Program,
         entry: &str,
         role: &str,
         session: &str,
@@ -131,16 +110,7 @@ impl<B: Backend> Runner<B> {
         value_budget: ValueBudget,
         work_budget: WorkBudget,
     ) -> std::result::Result<Self, LoadError<B>> {
-        if work_budget.instructions > Limits::INSTRUCTIONS
-            || work_budget.iterations > Limits::ITERATIONS
-            || work_budget.logical_bytes > Limits::LOGICAL_BYTES
-        {
-            return Err(LoadError {
-                error: RuntimeError::Limit,
-                usage: Usage::default(),
-                backend,
-            });
-        }
+        let instance = Instance::new(admitted, backend, role, session, value_budget, work_budget)?;
         let root = Origin {
             session: session.to_owned(),
             entry: entry.to_owned(),
@@ -148,79 +118,30 @@ impl<B: Backend> Runner<B> {
             path: Vec::new(),
         };
         let mut runner = Self {
-            admitted: admitted.clone(),
-            counts: Counts::new(admitted.executable.bindings.len()),
+            instance,
             preparation: None,
-            backend: BackendOwner(Some(backend)),
-            kernels: Vec::new(),
-            calls: Vec::new(),
-            arguments: Vec::new(),
-            role: role.to_owned(),
             root,
             stack: Vec::new(),
             pending: None,
-            usage: Usage::default(),
-            ledger: Ledger::default(),
-            value_budget,
-            work_budget,
-            next_frame: 0,
             local_failure: None,
             local_cleanup_errors: Vec::new(),
             early_return: None,
         };
-        if let Err(error) = runner.initialize(entry, role, session, inputs) {
-            if !runner.stack.is_empty() {
-                runner.halt(StopKind::Cancelled, None, None);
-            }
+        if let Err(error) = runner.initialize(entry, role, inputs) {
             return Err(LoadError {
                 error,
-                usage: runner.usage,
-                backend: runner
-                    .backend
-                    .0
-                    .take()
-                    .expect("load retains backend custody"),
+                usage: runner.instance.usage(),
+                backend: runner.instance.take_backend(),
             });
         }
         Ok(runner)
     }
-    fn initialize(
-        &mut self,
-        entry: &str,
-        role: &str,
-        session: &str,
-        inputs: Vec<B::Value>,
-    ) -> Result<()> {
-        if session.is_empty()
-            || session.len() > 128
-            || !session
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-'))
-        {
-            return Err(RuntimeError::Session);
-        }
-        self.kernels = admit::installed(
-            &self.admitted.program,
-            &self.admitted.executable,
-            self.backend(),
-        )
-        .map_err(RuntimeError::Admission)?;
-        self.calls
-            .resize_with(self.admitted.executable.calls, || None);
-        let roles = self
-            .admitted
-            .program
-            .entries
-            .get(entry)
-            .ok_or(RuntimeError::Entry)?;
-        let symbol = roles.get(role).ok_or(RuntimeError::Role)?;
-        let p = self.admitted.program.participants[symbol].clone();
+    fn initialize(&mut self, entry: &str, role: &str, inputs: Vec<B::Value>) -> Result<()> {
+        let p = self.instance.admitted().participant(entry, role)?;
         self.root.instance = p.instance.clone();
-        let mut frame =
-            self.frame_data(self.root.clone(), FrameKind::Entry, p.inputs.clone().into());
-        frame.services = p.services.clone();
+        let frame = self.instance.entry_frame(self.root.clone(), &p);
         self.push(
-            frame.into(),
+            frame,
             p.body.clone(),
             inputs,
             Destination::Root,
@@ -229,21 +150,21 @@ impl<B: Backend> Runner<B> {
         Ok(())
     }
     pub fn role(&self) -> &str {
-        &self.role
+        self.instance.role()
     }
     pub fn root_origin(&self) -> &Origin {
         &self.root
     }
     /// Snapshot optional instrumentation without exposing participant values.
-    pub fn execution_counts(&self) -> super::ExecutionCounts {
-        self.counts.snapshot(&self.admitted.executable.bindings)
+    pub fn execution_counts(&self) -> crate::vm::ExecutionCounts {
+        self.instance.execution_counts()
     }
     pub fn usage(&self) -> Usage {
-        self.usage
+        self.instance.usage()
     }
     /// Host inspection only; there is no mutable backend/environment getter for child code.
     pub fn backend(&self) -> &B {
-        &self.backend
+        self.instance.backend()
     }
     pub fn is_terminal(&self) -> bool {
         matches!(self.pending, Some(Action::Returned(_) | Action::Stopped(_)))
@@ -339,181 +260,20 @@ impl<B: Backend> Runner<B> {
         if !self.is_terminal() {
             self.halt(StopKind::Cancelled, None, None);
         }
-        self.backend.0.take().expect("runner owns backend custody")
+        self.instance.take_backend()
     }
     pub fn cancel(&mut self) {
         if !self.is_terminal() {
             self.halt(StopKind::Cancelled, None, None);
         }
     }
-    fn frame_data(
+    fn frame(
         &mut self,
         origin: Origin,
         kind: impl Into<Arc<FrameKind>>,
         inputs: FrameInputs,
-    ) -> FrameData {
-        self.counts.event(Event::Frame);
-        let kind = kind.into();
-        self.next_frame += 1; // bounded by instruction/iteration/call ceilings
-        let services = if matches!(kind.as_ref(), FrameKind::Loop { .. }) {
-            self.stack
-                .last()
-                .map(|frame| frame.frame.services().to_vec())
-                .unwrap_or_default()
-        } else {
-            vec![]
-        };
-        FrameData {
-            id: FrameId(self.next_frame),
-            parent: self.stack.last().map(|s| s.frame.id()),
-            role: self.role.clone(),
-            origin,
-            kind,
-            inputs,
-            services,
-        }
-    }
-    fn validate(&self, value: &B::Value, ty: &PhysicalType, wire: bool) -> Result<()> {
-        self.counts.event(Event::Validate);
-        if !value.has_type(ty) {
-            return Err(RuntimeError::Payload);
-        }
-        if value.retained_bytes() > Limits::VALUE_BYTES {
-            return Err(RuntimeError::Limit);
-        }
-        // An alias of a bound, capability-free immutable value of this type has
-        // already passed backend validation; its contents cannot have changed.
-        if !self.ledger.validated(value, ty) {
-            self.counts.event(Event::BackendValidate);
-            self.backend
-                .validate_value_retained(value, self.ledger.view())?;
-        }
-        if wire {
-            if !ty.is_message_type() {
-                return Err(RuntimeError::Payload);
-            }
-            // Keep the value-level check for types with an existing codec.
-            // Complete native-only frames were admitted by is_message_type.
-            if ty.is_serializable() {
-                value.validate_serializable()?;
-            }
-        }
-        Ok(())
-    }
-    fn accept(&self, value: B::Value, ty: &PhysicalType) -> Result<B::Value> {
-        self.validate(&value, ty, false)?;
-        Ok(value)
-    }
-    fn accept_values<'a>(
-        &self,
-        values: Vec<B::Value>,
-        types: impl Iterator<Item = &'a PhysicalType>,
-    ) -> Result<Vec<B::Value>> {
-        // Arity belongs to the producer's existing diagnostic boundary.
-        let mut types = types;
-        for value in &values {
-            self.validate(value, types.next().ok_or(RuntimeError::Payload)?, false)?;
-        }
-        if types.next().is_some() {
-            return Err(RuntimeError::Payload);
-        }
-        Ok(values)
-    }
-    fn can_retain(&self, values: &[B::Value], retention: Retention) -> Result<Charge> {
-        self.counts.event(Event::Plan);
-        self.counts.add(Event::PlanValue, values.len() as u64);
-        let charge = self
-            .ledger
-            .plan(values, retention)
-            .ok_or(RuntimeError::Limit)?;
-        let work = if retention == Retention::Result {
-            charge.fresh as u64
-        } else {
-            0
-        };
-        self.can_retain_size(values.len(), charge.live, charge.fresh, work)?;
-        Ok(charge)
-    }
-    fn can_retain_size(&self, count: usize, live: usize, fresh: usize, work: u64) -> Result<()> {
-        if self
-            .usage
-            .live_values
-            .checked_add(count)
-            .is_none_or(|n| n > Limits::LIVE_VALUES)
-            || self
-                .usage
-                .live_value_bytes
-                .checked_add(live)
-                .is_none_or(|n| n > self.value_budget.live_bytes)
-            || self
-                .usage
-                .total_value_bytes
-                .checked_add(fresh)
-                .is_none_or(|n| n > self.value_budget.total_bytes)
-            || self
-                .usage
-                .logical_bytes
-                .checked_add(work)
-                .is_none_or(|n| n > self.work_budget.logical_bytes)
-        {
-            return Err(RuntimeError::Limit);
-        }
-        Ok(())
-    }
-    /// Bind one reference to each value. Results also charge their newly
-    /// allocated bytes as logical work; transfers allocate nothing.
-    fn retain(&mut self, values: &[B::Value], retention: Retention) -> Result<()> {
-        let charge = self.can_retain(values, retention)?;
-        self.counts.add(Event::Retain, values.len() as u64);
-        self.ledger.retain(values);
-        self.usage.live_values += values.len();
-        self.usage.live_value_bytes += charge.live;
-        self.usage.total_value_bytes += charge.fresh;
-        if retention == Retention::Result {
-            self.usage.logical_bytes += charge.fresh as u64;
-        }
-        Ok(())
-    }
-    fn release<'a>(&mut self, values: impl Iterator<Item = &'a B::Value>)
-    where
-        B::Value: 'a,
-    {
-        let mut count = 0;
-        let bytes = self.ledger.release(values.inspect(|_| count += 1));
-        self.counts.add(Event::Release, count as u64);
-        self.usage.live_values -= count;
-        self.usage.live_value_bytes -= bytes;
-    }
-    /// Charge logical work that does not depend on allocation, such as
-    /// operand reads. Spent work is never refunded, even after a failure.
-    fn charge_logical(&mut self, bytes: u64) -> Result<()> {
-        self.usage.logical_bytes = self
-            .usage
-            .logical_bytes
-            .checked_add(bytes)
-            .filter(|n| *n <= self.work_budget.logical_bytes)
-            .ok_or(RuntimeError::Limit)?;
-        Ok(())
-    }
-    /// Largest result a kernel may allocate: the per-value ceiling and the
-    /// remaining live, cumulative and logical budgets. A result that aliases
-    /// its operands needs less, but the bound precedes knowledge of the result.
-    fn output_allowance(&self) -> usize {
-        let logical = self
-            .work_budget
-            .logical_bytes
-            .saturating_sub(self.usage.logical_bytes);
-        (self
-            .value_budget
-            .live_bytes
-            .saturating_sub(self.usage.live_value_bytes))
-        .min(
-            self.value_budget
-                .total_bytes
-                .saturating_sub(self.usage.total_value_bytes),
-        )
-        .min(usize::try_from(logical).unwrap_or(usize::MAX))
-        .min(Limits::VALUE_BYTES)
+    ) -> Frame {
+        self.instance.frame(origin, kind.into(), inputs)
     }
     /// Cleanup releases exactly the bound environment, so every retained
     /// region result must receive a name. Admission already checks the arity.
@@ -523,11 +283,6 @@ impl<B: Backend> Runner<B> {
         }
         Ok(())
     }
-    fn operand_bytes(values: &[B::Value]) -> u64 {
-        values
-            .iter()
-            .fold(0u64, |sum, v| sum.saturating_add(v.retained_bytes() as u64))
-    }
     fn push(
         &mut self,
         frame: Frame,
@@ -536,25 +291,21 @@ impl<B: Backend> Runner<B> {
         destination: Destination,
         retention: Retention,
     ) -> Result<()> {
-        if self.stack.len() >= Limits::STACK_DEPTH {
-            return Err(RuntimeError::Limit);
-        }
+        self.instance.check_frame_depth()?;
         if frame.inputs().len() != values.len() {
             return Err(RuntimeError::Inputs);
         }
-        let values = self.accept_values(values, frame.inputs().iter().map(|(_, ty)| ty))?;
+        let values = self
+            .instance
+            .accept_values(values, frame.inputs().iter().map(|(_, ty)| ty))?;
         // Captures remain in the suspended parent. The destination stores only
         // names; each iteration owns one checked body view, never a second
         // hidden payload store. The parent cannot advance while this frame lives.
         // Borrowed captures share the parent's allocations and add no storage.
-        self.retain(&values, retention)?;
-        self.counts.event(Event::Enter);
-        if let Err(e) = self
-            .backend
-            .enter_frame_retained(&frame, &values, self.ledger.view())
-        {
-            self.release(values.iter());
-            return Err(e.into());
+        let scope = self.instance.open_scope(&values, retention)?;
+        if let Err(e) = self.instance.enter_frame(&frame, &values) {
+            self.instance.close_scope(scope, values.iter());
+            return Err(e);
         }
         let env = frame
             .inputs()
@@ -564,6 +315,7 @@ impl<B: Backend> Runner<B> {
             .collect();
         self.stack.push(Execution {
             frame,
+            scope,
             body,
             pc: 0,
             env,
@@ -586,21 +338,6 @@ impl<B: Backend> Runner<B> {
             self.failed(error, Some(site.to_owned()), Some(origin));
         }
     }
-    fn tick(&mut self) -> Result<()> {
-        if self.usage.instructions >= self.work_budget.instructions {
-            return Err(RuntimeError::Limit);
-        }
-        self.usage.instructions += 1;
-        self.counts.event(Event::Tick);
-        Ok(())
-    }
-    fn iteration(&mut self) -> Result<()> {
-        if self.usage.iterations >= self.work_budget.iterations {
-            return Err(RuntimeError::Limit);
-        }
-        self.usage.iterations += 1;
-        Ok(())
-    }
     fn values(&self, names: &[String]) -> Vec<B::Value> {
         let env = &self.stack.last().expect("active frame").env;
         names.iter().map(|n| env[n].clone()).collect()
@@ -611,8 +348,10 @@ impl<B: Backend> Runner<B> {
         values: Vec<B::Value>,
         retention: Retention,
     ) -> Result<()> {
-        self.retain(&values, retention)?;
-        let env = &mut self.stack.last_mut().expect("parent frame").env;
+        let execution = self.stack.last_mut().expect("parent frame");
+        self.instance
+            .retain_in(&mut execution.scope, &values, retention)?;
+        let env = &mut execution.env;
         for (name, value) in names.iter().zip(values) {
             let previous = env.insert(name.clone(), value);
             debug_assert!(
@@ -634,17 +373,16 @@ impl<B: Backend> Runner<B> {
         } else {
             FrameExit::Stopped
         };
-        let mut cleanup_errors = Vec::new();
-        while let Some(frame) = self.stack.pop() {
-            self.counts.event(Event::Leave);
-            if let Err(e) = self.backend.leave_frame(&frame.frame, exit, &[]) {
-                cleanup_errors.push(e);
+        let stack = &mut self.stack;
+        let cleanup_errors = self.instance.unwind(exit, |instance, frame| {
+            if let Some(execution) = stack.pop_if(|execution| execution.frame.same_boundary(frame))
+            {
+                instance.close_scope(execution.scope, execution.env.values());
             }
-            self.release(frame.env.values());
-        }
+        });
         self.pending = Some(Action::Stopped(Stop {
             origin,
-            role: self.role.clone(),
+            role: self.role().to_owned(),
             site,
             kind,
             cleanup_errors,
@@ -681,7 +419,7 @@ impl<B: Backend> Runner<B> {
     }
     fn prepare(&mut self) -> Result<()> {
         while self.pending.is_none() {
-            if self.usage.instructions >= self.work_budget.instructions {
+            if !self.instance.has_instruction_capacity() {
                 return Err(RuntimeError::Limit);
             }
             let execution = self.stack.last().expect("nonterminal runner has frame");
@@ -712,7 +450,7 @@ impl<B: Backend> Runner<B> {
                     self.pending = Some(Action::Query(QueryAction {
                         cut: Cut {
                             origin,
-                            role: self.role.clone(),
+                            role: self.role().to_owned(),
                             site: site.clone(),
                             kind: CutKind::Query,
                         },
@@ -726,7 +464,7 @@ impl<B: Backend> Runner<B> {
                     self.pending = Some(Action::Local(LocalAction {
                         cut: Cut {
                             origin,
-                            role: self.role.clone(),
+                            role: self.role().to_owned(),
                             site: site.clone(),
                             kind: CutKind::Local,
                         },
@@ -741,13 +479,13 @@ impl<B: Backend> Runner<B> {
                 } => {
                     let payload = execution.env[input].clone();
                     let ty = payload.physical_type();
-                    self.validate(&payload, &ty, true)?;
+                    self.instance.validate(&payload, &ty, true)?;
                     self.pending = Some(Action::Send(Packet {
                         envelope: Envelope {
                             origin,
                             site: site.clone(),
                             schema: schema.clone(),
-                            sender: self.role.clone(),
+                            sender: self.role().to_owned(),
                             receiver: peer.clone(),
                         },
                         ty,
@@ -767,7 +505,7 @@ impl<B: Backend> Runner<B> {
                             site: site.clone(),
                             schema: schema.clone(),
                             sender: peer.clone(),
-                            receiver: self.role.clone(),
+                            receiver: self.role().to_owned(),
                         },
                         ty: ty.clone(),
                     }));
@@ -778,7 +516,7 @@ impl<B: Backend> Runner<B> {
                     return Err(BackendError::new("program-control-cut").into());
                 }
                 Instruction::Return(names) => {
-                    self.tick()?;
+                    self.instance.tick()?;
                     let values = self.values(names);
                     self.finish(values)?;
                 }
@@ -800,7 +538,7 @@ impl<B: Backend> Runner<B> {
             return Err(RuntimeError::WrongAction);
         };
         let origin = self.active_origin();
-        self.tick()?;
+        self.instance.tick()?;
         let values = self.values(&carried.iter().map(|(_, n)| n.clone()).collect::<Vec<_>>());
         self.stack.last_mut().expect("loop parent").pc += 1;
         let induction = count.induction.clone();
@@ -818,7 +556,7 @@ impl<B: Backend> Runner<B> {
             site: site.clone(),
             iteration: 0,
         });
-        if let Err(error) = self.iteration() {
+        if let Err(error) = self.instance.iteration() {
             self.failed(error, Some(site.clone()), Some(child_origin));
             return Ok(());
         }
@@ -844,10 +582,10 @@ impl<B: Backend> Runner<B> {
         }
         let mut all_values = values;
         all_values.extend(capture_values);
-        let value = self.index_value(0)?;
+        let value = self.instance.index_value(0)?;
         all_ports.insert(0, (induction, value.physical_type()));
         all_values.insert(0, value);
-        let frame = self.frame_data(
+        let frame = self.frame(
             child_origin,
             FrameKind::Loop {
                 site: site.clone(),
@@ -855,7 +593,7 @@ impl<B: Backend> Runner<B> {
             },
             all_ports.into(),
         );
-        self.push_child(frame.into(), body.clone(), all_values, destination, site);
+        self.push_child(frame, body.clone(), all_values, destination, site);
         Ok(())
     }
     /// Advance one reached loop boundary using this role's own count. This is
@@ -956,7 +694,10 @@ impl<B: Backend> Runner<B> {
         let Instruction::Yield(names) = &body[pc] else {
             return Err(RuntimeError::WrongAction);
         };
-        let result = self.tick().and_then(|()| self.finish(self.values(names)));
+        let result = self
+            .instance
+            .tick()
+            .and_then(|()| self.finish(self.values(names)));
         if let Err(error) = result {
             self.failed(error, None, Some(origin.clone()));
         }
@@ -981,7 +722,7 @@ impl<B: Backend> Runner<B> {
             return Err(RuntimeError::WrongCut);
         }
         let result = (|| {
-            self.tick()?;
+            self.instance.tick()?;
             let taken = self.stack.last().expect("return frame").env[condition].control_bool()?;
             let values = self.values(values);
             if !taken {
@@ -996,8 +737,7 @@ impl<B: Backend> Runner<B> {
             // Ordinary finish would restart a loop. Transfer the actual entry
             // tuple directly instead, using the backend's normal returned-frame
             // custody checks at each boundary.
-            self.counts.add(Event::Retain, values.len() as u64);
-            self.ledger.retain(&values);
+            self.instance.pin_return(&values);
             self.accept_return(values, |runner, values| {
                 while runner.stack.len() > 1 {
                     if !matches!(
@@ -1007,13 +747,13 @@ impl<B: Backend> Runner<B> {
                         return Err(BackendError::new("program-return-frame").into());
                     }
                     let execution = runner.stack.pop().expect("enclosing loop");
-                    runner.release(execution.env.values());
-                    runner.counts.event(Event::Leave);
-                    runner.backend.leave_frame_retained(
+                    runner
+                        .instance
+                        .close_scope(execution.scope, execution.env.values());
+                    runner.instance.leave_frame_retained(
                         &execution.frame,
                         FrameExit::Returned,
                         values,
-                        runner.ledger.view(),
                     )?;
                 }
                 runner.finish_retained(values.to_vec())?;
@@ -1036,8 +776,7 @@ impl<B: Backend> Runner<B> {
         // The returning environment is still live and validates every value.
         // Preserve shared backing through cleanup, custody checks and the next
         // participant frame just as for a Local region handoff.
-        self.counts.add(Event::Retain, values.len() as u64);
-        self.ledger.retain(&values);
+        self.instance.pin_return(&values);
         self.accept_return(values, |runner, values| {
             runner.finish_retained(values.to_vec())
         })
@@ -1045,14 +784,14 @@ impl<B: Backend> Runner<B> {
     fn finish_retained(&mut self, values: Vec<B::Value>) -> Result<()> {
         let execution = self.stack.pop().expect("return frame");
         let origin = execution.frame.origin().clone();
-        self.release(execution.env.values());
+        self.instance
+            .close_scope(execution.scope, execution.env.values());
         let root = matches!(execution.destination, Destination::Root);
-        if root && self.retain(&values, Retention::Transfer).is_err() {
+        if root && self.instance.retain_returned(&values).is_err() {
             // The root has no parent to receive a failed result transfer. Reserve
             // its returned values before reporting successful frame completion.
-            self.counts.event(Event::Leave);
             let cleanup = self
-                .backend
+                .instance
                 .leave_frame(&execution.frame, FrameExit::Stopped, &[]);
             self.halt(StopKind::Limit, None, Some(origin));
             if let (Err(error), Some(Action::Stopped(stop))) = (cleanup, &mut self.pending) {
@@ -1060,16 +799,12 @@ impl<B: Backend> Runner<B> {
             }
             return Ok(());
         }
-        self.counts.event(Event::Leave);
-        let leave = self.backend.leave_frame_retained(
-            &execution.frame,
-            FrameExit::Returned,
-            &values,
-            self.ledger.view(),
-        );
+        let leave =
+            self.instance
+                .leave_frame_retained(&execution.frame, FrameExit::Returned, &values);
         if let Err(e) = leave {
             if root {
-                self.release(values.iter());
+                self.instance.release_returned(&values);
             }
             self.halt(StopKind::Backend(e), None, Some(origin));
             return Ok(());
@@ -1096,7 +831,7 @@ impl<B: Backend> Runner<B> {
                         site: site.clone(),
                         iteration: iteration + 1,
                     });
-                    if let Err(error) = self.iteration() {
+                    if let Err(error) = self.instance.iteration() {
                         self.failed(error, Some(site.clone()), Some(origin));
                         return Ok(());
                     }
@@ -1106,10 +841,10 @@ impl<B: Backend> Runner<B> {
                         ports.push((name.clone(), value.physical_type()));
                         all_values.push(value);
                     }
-                    let value = self.index_value(iteration + 1)?;
+                    let value = self.instance.index_value(iteration + 1)?;
                     ports.insert(0, (induction.clone(), value.physical_type()));
                     all_values.insert(0, value);
-                    let frame = self.frame_data(
+                    let frame = self.frame(
                         origin,
                         FrameKind::Loop {
                             site: site.clone(),
@@ -1118,7 +853,7 @@ impl<B: Backend> Runner<B> {
                         ports.into(),
                     );
                     self.push_child(
-                        frame.into(),
+                        frame,
                         execution.body,
                         all_values,
                         Destination::Loop {
@@ -1175,82 +910,23 @@ impl<B: Backend> Runner<B> {
         Ok(())
     }
     fn query(&mut self) -> Result<()> {
-        self.tick()?;
+        self.instance.tick()?;
         let Some(Action::Query(query)) = self.pending.clone() else {
             unreachable!("checked query cut")
         };
-        let support = self
-            .backend
-            .service_support(query.port.contract, &query.method)
-            .ok_or_else(|| BackendError::new("service-unsupported"))?;
-        let signature = support.signature;
-        let bound = support.max_retained_bytes;
-        let expected = query
-            .port
-            .contract
-            .signature(&query.method)
-            .ok_or_else(|| BackendError::new("service-unsupported"))?;
-        if signature != expected
-            || signature.outputs
-                != query
-                    .results
-                    .iter()
-                    .map(|(_, ty)| ty.clone())
-                    .collect::<Vec<_>>()
-        {
-            return Err(BackendError::new("service-signature").into());
+        let execution = self.stack.last_mut().expect("query entry");
+        let values = self.instance.query(&mut execution.scope, &query)?;
+        let env = &mut execution.env;
+        for ((name, _), value) in query.results.iter().zip(values) {
+            let previous = env.insert(name.clone(), value);
+            debug_assert!(previous.is_none(), "admitted query result");
         }
-        // Service operands are read in full at every use, as kernel operands are.
-        let read = Self::operand_bytes(&query.arguments);
-        self.can_retain_size(
-            signature.outputs.len(),
-            bound,
-            bound,
-            read.saturating_add(bound as u64),
-        )?;
-        self.charge_logical(read)?;
-        let frame = self.stack.last().expect("query entry").frame.clone();
-        let invocation = ServiceInvocation {
-            frame: &frame,
-            site: &query.cut.site,
-            port: &query.port,
-            method: &query.method,
-            max_output_bytes: bound,
-        };
-        let values = self.backend.query(&invocation, &query.arguments)?;
-        let result = (|| {
-            if values.len() != signature.outputs.len() {
-                return Err(RuntimeError::Payload);
-            }
-            let values = self.accept_values(values, query.results.iter().map(|(_, ty)| ty))?;
-            // The installed reply bound counts shared backing in full.
-            let actual = values
-                .iter()
-                .try_fold(0usize, |sum, v| sum.checked_add(v.retained_bytes()))
-                .ok_or(RuntimeError::Limit)?;
-            if actual > bound {
-                return Err(RuntimeError::Limit);
-            }
-            self.bind(
-                &query
-                    .results
-                    .iter()
-                    .map(|(name, _)| name.clone())
-                    .collect::<Vec<_>>(),
-                values,
-                Retention::Result,
-            )
-        })();
-        if result.is_err() {
-            self.backend.reject_service_reply(&invocation);
-        }
-        result?;
         self.stack.last_mut().expect("query entry").pc += 1;
         self.pending = None;
         Ok(())
     }
     fn local(&mut self) -> Result<()> {
-        self.tick()?;
+        self.instance.tick()?;
         let execution = self.stack.last().expect("local parent");
         let body = execution.body.clone();
         let Instruction::Local {
@@ -1263,18 +939,16 @@ impl<B: Backend> Runner<B> {
             unreachable!("checked local cut")
         };
         let args = self.values(inputs);
-        let prepared = self.admitted.executable.functions[function].clone();
+        let prepared = self.instance.admitted().function(function);
         let code = &prepared.body;
-        let frame: Frame = self
-            .frame_data(
-                execution.frame.origin().clone(),
-                FrameKind::Local {
-                    site: site.clone(),
-                    function: function.clone(),
-                },
-                code.inputs.clone(),
-            )
-            .into();
+        let frame: Frame = self.frame(
+            execution.frame.origin().clone(),
+            FrameKind::Local {
+                site: site.clone(),
+                function: function.clone(),
+            },
+            code.inputs.clone(),
+        );
         let public = self.public_computation(code, inputs);
         let key = if public {
             Self::computation_key(function, &args)
@@ -1312,452 +986,20 @@ impl<B: Backend> Runner<B> {
         self.pending = None;
         Ok(())
     }
-    /// Returned shared backing stays accounted for until its caller installs
-    /// the result. The handoff itself adds no binding or inline-storage charge.
-    fn unpin_return(&mut self, values: &[B::Value]) {
-        self.counts.add(Event::Unpin, values.len() as u64);
-        self.usage.live_value_bytes -= self.ledger.unpin(values);
-    }
     fn accept_return<T>(
         &mut self,
         values: Vec<B::Value>,
         accept: impl FnOnce(&mut Self, &[B::Value]) -> Result<T>,
     ) -> Result<T> {
         let result = accept(self, &values);
-        self.unpin_return(&values);
+        self.instance.unpin_return(&values);
         result
     }
-    /// Execute one accepted local frame, preserving the original failure and
-    /// recording cleanup failures in actual inner-to-outer leave order.
-    fn run_local_frame(
-        &mut self,
-        frame: &Frame,
-        logical_origin: &LogicalOrigin,
-        body: &LocalCode,
-        args: Vec<B::Value>,
-        depth: usize,
-        key: Option<super::preparation::Key>,
-    ) -> Result<Vec<B::Value>> {
-        if self.stack.len() + depth > Limits::STACK_DEPTH {
-            return Err(RuntimeError::Limit);
-        }
-        self.can_retain(&args, Retention::Transfer)?;
-        self.counts.event(Event::Enter);
-        self.backend
-            .enter_frame_retained(frame, &args, self.ledger.view())?;
-        let reused = key.as_ref().and_then(|key| self.reuse_computation(key));
-        let (result, record) = if let Some(values) = reused {
-            (Ok(values), None)
-        } else {
-            let checkpoint = key.as_ref().and_then(|key| self.begin_computation(key));
-            let result = self.run_local_body(frame, logical_origin, body, args, depth);
-            let record = match (key, checkpoint, &result) {
-                (Some(key), Some((available, usage, frames, before)), Ok(values)) => {
-                    self.record_computation(key, available, usage, frames, before, values)
-                }
-                _ => None,
-            };
-            (result, record)
-        };
-        let (exit, returned) = match &result {
-            Ok(values) => (FrameExit::Returned, values.as_slice()),
-            Err(_) => (FrameExit::Stopped, &[][..]),
-        };
-        self.counts.event(Event::Leave);
-        let leave = self
-            .backend
-            .leave_frame_retained(frame, exit, returned, self.ledger.view());
-        match result {
-            Ok(values) => {
-                if let Err(error) = leave {
-                    self.unpin_return(&values);
-                    return Err(error.into());
-                }
-                self.publish_computation(record);
-                Ok(values)
-            }
-            Err(error) => {
-                if let Err(cleanup) = leave {
-                    self.local_cleanup_errors.push(cleanup);
-                }
-                Err(error)
-            }
-        }
-    }
-    fn index_value(&self, index: u64) -> Result<B::Value> {
-        let value = B::Value::from_control_index(index)?;
-        self.validate(&value, &super::executable::INDEX_TYPE, false)?;
-        Ok(value)
-    }
-    fn run_local_body(
-        &mut self,
-        frame: &Frame,
-        logical_origin: &LogicalOrigin,
-        body: &LocalCode,
-        args: Vec<B::Value>,
-        depth: usize,
-    ) -> Result<Vec<B::Value>> {
-        self.retain(&args, Retention::Transfer)?;
-        let mut local_count = args.len();
-        let mut ghost = 0usize;
-        let mut env = Values::new(args);
-        let mut current_site = None;
-        let mut current_has_own_site = false;
-        let result = (|| {
-            for instruction in &body.instructions {
-                current_has_own_site = matches!(
-                    instruction,
-                    Operation::BoolConstant { .. }
-                        | Operation::Conditional { .. }
-                        | Operation::For { .. }
-                        | Operation::Match { .. }
-                        | Operation::Stop { .. }
-                );
-                current_site = match instruction {
-                    Operation::BoolConstant { site, .. }
-                    | Operation::Variant { site, .. }
-                    | Operation::Match { site, .. }
-                    | Operation::Stop { site, .. }
-                    | Operation::Op { site, .. }
-                    | Operation::Conditional { site, .. }
-                    | Operation::For { site, .. } => Some(site.as_str()),
-                    _ => None,
-                };
-                if let Operation::Release(names) = instruction {
-                    self.counts.instruction(instruction);
-                    for name in names {
-                        // Admission independently excludes resources and future reads.
-                        // Removing ordinary immutable storage has no backend effect.
-                        let value = env.remove(name).expect("admitted storage release");
-                        // The binding's storage stays charged until frame cleanup.
-                        // Its ledger entries go now, so a later allocation that
-                        // reuses a freed address is charged as fresh storage.
-                        self.counts.event(Event::Release);
-                        ghost += self.ledger.release(std::iter::once(&value));
-                    }
-                    continue;
-                }
-                self.tick()?;
-                self.counts.instruction(instruction);
-                match instruction {
-                    Operation::BoolConstant { output, value, .. } => {
-                        let value = B::Value::from_control_bool(*value)?;
-                        let value = self.accept(value, &super::executable::BOOL_TYPE)?;
-                        self.retain(std::slice::from_ref(&value), Retention::Input)?;
-                        local_count += 1;
-                        env.insert(*output, value);
-                    }
-                    Operation::Stop { reason, .. } => {
-                        return Err(RuntimeError::ExplicitStop(reason.clone()));
-                    }
-                    Operation::Variant {
-                        ty,
-                        alternative,
-                        payload,
-                        output,
-                        ..
-                    } => {
-                        let descriptor = ty
-                            .logical()
-                            .variant_descriptor()
-                            .expect("admitted variant")
-                            .clone();
-                        let index = *alternative;
-                        let payload = payload.iter().map(|n| env[n].clone()).collect();
-                        let value = B::Value::pack_variant(descriptor, index, payload)?;
-                        let value = self.accept(value, ty)?;
-                        self.retain(std::slice::from_ref(&value), Retention::Input)?;
-                        local_count += 1;
-                        env.insert(*output, value);
-                    }
-                    Operation::Match {
-                        site,
-                        input,
-                        captures,
-                        arms,
-                        outputs,
-                    } => {
-                        let value = &env[input];
-                        self.counts.event(Event::BackendValidate);
-                        self.backend
-                            .validate_value_retained(value, self.ledger.view())?;
-                        let (descriptor, alternative, mut args) = value.unpack_variant()?;
-                        if value.physical_type().logical().variant_descriptor() != Some(&descriptor)
-                        {
-                            return Err(BackendError::new("variant-descriptor").into());
-                        }
-                        let arm = arms
-                            .get(alternative)
-                            .ok_or_else(|| BackendError::new("variant-alternative"))?;
-                        let declared = descriptor
-                            .alternatives()
-                            .get(alternative)
-                            .ok_or_else(|| BackendError::new("variant-alternative"))?;
-                        if arm.alternative != declared.label()
-                            || args.len() != declared.payload().len()
-                        {
-                            return Err(BackendError::new("variant-payload").into());
-                        }
-                        for (v, (_, ty)) in args.iter().zip(arm.body.inputs.iter()) {
-                            self.validate(v, ty, false)?;
-                        }
-                        args.extend(captures.iter().map(|n| env[n].clone()));
-                        let values = self.run_local_region(
-                            frame,
-                            logical_origin,
-                            &arm.body,
-                            args,
-                            PathElement::Match {
-                                site: site.clone(),
-                                alternative: arm.alternative.clone(),
-                            },
-                            depth,
-                        )?;
-                        self.accept_return(values, |runner, values| {
-                            Self::matches_outputs(outputs, values)?;
-                            runner.retain(values, Retention::Transfer)?;
-                            local_count += values.len();
-                            env.extend(outputs, values.iter().cloned());
-                            Ok(())
-                        })?;
-                    }
-                    Operation::Op {
-                        call,
-                        site,
-                        binding,
-                        attributes,
-                        inputs,
-                        outputs,
-                    } => {
-                        // The backend borrows arguments only for this call. Keep
-                        // empty slot capacity, never values or capability handles,
-                        // between calls. This also restores scratch on failures.
-                        self.counts.add(Event::Operand, inputs.len() as u64);
-                        let mut arguments = std::mem::take(&mut self.arguments);
-                        arguments.reserve_exact(inputs.len());
-                        arguments.extend(inputs.iter().map(|n| env[n].clone()));
-                        let result = (|| {
-                            let signature = binding.signature();
-                            for (v, ty) in arguments.iter().zip(&signature.inputs) {
-                                self.validate(v, ty, false)?;
-                            }
-                            let mut invocation = Invocation {
-                                frame,
-                                site,
-                                kernel: binding.implementation(),
-                                binding,
-                                logical_origin,
-                                attributes,
-                                max_output_bytes: 0,
-                                retained: super::Retained::NONE,
-                            };
-                            // Shared operands are read at every use; aliasing never
-                            // makes repeated computation free.
-                            // A declared extent can only lower the full-operand charge.
-                            let full = Self::operand_bytes(&arguments);
-                            let read = self
-                                .backend
-                                .operand_work(&self.kernels[binding.index], &invocation, &arguments)
-                                .map_or(full, |declared| declared.min(full));
-                            self.charge_logical(read)?;
-                            invocation.max_output_bytes = self.output_allowance();
-                            invocation.retained = self.ledger.view();
-                            self.counts.operation(binding.index);
-                            let values = self.backend.apply_prepared(
-                                &self.kernels[binding.index],
-                                &mut self.calls[*call],
-                                &invocation,
-                                &arguments,
-                            )?;
-                            if values.len() != signature.outputs.len() {
-                                return Err(RuntimeError::Backend(BackendError::new(
-                                    "kernel-output-arity",
-                                )));
-                            }
-                            let values = self.accept_values(values, signature.outputs.iter())?;
-                            self.retain(&values, Retention::Result)?;
-                            Ok(values)
-                        })();
-                        arguments.clear();
-                        self.arguments = arguments;
-                        let values = result?;
-                        local_count += values.len();
-                        env.extend(outputs, values.into_iter());
-                    }
-                    Operation::Conditional {
-                        site,
-                        condition,
-                        captures,
-                        then_body,
-                        else_body,
-                        outputs,
-                    } => {
-                        let taken = env[condition].control_bool()?;
-                        let args = captures.iter().map(|n| env[n].clone()).collect::<Vec<_>>();
-                        let values = self.run_local_region(
-                            frame,
-                            logical_origin,
-                            if taken { then_body } else { else_body },
-                            args,
-                            PathElement::Conditional {
-                                site: site.clone(),
-                                taken,
-                            },
-                            depth,
-                        )?;
-                        self.accept_return(values, |runner, values| {
-                            Self::matches_outputs(outputs, values)?;
-                            runner.retain(values, Retention::Transfer)?;
-                            local_count += values.len();
-                            env.extend(outputs, values.iter().cloned());
-                            Ok(())
-                        })?;
-                    }
-                    Operation::For {
-                        conditional,
-                        site,
-                        lower,
-                        upper,
-                        carried,
-                        captures,
-                        body,
-                        outputs,
-                    } => {
-                        let lower = env[lower].control_index()?;
-                        let upper = env[upper].control_index()?;
-                        if lower > Limits::PARAMETER
-                            || upper > Limits::PARAMETER
-                            || upper.saturating_sub(lower) > Limits::LOOP_COUNT
-                        {
-                            return Err(BackendError::new("exhausted:local-bound-limit").into());
-                        }
-                        let mut values = carried.iter().map(|n| env[n].clone()).collect::<Vec<_>>();
-                        let mut pinned = false;
-                        let result = (|| {
-                            for index in lower..upper {
-                                if let Err(error) = self.iteration() {
-                                    let mut origin = frame.origin().clone();
-                                    origin.path.push(PathElement::For {
-                                        site: site.clone(),
-                                        index,
-                                    });
-                                    self.local_failure = Some((site.clone(), origin));
-                                    return Err(error);
-                                }
-                                let mut args = vec![self.index_value(index)?];
-                                args.extend(values.iter().cloned());
-                                args.extend(captures.iter().map(|n| env[n].clone()));
-                                let returned = self.run_local_region(
-                                    frame,
-                                    logical_origin,
-                                    body,
-                                    args,
-                                    PathElement::For {
-                                        site: site.clone(),
-                                        index,
-                                    },
-                                    depth,
-                                )?;
-                                if pinned {
-                                    self.unpin_return(&values);
-                                }
-                                values = returned;
-                                pinned = true;
-                                if *conditional {
-                                    let condition = values.remove(0);
-                                    let continue_loop = condition.control_bool();
-                                    self.unpin_return(std::slice::from_ref(&condition));
-                                    if !continue_loop? {
-                                        break;
-                                    }
-                                }
-                            }
-                            Self::matches_outputs(outputs, &values)?;
-                            self.retain(&values, Retention::Transfer)?;
-                            local_count += values.len();
-                            env.extend(outputs, values.iter().cloned());
-                            Ok::<(), RuntimeError>(())
-                        })();
-                        if pinned {
-                            self.unpin_return(&values);
-                        }
-                        result?;
-                    }
-                    Operation::Release(_) => unreachable!("handled without a tick"),
-                    Operation::Return(names) | Operation::Yield(names) => {
-                        return Ok(names.iter().map(|n| env[n].clone()).collect::<Vec<_>>());
-                    }
-                }
-            }
-            unreachable!("admitted local terminator")
-        })();
-        if result.is_err() && self.local_failure.is_none() && (depth > 1 || current_has_own_site) {
-            let site = current_site.map(str::to_owned).unwrap_or_else(|| {
-                match frame.origin().path.last() {
-                    Some(
-                        PathElement::Conditional { site, .. }
-                        | PathElement::For { site, .. }
-                        | PathElement::Match { site, .. },
-                    ) => site.clone(),
-                    _ => String::new(),
-                }
-            });
-            self.local_failure = Some((site, frame.origin().clone()));
-        }
-        if let Ok(values) = &result {
-            // Each value is already held by this region and validated by this
-            // backend. Keep its shared subtree live while dropping the region's
-            // bindings; the caller releases this reference on every exit path.
-            self.counts.add(Event::Retain, values.len() as u64);
-            self.ledger.retain(values);
-        }
-        // Ghost charges survive physical release, including on every early error.
-        let released = self
-            .ledger
-            .release(env.values().inspect(|_| self.counts.event(Event::Release)));
-        self.usage.live_values -= local_count;
-        self.usage.live_value_bytes -= released + ghost;
-        result
-    }
-    #[allow(clippy::too_many_arguments)]
-    fn run_local_region(
-        &mut self,
-        parent: &Frame,
-        logical_origin: &LogicalOrigin,
-        body: &LocalCode,
-        args: Vec<B::Value>,
-        path: PathElement,
-        depth: usize,
-    ) -> Result<Vec<B::Value>> {
-        let mut origin = parent.origin().clone();
-        origin.path.push(path);
-        let mut frame = self.frame_data(origin, parent.shared_kind(), body.inputs.clone());
-        frame.parent = Some(parent.id());
-        let frame: Frame = frame.into();
-        let result = (|| {
-            if self.stack.len() + depth >= Limits::STACK_DEPTH {
-                return Err(RuntimeError::Limit);
-            }
-            let args = self.accept_values(args, frame.inputs().iter().map(|(_, ty)| ty))?;
-            self.run_local_frame(&frame, logical_origin, body, args, depth + 1, None)
-        })();
-        if result.is_err() && self.local_failure.is_none() {
-            let site = match frame.origin().path.last() {
-                Some(
-                    PathElement::Conditional { site, .. }
-                    | PathElement::For { site, .. }
-                    | PathElement::Match { site, .. },
-                ) => site.clone(),
-                _ => String::new(),
-            };
-            self.local_failure = Some((site, frame.origin().clone()));
-        }
-        result
-    }
+
     /// Consume one pending send. The caller owns delivery; no peer state is accessed.
     pub fn take_send(&mut self, expected: &Cut) -> Result<Packet<B::Value>> {
         self.require_cut(expected, CutKind::Send)?;
-        if let Err(e) = self.tick() {
+        if let Err(e) = self.instance.tick() {
             self.failed(e.clone(), Some(expected.site.clone()), None);
             return Err(e);
         }
@@ -1788,9 +1030,10 @@ impl<B: Backend> Runner<B> {
             return Err(RuntimeError::Payload);
         }
         let ty = request.ty.clone();
-        self.validate(&packet.payload, &ty, true)?;
-        self.can_retain(std::slice::from_ref(&packet.payload), Retention::Input)?;
-        if self.usage.instructions >= self.work_budget.instructions {
+        self.instance.validate(&packet.payload, &ty, true)?;
+        self.instance
+            .can_retain(std::slice::from_ref(&packet.payload), Retention::Input)?;
+        if !self.instance.has_instruction_capacity() {
             return Err(RuntimeError::Limit);
         }
         Ok(())
@@ -1817,7 +1060,7 @@ impl<B: Backend> Runner<B> {
         {
             return Err(RuntimeError::Payload);
         }
-        if let Err(error) = self.tick() {
+        if let Err(error) = self.instance.tick() {
             self.failed(error, Some(expected.site.clone()), None);
             return Ok(ReceiveCompletion::Stopped);
         }
@@ -1831,7 +1074,7 @@ impl<B: Backend> Runner<B> {
         let result = (|| {
             // Serializability was checked before acceptance. Backend validation
             // retains the existing runtime's typed error contract (no text parsing).
-            let value = self.accept(value, &ty)?;
+            let value = self.instance.accept(value, &ty)?;
             let frame = self.stack.last().expect("pending receiver frame");
             let Instruction::Receive { output, .. } = &frame.body[frame.pc] else {
                 unreachable!("pending native receive")
@@ -1854,7 +1097,7 @@ impl<B: Backend> Runner<B> {
     /// Wire decoding and its byte limits belong to the installed Value adapter.
     pub fn deliver(&mut self, packet: Packet<B::Value>) -> Result<()> {
         self.check_delivery(&packet)?;
-        self.tick()?;
+        self.instance.tick()?;
         let execution = self.stack.last().expect("receiver");
         let body = execution.body.clone();
         let Instruction::Receive { output, .. } = &body[execution.pc] else {
@@ -1873,7 +1116,7 @@ impl<B: Backend> Runner<B> {
 
 impl<B: Backend> Drop for Runner<B> {
     fn drop(&mut self) {
-        if self.backend.0.is_some() && !self.is_terminal() {
+        if self.instance.has_backend() && !self.is_terminal() {
             // The explicit cancellation API preserves diagnostics for the host.
             // Drop still closes every admitted view and never rolls back state.
             self.halt(StopKind::Cancelled, None, None);

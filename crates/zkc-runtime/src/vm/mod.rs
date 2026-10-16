@@ -1,14 +1,15 @@
-//! Strict, independently resumable execution for explicitly bound participants.
+//! Virtual-machine programs, execution contracts, and instance state.
 //!
 //! See `README.md` in this directory for admission, backend and transport contracts.
 //! This module implements no cryptography. An installed backend owns value codecs,
 //! capability issuance and state, shape admission, and mathematical operations.
 
 mod admit;
-mod backend;
+pub(crate) mod backend;
 mod bindings;
 mod field_array;
 mod fixed_vector;
+mod link;
 mod operations;
 mod resource_unit;
 mod sequence;
@@ -22,28 +23,27 @@ pub use structural::{
     TYPE_DEPTH_LIMIT, TYPE_NODE_LIMIT, TypeArgument,
 };
 pub use variant::{VariantAlternative, VariantDescriptor};
+pub(crate) mod code;
 mod decode;
-mod executable;
 mod model;
 mod native_proof;
-mod preparation;
+pub(crate) mod preparation;
 mod program;
-mod retention;
+pub(crate) mod retention;
 pub use native_proof::{
     ConstructionPlan, NativeProofEntry, NativeProofError, NativeTranscriptEvent, ProofConstruction,
 };
 pub use preparation::{PreparationLimits, PreparationStats, PreparedComputations};
 pub use program::{AssetReference, ProgramAction, ProgramCut, ProgramRole, ProgramState};
 pub use retention::{Backing, Retained};
-mod counts;
+pub(crate) mod counts;
 pub use counts::ExecutionCounts;
-mod runner;
-mod transport;
+mod observe;
 
-pub use admit::{Admitted, EntryRole, admit_supplied};
+pub use admit::{EntryRole, Program};
 pub use backend::{
-    Backend, BackendError, Frame, FrameExit, FrameId, FrameInputs, FrameKind, InstalledKernel,
-    Invocation, ServiceInvocation, Value,
+    Backend, BackendError, CallContext, Frame, FrameExit, FrameId, FrameInputs, FrameKind,
+    InstalledKernel, Invocation, ServiceInvocation, Value,
 };
 pub use bindings::{
     BoundSignature, Identity, LogicalType, OperationBinding, PhysicalType, Representation,
@@ -52,8 +52,7 @@ pub use bindings::{
 pub use model::{
     AdmissionError, AttributeRule, ErrorCode, KernelSignature, Limits, LogicalOrigin, Type,
 };
-pub use runner::Runner;
-pub use transport::{
+pub use observe::{
     Action, Cut, CutKind, DecodeReason, Envelope, LoadError, LocalAction, LocalContext, Origin,
     Packet, PathElement, QueryAction, Receive, ReceiveCompletion, RuntimeError, Stop, StopKind,
     Usage, ValueBudget, WorkBudget,
@@ -65,3 +64,8 @@ mod control_tests;
 mod tests;
 
 mod domain_bindings;
+
+#[cfg(test)]
+use crate::interpreter::Runner;
+
+pub(crate) mod instance;

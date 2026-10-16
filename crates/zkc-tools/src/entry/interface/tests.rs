@@ -606,7 +606,7 @@ fn pcs_schemas_preserve_independent_boundaries() {
             "{head}"
         );
         assert_eq!(
-            zkc_runtime::interactive::LogicalType::parse(&leaf)
+            zkc_runtime::vm::LogicalType::parse(&leaf)
                 .unwrap()
                 .is_native_message_data(),
             message,

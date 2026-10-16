@@ -10,7 +10,7 @@ mod support;
 pub(crate) mod table;
 pub(crate) mod transcript;
 
-use zkc_runtime::interactive::{
+use zkc_runtime::vm::{
     AttributeRule, BoundSignature, Identity, OperationBinding, Representation, Type,
 };
 type Resolver = fn(&OperationBinding, &Contract, Selection) -> Option<BoundSignature>;

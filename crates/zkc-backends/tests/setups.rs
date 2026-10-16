@@ -2,7 +2,7 @@ mod common;
 use common::*;
 use std::{collections::BTreeMap, sync::Arc};
 use zkc_backends::*;
-use zkc_runtime::interactive::{Backend, PhysicalType, Value as RuntimeValue};
+use zkc_runtime::vm::{Backend, PhysicalType, Value as RuntimeValue};
 
 #[test]
 fn authorized_setups_are_per_port_and_peer_bytes_cannot_select_authority() {
@@ -51,8 +51,13 @@ fn authorized_setups_are_per_port_and_peer_bytes_cannot_select_authority() {
         ],
     );
     assert!(out.unwrap().is_empty());
-    let admitted = zkc_runtime::interactive::admit_supplied(&bytes, &backend()).unwrap();
-    let wrong = zkc_runtime::interactive::Runner::new(
+    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        .and_then(|program| {
+            program.check_installation(&backend())?;
+            Ok(program)
+        })
+        .unwrap();
+    let wrong = zkc_runtime::interpreter::Runner::new(
         &admitted,
         "main",
         "P",
@@ -128,7 +133,7 @@ fn authorized_setups_are_per_port_and_peer_bytes_cannot_select_authority() {
     );
     // Public entry bytes use a host-selected port context too. Even a sole
     // registered setup does not implicitly become the input's expected setup.
-    let port = zkc_runtime::interactive::EntryRole {
+    let port = zkc_runtime::vm::EntryRole {
         services: vec![],
         role: "P".into(),
         participant: "p".into(),

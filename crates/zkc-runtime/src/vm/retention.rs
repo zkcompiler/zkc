@@ -1,9 +1,9 @@
-//! Identity-aware retained-value ledger for one Runner.
+//! Identity-aware retained-value ledger for one instance.
 //!
 //! Values report the immutable allocations they retain. The ledger counts each
 //! live allocation once, however many bindings, views or containers share it.
 //! An allocation's address identifies it only while it is alive; an entry exists
-//! only while a live Runner binding holds a strong reference to that allocation,
+//! only while a live instance binding holds a strong reference to that allocation,
 //! so an address cannot be reused by another allocation while it is recorded.
 //! Content is never compared: equal, separately created allocations are distinct.
 use super::{PhysicalType, Value};
@@ -20,8 +20,8 @@ pub struct Backing {
     bytes: usize,
 }
 
-/// A short-lived view of allocations retained by one Runner and admitted by
-/// that Runner's backend. Only the runtime can mint a nonempty view. A backend
+/// A short-lived view of allocations retained by one instance and admitted by
+/// that instance's backend. Only the runtime can mint a nonempty view. A backend
 /// may reuse validation for immutable, intrinsically typed allocations whose
 /// validity depends only on its fixed policy and setup registry. This is never
 /// evidence for capability validity or a different backend's authority.
@@ -55,7 +55,7 @@ impl Backing {
 
 /// Charges a retention adds to the live and cumulative ledgers.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(super) struct Charge {
+pub(crate) struct Charge {
     pub live: usize,
     pub fresh: usize,
 }
@@ -63,7 +63,7 @@ pub(super) struct Charge {
 /// How a binding obtained its value. Only production can create allocations;
 /// moving or borrowing an existing value between frames cannot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Retention {
+pub(crate) enum Retention {
     /// Arguments, captures, carried values and results crossing frames.
     Transfer,
     /// Entry inputs, received payloads, literals and constructed variants.
@@ -81,7 +81,7 @@ struct Entry {
 }
 
 #[derive(Default)]
-pub(super) struct Ledger {
+pub(crate) struct Ledger {
     entries: HashMap<Backing, Entry>,
 }
 impl Ledger {
@@ -114,7 +114,7 @@ impl Ledger {
     }
 
     /// Record one binding of each value. The caller has checked `plan` and
-    /// validated every value with this Runner's backend. Nested allocation
+    /// validated every value with this instance's backend. Nested allocation
     /// entries and handoff pins also certify that immutable contents passed
     /// validation; they must remain backed by live values until released.
     pub fn retain<V: Value>(&mut self, values: &[V]) {
@@ -133,8 +133,8 @@ impl Ledger {
                 );
                 true
             });
-            // Every value bound in a Runner environment has passed backend
-            // validation at its production site, under this Runner's backend.
+            // Every value bound in an instance environment has passed backend
+            // validation at its production site, under this instance's backend.
             if let Some(backing) = value.validation_backing()
                 && let Some(entry) = self.entries.get_mut(&backing)
             {

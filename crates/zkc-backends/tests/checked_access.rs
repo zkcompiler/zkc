@@ -5,9 +5,7 @@ use support::{Controlled, assert_value, backend, one, program};
 use zkc_backends::{
     Bn254Scalar, FieldArray, KoalaBear, KoalaBearExt8, Policy, RistrettoScalar, Scalar, Value,
 };
-use zkc_runtime::interactive::{
-    Backend, ErrorCode, Identity, LogicalType, OperationBinding, Value as _, admit_supplied,
-};
+use zkc_runtime::vm::{Backend, ErrorCode, Identity, LogicalType, OperationBinding, Value as _};
 
 const FIELDS: [(&str, &str); 5] = [
     ("bls12-381.fr", "arkworks"),
@@ -264,7 +262,11 @@ fn checked_access_rejects_attributes_wrong_ports_and_output_exhaustion() {
                 &["out".into()],
             );
             assert_eq!(
-                admit_supplied(&bytes, &backend(Policy::default()))
+                zkc_runtime::vm::Program::decode(&bytes)
+                    .and_then(|program| {
+                        program.check_installation(&backend(Policy::default()))?;
+                        Ok(program)
+                    })
                     .err()
                     .unwrap()
                     .code,
@@ -281,7 +283,11 @@ fn checked_access_rejects_attributes_wrong_ports_and_output_exhaustion() {
             &["out".into()],
         );
         assert_eq!(
-            admit_supplied(&bytes, &backend(Policy::default()))
+            zkc_runtime::vm::Program::decode(&bytes)
+                .and_then(|program| {
+                    program.check_installation(&backend(Policy::default()))?;
+                    Ok(program)
+                })
                 .err()
                 .unwrap()
                 .code,

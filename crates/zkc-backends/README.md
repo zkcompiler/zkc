@@ -1,6 +1,6 @@
 # Native backend adapters
 
-`zkc-backends` implements `zkc-runtime::interactive::Backend` with independently
+`zkc-backends` implements `zkc_runtime::vm::Backend` with independently
 installed operation signatures and native mathematical kernels. The runtime
 owns program admission and execution; this crate owns values, cryptographic
 operations, capability state and backend capacity checks.

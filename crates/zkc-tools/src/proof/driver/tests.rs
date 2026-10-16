@@ -1,7 +1,7 @@
 use super::*;
 use serde_json::json;
 use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Value};
-use zkc_runtime::interactive::{Runner, admit_supplied};
+use zkc_runtime::interpreter::Runner;
 
 fn fresh(role: &str) -> Runner<NativeBackend> {
     let boolean = "bool@native.bool/0";
@@ -43,7 +43,12 @@ fn fresh(role: &str) -> Runner<NativeBackend> {
         Default::default(),
     )
     .unwrap();
-    let admitted = admit_supplied(&bytes, &backend).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
     Runner::new(
         &admitted,
         "main",
@@ -186,7 +191,12 @@ fn record_publication_is_exact_bounded_and_requires_return() {
             Default::default(),
         )
         .unwrap();
-        let admitted = admit_supplied(&program, &backend).unwrap();
+        let admitted = zkc_runtime::vm::Program::decode(&program)
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap();
         Runner::new(
             &admitted,
             "main",

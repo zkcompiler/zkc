@@ -5,8 +5,8 @@ use zkc_backends::{
     ring::{self, Budget, Registry},
 };
 use zkc_runtime::{
-    interactive::Identity,
     ring::{Expression, Node},
+    vm::Identity,
 };
 
 #[path = "domains/support.rs"]
@@ -403,7 +403,7 @@ fn empty_batches_still_charge_preparation_and_keep_cumulative_work() {
 fn runner_frames_retain_ring_work_after_a_later_operation_fails() {
     use serde_json::json;
     use zkc_backends::Value;
-    use zkc_runtime::interactive::OperationBinding;
+    use zkc_runtime::vm::OperationBinding;
 
     let text = product().canonical();
     let digest = zkc_test_support::hex(&Sha256::digest(text.as_bytes()));
@@ -501,7 +501,7 @@ fn registry_bounds_text_and_decoded_metadata_before_installation() {
 
 #[test]
 fn an_active_frame_cannot_replace_the_expression_registry() {
-    use zkc_runtime::interactive::Backend;
+    use zkc_runtime::vm::Backend;
 
     let program = support::program(&[], &[], vec![], &[], &[]);
     let controlled = support::Controlled::new(support::backend(Policy::default()));

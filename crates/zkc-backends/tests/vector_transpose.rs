@@ -4,7 +4,7 @@ mod support;
 use p3_field::BasedVectorSpace;
 use support::{backend, one};
 use zkc_backends::{Bn254Scalar, KoalaBear, KoalaBearExt8, Policy, RistrettoScalar, Scalar, Value};
-use zkc_runtime::interactive::{OperationBinding, Value as _};
+use zkc_runtime::vm::{OperationBinding, Value as _};
 
 #[test]
 fn rectangular_transpose_preserves_coordinates_and_is_an_involution() {

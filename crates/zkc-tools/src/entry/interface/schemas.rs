@@ -1,7 +1,7 @@
 use super::{InterfaceError as E, Result, hash, identifier, raw::*, require, text};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
-use zkc_runtime::interactive::{Identity, LogicalType, Type};
+use zkc_runtime::vm::{Identity, LogicalType, Type};
 
 struct Leaf {
     ty: LogicalType,

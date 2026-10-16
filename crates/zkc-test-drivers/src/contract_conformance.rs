@@ -3,8 +3,8 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::io;
 use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy};
-use zkc_runtime::interactive::{
-    AdmissionError, KernelSignature, LogicalType, OperationBinding, PhysicalType, admit_supplied,
+use zkc_runtime::vm::{
+    AdmissionError, KernelSignature, LogicalType, OperationBinding, PhysicalType,
 };
 use zkc_tools::entry::Package;
 
@@ -172,7 +172,11 @@ fn respond(native: &NativeBackend, line: &[u8], resolve: LogicalResolver) -> Opt
         }
         let bytes = operation_program(&binding, attributes)?;
         return Some(observed(
-            admit_supplied(&bytes, native)
+            zkc_runtime::vm::Program::decode(&bytes)
+                .and_then(|program| {
+                    program.check_installation(native)?;
+                    Ok(program)
+                })
                 .map(|_| ())
                 .map_err(|e| e.code),
         ));

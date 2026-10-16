@@ -121,8 +121,8 @@ and cleanup obey the local machine's existing stop and custody rules. Terminal
 values remain retained for stable repeated polling.
 
 `Backend::supports_boolean_literals` is a stable installation fact, false by
-default. Admission checks it when any retained local body contains a literal;
-runner initialization checks it again before installing entry frames. This
+default. Installation checks it when any retained local body contains a literal;
+runner initialization links its owned backend before installing entry frames. This
 query must not execute work or construct a sample value. A backend advertising
 support must implement the constructor consistently. The runner still validates
 the constructed value; a dishonest or failing adapter causes a backend stop,
@@ -165,9 +165,11 @@ reports the iteration whose yield was attempted. Earlier effects remain installe
 
 ## Consumers and assurance boundary
 
-The Rust runner admits supplied physical programs through
-`admit_supplied`; the native backend supplies Boolean construction and the
-existing kernels/codecs. Structural admission does not establish correspondence
+`vm::Program::decode` structurally admits supplied physical programs without a
+backend. `Program::check_installation` optionally checks a deployment's installed
+signatures; each execution independently links its owned backend. The native
+backend supplies Boolean construction and the existing kernels/codecs. The
+[VM contract](../runtime/vm.md) defines this boundary. Structural admission does not establish correspondence
 to a mathematical source. A generic role runner can expose a message to a named
 external peer; its host must authorize the peer roster and route/envelope. Joint
 bundle and proof admission enforce their own closed roster policies.

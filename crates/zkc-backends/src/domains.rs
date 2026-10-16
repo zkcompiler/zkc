@@ -1,5 +1,5 @@
 //! Native library installations, independent of admission's nominal catalogue.
-use zkc_runtime::interactive::{Identity, LogicalType, PhysicalType, Representation, Type};
+use zkc_runtime::vm::{Identity, LogicalType, PhysicalType, Representation, Type};
 
 #[derive(Clone, Copy, Debug)]
 pub struct NativeDomain {

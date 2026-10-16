@@ -2,7 +2,7 @@
 use serde_json::Value as Json;
 use std::path::Path;
 use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
-use zkc_runtime::interactive::PathElement;
+use zkc_runtime::vm::PathElement;
 use zkc_tools::run::*;
 fn backend(role: &str) -> NativeBackend {
     NativeBackend::new(

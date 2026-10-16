@@ -5,7 +5,7 @@ use super::{
     construction::{CodecMessage, RecordCodec},
     *,
 };
-use crate::interactive::LogicalType;
+use crate::vm::LogicalType;
 use std::{cell::RefCell, sync::Arc};
 
 type Names = BTreeMap<String, String>;
@@ -372,7 +372,7 @@ struct Message<'a> {
     chunks: usize,
 }
 pub(super) struct CheckedCodec<'a> {
-    admitted: &'a Admitted,
+    admitted: &'a Program,
     codec: &'a RecordCodec,
     state: &'a [PhysicalType],
     messages: Vec<Message<'a>>,
@@ -383,7 +383,7 @@ pub(super) struct CheckedCodec<'a> {
 }
 impl<'a> CheckedCodec<'a> {
     pub fn new(
-        admitted: &'a Admitted,
+        admitted: &'a Program,
         codec: &'a RecordCodec,
         state: &'a [PhysicalType],
         helpers: &BTreeMap<String, Helper<'_>>,

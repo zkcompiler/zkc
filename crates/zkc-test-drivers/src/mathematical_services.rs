@@ -2,9 +2,10 @@
 use std::{collections::BTreeMap, path::Path};
 use zkc_backends::services::{ServiceReference, ServiceRegistry};
 use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
-use zkc_runtime::interactive::{
-    Action, Backend, BackendError, Frame, FrameExit, Invocation, OperationBinding, Packet, Runner,
-    RuntimeError, StopKind, Value as RuntimeValue, ValueBudget, admit_supplied,
+use zkc_runtime::interpreter::Runner;
+use zkc_runtime::vm::{
+    Action, Backend, BackendError, Frame, FrameExit, Invocation, OperationBinding, Packet,
+    RuntimeError, StopKind, Value as RuntimeValue, ValueBudget,
 };
 
 fn backend(role: &str, session: &str) -> NativeBackend {
@@ -39,7 +40,12 @@ fn load(
     inputs: Vec<Value>,
 ) -> Result<Runner<NativeBackend>, RuntimeError> {
     let native = backend(role, session);
-    let admitted = admit_supplied(bytes, &native).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(bytes)
+        .and_then(|program| {
+            program.check_installation(&native)?;
+            Ok(program)
+        })
+        .unwrap();
     let endpoint = admitted
         .entry("main")
         .unwrap()
@@ -144,14 +150,14 @@ impl Backend for InvalidReply {
     type Kernel = zkc_backends::NativeKernel;
     fn service_support(
         &self,
-        contract: zkc_runtime::interactive::ServiceContract,
+        contract: zkc_runtime::vm::ServiceContract,
         method: &str,
-    ) -> Option<zkc_runtime::interactive::ServiceSupport> {
+    ) -> Option<zkc_runtime::vm::ServiceSupport> {
         self.0.service_support(contract, method)
     }
     fn query(
         &mut self,
-        invocation: &zkc_runtime::interactive::ServiceInvocation<'_>,
+        invocation: &zkc_runtime::vm::ServiceInvocation<'_>,
         args: &[Value],
     ) -> Result<Vec<Value>, BackendError> {
         self.0.query(invocation, args)?;
@@ -162,10 +168,7 @@ impl Backend for InvalidReply {
             vec![]
         })
     }
-    fn reject_service_reply(
-        &mut self,
-        invocation: &zkc_runtime::interactive::ServiceInvocation<'_>,
-    ) {
+    fn reject_service_reply(&mut self, invocation: &zkc_runtime::vm::ServiceInvocation<'_>) {
         self.0.reject_service_reply(invocation);
     }
     fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {
@@ -203,9 +206,9 @@ impl Backend for ChangingSignature {
     type Kernel = zkc_backends::NativeKernel;
     fn service_support(
         &self,
-        contract: zkc_runtime::interactive::ServiceContract,
+        contract: zkc_runtime::vm::ServiceContract,
         method: &str,
-    ) -> Option<zkc_runtime::interactive::ServiceSupport> {
+    ) -> Option<zkc_runtime::vm::ServiceSupport> {
         let mut declared = self.0.service_support(contract, method)?;
         if self.1.replace(true) {
             declared.signature.outputs = vec![Value::Bool(true).physical_type()];
@@ -214,15 +217,12 @@ impl Backend for ChangingSignature {
     }
     fn query(
         &mut self,
-        invocation: &zkc_runtime::interactive::ServiceInvocation<'_>,
+        invocation: &zkc_runtime::vm::ServiceInvocation<'_>,
         args: &[Value],
     ) -> Result<Vec<Value>, BackendError> {
         self.0.query(invocation, args)
     }
-    fn reject_service_reply(
-        &mut self,
-        invocation: &zkc_runtime::interactive::ServiceInvocation<'_>,
-    ) {
+    fn reject_service_reply(&mut self, invocation: &zkc_runtime::vm::ServiceInvocation<'_>) {
         self.0.reject_service_reply(invocation);
     }
     fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {
@@ -261,7 +261,14 @@ fn main() {
     let bytes = read("services");
     let deferred = read("services_deferred");
     let single = read("service_single");
-    assert!(admit_supplied(&bytes, &WithoutServices(backend("Alice", "unsupported"))).is_err());
+    assert!(
+        zkc_runtime::vm::Program::decode(&bytes)
+            .and_then(|program| {
+                program.check_installation(&WithoutServices(backend("Alice", "unsupported")))?;
+                Ok(program)
+            })
+            .is_err()
+    );
 
     // Independent native admission of malformed carriers, before any root exists.
     for case in 0..14 {
@@ -321,7 +328,12 @@ fn main() {
         }
         let encoded = serde_json::to_vec(&artifact).unwrap();
         assert!(
-            admit_supplied(&encoded, &backend("Alice", "malformed")).is_err(),
+            zkc_runtime::vm::Program::decode(&encoded)
+                .and_then(|program| {
+                    program.check_installation(&backend("Alice", "malformed"))?;
+                    Ok(program)
+                })
+                .is_err(),
             "malformed case {case}"
         );
     }
@@ -332,11 +344,12 @@ fn main() {
         serde_json::json!(["query", "hidden", "service_0", "draw", [], ["out"]]),
     );
     assert!(
-        admit_supplied(
-            &serde_json::to_vec(&bad_local).unwrap(),
-            &backend("Alice", "bad_local")
-        )
-        .is_err()
+        zkc_runtime::vm::Program::decode(&serde_json::to_vec(&bad_local).unwrap())
+            .and_then(|program| {
+                program.check_installation(&backend("Alice", "bad_local"))?;
+                Ok(program)
+            })
+            .is_err()
     );
 
     // Same generated program, two different host alias relations.
@@ -543,7 +556,7 @@ fn main() {
     let wrong = registry
         .issue_random_for(
             "Alice",
-            zkc_runtime::interactive::ServiceContract::RandomBn254Field,
+            zkc_runtime::vm::ServiceContract::RandomBn254Field,
             1,
         )
         .unwrap();
@@ -615,7 +628,12 @@ fn main() {
 
     // A data-entry refusal releases a tentatively acquired service lease.
     let native = backend("Alice", "authorized_session");
-    let admitted = admit_supplied(&single, &native).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&single)
+        .and_then(|program| {
+            program.check_installation(&native)?;
+            Ok(program)
+        })
+        .unwrap();
     let port = admitted.entry("main").unwrap()[0].services[0].name.clone();
     let native = native
         .with_services(registry.clone(), BTreeMap::from([(port, root.clone())]))
@@ -655,7 +673,12 @@ fn main() {
         panic!("rng")
     };
     let before = native.observe(token).unwrap();
-    let admitted = admit_supplied(&artifact, &native).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&artifact)
+        .and_then(|program| {
+            program.check_installation(&native)?;
+            Ok(program)
+        })
+        .unwrap();
     let port = admitted.entry("main").unwrap()[0].services[0].name.clone();
     let wrong_owner = tape(&registry, "Bob", 1, &[5]);
     let native = native
@@ -696,7 +719,12 @@ fn main() {
 
     // Capacity refusal happens at the query cut, before the consume.
     let native = backend("Alice", "capacity");
-    let admitted = admit_supplied(&single, &native).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&single)
+        .and_then(|program| {
+            program.check_installation(&native)?;
+            Ok(program)
+        })
+        .unwrap();
     let port = admitted.entry("main").unwrap()[0].services[0].name.clone();
     let native = native
         .with_services(registry.clone(), BTreeMap::from([(port, root.clone())]))
@@ -719,7 +747,12 @@ fn main() {
     assert!(matches!(limited.poll(), Action::Stopped(stop) if stop.kind == StopKind::Limit));
     observe(&registry, &root, 2, 2, false, false);
     let native = backend("Alice", "changing_signature");
-    let admitted = admit_supplied(&single, &native).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&single)
+        .and_then(|program| {
+            program.check_installation(&native)?;
+            Ok(program)
+        })
+        .unwrap();
     let port = admitted.entry("main").unwrap()[0].services[0].name.clone();
     let native = native
         .with_services(registry.clone(), BTreeMap::from([(port, root.clone())]))
@@ -748,7 +781,12 @@ fn main() {
         let registry = ServiceRegistry::new(Policy::default());
         let root = tape(&registry, "Alice", 2, &[5, 11]);
         let native = backend("Alice", "bad_reply");
-        let admitted = admit_supplied(&single, &native).unwrap();
+        let admitted = zkc_runtime::vm::Program::decode(&single)
+            .and_then(|program| {
+                program.check_installation(&native)?;
+                Ok(program)
+            })
+            .unwrap();
         let port = admitted.entry("main").unwrap()[0].services[0].name.clone();
         let native = native
             .with_services(registry.clone(), BTreeMap::from([(port, root.clone())]))

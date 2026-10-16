@@ -4,15 +4,15 @@ use crate::resource::Resources;
 use crate::{Capability, CapabilityObservation, Policy, Result, Value, refused};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, MutexGuard};
-use zkc_runtime::interactive::ServiceContract;
+use zkc_runtime::vm::ServiceContract;
 
 /// Native service shapes belong to the executing provider, independently of
 /// the runtime contract catalogue. These facts never authorize a root or lease.
 pub(crate) fn support(
     contract: ServiceContract,
     method: &str,
-) -> Option<zkc_runtime::interactive::ServiceSupport> {
-    use zkc_runtime::interactive::{
+) -> Option<zkc_runtime::vm::ServiceSupport> {
+    use zkc_runtime::vm::{
         Identity, LogicalType, PhysicalType, Representation, ServiceSignature, ServiceSupport, Type,
     };
     if method == "index" {
@@ -398,7 +398,7 @@ impl ServiceBindings {
             lease: None,
         })
     }
-    pub(crate) fn enter(&mut self, frame: &zkc_runtime::interactive::Frame) -> Result<()> {
+    pub(crate) fn enter(&mut self, frame: &zkc_runtime::vm::Frame) -> Result<()> {
         if self.lease.is_some()
             || frame.services().len() != self.ports.len()
             || frame.services().iter().any(|port| {
@@ -505,7 +505,7 @@ mod tests {
                 .unwrap();
             let value = lease.draw(&alias).unwrap();
             assert_eq!(
-                zkc_runtime::interactive::Value::physical_type(&value),
+                zkc_runtime::vm::Value::physical_type(&value),
                 contract.signature("draw").unwrap().outputs[0]
             );
             assert!(lease.draw(&root).is_err());

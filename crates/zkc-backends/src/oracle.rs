@@ -4,7 +4,7 @@
 use crate::plonky3::oracle::{self as tree, Digest, Error, Shape};
 use crate::{Policy, Result, Value, exhausted, refused, value::size};
 use std::sync::Arc;
-use zkc_runtime::interactive::{
+use zkc_runtime::vm::{
     AttributeRule, Backing, BoundSignature, Identity, Invocation, KernelSignature, LogicalType,
     OperationBinding, PhysicalType, Type,
 };
@@ -83,7 +83,7 @@ impl State {
     }
 }
 
-fn failure(error: Error) -> zkc_runtime::interactive::BackendError {
+fn failure(error: Error) -> zkc_runtime::vm::BackendError {
     match error {
         Error::ElementLimit => exhausted("oracle-element-limit"),
         Error::ByteLimit => exhausted("oracle-byte-limit"),

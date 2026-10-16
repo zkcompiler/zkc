@@ -1,3 +1,4 @@
+mod instance;
 mod joint;
 mod storage;
 use joint::{DriverCut, DriverEvent, drive_cut};
@@ -125,6 +126,8 @@ struct Slot {
     owner: String,
     seal: u64,
 }
+type CloseEvents = std::rc::Rc<std::cell::RefCell<Vec<(FrameId, FrameExit)>>>;
+
 #[derive(Debug)]
 struct Mock {
     slots: BTreeMap<usize, Slot>,
@@ -138,7 +141,7 @@ struct Mock {
     fail_leave: bool,
     fail_enter: Option<FrameKind>,
     refused_frame: Option<Frame>,
-    close_count: Option<std::rc::Rc<std::cell::Cell<usize>>>,
+    close_events: Option<CloseEvents>,
 }
 impl Mock {
     fn new() -> Self {
@@ -154,7 +157,7 @@ impl Mock {
             fail_leave: false,
             fail_enter: None,
             refused_frame: None,
-            close_count: None,
+            close_events: None,
         }
     }
     fn issue(&mut self, slot: usize, role: &str) -> V {
@@ -203,7 +206,7 @@ impl Backend for Mock {
     type Call = ();
     type Checkpoint = ();
     type Value = V;
-    type Kernel = crate::interactive::BoundSignature;
+    type Kernel = crate::vm::BoundSignature;
     fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {
         let mut signature = binding.signature().ok()?;
         if self.wrong_signature {
@@ -243,8 +246,8 @@ impl Backend for Mock {
         exit: FrameExit,
         outputs: &[V],
     ) -> Result<(), BackendError> {
-        if let Some(count) = &self.close_count {
-            count.set(count.get() + 1);
+        if let Some(events) = &self.close_events {
+            events.borrow_mut().push((frame.id(), exit));
         }
         let (id, view) = self.frames.pop().expect("balanced frame");
         assert_eq!(id, frame.id());
@@ -267,7 +270,8 @@ impl Backend for Mock {
         invocation: &Invocation<'_>,
         arguments: &[V],
     ) -> Result<Vec<V>, BackendError> {
-        self.trace.push(invocation.kernel.to_owned());
+        self.trace
+            .push(invocation.binding.implementation().to_owned());
         self.domains.push(invocation.domain_bytes());
         let (_, view) = self.frames.last().expect("active frame");
         let mut argument_view = BTreeSet::new();
@@ -288,7 +292,7 @@ impl Backend for Mock {
         if self.wrong_output {
             return Ok(vec![V::Bool(false)]);
         }
-        let result = match (invocation.kernel, arguments) {
+        let result = match (invocation.binding.implementation(), arguments) {
             ("arkworks/field.constant", []) => {
                 vec![V::Field(invocation.attributes[0].parse().unwrap())]
             }
@@ -330,7 +334,7 @@ impl Backend for Mock {
     }
 }
 // This test authoring helper fixes one nominal BLS installation and emits only
-// /2. The runner never receives shorthand types or implicit operation contracts.
+// program/0. The runtime never receives shorthand types or implicit contracts.
 fn fixture_type(kind: &str) -> String {
     if kind.contains('@') {
         return kind.into();
@@ -460,8 +464,13 @@ fn one(functions: Json, inputs: Json, outputs: Json, body: Json) -> Json {
 fn bytes(j: &Json) -> Vec<u8> {
     serde_json::to_vec(j).unwrap()
 }
-fn admitted(j: &Json) -> Admitted {
-    admit_supplied(&bytes(j), &Mock::new()).unwrap()
+fn admitted(j: &Json) -> Program {
+    crate::vm::Program::decode(&bytes(j))
+        .and_then(|program| {
+            program.check_installation(&Mock::new())?;
+            Ok(program)
+        })
+        .unwrap()
 }
 fn runner(j: &Json, role: &str, backend: Mock, inputs: Vec<V>) -> Runner<Mock> {
     Runner::new(&admitted(j), "main", role, "test-session", backend, inputs).unwrap()
@@ -471,10 +480,30 @@ fn local(r: &mut Runner<Mock>) {
         panic!("expected local")
     };
     r.execute_local(&a.cut).unwrap();
+    if let Some(stop) = r.stop() {
+        assert_eq!(r.usage().live_values, 0);
+        assert_eq!(r.usage().live_value_bytes, 0);
+        let primary = match &stop.kind {
+            StopKind::Backend(error) => Some(error),
+            _ => None,
+        };
+        for error in primary.into_iter().chain(&stop.cleanup_errors) {
+            assert!(!matches!(
+                error.code.as_str(),
+                "vm-frame-order" | "vm-frame-parent"
+            ));
+        }
+    }
 }
 fn reject(j: &Json, code: ErrorCode) {
     assert_eq!(
-        admit_supplied(&bytes(j), &Mock::new()).unwrap_err().code,
+        crate::vm::Program::decode(&bytes(j))
+            .and_then(|program| {
+                program.check_installation(&Mock::new())?;
+                Ok(program)
+            })
+            .unwrap_err()
+            .code,
         code
     );
 }
@@ -560,13 +589,35 @@ fn strict_json_scalars_objects_trailing_and_truncation() {
         b"]",
         b"[\"x\",{}]",
     ] {
-        assert!(admit_supplied(bad, &Mock::new()).is_err(), "{bad:?}");
+        assert!(
+            crate::vm::Program::decode(bad)
+                .and_then(|program| {
+                    program.check_installation(&Mock::new())?;
+                    Ok(program)
+                })
+                .is_err(),
+            "{bad:?}"
+        );
     }
     let mut data = bytes(&identity());
     data.push(b'0');
-    assert!(admit_supplied(&data, &Mock::new()).is_err());
+    assert!(
+        crate::vm::Program::decode(&data)
+            .and_then(|program| {
+                program.check_installation(&Mock::new())?;
+                Ok(program)
+            })
+            .is_err()
+    );
     for length in 0..bytes(&identity()).len() {
-        assert!(admit_supplied(&bytes(&identity())[..length], &Mock::new()).is_err());
+        assert!(
+            crate::vm::Program::decode(&bytes(&identity())[..length])
+                .and_then(|program| {
+                    program.check_installation(&Mock::new())?;
+                    Ok(program)
+                })
+                .is_err()
+        );
     }
 }
 #[test]
@@ -596,20 +647,43 @@ fn exact_tags_arities_names_and_limits() {
     // Padding does not increase structural nodes or executable instructions.
     let mut padded = serde_json::to_vec(&identity()).unwrap();
     padded.resize(Limits::ARTIFACT_BYTES, b' ');
-    assert!(admit_supplied(&padded, &Mock::new()).is_ok());
+    assert!(
+        crate::vm::Program::decode(&padded)
+            .and_then(|program| {
+                program.check_installation(&Mock::new())?;
+                Ok(program)
+            })
+            .is_ok()
+    );
     padded.push(b' ');
     assert_eq!(
-        admit_supplied(&padded, &Mock::new()).unwrap_err().code,
+        crate::vm::Program::decode(&padded)
+            .and_then(|program| {
+                program.check_installation(&Mock::new())?;
+                Ok(program)
+            })
+            .unwrap_err()
+            .code,
         ErrorCode::Limit
     );
     let huge = vec![b' '; Limits::ARTIFACT_BYTES + 1];
     assert_eq!(
-        admit_supplied(&huge, &Mock::new()).unwrap_err().code,
+        crate::vm::Program::decode(&huge)
+            .and_then(|program| {
+                program.check_installation(&Mock::new())?;
+                Ok(program)
+            })
+            .unwrap_err()
+            .code,
         ErrorCode::Limit
     );
     let deep = format!("{}{}", "[".repeat(100), "]".repeat(100));
     assert_eq!(
-        admit_supplied(deep.as_bytes(), &Mock::new())
+        crate::vm::Program::decode(deep.as_bytes())
+            .and_then(|program| {
+                program.check_installation(&Mock::new())?;
+                Ok(program)
+            })
             .unwrap_err()
             .code,
         ErrorCode::Limit
@@ -685,7 +759,13 @@ fn installed_signatures_are_not_artifact_authority() {
     let mut backend = Mock::new();
     backend.wrong_signature = true;
     assert_eq!(
-        admit_supplied(&bytes(&j), &backend).unwrap_err().code,
+        crate::vm::Program::decode(&bytes(&j))
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap_err()
+            .code,
         ErrorCode::Backend
     );
     assert!(
@@ -1271,7 +1351,7 @@ impl Backend for GroupMock {
     type Call = ();
     type Checkpoint = ();
     type Value = G;
-    type Kernel = crate::interactive::BoundSignature;
+    type Kernel = crate::vm::BoundSignature;
     fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {
         binding.signature().ok()
     }
@@ -1330,7 +1410,7 @@ impl Backend for GroupMock {
                 self.consumed += 1;
             }
         }
-        match (i.kernel, args) {
+        match (i.binding.implementation(), args) {
             ("arkworks/curve.generator", []) => Ok(vec![G::Group(3)]),
             ("arkworks/curve.empty", []) => Ok(vec![G::Groups(vec![])]),
             ("arkworks/curve.append", [G::Groups(gs), G::Group(g)]) => {
@@ -1495,7 +1575,12 @@ fn group_exchange() -> Json {
 #[test]
 fn nonpolynomial_group_roles_use_distinct_typed_backend_and_consumed_nonce() {
     let j = group_exchange();
-    let a = admit_supplied(&bytes(&j), &GroupMock::new()).unwrap();
+    let a = crate::vm::Program::decode(&bytes(&j))
+        .and_then(|program| {
+            program.check_installation(&GroupMock::new())?;
+            Ok(program)
+        })
+        .unwrap();
     for hostile in [false, true] {
         let mut p = Runner::new(
             &a,
@@ -1840,7 +1925,12 @@ fn private_match_refuses_every_external_history_effect() {
         ),
     ] {
         let j = external_arm(contract, inputs, outputs, yielded);
-        let error = admit_supplied(&bytes(&j), &Mock::new()).unwrap_err();
+        let error = crate::vm::Program::decode(&bytes(&j))
+            .and_then(|program| {
+                program.check_installation(&Mock::new())?;
+                Ok(program)
+            })
+            .unwrap_err();
         assert_eq!(
             (error.code, error.detail.as_str()),
             (ErrorCode::Signature, "match-protocol-effect"),
@@ -1860,7 +1950,11 @@ fn private_match_admits_external_construction_and_stateless_hash() {
         ("external.openvm.init", json!([])),
     ] {
         let j = external_arm(contract, inputs, json!(["s2"]), "s2");
-        admit_supplied(&bytes(&j), &Mock::new())
+        crate::vm::Program::decode(&bytes(&j))
+            .and_then(|program| {
+                program.check_installation(&Mock::new())?;
+                Ok(program)
+            })
             .unwrap_or_else(|e| panic!("{contract}: {}", e.detail));
     }
 }
@@ -1888,7 +1982,12 @@ fn private_match_refuses_a_history_effect_under_nested_local_control() {
             ["yield", ["sampled"]]
         ]),
     );
-    let error = admit_supplied(&bytes(&j), &Mock::new()).unwrap_err();
+    let error = crate::vm::Program::decode(&bytes(&j))
+        .and_then(|program| {
+            program.check_installation(&Mock::new())?;
+            Ok(program)
+        })
+        .unwrap_err();
     assert_eq!(
         (error.code, error.detail.as_str()),
         (ErrorCode::Signature, "match-protocol-effect")
@@ -1999,7 +2098,12 @@ fn private_match_refuses_internal_transcript_observation_and_challenge() {
         let mut outside_match = j.clone();
         outside_match[2][0][4] = json!([j[2][0][4][1][4][0][2][0], ["return", ["t2"]]]);
         admitted(&outside_match);
-        let error = admit_supplied(&bytes(&j), &Mock::new()).unwrap_err();
+        let error = crate::vm::Program::decode(&bytes(&j))
+            .and_then(|program| {
+                program.check_installation(&Mock::new())?;
+                Ok(program)
+            })
+            .unwrap_err();
         assert_eq!(
             (error.code, error.detail.as_str()),
             (ErrorCode::Signature, "match-protocol-effect"),
@@ -2069,7 +2173,11 @@ fn leaf_payload_types_have_a_single_canonical_spelling() {
     }
     admitted(&tagged_witness("bool"));
     assert_eq!(
-        admit_supplied(&bytes(&tagged_witness("bool:")), &Mock::new())
+        crate::vm::Program::decode(&bytes(&tagged_witness("bool:")))
+            .and_then(|program| {
+                program.check_installation(&Mock::new())?;
+                Ok(program)
+            })
             .unwrap_err()
             .code,
         ErrorCode::Type
@@ -2096,7 +2204,12 @@ fn program_ports_admit_copyable_variants_and_refuse_affine_payloads() {
         ]],
         [["entry", "main", [["P", "p"]]]]
     ]);
-    admit_supplied(&bytes(&program), &Mock::new()).unwrap();
+    crate::vm::Program::decode(&bytes(&program))
+        .and_then(|program| {
+            program.check_installation(&Mock::new())?;
+            Ok(program)
+        })
+        .unwrap();
     let affine = zkc_test_support::variants::logical(
         "Local",
         json!([["empty", []], ["owned", ["rng:bls12-381.fr"]]]),
@@ -2104,7 +2217,12 @@ fn program_ports_admit_copyable_variants_and_refuse_affine_payloads() {
     let affine = format!("{affine}@logical.variant/0");
     program[3][0][4][0][1] = json!(affine);
     program[3][0][5][0] = json!(affine);
-    let error = admit_supplied(&bytes(&program), &Mock::new()).unwrap_err();
+    let error = crate::vm::Program::decode(&bytes(&program))
+        .and_then(|program| {
+            program.check_installation(&Mock::new())?;
+            Ok(program)
+        })
+        .unwrap_err();
     assert_eq!(error.code, ErrorCode::Type);
     assert_eq!(error.detail, "variant-participant-boundary");
 }
@@ -2143,7 +2261,12 @@ fn local_stop_identifies_its_namespace_when_a_participant_site_collides() {
 fn admitted_program_owns_its_bytes() {
     let mut data = bytes(&identity());
     let expected = data.clone();
-    let admitted = admit_supplied(&data, &Mock::new()).unwrap();
+    let admitted = crate::vm::Program::decode(&data)
+        .and_then(|program| {
+            program.check_installation(&Mock::new())?;
+            Ok(program)
+        })
+        .unwrap();
     data.fill(b' ');
     assert_eq!(admitted.bytes(), expected);
 }

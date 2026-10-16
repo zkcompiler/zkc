@@ -344,7 +344,7 @@ impl Dependencies<'_> {
 }
 
 pub(super) fn check_participant(
-    admitted: &Admitted,
+    admitted: &Program,
     body: &[Instruction],
     returns: &[PhysicalType],
     helpers: &BTreeMap<String, Helper<'_>>,

@@ -6,7 +6,7 @@ mod support;
 use serde_json::{Value as Json, json};
 use support::*;
 use zkc_backends::Policy;
-use zkc_runtime::interactive::{ErrorCode, Limits, admit_supplied};
+use zkc_runtime::vm::{ErrorCode, Limits};
 
 fn gather(d: bool, indices: &[String]) -> Vec<u8> {
     let op = binding(d, "vector.gather");
@@ -54,10 +54,14 @@ fn large_gather_keeps_order_repetition_and_dynamic_bounds() {
 fn parameter_budget_does_not_relax_naturals_ports_or_kernel_arity() {
     let b = backend(Policy::default());
     assert_eq!(
-        admit_supplied(
-            &gather(false, &vec!["0".into(); Limits::OPERATION_ATTRIBUTES + 1]),
-            &b
-        )
+        zkc_runtime::vm::Program::decode(&gather(
+            false,
+            &vec!["0".into(); Limits::OPERATION_ATTRIBUTES + 1]
+        ))
+        .and_then(|program| {
+            program.check_installation(&b)?;
+            Ok(program)
+        })
         .unwrap_err()
         .code,
         ErrorCode::Limit
@@ -66,7 +70,11 @@ fn parameter_budget_does_not_relax_naturals_ports_or_kernel_arity() {
         let mut indices = vec!["0".into(); 2048];
         indices[2047] = bad.into();
         assert_eq!(
-            admit_supplied(&gather(false, &indices), &b)
+            zkc_runtime::vm::Program::decode(&gather(false, &indices))
+                .and_then(|program| {
+                    program.check_installation(&b)?;
+                    Ok(program)
+                })
                 .unwrap_err()
                 .code,
             ErrorCode::Attributes
@@ -77,7 +85,11 @@ fn parameter_budget_does_not_relax_naturals_ports_or_kernel_arity() {
         let mut bad = original.clone();
         bad[2][0][4][0][slot] = json!(vec!["a0"; Limits::PORTS + 1]);
         assert_eq!(
-            admit_supplied(&serde_json::to_vec(&bad).unwrap(), &b)
+            zkc_runtime::vm::Program::decode(&serde_json::to_vec(&bad).unwrap())
+                .and_then(|program| {
+                    program.check_installation(&b)?;
+                    Ok(program)
+                })
                 .unwrap_err()
                 .code,
             ErrorCode::Limit
@@ -94,7 +106,11 @@ fn parameter_budget_does_not_relax_naturals_ports_or_kernel_arity() {
         bad[2][0][4][0][3] = attrs;
         bad[2][0][4][0][4] = json!(["a0", "a0"]);
         assert_eq!(
-            admit_supplied(&serde_json::to_vec(&bad).unwrap(), &b)
+            zkc_runtime::vm::Program::decode(&serde_json::to_vec(&bad).unwrap())
+                .and_then(|program| {
+                    program.check_installation(&b)?;
+                    Ok(program)
+                })
                 .unwrap_err()
                 .code,
             ErrorCode::Attributes
@@ -103,7 +119,11 @@ fn parameter_budget_does_not_relax_naturals_ports_or_kernel_arity() {
     let mut bad = original;
     bad[2][0][4][0][3] = json!([[]]);
     assert_eq!(
-        admit_supplied(&serde_json::to_vec(&bad).unwrap(), &b)
+        zkc_runtime::vm::Program::decode(&serde_json::to_vec(&bad).unwrap())
+            .and_then(|program| {
+                program.check_installation(&b)?;
+                Ok(program)
+            })
             .unwrap_err()
             .code,
         ErrorCode::Record

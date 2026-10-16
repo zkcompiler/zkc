@@ -9,7 +9,7 @@ use zkc_backends::{
     Policy, Sequence, Value,
     external::{monero, openvm},
 };
-use zkc_runtime::interactive::LogicalType;
+use zkc_runtime::vm::LogicalType;
 use zkc_tools::proof::NativeDeployment;
 fn packed(state: &openvm::Duplex) -> Value {
     let s = state.snapshot();

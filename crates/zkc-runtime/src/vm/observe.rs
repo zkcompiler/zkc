@@ -116,7 +116,7 @@ impl Envelope {
         ]))
         .expect("array/string serialization")
     }
-    pub(super) fn cut(&self, kind: CutKind) -> Cut {
+    pub(crate) fn cut(&self, kind: CutKind) -> Cut {
         Cut {
             origin: self.origin.clone(),
             role: if kind == CutKind::Send {

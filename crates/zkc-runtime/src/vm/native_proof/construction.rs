@@ -2,7 +2,7 @@
 //! It records ordinary functions; it does not authenticate their source or
 //! assert a sampling distribution for arbitrary Local code.
 use super::{Result, refuse};
-use crate::interactive::{LogicalType, PhysicalType, Type};
+use crate::vm::{LogicalType, PhysicalType, Type};
 use serde_json::Value;
 use std::collections::BTreeSet;
 

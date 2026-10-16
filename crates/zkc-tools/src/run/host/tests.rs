@@ -1,7 +1,7 @@
 use super::*;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
-use zkc_runtime::interactive::{LogicalType, PhysicalType};
+use zkc_runtime::vm::{LogicalType, PhysicalType};
 
 fn fixture(logical: &str) -> (Vec<u8>, Json) {
     let ty = PhysicalType::default_for(LogicalType::parse(logical).unwrap())

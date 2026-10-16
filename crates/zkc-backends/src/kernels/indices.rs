@@ -1,7 +1,7 @@
 //! Checked logical u64 indices. These are independent of field characteristic
 //! and host pointer size; arithmetic never wraps and division by zero refuses.
 use crate::{Policy, Result, Value, exhausted, refused, value::size};
-use zkc_runtime::interactive::{
+use zkc_runtime::vm::{
     AttributeRule, BoundSignature, Identity, KernelSignature, LogicalType, OperationBinding,
     PhysicalType, Type,
 };

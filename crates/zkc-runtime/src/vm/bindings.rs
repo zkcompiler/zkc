@@ -905,7 +905,7 @@ impl PhysicalType {
         ) && self.logical.is_native_message_data()
             && Self::default_for(self.logical.clone()).ok().as_ref() == Some(self)
     }
-    pub(super) fn is_message_type(&self) -> bool {
+    pub(crate) fn is_message_type(&self) -> bool {
         self.is_serializable() || self.has_native_array_frame() || self.has_native_data_frame()
     }
     pub fn is_serializable(&self) -> bool {

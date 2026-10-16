@@ -1,14 +1,12 @@
 #![allow(dead_code, unused_imports)]
+use zkc_runtime::interpreter::Runner;
 #[path = "../common/fixture.rs"]
 mod fixture;
 pub use fixture::*;
 
 use serde_json::{Value as Json, json};
 use zkc_backends::{NativeBackend, Policy, RistrettoScalar, Scalar, Value};
-use zkc_runtime::interactive::{
-    Backend, OperationBinding, PhysicalType, Runner, StopKind, Value as RuntimeValue,
-    admit_supplied,
-};
+use zkc_runtime::vm::{Backend, OperationBinding, PhysicalType, StopKind, Value as RuntimeValue};
 /// The thirteen tests that arrive through this root name the built backend,
 /// and all of them vary the policy.
 pub fn backend(p: Policy) -> NativeBackend {
@@ -211,7 +209,12 @@ pub fn run_program<B: Backend<Value = Value>>(
     bytes: &[u8],
     args: Vec<Value>,
 ) -> (Result<Vec<Value>, String>, B) {
-    let admitted = admit_supplied(bytes, &b).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(bytes)
+        .and_then(|program| {
+            program.check_installation(&b)?;
+            Ok(program)
+        })
+        .unwrap();
     let runner = Runner::new(&admitted, "main", "P", "session", b, args)
         .unwrap_or_else(|e| panic!("{}", e.error));
     let (outcome, backend) = fixture::drive(runner);
@@ -277,10 +280,10 @@ pub struct Controlled {
     pub inner: NativeBackend,
     pub output_limit: Option<usize>,
     pub substitute: Option<Value>,
-    pub implementation: Option<String>,
+    pub binding: Option<OperationBinding>,
     pub attributes: Option<Vec<String>>,
     pub outputs: Vec<Vec<Value>>,
-    pub frames: Vec<zkc_runtime::interactive::Frame>,
+    pub frames: Vec<zkc_runtime::vm::Frame>,
 }
 impl Controlled {
     pub fn new(inner: NativeBackend) -> Self {
@@ -288,7 +291,7 @@ impl Controlled {
             inner,
             output_limit: None,
             substitute: None,
-            implementation: None,
+            binding: None,
             attributes: None,
             outputs: Vec::new(),
             frames: Vec::new(),
@@ -303,42 +306,49 @@ impl Backend for Controlled {
     fn prepare_binding(&self, b: &OperationBinding) -> Option<Self::Kernel> {
         self.inner.prepare_binding(b)
     }
-    fn validate_value(&self, v: &Value) -> Result<(), zkc_runtime::interactive::BackendError> {
+    fn validate_value(&self, v: &Value) -> Result<(), zkc_runtime::vm::BackendError> {
         self.inner.validate_value(v)
     }
     fn enter_frame(
         &mut self,
-        f: &zkc_runtime::interactive::Frame,
+        f: &zkc_runtime::vm::Frame,
         a: &[Value],
-    ) -> Result<(), zkc_runtime::interactive::BackendError> {
+    ) -> Result<(), zkc_runtime::vm::BackendError> {
         self.inner.enter_frame(f, a)?;
         self.frames.push(f.clone());
         Ok(())
     }
     fn leave_frame(
         &mut self,
-        f: &zkc_runtime::interactive::Frame,
-        e: zkc_runtime::interactive::FrameExit,
+        f: &zkc_runtime::vm::Frame,
+        e: zkc_runtime::vm::FrameExit,
         v: &[Value],
-    ) -> Result<(), zkc_runtime::interactive::BackendError> {
+    ) -> Result<(), zkc_runtime::vm::BackendError> {
         self.inner.leave_frame(f, e, v)
     }
     fn apply(
         &mut self,
         kernel: &Self::Kernel,
-        i: &zkc_runtime::interactive::Invocation<'_>,
+        i: &zkc_runtime::vm::Invocation<'_>,
         a: &[Value],
-    ) -> Result<Vec<Value>, zkc_runtime::interactive::BackendError> {
+    ) -> Result<Vec<Value>, zkc_runtime::vm::BackendError> {
         let mut args = a.to_vec();
         if let Some(v) = &self.substitute {
             args[0] = v.clone();
         }
+        let replacement = self.binding.as_ref().map(|binding| {
+            self.inner
+                .prepare_binding(binding)
+                .expect("installed test binding")
+        });
         let result = self.inner.apply(
-            kernel,
-            &zkc_runtime::interactive::Invocation {
-                attributes: self.attributes.as_deref().unwrap_or(i.attributes),
+            replacement.as_ref().unwrap_or(kernel),
+            &zkc_runtime::vm::Invocation {
+                context: zkc_runtime::vm::CallContext {
+                    attributes: self.attributes.as_deref().unwrap_or(i.attributes),
+                    ..i.context
+                },
                 max_output_bytes: self.output_limit.unwrap_or(i.max_output_bytes),
-                kernel: self.implementation.as_deref().unwrap_or(i.kernel),
                 ..*i
             },
             &args,

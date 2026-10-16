@@ -1,4 +1,6 @@
-//! Positional local code derived only after structural admission.
+//! VM control and local code, independent of the execution engine.
+//! Local operands are prepared positionally after structural admission;
+//! participant control uses admitted SSA names.
 //!
 //! This is an internal execution layout, not another artifact or protocol IR.
 //! Source names remain in frame ports and diagnostics; operand lookup and region
@@ -7,33 +9,36 @@
 //! joined result types before this lowering runs. Types share their admitted Arc
 //! descriptors; match arms share captures. Stored metadata is linear in admitted
 //! source records/ports/operands, all bounded by the existing decoder ceilings.
-use super::{FrameInputs, OperationBinding, PhysicalType, ResolvedBinding, model::*};
+use super::{
+    FrameInputs, OperationBinding, PhysicalType, ResolvedBinding,
+    model::{LocalInstruction, Model},
+};
 use std::{
     collections::BTreeMap,
     sync::{Arc, LazyLock},
 };
 
-pub(super) static BOOL_TYPE: LazyLock<PhysicalType> =
+pub(crate) static BOOL_TYPE: LazyLock<PhysicalType> =
     LazyLock::new(|| PhysicalType::parse("bool@native.bool/0").expect("installed Boolean type"));
-pub(super) static INDEX_TYPE: LazyLock<PhysicalType> =
+pub(crate) static INDEX_TYPE: LazyLock<PhysicalType> =
     LazyLock::new(|| PhysicalType::parse("index@native.index/0").expect("installed index type"));
 
-pub(super) type Slot = usize;
+pub(crate) type Slot = usize;
 
 #[derive(Debug)]
-pub(super) struct Executable {
+pub(crate) struct Executable {
     pub functions: BTreeMap<String, Arc<Function>>,
     pub bindings: Vec<Arc<ResolvedBinding>>,
     pub calls: usize,
     pub requires_boolean_literals: bool,
 }
 #[derive(Debug)]
-pub(super) struct Function {
+pub(crate) struct Function {
     pub origin: super::LogicalOrigin,
     pub body: Arc<LocalCode>,
 }
 #[derive(Debug)]
-pub(super) struct Binding {
+pub(crate) struct Binding {
     pub index: usize,
     declaration: Arc<ResolvedBinding>,
 }
@@ -42,6 +47,15 @@ impl std::ops::Deref for Binding {
     fn deref(&self) -> &Self::Target {
         &self.declaration
     }
+}
+/// One immutable operation occurrence, derived from an admitted program.
+/// Installation identity is separate from reached-call preparation identity.
+#[derive(Debug)]
+pub(crate) struct Call {
+    pub index: usize,
+    pub site: String,
+    pub binding: Binding,
+    pub attributes: Vec<String>,
 }
 #[derive(Default)]
 struct Preparation {
@@ -70,17 +84,17 @@ impl Preparation {
 }
 
 #[derive(Debug)]
-pub(super) struct LocalCode {
+pub(crate) struct LocalCode {
     pub inputs: FrameInputs,
     pub instructions: Vec<Operation>,
 }
 #[derive(Debug)]
-pub(super) struct Arm {
+pub(crate) struct Arm {
     pub alternative: String,
     pub body: Arc<LocalCode>,
 }
 #[derive(Debug)]
-pub(super) enum Operation {
+pub(crate) enum Operation {
     BoolConstant {
         site: String,
         output: Slot,
@@ -125,10 +139,7 @@ pub(super) enum Operation {
     Yield(Vec<Slot>),
     Release(Vec<Slot>),
     Op {
-        call: usize,
-        site: String,
-        binding: Binding,
-        attributes: Vec<String>,
+        call: Call,
         inputs: Vec<Slot>,
         outputs: Vec<Slot>,
     },
@@ -178,7 +189,7 @@ impl Environment {
     }
 }
 
-pub(super) fn prepare(program: &Program) -> Executable {
+pub(crate) fn prepare(program: &Model) -> Executable {
     let mut preparation = Preparation::default();
     let functions = program
         .functions
@@ -371,10 +382,12 @@ impl Preparation {
                     let call = self.calls;
                     self.calls += 1;
                     Operation::Op {
-                        call,
-                        site: site.clone(),
-                        binding: self.binding(binding),
-                        attributes: attributes.clone(),
+                        call: Call {
+                            index: call,
+                            site: site.clone(),
+                            binding: self.binding(binding),
+                            attributes: attributes.clone(),
+                        },
                         inputs,
                         outputs,
                     }
@@ -400,4 +413,71 @@ impl Preparation {
             results,
         )
     }
+}
+
+/// Named participant registers and control blocks. Names are code identities,
+/// not dynamically resolved source expressions.
+pub(crate) type Ports = Vec<(String, PhysicalType)>;
+pub(crate) type Body = Arc<[Instruction]>;
+
+#[derive(Clone, Debug)]
+pub(crate) struct LoopCount {
+    pub value: String,
+    pub maximum: u64,
+    pub induction: String,
+}
+#[derive(Debug)]
+pub(crate) struct Participant {
+    pub services: Vec<super::ServicePort>,
+    pub symbol: String,
+    pub instance: String,
+    pub role: String,
+    pub inputs: Ports,
+    pub outputs: Vec<PhysicalType>,
+    pub body: Body,
+}
+#[derive(Clone, Debug)]
+pub(crate) enum Instruction {
+    Query {
+        site: String,
+        port: String,
+        method: String,
+        inputs: Vec<String>,
+        outputs: Vec<String>,
+    },
+    Local {
+        site: String,
+        function: String,
+        inputs: Vec<String>,
+        outputs: Vec<String>,
+    },
+    Send {
+        site: String,
+        schema: String,
+        peer: String,
+        input: String,
+    },
+    Receive {
+        site: String,
+        schema: String,
+        peer: String,
+        output: String,
+        ty: PhysicalType,
+    },
+    Loop {
+        site: String,
+        count: LoopCount,
+        carried: Vec<(String, String)>,
+        captures: Vec<String>,
+        body: Body,
+        outputs: Vec<String>,
+    },
+    ReturnIf {
+        site: String,
+        condition: String,
+        values: Vec<String>,
+        continuations: Vec<String>,
+    },
+    Yield(Vec<String>),
+    Return(Vec<String>),
 }

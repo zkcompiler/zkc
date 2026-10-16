@@ -1,7 +1,7 @@
 //! Immutable BLS12-381 field arrays. The complete logical shape is retained.
 use crate::{Policy, Result, Scalar, Value, exhausted, refused};
 use std::sync::Arc;
-use zkc_runtime::interactive::{
+use zkc_runtime::vm::{
     AttributeRule, Backing, BoundSignature, Identity, Invocation, KernelSignature, LogicalType,
     OperationBinding, PhysicalType, Representation, Type,
 };

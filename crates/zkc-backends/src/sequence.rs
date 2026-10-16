@@ -1,7 +1,7 @@
 //! Immutable nested data. Charges count the expanded value, even with Arc aliases.
 use crate::{Policy, Result, Value, exhausted, refused};
 use std::sync::Arc;
-use zkc_runtime::interactive::{
+use zkc_runtime::vm::{
     AttributeRule, Backing, BoundSignature, Invocation, KernelSignature, LogicalType,
     OperationBinding, PhysicalType, Retained, Value as RuntimeValue,
 };

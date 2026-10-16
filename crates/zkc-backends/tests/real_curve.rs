@@ -1,10 +1,11 @@
-use zkc_runtime::interactive::Identity;
-use zkc_runtime::interactive::Value as RuntimeValue;
+use zkc_runtime::interpreter::Runner;
+use zkc_runtime::vm::Identity;
+use zkc_runtime::vm::Value as RuntimeValue;
 mod common;
 use common::*;
 use serde_json::json;
 use zkc_backends::*;
-use zkc_runtime::interactive::{Backend, ErrorCode, admit_supplied};
+use zkc_runtime::vm::{Backend, ErrorCode};
 fn real() -> NativeBackend {
     backend().build()
 }
@@ -28,7 +29,7 @@ fn prog(
 
 #[test]
 fn nominal_bindings_match_independent_provider_signatures() {
-    use zkc_runtime::interactive::{LogicalType, OperationBinding, PhysicalType};
+    use zkc_runtime::vm::{LogicalType, OperationBinding, PhysicalType};
     let b = real();
     for (contract, arguments) in [
         ("curve.generator", vec!["bls12-381.g1"]),
@@ -145,7 +146,13 @@ fn public_curve_kernels_and_vector_bounds_run_through_runner() {
             &["got"],
         );
         assert_eq!(
-            admit_supplied(&b, &real()).unwrap_err().code,
+            zkc_runtime::vm::Program::decode(&b)
+                .and_then(|program| {
+                    program.check_installation(&real())?;
+                    Ok(program)
+                })
+                .unwrap_err()
+                .code,
             ErrorCode::Attributes
         );
     }
@@ -226,8 +233,8 @@ fn public_codecs_are_exact_and_nominally_typed() {
     enormous.extend(u32::MAX.to_le_bytes());
     assert_eq!(
         b.decode_native_value(
-            &zkc_runtime::interactive::PhysicalType::default_for(
-                zkc_runtime::interactive::LogicalType::parse("groups:bls12-381.g1").unwrap()
+            &zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::parse("groups:bls12-381.g1").unwrap()
             )
             .unwrap(),
             &enormous
@@ -242,8 +249,8 @@ fn public_codecs_are_exact_and_nominally_typed() {
     invalid[10] = 0x80;
     assert!(
         b.decode_native_value(
-            &zkc_runtime::interactive::PhysicalType::default_for(
-                zkc_runtime::interactive::LogicalType::parse("groups:bls12-381.g1").unwrap()
+            &zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::parse("groups:bls12-381.g1").unwrap()
             )
             .unwrap(),
             &invalid
@@ -254,8 +261,8 @@ fn public_codecs_are_exact_and_nominally_typed() {
     nonexistent.extend(2u32.to_le_bytes());
     assert_eq!(
         b.decode_native_value(
-            &zkc_runtime::interactive::PhysicalType::default_for(
-                zkc_runtime::interactive::LogicalType::parse("groups:bls12-381.g1").unwrap()
+            &zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::parse("groups:bls12-381.g1").unwrap()
             )
             .unwrap(),
             &nonexistent
@@ -455,7 +462,7 @@ fn pcs_equal_uses_pinned_public_commitments_and_preserves_keys() {
 
 #[test]
 fn real_os_nonce_custody_aliases_and_cancellation() {
-    use zkc_runtime::interactive::{Action, Runner};
+    use zkc_runtime::vm::Action;
     let bytes = prog(
         &[("n", "nonce"), ("bases", "groups")],
         vec![op(
@@ -485,8 +492,8 @@ fn real_os_nonce_custody_aliases_and_cancellation() {
     assert_eq!(
         backend
             .decode_native_value(
-                &zkc_runtime::interactive::PhysicalType::default_for(
-                    zkc_runtime::interactive::LogicalType::parse("nonce:bls12-381.fr").unwrap()
+                &zkc_runtime::vm::PhysicalType::default_for(
+                    zkc_runtime::vm::LogicalType::parse("nonce:bls12-381.fr").unwrap()
                 )
                 .unwrap(),
                 &[]
@@ -508,7 +515,12 @@ fn real_os_nonce_custody_aliases_and_cancellation() {
             .issue_nonce_for(Identity::Bls12381Fr, wrong, 2)
             .unwrap();
         let old = nonce.clone();
-        let admitted = admit_supplied(&bytes, &backend).unwrap();
+        let admitted = zkc_runtime::vm::Program::decode(&bytes)
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap();
         let e = Runner::new(
             &admitted,
             "main",
@@ -532,7 +544,12 @@ fn real_os_nonce_custody_aliases_and_cancellation() {
     let nonce = backend
         .issue_nonce_for(Identity::Bls12381Fr, domain(), 2)
         .unwrap();
-    let admitted = admit_supplied(&aliases, &backend).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&aliases)
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
     let e = Runner::new(
         &admitted,
         "main",
@@ -545,7 +562,7 @@ fn real_os_nonce_custody_aliases_and_cancellation() {
     .unwrap();
     assert_eq!(e.backend.observe(token(&nonce)).unwrap().generation, 0);
     assert!(
-        matches!(e.error,zkc_runtime::interactive::RuntimeError::Backend(e) if e.code=="refused:capability-alias")
+        matches!(e.error,zkc_runtime::vm::RuntimeError::Backend(e) if e.code=="refused:capability-alias")
     );
     // Cancel after commit but before participant return; preserve committed stage.
     let mut backend = real();

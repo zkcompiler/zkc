@@ -1,6 +1,6 @@
 //! Immutable byte strings with bounded allocation and exact slice bounds.
 use crate::{Policy, Result, Value, exhausted, refused, value::size};
-use zkc_runtime::interactive::{
+use zkc_runtime::vm::{
     AttributeRule, BoundSignature, Identity, KernelSignature, LogicalType, OperationBinding,
     PhysicalType, Type,
 };
@@ -157,7 +157,7 @@ pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
 mod tests {
     use super::*;
     use crate::{Domain, EntryPolicy, NativeBackend};
-    use zkc_runtime::interactive::Value as RuntimeValue;
+    use zkc_runtime::vm::Value as RuntimeValue;
 
     fn bytes(value: &[u8]) -> Value {
         Value::Bytes(value.to_vec().into())

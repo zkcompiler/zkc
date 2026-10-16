@@ -94,7 +94,7 @@ pub fn run(
             ) {
                 return Err(Failure::IncorrectResult);
             }
-            let mut counts = zkc_runtime::interactive::ExecutionCounts::default();
+            let mut counts = zkc_runtime::vm::ExecutionCounts::default();
             for role in &report
                 .native
                 .execution

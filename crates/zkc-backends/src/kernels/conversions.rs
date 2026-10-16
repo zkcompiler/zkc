@@ -2,7 +2,7 @@
 use crate::kernels::arithmetic::reserve;
 use crate::{Policy, Result, Value, ark, exhausted, refused, value::size};
 use std::sync::Arc;
-use zkc_runtime::interactive::{Invocation, Representation};
+use zkc_runtime::vm::{Invocation, Representation};
 pub(crate) fn apply(
     name: &str,
     args: &[Value],
@@ -85,7 +85,7 @@ pub(crate) fn apply(
 /// Independent native port facts, also used for exact implementation assembly.
 pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
     use crate::bindings::{field, poly};
-    use zkc_runtime::interactive::{AttributeRule, Type::*};
+    use zkc_runtime::vm::{AttributeRule, Type::*};
     &[
         field::operation(
             "vector.from_point",
@@ -119,7 +119,7 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
     crate::backend::registry::Alternative {
         identity: "arkworks-msb/vector.from_table",
         original: "arkworks/vector.from_table",
-        primary: zkc_runtime::interactive::Identity::Bls12381Fr,
+        primary: zkc_runtime::vm::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Msb,
         handler: None,
         deterministic: true,
@@ -127,7 +127,7 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
     crate::backend::registry::Alternative {
         identity: "arkworks-msb/vector.to_table",
         original: "arkworks/vector.to_table",
-        primary: zkc_runtime::interactive::Identity::Bls12381Fr,
+        primary: zkc_runtime::vm::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Msb,
         handler: None,
         deterministic: true,

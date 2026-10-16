@@ -1,6 +1,6 @@
 //! Physical-only table layout adaptation.
 use super::*;
-use zkc_runtime::interactive::{KernelSignature, LogicalType, PhysicalType};
+use zkc_runtime::vm::{KernelSignature, LogicalType, PhysicalType};
 pub(crate) fn relayout(binding: &OperationBinding) -> Option<BoundSignature> {
     let [field, from, to] = binding.arguments.as_slice() else {
         return None;

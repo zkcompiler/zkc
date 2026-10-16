@@ -1,10 +1,11 @@
 //! Repeated entry retains actual backend/provider state; only transcript and
 //! tentative proof bytes belong to an individual attempt.
 use super::*;
+use zkc_runtime::interpreter::Runner;
 use zkc_runtime::{
     Outcome, Stop,
     attempt::{Controller, Decision, Limits as AttemptLimits},
-    interactive::{Limits, Usage, ValueBudget, WorkBudget},
+    vm::{Limits, Usage, ValueBudget, WorkBudget},
 };
 
 /// Application policy, independent of the candidate and its proof. Ports refer
@@ -24,7 +25,7 @@ pub struct AttemptPolicy {
 
 #[derive(Debug)]
 pub struct AttemptRecord {
-    pub execution_counts: zkc_runtime::interactive::ExecutionCounts,
+    pub execution_counts: zkc_runtime::vm::ExecutionCounts,
     pub attempt: u64,
     /// Returned decision or fatal execution/cleanup failure, never private outputs.
     pub decision: Result<bool>,
@@ -38,8 +39,8 @@ pub struct AttemptRecord {
     pub ring_work: u64,
     pub transcript: Option<Json>,
     /// Successful entry-return coordinate; absent for the ordinary final return.
-    pub return_at: Option<(zkc_runtime::interactive::Origin, String)>,
-    pub stop: Option<zkc_runtime::interactive::Stop>,
+    pub return_at: Option<(zkc_runtime::vm::Origin, String)>,
+    pub stop: Option<zkc_runtime::vm::Stop>,
 }
 
 pub(super) struct Plan {

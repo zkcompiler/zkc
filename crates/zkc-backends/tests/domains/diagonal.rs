@@ -1,7 +1,7 @@
 use super::support::*;
 use serde_json::{Value as Json, json};
 use zkc_backends::{Policy, Value};
-use zkc_runtime::interactive::{Backend, Value as RuntimeValue, admit_supplied};
+use zkc_runtime::vm::{Backend, Value as RuntimeValue};
 
 fn fixture(d: bool, lazy: bool) -> (Json, Vec<Value>) {
     let names = if d {
@@ -117,11 +117,12 @@ fn dead_internal_views_release_after_all_consumers_without_requiring_a_codec() {
         let release = body.remove(3);
         body.insert(2, release);
         assert!(
-            admit_supplied(
-                &serde_json::to_vec(&released).unwrap(),
-                &backend(Policy::default())
-            )
-            .is_err()
+            zkc_runtime::vm::Program::decode(&serde_json::to_vec(&released).unwrap())
+                .and_then(|program| {
+                    program.check_installation(&backend(Policy::default()))?;
+                    Ok(program)
+                })
+                .is_err()
         );
     }
 }
@@ -158,11 +159,12 @@ fn every_diagonal_use_and_all_function_boundaries_are_checked() {
         let (base, _) = fixture(d, true);
         let check = |j: Json| {
             assert!(
-                admit_supplied(
-                    &serde_json::to_vec(&j).unwrap(),
-                    &backend(Policy::default())
-                )
-                .is_err(),
+                zkc_runtime::vm::Program::decode(&serde_json::to_vec(&j).unwrap())
+                    .and_then(|program| {
+                        program.check_installation(&backend(Policy::default()))?;
+                        Ok(program)
+                    })
+                    .is_err(),
                 "{j}"
             )
         };

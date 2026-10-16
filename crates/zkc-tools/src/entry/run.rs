@@ -85,9 +85,7 @@ impl RunEntry {
     pub fn limits(&self) -> HostLimits {
         self.native.limits()
     }
-    pub(crate) fn output_types(
-        &self,
-    ) -> impl Iterator<Item = &zkc_runtime::interactive::PhysicalType> {
+    pub(crate) fn output_types(&self) -> impl Iterator<Item = &zkc_runtime::vm::PhysicalType> {
         self.native
             .bundle()
             .roles()

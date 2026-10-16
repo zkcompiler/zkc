@@ -136,7 +136,7 @@ impl Backend for StorageBackend {
     type Call = ();
     type Checkpoint = ();
     type Value = Stored;
-    type Kernel = crate::interactive::BoundSignature;
+    type Kernel = crate::vm::BoundSignature;
     fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {
         binding.signature().ok()
     }
@@ -149,7 +149,7 @@ impl Backend for StorageBackend {
     fn operand_work(
         &self,
         _kernel: &Self::Kernel,
-        call: &Invocation<'_>,
+        call: &CallContext<'_>,
         _: &[Stored],
     ) -> Option<u64> {
         self.declared.filter(|_| call.site == "alias")
@@ -181,7 +181,7 @@ impl Backend for StorageBackend {
         self.trace.push(format!(
             "request:{}:{}:{:?}:{:?}:{}",
             call.site,
-            call.kernel,
+            call.binding.implementation(),
             call.attributes,
             args.iter()
                 .map(|v| v.backing.payload[0])
@@ -318,7 +318,12 @@ fn run_budgeted(
 ) -> (String, Usage, StorageBackend) {
     let mut backend = StorageBackend::new(charge, failure);
     backend.later_charge = later_charge;
-    let admitted = admit_supplied(&bytes(&program(release, repeat)), &backend).unwrap();
+    let admitted = crate::vm::Program::decode(&bytes(&program(release, repeat)))
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
     let mut runner = Runner::new_with_value_budget(
         &admitted,
         "main",
@@ -409,7 +414,12 @@ fn host_value_budget_checks_entry_and_keeps_individual_value_limit() {
             json!([]),
             json!([["return", []]]),
         );
-        let admitted = admit_supplied(&bytes(&program), &backend).unwrap();
+        let admitted = crate::vm::Program::decode(&bytes(&program))
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap();
         let result = Runner::new_with_value_budget(
             &admitted,
             "main",
@@ -525,7 +535,11 @@ fn storage_release_rejects_hostile_candidates_at_admission() {
             .unwrap()
             .insert(position, json!(["release", names]));
         assert_eq!(
-            admit_supplied(&bytes(&candidate), &backend)
+            crate::vm::Program::decode(&bytes(&candidate))
+                .and_then(|program| {
+                    program.check_installation(&backend)?;
+                    Ok(program)
+                })
                 .unwrap_err()
                 .code,
             code
@@ -537,7 +551,11 @@ fn storage_release_rejects_hostile_candidates_at_admission() {
         .unwrap()
         .insert(3, json!(["release", ["a"]]));
     assert_eq!(
-        admit_supplied(&bytes(&duplicate), &backend)
+        crate::vm::Program::decode(&bytes(&duplicate))
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
             .unwrap_err()
             .code,
         ErrorCode::Ssa
@@ -550,7 +568,11 @@ fn storage_release_rejects_hostile_candidates_at_admission() {
         .last_mut()
         .unwrap()[1] = json!(["c"]);
     assert_eq!(
-        admit_supplied(&bytes(&returned), &backend)
+        crate::vm::Program::decode(&bytes(&returned))
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
             .unwrap_err()
             .code,
         ErrorCode::Ssa
@@ -558,7 +580,13 @@ fn storage_release_rejects_hostile_candidates_at_admission() {
     let mut rebound = program(true, None);
     rebound[2][0][4][3][5] = json!(["a"]);
     assert_eq!(
-        admit_supplied(&bytes(&rebound), &backend).unwrap_err().code,
+        crate::vm::Program::decode(&bytes(&rebound))
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap_err()
+            .code,
         ErrorCode::Ssa
     );
     for ty in [
@@ -580,7 +608,10 @@ fn storage_release_rejects_hostile_candidates_at_admission() {
             json!([]),
             json!([["return", []]]),
         );
-        let admitted = admit_supplied(&bytes(&candidate), &backend);
+        let admitted = crate::vm::Program::decode(&bytes(&candidate)).and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        });
         if matches!(ty, "rng" | "transcript") {
             assert_eq!(admitted.unwrap_err().code, ErrorCode::Type);
         } else {
@@ -595,13 +626,25 @@ fn storage_release_rejects_hostile_candidates_at_admission() {
         .unwrap()
         .insert(0, json!(["release", ["a"]]));
     assert_eq!(
-        admit_supplied(&bytes(&control), &backend).unwrap_err().code,
+        crate::vm::Program::decode(&bytes(&control))
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap_err()
+            .code,
         ErrorCode::Record
     );
     let mut logical = program(true, None);
     logical.as_array_mut().unwrap().insert(2, json!("logical"));
     assert_eq!(
-        admit_supplied(&bytes(&logical), &backend).unwrap_err().code,
+        crate::vm::Program::decode(&bytes(&logical))
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap_err()
+            .code,
         ErrorCode::Record
     );
 }
@@ -668,12 +711,22 @@ fn storage_release_after_affine_consumption_is_rejected() {
         json!([["return", []]]),
     );
     let backend = StorageBackend::new(1, None);
-    admit_supplied(&bytes(&candidate), &backend).unwrap();
+    crate::vm::Program::decode(&bytes(&candidate))
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
     candidate[2][0][4]
         .as_array_mut()
         .unwrap()
         .insert(1, json!(["release", ["r"]]));
-    let error = admit_supplied(&bytes(&candidate), &backend).unwrap_err();
+    let error = crate::vm::Program::decode(&bytes(&candidate))
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap_err();
     assert_eq!(error.code, ErrorCode::Ssa);
 }
 
@@ -684,7 +737,12 @@ fn drive(
     values: ValueBudget,
     work: WorkBudget,
 ) -> (String, Usage, StorageBackend) {
-    let admitted = admit_supplied(&bytes(program), &backend).unwrap();
+    let admitted = crate::vm::Program::decode(&bytes(program))
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
     let mut runner = Runner::new_with_budgets(
         &admitted,
         "main",
@@ -957,7 +1015,7 @@ fn identity_release_keeps_ghost_accounting_and_charges_reused_addresses_as_fresh
     assert!(released.freed_before_later);
     // The later allocation may reuse the freed address; it is still fresh.
     assert_eq!(released_usage.total_value_bytes, 2 * C);
-    // Ghost charges keep the released storage until frame cleanup.
+    // Deferred storage charges keep the released storage until frame cleanup.
     for live in [2 * C - 1, 2 * C] {
         let (result, _, _) = drive(
             &program(true, None),
@@ -1211,7 +1269,12 @@ fn participant_handoff_references_are_released_on_every_failure() {
 #[test]
 fn logical_work_budget_has_a_hard_ceiling() {
     let backend = StorageBackend::new(1, None);
-    let admitted = admit_supplied(&bytes(&program(false, None)), &backend).unwrap();
+    let admitted = crate::vm::Program::decode(&bytes(&program(false, None)))
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
     for (budget, accepted) in [
         (Limits::LOGICAL_BYTES, true),
         (Limits::LOGICAL_BYTES + 1, false),

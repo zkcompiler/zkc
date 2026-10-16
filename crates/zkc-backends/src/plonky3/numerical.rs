@@ -3,9 +3,9 @@
 use super::polynomial::{self, Domain, Error, Kernels};
 use crate::{KoalaBear, KoalaBearExt8, Policy, Result, Value, exhausted, refused, value::size};
 use p3_field::ExtensionField;
-use zkc_runtime::interactive::{Identity, Invocation};
+use zkc_runtime::vm::{Identity, Invocation};
 
-fn failure(error: Error) -> zkc_runtime::interactive::BackendError {
+fn failure(error: Error) -> zkc_runtime::vm::BackendError {
     refused(match error {
         Error::DomainSize => "coset-size",
         Error::ElementLimit => "coset-element-limit",
@@ -195,7 +195,7 @@ fn execute<E: Family>(
 /// Independent native port facts, also used for exact implementation assembly.
 pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
     use crate::bindings::poly;
-    use zkc_runtime::interactive::{AttributeRule, Type::*};
+    use zkc_runtime::vm::{AttributeRule, Type::*};
     &[
         poly::operation(
             "poly.coset_evaluate",

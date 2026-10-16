@@ -3,7 +3,7 @@
 //! permutation. This is not spongefish's default SHAKE/DomainSeparator protocol.
 use crate::{Result, refused};
 use spongefish::{DuplexSpongeInterface, instantiations::Keccak};
-use zkc_runtime::interactive::Identity;
+use zkc_runtime::vm::Identity;
 
 pub(crate) enum Transcript {
     Merlin(merlin::Transcript),

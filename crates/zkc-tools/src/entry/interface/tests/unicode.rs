@@ -7,7 +7,7 @@ use crate::entry::{
 use crate::run::HostLimits;
 use crate::source_names::encode_nominal_identity;
 use std::collections::BTreeMap;
-use zkc_runtime::interactive::{LogicalType, PhysicalType};
+use zkc_runtime::vm::{LogicalType, PhysicalType};
 
 fn package(document: &Value, artifact: &str) -> Package {
     let bytes =

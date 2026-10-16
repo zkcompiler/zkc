@@ -1,6 +1,6 @@
 //! Scalar, vector and matrix arithmetic over an independently installed field.
 use super::*;
-use zkc_runtime::interactive::KernelSignature;
+use zkc_runtime::vm::KernelSignature;
 
 pub(crate) const fn operation(
     name: &'static str,

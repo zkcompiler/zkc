@@ -1,12 +1,11 @@
+use zkc_runtime::interpreter::Runner;
 mod common;
 use common::*;
 use serde_json::json;
 use std::sync::{Arc, Mutex};
 use zkc_backends::*;
-use zkc_runtime::interactive::Identity;
-use zkc_runtime::interactive::{
-    Backend, BackendError, Frame, FrameExit, FrameKind, Invocation, Runner, admit_supplied,
-};
+use zkc_runtime::vm::Identity;
+use zkc_runtime::vm::{Backend, BackendError, Frame, FrameExit, FrameKind, Invocation};
 
 fn draw_program() -> Vec<u8> {
     program(
@@ -48,7 +47,12 @@ fn actual_alias_cross_backend_wrong_kind_and_domain_are_refused_at_entry() {
     let bytes = program(&[("a", "rng"), ("b", "rng")], vec![], &[], &[]);
     let mut b = ark_backend(None);
     let r = b.issue_rng_for(Identity::Bls12381Fr, domain(), 3).unwrap();
-    let admitted = admit_supplied(&bytes, &b).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        .and_then(|program| {
+            program.check_installation(&b)?;
+            Ok(program)
+        })
+        .unwrap();
     match Runner::new(
         &admitted,
         "main",
@@ -83,7 +87,12 @@ fn actual_alias_cross_backend_wrong_kind_and_domain_are_refused_at_entry() {
         let r = b
             .issue_rng_for(Identity::Bls12381Fr, bad_domain, 1)
             .unwrap();
-        let admitted = admit_supplied(&draw_program(), &b).unwrap();
+        let admitted = zkc_runtime::vm::Program::decode(&draw_program())
+            .and_then(|program| {
+                program.check_installation(&b)?;
+                Ok(program)
+            })
+            .unwrap();
         match Runner::new(&admitted, "main", "P", "session", b, vec![r]) {
             Err(e) => {
                 assert!(e.error.to_string().contains("capability-domain"));
@@ -115,7 +124,12 @@ fn exhausted_attempt_advances_generation_and_counter_without_touching_other_slot
     );
     assert_eq!(b.observe(token(&other)).unwrap(), before);
     assert_eq!(b.active_frames(), 0);
-    let admitted = admit_supplied(&draw_program(), &b).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&draw_program())
+        .and_then(|program| {
+            program.check_installation(&b)?;
+            Ok(program)
+        })
+        .unwrap();
     assert!(Runner::new(&admitted, "main", "P", "session", b, vec![r]).is_err());
 }
 #[test]
@@ -170,10 +184,7 @@ impl Backend for Probe {
     type Checkpoint = ();
     type Value = Value;
     type Kernel = zkc_backends::NativeKernel;
-    fn prepare_binding(
-        &self,
-        binding: &zkc_runtime::interactive::OperationBinding,
-    ) -> Option<Self::Kernel> {
+    fn prepare_binding(&self, binding: &zkc_runtime::vm::OperationBinding) -> Option<Self::Kernel> {
         self.inner.prepare_binding(binding)
     }
     fn validate_value(&self, v: &Value) -> Result<(), BackendError> {
@@ -238,13 +249,14 @@ impl Backend for Probe {
     ) -> Result<Vec<Value>, BackendError> {
         if self.output_failure {
             let invocation = Invocation {
-                frame: i.frame,
-                site: i.site,
-                kernel: i.kernel,
-                attributes: i.attributes,
+                context: zkc_runtime::vm::CallContext {
+                    frame: i.frame,
+                    site: i.site,
+                    attributes: i.attributes,
+                    binding: i.binding,
+                    logical_origin: i.logical_origin,
+                },
                 max_output_bytes: 0,
-                binding: i.binding,
-                logical_origin: i.logical_origin,
                 retained: i.retained,
             };
             return self.inner.apply(kernel, &invocation, args);
@@ -257,13 +269,14 @@ impl Backend for Probe {
             self.findings.lock().unwrap().push(error.code);
             let root = self.root.as_ref().unwrap();
             let invocation = Invocation {
-                frame: root,
-                site: i.site,
-                kernel: i.kernel,
-                attributes: i.attributes,
+                context: zkc_runtime::vm::CallContext {
+                    frame: root,
+                    site: i.site,
+                    attributes: i.attributes,
+                    binding: i.binding,
+                    logical_origin: i.logical_origin,
+                },
                 max_output_bytes: i.max_output_bytes,
-                binding: i.binding,
-                logical_origin: i.logical_origin,
                 retained: i.retained,
             };
             self.findings.lock().unwrap().push(
@@ -485,10 +498,7 @@ fn nested_failure_and_cancellation_release_all_frames_and_preserve_unpassed_slot
         vec![a.clone(), second.clone(), Value::Index(1)],
     );
     while runner.advance_local_control().unwrap() {}
-    assert!(matches!(
-        runner.poll(),
-        zkc_runtime::interactive::Action::Local(_)
-    )); // child entered, no draw yet
+    assert!(matches!(runner.poll(), zkc_runtime::vm::Action::Local(_))); // child entered, no draw yet
     runner.cancel();
     let b = runner.into_backend();
     assert_eq!(b.active_frames(), 0);

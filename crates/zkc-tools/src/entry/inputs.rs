@@ -13,7 +13,7 @@ use crate::{
 };
 use serde_json::{Value as Json, json};
 use std::collections::BTreeMap;
-use zkc_runtime::interactive::{PhysicalType, Type};
+use zkc_runtime::vm::{PhysicalType, Type};
 
 pub struct InputGroup<'a> {
     pub(super) interface: &'a Interface,

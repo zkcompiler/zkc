@@ -3,7 +3,7 @@
 use super::NativeBackend;
 use crate::{Result, Value, refused};
 use std::{collections::BTreeMap, sync::OnceLock};
-use zkc_runtime::interactive::{BoundSignature, Identity, Invocation, OperationBinding};
+use zkc_runtime::vm::{BoundSignature, Identity, Invocation, OperationBinding};
 
 #[derive(Clone, Copy)]
 enum Signature {

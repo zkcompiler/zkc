@@ -3,7 +3,7 @@ use std::sync::Arc;
 use zkc_arkworks::{
     Bounds, Commitment, CommittedTable, OpeningProof, ProverKey, Scalar, Table, VerifierKey,
 };
-use zkc_runtime::interactive::{
+use zkc_runtime::vm::{
     Backing, Identity, LogicalType, PhysicalType, Representation, Type, Value as RuntimeValue,
 };
 
@@ -800,7 +800,7 @@ impl RuntimeValue for Value {
     }
 
     fn pack_variant(
-        descriptor: Arc<zkc_runtime::interactive::VariantDescriptor>,
+        descriptor: Arc<zkc_runtime::vm::VariantDescriptor>,
         alternative: usize,
         payload: Vec<Self>,
     ) -> Result<Self> {
@@ -812,11 +812,7 @@ impl RuntimeValue for Value {
     }
     fn unpack_variant(
         &self,
-    ) -> Result<(
-        Arc<zkc_runtime::interactive::VariantDescriptor>,
-        usize,
-        Vec<Self>,
-    )> {
+    ) -> Result<(Arc<zkc_runtime::vm::VariantDescriptor>, usize, Vec<Self>)> {
         match self {
             Self::Variant(v) => {
                 v.validate()?;
@@ -1209,7 +1205,7 @@ mod admission_size_tests {
 mod custody_traversal_tests {
     use super::*;
     use serde_json::json;
-    use zkc_runtime::interactive::Backend;
+    use zkc_runtime::vm::Backend;
 
     fn pack(name: &str, values: Vec<Value>) -> Value {
         let types: Vec<_> = values
@@ -1273,7 +1269,7 @@ mod custody_traversal_tests {
             .visit_active_leaves(&mut |leaf| {
                 native.validate_value(leaf)?;
                 visited.push(leaf.ty());
-                Ok::<_, zkc_runtime::interactive::BackendError>(())
+                Ok::<_, zkc_runtime::vm::BackendError>(())
             })
             .unwrap();
         assert_eq!(visited, [Type::Index, Type::Index, Type::Rng, Type::Index]);

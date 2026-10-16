@@ -1,7 +1,7 @@
 //! Setup checks shared by native invocation hosts. Authority maps stay with each host.
 use super::inputs::Result;
 use zkc_backends::Value;
-use zkc_runtime::interactive::{LogicalType, Type};
+use zkc_runtime::vm::{LogicalType, Type};
 pub(crate) fn needs_input_setup(ty: &LogicalType) -> bool {
     ty.kind() == Type::ProverKey || zkc_backends::requires_setup(ty.clone())
 }

@@ -2,7 +2,7 @@
 //! inputs. This module allocates bytes only; Host admission owns native decoding.
 use super::{bulk, frame, structured, table_type};
 use serde_json::Value as Json;
-use zkc_runtime::interactive::{Identity, LogicalType, PhysicalType, Type};
+use zkc_runtime::vm::{Identity, LogicalType, PhysicalType, Type};
 type Result<T> = std::result::Result<T, &'static str>;
 
 /// Decode readable JSON using an independently checked expected physical type.
@@ -461,7 +461,7 @@ impl crate::NativeBackend {
         &self,
         value: &crate::Value,
     ) -> std::result::Result<impl serde::Serialize, super::NativeWireError> {
-        use zkc_runtime::interactive::Value as _;
+        use zkc_runtime::vm::Value as _;
         struct Readable {
             ty: PhysicalType,
             bytes: Vec<u8>,
@@ -486,7 +486,7 @@ mod tests {
     use super::*;
     use crate::{Domain, EntryPolicy, NativeBackend, Policy, SetupRegistry, Value};
     use serde_json::json;
-    use zkc_runtime::interactive::Value as _;
+    use zkc_runtime::vm::Value as _;
     fn backend() -> NativeBackend {
         NativeBackend::new(
             Policy::default(),

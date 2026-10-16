@@ -1,7 +1,7 @@
 //! Bind authenticated source metadata to the native owner's admitted ABI.
 use super::{BoundInterface, InterfaceError as E, Result, raw::*, require};
 use crate::{proof::NativeDeployment, run::RunHost};
-use zkc_runtime::interactive::LogicalType;
+use zkc_runtime::vm::LogicalType;
 
 impl BoundInterface {
     /// Check the exact package artifact and its participant ABI. The authenticated

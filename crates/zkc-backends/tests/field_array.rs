@@ -4,9 +4,7 @@ use common::ark_backend;
 use zkc_backends::{
     FieldArray, NativeBackend, NativeWireError, Policy, Scalar, Value, native_wire_size,
 };
-use zkc_runtime::interactive::{
-    DecodeReason, Identity, LogicalType, PhysicalType, Value as RuntimeValue,
-};
+use zkc_runtime::vm::{DecodeReason, Identity, LogicalType, PhysicalType, Value as RuntimeValue};
 
 fn array(length: usize) -> Value {
     Value::FieldArray(

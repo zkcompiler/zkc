@@ -1,5 +1,6 @@
 use super::*;
-use zkc_runtime::interactive::{Admitted, PreparationLimits, PreparedComputations, WorkBudget};
+use zkc_runtime::interpreter::Runner;
+use zkc_runtime::vm::{PreparationLimits, PreparedComputations, Program, WorkBudget};
 
 fn generated() -> Vec<u8> {
     candidate(
@@ -12,7 +13,7 @@ fn generated() -> Vec<u8> {
     )
 }
 fn invoke(
-    admitted: &Admitted,
+    admitted: &Program,
     cache: &PreparedComputations<NativeBackend>,
     backend: NativeBackend,
     args: Vec<Value>,
@@ -20,7 +21,7 @@ fn invoke(
     values: ValueBudget,
     work: WorkBudget,
 ) -> (
-    Result<Vec<Value>, zkc_runtime::interactive::Stop>,
+    Result<Vec<Value>, zkc_runtime::vm::Stop>,
     Usage,
     NativeBackend,
 ) {
@@ -33,7 +34,12 @@ fn invoke(
 }
 #[test]
 fn reusable_outputs_preserve_aliases_and_every_usage_counter() {
-    let admitted = admit_supplied(&generated(), &ark_backend(None)).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&generated())
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap();
     let cache = PreparedComputations::new(&admitted, PreparationLimits::default());
     for n in [0, 4, 33] {
         let run = || {
@@ -72,7 +78,12 @@ fn reusable_outputs_preserve_aliases_and_every_usage_counter() {
 #[test]
 fn reduced_capacity_reexecutes_and_preserves_partial_failures() {
     let bytes = generated();
-    let admitted = admit_supplied(&bytes, &ark_backend(None)).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap();
     let cache = PreparedComputations::new(&admitted, PreparationLimits::default());
     let args = || vec![Value::Index(32), f(7)];
     let (_, full, _) = invoke(
@@ -150,7 +161,12 @@ fn reduced_capacity_reexecutes_and_preserves_partial_failures() {
 }
 #[test]
 fn private_inputs_changed_policy_and_other_programs_cannot_reuse() {
-    let admitted = admit_supplied(&generated(), &ark_backend(None)).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&generated())
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap();
     let cache = PreparedComputations::new(&admitted, PreparationLimits::default());
     let args = || vec![Value::Index(8), f(3)];
     invoke(
@@ -193,7 +209,12 @@ fn private_inputs_changed_policy_and_other_programs_cannot_reuse() {
         .is_err()
     );
     assert_eq!(cache.stats().hits, 0);
-    let other = admit_supplied(&generated(), &ark_backend(None)).unwrap();
+    let other = zkc_runtime::vm::Program::decode(&generated())
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap();
     let mut runner = Runner::new(&other, "main", "P", "session", ark_backend(None), args())
         .unwrap_or_else(|e| panic!("{}", e.error));
     assert!(
@@ -208,7 +229,12 @@ fn private_inputs_changed_policy_and_other_programs_cannot_reuse() {
 }
 #[test]
 fn bounded_storage_and_concurrent_invocations() {
-    let admitted = admit_supplied(&generated(), &ark_backend(None)).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&generated())
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap();
     let disabled = PreparedComputations::new(
         &admitted,
         PreparationLimits {
@@ -278,8 +304,12 @@ fn skipped_nested_frames_preserve_later_frame_ids() {
         1,
         json!(["local", "later", "local", ["cond", "ok"], ["later_answer"]]),
     );
-    let admitted =
-        admit_supplied(&serde_json::to_vec(&program).unwrap(), &ark_backend(None)).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&program).unwrap())
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap();
     let cache = PreparedComputations::new(&admitted, PreparationLimits::default());
     let run = || {
         let mut runner = Runner::new(
@@ -330,8 +360,12 @@ fn private_computation_ends_prefix_even_for_later_closed_functions() {
         .as_array_mut()
         .unwrap()
         .insert(1, json!(["local", "later", "closed", [], ["later_answer"]]));
-    let admitted =
-        admit_supplied(&serde_json::to_vec(&program).unwrap(), &ark_backend(None)).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&program).unwrap())
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap();
     let cache = PreparedComputations::new(&admitted, PreparationLimits::default());
     for _ in 0..2 {
         invoke(
@@ -350,7 +384,12 @@ fn private_computation_ends_prefix_even_for_later_closed_functions() {
 }
 #[test]
 fn nested_public_control_reuses_success_and_never_caches_failure() {
-    let admitted = admit_supplied(&choose(), &ark_backend(None)).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&choose())
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap();
     let cache = PreparedComputations::new(&admitted, PreparationLimits::default());
     let run = |cond| {
         invoke(
@@ -397,7 +436,12 @@ fn native_work_and_later_lower_capacity_use_the_same_accounting() {
         }
     }
     let bytes = serde_json::to_vec(&program).unwrap();
-    let admitted = admit_supplied(&bytes, &ark_backend(None)).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap();
     let cache = PreparedComputations::new(&admitted, PreparationLimits::default());
     let run = |instructions, external| {
         invoke(
@@ -476,8 +520,12 @@ fn untaken_impure_branch_permanently_closes_public_preparation() {
         .as_array_mut()
         .unwrap()
         .insert(1, json!(["local", "later", "closed", [], ["later_answer"]]));
-    let admitted =
-        admit_supplied(&serde_json::to_vec(&program).unwrap(), &ark_backend(None)).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&program).unwrap())
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap();
     for impure in [false, true] {
         let cache = PreparedComputations::new(&admitted, PreparationLimits::default());
         for _ in 0..2 {
@@ -506,7 +554,12 @@ fn untaken_impure_branch_permanently_closes_public_preparation() {
 
 #[test]
 fn mixed_parameters_and_storage_limits_preserve_cold_results() {
-    let admitted = admit_supplied(&generated(), &ark_backend(None)).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&generated())
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap();
     for limits in [
         PreparationLimits {
             entries: 0,
@@ -596,8 +649,12 @@ fn repeated_calls_do_not_alias_distinct_live_allocations() {
         ]),
     );
     body[2] = json!(["return", ["result0", "second0"]]);
-    let admitted =
-        admit_supplied(&serde_json::to_vec(&program).unwrap(), &ark_backend(None)).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&program).unwrap())
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap();
     let cache = PreparedComputations::new(&admitted, PreparationLimits::default());
     let empty = PreparedComputations::new(
         &admitted,
@@ -635,7 +692,12 @@ fn repeated_calls_do_not_alias_distinct_live_allocations() {
 #[test]
 fn empty_results_still_need_space_for_record_and_map_storage() {
     let bytes = candidate(json!([]), json!([]), json!([["return", []]]));
-    let admitted = admit_supplied(&bytes, &ark_backend(None)).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap();
     let cache = PreparedComputations::new(
         &admitted,
         PreparationLimits {
@@ -663,7 +725,12 @@ fn empty_results_still_need_space_for_record_and_map_storage() {
 
 #[test]
 fn execution_counts_distinguish_replayed_work_from_actual_calls() {
-    let admitted = admit_supplied(&generated(), &ark_backend(None)).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&generated())
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap();
     let cache = PreparedComputations::new(&admitted, PreparationLimits::default());
     for warm in [false, true] {
         let mut runner = Runner::new(

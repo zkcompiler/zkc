@@ -4,7 +4,7 @@ use common::ark_backend;
 use zkc_backends::{
     GroupPoint, NativeBackend, NativeWireError, Policy, Scalar, Value, native_wire_size,
 };
-use zkc_runtime::interactive::{DecodeReason, PhysicalType, Value as RuntimeValue};
+use zkc_runtime::vm::{DecodeReason, PhysicalType, Value as RuntimeValue};
 
 #[test]
 fn native_frames_decode_exact_values_and_refuse_malformed_bytes() {
@@ -397,7 +397,7 @@ fn additional_domains_keep_exact_canonical_frames_and_typed_errors() {
         bad[6..].fill(255);
         assert_eq!(
             backend.decode_native_value(&ty, &bad).unwrap_err(),
-            NativeWireError::Invalid(if ty.kind() == zkc_runtime::interactive::Type::Field {
+            NativeWireError::Invalid(if ty.kind() == zkc_runtime::vm::Type::Field {
                 DecodeReason::Scalar
             } else {
                 DecodeReason::Group

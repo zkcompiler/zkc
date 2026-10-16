@@ -1,5 +1,5 @@
 use serde_json::json;
-use zkc_runtime::{interactive::Limits, logical::*};
+use zkc_runtime::{logical::*, vm::Limits};
 
 #[test]
 fn borrowed_stream_matches_independent_grammar_and_short_writes() {
@@ -338,8 +338,8 @@ fn indexed_native_origins_require_explicit_coordinates_and_template_format() {
 
 #[test]
 fn query_templates_name_their_method_and_index_bounds_are_canonical() {
-    use zkc_runtime::interactive::{LogicalType, PhysicalType, ServiceContract};
     use zkc_runtime::logical::{native_query_template, uniform_index_bound};
+    use zkc_runtime::vm::{LogicalType, PhysicalType, ServiceContract};
     let template = |method: &str| {
         let bytes = encode_tree(&json!([
             "zkc.native-origin-template/0",

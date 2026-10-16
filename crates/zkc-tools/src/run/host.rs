@@ -12,7 +12,7 @@ use zkc_backends::{
     Capability, Domain, EntryPolicy, NativeBackend, PortConstraint, SetupRegistry, Value,
     services::{ServiceReference, ServiceRegistry},
 };
-use zkc_runtime::interactive::{EntryRole, Type, Value as RuntimeValue};
+use zkc_runtime::vm::{EntryRole, Type, Value as RuntimeValue};
 mod inputs;
 mod report;
 use crate::execution::InputValue;

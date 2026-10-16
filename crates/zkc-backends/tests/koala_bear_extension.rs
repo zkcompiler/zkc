@@ -5,9 +5,8 @@ use p3_field::{BasedVectorSpace, PrimeCharacteristicRing};
 use serde_json::json;
 use support::{Controlled, assert_value, backend, one, program};
 use zkc_backends::{KoalaBear, KoalaBearExt8, Policy, Value, domains::KOALA_BEAR_EXT8, plonky3};
-use zkc_runtime::interactive::{
+use zkc_runtime::vm::{
     Backend, Identity, LogicalType, OperationBinding, PhysicalType, Type, Value as RuntimeValue,
-    admit_supplied,
 };
 
 const EXT: &str = "koala-bear.ext8-binomial3";
@@ -460,7 +459,14 @@ fn resource_limits_and_hostile_operands_fail_closed() {
         std::slice::from_ref(&ext),
         &["out".into()],
     );
-    assert!(admit_supplied(&bytes, &backend(Policy::default())).is_err());
+    assert!(
+        zkc_runtime::vm::Program::decode(&bytes)
+            .and_then(|program| {
+                program.check_installation(&backend(Policy::default()))?;
+                Ok(program)
+            })
+            .is_err()
+    );
     for literal in ["2130706433", "00", "-1", "1.0"] {
         let bytes = program(
             &[binding("field.constant")],
@@ -469,6 +475,13 @@ fn resource_limits_and_hostile_operands_fail_closed() {
             std::slice::from_ref(&ext),
             &["out".into()],
         );
-        assert!(admit_supplied(&bytes, &backend(Policy::default())).is_err());
+        assert!(
+            zkc_runtime::vm::Program::decode(&bytes)
+                .and_then(|program| {
+                    program.check_installation(&backend(Policy::default()))?;
+                    Ok(program)
+                })
+                .is_err()
+        );
     }
 }

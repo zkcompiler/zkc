@@ -10,7 +10,7 @@ use curve25519_dalek::{
     traits::{Identity, MultiscalarMul},
 };
 use std::sync::Arc;
-use zkc_runtime::interactive::Invocation;
+use zkc_runtime::vm::Invocation;
 trait Group: Copy + PartialEq {
     type Scalar: Copy;
     fn generator() -> Self;
@@ -313,7 +313,7 @@ pub(crate) fn apply(
     if !name.starts_with("curve.") || matches!(name, "curve.commit" | "curve.response") {
         return Err(refused("kernel-operands"));
     }
-    use zkc_runtime::interactive::Identity;
+    use zkc_runtime::vm::Identity;
     let group = i
         .binding
         .declaration()
@@ -348,7 +348,7 @@ fn dense<G: Group>(
         .signature()
         .outputs
         .iter()
-        .all(|t| t.kind() != zkc_runtime::interactive::Type::Groups)
+        .all(|t| t.kind() != zkc_runtime::vm::Type::Groups)
     {
         p.output(512, i.max_output_bytes)?;
     }
@@ -476,7 +476,7 @@ fn dense<G: Group>(
 /// Independent native port facts, also used for exact implementation assembly.
 pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
     use crate::bindings::curve;
-    use zkc_runtime::interactive::{AttributeRule, Type::*};
+    use zkc_runtime::vm::{AttributeRule, Type::*};
     &[
         curve::operation("curve.identity", &[], &[Group], AttributeRule::None)
             .implemented_by(&["arkworks/curve.identity", "dalek/curve.identity"]),
@@ -559,22 +559,16 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
 pub(crate) const PAIRINGS: &[crate::bindings::Contract] = &[
     crate::bindings::curve::pairing(
         "pairing.apply",
-        &[
-            zkc_runtime::interactive::Type::Group,
-            zkc_runtime::interactive::Type::Group,
-        ],
-        &[zkc_runtime::interactive::Type::Group],
-        zkc_runtime::interactive::AttributeRule::None,
+        &[zkc_runtime::vm::Type::Group, zkc_runtime::vm::Type::Group],
+        &[zkc_runtime::vm::Type::Group],
+        zkc_runtime::vm::AttributeRule::None,
     )
     .implemented_by(&["arkworks/pairing.apply"]),
     crate::bindings::curve::pairing(
         "pairing.check",
-        &[
-            zkc_runtime::interactive::Type::Groups,
-            zkc_runtime::interactive::Type::Groups,
-        ],
-        &[zkc_runtime::interactive::Type::Bool],
-        zkc_runtime::interactive::AttributeRule::None,
+        &[zkc_runtime::vm::Type::Groups, zkc_runtime::vm::Type::Groups],
+        &[zkc_runtime::vm::Type::Bool],
+        zkc_runtime::vm::AttributeRule::None,
     )
     .implemented_by(&["arkworks/pairing.check"]),
 ];

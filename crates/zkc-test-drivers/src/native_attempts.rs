@@ -8,7 +8,7 @@ use std::{collections::BTreeMap, path::Path};
 use zkc_backends::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
 use zkc_runtime::{
     attempt::Limits,
-    interactive::{ValueBudget, WorkBudget},
+    vm::{ValueBudget, WorkBudget},
 };
 use zkc_test_support::hex;
 use zkc_tools::execution::{Capacity, InputValue};
@@ -957,7 +957,7 @@ fn abandonment(directory: &Path, name: &str, silent: bool) {
     assert_eq!(exhausted.attempts[0].decision, Ok(false));
     assert!(matches!(
         exhausted.attempts[1].stop.as_ref().unwrap().kind,
-        zkc_runtime::interactive::StopKind::Limit
+        zkc_runtime::vm::StopKind::Limit
     ));
     assert_eq!(exhausted.usage.iterations, capacity.work.iterations);
     assert!(exhausted.cleanup_errors.is_empty());
@@ -1005,7 +1005,6 @@ fn abandonment(directory: &Path, name: &str, silent: bool) {
 // Malformed affine state is already rejected by ordinary admission; event order
 // additionally needs the proof-specific checker.
 fn check_exit_mutations(envelope: &Json) {
-    use zkc_runtime::interactive::admit_supplied;
     let codec = NativeBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", "test", "main", None), None),
@@ -1044,13 +1043,18 @@ fn check_exit_mutations(envelope: &Json) {
                 .clone();
             *body[n][3].as_array_mut().unwrap().last_mut().unwrap() = stale;
         }
-        let error = admit_supplied(&serde_json::to_vec(&candidate).unwrap(), &codec).unwrap_err();
+        let error = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&candidate).unwrap())
+            .and_then(|program| {
+                program.check_installation(&codec)?;
+                Ok(program)
+            })
+            .unwrap_err();
         assert_eq!(
             error.code,
             if missing {
-                zkc_runtime::interactive::ErrorCode::Signature
+                zkc_runtime::vm::ErrorCode::Signature
             } else {
-                zkc_runtime::interactive::ErrorCode::Ssa
+                zkc_runtime::vm::ErrorCode::Ssa
             }
         );
         assert_eq!(refuse(&candidate), error.to_string());
@@ -1085,7 +1089,11 @@ fn check_exit_mutations(envelope: &Json) {
     *last = observed;
     body.insert(delivery, calculation);
     body.insert(delivery + 1, exit);
-    admit_supplied(&serde_json::to_vec(&candidate).unwrap(), &codec)
+    zkc_runtime::vm::Program::decode(&serde_json::to_vec(&candidate).unwrap())
+        .and_then(|program| {
+            program.check_installation(&codec)?;
+            Ok(program)
+        })
         .expect("pending-observation mutation must remain typed and affine");
     assert_eq!(refuse(&candidate), "native-proof-observation-order");
 }

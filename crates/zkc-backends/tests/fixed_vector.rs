@@ -5,9 +5,9 @@ use p3_field::PrimeField32;
 use serde_json::json;
 use support::{Controlled, backend, one, program, run_program};
 use zkc_backends::{FixedVector, KoalaBear, Policy, Value};
-use zkc_runtime::interactive::{
+use zkc_runtime::vm::{
     AttributeRule, Backend, ErrorCode, LogicalType, OperationBinding, PhysicalType, Representation,
-    Value as RuntimeValue, admit_supplied,
+    Value as RuntimeValue,
 };
 
 fn binding(operation: &str, n: u64) -> OperationBinding {
@@ -228,7 +228,7 @@ fn one_typed_local_program_executes_conversions_and_dot() {
 }
 
 #[test]
-fn native_invocation_refuses_forged_types_attributes_and_dispatch_names() {
+fn native_invocation_refuses_wrong_types_attributes_and_handles() {
     for (replacement, attributes, kernel, expected) in [
         (Some(vector(&[1, 2])), None, None, "refused:kernel-operands"),
         (Some(fixed(&[1])), None, None, "refused:kernel-operands"),
@@ -241,14 +241,14 @@ fn native_invocation_refuses_forged_types_attributes_and_dispatch_names() {
         (
             None,
             None,
-            Some("plonky3/fixed_vector.unknown".into()),
-            "refused:kernel-operands",
+            Some(binding("to_vector", 2)),
+            "refused:kernel-binding",
         ),
     ] {
         let mut controlled = Controlled::new(backend(Policy::default()));
         controlled.substitute = replacement;
         controlled.attributes = attributes;
-        controlled.implementation = kernel;
+        controlled.binding = kernel;
         assert_eq!(
             one(
                 controlled,
@@ -271,7 +271,11 @@ fn native_invocation_refuses_forged_types_attributes_and_dispatch_names() {
         &["x".into()],
     );
     assert_eq!(
-        admit_supplied(&bytes, &backend(Policy::default()))
+        zkc_runtime::vm::Program::decode(&bytes)
+            .and_then(|program| {
+                program.check_installation(&backend(Policy::default()))?;
+                Ok(program)
+            })
             .unwrap_err()
             .code,
         ErrorCode::Attributes
@@ -332,11 +336,12 @@ fn canonical_generic_origin_arguments_retain_types_and_naturals_without_authorit
         "zkcv.fixed_vector.koala-bear/0",
     ] {
         carrier[2][0][5][1][1][1] = json!(bad);
-        let error = admit_supplied(
-            &serde_json::to_vec(&carrier).unwrap(),
-            &backend(Policy::default()),
-        )
-        .unwrap_err();
+        let error = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&carrier).unwrap())
+            .and_then(|program| {
+                program.check_installation(&backend(Policy::default()))?;
+                Ok(program)
+            })
+            .unwrap_err();
         assert_eq!(error.code, ErrorCode::Type);
         assert_eq!(error.detail, "logical origin static identity");
     }

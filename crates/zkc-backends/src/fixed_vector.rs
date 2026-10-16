@@ -1,7 +1,7 @@
 //! Private immutable KoalaBear bulk values with a retained logical length.
 use crate::{KoalaBear, Policy, Result, Value, exhausted, refused};
 use std::sync::Arc;
-use zkc_runtime::interactive::{
+use zkc_runtime::vm::{
     AttributeRule, Backing, BoundSignature, Identity, Invocation, KernelSignature, LogicalType,
     OperationBinding, PhysicalType, Representation, Type,
 };

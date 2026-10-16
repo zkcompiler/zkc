@@ -1,6 +1,6 @@
 //! Exact mathematical encodings, separate from native transport and observation.
 use crate::{GroupPoint, Policy, Result, Scalar, Value, ark, refused, value::size};
-use zkc_runtime::interactive::{
+use zkc_runtime::vm::{
     AttributeRule, BoundSignature, Identity, KernelSignature, LogicalType, OperationBinding,
     PhysicalType, Type,
 };

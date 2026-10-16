@@ -5,7 +5,7 @@ use super::{Port, RoleMap, index, input_kind, wire_codec, wire_type};
 use crate::host::inputs::{Result, array, list, text};
 use serde_json::Value as Json;
 use std::collections::BTreeMap;
-use zkc_runtime::interactive::{Admitted, ConstructionPlan, LogicalType, PhysicalType, Type};
+use zkc_runtime::vm::{ConstructionPlan, LogicalType, PhysicalType, Program, Type};
 
 /// Borrowed policy fields after syntactic checks. Public selection is checked
 /// later against the actual validator inputs, after message and role checks.
@@ -94,7 +94,7 @@ pub(super) struct RoleInterface {
 }
 impl RoleInterface {
     pub(super) fn read(
-        admitted: &Admitted,
+        admitted: &Program,
         policy: &DeploymentPolicy<'_>,
         role_map: &Json,
         public_map: &Json,

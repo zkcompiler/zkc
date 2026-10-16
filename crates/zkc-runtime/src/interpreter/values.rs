@@ -1,4 +1,4 @@
-use crate::interactive::executable::Slot;
+use crate::vm::code::Slot;
 
 /// One frame's values. Slots are monotonic SSA definitions; release leaves a
 /// vacant slot and never reuses its identity while the frame remains active.

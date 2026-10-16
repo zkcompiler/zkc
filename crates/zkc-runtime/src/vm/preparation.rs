@@ -3,7 +3,7 @@
 //! The Runner is the only publisher. Entries retain the admitted executable,
 //! execution capacity evidence and backend checkpoints; a caller cannot mint a
 //! result by asserting that an ordinary value came from a computation.
-use super::{Admitted, Backend, Usage, Value, ValueBudget, WorkBudget, executable::Executable};
+use super::{Backend, Program, Usage, Value, ValueBudget, WorkBudget, code::Executable};
 use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex},
@@ -37,7 +37,7 @@ pub struct PreparationStats {
 /// Dropping the last clone releases all retained results. Zero limits disable
 /// retention. No cache contents or authority are accepted from artifact text.
 pub struct PreparedComputations<B: Backend> {
-    pub(super) executable: Arc<Executable>,
+    pub(crate) executable: Arc<Executable>,
     limits: PreparationLimits,
     shared: Arc<Mutex<Store<B>>>,
 }
@@ -63,7 +63,7 @@ struct Store<B: Backend> {
     entries: BTreeMap<Key, (usize, Arc<Evaluation<B>>)>,
 }
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub(super) struct Key {
+pub(crate) struct Key {
     pub function: String,
     pub parameters: Vec<Vec<u8>>,
 }
@@ -82,7 +82,7 @@ impl Key {
 /// A successful execution under these *initial remaining* allowances proves
 /// sufficient capacity for the same computation with dominating allowances.
 #[derive(Clone, Copy, Debug)]
-pub(super) struct Available {
+pub(crate) struct Available {
     pub work: WorkBudget,
     pub values: ValueBudget,
     pub bindings: usize,
@@ -99,7 +99,7 @@ impl Available {
 }
 /// Keep cumulative work separate from live storage. Exhaustive destructuring
 /// makes a new Usage counter require a decision at this replay boundary.
-pub(super) fn cumulative_delta(before: Usage, after: Usage) -> (WorkBudget, usize) {
+pub(crate) fn cumulative_delta(before: Usage, after: Usage) -> (WorkBudget, usize) {
     let Usage {
         instructions,
         iterations,
@@ -117,7 +117,7 @@ pub(super) fn cumulative_delta(before: Usage, after: Usage) -> (WorkBudget, usiz
         total_value_bytes - before.total_value_bytes,
     )
 }
-pub(super) struct Evaluation<B: Backend> {
+pub(crate) struct Evaluation<B: Backend> {
     pub available: Available,
     pub work: WorkBudget,
     pub allocated: usize,
@@ -128,7 +128,7 @@ pub(super) struct Evaluation<B: Backend> {
     pub outputs: Vec<B::Value>,
 }
 impl<B: Backend> PreparedComputations<B> {
-    pub fn new(admitted: &Admitted, limits: PreparationLimits) -> Self {
+    pub fn new(admitted: &Program, limits: PreparationLimits) -> Self {
         Self {
             executable: admitted.executable.clone(),
             limits,
@@ -147,7 +147,7 @@ impl<B: Backend> PreparedComputations<B> {
             hits: store.hits,
         }
     }
-    pub(super) fn enabled(&self) -> bool {
+    pub(crate) fn enabled(&self) -> bool {
         self.limits.entries != 0 && self.limits.bytes != 0
     }
     fn metadata_bytes(key: &Key) -> Option<usize> {
@@ -156,7 +156,7 @@ impl<B: Backend> PreparedComputations<B> {
             .checked_add(std::mem::size_of::<Evaluation<B>>())?
             .checked_add(key.retained_bytes()?)
     }
-    pub(super) fn can_record(&self, key: &Key) -> bool {
+    pub(crate) fn can_record(&self, key: &Key) -> bool {
         let store = self.shared.lock().unwrap_or_else(|p| p.into_inner());
         let previous = store.entries.get(key);
         let retained = store.bytes - previous.map_or(0, |(bytes, _)| *bytes);
@@ -164,7 +164,7 @@ impl<B: Backend> PreparedComputations<B> {
             && Self::metadata_bytes(key)
                 .is_some_and(|bytes| bytes <= self.limits.bytes.saturating_sub(retained))
     }
-    pub(super) fn get(&self, key: &Key) -> Option<Arc<Evaluation<B>>> {
+    pub(crate) fn get(&self, key: &Key) -> Option<Arc<Evaluation<B>>> {
         self.shared
             .lock()
             .unwrap_or_else(|p| p.into_inner())
@@ -172,11 +172,11 @@ impl<B: Backend> PreparedComputations<B> {
             .get(key)
             .map(|(_, record)| record.clone())
     }
-    pub(super) fn hit(&self) {
+    pub(crate) fn hit(&self) {
         let mut store = self.shared.lock().unwrap_or_else(|p| p.into_inner());
         store.hits = store.hits.saturating_add(1);
     }
-    pub(super) fn insert(&self, key: Key, evaluation: Evaluation<B>) {
+    pub(crate) fn insert(&self, key: Key, evaluation: Evaluation<B>) {
         // Conservative payload plus all owned record/key/container metadata.
         // Checkpoints have fixed, inline size by Backend's checkpoint contract.
         let bytes = Self::metadata_bytes(&key).and_then(|n| {

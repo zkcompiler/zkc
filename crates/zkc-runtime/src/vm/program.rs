@@ -1,6 +1,6 @@
 //! Immutable action layouts and observations for executable programs.
 use super::{
-    AdmissionError, Admitted, AttributeRule, CutKind, EntryRole, ErrorCode, Origin, PhysicalType,
+    AdmissionError, AttributeRule, CutKind, EntryRole, ErrorCode, Origin, PhysicalType, Program,
     ResolvedBinding, Stop,
     model::{Body, Instruction, LocalInstruction, LoopCount, Participant},
 };
@@ -126,7 +126,7 @@ fn called_functions(body: &Body, out: &mut BTreeSet<String>) {
     }
 }
 
-impl Admitted {
+impl Program {
     /// Every asset-naming operation an entry can reach: its participants'
     /// bodies and nested loop bodies, each called function once, and every
     /// local region of those functions including branches that an execution

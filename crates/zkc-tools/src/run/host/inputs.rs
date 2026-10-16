@@ -1,5 +1,5 @@
 use super::*;
-use zkc_runtime::interactive::PhysicalType;
+use zkc_runtime::vm::PhysicalType;
 /// Trusted setup identities and input assignments. Received PCS headers can
 /// select only among these authorized keys; this is not a per-site receive pin.
 #[derive(Clone, Debug, Default)]

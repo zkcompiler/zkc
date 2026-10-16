@@ -1,8 +1,9 @@
 use super::*;
 use crate::{Domain, EntryPolicy, Policy, Scalar, Value};
 use serde_json::json;
-use zkc_runtime::interactive::Identity;
-use zkc_runtime::interactive::{Action, OperationBinding, Runner, StopKind, admit_supplied};
+use zkc_runtime::interpreter::Runner;
+use zkc_runtime::vm::Identity;
+use zkc_runtime::vm::{Action, OperationBinding, StopKind};
 
 fn backend() -> NativeBackend {
     NativeBackend::new(
@@ -32,8 +33,8 @@ fn program(binding: &OperationBinding, attributes: &[&str]) -> Vec<u8> {
     let returned = if sig.outputs.iter().any(|t| {
         matches!(
             t.representation(),
-            zkc_runtime::interactive::Representation::FrDiagonal
-                | zkc_runtime::interactive::Representation::RistrettoDiagonal
+            zkc_runtime::vm::Representation::FrDiagonal
+                | zkc_runtime::vm::Representation::RistrettoDiagonal
         )
     }) {
         vec![]
@@ -134,7 +135,12 @@ fn run(
     attributes: &[&str],
     args: Vec<Value>,
 ) -> (std::result::Result<Vec<Value>, String>, NativeBackend) {
-    let admitted = admit_supplied(&program(binding, attributes), &backend).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&program(binding, attributes))
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
     let mut runner = Runner::new(&admitted, "main", "P", "session", backend, args)
         .unwrap_or_else(|e| panic!("{}", e.error));
     loop {
@@ -179,18 +185,18 @@ fn duplicate_implementation_owners_refuse_before_execution() {
 
 fn first_handler(
     _: &mut NativeBackend,
-    i: &zkc_runtime::interactive::Invocation<'_>,
+    i: &zkc_runtime::vm::Invocation<'_>,
     _: &[Value],
 ) -> crate::Result<Vec<Value>> {
-    assert_eq!(i.kernel, "arkworks/vector.dot");
+    assert_eq!(i.binding.implementation(), "arkworks/vector.dot");
     Err(crate::refused("first-handler"))
 }
 fn second_handler(
     _: &mut NativeBackend,
-    i: &zkc_runtime::interactive::Invocation<'_>,
+    i: &zkc_runtime::vm::Invocation<'_>,
     _: &[Value],
 ) -> crate::Result<Vec<Value>> {
-    assert_eq!(i.kernel, "arkworks-pairwise/vector.dot");
+    assert_eq!(i.binding.implementation(), "arkworks-pairwise/vector.dot");
     Err(crate::refused("second-handler"))
 }
 #[test]
@@ -230,7 +236,7 @@ fn identical_ports_preserve_exact_handler_selection() {
 fn every_payload_has_explicit_identity_and_retained_charge() {
     use crate::{Bn254Scalar, KoalaBear, KoalaBearExt8, RistrettoScalar};
     use std::{collections::HashSet, sync::Arc};
-    use zkc_runtime::interactive::{
+    use zkc_runtime::vm::{
         Identity as I, LogicalType, PhysicalType, Representation as R, ResourceDomain, Type,
         Value as RuntimeValue,
     };
@@ -691,8 +697,8 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
 
 #[test]
 fn wrong_kind_capability_wrappers_refuse_without_panicking() {
-    use zkc_runtime::interactive::Identity as I;
-    use zkc_runtime::interactive::{Backend, Value as RuntimeValue};
+    use zkc_runtime::vm::Identity as I;
+    use zkc_runtime::vm::{Backend, Value as RuntimeValue};
     let (unit, mut native) = run(
         backend(),
         &binding(
@@ -765,7 +771,12 @@ fn wrong_kind_capability_wrappers_refuse_without_panicking() {
                     [["entry", "main", [["P", "actor"]]]]
                 ]))
                 .unwrap();
-                let admitted = admit_supplied(&carrier, &native).unwrap();
+                let admitted = zkc_runtime::vm::Program::decode(&carrier)
+                    .and_then(|program| {
+                        program.check_installation(&native)?;
+                        Ok(program)
+                    })
+                    .unwrap();
                 native = match Runner::new(&admitted, "main", "P", "session", native, vec![wrong]) {
                     Err(error) => {
                         assert!(
@@ -788,7 +799,7 @@ fn independent_same_port_provider_and_missing_owner_are_checked() {
     let mut row = Alternative {
         identity: "independent/field.mul",
         original: "arkworks/field.mul",
-        primary: zkc_runtime::interactive::Identity::Bls12381Fr,
+        primary: zkc_runtime::vm::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Default,
         handler: Some(arithmetic),
         deterministic: true,
@@ -996,7 +1007,7 @@ fn transcript_alternative_refuses_unsupported_table_payload() {
 
 #[test]
 fn family_rows_retain_field_literal_rules() {
-    use zkc_runtime::interactive::AttributeRule as A;
+    use zkc_runtime::vm::AttributeRule as A;
     for (provider, field, single, multiple) in [
         (
             "arkworks",
@@ -1269,7 +1280,7 @@ fn every_alternative_executes_and_preserves_the_original_result() {
 #[test]
 fn collection_limits_follow_payload_storage() {
     use std::sync::Arc;
-    use zkc_runtime::interactive::{Backend, Identity, LogicalType, Type};
+    use zkc_runtime::vm::{Backend, Identity, LogicalType, Type};
     let mut native = backend();
     native.core.policy.max_table_elements = 2;
     let roots = Value::OracleRoots(crate::oracle::Domain::Base, Arc::from([[0u8; 32]; 3]));
@@ -1297,7 +1308,7 @@ fn collection_limits_follow_payload_storage() {
 
 #[test]
 fn every_exact_installation_has_a_supported_binding_and_impossible_owners_are_absent() {
-    use zkc_runtime::interactive::Backend;
+    use zkc_runtime::vm::Backend;
     let native = backend();
     let runtime_rows = OperationBinding::installed_implementations().unwrap();
     let backend_rows = native.installed_implementations();
@@ -1389,7 +1400,7 @@ fn every_exact_installation_has_a_supported_binding_and_impossible_owners_are_ab
 
 #[test]
 fn nested_transcript_observation_keeps_its_own_work_contract() {
-    use zkc_runtime::interactive::Backend;
+    use zkc_runtime::vm::Backend;
     let native = backend();
     let observe = binding(
         "transcript.native.indexed.observe.data",

@@ -14,12 +14,12 @@ use std::{fmt, sync::Arc};
 pub trait Value: Clone {
     /// Canonical key for a small inline parameter, independent of allocation,
     /// frame and session. Returning Some promises no retained backing or hidden
-    /// authority. Only the Runner's public provenance permits using this key.
+    /// authority. Only the evaluator's public provenance permits using this key.
     fn preparation_parameter(&self) -> Option<Vec<u8>> {
         None
     }
 
-    /// Self-contained immutable data whose clones may outlive this runner and
+    /// Self-contained immutable data whose clones may outlive this instance and
     /// be shared by other backend instances. No arena/session references,
     /// authority, interior mutation or reference-count-dependent accounting.
     /// The backend separately certifies the computation and policy context.
@@ -49,12 +49,12 @@ pub trait Value: Clone {
     fn control_index(&self) -> Result<u64, BackendError> {
         Err(BackendError::new("local-control-index"))
     }
-    /// Construct the native Boolean literal; the runner checks its full type
+    /// Construct the native Boolean literal; the instance checks its full type
     /// and charges the ordinary instruction and retained-value budgets.
     fn from_control_bool(_value: bool) -> Result<Self, BackendError> {
         Err(BackendError::new("native-boolean-unsupported"))
     }
-    /// Construct a native index. The runner validates its declared index type
+    /// Construct a native index. The instance validates its declared index type
     /// before binding an induction variable or entering its body.
     fn from_control_index(_index: u64) -> Result<Self, BackendError> {
         Err(BackendError::new("local-control-index"))
@@ -86,7 +86,7 @@ pub trait Value: Clone {
     }
     /// An allocation whose immutable contents, together with the physical type,
     /// alone determine backend validation of this value. Return it only for
-    /// values carrying no capability or other changeable authority. The Runner
+    /// values carrying no capability or other changeable authority. The instance
     /// then reuses one successful validation for aliases bound at the same time.
     fn validation_backing(&self) -> Option<Backing> {
         None
@@ -275,24 +275,38 @@ impl Frame {
     }
 }
 
-/// One allowlisted mathematical operation, never a whole-protocol callback.
-pub struct Invocation<'a> {
+/// Immutable context available while estimating an operation's operand work.
+/// It contains no provisional allocation allowance or retained-value evidence.
+#[derive(Clone, Copy)]
+pub struct CallContext<'a> {
     pub frame: &'a Frame,
     pub site: &'a str,
-    pub kernel: &'a str,
     pub binding: &'a ResolvedBinding,
     pub logical_origin: &'a LogicalOrigin,
     pub attributes: &'a [String],
+}
+
+/// One installed operation. Effects and partial failures follow its contract;
+/// installation does not make it a pure numerical kernel.
+#[derive(Clone, Copy)]
+pub struct Invocation<'a> {
+    pub context: CallContext<'a>,
     /// Backend must check allocation/shape bounds before allocating its result.
     /// This bounds newly allocated result storage; storage a result shares with
     /// its operands is already retained. It is not a reservation of external
-    /// PCS scratch. The Runner still checks the full charge of each result.
+    /// PCS scratch. The instance still checks the full charge of each result.
     pub max_output_bytes: usize,
     /// Evidence about still-live immutable allocations, bound to this backend's
-    /// Runner. Replacing an operand never gives the replacement this evidence.
+    /// instance. Replacing an operand never gives the replacement this evidence.
     pub retained: Retained<'a>,
 }
-impl Invocation<'_> {
+impl<'a> std::ops::Deref for Invocation<'a> {
+    type Target = CallContext<'a>;
+    fn deref(&self) -> &Self::Target {
+        &self.context
+    }
+}
+impl CallContext<'_> {
     /// Unambiguous bytes for local service domain separation. No hash or crypto.
     pub fn domain_bytes(&self) -> Vec<u8> {
         let binding = self.binding.declaration();
@@ -326,12 +340,12 @@ pub struct ServiceInvocation<'a> {
 }
 
 /// Independent installation evidence for one exact operation binding.
-/// The Runner prepares handles again on the backend it takes into custody;
+/// The instance prepares handles again on the backend it takes into custody;
 /// admission does not transfer handles from another backend. A handle carries
 /// no input, frame, resource or setup authority.
 pub trait InstalledKernel {
     fn signature(&self) -> &BoundSignature;
-    /// Read-only installation fact, stable for the Runner's lifetime.
+    /// Read-only installation fact, stable for the instance's lifetime.
     /// Fixed inputs, attributes and backend policy determine this operation's
     /// outputs or refusal. It cannot observe frame identity, resources, time,
     /// entropy or mutable dependencies. Values, refusal and logical charges must
@@ -385,14 +399,14 @@ pub trait Backend {
     }
     /// Read-only installation fact. True promises both Boolean constructors
     /// return native.bool/0 values. Runtime validation still checks each value.
-    /// Admission checks this before any frame, message or backend transition.
+    /// Linking checks this before any frame, message or backend transition.
     fn supports_boolean_literals(&self) -> bool {
         false
     }
     /// Independently installed method shape and aggregate retained reply bound.
     /// Author these from the implementation's actual supported values; echoing
     /// ServiceContract::signature does not provide independent installation facts.
-    /// Keep them stable throughout admission and execution. Runtime checks both
+    /// Keep them stable throughout installation and execution. Runtime checks both
     /// the declaration and actual replies; service-root authority is separate.
     /// The default refuses native service admission.
     fn service_support(
@@ -416,9 +430,9 @@ pub trait Backend {
     /// Resolve code and its independently installed signature for this exact
     /// contract, static arguments and implementation. Unsupported bindings refuse.
     /// This read-only operation must not draw randomness or consume resources.
-    /// Code selection and signature stay valid for this backend's Runner lifetime;
+    /// Code selection and signature stay valid for this backend's instance lifetime;
     /// invocation-dependent policy, setup and resource checks remain in `apply`.
-    /// The Runner calls this once per distinct binding before entering any frame.
+    /// The instance calls this once per distinct binding before entering any frame.
     fn prepare_binding(&self, _binding: &OperationBinding) -> Option<Self::Kernel> {
         None
     }
@@ -448,7 +462,7 @@ pub trait Backend {
         outputs: &[Self::Value],
     ) -> Result<(), BackendError>;
     /// Enter with the same custody checks as `enter_frame`, optionally reusing
-    /// validation of immutable argument subtrees retained by this Runner.
+    /// validation of immutable argument subtrees retained by this instance.
     fn enter_frame_retained(
         &mut self,
         frame: &Frame,
@@ -470,19 +484,19 @@ pub trait Backend {
     }
     /// Upper bound on operand bytes read by this installed kernel body,
     /// for kernels that access only part of their operands, such as one opening
-    /// of a committed table. The Runner charges it as logical work before
+    /// of a committed table. The instance charges it as logical work before
     /// `apply`. `None` charges the full retained bytes of every operand.
     /// A backend that additionally walks nested operands for admission must
     /// bound those walks separately.
     fn operand_work(
         &self,
         _kernel: &Self::Kernel,
-        _invocation: &Invocation<'_>,
+        _context: &CallContext<'_>,
         _arguments: &[Self::Value],
     ) -> Option<u64> {
         None
     }
-    /// Execute with storage for this Runner's call-site preparation. Prepare only
+    /// Execute with storage for this instance's call-site preparation. Prepare only
     /// at the original validation point inside execution: unused branches must
     /// not fail early. The default needs no preparation and uses the same checked
     /// path as direct calls. Implementations must check any reused facts against
@@ -510,9 +524,7 @@ pub trait Backend {
 #[cfg(test)]
 mod domain_tests {
     use super::*;
-    use crate::interactive::{
-        LogicalOrigin, OperationBinding, PathElement, ServiceContract, ServicePort,
-    };
+    use crate::vm::{LogicalOrigin, OperationBinding, PathElement, ServiceContract, ServicePort};
 
     #[test]
     fn frame_inputs_share_capture_storage_and_compare_flat_order() {
@@ -726,12 +738,13 @@ mod domain_tests {
         let domain =
             |frame: &Frame, binding: &ResolvedBinding, origin: &LogicalOrigin, site: &str| {
                 Invocation {
-                    frame,
-                    site,
-                    kernel: binding.implementation(),
-                    binding,
-                    logical_origin: origin,
-                    attributes: &[],
+                    context: crate::vm::CallContext {
+                        frame,
+                        site,
+                        binding,
+                        logical_origin: origin,
+                        attributes: &[],
+                    },
                     max_output_bytes: 4096,
                     retained: Retained::NONE,
                 }
@@ -763,12 +776,13 @@ mod domain_tests {
         };
         let frame = frame("add");
         let bytes = Invocation {
-            frame: &frame,
-            site: "op",
-            kernel: "arkworks/field.add",
-            binding: &binding,
-            logical_origin: &origin,
-            attributes: &[],
+            context: crate::vm::CallContext {
+                frame: &frame,
+                site: "op",
+                binding: &binding,
+                logical_origin: &origin,
+                attributes: &[],
+            },
             max_output_bytes: 1,
             retained: Retained::NONE,
         }

@@ -1,18 +1,22 @@
 # Native program runtime
 
 `zkc-runtime` admits and executes `zkc.program/0`, the physical program produced
-by the mathematical compiler. `interactive::Admitted` owns the exact admitted
-bytes and the derived typed program. `interactive::Runner` executes one role
-with caller-supplied values and an independently installed backend.
+by the compiler. `vm::Program` owns the exact admitted
+bytes and the derived typed program. `interpreter::Runner` executes one role
+with caller-supplied values and an independently installed backend. The VM
+instance owns frames, resource accounting and installed calls; the interpreter
+owns control flow and value environments. See the
+[VM contract](../../docs/spec/runtime/vm.md).
 
-Admission checks exact records, nominal physical types, operation bindings, SSA,
-local control, bounded value-counted loops, message data, affine resources and
-service interfaces. Loading selects an entry and role and enters its resource
-frame. Execution proceeds through explicit local, query, send, receive and
+`Program::decode` checks exact records, nominal physical types, operation
+bindings, SSA, local control, bounded value-counted loops, message data, affine resources and
+service interfaces without a backend. `Program::check_installation` optionally
+checks deployment availability. Loading links an independently owned backend,
+selects an entry and role and enters its resource frame. Execution proceeds through explicit local, query, send, receive and
 control boundaries. A stopped runner retains its diagnostics and completed
 resource transitions; cancellation closes its active frames.
 
-`interactive::ProgramRole` exposes a static layout and `ProgramState` exposes
+`vm::ProgramRole` exposes a static layout and `ProgramState` exposes
 non-advancing observations. The application host chooses scheduling and transport.
 `NativeProofEntry` checks the restrictions of the current native proof policy;
 proof framing and application acceptance belong to `zkc-tools`.
@@ -25,7 +29,7 @@ carrier admission, without a height. `Bundle::polynomial_view` checks static
 carrier compatibility; its height-taking methods check actual domain, policy,
 windows and limits when called. Point substitution requires no domain.
 Admission establishes executable structure, not compiler correctness or protocol
-security. See [the interpreter contract](src/interactive/README.md).
+security. See [the VM module guide](src/vm/README.md).
 
 General helpers retain separate owners:
 

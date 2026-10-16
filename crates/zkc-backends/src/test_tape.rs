@@ -1,6 +1,6 @@
 //! Typed deterministic scalar tapes for test providers only.
 use crate::{Bn254Scalar, RistrettoScalar, Scalar};
-use zkc_runtime::interactive::Identity;
+use zkc_runtime::vm::Identity;
 
 #[derive(Clone)]
 pub enum TestTape {

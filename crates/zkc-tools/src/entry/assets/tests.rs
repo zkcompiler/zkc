@@ -12,9 +12,9 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use zkc_backends::{KoalaBear, KoalaBearExt8, Value as Native};
 use zkc_runtime::{
-    interactive::{Identity, LogicalType, PhysicalType},
     logical,
     ring::{Expression, Node},
+    vm::{Identity, LogicalType, PhysicalType},
 };
 
 const BASE: &str = "koala-bear";

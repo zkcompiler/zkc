@@ -1,8 +1,9 @@
 //! Small runnable host input boundary; not a complete protocol CLI.
 use std::sync::Arc;
 use zkc_backends::{Domain, EntryPolicy, Keys, NativeBackend, Policy, Value};
-use zkc_runtime::interactive::Identity;
-use zkc_runtime::interactive::{Action, Runner, admit_supplied};
+use zkc_runtime::interpreter::Runner;
+use zkc_runtime::vm::Action;
+use zkc_runtime::vm::Identity;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let policy = Policy::default();
@@ -25,16 +26,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
       [["participant","prover","demo","P",[["pk","prover_key:multilinear.kzg.bls12-381/0@arkworks.multilinear-pcs/0"],["t","table:bls12-381.fr@arkworks.mle-lsb/0"],["rng","rng:bls12-381.fr@host.resource/0"]],["commitment:multilinear.kzg.bls12-381/0@arkworks.multilinear-pcs/0","opening_state:multilinear.kzg.bls12-381/0@arkworks.multilinear-pcs/0","field:bls12-381.fr@arkworks.fr/0","rng:bls12-381.fr@host.resource/0"],
         [["local","local_commit","commit_one",["pk","t","rng"],["C","state","r","next"]],["return",["C","state","r","next"]]], []]],
       [["entry","main",[["P","prover"]]]]]"#;
-    let admitted = admit_supplied(artifact, &backend)?;
+    let admitted = zkc_runtime::vm::Program::decode(artifact).and_then(|program| {
+        program.check_installation(&backend)?;
+        Ok(program)
+    })?;
     let table = Value::table(
         &[zkc_backends::Scalar::from(2), zkc_backends::Scalar::from(3)],
         &policy,
     )?;
     let wire = backend.encode_native_value(&table)?;
-    let decoded = backend.decode_native_value(
-        &zkc_runtime::interactive::Value::physical_type(&table),
-        &wire,
-    )?;
+    let decoded =
+        backend.decode_native_value(&zkc_runtime::vm::Value::physical_type(&table), &wire)?;
     let inputs = vec![key, decoded, rng];
     let mut runner = Runner::new(&admitted, "main", "P", "demo-session", backend, inputs)
         .map_err(|e| e.error)?;

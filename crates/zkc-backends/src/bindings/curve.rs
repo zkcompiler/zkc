@@ -1,6 +1,6 @@
 //! Group/scalar association and fixed pairing admission.
 use super::*;
-use zkc_runtime::interactive::{KernelSignature, LogicalType, PhysicalType};
+use zkc_runtime::vm::{KernelSignature, LogicalType, PhysicalType};
 pub(crate) const fn operation(
     name: &'static str,
     inputs: &'static [Type],

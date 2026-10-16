@@ -1,7 +1,7 @@
 //! Proof-entry admission over the executable program format.
 //! These checks establish executable shape and one complete transcript chain;
 //! they do not authenticate compilation or establish Fiat–Shamir soundness.
-use super::{Admitted, EntryRole, PhysicalType, ProgramAction, Type, model::*};
+use super::{EntryRole, PhysicalType, Program, ProgramAction, Type, model::*};
 use std::collections::{BTreeMap, BTreeSet};
 mod codec;
 mod construction;
@@ -42,7 +42,7 @@ fn refuse(reason: &'static str) -> NativeProofError {
 
 #[derive(Clone, Debug)]
 pub struct NativeProofEntry {
-    admitted: Admitted,
+    admitted: Program,
     entry: String,
     producer: EntryRole,
     validator: EntryRole,
@@ -568,7 +568,7 @@ fn verifier_key(ty: &PhysicalType) -> bool {
 // General admission checks SSA, exact signatures and resource use. This walk
 // adds ordered construction-state and event-occurrence correspondence.
 struct ProofWalk<'a> {
-    admitted: &'a Admitted,
+    admitted: &'a Program,
     helpers: &'a BTreeMap<String, Helper<'a>>,
     producer: &'a str,
     validator: &'a str,
@@ -854,7 +854,7 @@ impl NativeProofEntry {
     /// Admit the current structured proof rules, including configured PCS
     /// values and authored or derived transcript boundaries.
     pub fn new(
-        admitted: Admitted,
+        admitted: Program,
         entry: &str,
         producer: &str,
         validator: &str,
@@ -1230,7 +1230,7 @@ impl NativeProofEntry {
             record_codec: has_codec,
         })
     }
-    pub fn admitted(&self) -> &Admitted {
+    pub fn admitted(&self) -> &Program {
         &self.admitted
     }
     pub fn entry(&self) -> &str {

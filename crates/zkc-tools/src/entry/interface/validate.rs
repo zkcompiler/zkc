@@ -2,7 +2,7 @@ use super::{
     InterfaceError as E, Result, hash, identifier, raw::*, require, schemas::Schemas, text,
 };
 use std::collections::{BTreeMap, BTreeSet};
-use zkc_runtime::interactive::{LogicalType, ServiceContract, Type};
+use zkc_runtime::vm::{LogicalType, ServiceContract, Type};
 
 pub(super) struct Checked {
     pub selected: usize,

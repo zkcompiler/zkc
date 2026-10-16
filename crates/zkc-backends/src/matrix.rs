@@ -6,7 +6,7 @@ use ark_ff::{BigInt, BigInteger, PrimeField};
 use p3_field::{BasedVectorSpace, PrimeField32};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
-use zkc_runtime::interactive::Identity;
+use zkc_runtime::vm::Identity;
 
 /// Canonical mathematical coefficients, independent of Montgomery or wire
 /// storage. Prime fields use their least nonnegative decimal representative.
@@ -84,8 +84,8 @@ impl<S> SparseCoo<S> {
         size(self.entries.len(), std::mem::size_of::<(u32, u32, S)>())
     }
     /// The shared entry allocation, which holds the whole retained charge.
-    pub(crate) fn backing(&self) -> Result<zkc_runtime::interactive::Backing> {
-        Ok(zkc_runtime::interactive::Backing::of(
+    pub(crate) fn backing(&self) -> Result<zkc_runtime::vm::Backing> {
+        Ok(zkc_runtime::vm::Backing::of(
             &self.entries,
             self.retained_bytes()?,
         ))

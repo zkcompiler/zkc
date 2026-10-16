@@ -1,10 +1,11 @@
 //! Driver policy controls. Generated mathematical clients live in native_joint.
 use serde_json::{Value as Json, json};
 use zkc_backends::{Domain, EntryPolicy, NativeBackend, NativeWireError, Policy, Value};
-use zkc_runtime::interactive::Value as RuntimeValue;
-use zkc_runtime::interactive::{
+use zkc_runtime::interpreter::Runner;
+use zkc_runtime::vm::Value as RuntimeValue;
+use zkc_runtime::vm::{
     Action, Backend, BackendError, CutKind, DecodeReason, Frame, FrameExit, Invocation,
-    PhysicalType, Runner, Stop, StopKind, ValueBudget,
+    PhysicalType, Stop, StopKind, ValueBudget,
 };
 use zkc_tools::run::*;
 const BOOL: &str = "bool@native.bool/0";
@@ -51,7 +52,7 @@ impl Backend for Host {
     type Call = ();
     type Checkpoint = ();
     type Value = Value;
-    type Kernel = zkc_runtime::interactive::BoundSignature;
+    type Kernel = zkc_runtime::vm::BoundSignature;
     fn supports_boolean_literals(&self) -> bool {
         true
     }
@@ -204,7 +205,7 @@ impl Hooks<Host> for Controls {
         &mut self,
         index: usize,
         _: &Step,
-        _: &[zkc_runtime::interactive::PathElement],
+        _: &[zkc_runtime::vm::PathElement],
     ) -> Option<String> {
         (self.cancel == Some(index)).then(|| "host interruption".into())
     }
@@ -287,7 +288,7 @@ fn completed_false_is_an_output_and_roster_is_source_order() {
             .collect::<Vec<_>>(),
         [("Alice", 2, 2), ("Bob", 1, 1)]
     );
-    let mut combined = zkc_runtime::interactive::ExecutionCounts::default();
+    let mut combined = zkc_runtime::vm::ExecutionCounts::default();
     for role in &report.roles {
         if let Some(counts) = role.execution_counts.json() {
             let events = &counts["events"];
@@ -728,7 +729,7 @@ fn receive_retention_limit_is_an_accepted_stopping_completion() {
         i,
         RunLimits {
             values: ValueBudget {
-                live_bytes: zkc_runtime::interactive::Value::retained_bytes(&Value::Bool(false)),
+                live_bytes: zkc_runtime::vm::Value::retained_bytes(&Value::Bool(false)),
                 total_bytes: 10000,
             },
             ..Default::default()
@@ -877,7 +878,7 @@ fn wrong_encoder_width_refuses_before_commit_and_unknown_observations_stay_unkno
     );
     assert_eq!(
         report.reached[2].receive_completion,
-        Some(zkc_runtime::interactive::ReceiveCompletion::Delivered)
+        Some(zkc_runtime::vm::ReceiveCompletion::Delivered)
     );
     let report = execute(
         &mut Controls {
@@ -889,7 +890,7 @@ fn wrong_encoder_width_refuses_before_commit_and_unknown_observations_stay_unkno
     );
     assert_eq!(
         report.reached[2].receive_completion,
-        Some(zkc_runtime::interactive::ReceiveCompletion::Stopped)
+        Some(zkc_runtime::vm::ReceiveCompletion::Stopped)
     );
 }
 
@@ -1058,11 +1059,12 @@ fn structured_participant_admission_checks_every_nested_body() {
 #[test]
 fn structured_runner_poll_cannot_cross_control_cuts() {
     let raw = loop_bundle();
-    let admitted = zkc_runtime::interactive::admit_supplied(
-        raw["candidate"].as_str().unwrap().as_bytes(),
-        &Host::default(),
-    )
-    .unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(raw["candidate"].as_str().unwrap().as_bytes())
+        .and_then(|program| {
+            program.check_installation(&Host::default())?;
+            Ok(program)
+        })
+        .unwrap();
     for at_yield in [false, true] {
         let mut runner = Runner::new(
             &admitted,
@@ -1079,7 +1081,7 @@ fn structured_runner_poll_cannot_cross_control_cuts() {
             runner.enter_loop(&origin, "rounds", 1).unwrap();
         }
         let before = runner.usage();
-        let stale = zkc_runtime::interactive::Cut {
+        let stale = zkc_runtime::vm::Cut {
             origin: runner.root_origin().clone(),
             role: "Alice".into(),
             site: "stale".into(),
@@ -1087,10 +1089,10 @@ fn structured_runner_poll_cannot_cross_control_cuts() {
         };
         assert_eq!(
             runner.execute_local(&stale),
-            Err(zkc_runtime::interactive::RuntimeError::WrongAction)
+            Err(zkc_runtime::vm::RuntimeError::WrongAction)
         );
-        let packet = zkc_runtime::interactive::Packet {
-            envelope: zkc_runtime::interactive::Envelope {
+        let packet = zkc_runtime::vm::Packet {
+            envelope: zkc_runtime::vm::Envelope {
                 origin: stale.origin,
                 site: "stale".into(),
                 schema: "bool".into(),
@@ -1102,18 +1104,18 @@ fn structured_runner_poll_cannot_cross_control_cuts() {
         };
         assert_eq!(
             runner.check_delivery(&packet),
-            Err(zkc_runtime::interactive::RuntimeError::WrongAction)
+            Err(zkc_runtime::vm::RuntimeError::WrongAction)
         );
         assert_eq!(runner.usage(), before);
         if at_yield {
             assert!(matches!(
                 runner.inspect_program().unwrap(),
-                zkc_runtime::interactive::ProgramState::Yield
+                zkc_runtime::vm::ProgramState::Yield
             ));
         } else {
             assert!(matches!(
                 runner.inspect_program().unwrap(),
-                zkc_runtime::interactive::ProgramState::Unpolled {
+                zkc_runtime::vm::ProgramState::Unpolled {
                     kind: None,
                     site: Some("rounds")
                 }
@@ -1130,11 +1132,12 @@ fn structured_runner_poll_cannot_cross_control_cuts() {
 #[test]
 fn entering_native_loop_preserves_count_failure_as_stopped_outcome() {
     let raw = loop_bundle();
-    let admitted = zkc_runtime::interactive::admit_supplied(
-        raw["candidate"].as_str().unwrap().as_bytes(),
-        &Host::default(),
-    )
-    .unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(raw["candidate"].as_str().unwrap().as_bytes())
+        .and_then(|program| {
+            program.check_installation(&Host::default())?;
+            Ok(program)
+        })
+        .unwrap();
     let mut runner = Runner::new(
         &admitted,
         "main",
@@ -1169,17 +1172,14 @@ fn unknown_formats_and_wrong_participant_shapes_refuse() {
             matches!(admit(&raw), Err(BundleError::Candidate(_))),
             "{format}"
         );
-        let error = zkc_runtime::interactive::admit_supplied(
-            candidate.to_string().as_bytes(),
-            &Host::default(),
-        )
-        .err()
-        .unwrap();
-        assert_eq!(
-            error.code,
-            zkc_runtime::interactive::ErrorCode::Record,
-            "{format}"
-        );
+        let error = zkc_runtime::vm::Program::decode(candidate.to_string().as_bytes())
+            .and_then(|program| {
+                program.check_installation(&Host::default())?;
+                Ok(program)
+            })
+            .err()
+            .unwrap();
+        assert_eq!(error.code, zkc_runtime::vm::ErrorCode::Record, "{format}");
         assert_eq!(
             error.detail, "unknown participant module format",
             "{format}"
@@ -1196,16 +1196,22 @@ fn unknown_formats_and_wrong_participant_shapes_refuse() {
 
 #[test]
 fn proof_policies_check_messages_and_loops_independently_of_program_format() {
-    use zkc_runtime::interactive::{NativeProofEntry, admit_supplied};
-    let admit =
-        |program: &Json| admit_supplied(program.to_string().as_bytes(), &Host::default()).unwrap();
+    use zkc_runtime::vm::NativeProofEntry;
+    let admit = |program: &Json| {
+        zkc_runtime::vm::Program::decode(program.to_string().as_bytes())
+            .and_then(|program| {
+                program.check_installation(&Host::default())?;
+                Ok(program)
+            })
+            .unwrap()
+    };
     NativeProofEntry::new(
         admit(&carrier()),
         "main",
         "Alice",
         "Bob",
         0,
-        zkc_runtime::interactive::ProofConstruction {
+        zkc_runtime::vm::ProofConstruction {
             suite: None,
             events: &[],
             plan: None,
@@ -1225,7 +1231,7 @@ fn proof_policies_check_messages_and_loops_independently_of_program_format() {
         "Alice",
         "Bob",
         0,
-        zkc_runtime::interactive::ProofConstruction {
+        zkc_runtime::vm::ProofConstruction {
             suite: None,
             events: &[],
             plan: None,
@@ -1246,7 +1252,7 @@ fn proof_policies_check_messages_and_loops_independently_of_program_format() {
             "Alice",
             "Bob",
             0,
-            zkc_runtime::interactive::ProofConstruction {
+            zkc_runtime::vm::ProofConstruction {
                 suite: None,
                 events: &[],
                 plan: None,
@@ -1283,7 +1289,7 @@ fn proof_policies_check_messages_and_loops_independently_of_program_format() {
         "Alice",
         "Bob",
         0,
-        zkc_runtime::interactive::ProofConstruction {
+        zkc_runtime::vm::ProofConstruction {
             suite: None,
             events: &[],
             plan: None,
@@ -1296,7 +1302,7 @@ fn proof_policies_check_messages_and_loops_independently_of_program_format() {
 #[test]
 fn structured_bundles_transfer_dynamic_and_nested_messages() {
     use zkc_backends::{GroupPoint, Scalar, Sequence, Variant};
-    use zkc_runtime::interactive::LogicalType;
+    use zkc_runtime::vm::LogicalType;
     use zkc_test_support::variants::logical;
     let optional = logical("Optional", json!([["none", []], ["some", ["indices"]]]));
     let record = logical(
@@ -1501,7 +1507,7 @@ fn structured_wire_failures_preserve_handoff_and_cleanup() {
 fn excessive_sequence_count_preserves_pending_frame_and_cleanup() {
     let value = Value::Sequence(
         zkc_backends::Sequence::new(
-            zkc_runtime::interactive::LogicalType::parse("index").unwrap(),
+            zkc_runtime::vm::LogicalType::parse("index").unwrap(),
             vec![Value::Index(7)],
             &Policy::default(),
         )

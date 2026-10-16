@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
 use zkc_backends::services::ServiceRegistry;
 use zkc_backends::{Domain, EntryPolicy, FieldArray, NativeBackend, Policy, Scalar, Value};
-use zkc_runtime::interactive::{DecodeReason, Identity, LogicalType, Value as RuntimeValue};
+use zkc_runtime::vm::{DecodeReason, Identity, LogicalType, Value as RuntimeValue};
 use zkc_tools::run::*;
 
 fn backend(role: &str, session: &str, entry: &str) -> NativeBackend {

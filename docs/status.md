@@ -1,8 +1,8 @@
 # What the implementation supports
 
 The supported implementation is `.zkc` frontend → Protocol IR (PIR)
-(`protocol`, `participant`, `exec`, `physical`) → `zkc.program/0` → a shared Rust
-Runner with Entry/proof/joint Hosts. Direct MLIR enters the same compiler.
+(`protocol`, `participant`, `exec`, `physical`) → `zkc.program/0` → the Rust VM and
+interpreter with Entry/proof/joint Hosts. Direct MLIR enters the same compiler.
 [Specification](spec/README.md) defines contracts; this page records support.
 Links identify maintained checks, not a claim that they ran for this revision.
 
@@ -30,6 +30,19 @@ See the [SDK reference](../compiler/README.md#components-and-ownership).
 Rust package, run and deployment admission take trusted 32-byte SHA-256 pins;
 CLI adapters own hexadecimal spelling. Backend service installation uses
 `service_support` returning a named `ServiceSupport` signature and reply bound.
+
+## Execution foundation
+
+`zkc_runtime::vm::Program` owns structurally admitted code independently of a
+backend. Loading links one owned backend before entering frames. The internal
+VM instance owns frame nesting, installed calls, retained values and budgets;
+`zkc_runtime::interpreter::Runner` owns control evaluation and pending actions.
+Hosts use that interpreter for Entry, proof and joint execution. The
+[VM contract](spec/runtime/vm.md) defines authority, failure and accounting.
+
+There is no separate numerical Kernel IR or JIT/AOT engine yet. Numerical
+operations use existing checked physical realization and installed backends.
+The separation is an ownership foundation, not a speedup or correspondence proof.
 
 ## Source and application boundary
 

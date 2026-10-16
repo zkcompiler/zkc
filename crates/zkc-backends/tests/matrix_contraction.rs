@@ -7,7 +7,7 @@ use rand::{RngExt, SeedableRng, rngs::StdRng};
 use serde_json::json;
 use support::{Controlled, assert_value, backend, one, program};
 use zkc_backends::{Bn254Scalar, KoalaBear, KoalaBearExt8, Policy, RistrettoScalar, Scalar, Value};
-use zkc_runtime::interactive::{Backend, ErrorCode, OperationBinding, Value as _, admit_supplied};
+use zkc_runtime::vm::{Backend, ErrorCode, OperationBinding, Value as _};
 
 const FIELDS: [(&str, &str); 5] = [
     ("bls12-381.fr", "arkworks"),
@@ -403,7 +403,11 @@ fn native_reader_refuses_contraction_port_attribute_and_provider_mutations() {
                     &["out".into()],
                 );
                 assert_eq!(
-                    admit_supplied(&bytes, &backend(Policy::default()))
+                    zkc_runtime::vm::Program::decode(&bytes)
+                        .and_then(|program| {
+                            program.check_installation(&backend(Policy::default()))?;
+                            Ok(program)
+                        })
                         .unwrap_err()
                         .code,
                     code
@@ -448,10 +452,14 @@ fn native_reader_refuses_contraction_port_attribute_and_provider_mutations() {
                 "refused:kernel-attributes"
             );
             let mut controlled = Controlled::new(backend(Policy::default()));
-            controlled.implementation = Some(format!("{expected_provider}/matrix.bilinear"));
+            controlled.binding = Some(OperationBinding {
+                contract: "matrix.bilinear".into(),
+                implementation: format!("{expected_provider}/matrix.bilinear"),
+                arguments: operation.arguments.clone(),
+            });
             assert_eq!(
                 one(controlled, operation, &[], args).0.unwrap_err(),
-                "refused:kernel-operands"
+                "refused:kernel-binding"
             );
         }
     }

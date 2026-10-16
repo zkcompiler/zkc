@@ -5,8 +5,8 @@ use p3_field::{Field, PackedValue, PrimeCharacteristicRing};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, sync::Arc};
 use zkc_runtime::{
-    interactive::{Identity, Invocation},
     ring::{Expression, Node},
+    vm::{Identity, Invocation},
 };
 
 pub const DEFAULT_WORK_LIMIT: u64 = 1 << 28;
@@ -76,7 +76,7 @@ impl Registry {
             .cloned()
             .ok_or_else(|| refused("ring-asset-missing"))
     }
-    /// Admitted content identities in ascending order.
+    /// Program content identities in ascending order.
     pub fn identities(&self) -> impl ExactSizeIterator<Item = &str> {
         self.assets.keys().map(String::as_str)
     }
@@ -555,7 +555,7 @@ pub(crate) fn apply(
 
 pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
     use crate::bindings::poly;
-    use zkc_runtime::interactive::{AttributeRule, Type::*};
+    use zkc_runtime::vm::{AttributeRule, Type::*};
     &[
         poly::operation(
             "ring.point",

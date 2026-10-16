@@ -111,7 +111,7 @@ pub(super) fn prefix_controls(
     // Participant stops identify the enclosing local-call site.
     assert_eq!(stop.site.as_deref(), Some("prepare"));
     assert!(
-        matches!(&stop.kind, zkc_runtime::interactive::StopKind::Backend(error)
+        matches!(&stop.kind, zkc_runtime::vm::StopKind::Backend(error)
         if error.code == "exhausted:external-work-limit")
     );
     let summary = json!({"external_work":report.external_work,"resources":report.resources,

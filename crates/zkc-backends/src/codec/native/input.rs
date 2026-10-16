@@ -2,7 +2,7 @@
 //! codec; callers reserve invocation-wide retention before loading.
 use super::{NativeWireError as Error, structured, unsupported};
 use crate::{NativeBackend, Value, Variant};
-use zkc_runtime::interactive::{PhysicalType, Value as RuntimeValue};
+use zkc_runtime::vm::{PhysicalType, Value as RuntimeValue};
 
 type Result<T> = std::result::Result<T, Error>;
 

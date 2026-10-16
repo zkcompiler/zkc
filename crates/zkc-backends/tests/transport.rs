@@ -1,9 +1,10 @@
+use zkc_runtime::interpreter::Runner;
 mod common;
 use common::*;
 use serde_json::json;
 use std::sync::Arc;
 use zkc_backends::*;
-use zkc_runtime::interactive::{Action, Packet, Runner, admit_supplied};
+use zkc_runtime::vm::{Action, Packet};
 
 #[test]
 fn independent_runners_exchange_only_bound_public_bytes_and_reject_bad_packets() {
@@ -138,7 +139,12 @@ fn independent_runners_exchange_only_bound_public_bytes_and_reject_bad_packets()
         .unwrap(),
     )
     .unwrap();
-    let admitted = admit_supplied(&bytes, &prover).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        .and_then(|program| {
+            program.check_installation(&prover)?;
+            Ok(program)
+        })
+        .unwrap();
     let mut p = Runner::new(
         &admitted,
         "main",

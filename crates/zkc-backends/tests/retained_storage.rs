@@ -1,15 +1,16 @@
 //! Identity-aware retained-value accounting with real native values: shared
 //! immutable allocations, equal but independent allocations, multiwidth base
 //! and extension row commitments, and the element ceiling on height times width.
+use zkc_runtime::interpreter::Runner;
 #[path = "domains/support.rs"]
 mod support;
 use support::one;
 
 use serde_json::{Value as Json, json};
 use zkc_backends::{KoalaBear, KoalaBearExt8, NativeBackend, Policy, Value, oracle::Domain};
-use zkc_runtime::interactive::{
-    Action, Identity, LogicalType, OperationBinding, PhysicalType, Runner, StopKind, Type, Usage,
-    ValueBudget, WorkBudget, admit_supplied,
+use zkc_runtime::vm::{
+    Action, Identity, LogicalType, OperationBinding, PhysicalType, StopKind, Type, Usage,
+    ValueBudget, WorkBudget,
 };
 
 const INLINE: usize = 512;
@@ -80,7 +81,12 @@ fn run(
     values: ValueBudget,
     work: WorkBudget,
 ) -> (Result<(), String>, Usage) {
-    let admitted = admit_supplied(bytes, &backend).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(bytes)
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
     let mut runner = Runner::new_with_budgets(
         &admitted, "main", "P", "session", backend, inputs, values, work,
     )

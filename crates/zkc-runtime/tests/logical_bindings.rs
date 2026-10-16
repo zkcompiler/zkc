@@ -1,8 +1,8 @@
 //! Logical formation, explicit selection, and the production admission boundary.
 use serde_json::json;
-use zkc_runtime::interactive::{
+use zkc_runtime::vm::{
     AttributeRule, Backend, BackendError, ErrorCode, Frame, FrameExit, Invocation, KernelSignature,
-    LogicalType, OperationBinding, PhysicalType, Representation, Value, admit_supplied,
+    LogicalType, OperationBinding, PhysicalType, Representation, Value,
 };
 use zkc_test_support::variants::logical as variant;
 
@@ -280,7 +280,14 @@ fn unknown_transcript_contracts_are_not_logical_or_physical_bindings() {
         );
         assert!(b.logical_signature().is_err(), "{contract}");
         assert!(b.signature().is_err(), "{contract}");
-        assert!(admit_supplied(&serde_json::to_vec(&carrier(&b)).unwrap(), &NoBackend).is_err());
+        assert!(
+            zkc_runtime::vm::Program::decode(&serde_json::to_vec(&carrier(&b)).unwrap())
+                .and_then(|program| {
+                    program.check_installation(&NoBackend)?;
+                    Ok(program)
+                })
+                .is_err()
+        );
     }
 }
 
@@ -548,7 +555,11 @@ fn representation_refusals_are_distinct_from_formation_and_binding_errors() {
         b.arguments[1] = length.into();
         b.implementation = implementation.into();
         let production_error =
-            admit_supplied(&serde_json::to_vec(&carrier(&b)).unwrap(), &NoBackend)
+            zkc_runtime::vm::Program::decode(&serde_json::to_vec(&carrier(&b)).unwrap())
+                .and_then(|program| {
+                    program.check_installation(&NoBackend)?;
+                    Ok(program)
+                })
                 .err()
                 .unwrap();
         for error in [
@@ -671,7 +682,7 @@ impl Backend for NoBackend {
     type Call = ();
     type Checkpoint = ();
     type Value = NoValue;
-    type Kernel = zkc_runtime::interactive::BoundSignature;
+    type Kernel = zkc_runtime::vm::BoundSignature;
     fn validate_value(&self, value: &NoValue) -> Result<(), BackendError> {
         match *value {}
     }
@@ -727,14 +738,24 @@ fn production_decoder_requires_a_real_physical_selection() {
     ] {
         let mut b = binding(contract, &args, implementation);
         assert!(
-            admit_supplied(&serde_json::to_vec(&carrier(&b)).unwrap(), &NoBackend).is_ok(),
+            zkc_runtime::vm::Program::decode(&serde_json::to_vec(&carrier(&b)).unwrap())
+                .and_then(|program| {
+                    program.check_installation(&NoBackend)?;
+                    Ok(program)
+                })
+                .is_ok(),
             "{b:?}"
         );
         for implementation in ["", "unknown/provider"] {
             b.implementation = implementation.into();
-            let error = admit_supplied(&serde_json::to_vec(&carrier(&b)).unwrap(), &NoBackend)
-                .err()
-                .unwrap();
+            let error =
+                zkc_runtime::vm::Program::decode(&serde_json::to_vec(&carrier(&b)).unwrap())
+                    .and_then(|program| {
+                        program.check_installation(&NoBackend)?;
+                        Ok(program)
+                    })
+                    .err()
+                    .unwrap();
             assert_eq!(error.code, ErrorCode::Signature);
         }
     }
@@ -743,7 +764,11 @@ fn production_decoder_requires_a_real_physical_selection() {
         &["bls12-381.fr", "4"],
         "plonky3/fixed_vector.dot",
     );
-    let error = admit_supplied(&serde_json::to_vec(&carrier(&b)).unwrap(), &NoBackend)
+    let error = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&carrier(&b)).unwrap())
+        .and_then(|program| {
+            program.check_installation(&NoBackend)?;
+            Ok(program)
+        })
         .err()
         .unwrap();
     assert_eq!(error.code, ErrorCode::Representation);
@@ -762,7 +787,11 @@ fn production_admission_still_requires_backend_advertisement() {
         [["op", "site", "op", ["0"], [], ["x"]], ["return", ["x"]]],
         ["Constant", []]
     ]]);
-    let error = admit_supplied(&serde_json::to_vec(&value).unwrap(), &NoBackend)
+    let error = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&value).unwrap())
+        .and_then(|program| {
+            program.check_installation(&NoBackend)?;
+            Ok(program)
+        })
         .err()
         .unwrap();
     assert_eq!(error.code, ErrorCode::Backend);
@@ -814,7 +843,11 @@ fn logical_spelling_limit_excludes_the_outer_representation() {
             [["return", ["x"]]],
             ["Identity", []]
         ]]);
-        let error = admit_supplied(&serde_json::to_vec(&value).unwrap(), &NoBackend)
+        let error = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&value).unwrap())
+            .and_then(|program| {
+                program.check_installation(&NoBackend)?;
+                Ok(program)
+            })
             .err()
             .unwrap();
         assert_eq!(error.code, ErrorCode::Representation);

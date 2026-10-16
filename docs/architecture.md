@@ -3,7 +3,8 @@
 zkc uses one compilation and execution model. The `.zkc` frontend emits Protocol
 IR (PIR), built on MLIR. PIR passes through `protocol`, `participant`, `exec` and `physical`
 profiles and is exported as `zkc.program/0`. Entry packages, proof deployments
-and joint bundles execute through the same Rust Runner and installed kernels.
+and joint bundles execute through the same VM contracts, Rust interpreter and
+installed kernels.
 
 ## System map
 
@@ -18,9 +19,11 @@ explicit .zkc modules + Assets                    Protocol IR
                                                          │
                           authenticated Entry / proof / joint Host
                                                          │
-                                              shared Rust Runner
+                                          interpreter (control flow)
                                                          │
-                                            installed backend kernels
+                                        VM instance (frames, custody, limits)
+                                                         │
+                                            installed backend operations
 
 Lean: independently formalized semantic models and proofs
       (native source/compiler/runtime correspondence remains open)
@@ -65,7 +68,8 @@ judgment.
 | Transforms and Target | `compiler/include/zkc/Transforms` and `Target`: preparation, projection, realization and physical selection |
 | Compiler | `compiler/include/zkc/Compiler`: composed compilation, Entry packages, bundles and proof deployments |
 | Driver | `compiler/include/zkc/Driver`: command parsing and file I/O; links the Compiler API |
-| Rust runtime | [zkc-runtime](../crates/zkc-runtime/README.md): Runner, bounded work and resource custody |
+| Rust VM | [zkc-runtime::vm](../crates/zkc-runtime/src/vm/README.md): admitted code, installed-call contracts, frames and capacity |
+| Rust interpreter | `zkc-runtime::interpreter`: instruction walking, continuations and pending participant actions |
 | Rust Hosts | [zkc-tools](../crates/zkc-tools/README.md): Entry, proof and joint invocation, authentication, preparation and reports |
 | Backend integration | [zkc-backends](../crates/zkc-backends/README.md): installed types, codecs, services and kernel dispatch |
 | Lean | [formal](../lean/README.md): independently built semantic models, proofs and model-specific tools |
@@ -84,11 +88,19 @@ selected project and compiler and capture the returned package bytes. Deployed
 applications supply an independently authorized expected package digest.
 The Rust Host binds named inputs to the independently
 admitted program; it trusts the compiler publication for source correspondence.
-It does not interpret the retained MLIR. Admission prepares immutable local code
-with positional operands and shared frame layouts. Each Runner resolves installed
-backend handles independently, then interprets that code with fresh values,
-resource custody and budgets. The [interpreter contract](../crates/zkc-runtime/src/interactive/README.md)
-describes this execution layout; it is internal to the existing program boundary.
+It does not interpret the retained MLIR. Structural admission produces an immutable
+VM program without a backend. Each execution links its owned backend and uses a
+VM instance for frames, calls, resource custody and budgets. The interpreter
+walks structured instructions and manages value environments and continuations.
+The [VM contract](spec/runtime/vm.md) defines their boundary. This separation
+introduces no artifact format or alternative execution path.
+
+Numerical scheduling remains within existing checked realization and backend
+implementations. A future Kernel IR will make numerical domains, indexing,
+reductions and storage choices explicit at that compiler boundary. It will not
+own participant scheduling, transport or resource authority. Installed numerical
+kernels and effectful operations share the binding mechanism; only operations
+with established effect and failure properties may form a numerical region.
 
 The native proof policy covers flat, iterated, PCS and structured
 programs on the shared executable and Runner. [Proof compilation](compiler/construction.md)

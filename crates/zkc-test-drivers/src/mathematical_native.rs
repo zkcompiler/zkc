@@ -3,10 +3,8 @@
 //! Supplied admission checks the carrier, without claiming source correspondence.
 use std::path::Path;
 use zkc_backends::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
-use zkc_runtime::interactive::{
-    Action, Origin, Packet, PathElement, Runner, Stop, StopKind, Value as RuntimeValue,
-    admit_supplied,
-};
+use zkc_runtime::interpreter::Runner;
+use zkc_runtime::vm::{Action, Origin, Packet, PathElement, Stop, StopKind, Value as RuntimeValue};
 
 fn backend(role: &str) -> NativeBackend {
     NativeBackend::new(
@@ -27,7 +25,12 @@ fn group(value: u64) -> Value {
 
 fn runner(bytes: &[u8], role: &str, inputs: Vec<Value>) -> Runner<NativeBackend> {
     let native = backend(role);
-    let admitted = admit_supplied(bytes, &native).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(bytes)
+        .and_then(|program| {
+            program.check_installation(&native)?;
+            Ok(program)
+        })
+        .unwrap();
     Runner::new(&admitted, "main", role, "mathematical_test", native, inputs)
         .map_err(|failure| failure.error)
         .unwrap()

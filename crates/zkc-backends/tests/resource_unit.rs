@@ -1,11 +1,10 @@
 //! Independent physical admission and real native logical resource execution.
+use zkc_runtime::interpreter::Runner;
 mod common;
 use common::*;
 use serde_json::{Value as Json, json};
 use zkc_backends::Value;
-use zkc_runtime::interactive::{
-    AdmissionError, Backend, ErrorCode, LogicalType, PhysicalType, Runner, Type, admit_supplied,
-};
+use zkc_runtime::vm::{AdmissionError, Backend, ErrorCode, LogicalType, PhysicalType, Type};
 
 fn ty(domain: &str) -> String {
     format!("resource_unit:{domain}@logical.resource_unit/0")
@@ -137,7 +136,12 @@ fn create_pass_consume_and_host_alias_refusal() {
         json!(["a", "b"]),
         json!([]),
     );
-    let admitted = admit_supplied(&bytes(&dup), &backend).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&bytes(&dup))
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
     let error = Runner::new(
         &admitted,
         "main",
@@ -184,7 +188,11 @@ fn create_pass_consume_and_host_alias_refusal() {
         ["return", []]
     ]);
     assert!(
-        admit_supplied(&bytes(&dup), &backend)
+        zkc_runtime::vm::Program::decode(&bytes(&dup))
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
             .unwrap_err()
             .to_string()
             .contains("consumed operand")
@@ -198,7 +206,11 @@ fn duplicate_result_wrong_domain_codec_and_implementation_refused() {
     bad[2][0][3] = json!([ty("Slot.A"), ty("Slot.A")]);
     bad[2][0][4][1] = json!(["return", ["x", "x"]]);
     assert!(
-        admit_supplied(&bytes(&bad), &backend)
+        zkc_runtime::vm::Program::decode(&bytes(&bad))
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
             .unwrap_err()
             .to_string()
             .contains("consumed operand")
@@ -206,7 +218,10 @@ fn duplicate_result_wrong_domain_codec_and_implementation_refused() {
     let mut bad = make();
     bad[2][0][3] = json!([ty("Slot.B")]);
     refused_as(
-        admit_supplied(&bytes(&bad), &backend),
+        zkc_runtime::vm::Program::decode(&bytes(&bad)).and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        }),
         ErrorCode::Signature,
         "function-return-types: operand type x",
     );
@@ -215,21 +230,30 @@ fn duplicate_result_wrong_domain_codec_and_implementation_refused() {
     let mut bad = make();
     bad[1][0][2] = json!(["0invalid"]);
     refused_as(
-        admit_supplied(&bytes(&bad), &backend),
+        zkc_runtime::vm::Program::decode(&bytes(&bad)).and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        }),
         ErrorCode::Type,
         "binding-resource-unit-domain",
     );
     let mut bad = make();
     bad[1][0][3] = json!("arkworks/resource_unit.create");
     refused_as(
-        admit_supplied(&bytes(&bad), &backend),
+        zkc_runtime::vm::Program::decode(&bytes(&bad)).and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        }),
         ErrorCode::Signature,
         "binding-implementation",
     );
     let mut bad = make();
     bad[2][0][4][0][3] = json!(["bytes"]);
     refused_as(
-        admit_supplied(&bytes(&bad), &backend),
+        zkc_runtime::vm::Program::decode(&bytes(&bad)).and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        }),
         ErrorCode::Attributes,
         "interactive-kernel-parameters: exact kernel attributes required",
     );
@@ -240,7 +264,10 @@ fn duplicate_result_wrong_domain_codec_and_implementation_refused() {
         ["return", ["x"]]
     ]);
     refused_as(
-        admit_supplied(&bytes(&bad), &backend),
+        zkc_runtime::vm::Program::decode(&bytes(&bad)).and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        }),
         ErrorCode::Type,
         "nonserializable message type",
     );
@@ -297,7 +324,12 @@ fn logical_permission_cannot_cross_role_or_escape_a_selected_branch() {
     );
     other[3][0][3] = json!("V");
     other[4][0][2][0][0] = json!("V");
-    let admitted = admit_supplied(&bytes(&other), &backend).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&bytes(&other))
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
     let error = Runner::new(
         &admitted,
         "main",
@@ -355,7 +387,10 @@ fn logical_permission_cannot_cross_role_or_escape_a_selected_branch() {
         .unwrap()
         .insert(1, json!(["op", "reuse", "consume", [], ["a"], []]));
     refused_as(
-        admit_supplied(&bytes(&program), &backend),
+        zkc_runtime::vm::Program::decode(&bytes(&program)).and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        }),
         ErrorCode::Ssa,
         "interactive-resource-reuse: consumed operand a",
     );

@@ -121,11 +121,9 @@ fn main() {
                 .concat();
                 let Value::RistrettoGroup(base) = codec()
                     .decode_native_value(
-                        &zkc_runtime::interactive::PhysicalType::default_for(
-                            zkc_runtime::interactive::LogicalType::parse(
-                                "group:ristretto255.group",
-                            )
-                            .unwrap(),
+                        &zkc_runtime::vm::PhysicalType::default_for(
+                            zkc_runtime::vm::LogicalType::parse("group:ristretto255.group")
+                                .unwrap(),
                         )
                         .unwrap(),
                         &wire,
@@ -218,7 +216,7 @@ fn main() {
                 );
             }
             if case["retries"] == true && size == 7 {
-                use zkc_runtime::interactive::{ValueBudget, WorkBudget};
+                use zkc_runtime::vm::{ValueBudget, WorkBudget};
                 use zkc_tools::proof::AttemptPolicy;
                 let report = zkc_test_drivers::execute(
                     &deployment,

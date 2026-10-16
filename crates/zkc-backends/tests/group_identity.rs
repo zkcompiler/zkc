@@ -3,7 +3,7 @@
 mod support;
 use curve25519_dalek::traits::Identity as _;
 use zkc_backends::{Bn254G1, Bn254G2, Bn254Gt, GroupPoint, Policy, Value};
-use zkc_runtime::interactive::{Backend, OperationBinding, Value as RuntimeValue};
+use zkc_runtime::vm::{Backend, OperationBinding, Value as RuntimeValue};
 
 fn binding(group: &str, contract: &str) -> OperationBinding {
     OperationBinding {
@@ -278,7 +278,14 @@ fn exact_provider_group_codec_and_nullary_signature() {
                 &sig.outputs,
                 &["z".into()],
             );
-            assert!(zkc_runtime::interactive::admit_supplied(&wire, &backend).is_err());
+            assert!(
+                zkc_runtime::vm::Program::decode(&wire)
+                    .and_then(|program| {
+                        program.check_installation(&backend)?;
+                        Ok(program)
+                    })
+                    .is_err()
+            );
         }
     }
     for group in ["bn254.fr", "bls12-381.g2", "bls12-381.gt", "unknown"] {

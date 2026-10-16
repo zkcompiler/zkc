@@ -2,7 +2,7 @@
 //! and transcript capabilities.
 use super::NativeBackend;
 use crate::{Result, Value, refused};
-use zkc_runtime::interactive::{
+use zkc_runtime::vm::{
     AttributeRule, BoundSignature, Invocation, KernelSignature, LogicalType, OperationBinding,
     PhysicalType,
 };
@@ -14,7 +14,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         return None;
     }
     let ty = PhysicalType::default_for(LogicalType::resource_unit(
-        zkc_runtime::interactive::ResourceDomain::parse(domain).ok()?,
+        zkc_runtime::vm::ResourceDomain::parse(domain).ok()?,
     ))
     .ok()?;
     let (inputs, outputs) = match binding.contract.as_str() {

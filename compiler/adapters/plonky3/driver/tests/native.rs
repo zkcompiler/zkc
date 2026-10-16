@@ -20,7 +20,7 @@ use zkc_plonky3_air::view::{SelectorLaw, violations};
 use zkc_plonky3_air::{Export, Openings};
 use zkc_plonky3_air_client::{CounterAir, RecurrenceAir};
 use zkc_plonky3_air_driver::{files, fixtures};
-use zkc_runtime::interactive::Identity;
+use zkc_runtime::vm::Identity;
 use zkc_runtime::ring::Expression;
 
 // The adapter and the native provider must name the same pinned field types.

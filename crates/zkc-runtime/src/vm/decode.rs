@@ -483,7 +483,7 @@ impl Decoder {
         })
     }
 }
-pub(crate) fn physical(bytes: &[u8]) -> Result<Program> {
+pub(crate) fn physical(bytes: &[u8]) -> Result<Model> {
     preflight(bytes)?;
     let json: Json = serde_json::from_slice(bytes)
         .map_err(|_| err(ErrorCode::Json, "invalid JSON or trailing input"))?;
@@ -581,7 +581,7 @@ pub(crate) fn physical(bytes: &[u8]) -> Result<Program> {
             ));
         }
     }
-    Ok(Program {
+    Ok(Model {
         functions,
         participants,
         entries,
