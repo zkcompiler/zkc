@@ -91,6 +91,12 @@ test = false
 bench = false
 
 [[bin]]
+name = "participant_correspondence"
+path = "src/participant_correspondence.rs"
+test = true
+bench = false
+
+[[bin]]
 name = "mixed_native"
 path = "src/mixed_native.rs"
 test = false

@@ -105,6 +105,10 @@ project/dependency objects. These can be expensive.
 runs independent scalar and structured SSA/Lean comparisons, the source/property
 request matrix, and authored-target controls. The [structured bridge](../../lean/bridges/structured/README.md)
 also has a standalone command and optional production Runner comparisons.
+The separate [participant probe](../../lean/bridges/structured/participant.md)
+compares actual Schnorr endpoints, native G1 codecs, pending actions and provider
+state; build its test driver explicitly and run the documented standalone command.
+It requires the structured open replay executable and is not a default native check.
 To use an existing build, run
 `python3 common/tests/run.py lean-native --compiler-build=build/compiler`.
 This scope exercises wrong-program, wrong-relation and unproved-certificate

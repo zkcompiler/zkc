@@ -240,3 +240,11 @@ production arithmetic/sampling or runtime capacity equivalence. The source-level
 Schnorr theorem has its own algebraic and interaction assumptions. Repeated
 multilinear Sumcheck additionally requires protocol calls/repetition and broader
 index/vector operations in the checked source profile.
+
+## Native participant observations
+
+The optional [participant comparison](participant.md) binds actual Interactive
+Schnorr source and checked projection to Rust endpoint execution, canonical
+BLS12-381 G1 bytes, pending prefixes and provider residual observations. Its
+sampled generator-multiple relation and narrow stop adapters are separate from
+the source semantics and do not establish native refinement.
