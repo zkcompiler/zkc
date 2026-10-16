@@ -1,8 +1,20 @@
 //! Accounting for replay of successful public computations. Public provenance
 //! is supplied by the evaluator; the instance checks capacity and backend work.
 use super::*;
+use crate::vm::code::{LocalCode, Operation};
 use crate::vm::preparation::{Available, Evaluation, Key, cumulative_delta};
 use std::collections::HashSet;
+
+/// A VM-owned snapshot of the capacity and work before a cacheable body. The
+/// evaluator decides public eligibility but cannot assemble accounting evidence.
+#[must_use = "finish a successful recording or discard it on failure"]
+pub(crate) struct Recording<B: Backend> {
+    key: Key,
+    available: Available,
+    usage: Usage,
+    frames: u64,
+    before: B::Checkpoint,
+}
 
 fn shared_bytes<V: Value>(values: &[V], retained: crate::vm::Retained<'_>) -> Option<usize> {
     let mut seen = HashSet::new();
@@ -24,6 +36,28 @@ fn shared_bytes<V: Value>(values: &[V], retained: crate::vm::Retained<'_>) -> Op
     total
 }
 impl<B: Backend> Instance<B> {
+    pub(crate) fn owns_preparation(&self, cache: &PreparedComputations<B>) -> bool {
+        Arc::ptr_eq(&cache.executable, &self.admitted.executable)
+    }
+    pub(crate) fn deterministic(&self, code: &LocalCode) -> bool {
+        code.instructions.iter().all(|op| match op {
+            Operation::Op { call, .. } => self.kernels[call.binding.index].deterministic(),
+            Operation::Conditional {
+                then_body,
+                else_body,
+                ..
+            } => self.deterministic(then_body) && self.deterministic(else_body),
+            Operation::For { body, .. } => self.deterministic(body),
+            Operation::Match { arms, .. } => arms.iter().all(|arm| self.deterministic(&arm.body)),
+            Operation::BoolConstant { .. }
+            | Operation::Variant { .. }
+            | Operation::Stop { .. }
+            | Operation::Yield(_)
+            | Operation::Release(_)
+            | Operation::Return(_) => true,
+        })
+    }
+
     fn available(&self) -> Available {
         Available {
             work: WorkBudget {
@@ -42,7 +76,8 @@ impl<B: Backend> Instance<B> {
         &mut self,
         cache: &PreparedComputations<B>,
         key: &Key,
-    ) -> Option<Vec<B::Value>> {
+    ) -> Option<Transfer<B::Value>> {
+        debug_assert!(self.owns_preparation(cache));
         let evaluation = cache.get(key)?;
         if !self.available().dominates(evaluation.available) {
             return None;
@@ -80,17 +115,20 @@ impl<B: Backend> Instance<B> {
         self.ledger.retain(&evaluation.outputs);
         self.usage.live_value_bytes += bytes;
         cache.hit();
-        Some(evaluation.outputs.clone())
+        Some(Transfer::new(evaluation.outputs.clone()))
     }
     pub(crate) fn record_computation(
         &self,
-        key: Key,
-        available: Available,
-        usage: Usage,
-        frames: u64,
-        before: B::Checkpoint,
-        values: &[B::Value],
+        recording: Recording<B>,
+        values: &Transfer<B::Value>,
     ) -> Option<(Key, Evaluation<B>)> {
+        let Recording {
+            key,
+            available,
+            usage,
+            frames,
+            before,
+        } = recording;
         if values
             .iter()
             .any(|v| !v.preparation_output() || v.validate_serializable().is_err())
@@ -127,16 +165,18 @@ impl<B: Backend> Instance<B> {
     pub(crate) fn begin_computation(
         &self,
         cache: &PreparedComputations<B>,
-        key: &Key,
-    ) -> Option<(Available, Usage, u64, B::Checkpoint)> {
-        if !cache.can_record(key) {
+        key: Key,
+    ) -> Option<Recording<B>> {
+        debug_assert!(self.owns_preparation(cache));
+        if !cache.can_record(&key) {
             return None;
         }
-        Some((
-            self.available(),
-            self.usage,
-            self.next_frame,
-            self.backend.computation_checkpoint()?,
-        ))
+        Some(Recording {
+            key,
+            available: self.available(),
+            usage: self.usage,
+            frames: self.next_frame,
+            before: self.backend.computation_checkpoint()?,
+        })
     }
 }

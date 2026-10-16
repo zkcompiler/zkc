@@ -35,7 +35,11 @@ CLI adapters own hexadecimal spelling. Backend service installation uses
 
 `zkc_runtime::vm::Program` owns structurally admitted code independently of a
 backend. Loading links one owned backend before entering frames. The internal
-VM instance owns frame nesting, installed calls, retained values and budgets;
+VM instance owns complete invocation admission, frame identity and nesting,
+installed calls, retained values and budgets. Participant loop frames reuse
+typed input layouts retained during admission. Return handoffs carry owned
+values and their backing obligation; VM recording snapshots retain preparation
+accounting. Primitive value checks also reside in the VM;
 `zkc_runtime::interpreter::Runner` owns control evaluation and pending actions.
 Hosts use that interpreter for Entry, proof and joint execution. The
 [VM contract](spec/runtime/vm.md) defines authority, failure and accounting.

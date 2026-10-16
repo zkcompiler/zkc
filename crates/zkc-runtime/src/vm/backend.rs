@@ -217,9 +217,15 @@ impl std::fmt::Debug for Frame {
     }
 }
 impl Frame {
-    /// Compare the boundary used for active-frame custody. Sharing immutable
-    /// metadata proves equality; independently allocated equal frames still
-    /// match. This compares id, parent, role, origin, kind and flat inputs.
+    /// VM-local identity, including the instance that minted this allocation.
+    /// Equal diagnostic metadata does not authorize a different frame object.
+    pub(crate) fn identical(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+
+    /// Compare boundary metadata for backend bookkeeping. Independently
+    /// allocated equal frames match: id, parent, role, origin, kind and flat
+    /// inputs are compared. The VM uses object identity for its own custody.
     /// It does not authorize entry or service use: service declarations are
     /// excluded here and require their separate entry authority checks.
     #[inline]
@@ -227,7 +233,7 @@ impl Frame {
         if Arc::ptr_eq(&self.0, &other.0) {
             return true;
         }
-        // Exhaustive destructuring requires an explicit custody decision when
+        // Exhaustive destructuring requires an explicit comparison decision when
         // adding metadata. Service authority is not part of this predicate.
         let FrameData {
             id,

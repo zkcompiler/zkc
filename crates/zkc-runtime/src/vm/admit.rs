@@ -1,4 +1,6 @@
-use super::{PhysicalType, Representation, decode, model::*};
+use super::{
+    FrameInputs, PhysicalType, Representation, code::ParticipantLayouts, decode, model::*,
+};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -42,12 +44,15 @@ impl Program {
     pub(crate) fn function(&self, symbol: &str) -> Arc<super::code::Function> {
         self.executable.functions[symbol].clone()
     }
+    pub(super) fn loop_inputs(&self, participant: &str, site: &str) -> &FrameInputs {
+        &self.executable.participant_layouts[participant][site]
+    }
     /// Decode, structurally admit and prepare an immutable VM program.
     /// This performs no backend installation and grants no execution authority.
     pub fn decode(bytes: &[u8]) -> Result<Self> {
         let program = decode::physical(bytes)?;
-        validate(&program)?;
-        let executable = super::code::prepare(&program);
+        let participant_layouts = validate(&program)?;
+        let executable = super::code::prepare(&program, participant_layouts);
         Ok(Program {
             executable: Arc::new(executable),
             program: Arc::new(program),
@@ -678,6 +683,7 @@ struct Check<'a> {
     services: &'a [super::ServicePort],
     seen: BTreeSet<String>,
     schemas: &'a mut BTreeMap<(String, String), PhysicalType>,
+    loop_inputs: &'a mut BTreeMap<String, FrameInputs>,
 }
 impl Check<'_> {
     fn message(&mut self, schema: &str, peer: &str, ty: PhysicalType) -> Result<()> {
@@ -828,6 +834,19 @@ impl Check<'_> {
                             return Err(err(ErrorCode::Capture, "duplicate/overlapping capture"));
                         }
                     }
+                    // Record ports in admitted induction, carried and capture order.
+                    let explicit = std::iter::once(&count.induction)
+                        .chain(carried.iter().map(|(name, _)| name))
+                        .map(|name| (name.clone(), child[name].ty.clone()))
+                        .collect();
+                    let captured = captures
+                        .iter()
+                        .map(|name| (name.clone(), child[name].ty.clone()))
+                        .collect::<Vec<_>>();
+                    self.loop_inputs.insert(
+                        s.clone(),
+                        FrameInputs::with_captures(explicit, captured.into()),
+                    );
                     self.body(body, child, &types, true)?;
                     results(&mut env, &mut self.seen, outputs, &types)?;
                 }
@@ -860,12 +879,13 @@ impl Check<'_> {
         Ok(())
     }
 }
-fn validate(p: &Model) -> Result<()> {
+fn validate(p: &Model) -> Result<ParticipantLayouts> {
     for f in p.functions.values() {
         function(f)?;
     }
     let mut identities = BTreeSet::new();
     let mut schemas = BTreeMap::new();
+    let mut participant_layouts = ParticipantLayouts::new();
     for participant in p.participants.values() {
         local_boundary(&participant.inputs, &participant.outputs)?;
         if p.functions.contains_key(&participant.symbol)
@@ -907,6 +927,9 @@ fn validate(p: &Model) -> Result<()> {
             sites: BTreeSet::new(),
             seen,
             schemas: &mut schemas,
+            loop_inputs: participant_layouts
+                .entry(participant.symbol.clone())
+                .or_default(),
         }
         .body(&participant.body, env, &participant.outputs, false)?;
     }
@@ -932,5 +955,5 @@ fn validate(p: &Model) -> Result<()> {
             instance = Some(&body.instance);
         }
     }
-    Ok(())
+    Ok(participant_layouts)
 }

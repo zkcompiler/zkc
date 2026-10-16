@@ -24,10 +24,12 @@ pub(crate) static INDEX_TYPE: LazyLock<PhysicalType> =
     LazyLock::new(|| PhysicalType::parse("index@native.index/0").expect("installed index type"));
 
 pub(crate) type Slot = usize;
+pub(crate) type ParticipantLayouts = BTreeMap<String, BTreeMap<String, FrameInputs>>;
 
 #[derive(Debug)]
 pub(crate) struct Executable {
     pub functions: BTreeMap<String, Arc<Function>>,
+    pub participant_layouts: ParticipantLayouts,
     pub bindings: Vec<Arc<ResolvedBinding>>,
     pub calls: usize,
     pub requires_boolean_literals: bool,
@@ -189,7 +191,7 @@ impl Environment {
     }
 }
 
-pub(crate) fn prepare(program: &Model) -> Executable {
+pub(crate) fn prepare(program: &Model, participant_layouts: ParticipantLayouts) -> Executable {
     let mut preparation = Preparation::default();
     let functions = program
         .functions
@@ -206,6 +208,7 @@ pub(crate) fn prepare(program: &Model) -> Executable {
         .collect();
     Executable {
         functions,
+        participant_layouts,
         bindings: preparation.bindings,
         calls: preparation.calls,
         requires_boolean_literals: preparation.requires_boolean_literals,

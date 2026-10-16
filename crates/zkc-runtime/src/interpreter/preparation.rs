@@ -1,12 +1,10 @@
 //! Preparation of the deterministic public prefix, before interaction or
 //! private control. This does not infer secrecy from participant role or value.
 use super::*;
-use crate::vm::preparation::{Available, Evaluation, Key};
+use crate::vm::instance::Recording;
+use crate::vm::preparation::{Evaluation, Key};
 use crate::vm::{PreparationStats, PreparedComputations};
 use std::collections::BTreeSet;
-
-const MAX_PARAMETERS: usize = 16;
-const MAX_PARAMETER_BYTES: usize = 512;
 
 pub(super) struct Preparation<B: Backend> {
     cache: PreparedComputations<B>,
@@ -17,24 +15,6 @@ impl<B: Backend> Preparation<B> {
     pub(super) fn close(&mut self) {
         self.open = false;
     }
-}
-fn deterministic<B: Backend>(code: &LocalCode, instance: &Instance<B>) -> bool {
-    code.instructions.iter().all(|op| match op {
-        Operation::Op { call, .. } => instance.deterministic(call),
-        Operation::Conditional {
-            then_body,
-            else_body,
-            ..
-        } => deterministic(then_body, instance) && deterministic(else_body, instance),
-        Operation::For { body, .. } => deterministic(body, instance),
-        Operation::Match { arms, .. } => arms.iter().all(|arm| deterministic(&arm.body, instance)),
-        Operation::BoolConstant { .. }
-        | Operation::Variant { .. }
-        | Operation::Stop { .. }
-        | Operation::Yield(_)
-        | Operation::Release(_)
-        | Operation::Return(_) => true,
-    })
 }
 impl<B: Backend> Runner<B> {
     /// Enable bounded computation reuse before polling this Runner. The Host
@@ -52,7 +32,7 @@ impl<B: Backend> Runner<B> {
             || self.instance.usage().instructions != 0
             || self.pending.is_some()
             || self.stack.len() != 1
-            || !Arc::ptr_eq(&cache.executable, &self.instance.admitted().executable)
+            || !self.instance.owns_preparation(&cache)
         {
             return Err(BackendError::new("computation-preparation-context").into());
         }
@@ -98,7 +78,7 @@ impl<B: Backend> Runner<B> {
         p.open = p.open
             && self.stack.len() == 1
             && inputs.iter().all(|n| p.public.contains(n))
-            && deterministic(code, &self.instance);
+            && self.instance.deterministic(code);
         p.open
     }
     pub(super) fn public_results(&mut self, outputs: &[String]) {
@@ -106,30 +86,11 @@ impl<B: Backend> Runner<B> {
             p.public.extend(outputs.iter().cloned());
         }
     }
-    pub(super) fn computation_key(function: &str, args: &[B::Value]) -> Option<Key> {
-        if args.len() > MAX_PARAMETERS {
-            return None;
-        }
-        let parameters: Vec<_> = args
-            .iter()
-            .map(Value::preparation_parameter)
-            .collect::<Option<_>>()?;
-        if parameters.iter().map(Vec::len).sum::<usize>() > MAX_PARAMETER_BYTES {
-            return None;
-        }
-        Some(Key {
-            function: function.into(),
-            parameters,
-        })
-    }
-    pub(super) fn reuse_computation(&mut self, key: &Key) -> Option<Vec<B::Value>> {
+    pub(super) fn reuse_computation(&mut self, key: &Key) -> Option<Transfer<B::Value>> {
         self.instance
             .reuse_computation(&self.preparation.as_ref()?.cache, key)
     }
-    pub(super) fn begin_computation(
-        &self,
-        key: &Key,
-    ) -> Option<(Available, Usage, u64, B::Checkpoint)> {
+    pub(super) fn begin_computation(&self, key: Key) -> Option<Recording<B>> {
         self.instance
             .begin_computation(&self.preparation.as_ref()?.cache, key)
     }

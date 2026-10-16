@@ -12,6 +12,8 @@ use std::{
 // Include a sparsely occupied map node and the record's Arc header. Charging
 // only the occupied key/value slot would miss the node's reserved storage.
 const RECORD_OVERHEAD: usize = 1024;
+const MAX_PARAMETERS: usize = 16;
+const MAX_PARAMETER_BYTES: usize = 512;
 
 /// Separate retained preparation storage; it grants no execution capacity.
 #[derive(Clone, Copy, Debug)]
@@ -37,7 +39,7 @@ pub struct PreparationStats {
 /// Dropping the last clone releases all retained results. Zero limits disable
 /// retention. No cache contents or authority are accepted from artifact text.
 pub struct PreparedComputations<B: Backend> {
-    pub(crate) executable: Arc<Executable>,
+    pub(super) executable: Arc<Executable>,
     limits: PreparationLimits,
     shared: Arc<Mutex<Store<B>>>,
 }
@@ -64,10 +66,27 @@ struct Store<B: Backend> {
 }
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct Key {
-    pub function: String,
-    pub parameters: Vec<Vec<u8>>,
+    function: String,
+    parameters: Vec<Vec<u8>>,
 }
 impl Key {
+    pub(crate) fn new<V: Value>(function: &str, args: &[V]) -> Option<Key> {
+        if args.len() > MAX_PARAMETERS {
+            return None;
+        }
+        let parameters: Vec<_> = args
+            .iter()
+            .map(Value::preparation_parameter)
+            .collect::<Option<_>>()?;
+        if parameters.iter().map(Vec::len).sum::<usize>() > MAX_PARAMETER_BYTES {
+            return None;
+        }
+        Some(Self {
+            function: function.into(),
+            parameters,
+        })
+    }
+
     fn retained_bytes(&self) -> Option<usize> {
         let bytes = self.function.capacity().checked_add(
             self.parameters

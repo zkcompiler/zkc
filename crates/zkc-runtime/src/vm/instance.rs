@@ -12,7 +12,12 @@ use super::{
 };
 use std::sync::Arc;
 
+mod frames;
+mod loading;
 mod preparation;
+pub(crate) use preparation::Recording;
+mod values;
+pub(crate) use values::{Scope, Transfer};
 
 type Result<T> = std::result::Result<T, RuntimeError>;
 
@@ -31,29 +36,9 @@ impl<B> std::ops::DerefMut for BackendOwner<B> {
     }
 }
 
-/// Opaque accounting for one evaluator value environment. Its lifetime is
-/// independent of backend frames: arguments may be retained before entry, and
-/// returned backing can survive exit. Only the instance updates these charges.
-#[must_use = "close the value scope when its environment leaves"]
-pub(crate) struct Scope {
-    bindings: usize,
-    released_storage: usize,
-    #[cfg(debug_assertions)]
-    released_values: usize,
-}
-impl Scope {
-    fn new() -> Self {
-        Self {
-            bindings: 0,
-            released_storage: 0,
-            #[cfg(debug_assertions)]
-            released_values: 0,
-        }
-    }
-}
-
 pub(crate) struct Instance<B: Backend> {
     admitted: Program,
+    participant: Arc<code::Participant>,
     counts: Counts,
     backend: BackendOwner<B>,
     kernels: Vec<B::Kernel>,
@@ -65,6 +50,7 @@ pub(crate) struct Instance<B: Backend> {
     work_budget: WorkBudget,
     next_frame: u64,
     frames: Vec<Frame>,
+    pending_frame: Option<Frame>,
     role: String,
     returned: Scope,
 }
@@ -77,208 +63,17 @@ impl<B: Backend> Drop for Instance<B> {
         }
     }
 }
+// Keep metering borrows separate from immutable frame context and mutable
+// backend state, so a call can borrow its active frame without cloning it.
+fn charge_logical(used: &mut u64, limit: u64, bytes: u64) -> Result<()> {
+    *used = used
+        .checked_add(bytes)
+        .filter(|n| *n <= limit)
+        .ok_or(RuntimeError::Limit)?;
+    Ok(())
+}
+
 impl<B: Backend> Instance<B> {
-    pub(crate) fn new(
-        admitted: &Program,
-        backend: B,
-        role: &str,
-        session: &str,
-        value_budget: ValueBudget,
-        work_budget: WorkBudget,
-    ) -> std::result::Result<Self, LoadError<B>> {
-        if work_budget.instructions > Limits::INSTRUCTIONS
-            || work_budget.iterations > Limits::ITERATIONS
-            || work_budget.logical_bytes > Limits::LOGICAL_BYTES
-        {
-            return Err(LoadError {
-                error: RuntimeError::Limit,
-                usage: Usage::default(),
-                backend,
-            });
-        }
-        if session.is_empty()
-            || session.len() > 128
-            || !session
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-'))
-        {
-            return Err(LoadError {
-                error: RuntimeError::Session,
-                usage: Usage::default(),
-                backend,
-            });
-        }
-        let kernels = match super::link::install(admitted, &backend) {
-            Ok(kernels) => kernels,
-            Err(error) => {
-                return Err(LoadError {
-                    error: RuntimeError::Admission(error),
-                    usage: Usage::default(),
-                    backend,
-                });
-            }
-        };
-        let calls = (0..admitted.executable.calls).map(|_| None).collect();
-        Ok(Self {
-            admitted: admitted.clone(),
-            counts: Counts::new(admitted.executable.bindings.len()),
-            backend: BackendOwner(Some(backend)),
-            kernels,
-            calls,
-            arguments: Vec::new(),
-            usage: Usage::default(),
-            ledger: Ledger::default(),
-            value_budget,
-            work_budget,
-            next_frame: 0,
-            frames: Vec::new(),
-            role: role.to_owned(),
-            returned: Scope::new(),
-        })
-    }
-    pub(crate) fn validate(&self, value: &B::Value, ty: &PhysicalType, wire: bool) -> Result<()> {
-        self.counts.event(Event::Validate);
-        if !value.has_type(ty) {
-            return Err(RuntimeError::Payload);
-        }
-        if value.retained_bytes() > Limits::VALUE_BYTES {
-            return Err(RuntimeError::Limit);
-        }
-        // An alias of a bound, capability-free immutable value of this type has
-        // already passed backend validation; its contents cannot have changed.
-        if !self.ledger.validated(value, ty) {
-            self.counts.event(Event::BackendValidate);
-            self.backend
-                .validate_value_retained(value, self.ledger.view())?;
-        }
-        if wire {
-            if !ty.is_message_type() {
-                return Err(RuntimeError::Payload);
-            }
-            // Keep the value-level check for types with an existing codec.
-            // Complete native-only frames were admitted by is_message_type.
-            if ty.is_serializable() {
-                value.validate_serializable()?;
-            }
-        }
-        Ok(())
-    }
-
-    pub(crate) fn accept(&self, value: B::Value, ty: &PhysicalType) -> Result<B::Value> {
-        self.validate(&value, ty, false)?;
-        Ok(value)
-    }
-
-    pub(crate) fn accept_values<'a>(
-        &self,
-        values: Vec<B::Value>,
-        types: impl Iterator<Item = &'a PhysicalType>,
-    ) -> Result<Vec<B::Value>> {
-        // Arity belongs to the producer's existing diagnostic boundary.
-        let mut types = types;
-        for value in &values {
-            self.validate(value, types.next().ok_or(RuntimeError::Payload)?, false)?;
-        }
-        if types.next().is_some() {
-            return Err(RuntimeError::Payload);
-        }
-        Ok(values)
-    }
-
-    pub(crate) fn can_retain(&self, values: &[B::Value], retention: Retention) -> Result<Charge> {
-        self.counts.event(Event::Plan);
-        self.counts.add(Event::PlanValue, values.len() as u64);
-        let charge = self
-            .ledger
-            .plan(values, retention)
-            .ok_or(RuntimeError::Limit)?;
-        let work = if retention == Retention::Result {
-            charge.fresh as u64
-        } else {
-            0
-        };
-        self.can_retain_size(values.len(), charge.live, charge.fresh, work)?;
-        Ok(charge)
-    }
-
-    fn can_retain_size(&self, count: usize, live: usize, fresh: usize, work: u64) -> Result<()> {
-        if self
-            .usage
-            .live_values
-            .checked_add(count)
-            .is_none_or(|n| n > Limits::LIVE_VALUES)
-            || self
-                .usage
-                .live_value_bytes
-                .checked_add(live)
-                .is_none_or(|n| n > self.value_budget.live_bytes)
-            || self
-                .usage
-                .total_value_bytes
-                .checked_add(fresh)
-                .is_none_or(|n| n > self.value_budget.total_bytes)
-            || self
-                .usage
-                .logical_bytes
-                .checked_add(work)
-                .is_none_or(|n| n > self.work_budget.logical_bytes)
-        {
-            return Err(RuntimeError::Limit);
-        }
-        Ok(())
-    }
-
-    fn retain(&mut self, values: &[B::Value], retention: Retention) -> Result<()> {
-        let charge = self.can_retain(values, retention)?;
-        self.counts.add(Event::Retain, values.len() as u64);
-        self.ledger.retain(values);
-        self.usage.live_values += values.len();
-        self.usage.live_value_bytes += charge.live;
-        self.usage.total_value_bytes += charge.fresh;
-        if retention == Retention::Result {
-            self.usage.logical_bytes += charge.fresh as u64;
-        }
-        Ok(())
-    }
-
-    pub(crate) fn open_scope(
-        &mut self,
-        values: &[B::Value],
-        retention: Retention,
-    ) -> Result<Scope> {
-        let mut scope = Scope::new();
-        self.retain_in(&mut scope, values, retention)?;
-        Ok(scope)
-    }
-    pub(crate) fn retain_in(
-        &mut self,
-        scope: &mut Scope,
-        values: &[B::Value],
-        retention: Retention,
-    ) -> Result<()> {
-        self.retain(values, retention)?;
-        scope.bindings += values.len();
-        Ok(())
-    }
-    pub(crate) fn retain_returned(&mut self, values: &[B::Value]) -> Result<()> {
-        self.returned = self.open_scope(values, Retention::Transfer)?;
-        Ok(())
-    }
-    pub(crate) fn release_returned(&mut self, values: &[B::Value]) {
-        let scope = std::mem::replace(&mut self.returned, Scope::new());
-        self.close_scope(scope, values.iter());
-    }
-
-    fn charge_logical(&mut self, bytes: u64) -> Result<()> {
-        self.usage.logical_bytes = self
-            .usage
-            .logical_bytes
-            .checked_add(bytes)
-            .filter(|n| *n <= self.work_budget.logical_bytes)
-            .ok_or(RuntimeError::Limit)?;
-        Ok(())
-    }
-
     fn output_allowance(&self) -> usize {
         let logical = self
             .work_budget
@@ -320,16 +115,6 @@ impl<B: Backend> Instance<B> {
         Ok(())
     }
 
-    pub(crate) fn unpin_return(&mut self, values: &[B::Value]) {
-        self.counts.add(Event::Unpin, values.len() as u64);
-        self.usage.live_value_bytes -= self.ledger.unpin(values);
-    }
-
-    pub(crate) fn index_value(&self, index: u64) -> Result<B::Value> {
-        let value = B::Value::from_control_index(index)?;
-        self.validate(&value, &crate::vm::code::INDEX_TYPE, false)?;
-        Ok(value)
-    }
     /// Execute one reached operation and retain its validated results. The
     /// evaluator supplies only explicit operands, never its value environment.
     pub(crate) fn invoke(
@@ -358,13 +143,9 @@ impl<B: Backend> Instance<B> {
             for (v, ty) in arguments.iter().zip(&signature.inputs) {
                 self.validate(v, ty, false)?;
             }
-            let frame = self
-                .frames
-                .last()
-                .expect("operation inside entered frame")
-                .clone();
+            let frame = self.frames.last().expect("operation inside entered frame");
             let context = CallContext {
-                frame: &frame,
+                frame,
                 site,
                 binding,
                 logical_origin,
@@ -378,7 +159,11 @@ impl<B: Backend> Instance<B> {
                 .backend
                 .operand_work(&self.kernels[binding.index], &context, &arguments)
                 .map_or(full, |declared| declared.min(full));
-            self.charge_logical(read)?;
+            charge_logical(
+                &mut self.usage.logical_bytes,
+                self.work_budget.logical_bytes,
+                read,
+            )?;
             let invocation = Invocation {
                 context,
                 max_output_bytes: self.output_allowance(),
@@ -396,7 +181,7 @@ impl<B: Backend> Instance<B> {
                     "kernel-output-arity",
                 )));
             }
-            let values = self.accept_values(values, signature.outputs.iter())?;
+            self.validate_values(&values, signature.outputs.iter())?;
             self.retain_in(scope, &values, Retention::Result)?;
             Ok(values)
         })();
@@ -436,186 +221,31 @@ impl<B: Backend> Instance<B> {
     pub(crate) fn has_instruction_capacity(&self) -> bool {
         self.usage.instructions < self.work_budget.instructions
     }
-    pub(crate) fn deterministic(&self, call: &Call) -> bool {
-        self.kernels[call.binding.index].deterministic()
-    }
-    pub(crate) fn entry_frame(
-        &mut self,
-        origin: Origin,
-        participant: &super::code::Participant,
-    ) -> Frame {
-        let mut data = self.frame_data(
-            origin,
-            Arc::new(FrameKind::Entry),
-            participant.inputs.clone().into(),
-        );
-        data.services = participant.services.clone();
-        data.into()
-    }
-    pub(crate) fn frame(
-        &mut self,
-        origin: Origin,
-        kind: Arc<FrameKind>,
-        inputs: FrameInputs,
-    ) -> Frame {
-        self.frame_data(origin, kind, inputs).into()
-    }
-    fn frame_data(
-        &mut self,
-        origin: Origin,
-        kind: Arc<FrameKind>,
-        inputs: FrameInputs,
-    ) -> FrameData {
-        let parent = self.frames.last();
-        self.counts.event(Event::Frame);
-        self.next_frame += 1; // bounded by instruction/iteration/call ceilings
-        let services = if matches!(kind.as_ref(), FrameKind::Loop { .. }) {
-            parent
-                .map(|frame| frame.services().to_vec())
-                .unwrap_or_default()
-        } else {
-            vec![]
-        };
-        FrameData {
-            id: FrameId(self.next_frame),
-            parent: parent.map(Frame::id),
-            role: self.role.clone(),
-            origin,
-            kind,
-            inputs,
-            services,
-        }
-    }
-    pub(crate) fn check_frame_depth(&self) -> Result<()> {
-        if self.frames.len() >= Limits::STACK_DEPTH {
-            Err(RuntimeError::Limit)
-        } else {
-            Ok(())
-        }
-    }
-    pub(crate) fn enter_frame(&mut self, frame: &Frame, values: &[B::Value]) -> Result<()> {
-        self.check_frame_depth()?;
-        if frame.parent() != self.frames.last().map(Frame::id) {
-            return Err(BackendError::new("vm-frame-parent").into());
-        }
-        self.counts.event(Event::Enter);
-        self.backend
-            .enter_frame_retained(frame, values, self.ledger.view())?;
-        self.frames.push(frame.clone());
-        Ok(())
-    }
-    fn check_exit(&self, frame: &Frame) -> std::result::Result<(), BackendError> {
-        if self
-            .frames
-            .last()
-            .is_none_or(|top| !top.same_boundary(frame))
-        {
-            return Err(BackendError::new("vm-frame-order"));
-        }
-        Ok(())
-    }
-    pub(crate) fn leave_frame(
-        &mut self,
-        frame: &Frame,
-        exit: FrameExit,
-        values: &[B::Value],
-    ) -> std::result::Result<(), BackendError> {
-        self.check_exit(frame)?;
-        self.counts.event(Event::Leave);
-        let result = self.backend.leave_frame(frame, exit, values);
-        self.frames.pop();
-        result
-    }
-    pub(crate) fn leave_frame_retained(
-        &mut self,
-        frame: &Frame,
-        exit: FrameExit,
-        values: &[B::Value],
-    ) -> std::result::Result<(), BackendError> {
-        self.check_exit(frame)?;
-        self.counts.event(Event::Leave);
-        let result = self
-            .backend
-            .leave_frame_retained(frame, exit, values, self.ledger.view());
-        self.frames.pop();
-        result
-    }
-    /// Close actual entered views in order, then let the evaluator release each
-    /// corresponding environment. Recovery and destruction use this same walk.
-    pub(crate) fn unwind(
-        &mut self,
-        exit: FrameExit,
-        mut release: impl FnMut(&mut Self, &Frame),
-    ) -> Vec<BackendError> {
-        let mut errors = Vec::new();
-        while let Some(frame) = self.frames.last().cloned() {
-            if let Err(error) = self.leave_frame(&frame, exit, &[]) {
-                errors.push(error);
-            }
-            release(self, &frame);
-        }
-        errors
-    }
-    pub(crate) fn validate_backend(&self, value: &B::Value) -> Result<()> {
-        self.counts.event(Event::BackendValidate);
-        self.backend
-            .validate_value_retained(value, self.ledger.view())
-            .map_err(Into::into)
-    }
-    /// Pin only shared backing across an admitted frame handoff.
-    pub(crate) fn pin_return(&mut self, values: &[B::Value]) {
-        debug_assert!(
-            values
-                .iter()
-                .all(|value| value.validation_backing().is_none()
-                    || self.ledger.validated(value, &value.physical_type()))
-        );
-        self.counts.add(Event::Retain, values.len() as u64);
-        self.ledger.retain(values);
-    }
-    /// Physical release preserves logical charges until the region exits.
-    pub(crate) fn release_storage(&mut self, scope: &mut Scope, value: &B::Value) {
-        self.counts.event(Event::Release);
-        scope.released_storage += self.ledger.release(std::iter::once(value));
-        #[cfg(debug_assertions)]
-        {
-            scope.released_values += 1;
-        }
-    }
-    pub(crate) fn close_scope<'a>(
-        &mut self,
-        scope: Scope,
-        values: impl Iterator<Item = &'a B::Value>,
-    ) where
-        B::Value: 'a,
-    {
-        #[cfg(debug_assertions)]
-        let mut closed_values = scope.released_values;
-        let released = self.ledger.release(values.inspect(|_| {
-            self.counts.event(Event::Release);
-            #[cfg(debug_assertions)]
-            {
-                closed_values += 1;
-            }
-        }));
-        #[cfg(debug_assertions)]
-        debug_assert_eq!(closed_values, scope.bindings);
-        self.usage.live_values -= scope.bindings;
-        self.usage.live_value_bytes -= released + scope.released_storage;
-    }
     pub(crate) fn query(
         &mut self,
         scope: &mut Scope,
         query: &QueryAction<B::Value>,
     ) -> Result<Vec<B::Value>> {
+        // Reply rejection may follow retention failure; keep its authority
+        // context alive across mutable accounting as well as the provider call.
+        let frame = self
+            .frames
+            .last()
+            .expect("query inside entered frame")
+            .clone();
+        let port = frame
+            .services()
+            .iter()
+            .find(|port| port.name == query.port.name)
+            .filter(|port| **port == query.port)
+            .ok_or_else(|| BackendError::new("vm-service-port"))?;
         let support = self
             .backend
-            .service_support(query.port.contract, &query.method)
+            .service_support(port.contract, &query.method)
             .ok_or_else(|| BackendError::new("service-unsupported"))?;
         let signature = support.signature;
         let bound = support.max_retained_bytes;
-        let expected = query
-            .port
+        let expected = port
             .contract
             .signature(&query.method)
             .ok_or_else(|| BackendError::new("service-unsupported"))?;
@@ -637,16 +267,15 @@ impl<B: Backend> Instance<B> {
             bound,
             read.saturating_add(bound as u64),
         )?;
-        self.charge_logical(read)?;
-        let frame = self
-            .frames
-            .last()
-            .expect("query inside entered frame")
-            .clone();
+        charge_logical(
+            &mut self.usage.logical_bytes,
+            self.work_budget.logical_bytes,
+            read,
+        )?;
         let invocation = ServiceInvocation {
             frame: &frame,
             site: &query.cut.site,
-            port: &query.port,
+            port,
             method: &query.method,
             max_output_bytes: bound,
         };
@@ -655,7 +284,7 @@ impl<B: Backend> Instance<B> {
             if values.len() != signature.outputs.len() {
                 return Err(RuntimeError::Payload);
             }
-            let values = self.accept_values(values, query.results.iter().map(|(_, ty)| ty))?;
+            self.validate_values(&values, query.results.iter().map(|(_, ty)| ty))?;
             // The installed reply bound counts shared backing in full.
             let actual = values
                 .iter()

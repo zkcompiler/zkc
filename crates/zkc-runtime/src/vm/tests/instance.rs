@@ -16,6 +16,7 @@ fn program() -> Program {
 fn instance(program: &Program, backend: Mock) -> Instance<Mock> {
     Instance::new(
         program,
+        "main",
         backend,
         "P",
         "session",
@@ -27,19 +28,16 @@ fn instance(program: &Program, backend: Mock) -> Instance<Mock> {
 
 fn root(instance: &mut Instance<Mock>) -> Frame {
     let participant = instance.admitted().participant("main", "P").unwrap();
-    instance.entry_frame(
-        Origin {
-            session: "session".into(),
-            entry: "main".into(),
-            instance: participant.instance.clone(),
-            path: vec![],
-        },
-        &participant,
-    )
+    instance.entry_frame(Origin {
+        session: "session".into(),
+        entry: "main".into(),
+        instance: participant.instance.clone(),
+        path: vec![],
+    })
 }
 
 fn child(instance: &mut Instance<Mock>, parent: &Frame) -> Frame {
-    instance.frame(
+    instance.local_frame(
         parent.origin().clone(),
         std::sync::Arc::new(FrameKind::Local {
             site: "call".into(),
@@ -81,8 +79,8 @@ fn decoding_is_independent_of_installation_and_instances() {
 fn instance_enforces_parent_and_exit_order_before_backend_hooks() {
     let program = program();
     let mut instance = instance(&program, Mock::new());
-    let a = root(&mut instance);
     let stale = root(&mut instance);
+    let a = root(&mut instance);
     instance.enter_frame(&a, &[]).unwrap();
     let trace = instance.backend().trace.clone();
     assert!(
@@ -107,6 +105,56 @@ fn instance_enforces_parent_and_exit_order_before_backend_hooks() {
 }
 
 #[test]
+fn frame_proposals_are_instance_local_and_authorize_one_entry_attempt() {
+    let program = program();
+    let mut first = instance(&program, Mock::new());
+    let mut second = instance(&program, Mock::new());
+    let foreign = root(&mut second);
+    let stale = root(&mut first);
+    assert!(foreign.same_boundary(&stale));
+    let current = root(&mut first);
+    for frame in [&foreign, &stale] {
+        assert!(matches!(first.enter_frame(frame, &[]),
+            Err(RuntimeError::Backend(e)) if e.code == "vm-frame-entry"));
+    }
+    assert!(first.backend().trace.is_empty());
+    first.enter_frame(&current, &[]).unwrap();
+    first
+        .leave_frame(&current, FrameExit::Returned, &[])
+        .unwrap();
+    let trace = first.backend().trace.clone();
+    assert!(matches!(first.enter_frame(&current, &[]),
+        Err(RuntimeError::Backend(e)) if e.code == "vm-frame-entry"));
+    assert_eq!(first.backend().trace, trace);
+    // Refusal from another instance did not consume the legitimate proposal.
+    second.enter_frame(&foreign, &[]).unwrap();
+    second
+        .leave_frame(&foreign, FrameExit::Returned, &[])
+        .unwrap();
+}
+
+#[test]
+fn equal_frame_metadata_cannot_close_another_instances_view() {
+    let program = program();
+    let mut first = instance(&program, Mock::new());
+    let mut second = instance(&program, Mock::new());
+    let a = root(&mut first);
+    let b = root(&mut second);
+    assert!(a.same_boundary(&b));
+    first.enter_frame(&a, &[]).unwrap();
+    let trace = first.backend().trace.clone();
+    assert_eq!(
+        first
+            .leave_frame(&b, FrameExit::Returned, &[])
+            .unwrap_err()
+            .code,
+        "vm-frame-order"
+    );
+    assert_eq!(first.backend().trace, trace);
+    first.leave_frame(&a, FrameExit::Returned, &[]).unwrap();
+}
+
+#[test]
 fn refused_entry_does_not_push_and_failed_leave_still_removes_view() {
     let program = program();
     let mut backend = Mock::new();
@@ -121,6 +169,9 @@ fn refused_entry_does_not_push_and_failed_leave_still_removes_view() {
     let b = child(&mut instance, &a);
     assert!(
         matches!(instance.enter_frame(&b, &[]), Err(RuntimeError::Backend(e)) if e.code == "enter-refused")
+    );
+    assert!(
+        matches!(instance.enter_frame(&b, &[]), Err(RuntimeError::Backend(e)) if e.code == "vm-frame-entry")
     );
     assert_eq!(instance.backend().frames.len(), 1);
     assert_eq!(
@@ -307,4 +358,133 @@ fn refused_entry_returns_custody_and_preserves_charged_input_bytes() {
     assert!(error.backend.frames.is_empty());
     assert!(error.backend.refused_frame.is_some());
     assert!(error.backend.trace.is_empty());
+}
+
+#[test]
+fn vm_loading_owns_input_refusals_without_an_evaluator() {
+    let program = Program::decode(&bytes(&one(
+        json!([]),
+        json!([["value", "field"]]),
+        json!([]),
+        json!([["return", []]]),
+    )))
+    .unwrap();
+    for (inputs, budget, expected) in [
+        (vec![], ValueBudget::default(), RuntimeError::Inputs),
+        (
+            vec![V::Bool(true)],
+            ValueBudget::default(),
+            RuntimeError::Payload,
+        ),
+        (
+            vec![V::Field(1)],
+            ValueBudget {
+                live_bytes: 0,
+                total_bytes: 0,
+            },
+            RuntimeError::Limit,
+        ),
+    ] {
+        let error = Instance::load(
+            &program,
+            "main",
+            "P",
+            "session",
+            Mock::new(),
+            inputs,
+            budget,
+            WorkBudget::default(),
+        )
+        .err()
+        .unwrap();
+        assert_eq!(error.error, expected);
+        assert_eq!(error.usage, Usage::default());
+        assert!(error.backend.trace.is_empty());
+        assert!(error.backend.frames.is_empty());
+    }
+    let mut loaded = Instance::load(
+        &program,
+        "main",
+        "P",
+        "session",
+        Mock::new(),
+        vec![V::Field(7)],
+        ValueBudget::default(),
+        WorkBudget::default(),
+    )
+    .ok()
+    .unwrap();
+    assert_eq!(loaded.frame.origin().entry, "main");
+    assert_eq!(loaded.frame.role(), "P");
+    assert_eq!(loaded.instance.usage().instructions, 0);
+    assert_eq!(loaded.instance.usage().live_values, 1);
+    loaded
+        .instance
+        .leave_frame(&loaded.frame, FrameExit::Cancelled, &[])
+        .unwrap();
+    loaded
+        .instance
+        .close_scope(loaded.scope, loaded.inputs.iter());
+    assert_eq!(loaded.instance.usage().live_values, 0);
+    assert_eq!(loaded.instance.usage().live_value_bytes, 0);
+}
+
+#[test]
+fn service_queries_cannot_supply_authority_absent_from_the_active_frame() {
+    use crate::vm::retention::Retention;
+    let mut source = one(json!([]), json!([]), json!([]), json!([["return", []]]));
+    source[3][0][7] = json!([["coins", "random.bls12-381.fr/0", "0"]]);
+    let program = Program::decode(&bytes(&source)).unwrap();
+    let mut instance = instance(&program, Mock::new());
+    let frame = root(&mut instance);
+    instance.enter_frame(&frame, &[]).unwrap();
+    let mut scope = instance.open_scope(&[], Retention::Transfer).unwrap();
+    let mut query = QueryAction {
+        cut: Cut {
+            origin: frame.origin().clone(),
+            role: "P".into(),
+            site: "draw".into(),
+            kind: CutKind::Query,
+        },
+        port: ServicePort {
+            name: "invented".into(),
+            contract: ServiceContract::RandomBls12381Field,
+            input_index: 0,
+        },
+        method: "draw".into(),
+        arguments: vec![],
+        results: vec![],
+    };
+    let trace = instance.backend().trace.clone();
+    let usage = instance.usage();
+    assert!(matches!(instance.query(&mut scope, &query),
+        Err(RuntimeError::Backend(e)) if e.code == "vm-service-port"));
+    query.port.name = "coins".into();
+    query.port.contract = ServiceContract::RandomBn254Field;
+    assert!(matches!(instance.query(&mut scope, &query),
+        Err(RuntimeError::Backend(e)) if e.code == "vm-service-port"));
+    query.port.contract = ServiceContract::RandomBls12381Field;
+    query.port.input_index = 1;
+    assert!(matches!(instance.query(&mut scope, &query),
+        Err(RuntimeError::Backend(e)) if e.code == "vm-service-port"));
+    assert_eq!(instance.backend().trace, trace);
+    assert_eq!(instance.usage(), usage);
+    instance.close_scope(scope, [].iter());
+    instance
+        .leave_frame(&frame, FrameExit::Cancelled, &[])
+        .unwrap();
+}
+
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "unreleased return transfer")]
+fn dropping_a_nonempty_return_transfer_is_a_debug_contract_error() {
+    use crate::vm::retention::Retention;
+    let program = program();
+    let mut instance = instance(&program, Mock::new());
+    let values = vec![V::Field(1)];
+    let scope = instance.open_scope(&values, Retention::Input).unwrap();
+    let returned = instance.hold_return(values.clone());
+    instance.close_scope(scope, values.iter());
+    drop(returned);
 }

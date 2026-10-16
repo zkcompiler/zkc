@@ -12,20 +12,18 @@ impl<B: Backend> Runner<B> {
         args: Vec<B::Value>,
         depth: usize,
         key: Option<crate::vm::preparation::Key>,
-    ) -> Result<Vec<B::Value>> {
-        self.instance.check_frame_depth()?;
-        self.instance.can_retain(&args, Retention::Transfer)?;
-        self.instance.enter_frame(frame, &args)?;
+    ) -> Result<Transfer<B::Value>> {
+        self.instance.enter_local(frame, &args)?;
         let reused = key.as_ref().and_then(|key| self.reuse_computation(key));
         let (result, record) = if let Some(values) = reused {
             (Ok(values), None)
         } else {
-            let checkpoint = key.as_ref().and_then(|key| self.begin_computation(key));
+            let checkpoint = key.and_then(|key| self.begin_computation(key));
             let result = self.run_local_body(frame, logical_origin, body, args, depth);
-            let record = match (key, checkpoint, &result) {
-                (Some(key), Some((available, usage, frames, before)), Ok(values)) => self
-                    .instance
-                    .record_computation(key, available, usage, frames, before, values),
+            let record = match (checkpoint, &result) {
+                (Some(recording), Ok(values)) => {
+                    self.instance.record_computation(recording, values)
+                }
                 _ => None,
             };
             (result, record)
@@ -38,7 +36,7 @@ impl<B: Backend> Runner<B> {
         match result {
             Ok(values) => {
                 if let Err(error) = leave {
-                    self.instance.unpin_return(&values);
+                    self.instance.release_return(values);
                     return Err(error.into());
                 }
                 self.publish_computation(record);
@@ -59,7 +57,7 @@ impl<B: Backend> Runner<B> {
         body: &LocalCode,
         args: Vec<B::Value>,
         depth: usize,
-    ) -> Result<Vec<B::Value>> {
+    ) -> Result<Transfer<B::Value>> {
         let mut scope = self.instance.open_scope(&args, Retention::Transfer)?;
         let mut env = Values::new(args);
         let mut current_site = None;
@@ -101,13 +99,7 @@ impl<B: Backend> Runner<B> {
                 self.instance.counts().instruction(instruction);
                 match instruction {
                     Operation::BoolConstant { output, value, .. } => {
-                        let value = B::Value::from_control_bool(*value)?;
-                        let value = self.instance.accept(value, &crate::vm::code::BOOL_TYPE)?;
-                        self.instance.retain_in(
-                            &mut scope,
-                            std::slice::from_ref(&value),
-                            Retention::Input,
-                        )?;
+                        let value = self.instance.boolean(&mut scope, *value)?;
                         env.insert(*output, value);
                     }
                     Operation::Stop { reason, .. } => {
@@ -120,20 +112,10 @@ impl<B: Backend> Runner<B> {
                         output,
                         ..
                     } => {
-                        let descriptor = ty
-                            .logical()
-                            .variant_descriptor()
-                            .expect("admitted variant")
-                            .clone();
-                        let index = *alternative;
                         let payload = payload.iter().map(|n| env[n].clone()).collect();
-                        let value = B::Value::pack_variant(descriptor, index, payload)?;
-                        let value = self.instance.accept(value, ty)?;
-                        self.instance.retain_in(
-                            &mut scope,
-                            std::slice::from_ref(&value),
-                            Retention::Input,
-                        )?;
+                        let value = self
+                            .instance
+                            .variant(&mut scope, ty, *alternative, payload)?;
                         env.insert(*output, value);
                     }
                     Operation::Match {
@@ -143,28 +125,7 @@ impl<B: Backend> Runner<B> {
                         arms,
                         outputs,
                     } => {
-                        let value = &env[input];
-                        self.instance.validate_backend(value)?;
-                        let (descriptor, alternative, mut args) = value.unpack_variant()?;
-                        if value.physical_type().logical().variant_descriptor() != Some(&descriptor)
-                        {
-                            return Err(BackendError::new("variant-descriptor").into());
-                        }
-                        let arm = arms
-                            .get(alternative)
-                            .ok_or_else(|| BackendError::new("variant-alternative"))?;
-                        let declared = descriptor
-                            .alternatives()
-                            .get(alternative)
-                            .ok_or_else(|| BackendError::new("variant-alternative"))?;
-                        if arm.alternative != declared.label()
-                            || args.len() != declared.payload().len()
-                        {
-                            return Err(BackendError::new("variant-payload").into());
-                        }
-                        for (v, (_, ty)) in args.iter().zip(arm.body.inputs.iter()) {
-                            self.instance.validate(v, ty, false)?;
-                        }
+                        let (arm, mut args) = self.instance.match_variant(&env[input], arms)?;
                         args.extend(captures.iter().map(|n| env[n].clone()));
                         let values = self.run_local_region(
                             frame,
@@ -177,14 +138,10 @@ impl<B: Backend> Runner<B> {
                             },
                             depth,
                         )?;
-                        self.accept_return(values, |runner, values| {
-                            Self::matches_outputs(outputs, values)?;
-                            runner
-                                .instance
-                                .retain_in(&mut scope, values, Retention::Transfer)?;
-                            env.extend(outputs, values.iter().cloned());
-                            Ok(())
-                        })?;
+                        let values =
+                            self.instance
+                                .bind_return(&mut scope, outputs.len(), values)?;
+                        env.extend(outputs, values.into_iter());
                     }
                     Operation::Op {
                         call,
@@ -220,14 +177,10 @@ impl<B: Backend> Runner<B> {
                             },
                             depth,
                         )?;
-                        self.accept_return(values, |runner, values| {
-                            Self::matches_outputs(outputs, values)?;
-                            runner
-                                .instance
-                                .retain_in(&mut scope, values, Retention::Transfer)?;
-                            env.extend(outputs, values.iter().cloned());
-                            Ok(())
-                        })?;
+                        let values =
+                            self.instance
+                                .bind_return(&mut scope, outputs.len(), values)?;
+                        env.extend(outputs, values.into_iter());
                     }
                     Operation::For {
                         conditional,
@@ -239,18 +192,12 @@ impl<B: Backend> Runner<B> {
                         body,
                         outputs,
                     } => {
-                        let lower = env[lower].control_index()?;
-                        let upper = env[upper].control_index()?;
-                        if lower > Limits::PARAMETER
-                            || upper > Limits::PARAMETER
-                            || upper.saturating_sub(lower) > Limits::LOOP_COUNT
-                        {
-                            return Err(BackendError::new("exhausted:local-bound-limit").into());
-                        }
-                        let mut values = carried.iter().map(|n| env[n].clone()).collect::<Vec<_>>();
-                        let mut pinned = false;
+                        let range = Instance::<B>::local_range(&env[lower], &env[upper])?;
+                        let mut initial =
+                            carried.iter().map(|n| env[n].clone()).collect::<Vec<_>>();
+                        let mut carried: Option<Transfer<B::Value>> = None;
                         let result = (|| {
-                            for index in lower..upper {
+                            for index in range {
                                 if let Err(error) = self.instance.iteration() {
                                     let mut origin = frame.origin().clone();
                                     origin.path.push(PathElement::For {
@@ -261,6 +208,9 @@ impl<B: Backend> Runner<B> {
                                     return Err(error);
                                 }
                                 let mut args = vec![self.instance.index_value(index)?];
+                                let values = carried
+                                    .as_ref()
+                                    .map_or(initial.as_slice(), Transfer::as_slice);
                                 args.extend(values.iter().cloned());
                                 args.extend(captures.iter().map(|n| env[n].clone()));
                                 let returned = self.run_local_region(
@@ -274,28 +224,36 @@ impl<B: Backend> Runner<B> {
                                     },
                                     depth,
                                 )?;
-                                if pinned {
-                                    self.instance.unpin_return(&values);
+                                if let Some(previous) = carried.replace(returned) {
+                                    self.instance.release_return(previous);
+                                } else {
+                                    initial = Vec::new();
                                 }
-                                values = returned;
-                                pinned = true;
-                                if *conditional {
-                                    let condition = values.remove(0);
-                                    let continue_loop = condition.control_bool();
-                                    self.instance.unpin_return(std::slice::from_ref(&condition));
-                                    if !continue_loop? {
-                                        break;
-                                    }
+                                if *conditional
+                                    && !self
+                                        .instance
+                                        .take_condition(carried.as_mut().expect("returned carry"))?
+                                {
+                                    break;
                                 }
                             }
-                            Self::matches_outputs(outputs, &values)?;
-                            self.instance
-                                .retain_in(&mut scope, &values, Retention::Transfer)?;
-                            env.extend(outputs, values.iter().cloned());
+                            let values = if let Some(values) = carried.take() {
+                                self.instance
+                                    .bind_return(&mut scope, outputs.len(), values)?
+                            } else {
+                                Self::matches_outputs(outputs, &initial)?;
+                                self.instance.retain_in(
+                                    &mut scope,
+                                    &initial,
+                                    Retention::Transfer,
+                                )?;
+                                initial
+                            };
+                            env.extend(outputs, values.into_iter());
                             Ok::<(), RuntimeError>(())
                         })();
-                        if pinned {
-                            self.instance.unpin_return(&values);
+                        if let Some(values) = carried {
+                            self.instance.release_return(values);
                         }
                         result?;
                     }
@@ -320,12 +278,9 @@ impl<B: Backend> Runner<B> {
             });
             self.local_failure = Some((site, frame.origin().clone()));
         }
-        if let Ok(values) = &result {
-            // Each value is already held by this region and validated by this
-            // backend. Keep its shared subtree live while dropping the region's
-            // bindings; the caller releases this reference on every exit path.
-            self.instance.pin_return(values);
-        }
+        // Keep the owned return tuple and its backing obligation together while
+        // closing this environment. The receiver consumes the transfer once.
+        let result = result.map(|values| self.instance.hold_return(values));
         // Deferred storage charges survive physical release, including on every early error.
         self.instance.close_scope(scope, env.values());
         result
@@ -339,15 +294,14 @@ impl<B: Backend> Runner<B> {
         args: Vec<B::Value>,
         path: PathElement,
         depth: usize,
-    ) -> Result<Vec<B::Value>> {
+    ) -> Result<Transfer<B::Value>> {
         let mut origin = parent.origin().clone();
         origin.path.push(path);
-        let frame = self.frame(origin, parent.shared_kind(), body.inputs.clone());
+        let frame = self.local_frame(origin, parent.shared_kind(), body.inputs.clone());
         let result = (|| {
             self.instance.check_frame_depth()?;
-            let args = self
-                .instance
-                .accept_values(args, frame.inputs().iter().map(|(_, ty)| ty))?;
+            self.instance
+                .validate_values(&args, frame.inputs().iter().map(|(_, ty)| ty))?;
             self.run_local_frame(&frame, logical_origin, body, args, depth + 1, None)
         })();
         if result.is_err() && self.local_failure.is_none() {

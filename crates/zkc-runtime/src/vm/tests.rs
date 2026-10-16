@@ -219,6 +219,12 @@ impl Backend for Mock {
         // independent public-value validation must still reject it at a message.
         Ok(())
     }
+    fn service_support(&self, contract: ServiceContract, method: &str) -> Option<ServiceSupport> {
+        Some(ServiceSupport {
+            signature: contract.signature(method)?,
+            max_retained_bytes: 32,
+        })
+    }
     fn enter_frame(&mut self, frame: &Frame, arguments: &[V]) -> Result<(), BackendError> {
         assert_eq!(frame.inputs().len(), arguments.len());
         assert_eq!(frame.parent(), self.frames.last().map(|(id, _)| *id));
@@ -995,6 +1001,7 @@ fn send_receive_pending_delivery_and_type_checks() {
     assert_eq!(v.usage(), usage);
     v.deliver(packet.clone()).unwrap();
     assert_eq!(v.poll(), Action::Returned(vec![V::Field(17)]));
+    assert_eq!(v.check_delivery(&packet), Err(RuntimeError::WrongAction));
     assert_eq!(v.deliver(packet), Err(RuntimeError::WrongAction));
     assert_eq!(p.poll(), Action::Returned(vec![]));
 }
@@ -1273,6 +1280,118 @@ fn wrong_driver_cut_and_cross_session_fail_without_local_execution() {
         drive_cut(&mut p, &mut other, &cut),
         Err(RuntimeError::Envelope)
     );
+}
+
+#[test]
+fn refused_api_requests_do_not_prepare_an_unpolled_failing_send() {
+    let mut p = runner(&exchange(), "P", Mock::new(), vec![V::PrivateAsField]);
+    let wrong = Cut {
+        origin: p.root_origin().clone(),
+        role: "P".into(),
+        site: "msg".into(),
+        kind: CutKind::Local,
+    };
+    let usage = p.usage();
+    let trace = p.backend().trace.clone();
+    assert_eq!(p.execute_local(&wrong), Err(RuntimeError::WrongAction));
+    let expected = Cut {
+        kind: CutKind::Send,
+        ..wrong
+    };
+    let mut wrong_site = expected.clone();
+    wrong_site.site = "another".into();
+    let mut wrong_role = expected.clone();
+    wrong_role.role = "V".into();
+    let mut wrong_origin = expected.clone();
+    wrong_origin.origin.session = "another".into();
+    let mut wrong_kind = expected;
+    wrong_kind.kind = CutKind::Local;
+    for refused in [wrong_site, wrong_role, wrong_origin, wrong_kind] {
+        assert_eq!(p.take_send(&refused), Err(RuntimeError::WrongCut));
+    }
+    let mut receiver = runner(&exchange(), "V", Mock::new(), vec![]);
+    let Action::Receive(request) = receiver.poll() else {
+        panic!()
+    };
+    assert_eq!(
+        p.check_delivery(&Packet {
+            envelope: request.envelope,
+            ty: request.ty,
+            payload: V::Field(1),
+        }),
+        Err(RuntimeError::WrongAction)
+    );
+    assert!(matches!(
+        p.inspect_program().unwrap(),
+        ProgramState::Unpolled {
+            kind: Some(CutKind::Send),
+            ..
+        }
+    ));
+    assert_eq!(p.usage(), usage);
+    assert_eq!(p.backend().trace, trace);
+    assert!(!p.is_terminal());
+    // The actual send still performs its public-payload check when requested.
+    assert!(matches!(p.poll(), Action::Stopped(_)));
+}
+
+#[test]
+fn misrouted_receive_packets_preserve_unpolled_state_and_allow_retry() {
+    let program = admitted(&exchange());
+    let mut sender = Runner::new(
+        &program,
+        "main",
+        "P",
+        "session",
+        Mock::new(),
+        vec![V::Field(9)],
+    )
+    .unwrap();
+    let Action::Send(packet) = sender.poll() else {
+        panic!()
+    };
+    let mut receiver = Runner::new(&program, "main", "V", "session", Mock::new(), vec![]).unwrap();
+    let usage = receiver.usage();
+    let trace = receiver.backend().trace.clone();
+    let mut wrong = packet.clone();
+    wrong.envelope.origin.session = "another".into();
+    assert_eq!(receiver.deliver(wrong), Err(RuntimeError::Envelope));
+    let mut wrong = packet.clone();
+    wrong.ty = PhysicalType::parse("bool@native.bool/0").unwrap();
+    assert_eq!(receiver.deliver(wrong), Err(RuntimeError::Payload));
+    assert!(matches!(
+        receiver.inspect_program().unwrap(),
+        ProgramState::Unpolled {
+            kind: Some(CutKind::Receive),
+            ..
+        }
+    ));
+    assert_eq!(receiver.usage(), usage);
+    assert_eq!(receiver.backend().trace, trace);
+    receiver
+        .prepare_computations(
+            PreparedComputations::new(&program, PreparationLimits::default()),
+            &[],
+        )
+        .unwrap();
+    receiver.deliver(packet).unwrap();
+    assert_eq!(receiver.poll(), Action::Returned(vec![V::Field(9)]));
+}
+
+#[test]
+fn failed_root_exit_releases_the_successful_terminal_reservation() {
+    let mut backend = Mock::new();
+    backend.fail_leave = true;
+    let mut r = runner(&identity(), "P", backend, vec![V::Field(1)]);
+    let Action::Stopped(stop) = r.poll() else {
+        panic!()
+    };
+    assert!(matches!(stop.kind, StopKind::Backend(e) if e.code == "leave-failed"));
+    assert!(stop.cleanup_errors.is_empty());
+    assert_eq!(r.backend().trace.last().unwrap(), "leave:Returned");
+    assert!(r.backend().frames.is_empty());
+    assert_eq!(r.usage().live_values, 0);
+    assert_eq!(r.usage().live_value_bytes, 0);
 }
 
 #[test]

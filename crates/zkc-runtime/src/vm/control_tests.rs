@@ -43,6 +43,7 @@ impl Value for Datum {
 #[derive(Default, Debug)]
 struct Store {
     frames: Vec<u64>,
+    entered: Vec<Frame>,
     leaves: Vec<(u64, FrameExit, Vec<u64>)>,
     fail: Option<u64>,
 }
@@ -59,6 +60,7 @@ impl Backend for Store {
     }
     fn enter_frame(&mut self, f: &Frame, _: &[Datum]) -> Result<(), BackendError> {
         self.frames.push(f.id().get());
+        self.entered.push(f.clone());
         Ok(())
     }
     fn leave_frame(
@@ -168,6 +170,114 @@ fn runner(nested: bool, taken: bool, fail: Option<u64>, total: usize) -> Runner<
     )
     .unwrap()
 }
+
+#[test]
+fn participant_frames_use_admitted_loop_ports_and_reject_mistyped_captures() {
+    use crate::vm::{instance::Instance, retention::Retention};
+    let mut source = body(true);
+    source[0][4] = json!(["n", "c"]); // preserve declared order, not lexical order
+    let program =
+        Program::decode(&serde_json::to_vec(&artifact(source, json!([]))).unwrap()).unwrap();
+    let ports = |site| {
+        program
+            .loop_inputs("p", site)
+            .iter()
+            .map(|(name, ty)| (name.as_str(), ty.clone()))
+            .collect::<Vec<_>>()
+    };
+    let typed = |name, ty| (name, PhysicalType::parse(ty).unwrap());
+    assert_eq!(
+        ports("outer"),
+        [
+            typed("i", INDEX),
+            typed("outer_r", RNG),
+            typed("n", INDEX),
+            typed("c", BOOL)
+        ]
+    );
+    assert_eq!(
+        ports("inner"),
+        [typed("j", INDEX), typed("inner_r", RNG), typed("c", BOOL)]
+    );
+    let mut loaded = Instance::load(
+        &program,
+        "main",
+        "P",
+        "session",
+        Store::default(),
+        vec![
+            Datum::new(BOOL, 0),
+            Datum::new(INDEX, 3),
+            Datum::new(RNG, 7),
+        ],
+        ValueBudget::default(),
+        WorkBudget::default(),
+    )
+    .ok()
+    .unwrap();
+    let mut origin = loaded.frame.origin().clone();
+    origin.path.push(PathElement::Loop {
+        site: "outer".into(),
+        iteration: 0,
+    });
+    let frame = loaded.instance.loop_frame(origin, "outer", 0);
+    assert_eq!(
+        frame.inputs().iter().cloned().collect::<Vec<_>>(),
+        program
+            .loop_inputs("p", "outer")
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>()
+    );
+    let usage = loaded.instance.usage();
+    let wrong = [
+        Datum::new(INDEX, 0),
+        Datum::new(RNG, 7),
+        Datum::new(BOOL, 0),
+        Datum::new(INDEX, 3),
+    ];
+    assert!(matches!(
+        loaded
+            .instance
+            .enter_participant(&frame, &wrong, Retention::Transfer),
+        Err(RuntimeError::Payload)
+    ));
+    assert_eq!(loaded.instance.usage(), usage);
+    assert_eq!(loaded.instance.backend().frames, [loaded.frame.id().get()]);
+    loaded
+        .instance
+        .leave_frame(&loaded.frame, FrameExit::Cancelled, &[])
+        .unwrap();
+    loaded
+        .instance
+        .close_scope(loaded.scope, loaded.inputs.iter());
+
+    // Continue through every iteration with reordered captures. All actual
+    // backend entries must observe the admitted layout, including later trips.
+    let mut runner = Runner::new(
+        &program,
+        "main",
+        "P",
+        "session",
+        Store::default(),
+        vec![
+            Datum::new(BOOL, 0),
+            Datum::new(INDEX, 3),
+            Datum::new(RNG, 7),
+        ],
+    )
+    .unwrap();
+    while runner.advance_local_control().unwrap() {}
+    assert!(matches!(runner.poll(), Action::Returned(_)));
+    assert_eq!(runner.usage().iterations, 12);
+    assert_eq!(runner.backend().entered.len(), 13);
+    for frame in &runner.backend().entered {
+        if let FrameKind::Loop { site, .. } = frame.kind() {
+            assert_eq!(frame.inputs(), program.loop_inputs("p", site));
+        }
+    }
+}
+
 #[test]
 fn conditional_return_preserves_tuple_and_unwinds_only_reached_frames() {
     for nested in [false, true] {

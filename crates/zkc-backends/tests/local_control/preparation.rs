@@ -12,6 +12,41 @@ fn generated() -> Vec<u8> {
         ]),
     )
 }
+
+#[test]
+fn rejected_conditional_return_preserves_the_public_preparation_prefix() {
+    use zkc_runtime::vm::RuntimeError;
+    let admitted = Program::decode(&generated()).unwrap();
+    let cache = PreparedComputations::new(&admitted, PreparationLimits::default());
+    for warm in [false, true] {
+        let mut runner = Runner::new(
+            &admitted,
+            "main",
+            "P",
+            "session",
+            ark_backend(None),
+            vec![Value::Index(4), f(7)],
+        )
+        .unwrap_or_else(|e| panic!("{}", e.error));
+        runner.prepare_computations(cache.clone(), &[0, 1]).unwrap();
+        let origin = runner.root_origin().clone();
+        let mut wrong = origin.clone();
+        wrong.session.push('x');
+        assert_eq!(
+            runner.return_if(&wrong, "absent"),
+            Err(RuntimeError::WrongCut)
+        );
+        assert_eq!(
+            runner.return_if(&origin, "absent"),
+            Err(RuntimeError::WrongAction)
+        );
+        let (result, _, backend) = execute(runner);
+        assert!(result.is_ok());
+        assert_eq!(backend.active_frames(), 0);
+        assert_eq!(cache.stats().entries, 1);
+        assert_eq!(cache.stats().hits, u64::from(warm));
+    }
+}
 fn invoke(
     admitted: &Program,
     cache: &PreparedComputations<NativeBackend>,

@@ -27,6 +27,93 @@ struct Stored {
     /// A view retains its entire parent allocation.
     parent: Option<(Arc<Allocation>, usize)>,
 }
+
+#[test]
+fn owned_return_transfer_keeps_backing_alive_and_releases_a_refused_condition() {
+    use crate::vm::instance::Instance;
+    use crate::vm::retention::Retention;
+    let drops = Arc::new(AtomicUsize::new(0));
+    let value = Stored::new(
+        Arc::new(Allocation {
+            payload: vec![0; 32],
+            drops: drops.clone(),
+        }),
+        32,
+        true,
+    );
+    let program = Program::decode(&bytes(&one(
+        json!([]),
+        json!([]),
+        json!([]),
+        json!([["return", []]]),
+    )))
+    .unwrap();
+    let mut instance = Instance::new(
+        &program,
+        "main",
+        StorageBackend::shared(32, 32),
+        "P",
+        "session",
+        ValueBudget::default(),
+        WorkBudget::default(),
+    )
+    .ok()
+    .unwrap();
+    instance
+        .validate(&value, &value.physical_type(), false)
+        .unwrap();
+    let inputs = vec![value.clone(), value];
+    let scope = instance.open_scope(&inputs, Retention::Input).unwrap();
+    let mut returned = instance.hold_return(inputs.clone());
+    instance.close_scope(scope, inputs.iter());
+    drop(inputs);
+    assert_eq!(instance.usage().live_values, 0);
+    assert_eq!(instance.usage().live_value_bytes, 32);
+    assert_eq!(drops.load(Ordering::SeqCst), 0);
+    // The test value refuses Boolean inspection. Its handoff reference must
+    // still be removed while the remaining alias continues to own the backing.
+    assert!(matches!(instance.take_condition(&mut returned),
+        Err(RuntimeError::Backend(e)) if e.code == "local-control-bool"));
+    assert_eq!(returned.len(), 1);
+    assert_eq!(instance.usage().live_value_bytes, 32);
+    instance.release_return(returned);
+    assert_eq!(instance.usage().live_value_bytes, 0);
+    assert_eq!(instance.usage().total_value_bytes, 32);
+    assert_eq!(drops.load(Ordering::SeqCst), 1);
+}
+#[cfg(debug_assertions)]
+#[test]
+#[should_panic(expected = "return backing is already charged")]
+fn return_transfer_rejects_unretained_shared_backing() {
+    use crate::vm::instance::Instance;
+    let program = admitted(&one(
+        json!([]),
+        json!([]),
+        json!([]),
+        json!([["return", []]]),
+    ));
+    let mut instance = Instance::new(
+        &program,
+        "main",
+        StorageBackend::shared(32, 32),
+        "P",
+        "session",
+        ValueBudget::default(),
+        WorkBudget::default(),
+    )
+    .ok()
+    .unwrap();
+    let value = Stored::new(
+        Arc::new(Allocation {
+            payload: vec![0; 32],
+            drops: Arc::new(AtomicUsize::new(0)),
+        }),
+        32,
+        true,
+    );
+    let _returned = instance.hold_return(vec![value]);
+}
+
 impl Stored {
     fn new(backing: Arc<Allocation>, charge: usize, shared: bool) -> Self {
         Self {

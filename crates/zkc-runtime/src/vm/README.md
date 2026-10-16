@@ -3,13 +3,15 @@
 `vm::Program::decode` admits `zkc.program/0` into immutable typed VM code. It
 checks all retained definitions and prepares local positional operands, region
 layouts and operation bindings without consulting a backend. Participant code
-uses named SSA registers. Both forms retain the admitted structured control;
+uses named SSA registers and loop-input layouts retained by the same admission
+walk. Both forms retain the admitted structured control;
 there is no second serialized format.
 
 `Program::check_installation` optionally checks backend availability before a
 Host admits a deployment. Every execution independently links its owned backend.
-The internal `Instance` owns installed handles, reached-call preparation, frame
-nesting, retained storage, budgets and work accounting. Code can be shared;
+The internal `Instance` owns complete invocation loading, installed handles,
+reached-call preparation, frame identity and nesting, retained storage, budgets
+and work accounting. Code can be shared;
 mutable execution state and resource authority cannot.
 
 The [interpreter](../interpreter/) owns instruction walking, value environments,
@@ -18,6 +20,14 @@ services, frame transitions and accounting. The instance never reads interpreter
 environments. An installed operation receives only its admitted binding,
 explicit operands and current call context. Installed operations include effects;
 installation alone does not establish numerical purity.
+
+Inside `instance`, `loading` admits the initial invocation and participant
+arguments; `frames` owns typed loop-frame construction, entry and terminal
+cleanup; `values` owns validation, scopes and
+owned return handoffs; `preparation` owns deterministic classification, recording
+snapshots and replay. Handoffs must be consumed through their originating VM.
+The interpreter supplies public control provenance and never constructs a work
+snapshot or adjusts a backing reference count.
 
 ## Owners
 
