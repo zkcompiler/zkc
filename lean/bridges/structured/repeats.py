@@ -9,10 +9,11 @@ import argparse
 import copy
 import json
 from pathlib import Path
-import shutil
 import sys
+import tomllib
 
 from check import FIELD, MODULUS, ROOT, definition, digest, write_json
+from evidence import owned_sources
 from open_protocol import FIELD_TYPE, SERVICE, OpenSuite, reply, returned, stopped
 
 sys.path.insert(0, str(ROOT / "common/tests/support"))
@@ -40,60 +41,58 @@ def source_modules(path):
 class RepeatSuite(OpenSuite):
     """Use OpenSuite comparisons with immutable tools and Git-free receipts."""
 
-    def setup(self):
-        self.directory = self.args.report.resolve().parent / "runs" / self.identity
-        self.directory.mkdir(parents=True)
-        self.publish("running")
-        self.revision = None  # Exact working bytes are identified by sourceArchives, without Git.
-        paths = set(Path(__file__).parent.glob("*.py"))
-        for tree in ("lean/Zkc", "lean/ZkcExamples", "lean/Tests"):
-            paths.update((ROOT / tree).rglob("*.lean"))
-        paths.update((ROOT / "lean").glob("*.lean"))
-        paths.update([ROOT / "lean/lean-toolchain", ROOT / "lean/lake-manifest.json", ROOT / "lean/lakefile.toml",
-                      ROOT / "compiler/test/fixtures/finite/total-state.mlir",
-                      ROOT / "lean/checks/check_structured_renderer.py",
-                      ROOT / "lean/bridges/structured/README.md", ROOT / "common/tests/run.py"])
-        paths.update([ROOT / "compiler/lib/Compiler/StructuredSource.cpp",
-                      ROOT / "compiler/test/structured_reference.cpp",
-                      ROOT / "common/tests/support/project.py"])
+    source_scope = (
+        "Git-free source owners: main Lake package namespaces; structured bridge, Lean checks/support, "
+        "scripts and common test support; native compiler include/lib/tools/test/cmake and shared Unicode inputs; selected "
+        "authored project module closures and retained subjects. External packages, optional Lean "
+        "integrations, hidden/private/experiment directories and build caches excluded; "
+        "native executables are retained separately, not rebuilt from this archive.")
+
+    def source_inventory(self):
+        lean = ROOT / "lean"
+        paths = {lean / name for name in ("lean-toolchain", "lake-manifest.json", "lakefile.toml")}
+        config = tomllib.loads((lean / "lakefile.toml").read_text(encoding="utf-8"))
+        # Lake declarations own the namespaces, including executable roots
+        # outside a library's globs. Capture each whole namespace so new local
+        # imports are covered without a second per-module dependency list.
+        for target in [*config.get("lean_lib", []), *config.get("lean_exe", [])]:
+            directory = lean / target.get("srcDir", config.get("srcDir", "."))
+            roots = target.get("roots", [target.get("root", target["name"])])
+            if "root" in target:
+                paths.add(directory / (target["root"].replace(".", "/") + ".lean"))
+            for module in [*roots, *target.get("globs", [])]:
+                owner = directory / module.split(".")[0]
+                if not owner.with_suffix(".lean").exists() and not owner.is_dir():
+                    raise FileNotFoundError(f"missing Lake source namespace: {owner}")
+                if owner.with_suffix(".lean").exists():
+                    paths.add(owner.with_suffix(".lean"))
+                if owner.is_dir():
+                    paths.update(owned_sources(owner, {".lean"}))
+        for tree in ("scripts", "common/tests/support", "lean/checks", "lean/support"):
+            paths.update(owned_sources(ROOT / tree, {".py"}))
+        bridge = ROOT / "lean/bridges/structured"
+        paths.update(owned_sources(bridge, {".py", ".md", ".json", ".mlir", ".zkc"}))
+        for tree in ("include", "lib", "tools", "test", "cmake"):
+            paths.update(owned_sources(ROOT / "compiler" / tree,
+                {".cpp", ".h", ".td", ".def", ".inc", ".cmake", ".in", ".txt",
+                 ".py", ".json", ".mlir", ".zkc", ".toml"}))
+        # compiler/cmake/Unicode.cmake consumes this shared source owner.
+        paths.update(owned_sources(ROOT / "common/unicode", {".py", ".json", ".txt", ".md"}))
+        paths.update(ROOT / name for name in (
+            "compiler/CMakeLists.txt", "compiler/CMakePresets.json", "common/tests/run.py",
+            "pyproject.toml", "uv.lock"))
         for stem, namespace, _, source in SUBJECTS:
             modules, manifests = source_modules(ROOT / source)
             paths.update(modules.values()); paths.update(manifests)
-            paths.update(Path(__file__).parent / f"fixtures/{stem}.{suffix}" for suffix in ("json", "mlir"))
+            paths.update(bridge / f"fixtures/{stem}.{suffix}" for suffix in ("json", "mlir"))
             paths.add(ROOT / f"lean/ZkcExamples/Structured/{namespace}Data.lean")
-        self.archives["before"] = {}
-        for path in sorted(paths):
-            relative = str(path.relative_to(ROOT))
-            target = self.directory / "sources" / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(path, target)
-            self.archives["before"][relative] = digest(target)
-        tool_dir = self.directory / "tools"
-        tool_dir.mkdir()
-        for name in ("compiler", "reference", "lean"):
-            source = getattr(self.args, name).resolve()
-            if name == "lean" and self.args.native_only:
-                continue
-            before = digest(source)
-            target = tool_dir / name
-            shutil.copy2(source, target)
-            assert before == digest(target) == digest(source), f"tool changed during capture: {source}"
-            self.tools[name] = target
-            self.tool_records[name] = {"path": str(target), "source": str(source), "sha256": before}
-        self.publish("running")
+        return sorted(paths)
 
-    def finish(self, status=None):
-        if self.directory is not None:
-            self.archives["after"] = {
-                name: digest(ROOT / name) for name in self.archives.get("before", {})}
-            changed = [name for name, sha in self.archives.get("before", {}).items()
-                       if self.archives["after"][name] != sha]
-            if changed:
-                self.checks.append({"name": "source-stability", "passed": False, "changed": changed})
-        if self.args.native_only and status is None and self.checks and all(c["passed"] for c in self.checks):
-            super().finish("native-only")
-            return 0
-        return super().finish(status)
+    def tool_names(self):
+        return ("compiler", "reference") if self.args.native_only else ("compiler", "reference", "lean")
+
+    def success_status(self):
+        return "native-only" if self.args.native_only else "pass"
 
     def export(self, label, source, symbol="main"):
         if not self.args.native_only:

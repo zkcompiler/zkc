@@ -1,4 +1,4 @@
-"""Durable reports and complete project-source archives for structured suites."""
+"""Durable reports and scoped source archives for structured suites."""
 
 import hashlib
 import io
@@ -8,6 +8,32 @@ from pathlib import Path
 import subprocess
 import tarfile
 import tempfile
+
+
+def owned_sources(directory, suffixes):
+    """Walk a source owner, never caches, private experiments or directory links.
+
+    Unlike rglob, os.walk with onerror does not silently drop unreadable trees.
+    Ownership roots and source extensions are supplied by the suite, not Git.
+    """
+    def fail(error):
+        raise error
+
+    if directory.is_symlink():
+        raise ValueError(f"source directory is a symlink: {directory}")
+    excluded = {"build", "target", "__pycache__", "private", "experiments"}
+    for parent, directories, files in os.walk(directory, onerror=fail, followlinks=False):
+        directories[:] = sorted(name for name in directories
+                                if not name.startswith(".") and name not in excluded)
+        for name in directories:
+            if (Path(parent) / name).is_symlink():
+                raise ValueError(f"source directory is a symlink: {Path(parent) / name}")
+        for name in sorted(files):
+            path = Path(parent) / name
+            if not name.startswith(".") and path.suffix in suffixes:
+                if path.is_symlink():
+                    raise ValueError(f"owned source is a symlink: {path}")
+                yield path
 
 
 def atomic_json(path, value):
@@ -34,22 +60,41 @@ def atomic_json(path, value):
             temporary.unlink(missing_ok=True)
 
 
-def archive_sources(root, destination):
+def source_names(root, inventory=None):
+    """Normalize an explicit inventory, or ask Git for the working source set."""
+    if inventory is None:
+        names = subprocess.check_output(
+            ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"], cwd=root)
+        inventory = [os.fsdecode(name) for name in names.split(b"\0") if name]
+    names = set()
+    for entry in inventory:
+        path = Path(entry)
+        if path.is_absolute():
+            path = path.relative_to(root)
+        if ".." in path.parts or not path.parts:
+            raise ValueError(f"source path must be within the project: {entry}")
+        names.add(path.as_posix())
+    return sorted(names)
+
+
+def archive_sources(root, destination, *, inventory=None, scope=None):
     """Archive current tracked and nonignored untracked project files.
 
     Read working bytes, not HEAD or index blobs. Keep all project sources so
     transitive local imports are included without maintaining a dependency list.
     Ignored build caches and external packages are deliberately not vendored;
     their manifests and toolchain pins are part of this project archive.
+
+    An explicit inventory requires every selected path to be readable and does
+    not consult Git. Both modes use the same archive and manifest schema.
     """
-    names = subprocess.check_output(
-        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"], cwd=root)
+    names = source_names(root, inventory)
     files, deleted = {}, []
     archive = destination.with_suffix(".tar.gz")
     with tarfile.open(archive, "w:gz") as output:
-        for name in sorted(set(os.fsdecode(name) for name in names.split(b"\0") if name)):
+        for name in names:
             source = root / name
-            if not source.exists() and not source.is_symlink():
+            if inventory is None and not source.exists() and not source.is_symlink():
                 deleted.append(name)
                 continue
             info = output.gettarinfo(str(source), arcname=name)
@@ -74,5 +119,39 @@ def archive_sources(root, destination):
     atomic_json(manifest, {"files": files, "deletedTrackedPaths": deleted})
     return {"path": str(archive), "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
             "manifest": str(manifest), "fileCount": len(files), "bytes": archive.stat().st_size,
-            "scope": "all tracked and nonignored untracked project files at capture time; "
-                     "external dependencies and ignored build caches excluded"}
+            "scope": scope or ("explicit project source inventory" if inventory is not None else
+                     "all tracked and nonignored untracked project files at capture time; "
+                     "external dependencies and ignored build caches excluded")}
+
+
+def check_sources(root, archive, inventory=None):
+    """Check captured identities without letting one unreadable path abort reporting."""
+    manifest = json.loads(Path(archive["manifest"]).read_text(encoding="utf-8"))
+    current, changed, restored, errors = {}, [], [], {}
+    for name, before in manifest["files"].items():
+        source = root / name
+        try:
+            if source.is_symlink():
+                entry = {"symlink": os.readlink(source)}
+            else:
+                data = source.read_bytes()
+                entry = {"sha256": hashlib.sha256(data).hexdigest(), "size": len(data)}
+            current[name] = entry
+            if entry != before:
+                changed.append(name)
+        except OSError as error:
+            errors[name] = f"{type(error).__name__}: {error}"
+    for name in manifest["deletedTrackedPaths"]:
+        try:
+            (root / name).lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as error:
+            errors[name] = f"{type(error).__name__}: {error}"
+        else:
+            restored.append(name)
+    previous = set(manifest["files"]) | set(manifest["deletedTrackedPaths"])
+    added = sorted(set(source_names(root, inventory)) - previous)
+    return {"name": "source-stability", "passed": not (changed or restored or errors or added),
+            "files": current, "changed": changed, "restored": restored,
+            "errors": errors, "added": added}

@@ -136,9 +136,9 @@ negative controls, alongside explicit unsupported and harness-failure controls.
 
 This package adds no production kernels, IR changes, source semantics, native
 Lean interpreter or theorem about Rust. It observes open endpoints under an
-explicit host policy; it does not prove the joint scheduler. Repeated multilinear
-Sumcheck needs protocol-repeat support in the structured importer before this
-comparison can cover it. The checked projection reader accepts a deliberately
+explicit host policy; it does not prove the joint scheduler. The importer supports
+retained protocol repeats, but this participant suite does not yet supply the
+source/reply/provider cases for multilinear Sumcheck. The checked projection reader accepts a deliberately
 small current printed interface; unfamiliar forms fail closed. The driver
 request envelope (`zkc.participant-probe/0`) embeds the existing
 `zkc.structured-open-request/0` and expected result, plus projection binding,
@@ -153,3 +153,11 @@ report lifecycle. It imports and subclasses that owner directly. A copied
 executable from an active build is not evidence that it reflects the latest
 uncommitted source. Retain its hash and require a fresh integrated build before
 reporting current-source joint validation.
+
+Before selecting terminal status, the driver checks both its working source
+archive and each explicitly selected compiler/Lean build-source archive for
+changes. The participant detail and shared report receive the same status,
+including source failures and handled publication errors. The shared report
+retains the hash of the final participant detail. As with the shared lifecycle,
+a permanently unwritable destination or uncatchable termination may prevent
+publication; an archive alone does not prove executable derivation.

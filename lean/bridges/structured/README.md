@@ -36,14 +36,18 @@ exported source and snapshot hashes, and retained executable hashes. Each run
 allocates a fresh directory under `runs/` beside the selected report and copies
 its executables there before testing. The selected report is atomically marked
 `running` before setup, then `pass`, `failed` or `interrupted`; it identifies the
-run directory and its own retained report. Setup failures exit nonzero and
-cannot leave the previous success selected or overwrite its tools.
+run directory and its own retained report. Setup, source verification and
+finalization errors exit nonzero; handled interruptions report `interrupted`.
+Both report destinations are attempted even if one fails, and a publication
+error triggers another attempt with failure recorded. A permanently unwritable
+destination or an uncatchable process termination cannot be guaranteed a final
+report. Ordinary runs never overwrite an earlier run's archive or tools.
 `--compiler`, `--reference`, `--lean`, `--cases` and
 `--seed` select explicit tools and generated cases. Failed comparisons retain
 their source, requests and outputs beside the report.
 
-Each run also retains `source-before.tar.gz` and a per-file byte manifest. This
-is a snapshot of **all tracked and nonignored untracked project files**, using
+Each run also retains `source-before.tar.gz` and a per-file byte manifest. For
+the Git-backed drivers this snapshots **all tracked and nonignored untracked project files**, using
 current working bytes, including modified authored fixtures, proofs, all local
 imports, drivers, manifests and toolchain pins. Deleted tracked paths are
 listed in the manifest. Archived contents are verified against the captured
@@ -52,9 +56,17 @@ maintained partial source list. Ignored build outputs, `.git` history and
 external dependency caches are excluded. Reproduction still needs the pinned
 Lean toolchain and external packages from `lake-manifest.json`; this is not a
 hermetic archive of the host or of the native compiler build environment.
+The scoped repeat driver uses the Git-free inventory described below, with the
+same archive and manifest schema. Before reporting success, the shared lifecycle
+compares current source identities against that manifest, recording changed,
+added, deleted, restored or unreadable sources as a failed `source-stability` check.
+`--write-fixtures` instead retains a separate `source-after` archive because
+source changes are intentional in that mode. Archive hashes describe the exact
+bytes retained, not a simultaneous filesystem snapshot or a proof that copied
+executables were built from those sources.
 Extract the source archive into an empty directory to recover its working
 tree. Initialize a Git repository and commit the restored tree there before
-rerunning these drivers (Git supplies their source inventory and revision); the retained report still
+rerunning the Git-backed drivers (Git supplies their source inventory and revision); the retained report still
 identifies the original revision and archived bytes. Build Lean with the pinned
 dependencies and supply the archived native tools through the explicit flags.
 
@@ -378,9 +390,33 @@ its intentional formal closed-profile refusal are recorded separately.
 Renderer checks construct data and inspect it with the kernel; they do not
 produce semantic proofs or duplicate whole Sumcheck admission checks.
 
-The suite is registered in `lean-native`. Receipts retain exact source and tool
-hashes without requiring Git. `--native-only` supports development while the
-formal CLI is unavailable and reports `native-only`, never a paired pass.
+The suite is registered in `lean-native`. Its Git-free receipts use the shared
+archive, tool capture and report lifecycle. The inventory follows the main
+Lake package's declared library namespaces and executable roots, including
+`ZkcTools` and its local observer dependencies. It also captures the structured
+bridge and fixtures, Python sources in `scripts/`, `common/tests/support/`,
+`lean/checks/` and `lean/support/`, the common test entry point, compiler source
+owners (`include/`, `lib/`, `tools/`, `test/`, `cmake/`) and their shared
+`common/unicode/` inputs, package manifests and
+pins, and the authored module/manifests selected through each subject's project
+closure. New modules within those owners enter the inventory automatically;
+adding a dependency in a different owner requires extending this scope.
+
+This is a source archive for the main formal package and repeat driver, not a
+whole-checkout archive. Hidden directories, private experiments, build caches,
+external packages and optional Lean integrations are excluded. Directory links
+within scanned owners are refused rather than traversed. The selected native
+executables are copied and hashed; reproducing their build environment remains
+separate. Restoring the archive does not require initializing Git to rerun
+`repeats.py`; the report's revision is null and the manifest identifies its
+working sources. Deleted or unreadable required inputs fail setup, and changes
+or read failures after capture fail finalization while retaining the original
+archive and prior runs.
+
+`--native-only` supports development while the formal CLI is unavailable and
+reports `native-only` with exit zero only when its checks and evidence lifecycle
+succeed. Setup, comparison or finalization failures still report `failed` (or
+`interrupted`) and exit nonzero; they cannot become a native-only success.
 These finite comparisons establish neither universal exporter/native
 correspondence nor symbolic Sumcheck or security theorems.
 

@@ -160,7 +160,7 @@ class Suite(structured.Suite):
                            affinity=sorted(os.sched_getaffinity(0)),
                            threads={k: os.environ.get(k) for k in ("CARGO_BUILD_JOBS", "RAYON_NUM_THREADS", "OMP_NUM_THREADS")},
                            scope="sampled native endpoint values, prefixes and operational residual state")
-        # Shared Suite publishes running before allocation, Git or tool copies.
+        # Shared run publishes running before allocation, Git or tool copies.
         super().__init__(args)
 
     def setup(self):
@@ -191,13 +191,40 @@ class Suite(structured.Suite):
                                          else self.args.lean_revision if name == "lean" else self.revision)
         self.save()
 
-    def save(self):
+    def publish(self, status):
+        """Publish the detail with the same final status as the shared report."""
+        for check in self.checks:
+            check.setdefault("status", "Pass" if check["passed"] else "HarnessFailure")
+            check.setdefault("kind", "setup")
+        statuses = ("Pass", "Mismatch", "Unsupported", "HarnessFailure")
+        self.detail["case_counts"] = {
+            state: sum(row["status"] == state for row in self.detail["cases"]) for state in statuses}
+        self.detail["control_counts"] = {
+            state: sum(row["status"] == state for row in self.detail["controls"]) for state in statuses}
+        self.detail["status"] = status
         if self.directory is not None:
             path = self.directory / "participant.json"
-            self.evidence.atomic_json(path, self.detail)
-            record = dict(name="participant-observations", path=str(path), sha256=digest(path))
-            self.sources[:] = [r for r in self.sources if r["name"] != record["name"]] + [record]
+            # Remove stale evidence even if writing or hashing the new detail fails.
+            self.sources[:] = [r for r in self.sources if r["name"] != "participant-observations"]
+            try:
+                self.evidence.atomic_json(path, self.detail)
+                record = dict(name="participant-observations", path=str(path), sha256=digest(path))
+            except BaseException as error:
+                interrupted = status == "interrupted" or isinstance(error, KeyboardInterrupt)
+                super().publish("interrupted" if interrupted else "failed")
+                raise
+            self.sources.append(record)
+        super().publish(status)
+
+    def save(self):
         self.publish("running")
+
+    def verify_sources(self):
+        super().verify_sources()
+        for name, record in self.detail.get("external_sources", {}).items():
+            check = self.evidence.check_sources(Path(record["root"]), record["archive"])
+            check["name"] = name + "-source-stability"
+            self.checks.append(check)
 
     def command(self, label, args, accepted=(0,)):
         started = now()
@@ -213,17 +240,6 @@ class Suite(structured.Suite):
             if self.commands:
                 self.commands[-1].update(startedUtc=started,finishedUtc=now())
             self.save()
-
-    def finish(self, status=None):
-        for check in self.checks:
-            check.setdefault("status","Pass" if check["passed"] else "HarnessFailure")
-            check.setdefault("kind","setup")
-        statuses=("Pass","Mismatch","Unsupported","HarnessFailure")
-        self.detail["case_counts"]={s:sum(r["status"]==s for r in self.detail["cases"]) for s in statuses}
-        self.detail["control_counts"]={s:sum(r["status"]==s for r in self.detail["controls"]) for s in statuses}
-        self.detail["status"]=status or ("pass" if self.checks and all(r["passed"] for r in self.checks) else "failed")
-        self.save()
-        return super().finish(status)
 
     def subject(self, name, source=None, root="main"):
         folder = self.directory / name; folder.mkdir()

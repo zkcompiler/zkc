@@ -134,3 +134,107 @@ def test_shared_lifecycle_replaces_selected_success_without_mutating_old_run(tmp
 def test_malformed_observation_is_harness_failure():
     with pytest.raises(comparison.HarnessFailure):
         comparison.compare_result(None, dict(status="Pass", format="wrong"))
+
+
+@pytest.mark.parametrize("failure", [
+    "none", "changed-harness", "deleted-harness", "restored-harness",
+    "changed-external", "deleted-external", "detail-publication", "selected-publication", "interrupt",
+    "detail-read-once", "detail-read-persistent", "detail-read-interrupt-persistent", "interrupt-detail-write",
+])
+def test_terminal_detail_and_selected_source_roots_agree(tmp_path, monkeypatch, failure):
+    import argparse
+    import json
+    import subprocess
+
+    def repository(name):
+        root = tmp_path / name
+        root.mkdir()
+        (root / "input.zkc").write_text("original")
+        (root / "restored.lean").write_text("def restored := 1\n")
+        subprocess.run(["git", "init", "-q", root], check=True)
+        subprocess.run(["git", "add", "."], cwd=root, check=True)
+        subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                        "commit", "-qm", "source"], cwd=root, check=True)
+        revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+        return root, revision
+
+    root, _ = repository("harness")
+    external, revision = repository("build-source")
+    shared = comparison.structured
+    monkeypatch.setattr(shared, "ROOT", root)
+    tool = tmp_path / "tool"
+    tool.write_text("#!/bin/sh\nexit 0\n")
+    tool.chmod(0o755)
+    args = argparse.Namespace(report=tmp_path / "selected.json", seed=0, cases=1,
+        compiler=tool, optimizer=tool, reference=tool, lean=tool, runtime=tool,
+        compiler_source=external, lean_source=external,
+        compiler_revision=revision, lean_revision=revision)
+    if failure == "restored-harness":
+        (root / "restored.lean").unlink()
+
+    def action(suite):
+        suite.checks.append(dict(name="comparison", passed=True))
+        if failure == "interrupt":
+            raise KeyboardInterrupt()
+        if failure.startswith(("changed-", "deleted-")):
+            source = (external if failure.endswith("external") else root) / "input.zkc"
+            if failure.startswith("changed-"):
+                source.write_text("changed")
+            else:
+                source.unlink()
+        elif failure == "restored-harness":
+            (root / "restored.lean").write_text("def restored := 1\n")
+        elif failure.endswith("publication") or failure == "interrupt-detail-write":
+            detail_failure = failure != "selected-publication"
+            owner = suite.evidence if detail_failure else shared
+            publish = owner.atomic_json
+            failed = []
+
+            def fail_once(path, report):
+                selected = path.name == "participant.json" if detail_failure else path == args.report
+                if selected and report["status"] != "running" and (not failed or failure == "interrupt-detail-write"):
+                    failed.append(path)
+                    raise PermissionError("terminal publication failed")
+                publish(path, report)
+
+            monkeypatch.setattr(owner, "atomic_json", fail_once)
+            if failure == "interrupt-detail-write":
+                raise KeyboardInterrupt()
+        elif failure.startswith("detail-read-"):
+            read_bytes = Path.read_bytes
+            failed = []
+
+            def fail_detail_read(path):
+                if path.name == "participant.json" and (not failed or failure.endswith("persistent")):
+                    failed.append(path)
+                    if "interrupt" in failure:
+                        raise KeyboardInterrupt()
+                    raise PermissionError("terminal detail read failed")
+                return read_bytes(path)
+
+            monkeypatch.setattr(Path, "read_bytes", fail_detail_read)
+
+    suite = comparison.Suite(args)
+    assert suite.run(action) == (0 if failure == "none" else 1)
+    report = json.loads(args.report.read_text())
+    detail_path = suite.directory / "participant.json"
+    detail = json.loads(detail_path.read_text())
+    status = "pass" if failure == "none" else "interrupted" if "interrupt" in failure else "failed"
+    assert report["status"] == status
+    assert report["finishedUtc"]
+    # An unwritable detail may retain its old contents, but must be unreferenced.
+    assert detail["status"] == ("running" if failure == "interrupt-detail-write" else status)
+    assert json.loads((suite.directory / "report.json").read_text()) == report
+    retained = [row for row in report["sources"] if row["name"] == "participant-observations"]
+    if failure.endswith("persistent") or failure == "interrupt-detail-write":
+        assert not retained
+    else:
+        assert len(retained) == 1 and retained[0]["sha256"] == comparison.digest(detail_path)
+    if failure in ("changed-external", "deleted-external"):
+        checks = {row["name"]: row for row in report["checks"]}
+        assert checks["source-stability"]["passed"]
+        assert not checks["compiler-source-stability"]["passed"]
+        assert not checks["lean-source-stability"]["passed"]
+    if failure == "restored-harness":
+        check = next(row for row in report["checks"] if row["name"] == "source-stability")
+        assert check["restored"] == ["restored.lean"] and not check["passed"]

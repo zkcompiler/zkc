@@ -20,7 +20,7 @@ import time
 from uuid import uuid4
 
 import snapshot as constructors
-from evidence import archive_sources, atomic_json
+from evidence import archive_sources, atomic_json, check_sources
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -70,6 +70,8 @@ def typed_result(types, expected):
 
 
 class Suite:
+    source_scope = None
+
     def __init__(self, args):
         self.args = args
         self.directory = None
@@ -80,9 +82,20 @@ class Suite:
         self.identity = str(uuid4())
         self.started = datetime.now(timezone.utc).isoformat()
         self.rng = random.Random(args.seed)
-        # Clear any previous success before allocation, copies, Git or commands.
-        # No old archive is changed: all subsequent writes use a fresh directory.
-        self.publish("running")
+
+    def source_inventory(self):
+        """None selects Git; subclasses can supply a complete owned source set."""
+        return None
+
+    def tool_names(self):
+        return ("compiler", "optimizer", "reference", "lean", "runtime")
+
+    def success_status(self):
+        return "pass"
+
+    def capture_sources(self, stage):
+        return archive_sources(ROOT, self.directory / f"source-{stage}",
+                               inventory=self.source_inventory(), scope=self.source_scope)
 
     def setup(self):
         self.directory = new_directory(self.args.report.resolve().parent / "runs",
@@ -90,36 +103,50 @@ class Suite:
         self.publish("running")
         if self.args.cases < 1:
             raise ValueError("--cases must be positive")
-        self.revision = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-        self.archives["before"] = archive_sources(ROOT, self.directory / "source-before")
+        if self.source_inventory() is None:
+            self.revision = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+        self.archives["before"] = self.capture_sources("before")
         tool_dir = self.directory / "tools"
         tool_dir.mkdir()
-        for name in ("compiler", "optimizer", "reference", "lean", "runtime"):
+        for name in self.tool_names():
             source = getattr(self.args, name, None)
             if source is None:
                 continue
             source = source.resolve()
+            before = digest(source)
             target = tool_dir / name
             shutil.copy2(source, target)
+            if before != digest(target) or before != digest(source):
+                raise ValueError(f"tool changed during capture: {source}")
             self.tools[name] = target
-            self.tool_records[name] = {"path": str(target), "sha256": digest(target),
+            self.tool_records[name] = {"path": str(target), "sha256": before,
                                        "source": str(source)}
 
     def run(self, action):
         """Own setup and finalization for both structured drivers, including failure."""
         status = None
         try:
+            # Clear previous success before allocation, copies, Git or commands.
+            self.publish("running")
             self.setup()
             action(self)
-            if getattr(self.args, "write_fixtures", False):
-                self.archives["after"] = archive_sources(ROOT, self.directory / "source-after")
         except BaseException as error:
-            status = "interrupted" if isinstance(error, KeyboardInterrupt) else "failed"
-            self.checks.append({"name": "setup-or-generation", "passed": False,
-                                "error": f"{type(error).__name__}: {error}"})
-            print(error, file=sys.stderr)
-        return self.finish(status)
+            status = self.failure("setup-or-generation", error)
+        try:
+            return self.finish(status)
+        except BaseException as error:
+            failure = self.failure("finalization", error)
+            status = "interrupted" if "interrupted" in (status, failure) else "failed"
+            # A driver-specific finalizer must not bypass the common terminal
+            # publisher. Do not re-enter the failed override.
+            return Suite.finish(self, status)
+
+    def failure(self, name, error):
+        self.checks.append({"name": name, "passed": False,
+                            "error": f"{type(error).__name__}: {error}"})
+        print(error, file=sys.stderr)
+        return "interrupted" if isinstance(error, KeyboardInterrupt) else "failed"
 
     def publish(self, status):
         report = {"format": "zkc.structured-comparison/0", "seed": self.args.seed,
@@ -132,9 +159,17 @@ class Suite:
                   "scope": "bounded logical outcomes; no native correspondence theorem or resource equivalence"}
         if status != "running":
             report["finishedUtc"] = datetime.now(timezone.utc).isoformat()
+        paths = [self.args.report]
         if self.directory is not None:
-            atomic_json(self.directory / "report.json", report)
-        atomic_json(self.args.report, report)
+            paths.insert(0, self.directory / "report.json")
+        errors = []
+        for path in paths:
+            try:
+                atomic_json(path, report)
+            except BaseException as error:
+                errors.append(error)
+        if errors:
+            raise next((error for error in errors if isinstance(error, KeyboardInterrupt)), errors[0])
 
     def command(self, label, argv, success=True):
         start = time.monotonic()
@@ -307,14 +342,40 @@ class Suite:
             assert endpoint["after"][1]["cause"] == ["explicit", {
                 "omitted_bytes": 0, "text": expected[1]}], report
 
+    def verify_sources(self):
+        """Finish source evidence before selecting a terminal report status."""
+        if "before" in self.archives:
+            if getattr(self.args, "write_fixtures", False):
+                self.archives["after"] = self.capture_sources("after")
+            else:
+                self.checks.append(check_sources(ROOT, self.archives["before"],
+                                                 self.source_inventory()))
+
     def finish(self, status=None):
         if not self.checks:
             self.checks.append({"name": "suite", "passed": False, "error": "no checks executed"})
+        try:
+            self.verify_sources()
+        except BaseException as error:
+            failure = self.failure("source-stability", error)
+            status = "interrupted" if "interrupted" in (status, failure) else "failed"
         failures = sum(not check["passed"] for check in self.checks)
-        status = status or ("failed" if failures else "pass")
-        self.publish(status)
+        if status != "interrupted":
+            status = "failed" if failures or status == "failed" else self.success_status()
+        try:
+            self.publish(status)
+        except BaseException as error:
+            failure = self.failure("report-publication", error)
+            status = "interrupted" if "interrupted" in (status, failure) else "failed"
+            # Attempt both destinations again with the failure recorded. A
+            # permanently unwritable destination cannot be promised a report.
+            try:
+                self.publish(status)
+            except BaseException as error:
+                print(f"could not publish terminal report: {error}", file=sys.stderr)
+        failures = sum(not check["passed"] for check in self.checks)
         print(f"{len(self.checks)} checks, {failures} failures; {self.args.report}")
-        return int(status != "pass")
+        return int(status not in ("pass", "native-only"))
 
 
 def wire(ty, value):
