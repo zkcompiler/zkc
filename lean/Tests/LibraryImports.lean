@@ -70,6 +70,7 @@ import Zkc.Source.DeriveRegion
 import Zkc.Source.Finite
 import Zkc.Source.Format
 import Zkc.Source.Interpretation
+import Zkc.Source.KernelRfl
 import Zkc.Source.Mathematical.Projection
 import Zkc.Source.Mathematical
 import Zkc.Source.Participant
@@ -147,6 +148,7 @@ import Zkc.Source.Structured.Repeat
 import Zkc.Source.Structured.RepeatAdmission
 import Zkc.Source.Structured.RepeatLaws
 import Zkc.Source.Structured.Table
+import Zkc.Source.Structured.UnitViews
 import Zkc.Source.Structured.Vocabulary
 import Zkc.Specification
 import Tests.CommonRegion
@@ -372,6 +374,7 @@ import ZkcExamples.Structured.SumcheckSourceData
 import ZkcExamples.Structured.SumcheckSourceLaws
 import ZkcExamples.Structured.SumcheckSourceVerifier
 import ZkcExamples.Structured.SumcheckSourceViews
+import ZkcExamples.Structured.SumcheckUnitContracts
 import ZkcExamples.Structured.SumcheckVerifierBodies
 import ZkcExamples.Structured.SumcheckVerifierHelpers
 import ZkcExamples.Structured.SumcheckVerifierLaws

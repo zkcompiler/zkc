@@ -72,6 +72,15 @@ labels do not prove dynamic reachability. A shared interpretation
 environment fixes opaque relation meanings. `ContractExecution` projects
 boundaries from actual outcomes, preserving absent participants and stops.
 
+`Structured.UnitViews` emits a unit's literal checked payload from its typed
+bodies: `structured_views` writes the checked declarations, the payload and one
+named kernel equation per admission phase, ordering declarations with the
+admission orderers themselves; `structured_associations` writes each body's
+membership, signature and raw-tree association. The commands produce ordinary
+declarations, so a stale or mistyped body fails a phase equation. Phase
+equations use `kernel_rfl`, which checks a closed definitional equality in the
+kernel only.
+
 `Source.RegionDerivation` and its tactics derive process correspondence from the
 same typed body using local rules. `Structured.ContractCalls` enumerates lexical
 calls; `ContractComposition` proves actual callee substitution and continuation
