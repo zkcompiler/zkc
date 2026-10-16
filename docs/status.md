@@ -316,6 +316,13 @@ linear combination checks broadcasts and unused rows. Initial realization
 closures exclude finite work and bounded reads; maps exclude other fields,
 including the library's KoalaBear Ext8 Combination. Native preparation's Ring
 limits and generated guard sites remain a separate correspondence boundary.
+Native formation owns malformed map ABI/mask/helper and transitive ring-fragment
+refusals before either structured reader runs its redundant checks. Independent
+controls instead observe the Fr-only restriction, the 4096-instruction admission
+budget (one per retained preparation), and reference depth 64 measured in edges
+with leaf depth zero. Runtime evaluation depth starts at one and remains a
+separate observer limit. Missing-input evidence observes the owned protocol
+Local-call boundary, not a direct optional derived map operation.
 Protocol application/repetition and whole Sumcheck are not
 admitted by this profile. The separately owned
 [structured Lean bridge](../lean/bridges/structured/README.md) records its exact

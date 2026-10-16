@@ -20,7 +20,11 @@ serial = 0
 def export(source, symbol='main', refusal=None, keep=None):
     result = commands.source('protocol-structured', source, '--symbol=' + symbol,
                              refuses=refusal, keep=keep)
-    return None if refusal else json.loads(result)
+    if refusal:
+        return None
+    snapshot = json.loads(result)
+    assert snapshot[2] == 'sha256:' + hashlib.sha256(source.encode()).hexdigest()
+    return snapshot
 
 
 def run(source, inputs, symbol='main', role='P', replies=(), capacity=1000000, refusal=None):
@@ -42,6 +46,49 @@ def returned(values):
 def stopped(reason='refused', site='map'):
     return ['zkc.structured-open-result/0', ['stopped', reason, site],
             [['stop', reason, site, 0]], 0]
+
+
+def wrap_unit(body):
+    return '''!F = !algebra.field<"bls12-381.fr">
+!V = !algebra.field_vector<"bls12-381.fr">
+module { "protocol.module"() ({
+''' + body + '\n}) {profile=#protocol.profile<protocol>} : ()->() }\n'
+
+empty_main = '''"protocol.func"() ({ "protocol.return"() : ()->() })
+{sym_name="main",function_type=()->(),roles=["P"],input_roles=[],output_roles=[]} : ()->()'''
+
+def reference_chain(edges, preparation='map', reverse=False):
+    # main -> work -> prepared -> hN -> ... -> h0: N + 3 edges.
+    helpers = ['func.func private @h0(%x:!F)->!F { func.return %x : !F }']
+    for i in range(1, edges - 2):
+        helpers.append(f'''func.func private @h{i}(%x:!F)->!F {{
+%r = func.call @h{i - 1}(%x) : (!F)->!F
+func.return %r : !F }}''')
+    if reverse:
+        helpers.reverse()
+    lifted = '!V' if preparation == 'map' else '!F'
+    declaration = (f'algebra.map_realize @prepared = @h{edges - 3} [true] : (!V)->!V'
+                   if preparation == 'map' else
+                   f'local.realize @prepared = @h{edges - 3} : (!F)->!F')
+    body = '\n'.join(helpers) + '\n' + declaration + f'''
+local.func @work(%x:{lifted})->{lifted} attributes {{logical_origin=["work",[]]}} {{
+%r = local.apply @prepared(%x) {{site="prepare"}} : ({lifted})->{lifted}
+local.return %r : {lifted} }}
+"protocol.func"() ({{
+^entry(%x:{lifted}):
+%r = "protocol.local_call"(%x) {{callee=@work,role="P",site="work"}} : ({lifted})->{lifted}
+"protocol.return"(%r) : ({lifted})->()
+}}) {{sym_name="main",function_type=({lifted})->{lifted},roles=["P","V"],input_roles=[["P"]],output_roles=[["P"]]}} : ()->()'''
+    return wrap_unit(body)
+
+
+def instruction_budget_source(extra=''):
+    constants = '\n'.join(f'%c{i} = "algebra.constant"() {{value="0"}} : ()->!F' for i in range(4094))
+    return wrap_unit('func.func private @formula(%x:!F)->!F {\n' + constants + '''
+func.return %x : !F }
+local.realize @realized = @formula : (!F)->!F
+algebra.map_realize @mapped = @formula [true] : (!V)->!V
+''' + extra + '\n' + empty_main)
 
 
 mapped = (fixtures / 'map-declarations.mlir').read_text()
@@ -190,9 +237,53 @@ with case('dormant-realization-transitive-profile-and-dead-calls'):
     export(source, refusal='structured-source-realization')
     run(source, [], refusal='structured-reference-realization')
 
+with case('nested-realization-premise-needs-native-call-evidence'):
+    source = realized.replace(' func.func private @value', '''
+ func.func private @bounded(%xs:!V,%i:ui64)->!V attributes {data.preconditions=[#data.index_bound<1,0,0>]} {
+   func.return %xs : !V
+ }
+ func.func private @value''', 1)
+    marker = '   func.return %xs : !V\n }\n local.realize'
+    assert source.count(marker) == 1
+    source = source.replace(marker,
+        '   %dead = func.call @bounded(%xs,%dimension) : (!V,ui64)->!V\n' + marker, 1)
+    commands.verified(source, 'finite-bound')
+    export(source, refusal='structured-source-original')
+    run(source, [], refusal='structured-reference-source')
+
+with case('native-valid-nested-realization-premise-via-finite-index-evidence'):
+    source = (fixtures / 'realization-finite.mlir').read_text()
+    source = source.replace('"data.domain_elements"(%xs)',
+                            '"data.domain_indices"(%xs) {axis=0:i64}')
+    source = source.replace('!data.domain<!F>', '!data.domain<ui64>')
+    source = source.replace('@step(%acc:!F,%x:!F,%xs:!V)->!F {',
+        '@step(%acc:!F,%x:ui64,%xs:!V)->!F attributes {data.preconditions=[#data.index_bound<1,2,0>]} {')
+    source = source.replace('"algebra.field_add"(%acc,%x)', '"algebra.field_add"(%acc,%acc)')
+    assert source.count('data.preconditions=') == 1
+    commands.verified(source)
+    # Native accepts the discharged callback premise below an unconditional
+    # realization root. The structured total profile also excludes finite
+    # work, so this does not isolate its transitive premise check.
+    export(source, refusal='structured-source-realization')
+    run(source, [], refusal='structured-reference-realization')
+
 with case('numeric-native-mask-syntax-is-a-typed-boolean'):
-    source = mapped.replace('[true, true, true, false]', '[true, true, 1, false]')
-    assert next(row for row in export(source)[7] if row[0] == 'map')[5] == [True, True, True, False]
+    original, numeric = '[true, true, true, false]', '[true, true, 1, false]'
+    assert mapped.count(original) == 1
+    source = mapped.replace(original, numeric, 1)
+    assert source.count(numeric) == 1 and original not in source and source != mapped
+    before, after = export(mapped), export(source)
+    mask = next(row for row in after[7] if row[0] == 'map')[5]
+    assert mask == [True, True, True, False] and all(type(row) is bool for row in mask)
+    assert before[2] != after[2]
+    assert before[:2] + before[3:] == after[:2] + after[3:]
+    assert run(source, map_args) == run(mapped, map_args)
+
+with case('original-byte-digest-includes-comments-and-line-endings'):
+    source = '// original bytes: \u03bb\r\n' + mapped.replace('\n', '\r\n')
+    before, after = export(mapped), export(source)
+    assert before[2] != after[2]
+    assert before[:2] + before[3:] == after[:2] + after[3:]
 
 with case('native-preparation-name-bound-and-separate-wire-helper-bound'):
     for source, name in [(mapped, 'mapped'), (realized, 'realized')]:
@@ -215,6 +306,55 @@ with case('preparations-share-the-existing-definition-table-limit'):
         ' local.realize @extra = @value : (!V,ui64,ui64)->!V\n local.func @work')
     export(source, refusal='structured-source-limit')
     run(source, [], refusal='structured-reference-capacity')
+
+for preparation in ('map', 'realize'):
+    for reverse in (False, True):
+        with case(f'{preparation}-reference-edges-63-64-65-reverse-{reverse}'):
+            inputs = [['7']] if preparation == 'map' else ['7']
+            source = reference_chain(63, preparation, reverse)
+            commands.verified(source)
+            export(source)
+            assert run(source, inputs) == returned(inputs)
+
+            # 64 edges are admitted. Runtime root depth is 1: entering the
+            # last scalar helper would need depth 65, even with ample fuel.
+            source = reference_chain(64, preparation, reverse)
+            commands.verified(source)
+            export(source)
+            if preparation == 'map':
+                assert run(source, [[]]) == returned([[]])
+            else:
+                assert run(source, inputs, role='V') == returned([None])
+            run(source, inputs, refusal='structured-reference-capacity')
+            assert 'evaluation steps or depth' in commands.last.stderr
+
+            # Math has only 63 helper nodes here; native formation accepts it.
+            # The full path includes the protocol, Local and preparation edges.
+            source = reference_chain(65, preparation, reverse)
+            commands.verified(source)
+            export(source, refusal='structured-source-limit')
+            run(source, inputs, role='V', refusal='structured-reference-capacity')
+            assert 'reference depth' in commands.last.stderr
+
+for extra in ('map', 'realize'):
+    with case('derived-instruction-4096-4097-' + extra):
+        # 4094 stored constant instructions + two dormant preparations.
+        # Neither helper evaluation nor production Ring expansion is involved.
+        source = instruction_budget_source()
+        commands.verified(source)
+        snapshot = export(source)
+        assert len(snapshot[7]) == 4
+        assert len(snapshot[7][0][9][1]) == 4094
+        assert [row[0] for row in snapshot[7]] == ['function', 'realize', 'map', 'function']
+        assert run(source, []) == returned([])
+        declaration = ('algebra.map_realize @extra = @formula [true] : (!V)->!V'
+                       if extra == 'map' else
+                       'local.realize @extra = @formula : (!F)->!F')
+        source = instruction_budget_source(declaration)
+        commands.verified(source)
+        export(source, refusal='structured-source-limit')
+        run(source, [], refusal='structured-reference-capacity')
+        assert 'preparation instructions' in commands.last.stderr
 
 with case('retained-ssa-admission-is-distinct-from-expanded-ring-capacity'):
     body = []
@@ -291,10 +431,14 @@ def frontend(label):
     commands.write(label + '-inputs.json', before)
     flags = ['--source-format=zkc', '--entry=map_examples::' + label + 'Entry',
              *[f'--module={name}={path}' for name, path in sorted(modules.items())]]
-    source = commands.run([compiler, 'language-emit', *flags], keep=label + '.mlir')
+    emitted = commands.attempt([compiler, 'language-emit', *flags], text=False,
+                               keep=label + '.mlir')
+    assert emitted.returncode == 0, emitted.stderr.decode()
+    assert (commands.directory / (label + '.mlir')).read_bytes() == emitted.stdout
+    source = emitted.stdout.decode()
     interface = json.loads(commands.run([compiler, 'language-interface', *flags], keep=label + '-interface.json'))
     assert before == {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in modules.values()}
-    assert interface['original'] == hashlib.sha256(source.encode()).hexdigest()
+    assert interface['original'] == hashlib.sha256(emitted.stdout).hexdigest()
     snapshot = export(source, interface['protocol'], keep=label + '-structured.json')
     assert snapshot[2] == 'sha256:' + interface['original']
     assert not any(op in source for op in ['"protocol.apply"', '"protocol.repeat"'])

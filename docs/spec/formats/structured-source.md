@@ -142,6 +142,10 @@ empty preconditions and use only the admitted pure field/group/Boolean/index
 operations, select, Math calls and return. Finite operations and bounded reads
 are refused in this closure even when the native realization is valid. Other
 Math functions retain their existing finite profile.
+Native formation requires call-site evidence for nested helper premises, even
+on dead calls. It can accept a premise discharged by a finite index callback
+below an unconditional realization root. Such a structured negative also hits
+the finite-work exclusion; it does not isolate the transitive-premise check.
 
 A map root takes only `bls12-381.fr` scalars and returns exactly one such scalar.
 `rowwise` is a Boolean array with exactly one entry per input and at least one
@@ -152,6 +156,15 @@ fragment: constants, add, subtract, multiply, Math calls and return. Nested
 callees may return zero or multiple scalars; the one-result restriction applies
 only to the root. All helper preconditions are empty. Equality, selection,
 indices, groups, finite operations and other fields are outside this map profile.
+
+Both native tools run native formation before their separate structured checks.
+Native formation owns the map ABI, mask, helper identity and transitive ring
+fragment rules, including dead operations. Each structured reader repeats these
+checks, but malformed-map controls through these tools observe the native
+formation refusal first; they do not isolate the redundant structured closure
+checks. The structured Fr-only restriction and structural capacity limits remain
+independently observable. Native formation accepts a wider realization fragment
+than the conservative structured closure above.
 
 Preparation declarations are invoked only by `local.apply` in a Local function.
 `protocol.local_call` requires an actual Local function, so an ordinary wrapper
@@ -331,6 +344,9 @@ existing SSA evaluator. It does not dispatch a production kernel, extract a
 polynomial for another evaluator, or assign meaning by helper name. Realization
 passes every argument and returns every result in order. Owned Local calls are
 strict even for an unused projection input or a zero-result invocation.
+Native missing-input controls observe strictness at `protocol.local_call`, before
+entering its Local body. They do not separately exercise a direct optional
+derived map operation or the inner preparation invocation presence check.
 
 Map first measures the first row length, stopping `exhausted` if it is not below
 2^64. It then visits each remaining row input in argument order, measures and
@@ -413,7 +429,13 @@ while Local exec sequences operands strictly. Its eager Math execution needs a t
 comparison with native demand-driven projection for potentially failing Math.
 Native verification remains authoritative for formation. The reference bounds
 step capacity to 1..1000000, replies to 4096, request and replay-record bytes to 1 MiB, vector
-length to 4096 and loop bounds to 2^20; evaluation depth is 64. Capacity failures
+length to 4096 and loop bounds to 2^20; evaluation depth is 64, starting the entry
+invocation at 1 and increasing for helper calls and nested execution regions.
+This runtime observer bound is separate from reference-graph admission below:
+an admitted 64-edge path can require evaluation depth 65 if fully traversed.
+An empty map does not invoke its scalar helper, and nonowners skip owned Local
+calls, so admission of that path need not exhaust evaluation capacity.
+Capacity failures
 are explicit `structured-reference-capacity` diagnostics, not simulated native
 stops. This is bounded test evidence, not an interpreter correctness theorem.
 Vector result lengths are checked before allocation. Sum, split and equal-length
@@ -437,9 +459,14 @@ bindings and definitions to 128 each, signatures to 512
 positions and total instructions to 4096. The instruction count includes nested
 bodies and one derived instruction per finite, realization or map declaration;
 it excludes terminators and domain
-constructors. Lexical JSON and region nesting are bounded by 64. Helper reference
-depth is bounded by 64. References are derived from stored instructions, with
-at most two helper references per instruction; shared calls are not expanded for admission.
+constructors. The independent native reference enforces the same 4096-instruction
+admission budget, independently of runtime fuel and without expanding calls.
+Lexical JSON and region nesting are bounded by 64. Helper reference depth is the
+longest reference path in **edges**, with a leaf at 0 and a maximum of 64 in both
+native readers. A preparation-to-Math-helper reference contributes one edge,
+as do calls to Local wrappers and preparations. References are derived from
+stored instructions, with at most two helper references per instruction; shared
+calls are not expanded for admission.
 See the formal contract. All failures
 produce diagnostics rather than a partial successful snapshot.
 

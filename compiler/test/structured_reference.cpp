@@ -724,7 +724,9 @@ class Admission {
     if (found != heights.end())
       return found->second;
     active.insert(op);
-    unsigned result = 1;
+    // Height counts reference edges, with a leaf at zero. Keep this separate
+    // from the interpreter's one-based invocation/region depth budget.
+    unsigned result = 0;
     auto edges = dependencies.find(op);
     if (edges != dependencies.end())
       for (Operation *target : edges->second) {
@@ -880,7 +882,7 @@ public:
         return failure;
     }
     for (Operation &op : unit.getBody().front()) {
-      auto checked = height(&op, 1);
+      auto checked = height(&op, 0);
       if (!checked)
         return checked.takeError();
     }

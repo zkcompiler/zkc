@@ -918,6 +918,7 @@ class Exporter {
   }
 
   Error closure() {
+    // Height is the longest reference path in edges; a leaf has height zero.
     // Memoize heights, not only colors: a shared helper encountered first on a
     // short path must still count its whole suffix on a later, longer path.
     llvm::DenseMap<Operation *, unsigned> heights;
