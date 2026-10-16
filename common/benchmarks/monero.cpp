@@ -13,6 +13,7 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 #include <set>
+#include <sodium/crypto_hash_sha256.h>
 #include <sstream>
 #include <stdexcept>
 #include <time.h>
@@ -46,6 +47,20 @@ static void write(const std::string &path, const std::string &value) {
   out.write(value.data(), value.size());
   if (!out)
     throw std::runtime_error("cannot write " + path);
+}
+static std::string digest(const std::string &value) {
+  unsigned char bytes[crypto_hash_sha256_BYTES];
+  if (crypto_hash_sha256(bytes,
+                         reinterpret_cast<const unsigned char *>(value.data()),
+                         value.size()) != 0)
+    throw std::runtime_error("proof hashing failed");
+  constexpr char hex[] = "0123456789abcdef";
+  std::string result;
+  for (unsigned char byte : bytes) {
+    result += hex[byte >> 4];
+    result += hex[byte & 15];
+  }
+  return result;
 }
 static rapidjson::Document document(const std::string &path) {
   rapidjson::Document result;
@@ -201,6 +216,8 @@ int main(int argc, char **argv) {
           record.AddMember("path", Json(name.c_str(), allocator), allocator);
           record.AddMember("bytes", static_cast<uint64_t>(last.size()),
                            allocator);
+          record.AddMember("sha256", Json(digest(last).c_str(), allocator),
+                           allocator);
           proofs.PushBack(record, allocator);
         }
       }
@@ -227,6 +244,7 @@ int main(int argc, char **argv) {
                      static_cast<uint64_t>(prove ? last.size() : input.size()),
                      allocator);
     report.AddMember("diagnostics", Json(), allocator);
+    report.AddMember("lifecycle", Json(), allocator);
     Json build(rapidjson::kObjectType);
     build.AddMember("compiler", __VERSION__, allocator);
 #ifdef __OPTIMIZE__

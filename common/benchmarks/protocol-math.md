@@ -2,12 +2,20 @@
 
 [`protocol_math.py`](protocol_math.py) compares complete FRI, imported AIR/STARK,
 machine LogUp and machine grand-product proofs through the existing compiler
-and native CLI. It uses Python's standard library and the maintained
-[`processes`](../../scripts/processes.py) lifecycle helper and the
-[explicit project capture helper](../tests/support/project.py). It does not import
+and native CLI. It uses the shared [measurement I/O](bench/io.py),
+[`process lifecycle`](../../scripts/processes.py) and
+[project capture](../tests/support/project.py) helpers, with Python's standard library. It does not import
 pytest integration modules, build tools, synchronize dependencies or modify
 the selected source trees. Input preparation reuses the maintained example
 scripts and their small adapter dependencies.
+
+For SDK-call measurements, growing trace shapes, dense polynomial workloads and
+changing statements, use the common [execution benchmark suite](README.md).
+The two tools share process journals and the exclusive
+`/tmp/zkc-benchmark-execution.lock`. Each harness acquires the lock itself across
+preparation, timing and validation; do not wrap it in a second acquisition.
+Exit 75 means the slot is busy. Use the same lock for other CPU-heavy builds or
+experiments, and never unlink it. Command start/end times are recorded.
 
 ## Run a comparison
 

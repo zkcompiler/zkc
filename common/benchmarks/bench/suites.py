@@ -3,16 +3,16 @@ from dataclasses import replace
 import json
 from pathlib import Path
 import shutil
-import sys
 
 from .io import Journal, ROOT, digest, require, write_json
-from .runner import Job, execute_job
-from .workloads import catalog
+from .runner import CONTROL, Job, execute_job, refuse
+from .projects import freeze_project
+from .workloads import Protocol, catalog as protocol_catalog
+from .coverage import catalog as execution_catalog, SMOKE
 
-sys.path.insert(0, str(ROOT / 'common/tests/support'))
-from project import project_inputs  # noqa: E402
 
-CONTROL = {'warmups': 0, 'samples': 1, 'iterations': 1}
+def catalog():
+    return protocol_catalog() + execution_catalog()
 
 
 class ProofChecks:
@@ -30,20 +30,18 @@ class ProofChecks:
         self.seen.add(value)
 
 
-def freeze_project(root, project, capture):
-    manifest = root / project / 'zkc.toml'
-    manifests = []
-    modules, assets = project_inputs(manifest, manifests=manifests)
-    files = {*manifests, *modules.values(), *(v[1] for v in assets.values())}
-    for path in sorted(files):
-        capture.add(path, Path('source') / path.relative_to(root))
-    return capture.directory / 'source' / project / 'zkc.toml'
-
-
 def prepare(args, output, capture, manifest):
     selected = [c for c in catalog() if (not args.case or c[0] in args.case)
                 and (not args.suite or c[1].name in args.suite)]
+    if args.preset == 'smoke':
+        selected = [c for c in selected if c[0] in SMOKE]
+    elif args.preset == 'execution':
+        selected = [c for c in selected if not isinstance(c[1], Protocol)]
+    elif args.preset == 'stark':
+        selected = [c for c in selected if c[1].name in ('air', 'fri', 'polynomial', 'extension', 'transcript', 'machine')]
     require(selected, 'selection contains no cases')
+    controls = [c for c in selected if not isinstance(c[1], Protocol)]
+    selected = [c for c in selected if isinstance(c[1], Protocol)]
     suites = {c[1].name: c[1] for c in selected}
     journal = capture_sources(args, output, capture, manifest, suites)
     packages = compile_projects(args, output, capture, manifest, suites, journal)
@@ -53,7 +51,16 @@ def prepare(args, output, capture, manifest):
         all_jobs.extend(jobs)
         by_case[name], proof_checks[name] = jobs, gate
 
-    def check(job, proof, directory):
+    execution_checks = {}
+    from .execution import prepare_case as prepare_execution
+    for name, case, _ in controls:
+        jobs, gate = prepare_execution(args, output, capture, manifest, case)
+        all_jobs.extend(jobs)
+        execution_checks[name] = gate
+
+    def check(job, proof, directory, input_index):
+        if job.case in execution_checks:
+            return execution_checks[job.case](job, proof, directory, input_index)
         if job.operation == 'prove':
             proof_checks[job.case].observe(proof)
             # The other implementation validates the exact timed output bytes.
@@ -130,7 +137,7 @@ def prepare_case(args, output, capture, manifest, name, protocol, size, package)
         capture.add(directory / filename)
     public_path, witness_path = directory / 'public.json', directory / 'witness.json'
     host = {'kind': 'host', 'package': str(package), 'sha256': digest(package),
-            'public': str(public_path), 'witness': str(witness_path)}
+            'inputs': [{'public': str(public_path), 'witness': str(witness_path)}], 'preparation': True}
     reference = {'kind': suite, 'public': str(public_path)}
     if protocol.witness: reference['witness'] = str(witness_path)
     implementations = [('zkc', args.worker, host, 'admitted_entry_call'),
@@ -170,7 +177,8 @@ def prepare_case(args, output, capture, manifest, name, protocol, size, package)
             bad.write_bytes(value)
             refuse(replace(job, proof=bad), directory / f'{job.implementation}-{mutation}',
                    args.timeout, truncated=mutation == 'truncated')
-        refuse(replace(job, backend=job.backend | {'public': str(directory / 'changed.json')}),
+        changed_backend = (job.backend | {'inputs': [job.backend['inputs'][0] | {'public': str(directory / 'changed.json')}]}) if job.implementation == 'zkc' else job.backend | {'public': str(directory / 'changed.json')}
+        refuse(replace(job, backend=changed_backend),
                directory / f'{job.implementation}-changed', args.timeout)
     # CLI execution is retained as a different, separately named boundary.
     cli = Journal(directory / 'cli', args.timeout)
@@ -192,16 +200,3 @@ def prepare_case(args, output, capture, manifest, name, protocol, size, package)
     reference_proof = next(j.proof for j in jobs if j.implementation == 'reference')
     jobs = [replace(j, proof=reference_proof) if j.operation == 'verify' else j for j in jobs]
     return jobs, gate
-
-
-def refuse(job, directory, timeout, *, truncated=False):
-    directory.mkdir(parents=True)
-    path = directory / 'request.json'
-    write_json(path, {'format': 'zkc.benchmark-job/0', 'backend': job.backend, 'operation': 'verify',
-                      'plan': CONTROL, 'proof': str(job.proof)})
-    record = Journal(directory / 'commands', timeout).command([job.executable, path], cwd=directory, expected=None)
-    require(record['returncode'] > 0, 'negative control was accepted or crashed')
-    report = json.loads(Path(record['stdout']).read_text())
-    allowed = {'rejected', 'input-bounds'} if truncated else {'rejected'}
-    require(isinstance(report, dict) and report.get('format') == 'zkc.benchmark-worker/0'
-            and report.get('status') in allowed, 'negative control failed outside verification')

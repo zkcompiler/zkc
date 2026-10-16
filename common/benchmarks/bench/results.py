@@ -9,10 +9,15 @@ from .io import require, write_json
 FORMAT = 'zkc.benchmark/0'
 
 
+def validate_preparation(stats):
+    require(isinstance(stats, dict) and set(stats) == {'entries', 'retained_bytes', 'hits'}
+            and all(type(v) is int and v >= 0 for v in stats.values()), 'invalid preparation statistics')
+
+
 def validate_worker(report, plan, boundary):
     require(isinstance(report, dict), 'worker report must be an object')
     require(set(report) == {'format', 'status', 'boundary', 'samples', 'proof_bytes', 'admission_ns',
-                           'process_peak_rss_bytes', 'proofs', 'build', 'process', 'timer_floor_ns', 'diagnostics'},
+                           'process_peak_rss_bytes', 'proofs', 'build', 'process', 'timer_floor_ns', 'diagnostics', 'lifecycle'},
             'unexpected worker report fields')
     require(report.get('format') == 'zkc.benchmark-worker/0'
             and report.get('status') == 'passed', 'worker did not pass')
@@ -44,6 +49,41 @@ def validate_worker(report, plan, boundary):
             and build.get('opt_level') in ('1', '2', '3', 's', 'z')),
             'benchmark worker must be built with optimization')
     require(build.get('debug_assertions') is False, 'benchmark worker must disable debug assertions')
+    lifecycle = report['lifecycle']
+    if boundary in ('admitted_entry_call', 'admitted_run_call'):
+        require(isinstance(lifecycle, dict), 'missing Host lifecycle measurements')
+    if lifecycle is not None:
+        require(isinstance(lifecycle, dict) and set(lifecycle) == {'capture_ns', 'admit_ns', 'calls',
+                'diagnostics_ns', 'peak_rss_before_diagnostics', 'peak_rss_after_diagnostics', 'preparation_limits'}, 'invalid lifecycle fields')
+        limits = lifecycle['preparation_limits']
+        if boundary == 'admitted_entry_call':
+            require(isinstance(limits, dict) and set(limits) == {'entries', 'bytes', 'default_entries', 'default_bytes'}
+                    and all(type(v) is int and v >= 0 for v in limits.values()), 'invalid preparation limits')
+            require(limits['entries'] <= limits['default_entries'] and limits['bytes'] <= limits['default_bytes'],
+                    'preparation raised the default bounds')
+        else:
+            require(limits is None, 'unexpected preparation limits')
+        for name in ('capture_ns', 'admit_ns', 'diagnostics_ns'):
+            require(type(lifecycle[name]) is int and lifecycle[name] >= 0, f'invalid lifecycle {name}')
+        require(report['admission_ns'] == lifecycle['capture_ns'] + lifecycle['admit_ns'], 'admission boundary mismatch')
+        for name in ('peak_rss_before_diagnostics', 'peak_rss_after_diagnostics'):
+            require(lifecycle[name] is None or type(lifecycle[name]) is int and lifecycle[name] >= 0, f'invalid {name}')
+        calls = lifecycle['calls']
+        require(isinstance(calls, list) and len(calls) == len(values)*plan['iterations'], 'incomplete lifecycle calls')
+        for call in calls:
+            require(isinstance(call, dict) and {'input_index', 'decode_ns'} <= call.keys()
+                    and not (call.keys() - {'input_index', 'decode_ns', 'preparation'}), 'invalid lifecycle call')
+            require(type(call['input_index']) is int and call['input_index'] >= 0
+                    and type(call['decode_ns']) is int and call['decode_ns'] >= 0, 'invalid lifecycle call values')
+            if boundary == 'admitted_entry_call':
+                require('preparation' in call, 'missing preparation statistics')
+            if 'preparation' in call:
+                validate_preparation(call['preparation'])
+        count = len({c['input_index'] for c in calls})
+        require([c['input_index'] for c in calls] == [i % count for i in range(len(calls))], 'invalid lifecycle input order')
+        if count > 1:
+            require(plan['iterations'] == 1 and plan['warmups'] % count == 0 and plan['samples'] % count == 0,
+                    'incomplete changing-input cycles')
     return report
 
 
@@ -123,8 +163,37 @@ def summarize(manifest):
             for name in ('proof_bytes', 'admission_ns', 'process_peak_rss_bytes'):
                 values = [r['worker'][name] for r in results]
                 row[name] = distribution(values) if all(v is not None for v in values) else None
+            row.update(summarize_lifecycle(results, manifest['plan']))
         rows.append(row)
     return rows
+
+
+def summarize_lifecycle(results, plan):
+    row = {}
+    lifecycles = [r['worker']['lifecycle'] for r in results]
+    if all(life is not None for life in lifecycles):
+        row['lifecycle'] = {name: distribution([life[name] for life in lifecycles]) if all(life[name] is not None for life in lifecycles) else None
+            for name in ('capture_ns', 'admit_ns', 'diagnostics_ns', 'peak_rss_before_diagnostics', 'peak_rss_after_diagnostics')}
+        row['decode_ns_per_call'] = distribution([statistics.median(c['decode_ns'] for c in life['calls'][
+            plan['warmups']*plan['iterations']:]) for life in lifecycles])
+        if all('preparation' in life['calls'][-1] for life in lifecycles):
+            row['preparation'] = {name: distribution([life['calls'][-1]['preparation'][name] for life in lifecycles])
+                                  for name in ('entries', 'retained_bytes', 'hits')}
+        # Distinct statements remain separately visible. Pooled schedule
+        # medians above describe that declared schedule, not a batch API.
+        indices = sorted({c['input_index'] for c in lifecycles[0]['calls']})
+        row['inputs'] = []
+        for index in indices:
+            per_process, first_visits = [], []
+            for result, lifecycle in zip(results, lifecycles, strict=True):
+                matching = [(sample, lifecycle['calls'][i*sample['iterations']])
+                            for i, sample in enumerate(result['worker']['samples'])
+                            if lifecycle['calls'][i*sample['iterations']]['input_index'] == index]
+                first_visits.append(matching[0][0]['first_call_ns'])
+                per_process.append(statistics.median(s['elapsed_ns']/s['iterations'] for s, _ in matching if s['phase'] == 'sample'))
+            row['inputs'].append({'input_index': index, 'ns_per_call': distribution(per_process),
+                                  'first_visit_ns': distribution(first_visits)})
+    return row
 
 
 def publish(directory, manifest):
@@ -145,7 +214,7 @@ def publish(directory, manifest):
                                'mad_ns': row.get('ns_per_call', {}).get('mad'),
                                'proof_bytes': (row.get('proof_bytes') or {}).get('median'),
                                'peak_rss_bytes': (row.get('process_peak_rss_bytes') or {}).get('median')})
-    lines = ['# Protocol measurements', '', f"Run status: **{manifest['status']}**.", '',
+    lines = ['# Execution measurements', '', f"Run status: **{manifest['status']}**.", '',
              'Repeated-call times are medians of process medians; ranges span those process medians.',
              'First call is the first invocation, including the first warmup when warmups are enabled.', '',
              '| Case | Implementation | Operation | Repeated (ms) | Range (ms) | First (ms) | Proof bytes |',
@@ -161,7 +230,7 @@ def publish(directory, manifest):
         boundaries = ', '.join(f"{name}: `{value}`" for name, value in contract.get('boundaries', {}).items())
         lines.append(f"- **{case}** — {boundaries}. {' '.join(contract.get('notes', []))}".rstrip())
     lines += ['', '## Admission, CPU time and memory', '',
-              'CPU/wall is the ratio of median process CPU time to median wall time. RSS includes the entire worker lifetime.', '',
+              'CPU/wall is the ratio of median process CPU time to median wall time. RSS includes setup and all calls, but is sampled before final report serialization.', '',
               '| Case | Implementation | Operation | Admission (ms) | CPU/wall | Peak RSS (MiB) |',
               '|---|---|---|---:|---:|---:|']
     for row in successful:
@@ -170,9 +239,40 @@ def publish(directory, manifest):
         rss = f"{rss['median']/2**20:.2f}" if rss else '—'
         lines.append(f"| {row['case']} | {row['implementation']} | {row['operation']} | {admission} | "
                      f"{row['cpu_ns_per_call']['median']/row['ns_per_call']['median']:.3f} | {rss} |")
+    lines += ['', '## Host lifecycle', '',
+              'Separate boundaries; do not add their medians to estimate end-to-end latency. Diagnostics are materialized once after the final call.', '',
+              '| Case | Implementation | Operation | Capture (ms) | Admit (ms) | Decode/call (ms) | Diagnostics (ms) | RSS before/after diagnostics (MiB) |',
+              '|---|---|---|---:|---:|---:|---:|---|']
+    for row in successful:
+        if 'lifecycle' not in row:
+            continue
+        life = row['lifecycle']
+        times = [life['capture_ns'], life['admit_ns'], row['decode_ns_per_call'], life['diagnostics_ns']]
+        rss = [life[n] for n in ('peak_rss_before_diagnostics', 'peak_rss_after_diagnostics')]
+        lines.append(f"| {row['case']} | {row['implementation']} | {row['operation']} | "
+                     + ' | '.join(f"{v['median']/1e6:.6f}" for v in times) + ' | '
+                     + ' / '.join(f"{v['median']/2**20:.2f}" if v else '—' for v in rss) + ' |')
+    prepared = [row for row in successful if 'preparation' in row]
+    if prepared:
+        lines += ['', '## Preparation store', '',
+                  'Final per-process observations. Hits do not by themselves establish a timing benefit.', '',
+                  '| Case | Implementation | Operation | Entries (median) | Retained bytes (median) | Hits (median) |',
+                  '|---|---|---|---:|---:|---:|']
+        for row in prepared:
+            stats = row['preparation']
+            lines.append(f"| {row['case']} | {row['implementation']} | {row['operation']} | "
+                         + ' | '.join(str(stats[n]['median']) for n in ('entries', 'retained_bytes', 'hits')) + ' |')
+    changing = [row for row in successful if len(row.get('inputs', [])) > 1]
+    if changing:
+        lines += ['', '## Distinct statements', '', 'One admitted Entry; round-robin calls, not batch verification.', '',
+                  '| Case | Implementation | Operation | Input | First visit (ms) | Repeated (ms) |', '|---|---|---|---:|---:|---:|']
+        for row in changing:
+            for value in row['inputs']:
+                lines.append(f"| {row['case']} | {row['implementation']} | {row['operation']} | {value['input_index']} | "
+                             f"{value['first_visit_ns']['median']/1e6:.6f} | {value['ns_per_call']['median']/1e6:.6f} |")
     if manifest['status'] == 'passed':
         lines += ['', '## Preparation and CLI observations', '',
-                  'Compilation includes CLI/project capture and package publication. CLI proof calls are single exploratory observations.', '',
+                  'External-comparison compilation includes CLI/project capture and publication. Generated-source compilation uses the compiler directly; its contract records this boundary. CLI proof calls are single exploratory observations.', '',
                   '| Family | Compilation median (ms) | Range (ms) |', '|---|---:|---:|']
         for family, records in manifest.get('compilation', {}).items():
             value = distribution([r['wall_seconds']*1000 for r in records])
@@ -224,6 +324,11 @@ def compare(baseline, current):
                 'comparison requires two successful complete runs')
     for name in ('contracts', 'plan', 'processes', 'host'):
         require(baseline[name] == current[name], f'comparison {name} differ')
+    def limits(document):
+        return {tuple(r[name] for name in ('case', 'implementation', 'operation', 'repetition')):
+                r['worker']['lifecycle']['preparation_limits'] for r in document['results']
+                if r['worker']['lifecycle'] is not None}
+    require(limits(baseline) == limits(current), 'comparison preparation limits differ')
     def index(document):
         return {(r['case'], r['implementation'], r['operation']): r for r in summarize(document)}
     left, right = index(baseline), index(current)

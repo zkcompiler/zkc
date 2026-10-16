@@ -2511,6 +2511,7 @@ dependencies = [
  "serde_json",
  "sha2 0.11.0",
  "spongefish 0.7.4",
+ "zkc-backends",
  "zkc-runtime",
  "zkc-tools",
 ]

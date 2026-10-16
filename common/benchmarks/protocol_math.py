@@ -26,7 +26,7 @@ from project import project_inputs  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from bench.io import (  # noqa: E402
-    Journal, MeasurementError, digest, executable, identity,
+    Journal, MeasurementBusy, MeasurementError, digest, executable, identity, measurement_slot,
     positive_integer, require, write_json)
 
 FORMAT = 'zkc.protocol-measurement/0'
@@ -416,6 +416,18 @@ def parse_args(argv=None):
 
 def main(argv=None):
     args = parse_args(argv)
+    try:
+        with measurement_slot(args.output.expanduser().resolve() / 'coordination.json'):
+            return run(args, argv)
+    except MeasurementBusy as error:
+        print(str(error), file=sys.stderr)
+        return 75
+    except FileExistsError as error:
+        print(f'refusing to overwrite existing evidence: {error}', file=sys.stderr)
+        return 2
+
+
+def run(args, argv=None):
     output = args.output.expanduser().resolve()
     try:
         output.mkdir(parents=True, exist_ok=False)

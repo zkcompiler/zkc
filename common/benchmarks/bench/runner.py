@@ -9,8 +9,10 @@ import random
 import shutil
 import sys
 
-from .io import Journal, digest, identity, performance_environment, require, write_json
-from .results import FORMAT, publish, validate_manifest, validate_worker
+from .io import Journal, digest, identity, measurement_slot, command_environment, performance_environment, read_report, require, write_json
+from .results import FORMAT, publish, validate_manifest, validate_preparation, validate_worker
+
+CONTROL = {'warmups': 0, 'samples': 1, 'iterations': 1}
 
 
 @dataclass(frozen=True)
@@ -63,7 +65,7 @@ def host_info():
     settings += [Path(f'/sys/devices/system/cpu/cpu{i}/cpufreq/scaling_governor') for i in affinity or []]
     return {'platform': platform.platform(), 'machine': platform.machine(), 'python': sys.version,
             'cpu_model': cpu, 'cpu_count': os.cpu_count(),
-            'affinity': affinity, 'performance_environment': performance_environment(),
+            'affinity': affinity, 'command_environment': command_environment(), 'performance_environment': performance_environment(),
             'settings': {str(path): path.read_text().strip() for path in settings
                          if path.is_file()}}
 
@@ -77,27 +79,59 @@ def execute_job(job, directory, plan, timeout):
     write_json(path, request)
     journal = Journal(directory / 'commands', timeout)
     command = journal.command([job.executable, path], cwd=directory)
-    report = validate_worker(json.loads(Path(command['stdout']).read_text()), plan, job.boundary)
-    require(proof.is_file() and proof.stat().st_size == report['proof_bytes'], 'worker proof size mismatch')
+    report = validate_worker(read_report(command), plan, job.boundary)
+    if job.backend.get('kind') in ('host', 'run'):
+        count = len(job.backend['inputs']) if job.backend['kind'] == 'host' else 1
+        require([c['input_index'] for c in report['lifecycle']['calls']] ==
+                [i % count for i in range((plan['warmups']+plan['samples'])*plan['iterations'])],
+                'worker changed the input schedule')
+    if job.backend.get('kind') == 'host':
+        previous_hits = 0
+        limit = job.backend.get('preparation_entries')
+        limits = report['lifecycle']['preparation_limits']
+        limit = limits['default_entries'] if limit is None else limit
+        expected = (limit, limits['default_bytes']) if job.backend['preparation'] else (0, 0)
+        require((limits['entries'], limits['bytes']) == expected, 'preparation limits differ from the request')
+        for call in report['lifecycle']['calls']:
+            stats = call['preparation']
+            require(stats['hits'] >= previous_hits, 'preparation hits moved backwards')
+            previous_hits = stats['hits']
+            require(stats['entries'] <= limits['entries'] and stats['retained_bytes'] <= limits['bytes'],
+                    'preparation exceeded its resource contract')
+            if not job.backend['preparation']:
+                require(all(value == 0 for value in stats.values()), 'disabled preparation retained state')
+    if job.operation == 'run':
+        require(report['proof_bytes'] == 0, 'run worker reported a proof')
+    elif job.operation == 'prove' or job.backend.get('kind') != 'host' or len(job.backend['inputs']) == 1:
+        require(proof.is_file() and proof.stat().st_size == report['proof_bytes'], 'worker proof size mismatch')
     proofs = report.get('proofs', [])
     expected = (plan['warmups'] + plan['samples']) * plan['iterations'] if job.operation == 'prove' else 0
     require(len(proofs) == expected, 'worker did not retain every produced proof')
     paths = set()
-    for artifact in proofs:
+    for index, artifact in enumerate(proofs):
         require(isinstance(artifact, dict) and isinstance(artifact.get('path'), str), 'invalid proof artifact')
+        if job.backend.get('kind') == 'host':
+            require(artifact.get('input_index') == index % len(job.backend['inputs']), 'proof input identity differs')
         path = Path(artifact['path']).resolve()
         require(path.parent == directory.resolve(), 'proof escaped worker directory')
         require(path not in paths, 'worker reused a proof artifact path')
         paths.add(path)
-        require(path.is_file() and path.stat().st_size == report['proof_bytes'], 'produced proof size differs')
+        require(type(artifact.get('bytes')) is int and artifact['bytes'] >= 0, 'missing proof size')
+        require(path.is_file() and path.stat().st_size == artifact['bytes'], 'produced proof size differs')
         actual = identity(path)
-        require(artifact.get('sha256', actual['sha256']) == actual['sha256'], 'produced proof digest differs')
+        require(artifact.get('sha256') == actual['sha256'], 'produced proof digest differs')
         artifact.update(actual)
     return {'worker': report, 'process_wall_seconds': command['wall_seconds'],
-            'proof': identity(proof)}
+            'proof': identity(proof) if proof.is_file() else None}
 
 
 def run(args, prepare):
+    # Acquisition is fail-fast and precedes compilation or worker launch.
+    with measurement_slot(args.output.resolve() / 'coordination.json'):
+        return run_locked(args, prepare)
+
+
+def run_locked(args, prepare):
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     original_affinity = None
@@ -156,21 +190,22 @@ def run(args, prepare):
                 measured.append((job, directory, result))
             except Exception as error:
                 result['error'] = f'{type(error).__name__}: {error}'
-            publish(output, manifest)
+            with (output/'progress.jsonl').open('a') as stream:
+                stream.write(json.dumps(result) + '\n')
+        publish(output, manifest)
         # Independent validation cannot perturb the order of timed worker pairs.
         manifest['phase'] = 'validation'
         for job, directory, result in measured:
             try:
                 for index, proof in enumerate(result['worker']['proofs']):
                     require(digest(Path(proof['path'])) == proof['sha256'], 'produced proof changed before validation')
-                    check(job, Path(proof['path']), directory / 'checks' / str(index))
+                    check(job, Path(proof['path']), directory / 'checks' / str(index), proof.get('input_index', 0))
                     require(digest(Path(proof['path'])) == proof['sha256'], 'produced proof changed during validation')
                 result['validated_proofs'] = len(result['worker']['proofs'])
                 result['status'] = 'passed'
             except Exception as error:
                 result['status'] = 'failed'
                 result['error'] = f'{type(error).__name__}: {error}'
-            publish(output, manifest)
         capture.check()
         manifest['status'] = 'passed' if all(r['status'] == 'passed' for r in manifest['results']) else 'failed'
         validate_manifest(manifest)
@@ -190,3 +225,30 @@ def run(args, prepare):
         publish(output, manifest)
     print(f"{manifest['status']}: {output / 'manifest.json'}", flush=True)
     return 0 if manifest['status'] == 'passed' else 1
+
+def refuse(job, directory, timeout, *, truncated=False, completed=None, classes=None):
+    directory.mkdir(parents=True)
+    path = directory / 'request.json'
+    write_json(path, {'format': 'zkc.benchmark-job/0', 'backend': job.backend, 'operation': 'verify',
+                      'plan': CONTROL | {'samples': (completed or 0)+1}, 'proof': str(job.proof)})
+    record = Journal(directory / 'commands', timeout).command([job.executable, path], cwd=directory, expected=None)
+    require(record['returncode'] > 0, 'negative control was accepted or crashed')
+    report = read_report(record)
+    allowed = {'rejected', 'input-bounds'} if truncated else {'rejected'}
+    require(isinstance(report, dict) and report.get('format') == 'zkc.benchmark-worker/0'
+            and report.get('status') in allowed, 'negative control failed outside verification')
+
+    if completed is not None:
+        require(report.get('completed_calls') == completed, 'negative control failed before the intended invocation')
+    if classes is not None and report['status'] == 'rejected':
+        observed = report.get('refusal')
+        require(isinstance(observed, dict) and observed.get('class') in classes,
+                'negative control refused at the wrong layer')
+    if job.backend.get('kind') == 'host' and completed is not None:
+        stats = report.get('preparation')
+        require(isinstance(stats, dict) and set(stats) == {'before', 'after'}, 'missing refusal preparation observations')
+        for value in stats.values():
+            validate_preparation(value)
+            if not job.backend['preparation']:
+                require(all(v == 0 for v in value.values()), 'disabled preparation retained state on refusal')
+        require(stats['after']['hits'] >= stats['before']['hits'], 'refusal preparation hits moved backwards')

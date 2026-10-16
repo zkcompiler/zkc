@@ -1,6 +1,8 @@
 //! Development-only benchmark client. Production execution stays in the Host.
 mod host;
 mod measure;
+mod observation;
+mod run_entry;
 mod schnorr;
 mod sumcheck;
 
@@ -15,6 +17,19 @@ pub enum Failure {
     Failed(String),
     Rejected(String),
     InputBounds(String),
+    IncorrectResult,
+    Refusal {
+        class: &'static str,
+        code: Option<String>,
+        stop: Option<String>,
+        detail: String,
+    },
+    Invocation {
+        completed: usize,
+        cause: Box<Failure>,
+        preparation_before: observation::Preparation,
+        preparation_after: observation::Preparation,
+    },
 }
 type Result<T, E = Failure> = std::result::Result<T, E>;
 impl From<String> for Failure {
@@ -33,6 +48,7 @@ impl From<&str> for Failure {
 pub enum Operation {
     Prove,
     Verify,
+    Run,
 }
 
 #[derive(Deserialize)]
@@ -41,8 +57,15 @@ enum Backend {
     Host {
         package: PathBuf,
         sha256: String,
-        public: PathBuf,
-        witness: Option<PathBuf>,
+        inputs: Vec<host::Input>,
+        preparation: bool,
+        preparation_entries: Option<usize>,
+    },
+    Run {
+        package: PathBuf,
+        sha256: String,
+        roles: std::collections::BTreeMap<String, PathBuf>,
+        accept_role: String,
     },
     Schnorr {
         public: PathBuf,
@@ -72,6 +95,7 @@ pub struct Report {
     pub samples: Vec<Sample>,
     pub proof_bytes: usize,
     pub diagnostics: Value,
+    pub lifecycle: Option<observation::Lifecycle>,
     pub process_peak_rss_bytes: Option<u64>,
     pub proofs: Vec<Value>,
     pub build: Value,
@@ -88,6 +112,7 @@ impl Report {
             samples,
             proof_bytes,
             diagnostics: Value::Null,
+            lifecycle: None,
             process_peak_rss_bytes: None,
             proofs: Vec::new(),
             build: json!({"compiler":env!("BENCH_RUSTC"), "profile":env!("BENCH_PROFILE"),
@@ -141,11 +166,30 @@ fn run() -> Result<Report> {
         Backend::Host {
             package,
             sha256,
-            public,
-            witness,
-        } => host::run(&request, package, sha256, public, witness.as_deref())?,
-        Backend::Schnorr { public, witness } => schnorr::run(&request, public, witness.as_deref())?,
-        Backend::Sumcheck { public } => sumcheck::run(&request, public)?,
+            inputs,
+            preparation,
+            preparation_entries,
+        } => host::run(
+            &request,
+            package,
+            sha256,
+            inputs,
+            *preparation,
+            *preparation_entries,
+        )?,
+        Backend::Run {
+            package,
+            sha256,
+            roles,
+            accept_role,
+        } => run_entry::run(&request, package, sha256, roles, accept_role)?,
+        Backend::Schnorr { public, witness } if request.operation != Operation::Run => {
+            schnorr::run(&request, public, witness.as_deref())?
+        }
+        Backend::Sumcheck { public } if request.operation != Operation::Run => {
+            sumcheck::run(&request, public)?
+        }
+        _ => return Err("backend does not support this operation".into()),
     };
     report.process_peak_rss_bytes = peak_rss();
     let status = std::fs::read_to_string("/proc/self/status").unwrap_or_default();
@@ -170,14 +214,42 @@ fn main() {
     match run() {
         Ok(report) => println!("{}", serde_json::to_string(&report).unwrap()),
         Err(error) => {
+            let (completed_calls, preparation, error) = match error {
+                Failure::Invocation {
+                    completed,
+                    cause,
+                    preparation_before,
+                    preparation_after,
+                } => (
+                    Some(completed),
+                    json!({"before":preparation_before,"after":preparation_after}),
+                    *cause,
+                ),
+                error => (None, Value::Null, error),
+            };
+            let mut refusal = Value::Null;
             let (status, error) = match error {
                 Failure::Failed(error) => ("failed", error),
                 Failure::Rejected(error) => ("rejected", error),
+                Failure::Refusal {
+                    class,
+                    code,
+                    stop,
+                    detail,
+                } => {
+                    refusal = json!({"class":class,"code":code,"stop":stop});
+                    ("rejected", detail)
+                }
                 Failure::InputBounds(error) => ("input-bounds", error),
+                Failure::IncorrectResult => (
+                    "incorrect-result",
+                    "run did not return the expected true acceptance output".into(),
+                ),
+                Failure::Invocation { .. } => unreachable!("invocations are attributed once"),
             };
             println!(
                 "{}",
-                json!({"format":"zkc.benchmark-worker/0", "status":status, "error":error})
+                json!({"format":"zkc.benchmark-worker/0", "status":status, "error":error, "completed_calls":completed_calls,"refusal":refusal,"preparation":preparation})
             );
             std::process::exit(1);
         }
