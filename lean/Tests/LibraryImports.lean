@@ -389,6 +389,10 @@ import ZkcExamples.Structured.SumcheckReduceVerifier
 import ZkcExamples.Structured.SumcheckReduceViews
 import ZkcExamples.Structured.SumcheckReductionRequests
 import ZkcExamples.Structured.SumcheckRelationContract
+import ZkcExamples.Structured.SumcheckRepackedBodies
+import ZkcExamples.Structured.SumcheckRepackedData
+import ZkcExamples.Structured.SumcheckRepackedVerifier
+import ZkcExamples.Structured.SumcheckRepackedViews
 import ZkcExamples.Structured.SumcheckSourceAssociations
 import ZkcExamples.Structured.SumcheckSourceBodies
 import ZkcExamples.Structured.SumcheckSourceContracts

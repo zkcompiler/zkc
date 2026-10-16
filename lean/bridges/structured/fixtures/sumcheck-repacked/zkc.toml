@@ -1,0 +1,9 @@
+format = "zkc.project/0"
+
+[modules]
+"example" = "main.zkc"
+"sums" = "protocol.zkc"
+
+[dependencies]
+sumcheck = "../../../../../libraries/sumcheck"
+zkc = "../../../../../libraries/zkc"
