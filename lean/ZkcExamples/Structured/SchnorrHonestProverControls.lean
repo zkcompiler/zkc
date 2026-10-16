@@ -49,13 +49,12 @@ theorem bad_response_delivery_rejected :
   rw [ne_eq, SchnorrInteractive.contract.accepted_iff, strategy_eq]
   decide +kernel
 
-/-- Equal-copy premises are sufficient, not necessary: this source prover
-does not inspect its local key. A mismatch there alone need not be rejected. -/
+/-- The strengthened completeness theorem leaves the unused prover key
+unconstrained; this mismatch does not violate its premises. -/
 theorem unused_prover_key_can_differ :
     (Zkc.Protocols.Schnorr.Common.run (F := ℚ) SchnorrInteractive.verifier
       (1 : ℚ) 2 9 (strategy (F := ℚ) 1 99 2 3 8) 5).outcome = .returned (some true) := by
-  rw [SchnorrInteractive.contract.accepted_iff, strategy_eq]
-  decide +kernel
+  exact accepts (F := ℚ) 1 99 1 2 2 3 5 8 9 rfl (by decide +kernel)
 
 inductive Mutation where
   | response | site
@@ -148,17 +147,15 @@ theorem response_extracted (base key : G) (secret nonce challenge : F) (service 
   rw [response_execution]
   simp [extract, services, Values.get]
 
-/-- Test-only consumer of the changed source's actual sends. It uses the same
-partial decoder and proves success for this synthetic admitted subject. -/
-def responseMessages (base key : G) (secret nonce challenge : F) (service : Nat) : G × F :=
-  (extract service ((responseProcess base key secret service).run
-    (replyHandler service (.returned nonce) (.returned challenge)) ())).get (by
-      rw [response_extracted]; rfl)
-
+/-- The same extraction-to-Strategy constructor as the original source, applied
+to the actual admitted response mutation with its own success witness. -/
 def responseStrategy (base key : G) (secret nonce : F) (service : Nat) :
-    Zkc.Protocols.Schnorr.Common.Strategy F G where
-  commitment := (responseMessages base key secret nonce 0 service).1
-  response challenge := (responseMessages base key secret nonce challenge service).2
+    Zkc.Protocols.Schnorr.Common.Strategy F G :=
+  strategyOf service (fun challenge => (responseProcess base key secret service).run
+    (replyHandler service (.returned nonce) (.returned challenge)) ()) (by
+      intro challenge
+      rw [response_extracted]
+      rfl)
 
 theorem changed_site_refused (base key : G) (secret nonce challenge : F) (service : Nat) :
     ((siteProcess base key secret service).run
@@ -211,7 +208,7 @@ theorem changed_response_rejected :
       (1 : ℚ) 2 9 (responseStrategy (F := ℚ) 1 2 2 3 8) 5).outcome ≠
         .returned (some true) := by
   rw [ne_eq, SchnorrInteractive.contract.accepted_iff]
-  simp [responseStrategy, responseMessages, response_extracted]
+  simp [responseStrategy, strategyOf, response_extracted]
   decide +kernel
 
 theorem wrong_service_refused :

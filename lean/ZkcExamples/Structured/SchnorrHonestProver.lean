@@ -61,6 +61,16 @@ def extract {F G : Type} (service : Nat) (execution : Execution F G) : Option (G
           responsePeer = 1 then some (commitment, response) else none
   | _, _ => none
 
+/-- Package actual send observations from successful executions, with no
+fallback values. This constructor alone proves neither causal timing nor that
+the commitment at reference challenge zero agrees with every supplied run;
+those properties require separate source-specific proofs. -/
+def strategyOf {F G : Type} [Zero F] (service : Nat) (run : F → Execution F G)
+    (success : ∀ challenge, (extract service (run challenge)).isSome) :
+    Zkc.Protocols.Schnorr.Common.Strategy F G where
+  commitment := ((extract service (run 0)).get (success 0)).1
+  response challenge := ((extract service (run challenge)).get (success challenge)).2
+
 variable {F G : Type} [Field F] [DecidableEq F]
   [AddCommGroup G] [Module F G] [DecidableEq G]
 
@@ -121,38 +131,38 @@ this successful reply/send profile. Thus complete-trace extraction needs no
 future-dependent choice or default. This is specific to the checked source,
 not a causal adapter for arbitrary processes or handlers.
 `strategy_supplied` proves that every independently supplied challenge sees it. -/
-def strategy (base key : G) (secret nonce : F) (service : Nat) : Zkc.Protocols.Schnorr.Common.Strategy F G where
-  commitment := (messages base key secret nonce 0 service).1
-  response challenge := (messages base key secret nonce challenge service).2
+def strategy (base key : G) (secret nonce : F) (service : Nat) : Zkc.Protocols.Schnorr.Common.Strategy F G :=
+  strategyOf service (fun challenge => execution base key secret nonce challenge service) (by
+    intro challenge
+    rw [extract_execution]
+    rfl)
 
 theorem strategy_supplied (base key : G) (secret nonce challenge : F) (service : Nat) :
     extract service (execution base key secret nonce challenge service) =
       some ((strategy base key secret nonce service).commitment,
         (strategy base key secret nonce service).response challenge) := by
-  simp [strategy, messages_eq, extract_execution]
+  simp [strategy, strategyOf, extract_execution]
 
 theorem strategy_eq (base key : G) (secret nonce : F) (service : Nat) :
     strategy base key secret nonce service =
       ⟨nonce • base, fun challenge => nonce + challenge * secret⟩ := by
-  simp [strategy, messages_eq]
+  simp [strategy, strategyOf, extract_execution]
 
-/-- Copies are independent arguments. Equal bases/keys and the witness relation
-are explicit sufficient conditions, and the existing handler delivers exactly
+/-- Copies are independent arguments. Equal bases and the verifier-key witness
+relation suffice; this source never inspects the prover's local key, so that
+copy is unconstrained. The existing handler delivers exactly
 the extracted commitment/response and the fixed challenge. That delivery handler
 selects replies by type; matching source sites are certified separately by the
 process equations and extraction. This is not a joint routing theorem.
-These conditions are
-not necessary: this source prover ignores its local key, and some degenerate
-inputs also accept. No mechanism enforces equality of participant copies. -/
+No mechanism enforces equality of participant copies. -/
 theorem accepts (proverBase proverKey verifierBase verifierKey : G)
     (secret nonce challenge : F) (nonceService challengeService : Nat)
-    (sameBase : proverBase = verifierBase) (sameKey : proverKey = verifierKey)
-    (keyRelation : proverKey = secret • proverBase) :
+    (sameBase : proverBase = verifierBase)
+    (keyRelation : verifierKey = secret • verifierBase) :
     (Zkc.Protocols.Schnorr.Common.run SchnorrInteractive.verifier verifierBase verifierKey challengeService
       (strategy proverBase proverKey secret nonce nonceService) challenge).outcome =
         .returned (some true) := by
   subst verifierBase
-  subst verifierKey
   rw [strategy_eq, keyRelation]
   exact SchnorrInteractive.contract.perfect_completeness proverBase secret nonce challenge challengeService
 

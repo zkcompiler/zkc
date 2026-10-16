@@ -28,7 +28,8 @@ execution; the imported degree-two examples retain their separate scope.
 For the actual Interactive Schnorr subject,
 [honest-prover observations](docs/spec/structured-source.md#actual-interactive-schnorr-subject)
 now supply a causal strategy from ordered source sends, with explicit successful
-replies, consistent participant copies and honest delivery. The optional public
+replies, equal bases, the verifier-key witness relation and honest delivery;
+the unused prover key is unconstrained. The optional public
 view theorem transfers these observed messages and the checked verifier outcome
 to the existing simulator under a fixed challenge and uniform nonce. This
 extends the earlier handwritten-strategy consumer in the independent model;

@@ -63,14 +63,18 @@ the same source run. Sampling happens outside the deterministic handler, with
 the same nonce supplied across these runs. The stopped-prefix equations cover
 the nonce and challenge reply points; the decoder returns `none` on every stop
 and does not extract partial messages. Sends succeed in the selected profile.
-This is sufficient for `Common.Strategy`; generalizing it
-would need an actual second consumer and its causal/stopping obligations.
+The small `strategyOf` constructor is shared by the original source and the
+admitted response mutation. Each supplies its actual executions and a proof of
+successful extraction for every challenge; the constructor has no fallback.
+It packages observations into `Common.Strategy` without asserting that arbitrary
+runs are causal. The original source's prefix and supplied-strategy theorems
+remain separate, and the mutation's concrete process equation justifies its use.
 There is no new executor, replay oracle or generic `ProverContract`.
 
-Completeness keeps separate participant inputs and explicit sufficient equal-copy
-premises. The prover's key is unused, so equal keys are stronger than necessary;
-an accepting mismatched local key control prevents reading this as a necessity
-or an enforcement result. Other concrete input/delivery controls reject, and
+Completeness keeps separate participant inputs and requires only equal bases
+and `verifierKey = secret • verifierBase`. The prover's local key is unused and
+unconstrained; the accepting mismatched-key control applies this theorem directly.
+Other concrete input/delivery controls reject, and
 synthetic kernel-admitted constructor mutations expose changed response values
 and changed send sites without borrowing the original source digest. The changed
 source response also reaches the unchanged checked verifier and is rejected.

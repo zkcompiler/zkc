@@ -166,8 +166,13 @@ the imported `prover_equation`, not assumed in the message definition.
 The handler is deterministic for its fixed inputs: any sampling happens outside
 the run, and its nonce reply does not inspect the challenge parameter.
 
-`strategy` selects the commitment observed with reference challenge zero and
-the response observed for each supplied challenge. This retrospective extraction
+`strategyOf` selects the commitment observed with reference challenge zero and
+the response observed for each supplied challenge. It requires successful
+extraction for every challenge and unwraps those observations without fallback
+values. The original `strategy` and the admitted response mutation's
+`responseStrategy` use this same constructor. The constructor itself asserts
+neither causal timing nor agreement with every run's commitment.
+This retrospective extraction
 is justified for this source by `execution_eq`, `prefix_independent` and
 `commitment_independent`: the commitment precedes the independent challenge
 reply, the prefix through the receive request is identical for all replies, and
@@ -177,10 +182,10 @@ challenge. There is no generic causal adapter for arbitrary processes here.
 
 `accepts` delivers this strategy to the actual checked verifier through
 `Common.transcriptHandler`. Prover/verifier input copies are independent
-arguments; equal bases/keys and the witness relation are explicit sufficient
-premises. They are stronger than necessary: this prover ignores its local key,
-and particular degenerate inputs can also accept. These premises express no
-enforcement mechanism. `nonce_stopped` and `challenge_stopped` preserve the
+arguments. Its premises are `proverBase = verifierBase` and
+`verifierKey = secret • verifierBase`. The prover key is unconstrained because
+the source does not inspect it. These premises express no enforcement mechanism.
+`nonce_stopped` and `challenge_stopped` preserve the
 exact reached prefixes for every stop reason at those two reply points.
 `extract_stopped` proves the decoder returns `none` for every stopped run; there
 is no decoder for messages in a prefix. Send acknowledgements succeed and all
