@@ -77,7 +77,7 @@ private def finiteFields : List Json := [
 
 private def envelope (domains relations definitions : List Json) : Json :=
   arr [.str "zkc.structured-source/0", .str "original", .str digest, .str "main",
-    arr domains, arr relations, arr definitions]
+    arr domains, arr relations, empty, arr definitions]
 
 private def subject : Json := envelope [arr domainFields]
   [arr relationFields, arr (relationFields.set 1 (.str "Unused"))]
@@ -257,18 +257,18 @@ private def run : IO Unit := do
   check "legacy-function" (hasError
     (Format.definition (arr (rootFields.take 6 ++ rootFields.drop 7))) "structured-definition")
   check "legacy-role-envelope" (hasError (decode (arr [.str "zkc.structured-source/0",
-    .str "original", .str digest, .str "main", .str "P", empty, empty])) "structured-array")
+    .str "original", .str digest, .str "main", .str "P", empty, empty])) "structured-envelope")
   for envelopeFields in [
       [.str "zkc.structured-source/1", .str "original", .str digest, .str "main", empty, empty, empty],
       [.str "zkc.structured-source/0", .str "projected", .str digest, .str "main", empty, empty, empty],
       [.str "zkc.structured-source/0", .str "original", .str digest, .str "main", empty, empty],
-      [.str "zkc.structured-source/0", .str "original", .str digest, .str "main", empty, empty, empty, empty]] do
+      [.str "zkc.structured-source/0", .str "original", .str digest, .str "main", empty, empty, empty, empty, empty]] do
     check "envelope-tag-or-arity" (hasError (decode (arr envelopeFields)) "structured-envelope")
   for badDigest in ["sha256:" ++ String.ofList (List.replicate 64 'A'),
       "sha256:" ++ String.ofList (List.replicate 64 'g'), "sha256:0", "SHA256:" ++
         String.ofList (List.replicate 64 '0')] do
     check "digest-canonical" (hasError (decode (arr [.str "zkc.structured-source/0",
-      .str "original", .str badDigest, .str "main", empty, empty, empty])) "structured-source-digest")
+      .str "original", .str badDigest, .str "main", empty, empty, empty, empty])) "structured-source-digest")
 
   -- Bounded shapes apply to all declarations, even unused metadata and bodies.
   for (label, value) in [

@@ -201,7 +201,7 @@ theorem indices_admit (name : String) (types : List Ty) (field : String)
     (representable : (arguments.get container).length < indexLimit) :
     ((⟨name, types, field, container, true⟩ : DomainSpec).denote arguments).admit =
       .returned (List.range (arguments.get container).length) := by
-  change (Finite.Domain.check ((arguments.get container).length < indexLimit) .refused
+  change (Finite.Domain.check ((arguments.get container).length < indexLimit) .exhausted
     (Finite.Domain.elements _)).admit = _
   simp [Finite.Domain.admit, representable]
 
@@ -210,7 +210,7 @@ theorem elements_admit (name : String) (types : List Ty) (field : String)
     (representable : (arguments.get container).length < indexLimit) :
     ((⟨name, types, field, container, false⟩ : DomainSpec).denote arguments).admit =
       .returned (arguments.get container) := by
-  change (Finite.Domain.check ((arguments.get container).length < indexLimit) .refused
+  change (Finite.Domain.check ((arguments.get container).length < indexLimit) .exhausted
     (Finite.Domain.elements _)).admit = _
   simp [Finite.Domain.admit, representable]
 

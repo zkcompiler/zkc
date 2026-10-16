@@ -92,6 +92,11 @@ def execute(scope, args):
              "--reference", compiler / "test/zkc-structured_reference-test",
              "--lean", ROOT / "lean/.lake/build/bin/structured-source",
              "--report", output / "structured-open/report.json"])
+        run([sys.executable, ROOT / "lean/bridges/structured/primitives.py",
+             "--compiler", compiler / "zkc-compile",
+             "--reference", compiler / "test/zkc-structured_reference-test",
+             "--lean", ROOT / "lean/.lake/build/bin/structured-source",
+             "--report", output / "structured-primitives/report.json"])
         run([sys.executable, ROOT / "lean/bridges/structured/inlining.py",
              "--compiler", compiler / "zkc-compile",
              "--optimizer", compiler / "zkc-opt",

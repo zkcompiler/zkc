@@ -169,13 +169,13 @@ theorem operation_interpret (operations : PIR.OperationInterpretation I J)
     (operation leftSites left op args bodies).interpret operations =
       operation rightSites right op args (RegionFunctions.translate (dialect := dialect) operations bodies) := by
   cases op with
-  | fieldConstant | booleanConstant | groupIdentity => cases args; cases bodies; rfl
+  | indexConstant | fieldConstant | booleanConstant | groupIdentity => cases args; cases bodies; rfl
   | mark site =>
     cases args; cases bodies
     change ((leftSites.mark site).bind (fun _ => .done (Values.nil : Values (assignment F G) []))).interpret operations =
       (rightSites.mark site).bind (fun _ => .done Values.nil)
     simp only [PIR.Proc.interpret_bind, sites site, PIR.Proc.interpret]
-  | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
+  | indexEqual | fieldAdd | fieldSubtract | fieldMultiply | fieldEqual | booleanAnd | booleanOr |
       booleanXor | booleanEqual | booleanNotEqual | groupAdd | groupScale | groupEqual =>
     cases args with
     | cons a rest => cases rest with
@@ -197,6 +197,11 @@ theorem operation_interpret (operations : PIR.OperationInterpretation I J)
     | cons condition rest => cases rest with
       | cons yes rest => cases rest with
         | cons no rest => cases rest; cases bodies; rfl
+  | exec primitive =>
+    cases bodies
+    change (primitiveOutcome (primitive.evaluate args)).interpret operations =
+      primitiveOutcome (primitive.evaluate args)
+    cases primitive.evaluate args <;> rfl
   | invoke helper => cases bodies; exact tables helper args
   | fold spec => cases bodies; exact denoteFold_interpret operations tables spec args
   | branch =>
@@ -298,6 +303,19 @@ theorem componentOperation_interpret (operations : PIR.OperationInterpretation I
     (componentOperation leftSites left op args bodies).interpret operations =
       componentOperation rightSites right op args (RegionFunctions.translate operations bodies) := by
   cases op <;> try exact strictComponent_interpret operations sites tables.closed _ args bodies
+  case exec primitive =>
+    cases bodies
+    simp only [componentOperation, RegionFunctions.translate]
+    cases present : RoleFamily.sequence args with
+    | none => rfl
+    | some values =>
+      simp only []
+      rw [PIR.Proc.interpret_bind]
+      have lift : (primitiveOutcome (primitive.evaluate values)).interpret operations =
+          primitiveOutcome (primitive.evaluate values) := by
+        cases primitive.evaluate values <;> rfl
+      rw [lift]
+      rfl
   case invoke helper =>
     cases bodies
     by_cases math : helper.kind = .math

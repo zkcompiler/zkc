@@ -104,6 +104,21 @@ theorem fold_total {I : Signature} {A S : Type}
   | nil => rfl
   | cons item rest ih => simp only [fold, law, Proc.bind, List.foldl_cons, ih]
 
+/-- Indexed invariant for a counted loop. The callback equation is required
+only at reached indices and their corresponding states. This supports checked
+arithmetic whose range premise depends on the remaining iterations. -/
+theorem fold_range_state {I : Signature} {S : Type}
+    (step : S → Nat → Proc I S) (state : Nat → S) (start count : Nat)
+    (law : ∀ index, start ≤ index → index < start + count →
+      step (state index) index = .done (state (index + 1))) :
+    fold step (List.range' start count) (state start) = .done (state (start + count)) := by
+  induction count generalizing start with
+  | zero => simp [fold]
+  | succ count ih =>
+    rw [List.range'_succ, fold, law start (Nat.le_refl _) (by omega), Proc.bind]
+    simpa only [Nat.add_assoc, Nat.add_comm 1 count] using
+      ih (start + 1) (fun index lower upper => law index (by omega) (by omega))
+
 /-- An admitted domain and a total callback justify the pure fold denotation.
 This conditional theorem does not erase failed admission on other inputs. -/
 theorem execute_total {I : Signature} {A S : Type}

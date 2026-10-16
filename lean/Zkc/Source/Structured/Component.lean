@@ -28,6 +28,11 @@ variable [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq
 operations reuse the shared strict evaluator, including effects and stops. -/
 def componentOperation (observations : SiteObservations interface) (tables : ComponentTables F G interface) :
     ComponentOperations (meaning observations tables.closed)
+  | .exec primitive, args, .nil =>
+      match RoleFamily.sequence args with
+      | none => .halt .incomplete
+      | some values => (primitiveOutcome (primitive.evaluate values)).bind fun result =>
+          .done result.present
   | .invoke helper, args, .nil =>
       if helper.kind = .math then invoke tables.components helper args
       else strictComponent (meaning observations tables.closed) (.invoke helper) args .nil
@@ -87,6 +92,10 @@ theorem componentOperation_adequate (observations : SiteObservations interface) 
     ComponentOperations.Adequate (meaning observations tables.closed) (componentOperation observations tables) := by
   intro op args bodies
   cases op <;> try exact strictComponent_adequate (meaning observations tables.closed) _ args bodies
+  case exec primitive =>
+    cases bodies
+    simp only [componentOperation, RoleFamily.sequence_present]
+    rfl
   case invoke helper =>
     cases bodies
     cases helper with

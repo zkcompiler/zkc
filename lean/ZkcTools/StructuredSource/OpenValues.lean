@@ -67,15 +67,4 @@ def validateServiceAliases : {types : List Ty} → List (List Nat) → OptionalV
       | _, _ => pure seen
     validateServiceAliases scopes.tail rest seen
 
-def valueBounds : (type : Ty) → OpenValue type → InputBounds → InputBounds
-  | .index, value, bounds => { bounds with index := max bounds.index value }
-  | .vector _, value, bounds => { bounds with vectorLength := max bounds.vectorLength value.length }
-  | _, _, bounds => bounds
-
-def optionalInputBounds {types : List Ty} : OptionalValues types → InputBounds
-  | .nil => {}
-  | .cons (ty := type) value rest =>
-    let bounds := optionalInputBounds rest
-    value.elim bounds (fun value => valueBounds type value bounds)
-
 end ZkcTools.StructuredSource

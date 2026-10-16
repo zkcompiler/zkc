@@ -32,7 +32,7 @@ def check(output, lake):
                  ["protocol", ["P"], [["P"]], [["P"]]], [], [],
                  ["block", [[["call", name], [0], [["bool"]], [], ""]], ["return", [0]]]]
         data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
-                "main", [], [], [helper, entry]]
+                "main", [], [], [], [helper, entry]]
         namespace = f"RenderedCase{index}"
         if index == 4:
             # Exercise the actual CLI under an ASCII locale as well as the
@@ -74,7 +74,7 @@ example : (Zkc.Source.Structured.check {namespace}.snapshot).isOk = true := by
         [["statement", name, [name], 0], [6], [], [], ""],
     ]
     data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64, "main", [],
-            [["relation", name, "public", name, name, name, [group], [["bool"]], ["statement"]]],
+            [["relation", name, "public", name, name, name, [group], [["bool"]], ["statement"]]], [],
             [["function", "main", "protocol", "public", [group, field, service], [["bool"]],
               ["protocol", [name, "V"], [[name, "V"], [name], ["V"]], [["V"]]], [], [],
               ["block", operations, ["return", [1]]]]]]
@@ -104,6 +104,49 @@ example : (RenderedOpen.snapshot.definitions[0]?.map fun definition =>
     | _ => []) = some [0, 1, 2, 3, 4, 5, 6, 7] := by decide +kernel
 '''
     modules.append(source)
+    # Parse the full u64 endpoint through Lean's own string/constructor syntax.
+    # Admission, rather than the renderer, checks the primitive contract.
+    maximum = "18446744073709551615"
+    binding_rows = [["binding", "max_index", "index.constant", [], ""],
+                    ["binding", "sum", "vector.sum", [field[1]], ""]]
+    limit = ["function", "limit", "local", "private", [], [["index"]], [], [], ["limit", []],
+             ["block", [[["exec", "algebra.exec.index_constant", "max_index", [maximum]],
+                         [], [["index"]], [], "maximum"]], ["return", [0]]]]
+    entry = ["function", "main", "protocol", "public", [], [["bool"]],
+             ["protocol", ["P"], [], [["P"]]], [], [],
+             ["block", [
+                 [["index.constant", maximum], [], [["index"]], [], ""],
+                 [["local_call", "limit", "P"], [], [["index"]], [], "limit_call"],
+                 [["index.equal"], [0, 1], [["bool"]], [], ""],
+             ], ["return", [0]]]]
+    primitive_data = ["zkc.structured-source/0", "original", "sha256:" + "0" * 64,
+                      "main", [], [], binding_rows, [limit, entry]]
+    source = renderer.render(primitive_data, "RenderedPrimitives").replace("module\n\n", "", 1)
+    source += '''
+example : (RenderedPrimitives.snapshot.bindings.map fun binding =>
+    (binding.name, binding.contract, binding.arguments, binding.implementation)) =
+    [("max_index", "index.constant", [], ""),
+     ("sum", "vector.sum", ["bls12-381.fr"], "")] := by decide +kernel
+example : (RenderedPrimitives.snapshot.definitions[0]?.bind fun definition =>
+    match definition with
+    | .function function =>
+      let .block instructions _ := function.body
+      instructions[0]?.bind fun (.instruction descriptor _ _ _ _) => match descriptor with
+        | .exec operation binding parameters => some (operation, binding, parameters)
+        | _ => none
+    | _ => none) = some ("algebra.exec.index_constant", "max_index", ["18446744073709551615"]) := by
+  decide +kernel
+example : (Zkc.Source.Structured.check RenderedPrimitives.snapshot).isOk = true := by
+  decide +kernel
+'''
+    modules.append(source)
+    malformed = [primitive_data[:6] + primitive_data[7:]]  # Obsolete seven-field shape.
+    for data in malformed:
+        try:
+            renderer.render(data, "Rejected")
+        except ValueError:
+            continue
+        raise AssertionError("renderer accepted an obsolete envelope")
     # Imports/section commands from each rendering are legal at the file top
     # only. One import serves all independently named data declarations.
     header = "import Zkc.Source.Structured.Import\nset_option maxRecDepth 4096\n"
@@ -124,6 +167,7 @@ example : (RenderedOpen.snapshot.definitions[0]?.map fun definition =>
         raise AssertionError("renderer accepted an invalid or oversized UTF-8 string")
     report = {"status": "pass", "kernel_cases": len(names), "refusal_cases": 3,
               "open_metadata_kernel_cases": 3,
+              "primitive_metadata_kernel_cases": 3, "obsolete_envelope_refusal_cases": 1,
               "ascii_locale_cli_cases": 1,
               "renderer_sha256": support.lake.sha(Path(renderer.__file__)),
               "subject_sha256": support.lake.sha(path)}

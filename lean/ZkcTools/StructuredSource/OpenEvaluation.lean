@@ -130,56 +130,71 @@ def observe {types : List Ty} (roles : List String) (self : Nat) : Nat →
     | .stopped reason => stopResult state reason
     | .returned value => observe roles self fuel (next value) state
 
-/-- Only typed receive replies can introduce indices or vectors. Inspecting all
-supplied replies is conservative, including an unused suffix. A malformed reply
-cannot resume the process and therefore supplies no additional size bound. -/
-def replyBounds (bounds : InputBounds) (reply : ScriptReply) : InputBounds :=
-  match Structured.Format.array reply.request, Structured.Format.array reply.response with
-  | .ok [.str "receive", _, _, _, type], .ok [.str "value", value] =>
-    match Format.type type with
-    | .error _ => bounds
-    | .ok type => match wireInput type value with
-      | .error _ => bounds
-      | .ok value => valueBounds type value bounds
-  | _, _ => bounds
+/-- Decode only well-typed receive values for the abstract envelope. Every
+supplied reply is inspected, including unused suffixes. Malformed replies still
+have their original replay behavior; none can resume with an unbounded value. -/
+def abstractReplies (replies : List ScriptReply) : Bounds.Analysis (List (Ty × Bounds.Value)) := do
+  let mut result := []
+  for reply in replies do
+    -- Charge scanning even malformed/unused envelopes, independently of runtime work.
+    Bounds.tick (1 + reply.request.compress.utf8ByteSize + reply.response.compress.utf8ByteSize)
+    match Structured.Format.array reply.request, Structured.Format.array reply.response with
+    | .ok [.str "receive", _, _, _, type], .ok [.str "value", value] =>
+      match Format.type type with
+      | .error _ => pure ()
+      | .ok type => match wireInput type value with
+        | .error _ => pure ()
+        | .ok value =>
+          let bound := Bounds.value type value
+          Bounds.checkValue bound
+          result := (type, bound) :: result
+    | _, _ => pure ()
+  return result
 
-def protocolOperationCost (bounds : InputBounds) (costs : Costs) : ProtocolOp → Nat
-  | .calculate op _ => operationCost bounds costs op []
-  | .localCall helper .. => helperCost costs helper.name
-  | _ => 1
+/-- Bounds are per type and include all typed replies, not a guessed script
+position. Without any typed reply, this receive cannot resume; replay still
+reports its own missing/mismatched response or oversized-value error. -/
+def receiveBounds (replies : List (Ty × Bounds.Value)) (type : Ty) : Bounds.Analysis (Option Bounds.Value) := do
+  let mut bound := none
+  for (actual, value) in replies do
+    Bounds.tick
+    if actual == type then
+      bound := some (← match bound with
+        | none => pure value
+        | some previous => previous.join value)
+  return bound
 
-mutual
-  def protocolRegionCost (bounds : InputBounds) (costs : Costs) : RawRegion Ty ProtocolOp → Nat
-    | .ret _ | .stop _ => 1
-    | .letOp op _ _ bodies next =>
-      capped (1 + protocolOperationCost bounds costs op +
-        (protocolRegionsCost bounds costs bodies).foldl (fun a b => capped (a + b)) 0 +
-        protocolRegionCost bounds costs next)
-    | .bind _ body next =>
-      capped (1 + protocolRegionCost bounds costs body + protocolRegionCost bounds costs next)
-  def protocolRegionsCost (bounds : InputBounds) (costs : Costs) : RawRegions Ty ProtocolOp → List Nat
-    | .nil => []
-    | .cons _ _ body rest =>
-      protocolRegionCost bounds costs body :: protocolRegionsCost bounds costs rest
-end
+def optionalAbstractInputs {types : List Ty} : OptionalValues types → Bounds.Env
+  | .nil => []
+  | .cons (ty := type) value rest =>
+    (value.elim .absent (Bounds.value type)) :: optionalAbstractInputs rest
 
-/-- Preflight precedes process construction, which can eagerly allocate loop
-ranges inside closed Local callbacks. Supported operations cannot manufacture
-vectors or indices beyond supplied indices and finite-domain vector lengths.
-The bound includes untaken branches and callbacks that an owner might skip. -/
-def openEvaluationCost (payload : UnitPayload) (bounds : InputBounds) : Nat :=
-  let costs := payload.definitions.foldl (fun costs definition =>
-    (definition.name, regionCost bounds costs definition.raw) :: costs) []
-  protocolRegionCost bounds costs payload.entry.raw
+/-- Preflight runs before process construction, including eager ranges inside
+Local callbacks. Unknown branches, loop prefixes and all typed replies remain
+conservative; capacity failures do not become semantic stops. -/
+def openPreflight (payload : UnitPayload) (request : OpenRequest)
+    (values : OptionalValues payload.entry.inputs) : Except String Unit := do
+  let analysis : Bounds.Analysis Unit := do
+    let helpers ← Bounds.prepareHelpers payload.definitions
+    let replies ← abstractReplies request.replies
+    let inputs := optionalAbstractInputs values
+    inputs.forM Bounds.checkValue
+    let masked := inputs.zipWith (fun value scope =>
+      if scope.contains request.self then value else .absent) payload.entry.inputScopes
+    let result ← Bounds.region (Bounds.protocolOperation helpers request.self
+      (receiveBounds replies))
+      payload.entry.raw masked
+    if let some outputs := result then outputs.forM Bounds.outputWork
+    return ()
+  let _ ← (analysis.run {}).mapError (Bounds.Failure.code true)
+  return ()
 
 def evaluateOpen (program : Program) (json : Json) : Except String Json := do
   let root := program.payload.entry
   let request ← decodeOpenRequest root.roles json
   let values ← optionalInputs root.inputs request.inputs
   validateServiceAliases root.inputScopes values []
-  let bounds := request.replies.foldl replyBounds (optionalInputBounds values)
-  if openEvaluationCost program.payload bounds > workLimit then
-    throw "structured-open-work-limit"
+  openPreflight program.payload request values
   observe root.roles request.self request.capacity
     (program.observed Scalar Scalar request.self values) { remaining := request.replies }
 

@@ -16,6 +16,7 @@ def snapshot : Snapshot where
   entry := "main"
   domains := [⟨"items", [.vector "bls12-381.fr"], .elements 0⟩]
   relations := []
+  bindings := []
   definitions := [.function ⟨"step", .local, .privateDef, [.field "bls12-381.fr", .vector "bls12-381.fr", .boolean], [], none, [], some ("step", []), (.block [] (.stop .abort "body_stop"))⟩, .function ⟨"predicate", .local, .privateDef, [.field "bls12-381.fr", .vector "bls12-381.fr", .boolean], [.boolean], none, [], some ("predicate", []), (.block [] (.ret [2]))⟩, .finite ⟨"fold", .publicDef, [.vector "bls12-381.fr", .boolean], [], "items", "step", "predicate"⟩, .function ⟨"work", .local, .publicDef, [.vector "bls12-381.fr", .boolean], [.boolean], none, [], some ("work", []), (.block [.instruction (.apply "fold") [0, 1] [] [] "fold"] (.ret [1]))⟩, .function ⟨"main", .protocol, .publicDef, [.vector "bls12-381.fr", .boolean], [.boolean], some ⟨["P"], [["P"], ["P"]], [["P"]]⟩, [], none, (.block [.instruction (.localCall "work" "P") [0, 1] [.boolean] [] "work"] (.ret [0]))⟩]
 
 end ZkcExamples.Structured.UnitStateData

@@ -46,7 +46,18 @@ structure Domain where
   constructor : DomainConstructor
   deriving DecidableEq, Repr
 
+/-- Non-callable primitive declaration, retained even when unused. -/
+structure Binding where
+  name : String
+  contract : String
+  arguments : List String
+  implementation : String
+  deriving DecidableEq, Repr
+
 inductive Descriptor where
+  | exec (operation binding : String) (parameters : List String)
+  | indexConstant (decimal : String)
+  | indexEqual
   | fieldConstant (domain decimal : String)
   | fieldAdd (domain : String)
   | fieldSubtract (domain : String)
@@ -145,6 +156,7 @@ structure Snapshot where
   entry : String
   domains : List Domain
   relations : List Relation
+  bindings : List Binding
   definitions : List Definition
   deriving Repr
 

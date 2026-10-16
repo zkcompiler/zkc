@@ -50,3 +50,39 @@ The [structured bridge](../bridges/structured/README.md) separately compares
 full-size BLS12-381 scalar values with direct SSA execution and selected production
 Runner cases. Those finite comparisons do not establish native executable
 soundness, randomness or transcript encoding.
+
+## Structured primitive contracts
+
+The structured model independently admits all retained binding metadata,
+including unused rows, and resolves exact fifteen-operation ABIs. General
+`PrimitiveLaws` state conditional u64 arithmetic equations, overflow/underflow
+and zero-divisor refusal, list length exhaustion, sum, ordered split/append and
+equality. `Evaluation.exec_missing` and `exec_stopping_prefix` retain strict
+operand sequencing and continuation stops. `Finite.fold_range_state` supplies
+an indexed invariant for counted loops without imposing unreachable callback
+premises. General helper framing, effect interpretation, all-present adequacy,
+inlining and closed projection remain applicable to the extended vocabulary.
+These are logical equations, independent of native allocation, runtime resource
+cost, source translation correctness and security. Actual source client coverage
+is recorded separately from these generic laws.
+
+Five complete fresh original subjects are kernel-admitted: unchanged library
+Shape/Table/Halves wrappers, an independent eight-result arithmetic/vector caller
+and a two-role pure-index caller. Full-table equations discharge every helper
+premise through exact admitted body views. Successful table/halves contracts
+preserve ordered values and prove the two halves' shapes and reconstruction;
+source short-circuit laws use silent observations. A separate Sequence theorem
+proves the observed refusal prefix for arbitrary vectors with representable
+length plus one; no observed Shape/Table/Halves site law is claimed.
+The library equations state representation premises explicitly; the independent
+Sequence equation covers all logical inputs. See the
+[source contract](spec/structured-source.md#actual-library-primitive-subjects)
+for exact scope and theorem owners. Full Sumcheck's maps, realization, protocol
+application and repetition remain outside this admission profile.
+
+The executable reference propagates generated index/vector bounds through the
+checked source before running the existing evaluator. Separate analysis and
+logical-work budgets, conservative branch/loop joins and typed reply envelopes
+can refuse cheap concrete runs. In particular, a valid source equation does not
+imply CLI preflight success. These controls do not prove abstract-transfer
+soundness, exact host costs or agreement with native capacity thresholds.

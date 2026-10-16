@@ -16,7 +16,13 @@ The separate [structured bridge](bridges/structured/README.md) retains shared
 helpers, multiple results, finite folds and Local control, together with explicit
 protocol participants, group values and service interactions. Its bounded
 profile has independent admission, proved declaration linking and compositional
-helper-table laws. Its [scalar inlining pairs](bridges/structured/README.md#scalar-inlining-pairs)
+helper-table laws. Separate checked primitive bindings cover u64 arithmetic and
+ordered Fr-vector operations through that same evaluator; the
+[formal contract](docs/spec/structured-source.md#checked-primitives-and-index-values)
+states range, stopping and capacity boundaries. Complete original library
+Shape/Table/Halves wrappers have [source equations and ordered result contracts](docs/spec/structured-source.md#actual-library-primitive-subjects),
+alongside independent arithmetic/vector and pure-index callers.
+Its [scalar inlining pairs](bridges/structured/README.md#scalar-inlining-pairs)
 prove exact original/prepared model equality for authored response and claim
 computations using checked body contracts and a reusable inlining law.
 The [multilinear Sumcheck foundation](docs/spec/multilinear-sumcheck.md) separately

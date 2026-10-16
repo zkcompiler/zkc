@@ -36,6 +36,11 @@ theorem componentOperation_table_congr (left right : ComponentTables F G interfa
       exact congrArg (fun process => process.bind (fun results => .done results.present))
         (congrFun (congrFun closedOperation values) bodies)
   cases op <;> try exact strictSame
+  case exec primitive =>
+    funext args bodies
+    cases bodies
+    simp only [componentOperation]
+    split <;> rfl
   case invoke helper =>
     funext args bodies
     cases bodies

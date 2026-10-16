@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Structured.Vocabulary
+public import Zkc.Source.Structured.Primitives
 
 @[expose] public section
 
@@ -49,6 +49,9 @@ def FoldSpec.predicateHelper (fold : FoldSpec) : Helper :=
   ⟨fold.predicate, fold.kind, fold.domain.item :: (fold.domain.inputs ++ fold.captures), [.boolean]⟩
 
 inductive Op where
+  | exec (primitive : Primitive)
+  | indexConstant (value : Nat)
+  | indexEqual
   | fieldConstant (domain : String) (value : Nat)
   | fieldAdd (domain : String) | fieldSubtract (domain : String)
   | fieldMultiply (domain : String) | fieldEqual (domain : String)
@@ -70,6 +73,9 @@ inductive Op where
   | mark (site : String)
 
 def Op.arguments : Op → List Ty
+  | .exec primitive => primitive.arguments
+  | .indexConstant _ => []
+  | .indexEqual => [.index, .index]
   | .fieldConstant .. | .booleanConstant .. | .groupIdentity .. | .mark .. => []
   | .fieldAdd d | .fieldSubtract d | .fieldMultiply d | .fieldEqual d => [.field d, .field d]
   | .groupAdd d | .groupEqual d => [.group d, .group d]
@@ -84,6 +90,9 @@ def Op.arguments : Op → List Ty
   | .guard => [.boolean]
 
 def Op.results : Op → List Ty
+  | .exec primitive => primitive.results
+  | .indexConstant _ => [.index]
+  | .indexEqual => [.boolean]
   | .fieldConstant d _ | .fieldAdd d | .fieldSubtract d | .fieldMultiply d | .boundedAt d => [.field d]
   | .groupIdentity d | .groupAdd d | .groupScale d _ => [.group d]
   | .fieldEqual _ | .booleanConstant _ | .booleanAnd | .booleanOr | .booleanXor |
@@ -108,7 +117,7 @@ def Op.helpers : Op → List Helper
   | .invoke helper => [helper]
   | .fold spec => spec.stepHelper ::
       (if spec.predicate.isEmpty then [] else [spec.predicateHelper])
-  | .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
+  | .exec .. | .indexConstant .. | .indexEqual | .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
     .fieldEqual .. | .booleanConstant .. | .booleanAnd | .booleanOr | .booleanXor |
     .booleanEqual | .booleanNotEqual | .select .. | .boundedAt .. |
     .branch .. | .loop .. | .loopCondition .. | .guard | .mark .. |

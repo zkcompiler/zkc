@@ -32,7 +32,7 @@ def function (name : String) (kind : Kind) (inputs outputs : List Ty) (body : Bl
     if kind == .local then some (name, []) else none, body⟩
 
 def snapshot (definitions : List Definition) (domains : List Domain := []) : Snapshot :=
-  ⟨digest, "main", domains, [], definitions⟩
+  ⟨digest, "main", domains, [], [], definitions⟩
 
 def totalStep (returned : List Nat := [2, 0]) (container : Nat := 3)
     (premises : List Bound := [⟨2, 3, 0⟩]) : Definition :=
@@ -264,8 +264,8 @@ def run : IO Unit := do
     | .error _ => false)
   test "shared-dag-availability-admitted" ((check dag).isOk)
   test "empty-summary-dag-does-not-expand-operations" ((check (dependencyChain 40 2)).isOk)
-  test "shared-dag-runtime-limit-is-separate" (evaluate (dependencyChain 40 2) [] ==
-    .error "structured-evaluation-work-limit")
+  test "shared-dag-analysis-limit-is-separate" (evaluate (dependencyChain 40 2) [] ==
+    .error "structured-bounds-analysis-limit")
   test "reference-depth-boundary" ((check (dependencyChain 64 1)).isOk)
   test "declaration-order-does-not-change-fold" (evaluate
     {unit with definitions := unit.definitions.reverse} [vec [2], boolean true] == .ok (stopped "abort"))

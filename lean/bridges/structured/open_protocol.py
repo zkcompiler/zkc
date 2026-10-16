@@ -294,7 +294,7 @@ def schnorr_cases(suite):
         returned([None], prover_script)))
     # Relation metadata and its dormant mathematical declaration are retained.
     assert len(subject[2][5]) == 1
-    assert any(row[0] == "function" and row[2] == "math" for row in subject[2][6])
+    assert any(row[0] == "function" and row[2] == "math" for row in subject[2][7])
 
 
 def schnorr_variant_cases(suite):

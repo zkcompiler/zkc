@@ -242,3 +242,21 @@ dominance and `IsolatedFromAbove`; zkc's native regions already require explicit
 captures. Its [dialect conversion framework](https://mlir.llvm.org/docs/DialectConversion/)
 checks configured legality. Neither mechanism supplies a denotational correctness
 theorem by itself.
+
+## Primitive declaration and evaluation ownership
+
+Primitive bindings are retained separately from callable declarations. The
+closed fifteen-operation vocabulary exposes ordered ports independently of its
+evaluator, avoiding an import cycle through helper meanings. One Local exec
+operation uses the existing Outcome and Proc stops; pure index expressions
+remain distinct calculations. Full-table framing and effect translation add one
+family case. Binding names and helper origin names supply no semantic authority.
+
+Conditional source contracts use unchanged library helpers selected through
+ordinary authored wrappers and the complete original-stage dependency closure.
+An indexed finite-fold invariant belongs to `Source.Finite`; it applies callback
+equations only at reached states/indices, which is necessary for bounded doubling
+in the shape helper. The source import boundary retains original bytes, digest,
+constructor subject and kernel admission separately from the resulting equations.
+The full Sumcheck source still requires map/realization, composed protocol calls
+and repetition; primitive admission does not discharge those obligations.

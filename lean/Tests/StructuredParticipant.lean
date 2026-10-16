@@ -189,7 +189,7 @@ theorem output_filter_preserves_stop (x : Option F) :
     hiddenStopRoot.participant (tables F G) 0 (.cons x .nil) = .halt .abort := rfl
 
 private def projectionSnapshot : Snapshot :=
-  ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [], [],
+  ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [], [], [],
     [.function ⟨"main", .protocol, .privateDef, [.boolean], [],
       some ⟨["P"], [["P"]], []⟩, [], none,
       .block [.instruction (.guard "P") [0] [] [] "checked-guard"] (.ret [])⟩]⟩

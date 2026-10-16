@@ -238,8 +238,39 @@ The writer, parser and renderer are tested executable boundaries. This package
 does not prove C++ export correctness, frontend translation, native lowering,
 production arithmetic/sampling or runtime capacity equivalence. The source-level
 Schnorr theorem has its own algebraic and interaction assumptions. Repeated
-multilinear Sumcheck additionally requires protocol calls/repetition and broader
-index/vector operations in the checked source profile.
+multilinear Sumcheck additionally requires named maps/realizations and protocol
+calls/repetition in the checked source profile.
+
+## Primitive bindings and unchanged library helpers
+
+`primitives.py` emits five complete original-stage units from the maintained
+`compiler/test/fixtures/structured-source/primitive-callers.zkc` caller and unchanged
+standard libraries. The first three call `multilinear::has_shape`, `table` and
+`halves`; an independent sequence example uses append, length, sum, equality and
+checked integer arithmetic. A two-role index example checks pure expressions
+and absence at the nonowner.
+
+```sh
+python3 lean/bridges/structured/primitives.py \
+  --compiler build/compiler/zkc-compile \
+  --reference build/compiler/test/zkc-structured_reference-test \
+  --report build/experiments/structured-primitives/report.json
+```
+
+The native reference walks original SSA; Lean separately admits the current
+snapshot, including every binding declaration. Python expectations use ordered
+lists, integer arithmetic and the equation `length = 2^dimensions * columns`.
+Tests distinguish false shape results, rejected table construction and checked
+arithmetic refusal. Non-symmetric tables expose swapped halves. Invalid unused
+bindings, incompatible nominal arguments, duplicate names, implementation
+selection and binding-as-callable mutations exercise the independent reader.
+
+The suite compares retained original MLIR, exported JSON and transparent Lean
+constructor data byte-for-byte. `--write-fixtures` updates those subjects and
+requires review of their semantic proofs; it does not produce a proof. The
+ordinary `lean-native` check includes this suite. Executable capacity checks and
+logical range/shape premises remain separate; passing these finite comparisons
+does not establish universal exporter, native arithmetic or resource correctness.
 
 ## Native participant observations
 

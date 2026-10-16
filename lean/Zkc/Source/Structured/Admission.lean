@@ -177,8 +177,9 @@ def recordSite (site : String) (required : Bool) : LowerM Unit := do
 In particular, acquiring a bound cannot authorize a Protocol-level read. -/
 def Descriptor.admittedIn (descriptor : Descriptor) (kind : Kind) : Bool :=
   match descriptor with
+  | .exec .. => kind == .local
   | .booleanConstant _ => true
-  | .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
+  | .indexConstant .. | .indexEqual | .fieldConstant .. | .fieldAdd .. | .fieldSubtract .. | .fieldMultiply .. |
     .fieldEqual .. | .booleanAnd | .booleanOr | .booleanXor | .booleanEqual |
     .booleanNotEqual | .select .. | .call .. | .fold .. |
     .groupIdentity .. | .groupAdd .. | .groupScale .. | .groupEqual .. => kind != .local
@@ -186,6 +187,37 @@ def Descriptor.admittedIn (descriptor : Descriptor) (kind : Kind) : Bool :=
   | .localCall .. | .guard .. | .restrict .. | .exchange .. | .draw .. | .statement .. =>
     kind == .protocol
   | .apply .. | .branch | .loop | .loopCondition => kind == .local
+
+/-- Resolve the exact operation/contract pair and parameters independently of
+wire parsing. Direct constructor subjects pass the same checks. -/
+def resolvePrimitive (snapshot : Snapshot) (operation name : String)
+    (parameters : List String) : Except String Primitive := do
+  let binding ← requireSome (snapshot.bindings.find? (·.name == name)) "structured-unknown-binding"
+  if !binding.valid then throw "structured-binding"
+  let pair ← match operation with
+    | "algebra.exec.index_constant" => pure ("index.constant", Primitive.indexConstant 0)
+    | "algebra.exec.index_equal" => pure ("index.equal", Primitive.indexEqual)
+    | "algebra.exec.index_less" => pure ("index.less", Primitive.indexLess)
+    | "algebra.exec.index_add" => pure ("index.add", Primitive.indexAdd)
+    | "algebra.exec.index_mul" => pure ("index.mul", Primitive.indexMul)
+    | "algebra.exec.index_sub" => pure ("index.sub", Primitive.indexSub)
+    | "algebra.exec.index_div" => pure ("index.div", Primitive.indexDiv)
+    | "algebra.exec.index_mod" => pure ("index.mod", Primitive.indexMod)
+    | "algebra.exec.vector_empty" => pure ("vector.empty", Primitive.vectorEmpty scalarDomain)
+    | "algebra.exec.vector_length" => pure ("vector.length", Primitive.vectorLength scalarDomain)
+    | "algebra.exec.vector_sum" => pure ("vector.sum", Primitive.vectorSum scalarDomain)
+    | "algebra.exec.vector_split" => pure ("vector.split", Primitive.vectorSplit scalarDomain)
+    | "algebra.exec.vector_append" => pure ("vector.append", Primitive.vectorAppend scalarDomain)
+    | "algebra.exec.vector_equal" => pure ("vector.equal", Primitive.vectorEqual scalarDomain)
+    | "algebra.exec.field_equal" => pure ("field.equal", Primitive.fieldEqual scalarDomain)
+    | _ => throw "structured-primitive-operation"
+  if binding.contract != pair.1 then throw "structured-binding-contract"
+  if operation == "algebra.exec.index_constant" then
+    let [text] := parameters | throw "structured-primitive-parameters"
+    return .indexConstant (← Format.indexDecimal text)
+  else
+    if !parameters.isEmpty then throw "structured-primitive-parameters"
+    return pair.2
 
 def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
     (context : List Ty) (facts : Facts) (identities : List Nat)
@@ -200,7 +232,7 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
   let argumentTypes ← typesAt context operands
   let factOperands := operands.map fun index => identities[index]?.getD index
   let required := match descriptor with
-    | .apply _ | .localCall .. | .branch | .loop | .loopCondition | .guard _ => true
+    | .exec .. | .apply _ | .localCall .. | .branch | .loop | .loopCondition | .guard _ => true
     | .booleanConstant _ => kind == .local
     | _ => false
   if kind == .math && !site.isEmpty then throw "structured-math-site"
@@ -222,6 +254,10 @@ def resolveOp (snapshot : Snapshot) (domains : List DomainSpec) (kind : Kind)
   let checkField := fun (d : String) =>
     if d == scalarDomain then pure () else (throw "structured-field-domain" : LowerM Unit)
   match descriptor with
+  | .exec operation binding parameters =>
+    return .exec (← resolvePrimitive snapshot operation binding parameters)
+  | .indexConstant text => return .indexConstant (← Format.indexDecimal text)
+  | .indexEqual => return .indexEqual
   | .fieldConstant d text =>
     checkField d
     let value ← Format.decimal text

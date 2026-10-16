@@ -219,9 +219,9 @@ theorem process_eq_reference (xs : List F) (enabled : Bool)
       rfl
 
 /-- Domain failure precedes the predicate, including when it would disable every step. -/
-theorem process_refuses (xs : List F) (enabled : Bool)
+theorem process_exhausted (xs : List F) (enabled : Bool)
     (lengthInvalid : ¬ xs.length < indexLimit) :
-    process (G := G) xs enabled = .halt .refused := by
+    process (G := G) xs enabled = .halt .exhausted := by
   rw [process_fold]
   change (Evaluation.denoteFold (table F G) foldSpec
     ((Values.cons xs Values.nil).append
@@ -232,10 +232,10 @@ theorem process_refuses (xs : List F) (enabled : Bool)
 
 theorem process_eq_checked_reference (xs : List F) (enabled : Bool) :
     process (G := G) xs enabled =
-      if xs.length < indexLimit then reference (G := G) xs enabled else .halt .refused := by
+      if xs.length < indexLimit then reference (G := G) xs enabled else .halt .exhausted := by
   split
   · exact process_eq_reference (G := G) xs enabled ‹_›
-  · exact process_refuses xs enabled ‹_›
+  · exact process_exhausted xs enabled ‹_›
 
 theorem process_nil (enabled : Bool) :
     process (G := G) ([] : List F) enabled = .done (outputs enabled) := by

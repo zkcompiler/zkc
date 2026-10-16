@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Structured.ClosedProfile
+public import ZkcTools.StructuredSource.Bounds
 public import Mathlib.Data.ZMod.Basic
 
 @[expose] public section
@@ -62,64 +62,17 @@ def outcome {types : List Ty} : PIR.Outcome (Values (assignment Scalar Scalar) t
   | .returned values => return .arr #[.str "returned", .arr (← outputs values).toArray]
   | .stopped reason => .ok (.arr #[.str "stopped", Zkc.Source.Format.stop.encode reason])
 
-structure InputBounds where
-  vectorLength : Nat := 0
-  index : Nat := 0
-
-def inputBounds {types : List Ty} : Values (assignment Scalar Scalar) types → InputBounds
-  | .nil => {}
-  | .cons (ty := type) value rest =>
-    let tail := inputBounds rest
-    match type with
-    | .index => { tail with index := max tail.index value }
-    | .vector _ => { tail with vectorLength := max tail.vectorLength value.length }
-    | _ => tail
-
-def workLimit : Nat := 1000000
-def capped (value : Nat) : Nat := min (workLimit + 1) value
-abbrev Costs := List (String × Nat)
-
-def helperCost (costs : Costs) (name : String) : Nat :=
-  match costs.find? (·.1 == name) with
-  | some (_, cost) => cost
-  | none => workLimit + 1
-
-def operationCost (bounds : InputBounds) (costs : Costs) (op : Op) (bodies : List Nat) : Nat :=
-  match op with
-  | .invoke helper => helperCost costs helper.name
-  | .fold spec => capped (1 + bounds.vectorLength *
-      (helperCost costs spec.step + if spec.predicate.isEmpty then 1 else helperCost costs spec.predicate))
-  | .branch .. => 1 + bodies.foldl max 0
-  | .loop .. | .loopCondition .. =>
-      let upper := max bounds.index bounds.vectorLength
-      if upper > 2 ^ 20 then workLimit + 1
-      else capped (1 + upper * (1 + bodies.foldl max 0))
-  | _ => 1
-
-mutual
-  def regionCost (bounds : InputBounds) (costs : Costs) : RawRegion Ty Op → Nat
-    | .ret _ | .stop _ => 1
-    | .letOp op _ _ bodies next =>
-        capped (1 + operationCost bounds costs op (regionsCost bounds costs bodies) + regionCost bounds costs next)
-    | .bind _ body next => capped (1 + regionCost bounds costs body + regionCost bounds costs next)
-  def regionsCost (bounds : InputBounds) (costs : Costs) : RawRegions Ty Op → List Nat
-    | .nil => []
-    | .cons _ _ body rest => regionCost bounds costs body :: regionsCost bounds costs rest
-end
-
-/-- All supported operations preserve existing vector values; there are no
-vector constructors. Domain-generated indices are below the input vector bound.
-This conservative estimate includes untaken arms and skipped predicates. -/
-def evaluationCost (payload : Payload) (bounds : InputBounds) : Nat :=
-  let costs := payload.definitions.foldl (fun costs definition =>
-    (definition.name, regionCost bounds costs definition.raw) :: costs) []
-  regionCost bounds costs payload.entry.raw
+/-- Capacity analysis specializes each SSA input and checked helper call. The
+result is a tool policy check, not a theorem about the logical interpreter. -/
+def preflight (payload : Payload) {types : List Ty}
+    (values : Values (assignment Scalar Scalar) types) : Except String Unit := do
+  let _ ← (Bounds.closed payload (Bounds.values values)).mapError (Bounds.Failure.code false)
+  return ()
 
 def evaluate (program : Program) (json : Json) : Except String Json := do
   let payload ← program.closedPayload
   let values ← inputs payload.entry.inputs (← Format.array json)
-  if evaluationCost payload (inputBounds values) > workLimit then
-    throw "structured-evaluation-work-limit"
+  preflight payload values
   outcome (closedOutcome (payload.denote Scalar Scalar values))
 
 end ZkcTools.StructuredSource

@@ -102,7 +102,8 @@ of that control runs in `just test-integration` without Lean.
 project/dependency objects. These can be expensive.
 
 `just test-lean-native` prepares the native compiler, main Lean package and ArkLib integration, then
-runs independent scalar and structured SSA/Lean comparisons, the source/property
+runs independent scalar and structured SSA/Lean comparisons, including primitive
+bindings and unchanged table helpers, the source/property
 request matrix, and authored-target controls. The [structured bridge](../../lean/bridges/structured/README.md)
 also has a standalone command and optional production Runner comparisons.
 The separate [participant probe](../../lean/bridges/structured/participant.md)

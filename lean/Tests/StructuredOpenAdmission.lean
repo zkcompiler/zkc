@@ -15,7 +15,7 @@ private def root (inputs outputs : List Ty) (inputScopes outputScopes : List (Li
   .function ⟨"main", .protocol, .publicDef, inputs, outputs,
     some ⟨roles, inputScopes, outputScopes⟩, [], none, body⟩
 private def unit (definitions : List Definition) (relations : List Relation := []) : Snapshot :=
-  ⟨"sha256:0000000000000000000000000000000000000000000000000000000000000000", "main", [], relations, definitions⟩
+  ⟨"sha256:0000000000000000000000000000000000000000000000000000000000000000", "main", [], relations, [], definitions⟩
 private def accepted (snapshot : Snapshot) : Bool := (check snapshot).isOk
 private def first := math "first" [.boolean, .boolean] [.boolean] (.block [] (.ret [0]))
 private def relay := math "relay" [.boolean, .boolean] [.boolean]

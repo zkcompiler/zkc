@@ -47,7 +47,7 @@ def returned(*values):
 
 
 def definition(snapshot, name):
-    matches = [item for item in snapshot[6] if item[1] == name]
+    matches = [item for item in snapshot[7] if item[1] == name]
     if len(matches) != 1:
         raise ValueError(f"expected one definition: {name}")
     return matches[0]
@@ -507,7 +507,7 @@ def run_cases(suite):
             s, "active", [["2"], True], ["stopped", reason]))
 
     shared = suite.export("shared-math", (Path(__file__).parent / "fixtures/shared-math.mlir").read_text(encoding="utf-8"))
-    assert sum(item[1] == "pair" for item in shared[2][6]) == 1
+    assert sum(item[1] == "pair" for item in shared[2][7]) == 1
     structured = ROOT / "compiler/test/fixtures/structured-source"
     indexed = suite.export("indexed-helper", (structured / "indexed-helper.mlir").read_text(encoding="utf-8"))
     for entry in ("Run", "IndexedRun"):
@@ -531,13 +531,13 @@ def run_cases(suite):
     dag = suite.export("shared-local-dag", (structured / "shared-local-dag.mlir").read_text(encoding="utf-8"))
     def shared_dag_capacity():
         suite.command("shared-dag:check", [suite.tools["lean"], "check", dag[1]])
-        assert len(dag[2][6]) == 23, len(dag[2][6])
+        assert len(dag[2][7]) == 23, len(dag[2][7])
         request = dag[1].parent / "inputs.json"
         write_json(request, [["bool", True]])
         result = json.loads(suite.command("shared-dag:capacity",
             [suite.tools["lean"], "run", dag[1], request], success=False))
-        assert result == {"code": "structured-evaluation-work-limit", "status": "refused"}, result
-    suite.case("shared-helper-admission-is-separate-from-execution-capacity", shared_dag_capacity)
+        assert result == {"code": "structured-bounds-analysis-limit", "status": "refused"}, result
+    suite.case("shared-helper-admission-is-separate-from-analysis-capacity", shared_dag_capacity)
     nested = suite.export("nested-control", (structured / "nested-controls.mlir").read_text(encoding="utf-8"))
     loops = suite.export("loop-control", (structured / "loops-and-captures.mlir").read_text(encoding="utf-8"), "entry")
     completed = suite.export("conditional-completion",

@@ -39,7 +39,7 @@ def require(condition, message):
 
 def digest(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 def now(): return datetime.datetime.now(datetime.timezone.utc).isoformat()
-def definition(snapshot): return next(row for row in snapshot[6] if row[0] == "function" and row[1] == snapshot[3])
+def definition(snapshot): return next(row for row in snapshot[7] if row[0] == "function" and row[1] == snapshot[3])
 
 
 def projection_binding(text, snapshot):

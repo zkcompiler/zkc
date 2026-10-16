@@ -66,13 +66,20 @@ def descriptor(value):
              "bounded_at": "boundedAt", "call": "call", "apply": "apply", "guard": "guard"}
     nullary = {"bool.and": "booleanAnd", "bool.or": "booleanOr", "bool.xor": "booleanXor",
                "bool.equal": "booleanEqual", "bool.not_equal": "booleanNotEqual",
-               "if": "branch", "for": "loop", "for_condition": "loopCondition"}
+               "if": "branch", "for": "loop", "for_condition": "loopCondition",
+               "index.equal": "indexEqual"}
     if tag in unary:
         record(args, 1)
         return f".{unary[tag]} {text(args[0])}"
     if tag in nullary:
         record(args, 0)
         return "." + nullary[tag]
+    if tag == "index.constant":
+        record(args, 1)
+        return f".indexConstant {text(args[0])}"
+    if tag == "exec":
+        operation, binding_name, parameters = record(args, 3)
+        return f".exec {text(operation)} {text(binding_name)} {seq(parameters, text)}"
     if tag == "bool.constant":
         record(args, 1)
         if type(args[0]) is not bool:
@@ -168,6 +175,14 @@ def relation(value):
             f"{seq(inputs, ty)}, {seq(outputs, ty)}, {seq(purposes, text)}⟩")
 
 
+def primitive_binding(value):
+    tag, name, contract, arguments, implementation = record(value, 5)
+    if tag != "binding":
+        raise ValueError("invalid binding")
+    return (f"⟨{text(name)}, {text(contract)}, {seq(arguments, text)}, "
+            f"{text(implementation)}⟩")
+
+
 def definition(value):
     if value[0] == "finite":
         _, name, visibility, inputs, outputs, domain_name, step, predicate = record(value, 8)
@@ -191,7 +206,7 @@ def definition(value):
 
 
 def render(data, namespace):
-    version, stage, source, entry, domains, relations, definitions = record(data, 7)
+    version, stage, source, entry, domains, relations, bindings, definitions = record(data, 8)
     if version != "zkc.structured-source/0" or stage != "original":
         raise ValueError("wrong version or stage")
     if not re.fullmatch(r"(?:[A-Za-z][A-Za-z0-9_]*\.)*[A-Za-z][A-Za-z0-9_]*", namespace):
@@ -214,6 +229,7 @@ def snapshot : Snapshot where
   entry := {text(entry)}
   domains := {seq(domains, domain)}
   relations := {seq(relations, relation)}
+  bindings := {seq(bindings, primitive_binding)}
   definitions := {seq(definitions, definition)}
 
 end {namespace}

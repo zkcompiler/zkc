@@ -181,10 +181,10 @@ theorem process_eq_reference (xs : List F) (a b : F)
   rw [List.foldl_map] at enumeration
   exact congrArg PIR.Proc.done (enumeration.trans (values_fold xs a b))
 
-/-- Oversized domains refuse before any callback, rather than using unchecked reads. -/
-theorem process_refuses (xs : List F) (a b : F)
+/-- Unrepresentable domain lengths exhaust before any callback. -/
+theorem process_exhausted (xs : List F) (a b : F)
     (lengthInvalid : ¬ xs.length < indexLimit) :
-    process (G := G) xs a b = .halt .refused := by
+    process (G := G) xs a b = .halt .exhausted := by
   rw [process_fold]
   change Evaluation.denoteFold (table F G) foldSpec
     ((Values.cons xs Values.nil).append ((outputs a b).append Values.nil)) = _
@@ -197,10 +197,10 @@ theorem process_eq_checked_reference (xs : List F) (a b : F) :
     process (G := G) xs a b =
       if xs.length < indexLimit then
         .done (outputs (reference xs a b).1 (reference xs a b).2)
-      else .halt .refused := by
+      else .halt .exhausted := by
   split
   · exact process_eq_reference xs a b ‹_›
-  · exact process_refuses xs a b ‹_›
+  · exact process_exhausted xs a b ‹_›
 
 theorem process_nil (a b : F) : process (G := G) [] a b = .done (outputs a b) :=
   process_eq_reference [] a b (by change 0 < indexLimit; decide +kernel)

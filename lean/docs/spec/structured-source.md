@@ -7,13 +7,23 @@ logical meaning. Source/native correspondence is a separate boundary.
 ## Checked subject
 
 `Structured.Snapshot` retains source identity, selected entry, all domains,
-relations and definitions, exact function kinds, per-protocol rosters and port
+relations, bindings and definitions, exact function kinds, per-protocol rosters and port
 scopes, visibility, origins, preconditions, sites and ordered operands/results.
 There is one current strict wire schema. The reader rejects unknown tags, extra
 fields, objects and noncanonical numeric tokens, including in unused bodies.
 Canonical decimals use the shared bounded ASCII-digit fold, which reduces in
 the Lean kernel. Parsing JSON and matching an export digest to MLIR remain
 executable boundaries.
+
+Bindings are separate noncallable metadata in the exact eight-slot envelope
+`[format, original, digest, entry, domains, relations, bindings, definitions]`.
+Each row is `["binding", name, contract, arguments, implementation]`. All rows,
+including unused rows, are checked. Names match ASCII
+`[A-Za-z_][A-Za-z0-9_.-]*`, occupy at most 256 bytes and share the domain,
+relation and definition namespace. At most 128 binding rows are retained in
+encounter order. The implementation string must be empty. There is no missing
+field default or compatibility reader. Binding names cannot be called or
+selected as roots, domains or callbacks.
 
 Relations are noncallable metadata. Their input types, Boolean result, purposes,
 kind, key and revision are retained. A statement checks exact entry operands,
@@ -120,6 +130,127 @@ finite theorem families use the same explicit `F,G` assignment and evaluator.
 There is no separate scalar arithmetic or unsupported-sort fallback.
 The independent model retains its existing vector/index select controls, which
 are not currently native mathematical export paths.
+
+## Checked primitives and index values
+
+`Primitive` owns a closed vocabulary and ordered ports; `PrimitiveEvaluation`
+owns its meaning over the existing `PIR.Outcome`. One `Op.exec` case delegates
+through the shared `Evaluation` used by closed bodies, components and participant
+helpers. There is no new carrier, process executor or whole-protocol intrinsic.
+Its helper inventory is empty; general framing, effect interpretation, linking,
+all-present adequacy, inlining and closed projection retain their claims.
+
+An exec descriptor is `["exec", exact-native-operation, binding-name, parameters]`.
+Admission independently resolves the exact operation/contract pair below,
+nominal arguments, full ordered ports and parameters. Exec is Local-only,
+region-free and requires a nonempty unique source site. Index constant takes
+one canonical u64 decimal string; every other primitive takes no parameters.
+No leading zero except `"0"`, sign, whitespace, non-ASCII digit, field reduction
+or wrapping is accepted. Values through `18446744073709551615` are admitted.
+
+Here `I` is index, `B` Boolean, `F` the exact nominal `bls12-381.fr` scalar,
+and `V` its ordered vector. Every native operation has literal prefix
+`algebra.exec.`; the suffixes in the table are exhaustive. Index contracts have
+no domain arguments; vector and field contracts have exactly `["bls12-381.fr"]`.
+
+| Native suffix | Binding contract | Inputs | Outputs |
+|---|---|---|---|
+| `index_constant` | `index.constant` | none | I |
+| `index_equal` | `index.equal` | I, I | B |
+| `index_less` | `index.less` | I, I | B |
+| `index_add` | `index.add` | I, I | I |
+| `index_mul` | `index.mul` | I, I | I |
+| `index_sub` | `index.sub` | I, I | I |
+| `index_div` | `index.div` | I, I | I |
+| `index_mod` | `index.mod` | I, I | I |
+| `vector_empty` | `vector.empty` | none | V |
+| `vector_length` | `vector.length` | V | I |
+| `vector_sum` | `vector.sum` | V | F |
+| `vector_split` | `vector.split` | V | V, V |
+| `vector_append` | `vector.append` | V, F | V |
+| `vector_equal` | `vector.equal` | V, V | B |
+| `field_equal` | `field.equal` | F, F | B |
+
+Index values are `Nat` with explicit `value < 2^64` conditions. Exec checks
+both index operands, including comparisons. Add/multiply overflow, subtraction
+underflow, and division/remainder by zero stop `refused`. No result is reduced
+modulo the scalar characteristic. Pure `index.constant` and `index.equal`
+represent native `data.index` and `data.index_equal`, require Math/Protocol
+ownership and empty sites, and preserve optional component dependencies. Their
+constants are range-checked on admission. They cannot authorize Local exec.
+At the logical carrier level pure equality is total on `Nat`; relating arbitrary
+inputs to native u64 values additionally requires their representation bounds.
+Exec equality checks those bounds itself and can refuse.
+
+Vectors denote logical lists. Empty returns `[]`; sum folds field addition from
+zero; append returns the entire original list followed by one scalar; equality
+returns false for unequal lengths. Split requires positive even length and
+returns the contiguous low half followed by the high half, with neither padding
+nor truncation. It does not require a power-of-two length. All result positions
+and source marks remain ordered. The component exec case sequences every
+operand and stops `incomplete` on absence; reached exec cannot be skipped because
+its results are unused. An exec stop bypasses every later continuation.
+
+`vector.length` stops `exhausted` if logical length is not representable in u64.
+The same explicit representation check in `DomainSpec.denote` now also stops
+`exhausted`; its successful finite laws retain their range premises. This is a
+logical representation boundary. List sum/append/split equations do not assert
+host allocation success or equate native runtime and observer work capacities.
+Callers needing subsequent lengths or index arithmetic must state those bounds.
+The exact Fr/G1 nominal profile remains fixed; a configurable profile is deferred
+until a real second-domain consumer requires it. Multi-role partial Math remains
+restricted as above. Map/realization declarations, protocol application and
+protocol repetition remain unsupported, including in dormant source closure.
+
+## Actual library primitive subjects
+
+`PrimitiveShapeData`, `PrimitiveTableData` and `PrimitiveHalvesData` retain fresh
+complete original-stage exports of ordinary wrappers around unchanged
+`multilinear::has_shape`, `table` and `halves`. The selected closure includes all
+retained bindings and helper definitions. Each `Views` module kernel-admits its
+whole snapshot and proves the exact raw equality of every typed body it uses.
+The independently authored `PrimitiveSequenceData` retains an arithmetic/vector
+caller, and `PrimitivePureIndexData` retains a two-role pure-index caller.
+Generated constructor data explicitly records original digests; digest agreement
+and renderer regeneration are executable source-identity checks, not theorems
+about the exporter.
+
+`PrimitiveRows` proves the checked doubling loop using
+`Finite.fold_range_state`: after iteration i the state is exactly `2^i`, and
+every reached multiplication is within u64. `PrimitiveLibrary` states body
+equations under explicit comparison/rows helper premises. Each consumer in
+`PrimitiveLibraryConsumers` discharges those premises from its own complete
+checked table, using definition membership and exact body equality. A descriptive
+helper name alone never supplies a law. `PrimitiveExpansions` contains proved
+normal forms of these same bodies, keeping primitive evaluation opaque during
+SSA/environment simplification; it adds no interpreter.
+
+For representable vector length, dimension and columns, the complete Shape
+wrapper returns exactly
+`0 < columns ∧ dimension < 64 ∧ length % columns = 0 ∧ length / columns = 2^dimension`.
+Table returns the original three values in order precisely when that predicate
+holds, otherwise rejecting. The complete table-then-halves wrapper checks shape
+first, then positive dimension, then positive even split length. Its two results
+are `take (length / 2)` followed by `drop (length / 2)`.
+`PrimitiveContracts` packages successful body contracts: each half has dimension
+one smaller and unchanged columns, and concatenating the ordered halves
+reconstructs the original vector. The standalone halves helper checks dimension
+and split validity; it does not itself check columns or table shape.
+
+`PrimitiveSourceStops` exposes complete original Shape short circuits: zero
+columns avoids dimension/length requirements; a representable dimension at least
+64 avoids length requirements; an unrepresentable length exhausts only after the
+first two guards pass. `PrimitiveSequence.process_equation` covers every logical
+input, including checked length/addition, division/remainder and all eight
+ordered outputs. Its observed zero-divisor equation, under `length + 1 < 2^64`, retains the
+wrapper site and all five reached helper sites for arbitrary vectors, followed
+by refusal, excluding the suffix.
+`PrimitivePureIndex` proves owner, other-role and missing-input equations on the
+actual admitted open subject. The library and complete Sequence value equations use silent site observations;
+the separate observed Sequence theorem proves the stated site order. PureIndex
+uses the participant denotation that erases marks. No observed Shape/Table/Halves
+site equation is asserted here. Typed body views retain the original marks, and
+generic interpretation/closed-projection laws remain available.
 
 ## Helper inlining and selected transformations
 
@@ -289,7 +420,7 @@ This is not native BLS G1 semantics. Typed arbitrary-group equations protect
 distinctions that commutative scalar test arithmetic cannot detect.
 
 Source bytes are capped at 16 MiB, request bytes at 1 MiB; strings at 512 UTF-8
-bytes; domains, relations and definitions at 128 each; signatures at 512;
+bytes; domains, relations, bindings and definitions at 128 each; signatures at 512;
 source instructions/references at 4096; nesting/helper depth at 64. Stored
 internal marks add no source instructions. Availability allows 100000 stored
 traversal nodes, with separate 1000000 dependency and participant-replay budgets
@@ -306,6 +437,33 @@ Executable work bounds are separate from fuel-free denotation. The Lean observer
 and native SSA evaluator count different work, so their exact exhaustion
 thresholds are not equated. Comparisons of outcomes, traces, sites and consumed
 replies use sufficient capacities; capacity refusals are tested separately.
+
+Before interpretation, `ZkcTools.StructuredSource.Bounds` propagates per-value
+index intervals, vector-length intervals and optional presence through the
+checked source. This includes generated constants, arithmetic, append, helper
+bodies, loops and folds; an input maximum alone is insufficient. Typed received
+values use conservative bounds from all matching reply envelopes, including
+unused suffixes. A reversed array stores the abstract SSA context while ordered
+argument/result tuples retain their list ABI. The preflight never interprets a
+helper by its name and does not replace the typed evaluator.
+
+Separate analysis and expanded logical-work meters each allow 1000000 units;
+generated vectors are capped at 4096 elements. Work includes nodes, selected
+operands, tuples, allocated ranges and vector traversal/serialization. It is
+not an exact host instruction, allocation or wall-time bound. Analysis charges
+its own expansion and context operations. A known branch or select condition
+chooses its reachable alternative after strict/optional presence handling;
+unknown conditions join both alternatives. Loop joins and typed unused replies
+can still overapproximate the executed path, so a cheap logical run may fail
+preflight. Such diagnostics are tool-capacity refusals, distinct from the
+process's semantic stops. Transfer soundness and
+resource correspondence remain proof obligations; finite controls do not prove
+that every input satisfying a source theorem is admitted by this observer.
+Analysis exhaustion reports `structured-bounds-analysis-limit`; unsupported or
+mismatched abstract shapes report `structured-bounds-unknown`. Work and generated
+value caps retain separate closed/open diagnostics. Helpers are resolved in a
+bounded per-preflight table with full signature validation, preserving their
+checked bodies and ordinary linking.
 
 Native parsing/formation, C++ export, JSON parsing and constructor rendering
 remain reviewed executable boundaries. Exact logical equations and bounded

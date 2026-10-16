@@ -24,7 +24,7 @@ example : Format.decimal "1" = .ok 1 := rfl
 example : Common.Native.Format.decimal (.str "1") = .ok 1 := rfl
 
 private def constantSnapshot : Snapshot :=
-  ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [], [], [
+  ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [], [], [], [
     .function ⟨"main", .protocol, .publicDef, [], [.field scalarDomain],
       some ⟨["P"], [], [["P"]]⟩, [], none,
       .block [.instruction (.fieldConstant scalarDomain "123") []

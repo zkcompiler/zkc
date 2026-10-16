@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Structured.Vocabulary
+public import Zkc.Source.Structured.Primitives
 public import Zkc.Source.Format
 
 @[expose] public section
@@ -28,6 +28,12 @@ def natural (json : Json) (limit : Nat := 4096) : Except String Nat := do
 
 def decimal (text : String) : Except String Nat := do
   let some value := Source.Format.canonicalDecimal text | throw "structured-decimal"
+  return value
+
+def indexDecimal (text : String) : Except String Nat := do
+  if text.utf8ByteSize > 20 then throw "structured-index-canonical"
+  let value ← decimal text
+  if value ≥ indexLimit then throw "structured-index-canonical"
   return value
 
 def field (json : Json) : Except String String := do
@@ -77,6 +83,13 @@ def interface (json : Json) : Except String (Option ProtocolInterface) := do
 
 def descriptor (json : Json) : Except String Descriptor := do
   match ← array json with
+  | [.str "exec", operation, binding, parameters] =>
+      return .exec (← string operation) (← string binding) (← strings parameters)
+  | [.str "index.constant", n] =>
+      let text ← string n
+      let _ ← indexDecimal text
+      return .indexConstant text
+  | [.str "index.equal"] => return .indexEqual
   | [.str "field.constant", d, n] =>
       let text ← string n
       let value ← decimal text
@@ -193,6 +206,15 @@ def relation (json : Json) : Except String Relation := do
         ← string revision, ← types inputs, ← types outputs, ← (← array purposes).mapM purpose⟩
   | _ => throw "structured-relation"
 
+def binding (json : Json) : Except String Binding := do
+  match ← array json with
+  | [.str "binding", name, contract, arguments, implementation] =>
+    let value : Binding := ⟨← string name, ← string contract,
+      ← strings arguments, ← string implementation true⟩
+    if !value.valid then throw "structured-binding"
+    return value
+  | _ => throw "structured-binding"
+
 def definition (json : Json) : Except String Definition := do
   match ← array json with
   | [.str "function", name, mode, visible, inputs, outputs, ports, premises, source, body] =>
@@ -210,11 +232,12 @@ def digestValid (source : String) : Bool :=
 
 def snapshot (json : Json) : Except String Snapshot := do
   match ← array json with
-  | [.str "zkc.structured-source/0", .str "original", digest, entry, domains, relations, definitions] =>
+  | [.str "zkc.structured-source/0", .str "original", digest, entry, domains, relations, bindings, definitions] =>
     let source ← string digest
     if !digestValid source then throw "structured-source-digest"
     return ⟨source, ← string entry, ← (← array domains 128).mapM domain,
-      ← (← array relations 128).mapM relation, ← (← array definitions 128).mapM definition⟩
+      ← (← array relations 128).mapM relation, ← (← array bindings 128).mapM binding,
+      ← (← array definitions 128).mapM definition⟩
   | _ => throw "structured-envelope"
 
 /-- Lexical limits precede the recursive JSON parser, including inside unused bodies. -/

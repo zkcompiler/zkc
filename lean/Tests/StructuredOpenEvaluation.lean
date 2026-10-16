@@ -89,7 +89,7 @@ theorem owned_zero_result_missing_input_keeps_call_site (state : ReplayState) :
   rfl
 
 private def digest := "sha256:" ++ String.ofList (List.replicate 64 '0')
-private def snapshot (defs : List Definition) : Snapshot := ⟨digest, "main", [], [], defs⟩
+private def snapshot (defs : List Definition) : Snapshot := ⟨digest, "main", [], [], [], defs⟩
 private def root (inputs outputs : List Ty) (inputScopes outputScopes : List (List String))
     (body : Block) : Definition :=
   .function ⟨"main", .protocol, .publicDef, inputs, outputs,

@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Structured.Algebra
+public import Zkc.Source.Structured.PrimitiveEvaluation
 public import Zkc.Source.Finite
 
 @[expose] public section
@@ -14,10 +14,10 @@ namespace Zkc.Source.Structured
 def DomainSpec.denote {F G : Type} : (domain : DomainSpec) →
     Values (assignment F G) domain.inputs → Finite.Domain (assignment F G domain.item)
   | ⟨_, _, _, container, true⟩, arguments =>
-      .check ((arguments.get container).length < indexLimit) .refused
+      .check ((arguments.get container).length < indexLimit) .exhausted
         (.elements (List.range (arguments.get container).length))
   | ⟨_, _, _, container, false⟩, arguments =>
-      .check ((arguments.get container).length < indexLimit) .refused
+      .check ((arguments.get container).length < indexLimit) .exhausted
         (.elements (arguments.get container))
 
 namespace Evaluation
@@ -85,6 +85,9 @@ def operation {F G : Type} {interface : PIR.Signature}
     (op : Op) → Values (assignment F G) op.arguments →
     Values (RegionFunction (assignment F G) interface) op.regions →
     PIR.Proc interface (Values (assignment F G) op.results)
+  | .exec primitive, args, .nil => primitiveOutcome (primitive.evaluate args)
+  | .indexConstant value, .nil, .nil => .done (.cons value .nil)
+  | .indexEqual, .cons a (.cons b .nil), .nil => .done (.cons (decide (a = b)) .nil)
   | .fieldConstant _ value, .nil, .nil => .done (.cons (value : F) .nil)
   | .fieldAdd _, .cons a (.cons b .nil), .nil => .done (.cons (a + b) .nil)
   | .fieldSubtract _, .cons a (.cons b .nil), .nil => .done (.cons (a - b) .nil)
