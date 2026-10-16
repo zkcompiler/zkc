@@ -26,7 +26,7 @@ def export(source, refusal=None, symbol='main'):
 
 
 def table(snapshot):
-    return {definition[1]: definition for definition in snapshot[6]}
+    return {definition[1]: definition for definition in snapshot[7]}
 
 
 def instructions(definition):
@@ -45,7 +45,7 @@ def simple(declarations='', body='', result='%flag'):
 
 with case('original-total-state-and-exact-ssa-order'):
     data = export(total)
-    assert len(data) == 7
+    assert len(data) == 8
     assert data[:2] == ['zkc.structured-source/0', 'original']
     assert data[2] == 'sha256:' + hashlib.sha256(total.encode()).hexdigest()
     assert data[3] == 'main' and data[5] == []
@@ -202,7 +202,7 @@ for name, source, code in [
     ('math-operation-attribute', simple(body='%x = arith.xori %flag,%flag {unexpected=true} : i1'), 'structured-source-original'),
     ('extra-domain-constructor', total.replace('%d = "data.domain_indices"', '%extra = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>\n%d = "data.domain_indices"'), 'structured-source-domain'),
     ('unsupported-type', simple('func.func private @dead(%x:!algebra.group<"bn254.g1">) -> !algebra.group<"bn254.g1"> { return %x : !algebra.group<"bn254.g1"> }'), 'structured-source-type'),
-    ('unsupported-index-literal', simple('func.func private @dead() -> ui64 { %x = "data.index"() {value="0"} : ()->ui64\n return %x : ui64 }'), 'structured-source-operation'),
+    ('unsupported-index-less', simple('func.func private @dead(%a:ui64,%b:ui64) -> i1 { %x = "data.index_less"(%a,%b) : (ui64,ui64)->i1\n return %x : i1 }'), 'structured-source-operation'),
     ('unsupported-comparison', simple(body='%x = arith.cmpi ult,%flag,%flag : i1'), 'structured-source-original'),
     ('role-count-limit', simple().replace('roles=["P"]', 'roles=[' + ','.join(json.dumps(x) for x in ['P'] + [f'R{i}' for i in range(16)]) + ']', 1), 'structured-source-role'),
     ('long-name', simple().replace('sym_name="main"', 'sym_name="' + 'x' * 513 + '"'), 'structured-source-limit'),
@@ -242,8 +242,8 @@ with case('guard-native-verification-precedes-export-profile'):
 
 
 with case('unused-unsupported-provider-declaration'):
-    binding = '"local.binding"() {sym_name="constant",contract="index.constant",arguments=[],implementation=""} : ()->()'
-    export(simple(binding), 'structured-source-operation')
+    binding = '"local.binding"() {sym_name="product",contract="vector.product",arguments=["bls12-381.fr"],implementation=""} : ()->()'
+    export(simple(binding), 'structured-source-binding')
 
 with case('unsupported-collect'):
     export((fixtures / 'finite/total-collect.mlir').read_text(), 'structured-source-operation')
@@ -311,8 +311,8 @@ with case('helper-dag-keeps-shared-definitions-once'):
     for i in range(1, 11):
         helpers.append(f'func.func private @h{i}(%x:i1) -> i1 {{ %a = func.call @h{i-1}(%x) : (i1)->i1\n %b = func.call @h{i-1}(%a) : (i1)->i1\n return %b : i1 }}')
     data = export(simple('\n'.join(helpers), '%r = func.call @h10(%flag) : (i1)->i1', '%r'))
-    assert len(data[6]) == 12
-    assert sum(len(instructions(d)) for d in data[6]) == 21
+    assert len(data[7]) == 12
+    assert sum(len(instructions(d)) for d in data[7]) == 21
     assert len(json.dumps(data)) < 10000
 
 with case('snapshot-byte-limit'):
@@ -390,7 +390,7 @@ for name in ('forwarded-bounds', 'aliased-indices'):
     with case('native-exact-provenance-' + name):
         data = export((fixtures / 'structured-source' / (name + '.mlir')).read_text())
         assert data[3] == 'main'
-        assert len({definition[1] for definition in data[6]}) == len(data[6])
+        assert len({definition[1] for definition in data[7]}) == len(data[7])
 
 commands.save()
 print(f"structured-source: {counted()} cases")

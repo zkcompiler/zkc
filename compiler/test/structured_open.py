@@ -25,7 +25,7 @@ def export(source, symbol='main', refusal=None, keep=None):
 
 
 def definitions(data):
-    return {row[1]: row for row in data[6]}
+    return {row[1]: row for row in data[7]}
 
 
 def run(source, inputs, role='P', replies=(), symbol='main', capacity=1000000,
@@ -440,8 +440,8 @@ with case('actual-schnorr-library-interactive-retains-formula-and-relation'):
         'schnorr': repository_root / 'libraries/schnorr/lib.zkc'})
     assert len(data[5]) == 1
     assert data[5][0][3] == 'zkc.language.formula/0'
-    assert len([d for d in data[6] if d[2] == 'math']) == 1
-    assert len([d for d in data[6] if d[2] == 'protocol']) == 1
+    assert len([d for d in data[7] if d[2] == 'math']) == 1
+    assert len([d for d in data[7] if d[2] == 'protocol']) == 1
     assert not any(op[0][0] == 'statement' for op in definitions(data)[symbol][9][1])
     script = []
     for value in ['14', '5', None, '22']:
@@ -460,7 +460,7 @@ for form in ['Helpers', 'Reordered', 'EarlyChallenge']:
             'schnorr_forms': repository_root / 'lean/bridges/common/fixtures/schnorr-forms.zkc'})
         defs = definitions(data)
         assert data[5] == []
-        assert sum(d[2] == 'math' for d in data[6]) == (2 if form == 'Helpers' else 0)
+        assert sum(d[2] == 'math' for d in data[7]) == (2 if form == 'Helpers' else 0)
         ops = defs[symbol][9][1]
         assert sum(op[0][0] == 'call' for op in ops) == (2 if form == 'Helpers' else 0)
         first = run(source, ['2', '6', None, None, '29'], 'role00000001', symbol=symbol)

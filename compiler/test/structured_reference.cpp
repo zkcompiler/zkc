@@ -14,9 +14,11 @@
 #include "zkc/Support/MLIRInput.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/StringSet.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Support/raw_ostream.h"
 #include <functional>
+#include <limits>
 #include <memory>
 #include <variant>
 #include <vector>
@@ -70,6 +72,9 @@ bool valueType(Type type) {
 
 enum class Kind {
   Unsupported,
+  Exec,
+  IndexConstant,
+  IndexEqual,
   FieldConstant,
   Add,
   Subtract,
@@ -106,8 +111,84 @@ enum class Kind {
   DomainYield
 };
 
+// Independent of the exporter and native operation catalogue. Resolve every
+// declaration and occurrence before evaluation; the evaluator receives only
+// a closed primitive and its checked literal, never an arbitrary helper name.
+enum class Primitive {
+  Constant,
+  Add,
+  Sub,
+  Mul,
+  Div,
+  Mod,
+  Equal,
+  Less,
+  Empty,
+  Length,
+  Sum,
+  Split,
+  Append,
+  VectorEqual,
+  FieldEqual
+};
+struct PrimitiveSpec {
+  StringLiteral operation, contract, inputs, outputs;
+  Primitive primitive;
+  bool field;
+};
+constexpr PrimitiveSpec primitiveSpecs[] = {
+    {"algebra.exec.index_constant", "index.constant", "", "i",
+     Primitive::Constant, false},
+    {"algebra.exec.index_add", "index.add", "ii", "i", Primitive::Add, false},
+    {"algebra.exec.index_sub", "index.sub", "ii", "i", Primitive::Sub, false},
+    {"algebra.exec.index_mul", "index.mul", "ii", "i", Primitive::Mul, false},
+    {"algebra.exec.index_div", "index.div", "ii", "i", Primitive::Div, false},
+    {"algebra.exec.index_mod", "index.mod", "ii", "i", Primitive::Mod, false},
+    {"algebra.exec.index_equal", "index.equal", "ii", "b", Primitive::Equal,
+     false},
+    {"algebra.exec.index_less", "index.less", "ii", "b", Primitive::Less,
+     false},
+    {"algebra.exec.vector_empty", "vector.empty", "", "v", Primitive::Empty,
+     true},
+    {"algebra.exec.vector_length", "vector.length", "v", "i", Primitive::Length,
+     true},
+    {"algebra.exec.vector_sum", "vector.sum", "v", "f", Primitive::Sum, true},
+    {"algebra.exec.vector_split", "vector.split", "v", "vv", Primitive::Split,
+     true},
+    {"algebra.exec.vector_append", "vector.append", "vf", "v",
+     Primitive::Append, true},
+    {"algebra.exec.vector_equal", "vector.equal", "vv", "b",
+     Primitive::VectorEqual, true},
+    {"algebra.exec.field_equal", "field.equal", "ff", "b",
+     Primitive::FieldEqual, true},
+};
+struct CheckedPrimitive {
+  Primitive primitive;
+  uint64_t literal = 0;
+};
+using PrimitiveMap = llvm::DenseMap<Operation *, CheckedPrimitive>;
+
+bool primitivePorts(TypeRange types, StringRef ports) {
+  if (types.size() != ports.size())
+    return false;
+  for (auto [type, port] : llvm::zip(types, ports)) {
+    bool valid = port == 'i'   ? type.isUnsignedInteger(64)
+                 : port == 'b' ? type.isSignlessInteger(1)
+                 : port == 'v' ? isa<algebra::FieldVectorType>(type)
+                               : isa<algebra::FieldType>(type);
+    if (!valid || !valueType(type))
+      return false;
+  }
+  return true;
+}
+
 Kind kind(Operation &op) {
+  for (const auto &spec : primitiveSpecs)
+    if (op.getName().getStringRef() == spec.operation)
+      return Kind::Exec;
   return llvm::StringSwitch<Kind>(op.getName().getStringRef())
+      .Case("data.index", Kind::IndexConstant)
+      .Case("data.index_equal", Kind::IndexEqual)
       .Case("algebra.constant", Kind::FieldConstant)
       .Case("algebra.field_add", Kind::Add)
       .Case("algebra.field_subtract", Kind::Subtract)
@@ -189,6 +270,80 @@ class Admission {
   llvm::DenseMap<Operation *, SmallVector<Operation *>> dependencies;
   llvm::DenseSet<Operation *> active;
   llvm::DenseMap<Operation *, unsigned> heights;
+  llvm::DenseMap<Operation *, const PrimitiveSpec *> bindings;
+  PrimitiveMap primitives;
+  llvm::StringSet<> sites;
+
+  Error binding(Operation &op) {
+    if (auto failure = attributes(
+            op, {"sym_name", "contract", "arguments", "implementation"}))
+      return failure;
+    auto name = op.getAttrOfType<StringAttr>("sym_name");
+    auto contract = op.getAttrOfType<StringAttr>("contract");
+    auto arguments = op.getAttrOfType<ArrayAttr>("arguments");
+    auto implementation = op.getAttrOfType<StringAttr>("implementation");
+    auto alpha = [](char c) {
+      return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
+    };
+    if (!name || name.getValue().empty() || name.getValue().size() > 256 ||
+        !alpha(name.getValue().front()) ||
+        !llvm::all_of(name.getValue(),
+                      [&](char c) {
+                        return alpha(c) || (c >= '0' && c <= '9') || c == '.' ||
+                               c == '-';
+                      }) ||
+        !contract || !arguments || !implementation || op.getNumOperands() ||
+        op.getNumResults() || op.getNumRegions())
+      return error("structured-reference-binding");
+    if (!implementation.getValue().empty())
+      return error("structured-reference-implementation");
+    for (const auto &spec : primitiveSpecs) {
+      if (contract.getValue() != spec.contract)
+        continue;
+      if (spec.field
+              ? (arguments.size() != 1 ||
+                 arguments[0] != StringAttr::get(op.getContext(), fieldDomain))
+              : !arguments.empty())
+        return error("structured-reference-binding", "domain arguments");
+      bindings[&op] = &spec;
+      return Error::success();
+    }
+    return error("structured-reference-binding", "unsupported contract");
+  }
+
+  Error execution(Operation &op, Operation &owner) {
+    if (auto failure = attributes(op, {"binding", "parameters", "site"}))
+      return failure;
+    auto name = op.getAttrOfType<FlatSymbolRefAttr>("binding");
+    auto parameters = op.getAttrOfType<ArrayAttr>("parameters");
+    auto site = op.getAttrOfType<StringAttr>("site");
+    auto found =
+        bindings.find(name ? symbols.lookup(name.getValue()) : nullptr);
+    if (!isa<local::FuncOp>(owner) || !site || site.getValue().empty() ||
+        found == bindings.end() || !parameters)
+      return error("structured-reference-binding", "owner, reference or site");
+    const auto &spec = *found->second;
+    if (op.getName().getStringRef() != spec.operation ||
+        !primitivePorts(op.getOperandTypes(), spec.inputs) ||
+        !primitivePorts(op.getResultTypes(), spec.outputs))
+      return error("structured-reference-binding", "operation or ports");
+    CheckedPrimitive checked{spec.primitive};
+    bool constant = spec.primitive == Primitive::Constant;
+    if (parameters.size() != (constant ? 1u : 0u))
+      return error("structured-reference-binding", "parameters");
+    if (constant) {
+      auto text = dyn_cast<StringAttr>(parameters[0]);
+      if (!text)
+        return error("structured-reference-binding", "literal type");
+      auto parsed =
+          decimal(text.getValue(), false, "structured-reference-binding");
+      if (!parsed)
+        return parsed.takeError();
+      checked.literal = parsed->getZExtValue();
+    }
+    primitives.try_emplace(&op, checked);
+    return Error::success();
+  }
 
   Error reference(Operation &op, Operation &owner, StringRef attribute,
                   StringRef expected, bool optional = false) {
@@ -241,6 +396,26 @@ class Admission {
       if (!valueType(type) || isa<protocol_ir::ServiceReferenceType>(type))
         return error("structured-reference-unsupported", "result type");
     switch (code) {
+    case Kind::Exec:
+      return execution(op, owner);
+    case Kind::IndexConstant:
+    case Kind::IndexEqual: {
+      bool constant = code == Kind::IndexConstant;
+      if (!isa<func::FuncOp, protocol_ir::MathematicalOp>(owner) ||
+          !primitivePorts(op.getOperandTypes(), constant ? "" : "ii") ||
+          !primitivePorts(op.getResultTypes(), constant ? "i" : "b"))
+        return error("structured-reference-signature", "pure index operation");
+      if (auto failure = attributes(op, constant ? ArrayRef<StringRef>{"value"}
+                                                 : ArrayRef<StringRef>{}))
+        return failure;
+      if (constant) {
+        auto parsed = decimal(cast<data::IndexOp>(op).getValue(), false,
+                              "structured-reference-unsupported");
+        if (!parsed)
+          return parsed.takeError();
+      }
+      break;
+    }
     case Kind::FieldConstant: {
       if (auto failure = attributes(op, {"value"}))
         return failure;
@@ -350,6 +525,9 @@ class Admission {
       for (auto attr : op.getAttrs())
         if (auto failure = attributeBounds(attr.getValue()))
           return failure;
+      if (auto site = op.getAttrOfType<StringAttr>("site"))
+        if (site.getValue().empty() || !sites.insert(site.getValue()).second)
+          return error("structured-reference-unsupported", "execution site");
       if (auto failure = instruction(op, owner))
         return failure;
       for (Region &region : op.getRegions()) {
@@ -444,11 +622,26 @@ class Admission {
 public:
   explicit Admission(protocol_ir::ProtocolModuleOp unit)
       : unit(unit), symbols(unit) {}
+  const PrimitiveMap &checkedPrimitives() const { return primitives; }
 
   Error check() {
     unsigned domains = 0, definitions = 0, relations = 0;
     if (auto failure = attributes(*unit, {"profile"}))
       return failure;
+    llvm::StringSet<> names;
+    // Pre-admit even unused declarations, including forward references. Binding
+    // rows are metadata, not graph nodes or callable function signatures.
+    for (Operation &op : unit.getBody().front()) {
+      auto name = op.getAttrOfType<StringAttr>("sym_name");
+      if (!name || !names.insert(name.getValue()).second)
+        return error("structured-reference-symbol");
+      if (isa<local::OperationBindingOp>(op)) {
+        if (bindings.size() == 128)
+          return error("structured-reference-capacity", "bindings");
+        if (auto failure = binding(op))
+          return failure;
+      }
+    }
     for (Operation &op : unit.getBody().front()) {
       auto name = op.getAttrOfType<StringAttr>("sym_name");
       if (!name || name.getValue().empty())
@@ -459,6 +652,8 @@ public:
       if (auto visibility = op.getAttrOfType<StringAttr>("sym_visibility"))
         if (visibility != "private" && visibility != "public")
           return error("structured-reference-unsupported", "visibility");
+      if (isa<local::OperationBindingOp>(op))
+        continue;
       if (auto declaration = dyn_cast<relation::DeclareOp>(op)) {
         if (++relations > 128)
           return error("structured-reference-capacity", "relations");
@@ -549,6 +744,7 @@ public:
       if (op.getNumRegions() != 1 || !llvm::hasSingleElement(op.getRegion(0)) ||
           op.getRegion(0).front().empty())
         return error("structured-reference-unsupported", "function body");
+      sites.clear();
       if (auto failure = block(op.getRegion(0).front(), op, 1))
         return failure;
     }
@@ -685,6 +881,7 @@ bool matches(Type type, const Datum &value) {
 
 class Reference {
   SymbolTable symbols;
+  const PrimitiveMap &primitives;
   uint64_t steps = 0;
   uint64_t capacity = maxSteps;
   bool open = false;
@@ -709,6 +906,111 @@ class Reference {
       return error("structured-reference-capacity",
                    "evaluation steps or depth");
     return Error::success();
+  }
+
+  Error vectorWork(size_t count) {
+    // Linear vector work is observer fuel, not a source stop or a native
+    // backend allocation law. Check before copying or traversing elements.
+    if (count > maxVector || count > capacity - steps)
+      return error("structured-reference-capacity", "vector work or length");
+    steps += count;
+    return Error::success();
+  }
+
+  Expected<Outcome> execute(Operation &op, ArrayRef<Datum> args) {
+    auto found = primitives.find(&op);
+    if (found == primitives.end())
+      return error("structured-reference-binding", "unchecked execution");
+    Primitive code = found->second.primitive;
+    Outcome result;
+    switch (code) {
+    case Primitive::Constant:
+      result.values.emplace_back(found->second.literal);
+      break;
+    case Primitive::Add:
+    case Primitive::Sub:
+    case Primitive::Mul:
+    case Primitive::Div:
+    case Primitive::Mod:
+    case Primitive::Equal:
+    case Primitive::Less: {
+      uint64_t a = std::get<uint64_t>(args[0]), b = std::get<uint64_t>(args[1]);
+      constexpr uint64_t maximum = std::numeric_limits<uint64_t>::max();
+      if ((code == Primitive::Add && b > maximum - a) ||
+          (code == Primitive::Sub && a < b) ||
+          (code == Primitive::Mul && b && a > maximum / b) ||
+          ((code == Primitive::Div || code == Primitive::Mod) && b == 0))
+        return stopped(op, "refused");
+      if (code == Primitive::Equal || code == Primitive::Less)
+        result.values.emplace_back(code == Primitive::Equal ? a == b : a < b);
+      else
+        result.values.emplace_back(code == Primitive::Add   ? a + b
+                                   : code == Primitive::Sub ? a - b
+                                   : code == Primitive::Mul ? a * b
+                                   : code == Primitive::Div ? a / b
+                                                            : a % b);
+      break;
+    }
+    case Primitive::Empty:
+      result.values.emplace_back(
+          Vector(std::make_shared<std::vector<APInt>>()));
+      break;
+    case Primitive::Length:
+      // All reference vectors are bounded by maxVector, well within u64.
+      // Logical unrepresentable length is exhausted, not a shape refusal;
+      // this bounded observer cannot reach that semantic branch.
+      result.values.emplace_back(uint64_t(std::get<Vector>(args[0])->size()));
+      break;
+    case Primitive::Sum: {
+      const auto &items = *std::get<Vector>(args[0]);
+      if (auto failure = vectorWork(items.size()))
+        return failure;
+      APInt sum(512, 0);
+      for (const APInt &item : items)
+        sum = (sum + item).urem(modulus());
+      result.values.emplace_back(std::move(sum));
+      break;
+    }
+    case Primitive::Split: {
+      const auto &items = *std::get<Vector>(args[0]);
+      if (items.empty() || items.size() % 2)
+        return stopped(op, "refused");
+      if (auto failure = vectorWork(items.size()))
+        return failure;
+      auto middle = items.begin() + items.size() / 2;
+      result.values.emplace_back(
+          Vector(std::make_shared<std::vector<APInt>>(items.begin(), middle)));
+      result.values.emplace_back(
+          Vector(std::make_shared<std::vector<APInt>>(middle, items.end())));
+      break;
+    }
+    case Primitive::Append: {
+      const auto &items = *std::get<Vector>(args[0]);
+      // Guard addition and allocation before constructing the result.
+      if (items.size() >= maxVector)
+        return error("structured-reference-capacity", "append length");
+      if (auto failure = vectorWork(items.size() + 1))
+        return failure;
+      auto output = std::make_shared<std::vector<APInt>>(items);
+      output->push_back(std::get<APInt>(args[1]));
+      result.values.emplace_back(Vector(std::move(output)));
+      break;
+    }
+    case Primitive::VectorEqual: {
+      const auto &a = *std::get<Vector>(args[0]),
+                 &b = *std::get<Vector>(args[1]);
+      if (a.size() == b.size())
+        if (auto failure = vectorWork(a.size()))
+          return failure;
+      result.values.emplace_back(a == b);
+      break;
+    }
+    case Primitive::FieldEqual:
+      result.values.emplace_back(std::get<APInt>(args[0]) ==
+                                 std::get<APInt>(args[1]));
+      break;
+    }
+    return result;
   }
 
   Operation *target(Operation &op, StringRef attr) {
@@ -921,6 +1223,12 @@ class Reference {
                              unsigned depth) {
     Kind code = kind(op);
     switch (code) {
+    case Kind::Exec:
+      // Local execution sequences every operand even when all results are
+      // discarded. It cannot use the pure absent-component propagation below.
+      if (!llvm::all_of(args, present))
+        return stopped(op, "incomplete");
+      return execute(op, args);
     case Kind::Return:
     case Kind::Yield:
     case Kind::Condition:
@@ -998,6 +1306,18 @@ class Reference {
     }
     Outcome result;
     switch (code) {
+    case Kind::IndexConstant: {
+      auto parsed = decimal(cast<data::IndexOp>(op).getValue(), false,
+                            "structured-reference-unsupported");
+      if (!parsed)
+        return parsed.takeError();
+      result.values.emplace_back(parsed->getZExtValue());
+      break;
+    }
+    case Kind::IndexEqual:
+      result.values.emplace_back(std::get<uint64_t>(args[0]) ==
+                                 std::get<uint64_t>(args[1]));
+      break;
     case Kind::FieldConstant: {
       auto parsed = decimal(cast<algebra::ConstantFieldOp>(op).getValue(), true,
                             "structured-reference-unsupported");
@@ -1112,7 +1432,8 @@ class Reference {
   }
 
 public:
-  explicit Reference(Operation *unit) : symbols(unit) {}
+  Reference(Operation *unit, const PrimitiveMap &primitives)
+      : symbols(unit), primitives(primitives) {}
   Expected<json::Value> run(protocol_ir::MathematicalOp source,
                             const json::Array &request, bool openRequest) {
     open = openRequest;
@@ -1258,13 +1579,15 @@ int main(int argc, char **argv) {
       dyn_cast<protocol_ir::ProtocolModuleOp>(module->getBody()->front());
   if (!unit || unit.getProfile() != protocol_ir::Profile::Protocol)
     return fail(error("structured-reference-unsupported", "protocol profile"));
-  if (auto failure = Admission(unit).check())
+  Admission admission(unit);
+  if (auto failure = admission.check())
     return fail(std::move(failure));
   SymbolTable symbols(unit);
   auto selected = symbols.lookup<protocol_ir::MathematicalOp>(argv[2 + offset]);
   if (!selected)
     return fail(error("structured-reference-symbol", argv[2 + offset]));
-  auto result = Reference(unit).run(selected, *array, open);
+  auto result = Reference(unit, admission.checkedPrimitives())
+                    .run(selected, *array, open);
   if (!result)
     return fail(result.takeError());
   outs() << printJson(*result) << '\n';

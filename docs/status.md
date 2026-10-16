@@ -300,6 +300,15 @@ exports: Schnorr response and multilinear Sumcheck claim update. The reusable
 region law preserves complete helper processes and suffixes; regeneration and
 native SSA comparisons test these executable boundaries. These pair-specific
 proofs do not establish general compiler pass correctness.
+The native exporter also retains non-callable operation bindings in its exact
+schema and admits fifteen checked Local index/vector/field primitives, alongside
+pure index constant/equality. Unused bindings and dormant bodies are checked.
+Ordinary wrappers capture unchanged multilinear shape/table/halves closures and
+an independent vector/integer example without source slicing. The independent
+SSA reference checks arithmetic/shape stops and ordered vector results separately
+from observer capacity. Maps, realizations, protocol application/repetition and
+whole Sumcheck remain outside this profile. The structured Lean bridge records
+its independently checked reader, model and comparison coverage.
 [Formal support](../lean/docs/support.md) states exact experiments and premises.
 The independent [multilinear Sumcheck foundation](../lean/docs/spec/multilinear-sumcheck.md)
 proves arbitrary-length table restriction, endpoint-message and residual-to-full

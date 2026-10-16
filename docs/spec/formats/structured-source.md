@@ -9,7 +9,8 @@ prove how an externally supplied module was produced.
 Each `protocol.func` retains its own ordered participant roster and port scopes.
 The complete unit is checked: supported unused
 definitions are retained, and unsupported definitions are refused. Symbol names
-are nonempty and unique across functions, domains and relations. Helper references form an acyclic
+are nonempty and unique across functions, domains, relations and operation
+bindings. Helper references form an acyclic
 graph; helpers cannot call the selected root. The independent
 [formal admission contract](../../../lean/docs/spec/structured-source.md)
 defines the Lean interpretation.
@@ -19,7 +20,7 @@ defines the Lean interpretation.
 The current format is an exact tagged array, `zkc.structured-source/0`:
 
 ```text
-[format, "original", source-sha256, entry-name, domains, relations, definitions]
+[format, "original", source-sha256, entry-name, domains, relations, bindings, definitions]
 ```
 
 `source-sha256` is `sha256:` followed by 64 lowercase hexadecimal digits, hashing
@@ -27,6 +28,8 @@ the exact supplied MLIR bytes. It identifies those bytes; it is not a proof of
 their semantics or of export correctness. Every record below has the exact
 displayed arity. Unknown tags, extra fields and unrepresented native attributes
 are refused.
+All eight slots are required, including empty tables. Each declaration category preserves its native encounter
+order. There is no cross-category declaration-order field.
 
 | Type | Native interpretation |
 |---|---|
@@ -62,6 +65,8 @@ interface := ["protocol", role-names, input-scopes, output-scopes]  # protocol
 ["relation", name, visibility, kind, key, revision,
  input-types, output-types, purposes]
 
+["binding", name, contract, domain-arguments, implementation]
+
 ["finite", name, visibility, input-types, output-types,
  domain-name, step-name, predicate-name]
 ```
@@ -86,6 +91,17 @@ their validity and consistency, the ordered signature, and each input purpose
 Retaining a Math formula and a relation does not associate them: generated symbol
 names are not formula bindings. Any such association requires the separately
 checked language interface.
+
+Operation bindings are non-callable metadata for `local.binding`, retained and
+checked even when unused. The exact represented native attributes are
+`sym_name`, `contract`, `arguments`, and `implementation`; no signature, body,
+visibility, or execution parameters are invented for them. Names match ASCII
+`[A-Za-z_][A-Za-z0-9_.-]*` and have at most 256 bytes. Index contracts require
+empty domain arguments; vector and field contracts require exactly
+`["bls12-381.fr"]`. The implementation selector must be the explicit empty
+string. Selected implementations and contracts outside the catalogue below are
+refused, including on dormant declarations. Distinct binding names with the
+same metadata remain distinct retained rows.
 
 Math preconditions are exact arrays
 `["index_bound", index-argument, container-argument, 0]`. Other relation
@@ -143,6 +159,9 @@ including nested regions. Stop reasons are `reject`, `abort`, `exhausted`,
 
 | Descriptor | Meaning and interface |
 |---|---|
+| `["index.constant", decimal-string]` | pure canonical u64 constant |
+| `["index.equal"]` | pure two-index equality to Boolean |
+| `["exec", native-operation, binding-name, parameters]` | checked Local primitive occurrence from the catalogue below |
 | `["field.constant", domain, decimal-string]` | canonical scalar constant |
 | `["field.add" / "field.subtract" / "field.multiply", domain]` | two fields to one field |
 | `["field.equal", domain]` | two fields to Boolean |
@@ -182,9 +201,9 @@ Ownership is checked independently of operand types:
 
 | Body kind | Admitted instructions |
 |---|---|
-| Protocol | Pure field/group/Boolean operations, select, Math call, Algebra fold, Local call, guard, restrict, exchange, draw, statement |
-| Math | Pure field/group/Boolean operations, select, bounded read, Math call, Algebra fold |
-| Local | Boolean constant, Local apply, conditional and counted control |
+| Protocol | Pure index constant/equality and field/group/Boolean operations, select, Math call, Algebra fold, Local call, guard, restrict, exchange, draw, statement |
+| Math | Pure index constant/equality and field/group/Boolean operations, select, bounded read, Math call, Algebra fold |
+| Local | Boolean constant, checked primitive execution, Local apply, conditional and counted control |
 
 The descriptor can represent selection of any admitted value type. The current
 native mathematical verifier admits Boolean, scalar-field and group selection in this
@@ -192,8 +211,8 @@ profile; vector and index selection are not yet native export paths.
 
 Only Local bodies may end in an explicit stop. A guard retains the owner of
 the original `protocol.guard`; projected `local.guard` is outside this source
-stage. Local mathematical computation through realization/bindings is not yet
-part of this import profile.
+stage. Maps, mathematical realizations, protocol application and protocol
+repetition remain outside this profile.
 
 Multi-role protocols cannot use Math folds or bounded reads, including through
 retained Math helpers. Those combinations require additional partial-component
@@ -204,6 +223,68 @@ Native verification also checks availability of unused intermediate expressions.
 Local calls require all inputs at their owner, execute there even with zero
 results, and do not execute at other participants. Restriction and declared
 output scopes never erase preceding effects or stops.
+
+## Primitive execution
+
+An `exec` descriptor retains both the native operation kind and binding name,
+plus the exact ordered array of string parameters. It has zero regions and a
+required nonempty site, unique within its enclosing Local definition. Each use
+checks kind/contract agreement, nominal domain arguments, full ordered operand
+and result types, parameters, and Local ownership. Binding names confer no
+semantics by themselves. The exporter reuses the native logical catalogue for
+these ABI checks; the test reference independently admits this closed table.
+
+Here `I` is index, `B` Boolean, `F` Fr, and `V` a vector over Fr. The operation
+spellings are exact, not an extensible prefix convention.
+
+| Native operation | Binding contract | Inputs → outputs | Parameters |
+|---|---|---|---|
+| `algebra.exec.index_constant` | `index.constant` | `[] → [I]` | `[n]` |
+| `algebra.exec.index_add` | `index.add` | `[I,I] → [I]` | `[]` |
+| `algebra.exec.index_sub` | `index.sub` | `[I,I] → [I]` | `[]` |
+| `algebra.exec.index_mul` | `index.mul` | `[I,I] → [I]` | `[]` |
+| `algebra.exec.index_div` | `index.div` | `[I,I] → [I]` | `[]` |
+| `algebra.exec.index_mod` | `index.mod` | `[I,I] → [I]` | `[]` |
+| `algebra.exec.index_equal` | `index.equal` | `[I,I] → [B]` | `[]` |
+| `algebra.exec.index_less` | `index.less` | `[I,I] → [B]` | `[]` |
+| `algebra.exec.vector_empty` | `vector.empty` | `[] → [V]` | `[]` |
+| `algebra.exec.vector_length` | `vector.length` | `[V] → [I]` | `[]` |
+| `algebra.exec.vector_sum` | `vector.sum` | `[V] → [F]` | `[]` |
+| `algebra.exec.vector_split` | `vector.split` | `[V] → [V,V]` | `[]` |
+| `algebra.exec.vector_append` | `vector.append` | `[V,F] → [V]` | `[]` |
+| `algebra.exec.vector_equal` | `vector.equal` | `[V,V] → [B]` | `[]` |
+| `algebra.exec.field_equal` | `field.equal` | `[F,F] → [B]` | `[]` |
+
+`n` matches `0|[1-9][0-9]*` and denotes a value at most
+`18446744073709551615`. Index inputs/results have the same u64 range, independent
+of observer loop limits. Add/multiply overflow, subtract underflow, and zero
+divisors for division/remainder stop `refused` at the primitive site. Comparisons
+use unsigned order and equality; division/remainder use Euclidean integer laws.
+
+Empty produces `[]`. Sum folds field addition from zero, including on an empty
+vector. Length counts elements; a logical length outside u64 stops `exhausted`.
+Split refuses empty or odd vectors, otherwise returning the contiguous first
+half followed by the second half. Positive even length is sufficient, without
+a power-of-two requirement. Both results enter SSA in that order. Append adds
+one scalar at the end, retaining order and duplicates. Vector equality compares
+length and ordered elements; unequal lengths return false. Field equality
+compares canonical scalar values. Allocation/work limits are separate from
+these logical laws.
+
+Exec sequences all operands strictly and runs even when its results are unused.
+An owned Local call with absent required inputs stops `incomplete`; nonowners
+skip it. Pure `data.index` and `data.index_equal` export as the separate pure
+descriptors with empty sites and no bindings. Pure index equality propagates
+absent components. Pure scalar equality likewise remains distinct from Local
+`algebra.exec.field_equal`.
+
+Ordinary source wrappers capture the unchanged `multilinear::has_shape`,
+`table`, and `halves` helper closures, including the private rows loop and
+short-circuit guards. `table` checks shape; `halves` itself checks positive
+dimension and split length, so its stronger shape interpretation requires the
+constructor premise. An independent append/count example covers vector and
+integer operations. The complete frontend original is exported without slicing
+or preparation; unsupported dormant native declarations still refuse.
 
 ## Limits and evidence
 
@@ -252,18 +333,26 @@ failed owner guards retain their sites. Nonowners skip those operations.
 
 The reference interprets original native SSA and retained helper bodies using
 one evaluation core, without the structured exporter or serialized coordinates.
-Math operands remain optional through calls; primitives execute when their
-operands are present. Its eager Math execution needs a totality premise before
+Math operands remain optional through calls; pure operations propagate absence,
+while Local exec sequences operands strictly. Its eager Math execution needs a totality premise before
 comparison with native demand-driven projection for potentially failing Math.
 Native verification remains authoritative for formation. The reference bounds
 step capacity to 1..1000000, replies to 4096, request and replay-record bytes to 1 MiB, vector
 length to 4096 and loop bounds to 2^20; evaluation depth is 64. Capacity failures
 are explicit `structured-reference-capacity` diagnostics, not simulated native
 stops. This is bounded test evidence, not an interpreter correctness theorem.
+Vector result lengths are checked before allocation. Sum, split and equal-length
+equality charge one additional work unit per element; append charges its output
+length. Length itself is constant work. An input/reply longer than 4096, an
+append exceeding that bound, or insufficient observer work produces a capacity
+diagnostic. A malformed typed reply instead stops refused without consuming it.
+The observer's finite vector bound makes the logical unrepresentable-length
+exhaustion branch unreachable; it does not replace it with source refusal.
 
 The writer bounds source bytes to 16 MiB, the complete exported file (including
 its final newline) to 1 MiB, strings
-to 512 UTF-8 bytes, domains, relations and definitions to 128 each, signatures to 512
+to 512 UTF-8 bytes (binding names to 256 ASCII bytes), domains, relations,
+bindings and definitions to 128 each, signatures to 512
 positions and total instructions to 4096. The instruction count includes nested
 bodies and one fold per finite declaration; it excludes terminators and domain
 constructors. Lexical JSON and region nesting are bounded by 64. Helper reference

@@ -3,6 +3,8 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "zkc/Contracts/Kernels.h"
+#include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Operations.h"
 #include "zkc/Support/Json.h"
@@ -19,6 +21,37 @@ namespace {
 constexpr unsigned signatureLimit = 512;
 constexpr unsigned instructionLimit = 4096;
 constexpr unsigned depthLimit = 64;
+
+// This profile is deliberately smaller than the installed native catalogue.
+// Catalogue resolution below still owns nominal arguments, full ordered ports,
+// and parameters; membership alone never authorizes an execution.
+bool primitiveContract(StringRef contract) {
+  return llvm::is_contained(
+      ArrayRef<StringRef>{"index.constant", "index.add", "index.sub",
+                          "index.mul", "index.div", "index.mod", "index.equal",
+                          "index.less", "vector.empty", "vector.length",
+                          "vector.sum", "vector.split", "vector.append",
+                          "vector.equal", "field.equal"},
+      contract);
+}
+
+Expected<OperationBinding> primitiveBinding(Operation *op) {
+  auto binding = readBinding(op);
+  if (!binding)
+    return binding.takeError();
+  const auto &application = binding->application;
+  if (!primitiveContract(application.contract) ||
+      (StringRef(application.contract).starts_with("index.")
+           ? !application.arguments.empty()
+           : application.arguments != std::vector<std::string>{"bls12-381.fr"}))
+    return error("structured-source-binding");
+  if (!application.implementation.empty())
+    return error("structured-source-implementation");
+  auto resolved = resolveLogicalBinding(application);
+  if (!resolved)
+    return resolved.takeError();
+  return std::move(*binding);
+}
 
 Error attributes(Operation &op, ArrayRef<StringRef> allowed) {
   for (NamedAttribute attr : op.getAttrs()) {
@@ -199,6 +232,69 @@ class Exporter {
     auto field = [&]() {
       return cast<algebra::FieldType>(op.getOperand(0).getType()).getDomain();
     };
+    if (isa<data::IndexOp, data::EqualOp>(op)) {
+      bool constant = isa<data::IndexOp>(op);
+      if (owner != "protocol" && owner != "math")
+        return error("structured-source-operation");
+      if (auto e = attributes(op, constant ? ArrayRef<StringRef>{"value"}
+                                           : ArrayRef<StringRef>{}))
+        return std::move(e);
+      if (constant)
+        return json::Array{"index.constant",
+                           cast<data::IndexOp>(op).getValue()};
+      return json::Array{"index.equal"};
+    }
+    StringRef operation = op.getName().getStringRef();
+    if (operation.starts_with("algebra.exec.")) {
+      if (owner != "local")
+        return error("structured-source-operation");
+      if (auto e = attributes(op, {"binding", "parameters", "site"}))
+        return std::move(e);
+      auto ref = op.getAttrOfType<FlatSymbolRefAttr>("binding");
+      auto binding =
+          primitiveBinding(ref ? symbols.lookup(ref.getValue()) : nullptr);
+      if (!binding)
+        return binding.takeError();
+      std::string expected = "algebra.exec." + binding->application.contract;
+      std::replace(expected.begin() + StringRef("algebra.exec.").size(),
+                   expected.end(), '.', '_');
+      if (operation != expected ||
+          operation != boundOperationName(binding->application.contract) ||
+          !operationSupportsContract(operation, binding->application.contract))
+        return error("structured-source-binding");
+      auto resolved = resolveLogicalBinding(binding->application);
+      if (!resolved)
+        return resolved.takeError();
+      auto ports = [&](TypeRange types, ArrayRef<BoundType> expected) -> Error {
+        if (types.size() != expected.size())
+          return error("structured-source-binding");
+        for (auto [type, port] : llvm::zip(types, expected)) {
+          auto encoded = encodeBoundType(type, false);
+          if (!encoded)
+            return encoded.takeError();
+          if (!(*encoded == port))
+            return error("structured-source-binding");
+        }
+        return Error::success();
+      };
+      if (auto e = ports(op.getOperandTypes(), resolved->inputs))
+        return std::move(e);
+      if (auto e = ports(op.getResultTypes(), resolved->outputs))
+        return std::move(e);
+      auto parameters = op.getAttrOfType<ArrayAttr>("parameters");
+      if (!parameters)
+        return error("structured-source-binding");
+      std::vector<std::string> values;
+      for (Attribute parameter : parameters) {
+        auto text = dyn_cast<StringAttr>(parameter);
+        if (!text)
+          return error("structured-source-binding");
+        values.push_back(text.getValue().str());
+      }
+      if (auto e = checkParameters(binding->application, values))
+        return std::move(e);
+      return json::Array{"exec", operation, binding->name, names(parameters)};
+    }
     if (auto constant = dyn_cast<algebra::ConstantFieldOp>(op)) {
       if (auto e = attributes(op, {"value"}))
         return std::move(e);
@@ -455,6 +551,7 @@ class Exporter {
         return desc.takeError();
       StringRef occurrence;
       if (op.hasAttr("site") ||
+          op.getName().getStringRef().starts_with("algebra.exec.") ||
           isa<protocol_ir::ExchangeOp, protocol_ir::QueryOp,
               protocol_ir::GuardOp, protocol_ir::LocalCallOp, local::ApplyOp,
               local::LocalIfOp, local::LocalForOp, local::BoolConstantOp>(op)) {
@@ -731,12 +828,14 @@ public:
   Expected<json::Value> run(StringRef bytes) {
     if (auto e = attributes(*unit, {"profile"}))
       return std::move(e);
-    json::Array domains, relations, definitions;
+    json::Array domains, relations, bindings, definitions;
+    llvm::StringSet<> symbolsSeen;
     for (Operation &op : unit.getBody().front()) {
       // MLIR permits an empty quoted symbol. The wire vocabulary uses the
       // empty string only for absent predicates and sites, never a declaration.
       if (auto name = op.getAttrOfType<StringAttr>("sym_name");
-          name && name.getValue().empty())
+          !name || name.getValue().empty() ||
+          !symbolsSeen.insert(name.getValue()).second)
         return error("structured-source-symbol");
       definition = &op;
       sites.clear();
@@ -770,6 +869,19 @@ public:
                         declaration.getKind(), declaration.getKey(),
                         declaration.getRevision(), std::move(*inputs),
                         std::move(*outputs), names(declaration.getPurposes())});
+      } else if (isa<local::OperationBindingOp>(op)) {
+        if (bindings.size() == 128)
+          return error("structured-source-limit");
+        if (auto e = attributes(
+                op, {"sym_name", "contract", "arguments", "implementation"}))
+          return std::move(e);
+        auto binding = primitiveBinding(&op);
+        if (!binding)
+          return binding.takeError();
+        bindings.push_back(
+            json::Array{"binding", binding->name, binding->application.contract,
+                        names(op.getAttrOfType<ArrayAttr>("arguments")),
+                        binding->application.implementation});
       } else {
         if (definitions.size() == 128)
           return error("structured-source-limit");
@@ -809,6 +921,7 @@ public:
                        selected.getSymName(),
                        std::move(domains),
                        std::move(relations),
+                       std::move(bindings),
                        std::move(definitions)};
   }
 };
