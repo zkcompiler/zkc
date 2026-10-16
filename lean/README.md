@@ -10,8 +10,9 @@ VCVio security theorems to the imported subjects.
 
 The [formal reference](docs/README.md) defines the models, and
 [support](docs/support.md) states the exact scope and assumptions of each claim.
-Native compilation below the original stage, providers, production arithmetic
-and Fiat–Shamir are outside these claims. The [common](bridges/common/README.md)
+Native compilation below the original stage, providers and production
+arithmetic are outside these claims; the only Fiat–Shamir claim is the compiled
+Schnorr proof Entry's, under named assumptions. The [common](bridges/common/README.md)
 and [structured](bridges/structured/README.md) bridges test the native boundary
 with independent execution and negative controls.
 
@@ -22,6 +23,7 @@ with independent execution and negative controls.
 | Scalar imports | Admission and open-process contracts of exported scalar programs; Schnorr completeness, special soundness and rejection; the two-round degree-two Sumcheck bound `4 / \|F\|` | [Scalar import](docs/spec/common-source.md), [support](docs/support.md) |
 | Structured import | Independent admission, declaration linking, checked primitives, maps and realizations, protocol applications and repeats | [Structured source](docs/spec/structured-source.md), [support](docs/support.md) |
 | Interactive Schnorr | Verifier contracts over the actual export; an honest prover derived from checked sends; VCVio Sigma completeness, special soundness and fresh-challenge simulation | [Schnorr subject](docs/support.md#interactive-schnorr), [security integration](integrations/arklib/README.md) |
+| Compiled Schnorr proof | A checked transcript-construction rule accepts the actual compiled validator; its meaning is the Fiat–Shamir transform of the original verifier, with random-oracle knowledge soundness via VCVio | [Fiat–Shamir construction](docs/spec/fiat-shamir.md), [support](docs/support.md) |
 | Multilinear Sumcheck | Table laws for any round count; ArkLib `n / \|F\|` complete and `k / \|F\|` residual bounds | [Mathematics](docs/spec/multilinear-sumcheck.md), [security](docs/spec/multilinear-sumcheck-security.md) |
 | Imported Sumcheck and Reduce | Plain verifier equations; `n / \|F\|` bounds on the actual admitted roots under the uniform query service | [Verifier equations](docs/support.md#source-only-sumcheck-verifier), [uniform queries](docs/spec/uniform-query-service.md#actual-imported-roots) |
 | Authored DSL target | The imported Schnorr relation denotes discrete logarithm; two accepting transcripts yield a witness for it | [Verification](docs/spec/verification.md) |
@@ -94,7 +96,8 @@ arguments to fetch exact sources. The installed Lean/Std toolchain is trusted.
 
 ## Further reading
 
-- Bridges: [common](bridges/common/README.md), [structured](bridges/structured/README.md)
+- Bridges: [common](bridges/common/README.md), [structured](bridges/structured/README.md),
+  [transcript construction](bridges/construction/README.md)
   and [participant comparison](bridges/structured/participant.md).
 - [Dependencies](docs/dependencies.md) and the
   [design rationale](docs/design/protocol-verification.md).

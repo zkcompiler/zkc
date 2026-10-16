@@ -113,6 +113,9 @@ explicit returned decision handled by the [attempt Host](../runtime/attempts.md)
 [Public-coin views](public-coin.md) analyze a bounded verifier dependency profile.
 Construction checking covers observation/state wiring; neither supplies a
 Fiat–Shamir reduction, an entropy law or arbitrary authored-transcript security.
+`protocol-constructed-participant` exports a checked candidate's validator for
+the formal [transcript-construction rule](../../lean/docs/spec/fiat-shamir.md),
+which currently covers the flat native construction of the Schnorr proof Entry.
 The [native validation map](../../common/tests/native.md) identifies flat, iterated,
 structured, setup-backed and authored clients and their references.
 

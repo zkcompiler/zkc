@@ -269,6 +269,14 @@ selected verifier's dependencies against bound public context, challenges and
 receives. Neither establishes a Fiat–Shamir reduction or arbitrary polynomial
 or protocol equivalence.
 
+The [transcript-construction bridge](../lean/bridges/construction/README.md)
+exports the compiled Schnorr proof Entry's checked validator
+([format](spec/formats/constructed-participant.md)). Lean checks its transcript
+construction against the original export and proves Fiat–Shamir knowledge
+soundness for it in the random-oracle model, under the
+[named assumptions](../lean/docs/spec/fiat-shamir.md#named-assumptions). Other
+Entries, suites and programmable constructions have no such check.
+
 The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retained
 PIR programs, proves open-process contracts, and applies selected ArkLib/VCVio
 security results. Its named DSL target path also checks an authored relation body.
