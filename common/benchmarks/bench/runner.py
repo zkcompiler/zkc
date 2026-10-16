@@ -9,7 +9,7 @@ import random
 import shutil
 import sys
 
-from .io import Journal, digest, identity, measurement_slot, command_environment, performance_environment, require, write_json
+from .io import Journal, digest, identity, measurement_slot, command_environment, performance_environment, read_report, require, write_json
 from .results import FORMAT, publish, validate_manifest, validate_preparation, validate_worker
 
 CONTROL = {'warmups': 0, 'samples': 1, 'iterations': 1}
@@ -79,7 +79,7 @@ def execute_job(job, directory, plan, timeout):
     write_json(path, request)
     journal = Journal(directory / 'commands', timeout)
     command = journal.command([job.executable, path], cwd=directory)
-    report = validate_worker(json.loads(Path(command['stdout']).read_text()), plan, job.boundary)
+    report = validate_worker(read_report(command), plan, job.boundary)
     if job.backend.get('kind') in ('host', 'run'):
         count = len(job.backend['inputs']) if job.backend['kind'] == 'host' else 1
         require([c['input_index'] for c in report['lifecycle']['calls']] ==
@@ -233,7 +233,7 @@ def refuse(job, directory, timeout, *, truncated=False, completed=None, classes=
                       'plan': CONTROL | {'samples': (completed or 0)+1}, 'proof': str(job.proof)})
     record = Journal(directory / 'commands', timeout).command([job.executable, path], cwd=directory, expected=None)
     require(record['returncode'] > 0, 'negative control was accepted or crashed')
-    report = json.loads(Path(record['stdout']).read_text())
+    report = read_report(record)
     allowed = {'rejected', 'input-bounds'} if truncated else {'rejected'}
     require(isinstance(report, dict) and report.get('format') == 'zkc.benchmark-worker/0'
             and report.get('status') in allowed, 'negative control failed outside verification')

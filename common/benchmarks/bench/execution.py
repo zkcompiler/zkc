@@ -26,8 +26,6 @@ def compile_program(args, output, capture, manifest, case, program):
     manifests = []
     modules, assets = project_inputs(project, manifests=manifests)
     paths = {*manifests, *modules.values(), *(p for _, p in assets.values()), *program.support}
-    if case.name == 'air':
-        paths.add(root/'compiler/adapters/ring_arena.py')
     copied = {}
     for path in sorted(paths):
         require(path.is_relative_to(root) or path.is_relative_to(directory), 'generated input is outside the captured roots')
@@ -49,14 +47,14 @@ def compile_program(args, output, capture, manifest, case, program):
 
 def prepare_case(args, output, capture, manifest, case):
     print(f'prepare {case.identifier}', flush=True)
-    program = case.generate(args.source.resolve(), output/'cases'/case.identifier)
+    program = case.generate(args.source.resolve(), output/'cases'/case.identifier, timeout=args.timeout)
     directory, package = compile_program(args, output, capture, manifest, case, program)
     proof_format = (json.loads(json.loads(package.read_text())['interface'])['job']['construction']['format']
                     if program.proof else None)
     inputs = list(program.inputs)
     if program.proof:
         for index in range(1, args.input_count):
-            other = case.generate(args.source.resolve(), directory, index)
+            other = case.generate(args.source.resolve(), directory, index, timeout=args.timeout)
             require(other.source == program.source and other.assets == program.assets, 'changing input changed the program')
             inputs.extend(other.inputs)
         require(args.input_count == 1 or (args.iterations == 1 and args.samples % args.input_count == 0

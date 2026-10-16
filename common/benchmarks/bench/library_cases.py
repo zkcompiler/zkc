@@ -32,15 +32,17 @@ def bulletproofs(root, shape, directory):
     points = [commitments[i:i+32] for i in range(0, len(commitments), 32)]
     public = {'commitments': list(b''.join(rotated(points))), 'rounds': str(6+(n-1).bit_length())}
     private = {'values': list(map(str, rotated(case['values']))), 'masks': rotated(case['masks'])}
-    # Another known valid point changes the statement without malformed encodings.
-    changed = public | {'commitments': list(bytes.fromhex(cases[f'{n}-max' if kinds[index % 4] != 'max' else f'{n}-random']['commitments']))}
+    # Negate one admitted point without choosing another scheduled statement.
+    altered = list(b''.join(rotated(points)))
+    altered[31] ^= 0x80
+    changed = public | {'commitments': altered}
     source = root/'examples/projects/bulletproofs-plus/main.zkc'
     return Program(source.read_text(), [{'public': public, 'witness': private}], entry='example::Proof',
                    dependencies=('bulletproofs',), proof=True, changed=changed, mutate_proof=mutate_response,
                    support=(source, corpus), oracle='retained Monero conformance corpus; same-stack verification here, independent Monero comparison in the monero family')
 
 
-def machine(root, shape, directory):
+def machine(root, shape, directory, *, timeout):
     if shape['statement']:
         raise ValueError('machine regression fixtures support fixed inputs only')
     project = root/'common/tests/fixtures/projects/accumulator-machine'
@@ -49,7 +51,7 @@ def machine(root, shape, directory):
     command = [sys.executable, project/'prepare.py', fixture, generated]
     if shape['fixture'] == 'store-load':
         command += ['--memory-clocks', '16', '--memory-present']
-    Journal(directory/'generator', 300).command(command, cwd=root)
+    Journal(directory/'generator', timeout).command(command, cwd=root)
     public, witness = [json.loads((generated/f'{name}.json').read_text()) for name in ('public', 'witness')]
     bundle = root/'compiler/adapters/accumulator-machine/fixtures/bundle.json'
     return Program((project/'main.zkc').read_text(), [{'public': public, 'witness': witness}],

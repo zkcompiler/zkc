@@ -51,10 +51,12 @@ def test_distinct_stark_statements_keep_the_same_program(modules, tmp_path):
     root = Path(__file__).resolve().parents[3]
     for family in ('fri', 'air', 'transcript', 'bulletproofs'):
         case = next(c for c in modules['coverage'].cases() if c.name == family)
-        left, right = [case.generate(root, tmp_path, i) for i in (0, 1)]
+        programs = [case.generate(root, tmp_path, i) for i in range(4)]
+        left, right = programs[:2]
         assert left.source == right.source and left.assets == right.assets
         assert left.inputs[0]['public'] != right.inputs[0]['public']
-        assert left.inputs[0]['public'] != left.changed
+        assert all(program.changed not in [other.inputs[0]['public'] for other in programs]
+                   for program in programs)
 
 
 def test_shared_slot_is_exclusive_fail_fast_and_preserves_evidence(modules, tmp_path):
@@ -229,3 +231,40 @@ def test_comparison_rejects_changed_native_preparation_defaults(modules):
     changed['results'][0]['worker']['lifecycle']['preparation_limits']['default_bytes'] *= 2
     with pytest.raises(modules['io'].MeasurementError, match='preparation limits differ'):
         modules['results'].compare(baseline, changed)
+
+
+
+def test_air_declares_its_generator_dependency(modules, tmp_path):
+    root = Path(__file__).resolve().parents[3]
+    case = next(c for c in modules['coverage'].cases() if c.name == 'air')
+    assert root/'compiler/adapters/ring_arena.py' in case.generate(root, tmp_path).support
+
+
+def test_termination_during_python_preparation_retains_failure_evidence(modules, tmp_path):
+    root = Path(__file__).resolve().parents[3]
+    output = tmp_path/'interrupted'
+    script = f"""
+import os, signal, sys
+from pathlib import Path
+from types import SimpleNamespace
+sys.path.insert(0, {str(root/'common/benchmarks')!r})
+from bench import io, runner
+io.MEASUREMENT_LOCK = Path({str(tmp_path/'slot')!r})
+args = SimpleNamespace(output=Path({str(output)!r}), samples=1, warmups=0, iterations=1,
+    processes=1, seed=0, cpu=None, threads=1, label='signal', timeout=1, execution_counts=False)
+def prepare(*args):
+    os.kill(os.getpid(), signal.SIGTERM)
+raise SystemExit(runner.run(args, prepare))
+"""
+    result = subprocess.run([sys.executable, '-c', script], capture_output=True, timeout=10)
+    assert result.returncode == 1, result.stderr
+    assert json.loads((output/'manifest.json').read_text())['status'] == 'interrupted'
+    assert json.loads((output/'coordination.json').read_text())['finished_utc']
+
+
+def test_crashed_refusal_reports_the_command_logs(modules, tmp_path):
+    io = modules['io']
+    with pytest.raises(io.MeasurementError, match='invalid command report; see .*stderr'):
+        io.Journal(tmp_path/'commands', 10).report(
+            [sys.executable, '-c', 'raise SystemExit(101)'], cwd=tmp_path,
+            status='rejected', refused=True)

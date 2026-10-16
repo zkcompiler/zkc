@@ -101,7 +101,8 @@ Do not compare two workloads merely because both are called FRI or pairing.
 
 ## Changing statements and preparation
 
-Source proof workloads can cycle distinct inputs through one admitted Entry:
+Source proof workloads can cycle distinct inputs through one admitted Entry.
+Run workloads keep fixed inputs; `--input-count` does not change them:
 
 ```sh
 python3 common/benchmarks/run.py run --case bulletproofs-3 \

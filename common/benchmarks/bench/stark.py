@@ -50,7 +50,7 @@ proof Proof=Fri {prover P;verifier V;public {shift,round_count,query_count};acce
     witness = {'word': list(map(a.encode, a.coset(coefficients, shift, size)))}
     return Program(source, [{'public': public, 'witness': witness}], invalid_witness={'word': list(map(a.encode, a.coset([*coefficients, (1, 0, 0, 0, 0, 0, 0, 0)], shift, size)))},
                    entry='example::Proof', dependencies=('fri',), proof=True,
-                   changed=public | {'shift': a.encode((5, 1, 0, 0, 0, 0, 0, 0))},
+                   changed=public | {'shift': a.encode((2, 1, 0, 0, 0, 0, 0, 0))},
                    oracle='independent Python polynomial evaluation; same-stack FRI verification and refusal controls')
 
 
@@ -103,4 +103,4 @@ proof Proof=Air {prover P;verifier V;public {public_data,shift,round_count,query
     witness = {'trace': list(map(str, trace))}
     return Program(source, [{'public': public, 'witness': witness}], mutate_proof=mutate_claim,
                    entry='example::Proof', dependencies=('stark',), assets={'trace': bundle}, proof=True,
-                   changed=changed, oracle='Python quadratic trace recurrence; generated relation with first/last/transition constraints; same-stack proof verification')
+                   changed=changed, support=(root/'compiler/adapters/ring_arena.py',), oracle='Python quadratic trace recurrence; generated relation with first/last/transition constraints; same-stack proof verification')

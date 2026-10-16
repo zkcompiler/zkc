@@ -14,7 +14,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / 'scripts'))
-from processes import run  # noqa: E402
+from processes import run, termination_handler  # noqa: E402
 
 class MeasurementError(Exception):
     pass
@@ -47,7 +47,8 @@ def measurement_slot(evidence):
         record['acquired_utc'] = datetime.now(timezone.utc).isoformat()
         token = _measurement_fd.set(lock.fileno())
         try:
-            yield record
+            with termination_handler():
+                yield record
         finally:
             _measurement_fd.reset(token)
             record['finished_utc'] = datetime.now(timezone.utc).isoformat()
@@ -142,11 +143,20 @@ class Journal:
 
     def report(self, argv, *, cwd, status, refused=False):
         record = self.command(argv, cwd=cwd, expected=None)
-        report = json.loads(Path(record['stdout']).read_text())
+        report = read_report(record)
         code = record['returncode']
         require((code > 0 if refused else code == 0) and report.get('status') == status,
                 f'expected {status}, exit={code}; see {record["stdout"]}')
         return report, record
+
+
+def read_report(record):
+    try:
+        report = json.loads(Path(record['stdout']).read_text())
+    except ValueError as error:
+        raise MeasurementError(f'invalid command report; see {record["stderr"]} and {record["stdout"]}') from error
+    require(isinstance(report, dict), f'command report must be an object; see {record["stderr"]} and {record["stdout"]}')
+    return report
 
 
 def executable(value):

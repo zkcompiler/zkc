@@ -2,9 +2,9 @@
 
 [`protocol_math.py`](protocol_math.py) compares complete FRI, imported AIR/STARK,
 machine LogUp and machine grand-product proofs through the existing compiler
-and native CLI. It uses Python's standard library and the maintained
-[`processes`](../../scripts/processes.py) lifecycle helper and the
-[explicit project capture helper](../tests/support/project.py). It does not import
+and native CLI. It uses the shared [measurement I/O](bench/io.py),
+[`process lifecycle`](../../scripts/processes.py) and
+[project capture](../tests/support/project.py) helpers, with Python's standard library. It does not import
 pytest integration modules, build tools, synchronize dependencies or modify
 the selected source trees. Input preparation reuses the maintained example
 scripts and their small adapter dependencies.

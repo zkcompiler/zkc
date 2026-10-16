@@ -13,10 +13,12 @@ class Case:
     mix: tuple
     limitation: str
 
-    def generate(self, root, directory, statement=0):
+    def generate(self, root, directory, statement=0, *, timeout=300):
         shape = self.shape | {'statement': statement}
-        if self.name in ('bulletproofs', 'machine'):
-            return getattr(library_cases, self.name)(root, shape, directory)
+        if self.name == 'machine':
+            return library_cases.machine(root, shape, directory, timeout=timeout)
+        if self.name == 'bulletproofs':
+            return library_cases.bulletproofs(root, shape, directory)
         if self.name in ('fri', 'air'):
             return getattr(stark, self.name)(root, shape)
         return getattr(programs, self.name)(shape)
