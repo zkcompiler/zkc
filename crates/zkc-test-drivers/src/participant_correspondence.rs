@@ -87,6 +87,20 @@ struct ObservedBackend {
 }
 impl Backend for ObservedBackend {
     type Value = Value;
+    type Kernel = zkc_backends::NativeKernel;
+    type Call = zkc_backends::NativeCall;
+    type Checkpoint = zkc_backends::ComputationCheckpoint;
+
+    fn computation_checkpoint(&self) -> Option<Self::Checkpoint> {
+        self.native.computation_checkpoint()
+    }
+    fn replay_computation(&mut self, before: Self::Checkpoint, after: Self::Checkpoint) -> bool {
+        self.native.replay_computation(before, after)
+    }
+
+    fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {
+        self.native.prepare_binding(binding)
+    }
     fn supports_boolean_literals(&self) -> bool {
         self.native.supports_boolean_literals()
     }
@@ -151,15 +165,25 @@ impl Backend for ObservedBackend {
     ) -> std::result::Result<(), BackendError> {
         self.native.leave_frame_retained(f, e, v, retained)
     }
-    fn operand_work(&self, i: &Invocation<'_>, v: &[Value]) -> Option<u64> {
-        self.native.operand_work(i, v)
+    fn operand_work(&self, kernel: &Self::Kernel, i: &Invocation<'_>, v: &[Value]) -> Option<u64> {
+        self.native.operand_work(kernel, i, v)
     }
-    fn apply(
+    fn apply_prepared(
         &mut self,
+        kernel: &Self::Kernel,
+        call: &mut Option<Self::Call>,
         i: &Invocation<'_>,
         v: &[Value],
     ) -> std::result::Result<Vec<Value>, BackendError> {
-        self.native.apply(i, v)
+        self.native.apply_prepared(kernel, call, i, v)
+    }
+    fn apply(
+        &mut self,
+        kernel: &Self::Kernel,
+        i: &Invocation<'_>,
+        v: &[Value],
+    ) -> std::result::Result<Vec<Value>, BackendError> {
+        self.native.apply(kernel, i, v)
     }
 }
 fn value(ty: &Json, v: &Json) -> Result<Value> {
