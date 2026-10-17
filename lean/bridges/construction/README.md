@@ -1,7 +1,9 @@
 # Transcript-construction bridge
 
-`check.py` connects three compiled `example::Proof` Entries, from the Schnorr,
-Sumcheck and composed Sumcheck example projects, to the
+`check.py` connects five compiled proof Entries, `example::Proof` of the
+Schnorr, Sumcheck and composed Sumcheck example projects and
+`example::AndProof` and `example::EqualityProof` of the Sigma example project, to
+the
 [formal transcript-construction rule](../../docs/spec/fiat-shamir.md) and the
 [participant projection rule](../../docs/spec/participant-projection.md). It is
 part of `python3 common/tests/run.py lean-native`.
@@ -37,7 +39,13 @@ For each subject:
    (rendered by `render.py`); for Sumcheck the structured bridge's own
    `lean/ZkcExamples/Structured/SumcheckSourceData.lean`, which this bridge only
    compares, and `SumcheckProofParticipant.lean`; for the composed Sumcheck
-   `ComposedSumcheckProofData.lean` and `ComposedSumcheckProofParticipant.lean`.
+   `ComposedSumcheckProofData.lean` and `ComposedSumcheckProofParticipant.lean`;
+   for the Sigma Entries `SchnorrAndProofData.lean`,
+   `SchnorrAndProofParticipant.lean`, `ChaumPedersenProofData.lean` and
+   `ChaumPedersenProofParticipant.lean`. For Sumcheck the comparison is also the
+   pin that the Proof Entry's original export is the admitted Sumcheck source of
+   the security theorems (check
+   `regenerated:lean/ZkcExamples/Structured/SumcheckSourceData.lean`).
 4. A generated Lean file runs the composed check `checkCompiled` in the kernel
    on the fresh export against the admitted original program, which must be
    accepted with axioms among `propext`, `Classical.choice` and `Quot.sound`; the
@@ -50,7 +58,9 @@ For each subject:
    dropped, the claim update adds the low term twice, and the loop yields the
    claim it started with. For the composed Sumcheck: the conjunction reads the
    left check twice, and the right terminal check reads the left reduction's
-   point and claim. Every mutation that keeps the transcript wiring is accepted
+   point and claim. For both Sigma Entries: the second observation absorbs the
+   first commitment, a comparison compares the base with itself, and the
+   conjunction reads the first check twice. Every mutation that keeps the transcript wiring is accepted
    by `checkExport` alone and refused by the projection rule. The same file
    checks that the Lean model of the canonical occurrence encoding
    (`templateTree`) encodes every exported template to exactly its native bytes.
@@ -61,7 +71,8 @@ For each subject:
    both Sumcheck subjects: a constant changed in the prepared body of the last
    terminal check helper (exactly `native-proof-correspondence`); the Lean rules
    read helper calls with the original's checked helpers, so this is the native
-   boundary.
+   boundary. For both Sigma Entries: a challenge origin naming the delivery site
+   (exactly `native-proof-correspondence`).
 
 The retained `report.json` lists commands, exit statuses, hashes and checks per
 subject.

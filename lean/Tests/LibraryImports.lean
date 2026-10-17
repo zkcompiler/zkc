@@ -259,9 +259,15 @@ import Tests.SumcheckHelperMutants
 import Tests.SumcheckProjectionControls
 import Tests.SumcheckSourceComposition
 import Tests.SumcheckSourceControls
+import ZkcExamples.Construction.ChaumPedersenProof
+import ZkcExamples.Construction.ChaumPedersenProofData
+import ZkcExamples.Construction.ChaumPedersenProofParticipant
 import ZkcExamples.Construction.ComposedSumcheckProof
 import ZkcExamples.Construction.ComposedSumcheckProofData
 import ZkcExamples.Construction.ComposedSumcheckProofParticipant
+import ZkcExamples.Construction.SchnorrAndProof
+import ZkcExamples.Construction.SchnorrAndProofData
+import ZkcExamples.Construction.SchnorrAndProofParticipant
 import ZkcExamples.Construction.SchnorrProof
 import ZkcExamples.Construction.SchnorrProofBinding
 import ZkcExamples.Construction.SchnorrProofBodies

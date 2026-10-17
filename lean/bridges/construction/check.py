@@ -2,7 +2,9 @@
 """Check compiled proof Entries' transcript construction and projection in Lean.
 
 For each subject, the compiled `example::Proof` Entries of the Schnorr, Sumcheck
-and composed Sumcheck examples, the driver compiles the Entry, retains its
+and composed Sumcheck examples and the compiled `example::AndProof` and
+`example::EqualityProof` Entries of the Sigma example, the driver compiles the
+Entry, retains its
 original export, native policy, constructed candidate and exported validator
 participant, and requires the committed Lean data to be their exact rendering.
 It then runs the composed Lean check (transcript construction and participant
@@ -43,9 +45,10 @@ class Subject:
     this driver then only compares it.
     """
 
-    def __init__(self, name, modules, original, participant, module, program, original_owned):
+    def __init__(self, name, modules, original, participant, module, program, original_owned,
+                 entry="example::Proof"):
         self.name = name
-        self.entry = "example::Proof"
+        self.entry = entry
         self.modules = modules
         self.original = original
         self.participant = participant
@@ -78,7 +81,19 @@ SUBJECTS = [
              "ZkcExamples.Construction.ComposedSumcheckProofParticipant"),
             "ZkcExamples.Construction.ComposedSumcheckProof",
             "ZkcExamples.Construction.ComposedSumcheckProof.program", True),
+    Subject("schnorr-and", project_modules("examples/projects/sigma/zkc.toml"),
+            (DATA / "SchnorrAndProofData.lean", "ZkcExamples.Construction.SchnorrAndProofData"),
+            (DATA / "SchnorrAndProofParticipant.lean", "ZkcExamples.Construction.SchnorrAndProofParticipant"),
+            "ZkcExamples.Construction.SchnorrAndProof", "ZkcExamples.Construction.SchnorrAndProof.program", True,
+            entry="example::AndProof"),
+    Subject("chaum-pedersen", project_modules("examples/projects/sigma/zkc.toml"),
+            (DATA / "ChaumPedersenProofData.lean", "ZkcExamples.Construction.ChaumPedersenProofData"),
+            (DATA / "ChaumPedersenProofParticipant.lean",
+             "ZkcExamples.Construction.ChaumPedersenProofParticipant"),
+            "ZkcExamples.Construction.ChaumPedersenProof", "ZkcExamples.Construction.ChaumPedersenProof.program",
+            True, entry="example::EqualityProof"),
 ]
+SIGMA = {"schnorr-and", "chaum-pedersen"}
 
 
 def digest(data):
@@ -228,6 +243,12 @@ class Driver:
             checks = [item for item in instructions if item[0] == "local.call" and len(item[3]) == 3]
             checks[1][3][1:] = checks[0][3][1:]
 
+        def second_commitment_omitted(instructions):
+            # The second observation absorbs the first commitment again.
+            first = instruction(instructions, "crypto.exec.indexed_transcript_observe_data")
+            second = instruction(instructions, "crypto.exec.indexed_transcript_observe_data", 1)
+            second[3][1] = first[3][1]
+
         # Each mutation is refused for the obligation it violates. Those that keep
         # the transcript wiring are accepted by the construction rule alone.
         if subject.name == "schnorr":
@@ -250,6 +271,14 @@ class Driver:
                      "claim-update-mutated": "projection-unexplained",
                      "stale-claim-yielded": "projection-repeat-yield"}
             construction_accepts = {"round-check-dropped", "claim-update-mutated", "stale-claim-yielded"}
+        elif subject.name in SIGMA:
+            mutate("second-commitment-omitted", second_commitment_omitted)
+            mutate("decision-compares-base-with-itself", decision_compares_base_with_itself)
+            mutate("conjunction-reads-left-twice", conjunction_reads_left_twice)
+            codes = {"second-commitment-omitted": "construction-observe",
+                     "decision-compares-base-with-itself": "projection-unexplained",
+                     "conjunction-reads-left-twice": "projection-unexplained"}
+            construction_accepts = {"decision-compares-base-with-itself", "conjunction-reads-left-twice"}
         else:
             mutate("conjunction-reads-left-twice", conjunction_reads_left_twice)
             mutate("right-check-reads-left-reduction", right_check_reads_left_reduction)
@@ -309,9 +338,37 @@ class Driver:
                    result.stdout[-400:])
         return list(mutations)
 
+    def domain_separator_refusal(self, candidate, exported, prefix=""):
+        """A candidate whose challenge template names the delivery site instead of
+        the selected query site is refused natively; the mutation is generic."""
+        challenge = next(item for item in exported[7]
+                         if item[0] == "crypto.exec.indexed_transcript_challenge")
+        hex_text = dict(challenge[1])["parameters"][1][0]
+        tree, _ = constructed.decode_tree(bytes.fromhex(hex_text))
+        tree[4][2] = exported[3][8][0][1]
+        self.check(f"{prefix}native-origin-present", candidate.count(hex_text) == 1)
+        return {"wrong-domain-separator": (candidate.replace(
+            hex_text, constructed.encode_tree(tree).hex()), "native-proof-correspondence", "")}
+
+    def native_refusals(self, subject, refusals, prefix=""):
+        """Run the native checker on each mutated candidate; each must be refused
+        with its named reason and diagnostic."""
+        directory = self.output / subject.name
+        reasons = {}
+        for name, (text, code, detail) in refusals.items():
+            path = directory / f"candidate-{name}.mlir"
+            path.write_text(text)
+            result = self.run([self.args.compiler, "protocol-constructed-participant",
+                               directory / "source.mlir", directory / "policy.json", path],
+                              expect=None, name=f"{prefix}native-refusal:{name}")
+            reason = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else ""
+            self.check(f"{prefix}native-refusal:{name}", result.returncode != 0 and reason == code
+                       and detail in result.stderr, result.stderr[-400:])
+            reasons[name] = reason
+        return reasons
+
     def native_refusal(self, subject, candidate, exported):
         """The native checker refuses mutated Schnorr candidates before any export."""
-        directory = self.output / subject.name
         lines = candidate.splitlines()
         calls = [i for i, line in enumerate(lines) if "local.call @_transcript_4(" in line]
         self.check("native-mutation-site", len(calls) == 2)
@@ -321,28 +378,8 @@ class Driver:
         # Each mutation names the native refusal and diagnostic it must produce.
         refusals = {"challenge-before-commitment": ("\n".join(lines) + "\n", "native-proof-candidate",
                                                     "affine participant value reused")}
-
-        challenge = next(item for item in exported[7]
-                         if item[0] == "crypto.exec.indexed_transcript_challenge")
-        hex_text = dict(challenge[1])["parameters"][1][0]
-        tree, _ = constructed.decode_tree(bytes.fromhex(hex_text))
-        tree[4][2] = exported[3][8][0][1]
-        self.check("native-origin-present", candidate.count(hex_text) == 1)
-        refusals["wrong-domain-separator"] = (candidate.replace(
-            hex_text, constructed.encode_tree(tree).hex()), "native-proof-correspondence", "")
-
-        reasons = {}
-        for name, (text, code, detail) in refusals.items():
-            path = directory / f"candidate-{name}.mlir"
-            path.write_text(text)
-            result = self.run([self.args.compiler, "protocol-constructed-participant",
-                               directory / "source.mlir", directory / "policy.json", path],
-                              expect=None, name=f"native-refusal:{name}")
-            reason = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else ""
-            self.check(f"native-refusal:{name}", result.returncode != 0 and reason == code
-                       and detail in result.stderr, result.stderr[-400:])
-            reasons[name] = reason
-        return reasons
+        refusals.update(self.domain_separator_refusal(candidate, exported))
+        return self.native_refusals(subject, refusals)
 
 
     def native_helper_refusal(self, subject, candidate, exported):
@@ -397,6 +434,10 @@ def main():
             result["refused_mutations"] = driver.lean_rule(subject, original, exported)
             if subject.name == "schnorr":
                 result["native_refusals"] = driver.native_refusal(subject, candidate, exported)
+            elif subject.name in SIGMA:
+                prefix = f"{subject.name}:"
+                result["native_refusals"] = driver.native_refusals(
+                    subject, driver.domain_separator_refusal(candidate, exported, prefix), prefix)
             else:
                 result["native_refusals"] = driver.native_helper_refusal(subject, candidate, exported)
         report["status"] = "pass"

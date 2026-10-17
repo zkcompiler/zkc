@@ -182,8 +182,13 @@ is the Fiat–Shamir transform of the original Sumcheck validator, read through
 its acceptance output. `compiled_transform_rounds` rewrites the original with
 `SumcheckSourceVerifier.verifier_checked`: for an admitted round count and a
 decoded verifier table, the transformed process is the source rounds followed by
-the multilinear terminal check. No security theorem is claimed for this Entry;
-a multi-round Fiat–Shamir bound would be stated about this transform.
+the multilinear terminal check. `ZkcSecurity.Examples.CompiledSumcheckFiatShamir`
+composes this equation with the multi-round Fiat–Shamir soundness of the
+imported verifier's transform
+([multi-round security](fiat-shamir-security.md#the-compiled-sumcheck-proof-entry)):
+the compiled verifier's ideal interpretation accepts a false claim with
+probability at most `(Q + count) / |F|` for a fixed statement, and adaptively
+chosen statements are bounded under a binding that determines them.
 
 ## The compiled composed Sumcheck proof Entry
 
@@ -195,7 +200,23 @@ checks and conjoins them with the Math helper `zkc::boolean::both`, which the
 compiler inlines as a Boolean conjunction. No typed bodies are authored for this
 original: the kernel evaluates its admission (`admissible`), and the composed
 check accepts the export (`compiled`). `compiled_transform` is the generic
-composition theorem at this program: no proof is specific to the Entry.
+composition theorem at this program: no proof is specific to the Entry. No
+security theorem is stated for this Entry.
+
+## The compiled Sigma proof Entries
+
+`ZkcExamples.Construction.SchnorrAndProof` and
+`ZkcExamples.Construction.ChaumPedersenProof` check the compiled
+`example::AndProof` and `example::EqualityProof` of `examples/projects/sigma`:
+two Schnorr statements with independent witnesses and one shared challenge, and
+one witness for two bases. Both validators receive two commitments, take one
+challenge, receive their responses and conjoin two checked equations. As for the
+composed Sumcheck Entry, the kernel evaluates each original's admission, the
+composed check accepts the export (`compiled`) and the generic theorem gives the
+transform equation (`compiled_transform`) with no Entry-specific proof. The
+Fiat–Shamir theorems of the Sigma compositions are about the transforms of the
+imported interactive verifiers; no security theorem is stated for these compiled
+Entries.
 
 ## Controls
 
@@ -229,4 +250,7 @@ reading the wrong sort (`construction-loop`, `construction-guard`,
 `construction-call`). The construction bridge also refuses
 mutations of the composed export: a conjunction reading the left check twice
 (`projection-unexplained`) and a right terminal check reading the left
-reduction's point and claim (`projection-call`).
+reduction's point and claim (`projection-call`); and of both Sigma exports: the
+second commitment's observation absorbing the first commitment
+(`construction-observe`), a comparison of a base with itself and a conjunction
+reading the first check twice (`projection-unexplained`).
