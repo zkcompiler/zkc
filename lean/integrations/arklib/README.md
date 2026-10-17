@@ -70,14 +70,15 @@ VCVio's adaptive bad-query bound applied directly to the oracle on all typed
 histories, for fixed and for adaptively chosen statements; `randomized_soundness`
 adds private randomness drawn before the oracle computation, and
 `FiatShamir/Decoding` bounds challenges reduced from wide uniform samples.
-`acceptance_le_of_image` carries the bounds over to a compiled verifier that is
-an outcome image of the transform, and `acceptance_bind_done` moves a final
-projection of the validator's result into the acceptance predicate.
-`Examples/SumcheckFiatShamir` instantiates
-these for the actual imported Sumcheck verifier, with ArkLib's single-round
-successor bound as the per-round soundness, bounds the composed Reduction root
-as a reduction to a residual evaluation claim, and states composition theorems
-whose only premise about a compiled verifier is its construction equality.
+`acceptance_le_of_image` carries the fixed-statement bound over to a compiled
+verifier that is an outcome image of the transform, and `acceptance_bind_done`
+and `adaptive_acceptance_bind_done` move a final projection of the validator's
+result into the acceptance predicate. `Examples/SumcheckFiatShamir` instantiates
+the theorems for the actual imported Sumcheck verifier, with ArkLib's
+single-round successor bound as the per-round soundness, bounds the composed
+Reduction root as a reduction to a residual evaluation claim, and states
+composition theorems whose only premise about a compiled verifier is its
+construction equality.
 
 `TestsSecurity.Audit` checks every owned declaration's transitive axiom closure.
 Only `propext`, `Classical.choice` and `Quot.sound` are allowed. Unrelated upstream

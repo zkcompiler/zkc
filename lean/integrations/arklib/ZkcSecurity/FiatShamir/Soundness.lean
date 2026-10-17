@@ -30,11 +30,14 @@ exceed the uniform field's by at most `loss` adds `loss` per query
 when the initial history determines the statement (`Determined`); the
 transform then runs the statement's validator from the statement's initial
 history (`adaptive_soundness`). Private randomness drawn before the oracle
-computation is a distribution over provers (`randomized_soundness`). A compiled
-verifier that is an outcome image of the transform, accepting only where the
-transform accepts, inherits every bound (`acceptance_le_of_image`); a final
-projection of the validator's result moves into the acceptance predicate
-(`acceptance_bind_done`).
+computation is a distribution over provers (`randomized_soundness`).
+
+Compiled verifiers reach these bounds through their relation to the transform.
+One that is an outcome image of the transform, accepting only where the
+transform accepts, accepts no more often (`acceptance_le_of_image`, fixed
+statement). A final projection of the validator's result moves into the
+acceptance predicate, for fixed and adaptive statements (`acceptance_bind_done`,
+`adaptive_acceptance_bind_done`).
 
 The proof applies VCVio's adaptive bad-query bound
 (`OracleComp.prEvent_randomOracle_le_of_bad_queries`) directly to the history
@@ -578,11 +581,11 @@ theorem randomized_soundness {accepts : A → Prop} {error : ENNReal}
     soundness certificate context validator doomedValidator budget validatorBound initial prover
       queries (proverBound prover drawn)
 
-/-- Transfer to a compiled verifier. If, for every proof, the compiled verifier is
-an outcome image of the transform of `validator`, and an accepted image comes only
-from an accepted outcome, the compiled verifier accepts no more often than the
-transform. The image covers an acceptance projection and stop reasons that the
-compiled program reports differently. -/
+/-- Transfer to a compiled verifier for a fixed statement. If, for every proof,
+the compiled verifier is an outcome image of the transform of `validator`, and an
+accepted image comes only from an accepted outcome, the compiled verifier accepts
+no more often than the transform. The image covers an acceptance projection and
+stop reasons that the compiled program reports differently. -/
 theorem acceptance_le_of_image {A' : Type} (context : Context)
     (validator : PIR.Proc (Actions F G) A) (initial : History F G)
     (compiled : Proof F G → OracleComp (FieldOracle F G) (PIR.Outcome A' × Proof F G))
@@ -601,7 +604,8 @@ theorem acceptance_le_of_image {A' : Type} (context : Context)
     exact congrArg (prover >>= ·) (funext construction)
   have mapped : (simulateQ randomOracle
       (image <$> experiment context validator initial prover)).run' ∅ =
-        image <$> (simulateQ randomOracle (experiment context validator initial prover)).run' ∅ := by
+        image <$>
+          (simulateQ randomOracle (experiment context validator initial prover)).run' ∅ := by
     simp only [simulateQ_map, StateT.run'_eq, StateT.run_map, Functor.map_map]
   rw [imaged, mapped, prEvent_map]
   exact prEvent_mono _ _ _ fun result accepted => preserves result accepted
@@ -632,6 +636,40 @@ theorem acceptance_bind_done {A' : Type} (context : Context)
   rw [imaged, mapped, prEvent_map]
   refine prEvent_congr _ _ _ fun result => ?_
   rcases result with ⟨outcome, rest⟩
+  cases outcome <;> rfl
+
+omit [SampleableType F] in
+/-- A final projection of each statement's validator result in the adaptive
+experiment moves into the acceptance predicate, together with any event on the
+chosen statement. -/
+theorem adaptive_acceptance_bind_done {A' : Type} [SampleableType B] (context : Context)
+    (decode : B → F) (validator : Stmt → PIR.Proc (Actions F G) A) (f : A → A')
+    (initial : Stmt → History F G) (prover : OracleComp (Oracle F G B) (Stmt × Proof F G))
+    (event : Stmt → Prop) (accepts : A' → Prop) :
+    Pr{let result ← (simulateQ randomOracle (adaptiveExperiment context decode
+        (fun statement => (validator statement).bind fun value => .done (f value)) initial
+        prover)).run' ∅}[event result.1 ∧ Accepted accepts result.2.1] =
+      Pr{let result ← (simulateQ randomOracle
+        (adaptiveExperiment context decode validator initial prover)).run' ∅}[
+        event result.1 ∧ Accepted (fun value => accepts (f value)) result.2.1] := by
+  have imaged : adaptiveExperiment context decode
+      (fun statement => (validator statement).bind fun value => .done (f value)) initial prover =
+      (fun result => (result.1, (mapOutcome f result.2.1, result.2.2))) <$>
+        adaptiveExperiment context decode validator initial prover := by
+    rw [adaptiveExperiment, adaptiveExperiment, map_bind]
+    refine congrArg (prover >>= ·) (funext fun claimed => ?_)
+    rw [transform_bind_done context (decodedQuery decode) f (validator claimed.1)
+      (initial claimed.1) claimed.2, Functor.map_map, Functor.map_map]
+  have mapped : (simulateQ randomOracle
+      ((fun result => (result.1, (mapOutcome f result.2.1, result.2.2))) <$>
+        adaptiveExperiment context decode validator initial prover)).run' ∅ =
+      (fun result => (result.1, (mapOutcome f result.2.1, result.2.2))) <$>
+        (simulateQ randomOracle
+          (adaptiveExperiment context decode validator initial prover)).run' ∅ := by
+    simp only [simulateQ_map, StateT.run'_eq, StateT.run_map, Functor.map_map]
+  rw [imaged, mapped, prEvent_map]
+  refine prEvent_congr _ _ _ fun result => ?_
+  rcases result with ⟨statement, outcome, rest⟩
   cases outcome <;> rfl
 
 end Fixed

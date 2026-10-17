@@ -286,9 +286,9 @@ Entries, suites and programmable constructions have no such check. Lean also
 proves [Fiat–Shamir soundness](../lean/docs/spec/fiat-shamir-security.md) of the
 transform of any validator over the common participant actions with a
 round-by-round soundness certificate, and of the imported Sumcheck verifier's
-transform. A composition theorem leaves the construction equality of the
-compiled Sumcheck proof Entry as its only premise about the compiled program;
-that equality is proved above but not yet composed with the bound, so the
+transform. Composition theorems leave the construction equality of the
+compiled Sumcheck proof Entry as their only premise about the compiled program;
+that equality is proved above but not yet composed with the bounds, so the
 Sumcheck Entry has no security theorem.
 
 The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retained

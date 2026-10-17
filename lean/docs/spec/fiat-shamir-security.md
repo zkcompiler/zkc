@@ -110,13 +110,15 @@ Pr[falseStatement result.1 ∧ Accepted accepts result.2.1
 
 `randomized_soundness` is the fixed-statement bound for a distribution over
 provers, each within `queries` on its support. `acceptance_le_of_image` compares
-a compiled verifier with the transform: if, for every proof, the compiled
-verifier is an outcome image of the transform and an accepted image comes only
-from an accepted outcome, the compiled verifier accepts no more often than the
-transform, so every bound above transfers to it. `acceptance_bind_done` moves a
-final projection of the validator's result into the acceptance predicate: the
-transform of `validator.bind (done ∘ f)` accepts with `accepts` exactly as often
-as the transform of `validator` accepts with `accepts ∘ f`.
+a compiled verifier with the transform for a fixed statement: if, for every
+proof, the compiled verifier is an outcome image of the transform and an
+accepted image comes only from an accepted outcome, the compiled verifier
+accepts no more often than the transform, so the fixed-statement bound transfers
+to it. `acceptance_bind_done` moves a final projection of the validator's result
+into the acceptance predicate: the transform of `validator.bind (done ∘ f)`
+accepts with `accepts` exactly as often as the transform of `validator` accepts
+with `accepts ∘ f`. `adaptive_acceptance_bind_done` is the same equality in the
+adaptive experiment, with any event on the chosen statement.
 
 The proofs apply VCVio's adaptive bad-query bound
 `OracleComp.prEvent_randomOracle_le_of_bad_queries` directly to the history
@@ -205,35 +207,34 @@ not an acceptance decision.
 
 ## Composition with the construction rule
 
-The compiled `example::Proof` Entry and the imported `example::Interactive`
-Entry instantiate the same `Sumcheck<Fr, 2>`, and the construction applies after
-the original stage, so they have the same original-stage export and the
-original validator of the compiled Entry is `importedValidator`.
-`compiled_imported_soundness` takes the compiled verifier as any function from
-proofs to oracle computations, with one premise about it: with the transcript
-oracle as challenge function it is the transform of `importedValidator`
-(`construction`), which is the equation a construction rule for that Entry
-proves. Its conclusion is the fixed-statement bound for the compiled verifier.
-`compiled_adaptive_soundness` is the adaptive form: for every statement, the
-compiled verifier with the decoded oracle as challenge function is the transform
-of the imported verifier from that statement's initial history, the host
-binding; with a determining binding and a balanced decoding the adaptive bound
-follows. `compiled_soundness` is the variant for any original validator equal to
-the plain verifier (`projection`).
+The original-stage export of the compiled `example::Proof` Entry is the
+imported `example::Interactive` export, so the original validator of the
+compiled Entry is `importedValidator`. `compiled_imported_soundness` takes the
+compiled verifier as any function from proofs to oracle computations, with one
+premise about it: with the transcript oracle as challenge function it is the
+transform of `importedValidator` (`construction`), the equation that relates the
+compiled Entry to its original program. Its conclusion is the fixed-statement
+bound for the compiled verifier. `compiled_adaptive_soundness` is the adaptive
+form: for every statement, the compiled verifier with the decoded oracle as
+challenge function is the transform of the imported verifier from that
+statement's initial history, the host binding; with a determining binding and a
+balanced decoding the adaptive bound follows. `compiled_soundness` is the variant
+for any original validator equal to the plain verifier (`projection`).
 
-A construction rule composed with a participant projection rule relates the
-compiled meaning, read through a selection of its returned values, to the
-transform of the original participant process read through a matching selection
-of its outputs. `compiled_participant_soundness` takes that equation for the
-imported participant process followed by any final `decision` on its outputs,
-with one further premise: an accepted decision implies the Boolean output
-`some true`. Its conclusion is again the fixed-statement bound.
+The equation may also relate the compiled meaning, read through a selection of
+its returned values, to the transform of the original participant process read
+through a matching selection of its outputs.
+`compiled_participant_soundness` takes it in this form, for the imported
+participant process followed by any `final` reading of its outputs, with one
+further premise: an accepted reading implies the Boolean output `some true`. Its
+conclusion is again the fixed-statement bound;
+`compiled_adaptive_participant_soundness` is its adaptive form.
 
-A construction rule whose compiled verifier reports outcomes differently from
-the transform, for example a returned rejection as the stop `reject` or
-acceptance as a value of another type, proves equality with an outcome image of
-the transform instead; `acceptance_le_of_image` then carries the bounds over
-when acceptance of the image implies acceptance of the transform's outcome.
+A compiled verifier that reports outcomes differently from the transform, for
+example a returned rejection as the stop `reject` or acceptance as a value of
+another type, may instead be an outcome image of the transform;
+`acceptance_le_of_image` then carries the fixed-statement bound over when
+acceptance of the image implies acceptance of the transform's outcome.
 
 ## Obligations
 
@@ -252,8 +253,9 @@ The informal "random oracle" assumption separates into four obligations:
   the squeezed bytes. Modelled as `reduce` of a uniform sample below `2 ^ 512`,
   its distance from a uniform field challenge costs at most `|F| / 2 ^ 512` per
   challenge (`balanced_reduce`).
-- **Ideal-experiment reduction.** Given the three above, the bounds of this
-  chapter.
+- **Ideal-experiment reduction.** In the ideal experiment, which the three
+  obligations above connect to the deployed verifier, the bounds of this chapter
+  hold.
 
 [Support](../support.md#fiatshamir-security-validation) records which
 obligations are proved and lists the controls.

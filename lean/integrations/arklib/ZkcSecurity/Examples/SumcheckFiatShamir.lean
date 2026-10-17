@@ -28,12 +28,14 @@ message and table bridge); a doomed final claim fails the terminal check.
 `ZkcSecurity.FiatShamir.soundness` then bounds the Fiat–Shamir transform
 (`soundness`, `imported_soundness`). One certificate for all tables bounds
 adaptively chosen public statements (`adaptive_imported_soundness`,
-`reduced_imported_soundness`). The same rounds followed by the outputs of the
-composed `example::Reduction` root give a reduction to a residual evaluation
-claim (`reduction_soundness`). The `compiled_*` theorems leave the construction
-rule's equation as the only premise about the compiled verifier;
-`compiled_participant_soundness` states it for the imported participant process
-followed by any final decision on its outputs.
+`reduced_imported_soundness`). The rounds of the composed `example::Reduction`
+root, at its own context and up to four of them, followed by its point and
+residual claim, give a reduction to a residual evaluation claim
+(`reduction_soundness`). The `compiled_*` theorems leave the construction
+equation as the only premise about the compiled verifier;
+`compiled_participant_soundness` and `compiled_adaptive_participant_soundness`
+state it for the imported participant process followed by any final reading of
+its outputs.
 -/
 
 set_option autoImplicit false
@@ -374,7 +376,7 @@ noncomputable def certificate {A : Type} (ctx : ProtocolContext) (handle count :
     (doomed_step ctx handle count table output accepts rejects)
 
 omit [Fintype F] [SampleableType F] in
-/-- Each round makes exactly one challenge. -/
+/-- Each round makes at most one challenge. -/
 theorem residual_queryBound {A : Type} (ctx : ProtocolContext) (handle : Nat)
     (output : List F × F → A) :
     ∀ (remaining : Nat) (point : List F) (claim : F),
@@ -464,10 +466,10 @@ theorem imported_soundness (context : Context) (count : Nat) (raw : List F)
 
 omit [AddCommGroup G] [Module F G] in
 /-- Composition with a construction rule through any original validator equal to
-the plain verifier. The two premises are the construction rule's equation (the
-compiled verifier, with the transcript oracle as challenge function, is the
-Fiat–Shamir transform of the original validator) and the projection equation
-(that validator is the plain Sumcheck verifier). -/
+the plain verifier. The two premises about the verifiers are the construction
+equation (the compiled verifier, with the transcript oracle as challenge
+function, is the Fiat–Shamir transform of the original validator) and the
+projection equation (that validator is the plain Sumcheck verifier). -/
 theorem compiled_soundness (context : Context)
     (compiled :
       Proof F G → OracleComp (FieldOracle F G) (PIR.Outcome (Option Bool) × Proof F G))
@@ -492,11 +494,10 @@ theorem compiled_soundness (context : Context)
     proverBound
 
 /-- Composition with the construction rule of the compiled `example::Proof` Entry.
-That Entry and the imported `example::Interactive` Entry instantiate the same
-`Sumcheck<Fr, 2>`, and the construction applies after the original stage, so
-their original-stage exports coincide (`SumcheckSourceData.snapshot`) and the
-Entry's original validator is `importedValidator`. The construction equality is
-the only premise about the compiled verifier. -/
+That Entry's original-stage export is the imported `example::Interactive` export
+(`SumcheckSourceData.snapshot`), so its original validator is
+`importedValidator`. The construction equality is the only premise about the
+compiled verifier. -/
 theorem compiled_imported_soundness (context : Context)
     (compiled : Proof F G → OracleComp (FieldOracle F G) (PIR.Outcome (Option Bool) × Proof F G))
     (count : Nat) (raw : List F) (table : Table F count)
@@ -516,28 +517,27 @@ theorem compiled_imported_soundness (context : Context)
   exact imported_soundness context count raw table decoded claim falseClaim handle initial prover
     queries proverBound
 
-/-- Composition with a construction rule that reads the compiled verifier
-through a final decision on the imported program's outputs. If, for every proof,
-the compiled verifier is the transform of the imported `example::Interactive`
-participant process followed by `decision` of its outputs, and an accepted
-decision implies the Boolean output `some true`, the fixed-statement bound holds
-for the compiled verifier. A construction rule composed with a participant
-projection rule has this form: the compiled meaning, read through a selection of
-its returned values, is the transform of the original participant process read
-through a matching selection of its outputs. -/
+/-- Composition with a compiled verifier read through a final reading of the
+imported program's outputs. If, for every proof, the compiled verifier is the
+transform of the imported `example::Interactive` participant process followed by
+`final` of its outputs, and an accepted reading implies the Boolean output
+`some true`, the fixed-statement bound holds for the compiled verifier. This is
+the shape of an equation that relates the compiled meaning, read through a
+selection of its returned values, to the transform of the original participant
+process read through a matching selection of its outputs. -/
 theorem compiled_participant_soundness {B : Type} (context : Context)
     (compiled : Proof F G → OracleComp (FieldOracle F G) (PIR.Outcome B × Proof F G))
     (count : Nat) (raw : List F) (table : Table F count)
     (decoded : ofList? count raw = some table) (claim : F) (falseClaim : claim ≠ raw.sum)
     (handle : Nat) (initial : History F G)
-    (decision : Values (Component (assignment F G))
+    (final : Values (Component (assignment F G))
       SumcheckSourceViews.imported.program.payload.entry.outputs → B)
     (accepts : B → Prop)
-    (reflects : ∀ outputs, accepts (decision outputs) → outputs.get .here = some true)
+    (reflects : ∀ outputs, accepts (final outputs) → outputs.get .here = some true)
     (construction : ∀ proof, compiled proof = transform context historyQuery
       (((SumcheckSourceViews.imported.program.participant F G 1
         (SumcheckSourceVerifier.sourceRootInputs (some raw) (some claim) (some count)
-          (some handle))).bind fun outputs => .done (decision outputs)).interpret
+          (some handle))).bind fun outputs => .done (final outputs)).interpret
         CommonAdapter.project) initial proof)
     (prover : OracleComp (FieldOracle F G) (Proof F G)) (queries : Nat)
     (proverBound : IsTotalQueryBound prover queries) :
@@ -548,7 +548,7 @@ theorem compiled_participant_soundness {B : Type} (context : Context)
     (SumcheckSourceVerifier.sourceRootInputs (some raw) (some claim) (some count)
       (some handle))).interpret CommonAdapter.project
   have same : (prover >>= compiled) = FiatShamir.experiment context
-      (participant.bind fun outputs => .done (decision outputs)) initial prover := by
+      (participant.bind fun outputs => .done (final outputs)) initial prover := by
     refine congrArg (prover >>= ·) (funext fun proof => ?_)
     rw [construction, PIR.Proc.interpret_bind]
     rfl
@@ -704,8 +704,8 @@ theorem reduced_imported_soundness (context : Context) (handle : Nat)
 /-- Adaptive composition with the construction rule: for every statement the
 compiled verifier, with the decoded transcript oracle as challenge function, is
 the transform of the imported verifier from that statement's initial history,
-the host binding. The construction equality is the only premise besides the
-binding and decoding premises of `adaptive_imported_soundness`. -/
+the host binding. The construction equality is the only premise about the
+compiled verifier. -/
 theorem compiled_adaptive_soundness {B : Type} [SampleableType B] (context : Context)
     (handle : Nat) (decode : B → F) (loss : ENNReal) (balanced : Balanced decode loss)
     (initial : PublicStatement F → History F G) (determined : Determined initial)
@@ -733,6 +733,73 @@ theorem compiled_adaptive_soundness {B : Type} [SampleableType B] (context : Con
   rw [same]
   exact adaptive_imported_soundness context handle decode loss balanced initial determined prover
     queries proverBound
+
+/-- Adaptive composition with a compiled verifier read through a final reading of
+the imported program's outputs: the adaptive form of
+`compiled_participant_soundness`. For every statement the compiled verifier is
+the transform of the imported participant process at that statement, followed by
+`final` of its outputs, from the statement's initial history. -/
+theorem compiled_adaptive_participant_soundness {B C : Type} [SampleableType B]
+    (context : Context) (handle : Nat) (decode : B → F) (loss : ENNReal)
+    (balanced : Balanced decode loss) (initial : PublicStatement F → History F G)
+    (determined : Determined initial)
+    (final : Values (Component (assignment F G))
+      SumcheckSourceViews.imported.program.payload.entry.outputs → C)
+    (accepts : C → Prop)
+    (reflects : ∀ outputs, accepts (final outputs) → outputs.get .here = some true)
+    (compiled : PublicStatement F → Proof F G →
+      OracleComp (Oracle F G B) (PIR.Outcome C × Proof F G))
+    (construction : ∀ statement proof, compiled statement proof =
+      transform context (decodedQuery decode)
+        (((SumcheckSourceViews.imported.program.participant F G 1
+          (SumcheckSourceVerifier.sourceRootInputs (some statement.raw) (some statement.claim)
+            (some statement.count) (some handle))).bind fun outputs =>
+              .done (final outputs)).interpret CommonAdapter.project)
+        (initial statement) proof)
+    (prover : OracleComp (Oracle F G B) (PublicStatement F × Proof F G)) (queries : Nat)
+    (proverBound : IsTotalQueryBound prover queries) :
+    Pr{let result ← (simulateQ randomOracle (prover >>= fun claimed =>
+        (fun result => (claimed.1, result)) <$> compiled claimed.1 claimed.2)).run' ∅}[
+      result.1.claim ≠ result.1.raw.sum ∧ Accepted accepts result.2.1] ≤
+      (queries + 2) * (1 / (Fintype.card F : ENNReal) + loss) := by
+  let participant : PublicStatement F → PIR.Proc (Actions F G)
+      (Values (Component (assignment F G))
+        SumcheckSourceViews.imported.program.payload.entry.outputs) := fun statement =>
+    (SumcheckSourceViews.imported.program.participant F G 1
+      (SumcheckSourceVerifier.sourceRootInputs (some statement.raw) (some statement.claim)
+        (some statement.count) (some handle))).interpret CommonAdapter.project
+  have same : (prover >>= fun claimed =>
+      (fun result => (claimed.1, result)) <$> compiled claimed.1 claimed.2) =
+        adaptiveExperiment context decode
+          (fun statement => (participant statement).bind fun outputs => .done (final outputs))
+          initial prover := by
+    unfold adaptiveExperiment
+    refine congrArg (prover >>= ·) (funext fun claimed => ?_)
+    rw [construction, PIR.Proc.interpret_bind]
+    rfl
+  have imported : (fun statement : PublicStatement F =>
+      importedValidator (G := G) statement.raw statement.claim statement.count handle) =
+        fun statement => (participant statement).bind fun outputs => .done (outputs.get .here) := by
+    funext statement
+    rw [importedValidator, PIR.Proc.interpret_bind]
+    rfl
+  rw [same]
+  refine (adaptive_acceptance_bind_done context decode participant final initial prover
+    (fun statement => statement.claim ≠ statement.raw.sum) accepts).trans_le ?_
+  refine (prEvent_mono _ _ _ fun result accepted => ?_).trans
+    ((adaptive_acceptance_bind_done context decode participant (fun outputs => outputs.get .here)
+      initial prover (fun statement => statement.claim ≠ statement.raw.sum)
+      (· = some true)).symm.le.trans ?_)
+  · obtain ⟨wrong, accepted⟩ := accepted
+    refine ⟨wrong, ?_⟩
+    rcases result with ⟨statement, outcome, rest⟩
+    cases outcome with
+    | returned outputs => exact reflects outputs accepted
+    | stopped _ => exact accepted.elim
+  · have bound := adaptive_imported_soundness context handle decode loss balanced initial
+      determined prover queries proverBound
+    rw [imported] at bound
+    exact bound
 
 end Adaptive
 
