@@ -16,14 +16,18 @@ states, for each operation, how the transform treats it:
 - a send absorbs an event and continues with a fixed reply;
 - a query absorbs its challenge occurrence, asks the transcript oracle at the
   history ending with that occurrence and continues with its own decoding of the
-  answer;
+  raw answer, or stops with `exhausted` when the decoder refuses;
 - any other operation refuses.
 
-Query sites therefore choose their own result sorts (field or extension
-elements, bounded indices, bit strings, gated or compound challenges) and their
-own decoders of the oracle answer. `transform` is the transform with a challenge
-function in any monad; `answer` asks the transcript oracle on all event
-histories.
+The transcript oracle answers a history `key` in its own raw type `R key`, so
+the raw answer may depend on the query occurrence that ends the key (its
+method and the operands fixed before sampling). Query sites choose their own
+result sorts (field or extension elements, bounded indices, bit strings, gated
+or compound challenges) and their own decoders, which may refuse, as a
+rejection sampler does. Soundness does not depend on which stop a refusal
+reports; `exhausted` is the runtime's outcome for a sampler that gives up.
+`transform` is the transform with a challenge function in any monad; `answer`
+asks the transcript oracle on all event histories, `OracleSpec.ofFn R`.
 
 `replay` walks a validator along absorbed events, recovering received replies
 from their events and answering queries from a table. It is a function of the
@@ -48,26 +52,28 @@ def Accepted {A : Type} (accepts : A → Prop) : PIR.Outcome A → Prop
 
 namespace Typed
 
-/-- How the transform treats one validator operation whose reply has type `R`.
-Transcript events have type `E`, proof messages `P` and oracle answers `B`. -/
-inductive Absorption (E P B R : Type) where
+/-- How the transform treats one validator operation whose reply has type
+`Reply`. Transcript events have type `E`, proof messages `P`, and the oracle
+answers a history `key` in `R key`. -/
+inductive Absorption (E P : Type) (R : List E → Type) (Reply : Type) where
   /-- Read the next proof message, absorb `event message` and continue with the
   reply `recover` reads from that event. A message whose event recovers no reply
   refuses without being consumed. -/
-  | receive (event : P → E) (recover : E → Option R)
+  | receive (event : P → E) (recover : E → Option Reply)
   /-- Absorb `event` and continue with `value`. Produces no proof data. -/
-  | send (event : E) (value : R)
+  | send (event : E) (value : Reply)
   /-- Absorb the challenge occurrence `event`, ask the oracle at the history
-  ending with it and continue with `decode` of the answer. -/
-  | query (event : E) (decode : B → R)
+  `preceding ++ [event]` and continue with `decode preceding` of its raw answer;
+  a refused decoding stops with `exhausted`. -/
+  | query (event : E) (decode : (preceding : List E) → R (preceding ++ [event]) → Option Reply)
   /-- Refuse without consuming proof data. -/
   | refuse
 
 /-- A transcript interface: the absorption of every operation of `I`. -/
-abbrev Interface (I : PIR.Signature) (E P B : Type) :=
-  (operation : I.Op) → Absorption E P B (I.Reply operation)
+abbrev Interface (I : PIR.Signature) (E P : Type) (R : List E → Type) :=
+  (operation : I.Op) → Absorption E P R (I.Reply operation)
 
-variable {I : PIR.Signature} {E P B A : Type}
+variable {I : PIR.Signature} {E P A : Type} {R : List E → Type}
 
 section Transform
 variable {m : Type → Type} [Monad m]
@@ -75,7 +81,7 @@ variable {m : Type → Type} [Monad m]
 /-- The Fiat–Shamir transform of `process` over the interface `absorb`, from the
 absorbed `history`, reading proof messages from `proof` and answering queries
 with `oracle`. Returns the outcome and the unread proof suffix. -/
-def transform (absorb : Interface I E P B) (oracle : List E → m B) :
+def transform (absorb : Interface I E P R) (oracle : (key : List E) → m (R key)) :
     PIR.Proc I A → List E → List P → m (PIR.Outcome A × List P)
   | .done value, _, proof => pure (.returned value, proof)
   | .halt stop, _, proof => pure (.stopped stop, proof)
@@ -91,11 +97,13 @@ def transform (absorb : Interface I E P B) (oracle : List E → m B) :
               | none => pure (.stopped .refused, message :: rest)
       | .send event value => transform absorb oracle (next value) (history ++ [event]) proof
       | .query event decode => do
-          let reply ← oracle (history ++ [event])
-          transform absorb oracle (next (decode reply)) (history ++ [event]) proof
+          let raw ← oracle (history ++ [event])
+          match decode history raw with
+          | some value => transform absorb oracle (next value) (history ++ [event]) proof
+          | none => pure (.stopped .exhausted, proof)
       | .refuse => pure (.stopped .refused, proof)
 
-variable (absorb : Interface I E P B) (oracle : List E → m B)
+variable (absorb : Interface I E P R) (oracle : (key : List E) → m (R key))
 
 theorem transform_receive {operation : I.Op} {next : I.Reply operation → PIR.Proc I A}
     {event : P → E} {recover : E → Option (I.Reply operation)}
@@ -121,11 +129,14 @@ theorem transform_send {operation : I.Op} {next : I.Reply operation → PIR.Proc
   simp only [transform, absorbed]
 
 theorem transform_query {operation : I.Op} {next : I.Reply operation → PIR.Proc I A}
-    {event : E} {decode : B → I.Reply operation} (absorbed : absorb operation = .query event decode)
-    (history : List E) (proof : List P) :
+    {event : E}
+    {decode : (preceding : List E) → R (preceding ++ [event]) → Option (I.Reply operation)}
+    (absorbed : absorb operation = .query event decode) (history : List E) (proof : List P) :
     transform absorb oracle (.call operation next) history proof =
-      oracle (history ++ [event]) >>= fun reply =>
-        transform absorb oracle (next (decode reply)) (history ++ [event]) proof := by
+      oracle (history ++ [event]) >>= fun raw =>
+        match decode history raw with
+        | some value => transform absorb oracle (next value) (history ++ [event]) proof
+        | none => pure (.stopped .exhausted, proof) := by
   simp only [transform, absorbed]
 
 theorem transform_refuse {operation : I.Op} {next : I.Reply operation → PIR.Proc I A}
@@ -138,18 +149,18 @@ end Transform
 
 /-- One transcript challenge: the transcript oracle on all event histories,
 asked at `key`. -/
-def answer (key : List E) : OracleComp (List E →ₒ B) B :=
-  liftM ((List E →ₒ B).query key)
+def answer (key : List E) : OracleComp (OracleSpec.ofFn R) (R key) :=
+  liftM ((OracleSpec.ofFn R).query key)
 
 section Replay
 variable [DecidableEq E]
 
 /-- Walk `process` along the absorbed `events`, starting after `history`.
 Received replies are recovered from their events and queries are answered by
-`table` at the history ending with their occurrence. The result is the residual
-process after the last event, or `none` when the events are not a history the
-transform could absorb from this process. -/
-def replay (absorb : Interface I E P B) (table : List E → B) :
+decoding `table` at the history ending with their occurrence. The result is the
+residual process after the last event, or `none` when the events are not a
+history the transform could absorb from this process. -/
+def replay (absorb : Interface I E P R) (table : (key : List E) → R key) :
     PIR.Proc I A → List E → List E → Option (PIR.Proc I A)
   | process, _, [] => some process
   | .done _, _, _ :: _ => none
@@ -165,12 +176,13 @@ def replay (absorb : Interface I E P B) (table : List E → B) :
           else none
       | .query event decode =>
           if observed = event then
-            replay absorb table (next (decode (table (history ++ [observed]))))
-              (history ++ [observed]) rest
+            match decode history (table (history ++ [event])) with
+            | some value => replay absorb table (next value) (history ++ [event]) rest
+            | none => none
           else none
       | .refuse => none
 
-variable (absorb : Interface I E P B) (table : List E → B)
+variable (absorb : Interface I E P R) (table : (key : List E) → R key)
 
 @[simp] theorem replay_nil (process : PIR.Proc I A) (history : List E) :
     replay absorb table process history [] = some process := by
@@ -191,13 +203,16 @@ theorem replay_send {operation : I.Op} {next : I.Reply operation → PIR.Proc I 
     replay absorb table (.call operation next) history [event] = some (next value) := by
   simp [replay, absorbed]
 
-/-- One challenge occurrence, answered by the table at the history ending with it. -/
+/-- One challenge occurrence, answered by decoding the table at the history
+ending with it. -/
 theorem replay_query {operation : I.Op} {next : I.Reply operation → PIR.Proc I A}
-    {event : E} {decode : B → I.Reply operation} (absorbed : absorb operation = .query event decode)
-    (history : List E) :
-    replay absorb table (.call operation next) history [event] =
-      some (next (decode (table (history ++ [event])))) := by
-  simp [replay, absorbed]
+    {event : E}
+    {decode : (preceding : List E) → R (preceding ++ [event]) → Option (I.Reply operation)}
+    (absorbed : absorb operation = .query event decode) (history : List E)
+    {value : I.Reply operation}
+    (decoded : decode history (table (history ++ [event])) = some value) :
+    replay absorb table (.call operation next) history [event] = some (next value) := by
+  simp [replay, absorbed, decoded]
 
 /-- Replaying a concatenation replays the first part, then the second from the
 residual and the extended history. -/
@@ -226,13 +241,17 @@ theorem replay_append (first second : List E) :
             · rfl
           · simp only [List.cons_append, replay, absorbed]
             split
-            · simp [ih]
+            · rename_i same
+              subst same
+              cases decode history (table (history ++ [observed])) with
+              | none => rfl
+              | some value => simp [ih]
             · rfl
           · simp only [List.cons_append, replay, absorbed]
             rfl
 
 /-- Replay reads the table only at histories no longer than the replayed one. -/
-theorem replay_congr {other : List E → B} (events : List E) :
+theorem replay_congr {other : (key : List E) → R key} (events : List E) :
     ∀ (process : PIR.Proc I A) (history : List E),
       (∀ key : List E, key.length ≤ history.length + events.length → table key = other key) →
       replay absorb table process history events = replay absorb other process history events := by
@@ -262,11 +281,15 @@ theorem replay_congr {other : List E → B} (events : List E) :
             · rfl
           · simp only [replay, absorbed]
             split
-            · have same : table (history ++ [observed]) = other (history ++ [observed]) := by
+            · rename_i same
+              subst same
+              have agreeing : table (history ++ [observed]) = other (history ++ [observed]) := by
                 apply agree
                 simp
-              rw [same]
-              exact ih _ _ shifted
+              rw [agreeing]
+              cases decode history (other (history ++ [observed])) with
+              | none => rfl
+              | some value => exact ih _ _ shifted
             · rfl
           · simp only [replay, absorbed]
 
@@ -275,20 +298,19 @@ end Replay
 section Bounds
 
 /-- At most `budget` queries on every path, for every reply. -/
-def QueryBound (absorb : Interface I E P B) : PIR.Proc I A → ℕ → Prop
+def QueryBound (absorb : Interface I E P R) : PIR.Proc I A → ℕ → Prop
   | .done _, _ => True
   | .halt _, _ => True
   | .call operation next, budget =>
       match absorb operation with
       | .receive _ _ => ∀ value, QueryBound absorb (next value) budget
       | .send _ value => QueryBound absorb (next value) budget
-      | .query _ decode =>
-          0 < budget ∧ ∀ reply, QueryBound absorb (next (decode reply)) (budget - 1)
+      | .query _ _ => 0 < budget ∧ ∀ value, QueryBound absorb (next value) (budget - 1)
       | .refuse => True
 
 /-- The queries on every path charge at most `cost` in total, each query the
 error of its absorbed occurrence. -/
-def CostBound (absorb : Interface I E P B) (error : E → ENNReal) :
+def CostBound (absorb : Interface I E P R) (error : E → ENNReal) :
     PIR.Proc I A → ENNReal → Prop
   | .done _, _ => True
   | .halt _, _ => True
@@ -296,11 +318,11 @@ def CostBound (absorb : Interface I E P B) (error : E → ENNReal) :
       match absorb operation with
       | .receive _ _ => ∀ value, CostBound absorb error (next value) cost
       | .send _ value => CostBound absorb error (next value) cost
-      | .query event decode => ∃ remaining, error event + remaining ≤ cost ∧
-          ∀ reply, CostBound absorb error (next (decode reply)) remaining
+      | .query event _ => ∃ remaining, error event + remaining ≤ cost ∧
+          ∀ value, CostBound absorb error (next value) remaining
       | .refuse => True
 
-variable (absorb : Interface I E P B) (error : E → ENNReal)
+variable (absorb : Interface I E P R) (error : E → ENNReal)
 
 theorem CostBound.mono :
     ∀ (process : PIR.Proc I A) {cost larger : ENNReal},
@@ -338,8 +360,8 @@ theorem QueryBound.costBound {bound : ENNReal} (bounded : ∀ event, error event
       · simp only [QueryBound, absorbed] at counted
         simp only [CostBound, absorbed]
         obtain ⟨positive, rest⟩ := counted
-        refine ⟨((budget - 1 : ℕ) : ENNReal) * bound, ?_, fun reply =>
-          QueryBound.costBound bounded (next (decode reply)) (budget - 1) (rest reply)⟩
+        refine ⟨((budget - 1 : ℕ) : ENNReal) * bound, ?_, fun value =>
+          QueryBound.costBound bounded (next value) (budget - 1) (rest value)⟩
         calc error event + ((budget - 1 : ℕ) : ENNReal) * bound
             ≤ bound + ((budget - 1 : ℕ) : ENNReal) * bound := add_le_add_left (bounded event) _
           _ = (budget : ENNReal) * bound := by
@@ -359,10 +381,10 @@ def keyError (key : List E) : ENNReal :=
 
 /-- A total query count with every key error at most `bound` charges at most
 `queries * bound` on every path. -/
-theorem worstCaseCostBound_of_isTotalQueryBound {α D : Type} {R : D → Type}
-    [∀ key : D, Nonempty (R key)]
+theorem worstCaseCostBound_of_isTotalQueryBound {α D : Type} {Raw : D → Type}
+    [∀ key : D, Nonempty (Raw key)]
     (weight : D → ENNReal) {bound : ENNReal} (bounded : ∀ key, weight key ≤ bound) :
-    ∀ (computation : OracleComp (OracleSpec.ofFn R) α) (queries : ℕ),
+    ∀ (computation : OracleComp (OracleSpec.ofFn Raw) α) (queries : ℕ),
       IsTotalQueryBound computation queries →
         WorstCaseCostBound computation ⟨weight⟩ (queries * bound) := by
   intro computation
@@ -383,11 +405,11 @@ theorem worstCaseCostBound_of_isTotalQueryBound {α D : Type} {R : D → Type}
           rw [← one_add_mul, ← Nat.cast_one, ← Nat.cast_add, Nat.add_sub_cancel' positive]
 
 theorem worstCaseCostBound_map {α β : Type} (f : α → β)
-    (computation : OracleComp (List E →ₒ B) α) (weight : List E → ENNReal) (cost : ENNReal)
-    (bounded : WorstCaseCostBound computation ⟨weight⟩ cost) :
+    (computation : OracleComp (OracleSpec.ofFn R) α) (weight : List E → ENNReal)
+    (cost : ENNReal) (bounded : WorstCaseCostBound computation ⟨weight⟩ cost) :
     WorstCaseCostBound (f <$> computation) ⟨weight⟩ cost := by
   have composed := WorstCaseCostBound.bind (k := fun value => (pure (f value) :
-      OracleComp (List E →ₒ B) β)) bounded fun _ =>
+      OracleComp (OracleSpec.ofFn R) β)) bounded fun _ =>
     (worstCaseCostBound_pure _ _ (0 : ENNReal)).mpr le_rfl
   rw [add_zero] at composed
   simpa only [map_eq_bind_pure_comp, Function.comp_def] using composed
@@ -427,9 +449,18 @@ theorem transform_costBound :
       · simp only [CostBound, absorbed] at bounded
         obtain ⟨remaining, charged, rest⟩ := bounded
         rw [transform_query absorb _ absorbed, answer, worstCaseCostBound_query_bind_iff]
-        intro reply total member
-        have tail := (worstCaseCostBound_iff_support_bound _ _ _).mp
-          (ih (decode reply) remaining (history ++ [event]) proof (rest reply)) total member
+        intro raw total member
+        have tail : Multiplicative.toAdd total.2 ≤ remaining := by
+          revert member
+          cases decode history raw with
+          | none =>
+              intro member
+              exact (worstCaseCostBound_iff_support_bound _ _ _).mp
+                ((worstCaseCostBound_pure _ _ _).mpr zero_le) total member
+          | some value =>
+              intro member
+              exact (worstCaseCostBound_iff_support_bound _ _ _).mp
+                (ih value remaining (history ++ [event]) proof (rest value)) total member
         calc keyError error (history ++ [event]) + Multiplicative.toAdd total.2
             ≤ error event + remaining := by
               rw [keyError_append_singleton]
@@ -466,8 +497,10 @@ theorem transform_queryBound :
         exact ih value budget _ proof bounded
       · simp only [QueryBound, absorbed] at bounded
         rw [transform_query absorb _ absorbed, answer]
-        exact isTotalQueryBound_query_bind_iff.mpr
-          ⟨bounded.1, fun reply => ih _ _ _ _ (bounded.2 reply)⟩
+        refine isTotalQueryBound_query_bind_iff.mpr ⟨bounded.1, fun raw => ?_⟩
+        cases decode history raw with
+        | none => trivial
+        | some value => exact ih value _ _ _ (bounded.2 value)
       · rw [transform_refuse absorb _ absorbed]
         trivial
 
@@ -475,15 +508,16 @@ end Bounds
 
 section Execution
 
-theorem tableQueryLog_map {α β : Type} (f : α → β) (computation : OracleComp (List E →ₒ B) α)
-    (table : List E → B) :
+theorem tableQueryLog_map {α β : Type} (f : α → β)
+    (computation : OracleComp (OracleSpec.ofFn R) α) (table : (key : List E) → R key) :
     tableQueryLog (f <$> computation) table = tableQueryLog computation table := by
   rw [map_eq_bind_pure_comp, tableQueryLog_bind]
   simp
 
 /-- Deterministic evaluation of the oracle transform against a total table is
 the transform with the table as challenge function. -/
-theorem evalWithAnswerFn_transform (absorb : Interface I E P B) (table : List E → B) :
+theorem evalWithAnswerFn_transform (absorb : Interface I E P R)
+    (table : (key : List E) → R key) :
     ∀ (process : PIR.Proc I A) (history : List E) (proof : List P),
       evalWithAnswerFn (QueryImpl.ofFn table) (transform absorb answer process history proof) =
         transform (m := Id) absorb table process history proof := by
@@ -508,7 +542,12 @@ theorem evalWithAnswerFn_transform (absorb : Interface I E P B) (table : List E 
         exact ih value _ _
       · rw [transform_query absorb _ absorbed, transform_query absorb _ absorbed, answer,
           evalWithAnswerFn_bind, evalWithAnswerFn_liftM_query, QueryImpl.ofFn_apply]
-        exact ih _ _ _
+        change _ = (match decode history (table (history ++ [event])) with
+          | some value => transform (m := Id) absorb table (next value) (history ++ [event]) proof
+          | none => pure (.stopped .exhausted, proof))
+        cases decode history (table (history ++ [event])) with
+        | none => rfl
+        | some value => exact ih value _ _
       · rw [transform_refuse absorb _ absorbed, transform_refuse absorb _ absorbed]
         rfl
 

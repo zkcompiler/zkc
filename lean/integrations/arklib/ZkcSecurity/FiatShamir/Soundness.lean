@@ -200,9 +200,9 @@ def received (context : Context) (ty : Ty) (site : String) (sender : Nat) :
 absorbs its message occurrence with the payload and recovers the payload's value
 at the expected type, a send absorbs its message occurrence with the sent value
 (refusing a value without a payload), and every query absorbs its challenge
-occurrence and decodes the oracle answer with `decode`. -/
+occurrence and decodes the oracle answer with `decode`, which never refuses. -/
 def interface (context : Context) (decode : B → F) :
-    Typed.Interface (Actions F G) (Event F G) (Payload F G) B
+    Typed.Interface (Actions F G) (Event F G) (Payload F G) (fun _ => B)
   | .receive ty site sender =>
       .receive (fun payload => .message (context.message site sender context.validator) payload)
         (received context ty site sender)
@@ -211,7 +211,7 @@ def interface (context : Context) (decode : B → F) :
       | some payload =>
           .send (.message (context.message site context.validator receiver) payload) ()
       | none => .refuse
-  | .query site _ _ => .query (.challenge (context.query site)) decode
+  | .query site _ _ => .query (.challenge (context.query site)) fun _ raw => some (decode raw)
 
 theorem received_message (context : Context) (ty : Ty) (site : String) (sender : Nat)
     (payload : Payload F G) :
@@ -299,7 +299,14 @@ def RoundByRound.typed {accepts : A → Prop} {error : ENNReal} (bound : ENNReal
             | none => trivial
             | some payload => exact certificate.send _ site receiver sent next member
         | query site op arguments =>
-            exact escape _ (certificate.query site op arguments next member)
+            intro preceding
+            refine le_trans (le_of_eq (prEvent_congr _ _
+              (fun raw => ¬ certificate.doomed (next (decode raw))) fun raw => ?_))
+              (escape _ (certificate.query site op arguments next member))
+            exact ⟨fun ⟨_, decoded, outside⟩ => by
+                cases Option.some.inj decoded
+                exact outside,
+              fun outside => ⟨_, rfl, outside⟩⟩
 
 /-- Balanced decoding adds its loss to every site's error. -/
 noncomputable def RoundByRound.balanced {accepts : A → Prop} {error loss : ENNReal}
