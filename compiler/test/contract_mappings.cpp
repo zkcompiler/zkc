@@ -131,6 +131,8 @@ constexpr ExpectedMapping expected[] = {
     {"vector.transpose", "algebra.exec.vector_transpose"},
     {"vector.length", "algebra.exec.vector_length"},
     {"vector.rotate", "algebra.exec.vector_rotate"},
+    {"vector.bit_reverse", "algebra.exec.vector_bit_reverse"},
+    {"vector.bit_reverse_rows", "algebra.exec.vector_bit_reverse_rows"},
     {"vector.interleave", "algebra.exec.vector_interleave"},
     {"vector.prefix_product", "algebra.exec.vector_prefix_product"},
     {"vector.prefix_sum", "algebra.exec.vector_prefix_sum"},

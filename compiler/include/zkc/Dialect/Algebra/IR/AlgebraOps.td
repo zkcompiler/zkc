@@ -193,6 +193,8 @@ def VectorPrefixProductOp : KernelOp<AlgebraDialect, "exec.vector_prefix_product
 def VectorPrefixSumOp : KernelOp<AlgebraDialect, "exec.vector_prefix_sum", [OpVectorPrefixSum]>;
 
 def VectorRotateOp : KernelOp<AlgebraDialect, "exec.vector_rotate", [OpVectorRotate]>;
+def VectorBitReverseOp : KernelOp<AlgebraDialect, "exec.vector_bit_reverse", [OpVectorBitReverse]>;
+def VectorBitReverseRowsOp : KernelOp<AlgebraDialect, "exec.vector_bit_reverse_rows", [OpVectorBitReverseRows]>;
 
 def VectorScaleOp : KernelOp<AlgebraDialect, "exec.vector_scale", [OpVectorScale]>;
 

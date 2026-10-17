@@ -82,6 +82,16 @@ pub(crate) fn boundary<S: Coefficient>(coefficients: &[S]) -> S {
 pub(crate) fn normalized<S: Coefficient>(coefficients: &[S]) -> bool {
     coefficients.last().is_none_or(|c| *c != S::zero())
 }
+/// The index of `position` with its `log2(count)` low bits reversed; `count`
+/// is a power of two.
+pub(crate) fn reverse_bits(position: usize, count: usize) -> usize {
+    let bits = count.trailing_zeros();
+    if bits == 0 {
+        0
+    } else {
+        position.reverse_bits() >> (usize::BITS - bits)
+    }
+}
 pub(crate) fn reserve<T>(n: usize) -> Result<Vec<T>> {
     let mut v = Vec::new();
     v.try_reserve_exact(n)
@@ -546,6 +556,27 @@ fn dense<S: Family>(
             out.extend_from_slice(&a[..k]);
             Ok(vec![S::vector_value(out.into())])
         }
+        "vector.bit_reverse" | "vector.bit_reverse_rows" => {
+            let a = v(0)?;
+            let width = if name == "vector.bit_reverse" {
+                1
+            } else {
+                index(1)?
+            };
+            if width == 0 || !a.len().is_multiple_of(width) {
+                return Err(refused("vector-shape"));
+            }
+            let height = a.len() / width;
+            if !height.is_power_of_two() {
+                return Err(refused("vector-bit-reversal"));
+            }
+            let mut out = allocation(a.len())?;
+            for row in 0..height {
+                let source = crate::kernels::arithmetic::reverse_bits(row, height);
+                out.extend_from_slice(&a[source * width..(source + 1) * width]);
+            }
+            Ok(vec![S::vector_value(out.into())])
+        }
         "vector.interleave" => {
             let (a, b) = (v(0)?, v(1)?);
             equal_len(a.len(), b.len())?;
@@ -891,6 +922,28 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             "arkworks/vector.rotate",
             "dalek/vector.rotate",
             "plonky3/vector.rotate",
+        ]),
+        field::operation(
+            "vector.bit_reverse",
+            &[Vector],
+            &[Vector],
+            AttributeRule::None,
+        )
+        .implemented_by(&[
+            "arkworks/vector.bit_reverse",
+            "dalek/vector.bit_reverse",
+            "plonky3/vector.bit_reverse",
+        ]),
+        field::operation(
+            "vector.bit_reverse_rows",
+            &[Vector, Index],
+            &[Vector],
+            AttributeRule::None,
+        )
+        .implemented_by(&[
+            "arkworks/vector.bit_reverse_rows",
+            "dalek/vector.bit_reverse_rows",
+            "plonky3/vector.bit_reverse_rows",
         ]),
         field::operation(
             "vector.interleave",

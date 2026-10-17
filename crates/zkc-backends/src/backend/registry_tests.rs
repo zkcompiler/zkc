@@ -1152,6 +1152,8 @@ fn alternative_eligibility_matches_the_reviewed_native_set() {
         "vector.prefix_product",
         "vector.prefix_sum",
         "vector.rotate",
+        "vector.bit_reverse",
+        "vector.bit_reverse_rows",
         "vector.scale",
         "vector.scatter_sum",
         "vector.slice",

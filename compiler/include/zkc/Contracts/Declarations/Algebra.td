@@ -37,6 +37,22 @@ def OpVectorRotate : ZKC_Operation<"vector.rotate", [OpVectorRotateF],
   int ordinal = 27;
 }
 
+// Bit-reversal permutations of a power-of-two sequence of elements or of the
+// rows of a flat row-major vector; positional only, for every field.
+def OpVectorBitReverseF : ZKC_Root<"F", FieldDomain>;
+def OpVectorBitReverse : ZKC_Operation<"vector.bit_reverse", [OpVectorBitReverseF],
+    [ZKC_Apply<TypeVector, [OpVectorBitReverseF]>],
+    [ZKC_Apply<TypeVector, [OpVectorBitReverseF]>], [ZKC_Holds<CapabilityField, [OpVectorBitReverseF]>]> {
+  int ordinal = 196;
+}
+
+def OpVectorBitReverseRowsF : ZKC_Root<"F", FieldDomain>;
+def OpVectorBitReverseRows : ZKC_Operation<"vector.bit_reverse_rows", [OpVectorBitReverseRowsF],
+    [ZKC_Apply<TypeVector, [OpVectorBitReverseRowsF]>, ZKC_Apply<TypeIndex, []>],
+    [ZKC_Apply<TypeVector, [OpVectorBitReverseRowsF]>], [ZKC_Holds<CapabilityField, [OpVectorBitReverseRowsF]>]> {
+  int ordinal = 197;
+}
+
 def OpVectorInterleaveF : ZKC_Root<"F", FieldDomain>;
 def OpVectorInterleave : ZKC_Operation<"vector.interleave", [OpVectorInterleaveF],
     [ZKC_Apply<TypeVector, [OpVectorInterleaveF]>, ZKC_Apply<TypeVector, [OpVectorInterleaveF]>],

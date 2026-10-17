@@ -231,6 +231,20 @@ even when disabled, the selection and equation have already executed.
 as their input; their empty result is empty. `vector.inverse` requires every
 entry to be nonzero. Prefix products permit zeros and never divide.
 
+`vector.bit_reverse<F>(v)` requires a length `n = 2^k` with `k >= 0` and
+returns `result[i] = v[rev_k(i)]`, where `rev_k` reverses the `k` low bits of
+`i`. `vector.bit_reverse_rows<F>(v,w)` treats `v` as a flat row-major table of
+width `w`; it requires `w > 0`, `length(v)` divisible by `w`, and a height
+`h = length(v)/w = 2^k`, and returns row `i` of the result equal to row
+`rev_k(i)` of the input, with the order within each row unchanged. A width of
+one is the element permutation. Both are involutions and preserve field
+identity and values. They refuse an empty or non-power-of-two height with
+`vector-bit-reversal` and a zero or non-dividing width with `vector-shape`, and
+take no attributes. They are positional, defined for every field independently
+of its characteristic or two-adic structure; they supply no evaluation-domain
+or polynomial meaning by themselves. A consumer that reads a bit-reversed layout
+as evaluations on a subgroup coset states that correspondence separately.
+
 `vector.fill<F>(x,n)` produces `n` copies of `x`; `vector.geometric<F>(x,n)`
 produces `[1,x,...,x^(n-1)]`. Both admit zero length and take a dynamic `index`.
 `vector.embed<E>` applies the declared `E.BaseField → E` embedding elementwise.

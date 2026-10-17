@@ -175,6 +175,8 @@ constexpr ContractRow contractRows[] = {
     {"vector.transpose", Arithmetic},
     {"vector.length", Arithmetic},
     {"vector.rotate", Arithmetic},
+    {"vector.bit_reverse", Arithmetic},
+    {"vector.bit_reverse_rows", Arithmetic},
     {"vector.interleave", Arithmetic},
     {"vector.prefix_product", Arithmetic},
     {"vector.prefix_sum", Arithmetic},
