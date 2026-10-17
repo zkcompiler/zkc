@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.FiatShamir.Interface
+public import ZkcSecurity.FiatShamir.Sampling
 public import ZkcSecurity.FiatShamir.Replay
 public import Zkc.Construction.Soundness
 public import VCVio.OracleComp.QueryTracking.RandomOracle.FreshQuery
@@ -185,6 +185,148 @@ def Balanced [SampleableType B] (decode : B → F) (loss : ENNReal) : Prop :=
 theorem balanced_id : Balanced (B := F) (id : F → F) 0 := fun _ => by simp
 
 end RoundByRound
+
+section Interface
+
+/-- The reply a received message event carries: the payload at the expected
+message occurrence, decoded at the expected type. -/
+def received (context : Context) (ty : Ty) (site : String) (sender : Nat) :
+    Event F G → Option (ScalarValue F G ty)
+  | .message origin payload =>
+      if origin = context.message site sender context.validator then payload.value ty else none
+  | _ => none
+
+/-- The transcript interface of the common participant actions: a receive
+absorbs its message occurrence with the payload and recovers the payload's value
+at the expected type, a send absorbs its message occurrence with the sent value
+(refusing a value without a payload), and every query absorbs its challenge
+occurrence and decodes the oracle answer with `decode`. -/
+def interface (context : Context) (decode : B → F) :
+    Typed.Interface (Actions F G) (Event F G) (Payload F G) B
+  | .receive ty site sender =>
+      .receive (fun payload => .message (context.message site sender context.validator) payload)
+        (received context ty site sender)
+  | .send (ty := ty) site receiver sent =>
+      match Payload.ofValue ty sent with
+      | some payload =>
+          .send (.message (context.message site context.validator receiver) payload) ()
+      | none => .refuse
+  | .query site _ _ => .query (.challenge (context.query site)) decode
+
+theorem received_message (context : Context) (ty : Ty) (site : String) (sender : Nat)
+    (payload : Payload F G) :
+    received context ty site sender (.message (context.message site sender context.validator)
+      payload) = payload.value ty := by
+  simp [received]
+
+/-- The transform of the participant actions is the transform over their
+interface, with the decoded oracle as challenge function. -/
+theorem transform_eq (context : Context) (decode : B → F) :
+    ∀ (process : PIR.Proc (Actions F G) A) (history : History F G) (proof : Proof F G),
+      transform context (decodedQuery decode) process history proof =
+        Typed.transform (interface context decode) Typed.answer process history proof := by
+  intro process
+  induction process with
+  | done value => intro history proof; rfl
+  | halt stop => intro history proof; rfl
+  | call operation next ih =>
+      intro history proof
+      cases operation with
+      | receive ty site sender =>
+          cases proof with
+          | nil => rfl
+          | cons payload rest =>
+              rw [Typed.transform_receive (interface context decode) _ rfl, received_message]
+              simp only [transform]
+              cases payload.value ty with
+              | none => rfl
+              | some value => exact ih value _ _
+      | query site op arguments =>
+          rw [Typed.transform_query (interface context decode) _ rfl]
+          simp only [transform, decodedQuery, bind_map_left, Typed.answer]
+          exact congrArg (_ >>= ·) (funext fun reply => ih _ _ _)
+      | send site receiver sent =>
+          simp only [transform]
+          cases encoded : Payload.ofValue _ sent with
+          | none =>
+              rw [Typed.transform_refuse (interface context decode) _ (by simp [interface, encoded])]
+          | some payload =>
+              rw [Typed.transform_send (interface context decode) _
+                (event := .message (context.message site context.validator receiver) payload)
+                (value := ()) (by simp [interface, encoded])]
+              exact ih () _ _
+
+/-- The query count of a participant process is its query count over the
+interface. -/
+theorem QueryBound.typed (context : Context) (decode : B → F) :
+    ∀ (process : PIR.Proc (Actions F G) A) (budget : ℕ), QueryBound process budget →
+      Typed.QueryBound (interface context decode) process budget
+  | .done _, _, _ => trivial
+  | .halt _, _, _ => trivial
+  | .call (.receive _ _ _) next, budget, bounded => fun value =>
+      QueryBound.typed context decode (next value) budget (bounded value)
+  | .call (.send (ty := ty) _ _ sent) next, budget, bounded => by
+      simp only [Typed.QueryBound, interface]
+      cases Payload.ofValue ty sent with
+      | none => trivial
+      | some payload => exact QueryBound.typed context decode (next ()) budget bounded
+  | .call (.query _ _ _) next, budget, bounded =>
+      ⟨bounded.1, fun reply => QueryBound.typed context decode _ (budget - 1) (bounded.2 _)⟩
+
+variable [SampleableType F] [SampleableType B]
+
+/-- A certificate over the interface from a round-by-round certificate and a
+bound `escape` that turns every escape bound under uniform field challenges into
+one under decoded answers. -/
+def RoundByRound.typed {accepts : A → Prop} {error : ENNReal} (bound : ENNReal)
+    (certificate : RoundByRound (F := F) (G := G) accepts error) (context : Context)
+    (decode : B → F)
+    (escape : ∀ event : F → Prop, Pr{let challenge ← $ᵗ F}[event challenge] ≤ error →
+      Pr{let answer ← $ᵗ B}[event (decode answer)] ≤ bound) :
+    Typed.Certificate (interface (G := G) context decode) accepts (fun _ => bound) where
+  doomed := certificate.doomed
+  step process member := by
+    cases process with
+    | done value => exact certificate.done value member
+    | halt stop => trivial
+    | call operation next =>
+        cases operation with
+        | receive ty site sender => exact certificate.receive ty site sender next member
+        | send site receiver sent =>
+            simp only [Typed.Step, interface]
+            cases Payload.ofValue _ sent with
+            | none => trivial
+            | some payload => exact certificate.send _ site receiver sent next member
+        | query site op arguments =>
+            exact escape _ (certificate.query site op arguments next member)
+
+/-- Balanced decoding adds its loss to every site's error. -/
+noncomputable def RoundByRound.balanced {accepts : A → Prop} {error loss : ENNReal}
+    (certificate : RoundByRound (F := F) (G := G) accepts error) (context : Context)
+    (decode : B → F) (balanced : Balanced decode loss) :
+    Typed.Certificate (interface (G := G) context decode) accepts (fun _ => error + loss) :=
+  certificate.typed (error + loss) context decode fun event bounded =>
+    (balanced event).trans (add_le_add_left bounded loss)
+
+/-- Dominated decoding multiplies every site's error by its factor. -/
+noncomputable def RoundByRound.dominated {accepts : A → Prop} {error factor : ENNReal}
+    (certificate : RoundByRound (F := F) (G := G) accepts error) (context : Context)
+    (decode : B → F) (dominated : Dominated decode factor) :
+    Typed.Certificate (interface (G := G) context decode) accepts (fun _ => factor * error) :=
+  certificate.typed (factor * error) context decode fun event bounded =>
+    dominated.escape_le event bounded
+
+omit [SampleableType F] [SampleableType B] in
+/-- The adaptive experiment is the experiment over the interface. -/
+theorem adaptiveExperiment_eq (context : Context) (decode : B → F)
+    (validator : Stmt → PIR.Proc (Actions F G) A) (initial : Stmt → History F G)
+    (prover : OracleComp (Oracle F G B) (Stmt × Proof F G)) :
+    adaptiveExperiment context decode validator initial prover =
+      Typed.experiment (interface context decode) validator initial prover := by
+  unfold adaptiveExperiment Typed.experiment
+  exact congrArg (prover >>= ·) (funext fun claimed => by rw [transform_eq])
+
+end Interface
 
 section Execution
 
@@ -520,6 +662,55 @@ theorem adaptive_soundness {accepts : A → Prop} {error loss : ENNReal}
   simpa only [Nat.cast_add] using bound
 
 end Bad
+
+section Decoded
+variable [DecidableEq F] [DecidableEq G] [SampleableType F] [SampleableType B]
+
+/-- Fiat–Shamir soundness with adaptively chosen statements and challenges whose
+decoding is dominated by `factor`: every event of the decoded challenge is at
+most `factor` times as likely as under the uniform field, for example when
+every point has probability at most `factor / |F|`. The round error is
+multiplied by the factor instead of being increased by an additive loss. -/
+theorem adaptive_soundness_dominated {accepts : A → Prop} {error factor : ENNReal}
+    (certificate : RoundByRound (F := F) (G := G) accepts error) (context : Context)
+    (decode : B → F) (dominated : Dominated decode factor)
+    (validator : Stmt → PIR.Proc (Actions F G) A) (initial : Stmt → History F G)
+    (determined : Determined initial) (falseStatement : Stmt → Prop)
+    (doomedValidator : ∀ statement, falseStatement statement →
+      certificate.doomed (validator statement))
+    (budget : ℕ) (validatorBound : ∀ statement, QueryBound (validator statement) budget)
+    (prover : OracleComp (Oracle F G B) (Stmt × Proof F G)) (queries : ℕ)
+    (proverBound : IsTotalQueryBound prover queries) :
+    Pr{let result ← (simulateQ randomOracle
+        (adaptiveExperiment context decode validator initial prover)).run' ∅}[
+      falseStatement result.1 ∧ Accepted accepts result.2.1] ≤
+      (queries + budget) * (factor * error) := by
+  rw [adaptiveExperiment_eq]
+  exact Typed.adaptive_soundness (certificate.dominated context decode dominated)
+    (fun _ => le_rfl) validator initial determined falseStatement doomedValidator budget
+    (fun statement => QueryBound.typed context decode _ budget (validatorBound statement))
+    prover queries proverBound
+
+/-- Fiat–Shamir soundness with adaptively chosen statements and exactly uniform
+decoded challenges: a bijective decoding keeps the round error unchanged. -/
+theorem adaptive_soundness_exact [Fintype F] [Fintype B] {accepts : A → Prop} {error : ENNReal}
+    (certificate : RoundByRound (F := F) (G := G) accepts error) (context : Context)
+    (decode : B → F) (bijective : Function.Bijective decode)
+    (validator : Stmt → PIR.Proc (Actions F G) A) (initial : Stmt → History F G)
+    (determined : Determined initial) (falseStatement : Stmt → Prop)
+    (doomedValidator : ∀ statement, falseStatement statement →
+      certificate.doomed (validator statement))
+    (budget : ℕ) (validatorBound : ∀ statement, QueryBound (validator statement) budget)
+    (prover : OracleComp (Oracle F G B) (Stmt × Proof F G)) (queries : ℕ)
+    (proverBound : IsTotalQueryBound prover queries) :
+    Pr{let result ← (simulateQ randomOracle
+        (adaptiveExperiment context decode validator initial prover)).run' ∅}[
+      falseStatement result.1 ∧ Accepted accepts result.2.1] ≤ (queries + budget) * error := by
+  simpa only [one_mul] using adaptive_soundness_dominated certificate context decode
+    (dominated_of_bijective bijective) validator initial determined falseStatement
+    doomedValidator budget validatorBound prover queries proverBound
+
+end Decoded
 
 section Fixed
 variable [DecidableEq F] [DecidableEq G] [SampleableType F]
