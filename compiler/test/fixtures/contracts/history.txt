@@ -214,3 +214,5 @@ encoding.fields_from_montgomery_le 0
 vector.bit_reverse 0
 vector.bit_reverse_rows 0
 hash.poseidon2_16 0
+oracle.open_many 0
+oracle.check_many 0

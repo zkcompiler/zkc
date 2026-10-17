@@ -139,6 +139,8 @@
       "oracle.commit",
       "oracle.open",
       "oracle.check",
+      "oracle.open_many",
+      "oracle.check_many",
       "commitments.empty",
       "commitments.append",
       "commitments.at",

@@ -116,13 +116,14 @@ def required_atomic_types():
         "multilinear.kzg.bls12-381/0": "commitment proof opening_state prover_key verifier_key",
         "rows.merkle-keccak256.koala-bear/0": "commitment proof opening_state commitments opening_states",
         "rows.merkle-keccak256.koala-bear.ext8-binomial3/0": "commitment proof opening_state commitments opening_states",
+        "rows.merkle-poseidon2-16.koala-bear/0": "commitment proof opening_state commitments opening_states",
         "merlin3.bls12-381.fr64be/0": "transcript",
         "merlin3.ristretto255.scalar64le/0": "transcript",
         "spongefish0.8.0.keccak.bls12-381.fr64be/0": "transcript",
         "merlin3.koala-bear.ext8-binomial3.rejection31le/0": "transcript",
     }
     result = {(kind, domain) for domain, kinds in families.items() for kind in kinds.split()}
-    assert len(result) == 65
+    assert len(result) == 70
     return result
 
 
@@ -271,7 +272,9 @@ def candidates(inventory):
                         "proof:rows.merkle-keccak256.koala-bear/0",
                         "proof:rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
                         "opening_state:rows.merkle-keccak256.koala-bear/0",
-                        "commitments:rows.merkle-keccak256.koala-bear/0"]]
+                        "commitments:rows.merkle-keccak256.koala-bear/0",
+                        "commitment:rows.merkle-poseidon2-16.koala-bear/0",
+                        "proof:rows.merkle-poseidon2-16.koala-bear/0"]]
         else:
             sort = {"field": "Field", "fixed": "Field", "array": "Field", "group": "Group",
                     "commitment": "Commitment", "transcript": "Transcript"}[group]
@@ -527,6 +530,9 @@ def test_explicit_semantic_witnesses(drivers, directory):
           "point:bls12-381.fr", "field:bls12-381.fr", "proof:multilinear.kzg.bls12-381/0"], ["bool"]),
         ("oracle.commit", ["rows.merkle-keccak256.koala-bear/0"], ["vector:koala-bear", "index"],
          ["commitment:rows.merkle-keccak256.koala-bear/0", "opening_state:rows.merkle-keccak256.koala-bear/0"]),
+        ("oracle.open_many", ["rows.merkle-poseidon2-16.koala-bear/0"],
+         ["opening_state:rows.merkle-poseidon2-16.koala-bear/0", "indices"],
+         ["vector:koala-bear", "proof:rows.merkle-poseidon2-16.koala-bear/0"]),
         ("transcript.native.indexed.challenge", ["merlin3.bls12-381.fr64be/0"],
          ["transcript:merlin3.bls12-381.fr64be/0", "indices"],
          ["field:bls12-381.fr", "transcript:merlin3.bls12-381.fr64be/0"]),

@@ -226,6 +226,8 @@ constexpr ExpectedMapping expected[] = {
     {"oracle.commit", "oracle.exec.commit"},
     {"oracle.open", "oracle.exec.open"},
     {"oracle.check", "oracle.exec.check"},
+    {"oracle.open_many", "oracle.exec.open_many"},
+    {"oracle.check_many", "oracle.exec.check_many"},
     {"commitments.empty", "oracle.exec.commitments_empty"},
     {"sequence.empty", "data.exec.sequence_empty"},
     {"sequence.append", "data.exec.sequence_append"},

@@ -1,4 +1,5 @@
 module zkc::oracle;
+use zkc::indices::{Indices};
 use zkc::vector::{Vector};
 
 // Row commitments. Width, row count and index remain explicit authentication
@@ -16,6 +17,14 @@ pub fn open<C: Commitment>(state: State<C>, position: index)
 pub fn check<C: Commitment>(root: Root<C>, width: index, rows: index,
     position: index, values: Vector<C::ValueField>, path: Path<C>) -> bool
     = primitive("oracle.check");
+// Schemes with MultiOpening: one pruned proof for several positions. Rows are
+// concatenated in position order, duplicates included; positions are the
+// verifier's own and must be nonempty and below the expected row count.
+pub fn open_many<C: Commitment>(state: State<C>, positions: Indices)
+    -> (Vector<C::ValueField>, Path<C>) = primitive("oracle.open_many");
+pub fn check_many<C: Commitment>(root: Root<C>, width: index, rows: index,
+    positions: Indices, values: Vector<C::ValueField>, proof: Path<C>) -> bool
+    = primitive("oracle.check_many");
 pub fn roots<C: Commitment>() -> Roots<C> = primitive("commitments.empty");
 pub fn append_root<C: Commitment>(items: Roots<C>, root: Root<C>) -> Roots<C>
     = primitive("commitments.append");

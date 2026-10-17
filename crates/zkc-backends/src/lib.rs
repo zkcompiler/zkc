@@ -9,6 +9,7 @@ mod external_kernels;
 pub mod hash;
 mod kernels;
 pub mod matrix;
+pub mod merkle;
 pub mod oracle;
 pub mod relation;
 mod resource;

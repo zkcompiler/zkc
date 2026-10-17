@@ -22,6 +22,10 @@ def CommitmentsLengthOp : KernelOp<OracleDialect, "exec.commitments_length", [Op
 
 def OracleOpenOp : KernelOp<OracleDialect, "exec.open", [OpOracleOpen]>;
 
+def OracleOpenManyOp : KernelOp<OracleDialect, "exec.open_many", [OpOracleOpenMany]>;
+
+def OracleCheckManyOp : KernelOp<OracleDialect, "exec.check_many", [OpOracleCheckMany]>;
+
 def OpeningStatesAppendOp : KernelOp<OracleDialect, "exec.opening_states_append", [OpOpeningStatesAppend]>;
 
 def OpeningStatesAtOp : KernelOp<OracleDialect, "exec.opening_states_at", [OpOpeningStatesAt]>;

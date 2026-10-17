@@ -86,3 +86,25 @@ def OpOpeningStatesLength : ZKC_Operation<"opening_states.length", [OpOpeningSta
     [ZKC_Apply<TypeIndex, []>], [ZKC_Holds<CapabilityVectorCommitment, [OpOpeningStatesLengthC]>]> {
   int ordinal = 119;
 }
+
+// One pruned authentication proof for several positions of one committed
+// table; rows are concatenated in position order, duplicates included.
+def OpOracleOpenManyC : ZKC_Root<"C", CommitmentDomain>;
+def OpOracleOpenManyValueField : ZKC_Project<OpOracleOpenManyC, CommitmentValueField>;
+def OpOracleOpenMany : ZKC_Operation<"oracle.open_many", [OpOracleOpenManyC, OpOracleOpenManyValueField],
+    [ZKC_Apply<TypeOpeningState, [OpOracleOpenManyC]>, ZKC_Apply<TypeIndices, []>],
+    [ZKC_Apply<TypeVector, [OpOracleOpenManyValueField]>, ZKC_Apply<TypeProof, [OpOracleOpenManyC]>],
+    [ZKC_Holds<CapabilityVectorCommitment, [OpOracleOpenManyC]>,
+     ZKC_Holds<CapabilityMultiOpening, [OpOracleOpenManyC]>]> {
+  int ordinal = 199;
+}
+
+def OpOracleCheckManyC : ZKC_Root<"C", CommitmentDomain>;
+def OpOracleCheckManyValueField : ZKC_Project<OpOracleCheckManyC, CommitmentValueField>;
+def OpOracleCheckMany : ZKC_Operation<"oracle.check_many", [OpOracleCheckManyC, OpOracleCheckManyValueField],
+    [ZKC_Apply<TypeCommitment, [OpOracleCheckManyC]>, ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndex, []>, ZKC_Apply<TypeIndices, []>, ZKC_Apply<TypeVector, [OpOracleCheckManyValueField]>, ZKC_Apply<TypeProof, [OpOracleCheckManyC]>],
+    [ZKC_Apply<TypeBool, []>],
+    [ZKC_Holds<CapabilityVectorCommitment, [OpOracleCheckManyC]>,
+     ZKC_Holds<CapabilityMultiOpening, [OpOracleCheckManyC]>]> {
+  int ordinal = 200;
+}

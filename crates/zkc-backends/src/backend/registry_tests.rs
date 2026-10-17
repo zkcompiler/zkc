@@ -277,6 +277,11 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
             "OracleState" => R::MerkleState,
             "OracleRoots" => R::MerkleRoots,
             "OracleStates" => R::MerkleStates,
+            "MerkleDigest" => R::MerkleDigest,
+            "MerkleProof" => R::MerkleProof,
+            "MerkleTree" => R::MerkleTree,
+            "MerkleDigests" => R::MerkleDigests,
+            "MerkleTrees" => R::MerkleTrees,
             "Index" => R::Index,
             "Indices" => R::Indices,
             "Bytes" => R::Bytes,
@@ -603,6 +608,46 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         Type::OpeningStates,
         I::MerkleKoalaBear,
         616 + std::mem::size_of::<crate::oracle::State>(),
+    );
+    // Digest-generic carriers share one byte allocation per digest list.
+    let (root, tree) = crate::merkle::commit::<crate::merkle::poseidon2::Base>(
+        vec![KoalaBear::new(1); 2],
+        shape,
+        4096,
+    )
+    .unwrap();
+    let proof = crate::merkle::open(&tree, &[0]).unwrap().1;
+    let tree = crate::merkle::State::Poseidon2KoalaBear(Arc::new(tree));
+    let scheme = crate::merkle::Scheme::Poseidon2KoalaBear;
+    check(
+        Value::MerkleDigest(scheme, root.clone().into()),
+        Type::Commitment,
+        I::MerklePoseidon2KoalaBear,
+        288,
+    );
+    check(
+        Value::MerkleProof(scheme, proof.into()),
+        Type::Proof,
+        I::MerklePoseidon2KoalaBear,
+        288,
+    );
+    check(
+        Value::MerkleTree(tree.clone()),
+        Type::OpeningState,
+        I::MerklePoseidon2KoalaBear,
+        360,
+    );
+    check(
+        Value::MerkleDigests(scheme, [root.clone(), root].concat().into()),
+        Type::Commitments,
+        I::MerklePoseidon2KoalaBear,
+        320,
+    );
+    check(
+        Value::MerkleTrees(scheme, [tree].into()),
+        Type::OpeningStates,
+        I::MerklePoseidon2KoalaBear,
+        616 + std::mem::size_of::<crate::merkle::State>(),
     );
     let logical = LogicalType::parse("fixed_vector<field:koala-bear,2>").unwrap();
     let fixed = Value::FixedVector(
@@ -1336,6 +1381,7 @@ fn every_exact_installation_has_a_supported_binding_and_impossible_owners_are_ab
         &["multilinear.kzg.bls12-381/0"],
         &["rows.merkle-keccak256.koala-bear/0"],
         &["rows.merkle-keccak256.koala-bear.ext8-binomial3/0"],
+        &["rows.merkle-poseidon2-16.koala-bear/0"],
         &["merlin3.bls12-381.fr64be/0"],
         &["merlin3.ristretto255.scalar64le/0"],
         &["merlin3.koala-bear.ext8-binomial3.rejection31le/0"],

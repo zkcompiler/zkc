@@ -209,6 +209,15 @@ impl Core {
                     .vector_width(states.len(), std::mem::size_of::<crate::oracle::State>())?;
                 None
             }
+            Value::MerkleDigest(..) | Value::MerkleProof(..) | Value::MerkleDigests(..) => {
+                crate::merkle::validate(v, &self.policy)?;
+                None
+            }
+            Value::MerkleTrees(_, trees) => {
+                self.policy
+                    .vector_width(trees.len(), std::mem::size_of::<crate::merkle::State>())?;
+                None
+            }
             Value::Shake128State(..)
             | Value::ResourceUnit(..)
             | Value::Bn254Field(..)
@@ -220,6 +229,7 @@ impl Core {
             | Value::Bls12381Gt(..)
             | Value::OracleRoot(..)
             | Value::OracleState(..)
+            | Value::MerkleTree(..)
             | Value::Index(..)
             | Value::KoalaBearExt8Field(..)
             | Value::KoalaBearExt8Round(..)

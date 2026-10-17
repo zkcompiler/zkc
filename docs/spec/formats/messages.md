@@ -97,6 +97,15 @@ rows and columns occupy offsets 6 and 10. Each coordinate/count is `u32`.
 | Sparse matrix | BLS 23, BN254 45, Ristretto 24, KoalaBear 25, ext8 30 | `18 + n*(8+w)`; each entry is row, column, canonical scalar | `n` elements |
 | Merkle root | KoalaBear 33, ext8 35 | 38 | one element |
 | Merkle path | KoalaBear 34, ext8 36 | `10 + 32*n`, at most 24 siblings | `n` elements |
+| Digest-generic Merkle root | 71 | `6 + w` | one element |
+| Digest-generic Merkle proof | 72 | `10 + w*n` | `n` elements |
+
+Digest-generic Merkle frames carry digests of the scheme's width `w` in its
+canonical encoding: `w = 32` and eight canonical four-byte little-endian words
+for `rows.merkle-poseidon2-16.koala-bear/0`. Decoding refuses a noncanonical
+word. A proof frame holds a single path or a pruned multi-opening proof in the
+[documented order](../domains/oracles.md#openings-and-the-pruned-proof); its
+count is bounded by the element ceiling, not by a path depth.
 
 Matrix entries must be in strictly increasing row/column order, in bounds and
 nonzero; decoding never normalizes or merges entries. Merkle framing checks

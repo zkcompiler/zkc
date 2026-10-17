@@ -39,6 +39,10 @@ domain validity, not polynomial identity, a degree bound or authentication.
 requires the root, width, number of rows, position, row and path. A successful
 row check establishes no polynomial evaluation or low-degree claim. `State`
 contains prover opening data; `Root` and `Path` are distinct native values.
+For schemes with `MultiOpening`, `open_many` returns the rows at several
+positions with one pruned proof and `check_many` authenticates them; the
+verifier supplies the positions, which must be nonempty. The proof layout is in
+the [oracle contract](../../docs/spec/domains/oracles.md#openings-and-the-pruned-proof).
 
 `scalar::inverse` and vector inversion refuse zero. Vector arithmetic and
 layout operations retain native shape checks. `scalar::power` uses an unsigned

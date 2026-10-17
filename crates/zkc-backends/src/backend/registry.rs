@@ -232,6 +232,11 @@ pub(super) fn installed() -> Result<&'static Registry> {
                 Signature::Custom(crate::oracle::signature),
                 oracle,
             )?;
+            r.family(
+                crate::merkle::IMPLEMENTATIONS,
+                Signature::Custom(crate::merkle::signature),
+                merkle,
+            )?;
             r.pure_family(
                 crate::field_array::IMPLEMENTATIONS,
                 Signature::Custom(crate::field_array::signature),
@@ -418,6 +423,9 @@ fn external(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result
 }
 fn oracle(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
     crate::oracle::apply(&i.binding.declaration().contract, args, i, &b.core.policy)
+}
+fn merkle(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
+    crate::merkle::apply(&i.binding.declaration().contract, args, i, &b.core.policy)
 }
 pub(crate) fn diagonal(
     b: &mut NativeBackend,

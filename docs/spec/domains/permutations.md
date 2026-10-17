@@ -64,4 +64,5 @@ different charges.
 Poseidon2 here is a primitive, not a hash function. Collision resistance of a
 sponge, the binding of a Merkle commitment, or a random-oracle model for a
 transcript are properties of the construction and its parameters, stated with
-that construction; they do not follow from installing this operation.
+that construction; they do not follow from installing this operation. The
+[Poseidon2 Merkle scheme](oracles.md#poseidon2-instance) states its modes.
