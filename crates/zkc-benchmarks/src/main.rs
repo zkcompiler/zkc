@@ -60,6 +60,7 @@ enum Backend {
         inputs: Vec<host::Input>,
         preparation: bool,
         preparation_entries: Option<usize>,
+        preparation_bytes: Option<usize>,
     },
     Run {
         package: PathBuf,
@@ -175,6 +176,7 @@ fn run() -> Result<Report> {
             inputs,
             preparation,
             preparation_entries,
+            preparation_bytes,
         } => host::run(
             &request,
             package,
@@ -182,6 +184,7 @@ fn run() -> Result<Report> {
             inputs,
             *preparation,
             *preparation_entries,
+            *preparation_bytes,
         )?,
         Backend::Run {
             package,

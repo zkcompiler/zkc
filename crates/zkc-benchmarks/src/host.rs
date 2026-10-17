@@ -71,6 +71,7 @@ pub fn run(
     inputs: &[Input],
     preparation: bool,
     preparation_entries: Option<usize>,
+    preparation_bytes: Option<usize>,
 ) -> Result<Report> {
     if job.operation == Operation::Run || inputs.is_empty() {
         return Err("proof worker requires proof inputs and a proof operation".into());
@@ -96,10 +97,10 @@ pub fn run(
     let defaults = zkc_runtime::interactive::PreparationLimits::default();
     let mut limits = defaults;
     if let Some(entries) = preparation_entries {
-        if entries > defaults.entries {
-            return Err("preparation control may only lower the default entry bound".into());
-        }
         limits.entries = entries;
+    }
+    if let Some(bytes) = preparation_bytes {
+        limits.bytes = bytes;
     }
     if !preparation {
         limits.entries = 0;

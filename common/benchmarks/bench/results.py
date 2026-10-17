@@ -66,8 +66,6 @@ def validate_worker(report, plan, boundary):
         if boundary == 'admitted_entry_call':
             require(isinstance(limits, dict) and set(limits) == {'entries', 'bytes', 'default_entries', 'default_bytes'}
                     and all(type(v) is int and v >= 0 for v in limits.values()), 'invalid preparation limits')
-            require(limits['entries'] <= limits['default_entries'] and limits['bytes'] <= limits['default_bytes'],
-                    'preparation raised the default bounds')
         else:
             require(limits is None, 'unexpected preparation limits')
         for name in ('capture_ns', 'admit_ns', 'diagnostics_ns'):
@@ -77,6 +75,7 @@ def validate_worker(report, plan, boundary):
             require(lifecycle[name] is None or type(lifecycle[name]) is int and lifecycle[name] >= 0, f'invalid {name}')
         calls = lifecycle['calls']
         require(isinstance(calls, list) and len(calls) == len(values)*plan['iterations'], 'incomplete lifecycle calls')
+        previous_hits = 0
         for call in calls:
             require(isinstance(call, dict) and {'input_index', 'decode_ns'} <= call.keys()
                     and not (call.keys() - {'input_index', 'decode_ns', 'preparation', 'execution_counts'}), 'invalid lifecycle call')
@@ -85,7 +84,15 @@ def validate_worker(report, plan, boundary):
             if boundary == 'admitted_entry_call':
                 require('preparation' in call, 'missing preparation statistics')
             if 'preparation' in call:
-                validate_preparation(call['preparation'])
+                stats = call['preparation']
+                validate_preparation(stats)
+                require(stats['hits'] >= previous_hits, 'preparation hits moved backwards')
+                previous_hits = stats['hits']
+                if limits is not None:
+                    require(stats['entries'] <= limits['entries'] and stats['retained_bytes'] <= limits['bytes'],
+                            'preparation exceeded its resource contract')
+                    if limits['entries'] == 0 or limits['bytes'] == 0:
+                        require(all(value == 0 for value in stats.values()), 'disabled preparation retained state')
             require(('execution_counts' in call) == counted, 'call observation capability mismatch')
             if counted:
                 validate_counts(call['execution_counts'])
