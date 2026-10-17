@@ -88,7 +88,7 @@ theorem helper_equation (xs : List F) (x : F) (divisor : Nat) :
     invoke (program.payload.meanings F G) appendSummaryHelper (inputs xs x divisor) =
       reference xs x divisor :=
   (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-    program.payload appendSummaryDefinition (List.get_find?_mem _)
+    program.payload appendSummaryDefinition appendSummary_member
     appendSummaryBody appendSummary_exact (inputs xs x divisor)).trans
       (body_equation _ xs x divisor)
 
@@ -159,7 +159,7 @@ theorem original_division_zero_sites {I : PIR.Signature} (sites : SiteObservatio
         (Evaluation.meaning sites (Evaluation.payloadMeanings sites program.payload))
         (inputs xs x 0).get :=
     Evaluation.payload_invoke_body_view (F := F) (G := G) sites
-      program.payload appendSummaryDefinition (List.get_find?_mem _)
+      program.payload appendSummaryDefinition appendSummary_member
       appendSummaryBody appendSummary_exact (inputs xs x 0)
   refine (Evaluation.payload_denote_body_view (F := F) (G := G) sites
     program.payload entryBody entry_exact (inputs xs x 0)).trans ?_

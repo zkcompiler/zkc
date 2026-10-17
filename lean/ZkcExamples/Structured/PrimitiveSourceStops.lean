@@ -23,7 +23,7 @@ theorem zero_columns (xs : List F) (dimension : Nat) :
   have helper : invoke (program.payload.meanings F G) shapeHelper (inputs xs dimension 0) =
       .done (boolResult false) :=
     (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-      program.payload shapeDefinition (List.get_find?_mem _)
+      program.payload shapeDefinition shape_member
       shapeBody shape_exact (inputs xs dimension 0)).trans
         (shape_zero_columns _ PrimitiveLibraryConsumers.Shape.less_law xs dimension)
   refine (Evaluation.payload_denote_body_view (F := F) (G := G) SiteObservations.closed
@@ -43,7 +43,7 @@ theorem large_dimension (xs : List F) (dimension columns : Nat) (positive : 0 < 
   have helper : invoke (program.payload.meanings F G) shapeHelper (inputs xs dimension columns) =
       .done (boolResult false) :=
     (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-      program.payload shapeDefinition (List.get_find?_mem _)
+      program.payload shapeDefinition shape_member
       shapeBody shape_exact (inputs xs dimension columns)).trans
         (shape_large_dimension _ PrimitiveLibraryConsumers.Shape.less_law xs dimension columns
           positive columnsBound dimensionBound large)
@@ -64,7 +64,7 @@ theorem length_exhausted (xs : List F) (dimension columns : Nat) (positive : 0 <
   have helper : invoke (program.payload.meanings F G) shapeHelper (inputs xs dimension columns) =
       .halt .exhausted :=
     (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-      program.payload shapeDefinition (List.get_find?_mem _)
+      program.payload shapeDefinition shape_member
       shapeBody shape_exact (inputs xs dimension columns)).trans
         (shape_length_exhausted _ PrimitiveLibraryConsumers.Shape.less_law xs dimension columns
           positive columnsBound dimensionSmall lengthInvalid)

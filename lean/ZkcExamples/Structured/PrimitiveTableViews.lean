@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Structured.PrimitiveTableData
-public import Zkc.Source.Structured.Linking
+public import Zkc.Source.Structured.UnitViews
 public import Zkc.Source.Structured.ClosedProfile
 
 @[expose] public section
@@ -12,24 +12,13 @@ The original exporter and constructor renderer remain executable trust boundarie
 
 namespace ZkcExamples.Structured.PrimitiveTableViews
 open Zkc.Source Zkc.Source.Structured
-set_option maxRecDepth 20000
-set_option maxHeartbeats 8000000
 set_option smartUnfolding false
-
-def program : ClosedProgram :=
-  (checkClosed PrimitiveTableData.snapshot).toOption.get (by decide +kernel)
-def imported : ClosedImported PrimitiveTableData.snapshot := ⟨program, rfl⟩
 
 set_option smartUnfolding true in
 def entryBody : Region dialect [.vector "bls12-381.fr", .index, .index] [.vector "bls12-381.fr", .index, .index] :=
   .letOp (.mark "s0") .nil .nil <|
   .letOp (.invoke ⟨"zkl_8ef40b11d6cf00ead63fb713e26ae93987287c607cdcdc4860180f6744dc588a", .local, [.vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr", .index, .index]⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
   .ret (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))
-
-theorem entry_exact : program.payload.entry.raw = entryBody.erase := rfl
-
-def tableDefinition : CheckedDefinition :=
-  (program.payload.definitions.find? (·.name == "zkl_8ef40b11d6cf00ead63fb713e26ae93987287c607cdcdc4860180f6744dc588a")).get (by decide +kernel)
 
 abbrev tableHelper : Helper := ⟨"zkl_8ef40b11d6cf00ead63fb713e26ae93987287c607cdcdc4860180f6744dc588a", .local, [.vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr", .index, .index]⟩
 
@@ -40,11 +29,6 @@ def tableBody : Region dialect [.vector "bls12-381.fr", .index, .index] [.vector
   .letOp (.mark "s1") .nil .nil <|
   .letOp (.branch [] []) (.cons .here .nil) (.cons (.ret .nil) (.cons (.letOp (.mark "s1_reject") .nil .nil (.stop .reject)) .nil)) <|
   .ret (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) .nil)))
-
-theorem table_exact : tableDefinition.raw = tableBody.erase := rfl
-
-def shapeDefinition : CheckedDefinition :=
-  (program.payload.definitions.find? (·.name == "zkl_84866a528a9e472fae644df45c457b704b5e44f2a5edb0a5aa068a3ce5519655")).get (by decide +kernel)
 
 abbrev shapeHelper : Helper := ⟨"zkl_84866a528a9e472fae644df45c457b704b5e44f2a5edb0a5aa068a3ce5519655", .local, [.vector "bls12-381.fr", .index, .index], [.boolean]⟩
 
@@ -88,11 +72,6 @@ def shapeBody : Region dialect [.vector "bls12-381.fr", .index, .index] [.boolea
   .ret (.cons .here .nil)) .nil)) <|
   .ret (.cons .here .nil)
 
-theorem shape_exact : shapeDefinition.raw = shapeBody.erase := rfl
-
-def lessDefinition : CheckedDefinition :=
-  (program.payload.definitions.find? (·.name == "s3h7a6b637h696e64696365734h6c657373")).get (by decide +kernel)
-
 abbrev lessHelper : Helper := ⟨"s3h7a6b637h696e64696365734h6c657373", .local, [.index, .index], [.boolean]⟩
 
 set_option smartUnfolding true in
@@ -100,11 +79,6 @@ def lessBody : Region dialect [.index, .index] [.boolean] :=
   .letOp (.mark "s0") .nil .nil <|
   .letOp (.exec (.indexLess)) (.cons .here (.cons (.there .here) .nil)) .nil <|
   .ret (.cons .here .nil)
-
-theorem less_exact : lessDefinition.raw = lessBody.erase := rfl
-
-def rowsDefinition : CheckedDefinition :=
-  (program.payload.definitions.find? (·.name == "s3h7a6b6311h6d756c74696c696e6561724h726f7773")).get (by decide +kernel)
 
 abbrev rowsHelper : Helper := ⟨"s3h7a6b6311h6d756c74696c696e6561724h726f7773", .local, [.index], [.index]⟩
 
@@ -128,6 +102,23 @@ def rowsBody : Region dialect [.index] [.index] :=
   .ret (.cons .here .nil)) .nil) <|
   .ret (.cons .here .nil)
 
-theorem rows_exact : rowsDefinition.raw = rowsBody.erase := rfl
+def protocolSignature : ProtocolSignature where
+  name := "s18h7072696d69746976655f6578616d706c65739h4d616b655461626c65"
+  roles := ["role00000000"]
+  inputs := [.vector "bls12-381.fr", .index, .index]
+  outputs := [.vector "bls12-381.fr", .index, .index]
+  inputScopes := [[0], [0], [0]]
+  outputScopes := [[0], [0], [0]]
+
+set_option smartUnfolding true in
+def protocolBody : Region protocolDialect [.vector "bls12-381.fr", .index, .index] [.vector "bls12-381.fr", .index, .index] :=
+  .letOp (.mark "s0") .nil .nil <|
+  .letOp (.localCall ⟨"zkl_8ef40b11d6cf00ead63fb713e26ae93987287c607cdcdc4860180f6744dc588a", .local, [.vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr", .index, .index]⟩ rfl 0 "s0") (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
+  .ret (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))
+
+structured_closed_views PrimitiveTableData.snapshot
+  helpers [table, shape, less, rows]
+  protocols [protocol]
+  root entryBody
 
 end ZkcExamples.Structured.PrimitiveTableViews

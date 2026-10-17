@@ -3,6 +3,7 @@ module
 public import Zkc.Source.Structured.Import
 public import Zkc.Source.Structured.Association
 public import Zkc.Source.Structured.OpenLaws
+public import Zkc.Source.Structured.ClosedProfile
 public import Zkc.Source.KernelRfl
 public meta import Lean.Elab.Command
 
@@ -81,6 +82,27 @@ theorem checkUnitProtocols_of_checked {snapshot : Snapshot} {domains : List Doma
     simp only [ordering, Except.map, Except.ok.injEq] at order
     simp only [checkUnitProtocols, sources, ordering, order, bind, Except.bind, pure, Except.pure]
 
+/-- Closed admission from whole-unit admission and the checked closed projection. -/
+theorem checkClosed_of_check {snapshot : Snapshot} {subject : Program} {payload : Payload}
+    (admitted : check snapshot = .ok subject) (projected : subject.closedPayload = .ok payload) :
+    checkClosed snapshot = .ok ⟨subject, payload, projected⟩ := by
+  unfold checkClosed
+  split
+  · rename_i code failed
+    rw [admitted] at failed
+    cases failed
+  · rename_i checked accepted
+    rw [admitted] at accepted
+    cases accepted
+    split
+    · rename_i code failed
+      rw [projected] at failed
+      cases failed
+    · rename_i result same
+      rw [projected] at same
+      cases same
+      rfl
+
 /-- Split an ordered `mapM` over a literal list into its element equations. -/
 theorem mapM_cons_ok {α β : Type} {f : α → Except String β} {head : α} {tail : List α}
     {first : β} {rest : List β} (headEq : f head = .ok first) (tailEq : tail.mapM f = .ok rest) :
@@ -155,6 +177,16 @@ structure Entry where
   signature : Term
   body : Term
 
+/-- Names of the unit-level declarations; a closed subject keeps the plain names
+for its closed projection. -/
+structure Naming where
+  program : Name := `program
+  imported : Name := `imported
+  admission : Name := `kernel_admission
+  helperRaw : String := "_raw"
+  helperBody : String := "_body"
+  closed : Bool := false
+
 meta def suffixed (base : Name) (suffix : String) : Name :=
   match base with
   | .str parent last => .str parent (last ++ suffix)
@@ -172,6 +204,12 @@ syntax structuredViewEntry := ident (" := " (ident <|> ("(" term ", " term ")"))
 /-- Emit a literal checked unit and its named admission phases. -/
 syntax (name := structuredViews) "structured_views " term:max
   &" helpers" " [" structuredViewEntry,* "]" &" protocols" " [" structuredViewEntry,* "]" : command
+
+/-- Emit a literal checked unit of the closed single-role profile. The unit is
+named `subject`; `program` is its closed projection with root body `root`. -/
+syntax (name := structuredClosedViews) "structured_closed_views " term:max
+  &" helpers" " [" structuredViewEntry,* "]" &" protocols" " [" structuredViewEntry,* "]"
+  &" root" term:max : command
 
 /-- Emit membership, full signature, raw tree and association for each body of a
 unit emitted by `structured_views` in the given namespace. -/
@@ -220,8 +258,8 @@ meta def natPairs (expression : Expr) : MetaM (List (Nat × Nat)) := do
     return (← natValue first, ← natValue second)
 
 /-- Generated declarations: literal payload, admission phases and source facts. -/
-meta def emitViews (snapshot : Term) (helperEntries protocolEntries : Array Entry) :
-    CommandElabM Unit := do
+meta def emitViews (snapshot : Term) (helperEntries protocolEntries : Array Entry)
+    (naming : Naming := {}) : CommandElabM Entry := do
   let (helperOrder, protocolOrder, snapshotProtocols, entryIndex, domains, summaries) ←
       liftTermElabM do
     let retainedTerm ← `(List.map Definition.name (List.filter
@@ -277,8 +315,9 @@ meta def emitViews (snapshot : Term) (helperEntries protocolEntries : Array Entr
   for entry in helperEntries do
     let definition := definitionIdent entry
     elabCommand (← `(def $definition : CheckedDefinition := CheckedDefinition.ofBody $(entry.signature) $(entry.body)))
-    elabCommand (← `(theorem $(theoremIdent entry "_raw") : ($definition).raw = ($(entry.body)).erase := rfl))
-    elabCommand (← `(theorem $(theoremIdent entry "_body") : ($definition).body = $(entry.body) := rfl))
+    elabCommand (← `(theorem $(theoremIdent entry naming.helperRaw) :
+        ($definition).raw = ($(entry.body)).erase := rfl))
+    elabCommand (← `(theorem $(theoremIdent entry naming.helperBody) : ($definition).body = $(entry.body) := rfl))
   for entry in protocolEntries do
     let definition := definitionIdent entry
     elabCommand (← `(def $definition : CheckedProtocol := CheckedProtocol.ofBody $(entry.signature) $(entry.body)))
@@ -296,7 +335,7 @@ meta def emitViews (snapshot : Term) (helperEntries protocolEntries : Array Entr
   let domainsId := mkIdent `domains
   let summariesId := mkIdent `summaries
   let unitId := mkIdent `unit
-  let programId := mkIdent `program
+  let programId := mkIdent naming.program
   elabCommand (← `(def $definitionsId : List CheckedDefinition := [$definitionsList,*]))
   elabCommand (← `(def $orderedId : List OrderedDefinition := [$orderedList,*]))
   elabCommand (← `(def $headersId : List ProtocolSignature := [$headersList,*]))
@@ -348,22 +387,24 @@ meta def emitViews (snapshot : Term) (helperEntries protocolEntries : Array Entr
       linkUnitPayload $snapshot $orderedId ($unitId).protocols = .ok $unitId :=
       linkUnitPayload_of_payload _ _ _ rfl rfl))
   elabCommand (← `(/-- All declarations, callback trees and metadata phases of the original unit. -/
-    theorem $(mkIdent `kernel_admission) : check $snapshot = .ok $programId :=
+    theorem $(mkIdent naming.admission) : check $snapshot = .ok $programId :=
       check_parts _ $unitId (check_payload_of_phases $(mkIdent `headers_checked) $(mkIdent `helpers_checked)
         $(mkIdent `protocols_checked) $(mkIdent `metadata_checked) $(mkIdent `payload_linked))))
-  let importedId := mkIdent `imported
-  elabCommand (← `(def $importedId : Imported $snapshot := ⟨$programId, $(mkIdent `kernel_admission)⟩))
-  elabCommand (← `(theorem $(mkIdent `exact_subject) : ($programId).snapshot = $snapshot :=
-      ($importedId).exactSubject))
+  let importedId := mkIdent naming.imported
+  elabCommand (← `(def $importedId : Imported $snapshot := ⟨$programId, $(mkIdent naming.admission)⟩))
+  unless naming.closed do
+    elabCommand (← `(theorem $(mkIdent `exact_subject) : ($programId).snapshot = $snapshot :=
+        ($importedId).exactSubject))
   for entry in protocolOrder do
     elabCommand (← `(theorem $(theoremIdent entry "_member") : $(definitionIdent entry) ∈ ($unitId).protocols :=
       by structured_mem))
   let some entry := protocolOrder[entryIndex]? | throwError "structured_views: missing entry protocol"
-  elabCommand (← `(theorem $(mkIdent `entry_selection) : ($unitId).entry = $(definitionIdent entry) := rfl))
-  elabCommand (← `(theorem $(mkIdent `entry_signature) :
-      ($programId).payload.entry.signature = $(entry.signature) := rfl))
-  elabCommand (← `(theorem $(mkIdent `entry_raw) :
-      ($programId).payload.entry.raw = ($(entry.body)).erase := rfl))
+  unless naming.closed do
+    elabCommand (← `(theorem $(mkIdent `entry_selection) : ($unitId).entry = $(definitionIdent entry) := rfl))
+    elabCommand (← `(theorem $(mkIdent `entry_signature) :
+        ($programId).payload.entry.signature = $(entry.signature) := rfl))
+    elabCommand (← `(theorem $(mkIdent `entry_raw) :
+        ($programId).payload.entry.raw = ($(entry.body)).erase := rfl))
   elabCommand (← `(/-- Complete original-to-checked association includes every nested callback. -/
     theorem $(mkIdent `complete_protocol_source) (definition : CheckedProtocol)
       (member : definition ∈ ($unitId).protocols) :
@@ -388,11 +429,51 @@ meta def emitViews (snapshot : Term) (helperEntries protocolEntries : Array Entr
             checkProtocol $snapshot domains summaries function headers = .ok other →
               other = definition :=
       ($importedId).protocolChecked member kind))
+  return entry
 
 @[command_elab structuredViews] meta def elabStructuredViews : CommandElab := fun stx => do
   let helperEntries ← stx[4].getSepArgs.mapM (parseEntry "Helper")
   let protocolEntries ← stx[8].getSepArgs.mapM (parseEntry "Signature")
-  emitViews ⟨stx[1]⟩ helperEntries protocolEntries
+  discard <| emitViews ⟨stx[1]⟩ helperEntries protocolEntries
+
+@[command_elab structuredClosedViews] meta def elabStructuredClosedViews : CommandElab := fun stx => do
+  let snapshot : Term := ⟨stx[1]⟩
+  let rootBody : Term := ⟨stx[11]⟩
+  let helperEntries ← stx[4].getSepArgs.mapM (parseEntry "Helper")
+  let protocolEntries ← stx[8].getSepArgs.mapM (parseEntry "Signature")
+  let entry ← emitViews snapshot helperEntries protocolEntries
+    { program := `subject, imported := `subjectImported, admission := `subject_admission,
+      helperRaw := "_exact", helperBody := "_body_exact", closed := true }
+  let signature := entry.signature
+  let program := mkIdent `program
+  let imported := mkIdent `imported
+  elabCommand (← `(def $(mkIdent `root) : ClosedRoot :=
+      ⟨($signature).name, ($signature).inputs, ($signature).outputs, ($rootBody).erase, $rootBody,
+        ($rootBody).elaborate_erase⟩))
+  elabCommand (← `(def $(mkIdent `payload) : Payload where
+      definitions := $(mkIdent `definitions)
+      entry := $(mkIdent `root)
+      linked := ($(mkIdent `unit)).linked
+      entryLinked := by decide +kernel))
+  elabCommand (← `(def $program : ClosedProgram :=
+      ⟨$(mkIdent `subject), $(mkIdent `payload), by kernel_rfl⟩))
+  elabCommand (← `(/-- Complete actual-source admission, including the closed projection. -/
+    theorem $(mkIdent `kernel_admission) : checkClosed $snapshot = .ok $program :=
+      checkClosed_of_check $(mkIdent `subject_admission) ($program).projected))
+  elabCommand (← `(def $imported : ClosedImported $snapshot := ⟨$program, $(mkIdent `kernel_admission)⟩))
+  elabCommand (← `(theorem $(mkIdent `exact_subject) : ($program).snapshot = $snapshot :=
+      ($imported).exactSubject))
+  elabCommand (← `(theorem $(theoremIdent entry "_selected") :
+      ($program).subject.payload.entry = $(definitionIdent entry) := rfl))
+  elabCommand (← `(theorem $(theoremIdent entry "_exact") :
+      ($program).subject.payload.entry.raw = ($(entry.body)).erase := rfl))
+  elabCommand (← `(theorem $(theoremIdent entry "_body_exact") :
+      ($program).subject.payload.entry.body = $(entry.body) := rfl))
+  elabCommand (← `(theorem $(mkIdent `entry_exact) : ($program).payload.entry.raw = ($rootBody).erase := rfl))
+  elabCommand (← `(theorem $(mkIdent `entry_body_exact) : ($program).payload.entry.body = $rootBody := rfl))
+  for helper in helperEntries do
+    elabCommand (← `(theorem $(theoremIdent helper "_member") :
+        $(definitionIdent helper) ∈ ($program).payload.definitions := by structured_mem))
 
 @[command_elab structuredAssociations] meta def elabStructuredAssociations : CommandElab := fun stx => do
   let views := stx[1].getId
