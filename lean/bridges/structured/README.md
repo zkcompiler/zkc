@@ -229,6 +229,27 @@ translator.
 [Formal support](../../docs/support.md#finite-fold-subjects) states the proved
 process equations for both subjects.
 
+### Typed bodies and generated views
+
+A proof subject is admitted from literal typed bodies: `structured_views`
+(or `structured_closed_views` for a single-role closed root) emits the checked
+payload and one kernel equation per admission phase from them. `bodies.py`
+prints those bodies for a retained snapshot:
+
+```sh
+python3 lean/bridges/structured/bodies.py \
+  --data ZkcExamples.Structured.SchnorrHelpersData \
+  --namespace ZkcExamples.Structured.SchnorrHelpersBodies \
+  --name s13h7363686e6f72725f666f726d738h726573706f6e7365=response \
+  --output build/experiments/bodies/SchnorrHelpersBodies.lean
+```
+
+It admits the snapshot with the checker in a scratch module, materializes each
+checked helper, protocol and (with `--closed`) projected root body, and prints
+them as `<|` chains. `--name` replaces the default `helperN`/`protocolN` names.
+The printed module is ordinary source, not an admission certificate: a wrong
+or stale body fails the generated phase equations.
+
 ## Open participants
 
 The open suite compares the original native SSA interpreter with the independently

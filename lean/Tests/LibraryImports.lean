@@ -292,6 +292,7 @@ import ZkcExamples.Structured.PrimitiveHalvesViews
 import ZkcExamples.Structured.PrimitiveLibrary
 import ZkcExamples.Structured.PrimitiveLibraryConsumers
 import ZkcExamples.Structured.PrimitivePureIndex
+import ZkcExamples.Structured.PrimitivePureIndexBodies
 import ZkcExamples.Structured.PrimitivePureIndexData
 import ZkcExamples.Structured.PrimitiveRows
 import ZkcExamples.Structured.PrimitiveSequence
