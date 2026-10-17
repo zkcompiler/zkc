@@ -28,9 +28,11 @@ import ZkcSecurity.Examples.CausalSumcheck.SourceContracts
 import ZkcSecurity.Examples.CausalSumcheck.SourceVerifier
 import ZkcSecurity.Examples.CausalSumcheck.Terminal
 import ZkcSecurity.Examples.CausalSumcheck.UniformService
+import ZkcSecurity.Examples.ChaumPedersenSigma
 import ZkcSecurity.Examples.CompiledSchnorrFiatShamir
 import ZkcSecurity.Examples.ExecutableSchnorrFiatShamir
 import ZkcSecurity.Examples.Schnorr
+import ZkcSecurity.Examples.SchnorrAndSigma
 import ZkcSecurity.Examples.StructuredSchnorr
 import ZkcSecurity.Examples.StructuredSchnorrFiatShamir
 import ZkcSecurity.Examples.StructuredSchnorrHonestView
@@ -46,6 +48,8 @@ import ZkcSecurity.VCVio.Composition
 import ZkcSecurity.VCVio.Coupling
 import ZkcSecurity.VCVio.Execution
 import ZkcSecurity.VCVio.Schnorr
+import ZkcSecurity.VCVio.SigmaAnd
+import ZkcSecurity.VCVio.SigmaAndSchnorr
 import ZkcSecurity.VCVio.StructuredUniform
 import TestsSecurity.CallComposition
 import TestsSecurity.CausalSumcheck.Contracts
@@ -62,6 +66,8 @@ import TestsSecurity.LocalCoupling
 import TestsSecurity.LocalCouplingAudit
 import TestsSecurity.LocalCouplingClients
 import TestsSecurity.MultilinearSumcheck
+import TestsSecurity.SigmaComposition
+import TestsSecurity.SigmaCompositionFiatShamir
 import TestsSecurity.StructuredSchnorrFiatShamir
 import TestsSecurity.StructuredSchnorrSigma
 import TestsSecurity.StructuredSemanticDependencies
