@@ -64,7 +64,10 @@ program instead of requiring it to be unchanged.
    lowering rule's `validate_ideal` and `validate_rejects`) and the Entry's
    per-compile checks (`SchnorrProof.compiled`, the executable `accepted`), and
    must not reach `ZkcExamples.Construction.SchnorrProof.spec_equation`: the
-   chain uses no equation specific to this Entry.
+   chain uses no equation specific to this Entry about the compiled program. The
+   walk also records whether the chain reaches the original-stage equation
+   `SchnorrProof.process_equation`, which ties the admitted original to the
+   Schnorr experiment the VCVio consumer uses.
 6. `receipt.json` names the compiler, runtime, Lean toolchain and manifest
    identities, the source module, original, export, program, deployment,
    descriptor and package digests, the Lean data digests, the runtime's

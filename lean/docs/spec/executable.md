@@ -130,7 +130,10 @@ transcript-construction and participant projection rules
 any budget of at least 25, under the Entry's checked occurrence context, the
 executable's observations and challenge interaction are those of the
 Fiat–Shamir transform of the original Proof Entry's verifier on the decoded
-proof.
+proof. The only Entry-specific equation on the chain is on the original side:
+`SchnorrProof.process_equation`, kernel-checked, equates the admitted original
+Proof Entry's validator with the common Schnorr experiment that the VCVio
+consumer uses.
 `executable_validate` and `executable_rejects` state host validation in the same
 terms.
 

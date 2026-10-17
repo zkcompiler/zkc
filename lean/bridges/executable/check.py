@@ -107,6 +107,11 @@ USED = [
 UNUSED = [
     "ZkcExamples.Construction.SchnorrProof.spec_equation",
 ]
+# Per-protocol equations about the original program, recorded in the receipt: they
+# tie the admitted original to the protocol experiment the security library uses.
+ORIGINAL = [
+    "ZkcExamples.Construction.SchnorrProof.process_equation",
+]
 
 
 def digest(data):
@@ -212,7 +217,7 @@ class Driver:
         """The axiom closure of every theorem in the receipt's chain, and the declarations
         the byte-level theorem's proof reaches."""
         path = self.output / "ReceiptAxioms.lean"
-        queried = USED + UNUSED
+        queried = USED + UNUSED + ORIGINAL
         path.write_text(
             "import ZkcSecurity.Examples.ExecutableSchnorrFiatShamir\n\n"
             + "".join(f"#print axioms {name}\n" for name in CHAIN)
@@ -252,7 +257,9 @@ class Driver:
             self.check(f"proof-uses:{name}", reached.get(name) == "true", json.dumps(reached.get(name)))
         for name in UNUSED:
             self.check(f"proof-avoids:{name}", reached.get(name) == "false", json.dumps(reached.get(name)))
-        self.dependencies = dict(uses=USED, avoids=UNUSED)
+        self.dependencies = dict(uses=USED, avoids=UNUSED,
+                                 original_stage_equations={name: reached.get(name) == "true"
+                                                           for name in ORIGINAL})
         return found
 
     # The Lean lowering rule on the fresh program and on mutations.
