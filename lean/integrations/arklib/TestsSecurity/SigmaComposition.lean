@@ -9,8 +9,9 @@ and additive group, with no hardness claim.
   complete, specially sound and specially HVZK, so their composition is too.
 * An unshared challenge fails: when each component receives its own challenge,
   two accepting transcripts can differ only in the second component's
-  challenge, and the first component then yields no witness. A statement with
-  base zero and key one has no witness, yet such a pair is accepted.
+  challenge. For a first statement without any witness (base zero, key one)
+  such a pair is accepted, so no extractor makes that composition specially
+  sound.
 * A shared witness cannot be claimed: two accepting transcripts of the
   composition with distinct challenges exist for keys zero and one at base one,
   where no single witness exists, so no extractor makes the composition
@@ -20,7 +21,6 @@ namespace TestsSecurity.SigmaComposition
 open OracleComp ZkcSecurity.VCVio ZkcSecurity.VCVio.SigmaAnd
 
 instance : Fact (Nat.Prime 5) := ⟨by decide⟩
-noncomputable local instance : SampleableType (ZMod 5) := SampleableType.ofFintype _
 
 abbrev Scalar := ZMod 5
 
@@ -29,7 +29,7 @@ abbrev Scalar := ZMod 5
 theorem premises (firstBase secondBase : Scalar) :
     (_root_.Schnorr.sigma Scalar Scalar firstBase).PerfectlyComplete ∧
       (_root_.Schnorr.sigma Scalar Scalar firstBase).SpeciallySound ∧
-      (_root_.Schnorr.sigma Scalar Scalar firstBase).SpecialHVZK
+      SpecialHVZK (_root_.Schnorr.sigma Scalar Scalar firstBase).toChallengeVerifyProtocol
         (SigmaAndSchnorr.simulate Scalar Scalar firstBase) ∧
       (SigmaAndSchnorr.sigma Scalar Scalar firstBase secondBase).PerfectlyComplete ∧
       (SigmaAndSchnorr.sigma Scalar Scalar firstBase secondBase).SpeciallySound :=
@@ -41,7 +41,7 @@ theorem premises (firstBase secondBase : Scalar) :
 
 theorem zero_knowledge (firstBase secondBase : Scalar) :
     (SigmaAndSchnorr.sigma Scalar Scalar firstBase secondBase).PerfectHVZK
-      (ChallengeVerifyProtocol.challengeFirst (simulateAnd (SigmaAndSchnorr.simulate Scalar Scalar firstBase)
+      (challengeFirst (simulateAnd (SigmaAndSchnorr.simulate Scalar Scalar firstBase)
         (SigmaAndSchnorr.simulate Scalar Scalar secondBase))) :=
   SigmaAndSchnorr.hvzk Scalar Scalar firstBase secondBase
 
@@ -50,9 +50,11 @@ theorem zero_knowledge (firstBase secondBase : Scalar) :
 variable {Stmt₁ Wit₁ Commit₁ State₁ Resp₁ Stmt₂ Wit₂ Commit₂ State₂ Resp₂ Chal : Type}
   {rel₁ : Stmt₁ → Wit₁ → Bool} {rel₂ : Stmt₂ → Wit₂ → Bool}
 
-/-- Parallel composition in which each component receives its own challenge. -/
+/-- Parallel composition in which each component receives its own challenge,
+with an arbitrary extractor. -/
 def unshared (first : SigmaProtocol Stmt₁ Wit₁ Commit₁ State₁ Chal Resp₁ rel₁)
-    (second : SigmaProtocol Stmt₂ Wit₂ Commit₂ State₂ Chal Resp₂ rel₂) :
+    (second : SigmaProtocol Stmt₂ Wit₂ Commit₂ State₂ Chal Resp₂ rel₂)
+    (extract : Chal × Chal → Resp₁ × Resp₂ → Chal × Chal → Resp₁ × Resp₂ → ProbComp (Wit₁ × Wit₂)) :
     SigmaProtocol (Stmt₁ × Stmt₂) (Wit₁ × Wit₂) (Commit₁ × Commit₂) (State₁ × State₂) (Chal × Chal)
       (Resp₁ × Resp₂) (andRelation rel₁ rel₂) where
   commit := (and first second).commit
@@ -64,19 +66,23 @@ def unshared (first : SigmaProtocol Stmt₁ Wit₁ Commit₁ State₁ Chal Resp�
     first.verify statement.1 commitment.1 challenge.1 response.1 &&
       second.verify statement.2 commitment.2 challenge.2 response.2
   sim := (and first second).sim
-  extract challenge₁ response₁ challenge₂ response₂ := do
-    let witness₁ ← first.extract challenge₁.1 response₁.1 challenge₂.1 response₂.1
-    let witness₂ ← second.extract challenge₁.2 response₁.2 challenge₂.2 response₂.2
-    pure (witness₁, witness₂)
+  extract := extract
 
-/-- The first statement, base zero and key one, has no witness; the transcripts
-differ only in the second challenge. -/
-theorem unshared_not_speciallySound :
-    ¬ (unshared (_root_.Schnorr.sigma Scalar Scalar 0) (_root_.Schnorr.sigma Scalar Scalar 1)).SpeciallySound := by
+/-- The first statement, base zero and key one, has no witness, yet two
+transcripts that differ only in the second challenge are accepted. Whatever
+extractor is chosen, the unshared composition is not specially sound. -/
+theorem unshared_not_speciallySound
+    (extract : Scalar × Scalar → Scalar × Scalar → Scalar × Scalar → Scalar × Scalar →
+      ProbComp (Scalar × Scalar)) :
+    ¬ (unshared (_root_.Schnorr.sigma Scalar Scalar 0) (_root_.Schnorr.sigma Scalar Scalar 1)
+      extract).SpeciallySound := by
   intro sound
-  have extracted := sound (1, 0) (0, 0) (0, 0) (0, 1) (0, 0) (0, 0) (by decide) (by decide) (by decide)
-    (0, 0) (by simp [unshared, _root_.Schnorr.sigma])
-  revert extracted
+  obtain ⟨witness, extracted⟩ := support_nonempty (extract (0, 0) (0, 0) (0, 1) (0, 0))
+  have holds := sound (1, 0) (0, 0) (0, 0) (0, 1) (0, 0) (0, 0) (by decide) rfl rfl witness extracted
+  clear extracted sound
+  revert holds
+  rcases witness with ⟨first, second⟩
+  revert first second
   decide
 
 /-! ### A shared witness claimed for the composition -/

@@ -7,13 +7,14 @@ public import Mathlib.Algebra.Order.Field.Rat
 
 /-! Controls for the imported Schnorr AND and Chaum–Pedersen protocols.
 
-The extraction premises are satisfiable: the actual provers' sends for one
-nonce choice and two distinct challenges are accepted by the actual verifiers,
-and extraction returns the honest witnesses. Over the rationals with bases one
-and keys zero and one, the AND verifier accepts two transcripts that share their
-commitments and differ in the challenge, although no single witness exists: a
-shared challenge does not make the witnesses shared. The Chaum–Pedersen
-verifier accepts no such pair for that statement. -/
+The extraction premises are satisfiable: honest transcripts for one nonce
+choice and two distinct challenges, with the values the admitted provers send,
+are accepted by the actual verifiers, and extraction returns the honest
+witnesses. Over the rationals with bases one and keys zero and one, the AND
+verifier accepts two transcripts that share their commitments and differ in the
+challenge, although no single witness exists: a shared challenge does not make
+the witnesses shared. For that statement the Chaum–Pedersen verifier accepts
+single transcripts but no such pair. -/
 namespace ZkcExamples.Structured.SigmaCompositionControls
 open Zkc.Source Zkc.Source.Structured SigmaLogicalContexts
 
@@ -82,15 +83,18 @@ theorem pair_accepts_without_common_witness (service : Nat) :
   have one : (1 : ℚ) = witness := by simpa using equations.2
   exact zero_ne_one (zero.trans one.symm)
 
-/-- For the same statement, the actual Chaum–Pedersen verifier accepts no pair
-of transcripts with common commitments and distinct challenges: their shared
-extraction would be a common witness. -/
-theorem equality_rejects_without_common_witness (service : Nat) (commitments : ℚ × ℚ)
+/-- For the same statement, the actual Chaum–Pedersen verifier accepts a single
+transcript, but no pair of transcripts with common commitments and distinct
+challenges: their shared extraction would be a common witness. -/
+theorem equality_accepts_no_pair_without_common_witness (service : Nat) (commitments : ℚ × ℚ)
     (first second firstResponse secondResponse : ℚ) (distinct : first ≠ second) :
+    ChaumPedersenBinding.decisionSelector.read {} (ChaumPedersenBinding.observedBoundary (1 : ℚ) 0 1 1
+        service (0, 0) (0 : ℚ) (0 : ℚ)) = some true ∧
     ¬ (ChaumPedersenBinding.decisionSelector.read {} (ChaumPedersenBinding.observedBoundary (1 : ℚ) 0 1 1
         service commitments first firstResponse) = some true ∧
       ChaumPedersenBinding.decisionSelector.read {} (ChaumPedersenBinding.observedBoundary (1 : ℚ) 0 1 1
         service commitments second secondResponse) = some true) := by
+  refine ⟨(ChaumPedersenBinding.observed_accepts_iff ..).mpr (by norm_num), ?_⟩
   rintro ⟨acceptFirst, acceptSecond⟩
   have shared := shared_extraction (1 : ℚ) 0 1 1 service commitments first second firstResponse
     secondResponse distinct acceptFirst acceptSecond

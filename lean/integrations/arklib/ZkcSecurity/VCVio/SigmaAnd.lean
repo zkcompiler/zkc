@@ -19,15 +19,129 @@ The premises are stated per property:
 * zero knowledge composes from *special* honest-verifier zero knowledge: for every
   fixed challenge, the honest commitment and response are distributed as a
   simulator that is given that challenge. VCVio's `PerfectHVZK` lets each
-  simulator choose its own challenge, which two components cannot share.
-  `SpecialHVZK.of_perfectHVZK` recovers the per-challenge form from a full
-  transcript simulator that draws a uniform challenge first, over a finite
-  challenge space; `SpecialHVZK.perfectHVZK` returns to VCVio's form.
+  simulator choose its own challenge, so two component simulators do not
+  directly yield one transcript with a shared challenge. `SpecialHVZK.perfectHVZK`
+  gives VCVio's form with the challenge-first simulator;
+  `SpecialHVZK.of_perfectHVZK` recovers the per-challenge form from a
+  challenge-first simulator over a finite challenge space.
 -/
 
 open OracleComp OracleSpec
 
 namespace ZkcSecurity.VCVio.SigmaAnd
+
+/-! ### Special honest-verifier zero knowledge -/
+
+section Special
+
+variable {Stmt Wit Commit State Chal Resp : Type} {rel : Stmt → Wit → Bool}
+
+/-- The honest commitment and response for one fixed challenge. -/
+def honestAt (σ : ChallengeVerifyProtocol Stmt Wit Commit State Chal Resp rel) (statement : Stmt)
+    (witness : Wit) (challenge : Chal) : ProbComp (Commit × Resp) := do
+  let (commitment, state) ← σ.commit statement witness
+  let response ← σ.respond statement witness state challenge
+  pure (commitment, response)
+
+set_option linter.deprecated false in
+/-- Special honest-verifier zero knowledge: for every valid statement and
+witness and every challenge, the honest commitment and response have exactly
+the distribution of `simulate statement challenge`, which receives no witness.
+Like VCVio's `PerfectHVZK`, it compares the executable `SPMF` semantics, which
+VCVio is retiring; using the same semantics lets the two be converted. -/
+def SpecialHVZK (σ : ChallengeVerifyProtocol Stmt Wit Commit State Chal Resp rel)
+    (simulate : Stmt → Chal → ProbComp (Commit × Resp)) : Prop :=
+  ∀ statement witness, rel statement witness = true → ∀ challenge,
+    𝒮[honestAt σ statement witness challenge] = 𝒮[simulate statement challenge]
+
+/-- The full transcript simulator that draws a uniform challenge first. -/
+def challengeFirst [SampleableType Chal] (simulate : Stmt → Chal → ProbComp (Commit × Resp))
+    (statement : Stmt) : ProbComp (Commit × Chal × Resp) := do
+  let challenge ← $ᵗ Chal
+  let (commitment, response) ← simulate statement challenge
+  pure (commitment, challenge, response)
+
+/-- A full transcript with the challenge placed between commitment and response. -/
+def withChallenge (challenge : Chal) (result : Commit × Resp) : Commit × Chal × Resp :=
+  (result.1, challenge, result.2)
+
+theorem withChallenge_injective (challenge : Chal) :
+    Function.Injective (withChallenge (Commit := Commit) (Resp := Resp) challenge) := by
+  intro first second same
+  simp only [withChallenge, Prod.mk.injEq] at same
+  exact Prod.ext same.1 same.2.2
+
+theorem challengeFirst_eq [SampleableType Chal] (simulate : Stmt → Chal → ProbComp (Commit × Resp))
+    (statement : Stmt) :
+    challengeFirst simulate statement =
+      ($ᵗ Chal) >>= fun challenge => withChallenge challenge <$> simulate statement challenge := by
+  unfold challengeFirst withChallenge
+  simp [monad_norm]
+
+set_option linter.deprecated false in
+/-- The honest commitment is drawn independently of the uniform challenge that
+follows it, so the real transcript can draw the challenge first. -/
+theorem evalSPMF_realTranscript [SampleableType Chal]
+    (σ : ChallengeVerifyProtocol Stmt Wit Commit State Chal Resp rel) (statement : Stmt)
+    (witness : Wit) :
+    𝒮[σ.realTranscript statement witness] =
+      𝒮[($ᵗ Chal) >>= fun challenge =>
+        withChallenge challenge <$> honestAt σ statement witness challenge] := by
+  unfold ChallengeVerifyProtocol.realTranscript honestAt withChallenge
+  rw [evalSPMF_bind_bind_swap]
+  simp [monad_norm]
+
+set_option linter.deprecated false in
+/-- Special HVZK gives VCVio's perfect HVZK with the challenge-first simulator. -/
+theorem SpecialHVZK.perfectHVZK [SampleableType Chal]
+    {σ : ChallengeVerifyProtocol Stmt Wit Commit State Chal Resp rel}
+    {simulate : Stmt → Chal → ProbComp (Commit × Resp)} (special : SpecialHVZK σ simulate) :
+    σ.PerfectHVZK (challengeFirst simulate) := by
+  intro statement witness valid
+  rw [evalSPMF_realTranscript, challengeFirst_eq]
+  refine evalSPMF_bind_congr' _ fun challenge => ?_
+  exact evalSPMF_map_eq_of_evalSPMF_eq (special statement witness valid challenge) _
+
+set_option linter.deprecated false in
+/-- Over a finite challenge space, a challenge-first transcript assigns each
+transcript with challenge `challenge` the uniform weight of that challenge times
+the per-challenge probability of its commitment and response. -/
+theorem probOutput_challengeFirst [SampleableType Chal] [Fintype Chal]
+    (computation : Chal → ProbComp (Commit × Resp)) (challenge : Chal) (result : Commit × Resp) :
+    Pr[= withChallenge challenge result | ($ᵗ Chal) >>= fun drawn =>
+        withChallenge drawn <$> computation drawn] =
+      (Fintype.card Chal : ENNReal)⁻¹ * Pr[= result | computation challenge] := by
+  classical
+  rw [probOutput_bind_eq_tsum, tsum_eq_single challenge]
+  · rw [probOutput_uniformSample, probOutput_map_injective _ (withChallenge_injective challenge)]
+  · intro other different
+    rw [probOutput_map_eq_tsum_ite]
+    simp only [withChallenge, Prod.mk.injEq]
+    simp [Ne.symm different]
+
+set_option linter.deprecated false in
+/-- Conversely, over a finite challenge space, perfect HVZK with a
+challenge-first simulator gives special HVZK: conditioning on each challenge,
+which has positive uniform weight, separates the two transcript distributions. -/
+theorem SpecialHVZK.of_perfectHVZK [SampleableType Chal] [Fintype Chal]
+    {σ : ChallengeVerifyProtocol Stmt Wit Commit State Chal Resp rel}
+    {simulate : Stmt → Chal → ProbComp (Commit × Resp)}
+    (perfect : σ.PerfectHVZK (challengeFirst simulate)) : SpecialHVZK σ simulate := by
+  intro statement witness valid challenge
+  have total := perfect statement witness valid
+  rw [evalSPMF_realTranscript, challengeFirst_eq] at total
+  apply evalSPMF_ext
+  intro result
+  have weighted := evalSPMF_ext_iff.mp total (withChallenge challenge result)
+  rw [probOutput_challengeFirst, probOutput_challengeFirst] at weighted
+  have positive : (Fintype.card Chal : ENNReal)⁻¹ ≠ 0 := ENNReal.inv_ne_zero.mpr (ENNReal.natCast_ne_top _)
+  have finite : (Fintype.card Chal : ENNReal)⁻¹ ≠ ⊤ := by
+    simp [Fintype.card_ne_zero]
+  exact (ENNReal.mul_right_inj positive finite).mp weighted
+
+end Special
+
+/-! ### The composition -/
 
 variable {Stmt₁ Wit₁ Commit₁ State₁ Resp₁ Stmt₂ Wit₂ Commit₂ State₂ Resp₂ Chal : Type}
   {rel₁ : Stmt₁ → Wit₁ → Bool} {rel₂ : Stmt₂ → Wit₂ → Bool}
@@ -62,6 +176,14 @@ def and (first : SigmaProtocol Stmt₁ Wit₁ Commit₁ State₁ Chal Resp₁ re
     let witness₁ ← first.extract challenge₁ response₁.1 challenge₂ response₂.1
     let witness₂ ← second.extract challenge₁ response₁.2 challenge₂ response₂.2
     pure (witness₁, witness₂)
+
+/-- Both component simulators receive the same challenge. -/
+def simulateAnd (simulate₁ : Stmt₁ → Chal → ProbComp (Commit₁ × Resp₁))
+    (simulate₂ : Stmt₂ → Chal → ProbComp (Commit₂ × Resp₂)) (statement : Stmt₁ × Stmt₂)
+    (challenge : Chal) : ProbComp ((Commit₁ × Commit₂) × (Resp₁ × Resp₂)) := do
+  let (commitment₁, response₁) ← simulate₁ statement.1 challenge
+  let (commitment₂, response₂) ← simulate₂ statement.2 challenge
+  pure ((commitment₁, commitment₂), (response₁, response₂))
 
 variable (first : SigmaProtocol Stmt₁ Wit₁ Commit₁ State₁ Chal Resp₁ rel₁)
   (second : SigmaProtocol Stmt₂ Wit₂ Commit₂ State₂ Chal Resp₂ rel₂)
@@ -109,146 +231,21 @@ theorem speciallySound (sound₁ : first.SpeciallySound) (sound₂ : second.Spec
     sound₂ statement.2 commitment.2 challenge₁ challenge₂ response₁.2 response₂.2 distinct
       accepted₁.2 accepted₂.2 witness₂ extracted₂⟩
 
-end ZkcSecurity.VCVio.SigmaAnd
-
-namespace ChallengeVerifyProtocol
-
-variable {Stmt Wit Commit State Chal Resp : Type} {rel : Stmt → Wit → Bool}
-
-/-- The honest commitment and response for one fixed challenge. -/
-def honestAt (σ : ChallengeVerifyProtocol Stmt Wit Commit State Chal Resp rel) (statement : Stmt)
-    (witness : Wit) (challenge : Chal) : ProbComp (Commit × Resp) := do
-  let (commitment, state) ← σ.commit statement witness
-  let response ← σ.respond statement witness state challenge
-  pure (commitment, response)
-
-set_option linter.deprecated false in
-/-- Special honest-verifier zero knowledge: for every valid statement and
-witness and every challenge, the honest commitment and response have exactly
-the distribution of `simulate statement challenge`, which receives no witness.
-Like VCVio's `PerfectHVZK`, it compares the executable `SPMF` semantics, which
-VCVio is retiring; using the same semantics lets the two be converted. -/
-def SpecialHVZK (σ : ChallengeVerifyProtocol Stmt Wit Commit State Chal Resp rel)
-    (simulate : Stmt → Chal → ProbComp (Commit × Resp)) : Prop :=
-  ∀ statement witness, rel statement witness = true → ∀ challenge,
-    𝒮[σ.honestAt statement witness challenge] = 𝒮[simulate statement challenge]
-
-/-- The full transcript simulator that draws a uniform challenge first. -/
-def challengeFirst [SampleableType Chal] (simulate : Stmt → Chal → ProbComp (Commit × Resp))
-    (statement : Stmt) : ProbComp (Commit × Chal × Resp) := do
-  let challenge ← $ᵗ Chal
-  let (commitment, response) ← simulate statement challenge
-  pure (commitment, challenge, response)
-
-/-- A full transcript with the challenge placed between commitment and response. -/
-def withChallenge (challenge : Chal) (result : Commit × Resp) : Commit × Chal × Resp :=
-  (result.1, challenge, result.2)
-
-theorem withChallenge_injective (challenge : Chal) :
-    Function.Injective (withChallenge (Commit := Commit) (Resp := Resp) challenge) := by
-  intro first second same
-  simp only [withChallenge, Prod.mk.injEq] at same
-  exact Prod.ext same.1 same.2.2
-
-theorem challengeFirst_eq [SampleableType Chal] (simulate : Stmt → Chal → ProbComp (Commit × Resp))
-    (statement : Stmt) :
-    challengeFirst simulate statement =
-      ($ᵗ Chal) >>= fun challenge => withChallenge challenge <$> simulate statement challenge := by
-  unfold challengeFirst withChallenge
-  simp [monad_norm]
-
-set_option linter.deprecated false in
-/-- The honest commitment is drawn independently of the uniform challenge that
-follows it, so the real transcript can draw the challenge first. -/
-theorem evalSPMF_realTranscript [SampleableType Chal]
-    (σ : ChallengeVerifyProtocol Stmt Wit Commit State Chal Resp rel) (statement : Stmt)
-    (witness : Wit) :
-    𝒮[σ.realTranscript statement witness] =
-      𝒮[($ᵗ Chal) >>= fun challenge =>
-        withChallenge challenge <$> σ.honestAt statement witness challenge] := by
-  unfold realTranscript honestAt withChallenge
-  rw [evalSPMF_bind_bind_swap]
-  simp [monad_norm]
-
-set_option linter.deprecated false in
-/-- Special HVZK gives VCVio's perfect HVZK with the challenge-first simulator. -/
-theorem SpecialHVZK.perfectHVZK [SampleableType Chal]
-    {σ : ChallengeVerifyProtocol Stmt Wit Commit State Chal Resp rel}
-    {simulate : Stmt → Chal → ProbComp (Commit × Resp)} (special : σ.SpecialHVZK simulate) :
-    σ.PerfectHVZK (challengeFirst simulate) := by
-  intro statement witness valid
-  rw [evalSPMF_realTranscript, challengeFirst_eq]
-  refine evalSPMF_bind_congr' _ fun challenge => ?_
-  exact evalSPMF_map_eq_of_evalSPMF_eq (special statement witness valid challenge) _
-
-set_option linter.deprecated false in
-/-- Over a finite challenge space, a challenge-first transcript assigns each
-transcript with challenge `challenge` the uniform weight of that challenge times
-the per-challenge probability of its commitment and response. -/
-theorem probOutput_challengeFirst [SampleableType Chal] [Fintype Chal]
-    (computation : Chal → ProbComp (Commit × Resp)) (challenge : Chal) (result : Commit × Resp) :
-    Pr[= withChallenge challenge result | ($ᵗ Chal) >>= fun drawn =>
-        withChallenge drawn <$> computation drawn] =
-      (Fintype.card Chal : ENNReal)⁻¹ * Pr[= result | computation challenge] := by
-  classical
-  rw [probOutput_bind_eq_tsum, tsum_eq_single challenge]
-  · rw [probOutput_uniformSample, probOutput_map_injective _ (withChallenge_injective challenge)]
-  · intro other different
-    rw [probOutput_map_eq_tsum_ite]
-    simp only [withChallenge, Prod.mk.injEq]
-    simp [Ne.symm different]
-
-set_option linter.deprecated false in
-/-- Conversely, over a finite challenge space, perfect HVZK with a
-challenge-first simulator gives special HVZK: conditioning on each challenge,
-which has positive uniform weight, separates the two transcript distributions. -/
-theorem SpecialHVZK.of_perfectHVZK [SampleableType Chal] [Fintype Chal]
-    {σ : ChallengeVerifyProtocol Stmt Wit Commit State Chal Resp rel}
-    {simulate : Stmt → Chal → ProbComp (Commit × Resp)}
-    (perfect : σ.PerfectHVZK (challengeFirst simulate)) : σ.SpecialHVZK simulate := by
-  intro statement witness valid challenge
-  have total := perfect statement witness valid
-  rw [evalSPMF_realTranscript, challengeFirst_eq] at total
-  apply evalSPMF_ext
-  intro result
-  have weighted := evalSPMF_ext_iff.mp total (withChallenge challenge result)
-  rw [probOutput_challengeFirst, probOutput_challengeFirst] at weighted
-  have positive : (Fintype.card Chal : ENNReal)⁻¹ ≠ 0 := ENNReal.inv_ne_zero.mpr (ENNReal.natCast_ne_top _)
-  have finite : (Fintype.card Chal : ENNReal)⁻¹ ≠ ⊤ := by
-    simp [Fintype.card_ne_zero]
-  exact (ENNReal.mul_right_inj positive finite).mp weighted
-
-end ChallengeVerifyProtocol
-
-namespace ZkcSecurity.VCVio.SigmaAnd
-
-variable {Stmt₁ Wit₁ Commit₁ State₁ Resp₁ Stmt₂ Wit₂ Commit₂ State₂ Resp₂ Chal : Type}
-  {rel₁ : Stmt₁ → Wit₁ → Bool} {rel₂ : Stmt₂ → Wit₂ → Bool}
-
-/-- Both component simulators receive the same challenge. -/
-def simulateAnd (simulate₁ : Stmt₁ → Chal → ProbComp (Commit₁ × Resp₁))
-    (simulate₂ : Stmt₂ → Chal → ProbComp (Commit₂ × Resp₂)) (statement : Stmt₁ × Stmt₂)
-    (challenge : Chal) : ProbComp ((Commit₁ × Commit₂) × (Resp₁ × Resp₂)) := do
-  let (commitment₁, response₁) ← simulate₁ statement.1 challenge
-  let (commitment₂, response₂) ← simulate₂ statement.2 challenge
-  pure ((commitment₁, commitment₂), (response₁, response₂))
-
 set_option linter.deprecated false in
 /-- Special HVZK composes under one shared challenge: the second component's
 commitment is drawn independently of the first component's response. -/
-theorem specialHVZK (first : SigmaProtocol Stmt₁ Wit₁ Commit₁ State₁ Chal Resp₁ rel₁)
-    (second : SigmaProtocol Stmt₂ Wit₂ Commit₂ State₂ Chal Resp₂ rel₂)
-    {simulate₁ : Stmt₁ → Chal → ProbComp (Commit₁ × Resp₁)}
+theorem specialHVZK {simulate₁ : Stmt₁ → Chal → ProbComp (Commit₁ × Resp₁)}
     {simulate₂ : Stmt₂ → Chal → ProbComp (Commit₂ × Resp₂)}
-    (special₁ : first.SpecialHVZK simulate₁) (special₂ : second.SpecialHVZK simulate₂) :
-    (and first second).SpecialHVZK (simulateAnd simulate₁ simulate₂) := by
+    (special₁ : SpecialHVZK first.toChallengeVerifyProtocol simulate₁)
+    (special₂ : SpecialHVZK second.toChallengeVerifyProtocol simulate₂) :
+    SpecialHVZK (and first second).toChallengeVerifyProtocol (simulateAnd simulate₁ simulate₂) := by
   intro statement witness valid challenge
   simp only [andRelation, Bool.and_eq_true] at valid
-  have separated : 𝒮[(and first second).honestAt statement witness challenge] =
-      𝒮[first.honestAt statement.1 witness.1 challenge >>= fun result₁ =>
-        second.honestAt statement.2 witness.2 challenge >>= fun result₂ =>
+  have separated : 𝒮[honestAt (and first second).toChallengeVerifyProtocol statement witness challenge] =
+      𝒮[honestAt first.toChallengeVerifyProtocol statement.1 witness.1 challenge >>= fun result₁ =>
+        honestAt second.toChallengeVerifyProtocol statement.2 witness.2 challenge >>= fun result₂ =>
           pure ((result₁.1, result₂.1), (result₁.2, result₂.2))] := by
-    unfold ChallengeVerifyProtocol.honestAt and
+    unfold honestAt and
     simp only [bind_assoc, pure_bind]
     refine evalSPMF_bind_congr' _ fun committed₁ => ?_
     rw [evalSPMF_bind_bind_swap]

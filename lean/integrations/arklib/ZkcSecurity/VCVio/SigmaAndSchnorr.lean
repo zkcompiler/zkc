@@ -29,13 +29,13 @@ def simulate (base key : G) (challenge : F) : ProbComp (G × F) := do
 
 omit [SampleableType G] [DecidableEq G] in
 theorem challengeFirst_simulate (base : G) :
-    ChallengeVerifyProtocol.challengeFirst (simulate F G base) = _root_.Schnorr.simTranscript F G base := by
+    challengeFirst (simulate F G base) = _root_.Schnorr.simTranscript F G base := by
   funext key
-  simp [ChallengeVerifyProtocol.challengeFirst, simulate, _root_.Schnorr.simTranscript, monad_norm]
+  simp [challengeFirst, simulate, _root_.Schnorr.simTranscript, monad_norm]
 
 theorem specialHVZK [Fintype F] (base : G) :
-    (_root_.Schnorr.sigma F G base).SpecialHVZK (simulate F G base) := by
-  apply ChallengeVerifyProtocol.SpecialHVZK.of_perfectHVZK
+    SpecialHVZK (_root_.Schnorr.sigma F G base).toChallengeVerifyProtocol (simulate F G base) := by
+  apply SpecialHVZK.of_perfectHVZK
   rw [challengeFirst_simulate]
   exact _root_.Schnorr.sigma_hvzk F G base
 
@@ -53,7 +53,7 @@ theorem speciallySound (firstBase secondBase : G) : (sigma F G firstBase secondB
     (_root_.Schnorr.sigma_speciallySound F G secondBase)
 
 theorem hvzk [Fintype F] (firstBase secondBase : G) :
-    (sigma F G firstBase secondBase).PerfectHVZK (ChallengeVerifyProtocol.challengeFirst
+    (sigma F G firstBase secondBase).PerfectHVZK (challengeFirst
       (simulateAnd (simulate F G firstBase) (simulate F G secondBase))) :=
   (SigmaAnd.specialHVZK _ _ (specialHVZK F G firstBase) (specialHVZK F G secondBase)).perfectHVZK
 

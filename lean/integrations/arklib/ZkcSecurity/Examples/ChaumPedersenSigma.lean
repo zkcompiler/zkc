@@ -14,10 +14,13 @@ pair: `response • (first, second) = commitment + challenge • (firstKey,
 secondKey)` is exactly the two checked equations. Completeness, special
 soundness and perfect HVZK are therefore the pinned upstream theorems, with no
 new protocol mathematics; the shared witness is the product's single scalar.
+Its prover algorithms are VCVio's; `prover_sends` shows that, for every nonce
+and challenge, the values the admitted prover sends are possible outputs of
+those algorithms, so completeness and HVZK concern VCVio's uniform-nonce prover.
 Knowledge soundness of the Fiat–Shamir transform comes from VCVio's replay
 extractor and is stated for the retained `DLogEquality` formula, which
-`SigmaLogicalContexts.shared_iff` equates with the shared logical context at
-every verifier boundary. -/
+`SigmaLogicalContexts.shared_iff` equates with the shared logical context at the
+observed boundary of every actual verifier run. -/
 
 namespace ZkcSecurity.Examples.ChaumPedersenSigma
 open OracleComp OracleSpec

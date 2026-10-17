@@ -10,16 +10,24 @@ public import ZkcExamples.Structured.ChaumPedersenBinding
 logical vocabulary.
 
 Both compositions are read through the component relation they combine: the
-`DLog` relation retained by the Schnorr subject, keyed by its declaration. Each
-atom observes a base and a key at the actual verifier's input ports of the
-composed protocol and reads its witness from a lexical binder. Chaum–Pedersen
-uses one binder in both atoms; Schnorr AND uses two. The composed protocols'
-own retained formulas (`DLogEquality`, `DLogPair`) have their own identities, so
-reusing `DLog` here is a proved equivalence with those formulas, not an
-identification of declarations. -/
+`DLog` relation retained by the Interactive Schnorr subject, selected here by
+its position in that subject's relation table. Each atom observes a base and a
+key at the actual verifier's input ports of the composed protocol and reads its
+witness from a lexical binder. Chaum–Pedersen uses one binder in both atoms;
+Schnorr AND uses two.
+
+At the observed boundary of every actual verifier run, each context holds
+exactly when the composed protocol's own retained formula (`DLogEquality`,
+`DLogPair`) holds at the verifier's bases and keys, and exactly when the
+retained target holds for parameter assignments equal to those bases. The
+composed formulas have their own identities, so reusing `DLog` here is a proved
+equivalence, not an identification of declarations. The retained contract
+layer keys `parameter` arguments; these atoms observe the bases instead, which
+agree with such assignments only when the assignments equal the verifier's
+inputs. -/
 namespace ZkcExamples.Structured.SigmaLogicalContexts
 open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.Logical
-open LogicalContextControls (relations interpretation scalarSort dlog_meaning)
+open LogicalContextControls (relations interpretation scalarSort dlog_meaning shared independent)
 
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
@@ -62,8 +70,6 @@ theorem dlogAt_holds {snapshot : Snapshot} {imported : Imported snapshot}
 section Equality
 open ChaumPedersenBinding
 
-abbrev shared : List (LogicalType relations.Sorts) := [scalarSort]
-
 def SharedHolds (boundary : BoundaryValuation (assignment F G) owner.protocol.inputs owner.protocol.outputs)
     (witness : F) : Prop :=
   (dlogAt (F := F) firstBaseSelector firstKeySelector (context := shared) .here).Holds (interpretation F G)
@@ -82,6 +88,16 @@ theorem shared_iff (firstBase firstKey secondBase secondKey : G) (service : Nat)
   unfold SharedHolds
   rw [dlogAt_holds _ _ _ _ _ firstBase firstKey witness rfl rfl rfl,
     dlogAt_holds _ _ _ _ _ secondBase secondKey witness rfl rfl rfl, relation_iff]
+
+/-- With parameter assignments equal to the verifier's bases, the shared
+context holds exactly when the retained target holds. -/
+theorem shared_iff_target (firstBase firstKey secondBase secondKey : G) (service : Nat)
+    (commitments : G × G) (challenge response witness : F) :
+    SharedHolds (observedBoundary firstBase firstKey secondBase secondKey service commitments
+        challenge response) witness ↔
+      (target (F := F) (G := G)).Holds {} (observedBoundary firstBase firstKey secondBase secondKey
+        service commitments challenge response) (assignments firstBase secondBase witness) :=
+  (shared_iff ..).trans (observed_target_iff ..).symm
 
 /-- Two accepting transcripts with one pair of commitments yield one binder
 value for both atoms at the first run's actual boundary. -/
@@ -104,8 +120,6 @@ end Equality
 section Pair
 open SchnorrAndBinding
 
-abbrev independent : List (LogicalType relations.Sorts) := [scalarSort, scalarSort]
-
 def IndependentHolds
     (boundary : BoundaryValuation (assignment F G) owner.protocol.inputs owner.protocol.outputs)
     (firstWitness secondWitness : F) : Prop :=
@@ -124,6 +138,17 @@ theorem independent_iff (firstBase firstKey secondBase secondKey : G) (service :
   unfold IndependentHolds
   rw [dlogAt_holds _ _ _ _ _ firstBase firstKey firstWitness rfl rfl rfl,
     dlogAt_holds _ _ _ _ _ secondBase secondKey secondWitness rfl rfl rfl, relation_iff]
+
+/-- With parameter assignments equal to the verifier's bases, the independent
+context holds exactly when the retained target holds. -/
+theorem independent_iff_target (firstBase firstKey secondBase secondKey : G) (service : Nat)
+    (commitments : G × G) (challenge : F) (responses : F × F) (firstWitness secondWitness : F) :
+    IndependentHolds (observedBoundary firstBase firstKey secondBase secondKey service commitments
+        challenge responses) firstWitness secondWitness ↔
+      (target (F := F) (G := G)).Holds {} (observedBoundary firstBase firstKey secondBase secondKey
+        service commitments challenge responses)
+        (assignments firstBase secondBase firstWitness secondWitness) :=
+  (independent_iff ..).trans (observed_target_iff ..).symm
 
 theorem independent_extraction (firstBase firstKey secondBase secondKey : G) (service : Nat)
     (commitments : G × G) (first second : F) (firstResponses secondResponses : F × F)

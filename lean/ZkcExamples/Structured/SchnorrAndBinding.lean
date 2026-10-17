@@ -202,9 +202,10 @@ theorem extracted_target (firstBase firstKey secondBase secondKey : G) (service 
     (Zkc.Protocols.Schnorr.extract_public_key secondBase secondKey commitments.2 first second
       firstResponses.2 secondResponses.2 distinct acceptFirst.2 acceptSecond.2).symm⟩
 
-/-- The actual prover's sends, with the challenge the verifier delivered, are
-accepted by the actual verifier when both keys use the prover's witnesses and
-both participants hold the same bases. -/
+/-- The values the admitted prover sends (`SchnorrAnd.prover_run`) for given
+nonces and a challenge, delivered with that challenge, are accepted by the
+actual verifier when both keys use the witnesses at the verifier's bases. This
+states the values, not a joint run of the two participants. -/
 theorem honest_accepts (firstBase firstKey secondBase secondKey : G) (firstWitness secondWitness : F)
     (firstNonce secondNonce challenge : F) (service : Nat)
     (valid : Relation firstBase firstKey secondBase secondKey firstWitness secondWitness) :

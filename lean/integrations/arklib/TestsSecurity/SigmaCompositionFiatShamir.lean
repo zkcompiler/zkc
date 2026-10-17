@@ -105,10 +105,12 @@ theorem equality_bound :
       pure ((3, 4), 3 + challenge * 2)) _ 1
   simp
 
-/-- One response must satisfy both bases: an AND-style second response is rejected. -/
+/-- One response must satisfy both bases: commitments and a response that
+satisfy the first base's equation but not the second's are rejected. -/
 theorem equality_decision_controls :
     decision (1 : Scalar) 3 0 equalityKeys (3, 4) (4 : Scalar) (3 + 4 * 2) = true ∧
-      decision (1 : Scalar) 3 0 equalityKeys (3, 4) (4 : Scalar) 2 = false := by
+      decision (1 : Scalar) 3 0 equalityKeys (3, 0) (4 : Scalar) 1 = false ∧
+      (1 : Scalar) • (1 : Scalar) = 3 + (4 : Scalar) • equalityKeys.1 := by
   simp only [decision_eq]
   decide
 

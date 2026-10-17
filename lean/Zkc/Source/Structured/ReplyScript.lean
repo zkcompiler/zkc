@@ -7,12 +7,15 @@ public import Zkc.Source.Structured.Participant
 /-! Deterministic replies for one role-local run.
 
 A script answers each receive by its type and site and each service query by
-its site; sends are acknowledged. A request without a scripted reply stops
-`refused`. Every request is recorded, in order. A script is an experiment
-choice, not a provider law or a scheduler: it fixes the replies of one run, for
-example the messages and challenges of one public-coin transcript, so that the
-participant's actual returned outputs can be observed. Sites distinguish
-messages of the same type; a script gives one reply per type and site. -/
+its site; sends are acknowledged. The sender of a receive and the service, method
+and operands of a query are not inspected, but every request is recorded
+verbatim, in order. A request outside the script is a mismatch, as for the
+structured observer's scripted replies, and stops `refused`. A script is an
+experiment choice, not a provider law or a scheduler: it fixes the replies of
+one run, for example the messages and challenges of one public-coin transcript,
+so that the participant's actual returned outputs can be observed. Sites
+distinguish messages of the same type; a script gives one reply per type and
+site. -/
 
 set_option autoImplicit false
 

@@ -11,13 +11,15 @@ VCVio Schnorr Σ-protocols, and its Fiat–Shamir transform.
 
 The Σ-protocol's verifier is the decision observed at the admitted
 original-stage verifier's returned boundary on one transcript. Its prover
-algorithms are VCVio's; `prover_sends` shows that the admitted prover sends
-exactly their values for every nonce pair and challenge. Completeness, special
-soundness and perfect HVZK come from the generic composition; knowledge
+algorithms are VCVio's; `prover_sends` shows that, for every nonce pair and
+challenge, the values the admitted prover sends are possible outputs of those
+algorithms. Completeness and HVZK therefore concern VCVio's uniform-nonce
+prover; the admitted prover's own randomness is not modeled. Completeness,
+special soundness and perfect HVZK come from the generic composition; knowledge
 soundness of the Fiat–Shamir transform comes from VCVio's replay extractor and
-is stated for the retained `DLogPair` relation, which
+is stated for the retained `DLogPair` formula, which
 `SigmaLogicalContexts.independent_iff` equates with the independent logical
-context at every verifier boundary. -/
+context at the observed boundary of every actual verifier run. -/
 
 namespace ZkcSecurity.Examples.SchnorrAndSigma
 open OracleComp OracleSpec
@@ -116,7 +118,7 @@ theorem speciallySound (firstBase secondBase : G) (service : Nat) :
   exact SigmaAndSchnorr.speciallySound F G firstBase secondBase
 
 theorem hvzk [Fintype F] (firstBase secondBase : G) (service : Nat) :
-    (sigma (F := F) firstBase secondBase service).PerfectHVZK (ChallengeVerifyProtocol.challengeFirst
+    (sigma (F := F) firstBase secondBase service).PerfectHVZK (challengeFirst
       (simulateAnd (SigmaAndSchnorr.simulate F G firstBase) (SigmaAndSchnorr.simulate F G secondBase))) := by
   rw [sigma_eq]
   exact SigmaAndSchnorr.hvzk F G firstBase secondBase
