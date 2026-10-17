@@ -4,9 +4,10 @@ This package holds independent Lean models of zkc programs and proves claims
 about the programs the compiler actually exports. Two imports connect it to the
 compiler: the scalar common-source profile, and the structured profile, which
 admits original protocol-stage PIR with shared helpers, participants, services,
-protocol applications and repeats. Lean checks each import's typed admission
-and proves its open-process contract. Optional packages then apply ArkLib and
-VCVio security theorems to the imported subjects.
+protocol applications and repeats. Lean checks each import's typed admission;
+for selected imports it proves open-process contracts from checked derivations
+and local mathematical laws. Optional packages then apply ArkLib and VCVio
+security theorems to those subjects.
 
 The [formal reference](docs/README.md) defines the models, and
 [support](docs/support.md) states the exact scope and assumptions of each claim.
@@ -24,7 +25,7 @@ with independent execution and negative controls.
 | Scalar imports | Admission and open-process contracts of exported scalar programs; Schnorr completeness, special soundness and rejection; the two-round degree-two Sumcheck bound `4 / \|F\|` | [Scalar import](docs/spec/common-source.md), [support](docs/support.md) |
 | Structured import | Independent admission, declaration linking, checked primitives, maps and realizations, protocol applications and repeats | [Structured source](docs/spec/structured-source.md), [support](docs/support.md) |
 | Interactive Schnorr | Verifier contracts over the actual export; an honest prover derived from checked sends; VCVio Sigma completeness, special soundness and fresh-challenge simulation | [Schnorr subject](docs/support.md#interactive-schnorr), [security integration](integrations/arklib/README.md) |
-| Compiled Schnorr proof | A checked transcript-construction rule accepts the actual compiled validator; its meaning is the Fiat–Shamir transform of the original verifier, with fixed-statement random-oracle knowledge soundness via VCVio | [Fiat–Shamir construction](docs/spec/fiat-shamir.md), [support](docs/support.md) |
+| Compiled Schnorr proof | A checked transcript-construction rule accepts the actual compiled validator, and a per-compile equation ties it to the original Proof Entry; the ideal interpretation of the exported validator is the Fiat–Shamir transform of the original verifier, with a fixed-statement extraction-probability bound in the random-oracle model via VCVio | [Fiat–Shamir construction](docs/spec/fiat-shamir.md), [support](docs/support.md) |
 | Logical contexts | Port-independent binders whose atoms transport along port maps; the existing contract layer is an instance; the Sumcheck residual bound holds on the retained and a port-repacked Reduction export | [Logical contexts](docs/design/logical-contexts.md), [support](docs/support.md) |
 | Multilinear Sumcheck | Table laws for any round count; ArkLib `n / \|F\|` complete and `k / \|F\|` residual bounds | [Mathematics](docs/spec/multilinear-sumcheck.md), [security](docs/spec/multilinear-sumcheck-security.md) |
 | Imported Sumcheck and Reduce | Plain verifier equations; `n / \|F\|` bounds on the actual admitted roots under the uniform query service | [Verifier equations](docs/support.md#source-only-sumcheck-verifier), [uniform queries](docs/spec/uniform-query-service.md#actual-imported-roots) |
