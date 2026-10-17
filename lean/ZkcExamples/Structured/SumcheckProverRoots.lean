@@ -13,7 +13,7 @@ constructor, the child Reduce at the prover and, for Source, the skipped
 verifier terminal. The verifier's inputs are absent at the prover. -/
 namespace ZkcExamples.Structured.SumcheckProverRoots
 open Zkc.Source Zkc.Source.Structured PrimitiveLibrary
-open SumcheckVerifierPrelude SumcheckVerifierHelpers SumcheckProverLaws
+open SumcheckVerifierPrelude SumcheckVerifierHelpers SumcheckProverLaws SumcheckProverPrelude
 open Zkc.Polynomial.Multilinear (restrictPrefixValues)
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]

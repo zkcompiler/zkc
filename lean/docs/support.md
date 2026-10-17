@@ -33,7 +33,7 @@ They do not certify arbitrary DSL programs or the full native lowering pipeline.
 | Local VCVio coupling | Per-action RelTriple premises lift through the same finite reply-adaptive process, preserving exact paired replies/outcomes and related provider state/event views | Same-process theorem; local laws hold at all required related states; demonstrated on typed-region controls, not a generic security theorem for differently transformed programs |
 | Probabilistic call composition | A child's residual-event bound transfers to caller acceptance through an all-state continuation implication; the actual Sumcheck caller reuses this rule for arbitrary returned tuples and a replacement child | Returned-value events; explicit terminal implication and child bound; both prefix and continuation stops are nonaccepting; no losslessness premise or automatic invariant discovery |
 | [Source-only Sumcheck verifier](#source-only-sumcheck-verifier) | Plain verifier equations for both complete original units, exact maxima 2/4, optional inputs and ordered stops; Source composes its actual terminal with multilinear table equality | Ring/module interpretation; no frontend/exporter or native correctness, sampling, or cryptographic security claim; honest P completeness is the next row |
-| [Honest Sumcheck prover](#honest-sumcheck-prover) | Plain prover equations for both complete original units; the per-round fold invariant on the actual callback (partial evaluation of the original table at the received point, correct round messages); honest-prover completeness of the actual Source and Reduction pairs under honest delivery for every challenge tape | Present prover inputs with the true claim and agreeing tables; two-endpoint deterministic delivery; no sampling, scheduler, native or provider correspondence |
+| [Honest Sumcheck prover](#honest-sumcheck-prover) | Plain prover equations for both complete original units; the per-round fold invariant on the Reduce callback tied to each checked body (the frame is the honest state of exactly the received challenges, representing the partial evaluation of the original table, with correct round messages); honest-prover completeness of the actual Source and Reduction pairs under honest delivery for every challenge tape that supplies the rounds, and the residual request on the honest Reduction run | Present prover inputs with the true claim and agreeing tables; retained maxima 2/4; two-endpoint deterministic delivery; frame metadata written in Lean, not exported; no sampling, scheduler, native or provider correspondence |
 | [Uniform structured queries](spec/uniform-query-service.md) | Concrete service constructor, exact all-state query execution, receive/send delegation and wrong-route refusal | Optional VCVio.StructuredUniform at the structured participant boundary; arbitrary network and callback effects; pinned SampleableType measure law; generic F, without native RNG/provider/exporter or Fiat–Shamir correspondence |
 | [Uniform Sumcheck composition](spec/uniform-query-service.md#actual-imported-roots) | Concrete-service `n / \|F\|` bounds on the actual admitted `Sumcheck` returned-true result and `Reduce` residual observation, nontrivial up to the exported maxima 2 and 4; excess counts refuse with zero mass. One arbitrary-count execution-distribution transport; finite-field controls on the actual roots and a generic client | Verifier role 1, peer 0, root context; arbitrary network, callbacks and initial states. `Sumcheck`: V's raw vector decodes to the table and the claim is false. `Reduce`: an external table of dimension `remaining + n` and a false initial claim; P inputs are arbitrary; the event is the residual observation, since `Reduce` has no acceptance check. Model-level only, without frontend, native or provider correspondence |
 | Source-bound Sumcheck requests | Refutation of the retained source formula transfers through its checked local law to the actual Reduce input; the child residual bound composes with the public wrapper's terminal check, and the Reduction wrapper transports actual returned point/value selectors. `public_target_bound`, `reduction_request_bound` and `source_composed_bound` reach the same two bounds as the direct theorems through the retained source relation or call-boundary composition | Fixed original table, decoding and capacity premises; concrete retained maxima 2/4, explicit fresh uniform queries and arbitrary optional P inputs. The typed residual request is external Lean intent, not a source-authored generic continuation or a native security theorem |
@@ -483,35 +483,52 @@ prover (`source_prover`, `reduction_prover`), including the checked table
 constructor, the masked verifier inputs and, for Reduction, the residual
 projection. Only present prover inputs are covered.
 
-`SumcheckFoldInvariant.prover_frames` is the per-round invariant on the actual
-callback: after any number of iterations, the frame the loop reaches is the
-honest state of the received point, and its entries represent the partial
-evaluation of the original table at that point (`Fold.partialEvaluation_restrict`).
-`prover_messages` shows that the prover's two actual sends are
+`SumcheckFoldInvariant.prover_frames` is the per-round invariant. Its
+interaction phase records the challenges the prover receives at the delivery
+site (`receivedChallenges`). After any number of iterations, the frame the loop
+reaches is the honest state of exactly those challenges (`HonestFrame`), and its
+entries represent the partial evaluation of the original table at that point
+(`Fold.partialEvaluation_restrict`). `prover_messages` shows that, from an
+honest frame with a round remaining, the prover's two actual sends are
 `roundEndpoint` at zero and one, the endpoints of the correct round polynomial.
-The original table is a logical binder; its agreement with the prover's input
-is the premise `ofList? count raw = some table`. `frame_export_checks` checks
-the invariant's proposed export form to exactly the proved atoms.
+Like the verifier's laws, both are stated on `bodyFn`: the typed Reduce callback
+whose erasure is each unit's checked body (`reduce_raw`, `reduce_raw_shared`),
+interpreted with that unit's own tables. `prelude_prover` places the same loop
+in the admitted Reduce body; the root and completeness equations below are over
+`program.participant` itself. The original table is a logical binder; its
+agreement with the prover's input is the premise `ofList? count raw = some table`.
+`frame_export_checks` and `source_frame_export_checks` check the invariant's
+proposed export form, written in Lean, to exactly the proved atoms; its site
+resolves through `repeatAt` to the repeat occurrence of each unit's checked
+Reduce body.
 
 `SumcheckHonestExecution` runs both actual participants of one root invocation
 with the same inputs. `peerHandler` routes the verifier's receives and sends to
-the prover's actual residual process and answers its challenge queries from a
-tape. `coupled_round` and `coupled_rounds` show that each verifier guard holds
-and each claim update equals the sum of the prover's folded table.
-`source_complete` proves that the verifier returns `true`, the prover returns
-and exactly the used challenges are consumed, for every tape with enough
-values, given the true claim, a shaped representable table and the retained
-maximum. `reduction_complete` returns the tape prefix and the true residual sum
-at the verifier and the same point and folded table at the prover;
-`honest_residual` shows that these outputs satisfy the residual request of the
-security consumer.
+the prover's actual residual process; `challengeTape` answers the verifier's
+queries in order from a tape, whatever their site, which suffices because the
+Sumcheck verifier's only queries are its challenges. `coupled_round` and
+`coupled_rounds` show that each verifier guard holds and each claim update
+equals the sum of the prover's folded table. `source_complete` proves that the
+verifier returns `true`, the prover returns and exactly the used challenges are
+consumed, for every tape with enough values, given the true claim, a shaped
+representable table and the retained maximum. `reduction_complete` returns the
+tape prefix and the true residual sum at the verifier and the same point and
+folded table at the prover. `reduction_complete_residual` composes this run with
+`honest_residual`: for a table of `remaining + rounds` variables, the verifier's
+outputs satisfy the residual request of the security consumer, and the prover's
+returned residual decodes to the partial evaluation at the same point.
 
-`SumcheckFoldControls` instantiates every premise over `ZMod 5`, shows that
-the actual loop reaches the honest frame, and refutes a least-significant-first
-meaning of the same atoms at that frame. `Tests.SumcheckFoldMutations` admits
-a mutant whose callback discards the fold: it still accepts one round, because
-the first message is correct regardless, and is rejected by the verifier's
-guard from the second round, while the original accepts both.
+`SumcheckFoldControls` instantiates the premises of the completeness, residual,
+frame and message theorems over `ZMod 5`. It applies `source_frames` to the
+frame that a concrete run of the actual loop reaches, with the delivered
+challenges recorded in the phase, reaches the stop past the table's dimension,
+and refutes a least-significant-first meaning of the same atoms at that frame.
+Exported frames that read a slot outside the observed role's scope or of the
+wrong type, name an unknown site or a role outside the repeat, or misplace the
+index are refused, each with its own reason. `Tests.SumcheckFoldMutations`
+admits a mutant whose callback discards the fold: it still accepts one round,
+because the first message is correct regardless, and is rejected by the
+verifier's guard from the second round, while the original accepts both.
 
 ## Multilinear Sumcheck controls
 

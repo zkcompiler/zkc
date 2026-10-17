@@ -179,19 +179,30 @@ structure RawFrame where
 
 inductive FrameRefusal where
   | unknownRepeat (site : String)
+  | unknownRole (role : Nat)
   | unknownPredicate (identity : Identity)
   | unboundBinder (position : Nat)
   | sortMismatch (position : Nat)
-  | carriedMismatch (slot role : Nat)
+  | slotType (slot : Nat)
+  | slotScope (slot role : Nat)
   | iterationMismatch
   | arityMismatch (identity : Identity)
   deriving DecidableEq, Repr
 
+/-- The repeat occurrence at a site, read from a checked body's stored
+operations (including nested callbacks). The first occurrence wins; admission
+refuses effective-site collisions within a root, so a checked body has at most
+one repeat at each site. -/
+def repeatAt (operations : List ProtocolOp) (site : String) : Option RepeatSpec :=
+  operations.findSome? fun op => match op with
+    | .repeat spec occurrence => if occurrence = site then some spec else none
+    | _ => none
+
 variable {V : Vocabulary} [DecidableEq V.Sorts] (resolution : Resolution V) {Value : Ty → Type}
 
-/-- A carried slot must exist with the expected type, and its scope must
-contain the observed role: a slot hidden from that participant is refused
-rather than read as always absent. -/
+/-- A carried slot must exist with the expected type (`slotType`), and its
+scope must contain the observed role (`slotScope`): a slot hidden from that
+participant is refused rather than read as always absent. -/
 def checkFrameTerm (spec : RepeatSpec) (role : Nat) (context : List (LogicalType V.Sorts))
     (expected : LogicalType V.Sorts) :
     RawFrameTerm → Except FrameRefusal (FrameTerm V Value spec.state context expected)
@@ -203,9 +214,9 @@ def checkFrameTerm (spec : RepeatSpec) (role : Nat) (context : List (LogicalType
     | .native type => match Var.decode spec.state type slot with
       | some ref =>
         if (spec.stateScopes[slot]?.getD []).contains role then .ok (.carried ref)
-        else .error (.carriedMismatch slot role)
-      | none => .error (.carriedMismatch slot role)
-    | .sort _ => .error (.carriedMismatch slot role)
+        else .error (.slotScope slot role)
+      | none => .error (.slotType slot)
+    | .sort _ => .error (.slotType slot)
   | .iteration => match expected with
     | .native .index => .ok .iteration
     | _ => .error .iterationMismatch
@@ -237,14 +248,17 @@ def checkFrameAtoms (spec : RepeatSpec) (role : Nat) (context : List (LogicalTyp
     let tail ← checkFrameAtoms spec role context rest
     pure (head :: tail)
 
-/-- Admit an exported frame invariant against the repeat occurrences of the
-owner body, resolved by site, within the owner's checked binder context. -/
+/-- Admit an exported frame invariant against a site lookup and the owner's
+binder context. With `repeatAt` of a checked body's stored operations, the site
+names that body's own repeat occurrence; the observed role must belong to it. -/
 def checkFrame (repeats : String → Option RepeatSpec) (context : List (LogicalType V.Sorts))
     (raw : RawFrame) : Except FrameRefusal ((spec : RepeatSpec) × FrameInvariant V Value spec.state context) :=
   match repeats raw.site with
   | none => .error (.unknownRepeat raw.site)
-  | some spec => do
-    let atoms ← checkFrameAtoms (Value := Value) resolution spec raw.role context raw.atoms
-    pure ⟨spec, atoms⟩
+  | some spec =>
+    if spec.roles.contains raw.role then do
+      let atoms ← checkFrameAtoms (Value := Value) resolution spec raw.role context raw.atoms
+      pure ⟨spec, atoms⟩
+    else .error (.unknownRole raw.role)
 
 end Zkc.Source.Structured.Logical

@@ -9,9 +9,10 @@ public import ZkcExamples.Structured.SumcheckVerifierPrelude
 guards, the empty point, the admitted repeat on the prover's own state and the
 actual six-slot return permutation. Only present prover inputs are covered;
 the verifier's claim and service are absent at the prover. -/
-namespace ZkcExamples.Structured.SumcheckProverLaws
+namespace ZkcExamples.Structured.SumcheckProverPrelude
 open Zkc.Source Zkc.Source.Structured PrimitiveLibrary
 open SumcheckVerifierBodies SumcheckVerifierHelpers SumcheckVerifierLaws SumcheckVerifierPrelude
+open SumcheckProverLaws
 open Zkc.Polynomial.Multilinear (restrictPrefixValues)
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
@@ -193,4 +194,4 @@ theorem reduce_prover (U : UnitPayload) (bodies : SumcheckUnitContracts.Bodies U
     (proverResults raw count point)) = _
   rw [mask_proverResults ctx (ctx.roles 0) rfl]
 
-end ZkcExamples.Structured.SumcheckProverLaws
+end ZkcExamples.Structured.SumcheckProverPrelude

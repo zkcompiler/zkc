@@ -67,18 +67,25 @@ changes a binder.
 Execution records actions, not frames. A frame invariant is therefore
 established by `Repeat.loop_frames`: an obligation on the actual masked
 callback step, for every reply, gives the invariant at the frame the loop
-reaches after any number of iterations. The export form names the repeat by its
-site in the owner body, the observed participant by its local role and carried
-slots by position. `checkFrame` refuses an unknown site, a slot of another type,
-a slot outside the participant's scope, and a misplaced index by name.
+reaches after any number of iterations. The obligation may also relate each
+frame to an interaction phase, such as the challenges received so far. The
+export form names the repeat by its site, the observed participant by its local
+role and carried slots by position; `repeatAt` resolves the site among the
+repeat occurrences of a checked body's stored operations. `checkFrame` refuses
+an unknown site, a role outside the repeat, a slot of another type, a slot
+outside the observed role's scope and a misplaced index, each with its own
+reason.
 
 `ZkcExamples.Structured.SumcheckFoldInvariant` states the prover's fold
-invariant on the actual Reduce callback. The original table is one binder; the
+invariant on the Reduce callback. The original table is one binder; the
 prover's entries, remaining dimension, width and received point are carried
-slots. At every frame, the entries represent the partial evaluation of the
-original table at the received point, and their two half sums are the endpoints
-of the correct round polynomial. The binder is the decoding of the prover's own
-input table; this agreement is an explicit premise.
+slots. At every frame the loop reaches, the carried point is exactly the
+challenges the prover has received, the entries represent the partial
+evaluation of the original table at that point, and their two half sums are the
+endpoints of the correct round polynomial. As for the verifier, the theorems are
+stated on the typed callback whose erasure is each unit's checked Reduce body.
+The binder is the decoding of the prover's own input table; this agreement is an
+explicit premise.
 
 ## Example
 
@@ -94,6 +101,8 @@ roots with the unchanged `repeat_uniform_residual_soundness`.
 Sorts have static arities; a dependency on an observed value, such as the
 remaining dimension of a folded table, stays inside a predicate's meaning.
 Frames observe carried state only: actions inside an iteration are not frame
-terms, and the process events carry no iteration coordinate. Identity keying of
-opaque relations, native export and source syntax are not part of these
-modules.
+terms, and the process events carry no iteration coordinate. Honest-agreement
+consumers, which would derive a binder's agreement with a participant's input,
+are not part of these modules: the Sumcheck fold and completeness theorems take
+that agreement as an explicit premise. Identity keying of opaque relations,
+native export and source syntax are not part of these modules either.

@@ -25,8 +25,9 @@ open Zkc.Protocols.Sumcheck.Multilinear (restrictValues_sum)
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
-/-- Answers the verifier's challenge queries in order from a supplied tape. A
-missing challenge stops incomplete; every other action refuses. -/
+/-- Answers every query in order from a supplied tape, whatever its site, field
+or handle; the Sumcheck verifier's only queries are its challenges. An empty
+tape stops incomplete; every other action refuses. -/
 def challengeTape : PIR.Handler (participantInterface F G) (List F) Unit
   | .query _ _ _, r :: rest => ⟨.returned r, rest, []⟩
   | .query _ _ _, [] => ⟨.stopped .incomplete, [], []⟩
@@ -220,5 +221,33 @@ theorem honest_residual (remaining rounds : Nat) (raw : List F)
   have residual := ofList?_restrictPrefixValues_of_length rounds raw point table length decoded
   refine ⟨⟨coordinates rounds point, ofFn_coordinates point length, ?_⟩, residual⟩
   exact booleanSum_ofList? _ _ residual
+
+/-- The honest Reduction run composed with the residual request: for a table of
+`remaining + rounds` variables, the run is the one of `reduction_complete`, and
+its verifier outputs, the tape prefix and the folded sum, satisfy the residual
+request of the security consumer for the original table, while the prover's
+returned residual decodes to the partial evaluation at that same point. -/
+theorem reduction_complete_residual (remaining rounds : Nat) (raw : List F)
+    (table : Table F (remaining + rounds)) (decoded : ofList? (remaining + rounds) raw = some table)
+    (shape : HasShape raw (remaining + rounds) 1) (bound : raw.length < indexLimit)
+    (admitted : rounds ≤ 4) (handle : Nat) (tape : List F) (supply : rounds ≤ tape.length) :
+    (SumcheckReduceViews.program.participant F G 1
+        (SumcheckReduceVerifier.reduceRootInputs (some raw) (some (remaining + rounds))
+          (some raw.sum) (some rounds) (some handle))).run
+      (network reductionChild)
+      ⟨SumcheckReduceViews.program.participant F G 0
+        (SumcheckReduceVerifier.reduceRootInputs (some raw) (some (remaining + rounds))
+          (some raw.sum) (some rounds) (some handle)), tape⟩ =
+      ⟨.returned (SumcheckReduceVerifier.reduceRootResults
+          (some (tape.take rounds), some (restrictPrefixValues raw (tape.take rounds)).sum)),
+        ⟨.done (SumcheckProverRoots.reductionResults raw (tape.take rounds)), tape.drop rounds⟩,
+        []⟩ ∧
+    SumcheckContractBindings.Residual remaining rounds table (tape.take rounds)
+        (restrictPrefixValues raw (tape.take rounds)).sum ∧
+      ofList? remaining (restrictPrefixValues raw (tape.take rounds)) =
+        some (fixPrefix rounds table (coordinates rounds (tape.take rounds))) :=
+  ⟨reduction_complete raw (remaining + rounds) rounds shape bound admitted (Nat.le_add_left _ _)
+      handle tape supply,
+    honest_residual remaining rounds raw table decoded (tape.take rounds) (by simp; omega)⟩
 
 end ZkcExamples.Structured.SumcheckHonestExecution

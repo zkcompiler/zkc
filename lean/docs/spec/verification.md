@@ -233,6 +233,16 @@ mechanism makes the participants' copies equal. The optional
 observed commitment and response, the fixed challenge and the verifier's actual
 outcome under honest delivery.
 
+For the imported Sumcheck pair, `SumcheckHonestExecution` runs both actual
+participants instead of extracting a strategy. `Source.PeerExecution.peerHandler`
+keeps the prover's actual residual process in the handler state: a verifier
+receive takes the value of the prover's next send, a verifier send is consumed
+by the prover's next receive, and the verifier's queries go to a challenge tape.
+A mismatched type, site or endpoint refuses. Both participants receive the same
+inputs as explicit arguments, and completeness is an equation for the run of the
+actual roots for every tape that supplies the rounds; the
+[support matrix](../support.md#honest-sumcheck-prover) lists its premises.
+
 ## Bounded scalar requests
 
 A native DSL `spec` clause records intended relations and port/role selectors.

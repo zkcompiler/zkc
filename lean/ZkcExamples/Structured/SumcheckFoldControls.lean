@@ -12,14 +12,15 @@ A concrete two-variable table satisfies every premise of the completeness and
 fold theorems. The actual prover loop reaches the honest frame of the received
 challenges, where the invariant holds under the library meaning and fails under
 a least-significant-first reading of the same atoms. Exported frame metadata
-that observes a slot hidden from the prover, a wrongly typed slot, an unknown
-repeat or a misplaced iteration index is refused by name. -/
+that observes a slot outside the observed role's scope, a wrongly typed slot, an
+unknown repeat, a role outside the repeat or a misplaced iteration index is
+refused with the matching reason. -/
 namespace ZkcExamples.Structured.SumcheckFoldControls
 open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.Logical PrimitiveLibrary
 open SumcheckVerifierBodies SumcheckVerifierLaws SumcheckProverLaws SumcheckFoldInvariant
 open SumcheckHonestExecution
 open Zkc.Polynomial Zkc.Polynomial.Multilinear
-open Zkc.Protocols.Sumcheck.Multilinear (PartialEvaluation)
+open Zkc.Protocols.Sumcheck.Multilinear (PartialEvaluation roundEndpoint)
 
 abbrev F := ZMod 5
 
@@ -61,8 +62,17 @@ theorem reduction_complete_instance :
         ⟨.done (SumcheckProverRoots.reductionResults raw [2]), [3]⟩, []⟩ :=
   reduction_complete raw 2 1 raw_shape raw_bound (by decide) (by decide) 7 [2, 3] (by decide)
 
-/-- The completed point's value is the original extension at the tape prefix. -/
-theorem source_value : (restrictPrefixValues raw [2, 3]).sum = 3 := by decide
+/-- The folded value at the complete point `(2, 3)` is the original extension there. -/
+theorem source_value :
+    (restrictPrefixValues raw [2, 3]).sum = 3 ∧ extension 2 table (coordinates 2 [2, 3]) = 3 := by
+  decide
+
+/-- The residual request holds on the honest Reduction run with one of two rounds. -/
+theorem reduction_residual_instance :
+    SumcheckContractBindings.Residual 1 1 table [2] (restrictPrefixValues raw [2]).sum ∧
+      ofList? 1 (restrictPrefixValues raw [2]) = some (fixPrefix 1 table (coordinates 1 [2])) :=
+  (reduction_complete_residual (G := F) 1 1 raw table raw_decoded raw_shape raw_bound (by decide) 7
+    [2, 3] (by decide)).2
 
 /-! ### The actual loop reaches the honest frame -/
 
@@ -87,10 +97,70 @@ theorem invariant_holds_at_reached_frame :
     Holds (G := F) 2 table 2 (embedP (honestState raw 2 [2, 3])) :=
   holds_honest raw 2 table raw_decoded [2, 3] (by decide)
 
+/-- The same run with its received challenges recorded as the phase. -/
+abbrev recordedRun :=
+  (Repeat.loop (repeatSpec 2) SumcheckSourceVerifier.childContext 0 (cap none)
+    (bodyFn SumcheckSourceViews.unit SumcheckSourceVerifier.childContext 0) 0 2
+    (embedP (G := F) (honestState raw 2 []))).run
+    (PIR.ExecutionPath.handler (receivedChallenges (F := F) (G := F) SumcheckSourceVerifier.childContext)
+      deliveries) ([], [2, 3])
+
+theorem recorded_outcome : recordedRun.outcome = .returned (embedP (honestState raw 2 [2, 3])) := by
+  unfold recordedRun
+  rw [loop_honest SumcheckSourceViews.unit SumcheckSourceContracts.bodies
+    SumcheckSourceVerifier.childContext 0 rfl (by decide) 2 none raw 2 raw_shape raw_bound 0 2 []]
+  rfl
+
+theorem recorded_challenges : recordedRun.state.1 = [2, 3] := by
+  unfold recordedRun
+  rw [loop_honest SumcheckSourceViews.unit SumcheckSourceContracts.bodies
+    SumcheckSourceVerifier.childContext 0 rfl (by decide) 2 none raw 2 raw_shape raw_bound 0 2 []]
+  rfl
+
+/-- `source_frames` itself, applied to the frame this run actually reaches: it is
+the honest state of the challenges the run delivered, and every atom holds. -/
+theorem source_frames_at_reached_frame :
+    HonestFrame raw 2 2 [2, 3] (embedP (G := F) (honestState raw 2 [2, 3])) ∧
+      Holds (G := F) 2 table 2 (embedP (honestState raw 2 [2, 3])) := by
+  have reached := PIR.Boundary.actual_return
+    (receivedChallenges (F := F) (G := F) SumcheckSourceVerifier.childContext) _ deliveries _ [] [2, 3]
+    (source_frames raw 2 raw_shape raw_bound table raw_decoded 2) _ recorded_outcome
+  rw [recorded_challenges] at reached
+  exact reached
+
+/-- The round messages from the initial frame are the endpoints of the correct
+round polynomial: `f(0,0)+f(0,1) = 1` and `f(1,0)+f(1,1) = 6 = 1`. -/
+theorem first_round_messages :
+    Repeat.step (repeatSpec 2) SumcheckSourceVerifier.childContext 0 (cap none)
+        (bodyFn SumcheckSourceViews.unit SumcheckSourceVerifier.childContext 0)
+        (embedP (G := F) (honestState raw 2 [])) 0 =
+      .call (.send (ty := .field "bls12-381.fr") (lowSite SumcheckSourceVerifier.childContext)
+        (SumcheckSourceVerifier.childContext.roles 1) (roundEndpoint table [] 0)) (fun _ =>
+      .call (.send (ty := .field "bls12-381.fr") (highSite SumcheckSourceVerifier.childContext)
+        (SumcheckSourceVerifier.childContext.roles 1) (roundEndpoint table [] 1)) fun _ =>
+      .call (.receive (.field "bls12-381.fr") (deliverySite SumcheckSourceVerifier.childContext)
+        (SumcheckSourceVerifier.childContext.roles 1)) fun (cp : F) =>
+      .done (embedP (honestState raw 2 ([] ++ [cp])))) ∧
+      roundEndpoint table [] 0 = 1 ∧ roundEndpoint table [] 1 = 1 :=
+  ⟨prover_messages SumcheckSourceViews.unit SumcheckSourceContracts.bodies
+      SumcheckSourceVerifier.childContext 0 rfl (by decide) 2 none raw 2 raw_shape raw_bound table
+      raw_decoded [] (by decide) 0, by decide, by decide⟩
+
+/-- Past the table's dimension the actual step stops at the halves of a
+zero-dimensional table, before any send. -/
+theorem step_past_dimension_rejects :
+    Repeat.step (repeatSpec 2) SumcheckSourceVerifier.childContext 0 (cap none)
+        (bodyFn SumcheckSourceViews.unit SumcheckSourceVerifier.childContext 0)
+        (embedP (G := F) (honestState raw 2 [2, 3])) 2 = .halt .reject := by
+  rw [step_honest SumcheckSourceViews.unit SumcheckSourceContracts.bodies
+    SumcheckSourceVerifier.childContext 0 rfl (by decide) 2 none raw 2 raw_shape raw_bound [2, 3] 2]
+  rfl
+
 /-! ### A wrong invariant fails -/
 
-/-- The same atoms read least-significant coordinate first: the received point
-is reversed before the partial evaluation. Only this meaning changes. -/
+/-- The same atoms with the received point reversed before the partial
+evaluation; at a complete point this is the least-significant-first reading.
+Only this meaning changes. -/
 def reversedInterpretation : Interpretation vocabulary (assignment F F) :=
   { interpretation F F with
     holds := fun predicate arguments => match predicate, arguments with
@@ -111,51 +181,63 @@ theorem reversed_invariant_fails :
     partialHolds (by decide)
   exact absurd complete (by decide)
 
-/-! ### Exported frame refusals -/
+/-! ### Exported frame refusals
 
-/-- The verifier's local role cannot observe the prover's point slot. -/
+Each refusal is checked against the actual Source body's repeat occurrences. -/
+
+abbrev sourceRepeats := repeatAt SumcheckSourceViews.reduceDefinition.raw.operations
+
+/-- The verifier's local role cannot observe the prover's point slot (scope). -/
 theorem verifier_role_refused :
-    checkFrame (Value := assignment F F) resolution (repeats 2) (tableContext 2)
-      { frameExport 2 with role := 1 } = .error (.carriedMismatch 3 1) := by
+    checkFrame (Value := assignment F F) resolution sourceRepeats (tableContext 2)
+      { frameExport 2 with role := 1 } = .error (.slotScope 3 1) := by
   simp [checkFrame, checkFrameAtoms, checkFrameAtom, checkFrameTerms, checkFrameTerm, resolution,
     Resolution.ofCandidates, sortCandidate, predicateCandidate, frameExport, partialIdentity,
-    vocabulary, repeats, decode_first_binder, bind, Except.bind, pure, Except.pure]
+    vocabulary, bind, Except.bind, pure, Except.pure]
   rfl
 
-/-- The verifier's own point slot is hidden from the prover. -/
+/-- The verifier's own point slot is hidden from the prover (scope). -/
 theorem hidden_slot_refused :
-    checkFrame (Value := assignment F F) resolution (repeats 2) (tableContext 2)
+    checkFrame (Value := assignment F F) resolution sourceRepeats (tableContext 2)
       ⟨"s15", 0, [⟨partialIdentity 2, [.binder 0, .carried 4, .carried 0]⟩]⟩ =
-      .error (.carriedMismatch 4 0) := by
+      .error (.slotScope 4 0) := by
   simp [checkFrame, checkFrameAtoms, checkFrameAtom, checkFrameTerms, checkFrameTerm, resolution,
     Resolution.ofCandidates, sortCandidate, predicateCandidate, partialIdentity,
-    vocabulary, repeats, decode_first_binder, bind, Except.bind, pure, Except.pure]
+    vocabulary, bind, Except.bind, pure, Except.pure]
   rfl
 
-/-- The scalar claim slot is not a vector. -/
+/-- The prover's own dimension slot is an index, not a point vector (type). -/
 theorem wrong_type_refused :
-    checkFrame (Value := assignment F F) resolution (repeats 2) (tableContext 2)
-      ⟨"s15", 0, [⟨partialIdentity 2, [.binder 0, .carried 5, .carried 0]⟩]⟩ =
-      .error (.carriedMismatch 5 0) := by
+    checkFrame (Value := assignment F F) resolution sourceRepeats (tableContext 2)
+      ⟨"s15", 0, [⟨partialIdentity 2, [.binder 0, .carried 1, .carried 0]⟩]⟩ =
+      .error (.slotType 1) := by
   simp [checkFrame, checkFrameAtoms, checkFrameAtom, checkFrameTerms, checkFrameTerm, resolution,
     Resolution.ofCandidates, sortCandidate, predicateCandidate, partialIdentity,
-    vocabulary, repeats, decode_first_binder, bind, Except.bind, pure, Except.pure]
+    vocabulary, bind, Except.bind, pure, Except.pure]
   rfl
 
-/-- A site naming no repeat occurrence is refused before any atom. -/
+/-- A site naming no repeat occurrence of the actual body is refused before any atom. -/
 theorem unknown_repeat_refused :
-    checkFrame (Value := assignment F F) resolution (repeats 2) (tableContext 2)
+    checkFrame (Value := assignment F F) resolution sourceRepeats (tableContext 2)
       { frameExport 2 with site := "s16" } = .error (.unknownRepeat "s16") := by
-  simp [checkFrame, repeats]
+  simp only [checkFrame]
+  rfl
+
+/-- A role outside the repeat's roster is refused, even for atoms reading no slot. -/
+theorem unknown_role_refused :
+    checkFrame (Value := assignment F F) resolution sourceRepeats (tableContext 2)
+      ⟨"s15", 2, [⟨widthIdentity, [.iteration]⟩]⟩ = .error (.unknownRole 2) := by
+  simp only [checkFrame]
+  rfl
 
 /-- The iteration index is not a vector. -/
 theorem iteration_refused :
-    checkFrame (Value := assignment F F) resolution (repeats 2) (tableContext 2)
+    checkFrame (Value := assignment F F) resolution sourceRepeats (tableContext 2)
       ⟨"s15", 0, [⟨partialIdentity 2, [.binder 0, .iteration, .carried 0]⟩]⟩ =
       .error .iterationMismatch := by
   simp [checkFrame, checkFrameAtoms, checkFrameAtom, checkFrameTerms, checkFrameTerm, resolution,
     Resolution.ofCandidates, sortCandidate, predicateCandidate, partialIdentity,
-    vocabulary, repeats, bind, Except.bind, pure, Except.pure]
+    vocabulary, bind, Except.bind, pure, Except.pure]
   rfl
 
 end ZkcExamples.Structured.SumcheckFoldControls

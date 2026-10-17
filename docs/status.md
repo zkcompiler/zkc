@@ -325,8 +325,10 @@ proves its process equations on the shared Region carrier.
 [Formal support](../lean/docs/support.md) states exact experiments and premises,
 including: the Interactive Schnorr verifier contracts, an honest prover derived
 from the checked source's sends and the Sigma properties; two inlining pairs
-checked against actual prepared exports; and `n / |F|` Sumcheck bounds on the
-actual admitted roots under a uniform query service. No general
+checked against actual prepared exports; `n / |F|` Sumcheck bounds on the
+actual admitted roots under a uniform query service; and honest-prover
+completeness of both imported Sumcheck pairs with the prover's per-round fold
+invariant. No general
 availability-soundness or native execution-correspondence theorem is claimed.
 Full DSL/compiler/runtime correspondence, production arithmetic/sampling,
 backend correctness and complete protocol security remain open.

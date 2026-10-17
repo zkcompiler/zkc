@@ -100,7 +100,7 @@ theorem peer_receive_other_site {ty : Ty} (site peerSite : String) (value : Valu
       ⟨.stopped .refused, ⟨.call (.send peerSite self value) next, state⟩, []⟩ := by
   simp only [peerHandler, different, false_and, and_false, ↓reduceDIte]
 
-/-- A send refuses when the peer is not waiting to receive it. -/
+/-- A send refuses when the peer's next action is a send rather than a receive. -/
 theorem peer_send_unexpected {ty : Ty} (site : String) (value : Value ty)
     (peerSite : String) (peerValue : Value ty)
     (next : Unit → PIR.Proc (interface Role Ty services Value) A) (state : S) :

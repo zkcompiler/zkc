@@ -6,17 +6,19 @@ public import Zkc.Protocols.Sumcheck.Multilinear.Fold
 
 @[expose] public section
 
-/-! The prover's per-round fold invariant on the actual imported Reduce body.
+/-! The prover's per-round fold invariant on the imported Reduce callback.
 
 The original table is one port-independent logical binder of a library sort.
 The prover's current table, its remaining dimension, width and received point
 are carried slots of the Reduce repeat, observed in loop frames at the prover.
-At every frame the loop reaches, the carried entries represent the partial
-evaluation of the original table at the received point, and their two half
-sums are the endpoints of the correct round polynomial. The step obligation is
-discharged on the actual callback; the round messages are the prover's actual
-sends. The binder is the decoding of the prover's own input table: this
-agreement is an explicit premise, never inferred from a port. -/
+At every frame the loop reaches, the carried point is exactly the challenges
+received so far, the carried entries represent the partial evaluation of the
+original table at that point, and their two half sums are the endpoints of the
+correct round polynomial. The step obligation is discharged on `bodyFn`, the
+typed callback whose erasure is each unit's checked Reduce body (`reduce_raw`,
+`reduce_raw_shared`); the round messages are the prover's actual sends. The
+binder is the decoding of the prover's own input table: this agreement is an
+explicit premise, never inferred from a port. -/
 namespace ZkcExamples.Structured.SumcheckFoldInvariant
 open Zkc.Source Zkc.Source.Structured Zkc.Source.Structured.Logical PrimitiveLibrary
 open SumcheckVerifierBodies SumcheckVerifierHelpers SumcheckVerifierLaws SumcheckProverLaws
@@ -38,7 +40,8 @@ inductive FoldPredicate where
   | roundMessage (dimension : Nat)
   deriving DecidableEq
 
-/-- Identities carry the domain and every static arity. There are no views. -/
+/-- Identities carry every static argument; the table sort, the partial
+evaluation and the round message also carry the scalar domain. There are no views. -/
 def vocabulary : Vocabulary where
   Sorts := FoldSort
   Predicates := FoldPredicate
@@ -140,63 +143,80 @@ theorem holds_honest (raw : List F) (count : Nat) (table : Table F count)
     exact fun remaining =>
       Zkc.Protocols.Sumcheck.Multilinear.partialEvaluation_endpoints table point _ represents remaining
 
-/-- The exact honest form of the frame reached after `index` iterations. -/
-def HonestFrame (raw : List F) (count index : Nat)
+/-- The phase records, in order, the challenges the prover has received at the
+delivery site of `ctx`. Sends and other actions leave it unchanged. -/
+def receivedChallenges (ctx : ProtocolContext) : PIR.Interaction (participantInterface F G) where
+  Role := Unit
+  Phase := List F
+  owner _ := ()
+  enabled _ _ := True
+  advance phase action reply :=
+    match action, reply with
+    | .receive (.field _) site _, (challenge : F) =>
+      if site = deliverySite ctx then phase ++ [challenge] else phase
+    | _, _ => phase
+
+/-- The frame reached after `index` iterations is the honest state of exactly
+the challenges received so far. -/
+def HonestFrame (raw : List F) (count index : Nat) (received : List F)
     (state : Values (Component (assignment F G)) repeatState) : Prop :=
-  ∃ point : List F, point.length = index ∧ index ≤ count ∧ state = embedP (honestState raw count point)
+  received.length = index ∧ index ≤ count ∧ state = embedP (honestState raw count received)
 
 omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
-/-- One honest round either stops or returns the received point extended by one
-challenge, still within the dimension. -/
-theorem roundHonest_returns (interaction : PIR.Interaction (participantInterface F G))
-    (ctx : ProtocolContext) (raw : List F) (count : Nat) (point : List F) (phase : interaction.Phase) :
-    PIR.Boundary.Returns interaction
-      (fun result _ => result.length = point.length + 1 ∧ result.length ≤ count)
-      (roundHonest ctx raw count point) phase := by
+/-- One honest round either stops or returns the received point extended by the
+challenge it receives, still within the dimension. -/
+theorem roundHonest_received (ctx : ProtocolContext) (raw : List F) (count : Nat) (point : List F) :
+    PIR.Boundary.Returns (receivedChallenges (G := G) ctx)
+      (fun result received => result = received ∧ result.length = point.length + 1 ∧
+        result.length ≤ count)
+      (roundHonest ctx raw count point) point := by
   unfold roundHonest
   by_cases remaining : point.length < count
   · simp only [remaining, ↓reduceIte, SumcheckProverLaws.roundPresent, PIR.Proc.bind,
       PIR.Boundary.Returns]
     intro _ _ cp
-    have extended : ((honestState raw count point).2.2.2 ++ [cp]).length = point.length + 1 := by
-      simp only [honestState, List.length_append, List.length_singleton]
-    exact ⟨extended, by rw [extended]; exact remaining⟩
+    simp only [receivedChallenges, ↓reduceIte, honestState, List.length_append,
+      List.length_singleton]
+    exact ⟨trivial, trivial, remaining⟩
   · simp only [remaining, ↓reduceIte, PIR.Boundary.Returns]
 
-/-- The fold invariant on the actual imported Reduce callback at the prover: after
-any number of iterations and for every delivered challenge, the frame the actual
-loop reaches has the honest form and satisfies every atom. The binder is the
-decoding of the prover's own input table. -/
+/-- The fold invariant on the imported Reduce callback at the prover: after
+any number of iterations, the frame the loop reaches is the honest state of
+exactly the challenges it received, and it satisfies every atom. Starting from no received challenge, the phase is the received point.
+The binder is the decoding of the prover's own input table. -/
 theorem prover_frames (U : UnitPayload) (bodies : SumcheckUnitContracts.Bodies U.definitions)
     (ctx : ProtocolContext) (self : Nat) (prover : self = ctx.roles 0)
     (separate : ctx.roles 1 ≠ self) (maximum : Nat) (service : Option Nat)
     (raw : List F) (count : Nat) (shape : HasShape raw count 1) (bound : raw.length < indexLimit)
-    (table : Table F count) (decoded : ofList? count raw = some table)
-    (interaction : PIR.Interaction (participantInterface F G)) (phase : interaction.Phase)
-    (iterations : Nat) :
-    PIR.Boundary.Returns interaction
-      (fun state _ => HonestFrame raw count iterations state ∧ Holds count table iterations state)
+    (table : Table F count) (decoded : ofList? count raw = some table) (iterations : Nat) :
+    PIR.Boundary.Returns (receivedChallenges (G := G) ctx)
+      (fun state received => HonestFrame raw count iterations received state ∧
+        Holds count table iterations state)
       (Repeat.loop (repeatSpec maximum) ctx self (cap service) (bodyFn U ctx self) 0 iterations
-        (embedP (G := G) (honestState raw count []))) phase := by
+        (embedP (G := G) (honestState raw count []))) [] := by
   have exact := Repeat.loop_frames (repeatSpec maximum) ctx self (cap service) (bodyFn U ctx self)
-    interaction (fun index state _ => HonestFrame raw count index state)
+    (receivedChallenges (F := F) (G := G) ctx)
+    (fun index state (received : List F) => HonestFrame raw count index received state)
     (by
-      intro index state phase valid
-      obtain ⟨point, length, _, rfl⟩ := valid
-      rw [step_honest U bodies ctx self prover separate maximum service raw count shape bound point index]
-      apply PIR.Boundary.returns_bind interaction _ _
-        (fun result _ => result.length = point.length + 1 ∧ result.length ≤ count)
-      · exact roundHonest_returns interaction ctx raw count point phase
-      · intro result next ⟨extended, fits⟩
-        exact ⟨result, by omega, by omega, rfl⟩)
-    0 iterations (embedP (honestState raw count [])) phase ⟨[], rfl, Nat.zero_le _, rfl⟩
-  apply PIR.Boundary.returns_mono interaction _ _ _ _ exact
-  intro state next valid
+      intro index state received valid
+      obtain ⟨length, _, rfl⟩ := valid
+      rw [step_honest U bodies ctx self prover separate maximum service raw count shape bound
+        received index]
+      apply PIR.Boundary.returns_bind (receivedChallenges (F := F) (G := G) ctx) _ _
+        (fun result next => result = next ∧ result.length = received.length + 1 ∧
+          result.length ≤ count)
+      · exact roundHonest_received ctx raw count received
+      · intro result next ⟨same, extended, fits⟩
+        subst next
+        exact ⟨by omega, by omega, rfl⟩)
+    0 iterations (embedP (honestState raw count [])) [] ⟨rfl, Nat.zero_le _, rfl⟩
+  apply PIR.Boundary.returns_mono (receivedChallenges (F := F) (G := G) ctx) _ _ _ _ exact
+  intro state received valid
   rw [Nat.zero_add] at valid
   refine ⟨valid, ?_⟩
-  obtain ⟨point, length, fits, rfl⟩ := valid
+  obtain ⟨length, fits, rfl⟩ := valid
   rw [← length]
-  exact holds_honest raw count table decoded point (by omega)
+  exact holds_honest raw count table decoded received (by omega)
 
 /-- The round messages on the actual callback: from a frame in the honest form
 with a round remaining, the prover's two actual sends are the endpoints of the
@@ -229,37 +249,35 @@ theorem prover_messages (U : UnitPayload) (bodies : SumcheckUnitContracts.Bodies
 /-- The fold invariant at the prover of the complete Source unit's Reduce. -/
 theorem source_frames (raw : List F) (count : Nat) (shape : HasShape raw count 1)
     (bound : raw.length < indexLimit) (table : Table F count) (decoded : ofList? count raw = some table)
-    (interaction : PIR.Interaction (participantInterface F G)) (phase : interaction.Phase)
     (iterations : Nat) :
-    PIR.Boundary.Returns interaction
-      (fun state _ => HonestFrame raw count iterations state ∧ Holds count table iterations state)
+    PIR.Boundary.Returns (receivedChallenges (G := G) SumcheckSourceVerifier.childContext)
+      (fun state received => HonestFrame raw count iterations received state ∧
+        Holds count table iterations state)
       (Repeat.loop (repeatSpec 2) SumcheckSourceVerifier.childContext 0 (cap none)
         (bodyFn SumcheckSourceViews.unit SumcheckSourceVerifier.childContext 0) 0 iterations
-        (embedP (G := G) (honestState raw count []))) phase :=
+        (embedP (G := G) (honestState raw count []))) [] :=
   prover_frames SumcheckSourceViews.unit SumcheckSourceContracts.bodies
     SumcheckSourceVerifier.childContext 0 rfl (by decide) 2 none raw count shape bound table decoded
-    interaction phase iterations
+    iterations
 
 /-- The fold invariant at the prover of the complete Reduction unit's Reduce. -/
 theorem reduction_frames (raw : List F) (count : Nat) (shape : HasShape raw count 1)
     (bound : raw.length < indexLimit) (table : Table F count) (decoded : ofList? count raw = some table)
-    (interaction : PIR.Interaction (participantInterface F G)) (phase : interaction.Phase)
     (iterations : Nat) :
-    PIR.Boundary.Returns interaction
-      (fun state _ => HonestFrame raw count iterations state ∧ Holds count table iterations state)
+    PIR.Boundary.Returns (receivedChallenges (G := G) (ProtocolContext.enter {} "s3" [0, 1]))
+      (fun state received => HonestFrame raw count iterations received state ∧
+        Holds count table iterations state)
       (Repeat.loop (repeatSpec 4) (ProtocolContext.enter {} "s3" [0, 1]) 0 (cap none)
         (bodyFn SumcheckReduceViews.unit (ProtocolContext.enter {} "s3" [0, 1]) 0) 0 iterations
-        (embedP (G := G) (honestState raw count []))) phase :=
+        (embedP (G := G) (honestState raw count []))) [] :=
   prover_frames SumcheckReduceViews.unit SumcheckReduceContracts.bodies
     (ProtocolContext.enter {} "s3" [0, 1]) 0 rfl (by decide) 4 none raw count shape bound table
-    decoded interaction phase iterations
+    decoded iterations
 
 /-! ### Exported frame metadata -/
 
 instance : DecidableEq vocabulary.Sorts := inferInstanceAs (DecidableEq FoldSort)
 
-def tableIdentity (dimension : Nat) : Identity :=
-  ⟨"zkc::multilinear::logic::Polynomial", [.domain "bls12-381.fr", .nat dimension]⟩
 def partialIdentity (dimension : Nat) : Identity :=
   ⟨"zkc::multilinear::logic::PartialEvaluation", [.domain "bls12-381.fr", .nat dimension]⟩
 def remainingIdentity (dimension : Nat) : Identity :=
@@ -297,19 +315,40 @@ def frameExport (count : Nat) : RawFrame where
     ⟨widthIdentity, [.carried 2]⟩,
     ⟨roundIdentity count, [.binder 0, .carried 3, .carried 0]⟩]
 
-/-- The Reduce body's only repeat occurrence, by site. -/
-def repeats (maximum : Nat) (site : String) : Option RepeatSpec :=
-  if site = "s15" then some (repeatSpec maximum) else none
+/-- The Reduction unit's actual Reduce body has its repeat at site `s15`, with
+maximum four; the Source unit's has maximum two. -/
+theorem reduction_repeat :
+    repeatAt SumcheckReduceViews.reduceDefinition.raw.operations "s15" = some (repeatSpec 4) := by
+  decide +kernel
+
+theorem source_repeat :
+    repeatAt SumcheckSourceViews.reduceDefinition.raw.operations "s15" = some (repeatSpec 2) := by
+  decide +kernel
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
-/-- For every dimension and maximum, the exported frame checks to exactly the
-invariant proved on the actual callback. -/
-theorem frame_export_checks (count maximum : Nat) :
-    checkFrame (Value := assignment F G) resolution (repeats maximum) (tableContext count)
-      (frameExport count) = .ok ⟨repeatSpec maximum, proverInvariant count⟩ := by
-  simp [checkFrame, checkFrameAtoms, checkFrameAtom, checkFrameTerms, checkFrameTerm, resolution,
+/-- For every dimension, the exported frame checks against the actual Reduction
+body's own repeat occurrence to exactly the invariant proved on its callback. -/
+theorem frame_export_checks (count : Nat) :
+    checkFrame (Value := assignment F G) resolution
+      (repeatAt SumcheckReduceViews.reduceDefinition.raw.operations) (tableContext count)
+      (frameExport count) = .ok ⟨repeatSpec 4, proverInvariant count⟩ := by
+  simp only [checkFrame]
+  simp [checkFrameAtoms, checkFrameAtom, checkFrameTerms, checkFrameTerm, resolution,
     Resolution.ofCandidates, sortCandidate, predicateCandidate, frameExport,
-    partialIdentity, remainingIdentity, widthIdentity, roundIdentity, vocabulary, repeats,
+    partialIdentity, remainingIdentity, widthIdentity, roundIdentity, vocabulary,
+    decode_first_binder, bind, Except.bind, pure, Except.pure]
+  rfl
+
+omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
+/-- The same export checks against the actual Source body's repeat occurrence. -/
+theorem source_frame_export_checks (count : Nat) :
+    checkFrame (Value := assignment F G) resolution
+      (repeatAt SumcheckSourceViews.reduceDefinition.raw.operations) (tableContext count)
+      (frameExport count) = .ok ⟨repeatSpec 2, proverInvariant count⟩ := by
+  simp only [checkFrame]
+  simp [checkFrameAtoms, checkFrameAtom, checkFrameTerms, checkFrameTerm, resolution,
+    Resolution.ofCandidates, sortCandidate, predicateCandidate, frameExport,
+    partialIdentity, remainingIdentity, widthIdentity, roundIdentity, vocabulary,
     decode_first_binder, bind, Except.bind, pure, Except.pure]
   rfl
 
