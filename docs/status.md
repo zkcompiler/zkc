@@ -284,10 +284,12 @@ fixed-statement Fiat–Shamir knowledge soundness in the random-oracle model, un
 the [named assumptions](../lean/docs/spec/fiat-shamir.md#named-assumptions). Other
 Entries, suites and programmable constructions have no such check. Lean also
 proves [Fiat–Shamir soundness](../lean/docs/spec/fiat-shamir-security.md) of the
-transform of any validator with a round-by-round soundness certificate, and of
-the imported Sumcheck verifier's transform; that bound and the compiled Sumcheck
-Entry's transform equation are not yet composed, so the Sumcheck Entry has no
-security theorem.
+transform of any validator over the common participant actions with a
+round-by-round soundness certificate, and of the imported Sumcheck verifier's
+transform. A composition theorem leaves the construction equality of the
+compiled Sumcheck proof Entry as its only premise about the compiled program;
+that equality is proved above but not yet composed with the bound, so the
+Sumcheck Entry has no security theorem.
 
 The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retained
 PIR programs, proves open-process contracts, and applies selected ArkLib/VCVio

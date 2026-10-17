@@ -10,7 +10,7 @@ public import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
 A transcript suite derives a field challenge by squeezing a fixed number of
 bytes and reducing their integer modulo the field size. The reduced sample is
 close to, not exactly, uniform. `balanced_of_fibers` bounds the excess of every
-event by `|F| / |B|` when no field element has more than a ceiling share of the
+event by `|F| / |B|` when no field element has more than `|B| / |F| + 1` of the
 samples; `balanced_reduce` applies it to reduction modulo the field size of a
 uniform integer below `N`, through a numbering of the field elements. Combined
 with `adaptive_soundness`, a suite that squeezes `k` bytes adds `|F| / 2^(8k)`
@@ -25,8 +25,8 @@ open OracleComp
 variable {F B : Type}
 
 /-- If every fiber of `decode` has at most `fiber` samples, and `fiber` is at most
-the ceiling share `|B| / |F| + 1`, every event of the decoded sample is at most
-`|F| / |B|` likelier than under the uniform field. -/
+`|B| / |F| + 1`, every event of the decoded sample is at most `|F| / |B|`
+likelier than under the uniform field. -/
 theorem balanced_of_fibers [Fintype F] [Fintype B] [SampleableType F] [SampleableType B]
     [DecidableEq F] (decode : B → F) (fiber : ℕ)
     (small : ∀ challenge, (Finset.univ.filter fun answer => decode answer = challenge).card ≤ fiber)

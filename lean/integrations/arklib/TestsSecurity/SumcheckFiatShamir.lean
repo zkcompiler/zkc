@@ -18,9 +18,17 @@ count determines the statement and the adaptive premises hold together. The
 determining premise is necessary: with one initial history for every statement,
 a prover that asks the challenge of `(0, 0)` first and then chooses a vector it
 fits is accepted on a false claim with probability `4 / 5`, above the `3 / 5`
-the adaptive bound would give for its one query. Reducing a sample below `8`
-modulo `5` satisfies the decoding premise with loss `5 / 8` and violates it with
-loss zero. -/
+the adaptive bound would give for its one query (`unbound_violates_bound`).
+Reducing a sample below `8` modulo `5` satisfies the decoding premise with loss
+`5 / 8` and violates it with loss zero; with samples below `64` all premises of
+the reduced theorem hold and the bound stays below one.
+
+The remaining theorems have their premises met on the same instance: a
+distribution over provers (`randomized_premises`), compiled verifiers given by
+their construction equation (`compiled_premises`, `compiled_plain_premises`,
+`compiled_adaptive_premises`, `participant_premises`), a compiled verifier
+reporting rejection as a stop (`image_premises`) and the Reduction root over the
+same table (`reduction_premises`). -/
 
 namespace TestsSecurity.SumcheckFiatShamir
 open OracleComp OracleSpec
@@ -46,8 +54,6 @@ theorem decoded : ofList? 1 raw = some table := by
   funext bits
   cases first : bits 0 <;> simp [ofVector, index, first]
 
-theorem sum_three : raw.sum = 3 := by decide +kernel
-
 theorem false_claim : (0 : Scalar) ≠ raw.sum := by decide +kernel
 
 /-- A concrete deployment context; the theorems quantify over all of them. -/
@@ -66,7 +72,7 @@ def cheat : Proof Scalar Scalar := [.field "bls12-381.fr" 0, .field "bls12-381.f
 def honest : Proof Scalar Scalar := [.field "bls12-381.fr" 2, .field "bls12-381.fr" 1]
 
 /-- The cheating prover queries nothing. -/
-def cheater : OracleComp (Spec Scalar Scalar) (Proof Scalar Scalar) := pure cheat
+def cheater : OracleComp (FieldOracle Scalar Scalar) (Proof Scalar Scalar) := pure cheat
 
 theorem cheater_bound : IsTotalQueryBound cheater 0 := trivial
 
@@ -132,7 +138,7 @@ theorem cheat_transform :
     transform context historyQuery (plain 0) initial cheat =
       cheatDecision <$> historyQuery cheatKey := by
   simp only [plain, validator, PIR.repeatN, verifierRound, afterLow, afterHigh, afterChallenge,
-    terminal, PIR.Proc.bind, cheat, transform, Payload.value, ↓reduceIte, add_zero,
+    terminal, decision, PIR.Proc.bind, cheat, transform, Payload.value, ↓reduceIte, add_zero,
     List.nil_append]
   rfl
 
@@ -188,7 +194,7 @@ theorem binding_determined : Determined binding := by
 def falseStatement : PublicStatement Scalar := ⟨raw, 0, 1, table, decoded⟩
 
 def adaptiveCheater :
-    OracleComp (Spec Scalar Scalar) (PublicStatement Scalar × Proof Scalar Scalar) :=
+    OracleComp (FieldOracle Scalar Scalar) (PublicStatement Scalar × Proof Scalar Scalar) :=
   pure (falseStatement, cheat)
 
 /-- Every premise of the adaptive theorem holds together; the bound is `2 / 5`. -/
@@ -232,7 +238,7 @@ def chosenStatement (challenge : Scalar) : PublicStatement Scalar :=
 
 /-- Ask the challenge of the proof `(0, 0)` first, then choose a statement it fits. -/
 def weakProver :
-    OracleComp (Spec Scalar Scalar) (PublicStatement Scalar × Proof Scalar Scalar) := do
+    OracleComp (FieldOracle Scalar Scalar) (PublicStatement Scalar × Proof Scalar Scalar) := do
   let challenge ← historyQuery cheatKey
   pure (chosenStatement challenge, cheat)
 
@@ -250,10 +256,11 @@ theorem weak_transform (challenge : Scalar) :
     transform context (decodedQuery id)
         (plainFamily (G := Scalar) handle (chosenStatement challenge))
         (unbound (chosenStatement challenge)) cheat =
-      weakDecision challenge <$> liftM ((Spec Scalar Scalar).query cheatKey) := by
+      weakDecision challenge <$> liftM ((FieldOracle Scalar Scalar).query cheatKey) := by
   have admitted : (1 : ℕ) ≤ 2 := by decide
   simp only [plainFamily, admitted, ↓reduceIte, chosenStatement, unbound, validator, PIR.repeatN,
-    verifierRound, afterLow, afterHigh, afterChallenge, terminal, PIR.Proc.bind, cheat, transform,
+    verifierRound, afterLow, afterHigh, afterChallenge, terminal, decision, PIR.Proc.bind, cheat,
+    transform,
     Payload.value, add_zero, List.nil_append, decodedQuery, id_map]
   rfl
 
@@ -292,6 +299,161 @@ theorem weak_exceeds_bound : ((1 : ℕ) + (2 : ℕ) : ENNReal) * (1 / 5 + 0) < 4
     (ENNReal.div_ne_top (by simp) (by simp)), ENNReal.toReal_div, ENNReal.toReal_div]
   norm_num
 
+/-- The adaptive conclusion fails without a determining initial history: the
+one-query prover exceeds `(1 + 2) * (1 / 5 + 0)`. -/
+theorem unbound_violates_bound :
+    ¬ Pr{let result ← (simulateQ randomOracle (adaptiveExperiment context (id : Scalar → Scalar)
+        (plainFamily (G := Scalar) handle) unbound weakProver)).run' ∅}[
+      result.1.claim ≠ result.1.raw.sum ∧ Accepted (· = some true) result.2.1] ≤
+      ((1 : ℕ) + (2 : ℕ) : ENNReal) * (1 / 5 + 0) := fun bound =>
+  absurd (weak_acceptance.symm.le.trans bound) (not_le.mpr weak_exceeds_bound)
+
+/-! ### Private randomness and composition -/
+
+/-- The plain verifier's certificate for the instance. -/
+noncomputable abbrev instanceCertificate :=
+  certificate (G := Scalar) SumcheckSourceVerifier.childContext handle 1 table (decision 1 table)
+    (· = some true) (decision_rejects table)
+
+theorem plain_doomed : instanceCertificate.doomed (plain 0) :=
+  ⟨.round 1 [] 0, ⟨rfl, falseClaim_initial table 0 (by decide +kernel)⟩, rfl⟩
+
+/-- The premises of `randomized_soundness` hold for a distribution over provers. -/
+theorem randomized_premises :
+    Pr{let result ← (pure cheater : ProbComp _) >>= fun prover =>
+        (simulateQ randomOracle (experiment context (plain 0) initial prover)).run' ∅}[
+      Accepted (· = some true) result.1] ≤ ((0 : ℕ) + (1 : ℕ)) * (1 / 5) := by
+  have bound := randomized_soundness instanceCertificate context (plain 0) plain_doomed 1
+    (residual_queryBound SumcheckSourceVerifier.childContext handle (decision 1 table) 1 [] 0)
+    initial (pure cheater) 0 (by
+      intro prover drawn
+      rw [support_pure, Set.mem_singleton_iff] at drawn
+      subst drawn
+      exact cheater_bound)
+  simpa only [ZMod.card, Nat.cast_ofNat] using bound
+
+/-- The compiled verifier given by its construction equation; both composition
+premises hold by definition. -/
+def compiledVerifier (proof : Proof Scalar Scalar) :
+    OracleComp (FieldOracle Scalar Scalar) (PIR.Outcome (Option Bool) × Proof Scalar Scalar) :=
+  transform context historyQuery (importedValidator raw 0 1 handle) initial proof
+
+theorem compiled_premises :
+    Pr{let result ← (simulateQ randomOracle (cheater >>= compiledVerifier)).run' ∅}[
+      Accepted (· = some true) result.1] ≤ 1 / 5 := by
+  have bound := compiled_imported_soundness context compiledVerifier 1 raw table decoded 0
+    false_claim handle initial (fun _ => rfl) cheater 0 cheater_bound
+  simpa only [Nat.cast_zero, Nat.cast_one, zero_add, one_mul, ZMod.card, Nat.cast_ofNat]
+    using bound
+
+theorem compiled_plain_premises :
+    Pr{let result ← (simulateQ randomOracle (cheater >>= fun proof =>
+        transform context historyQuery (plain 0) initial proof)).run' ∅}[
+      Accepted (· = some true) result.1] ≤ 1 / 5 := by
+  have bound := compiled_soundness context _ (plain 0) initial (fun _ => rfl)
+    SumcheckSourceVerifier.childContext handle 1 table 0 rfl (by decide +kernel) cheater 0
+    cheater_bound
+  simpa only [Nat.cast_zero, Nat.cast_one, zero_add, one_mul, ZMod.card, Nat.cast_ofNat]
+    using bound
+
+theorem compiled_adaptive_premises :
+    Pr{let result ← (simulateQ randomOracle (adaptiveCheater >>= fun claimed =>
+        (fun result => (claimed.1, result)) <$>
+          transform context (decodedQuery (id : Scalar → Scalar))
+            (importedValidator claimed.1.raw claimed.1.claim claimed.1.count handle)
+            (binding claimed.1) claimed.2)).run' ∅}[
+      result.1.claim ≠ result.1.raw.sum ∧ Accepted (· = some true) result.2.1] ≤ 2 / 5 := by
+  have bound := compiled_adaptive_soundness context handle (id : Scalar → Scalar) 0 balanced_id
+    binding binding_determined
+    (fun statement proof => transform context (decodedQuery id)
+      (importedValidator statement.raw statement.claim statement.count handle)
+      (binding statement) proof) (fun _ _ => rfl) adaptiveCheater 0 trivial
+  simpa only [Nat.cast_zero, zero_add, add_zero, ZMod.card, Nat.cast_ofNat, mul_one_div]
+    using bound
+
+/-- A Boolean selection of the decision output. -/
+theorem selected_reflects (value : Option Bool) (selected : value.getD false = true) :
+    value = some true := by
+  cases value with
+  | none => cases selected
+  | some decided => exact congrArg some selected
+
+/-- A compiled verifier read through a Boolean selection of the imported
+program's outputs, given by its construction equation. -/
+def selectedVerifier (proof : Proof Scalar Scalar) :
+    OracleComp (FieldOracle Scalar Scalar) (PIR.Outcome Bool × Proof Scalar Scalar) :=
+  transform context historyQuery
+    (((SumcheckSourceViews.imported.program.participant Scalar Scalar 1
+      (SumcheckSourceVerifier.sourceRootInputs (some raw) (some 0) (some 1) (some handle))).bind
+        fun outputs => .done ((outputs.get .here).getD false)).interpret
+      Structured.CommonAdapter.project)
+    initial proof
+
+/-- All premises of `compiled_participant_soundness` hold together. -/
+theorem participant_premises :
+    Pr{let result ← (simulateQ randomOracle (cheater >>= selectedVerifier)).run' ∅}[
+      Accepted (· = true) result.1] ≤ 1 / 5 := by
+  have bound := compiled_participant_soundness context selectedVerifier 1 raw table decoded 0
+    false_claim handle initial (fun outputs => (outputs.get .here).getD false) (· = true)
+    (fun outputs selected => selected_reflects _ selected) (fun _ => rfl) cheater 0 cheater_bound
+  simpa only [Nat.cast_zero, Nat.cast_one, zero_add, one_mul, ZMod.card, Nat.cast_ofNat]
+    using bound
+
+/-! ### Outcome images -/
+
+/-- A compiled verifier's report of the plain verifier's outcome: acceptance
+returns unit, and a returned rejection or a missing decision becomes the stop
+`reject`. -/
+def reportOutcome :
+    PIR.Outcome (Option Bool) × Proof Scalar Scalar → PIR.Outcome Unit × Proof Scalar Scalar
+  | (.returned (some true), rest) => (.returned (), rest)
+  | (.returned _, rest) => (.stopped .reject, rest)
+  | (.stopped reason, rest) => (.stopped reason, rest)
+
+theorem reportOutcome_preserves (result : PIR.Outcome (Option Bool) × Proof Scalar Scalar)
+    (accepted : Accepted (fun _ : Unit => True) (reportOutcome result).1) :
+    Accepted (· = some true) result.1 := by
+  obtain ⟨outcome, rest⟩ := result
+  cases outcome with
+  | returned value =>
+    cases value with
+    | none => exact False.elim accepted
+    | some decided =>
+      cases decided
+      · exact False.elim accepted
+      · rfl
+  | stopped reason => exact False.elim accepted
+
+/-- All premises of `acceptance_le_of_image` hold for the reporting verifier;
+with the plain verifier's bound its acceptance is at most `1 / 5`. -/
+theorem image_premises :
+    Pr{let result ← (simulateQ randomOracle (cheater >>= fun proof =>
+        reportOutcome <$> transform context historyQuery (plain 0) initial proof)).run' ∅}[
+      Accepted (fun _ : Unit => True) result.1] ≤ 1 / 5 := by
+  refine (acceptance_le_of_image context (plain 0) initial _ reportOutcome (fun _ => rfl)
+    (· = some true) (fun _ => True) reportOutcome_preserves cheater).trans ?_
+  have bound := ZkcSecurity.Examples.SumcheckFiatShamir.soundness context
+    SumcheckSourceVerifier.childContext handle 1 table 0 (by decide +kernel) initial cheater 0
+    cheater_bound
+  simpa only [Nat.cast_zero, Nat.cast_one, zero_add, one_mul, ZMod.card, Nat.cast_ofNat]
+    using bound
+
+/-! ### The Reduction root -/
+
+/-- The one-variable table as an external table of dimension `0 + 1`; its
+residual claim after one round is a complete evaluation. All premises of
+`reduction_soundness` hold with the false claim `0`. -/
+theorem reduction_premises :
+    Pr{let result ← (simulateQ randomOracle (experiment context
+        (importedReduction (G := Scalar) none none 0 1 handle) initial cheater)).run' ∅}[
+      Accepted (ZkcSecurity.Examples.CausalSumcheck.SourceVerifier.residualObservation
+        (G := Scalar) 0 1 table) result.1] ≤ 1 / 5 := by
+  have bound := reduction_soundness context none none 0 1 table 0
+    (fun same => false_claim (same.trans (booleanSum_ofList? raw table decoded))) handle
+    initial cheater 0 cheater_bound
+  simpa only [Nat.cast_zero, Nat.cast_one, zero_add, one_mul, ZMod.card, Nat.cast_ofNat]
+    using bound
+
 /-! ### Reduced wide samples -/
 
 /-- The canonical numbering of `ZMod 5`. -/
@@ -319,5 +481,32 @@ theorem reduced_not_exact : ¬ Balanced (reduce numbering 8) 0 := by
     (ENNReal.div_ne_top (by simp) (by simp))).mpr bound
   rw [ENNReal.toReal_div, ENNReal.toReal_div] at real
   norm_num at real
+
+/-- A cheating prover on the oracle answering samples below `64`. -/
+def wideCheater :
+    OracleComp (Oracle Scalar Scalar (Fin 64)) (PublicStatement Scalar × Proof Scalar Scalar) :=
+  pure (falseStatement, cheat)
+
+/-- All premises of `reduced_imported_soundness` hold together with reduction
+from samples below `64`. -/
+theorem reduced_imported_premises :
+    Pr{let result ← (simulateQ randomOracle (adaptiveExperiment context (reduce numbering 64)
+        (fun statement : PublicStatement Scalar =>
+          importedValidator statement.raw statement.claim statement.count handle)
+        binding wideCheater)).run' ∅}[
+      result.1.claim ≠ result.1.raw.sum ∧ Accepted (· = some true) result.2.1] ≤
+      ((0 : ℕ) + 2) * (1 / 5 + 5 / 64) := by
+  have bound := reduced_imported_soundness context handle numbering 64 binding binding_determined
+    wideCheater 0 trivial
+  simpa only [ZMod.card, Nat.cast_ofNat] using bound
+
+/-- The reduced bound is below one. -/
+theorem reduced_bound_below_one : ((0 : ℕ) + 2 : ENNReal) * (1 / 5 + 5 / 64) < 1 := by
+  have fifth : (1 / 5 : ENNReal) ≠ ⊤ := ENNReal.div_ne_top (by simp) (by simp)
+  have share : (5 / 64 : ENNReal) ≠ ⊤ := ENNReal.div_ne_top (by simp) (by simp)
+  rw [Nat.cast_zero, zero_add, ← ENNReal.toReal_lt_toReal
+    (ENNReal.mul_ne_top (by simp) (ENNReal.add_ne_top.mpr ⟨fifth, share⟩)) ENNReal.one_ne_top,
+    ENNReal.toReal_mul, ENNReal.toReal_add fifth share, ENNReal.toReal_div, ENNReal.toReal_div]
+  norm_num
 
 end TestsSecurity.SumcheckFiatShamir

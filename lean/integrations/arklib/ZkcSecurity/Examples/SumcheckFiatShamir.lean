@@ -5,6 +5,7 @@ public import ZkcSecurity.Examples.CausalSumcheck.SourceVerifier
 public import ZkcSecurity.ArkLib.Sumcheck.Multilinear.Protocol
 public import ArkLib.ProofSystem.Sumcheck.Interaction.ProtocolSoundness
 public import Zkc.Source.Structured.CommonAdapter
+public import ZkcExamples.Structured.SumcheckReduceViews
 
 @[expose] public section
 
@@ -24,7 +25,15 @@ rejects; a passed check and a fresh challenge make the interpolated claim true
 with probability at most `1 / |F|` (ArkLib's
 `MultivariateRound.uniform_successor_soundness`, through the multilinear
 message and table bridge); a doomed final claim fails the terminal check.
-`ZkcSecurity.FiatShamir.soundness` then bounds the Fiat–Shamir transform.
+`ZkcSecurity.FiatShamir.soundness` then bounds the Fiat–Shamir transform
+(`soundness`, `imported_soundness`). One certificate for all tables bounds
+adaptively chosen public statements (`adaptive_imported_soundness`,
+`reduced_imported_soundness`). The same rounds followed by the outputs of the
+composed `example::Reduction` root give a reduction to a residual evaluation
+claim (`reduction_soundness`). The `compiled_*` theorems leave the construction
+rule's equation as the only premise about the compiled verifier;
+`compiled_participant_soundness` states it for the imported participant process
+followed by any final decision on its outputs.
 -/
 
 set_option autoImplicit false
@@ -71,11 +80,14 @@ def verifierRound (ctx : ProtocolContext) (handle : Nat) (pc : List F × F) :
   .call (.receive (.field "bls12-381.fr") (SumcheckVerifierLaws.lowSite ctx) (ctx.roles 0))
     fun low => afterLow ctx handle pc low
 
+/-- The public-table decision on the final point and claim. -/
+def decision (count : Nat) (table : Table F count) (pc : List F × F) : Option Bool :=
+  some (decide (pc.1.length = count ∧ extension count table (coordinates count pc.1) = pc.2))
+
 /-- The public-table terminal check on the final point and claim. -/
 def terminal (count : Nat) (table : Table F count) (pc : List F × F) :
     PIR.Proc (Actions F G) (Option Bool) :=
-  .done (some (decide (pc.1.length = count ∧
-    extension count table (coordinates count pc.1) = pc.2)))
+  .done (decision count table pc)
 
 /-- The plain verifier: `count` rounds from the empty point and the claim, then
 the terminal check. -/
@@ -169,21 +181,23 @@ inductive Phase (F : Type) where
 section Certificate
 variable [Field F] [DecidableEq F]
 
-/-- The residual process at each phase, exactly as the verifier's continuations
+/-- The residual process at each phase of the rounds followed by returning
+`output` of the final point and claim, exactly as the verifier's continuations
 produce it. -/
-def residual (ctx : ProtocolContext) (handle count : Nat) (table : Table F count) :
-    Phase F → PIR.Proc (Actions F G) (Option Bool)
+def residual {A : Type} (ctx : ProtocolContext) (handle : Nat) (output : List F × F → A) :
+    Phase F → PIR.Proc (Actions F G) A
   | .round remaining point claim =>
-      (PIR.repeatN remaining (verifierRound ctx handle) (point, claim)).bind (terminal count table)
+      (PIR.repeatN remaining (verifierRound ctx handle) (point, claim)).bind
+        fun pc => .done (output pc)
   | .low remaining point claim low =>
       ((afterLow ctx handle (point, claim) low).bind
-        (PIR.repeatN remaining (verifierRound ctx handle))).bind (terminal count table)
+        (PIR.repeatN remaining (verifierRound ctx handle))).bind fun pc => .done (output pc)
   | .high remaining point claim low high =>
       ((afterHigh ctx handle (point, claim) low high).bind
-        (PIR.repeatN remaining (verifierRound ctx handle))).bind (terminal count table)
+        (PIR.repeatN remaining (verifierRound ctx handle))).bind fun pc => .done (output pc)
   | .challenged remaining point claim low high challenge =>
       ((afterChallenge ctx (point, claim) low high challenge).bind
-        (PIR.repeatN remaining (verifierRound ctx handle))).bind (terminal count table)
+        (PIR.repeatN remaining (verifierRound ctx handle))).bind fun pc => .done (output pc)
 
 /-- ArkLib's realized polynomial oracle of the original table. -/
 noncomputable abbrev behavior {count : Nat} (table : Table F count) :=
@@ -211,9 +225,9 @@ def Holds (count : Nat) (table : Table F count) : Phase F → Prop
         FalseClaim table (point ++ [challenge]) ((1 - challenge) * low + challenge * high)
 
 /-- Doomed residuals: those of phases satisfying the invariant. -/
-def Doomed (ctx : ProtocolContext) (handle count : Nat) (table : Table F count)
-    (process : PIR.Proc (Actions F G) (Option Bool)) : Prop :=
-  ∃ phase, Holds count table phase ∧ residual ctx handle count table phase = process
+def Doomed {A : Type} (ctx : ProtocolContext) (handle count : Nat) (table : Table F count)
+    (output : List F × F → A) (process : PIR.Proc (Actions F G) A) : Prop :=
+  ∃ phase, Holds count table phase ∧ residual ctx handle output phase = process
 
 omit [DecidableEq F] in
 theorem snoc_coordinates (point : List F) (challenge : F) {length : Nat}
@@ -257,7 +271,7 @@ omit [DecidableEq F] in
 passed boundary check, a fresh uniform challenge makes a false claim true with
 probability at most `1 / |F|`. -/
 theorem falseClaim_successor {count : Nat} (table : Table F count) (point : List F)
-    (claim low high : F) (wrong : FalseClaim table point claim) (open' : point.length < count)
+    (claim low high : F) (wrong : FalseClaim table point claim) (incomplete : point.length < count)
     (checked : claim = low + high) :
     Pr{let challenge ← $ᵗ F}[
       ¬ FalseClaim table (point ++ [challenge]) ((1 - challenge) * low + challenge * high)] ≤
@@ -292,41 +306,42 @@ theorem falseClaim_successor {count : Nat} (table : Table F count) (point : List
     exact snoc_coordinates point challenge sized
 
 omit [Fintype F] [SampleableType F] in
-theorem residual_high_pass (ctx : ProtocolContext) (handle count : Nat) (table : Table F count)
-    (remaining : Nat) (point : List F) (claim low high : F) (checked : claim = low + high) :
-    residual (G := G) ctx handle count table (.high remaining point claim low high) =
+theorem residual_high_pass {A : Type} (ctx : ProtocolContext) (handle : Nat)
+    (output : List F × F → A) (remaining : Nat) (point : List F) (claim low high : F)
+    (checked : claim = low + high) :
+    residual (G := G) ctx handle output (.high remaining point claim low high) =
       .call (.query (SumcheckVerifierLaws.challengeSite ctx) "bls12-381.fr" (.cons handle .nil))
-        fun challenge => residual ctx handle count table
+        fun challenge => residual ctx handle output
           (.challenged remaining point claim low high challenge) := by
   simp only [residual, afterHigh]
   rw [ite_eq_left_of_eq_true _ _ (eq_true checked)]
   rfl
 
 omit [Fintype F] [SampleableType F] in
-theorem residual_high_fail (ctx : ProtocolContext) (handle count : Nat) (table : Table F count)
-    (remaining : Nat) (point : List F) (claim low high : F) (failed : ¬ claim = low + high) :
-    residual (G := G) ctx handle count table (.high remaining point claim low high) =
+theorem residual_high_fail {A : Type} (ctx : ProtocolContext) (handle : Nat)
+    (output : List F × F → A) (remaining : Nat) (point : List F) (claim low high : F)
+    (failed : ¬ claim = low + high) :
+    residual (G := G) ctx handle output (.high remaining point claim low high) =
       .halt .reject := by
   simp only [residual, afterHigh]
   rw [ite_eq_right_of_eq_false _ _ (eq_false failed)]
   rfl
 
-/-- Every doomed residual meets its local obligation. -/
-theorem doomed_step (ctx : ProtocolContext) (handle count : Nat) (table : Table F count) :
-    ∀ process, Doomed (G := G) ctx handle count table process →
-      Step (Doomed ctx handle count table) (· = some true) (1 / (Fintype.card F : ENNReal))
+/-- Every doomed residual meets its local obligation, when no output of a false
+claim at a complete point is accepted. -/
+theorem doomed_step {A : Type} (ctx : ProtocolContext) (handle count : Nat)
+    (table : Table F count) (output : List F × F → A) (accepts : A → Prop)
+    (rejects : ∀ point claim, point.length = count → FalseClaim table point claim →
+      ¬ accepts (output (point, claim))) :
+    ∀ process, Doomed (G := G) ctx handle count table output process →
+      Step (Doomed ctx handle count table output) accepts (1 / (Fintype.card F : ENNReal))
         process := by
   rintro _ ⟨phase, holds, rfl⟩
   cases phase with
   | round remaining point claim =>
       obtain ⟨sized, wrong⟩ := holds
       cases remaining with
-      | zero =>
-          show ¬ some (decide (point.length = count ∧
-            extension count table (coordinates count point) = claim)) = some true
-          intro accepted
-          simp only [Option.some.injEq, decide_eq_true_eq] at accepted
-          exact falseClaim_terminal table point claim wrong accepted.1 accepted.2
+      | zero => exact rejects point claim sized wrong
       | succ remaining =>
           intro low
           exact ⟨.low remaining point claim low, ⟨sized, wrong⟩, rfl⟩
@@ -336,30 +351,34 @@ theorem doomed_step (ctx : ProtocolContext) (handle count : Nat) (table : Table 
   | high remaining point claim low high =>
       obtain ⟨sized, wrong⟩ := holds
       by_cases checked : claim = low + high
-      · rw [residual_high_pass ctx handle count table remaining point claim low high checked]
+      · rw [residual_high_pass ctx handle output remaining point claim low high checked]
         refine (prEvent_mono _ _ _ (fun challenge escaped => ?_)).trans
           (falseClaim_successor table point claim low high wrong (by omega) checked)
         exact fun stays => escaped ⟨.challenged remaining point claim low high challenge,
           ⟨sized, stays⟩, rfl⟩
-      · rw [residual_high_fail ctx handle count table remaining point claim low high checked]
+      · rw [residual_high_fail ctx handle output remaining point claim low high checked]
         trivial
   | challenged remaining point claim low high challenge =>
       obtain ⟨sized, wrong⟩ := holds
       exact ⟨.round remaining (point ++ [challenge]) ((1 - challenge) * low + challenge * high),
         ⟨by simp; omega, wrong⟩, rfl⟩
 
-/-- Round-by-round soundness of the plain verifier, with error `1 / |F|` per
-challenge. -/
-noncomputable def certificate (ctx : ProtocolContext) (handle count : Nat)
-    (table : Table F count) :
-    RoundByRound (F := F) (G := G) (· = some true) (1 / (Fintype.card F : ENNReal)) :=
-  RoundByRound.ofStep (Doomed ctx handle count table) (doomed_step ctx handle count table)
+/-- Round-by-round soundness of the rounds followed by `output`, with error
+`1 / |F|` per challenge. -/
+noncomputable def certificate {A : Type} (ctx : ProtocolContext) (handle count : Nat)
+    (table : Table F count) (output : List F × F → A) (accepts : A → Prop)
+    (rejects : ∀ point claim, point.length = count → FalseClaim table point claim →
+      ¬ accepts (output (point, claim))) :
+    RoundByRound (F := F) (G := G) accepts (1 / (Fintype.card F : ENNReal)) :=
+  RoundByRound.ofStep (Doomed ctx handle count table output)
+    (doomed_step ctx handle count table output accepts rejects)
 
 omit [Fintype F] [SampleableType F] in
 /-- Each round makes exactly one challenge. -/
-theorem residual_queryBound (ctx : ProtocolContext) (handle count : Nat) (table : Table F count) :
+theorem residual_queryBound {A : Type} (ctx : ProtocolContext) (handle : Nat)
+    (output : List F × F → A) :
     ∀ (remaining : Nat) (point : List F) (claim : F),
-      QueryBound (residual (G := G) ctx handle count table (.round remaining point claim))
+      QueryBound (residual (G := G) ctx handle output (.round remaining point claim))
         remaining := by
   intro remaining
   induction remaining with
@@ -367,14 +386,23 @@ theorem residual_queryBound (ctx : ProtocolContext) (handle count : Nat) (table 
   | succ remaining ih =>
       intro point claim low high
       by_cases checked : claim = low + high
-      · change QueryBound (residual ctx handle count table (.high remaining point claim low high))
+      · change QueryBound (residual ctx handle output (.high remaining point claim low high))
           (remaining + 1)
-        rw [residual_high_pass ctx handle count table remaining point claim low high checked]
+        rw [residual_high_pass ctx handle output remaining point claim low high checked]
         exact ⟨Nat.succ_pos remaining, fun challenge => ih _ _⟩
-      · change QueryBound (residual ctx handle count table (.high remaining point claim low high))
+      · change QueryBound (residual ctx handle output (.high remaining point claim low high))
           (remaining + 1)
-        rw [residual_high_fail ctx handle count table remaining point claim low high checked]
+        rw [residual_high_fail ctx handle output remaining point claim low high checked]
         trivial
+
+omit [Fintype F] [SampleableType F] in
+/-- A false claim at a complete point fails the public-table decision. -/
+theorem decision_rejects {count : Nat} (table : Table F count) (point : List F) (claim : F)
+    (sized : point.length = count) (wrong : FalseClaim table point claim) :
+    ¬ decision count table (point, claim) = some true := by
+  intro accepted
+  simp only [decision, Option.some.injEq, decide_eq_true_eq] at accepted
+  exact falseClaim_terminal table point claim wrong sized accepted.2
 
 variable [DecidableEq G]
 
@@ -389,15 +417,17 @@ are also charged. No other oracle or private randomness is available inside
 the computation. -/
 theorem soundness (context : Context) (ctx : ProtocolContext) (handle count : Nat)
     (table : Table F count) (claim : F) (falseClaim : claim ≠ booleanSum table)
-    (initial : History F G) (prover : OracleComp (Spec F G) (Proof F G)) (queries : Nat)
+    (initial : History F G) (prover : OracleComp (FieldOracle F G) (Proof F G)) (queries : Nat)
     (proverBound : IsTotalQueryBound prover queries) :
     Pr{let result ← (simulateQ randomOracle (FiatShamir.experiment context
         (validator ctx handle count table claim) initial prover)).run' ∅}[
       Accepted (· = some true) result.1] ≤
       (queries + count) * (1 / (Fintype.card F : ENNReal)) :=
-  FiatShamir.soundness (certificate ctx handle count table) context _
+  FiatShamir.soundness (certificate ctx handle count table (decision count table)
+      (· = some true) (decision_rejects table)) context _
     ⟨.round count [] claim, ⟨by simp, falseClaim_initial table claim falseClaim⟩, rfl⟩ count
-    (residual_queryBound ctx handle count table count [] claim) initial prover queries proverBound
+    (residual_queryBound ctx handle (decision count table) count [] claim) initial prover
+    queries proverBound
 
 end Certificate
 
@@ -406,8 +436,8 @@ variable [Field F] [Fintype F] [DecidableEq F] [SampleableType F]
   [AddCommGroup G] [Module F G] [DecidableEq G]
 
 /-- A refused validator never accepts. -/
-noncomputable def refusedCertificate (error : ENNReal) :
-    RoundByRound (F := F) (G := G) (A := Option Bool) (· = some true) error :=
+noncomputable def refusedCertificate {A : Type} (accepts : A → Prop) (error : ENNReal) :
+    RoundByRound (F := F) (G := G) accepts error :=
   RoundByRound.ofStep (fun process => process = .halt .refused) (by rintro _ rfl; trivial)
 
 /-- Fiat–Shamir soundness of the actual imported `example::Interactive`
@@ -417,7 +447,7 @@ plain verifier; above it the verifier refuses. Same adversary interface as
 theorem imported_soundness (context : Context) (count : Nat) (raw : List F)
     (table : Table F count) (decoded : ofList? count raw = some table) (claim : F)
     (falseClaim : claim ≠ raw.sum) (handle : Nat) (initial : History F G)
-    (prover : OracleComp (Spec F G) (Proof F G)) (queries : Nat)
+    (prover : OracleComp (FieldOracle F G) (Proof F G)) (queries : Nat)
     (proverBound : IsTotalQueryBound prover queries) :
     Pr{let result ← (simulateQ randomOracle (FiatShamir.experiment context
         (importedValidator raw claim count handle) initial prover)).run' ∅}[
@@ -428,24 +458,26 @@ theorem imported_soundness (context : Context) (count : Nat) (raw : List F)
     exact soundness context SumcheckSourceVerifier.childContext handle count table claim
       (by rwa [booleanSum_ofList? raw table decoded]) initial prover queries proverBound
   · rw [importedValidator_excess count (by omega) raw claim handle]
-    refine (FiatShamir.soundness (refusedCertificate (1 / (Fintype.card F : ENNReal))) context _
-      rfl 0 trivial initial prover queries proverBound).trans ?_
+    refine (FiatShamir.soundness (refusedCertificate _ (1 / (Fintype.card F : ENNReal))) context
+      _ rfl 0 trivial initial prover queries proverBound).trans ?_
     exact mul_le_mul_left (add_le_add_right (by exact_mod_cast Nat.zero_le count) _) _
 
 omit [AddCommGroup G] [Module F G] in
-/-- Composition with the construction rule of the compiled Proof Entry. The
-two premises are the vertical links the stage-correspondence rules supply: the
+/-- Composition with a construction rule through any original validator equal to
+the plain verifier. The two premises are the construction rule's equation (the
 compiled verifier, with the transcript oracle as challenge function, is the
-Fiat–Shamir transform of an original validator (`construction`), and that
-validator is the plain Sumcheck verifier (`projection`). -/
+Fiat–Shamir transform of the original validator) and the projection equation
+(that validator is the plain Sumcheck verifier). -/
 theorem compiled_soundness (context : Context)
-    (compiled : Proof F G → OracleComp (Spec F G) (PIR.Outcome (Option Bool) × Proof F G))
+    (compiled :
+      Proof F G → OracleComp (FieldOracle F G) (PIR.Outcome (Option Bool) × Proof F G))
     (original : PIR.Proc (Actions F G) (Option Bool)) (initial : History F G)
-    (construction : ∀ proof, compiled proof = transform context historyQuery original initial proof)
+    (construction :
+      ∀ proof, compiled proof = transform context historyQuery original initial proof)
     (ctx : ProtocolContext) (handle count : Nat) (table : Table F count) (claim : F)
     (projection : original = validator ctx handle count table claim)
     (falseClaim : claim ≠ booleanSum table)
-    (prover : OracleComp (Spec F G) (Proof F G)) (queries : Nat)
+    (prover : OracleComp (FieldOracle F G) (Proof F G)) (queries : Nat)
     (proverBound : IsTotalQueryBound prover queries) :
     Pr{let result ← (simulateQ randomOracle (prover >>= compiled)).run' ∅}[
       Accepted (· = some true) result.1] ≤
@@ -458,6 +490,83 @@ theorem compiled_soundness (context : Context)
   rw [same, projection]
   exact soundness context ctx handle count table claim falseClaim initial prover queries
     proverBound
+
+/-- Composition with the construction rule of the compiled `example::Proof` Entry.
+That Entry and the imported `example::Interactive` Entry instantiate the same
+`Sumcheck<Fr, 2>`, and the construction applies after the original stage, so
+their original-stage exports coincide (`SumcheckSourceData.snapshot`) and the
+Entry's original validator is `importedValidator`. The construction equality is
+the only premise about the compiled verifier. -/
+theorem compiled_imported_soundness (context : Context)
+    (compiled : Proof F G → OracleComp (FieldOracle F G) (PIR.Outcome (Option Bool) × Proof F G))
+    (count : Nat) (raw : List F) (table : Table F count)
+    (decoded : ofList? count raw = some table) (claim : F) (falseClaim : claim ≠ raw.sum)
+    (handle : Nat) (initial : History F G)
+    (construction : ∀ proof, compiled proof =
+      transform context historyQuery (importedValidator raw claim count handle) initial proof)
+    (prover : OracleComp (FieldOracle F G) (Proof F G)) (queries : Nat)
+    (proverBound : IsTotalQueryBound prover queries) :
+    Pr{let result ← (simulateQ randomOracle (prover >>= compiled)).run' ∅}[
+      Accepted (· = some true) result.1] ≤
+      (queries + count) * (1 / (Fintype.card F : ENNReal)) := by
+  have same : (prover >>= compiled) = FiatShamir.experiment context
+      (importedValidator raw claim count handle) initial prover :=
+    congrArg (prover >>= ·) (funext construction)
+  rw [same]
+  exact imported_soundness context count raw table decoded claim falseClaim handle initial prover
+    queries proverBound
+
+/-- Composition with a construction rule that reads the compiled verifier
+through a final decision on the imported program's outputs. If, for every proof,
+the compiled verifier is the transform of the imported `example::Interactive`
+participant process followed by `decision` of its outputs, and an accepted
+decision implies the Boolean output `some true`, the fixed-statement bound holds
+for the compiled verifier. A construction rule composed with a participant
+projection rule has this form: the compiled meaning, read through a selection of
+its returned values, is the transform of the original participant process read
+through a matching selection of its outputs. -/
+theorem compiled_participant_soundness {B : Type} (context : Context)
+    (compiled : Proof F G → OracleComp (FieldOracle F G) (PIR.Outcome B × Proof F G))
+    (count : Nat) (raw : List F) (table : Table F count)
+    (decoded : ofList? count raw = some table) (claim : F) (falseClaim : claim ≠ raw.sum)
+    (handle : Nat) (initial : History F G)
+    (decision : Values (Component (assignment F G))
+      SumcheckSourceViews.imported.program.payload.entry.outputs → B)
+    (accepts : B → Prop)
+    (reflects : ∀ outputs, accepts (decision outputs) → outputs.get .here = some true)
+    (construction : ∀ proof, compiled proof = transform context historyQuery
+      (((SumcheckSourceViews.imported.program.participant F G 1
+        (SumcheckSourceVerifier.sourceRootInputs (some raw) (some claim) (some count)
+          (some handle))).bind fun outputs => .done (decision outputs)).interpret
+        CommonAdapter.project) initial proof)
+    (prover : OracleComp (FieldOracle F G) (Proof F G)) (queries : Nat)
+    (proverBound : IsTotalQueryBound prover queries) :
+    Pr{let result ← (simulateQ randomOracle (prover >>= compiled)).run' ∅}[
+      Accepted accepts result.1] ≤
+      (queries + count) * (1 / (Fintype.card F : ENNReal)) := by
+  set participant := (SumcheckSourceViews.imported.program.participant F G 1
+    (SumcheckSourceVerifier.sourceRootInputs (some raw) (some claim) (some count)
+      (some handle))).interpret CommonAdapter.project
+  have same : (prover >>= compiled) = FiatShamir.experiment context
+      (participant.bind fun outputs => .done (decision outputs)) initial prover := by
+    refine congrArg (prover >>= ·) (funext fun proof => ?_)
+    rw [construction, PIR.Proc.interpret_bind]
+    rfl
+  have imported : importedValidator (G := G) raw claim count handle =
+      participant.bind fun outputs => .done (outputs.get .here) := by
+    rw [importedValidator, PIR.Proc.interpret_bind]
+    rfl
+  rw [same, acceptance_bind_done]
+  refine (prEvent_mono _ _ _ fun result accepted => ?_).trans
+    ((acceptance_bind_done context participant (fun outputs => outputs.get .here) initial prover
+      (· = some true)).symm.le.trans ?_)
+  · rcases result with ⟨outcome, rest⟩
+    cases outcome with
+    | returned outputs => exact reflects outputs accepted
+    | stopped _ => exact accepted.elim
+  · rw [← imported]
+    exact imported_soundness context count raw table decoded claim falseClaim handle initial
+      prover queries proverBound
 
 end Imported
 
@@ -480,7 +589,8 @@ variable [Field F] [Fintype F] [DecidableEq F] [SampleableType F]
 /-- Doomed residuals of every table and claim, and the refused verifier. -/
 def DoomedAny (ctx : ProtocolContext) (handle : Nat)
     (process : PIR.Proc (Actions F G) (Option Bool)) : Prop :=
-  (∃ count table, Doomed ctx handle count table process) ∨ process = .halt .refused
+  (∃ count table, Doomed ctx handle count table (decision count table) process) ∨
+    process = .halt .refused
 
 omit [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem doomedAny_step (ctx : ProtocolContext) (handle : Nat) :
@@ -489,7 +599,8 @@ theorem doomedAny_step (ctx : ProtocolContext) (handle : Nat) :
         process := by
   rintro process (⟨count, table, member⟩ | refused)
   · exact Step.mono (fun _ inside => .inl ⟨count, table, inside⟩) process
-      (doomed_step ctx handle count table process member)
+      (doomed_step ctx handle count table (decision count table) (· = some true)
+        (decision_rejects table) process member)
   · subst refused
     trivial
 
@@ -540,7 +651,7 @@ theorem plainFamily_queryBound (handle : Nat) (statement : PublicStatement F) :
   by_cases admitted : statement.count ≤ 2
   · rw [ite_eq_left admitted]
     exact QueryBound.mono _ (residual_queryBound SumcheckSourceVerifier.childContext handle
-      statement.count statement.table statement.count [] statement.claim) admitted
+      (decision statement.count statement.table) statement.count [] statement.claim) admitted
   · rw [ite_eq_right admitted]
     trivial
 
@@ -590,6 +701,133 @@ theorem reduced_imported_soundness (context : Context) (handle : Nat)
   adaptive_imported_soundness context handle (reduce numbering N) _ (balanced_reduce numbering N)
     initial determined prover queries proverBound
 
+/-- Adaptive composition with the construction rule: for every statement the
+compiled verifier, with the decoded transcript oracle as challenge function, is
+the transform of the imported verifier from that statement's initial history,
+the host binding. The construction equality is the only premise besides the
+binding and decoding premises of `adaptive_imported_soundness`. -/
+theorem compiled_adaptive_soundness {B : Type} [SampleableType B] (context : Context)
+    (handle : Nat) (decode : B → F) (loss : ENNReal) (balanced : Balanced decode loss)
+    (initial : PublicStatement F → History F G) (determined : Determined initial)
+    (compiled : PublicStatement F → Proof F G →
+      OracleComp (Oracle F G B) (PIR.Outcome (Option Bool) × Proof F G))
+    (construction : ∀ statement proof, compiled statement proof =
+      transform context (decodedQuery decode)
+        (importedValidator statement.raw statement.claim statement.count handle)
+        (initial statement) proof)
+    (prover : OracleComp (Oracle F G B) (PublicStatement F × Proof F G)) (queries : Nat)
+    (proverBound : IsTotalQueryBound prover queries) :
+    Pr{let result ← (simulateQ randomOracle (prover >>= fun claimed =>
+        (fun result => (claimed.1, result)) <$> compiled claimed.1 claimed.2)).run' ∅}[
+      result.1.claim ≠ result.1.raw.sum ∧ Accepted (· = some true) result.2.1] ≤
+      (queries + 2) * (1 / (Fintype.card F : ENNReal) + loss) := by
+  have same : (prover >>= fun claimed =>
+      (fun result => (claimed.1, result)) <$> compiled claimed.1 claimed.2) =
+        adaptiveExperiment context decode
+          (fun statement : PublicStatement F =>
+            importedValidator statement.raw statement.claim statement.count handle)
+          initial prover := by
+    unfold adaptiveExperiment
+    refine congrArg (prover >>= ·) (funext fun claimed => ?_)
+    simp only [construction]
+  rw [same]
+  exact adaptive_imported_soundness context handle decode loss balanced initial determined prover
+    queries proverBound
+
 end Adaptive
+
+/-! ## The Reduction root: a residual evaluation claim -/
+
+section Reduction
+variable [Field F] [Fintype F] [DecidableEq F] [SampleableType F]
+  [AddCommGroup G] [Module F G] [DecidableEq G]
+
+/-- The child context of the composed `example::Reduction` root's application. -/
+abbrev reductionContext : ProtocolContext := ProtocolContext.enter {} "s3" [0, 1]
+
+/-- The returned outputs of the Reduction root: no prover vectors at the
+verifier, the point and the residual claim. -/
+abbrev reductionOutput (pc : List F × F) :
+    Values (Component (assignment F G)) SumcheckReduceBodies.runSignature.outputs :=
+  SumcheckReduceVerifier.reduceRootResults (some pc.1, some pc.2)
+
+/-- The actual imported `example::Reduction` verifier at role 1, projected to the
+common participant actions. Its prover-side inputs are arbitrary. -/
+def importedReduction (vector : Option (List F)) (dimension : Option Nat) (claim : F)
+    (count handle : Nat) :
+    PIR.Proc (Actions F G) (Values (Component (assignment F G))
+      SumcheckReduceBodies.runSignature.outputs) :=
+  (SumcheckReduceViews.imported.program.participant F G 1
+    (SumcheckReduceVerifier.reduceRootInputs vector dimension (some claim) (some count)
+      (some handle))).interpret CommonAdapter.project
+
+omit [Fintype F] [SampleableType F] in
+theorem importedReduction_eq (vector : Option (List F)) (dimension : Option Nat) (count : Nat)
+    (admitted : count ≤ 4) (claim : F) (handle : Nat) :
+    importedReduction (G := G) vector dimension claim count handle =
+      residual reductionContext handle reductionOutput (.round count [] claim) := by
+  rw [importedReduction, CausalSumcheck.SourceVerifier.reduction_present vector dimension count
+    admitted claim handle, PIR.Proc.interpret_bind, repeatN_interpret]
+  simp only [roundPresent_project]
+  rfl
+
+omit [Fintype F] [SampleableType F] in
+theorem importedReduction_excess (vector : Option (List F)) (dimension : Option Nat)
+    (count : Nat) (large : 4 < count) (claim : F) (handle : Nat) :
+    importedReduction (G := G) vector dimension claim count handle = .halt .refused := by
+  rw [importedReduction]
+  change (SumcheckReduceViews.program.participant F G 1
+    (SumcheckReduceVerifier.reduceRootInputs vector dimension (some claim) (some count)
+      (some handle))).interpret CommonAdapter.project = _
+  rw [SumcheckReduceVerifier.verifier_excess vector dimension (some claim) count large]
+  rfl
+
+omit [Fintype F] [DecidableEq F] [SampleableType F] [AddCommGroup G] [Module F G]
+  [DecidableEq G] in
+/-- A false claim on the marginal table fails the residual observation. -/
+theorem reduction_rejects (remaining count : Nat) (table : Table F (remaining + count))
+    (point : List F) (claim : F) (sized : point.length = count)
+    (wrong : FalseClaim (sumRemaining remaining count table) point claim) :
+    ¬ CausalSumcheck.SourceVerifier.residualObservation (G := G) remaining count table
+      (reductionOutput (point, claim)) := by
+  intro observed
+  change Causal.residualTerminal remaining count table point claim at observed
+  rw [Causal.residualTerminal_eq_marginal] at observed
+  obtain ⟨coordinates', ordered, evaluates⟩ := observed
+  have same : coordinates count point = coordinates' := by rw [← ordered, coordinates_ofFn]
+  exact falseClaim_terminal _ point claim wrong sized (same ▸ evaluates)
+
+/-- Fiat–Shamir soundness of the imported Reduction root as a reduction to a
+residual evaluation claim: for an external table of dimension
+`remaining + count` and a false initial claim, the transform returns a true
+residual claim (`residualObservation`) with probability at most
+`(queries + count) * (1 / |F|)`, for every count (above four the root refuses).
+Prover-side vector and dimension inputs are arbitrary. Same adversary interface
+as `soundness`. -/
+theorem reduction_soundness (context : Context) (vector : Option (List F))
+    (dimension : Option Nat) (remaining count : Nat) (table : Table F (remaining + count))
+    (claim : F) (falseClaim : claim ≠ booleanSum table) (handle : Nat) (initial : History F G)
+    (prover : OracleComp (FieldOracle F G) (Proof F G)) (queries : Nat)
+    (proverBound : IsTotalQueryBound prover queries) :
+    Pr{let result ← (simulateQ randomOracle (FiatShamir.experiment context
+        (importedReduction vector dimension claim count handle) initial prover)).run' ∅}[
+      Accepted (CausalSumcheck.SourceVerifier.residualObservation remaining count table)
+        result.1] ≤
+      (queries + count) * (1 / (Fintype.card F : ENNReal)) := by
+  by_cases admitted : count ≤ 4
+  · rw [importedReduction_eq vector dimension count admitted claim handle]
+    exact FiatShamir.soundness (certificate reductionContext handle count
+        (sumRemaining remaining count table) reductionOutput _
+        (reduction_rejects remaining count table)) context _
+      ⟨.round count [] claim, ⟨by simp, falseClaim_initial _ claim
+        (by rwa [booleanSum_sumRemaining])⟩, rfl⟩ count
+      (residual_queryBound reductionContext handle reductionOutput count [] claim) initial
+      prover queries proverBound
+  · rw [importedReduction_excess vector dimension count (by omega) claim handle]
+    refine (FiatShamir.soundness (refusedCertificate _ (1 / (Fintype.card F : ENNReal))) context
+      _ rfl 0 trivial initial prover queries proverBound).trans ?_
+    exact mul_le_mul_left (add_le_add_right (by exact_mod_cast Nat.zero_le count) _) _
+
+end Reduction
 
 end ZkcSecurity.Examples.SumcheckFiatShamir

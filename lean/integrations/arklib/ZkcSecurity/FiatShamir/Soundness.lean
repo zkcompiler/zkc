@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.FiatShamir.Replay
+public import Zkc.Construction.Soundness
 public import VCVio.OracleComp.QueryTracking.RandomOracle.FreshQuery
 
 @[expose] public section
@@ -28,7 +29,12 @@ exceed the uniform field's by at most `loss` adds `loss` per query
 (`Balanced`). The prover may also choose the statement after its queries,
 when the initial history determines the statement (`Determined`); the
 transform then runs the statement's validator from the statement's initial
-history (`adaptive_soundness`).
+history (`adaptive_soundness`). Private randomness drawn before the oracle
+computation is a distribution over provers (`randomized_soundness`). A compiled
+verifier that is an outcome image of the transform, accepting only where the
+transform accepts, inherits every bound (`acceptance_le_of_image`); a final
+projection of the validator's result moves into the acceptance predicate
+(`acceptance_bind_done`).
 
 The proof applies VCVio's adaptive bad-query bound
 (`OracleComp.prEvent_randomOracle_le_of_bad_queries`) directly to the history
@@ -52,11 +58,11 @@ variable {F G A B Stmt : Type}
 abbrev Oracle (F G B : Type) := History F G →ₒ B
 
 /-- The transcript oracle answering field challenges directly. -/
-abbrev Spec (F G : Type) := Oracle F G F
+abbrev FieldOracle (F G : Type) := Oracle F G F
 
 /-- One transcript challenge: a query of the oracle at the absorbed history. -/
-def historyQuery (history : History F G) : OracleComp (Spec F G) F :=
-  liftM ((Spec F G).query history)
+def historyQuery (history : History F G) : OracleComp (FieldOracle F G) F :=
+  liftM ((FieldOracle F G).query history)
 
 /-- One transcript challenge decoded from the oracle's answer. -/
 def decodedQuery (decode : B → F) (history : History F G) : OracleComp (Oracle F G B) F :=
@@ -95,8 +101,8 @@ theorem QueryBound.mono :
 /-- The prover's oracle computation followed by the transform of `validator`
 from the history `initial`, sharing one oracle. -/
 def experiment (context : Context) (validator : PIR.Proc (Actions F G) A)
-    (initial : History F G) (prover : OracleComp (Spec F G) (Proof F G)) :
-    OracleComp (Spec F G) (PIR.Outcome A × Proof F G) :=
+    (initial : History F G) (prover : OracleComp (FieldOracle F G) (Proof F G)) :
+    OracleComp (FieldOracle F G) (PIR.Outcome A × Proof F G) :=
   prover >>= fun proof => transform context historyQuery validator initial proof
 
 /-- The prover chooses a statement and a proof; the transform runs that
@@ -108,8 +114,10 @@ def adaptiveExperiment (context : Context) (decode : B → F)
   prover >>= fun claimed => (fun result => (claimed.1, result)) <$>
     transform context (decodedQuery decode) (validator claimed.1) (initial claimed.1) claimed.2
 
-/-- The initial history determines the statement: no initial history is a
-prefix of another statement's history. -/
+/-- The initial histories determine the statements: when two statements' initial
+histories, each followed by some events, are equal, the statements are equal.
+Injective initial histories of which none is a proper prefix of another satisfy
+this. -/
 def Determined (initial : Stmt → History F G) : Prop :=
   ∀ statement other (rest otherRest : History F G),
     initial statement ++ rest = initial other ++ otherRest → statement = other
@@ -529,7 +537,7 @@ theorem soundness {accepts : A → Prop} {error : ENNReal}
     (certificate : RoundByRound (F := F) (G := G) accepts error) (context : Context)
     (validator : PIR.Proc (Actions F G) A) (doomedValidator : certificate.doomed validator)
     (budget : ℕ) (validatorBound : QueryBound validator budget) (initial : History F G)
-    (prover : OracleComp (Spec F G) (Proof F G)) (queries : ℕ)
+    (prover : OracleComp (FieldOracle F G) (Proof F G)) (queries : ℕ)
     (proverBound : IsTotalQueryBound prover queries) :
     Pr{let result ← (simulateQ randomOracle (experiment context validator initial prover)).run' ∅}[
       Accepted accepts result.1] ≤ (queries + budget) * error := by
@@ -561,7 +569,7 @@ theorem randomized_soundness {accepts : A → Prop} {error : ENNReal}
     (certificate : RoundByRound (F := F) (G := G) accepts error) (context : Context)
     (validator : PIR.Proc (Actions F G) A) (doomedValidator : certificate.doomed validator)
     (budget : ℕ) (validatorBound : QueryBound validator budget) (initial : History F G)
-    (provers : ProbComp (OracleComp (Spec F G) (Proof F G))) (queries : ℕ)
+    (provers : ProbComp (OracleComp (FieldOracle F G) (Proof F G))) (queries : ℕ)
     (proverBound : ∀ prover ∈ support provers, IsTotalQueryBound prover queries) :
     Pr{let result ← provers >>= fun prover =>
         (simulateQ randomOracle (experiment context validator initial prover)).run' ∅}[
@@ -569,6 +577,62 @@ theorem randomized_soundness {accepts : A → Prop} {error : ENNReal}
   prEvent_bind_le_of_forall_le_of_support _ _ _ fun prover drawn =>
     soundness certificate context validator doomedValidator budget validatorBound initial prover
       queries (proverBound prover drawn)
+
+/-- Transfer to a compiled verifier. If, for every proof, the compiled verifier is
+an outcome image of the transform of `validator`, and an accepted image comes only
+from an accepted outcome, the compiled verifier accepts no more often than the
+transform. The image covers an acceptance projection and stop reasons that the
+compiled program reports differently. -/
+theorem acceptance_le_of_image {A' : Type} (context : Context)
+    (validator : PIR.Proc (Actions F G) A) (initial : History F G)
+    (compiled : Proof F G → OracleComp (FieldOracle F G) (PIR.Outcome A' × Proof F G))
+    (image : PIR.Outcome A × Proof F G → PIR.Outcome A' × Proof F G)
+    (construction : ∀ proof,
+      compiled proof = image <$> transform context historyQuery validator initial proof)
+    (accepts : A → Prop) (accepts' : A' → Prop)
+    (preserves : ∀ result, Accepted accepts' (image result).1 → Accepted accepts result.1)
+    (prover : OracleComp (FieldOracle F G) (Proof F G)) :
+    Pr{let result ← (simulateQ randomOracle (prover >>= compiled)).run' ∅}[
+      Accepted accepts' result.1] ≤
+      Pr{let result ← (simulateQ randomOracle
+        (experiment context validator initial prover)).run' ∅}[Accepted accepts result.1] := by
+  have imaged : (prover >>= compiled) = image <$> experiment context validator initial prover := by
+    rw [experiment, map_bind]
+    exact congrArg (prover >>= ·) (funext construction)
+  have mapped : (simulateQ randomOracle
+      (image <$> experiment context validator initial prover)).run' ∅ =
+        image <$> (simulateQ randomOracle (experiment context validator initial prover)).run' ∅ := by
+    simp only [simulateQ_map, StateT.run'_eq, StateT.run_map, Functor.map_map]
+  rw [imaged, mapped, prEvent_map]
+  exact prEvent_mono _ _ _ fun result accepted => preserves result accepted
+
+/-- A final projection of the validator's result: the transform of
+`validator.bind (done ∘ f)` accepts with `accepts` exactly as often as the
+transform of `validator` accepts with `accepts ∘ f`. -/
+theorem acceptance_bind_done {A' : Type} (context : Context)
+    (validator : PIR.Proc (Actions F G) A) (f : A → A') (initial : History F G)
+    (prover : OracleComp (FieldOracle F G) (Proof F G)) (accepts : A' → Prop) :
+    Pr{let result ← (simulateQ randomOracle (experiment context
+        (validator.bind fun value => .done (f value)) initial prover)).run' ∅}[
+      Accepted accepts result.1] =
+      Pr{let result ← (simulateQ randomOracle
+        (experiment context validator initial prover)).run' ∅}[
+        Accepted (fun value => accepts (f value)) result.1] := by
+  have imaged : experiment context (validator.bind fun value => .done (f value)) initial prover =
+      (fun result => (mapOutcome f result.1, result.2)) <$>
+        experiment context validator initial prover := by
+    rw [experiment, experiment, map_bind]
+    exact congrArg (prover >>= ·)
+      (funext fun proof => transform_bind_done context historyQuery f validator initial proof)
+  have mapped : (simulateQ randomOracle ((fun result => (mapOutcome f result.1, result.2)) <$>
+      experiment context validator initial prover)).run' ∅ =
+        (fun result => (mapOutcome f result.1, result.2)) <$>
+          (simulateQ randomOracle (experiment context validator initial prover)).run' ∅ := by
+    simp only [simulateQ_map, StateT.run'_eq, StateT.run_map, Functor.map_map]
+  rw [imaged, mapped, prEvent_map]
+  refine prEvent_congr _ _ _ fun result => ?_
+  rcases result with ⟨outcome, rest⟩
+  cases outcome <;> rfl
 
 end Fixed
 

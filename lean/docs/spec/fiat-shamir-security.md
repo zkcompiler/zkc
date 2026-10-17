@@ -11,7 +11,7 @@ verifier. The general theorems are in `ZkcSecurity.FiatShamir`
 ## The ideal experiment
 
 The transcript oracle `Oracle F G B` answers every typed history
-`History F G` with a value of `B`; `Spec F G` is the oracle answering field
+`History F G` with a value of `B`; `FieldOracle F G` is the oracle answering field
 elements directly. `decodedQuery decode` is the challenge function that asks the
 oracle at the absorbed history and decodes the answer to a field challenge;
 `historyQuery` is the undecoded case.
@@ -39,19 +39,21 @@ The adversary interface is:
 - **Query accounting.** `IsTotalQueryBound prover queries` bounds the prover's
   queries on every path, counting repeated and cached ones. The transform's own
   challenges are charged on top of these, also when they are cache hits.
-- **Auxiliary effects.** None inside the oracle computation. Private
-  randomness sampled before it is covered by `randomized_soundness`: a
-  `ProbComp` distribution over provers, each bounded on its support.
+- **Auxiliary effects.** None inside the oracle computation. For a fixed
+  statement, private randomness sampled before it is covered by
+  `randomized_soundness`: a `ProbComp` distribution over provers, each bounded on
+  its support.
 - **Statement.** In `experiment` the statement is fixed: the validator (which
   closes over the statement) and the initial history are chosen before the
   experiment. In `adaptiveExperiment` the prover chooses the statement after its
-  queries; the initial history of each statement must determine it
-  (`Determined`): no statement's initial history followed by any events equals
-  another statement's.
+  queries, and the initial histories must determine the statements
+  (`Determined`): if one statement's initial history followed by some events
+  equals another statement's initial history followed by some events, the two
+  statements are equal.
 - **Event.** `Accepted accepts outcome`: the transform returns a value
   satisfying `accepts`; in the adaptive experiment, also for a false chosen
-  statement. Stops never accept. The unread proof suffix is not constrained, so
-  the bounds also cover verifiers that require the whole proof to be read.
+  statement. Stops never accept. The event ignores the unread proof suffix, so
+  the bounds also cover verifiers that reject leftover proof data.
 
 ## Round-by-round soundness
 
@@ -106,6 +108,16 @@ Pr[falseStatement result.1 ∧ Accepted accepts result.2.1
   ≤ (queries + budget) * (error + loss)
 ```
 
+`randomized_soundness` is the fixed-statement bound for a distribution over
+provers, each within `queries` on its support. `acceptance_le_of_image` compares
+a compiled verifier with the transform: if, for every proof, the compiled
+verifier is an outcome image of the transform and an accepted image comes only
+from an accepted outcome, the compiled verifier accepts no more often than the
+transform, so every bound above transfers to it. `acceptance_bind_done` moves a
+final projection of the validator's result into the acceptance predicate: the
+transform of `validator.bind (done ∘ f)` accepts with `accepts` exactly as often
+as the transform of `validator` accepts with `accepts ∘ f`.
+
 The proofs apply VCVio's adaptive bad-query bound
 `OracleComp.prEvent_randomOracle_le_of_bad_queries` directly to the history
 oracle, with no routing to library keys:
@@ -145,11 +157,14 @@ round, two received field halves, the boundary check, one challenge, its
 delivery and the interpolated claim; then the public-table terminal check.
 Above the exported maximum it refuses (`importedValidator_excess`).
 
-The doomed set describes each phase of the plain process (`Phase`, `residual`,
-`Holds`): the current claim is false, as ArkLib's closed round relation
+The doomed set describes each phase of the rounds (`Phase`, `residual`, `Holds`):
+the current claim is false, as ArkLib's closed round relation
 `MultivariateRound.closedRelation` for the table's multilinear extension
-(`FalseClaim`), and the point length matches the rounds still to run. The laws
-follow from:
+(`FalseClaim`), and the point length matches the rounds still to run. The
+certificate (`certificate`) is stated for the rounds followed by any returned
+`output` of the final point and claim, with the terminal law that no output of a
+false claim at a complete point is accepted; the public-table decision is one
+such output (`decision`, `decision_rejects`). The laws follow from:
 
 - `falseClaim_initial`: a claim different from the table sum is false at the
   empty point (the bridge's `closed_statement`);
@@ -168,29 +183,61 @@ The Sumcheck theorems are:
 - `imported_soundness`: the same bound for the imported verifier, for every
   count, with the false claim on the raw public vector;
 - `adaptive_imported_soundness`: the prover chooses a well-formed
-  `PublicStatement` (raw vector, claim, count and the vector's table) after its
-  queries; with a determining initial history and a balanced decoding, a false
-  chosen claim is accepted with probability at most
-  `(queries + 2) * (1 / |F| + loss)`, two being the exported maximum count.
+  `PublicStatement` (a raw vector, a claim, a count and the table the vector
+  decodes to at that count) after its queries; with a determining initial history
+  and a balanced decoding, a false chosen claim is accepted with probability at
+  most `(queries + 2) * (1 / |F| + loss)`, two being the exported maximum count.
   `DoomedAny` combines the doomed sets of all tables with the refused verifier;
 - `reduced_imported_soundness`: the adaptive bound with challenges reduced
   modulo the field size from a uniform sample below `N`, with loss `|F| / N`.
 
+The composed `example::Reduction` root returns its point and residual claim
+instead of a decision. `importedReduction` is its imported verifier, equal to the
+rounds for every admitted count (`count ≤ 4`, `importedReduction_eq`) and
+refusing above (`importedReduction_excess`). For an external table of dimension
+`remaining + count`, falsity is taken on the marginal table `sumRemaining`,
+whose sum is the original sum and whose terminal relation is the residual one
+(`reduction_rejects`). `reduction_soundness` bounds by
+`(queries + count) * (1 / |F|)` the probability that the transform returns a
+true residual claim (`residualObservation`) from a false initial claim, for every
+count. The residual claim is a terminal obligation for a later opening argument,
+not an acceptance decision.
+
 ## Composition with the construction rule
 
-`compiled_soundness` takes the compiled verifier as any function from proofs to
-oracle computations, with two premises: the compiled verifier with the
-transcript oracle as challenge function is the transform of an original
-validator (`construction`), and that validator is the plain Sumcheck verifier
-(`projection`). Its conclusion is the fixed-statement bound for the compiled
-verifier. The premises are the vertical links a construction rule and a
-projection rule supply for the compiled `example::Proof` Entry. The same
-substitution applies to the adaptive and reduced forms, whose experiments take
-any challenge function through `transform`.
+The compiled `example::Proof` Entry and the imported `example::Interactive`
+Entry instantiate the same `Sumcheck<Fr, 2>`, and the construction applies after
+the original stage, so they have the same original-stage export and the
+original validator of the compiled Entry is `importedValidator`.
+`compiled_imported_soundness` takes the compiled verifier as any function from
+proofs to oracle computations, with one premise about it: with the transcript
+oracle as challenge function it is the transform of `importedValidator`
+(`construction`), which is the equation a construction rule for that Entry
+proves. Its conclusion is the fixed-statement bound for the compiled verifier.
+`compiled_adaptive_soundness` is the adaptive form: for every statement, the
+compiled verifier with the decoded oracle as challenge function is the transform
+of the imported verifier from that statement's initial history, the host
+binding; with a determining binding and a balanced decoding the adaptive bound
+follows. `compiled_soundness` is the variant for any original validator equal to
+the plain verifier (`projection`).
+
+A construction rule composed with a participant projection rule relates the
+compiled meaning, read through a selection of its returned values, to the
+transform of the original participant process read through a matching selection
+of its outputs. `compiled_participant_soundness` takes that equation for the
+imported participant process followed by any final `decision` on its outputs,
+with one further premise: an accepted decision implies the Boolean output
+`some true`. Its conclusion is again the fixed-statement bound.
+
+A construction rule whose compiled verifier reports outcomes differently from
+the transform, for example a returned rejection as the stop `reject` or
+acceptance as a value of another type, proves equality with an outcome image of
+the transform instead; `acceptance_le_of_image` then carries the bounds over
+when acceptance of the image implies acceptance of the transform's outcome.
 
 ## Obligations
 
-The informal "random oracle" assumption is separated into four obligations:
+The informal "random oracle" assumption separates into four obligations:
 
 - **Encoding and transcript state.** Typed histories stand for the absorbed
   bytes: canonical value, occurrence and binding encodings are injective, proof
@@ -199,34 +246,14 @@ The informal "random oracle" assumption is separated into four obligations:
   determines the statement. These belong to the construction rule and the
   native boundary.
 - **Transcript primitive.** The suite's squeezed bytes on an absorbed history
-  are a uniformly random function of that history. This is a named assumption
-  about the duplex construction and is not proved.
+  are a uniformly random function of that history. This is an assumption about
+  the duplex construction.
 - **Challenge distribution.** The field challenge is the suite's reduction of
-  the squeezed bytes. With the reduction modelled as `reduce` of a uniform
-  sample below `2 ^ 512`, its distance from a uniform field challenge is proved
-  to cost at most `|F| / 2 ^ 512` per challenge. That the suite's byte order and
-  reduction are this `reduce` is part of the native boundary.
+  the squeezed bytes. Modelled as `reduce` of a uniform sample below `2 ^ 512`,
+  its distance from a uniform field challenge costs at most `|F| / 2 ^ 512` per
+  challenge (`balanced_reduce`).
 - **Ideal-experiment reduction.** Given the three above, the bounds of this
-  chapter are proved.
+  chapter.
 
-## Controls
-
-`TestsSecurity.SumcheckFiatShamir` uses `ZMod 5`, one round and the raw vector
-`[2, 1]`, whose extension is `2 - r` and whose sum is `3`. All premises of
-`imported_soundness` hold together for the false claim `0`, giving the bound
-`1 / 5`. The cheating proof `(0, 0)` passes the boundary check and is accepted
-exactly at the challenge `2`; a prover that sends it without querying is accepted
-with probability exactly `1 / 5` (`cheater_acceptance`), so the bound is attained.
-For the true claim `3` the honest proof is accepted at every challenge, so the
-false-claim premise cannot be dropped.
-
-A binding of the raw vector, the claim and the round count in three initial
-events determines the statement, and all premises of
-`adaptive_imported_soundness` hold together with the bound `2 / 5`. The
-determining premise cannot be dropped: with one initial history for every
-statement (`unbound`, which is not determining), a prover that asks the
-challenge `r` of `(0, 0)` first and then chooses the vector `[r, r - 1]` is
-accepted on a false claim with probability `4 / 5` (`weak_acceptance`), above the
-`3 / 5` the adaptive bound would give for its single query. Reducing a uniform
-sample below `8` modulo `5` satisfies the decoding premise with loss `5 / 8` and
-violates it with loss zero, since it hits `0` with probability `2 / 8`.
+[Support](../support.md#fiatshamir-security-validation) records which
+obligations are proved and lists the controls.
