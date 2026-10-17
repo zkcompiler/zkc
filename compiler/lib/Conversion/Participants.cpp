@@ -6,6 +6,7 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Support/Json.h"
+#include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/LinearContraction.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/Protocol.h"
@@ -37,7 +38,8 @@ lowerPhysical(ModuleOp module,
     return diagnostics::emit(root.emitError(), "interactive-physical-stage");
   OwningOpRef<ModuleOp> selected(cast<ModuleOp>(module->clone()));
   LinearContractionStats selectedStats;
-  if (failed(lowerBoundPhysical(*selected, selections, linearContractions,
+  if (failed(kernel::lowerKernels(*selected)) ||
+      failed(lowerBoundPhysical(*selected, selections, linearContractions,
                                 &selectedStats)) ||
       (releaseStorage && failed(releaseLocalStorage(*selected))) ||
       failed(verify(*selected)))

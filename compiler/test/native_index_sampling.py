@@ -206,11 +206,13 @@ with case("the explicit policy reconstructs and checks the same candidate"):
     candidate = commands.run([compiler, "protocol-construct-proof", source, policy])
     (OUT / "echo.candidate.mlir").write_text(candidate)
     commands.run([compiler, "protocol-check-proof", source, policy, OUT / "echo.candidate.mlir"])
-    constant = re.search(r'"algebra.exec.index_constant"\(\) <\{[^}]*parameters = \["32"\]', candidate)
-    assert constant, "the helper materializes its static bound"
+    # Mutate the projected bound, leaving authored queries untouched.
+    constant = re.search(r'"data.index"\(\) <\{[^}]*value = "(32)"', candidate)
+    assert constant, "the projected program retains its static bound"
+    start, end = constant.span(1)
     for value, reason in [("64", "native-proof-correspondence"), ("3", "native-proof-correspondence")]:
         changed = OUT / f"echo.candidate.{value}.mlir"
-        changed.write_text(candidate.replace('parameters = ["32"]', f'parameters = ["{value}"]'))
+        changed.write_text(candidate[:start] + value + candidate[end:])
         commands.run([compiler, "protocol-check-proof", source, policy, changed], refuses=reason)
 
 

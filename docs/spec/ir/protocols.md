@@ -141,31 +141,18 @@ request, carries no body or runtime provider, and is forbidden in participant
 and executable profiles. Ordinary portable source admission has no external
 signature permission for such an application.
 
-Preparation expands pure helpers into the requested realization, checks every
-polynomial observation before dead-expression elimination, then reuses polynomial
-elimination and mathematical execution recipes. The resulting `local.func` keeps
-the realization symbol and signature, and its logical origin names the pure
-helper. Admission conservatively bounds expanded helper operations across all
-realizations, including helper call and return overhead.
-Polynomial expansion and final executable instruction limits are checked during
-preparation; an admitted declaration can still exceed these realization limits.
-After polynomial checks and elimination, static dimension queries become index
-constants and unused total expressions are removed before becoming ordered
-execution. This normalization applies to helper realization.
+Preparation forms an owned [Kernel unit](kernel.md) and a `local.func`
+wrapper with the realization's original symbol and signature. The wrapper's
+logical origin names the pure helper. The complete helper/domain closure and
+actual wrapper data flow are checked against the original request and frozen
+through projection. Relation formulas remain specification-only declarations.
 
-Before a normalized helper becomes a recipe input, an independent read-only
-checker compares it with the original admitted helper. The checker interprets
-calls by positional substitution, checks every result coordinate, and uses
-polynomial meaning and static shape facts without invoking helper inlining or
-polynomial elimination. It also checks unused polynomial observations before
-accepting their removal. Preparation still produces normalization proposals;
-the independent check is required before any proposal is used. The realization
-stage copies these checked bodies into its candidate and reuses them for recipe
-checking. Normalization is cached per helper, while every emitted copy consumes
-the stage's operation and operand/result-slot allowance. All helper
-comparisons in one check share a four-million-unit work budget. Exhaustion
-refuses with `mathematical-helper-limit`, separately from a correspondence
-mismatch.
+Numerical realization uses checked helper normalization, polynomial observation
+checks and execution recipes under bounded work. An independent read-only
+normalization checker interprets calls by positional substitution and checks
+polynomial meaning, static shape facts and every result coordinate. It checks
+unused observations before accepting their removal. Cached normalization does
+not refund the work charged for each emitted occurrence.
 
 The mathematical recipe matcher then compares the checked expressions,
 operands and returns against the generated local body. A separate structural
@@ -559,11 +546,11 @@ after role projection while preserving the original interface and ordered
 actions. Every resulting candidate must pass closed admission and the frozen
 interface postcondition.
 
-`zkc-lower-math` separately produces `exec`. For every local
+`zkc-lower-math` separately produces `exec` with logical Kernel units. For every local
 action or finish cut, it finds total dependencies not previously computed and
 schedules them in dependency order with source-order tie breaking. Work starts
 at its first consumer, so an earlier guard cannot trigger unrelated later
-calculations. A value needed at several cuts is computed once and passed as an
+calculations. A value needed at several cuts is computed once and passed as a
 participant SSA result to later calls. Each generated `local.func` has one invocation and takes and
 returns only total mathematical data. Unused result ports are removed after
 original participant expressions have been erased; this does not remove executable
@@ -585,18 +572,20 @@ Boolean kernels; selection uses local conditional control with already evaluated
 data captures. A literal uses the
 [native participant instruction](../formats/program.md).
 
-Full dialect conversion applies registered recipes only in generated local
-functions and refuses any remaining total expression or guard there.
-Verification checks the `exec` candidate before the pass publishes it.
+Each total calculation becomes an owned numerical entry invoked from its Local
+wrapper. The guard remains outside that unit. Verification checks this logical
+`exec` candidate before publication. `zkc-lower-kernels` subsequently applies
+checked recipes at each Local invocation and removes every numerical unit;
+physical selection invokes this edge before constructing its plan.
 
 The Transforms component then compares the verified `exec` candidate against its
 frozen `participant` input. This closed postcondition independently walks source
-dependencies at each first demand and matches the generated recipes in source
-order. It checks exact resolved contracts and their domain arguments, captures,
+dependencies at each first demand and matches the actual numerical body in source
+order. Kernel realization separately checks the generated executable recipes. It checks exact resolved contracts and their domain arguments, captures,
 returned values, guard conditions and rejection, and ordered action operands.
 Entry arguments and actual receive/call/query results are distinct SSA anchors.
 Every generated calculation is a fresh symbol with one invocation and its own
-logical origin. Only these functions and their used binding declarations may be
+logical origin. Only these functions, their numerical units and accounted recipe bindings may be
 added to the frozen symbol table. Extra work, recomputation and
 work moved across an earlier cut refuse. The traversal uses explicit worklists
 and a shared limit of one million operation/operand comparison units for the

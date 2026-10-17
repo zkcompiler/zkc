@@ -22,6 +22,10 @@ not authorize moving a failure, erasing a draw or reusing a consumed capability.
 
 ## Checked physical decisions
 
+The compiler first checks and materializes any [logical Kernel calls](../spec/ir/kernel.md)
+into the existing Local vocabulary. The physical planner receives that exact
+lowered subject; a plan is never reused across Kernel expansion.
+
 Physical lowering separates three steps inside Target and Conversion:
 
 1. Propose binding implementations, physical ports and direct conversions against

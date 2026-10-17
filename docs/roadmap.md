@@ -18,14 +18,14 @@ independently.
 
 ## Make numerical realization explicit
 
-Build on the separated VM code, instance and interpreter. Introduce numerical
-Kernel IR at the existing checked realization boundary, preserving domains,
-indexing, reductions, effects and failure obligations before choosing schedules
-and storage. Reuse physical planning and installed operation contracts. Establish
+Build on the separated VM and logical Kernel units. Consolidate numerical
+planning around their owned mathematical bodies, preserving domains, indexing,
+reductions and failure obligations before choosing explicit schedules and
+storage. Reuse physical planning and installed operation contracts. Establish
 field representations, layouts, aliasing and work bounds before adding generated
 arithmetic. VM control retains participant order and authority.
 
-Validate the first realization across representative operations and protocol
+Validate realization refinements across representative operations and protocol
 families. Keep alternate interpreters, JIT and AOT dependent on evidence and the
 same execution contract; the VM separation itself makes no performance claim.
 

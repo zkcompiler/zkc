@@ -434,8 +434,8 @@ std::optional<Elementwise> analyzeAlignedLanes(const ComputationFacts &facts,
         view.environment.inputPosition(
             facts.factor(access.item)->getOperand(0)) == access.input)
       lookups[access.value] = facts.inputs[access.input];
-  return analyzeLanes(c.helper->getRegion(0).front(), field, lanes, lookups,
-                      facts.payload, view.accessDeclines, yielded, state);
+  return analyzeLanes(*view.callbackBody, field, lanes, lookups, facts.payload,
+                      view.accessDeclines, yielded, state);
 }
 std::optional<Elementwise> analyzeElementwise(const ComputationFacts &facts) {
   auto c = facts.view.computation;
@@ -709,10 +709,14 @@ matchNestedContraction(const ComputationView &structure,
   if (!work.take(child.computation.arguments + view->axes.size()))
     return std::nullopt;
   for (Value operand :
-       call->getOperands().take_front(child.computation.arguments))
-    if (!view->environment.inputPosition(operand) &&
-        operand != view->items.front().formal)
+       call->getOperands().take_front(child.computation.arguments)) {
+    if (auto input = view->environment.inputPosition(operand))
+      selected.domainInputs.push_back(*input + 1);
+    else if (operand == view->items.front().formal)
+      selected.domainInputs.push_back(0);
+    else
       return std::nullopt;
+  }
   Value seed = child.seeds.front().actual;
   if (auto input = view->environment.inputPosition(seed)) {
     selected.seed.input = *input;
@@ -762,7 +766,7 @@ matchNestedContraction(const ComputationView &structure,
   for (const auto &axis : view->axes)
     selected.witness.freeAxes.push_back(axis.identity);
   selected.inner = child.computation;
-  selected.call = call.getOperation();
+  selected.call = view->sourceOperation(call.getOperation());
   selected.matrix = *matrix;
   selected.vector = *vector;
   selected.axis = axis;

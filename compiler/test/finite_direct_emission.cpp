@@ -8,6 +8,7 @@
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Transforms/Finite.h"
+#include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include <chrono>
@@ -57,7 +58,6 @@ protocol_ir::ProtocolModuleOp unit(ModuleOp module) {
 void prepare(ModuleOp module) {
   PassManager passes(module.getContext());
   passes.addPass(protocol::createProjectProtocolPass(false, {false, false}));
-  passes.addPass(protocol::createEliminatePolynomialsPass());
   require(succeeded(passes.run(module)), "preparation failed");
 }
 void lower(ModuleOp module) {
@@ -210,6 +210,10 @@ int main(int argc, char **argv) {
     require(succeeded(mathematical::verifyMathLowering(unit(*source),
                                                        unit(*candidate))),
             "aliased range direct body did not correspond");
+    auto logical = OwningOpRef<ModuleOp>(cast<ModuleOp>(candidate->clone()));
+    require(succeeded(kernel::lowerKernels(*candidate)) &&
+                succeeded(kernel::verifyKernelLowering(*logical, *candidate)),
+            "aliased range recipes did not correspond");
     unsigned branches = 0;
     candidate->walk([&](local::LocalIfOp branch) {
       ++branches;
@@ -264,6 +268,10 @@ int main(int argc, char **argv) {
       require(succeeded(mathematical::verifyMathLowering(unit(*source),
                                                          unit(*candidate))),
               "independent complete reader refused direct lowering");
+      auto logical = OwningOpRef<ModuleOp>(cast<ModuleOp>(candidate->clone()));
+      require(succeeded(kernel::lowerKernels(*candidate)) &&
+                  succeeded(kernel::verifyKernelLowering(*logical, *candidate)),
+              "complete Kernel recipe reader refused direct lowering");
       if (measure) {
         auto time = [](auto action) {
           auto start = std::chrono::steady_clock::now();
@@ -276,8 +284,7 @@ int main(int argc, char **argv) {
         for (unsigned i = 0; i < 34; ++i) {
           double f = time([&] { return verify(*candidate); });
           double c = time([&] {
-            return mathematical::verifyMathLowering(unit(*source),
-                                                    unit(*candidate));
+            return kernel::verifyKernelLowering(*logical, *candidate);
           });
           if (i >= 3) {
             formation.push_back(f);

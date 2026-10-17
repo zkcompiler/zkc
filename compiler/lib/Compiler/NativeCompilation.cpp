@@ -61,7 +61,6 @@ LogicalResult lowerProgram(ModuleOp module, bool simplify, bool fixPolynomials,
     pipeline.addPass(protocol::createSimplifyParticipantPass());
   if (fixPolynomials)
     pipeline.addPass(protocol::createFixPolynomialFactorsPass());
-  pipeline.addPass(protocol::createEliminatePolynomialsPass());
   pipeline.addPass(protocol::createLowerMathPass(mathematicalSelection));
   pipeline.addPass(protocol::createSelectPhysicalPass({}, false, releaseStorage,
                                                       &statistics));

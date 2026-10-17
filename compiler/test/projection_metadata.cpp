@@ -6,6 +6,7 @@
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Protocol/Execution.h"
+#include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Translation/Protocol.h"
@@ -150,6 +151,7 @@ void profileEdges(MLIRContext &context) {
   run(*participant, protocol::createProjectProtocolPass());
   auto executable = copy(*participant);
   run(*executable, protocol::createLowerMathPass());
+  run(*executable, protocol::createLowerKernelsPass());
   auto physical = copy(*executable);
   run(*physical, protocol::createSelectPhysicalPass());
   for (auto module : {participant.get(), executable.get(), physical.get()})
@@ -194,6 +196,7 @@ void suppliedMaterialization(MLIRContext &context) {
                      .begin();
   record.erase();
   require(succeeded(verify(*source)), "supplied executable is not well formed");
+  run(*source, protocol::createLowerKernelsPass());
   auto candidate = copy(*source);
   run(*candidate, protocol::createSelectPhysicalPass());
   require(
@@ -223,7 +226,8 @@ void suppliedMaterialization(MLIRContext &context) {
 void changeLocalOperand(ModuleOp module) {
   unsigned mutations = 0;
   module.walk([&](Operation *op) {
-    if (mutations || !op->getParentOfType<local::FuncOp>())
+    if (mutations || !(op->getParentOfType<local::FuncOp>() ||
+                       op->getParentOfType<kernel::ModuleOp>()))
       return;
     if (op->getNumOperands() == 2 && op->getOperand(0) != op->getOperand(1) &&
         op->getOperand(0).getType() == op->getOperand(1).getType()) {
@@ -339,10 +343,12 @@ void scheduling(MLIRContext &context) {
   run(*bound, protocol::createLowerMathPass());
   run(*repeated, protocol::createLowerMathPass());
   executableIdentity(*bound);
-  auto identityPhysical = copy(*bound);
+  auto realized = copy(*bound);
+  run(*realized, protocol::createLowerKernelsPass());
+  auto identityPhysical = copy(*realized);
   run(*identityPhysical, protocol::createSelectPhysicalPass());
   executableIdentity(*identityPhysical);
-  executableEdges(*bound, *identityPhysical);
+  executableEdges(*realized, *identityPhysical);
   require(OperationEquivalence::isEquivalentTo(
               bound->getOperation(), repeated->getOperation(),
               OperationEquivalence::IgnoreLocations),
@@ -424,6 +430,7 @@ void scheduling(MLIRContext &context) {
                                     [](Diagnostic &) { return success(); });
     require(failed(verify(*invalid)), "duplicate calculation origin admitted");
   }
+  run(*bound, protocol::createLowerKernelsPass());
   auto physical = copy(*bound);
   run(*physical, protocol::createSelectPhysicalPass({}, false, true));
   require(succeeded(mathematical::verifyProjectionPreserved(*bound, *physical)),
@@ -494,6 +501,7 @@ int main() {
     require(failed(verify(*invalid)),
             "module did not validate malformed metadata");
   }
+  run(*bound, protocol::createLowerKernelsPass());
   auto physical = copy(*bound);
   run(*physical, protocol::createSelectPhysicalPass());
   require(succeeded(mathematical::verifyProjectionPreserved(*bound, *physical)),

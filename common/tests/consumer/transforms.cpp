@@ -3,6 +3,7 @@
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Pass/PassRegistry.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 
@@ -52,9 +53,19 @@ int main() {
   if (failed(lowering.run(*module)) ||
       failed(zkc::mathematical::verifyProjectionPreserved(*original, *module)))
     return 1;
+  mlir::OwningOpRef<mlir::ModuleOp> logical(
+      mlir::cast<mlir::ModuleOp>(module->clone()));
+  lowering.clear();
+  lowering.addPass(zkc::protocol::createLowerKernelsPass());
+  if (failed(lowering.run(*module)) ||
+      failed(zkc::kernel::verifyKernelLowering(*logical, *module)))
+    return 1;
+  mlir::OwningOpRef<mlir::ModuleOp> realized(
+      mlir::cast<mlir::ModuleOp>(module->clone()));
   pipeline.clear();
   pipeline.addPass(zkc::protocol::createSelectPhysicalPass());
-  if (failed(pipeline.run(*module)) || failed(mlir::verify(*module)))
+  if (failed(pipeline.run(*module)) || failed(mlir::verify(*module)) ||
+      failed(zkc::mathematical::verifyProjectionPreserved(*realized, *module)))
     return 1;
   // Passes publish a new body in the builtin module; reacquire its unit.
   auto scope = mlir::cast<zkc::protocol_ir::ProtocolModuleOp>(
@@ -77,5 +88,8 @@ int main() {
   if (succeeded(
           zkc::mathematical::verifyProjectionPreserved(*module, *changed)))
     return 5;
-  return mlir::PassInfo::lookup("zkc-lower-math") ? 6 : 0;
+  return mlir::PassInfo::lookup("zkc-lower-math") ||
+                 mlir::PassInfo::lookup("zkc-lower-kernels")
+             ? 6
+             : 0;
 }

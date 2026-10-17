@@ -168,6 +168,8 @@ add_zkc_component(IR
   lib/Dialect/Local/IR/LocalDialect.cpp
   lib/Dialect/Local/IR/Functions.cpp
   lib/Dialect/Local/IR/Control.cpp
+  lib/Dialect/Kernel/IR/KernelDialect.cpp
+  lib/Dialect/Kernel/IR/Kernel.cpp
   lib/Dialect/Data/IR/DataDialect.cpp
   lib/Dialect/Data/IR/Domains.cpp
   lib/Analysis/NativeTypes.cpp
@@ -193,7 +195,7 @@ add_zkc_component(IR
   lib/Dialect/PCS/IR/PCSDialect.cpp
   lib/Dialect/Protocol/IR/ProtocolDialect.cpp
   lib/Dialect/Protocol/IR/Attributes.cpp
-  lib/Dialect/Protocol/Semantics.cpp
+  lib/Dialect/MathematicalSemantics.cpp
   lib/Dialect/Protocol/NativePolicy.cpp
   lib/Dialect/Protocol/IR/Protocol.cpp
   lib/Dialect/Protocol/IR/Mathematical.cpp
@@ -243,6 +245,15 @@ add_zkc_component(Transforms
   lib/Transforms/ProtocolApplications.cpp
   lib/Transforms/MathLowering.cpp
   lib/Transforms/MathRealizations.cpp
+  lib/Transforms/Kernel/Formation.cpp
+  lib/Transforms/Kernel/Closure.cpp
+  lib/Transforms/Kernel/Readback.cpp
+  lib/Transforms/Kernel/Lowering.cpp
+  lib/Transforms/Kernel/Verification.cpp
+  lib/Transforms/Kernel/Recipes.cpp
+  lib/Transforms/Kernel/Frontier.cpp
+  lib/Transforms/Kernel/FrontierVerification.cpp
+  lib/Transforms/Kernel/NormalizationVerification.cpp
   lib/Transforms/HelperNormalization.cpp
   lib/Transforms/HelperNormalizationVerification.cpp
   lib/Transforms/FiniteRealizations.cpp

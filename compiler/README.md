@@ -10,7 +10,8 @@ Language captures explicit module buffers and relation Assets, checks declaratio
 and closes a selected Entry. Translation emits a mathematical `protocol.module`.
 Preparation expands local applications and protocol applications; projection
 assigns actions and values to participants. Mathematical lowering produces the
-`exec` profile. Representation and kernel selection produce `physical` programs,
+`exec` profile with owned logical Kernel units and ordered Local control. Checked
+Kernel realization, representation and implementation selection produce `physical` programs,
 exported as `zkc.program/0` for the generic participant runtime.
 
 ## Build and validate

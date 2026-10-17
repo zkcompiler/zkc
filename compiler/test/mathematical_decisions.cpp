@@ -1,7 +1,9 @@
 #include "../lib/Transforms/AlgorithmSupport.h"
+#include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/LaneRealization.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "../lib/Transforms/RecipeRealizations.h"
+#include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
@@ -9,6 +11,7 @@
 #include "support/NativeCases.h"
 #include "zkc/Analysis/Computation.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include <fstream>
@@ -19,6 +22,35 @@ using namespace zkc;
 using namespace zkc::test;
 using namespace zkc::mathematical;
 namespace {
+protocol_ir::ProtocolModuleOp unit(ModuleOp module) {
+  return cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
+}
+local::FuncOp calculation(ModuleOp module) {
+  return SymbolTable(unit(module)).lookup<local::FuncOp>("calculation");
+}
+void outlineTotal(ModuleOp module) {
+  auto total = SymbolTable(unit(module)).lookup<func::FuncOp>("total");
+  require(bool(total), "missing total helper");
+  OpBuilder builder(total);
+  auto function = local::FuncOp::create(builder, total.getLoc(), "calculation",
+                                        total.getFunctionType());
+  function->setAttr("logical_origin",
+                    builder.getArrayAttr({builder.getStringAttr("calculation"),
+                                          builder.getArrayAttr({})}));
+  builder.setInsertionPointToEnd(function.addEntryBlock());
+  IRMapping mapping;
+  mapping.map(total.getArguments(), function.getArguments());
+  unsigned ordinal = 0;
+  for (auto &operation : total.front().without_terminator()) {
+    auto *copy = builder.clone(operation, mapping);
+    copy->setAttr("site", builder.getStringAttr("calculation_" +
+                                                std::to_string(ordinal++)));
+  }
+  SmallVector<Value> outputs;
+  for (auto value : total.front().back().getOperands())
+    outputs.push_back(mapping.lookup(value));
+  local::ReturnOp::create(builder, total.getLoc(), outputs);
+}
 constexpr llvm::StringLiteral fusionFixture =
     R"mlir(!F = !algebra.field<"koala-bear">
 !V = !algebra.field_vector<"koala-bear">
@@ -299,20 +331,23 @@ int main() {
         });
       }
       require(succeeded(verify(*source)), "total control refused");
+      outlineTotal(*source);
       auto original = copy(*source), ordered = copy(*source),
            unobserved = copy(*source);
       RealizationTrace trace;
       RealizationWork work, controlWork, orderedWork;
       require(
-          succeeded(
-              expandMathRealizations(*ordered, {false, false}, &orderedWork)) &&
-              succeeded(expandMathRealizations(*source, {}, &work, {100000, 1},
-                                               &trace)) &&
-              succeeded(expandMathRealizations(*unobserved, {}, &controlWork,
-                                               {100000, 1})) &&
+          succeeded(lowerCalculations(unit(*ordered), {calculation(*ordered)},
+                                      {false, false}, &orderedWork)) &&
+              succeeded(lowerCalculations(unit(*source), {calculation(*source)},
+                                          {}, &work, {100000, 1}, &trace)) &&
+              succeeded(lowerCalculations(unit(*unobserved),
+                                          {calculation(*unobserved)}, {},
+                                          &controlWork, {100000, 1})) &&
               same(*source, *ordered) && same(*source, *unobserved) &&
               sameWork(work, controlWork) &&
-              succeeded(verifyMathRealizationsPreserved(*original, *source)),
+              succeeded(verifyCalculationRecipes(unit(*original), unit(*source),
+                                                 {calculation(*source)})),
           "total retry changed IR, checking, or accounting");
       require(work.matching.structural < orderedWork.matching.structural,
               "total retry replenished matching work");
@@ -400,11 +435,17 @@ int main() {
                 std::get<PublicationDecision>(publications.back()->payload)
                         .boundary == PublicationBoundary::PublishedToCaller,
             "demand lowering masqueraded as preparation");
+    require(events<SelectionDecision>(trace).empty(),
+            "logical formation performed numerical selection");
+    auto logical = copy(*source);
+    require(succeeded(kernel::lowerKernels(*source, {}, &trace)) &&
+                succeeded(kernel::verifyKernelLowering(*logical, *source)),
+            "observed Kernel realization failed");
     bool expression = false;
     for (auto *event : events<SelectionDecision>(trace))
       expression |= event->service == "finite-expression";
     require(expression,
-            "total finite selection missing from participant lowering");
+            "total finite selection missing from Kernel realization");
   });
   cases.run("fusion recipes and occurrence choices are observational", [&] {
     auto source = parseSourceString<ModuleOp>(fusionFixture, &context);

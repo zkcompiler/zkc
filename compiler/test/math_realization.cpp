@@ -1,3 +1,4 @@
+#include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
@@ -23,6 +24,13 @@ std::string replace(StringRef source, StringRef from, StringRef to) {
 }
 OwningOpRef<ModuleOp> copy(ModuleOp module) {
   return OwningOpRef<ModuleOp>(cast<ModuleOp>(module->clone()));
+}
+void materialize(ModuleOp module) {
+  PassManager manager(module.getContext());
+  manager.addPass(protocol::createProjectProtocolPass(false));
+  manager.addPass(protocol::createLowerMathPass());
+  manager.addPass(protocol::createLowerKernelsPass());
+  require(succeeded(manager.run(module)), "Kernel realization failed");
 }
 local::FuncOp realized(ModuleOp module) {
   local::FuncOp found;
@@ -50,7 +58,16 @@ int main(int argc, char **argv) {
   require(succeeded(mathematical::expandMathRealizations(*expanded)),
           "realization failed");
   cases.run("polynomial intermediates disappear from realized execution", [&] {
-    auto function = realized(*expanded);
+    require(isa<kernel::CallOp>(realized(*expanded).getBody().front().front()),
+            "preparation bypassed logical Kernel IR");
+    bool retainedPolynomial = false;
+    expanded->walk([&](kernel::ModuleOp unit) {
+      unit.walk([&](poly::MultiplyPolynomialOp) { retainedPolynomial = true; });
+    });
+    require(retainedPolynomial, "preparation erased the raw polynomial DAG");
+    auto executable = copy(*expanded);
+    materialize(*executable);
+    auto function = realized(*executable);
     bool polynomial = false, kernel = false, dead = false;
     function.walk([&](Operation *op) {
       for (auto type : op->getResultTypes())
@@ -72,7 +89,6 @@ int main(int argc, char **argv) {
           auto module = copy(*source);
           PassManager manager(&context);
           manager.addPass(protocol::createProjectProtocolPass(simplify));
-          manager.addPass(protocol::createEliminatePolynomialsPass());
           manager.addPass(protocol::createLowerMathPass());
           manager.addPass(protocol::createSelectPhysicalPass());
           require(succeeded(manager.run(*module)),
@@ -191,6 +207,7 @@ int main(int argc, char **argv) {
     require(bool(module), "dimension fixture refused");
     require(succeeded(mathematical::expandMathRealizations(*module)),
             "dimension realization failed");
+    materialize(*module);
     module->walk([&](local::FuncOp function) {
       if (function.getSymName() != "dimension_exec")
         return;
@@ -218,6 +235,7 @@ int main(int argc, char **argv) {
     require(succeeded(mathematical::verifyMathRealizationsPreserved(
                 *module, *candidate)),
             "byte dimension recipe comparison failed");
+    materialize(*candidate);
     bool found = false;
     candidate->walk([&](local::FuncOp function) {
       if (function.getSymName() != "byte_dimension_exec")
@@ -362,15 +380,20 @@ int main(int argc, char **argv) {
            });
   mutation("realized polynomial evaluation operand changed",
            [&](ModuleOp module) {
-             auto function = realized(module);
              bool changed = false;
-             function.walk([&](Operation *op) {
-               if (!changed && isa<algebra::FieldProductOp>(op)) {
-                 op->setOperand(1, function.getArgument(0));
-                 changed = true;
-               }
+             module.walk([&](kernel::ModuleOp unit) {
+               unit.walk([&](Operation *op) {
+                 if (!changed && isa<poly::EvaluatePolynomialOp>(op)) {
+                   auto entry = op->getParentOfType<func::FuncOp>();
+                   auto replacement = entry.getArgument(0);
+                   if (op->getOperand(1) == replacement)
+                     replacement = entry.getArgument(1);
+                   op->setOperand(1, replacement);
+                   changed = true;
+                 }
+               });
              });
-             require(changed, "missing polynomial multiplication");
+             require(changed, "missing raw polynomial evaluation");
            });
   mutation("partial runtime operation inserted", [&](ModuleOp module) {
     auto function = realized(module);
@@ -404,12 +427,11 @@ int main(int argc, char **argv) {
                                   ArrayAttr::get(&context, {})}));
   });
   mutation("unused binding inserted", [&](ModuleOp module) {
-    Operation *binding = nullptr;
-    module.walk([&](local::OperationBindingOp op) { binding = op; });
-    require(binding, "no generated bindings");
-    auto *extra = binding->clone();
-    extra->setAttr("sym_name", StringAttr::get(&context, "extra"));
-    binding->getBlock()->push_back(extra);
+    auto function = realized(module);
+    OpBuilder builder(function);
+    local::OperationBindingOp::create(
+        builder, function.getLoc(), "extra", "field.add",
+        builder.getStrArrayAttr({"bls12-381.fr"}), "");
   });
   cases.run("internal signatures never enable ordinary source admission", [&] {
     program::LocalDefinitions empty;

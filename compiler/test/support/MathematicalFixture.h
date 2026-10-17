@@ -46,6 +46,7 @@ executableFixture(llvm::StringRef text, mlir::MLIRContext &context) {
   mlir::PassManager pipeline(&context);
   pipeline.addPass(protocol::createProjectProtocolPass(false));
   pipeline.addPass(protocol::createLowerMathPass());
+  pipeline.addPass(protocol::createLowerKernelsPass());
   if (mlir::failed(pipeline.run(*module)))
     return zkc::error("fixture-lowering");
   return module;

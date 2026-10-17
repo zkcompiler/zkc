@@ -586,8 +586,7 @@ public:
       Value term =
           reduction ? selection.equations.pointwiseReduction->term : Value();
       auto result =
-          elementwise(selectionComputation.helper->getRegion(0).front(), *view,
-                      formula, entry, vector, term);
+          elementwise(*view->callbackBody, *view, formula, entry, vector, term);
       if (!result) {
         diagnostics::emit(source->emitOpError(), result.takeError());
         return failure();

@@ -12,7 +12,9 @@ A local definition contains ordered primitive operations, role-free applications
 `local.apply` names a closed local definition and supplies its ordered argument
 and result types. The mathematical profile also permits
 [data-only helper realization](protocols.md#executable-local-calls-and-type-use);
-preparation materializes it before expansion. No unresolved helper or static
+preparation forms an owned [Kernel unit](kernel.md) and an ordered Local wrapper
+before expansion. Numerical materialization occurs before physical planning.
+No unresolved helper or static
 selection enters the executable. `.zkc` static checking belongs to the
 [Language profile](../language/README.md).
 

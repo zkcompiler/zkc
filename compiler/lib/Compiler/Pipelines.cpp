@@ -29,7 +29,6 @@ void registerCompilerPipelines() {
                                            options.fuseVectorReductions};
         pm.addPass(protocol::createProjectProtocolPass(true, policy));
         if (!options.projectOnly) {
-          pm.addPass(protocol::createEliminatePolynomialsPass());
           pm.addPass(protocol::createLowerMathPass(policy));
           pm.addPass(protocol::createSelectPhysicalPass({}, options.linear,
                                                         options.release));

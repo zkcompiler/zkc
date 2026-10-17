@@ -1,9 +1,12 @@
+#include "../lib/Transforms/MathematicalSupport.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/Support/Threading.h"
@@ -58,11 +61,17 @@ int main() {
   auto source = parseSourceString<ModuleOp>(fixture, &context);
   require(bool(source), "fixture refused");
   run(*source, protocol::createProjectProtocolPass());
-  auto bound = copy(*source);
-  run(*bound, protocol::createLowerMathPass());
+  auto logical = copy(*source);
+  run(*logical, protocol::createLowerMathPass());
+  auto bound = copy(*logical);
+  run(*bound, protocol::createLowerKernelsPass());
   Cases cases;
   cases.run("all Boolean recipes, shared demand, received guard", [&] {
-    require(succeeded(mathematical::verifyProjectionPreserved(*source, *bound)),
+    require(succeeded(mathematical::verifyMathLowering(
+                cast<protocol_ir::ProtocolModuleOp>(source->getBody()->front()),
+                cast<protocol_ir::ProtocolModuleOp>(
+                    logical->getBody()->front()))) &&
+                succeeded(kernel::verifyKernelLowering(*logical, *bound)),
             "valid lowering refused");
   });
   cases.run("equivalent pure split is a different lowering policy", [&] {
@@ -83,29 +92,40 @@ int main() {
     auto call =
         *participant(*split).getBody().front().getOps<local::CallOp>().begin();
     auto function = callee(call);
-    auto &body = function.getBody().front();
-    auto &first = body.front();
-    require(first.getNumResults() == 1 && body.getNumArguments() == 2,
-            "split fixture recipe");
+    auto invocation = cast<kernel::CallOp>(function.getBody().front().front());
+    SymbolTableCollection symbols;
+    auto entry = kernel::resolve(invocation, symbols);
+    require(bool(entry) && entry.getNumArguments() == 2 &&
+                isa<arith::AndIOp>(entry.front().front()),
+            "split fixture mathematical body");
+    auto closure = cast<kernel::ModuleOp>(entry->getParentOp());
     OpBuilder builder(function);
-    auto prefix = local::FuncOp::create(
-        builder, function.getLoc(), "split_prefix", function.getFunctionType());
+    auto prefixUnit = cast<kernel::ModuleOp>(builder.clone(*closure));
+    prefixUnit.setSymName("split_prefix_kernel");
+    auto prefixEntry = kernel::getEntry(prefixUnit);
+    auto &prefixBody = prefixEntry.front();
+    auto &first = prefixBody.front();
+    prefixBody.back().setOperands(first.getResults());
+    for (auto &operation : llvm::make_early_inc_range(prefixBody))
+      if (&operation != &first && !isa<func::ReturnOp>(operation))
+        operation.erase();
+    auto prefix = cast<local::FuncOp>(builder.clone(*function));
+    prefix.setSymName("split_prefix");
     prefix->setAttr("logical_origin",
                     builder.getArrayAttr({builder.getStringAttr("split_prefix"),
                                           builder.getArrayAttr({})}));
-    auto *entry = prefix.addEntryBlock();
-    builder.setInsertionPointToEnd(entry);
-    IRMapping mapping;
-    for (auto [a, b] : llvm::zip(body.getArguments(), entry->getArguments()))
-      mapping.map(a, b);
-    auto *andOperation = builder.clone(first, mapping);
-    local::ReturnOp::create(builder, call.getLoc(), andOperation->getResults());
+    auto prefixInvocation =
+        cast<kernel::CallOp>(prefix.getBody().front().front());
+    prefixInvocation.setCalleeAttr(SymbolRefAttr::get(
+        &context, prefixUnit.getSymName(),
+        {FlatSymbolRefAttr::get(&context, prefixEntry.getSymName())}));
     builder.setInsertionPoint(call);
     auto prefixCall = local::CallOp::create(
         builder, call.getLoc(), call.getResultTypes(), call.getInputs(),
         prefix.getSymName(), "split_prefix");
-    first.getResult(0).replaceAllUsesWith(body.getArgument(1));
-    first.erase();
+    auto &andOperation = entry.front().front();
+    andOperation.getResult(0).replaceAllUsesWith(entry.getArgument(1));
+    andOperation.erase();
     call->setOperand(1, prefixCall.getResult(0));
     split->walk([&](protocol_ir::ProjectionOp record) {
       SmallVector<Attribute> rows(record.getCalculations().getValue());
@@ -125,9 +145,31 @@ int main() {
       return success();
     });
     require(
-        failed(mathematical::verifyProjectionPreserved(*original, *split)) &&
+        failed(mathematical::verifyMathLowering(
+            cast<protocol_ir::ProtocolModuleOp>(original->getBody()->front()),
+            cast<protocol_ir::ProtocolModuleOp>(split->getBody()->front()))) &&
             partition,
         "split escaped the closed lowering policy");
+  });
+  cases.run("logical Kernel operand mutation", [&] {
+    auto candidate = copy(*logical);
+    bool changed = false;
+    candidate->walk([&](arith::AndIOp op) {
+      if (!changed && op->getParentOfType<kernel::ModuleOp>() &&
+          op.getLhs() != op.getRhs()) {
+        op->setOperand(1, op.getLhs());
+        changed = true;
+      }
+    });
+    require(changed && succeeded(verify(*candidate)),
+            "logical operand mutation lost formation");
+    ScopedDiagnosticHandler expected(&context,
+                                     [](Diagnostic &) { return success(); });
+    require(failed(mathematical::verifyMathLowering(
+                cast<protocol_ir::ProtocolModuleOp>(source->getBody()->front()),
+                cast<protocol_ir::ProtocolModuleOp>(
+                    candidate->getBody()->front()))),
+            "changed Kernel mathematics escaped formation correspondence");
   });
   auto mutation = [&](StringRef name, llvm::function_ref<void(ModuleOp)> change,
                       bool formed = true,
@@ -150,12 +192,11 @@ int main() {
               "mutation did not retain formation");
       bool code = false;
       ScopedDiagnosticHandler expected(&context, [&](Diagnostic &diagnostic) {
-        code |= diagnostic.str().find("mathematical-lowering-preservation") !=
+        code |= diagnostic.str().find("kernel-lowering-correspondence") !=
                 std::string::npos;
         return success();
       });
-      require(failed(mathematical::verifyProjectionPreserved(*source,
-                                                             *candidate)) &&
+      require(failed(kernel::verifyKernelLowering(*logical, *candidate)) &&
                   code,
               "lowering mutation escaped data-flow comparison");
     });
@@ -377,6 +418,8 @@ int main() {
     require(succeeded(verify(*original)), "authored binding lost formation");
     auto candidate = copy(*original);
     run(*candidate, protocol::createLowerMathPass());
+    auto logicalCandidate = copy(*candidate);
+    run(*candidate, protocol::createLowerKernelsPass());
     local::OperationBindingOp generated;
     candidate->walk([&](local::OperationBindingOp binding) {
       if (binding.getContract() == "bool.and" &&
@@ -392,9 +435,9 @@ int main() {
     });
     generated.erase();
     require(succeeded(verify(*candidate)), "binding reuse lost formation");
-    require(succeeded(
-                mathematical::verifyProjectionPreserved(*original, *candidate)),
-            "equivalent authored binding was refused");
+    require(
+        succeeded(kernel::verifyKernelLowering(*logicalCandidate, *candidate)),
+        "equivalent authored binding was refused");
   });
   cases.run("interfaces remain immutable across lowering", [&] {
     protocol_ir::ProjectionOp a, b;

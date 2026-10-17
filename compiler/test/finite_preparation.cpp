@@ -1,5 +1,6 @@
 #include "../lib/Transforms/FinitePreparation.h"
 #include "../lib/Transforms/HelperNormalization.h"
+#include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "../lib/Transforms/RealizationTrace.h"
 #include "mlir/IR/IRMapping.h"
@@ -130,7 +131,8 @@ bool hasLoop(ModuleOp module) {
 OwningOpRef<ModuleOp> emit(ModuleOp source, RealizationWork &work,
                            RealizationTrace *trace = nullptr,
                            ArrayRef<StringRef> totals = {"total"},
-                           bool optimize = true) {
+                           bool optimize = true,
+                           finite::VerificationLimits limits = {}) {
   OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(source->clone()));
   auto prototype = helper(*candidate, "total");
   SmallVector<Type> results(totals.size(), prototype.getResultTypes().front());
@@ -154,7 +156,7 @@ OwningOpRef<ModuleOp> emit(ModuleOp source, RealizationWork &work,
   }
   local::ReturnOp::create(builder, source.getLoc(), values);
   require(succeeded(lowerCalculations(unit(*candidate), {function},
-                                      {optimize, false}, &work, trace)),
+                                      {optimize, false}, &work, limits, trace)),
           "checked callback lowering failed");
   require(succeeded(verify(*candidate)), "candidate refused");
   for (auto original : unit(source).getBody().front().getOps<func::FuncOp>())
@@ -463,14 +465,12 @@ int main() {
               });
   cases.run(
       "comparison retry retains optional work and required reserves", [&] {
-        auto source = fixture(context);
-        OwningOpRef<ModuleOp> ordered(cast<ModuleOp>((*source)->clone()));
+        auto original = fixture(context);
         RealizationWork work, orderedWork;
-        require(succeeded(
-                    expandMathRealizations(*source, {}, &work, {100000, 1})) &&
-                    succeeded(expandMathRealizations(*ordered, {false, false},
-                                                     &orderedWork)) &&
-                    same(*source, *ordered),
+        auto source =
+            emit(*original, work, nullptr, {"total"}, true, {100000, 1});
+        auto ordered = emit(*original, orderedWork, nullptr, {"total"}, false);
+        require(same(*source, *ordered),
                 "comparison exhaustion did not retry ordered");
         require(work.matching.structural < orderedWork.matching.structural &&
                     work.helperOperations == orderedWork.helperOperations &&
@@ -502,9 +502,9 @@ int main() {
           builder.clone(total.front().front(), mapping);
           require(succeeded(verify(*source)), "nested source refused");
           CheckedHelperNormalizations helpers(unit(*source));
-          require(succeeded(helpers.prepareRealization(step)),
+          require(succeeded(helpers.prepare(step)),
                   "nested realization normalization refused");
-          auto prepared = helpers.lookup(step, true);
+          auto prepared = helpers.lookup(step);
           require(llvm::any_of(
                       prepared.front(),
                       [](Operation &op) { return finite::isComputation(&op); }),

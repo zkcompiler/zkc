@@ -28,10 +28,15 @@ createPrepareProtocolPass(bool simplify = true,
 std::unique_ptr<mlir::Pass>
 createProjectProtocolPass(bool simplify = true,
                           MathematicalSelectionPolicy policy = {});
-/// Lower participant mathematics to execution recipes in the exec profile.
+/// Form demanded participant mathematics as logical Kernel units in Exec.
 std::unique_ptr<mlir::Pass>
 createLowerMathPass(MathematicalSelectionPolicy policy = {},
                     mathematical::RealizationTrace *trace = nullptr);
+/// Realize logical numerical units into existing Local execution before
+/// physical planning. This is a separate independently checked Exec edge.
+std::unique_ptr<mlir::Pass>
+createLowerKernelsPass(MathematicalSelectionPolicy policy = {},
+                       mathematical::RealizationTrace *trace = nullptr);
 /// Distribute prefix fixing through shared sums/products and MLE leaves.
 std::unique_ptr<mlir::Pass> createFixPolynomialFactorsPass();
 /// Eliminate formal polynomial SSA while retaining concrete participant types.

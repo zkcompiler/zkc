@@ -5,9 +5,10 @@
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Kernel/IR/KernelOps.h"
 #include "zkc/Dialect/Mathematical.h"
+#include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
-#include "zkc/Dialect/Protocol/Semantics.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringMap.h"
@@ -1019,7 +1020,7 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
           return refuse(entry, "unsupported participant entry attribute");
       continue;
     }
-    if (isa<data::DomainOp, func::FuncOp, local::FuncOp,
+    if (isa<data::DomainOp, func::FuncOp, local::FuncOp, kernel::ModuleOp,
             local::OperationBindingOp>(declaration))
       continue;
     if (isa<protocol_ir::ProjectionOp>(declaration))

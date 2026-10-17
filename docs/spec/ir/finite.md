@@ -198,6 +198,11 @@ operand dependencies until a checked decomposition supports narrower cloning.
 
 ## Realization and checking
 
+Total finite expressions and their actual helper/domain dependencies may remain
+inside [logical Kernel units](kernel.md). Their canonical and bulk recipes are
+selected during checked Kernel realization. Ordered Local finite declarations
+retain their existing partial-control contract and preparation path.
+
 Finite structure remains available through ordinary helper expansion. Recognizers
 inspect helper bodies and native contract identities. A recognition miss uses
 Local loops, branches and checked collection access; it cannot make a well-formed

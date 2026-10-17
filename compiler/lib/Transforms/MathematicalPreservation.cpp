@@ -4,7 +4,7 @@
 #include "mlir/IR/OperationSupport.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Dialect/Protocol/Semantics.h"
+#include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/StringMap.h"
 
@@ -166,13 +166,13 @@ LogicalResult verifyAuthoredLocalsPreserved(Operation *before,
   if (profile == protocol_ir::Profile::Protocol ||
       profile == protocol_ir::Profile::Participant) {
     for (auto &op : after->getRegion(0).front())
-      if (isa<local::FuncOp, local::OperationBindingOp>(op) &&
+      if (isa<kernel::ModuleOp, local::FuncOp, local::OperationBindingOp>(op) &&
           !sourceSymbols.lookup(SymbolTable::getSymbolName(&op)))
         return refuseLocal(after,
                            "mathematical pass added an executable definition");
   }
   for (auto &op : before->getRegion(0).front()) {
-    if (!isa<local::FuncOp, local::OperationBindingOp>(op))
+    if (!isa<kernel::ModuleOp, local::FuncOp, local::OperationBindingOp>(op))
       continue;
     auto name = SymbolTable::getSymbolName(&op);
     auto *target = targetSymbols.lookup(name);

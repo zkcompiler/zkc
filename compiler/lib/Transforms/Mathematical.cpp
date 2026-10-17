@@ -18,8 +18,8 @@
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Mathematical.h"
+#include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
-#include "zkc/Dialect/Protocol/Semantics.h"
 #include "zkc/Dialect/Relation/IR/RelationOps.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Algorithms.h"
@@ -611,14 +611,16 @@ public:
     root.getBody().push_back(declarations);
     builder.setInsertionPointToEnd(declarations);
     bool hasFinite = false;
-    common->walk(
-        [&](Operation *op) { hasFinite |= finite::isComputation(op); });
+    for (auto program :
+         common.getBody().front().getOps<protocol_ir::MathematicalOp>())
+      program.walk(
+          [&](Operation *op) { hasFinite |= finite::isComputation(op); });
     for (auto &op : common.getBody().front()) {
       if (auto symbol = SymbolTable::getSymbolName(&op))
         names.insert(symbol.getValue());
       if ((hasFinite && isa<data::DomainOp, func::FuncOp>(op)) ||
-          isa<zkc::relation::DeclareOp, zkc::local::FuncOp,
-              zkc::local::OperationBindingOp>(op)) {
+          isa<zkc::relation::DeclareOp, zkc::kernel::ModuleOp,
+              zkc::local::FuncOp, zkc::local::OperationBindingOp>(op)) {
         auto *copy = builder.clone(op);
         // Participant projection does not retain the original Math closure or
         // transport declaration contracts. Its statement manifest keeps only
@@ -1026,13 +1028,14 @@ OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
     return {};
   OwningOpRef<protocol_ir::ProtocolModuleOp> expanded(
       cast<protocol_ir::ProtocolModuleOp>(unit->clone()));
-  // Freeze canonical local application expansion and realized math helpers
-  // before participant rewriting. A realization's logical_origin names its
-  // original pure helper; its recipes were checked before reaching this point.
+  // Freeze local application expansion and the complete owned numerical
+  // closures before participant rewriting. Kernel lowering checks their
+  // executable realization separately, after placement.
   OwningOpRef<ModuleOp> frozenLocals(ModuleOp::create(unit.getLoc()));
   OpBuilder snapshotBuilder(frozenLocals->getBodyRegion());
   for (auto &op : unit.getBody().front())
-    if (isa<zkc::local::FuncOp, zkc::local::OperationBindingOp>(op))
+    if (isa<zkc::kernel::ModuleOp, zkc::local::FuncOp,
+            zkc::local::OperationBindingOp>(op))
       snapshotBuilder.clone(op);
   unsigned remainingHelpers = realizedHelperOperationLimit;
   uint64_t helperIndices = 1000000;
@@ -1112,9 +1115,10 @@ struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
            "their callers";
   }
   void getDependentDialects(DialectRegistry &registry) const final {
-    // Finite and mathematical realizations can introduce execution operations
-    // even when the source has no algebra operations or types.
-    registry.insert<local::LocalDialect, algebra::AlgebraDialect>();
+    // Preparation can form numerical units and realize partial Local work even
+    // when the source has no Algebra operations or types.
+    registry.insert<local::LocalDialect, kernel::KernelDialect,
+                    algebra::AlgebraDialect, func::FuncDialect>();
   }
   void runOnOperation() final {
     auto source = getOperation();
@@ -1199,7 +1203,8 @@ struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
   }
   void getDependentDialects(DialectRegistry &registry) const final {
     registry.insert<zkc::protocol_ir::ProtocolDialect, zkc::local::LocalDialect,
-                    zkc::algebra::AlgebraDialect, func::FuncDialect>();
+                    zkc::kernel::KernelDialect, zkc::algebra::AlgebraDialect,
+                    func::FuncDialect>();
   }
   void runOnOperation() final {
     auto source = getOperation();

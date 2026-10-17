@@ -110,15 +110,15 @@ ComputationSelection selectComputation(finite::Computation computation,
       selection.kind = RealizationKind::Reduction;
   } else if (selection.equations.pointwiseReduction) {
     const auto &equation = *selection.equations.pointwiseReduction;
-    if (laneRecipesAvailable(computation.helper->getRegion(0).front(),
-                             equation.formula, recipes)) {
+    if (laneRecipesAvailable(*selection.view->callbackBody, equation.formula,
+                             recipes)) {
       selection.pointwiseReduction =
           recipes.reduction(equation.combine, {}, ReductionForm::Direct);
       if (selection.pointwiseReduction)
         selection.kind = RealizationKind::PointwiseReduction;
     }
   } else if (selection.equations.elementwise &&
-             laneRecipesAvailable(computation.helper->getRegion(0).front(),
+             laneRecipesAvailable(*selection.view->callbackBody,
                                   *selection.equations.elementwise, recipes))
     selection.kind = RealizationKind::Elementwise;
   selection.diagnostic.outcome =

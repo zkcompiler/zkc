@@ -1,4 +1,4 @@
-#include "zkc/Dialect/Protocol/Semantics.h"
+#include "zkc/Dialect/MathematicalSemantics.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
@@ -18,7 +18,7 @@ std::optional<OperationSemantics> classify(Operation *op) {
   .Case<OP>([](OP) -> std::optional<OperationSemantics> {                      \
     return OperationSemantics{Category::CATEGORY, CONTEXTS};                   \
   })
-#include "zkc/Dialect/Protocol/MathematicalOperations.def"
+#include "zkc/Dialect/MathematicalOperations.def"
 #undef ZKC_MATH_OPERATION
       .Default(std::nullopt);
 }
@@ -73,7 +73,7 @@ LogicalResult verifyOperation(Operation *op, Context context) {
     static const SmallVector<StringRef> attrs = {__VA_ARGS__};                 \
     return attrs;                                                              \
   })
-#include "zkc/Dialect/Protocol/MathematicalOperations.def"
+#include "zkc/Dialect/MathematicalOperations.def"
 #undef ZKC_MATH_OPERATION
                      .Default(ArrayRef<StringRef>{});
   for (auto attribute : op->getAttrs())

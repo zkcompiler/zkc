@@ -45,6 +45,8 @@ selectComputation(finite::Computation computation,
                   finite::ComputationWork &work,
                   const MathematicalRecipes &recipes = mathematicalRecipes());
 struct NestedContractionSelection {
+  /// Own any exact callback substitution referenced by the equation/witness.
+  std::optional<finite::ComputationView> view;
   std::optional<NestedContraction> equation;
   const MatrixContractionRecipe *recipe = nullptr;
   finite::ComputationDiagnostic diagnostic;

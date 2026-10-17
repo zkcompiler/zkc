@@ -1,8 +1,12 @@
 #include "zkc/Analysis/Computation.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/IR/Builders.h"
+#include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/IRMapping.h"
 #include "zkc/Analysis/MathematicalFacts.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Kernel/IR/KernelOps.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"
@@ -11,6 +15,21 @@
 using namespace mlir;
 using namespace llvm;
 namespace zkc::finite {
+struct ComputationBody {
+  OwningOpRef<mlir::ModuleOp> storage;
+  local::FuncOp helper;
+  llvm::DenseMap<Operation *, Operation *> sources;
+  llvm::DenseMap<Value, Value> callbackValues;
+};
+Operation *ComputationView::sourceOperation(Operation *operation) const {
+  if (numericalBody)
+    if (auto *source = numericalBody->sources.lookup(operation))
+      return source;
+  return operation;
+}
+Value ComputationView::callbackValue(Value source) const {
+  return numericalBody ? numericalBody->callbackValues.lookup(source) : source;
+}
 std::optional<unsigned>
 ComputationEnvironment::inputPosition(Value formal) const {
   if (!formal)
@@ -31,6 +50,188 @@ Value ComputationEnvironment::resolveCapture(Value value) const {
   return input.resolved ? input.resolved : input.formal;
 }
 namespace {
+// An invocation-local standard SSA view, not a normalizer. Call arguments and
+// every returned coordinate are substituted exactly. In particular, dead
+// arithmetic, pins and opaque Local control remain visible to recognition.
+class NumericalBodyReader {
+  ComputationBody &result;
+  ComputationWork &work;
+  ComputationDiagnostic &diagnostic;
+  SymbolTableCollection symbols;
+  llvm::DenseSet<Operation *> active;
+  llvm::DenseMap<Operation *, local::OperationBindingOp> bindings;
+  OpBuilder builder;
+  bool charge(Operation *op) {
+    return consumeComputationWork(
+        work.structural, 1 + op->getNumOperands() + op->getNumResults(),
+        WorkOwner::Structural, &diagnostic.outcome);
+  }
+  FailureOr<SmallVector<Value>> copy(Block &source, ValueRange arguments,
+                                     Block &target, bool numerical) {
+    auto *owner = source.getParentOp();
+    if (active.size() >= 64) {
+      diagnostic.outcome = {OptimizationStatus::Unsupported,
+                            OptimizationReason::Depth};
+      return failure();
+    }
+    if (!active.insert(owner).second) {
+      diagnostic.outcome = {OptimizationStatus::Unsupported,
+                            OptimizationReason::Cycle};
+      return failure();
+    }
+    auto leave = llvm::scope_exit([&] { active.erase(owner); });
+    if (source.getNumArguments() != arguments.size() || !charge(owner))
+      return failure();
+    IRMapping values;
+    for (auto [formal, actual] : zip(source.getArguments(), arguments)) {
+      if (formal.getType() != actual.getType())
+        return failure();
+      values.map(formal, actual);
+    }
+    for (auto &op : source.without_terminator()) {
+      if (!charge(&op))
+        return failure();
+      SmallVector<Value> inputs;
+      for (Value operand : op.getOperands()) {
+        Value actual = values.lookupOrNull(operand);
+        if (!actual)
+          return failure();
+        inputs.push_back(actual);
+      }
+      func::FuncOp callee;
+      if (auto call = dyn_cast<kernel::CallOp>(op)) {
+        // A retained compile-time choice cannot be bypassed by a surrounding
+        // collection strategy. Unknown policies remain opaque as well.
+        if (auto policy = call->getAttrOfType<ArrayAttr>("policy"))
+          if (policy.size() != 2 || !isa<BoolAttr>(policy[0]) ||
+              !isa<BoolAttr>(policy[1]) ||
+              !cast<BoolAttr>(policy[0]).getValue())
+            return failure();
+        callee = kernel::resolve(call, symbols);
+      } else if (auto call = dyn_cast<func::CallOp>(op)) {
+        callee = symbols.lookupNearestSymbolFrom<func::FuncOp>(
+            call, call.getCalleeAttr());
+      }
+      if (isa<kernel::CallOp, func::CallOp>(op)) {
+        if (!callee || !callee.getBody().hasOneBlock() ||
+            callee.front().empty())
+          return failure();
+        auto outputs = copy(callee.front(), inputs, target, true);
+        if (failed(outputs) || outputs->size() != op.getNumResults())
+          return failure();
+        for (auto [expected, actual] : zip(op.getResultTypes(), *outputs))
+          if (expected != actual.getType())
+            return failure();
+        values.map(op.getResults(), *outputs);
+        continue;
+      }
+      // Keep opaque straight-line payloads intact. Region control cannot be
+      // substituted by this bounded view and conservatively keeps fallback.
+      // Nested finite invocations inside standard numerical helpers also need
+      // their own call-occurrence axes; this scalar view does not flatten them.
+      if (op.getNumRegions() || (numerical && isComputation(&op)))
+        return failure();
+      // Exact pack projection is descriptor substitution, not arithmetic
+      // simplification. Keep every scalar producer and its occurrence order.
+      if (auto projection = dyn_cast<algebra::ArrayAtOp>(op)) {
+        auto pack =
+            inputs.front().getDefiningOp<algebra::ArrayFromElementsOp>();
+        auto coordinate = projection.getIndexAttr().getInt();
+        if (pack && coordinate >= 0 &&
+            uint64_t(coordinate) < pack.getNumOperands()) {
+          values.map(projection.getResult(), pack.getOperand(coordinate));
+          continue;
+        }
+      }
+      builder.setInsertionPointToEnd(&target);
+      auto *copy = builder.clone(op, values);
+      result.sources[copy] = &op;
+      if (auto reference = op.getAttrOfType<FlatSymbolRefAttr>("binding")) {
+        auto binding =
+            symbols.lookupNearestSymbolFrom<local::OperationBindingOp>(
+                &op, reference);
+        if (!binding)
+          return failure();
+        auto &retained = bindings[binding];
+        if (!retained) {
+          if (!charge(binding))
+            return failure();
+          auto *declaration = binding->clone();
+          SymbolTable table(*result.storage);
+          table.insert(declaration);
+          retained = cast<local::OperationBindingOp>(declaration);
+        }
+        copy->setAttr("binding",
+                      FlatSymbolRefAttr::get(retained.getSymNameAttr()));
+      }
+    }
+    auto &end = source.back();
+    if (!charge(&end) ||
+        (numerical ? !isa<func::ReturnOp>(end) : !isa<local::ReturnOp>(end)))
+      return failure();
+    SmallVector<Value> outputs;
+    for (Value operand : end.getOperands()) {
+      Value actual = values.lookupOrNull(operand);
+      if (!actual)
+        return failure();
+      outputs.push_back(actual);
+    }
+    if (!numerical) {
+      for (Value argument : source.getArguments())
+        result.callbackValues[argument] = values.lookup(argument);
+      for (auto &op : source.without_terminator())
+        for (Value value : op.getResults())
+          result.callbackValues[value] = values.lookup(value);
+    }
+    return outputs;
+  }
+
+public:
+  NumericalBodyReader(ComputationBody &result, ComputationWork &work,
+                      ComputationDiagnostic &diagnostic)
+      : result(result), work(work), diagnostic(diagnostic),
+        builder(result.helper.getContext()) {}
+  LogicalResult read(local::FuncOp source) {
+    auto *body = result.helper.addEntryBlock();
+    auto outputs =
+        copy(source.getBody().front(), body->getArguments(), *body, false);
+    if (failed(outputs))
+      return failure();
+    builder.setInsertionPointToEnd(body);
+    auto end = local::ReturnOp::create(builder, source.getLoc(), *outputs);
+    result.sources[end] = &source.getBody().front().back();
+    for (auto &op : llvm::make_early_inc_range(body->without_terminator())) {
+      if (!charge(&op))
+        return failure();
+      if (!isa<algebra::ArrayFromElementsOp>(op) || !op.use_empty())
+        continue;
+      for (auto iterator = result.callbackValues.begin();
+           iterator != result.callbackValues.end();) {
+        if (!charge(&op))
+          return failure();
+        auto current = iterator++;
+        if (current->second == op.getResult(0))
+          result.callbackValues.erase(current);
+      }
+      result.sources.erase(&op);
+      op.erase();
+    }
+    return success();
+  }
+};
+
+std::shared_ptr<ComputationBody>
+readNumericalBody(local::FuncOp helper, ComputationWork &work,
+                  ComputationDiagnostic &diagnostic) {
+  auto result = std::make_shared<ComputationBody>();
+  result->storage = mlir::ModuleOp::create(helper.getLoc());
+  result->helper = cast<local::FuncOp>(helper->cloneWithoutRegions());
+  result->storage->getBody()->push_back(result->helper);
+  if (failed(NumericalBodyReader(*result, work, diagnostic).read(helper)))
+    return {};
+  return result;
+}
+
 Value domainResult(Computation c) {
   return c.domain.getBody().front().back().getOperand(0);
 }
@@ -333,12 +534,15 @@ public:
   read(Computation c, Operation *occurrence,
        ArrayRef<Operation *> parentPath = {},
        const llvm::DenseMap<Value, Value> &enclosing =
-           llvm::DenseMap<Value, Value>()) {
+           llvm::DenseMap<Value, Value>(),
+       Operation *sourceOccurrence = nullptr) {
+    if (!sourceOccurrence)
+      sourceOccurrence = occurrence;
     Operation *previousSubject = subject;
     auto previousPath = std::move(occurrencePath);
     occurrencePath.assign(parentPath.begin(), parentPath.end());
-    occurrencePath.push_back(occurrence);
-    subject = occurrence;
+    occurrencePath.push_back(sourceOccurrence);
+    subject = sourceOccurrence;
     auto restore = llvm::scope_exit([&] {
       subject = previousSubject;
       occurrencePath = std::move(previousPath);
@@ -358,17 +562,36 @@ public:
         !charge(1 + c.signature.getNumInputs() + c.signature.getNumResults() +
                 c.helper->getRegion(0).front().getNumArguments()))
       return std::nullopt;
+    auto callbackComputation = c;
+    std::shared_ptr<ComputationBody> numericalBody;
+    if (auto helper = dyn_cast<local::FuncOp>(c.helper)) {
+      bool calls = false;
+      for (auto &op : helper.getBody().front().without_terminator()) {
+        if (!charge())
+          return std::nullopt;
+        calls |= isa<kernel::CallOp, func::CallOp>(op);
+      }
+      if (calls) {
+        numericalBody = readNumericalBody(helper, work, diagnostic);
+        if (!numericalBody)
+          return std::nullopt;
+        callbackComputation.helper = numericalBody->helper;
+      }
+    }
     auto callback =
-        readCallback(c, c.collect ? CallbackRole::Body : CallbackRole::Step);
+        readCallback(callbackComputation,
+                     c.collect ? CallbackRole::Body : CallbackRole::Step);
     if (failed(callback))
       return std::nullopt;
     auto &body = *callback->body;
     ComputationView result;
     result.computation = c;
+    result.numericalBody = std::move(numericalBody);
+    result.callbackBody = &body;
     result.occurrence = occurrence;
     result.terminator = callback->terminator;
     append_range(result.occurrencePath, parentPath);
-    result.occurrencePath.push_back(occurrence);
+    result.occurrencePath.push_back(sourceOccurrence);
     llvm::DenseMap<Value, unsigned> iterations;
     for (auto &op : c.domain.getBody().front().without_terminator()) {
       if (!charge(1 + op.getNumOperands()))
@@ -493,11 +716,12 @@ public:
         if (!charge(1 + op.getNumOperands()))
           return false;
         payload.push_back(&op);
-        Operation *definition = &op;
+        Operation *source = result.sourceOperation(&op);
+        Operation *definition = source;
         if (isa<local::ApplyOp, func::CallOp>(op)) {
           auto reference = op.getAttrOfType<FlatSymbolRefAttr>("callee");
           definition = reference
-                           ? symbols.lookupNearestSymbolFrom(&op, reference)
+                           ? symbols.lookupNearestSymbolFrom(source, reference)
                            : nullptr;
         }
         if (!definition || !isComputation(definition))
@@ -505,7 +729,8 @@ public:
         Computation child;
         if (failed(describe(definition, child, nullptr, &symbols)))
           return false;
-        auto nested = read(child, &op, result.occurrencePath, environment);
+        auto nested =
+            read(child, &op, result.occurrencePath, environment, source);
         if (!nested)
           return false;
         result.nested.push_back(std::move(*nested));
@@ -557,7 +782,8 @@ public:
                       : std::nullopt,
            c.signature.getResult(i),
            c.collect && !c.predicate ? std::optional<unsigned>(result.root)
-                                     : std::nullopt});
+                                     : std::nullopt,
+           c.helper->getRegion(0).front().back().getOperand(i)});
     if (result.results.size() == 1)
       result.result = result.results.front();
     AccessAnalysis accesses(result, aligned, work, factAnalysis, evidence,
@@ -585,6 +811,12 @@ analyzeComputation(Computation c, ComputationWork &work,
                 c.operation,
                 {},
                 result->occurrencePath};
+  else {
+    // Failed temporary views have already been destroyed. Preserve the refusal
+    // and its debit without exporting references into their transient SSA.
+    observed.subject = c.operation;
+    observed.access = {};
+  }
   if (diagnostic)
     *diagnostic = observed;
   return result;

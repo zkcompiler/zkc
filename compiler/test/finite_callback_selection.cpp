@@ -1,3 +1,4 @@
+#include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "../lib/Transforms/RealizationEmission.h"
 #include "mlir/IR/IRMapping.h"
@@ -201,7 +202,8 @@ bool hasLoop(local::FuncOp function) {
 }
 OwningOpRef<ModuleOp> emit(ModuleOp source, RealizationWork &work,
                            bool optimize = true,
-                           RealizationTrace *trace = nullptr) {
+                           RealizationTrace *trace = nullptr,
+                           finite::VerificationLimits limits = {}) {
   auto candidate = copy(source);
   auto total = SymbolTable(unit(*candidate)).lookup<func::FuncOp>("total");
   OpBuilder builder(source.getContext());
@@ -224,7 +226,7 @@ OwningOpRef<ModuleOp> emit(ModuleOp source, RealizationWork &work,
   // Pass the same work object through it so optional and required accounting
   // assertions cover the checked candidate, including any ordered fallback.
   require(succeeded(lowerCalculations(unit(*candidate), {function},
-                                      {optimize, false}, &work, trace)),
+                                      {optimize, false}, &work, limits, trace)),
           "checked callback lowering failed");
   require(succeeded(verify(*candidate)), "candidate refused");
   for (auto helper : unit(source).getBody().front().getOps<func::FuncOp>())
@@ -903,14 +905,12 @@ module { "protocol.module"() ({
             "next occurrence replenished normalization work");
   });
   cases.run("comparison retry retains spent normalization work", [&] {
-    auto source = parse(context), ordered = copy(*source);
+    auto original = parse(context);
     RealizationWork work, orderedWork;
-    require(
-        succeeded(expandMathRealizations(*source, {}, &work, {100000, 1})) &&
-            succeeded(expandMathRealizations(*ordered, {false, false},
-                                             &orderedWork)) &&
-            same(*source, *ordered),
-        "comparison capacity did not retry the original ordered callback");
+    auto source = emit(*original, work, true, nullptr, {100000, 1});
+    auto ordered = emit(*original, orderedWork, false);
+    require(same(*source, *ordered),
+            "comparison capacity did not retry the original ordered callback");
     require(work.matching.structural < orderedWork.matching.structural &&
                 work.helperOperations == orderedWork.helperOperations &&
                 work.helperSlots == orderedWork.helperSlots &&

@@ -3,9 +3,9 @@
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialOps.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
-#include "zkc/Dialect/Protocol/Semantics.h"
 #include "llvm/ADT/DenseSet.h"
 
 using namespace mlir;
@@ -110,7 +110,7 @@ public:
       return failure();
     auto dataType = [&](Type type) {
       auto policy = types.get(type);
-      return policy && policy->total;
+      return policy && policy->total && !policy->affine;
     };
     if (function->getParentOp() != unit || function.isExternal() ||
         (function == entry ? !function.isPublic() : !function.isPrivate()) ||

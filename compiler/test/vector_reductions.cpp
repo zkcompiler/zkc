@@ -867,8 +867,8 @@ int main() {
                 auto candidate = parse(fixture);
                 run(*candidate, protocol::createProjectProtocolPass(
                                     simplify, {true, true}));
-                run(*candidate, protocol::createEliminatePolynomialsPass());
                 run(*candidate, protocol::createLowerMathPass());
+                run(*candidate, protocol::createLowerKernelsPass());
                 require(count(*candidate, "algebra.exec.vector_dot") == 1,
                         "fusion not forwarded");
                 run(*candidate, protocol::createSelectPhysicalPass());
@@ -887,6 +887,11 @@ int main() {
       auto enabled = copy(*original);
       run(*original, protocol::createPrepareProtocolPass(false));
       run(*enabled, protocol::createPrepareProtocolPass(false, {true, true}));
+      for (auto module : {original.get(), enabled.get()}) {
+        run(module, protocol::createProjectProtocolPass(false));
+        run(module, protocol::createLowerMathPass());
+        run(module, protocol::createLowerKernelsPass());
+      }
       require(OperationEquivalence::isEquivalentTo(
                   *original, *enabled, OperationEquivalence::IgnoreLocations),
               "nonmatching recipe changed under enabled preparation");

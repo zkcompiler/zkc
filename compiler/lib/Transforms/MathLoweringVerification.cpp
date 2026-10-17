@@ -1,5 +1,6 @@
 #include "CollectionInterpretation.h"
 #include "HelperNormalization.h"
+#include "Kernel/Support.h"
 #include "MathematicalSupport.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "zkc/Analysis/ComputationMeaning.h"
@@ -9,7 +10,8 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
-#include "zkc/Dialect/Protocol/Semantics.h"
+#include "zkc/Dialect/MathematicalSemantics.h"
+#include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Interfaces/Collection.h"
 #include "zkc/Transforms/Finite.h"
 #include "llvm/ADT/DenseMap.h"
@@ -25,10 +27,12 @@ namespace {
 // recursive expansion of calls or SSA chains.
 class LoweringVerifier {
   protocol_ir::ProtocolModuleOp before, after;
-  llvm::DenseSet<Operation *> generated, invoked;
+  llvm::DenseSet<Operation *> generated, invoked, generatedKernels;
+  SymbolTableCollection kernelSymbols;
   SymbolTable sourceSymbols, symbols;
   const CheckedHelperNormalizations &helpers;
   size_t remaining = 1000000;
+  bool allowFiniteBulk = true;
   finite::VerificationLimits finiteLimits;
   finite::VerificationResult finiteOutcome{finite::VerificationStatus::Mismatch,
                                            {}};
@@ -117,11 +121,12 @@ class LoweringVerifier {
   finiteRecipe(Operation *source, Operation *&cursor, ValueRange inputs) {
     finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
                                        {}};
+    auto *begin = cursor;
     auto result = finite::verifyExpression(
         source, inputs, cursor,
         [&](Operation *helper, ValueRange args,
             Operation *&at) -> FailureOr<SmallVector<Value>> {
-          // Only independently checked proposals are available here. Lookup
+          // Only exact bounded closure snapshots are available here. Lookup
           // is read-only: this verifier cannot run either normalizer.
           auto normalized = helpers.lookup(helper);
           if (!normalized || normalized.getNumArguments() != args.size())
@@ -172,6 +177,16 @@ class LoweringVerifier {
     if (failed(result) &&
         finiteOutcome.status == finite::VerificationStatus::Mismatch)
       finiteOutcome = outcome;
+    if (succeeded(result) && !allowFiniteBulk) {
+      bool traversal = false;
+      for (auto *op = begin; op != cursor; op = op->getNextNode()) {
+        if (!op || !charge())
+          return failure();
+        traversal |= isa<local::LocalForOp>(op);
+      }
+      if (!traversal)
+        return failure();
+    }
     return result;
   }
   Value recipe(Operation *source, Operation *&cursor, ValueRange inputs) {
@@ -463,7 +478,7 @@ class LoweringVerifier {
       sourceValues[b] = a;
     }
     llvm::DenseMap<Operation *, unsigned> order;
-    llvm::DenseSet<Operation *> realized;
+    llvm::DenseSet<Value> realized;
     unsigned index = 0;
     for (auto &op : original)
       order[&op] = index++;
@@ -483,7 +498,9 @@ class LoweringVerifier {
           return refuse(target, "lowering comparison work limit exceeded");
         auto *definition = value.getDefiningOp();
         if (!definition || !isTotal(definition) ||
-            realized.contains(definition) || !visited.insert(definition).second)
+            (!isa<poly::PolynomialType>(value.getType()) &&
+             realized.contains(value)) ||
+            !visited.insert(definition).second)
           continue;
         needed.push_back(definition);
         append_range(pending, definition->getOperands());
@@ -529,44 +546,86 @@ class LoweringVerifier {
           return mapped;
         };
         auto *instruction = &function.getBody().front().front();
-        for (auto *op : needed) {
-          if (op->getNumResults() != 1 && !finite::isComputation(op))
-            return refuse(call,
-                          "recipe requires one result or a finite state list");
-          auto dependencies = operandDependencies(op, 0);
-          if (failed(dependencies) ||
-              dependencies->size() != op->getNumOperands())
-            return refuse(call,
-                          "recipe requires complete operand dependencies");
-          for (auto [index, operand] : enumerate(*dependencies))
-            if (index != operand)
-              return refuse(call, "recipe dependency ordering changed");
-          SmallVector<Value> inputs;
-          for (auto operand : op->getOperands()) {
-            auto value = lookup(operand);
-            if (!value)
-              return refuse(call, "calculation lost a mathematical dependency");
-            inputs.push_back(value);
+        if (!needed.empty()) {
+          auto kernelCall = dyn_cast<kernel::CallOp>(instruction);
+          auto entry = kernelCall ? kernel::resolve(kernelCall, kernelSymbols)
+                                  : func::FuncOp();
+          auto unit = entry ? dyn_cast<kernel::ModuleOp>(entry->getParentOp())
+                            : kernel::ModuleOp();
+          if (!unit || !generatedKernels.insert(unit).second ||
+              sourceSymbols.lookup(unit.getSymName()) ||
+              kernelCall.getInputs() != function.getArguments() ||
+              failed(kernel::verifyDependencies(before, unit)))
+            return refuse(call, "missing or changed actual numerical closure");
+          for (auto &value : localValues) {
+            auto argument = dyn_cast<BlockArgument>(value.second);
+            if (!argument || argument.getOwner() != &function.getBody().front())
+              return refuse(call, "invalid capture mapping");
+            value.second = entry.getArgument(argument.getArgNumber());
           }
-          if (finite::isComputation(op)) {
-            auto results = finiteRecipe(op, instruction, inputs);
-            if (failed(results) || results->size() != op->getNumResults())
-              return refuse(call, "finite recipe result arity");
-            for (auto [a, b] : zip(op->getResults(), *results)) {
-              if (!b || a.getType() != b.getType())
-                return refuse(call, "finite recipe result type");
-              localValues[a] = b;
+          auto *mathematics = &entry.front().front();
+          for (auto *op : needed) {
+            if (!charge(1 + op->getNumOperands() + op->getNumResults()))
+              return refuse(call, "logical comparison work limit");
+            auto dependencies = operandDependencies(op, 0);
+            if (failed(dependencies) ||
+                dependencies->size() != op->getNumOperands())
+              return refuse(call, "incomplete numerical operand dependencies");
+            for (auto [index, operand] : enumerate(*dependencies))
+              if (index != operand)
+                return refuse(call, "numerical dependency ordering changed");
+            SmallVector<Value> inputs;
+            for (auto operand : op->getOperands()) {
+              auto value = lookup(operand);
+              if (!value)
+                return refuse(call,
+                              "calculation lost a mathematical dependency");
+              inputs.push_back(value);
             }
-            realized.insert(op);
-            continue;
+            NamedAttrList sourceAttrs(op->getAttrs());
+            sourceAttrs.erase("site");
+            if (!mathematics || mathematics->getName() != op->getName() ||
+                mathematics->getAttrDictionary() !=
+                    sourceAttrs.getDictionary(after.getContext()) ||
+                mathematics->getOperands() != ValueRange(inputs) ||
+                mathematics->getResultTypes() != op->getResultTypes() ||
+                mathematics->getNumRegions())
+              return refuse(
+                  call,
+                  "actual numerical operation, operands or attributes differ");
+            for (auto [source, actual] :
+                 zip(op->getResults(), mathematics->getResults())) {
+              localValues[source] = actual;
+              if (!isa<poly::PolynomialType>(source.getType()))
+                realized.insert(source);
+            }
+            mathematics = mathematics->getNextNode();
           }
-          auto value = recipe(op, instruction, inputs);
-          if (!value || op->getNumResults() != 1 ||
-              value.getType() != op->getResult(0).getType())
-            return refuse(call,
-                          "calculation changed an execution recipe or operand");
-          localValues[op->getResult(0)] = value;
-          realized.insert(op);
+          if (any_of(kernelCall.getResults(),
+                     [](Value value) { return value.use_empty(); }))
+            return refuse(call, "unused extra numerical output");
+          auto returned = dyn_cast_or_null<func::ReturnOp>(mathematics);
+          if (!returned || returned->getNextNode() ||
+              returned.getNumOperands() != kernelCall.getNumResults())
+            return refuse(
+                call, "numerical entry contains extra work or changed outputs");
+          // The entry's actual return operands determine the wrapper values.
+          // This detects same-typed result permutations and hidden/lost
+          // escapes.
+          llvm::DenseMap<Value, Value> returnedValues;
+          for (auto [value, result] :
+               zip(returned.getOperands(), kernelCall.getResults()))
+            if (!returnedValues.try_emplace(value, result).second)
+              return refuse(call, "duplicated numerical return coordinate");
+          if (sourceGuard) {
+            auto value = localValues.lookup(sourceGuard.getCondition());
+            if (isa_and_nonnull<BlockArgument>(value))
+              usedCaptures.insert(value);
+          }
+          for (auto &value : localValues)
+            if (auto actual = returnedValues.lookup(value.second))
+              value.second = actual;
+          instruction = kernelCall->getNextNode();
         }
         if (sourceGuard && !guard(sourceGuard, instruction,
                                   lookup(sourceGuard.getCondition())))
@@ -580,7 +639,8 @@ class LoweringVerifier {
         llvm::DenseMap<Value, Value> results;
         for (auto *op : needed)
           for (Value result : op->getResults())
-            results[localValues.lookup(result)] = result;
+            if (!isa<poly::PolynomialType>(result.getType()))
+              results[localValues.lookup(result)] = result;
         llvm::DenseSet<Value> exported;
         for (auto [value, output] :
              zip(returned.getInputs(), call.getResults())) {
@@ -628,29 +688,81 @@ public:
       : before(before), after(after), sourceSymbols(before), symbols(after),
         helpers(helpers), finiteLimits(finiteLimits), reportedOutcome(outcome) {
   }
-  LogicalResult calculations(ArrayRef<local::FuncOp> functions,
-                             bool realization = false) {
+  FailureOr<SmallVector<Value>>
+  kernelRecipes(local::FuncOp entry, ValueRange arguments, Operation *&cursor,
+                uint64_t &budget, MathematicalSelectionPolicy policy) {
+    allowFiniteBulk = policy.finiteBulk;
+    remaining = std::min<uint64_t>(remaining, budget);
+    auto initial = remaining;
+    auto finish =
+        [&](bool valid,
+            SmallVector<Value> values = {}) -> FailureOr<SmallVector<Value>> {
+      budget -= initial - remaining;
+      return valid ? FailureOr<SmallVector<Value>>(std::move(values))
+                   : FailureOr<SmallVector<Value>>(failure());
+    };
+    if (arguments.size() != entry.getNumArguments())
+      return finish(false);
+    llvm::DenseMap<Value, Value> values;
+    for (auto [source, actual] : zip(entry.getArguments(), arguments)) {
+      if (source.getType() != actual.getType())
+        return finish(false);
+      values[source] = actual;
+    }
+    for (auto &op : entry.getBody().front()) {
+      if (!charge(1 + op.getNumOperands() + op.getNumResults()))
+        return finish(false);
+      SmallVector<Value> inputs;
+      for (Value value : op.getOperands()) {
+        auto actual = values.lookup(value);
+        if (!actual)
+          return finish(false);
+        inputs.push_back(actual);
+      }
+      if (isa<local::ReturnOp>(op))
+        return finish(true, inputs);
+      auto *begin = cursor;
+      SmallVector<Value> results;
+      bool finite = finite::isComputation(&op);
+      if (finite) {
+        auto read = finiteRecipe(&op, cursor, inputs);
+        if (failed(read))
+          return finish(false);
+        results = *read;
+      } else {
+        auto value = recipe(&op, cursor, inputs);
+        if (!value)
+          return finish(false);
+        results.push_back(value);
+      }
+      auto site = op.getAttrOfType<StringAttr>("site");
+      if (!site || results.size() != op.getNumResults() ||
+          !occurrences(begin, cursor, site.getValue(), finite))
+        return finish(false);
+      // Primitive roots keep the original occurrence, while a finite recipe
+      // has its documented traversal suffixes. No label establishes meaning.
+      if (!finite && !results.empty()) {
+        auto rootSite =
+            results.back().getDefiningOp()->getAttrOfType<StringAttr>("site");
+        if (!rootSite || rootSite != site)
+          return finish(false);
+      }
+      for (auto [source, actual] : zip(op.getResults(), results)) {
+        if (source.getType() != actual.getType())
+          return finish(false);
+        values[source] = actual;
+      }
+    }
+    return finish(false);
+  }
+  LogicalResult calculations(ArrayRef<local::FuncOp> functions) {
     for (auto target : functions) {
       Block *sourceBody = nullptr;
-      if (realization) {
-        auto declaration =
-            sourceSymbols.lookup<local::RealizeOp>(target.getSymName());
-        auto helper =
-            declaration
-                ? sourceSymbols.lookup<func::FuncOp>(declaration.getHelper())
-                : func::FuncOp();
-        auto normalized =
-            helper ? helpers.lookup(helper, true) : func::FuncOp();
-        if (normalized &&
-            normalized.getFunctionType() == target.getFunctionType())
-          sourceBody = &normalized.front();
-      } else {
-        auto source = sourceSymbols.lookup<local::FuncOp>(target.getSymName());
-        if (source &&
-            source->getAttrDictionary() == target->getAttrDictionary() &&
-            source.getBody().hasOneBlock())
-          sourceBody = &source.getBody().front();
-      }
+      auto source = sourceSymbols.lookup<local::FuncOp>(target.getSymName());
+      if (source &&
+          source->getAttrDictionary() == target->getAttrDictionary() &&
+          source.getBody().hasOneBlock())
+        sourceBody = &source.getBody().front();
       if (!sourceBody || !hasSingleElement(target.getBody()) ||
           !llvm::equal(sourceBody->getArgumentTypes(),
                        target.getArgumentTypes()))
@@ -659,7 +771,6 @@ public:
       for (auto [a, b] : zip(sourceBody->getArguments(), target.getArguments()))
         values[a] = b;
       auto *cursor = &target.getBody().front().front();
-      unsigned occurrence = 0;
       for (auto &op : *sourceBody) {
         if (!charge(1 + op.getNumOperands() + op.getNumResults()))
           return refuse(target, "lowering comparison work limit exceeded");
@@ -682,48 +793,28 @@ public:
           // Participant outlining includes the guard at its demand boundary.
           // It has no result, but its condition and rejection remain part of
           // the independently checked calculation.
-          if (realization || inputs.size() != 1 ||
-              !guard(sourceGuard, cursor, inputs.front()))
+          if (inputs.size() != 1 || !guard(sourceGuard, cursor, inputs.front()))
             return refuse(target, "realized calculation changed its guard");
           continue;
         }
         if (finite::isComputation(&op)) {
-          auto *begin = cursor;
           auto results = finiteRecipe(&op, cursor, inputs);
           if (failed(results) || results->size() != op.getNumResults())
             return refuse(target, "finite multi-result recipe changed");
           for (auto [a, b] : zip(op.getResults(), *results))
             values[a] = b;
-          if (realization &&
-              !occurrences(begin, cursor, "value_" + std::to_string(occurrence),
-                           true))
-            return refuse(target, "finite recipe changed its occurrence");
-          ++occurrence;
           continue;
         }
         if (!isTotal(&op) || op.getNumResults() != 1)
           return refuse(target, "unexpected realized mathematical operation");
-        auto *begin = cursor;
         auto value = recipe(&op, cursor, inputs);
         // A checked finite realization may discard an ignored capture in an
         // outlined participant calculation. Its eagerly computed primitive
         // still has to match exactly, even when it is no longer used.
-        if (!value || value.getType() != op.getResult(0).getType() ||
-            (realization && value.use_empty()))
+        if (!value || value.getType() != op.getResult(0).getType())
           return refuse(
               target,
               "realized calculation changed a recipe, operand or liveness");
-        // The complete local.realize path assigns these root occurrences
-        // before lowering; expanded recipe intermediates have their own sites.
-        if (realization) {
-          auto root = "value_" + std::to_string(occurrence);
-          auto site = value.getDefiningOp()->getAttrOfType<StringAttr>("site");
-          if (!site || site.getValue() != root ||
-              !occurrences(begin, cursor, root, false))
-            return refuse(target,
-                          "realized calculation changed its occurrence");
-        }
-        ++occurrence;
         values[op.getResult(0)] = value;
       }
       if (cursor)
@@ -806,7 +897,8 @@ public:
       auto name = SymbolTable::getSymbolName(&definition);
       if (name && !sourceSymbols.lookup(name) &&
           !generated.contains(&definition) &&
-          !recipeBindings.contains(&definition))
+          !recipeBindings.contains(&definition) &&
+          !generatedKernels.contains(&definition))
         return refuse(&definition, "lowering added an untracked declaration");
     }
     llvm::DenseMap<Operation *, unsigned> uses;
@@ -843,49 +935,28 @@ LogicalResult verifyCalculationRecipes(protocol_ir::ProtocolModuleOp original,
   outcome = {finite::VerificationStatus::Mismatch,
              "calculation recipes differ"};
   CheckedHelperNormalizations helpers(original);
-  SymbolTable symbols(original);
-  for (auto function : functions) {
-    auto source = symbols.lookup<local::FuncOp>(function.getSymName());
-    if (!source || failed(helpers.prepare(source)))
-      return failure();
-  }
+  if (failed(helpers.readback()))
+    return failure();
   auto result = LoweringVerifier(original, candidate, helpers, limits, &outcome)
                     .calculations(functions);
   if (succeeded(result))
     outcome = {finite::VerificationStatus::Verified, {}};
   return result;
 }
-LogicalResult
-verifyRealizedHelperRecipes(protocol_ir::ProtocolModuleOp original,
-                            protocol_ir::ProtocolModuleOp candidate,
-                            ArrayRef<local::FuncOp> functions) {
-  CheckedHelperNormalizations helpers(original);
-  SymbolTable symbols(original);
-  for (auto function : functions) {
-    auto declaration = symbols.lookup<local::RealizeOp>(function.getSymName());
-    auto helper = declaration
-                      ? symbols.lookup<func::FuncOp>(declaration.getHelper())
-                      : func::FuncOp();
-    if (!helper || failed(helpers.prepareRealization(helper)))
-      return failure();
-  }
-  return verifyRealizedHelperRecipes(original, candidate, functions, helpers);
-}
-LogicalResult
-verifyRealizedHelperRecipes(protocol_ir::ProtocolModuleOp original,
-                            protocol_ir::ProtocolModuleOp candidate,
-                            ArrayRef<local::FuncOp> functions,
-                            const CheckedHelperNormalizations &helpers) {
-  return LoweringVerifier(original, candidate, helpers)
-      .calculations(functions, true);
+FailureOr<SmallVector<Value>>
+verifyKernelRecipes(protocol_ir::ProtocolModuleOp source, local::FuncOp entry,
+                    protocol_ir::ProtocolModuleOp candidate,
+                    ValueRange arguments, Operation *&cursor,
+                    uint64_t &remaining, MathematicalSelectionPolicy policy) {
+  CheckedHelperNormalizations helpers(source);
+  if (failed(helpers.readback(&remaining)))
+    return failure();
+  return LoweringVerifier(source, candidate, helpers)
+      .kernelRecipes(entry, arguments, cursor, remaining, policy);
 }
 LogicalResult verifyMathLowering(protocol_ir::ProtocolModuleOp original,
                                  protocol_ir::ProtocolModuleOp candidate) {
   CheckedHelperNormalizations helpers(original);
-  for (auto participant :
-       original.getBody().front().getOps<protocol_ir::ParticipantOp>())
-    if (failed(helpers.prepare(participant)))
-      return failure();
   return LoweringVerifier(original, candidate, helpers).run();
 }
 } // namespace zkc::mathematical

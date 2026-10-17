@@ -1,4 +1,4 @@
-// Exact primitive expressions admitted by the mathematical protocol profile.
+// Exact expressions and contextual actions shared by mathematical owners.
 // This is not a dialect-wide grant. Interfaces supply dependencies only after
 // an exact registered operation has matched this list.
 ZKC_MATH_OPERATION(data::SequenceEmptyOp, Total, Context::Protocol | Context::Participant | Context::Helper)

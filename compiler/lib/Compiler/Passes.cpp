@@ -7,6 +7,7 @@ void registerCompilerPasses() {
   mlir::registerPass([] { return protocol::createPrepareProtocolPass(); });
   mlir::registerPass([] { return protocol::createProjectProtocolPass(); });
   mlir::registerPass([] { return protocol::createLowerMathPass(); });
+  mlir::registerPass([] { return protocol::createLowerKernelsPass(); });
   mlir::registerPass([] { return protocol::createEliminatePolynomialsPass(); });
   mlir::registerPass([] { return protocol::createFixPolynomialFactorsPass(); });
   mlir::registerPass([] { return protocol::createSimplifyParticipantPass(); });

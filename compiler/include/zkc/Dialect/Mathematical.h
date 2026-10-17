@@ -1,7 +1,7 @@
 #ifndef ZKC_DIALECT_MATHEMATICAL_H
 #define ZKC_DIALECT_MATHEMATICAL_H
+#include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Operations.h"
-#include "zkc/Dialect/Protocol/Semantics.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/Twine.h"

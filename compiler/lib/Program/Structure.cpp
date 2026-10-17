@@ -15,6 +15,7 @@ class Structure {
   size_t nodes = 0;
   bool projected = false;
   bool nativeIR = false;
+  bool logicalRealizations = false;
 
   void fail(StringRef code) {
     if (problem.empty())
@@ -123,7 +124,7 @@ class Structure {
               return fields({tag, text(i.site), text(op.callee),
                              names(op.inputs), names(op.outputs)});
             } else if constexpr (std::is_same_v<T, LocalApply>) {
-              if (projected)
+              if (projected && !logicalRealizations)
                 fail("algorithm-call-context");
               return fields({tag, text(i.site), text(op.callee),
                              names(op.inputs), names(op.outputs)});
@@ -197,6 +198,8 @@ class Structure {
   }
   size_t measure(const Participants &m) {
     projected = true;
+    logicalRealizations = logicalRealizations && nativeIR &&
+                          m.stage == Participants::Stage::Logical;
     if (!nativeIR && m.stage == Participants::Stage::Logical)
       fail("native-physical-required");
     if (m.stage != Participants::Stage::Logical &&
@@ -226,8 +229,12 @@ class Structure {
 
 public:
   // Reconstructed IR may precede physical selection. Interchange accepts only
-  // physical programs; local.apply remains internal to local definitions.
-  explicit Structure(bool allowNativeIR = false) : nativeIR(allowNativeIR) {}
+  // physical programs. Realization applications require an internal logical
+  // opt-in; default native reconstruction still rejects projected local.apply.
+  explicit Structure(bool allowNativeIR = false,
+                     bool allowLogicalRealizations = false)
+      : nativeIR(allowNativeIR), logicalRealizations(allowLogicalRealizations) {
+  }
   template <typename T> Error run(const T &value) {
     measure(value);
     return problem.empty() ? Error::success() : error(problem);
@@ -238,7 +245,8 @@ Error checkStructure(const Participants &m) { return Structure().run(m); }
 Error detail::checkNativeIRStructure(const LocalDefinitions &m) {
   return Structure(true).run(m);
 }
-Error detail::checkNativeIRStructure(const Participants &m) {
-  return Structure(true).run(m);
+Error detail::checkNativeIRStructure(const Participants &m,
+                                     bool allowLogicalRealizations) {
+  return Structure(true, allowLogicalRealizations).run(m);
 }
 } // namespace zkc::program

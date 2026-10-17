@@ -6,8 +6,9 @@
 #include "llvm/Support/Error.h"
 
 namespace zkc::protocol {
-/// Signature supplied only by an admitted mathematical module. This is not a
-/// source-carrier declaration or permission to export an unresolved call.
+/// Signature supplied only by an admitted mathematical module or Kernel entry.
+/// This is not a source-carrier declaration or permission to export an
+/// unresolved call.
 struct LocalRealization {
   std::string name;
   std::vector<std::string> inputs, outputs;
@@ -23,6 +24,11 @@ admitNativeLocalDefinitions(const program::LocalDefinitions &,
 /// Check executable formation and local definitions.
 /// The model interface does not require an MLIR context.
 llvm::Error admit(const program::Participants &);
+/// Internal validation of logical Participants with admitted Total signatures.
+/// Only local.apply inside local functions may reference these realizations;
+/// this does not permit unresolved calls in physical programs or publication.
+llvm::Error admit(const program::Participants &,
+                  llvm::ArrayRef<LocalRealization> realizations);
 } // namespace zkc::protocol
 
 #endif

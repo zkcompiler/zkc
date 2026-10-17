@@ -8,7 +8,7 @@
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
-#include "zkc/Dialect/Protocol/Semantics.h"
+#include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Interfaces/Collection.h"
 #include "llvm/ADT/DenseSet.h"
 #include <optional>

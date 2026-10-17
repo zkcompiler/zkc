@@ -45,11 +45,13 @@ std::optional<NativeTypePolicy> NativeTypePolicies::get(Type type) {
 }
 LogicalResult verifyTotalTypes(Operation *op, NativeTypePolicies &types) {
   for (auto type : op->getOperandTypes())
-    if (auto policy = types.get(type); !policy || !policy->total)
+    if (auto policy = types.get(type);
+        !policy || !policy->total || policy->affine)
       return diagnostics::emit(op->emitOpError(), "mathematical-formation",
                                "unsupported mathematical data type");
   for (auto type : op->getResultTypes())
-    if (auto policy = types.get(type); !policy || !policy->total)
+    if (auto policy = types.get(type);
+        !policy || !policy->total || policy->affine)
       return diagnostics::emit(op->emitOpError(), "mathematical-formation",
                                "unsupported mathematical data type");
   return success();

@@ -44,9 +44,12 @@ accounting. Primitive value checks also reside in the VM;
 Hosts use that interpreter for Entry, proof and joint execution. The
 [VM contract](spec/runtime/vm.md) defines authority, failure and accounting.
 
-There is no separate numerical Kernel IR or JIT/AOT engine yet. Numerical
-operations use existing checked physical realization and installed backends.
-The separation is an ownership foundation, not a speedup or correspondence proof.
+Logical [Kernel IR](spec/ir/kernel.md) owns total numerical closures and their
+ordered Local invocations. Preparation and participant demand lowering form
+units; checked realization removes them before physical selection and export.
+Existing installed backends execute the resulting operations. Explicit numerical
+schedules and JIT/AOT engines remain unimplemented. This separation establishes
+ownership without claiming a speedup or a formal native correspondence proof.
 
 ## Source and application boundary
 

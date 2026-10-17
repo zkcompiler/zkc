@@ -4,7 +4,7 @@
 #include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Dialect/Mathematical.h"
-#include "zkc/Dialect/Protocol/Semantics.h"
+#include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Passes.h"

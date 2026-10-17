@@ -156,6 +156,10 @@ def main():
         "lib/Dialect/Protocol/IR/Protocol.cpp": "ZkcIR",
         "lib/Transforms/MathematicalPreservation.cpp": "ZkcTransforms",
         "lib/Transforms/MathLoweringVerification.cpp": "ZkcTransforms",
+        "lib/Dialect/Kernel/IR/Kernel.cpp": "ZkcIR",
+        "lib/Transforms/Kernel/Formation.cpp": "ZkcTransforms",
+        "lib/Transforms/Kernel/Lowering.cpp": "ZkcTransforms",
+        "lib/Transforms/Kernel/Verification.cpp": "ZkcTransforms",
     }.items():
         assert owners[ROOT / source] == owner, f"mandatory component ownership: {source} belongs to {owner}"
     private_headers = {
@@ -194,6 +198,10 @@ def main():
         ROOT / "lib/Transforms/PreparedProtocol.h",
         ROOT / "lib/Transforms/ProtocolApplications.h"
     }
+    private_headers["ZkcTransforms"].update(
+        ROOT / f"lib/Transforms/Kernel/{name}.h"
+        for name in ("Support", "FrontierVerification", "NormalizationVerification")
+    )
     private_headers["ZkcCompiler"] = {
         ROOT / "lib/Compiler/CompilationState.h",
         ROOT / "lib/Compiler/Run.h", ROOT / "lib/Compiler/ArtifactJson.h",

@@ -41,8 +41,8 @@ relation declarations, library-level multi-table bundles and external adapters.
 | `.zkc` modules and Entry closure | Names, static parameters, types, permissions, capabilities, role availability and explicit application selection |
 | `protocol` | Mathematical values, joint actions, services, relation declarations and participant dependencies |
 | `participant` | Role-specific values, actual sends/receives, ordered actions and optional transcript construction |
-| `exec` | Demand-driven mathematical realization and explicit executable local calls |
-| `physical` | Admitted representations, installed kernels, conversions and storage handling |
+| `exec` | Demand-driven Kernel units and ordered Local calls; checked numerical realization |
+| `physical` | Admitted representations, installed operations, conversions and storage handling |
 | `zkc.program/0` | Closed executable participant description admitted by C++ export and Rust loading |
 | Host package | Application-authorized identity, input/result layout, setup authority, execution limits and publication |
 
@@ -95,12 +95,14 @@ walks structured instructions and manages value environments and continuations.
 The [VM contract](spec/runtime/vm.md) defines their boundary. This separation
 introduces no artifact format or alternative execution path.
 
-Numerical scheduling remains within existing checked realization and backend
-implementations. A future Kernel IR will make numerical domains, indexing,
-reductions and storage choices explicit at that compiler boundary. It will not
-own participant scheduling, transport or resource authority. Installed numerical
-kernels and effectful operations share the binding mechanism; only operations
-with established effect and failure properties may form a numerical region.
+[Kernel IR](spec/ir/kernel.md) owns closed logical numerical units, using existing
+mathematical operations and standard functions. Ordered Local calls invoke them;
+checked realization expands them before physical planning. This boundary keeps
+the complete numerical body available independently of participant control.
+Explicit numerical schedules and storage layouts remain future work. Participant
+scheduling, transport and resource authority stay with their existing owners.
+Installed numerical and effectful operations share the binding mechanism;
+installation alone does not authorize extraction into a numerical unit.
 
 The native proof policy covers flat, iterated, PCS and structured
 programs on the shared executable and Runner. [Proof compilation](compiler/construction.md)

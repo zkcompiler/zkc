@@ -5,11 +5,12 @@
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Kernel/IR/KernelOps.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
+#include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Plan/IR/PlanOps.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
-#include "zkc/Dialect/Protocol/Semantics.h"
 using namespace mlir;
 using namespace llvm;
 namespace zkc::mathematical {
@@ -26,6 +27,21 @@ LogicalResult verifyNativeLocals(Operation *unit, bool allowApply,
                                  NativeTypePolicies &types) {
   auto root = cast<protocol_ir::ProtocolModuleOp>(unit);
   const bool physical = root.getProfile() == protocol_ir::Profile::Physical;
+  // Phase legality belongs to the enclosing profile, including dormant units.
+  if (physical) {
+    auto residual = unit->walk([](Operation *op) -> WalkResult {
+      if (isa<kernel::ModuleOp, kernel::CallOp>(op)) {
+        (void)diagnostics::emit(
+            op->emitOpError(), "kernel-profile",
+            "physical profile requires realized Kernel units and calls");
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (residual.wasInterrupted())
+      return failure();
+  }
+
   auto admitted = [&](Type type) {
     if (physical) {
       auto selected = dyn_cast<plan::DataType>(type);

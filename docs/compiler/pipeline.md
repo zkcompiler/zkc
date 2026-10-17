@@ -10,12 +10,13 @@ owns exact formation and projection rules.
 |---|---|
 | `protocol` | Joint mathematics, declared roles, messages, services and relations; source analysis and preparation |
 | `participant` | Each role's mathematics, actual receives and ordered actions; simplification and transcript construction |
-| `exec` | Computations at demand sites and explicit local recipes; execution verification and physical planning |
-| `physical` | Installed kernels, representations, conversions and storage; executable export |
+| `exec` | Owned numerical units at demand sites and ordered Local control; checked realization and physical planning |
+| `physical` | Installed operations, representations, conversions and storage; executable export |
 
 Profiles constrain mixed-dialect programs. `protocol` owns interaction and role
 interfaces; `local` owns ordered algorithms and control. `algebra`, `poly`,
-`data`, `oracle`, `pcs` and `crypto` retain domain meaning. `relation` stores
+`data`, `oracle`, `pcs` and `crypto` retain domain meaning. `kernel` owns closed
+logical numerical units using the existing mathematical operations. `relation` stores
 declarations and R1CS/AIR assets. `plan` provides physical types and bindings.
 It does not introduce a second executor.
 
@@ -58,8 +59,9 @@ ordered actions and dynamic occurrence coordinates.
 
 ## Realization and publication
 
-Demand lowering realizes mathematics at its consuming action. An ordered recipe
-preserves its complete operation contract, including failure. Physical selection
+Demand lowering forms [Kernel units](../spec/ir/kernel.md) at consuming actions.
+Checked Kernel lowering materializes their ordered recipes before physical
+planning, preserving the complete operation contracts, including failure. Physical selection
 chooses an installed implementation and validated conversions; storage handling
 respects copy/drop permissions and affine custody. [Representation](representation.md)
 describes selection and [verification](verification.md) describes the independent

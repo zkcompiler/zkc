@@ -9,10 +9,11 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataOps.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Kernel/IR/KernelOps.h"
+#include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Polynomial/Mathematical.h"
 #include "zkc/Dialect/Protocol/Contracts.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
-#include "zkc/Dialect/Protocol/Semantics.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringExtras.h"
@@ -565,9 +566,10 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
                    op)) {
       // The descriptor and finite closure were checked before any liveness.
     } else if (isa<protocol_ir::ConstructionOp, local::FuncOp,
-                   local::OperationBindingOp, poly::RecipeOp, poly::RealizeOp>(
-                   op)) {
-      // Whole executable admission below checks even unused definitions.
+                   local::OperationBindingOp, kernel::ModuleOp, poly::RecipeOp,
+                   poly::RealizeOp>(op)) {
+      // Kernel already checked its owned closure; whole Local admission below
+      // checks even unused executable definitions.
     } else if (auto declaration = dyn_cast<relation::DeclareOp>(op)) {
       for (auto attr : declaration->getAttrs())
         if (!is_contained(declaration.getAttributeNames(),

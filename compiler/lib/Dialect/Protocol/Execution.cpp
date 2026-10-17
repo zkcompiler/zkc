@@ -6,6 +6,7 @@
 #include "zkc/Contracts/Services.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Kernel/IR/KernelOps.h"
 #include "zkc/Dialect/Relation/IR/Assets.h"
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Program/Admission.h"
@@ -23,6 +24,45 @@ class ExecutionModelReader {
   bool physical;
   std::string problem;
   unsigned next = 0;
+  SymbolTableCollection kernelSymbols;
+  llvm::DenseMap<Operation *, std::string> kernelEntries;
+  SmallVector<LocalRealization> kernelRealizations;
+
+  // Internal validation signatures, never executable bodies or published
+  // symbols. The Kernel region verifier has admitted every retained closure.
+  bool collectKernels() {
+    unsigned index = 0;
+    for (auto unit :
+         root->getRegion(0).front().getOps<zkc::kernel::ModuleOp>()) {
+      if (physical) {
+        fail("kernel-profile");
+        return false;
+      }
+      auto entry = zkc::kernel::getEntry(unit);
+      auto type = signature(entry);
+      if (!type)
+        return false;
+      LocalRealization realization;
+      do {
+        realization.name = "kernel_entry_" + std::to_string(index++);
+      } while (SymbolTable::lookupSymbolIn(root, realization.name));
+      for (bool input : {true, false})
+        for (auto port : input ? type.getInputs() : type.getResults()) {
+          auto bound = encodeBoundType(port, false);
+          if (!bound) {
+            consumeError(bound.takeError());
+            fail("kernel-entry");
+            return false;
+          }
+          (input ? realization.inputs : realization.outputs)
+              .push_back(bound->spelling());
+        }
+      kernelEntries[entry] = realization.name;
+      kernelRealizations.push_back(std::move(realization));
+    }
+    return true;
+  }
+
   using Env = llvm::DenseMap<mlir::Value, std::string>;
   void fail(StringRef why) {
     if (problem.empty())
@@ -212,6 +252,25 @@ class ExecutionModelReader {
           return {};
         }
         out.push_back({site, program::Stop{attr(op, "reason").str()}});
+
+      } else if (auto call = dyn_cast<zkc::kernel::CallOp>(op)) {
+        if (!local || physical ||
+            !attributes(
+                op, {"site", "callee", "policy", "arg_attrs", "res_attrs"}) ||
+            failed(call.verify()) ||
+            failed(call.verifySymbolUses(kernelSymbols))) {
+          fail("kernel-call-context");
+          return {};
+        }
+        auto entry = zkc::kernel::resolve(call, kernelSymbols);
+        auto found = kernelEntries.find(entry);
+        if (found == kernelEntries.end()) {
+          fail("kernel-call-symbol");
+          return {};
+        }
+        out.push_back({site, program::LocalApply{found->second,
+                                                 names(op->getOperands(), env),
+                                                 results(op, env)}});
       } else if (auto call = dyn_cast<zkc::local::ApplyOp>(op)) {
         if (!localDefinitionsOnly || !local ||
             !attributes(op, {"site", "callee"}) ||
@@ -575,7 +634,10 @@ public:
     localDefinitionsOnly = true;
     physical = false;
     program::LocalDefinitions module;
-    SmallVector<LocalRealization> realizations;
+    if (!collectKernels())
+      return error(problem);
+    SmallVector<LocalRealization> realizations(kernelRealizations);
+
     for (auto &op : root->getRegion(0).front()) {
       if (isa<zkc::local::OperationBindingOp>(op)) {
         if (!attributes(
@@ -633,16 +695,25 @@ public:
       return std::move(e);
     return module;
   }
-  Expected<program::Participants> run() {
+  Expected<program::Participants> run(bool allowLogicalKernels = false) {
     if (!isa<zkc::protocol_ir::ProtocolModuleOp>(root) ||
         !attributes(root, {"profile"}) || !profile ||
         !zkc::protocol_ir::isExecutableProfile(profile.getValue()) ||
         !llvm::hasSingleElement(root->getRegion(0)))
       return error("interactive-module");
+    if (allowLogicalKernels && !collectKernels())
+      return error(problem);
     program::Participants participants;
     participants.stage = physical ? program::Participants::Stage::Physical
                                   : program::Participants::Stage::Logical;
     for (auto &op : root->getRegion(0).front()) {
+      if (isa<zkc::kernel::ModuleOp>(op)) {
+        // MLIR already checked the owned numerical closure. Only internal
+        // logical admission may retain it; publication must realize it first.
+        if (!allowLogicalKernels || physical)
+          return error("kernel-profile");
+        continue;
+      }
       if (isa<zkc::protocol_ir::ProjectionOp, zkc::relation::DeclareOp>(op))
         continue;
       if (isa<zkc::local::OperationBindingOp>(op)) {
@@ -677,7 +748,9 @@ public:
     }
     if (!problem.empty())
       return error(problem);
-    if (auto e = admit(participants))
+    if (auto e = kernelRealizations.empty()
+                     ? admit(participants)
+                     : admit(participants, kernelRealizations))
       return e;
     return participants;
   }
@@ -709,7 +782,7 @@ LogicalResult verifyLocalDefinitions(Operation *root) {
 }
 LogicalResult verifyModule(Operation *root) {
   // Region verification already checked all nested operation invariants.
-  auto v = ExecutionModelReader(root).run();
+  auto v = ExecutionModelReader(root).run(/*allowLogicalKernels=*/true);
   if (!v)
     return diagnostics::emit(root->emitOpError(), v.takeError());
   return success();
