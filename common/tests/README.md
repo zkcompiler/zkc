@@ -119,7 +119,8 @@ compares actual Schnorr endpoints, native G1 codecs, pending actions and provide
 state; build its test driver explicitly and run the documented standalone command.
 It requires the structured open replay executable and is not a default native check.
 `lean-native` also runs the [transcript-construction bridge](../../lean/bridges/construction/README.md),
-which checks the compiled Schnorr proof Entry's validator with the Lean rule, and the
+which checks the validators of the compiled Schnorr, Sumcheck, composed Sumcheck,
+Schnorr AND and Chaum–Pedersen proof Entries with the Lean rules, and the
 [executable bridge](../../lean/bridges/executable/README.md), which checks the validator
 program the runtime admits with the Lean lowering rule and compares the runtime CLI
 selected by `ZKC_NATIVE_BIN` with the Lean executable meaning.

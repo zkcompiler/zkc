@@ -279,17 +279,17 @@ Sumcheck, composed Sumcheck and Sigma examples
 construction and their [participant projection](../lean/docs/spec/participant-projection.md)
 against the original exports and proves that each compiled verifier's ideal
 meaning, with helper calls read by the original's helpers, is the Fiat–Shamir
-transform of its original verifier. For Schnorr it proves
+transform of its original verifier; other Entries, suites and programmable
+constructions have no such check. For Schnorr it proves
 fixed-statement Fiat–Shamir knowledge soundness in the random-oracle model, under
-the [named assumptions](../lean/docs/spec/fiat-shamir.md#named-assumptions). Other
-Entries, suites and programmable constructions have no such check. Lean also
+the [named assumptions](../lean/docs/spec/fiat-shamir.md#named-assumptions). Lean also
 proves [Fiat–Shamir soundness](../lean/docs/spec/fiat-shamir-security.md) of the
 transform of any validator over the common participant actions with a
 round-by-round soundness certificate, and of the imported Sumcheck verifier's
 transform. Composed with the Sumcheck Entry's checked transform equation, this
 bounds the compiled Sumcheck verifier's ideal interpretation in the random-oracle
 model: a false claim is accepted with probability at most `(Q + n) / |F|` for a
-fixed statement, and adaptively chosen statements are bounded when the initial
+fixed well-formed statement, and adaptively chosen statements are bounded when the initial
 transcript determines the statement. The host's binding of the Entry's vector
 and count public inputs is not modelled, so that adaptive premise is not
 discharged for the deployed Entry.
@@ -299,7 +299,8 @@ checks it against the constructed validator with a [lowering rule](../lean/docs/
 whose meaning covers proof framing, decoding failures, instruction budgets,
 frames and transcript custody, and transfers the knowledge-soundness bound to
 provers of proof bytes through the general construction, projection and lowering
-rules, with no equation specific to the Entry. The bridge compares the runtime's
+rules, with no equation specific to the Entry about the compiled program. The
+bridge compares the runtime's
 stops and observations with that meaning and checks that the runtime executes the
 program a verification receipt names, with the acceptance output and public
 inputs of the Lean statement. The runtime's execution, kernels and codec, the

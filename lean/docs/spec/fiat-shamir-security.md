@@ -258,11 +258,15 @@ the initial transcript, read through the acceptance output the policy selects.
   `SumcheckSourceData`, the admitted source both readings use (the check
   `regenerated:lean/ZkcExamples/Structured/SumcheckSourceData.lean` of its
   `sumcheck` subject).
-- `soundness`: for a fixed statement and initial transcript, the compiled
-  verifier accepts a false claim on the raw table values with probability at
-  most `(Q + count) / |F|`, against every prover with at most `Q` queries to the
+- `soundness`: for a fixed well-formed statement (the raw values decode to a
+  table at the count) and initial transcript, the compiled verifier accepts a
+  false claim on the raw table values with probability at most
+  `(Q + count) / |F|`, against every prover with at most `Q` queries to the
   transcript oracle on all typed histories. Acceptance ignores unread proof
-  messages, so the bound also covers host acceptance.
+  messages, so the bound also covers an acceptance of the same ideal
+  interpretation that requires the whole proof to be read. No executable meaning
+  of this Entry is covered: its validator uses loops, outside the
+  [executable subset](executable.md).
 - `adaptive_soundness`: for well-formed statements chosen after the queries,
   with decoded challenges, at most `(Q + 2) * (1 / |F| + loss)` when the initial
   transcripts `initial statement` determine the statement; `reduced_soundness`

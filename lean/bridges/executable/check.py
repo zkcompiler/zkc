@@ -19,8 +19,8 @@ validator the runtime admits. It then
    response, which the value-free prediction cannot tell apart;
 3. checks the axiom closure of every theorem from the lowering rule to the
    byte-level knowledge-soundness theorem in the ArkLib integration, and that
-   the byte-level theorem's proof uses the general composed rules and no
-   equation specific to this Entry;
+   the byte-level theorem's proof reaches the general composed rules and not
+   the Entry's equation about the compiled program's meaning (`spec_equation`);
 4. writes a verification receipt naming every artifact digest, the checked
    rules, the theorems and the remaining assumptions, and checks on the
    runtime that it executes exactly the program the receipt names: the pinned
@@ -615,12 +615,15 @@ class Driver:
                 "the protocol-structured exporter and its renderer denote the original MLIR",
                 "the zkc.program/0 renderer denotes the admitted program bytes",
                 "the runtime accepts proof bytes for the admitted validator only when "
-                "Zkc.Executable.validate accepts them",
+                "Zkc.Executable.validate accepts them under the Entry's checked occurrence context "
+                "ZkcExamples.Construction.SchnorrProof.context",
                 "installed kernels implement the meanings of Zkc.Executable.installed",
                 "the native codec is a function of a message's bytes and type",
-                "the suite's framing, labels and payload codecs encode typed histories injectively and "
-                "the native kernels absorb exactly the encoded events (the occurrence-template encoding "
-                "is proved injective by Zkc.Construction.occurrence_inj)",
+                "the bytes the native kernels absorb are an injective encoding of the model events: the "
+                "suite's framing, labels and payload codecs encode typed histories injectively, and each "
+                "occurrence template's model occurrence under ZkcExamples.Construction.SchnorrProof.context "
+                "determines its native bytes (the occurrence-template encoding is proved injective by "
+                "Zkc.Construction.occurrence_inj)",
                 "the Merlin suite behaves as a random oracle on its absorbed byte histories",
                 "reduced 64-byte challenges are treated as exactly uniform scalars",
                 "the host binds the authorized public context and the policy's public inputs",

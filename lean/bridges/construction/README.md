@@ -42,7 +42,9 @@ For each subject:
    `ComposedSumcheckProofData.lean` and `ComposedSumcheckProofParticipant.lean`;
    for the Sigma Entries `SchnorrAndProofData.lean`,
    `SchnorrAndProofParticipant.lean`, `ChaumPedersenProofData.lean` and
-   `ChaumPedersenProofParticipant.lean`. For Sumcheck the comparison is also the
+   `ChaumPedersenProofParticipant.lean` (their typed bodies, printed by the
+   structured bridge's `bodies.py`, are not compared: `structured_views` admits
+   the original from them in the kernel). For Sumcheck the comparison is also the
    pin that the Proof Entry's original export is the admitted Sumcheck source of
    the security theorems (check
    `regenerated:lean/ZkcExamples/Structured/SumcheckSourceData.lean`).

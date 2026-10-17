@@ -177,7 +177,8 @@ compiled candidate. In `ZkcExamples.Construction.SchnorrProof`:
 
 The compiled proof Entries of the Sumcheck example, its composed variant and
 the Sigma example are checked the same way
-([participant projection](participant-projection.md#the-compiled-sumcheck-proof-entry)):
+([Sumcheck](participant-projection.md#the-compiled-sumcheck-proof-entry),
+[Sigma](participant-projection.md#the-compiled-sigma-proof-entries)):
 each validator's ideal meaning is the Fiat–Shamir transform of its original
 validator for every challenge function. For the compiled Sumcheck Entry,
 [multi-round security](fiat-shamir-security.md#the-compiled-sumcheck-proof-entry)

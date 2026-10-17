@@ -210,13 +210,16 @@ security theorem is stated for this Entry.
 `example::AndProof` and `example::EqualityProof` of `examples/projects/sigma`:
 two Schnorr statements with independent witnesses and one shared challenge, and
 one witness for two bases. Both validators receive two commitments, take one
-challenge, receive their responses and conjoin two checked equations. As for the
-composed Sumcheck Entry, the kernel evaluates each original's admission, the
-composed check accepts the export (`compiled`) and the generic theorem gives the
-transform equation (`compiled_transform`) with no Entry-specific proof. The
-Fiat–Shamir theorems of the Sigma compositions are about the transforms of the
-imported interactive verifiers; no security theorem is stated for these compiled
-Entries.
+challenge, receive the responses (two for AND, one for Chaum–Pedersen) and
+conjoin two checked equations. Each original is admitted from typed bodies
+printed by `bridges/structured/bodies.py` and checked by `structured_views` in
+the kernel, so its entry types are literal. The composed check accepts the
+export (`compiled`), and `compiled_transform` instantiates the generic theorem
+at the Entry's public inputs and acceptance output (`inputs_related`,
+`acceptance_decision`), as for Schnorr, with no equation about the program's
+meaning specific to the Entry. The Fiat–Shamir theorems of the Sigma
+compositions are about the transforms of the imported interactive verifiers; no
+security theorem is stated for these compiled Entries.
 
 ## Controls
 

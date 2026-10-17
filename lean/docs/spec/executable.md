@@ -130,10 +130,12 @@ transcript-construction and participant projection rules
 any budget of at least 25, under the Entry's checked occurrence context, the
 executable's observations and challenge interaction are those of the
 Fiat–Shamir transform of the original Proof Entry's verifier on the decoded
-proof. The only Entry-specific equation on the chain is on the original side:
-`SchnorrProof.process_equation`, kernel-checked, equates the admitted original
-Proof Entry's validator with the common Schnorr experiment that the VCVio
-consumer uses.
+proof. The only Entry-specific equation about a program's meaning on the chain
+is on the original side: `SchnorrProof.process_equation`, kernel-checked,
+equates the admitted original Proof Entry's validator with the common Schnorr
+experiment that the VCVio consumer uses. The other Entry-specific facts on the
+chain are wiring: the derived context, the input relation and the position of
+the acceptance output.
 `executable_validate` and `executable_rejects` state host validation in the same
 terms.
 
@@ -153,7 +155,8 @@ assumptions of the [compiled theorem](fiat-shamir.md#named-assumptions). Its
 transport and native-correctness assumptions are replaced by the following.
 
 - The runtime accepts proof bytes for the admitted validator only when
-  `validate` accepts them, for the same expected binding, data inputs and
+  `validate` accepts them under the Entry's checked occurrence context
+  (`SchnorrProof.context`), for the same expected binding, data inputs and
   challenge function. Soundness needs only this direction; completeness also
   needs the converse at a sufficient budget and within the runtime's other
   resource limits.

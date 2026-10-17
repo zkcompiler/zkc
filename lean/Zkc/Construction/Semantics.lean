@@ -41,6 +41,8 @@ inductive Value (F G : Type) where
   | transcript (history : History F G)
   | indices (coordinates : List Nat)
 
+deriving instance DecidableEq for Value
+
 /-- Types whose values exported programs carry: everything except services. -/
 def dataType : Structured.Ty → Bool
   | .service _ => false

@@ -117,9 +117,15 @@ relation and the position of the acceptance output. The compiled Schnorr and
 Sumcheck proof Entries are both linked this way; for Sumcheck the transformed
 original rewrites further, with an existing source theorem, to the rounds
 followed by the multilinear check. The composed Sumcheck Entry, with two
-applications, and the Schnorr AND and Chaum–Pedersen Entries need no
-Entry-specific proof at all: their admissions and the composed check are
-evaluated in the kernel, and the generic theorem applies.
+applications, needs no Entry-specific proof for the composed equation: its
+admission and the composed check are evaluated in the kernel, and the generic
+theorem applies. Instantiating the theorem at an Entry's inputs and acceptance
+output takes the input relation and output selection lemmas, which the Schnorr,
+Sumcheck, Schnorr AND and Chaum–Pedersen Entries state. Those lemmas need the
+admitted program's entry types in literal form: the Sigma Entries are therefore
+admitted from printed typed bodies, because with a kernel-evaluated admission
+the elaborator reads the entry types only by evaluating the admission, which
+took minutes per Entry in an experiment.
 
 Security composes the same way. `CompiledSchnorrFiatShamir` and
 `CompiledSumcheckFiatShamir` prove their bounds about `transform` of the
@@ -128,7 +134,7 @@ imported Sumcheck verifier) and rewrite with the composed equation, so the
 compiled verifiers' ideal interpretations inherit the bounds without a proof
 about the compiled programs. `ExecutableSchnorrFiatShamir` continues one stage
 down through the lowering rule, and a walk over its proof's dependencies shows
-that the chain uses the general rules and no Entry-specific equation.
+that the proof reaches the general rules and not the Entry's `spec_equation`.
 
 ## Stage meanings
 
@@ -144,7 +150,9 @@ that the chain uses the general rules and no Entry-specific equation.
 
 The rule from the constructed participant to the executable participant is a
 representation refinement. `Zkc.Executable` realizes it for straight-line
-validators without helper calls or loops: the reading of the program into
+validators whose constructed programs have no helper `call` instructions and no
+loops (the executable's single-level local calls are frames the reading treats
+transparently): the reading of the program into
 constructed instructions is the certificate, and the relation is outcome class,
 whole-proof consumption and challenge interaction against a metered ideal
 meaning. The meanings above fix what such a rule must expose in general:

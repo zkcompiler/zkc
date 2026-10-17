@@ -35,8 +35,9 @@ Two proved links compose:
   forms).
 
 `soundness` bounds the probability that the compiled verifier accepts a false
-claim, for a fixed statement and initial transcript, in a random oracle on all
-typed histories, by `(Q + count) / |F|`. `adaptive_soundness` covers
+claim, for a fixed well-formed statement (the raw values decode to a table at the
+count) and initial transcript, in a random oracle on all typed histories, by
+`(Q + count) / |F|`. `adaptive_soundness` covers
 statements chosen after the oracle queries, with decoded challenges, by
 `(Q + 2) * (1 / |F| + loss)`, under a binding whose initial histories determine
 the statement (`Determined`); `reduced_soundness` instantiates the decoding with
@@ -100,9 +101,10 @@ statement: against every prover with at most `queries` queries to one lazily
 sampled random oracle on all typed histories (empty initial cache, shared with
 the verifier's challenges), the compiled verifier accepts a false claim on the
 raw table values with probability at most `(queries + count) / |F|`, for every
-initial transcript. Acceptance here ignores unread proof bytes, so the bound
-also covers host acceptance, which additionally requires the whole proof to be
-read. -/
+initial transcript. Acceptance here ignores unread proof messages, so the bound
+also covers an acceptance of the same ideal interpretation that additionally
+requires the whole proof to be read; no executable meaning of this Entry is
+covered. -/
 theorem soundness (count : Nat) (raw : List F) (table : Table F count)
     (decoded : ofList? count raw = some table) (claim : F) (falseClaim : claim ≠ raw.sum)
     (initial : History F G) (prover : OracleComp (FieldOracle F G) (Proof F G)) (queries : Nat)

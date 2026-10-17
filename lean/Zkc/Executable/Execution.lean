@@ -190,9 +190,6 @@ inductive Cause where
 
 variable {F G : Type}
 
--- Executable results are compared value by value, for example in controls.
-deriving instance DecidableEq for Value
-
 abbrev Env (F G : Type) := List (String × Value F G)
 
 structure Frame (F G : Type) where
