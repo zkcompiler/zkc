@@ -139,6 +139,7 @@ fn capabilities_are_nominal_and_embedding_preserves_all_coordinates() {
                 zkc_runtime::interactive::Identity::Bn254Fr
                     | zkc_runtime::interactive::Identity::KoalaBear
                     | zkc_runtime::interactive::Identity::KoalaBearExt8
+                    | zkc_runtime::interactive::Identity::KoalaBearExt4
             )
         );
         assert_eq!(

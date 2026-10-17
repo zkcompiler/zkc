@@ -35,8 +35,8 @@ do not authorize a root or replace live lease, generation and owner checks.
 
 The Arkworks, Dalek and Plonky3 providers retain their nominal field, vector,
 polynomial, round, sparse matrix, group and pairing kernels where installed.
-This includes BLS12-381, BN254, Ristretto255, KoalaBear and its degree-eight
-extension. Multilinear KZG, row-oracle operations, external Monero/OpenVM
+This includes BLS12-381, BN254, Ristretto255, KoalaBear and its degree-eight and
+degree-four extensions. Multilinear KZG, row-oracle operations, external Monero/OpenVM
 primitives, sequences, variants, field arrays, fixed vectors and resource units
 retain their own type and capacity checks. Domain installation does not imply
 that every domain has every group, transcript or PCS operation.

@@ -228,7 +228,7 @@ fn identical_ports_preserve_exact_handler_selection() {
 
 #[test]
 fn every_payload_has_explicit_identity_and_retained_charge() {
-    use crate::{Bn254Scalar, KoalaBear, KoalaBearExt8, RistrettoScalar};
+    use crate::{Bn254Scalar, KoalaBear, KoalaBearExt4, KoalaBearExt8, RistrettoScalar};
     use std::{collections::HashSet, sync::Arc};
     use zkc_runtime::interactive::{
         Identity as I, LogicalType, PhysicalType, Representation as R, ResourceDomain, Type,
@@ -294,6 +294,11 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
             "KoalaBearExt8Vector" => R::KoalaBearExt8Vector,
             "KoalaBearExt8Polynomial" => R::KoalaBearExt8Polynomial,
             "KoalaBearExt8Round" => R::KoalaBearExt8Round,
+            "KoalaBearExt4Matrix" => R::KoalaBearExt4SparseCoo,
+            "KoalaBearExt4Field" => R::KoalaBearExt4,
+            "KoalaBearExt4Vector" => R::KoalaBearExt4Vector,
+            "KoalaBearExt4Polynomial" => R::KoalaBearExt4Polynomial,
+            "KoalaBearExt4Round" => R::KoalaBearExt4Round,
             "KoalaBearField" => R::KoalaBear,
             "KoalaBearVector" => R::KoalaBearVector,
             "KoalaBearPolynomial" => R::KoalaBearPolynomial,
@@ -423,6 +428,16 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         KoalaBearExt8Round,
         KoalaBearExt8Matrix,
         32
+    );
+    scalar_family!(
+        KoalaBearExt4::from(KoalaBear::new(1)),
+        KoalaBearExt4,
+        KoalaBearExt4Field,
+        KoalaBearExt4Vector,
+        KoalaBearExt4Polynomial,
+        KoalaBearExt4Round,
+        KoalaBearExt4Matrix,
+        16
     );
     macro_rules! group_family {
         ($point:expr, $identity:ident, $point_variant:ident, $vector_variant:ident, $width:expr) => {{

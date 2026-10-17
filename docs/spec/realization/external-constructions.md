@@ -236,10 +236,10 @@ has no Montgomery encoding.
 `koala-bear` has `w = 4`, so `R = 2^32` and `R mod p = 33554430`. The canonical
 word of `x` is the four-byte little-endian integer `x`; its Montgomery word is
 `x * 2^32 mod p`, the residue that Plonky3 0.8.0's binary serializers write for
-`MontyField31` values. `koala-bear.ext8-binomial3` elements are eight words.
-`field_le`, `field_from_le`, `fields_le`, `fields_from_le` and the four
-Montgomery operations are installed for `koala-bear` and
-`koala-bear.ext8-binomial3`; `field_reduce_le` is not.
+`MontyField31` values. `koala-bear.ext8-binomial3` elements are eight words and
+`koala-bear.ext4-binomial3` elements four. `field_le`, `field_from_le`,
+`fields_le`, `fields_from_le` and the four Montgomery operations are installed
+for `koala-bear` and both extensions; `field_reduce_le` is not.
 
 A decoder never reduces. `field_from_le` and `field_from_montgomery_le` return
 `(false, 0)` unless the input has exactly one element's width and every word is

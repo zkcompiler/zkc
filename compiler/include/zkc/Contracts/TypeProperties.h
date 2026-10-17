@@ -97,7 +97,8 @@ inline bool nativeMessageData(const BoundType &type) {
           (type.identity == "bn254.fr" ||
            type.identity == "ristretto255.scalar" ||
            type.identity == "koala-bear" ||
-           type.identity == "koala-bear.ext8-binomial3")) ||
+           type.identity == "koala-bear.ext8-binomial3" ||
+           type.identity == "koala-bear.ext4-binomial3")) ||
          ((type.kind == "group" || type.kind == "groups") &&
           (type.identity == "bn254.g1" || type.identity == "bn254.g2" ||
            type.identity == "ristretto255.group" ||

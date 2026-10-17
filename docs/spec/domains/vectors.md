@@ -113,7 +113,8 @@ and [capacity accounting](../runtime/capacity.md) retain their own work.
 
 Bindings retain their explicit implementation choice and field identity:
 `arkworks` supports BLS12-381 Fr and BN254 Fr, `dalek` supports Ristretto255
-scalars, and `plonky3` supports KoalaBear and its installed octic extension.
+scalars, and `plonky3` supports KoalaBear and its installed octic and quartic
+extensions.
 Native scalar output preflight reserves the existing 512-byte retained charge
 before arithmetic or shape/index checks, including zero results. Insufficient
 per-value or invocation output allowance reports `exhausted:output-bytes`.
@@ -127,8 +128,8 @@ The encoding is compact UTF-8 JSON
 `["zkc.matrix/0", fieldName, [rows, columns, entries]]`, with naturals and
 coefficients as canonical decimal strings. Entries are ordered `[row,column,value]`
 triples; zero coefficients are omitted. Prime-field values use least nonnegative
-representatives. The installed octic extension encodes its ascending coordinates
-as the integer `sum(c_i * p^i)`. Thus shape, nominal field and coefficients all
+representatives. The installed octic and quartic extensions encode their
+ascending coordinates as the integer `sum(c_i * p^i)`. Thus shape, nominal field and coefficients all
 contribute. The result is Boolean; a consuming guard decides whether to reject.
 This is a content-binding contract under the stated hash assumption, not a
 proof of source-compiler adequacy or prepared-key derivation.

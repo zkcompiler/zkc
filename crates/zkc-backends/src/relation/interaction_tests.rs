@@ -760,6 +760,7 @@ fn registry_references_and_signatures_cover_the_interaction_kernels() {
         for (field, table, accepted) in [
             ("koala-bear", "0", true),
             ("koala-bear.ext8-binomial3", "1048576", true),
+            ("koala-bear.ext4-binomial3", "1048576", true),
             ("koala-bear", "1048577", false),
             ("bls12-381.fr", "0", false),
         ] {
@@ -777,7 +778,11 @@ fn registry_references_and_signatures_cover_the_interaction_kernels() {
             }
         }
     }
-    for field in ["koala-bear", "koala-bear.ext8-binomial3"] {
+    for field in [
+        "koala-bear",
+        "koala-bear.ext8-binomial3",
+        "koala-bear.ext4-binomial3",
+    ] {
         let binding = OperationBinding {
             contract: "relation.table_record_points".into(),
             arguments: vec![field.into(), "0".into()],

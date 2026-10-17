@@ -89,7 +89,10 @@ fn fold_bindings_require_installed_two_adic_odd_fields() {
             b.signature().is_ok(),
             matches!(
                 domain.field,
-                Identity::Bn254Fr | Identity::KoalaBear | Identity::KoalaBearExt8
+                Identity::Bn254Fr
+                    | Identity::KoalaBear
+                    | Identity::KoalaBearExt8
+                    | Identity::KoalaBearExt4
             )
         );
         assert_eq!(

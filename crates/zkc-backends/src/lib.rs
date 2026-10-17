@@ -23,7 +23,9 @@ mod value;
 /// Independently installed physical domains and their nominal associations.
 pub mod domains;
 pub mod plonky3;
-pub use plonky3::{KoalaBear, KoalaBearExt8, parse_decimal as parse_koala_bear_decimal};
+pub use plonky3::{
+    KoalaBear, KoalaBearExt4, KoalaBearExt8, parse_decimal as parse_koala_bear_decimal,
+};
 
 pub use backend::{
     ComputationCheckpoint, EntryPolicy, NativeBackend, NativeCall, NativeKernel, PortConstraint,

@@ -37,12 +37,14 @@ fn literal_rule(rule: AttributeRule, field: Identity) -> AttributeRule {
         (Identity::Ristretto255Scalar, AttributeRule::FieldDecimals) => {
             AttributeRule::RistrettoDecimals
         }
-        (Identity::KoalaBear | Identity::KoalaBearExt8, AttributeRule::FieldDecimal) => {
-            AttributeRule::KoalaBearDecimal
-        }
-        (Identity::KoalaBear | Identity::KoalaBearExt8, AttributeRule::FieldDecimals) => {
-            AttributeRule::KoalaBearDecimals
-        }
+        (
+            Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4,
+            AttributeRule::FieldDecimal,
+        ) => AttributeRule::KoalaBearDecimal,
+        (
+            Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4,
+            AttributeRule::FieldDecimals,
+        ) => AttributeRule::KoalaBearDecimals,
         (Identity::Bn254Fr, AttributeRule::FieldDecimal) => AttributeRule::Bn254Decimal,
         (Identity::Bn254Fr, AttributeRule::FieldDecimals) => AttributeRule::Bn254Decimals,
         _ => rule,

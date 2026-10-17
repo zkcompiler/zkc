@@ -65,7 +65,9 @@ const CosetConvention *cosetConvention(llvm::StringRef field) {
   static const CosetConvention koala{"koala-bear.two-adic.1791270792/0",
                                      "koala-bear", "1791270792",
                                      "shift * root(size)^i; i = 0..size-1", 24};
-  return field == "koala-bear" || field == "koala-bear.ext8-binomial3"
+  // Installed KoalaBear extensions evaluate on the base field's subgroups.
+  return field == "koala-bear" || field == "koala-bear.ext8-binomial3" ||
+                 field == "koala-bear.ext4-binomial3"
              ? &koala
              : nullptr;
 }

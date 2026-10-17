@@ -60,8 +60,10 @@ impl Bundle {
         // KoalaBear: checking each output checks its whole sub-DAG. Every
         // arena output is an assertion or interaction output.
         let facts = &self.facts[table];
-        if !matches!(field, Identity::KoalaBear | Identity::KoalaBearExt8)
-            || self.publics.iter().any(|p| !lifts(p.field, field))
+        if !matches!(
+            field,
+            Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4
+        ) || self.publics.iter().any(|p| !lifts(p.field, field))
             || t.groups.iter().any(|g| !lifts(g.field, field))
             || t.assertions
                 .iter()

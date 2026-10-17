@@ -30,6 +30,7 @@ pub enum Identity {
     Ristretto255Scalar,
     KoalaBear,
     KoalaBearExt8,
+    KoalaBearExt4,
     Ristretto255Group,
     Edwards25519Prime,
     Merlin3Ristretto64Le,
@@ -41,7 +42,7 @@ impl Identity {
     /// A group or service with an associated scalar field is not itself a field.
     pub(crate) fn field_characteristic(self) -> Option<&'static str> {
         match self {
-            Self::KoalaBear | Self::KoalaBearExt8 => Some("2130706433"),
+            Self::KoalaBear | Self::KoalaBearExt8 | Self::KoalaBearExt4 => Some("2130706433"),
             Self::Bls12381Fr => Some(
                 "52435875175126190479447740508185965837690552500527637822603658699938581184513",
             ),
@@ -75,6 +76,7 @@ impl Identity {
                 | Self::Ristretto255Scalar
                 | Self::KoalaBear
                 | Self::KoalaBearExt8
+                | Self::KoalaBearExt4
         )
     }
     /// Installed associations, independent of the value kind.
@@ -98,6 +100,7 @@ impl Identity {
             Self::KoalaBearExt8 | Self::MerkleKoalaBearExt8 | Self::Merlin3KoalaBearExt8 => {
                 Some(Self::KoalaBearExt8)
             }
+            Self::KoalaBearExt4 => Some(Self::KoalaBearExt4),
             Self::None => None,
         }
     }
@@ -116,7 +119,7 @@ impl Identity {
     /// A nominal extension has an explicit base; other fields have no embedding contract.
     pub fn base_field(self) -> Option<Self> {
         match self {
-            Self::KoalaBearExt8 => Some(Self::KoalaBear),
+            Self::KoalaBearExt8 | Self::KoalaBearExt4 => Some(Self::KoalaBear),
             _ => None,
         }
     }
@@ -155,7 +158,7 @@ impl Identity {
         match self.scalar_field()? {
             Self::Bls12381Fr | Self::Bn254Fr => Some("arkworks"),
             Self::Ristretto255Scalar => Some("dalek"),
-            Self::KoalaBear | Self::KoalaBearExt8 => Some("plonky3"),
+            Self::KoalaBear | Self::KoalaBearExt8 | Self::KoalaBearExt4 => Some("plonky3"),
             _ => None,
         }
     }
@@ -169,6 +172,7 @@ impl Identity {
 
             Self::KoalaBear => "koala-bear",
             Self::KoalaBearExt8 => "koala-bear.ext8-binomial3",
+            Self::KoalaBearExt4 => "koala-bear.ext4-binomial3",
             Self::Bls12381Fr => "bls12-381.fr",
             Self::Bls12381G1 => "bls12-381.g1",
             Self::Bls12381G2 => "bls12-381.g2",
@@ -205,6 +209,7 @@ impl Identity {
             Self::Ristretto255Scalar,
             Self::KoalaBear,
             Self::KoalaBearExt8,
+            Self::KoalaBearExt4,
             Self::Ristretto255Group,
             Self::Edwards25519Prime,
             Self::Merlin3Ristretto64Le,
@@ -291,7 +296,12 @@ impl LogicalType {
             Type::Field | Type::Matrix | Type::Vector | Type::Polynomial | Type::Round => {
                 matches!(
                     identity,
-                    Bn254Fr | Bls12381Fr | Ristretto255Scalar | KoalaBear | KoalaBearExt8
+                    Bn254Fr
+                        | Bls12381Fr
+                        | Ristretto255Scalar
+                        | KoalaBear
+                        | KoalaBearExt8
+                        | KoalaBearExt4
                 )
             }
             Type::Rng => matches!(
@@ -416,6 +426,7 @@ impl LogicalType {
                         | Identity::Ristretto255Scalar
                         | Identity::KoalaBear
                         | Identity::KoalaBearExt8
+                        | Identity::KoalaBearExt4
                 ) | (
                     Type::Group | Type::Groups,
                     Identity::Bn254G1
@@ -577,6 +588,11 @@ pub enum Representation {
     KoalaBearExt8Vector,
     KoalaBearExt8Polynomial,
     KoalaBearExt8Round,
+    KoalaBearExt4SparseCoo,
+    KoalaBearExt4Vector,
+    KoalaBearExt4Polynomial,
+    KoalaBearExt4Round,
+    KoalaBearExt4,
     KoalaBearSparseCoo,
     KoalaBear,
     KoalaBearExt8,
@@ -649,6 +665,11 @@ impl Representation {
             Self::KoalaBearExt8Polynomial => "plonky3.koala-bear.ext8-binomial3-polynomial/0",
             Self::KoalaBearExt8Round => "plonky3.koala-bear.ext8-binomial3-quadratic/0",
             Self::KoalaBearExt8SparseCoo => "plonky3.koala-bear.ext8-binomial3-sparse-coo/0",
+            Self::KoalaBearExt4 => "plonky3.koala-bear.ext4-binomial3/0",
+            Self::KoalaBearExt4Vector => "plonky3.koala-bear.ext4-binomial3-vector/0",
+            Self::KoalaBearExt4Polynomial => "plonky3.koala-bear.ext4-binomial3-polynomial/0",
+            Self::KoalaBearExt4Round => "plonky3.koala-bear.ext4-binomial3-quadratic/0",
+            Self::KoalaBearExt4SparseCoo => "plonky3.koala-bear.ext4-binomial3-sparse-coo/0",
             Self::KoalaBear => "plonky3.koala-bear/0",
             Self::KoalaBearVector => "plonky3.koala-bear-vector/0",
             Self::KoalaBearPolynomial => "plonky3.koala-bear-polynomial/0",
@@ -721,6 +742,11 @@ impl Representation {
             Self::KoalaBearExt8Vector,
             Self::KoalaBearExt8Polynomial,
             Self::KoalaBearExt8Round,
+            Self::KoalaBearExt4SparseCoo,
+            Self::KoalaBearExt4Vector,
+            Self::KoalaBearExt4Polynomial,
+            Self::KoalaBearExt4Round,
+            Self::KoalaBearExt4,
             Self::KoalaBearSparseCoo,
             Self::KoalaBear,
             Self::KoalaBearExt8,
@@ -866,6 +892,11 @@ impl PhysicalType {
             (T::Polynomial, I::KoalaBearExt8) => R::KoalaBearExt8Polynomial,
             (T::Round, I::KoalaBearExt8) => R::KoalaBearExt8Round,
             (T::Matrix, I::KoalaBearExt8) => R::KoalaBearExt8SparseCoo,
+            (T::Field, I::KoalaBearExt4) => R::KoalaBearExt4,
+            (T::Vector, I::KoalaBearExt4) => R::KoalaBearExt4Vector,
+            (T::Polynomial, I::KoalaBearExt4) => R::KoalaBearExt4Polynomial,
+            (T::Round, I::KoalaBearExt4) => R::KoalaBearExt4Round,
+            (T::Matrix, I::KoalaBearExt4) => R::KoalaBearExt4SparseCoo,
             (T::Field, I::KoalaBear) => R::KoalaBear,
             (T::Vector, I::KoalaBear) => R::KoalaBearVector,
             (T::Polynomial, I::KoalaBear) => R::KoalaBearPolynomial,

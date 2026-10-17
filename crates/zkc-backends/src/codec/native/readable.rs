@@ -92,13 +92,20 @@ fn natural(value: &Json) -> Result<u64> {
 }
 fn scalar(identity: Identity, value: &Json, out: &mut Buffer) -> Result<()> {
     use Identity::*;
-    if identity == KoalaBearExt8 {
+    // A KoalaBear extension element: a base decimal embeds, or one decimal per
+    // coordinate in the ascending basis.
+    let degree = match identity {
+        KoalaBearExt8 => Some(8),
+        KoalaBearExt4 => Some(4),
+        _ => Option::None,
+    };
+    if let Some(degree) = degree {
         if value.is_string() {
             scalar(KoalaBear, value, out)?;
-            return out.put(&[0; 28]);
+            return out.put(&[0; 28][..4 * (degree - 1)]);
         }
         let values = array(value)?;
-        if values.len() != 8 {
+        if values.len() != degree {
             return Err("entry-input-shape");
         }
         for v in values {
@@ -327,7 +334,7 @@ impl serde::Serialize for Scalar<'_> {
         &self,
         serializer: S,
     ) -> std::result::Result<S::Ok, S::Error> {
-        if self.0 == Identity::KoalaBearExt8 {
+        if matches!(self.0, Identity::KoalaBearExt8 | Identity::KoalaBearExt4) {
             serializer.collect_seq(self.1.as_chunks::<4>().0.iter().map(|b| decimal_text(b)))
         } else {
             serializer.serialize_str(&decimal_text(self.1))

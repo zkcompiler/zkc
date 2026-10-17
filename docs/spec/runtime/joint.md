@@ -178,7 +178,7 @@ then release all endpoint leases through normal finalization.
 
 Scalar/group wire types use the exact default representations of the
 [structured native message grammar](../formats/messages.md): Boolean,
-BLS Fr/G1, BN254 Fr/G1/G2, KoalaBear base/ext8 and Ristretto scalar/group and prime-order Edwards25519.
+BLS Fr/G1, BN254 Fr/G1/G2, KoalaBear base/ext8/ext4 and Ristretto scalar/group and prime-order Edwards25519.
 They reuse the installed `ZKCV` version-0 frames, including recursively nested
 sequences and variants. This bundle follows installed native codec support;
 proof deployment adds its own admission and authority checks.

@@ -300,6 +300,7 @@ const DomainCatalog &installedDomains() {
     const std::string spongefish = "spongefish0.8.0.keccak.bls12-381.fr64be/0";
     const std::string koala = "koala-bear";
     const std::string extension = "koala-bear.ext8-binomial3";
+    const std::string quartic = "koala-bear.ext4-binomial3";
     const std::string extensionTranscript =
         "merlin3.koala-bear.ext8-binomial3.rejection31le/0";
     const std::string rowBase = "rows.merkle-keccak256.koala-bear/0";
@@ -327,6 +328,12 @@ const DomainCatalog &installedDomains() {
           {{"BaseField", koala}},
           {"IndexRandomness", "ExtensionField", "TwoAdicField", "Field",
            "CommRing", "CharacteristicNotTwo"},
+          "2130706433"},
+         {quartic,
+          "Field",
+          {{"BaseField", koala}},
+          {"ExtensionField", "TwoAdicField", "Field", "CommRing",
+           "CharacteristicNotTwo"},
           "2130706433"},
          {koala,
           "Field",
@@ -422,6 +429,11 @@ const DomainCatalog &installedDomains() {
          {"round", extension},
          {"matrix", extension},
          {"rng", extension},
+         {"field", quartic},
+         {"vector", quartic},
+         {"polynomial", quartic},
+         {"round", quartic},
+         {"matrix", quartic},
          {"group", group},
          {"groups", group},
          {"group", blsg2},
@@ -483,6 +495,11 @@ const DomainCatalog &installedDomains() {
           extension},
          {"zkcv.round.koala-bear.ext8-binomial3/0", "round", extension},
          {"zkcv.matrix.koala-bear.ext8-binomial3/0", "matrix", extension},
+         {"zkcv.field.koala-bear.ext4-binomial3/0", "field", quartic},
+         {"zkcv.vector.koala-bear.ext4-binomial3/0", "vector", quartic},
+         {"zkcv.polynomial.koala-bear.ext4-binomial3/0", "polynomial", quartic},
+         {"zkcv.round.koala-bear.ext4-binomial3/0", "round", quartic},
+         {"zkcv.matrix.koala-bear.ext4-binomial3/0", "matrix", quartic},
          {"zkcv.field.bn254.fr/0", "field", bn254},
          {"zkcv.vector.bn254.fr/0", "vector", bn254},
          {"zkcv.polynomial.bn254.fr/0", "polynomial", bn254},
@@ -548,6 +565,15 @@ const DomainCatalog &installedDomains() {
          {"plonky3.koala-bear.ext8-binomial3-quadratic/0", "round", extension,
           true, ""},
          {"plonky3.koala-bear.ext8-binomial3-sparse-coo/0", "matrix", extension,
+          true, ""},
+         {"plonky3.koala-bear.ext4-binomial3/0", "field", quartic, true, ""},
+         {"plonky3.koala-bear.ext4-binomial3-vector/0", "vector", quartic, true,
+          ""},
+         {"plonky3.koala-bear.ext4-binomial3-polynomial/0", "polynomial",
+          quartic, true, ""},
+         {"plonky3.koala-bear.ext4-binomial3-quadratic/0", "round", quartic,
+          true, ""},
+         {"plonky3.koala-bear.ext4-binomial3-sparse-coo/0", "matrix", quartic,
           true, ""},
          {"arkworks.bn254-fr/0", "field", bn254, true, ""},
          {"arkworks.bn254-fr-vector/0", "vector", bn254, true, ""},
@@ -618,7 +644,8 @@ const DomainCatalog &installedDomains() {
          {scalar, "dalek"},          {ristretto, "dalek"},
          {edwards, "dalek"},         {merlin, "dalek"},
          {spongefish, "spongefish"}, {koala, "plonky3"},
-         {extension, "plonky3"},     {extensionTranscript, "plonky3"},
+         {extension, "plonky3"},     {quartic, "plonky3"},
+         {extensionTranscript, "plonky3"},
          {rowBase, "plonky3"},       {rowExtension, "plonky3"},
          {poseidonRows, "plonky3"}});
     if (!result)

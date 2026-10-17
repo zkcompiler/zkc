@@ -1,7 +1,8 @@
 //! Exact mathematical encodings, separate from native transport and observation.
 use crate::plonky3::words::{self, Form};
 use crate::{
-    GroupPoint, KoalaBear, KoalaBearExt8, Policy, Result, Scalar, Value, ark, refused, value::size,
+    GroupPoint, KoalaBear, KoalaBearExt4, KoalaBearExt8, Policy, Result, Scalar, Value, ark,
+    refused, value::size,
 };
 use p3_field::BasedVectorSpace;
 use std::sync::Arc;
@@ -51,19 +52,19 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         ("encoding.cryptonote_map", Identity::Edwards25519Prime) => (&[Bytes], &[Group]),
         (
             "encoding.field_le" | "encoding.field_montgomery_le",
-            Identity::KoalaBear | Identity::KoalaBearExt8,
+            Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4,
         ) => (&[Field], &[Bytes]),
         (
             "encoding.fields_le" | "encoding.fields_montgomery_le",
-            Identity::KoalaBear | Identity::KoalaBearExt8,
+            Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4,
         ) => (&[Vector], &[Bytes]),
         (
             "encoding.field_from_le" | "encoding.field_from_montgomery_le",
-            Identity::KoalaBear | Identity::KoalaBearExt8,
+            Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4,
         ) => (&[Bytes], &[Bool, Field]),
         (
             "encoding.fields_from_le" | "encoding.fields_from_montgomery_le",
-            Identity::KoalaBear | Identity::KoalaBearExt8,
+            Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4,
         ) => (&[Bytes], &[Bool, Vector]),
         _ => return None,
     };
@@ -152,6 +153,26 @@ impl WordElement for KoalaBear {
     }
     fn vector_value(values: Arc<[Self]>) -> Value {
         Value::KoalaBearVector(values)
+    }
+}
+impl WordElement for KoalaBearExt4 {
+    fn field(value: &Value) -> Option<Self> {
+        match value {
+            Value::KoalaBearExt4Field(x) => Some(*x),
+            _ => None,
+        }
+    }
+    fn vector(value: &Value) -> Option<&[Self]> {
+        match value {
+            Value::KoalaBearExt4Vector(x) => Some(x),
+            _ => None,
+        }
+    }
+    fn field_value(self) -> Value {
+        Value::KoalaBearExt4Field(self)
+    }
+    fn vector_value(values: Arc<[Self]>) -> Value {
+        Value::KoalaBearExt4Vector(values)
     }
 }
 impl WordElement for KoalaBearExt8 {
@@ -271,6 +292,9 @@ pub(crate) fn apply(
             }
             Identity::KoalaBearExt8 => {
                 return koala_bear_words::<KoalaBearExt8>(name, form, args, policy, available);
+            }
+            Identity::KoalaBearExt4 => {
+                return koala_bear_words::<KoalaBearExt4>(name, form, args, policy, available);
             }
             // The Ristretto little-endian codecs below keep their own rows.
             _ => {}

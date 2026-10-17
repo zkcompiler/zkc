@@ -9,7 +9,7 @@ from entry import Entry
 from source_modules import library_modules
 
 FIELDS = {'bls12-381.fr': 1, 'ristretto255.scalar': 1, 'bn254.fr': 1,
-          'koala-bear': 1, 'koala-bear.ext8-binomial3': 8}
+          'koala-bear': 1, 'koala-bear.ext8-binomial3': 8, 'koala-bear.ext4-binomial3': 4}
 
 SOURCE = '''module sample;
 use zkc::vector as vector;

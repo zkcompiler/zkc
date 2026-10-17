@@ -106,7 +106,7 @@ carrier is the field of the operation's first vector operand, taken from the
 admitted signature. The referenced arena must be admitted, else
 `entry-asset-missing`, and its inputs and facts must be interpretable in that
 carrier under the kernels' own rule, else `entry-asset-carrier`: KoalaBear
-arenas under an Ext8 carrier are permitted, the converse is not.
+arenas under an Ext8 or Ext4 carrier are permitted, the converse is not.
 For `relation.table_rows`, the Host checks the selected static table index and
 the Bundle view's exact field requirements. It does not promote a base-field
 trace to arbitrary extension-field values. For `relation.table_shape`,
@@ -115,7 +115,7 @@ trace to arbitrary extension-field values. For `relation.table_shape`,
 contracts share one rule, checked once per asset, table and carrier without
 allocating: the static table index, the
 [polynomial view's](../domains/relation-bundles.md#compiler-visible-polynomial-view)
-carrier rule, which lets a KoalaBear table be substituted in Ext8. No height
+carrier rule, which lets a KoalaBear table be substituted in Ext8 or Ext4. No height
 or polynomial domain is selected or required to exist. The
 [interaction view's](../domains/relation-bundles.md#compiler-visible-interaction-view)
 `relation.table_interactions`, `relation.table_interaction` and

@@ -1,6 +1,6 @@
 //! Shared dense scalar/vector/coefficient arithmetic. Mathematical meanings do
 //! not depend on physical layout. Callers preflight sizes before allocating.
-use crate::{KoalaBear, KoalaBearExt8};
+use crate::{KoalaBear, KoalaBearExt4, KoalaBearExt8};
 use crate::{Policy, Result, RistrettoScalar, Scalar, Value, exhausted, refused, value::size};
 use ark_ff::Field;
 use std::{
@@ -155,6 +155,17 @@ impl Coefficient for KoalaBearExt8 {
         p3_field::Field::try_inverse(&self)
     }
 }
+impl Coefficient for KoalaBearExt4 {
+    fn zero() -> Self {
+        <Self as p3_field::PrimeCharacteristicRing>::ZERO
+    }
+    fn one() -> Self {
+        <Self as p3_field::PrimeCharacteristicRing>::ONE
+    }
+    fn inverse(self) -> Option<Self> {
+        p3_field::Field::try_inverse(&self)
+    }
+}
 trait Family: crate::matrix::IdentityCoefficient {
     fn dot(a: &[Self], b: &[Self]) -> Result<Self> {
         equal_len(a.len(), b.len())?;
@@ -274,6 +285,16 @@ family!(
     crate::plonky3::parse_extension_decimal
 );
 
+family!(
+    KoalaBearExt4,
+    KoalaBearExt4Field,
+    KoalaBearExt4Vector,
+    KoalaBearExt4Matrix,
+    KoalaBearExt4Polynomial,
+    KoalaBearExt4Round,
+    crate::plonky3::parse_quartic_decimal
+);
+
 pub(crate) fn apply(
     name: &str,
     field: Option<Identity>,
@@ -281,28 +302,43 @@ pub(crate) fn apply(
     i: &Invocation<'_>,
     p: &Policy,
 ) -> Result<Vec<Value>> {
+    // The binding's output port names the extension; the base is KoalaBear.
+    let target = i
+        .binding
+        .signature()
+        .outputs
+        .first()
+        .map(|t| t.logical().identity());
     if name == "vector.embed" {
         let [Value::KoalaBearVector(xs)] = args else {
             return Err(refused("kernel-operands"));
         };
-        p.vector_width(xs.len(), 32)?;
-        p.output(size(xs.len(), 32)?, i.max_output_bytes)?;
-        let mut out = reserve(xs.len())?;
-        out.extend(xs.iter().copied().map(KoalaBearExt8::from));
-        return Ok(vec![Value::KoalaBearExt8Vector(out.into())]);
+        return match target {
+            Some(Identity::KoalaBearExt8) => {
+                p.vector_width(xs.len(), 32)?;
+                p.output(size(xs.len(), 32)?, i.max_output_bytes)?;
+                let mut out = reserve(xs.len())?;
+                out.extend(xs.iter().copied().map(KoalaBearExt8::from));
+                Ok(vec![Value::KoalaBearExt8Vector(out.into())])
+            }
+            Some(Identity::KoalaBearExt4) => {
+                p.vector_width(xs.len(), 16)?;
+                p.output(size(xs.len(), 16)?, i.max_output_bytes)?;
+                let mut out = reserve(xs.len())?;
+                out.extend(xs.iter().copied().map(KoalaBearExt4::from));
+                Ok(vec![Value::KoalaBearExt4Vector(out.into())])
+            }
+            _ => Err(refused("kernel-operands")),
+        };
     }
     if name == "field.embed" {
         p.output(512, i.max_output_bytes)?;
-        return match (
-            i.binding
-                .signature()
-                .outputs
-                .first()
-                .map(|t| t.logical().identity()),
-            args,
-        ) {
+        return match (target, args) {
             (Some(Identity::KoalaBearExt8), [Value::KoalaBearField(x)]) => {
                 Ok(vec![Value::KoalaBearExt8Field((*x).into())])
+            }
+            (Some(Identity::KoalaBearExt4), [Value::KoalaBearField(x)]) => {
+                Ok(vec![Value::KoalaBearExt4Field((*x).into())])
             }
             _ => Err(refused("kernel-operands")),
         };
@@ -312,6 +348,7 @@ pub(crate) fn apply(
         Some(Identity::Bls12381Fr) => dense::<Scalar>(name, args, i, p),
         Some(Identity::Ristretto255Scalar) => dense::<RistrettoScalar>(name, args, i, p),
         Some(Identity::KoalaBearExt8) => dense::<KoalaBearExt8>(name, args, i, p),
+        Some(Identity::KoalaBearExt4) => dense::<KoalaBearExt4>(name, args, i, p),
         Some(Identity::KoalaBear) => dense::<KoalaBear>(name, args, i, p),
         _ => Err(refused("kernel-operands")),
     }
@@ -806,6 +843,12 @@ impl Value {
         let mut v = reserve(values.len())?;
         v.extend_from_slice(values);
         Ok(Self::KoalaBearExt8Vector(v.into()))
+    }
+    pub fn koala_bear_ext4_vector(values: &[KoalaBearExt4], policy: &Policy) -> Result<Self> {
+        policy.vector_width(values.len(), std::mem::size_of::<KoalaBearExt4>())?;
+        let mut v = reserve(values.len())?;
+        v.extend_from_slice(values);
+        Ok(Self::KoalaBearExt4Vector(v.into()))
     }
     pub fn koala_bear_vector(values: &[KoalaBear], policy: &Policy) -> Result<Self> {
         policy.vector_width(values.len(), std::mem::size_of::<KoalaBear>())?;
@@ -1461,5 +1504,6 @@ mod batch_inversion_tests {
         check::<RistrettoScalar>();
         check::<KoalaBear>();
         check::<KoalaBearExt8>();
+        check::<KoalaBearExt4>();
     }
 }

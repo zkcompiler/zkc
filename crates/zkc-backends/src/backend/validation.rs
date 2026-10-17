@@ -110,6 +110,21 @@ impl Core {
                 m.policy(&self.policy)?;
                 None
             }
+            Value::KoalaBearExt4Matrix(m) => {
+                m.policy(&self.policy)?;
+                None
+            }
+            Value::KoalaBearExt4Vector(a) => {
+                self.policy.vector_width(a.len(), 16)?;
+                None
+            }
+            Value::KoalaBearExt4Polynomial(a) => {
+                self.policy.vector_width(a.len(), 16)?;
+                if !crate::kernels::arithmetic::normalized(a) {
+                    return Err(refused("polynomial-normalization"));
+                }
+                None
+            }
             Value::KoalaBearExt8Vector(a) => {
                 self.policy.vector_width(a.len(), 32)?;
                 None
@@ -233,6 +248,8 @@ impl Core {
             | Value::Index(..)
             | Value::KoalaBearExt8Field(..)
             | Value::KoalaBearExt8Round(..)
+            | Value::KoalaBearExt4Field(..)
+            | Value::KoalaBearExt4Round(..)
             | Value::KoalaBearField(..)
             | Value::KoalaBearRound(..)
             | Value::RistrettoField(..)

@@ -65,6 +65,7 @@ fn frame(ty: &PhysicalType) -> Option<(u8, usize)> {
             (Group, Bls12381Gt) => Some((53, 582)),
             (Field, KoalaBear) => Some((19, 10)),
             (Field, KoalaBearExt8) => Some((26, 38)),
+            (Field, KoalaBearExt4) => Some((21, 22)),
             (Field, Ristretto255Scalar) => Some((13, 38)),
             (Group, Ristretto255Group) => Some((16, 38)),
             (Group, Edwards25519Prime) => Some((68, 38)),
@@ -188,6 +189,9 @@ fn encode_fixed(value: &Value, policy: &Policy) -> Result<Vec<u8>, NativeWireErr
         Value::KoalaBearField(v) => bytes.extend_from_slice(&crate::plonky3::encode_scalar(*v)),
         Value::KoalaBearExt8Field(v) => {
             bytes.extend_from_slice(&crate::plonky3::encode_extension(*v))
+        }
+        Value::KoalaBearExt4Field(v) => {
+            bytes.extend_from_slice(&crate::plonky3::encode_quartic(*v))
         }
         Value::RistrettoField(v) => bytes.extend_from_slice(&v.to_bytes()),
         Value::RistrettoGroup(v) => bytes.extend_from_slice(&v.compress().to_bytes()),
@@ -379,6 +383,10 @@ impl NativeBackend {
             ),
             26 => Value::KoalaBearExt8Field(
                 crate::plonky3::decode_extension(&bytes[6..])
+                    .map_err(|_| Invalid(DecodeReason::Scalar))?,
+            ),
+            21 => Value::KoalaBearExt4Field(
+                crate::plonky3::decode_quartic(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Scalar))?,
             ),
             13 => Value::RistrettoField(

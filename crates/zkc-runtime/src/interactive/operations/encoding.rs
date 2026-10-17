@@ -156,7 +156,10 @@ fn select(
     }
     let primary = support::primary(binding)?;
     // Four-byte coordinate words cover KoalaBear and its installed extensions.
-    let koala_bear = matches!(primary, Identity::KoalaBear | Identity::KoalaBearExt8);
+    let koala_bear = matches!(
+        primary,
+        Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4
+    );
     let allowed = match binding.contract.as_str() {
         "encoding.field_le" | "encoding.fields_le" | "encoding.field_from_le" => {
             primary == Identity::Ristretto255Scalar || koala_bear

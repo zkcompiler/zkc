@@ -202,7 +202,8 @@ impl Expression {
                 }
                 Node::Embed(target, a) => {
                     let mut f = get(*a)?;
-                    if *target != Identity::KoalaBearExt8 || f.field != Identity::KoalaBear {
+                    // Only an installed extension's declared base embeds.
+                    if target.base_field() != Some(f.field) {
                         return Err(Error("ring-embedding"));
                     }
                     f.field = *target;

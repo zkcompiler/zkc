@@ -34,10 +34,10 @@ pub struct PolynomialInput {
     pub rotation: u64,
 }
 
-/// A table field substituted in the carrier: the carrier itself, or KoalaBear
-/// in its installed degree-eight extension.
+/// A table field substituted in the carrier: the carrier itself, or the base
+/// field of an installed extension carrier.
 pub(super) fn lifts(field: Identity, carrier: Identity) -> bool {
-    field == carrier || (carrier == Identity::KoalaBearExt8 && field == Identity::KoalaBear)
+    field == carrier || carrier.base_field() == Some(field)
 }
 pub(super) fn kind(authority: Authority) -> u64 {
     match authority {
@@ -131,8 +131,10 @@ impl Bundle {
         // KoalaBear-to-Ext8 embedding. Every node an output needs therefore has
         // the output's field or, below Ext8, KoalaBear: checking each assertion
         // output checks its whole sub-DAG.
-        if !matches!(field, Identity::KoalaBear | Identity::KoalaBearExt8)
-            || self.publics.iter().any(|p| !lifts(p.field, field))
+        if !matches!(
+            field,
+            Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4
+        ) || self.publics.iter().any(|p| !lifts(p.field, field))
             || t.groups.iter().any(|g| !lifts(g.field, field))
             || t.assertions
                 .iter()

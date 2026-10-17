@@ -35,6 +35,7 @@ constexpr ProviderDomain providerDomains[] = {
     {"dalek", "merlin3.ristretto255.scalar64le/0"},
     {"plonky3", "koala-bear"},
     {"plonky3", "koala-bear.ext8-binomial3"},
+    {"plonky3", "koala-bear.ext4-binomial3"},
     {"plonky3", "merlin3.koala-bear.ext8-binomial3.rejection31le/0"},
     {"plonky3", "rows.merkle-keccak256.koala-bear/0"},
     {"plonky3", "rows.merkle-keccak256.koala-bear.ext8-binomial3/0"},
