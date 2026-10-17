@@ -172,6 +172,7 @@ import Zkc.Source.Structured.RealizationTotality
 import Zkc.Source.Structured.Repeat
 import Zkc.Source.Structured.RepeatAdmission
 import Zkc.Source.Structured.RepeatLaws
+import Zkc.Source.Structured.ReplyScript
 import Zkc.Source.Structured.Table
 import Zkc.Source.Structured.UnitViews
 import Zkc.Source.Structured.Vocabulary
@@ -301,6 +302,11 @@ import ZkcExamples.Structured.ApplicationViews
 import ZkcExamples.Structured.ApplicationWrapper
 import ZkcExamples.Structured.ApplicationWrapperData
 import ZkcExamples.Structured.ApplicationWrapperViews
+import ZkcExamples.Structured.ChaumPedersen
+import ZkcExamples.Structured.ChaumPedersenBinding
+import ZkcExamples.Structured.ChaumPedersenBodies
+import ZkcExamples.Structured.ChaumPedersenData
+import ZkcExamples.Structured.ChaumPedersenViews
 import ZkcExamples.Structured.LogicalContextControls
 import ZkcExamples.Structured.MapCombination
 import ZkcExamples.Structured.MapCombinationData
@@ -365,6 +371,11 @@ import ZkcExamples.Structured.RepeatServiceWrapperData
 import ZkcExamples.Structured.RepeatServiceWrapperLaws
 import ZkcExamples.Structured.RepeatServiceWrapperViews
 import ZkcExamples.Structured.RepeatViews
+import ZkcExamples.Structured.SchnorrAnd
+import ZkcExamples.Structured.SchnorrAndBinding
+import ZkcExamples.Structured.SchnorrAndBodies
+import ZkcExamples.Structured.SchnorrAndData
+import ZkcExamples.Structured.SchnorrAndViews
 import ZkcExamples.Structured.SchnorrBinding
 import ZkcExamples.Structured.SchnorrCheckpoints
 import ZkcExamples.Structured.SchnorrContract
@@ -389,6 +400,8 @@ import ZkcExamples.Structured.ServiceOrderBodies
 import ZkcExamples.Structured.ServiceOrderControls
 import ZkcExamples.Structured.ServiceOrderData
 import ZkcExamples.Structured.ServiceOrderViews
+import ZkcExamples.Structured.SigmaCompositionControls
+import ZkcExamples.Structured.SigmaLogicalContexts
 import ZkcExamples.Structured.SumcheckCallBoundary
 import ZkcExamples.Structured.SumcheckCallBoundaryControls
 import ZkcExamples.Structured.SumcheckClaim

@@ -324,6 +324,104 @@ def schnorr_variant_cases(suite):
                                       stopped("incomplete", a[1], pending=a)))
 
 
+def sigma_subject(suite, entry, stem, module):
+    subject = suite.authored(stem, "example::" + entry, {
+        "example": ROOT / "examples/projects/sigma/main.zkc",
+        "sigma": ROOT / "libraries/sigma/lib.zkc",
+    }, (stem, module))
+    root = definition(subject[2], subject[2][3])
+    prover, verifier = root[6][1]
+    instructions = root[9][1]
+    draws = [row[4] for row in instructions if row[0][0] == "draw"]
+    exchanges = [row[4] for row in instructions if row[0][0] == "exchange"]
+    return subject, prover, verifier, draws, exchanges
+
+
+def schnorr_and_cases(suite):
+    subject, prover, verifier, draws, exchanges = sigma_subject(
+        suite, "AndInteractive", "schnorr-and", "SchnorrAnd")
+    assert len(draws) == 3 and len(exchanges) == 5
+    first_nonce, second_nonce, challenge = draws
+    first_commitment, second_commitment, delivery, first_response, second_response = exchanges
+    actions = [
+        ["receive", first_commitment, prover, verifier, GROUP_TYPE],
+        ["receive", second_commitment, prover, verifier, GROUP_TYPE],
+        ["draw", challenge, verifier, SERVICE, "29", FIELD],
+        ["send", delivery, verifier, prover, FIELD_TYPE, "5"],
+        ["receive", first_response, prover, verifier, FIELD_TYPE],
+        ["receive", second_response, prover, verifier, FIELD_TYPE],
+    ]
+    # Additive group: 22*2 = 14 + 5*6 and 28*5 = 40 + 5*20 (witnesses 3 and 4).
+    script = [reply(action, value) for action, value in zip(actions, ("14", "40", "5", None, "22", "28"))]
+    inputs = ["2", "6", "5", "20", None, None, None, "29"]
+    suite.case("and-verifier-accepts", lambda: suite.compare_open(
+        subject, "and-verifier", verifier, inputs, script, returned([True], script)))
+    for index in (4, 5):
+        altered = copy.deepcopy(script)
+        altered[index][2] = ["value", "23"]
+        suite.case(f"and-verifier-rejects-{index}", lambda n=index, a=altered: suite.compare_open(
+            subject, f"and-rejects-{n}", verifier, inputs, a, returned([False], a)))
+    for index, action in enumerate(actions):
+        stopped_script = script[:index] + [reply(action, stop="abort")]
+        suite.case(f"and-stop-{index}", lambda n=index, a=action, s=stopped_script:
+                   suite.compare_open(subject, f"and-stop-{n}", verifier, inputs, s, stopped("abort", a[1], s)))
+    # One challenge reply reaches both responses: 7 + 11*3 and 8 + 11*4.
+    prover_script = [
+        reply(["draw", first_nonce, prover, SERVICE, "17", FIELD], "7"),
+        reply(["draw", second_nonce, prover, SERVICE, "17", FIELD], "8"),
+        reply(["send", first_commitment, prover, verifier, GROUP_TYPE, "14"]),
+        reply(["send", second_commitment, prover, verifier, GROUP_TYPE, "40"]),
+        reply(["receive", delivery, verifier, prover, FIELD_TYPE], "11"),
+        reply(["send", first_response, prover, verifier, FIELD_TYPE, "40"]),
+        reply(["send", second_response, prover, verifier, FIELD_TYPE, "52"]),
+    ]
+    suite.case("and-prover", lambda: suite.compare_open(
+        subject, "and-prover", prover, ["2", "6", "5", "20", "3", "4", "17", None], prover_script,
+        returned([None], prover_script)))
+    assert len(subject[2][5]) == 1
+
+
+def chaum_pedersen_cases(suite):
+    subject, prover, verifier, draws, exchanges = sigma_subject(
+        suite, "EqualityInteractive", "chaum-pedersen", "ChaumPedersen")
+    assert len(draws) == 2 and len(exchanges) == 4
+    nonce, challenge = draws
+    first_commitment, second_commitment, delivery, response = exchanges
+    actions = [
+        ["receive", first_commitment, prover, verifier, GROUP_TYPE],
+        ["receive", second_commitment, prover, verifier, GROUP_TYPE],
+        ["draw", challenge, verifier, SERVICE, "29", FIELD],
+        ["send", delivery, verifier, prover, FIELD_TYPE, "5"],
+        ["receive", response, prover, verifier, FIELD_TYPE],
+    ]
+    # Additive group: 22*2 = 14 + 5*6 and 22*5 = 35 + 5*15 (one witness 3).
+    script = [reply(action, value) for action, value in zip(actions, ("14", "35", "5", None, "22"))]
+    suite.case("equality-verifier-accepts", lambda: suite.compare_open(
+        subject, "equality-verifier", verifier, ["2", "6", "5", "15", None, None, "29"], script,
+        returned([True], script)))
+    # The second key uses witness 4; the AND-valid commitment 40 cannot share the response.
+    unshared = [reply(action, value) for action, value in zip(actions, ("14", "40", "5", None, "22"))]
+    suite.case("equality-rejects-unshared-witness", lambda: suite.compare_open(
+        subject, "equality-unshared", verifier, ["2", "6", "5", "20", None, None, "29"], unshared,
+        returned([False], unshared)))
+    for index, action in enumerate(actions):
+        stopped_script = script[:index] + [reply(action, stop="abort")]
+        suite.case(f"equality-stop-{index}", lambda n=index, a=action, s=stopped_script: suite.compare_open(
+            subject, f"equality-stop-{n}", verifier, ["2", "6", "5", "15", None, None, "29"], s,
+            stopped("abort", a[1], s)))
+    prover_script = [
+        reply(["draw", nonce, prover, SERVICE, "17", FIELD], "7"),
+        reply(["send", first_commitment, prover, verifier, GROUP_TYPE, "14"]),
+        reply(["send", second_commitment, prover, verifier, GROUP_TYPE, "35"]),
+        reply(["receive", delivery, verifier, prover, FIELD_TYPE], "11"),
+        reply(["send", response, prover, verifier, FIELD_TYPE, "40"]),
+    ]
+    suite.case("equality-prover", lambda: suite.compare_open(
+        subject, "equality-prover", prover, ["2", "6", "5", "15", "3", "17", None], prover_script,
+        returned([None], prover_script)))
+    assert len(subject[2][5]) == 1
+
+
 def run_cases(suite):
     component_cases(suite)
     service_cases(suite)
@@ -332,6 +430,8 @@ def run_cases(suite):
     wire_cases(suite)
     schnorr_cases(suite)
     schnorr_variant_cases(suite)
+    schnorr_and_cases(suite)
+    chaum_pedersen_cases(suite)
 
 
 def main():
