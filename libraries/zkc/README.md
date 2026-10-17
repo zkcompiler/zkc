@@ -6,7 +6,7 @@ They select no application relation, participant protocol or transcript policy.
 | Family | Modules |
 |---|---|
 | Collections and traversal | `vector`, `indices`, `sequence`, `matrix`, `field_array`, `finite`, `finite_math`, `finite_domain`, `accumulation` |
-| Algebra and polynomials | `scalar`, `curve`, `linear`, `polynomial`, `multilinear`, `coset`, `opening`, `symbolic`, `boolean` |
+| Algebra and polynomials | `scalar`, `curve`, `pairing`, `linear`, `polynomial`, `multilinear`, `coset`, `opening`, `symbolic`, `boolean` |
 | Commitments and encoding | `oracle`, `bytes`, `encoding`, `proof`, `shake128`, `transcript`, `sampling` |
 
 Names above are under `zkc::`. The [manifest](zkc.toml) captures this family.
@@ -276,6 +276,9 @@ lengths and use the selected group's associated scalar field. `curve::add` and
 `empty`, `append`, `length`, `get`, `split` and `concat` provide the matching
 collection operations; `generator`, `neg` and `nonidentity` operate on points.
 These source names select existing contracts, not new group families or providers.
+`pairing::check<F>(left, right)` and `pairing::apply<F>(a, b)` use the ordered
+source groups `F::PairingG1` and `F::PairingG2` of a field with
+`zkc::algebra::PairingField(F)`; the empty product is the target identity.
 `scalar::from_index<F>` embeds an index by reduction in `F`.
 
 `encoding::cryptonote_map` is specific to `edwards25519.prime`; its signature

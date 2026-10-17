@@ -74,6 +74,8 @@ Additional leaf frames reuse the installed ZKCV encodings exactly:
 | BN254 G1 | 46 | 38 |
 | BN254 G2 | 48 | 70 |
 | BN254 GT | 50 | 390 |
+| BLS12-381 G2 | 51 | 102 |
+| BLS12-381 GT | 53 | 582 |
 | KoalaBear base | 19 | 10 |
 | KoalaBear ext8 | 26 | 38 |
 | Ristretto scalar | 13 | 38 |
@@ -91,7 +93,7 @@ rows and columns occupy offsets 6 and 10. Each coordinate/count is `u32`.
 | Leaf | Tags by domain | Complete frame bytes | Aggregate charge |
 |---|---|---|---|
 | Field vector | BLS 66, BN254 41, Ristretto 14, KoalaBear 20, ext8 27 | `10 + n*w`; scalar width `w=4` for KoalaBear, otherwise 32 | `n` elements |
-| Source-group vector | BLS 67, BN254 G1 47, G2 49, Ristretto 17, Edwards25519 69 | `10 + n*w`; point widths 48, 32, 64, 32, 32 respectively | `n` groups |
+| Source-group vector | BLS 67, BLS G2 52, BN254 G1 47, G2 49, Ristretto 17, Edwards25519 69 | `10 + n*w`; point widths 48, 96, 32, 64, 32, 32 respectively | `n` groups |
 | Sparse matrix | BLS 23, BN254 45, Ristretto 24, KoalaBear 25, ext8 30 | `18 + n*(8+w)`; each entry is row, column, canonical scalar | `n` elements |
 | Merkle root | KoalaBear 33, ext8 35 | 38 | one element |
 | Merkle path | KoalaBear 34, ext8 36 | `10 + 32*n`, at most 24 siblings | `n` elements |

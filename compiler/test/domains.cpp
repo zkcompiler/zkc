@@ -322,6 +322,8 @@ void installedInventory() {
       {"koala-bear.ext8-binomial3",
        {"field", "vector", "polynomial", "round", "matrix", "rng"}},
       {"bls12-381.g1", {"group", "groups"}},
+      {"bls12-381.g2", {"group", "groups"}},
+      {"bls12-381.gt", {"group"}},
       {"ristretto255.group", {"group", "groups"}},
       {"edwards25519.prime", {"group", "groups"}},
       {"bn254.g1", {"group", "groups"}},
@@ -347,7 +349,7 @@ void installedInventory() {
   for (const auto &type : catalog.allLogicalTypes())
     require(actual.emplace(type.kind, type.domain).second,
             "logical inventory contains no duplicate instances");
-  require(pairs.size() == 68 && actual == pairs,
+  require(pairs.size() == 71 && actual == pairs,
           "the complete installed logical inventory is unchanged");
 
   std::vector<std::string> identities{"", "missing"};
@@ -375,6 +377,8 @@ void installedInventory() {
   const std::map<std::string, std::string> providers{
       {"bls12-381.fr", "arkworks"},
       {"bls12-381.g1", "arkworks"},
+      {"bls12-381.g2", "arkworks"},
+      {"bls12-381.gt", "arkworks"},
       {"bn254.fr", "arkworks"},
       {"bn254.g1", "arkworks"},
       {"bn254.g2", "arkworks"},
@@ -431,6 +435,12 @@ const ExpectedType types[] = {
     {"group", "bls12-381.g1", "arkworks.g1/0", "zkcv.group.bls12-381.g1/0"},
     {"groups", "bls12-381.g1", "arkworks.g1-vector/0",
      "zkcv.groups.bls12-381.g1/0"},
+    {"group", "bls12-381.g2", "arkworks.bls12-381-g2/0",
+     "zkcv.group.bls12-381.g2/0"},
+    {"groups", "bls12-381.g2", "arkworks.bls12-381-g2-vector/0",
+     "zkcv.groups.bls12-381.g2/0"},
+    {"group", "bls12-381.gt", "arkworks.bls12-381-gt/0",
+     "zkcv.group.bls12-381.gt/0"},
     {"rng", "bls12-381.fr", "host.resource/0", ""},
     {"nonce", "bls12-381.fr", "host.resource/0", ""},
     {"transcript", "merlin3.bls12-381.fr64be/0", "host.resource/0", ""},
@@ -487,9 +497,16 @@ void installedBindings() {
               associatedIdentity("merlin3.bls12-381.fr64be/0",
                                  "ChallengeField") == "bls12-381.fr",
           "group and transcript associated fields");
-  for (StringRef fact :
-       {"Field", "CommRing", "PrimeField", "CharacteristicNotTwo"})
+  for (StringRef fact : {"Field", "CommRing", "PrimeField",
+                         "CharacteristicNotTwo", "PairingField"})
     require(catalog.hasFact(fact, {"bls12-381.fr"}), "installed field facts");
+  require(
+      associatedIdentity("bls12-381.fr", "PairingG1") == "bls12-381.g1" &&
+          associatedIdentity("bls12-381.fr", "PairingG2") == "bls12-381.g2" &&
+          associatedIdentity("bls12-381.fr", "PairingGT") == "bls12-381.gt" &&
+          associatedIdentity("bls12-381.g2", "Scalar") == "bls12-381.fr" &&
+          associatedIdentity("bls12-381.gt", "Scalar") == "bls12-381.fr",
+      "BLS12-381 ordered pairing groups");
   require(
       catalog.hasFact("Group", {"bls12-381.g1"}) &&
           catalog.hasFact("ScalarAction", {"bls12-381.g1"}) &&
@@ -800,10 +817,24 @@ void bn254Domains() {
   pairing.application.implementation.clear();
   pairing.application.arguments = {"bn254.g1", "bn254.g2"};
   refuse(resolveBinding(pairing.application, false), "binding-static-identity");
-  pairing.application.arguments = {"bls12-381.fr"};
+  pairing.application.arguments = {"ristretto255.scalar"};
   refuse(resolveBinding(pairing.application, false), "binding-static-identity");
   pairing.application.arguments.clear();
   refuse(resolveBinding(pairing.application, false), "binding-static-arity");
+  // The second installed pairing field selects its own ordered groups.
+  pairing.application.arguments = {"bls12-381.fr"};
+  require(accept(resolveBinding(pairing.application, false)).inputs ==
+              std::vector<BoundType>{{"groups", "bls12-381.g1", ""},
+                                     {"groups", "bls12-381.g2", ""}},
+          "BLS12-381 pairing has ordered distinct group-vector operands");
+  require(accept(defaultImplementation(pairing.application)) ==
+              "arkworks/pairing.check",
+          "BLS12-381 pairing uses the arkworks provider");
+  protocol::OperationBinding target{"target",
+                                    {"pairing.apply", {"bls12-381.fr"}, ""}};
+  require(accept(resolveBinding(target.application, false)).outputs ==
+              std::vector<BoundType>{{"group", "bls12-381.gt", ""}},
+          "BLS12-381 pairing results are target-group values");
 
   for (StringRef contract :
        {"field.add", "vector.dot", "matrix.mul_vector", "poly.coset_evaluate",

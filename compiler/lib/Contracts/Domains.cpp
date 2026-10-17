@@ -285,6 +285,8 @@ const DomainCatalog &installedDomains() {
   static const DomainCatalog catalog = [] {
     const std::string field = "bls12-381.fr";
     const std::string group = "bls12-381.g1";
+    const std::string blsg2 = "bls12-381.g2";
+    const std::string blsgt = "bls12-381.gt";
     const std::string bn254 = "bn254.fr";
     const std::string bn254g1 = "bn254.g1";
     const std::string bn254g2 = "bn254.g2";
@@ -339,10 +341,13 @@ const DomainCatalog &installedDomains() {
          {bn254gt, "Group", {{"Scalar", bn254}}, {"Group", "ScalarAction"}},
          {field,
           "Field",
-          {},
-          {"Field", "CommRing", "PrimeField", "CharacteristicNotTwo"},
+          {{"PairingG1", group}, {"PairingG2", blsg2}, {"PairingGT", blsgt}},
+          {"Field", "CommRing", "PrimeField", "CharacteristicNotTwo",
+           "PairingField"},
           "52435875175126190479447740508185965837690552500527637822603658699938"
           "581184513"},
+         {blsg2, "Group", {{"Scalar", field}}, {"Group", "ScalarAction"}},
+         {blsgt, "Group", {{"Scalar", field}}, {"Group", "ScalarAction"}},
          {scalar,
           "Field",
           {},
@@ -412,6 +417,9 @@ const DomainCatalog &installedDomains() {
          {"rng", extension},
          {"group", group},
          {"groups", group},
+         {"group", blsg2},
+         {"groups", blsg2},
+         {"group", blsgt},
          {"group", ristretto},
          {"groups", ristretto},
          {"group", edwards},
@@ -494,6 +502,9 @@ const DomainCatalog &installedDomains() {
          {"zkcv.round.bls12-381.fr/0", "round", field},
          {"zkcv.group.bls12-381.g1/0", "group", group},
          {"zkcv.groups.bls12-381.g1/0", "groups", group},
+         {"zkcv.group.bls12-381.g2/0", "group", blsg2},
+         {"zkcv.groups.bls12-381.g2/0", "groups", blsg2},
+         {"zkcv.group.bls12-381.gt/0", "group", blsgt},
          {"zkcv.commitment.multilinear-kzg.bls12-381/0", "commitment", pcs},
          {"zkcv.proof.multilinear-kzg.bls12-381/0", "proof", pcs}},
         {{"plonky3.merkle-root/0", "commitment", rowBase, true, ""},
@@ -562,6 +573,9 @@ const DomainCatalog &installedDomains() {
          {"arkworks.quadratic/0", "round", field, true, ""},
          {"arkworks.g1/0", "group", group, true, ""},
          {"arkworks.g1-vector/0", "groups", group, true, ""},
+         {"arkworks.bls12-381-g2/0", "group", blsg2, true, ""},
+         {"arkworks.bls12-381-g2-vector/0", "groups", blsg2, true, ""},
+         {"arkworks.bls12-381-gt/0", "group", blsgt, true, ""},
          {"host.resource/0", "rng", field, true, ""},
          {"host.resource/0", "nonce", field, true, ""},
          {"host.resource/0", "transcript", transcript, true, ""},
@@ -573,24 +587,16 @@ const DomainCatalog &installedDomains() {
          {"arkworks.multilinear-pcs/0", "opening_state", pcs, true, ""}},
         // Nominal provider policy does not follow representation spelling or
         // associated fields. Implementation legality is checked separately.
-        {{field, "arkworks"},
-         {group, "arkworks"},
-         {bn254, "arkworks"},
-         {bn254g1, "arkworks"},
-         {bn254g2, "arkworks"},
-         {bn254gt, "arkworks"},
-         {pcs, "arkworks"},
-         {transcript, "arkworks"},
-         {scalar, "dalek"},
-         {ristretto, "dalek"},
-         {edwards, "dalek"},
-         {merlin, "dalek"},
-         {spongefish, "spongefish"},
-         {koala, "plonky3"},
-         {extension, "plonky3"},
-         {extensionTranscript, "plonky3"},
-         {rowBase, "plonky3"},
-         {rowExtension, "plonky3"}});
+        {{field, "arkworks"},        {group, "arkworks"},
+         {blsg2, "arkworks"},        {blsgt, "arkworks"},
+         {bn254, "arkworks"},        {bn254g1, "arkworks"},
+         {bn254g2, "arkworks"},      {bn254gt, "arkworks"},
+         {pcs, "arkworks"},          {transcript, "arkworks"},
+         {scalar, "dalek"},          {ristretto, "dalek"},
+         {edwards, "dalek"},         {merlin, "dalek"},
+         {spongefish, "spongefish"}, {koala, "plonky3"},
+         {extension, "plonky3"},     {extensionTranscript, "plonky3"},
+         {rowBase, "plonky3"},       {rowExtension, "plonky3"}});
     if (!result)
       report_fatal_error(Twine("invalid installed domain catalog: ") +
                              toString(result.takeError()),

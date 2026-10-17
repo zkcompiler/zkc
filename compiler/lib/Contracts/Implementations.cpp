@@ -21,6 +21,8 @@ struct ProviderDomain {
 constexpr ProviderDomain providerDomains[] = {
     {"arkworks", "bls12-381.fr"},
     {"arkworks", "bls12-381.g1"},
+    {"arkworks", "bls12-381.g2"},
+    {"arkworks", "bls12-381.gt"},
     {"arkworks", "bn254.fr"},
     {"arkworks", "bn254.g1"},
     {"arkworks", "bn254.g2"},
@@ -102,8 +104,12 @@ constexpr ContractRow contractRows[] = {
      "bls12-381.fr"},
     {"encoding.group_compressed", Arkworks, Compatibility::Nominal,
      "bls12-381.g1"},
+    {"encoding.group_compressed", Arkworks, Compatibility::Nominal,
+     "bls12-381.g2"},
     {"encoding.group_from_compressed", Arkworks, Compatibility::Nominal,
      "bls12-381.g1"},
+    {"encoding.group_from_compressed", Arkworks, Compatibility::Nominal,
+     "bls12-381.g2"},
     {"encoding.field_le", Dalek, Compatibility::Nominal, "ristretto255.scalar"},
     {"encoding.field_from_le", Dalek, Compatibility::Nominal,
      "ristretto255.scalar"},
@@ -398,7 +404,7 @@ Error checkImplementationScope(const ImplementationDescriptor &entry,
   if (scope.terms.size() != scope.sorts.size())
     return error("implementation-catalog-policy");
   if (entry.compatibility == Compatibility::Independent) {
-    if (entry.providerTerm != 0 || !entry.domain.empty() ||
+    if (entry.providerTerm != 0 || !entry.domains.empty() ||
         !all_of(scope.sorts,
                 [](StringRef sort) { return sort == "Type" || sort == "Nat"; }))
       return error("implementation-catalog-policy");
@@ -434,10 +440,10 @@ Error checkImplementationScope(const ImplementationDescriptor &entry,
       return error("implementation-catalog-policy");
     index = *term.parent;
   }
-  if (!entry.domain.empty() &&
-      (installedDomains().identitySort(entry.domain) != sort ||
-       !implementationProviderSupports(entry.provider, entry.domain)))
-    return error("implementation-catalog-policy");
+  for (const auto &domain : entry.domains)
+    if (installedDomains().identitySort(domain) != sort ||
+        !implementationProviderSupports(entry.provider, domain))
+      return error("implementation-catalog-policy");
   return Error::success();
 }
 
@@ -452,7 +458,8 @@ Error checkImplementationArguments(const ImplementationDescriptor &entry,
     return error("binding-implementation");
   if (entry.compatibility == Compatibility::Independent)
     return Error::success();
-  if (!entry.domain.empty() && identities[entry.providerTerm] != entry.domain)
+  if (!entry.domains.empty() &&
+      !is_contained(entry.domains, identities[entry.providerTerm]))
     return error("binding-implementation");
   if (entry.compatibility == Compatibility::Transcript) {
     const auto &suite = identities[entry.providerTerm];
@@ -533,17 +540,37 @@ const ImplementationCatalog &installedImplementations() {
         {Plonky3, "plonky3"},
         {Spongefish, "spongefish"},
         {Native, "native"}};
+    // Rows naming one contract, provider and policy with different domain
+    // restrictions describe a single implementation admitting each domain.
     for (const auto &row : contractRows)
       for (const auto &[flag, provider] : providers)
         if (row.providers & flag) {
           std::string identity = (provider + "/" + row.contract).str();
+          auto existing = find_if(entries, [&](const auto &entry) {
+            return entry.contract == row.contract && entry.identity == identity;
+          });
+          if (existing != entries.end()) {
+            if (existing->compatibility != row.compatibility ||
+                existing->domains.empty() || row.domain.empty() ||
+                is_contained(existing->domains, row.domain))
+              report_fatal_error("ambiguous installed implementation row",
+                                 false);
+            existing->domains.push_back(row.domain.str());
+            continue;
+          }
+          std::vector<std::string> domains;
+          if (!row.domain.empty())
+            domains.push_back(row.domain.str());
           entries.push_back({row.contract.str(), identity, provider.str(),
-                             row.compatibility, row.domain.str()});
+                             row.compatibility, std::move(domains)});
           preferences.push_back({row.contract.str(), provider.str(), identity});
         }
     // Algorithm and layout alternatives do not add a default preference.
-    entries.push_back({"vector.dot", "arkworks-pairwise/vector.dot", "arkworks",
-                       Compatibility::Nominal, "bls12-381.fr"});
+    entries.push_back({"vector.dot",
+                       "arkworks-pairwise/vector.dot",
+                       "arkworks",
+                       Compatibility::Nominal,
+                       {"bls12-381.fr"}});
     for (StringRef contract :
          {"poly.product_sum", "poly.product_round", "poly.boundary",
           "poly.round_evaluate", "poly.fold", "poly.evaluate",
@@ -553,27 +580,27 @@ const ImplementationCatalog &installedImplementations() {
                          ("arkworks-msb/" + contract).str(),
                          "arkworks",
                          Compatibility::Nominal,
-                         "bls12-381.fr",
+                         {"bls12-381.fr"},
                          {{"table", "bls12-381.fr", "arkworks.mle-msb/0"}}});
     entries.push_back(
         {"vector.mul",
          "arkworks-diagonal/vector.mul",
          "arkworks",
          Compatibility::Nominal,
-         "bls12-381.fr",
+         {"bls12-381.fr"},
          {{"vector", "bls12-381.fr", "arkworks.fr-diagonal/0", 0, true}}});
     entries.push_back(
         {"vector.dot",
          "arkworks-diagonal/vector.dot",
          "arkworks",
          Compatibility::Nominal,
-         "bls12-381.fr",
+         {"bls12-381.fr"},
          {{"vector", "bls12-381.fr", "arkworks.fr-diagonal/0", 1}}});
     entries.push_back({"curve.scale_each",
                        "dalek-diagonal/curve.scale_each",
                        "dalek",
                        Compatibility::Nominal,
-                       "ristretto255.group",
+                       {"ristretto255.group"},
                        {{"groups", "ristretto255.group",
                          "dalek.ristretto-diagonal/0", 0, true}}});
     entries.push_back(
@@ -581,7 +608,7 @@ const ImplementationCatalog &installedImplementations() {
          "dalek-diagonal/curve.msm",
          "dalek",
          Compatibility::Nominal,
-         "ristretto255.group",
+         {"ristretto255.group"},
          {{"groups", "ristretto255.group", "dalek.ristretto-diagonal/0", 1}}});
     auto result = ImplementationCatalog::create(std::move(entries),
                                                 std::move(preferences));

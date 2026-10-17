@@ -79,11 +79,15 @@ impl Core {
                 None
             }
             Value::Bn254G1Vector(v) => {
-                self.policy.bn254_groups::<crate::Bn254G1>(v.len())?;
+                self.policy.typed_groups::<crate::Bn254G1>(v.len())?;
                 None
             }
             Value::Bn254G2Vector(v) => {
-                self.policy.bn254_groups::<crate::Bn254G2>(v.len())?;
+                self.policy.typed_groups::<crate::Bn254G2>(v.len())?;
+                None
+            }
+            Value::Bls12381G2Vector(v) => {
+                self.policy.typed_groups::<crate::Bls12381G2>(v.len())?;
                 None
             }
             Value::Bytes(a) => {
@@ -212,6 +216,8 @@ impl Core {
             | Value::Bn254G1(..)
             | Value::Bn254Gt(..)
             | Value::Bn254G2(..)
+            | Value::Bls12381G2(..)
+            | Value::Bls12381Gt(..)
             | Value::OracleRoot(..)
             | Value::OracleState(..)
             | Value::Index(..)

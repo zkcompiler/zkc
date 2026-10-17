@@ -21,9 +21,9 @@ struct ImplementationDescriptor {
   enum class Compatibility { Nominal, Transcript, Independent };
   std::string contract, identity, provider;
   Compatibility compatibility = Compatibility::Nominal;
-  /// Optional exact identity of providerTerm, in addition to provider
-  /// membership.
-  std::string domain = {};
+  /// Optional exact identities admitted for providerTerm, in addition to
+  /// provider membership. Empty admits every domain the provider supports.
+  std::vector<std::string> domains = {};
   std::vector<ImplementationRepresentation> representations = {};
   /// Index in the resolved logical scope, not in the supplied argument list.
   /// Selects a Domain root (including a constant) or associated Domain

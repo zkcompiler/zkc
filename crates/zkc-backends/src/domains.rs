@@ -27,6 +27,16 @@ pub const BLS: NativeDomain = NativeDomain {
     group: Some(Identity::Bls12381G1),
     provider: "arkworks",
 };
+pub const BLS_G2: NativeDomain = NativeDomain {
+    field: Identity::Bls12381Fr,
+    group: Some(Identity::Bls12381G2),
+    provider: "arkworks",
+};
+pub const BLS_GT: NativeDomain = NativeDomain {
+    field: Identity::Bls12381Fr,
+    group: Some(Identity::Bls12381Gt),
+    provider: "arkworks",
+};
 pub const EDWARDS: NativeDomain = NativeDomain {
     field: Identity::Ristretto255Scalar,
     group: Some(Identity::Edwards25519Prime),
@@ -56,6 +66,8 @@ pub const INSTALLED: &[NativeDomain] = &[
     BN254_G1,
     BN254_G2,
     BN254_GT,
+    BLS_G2,
+    BLS_GT,
 ];
 impl NativeDomain {
     pub fn physical(self, kind: Type) -> Option<PhysicalType> {
@@ -74,6 +86,9 @@ impl NativeDomain {
                 (Identity::Bn254G2, Group) => R::Bn254G2,
                 (Identity::Bn254G2, Groups) => R::Bn254G2Vector,
                 (Identity::Bn254Gt, Group) => R::Bn254Gt,
+                (Identity::Bls12381G2, Group) => R::Bls12381G2,
+                (Identity::Bls12381G2, Groups) => R::Bls12381G2Vector,
+                (Identity::Bls12381Gt, Group) => R::Bls12381Gt,
                 (Identity::Ristretto255Group, Group) => R::Ristretto,
                 (Identity::Ristretto255Group, Groups) => R::RistrettoVector,
                 (Identity::Edwards25519Prime, Group) => R::EdwardsPrime,

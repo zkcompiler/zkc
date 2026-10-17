@@ -751,17 +751,24 @@ impl Value {
     }
     /// Bounded vector of validated BN254 G1 points.
     pub fn bn254_g1_vector(values: &[crate::Bn254G1], policy: &Policy) -> Result<Self> {
-        policy.bn254_groups::<crate::Bn254G1>(values.len())?;
+        policy.typed_groups::<crate::Bn254G1>(values.len())?;
         let mut v = reserve(values.len())?;
         v.extend_from_slice(values);
         Ok(Self::Bn254G1Vector(v.into()))
     }
     /// Bounded vector of validated BN254 G2 points.
     pub fn bn254_g2_vector(values: &[crate::Bn254G2], policy: &Policy) -> Result<Self> {
-        policy.bn254_groups::<crate::Bn254G2>(values.len())?;
+        policy.typed_groups::<crate::Bn254G2>(values.len())?;
         let mut v = reserve(values.len())?;
         v.extend_from_slice(values);
         Ok(Self::Bn254G2Vector(v.into()))
+    }
+    /// Bounded vector of validated BLS12-381 G2 points.
+    pub fn bls12381_g2_vector(values: &[crate::Bls12381G2], policy: &Policy) -> Result<Self> {
+        policy.typed_groups::<crate::Bls12381G2>(values.len())?;
+        let mut v = reserve(values.len())?;
+        v.extend_from_slice(values);
+        Ok(Self::Bls12381G2Vector(v.into()))
     }
     pub fn koala_bear_ext8_vector(values: &[KoalaBearExt8], policy: &Policy) -> Result<Self> {
         policy.vector_width(values.len(), std::mem::size_of::<KoalaBearExt8>())?;

@@ -73,7 +73,7 @@ void selectorPolicies(const ImplementationCatalog &installed) {
   auto projected = *installed.find("curve.msm", "dalek/curve.msm");
   projected.identity = "custom/projected-msm";
   projected.providerTerm = 1;
-  projected.domain = "ristretto255.scalar";
+  projected.domains = {"ristretto255.scalar"};
   auto catalog = accept(ImplementationCatalog::create(
       {projected},
       {{projected.contract, projected.provider, projected.identity}}));
@@ -140,7 +140,7 @@ void selectorPolicies(const ImplementationCatalog &installed) {
   zkc::generic::Scope leading{{{"T"}, {"N"}, {"F"}}, {"Type", "Nat", "Field"}};
   auto selected = *installed.find("field.add", "plonky3/field.add");
   selected.providerTerm = 2;
-  selected.domain = "koala-bear";
+  selected.domains = {"koala-bear"};
   succeeds(checkImplementationScope(selected, leading));
   auto leadingIdentities =
       accept(resolveStaticArguments(leading, {"bool", "7", "koala-bear"}));
@@ -194,7 +194,7 @@ void selectorPolicies(const ImplementationCatalog &installed) {
   refuse(checkImplementationScope(independent, structural),
          "implementation-catalog-policy");
   independent.providerTerm = 0;
-  independent.domain = "bls12-381.fr";
+  independent.domains = {"bls12-381.fr"};
   refuse(checkImplementationScope(independent, structural),
          "implementation-catalog-policy");
 
@@ -476,7 +476,7 @@ int main() {
   refuse(ImplementationCatalog::create({bad}, {}),
          "implementation-catalog-policy");
   bad = renamed;
-  bad.domain = "ristretto255.scalar";
+  bad.domains = {"ristretto255.scalar"};
   refuse(ImplementationCatalog::create({bad}, {}),
          "implementation-catalog-policy");
   bad = renamed;

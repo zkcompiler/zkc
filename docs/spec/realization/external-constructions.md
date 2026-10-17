@@ -123,7 +123,7 @@ snapshot, including snapshots inside aggregates. A fork does not refund work.
 
 `zkc::encoding` provides explicit encodings independently of transport and
 transcript observation. The installed implementations use arkworks for
-BLS12-381 Fr and G1, and dalek for Ristretto scalar and prime-order Edwards25519.
+BLS12-381 Fr, G1 and G2, and dalek for Ristretto scalar and prime-order Edwards25519.
 Other domains require their own installed implementations;
 the generic source signature does not promise support for every field or group.
 
@@ -136,8 +136,17 @@ the generic source signature does not promise support for every field or group.
 | `field_le<F>` | `F` | `Bytes` | Canonical 32-byte little-endian scalar-order integer |
 | `field_from_le<F>` | `Bytes` | `(bool, F)` | Exact width and integer below the scalar order |
 | `field_reduce_le<F>` | `Bytes` | `F` | Little-endian integer reduced modulo the scalar order |
-| `group_compressed<G>` | `G` | `Bytes` | Canonical compressed point: 48-byte BLS G1 or 32-byte Edwards |
+| `group_compressed<G>` | `G` | `Bytes` | Canonical compressed point: 48-byte BLS G1, 96-byte BLS G2 or 32-byte Edwards |
 | `group_from_compressed<G>` | `Bytes` | `(bool, G)` | Exact width, canonical encoding and prime-order subgroup check |
+
+The BLS12-381 compressed point encodings are the big-endian x coordinate (for
+G2, the `c1` then `c0` coefficient) with three flag bits in the most significant
+byte: `0x80` marks compression and must be set, `0x40` marks the point at
+infinity, and `0x20` selects the lexicographically larger y. The only encoding
+of infinity is `0xc0` followed by zero bytes; the sign flag on infinity, an x
+coefficient at or above the base-field modulus, an x without a curve point, and
+a point outside the prime-order subgroup are invalid. This is the encoding of
+the Ethereum consensus specifications and the blst library.
 
 `index_uleb128` encodes the [unsigned 64-bit index](../language/definitions.md)
 using low seven-bit groups first, setting bit `0x80` on every byte except the

@@ -31,10 +31,14 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         | ("encoding.field_from_le", Identity::Ristretto255Scalar) => (&[Bytes], &[Bool, Field]),
         ("encoding.field_reduce_be", Identity::Bls12381Fr)
         | ("encoding.field_reduce_le", Identity::Ristretto255Scalar) => (&[Bytes], &[Field]),
-        ("encoding.group_compressed", Identity::Bls12381G1 | Identity::Edwards25519Prime) => {
-            (&[Group], &[Bytes])
-        }
-        ("encoding.group_from_compressed", Identity::Bls12381G1 | Identity::Edwards25519Prime)
+        (
+            "encoding.group_compressed",
+            Identity::Bls12381G1 | Identity::Bls12381G2 | Identity::Edwards25519Prime,
+        ) => (&[Group], &[Bytes]),
+        (
+            "encoding.group_from_compressed",
+            Identity::Bls12381G1 | Identity::Bls12381G2 | Identity::Edwards25519Prime,
+        )
         | ("encoding.group_decode_cofactor", Identity::Edwards25519Prime) => {
             (&[Bytes], &[Bool, Group])
         }
@@ -249,6 +253,23 @@ pub(crate) fn apply(
                 .map_err(|_| refused("encoding-width"))?;
             budget.charge_units(2048)?;
             Ok(vec![Value::EdwardsGroup(crate::edwards::map(input)?)])
+        }
+        ("encoding.group_compressed", [Value::Bls12381G2(point)]) => {
+            policy.bytes(96)?;
+            policy.output(size(96, 1)?, available)?;
+            Ok(vec![Value::Bytes(
+                point.to_bytes().map_err(ark)?.as_slice().into(),
+            )])
+        }
+        ("encoding.group_from_compressed", [Value::Bytes(bytes)])
+            if identity == Identity::Bls12381G2 =>
+        {
+            policy.output(1024, available)?;
+            let point = crate::Bls12381G2::from_bytes(bytes).ok();
+            Ok(vec![
+                Value::Bool(point.is_some()),
+                Value::Bls12381G2(point.unwrap_or_else(crate::Bls12381G2::identity)),
+            ])
         }
         ("encoding.group_compressed", [Value::Curve(point)]) => {
             policy.bytes(48)?;
@@ -887,5 +908,48 @@ mod tests {
             )
             .is_err()
         );
+    }
+    fn g2(name: &str, args: &[Value]) -> Vec<Value> {
+        apply(
+            name,
+            Identity::Bls12381G2,
+            args,
+            &[],
+            &Policy::default(),
+            usize::MAX,
+            &mut Default::default(),
+        )
+        .unwrap()
+    }
+    #[test]
+    fn g2_codec_round_trips_and_rejects_malformed_encodings() {
+        let generator = crate::Bls12381G2::generator();
+        for value in [generator, crate::Bls12381G2::identity(), generator.neg()] {
+            let encoded = g2("encoding.group_compressed", &[Value::Bls12381G2(value)]);
+            assert!(matches!(&encoded[0], Value::Bytes(b) if b.len() == 96));
+            assert!(
+                matches!(g2("encoding.group_from_compressed", &encoded).as_slice(),
+                [Value::Bool(true), Value::Bls12381G2(p)] if *p == value)
+            );
+        }
+        let identity = crate::Bls12381G2::identity().to_bytes().unwrap();
+        let mut signed_infinity = identity;
+        signed_infinity[0] |= 0x20;
+        let mut uncompressed = generator.to_bytes().unwrap();
+        uncompressed[0] &= 0x7f;
+        for invalid in [
+            vec![],
+            vec![0; 95],
+            vec![0; 97],
+            vec![255; 96],
+            signed_infinity.to_vec(),
+            uncompressed.to_vec(),
+            GroupPoint::generator().to_bytes().unwrap().to_vec(),
+        ] {
+            assert!(
+                matches!(g2("encoding.group_from_compressed", &[bytes(&invalid)]).as_slice(),
+                [Value::Bool(false), Value::Bls12381G2(p)] if *p == crate::Bls12381G2::identity())
+            );
+        }
     }
 }
