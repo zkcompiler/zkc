@@ -1,5 +1,5 @@
-import ZkcSecurity.ArkLib.Fri.Certificate
 import ZkcSecurity.ArkLib.Fri.Completeness
+import ZkcSecurity.ArkLib.Fri.GeneralizedJohnson
 
 /-! Controls for the completeness and round-by-round soundness of `fri::LowDegree` at the ideal
 interpretation.
@@ -16,7 +16,10 @@ interpretation.
     committed initial word at relative distance at least `δ` from the degree-below-8 code with
     probability at most `(16 + 8 + 4) / |F| + (1 - min (3/8) δ)^8` (`example_bound`);
   * the verifier after such a committed word is a doomed residual of the certificate over
-    verifier residuals, with the unique-decoding folding errors (`doomed_after_commit`). -/
+    verifier residuals, with the unique-decoding folding errors (`doomed_after_commit`).
+* At rate `1/8` (a 64-point coset, three folds to a constant final polynomial and eight queries),
+  the generalized Johnson instance holds at the radius `12/25` with slack `1/100`, beyond the
+  unique-decoding radius `7/16`, with no remaining premise (`lowRate_bound`). -/
 
 namespace TestsSecurity.FriSecurity
 
@@ -93,5 +96,34 @@ theorem doomed_after_commit (ω shift : F) (hω : IsPrimitiveRoot ω (2 ^ 5)) (h
       norm_num [degreeBound]
       rw [show (1 : ℝ≥0) - 1 / 4 = 3 / 4 from tsub_eq_of_eq_add (by norm_num)]
       norm_num) δ word far
+
+/-- At rate `1/8`, the radius `12/25` lies within the generalized Johnson radius of lines at slack
+`1/100`: `(1/8 + 1/100)^(1/3) ≤ 13/25`. -/
+theorem lowRate_bound (ω shift : F) (hω : IsPrimitiveRoot ω (2 ^ 6)) (hshift : shift ≠ 0)
+    (δ : ℝ) (prover : ProbComp ((Fin (2 ^ 6) → F) × Strategy F 6 3)) :
+    Pr{let result ← experiment (fun m => ω ^ 2 ^ (6 - m)) 0 shift 8 prover}[
+      result.2 = true ∧
+        Far (cosetDomain shift ω hshift hω) 8 δ
+          (toTrace 0 (cosetDomain shift ω hshift hω) result.1).initial] ≤
+      (∑ round ∈ Finset.range 3, johnsonError F 0 6 3 (1 / 100) round) +
+        ENNReal.ofReal (1 - min ((12 / 25 : ℝ≥0) : ℝ) δ) ^ 8 := by
+  have cube : (27 / 200 : ℝ) ^ ((1 : ℝ) / 3) ≤ 13 / 25 := by
+    have root : ((13 / 25 : ℝ) ^ (3 : ℕ)) ^ ((1 : ℝ) / 3) = 13 / 25 := by
+      rw [← Real.rpow_natCast, ← Real.rpow_mul (by norm_num)]
+      norm_num
+    calc (27 / 200 : ℝ) ^ ((1 : ℝ) / 3) ≤ ((13 / 25 : ℝ) ^ (3 : ℕ)) ^ ((1 : ℝ) / 3) :=
+          Real.rpow_le_rpow (by norm_num) (by norm_num) (by norm_num)
+      _ = 13 / 25 := root
+  exact soundness_generalizedJohnson (fun m => ω ^ 2 ^ (6 - m)) 0 (n := 5) (R := 2) 8
+    (cosetDomain shift ω hshift hω) shift
+    (fun i => by rw [cosetDomain_apply]; simp [point]) (compatible_powers ω 6 3) (12 / 25)
+    (1 / 100) (by norm_num) (by decide) (by norm_num [degreeBound])
+    (by
+      have rate : (degreeBound (2 + 1) (2 ^ 0) : ℝ) / 2 ^ (5 + 1) + ((1 / 100 : ℝ≥0) : ℝ) =
+          27 / 200 := by
+        norm_num [degreeBound]
+      have radius : ((12 / 25 : ℝ≥0) : ℝ) = 12 / 25 := by norm_num
+      rw [rate, radius]
+      linarith [cube]) δ prover
 
 end TestsSecurity.FriSecurity

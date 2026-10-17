@@ -3,6 +3,7 @@ import ZkcSecurity.ArkLib.Fri.Certificate
 import ZkcSecurity.ArkLib.Fri.Completeness
 import ZkcSecurity.ArkLib.Fri.Correspondence
 import ZkcSecurity.ArkLib.Fri.Domain
+import ZkcSecurity.ArkLib.Fri.GeneralizedJohnson
 import ZkcSecurity.ArkLib.Fri.Protocol
 import ZkcSecurity.ArkLib.Fri.Soundness
 import ZkcSecurity.ArkLib.Fri.UniqueDecoding
