@@ -32,7 +32,7 @@ computations; their order of operations does not affect the result.
 | `verify_kzg_proof` | `verify_kzg_proof(commitment, z, y, proof)`; verifier of `PointOpening` under construction `Point` |
 | `verify_blob_kzg_proof` | verifier of `BlobOpening` under construction `Blob` |
 | `verify_blob_kzg_proof_batch` | verifier of `BlobBatch` under construction `Batch` |
-| `compute_challenge` | `compute_challenge(blob, commitment)`; protocol `Challenge` |
+| `compute_challenge` | `compute_challenge(blob, commitment)`; protocol `Challenge`, which first requires a 131072-byte blob and a commitment that decodes as a point, as c-kzg-4844's Go binding does before calling it |
 | Point evaluation precompile (address `0x0A`) | `point_evaluation(input)`; protocol `PointEvaluation` |
 
 ```text
@@ -51,9 +51,11 @@ The [example project](../../examples/projects/eip4844/README.md) selects every
 function as an Entry. Under the default execution capacity a batch verifier
 handles 63 blobs, the limit of the proof Host's public-input binding, and a
 batch prover 19 blobs; the prover's bit reversal in `.zkc` dominates its
-allocation. A larger batch needs an explicit capacity configuration. A blob is 131072 bytes: 4096 canonical 32-byte
-big-endian scalars of the BLS12-381 scalar field. Blob element `i` is the
-polynomial's value at `roots()[i]`, the roots of unity in bit-reversed order.
+allocation. A larger batch needs an explicit capacity configuration.
+
+A blob is 131072 bytes: 4096 canonical 32-byte big-endian scalars of the
+BLS12-381 scalar field. Blob element `i` is the polynomial's value at
+`roots()[i]`, the roots of unity in bit-reversed order.
 Commitments and proofs are 48-byte compressed G1 points; points `z` and values
 `y` are 32-byte big-endian scalars.
 
@@ -71,14 +73,16 @@ compressed opening proof.
 `BlobBatch` checks several blob openings with one random linear combination
 (`verify_kzg_proof_batch`). Each opening point is that blob's own evaluation
 challenge, computed locally by both participants from its blob and commitment
-alone (`compute_challenge`). It carries no batch position, so equal statements
-at different positions share a point. After every proof is fixed, the
-verifier draws one weight `r` and checks the combination with weights `r^i`.
-The two bindings stay separate: the construction `Batch` derives only `r`, as
-SHA-256 of `RCKZGBATCH___V1_`, the 8-byte big-endian degree bound and count, then
-commitment, `z`, `y` and proof of every opening in order. Blobs are not hashed
-again. The transcript provider recomputes each `z` and `y = p(z)` from the
-statement, as the verifier does: they are verifier-side values, not messages.
+alone (`compute_challenge`). The evaluation challenge has no per-position
+domain separation, as upstream: equal statements at different positions share
+a point. After every proof is fixed, the verifier draws one weight `r` and
+checks the combination with weights `r^i`. The two bindings stay separate: the
+construction `Batch` derives only `r`, as SHA-256 of `RCKZGBATCH___V1_`, the
+8-byte big-endian degree bound and count, then commitment, `z`, `y` and proof
+of every opening in order. Positions enter only through this order, and blobs
+are not hashed again. The transcript provider recomputes each `z` and
+`y = p(z)` from the statement, as the verifier does: they are verifier-side
+values, not messages.
 The proof is the concatenation of the 48-byte proofs. The public `count` sizes
 the loop up to the static bound `MaxBlobs`; both participants check it against
 the commitments and blobs.
@@ -135,8 +139,9 @@ exact bytes and accept, reject or stop outcomes. A second corpus derives 57
 cases from those inputs (malformed point encodings and lengths, changed and
 negated proofs, duplicated, repeated and reordered batch openings) with
 outcomes computed by the pinned c-kzg-4844 reference. The tests also build the
-precompile input from the point vectors, check the setup constants and digest
-against the asset, the prover's statement checks and the batch bounds. The
+precompile input from the point vectors, check the challenge entry point's
+typed inputs, the setup constants and digest against the asset, the prover's
+statement checks and the batch bounds. The
 [corpora](../../common/tests/fixtures/kzg-eip4844/) and their
 [reproduction](../../common/tests/reference/c-kzg/README.md) are pinned to the
 upstream revision. These controls demonstrate finite interoperability; they

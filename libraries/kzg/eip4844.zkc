@@ -235,7 +235,12 @@ pub protocol Prove roles(P)(blob: Bytes @P, z: Bytes @P, setup: Groups<G1> @P)
   let (proof, y) = compute_kzg_proof(blob, z, setup);
   return (proof = proof, y = y);
 }
+// compute_challenge itself hashes its bytes as given; this entry point first
+// applies the input checks of c-kzg-4844's Go binding: a whole blob, hashed
+// without decoding its scalars, and a commitment that decodes as a point.
 pub protocol Challenge roles(P)(blob: Bytes @P, commitment: Bytes @P) -> (challenge: Bytes @P) {
+  require bytes::length(blob) == 131072;
+  let _ = bytes_to_point(commitment);
   return encoding::field_be(compute_challenge(blob, commitment));
 }
 pub protocol PointEvaluation roles(P)(input: Bytes @P) -> (output: Bytes @P) {

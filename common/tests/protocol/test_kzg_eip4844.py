@@ -232,6 +232,31 @@ def test_derived_cases_match_the_reference(entries, journal, directory, function
         journal.check(case['name'], actual == case['output'], shown(actual))
 
 
+def challenge(blob_bytes, commitment):
+    """compute_challenge over raw bytes, as specified."""
+    data = b'FSBLOBVERIFY_V1_' + (4096).to_bytes(16, 'big') + blob_bytes + commitment
+    return (int.from_bytes(hashlib.sha256(data).digest(), 'big') % R).to_bytes(32, 'big')
+
+
+def test_challenge_entry_takes_typed_inputs(entries, journal, directory):
+    """Lengths and the commitment point are checked as by the upstream bindings;
+    blob scalars are hashed without being decoded."""
+    for case in cases('compute_challenge'):
+        values = case['input']
+        assert challenge(blob(values['blob']), hexes(values['commitment'])) == hexes(case['output'])
+    selected = [case for case in cases('verify_blob_kzg_proof')
+                if '_invalid_blob_' in case['name'] or '_invalid_commitment_' in case['name']]
+    assert len(selected) == 8
+    for case in selected:
+        blob_bytes, commitment = blob(case['input']['blob']), hexes(case['input']['commitment'])
+        inputs = Inputs(directory, f'challenge-{case["name"]}')
+        inputs.values = {'blob': inputs.bytes('blob', blob_bytes), 'commitment': list(commitment)}
+        roles = entries.run('ComputeChallenge', inputs)
+        actual = bytes(roles['challenge']) if roles else None
+        typed = len(blob_bytes) == 131072 and '_invalid_commitment_' not in case['name']
+        journal.check(case['name'], actual == (challenge(blob_bytes, commitment) if typed else None), shown(actual))
+
+
 def versioned(commitment):
     return b'\x01' + hashlib.sha256(commitment).digest()[1:]
 
