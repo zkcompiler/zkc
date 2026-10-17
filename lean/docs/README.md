@@ -25,6 +25,10 @@ that all native behavior already has a Lean model.
 - [Participant projection](spec/participant-projection.md): the checked rule
   relating an exported validator to the original program at its role, and its
   composition with transcript construction.
+- [Multi-round Fiat–Shamir security](spec/fiat-shamir-security.md): soundness of
+  the transform of any validator from round-by-round soundness, in a random
+  oracle on all typed histories, and its instance for the imported Sumcheck
+  verifier.
 - [Uniform query service](spec/uniform-query-service.md): a concrete structured
   handler with exact all-state query, pass-through and refusal laws, plus
   general-count Sumcheck process transport and actual imported-root bounds.
