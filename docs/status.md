@@ -273,7 +273,8 @@ receives. Neither establishes a Fiat–Shamir reduction or arbitrary polynomial
 or protocol equivalence.
 
 The [transcript-construction bridge](../lean/bridges/construction/README.md)
-exports the compiled Schnorr and Sumcheck proof Entries' checked validators
+exports the compiled Schnorr, Sumcheck and composed Sumcheck proof Entries'
+checked validators
 ([format](spec/formats/constructed-participant.md)). Lean checks their transcript
 construction and their [participant projection](../lean/docs/spec/participant-projection.md)
 against the original exports and proves that each compiled verifier is the

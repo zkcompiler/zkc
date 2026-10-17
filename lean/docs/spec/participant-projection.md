@@ -53,9 +53,13 @@ original operation:
 - a Math helper invocation whose operands are all absent is absent when the
   checked helper's body preserves absence (`absentPreserving`: every operation
   in it reads an operand and is evaluated strictly, so absent inputs give absent
-  outputs with no effect or stop); a fold with an absent operand is absent. Other
-  Math invocations and folds at the validator are refused (`projection-invoke`,
-  `projection-operation`);
+  outputs with no effect or stop). When its operands are all present, the
+  checked helper's body is walked inline: every operation in it must be a
+  carrier calculation, matched as above, and the body's returned slots are the
+  invocation's results. Compilers inline such helpers, so the export has no call
+  for them. An invocation with both absent and present operands is refused
+  (`projection-invoke`). A fold with an absent operand is absent; other folds at
+  the validator are refused (`projection-operation`);
 - a helper call owned by the validator must be implemented by a call of the
   same checked helper of the original program on the references holding its
   operands, with the helper's data outputs; its results are held. Calls owned by
@@ -130,8 +134,10 @@ the walk: each accepted operation transports agreement of continuations
 (`OperationSound`, `walkStep_sound`), with the invariant that every slot relates
 its original component to the exported environment (`Holds`). Helper calls use
 the closed helper table's lookup of the checked helper; calculations use the
-structured evaluator, and an absence-preserving Math helper's component
-evaluation is absent on absent inputs (`absentPreserving_component`). An
+structured evaluator, an absence-preserving Math helper's component
+evaluation is absent on absent inputs (`absentPreserving_component`), and an
+inlined helper body is related to the helper's component evaluation by its own
+walk (`walkHelper_sound`). An
 application uses the callee's linked body (`protocol_invoke_body`). A repeat is
 proved by induction on its iterations (`iterate_projects`): each body iteration
 implements one step of the repeat's fold, with the carried values related to the
@@ -176,6 +182,18 @@ decoded verifier table, the transformed process is the source rounds followed by
 the multilinear terminal check. No security theorem is claimed for this Entry;
 a multi-round Fiat–Shamir bound would be stated about this transform.
 
+## The compiled composed Sumcheck proof Entry
+
+`ZkcExamples.Construction.ComposedSumcheckProof` checks the compiled
+`example::Proof` of `examples/projects/sumcheck/composed`. Its `TwoSums`
+protocol applies the Sumcheck `Reduce` protocol at two sites, each with its own
+repeat and both drawing from one challenge service, then runs two terminal
+checks and conjoins them with the Math helper `zkc::boolean::both`, which the
+compiler inlines as a Boolean conjunction. No typed bodies are authored for this
+original: the kernel evaluates its admission (`admissible`), and the composed
+check accepts the export (`compiled`). `compiled_transform` is the generic
+composition theorem at this program: no proof is specific to the Entry.
+
 ## Controls
 
 `Tests.ProjectionControls` runs the composed check on mutations of the actual
@@ -200,4 +218,7 @@ challenge term (`projection-unexplained`), a loop yielding the claim it started
 with (`projection-repeat-yield`), a changed loop bound, an unqualified loop site
 and a loop starting from the table values (`projection-repeat`), and a terminal
 check with swapped operands (`projection-call`). The transcript-construction
-rule accepts every one of these mutations.
+rule accepts every one of these mutations. The construction bridge also refuses
+mutations of the composed export: a conjunction reading the left check twice
+(`projection-unexplained`) and a right terminal check reading the left
+reduction's point and claim (`projection-call`).

@@ -1,7 +1,7 @@
 # Transcript-construction bridge
 
-`check.py` connects two compiled `example::Proof` Entries, from the Schnorr and
-Sumcheck example projects, to the
+`check.py` connects three compiled `example::Proof` Entries, from the Schnorr,
+Sumcheck and composed Sumcheck example projects, to the
 [formal transcript-construction rule](../../docs/spec/fiat-shamir.md) and the
 [participant projection rule](../../docs/spec/participant-projection.md). It is
 part of `python3 common/tests/run.py lean-native`.
@@ -36,7 +36,8 @@ For each subject:
    structured bridge's `snapshot.py`) and `SchnorrProofParticipant.lean`
    (rendered by `render.py`); for Sumcheck the structured bridge's own
    `lean/ZkcExamples/Structured/SumcheckSourceData.lean`, which this bridge only
-   compares, and `SumcheckProofParticipant.lean`.
+   compares, and `SumcheckProofParticipant.lean`; for the composed Sumcheck
+   `ComposedSumcheckProofData.lean` and `ComposedSumcheckProofParticipant.lean`.
 4. A generated Lean file runs the composed check `checkCompiled` in the kernel
    on the fresh export against the admitted original program, which must be
    accepted with axioms among `propext`, `Classical.choice` and `Quot.sound`; the
@@ -47,15 +48,20 @@ For each subject:
    delivery site, and the final comparison compares the base with itself. For
    Sumcheck: the challenge origin names the delivery site, the round check is
    dropped, the claim update adds the low term twice, and the loop yields the
-   claim it started with. Every mutation that keeps the transcript wiring is
-   accepted by `checkExport` alone and refused by the projection rule.
+   claim it started with. For the composed Sumcheck: the conjunction reads the
+   left check twice, and the right terminal check reads the left reduction's
+   point and claim. Every mutation that keeps the transcript wiring is accepted
+   by `checkExport` alone and refused by the projection rule. The same file
+   checks that the Lean model of the canonical occurrence encoding
+   (`templateTree`) encodes every exported template to exactly its native bytes.
 5. Mutated candidates must be refused by the native checker before export. For
    Schnorr: the validator's challenge reusing its host transcript (exactly
    `native-proof-candidate` with the affine-reuse diagnostic) and a challenge
    origin naming the delivery site (exactly `native-proof-correspondence`). For
-   Sumcheck: a constant changed in the prepared body of the terminal check helper
-   (exactly `native-proof-correspondence`); the Lean rules read helper calls
-   with the original's checked helpers, so this is the native boundary.
+   both Sumcheck subjects: a constant changed in the prepared body of the last
+   terminal check helper (exactly `native-proof-correspondence`); the Lean rules
+   read helper calls with the original's checked helpers, so this is the native
+   boundary.
 
 The retained `report.json` lists commands, exit statuses, hashes and checks per
 subject.

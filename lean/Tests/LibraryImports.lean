@@ -2,6 +2,7 @@
 import Zkc
 import Zkc.Algebra.RingExpression
 import Zkc.Construction.Compiled
+import Zkc.Construction.Encoding
 import Zkc.Construction.FiatShamir
 import Zkc.Construction.Participant
 import Zkc.Construction.Projection
@@ -247,6 +248,9 @@ import Tests.SumcheckHelperMutants
 import Tests.SumcheckProjectionControls
 import Tests.SumcheckSourceComposition
 import Tests.SumcheckSourceControls
+import ZkcExamples.Construction.ComposedSumcheckProof
+import ZkcExamples.Construction.ComposedSumcheckProofData
+import ZkcExamples.Construction.ComposedSumcheckProofParticipant
 import ZkcExamples.Construction.SchnorrProof
 import ZkcExamples.Construction.SchnorrProofBinding
 import ZkcExamples.Construction.SchnorrProofBodies

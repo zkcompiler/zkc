@@ -71,6 +71,12 @@ SUBJECTS = [
             (DATA / "SumcheckProofParticipant.lean", "ZkcExamples.Construction.SumcheckProofParticipant"),
             "ZkcExamples.Construction.SumcheckProof", "ZkcExamples.Structured.SumcheckSourceViews.program",
             False),
+    Subject("composed-sumcheck", project_modules("examples/projects/sumcheck/composed/zkc.toml"),
+            (DATA / "ComposedSumcheckProofData.lean", "ZkcExamples.Construction.ComposedSumcheckProofData"),
+            (DATA / "ComposedSumcheckProofParticipant.lean",
+             "ZkcExamples.Construction.ComposedSumcheckProofParticipant"),
+            "ZkcExamples.Construction.ComposedSumcheckProof",
+            "ZkcExamples.Construction.ComposedSumcheckProof.program", True),
 ]
 
 
@@ -205,6 +211,14 @@ class Driver:
             base = len(exported[5]) + sum(len(item[4]) for item in instructions[:position])
             loop[5][0][2][1] = base + 2
 
+        def conjunction_reads_left_twice(instructions):
+            conjunction = instruction(instructions, "arith.andi")
+            conjunction[3][:] = [conjunction[3][0], conjunction[3][0]]
+
+        def right_check_reads_left_reduction(instructions):
+            checks = [item for item in instructions if item[0] == "local.call" and len(item[3]) == 3]
+            checks[1][3][1:] = checks[0][3][1:]
+
         # Each mutation is refused for the obligation it violates. Those that keep
         # the transcript wiring are accepted by the construction rule alone.
         if subject.name == "schnorr":
@@ -217,7 +231,7 @@ class Driver:
                      "wrong-domain-separator": "construction-challenge-site",
                      "decision-compares-base-with-itself": "projection-unexplained"}
             construction_accepts = {"decision-compares-base-with-itself"}
-        else:
+        elif subject.name == "sumcheck":
             mutate("wrong-domain-separator", challenge_names_delivery)
             mutate("round-check-dropped", round_check_dropped)
             mutate("claim-update-mutated", claim_update_mutated)
@@ -227,6 +241,20 @@ class Driver:
                      "claim-update-mutated": "projection-unexplained",
                      "stale-claim-yielded": "projection-repeat-yield"}
             construction_accepts = {"round-check-dropped", "claim-update-mutated", "stale-claim-yielded"}
+        else:
+            mutate("conjunction-reads-left-twice", conjunction_reads_left_twice)
+            mutate("right-check-reads-left-reduction", right_check_reads_left_reduction)
+            codes = {"conjunction-reads-left-twice": "projection-unexplained",
+                     "right-check-reads-left-reduction": "projection-call"}
+            construction_accepts = set(codes)
+
+        # The Lean model of the canonical occurrence encoding must reproduce the
+        # native bytes of every exported template, in program order.
+        def templates(instructions):
+            for item in nested(instructions):
+                if item[0] in ("crypto.exec.indexed_transcript_observe_data",
+                               "crypto.exec.indexed_transcript_challenge"):
+                    yield list(bytes.fromhex(dict(item[1])["parameters"][1][0]))
 
         def body(text):
             """Drop the module header so several renderings share one check file."""
@@ -234,14 +262,18 @@ class Driver:
                              if line not in ("module", "@[expose] public section")
                              and not line.startswith("public import "))
 
-        parts = [f"import {subject.module}", "set_option maxRecDepth 20000",
+        parts = [f"import {subject.module}", "import Zkc.Construction.Encoding", "set_option maxRecDepth 20000",
                  body(structured.render(original, "Fresh.Original")),
                  body(constructed.render(exported, "Fresh.Actual"))]
         # The admitted original program was checked from the retained snapshot,
         # which must be the fresh one.
         program = subject.program
+        encoded = json.dumps(list(templates(exported[7])))
         proofs = ["theorem original_retained : Fresh.Original.snapshot = "
                   f"{subject.original[1]}.snapshot := rfl",
+                  "theorem templates_encoded : (Zkc.Construction.Instruction.templatesList "
+                  "Fresh.Actual.participant.instructions).map (fun template => "
+                  f"(Zkc.Construction.templateTree template).encode) = {encoded} := by decide +kernel",
                   "theorem actual_accepted : Zkc.Construction.checkCompiled Fresh.Original.snapshot "
                   f"{program} Fresh.Actual.participant = .ok () := by decide +kernel"]
         for index, (name, value) in enumerate(mutations.items()):
@@ -308,7 +340,8 @@ class Driver:
         """The Lean rules read a helper call with the original's checked helper; the
         native checker must refuse a candidate whose prepared helper body differs."""
         directory = self.output / subject.name
-        callee = dict(exported[7][-1][1])["callee"][1]
+        calls = [item for item in exported[7] if item[0] == "local.call"]
+        callee = dict(calls[-1][1])["callee"][1]
         start = candidate.index(f"local.func @{callee}(")
         end = candidate.index("local.func", start + 1)
         body = candidate[start:end]

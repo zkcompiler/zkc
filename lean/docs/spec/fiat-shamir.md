@@ -170,11 +170,12 @@ compiled candidate. In `ZkcExamples.Construction.SchnorrProof`:
   selected acceptance output is the common Schnorr experiment, is derived from
   `project_sound` and `verifier_correspondence`.
 
-The compiled Sumcheck proof Entry is checked the same way
+The compiled Sumcheck proof Entries of the Sumcheck example and its composed
+variant are checked the same way
 ([participant projection](participant-projection.md#the-compiled-sumcheck-proof-entry)):
-its validator's ideal meaning is the Fiat–Shamir transform of the original
-Sumcheck validator for every challenge function. No security theorem is proved
-for it here.
+each validator's ideal meaning is the Fiat–Shamir transform of its original
+validator for every challenge function. No security theorem is proved for them
+here.
 
 `ZkcSecurity.Examples.CompiledSchnorrFiatShamir` answers every challenge with
 one lazily sampled random oracle on histories, which the prover may query at any
@@ -207,8 +208,13 @@ Sigma instance.
 
 - Random oracle: the suite's challenge on an absorbed history is a uniformly
   random function of that history, shared by the prover and final verification.
-  Canonical value and occurrence encodings are injective, so typed histories
-  stand for absorbed bytes. Model occurrences omit the iteration coordinates
+  Canonical value encodings are injective, so typed histories stand for
+  absorbed bytes. For occurrences this is proved: the canonical occurrence
+  encoding is injective and prefix-free in the template and the iteration
+  coordinates (`Zkc.Construction.occurrence_inj`), and the construction bridge
+  checks in the kernel that the model encoding of every exported template is its
+  native bytes; the suite's framing and payload codecs remain assumed. Model
+  occurrences omit the iteration coordinates
   that native occurrences inside loops carry; a typed history stands for the
   absorbed bytes because a validator's coordinates at each occurrence are
   determined by its absorbed history. The suite reduces 64 squeezed bytes to a field

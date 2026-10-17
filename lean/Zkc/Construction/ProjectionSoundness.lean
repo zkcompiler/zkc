@@ -1157,6 +1157,199 @@ theorem invoke_absent (definition : CheckedDefinition) (member : definition ∈ 
   rw [plainHelpers_component program definition member]
   exact absentPreserving_component _ _ definition.body preserving _ get_absent
 
+/-- A carrier calculation's component evaluation: absent when an operand is,
+and otherwise the evaluator's outcome with present results. -/
+theorem componentCalculation (calculation : Calculation)
+    (args : Values (Component (assignment F G)) calculation.op.arguments)
+    (bodies : Values (RegionFunction (assignment F G) (participantInterface F G)) calculation.op.regions) :
+    Evaluation.componentOperation (.silent _) (plainHelpers program) calculation.op args bodies =
+      match RoleFamily.sequence (types := calculation.op.arguments) args with
+      | none => .done (Values.absent (assignment F G) calculation.op.results)
+      | some values => (ofOutcome (calculation.evaluate values)).bind fun results =>
+          .done results.present := by
+  rw [componentOperation_calculation]
+  simp only [strictComponent]
+  cases sequenced : RoleFamily.sequence args with
+  | none => rfl
+  | some values =>
+    dsimp only
+    rw [Calculation.operation_eq]
+
+/-- Soundness of one carrier calculation step, for any callbacks. -/
+theorem vocabulary_projects (n : Nat) (calculation : Calculation) (arguments : List Slot)
+    (instructions rest : List Instruction) (results : List Slot) (n' : Nat)
+    (accepted : walkVocabulary context n calculation arguments instructions = .ok (rest, results, n'))
+    (args : Values (Component (assignment F G)) calculation.op.arguments)
+    (bodies : Values (RegionFunction (assignment F G) (participantInterface F G)) calculation.op.regions)
+    (cenv : List (Value F G)) (argsHold : HoldsValues handle cenv arguments args)
+    (argsLength : arguments.length = calculation.op.arguments.length) (length : cenv.length = n)
+    {A : Type} (kS : List (Value F G) → PIR.Proc (Actions F G) A)
+    (kO : Values (Component (assignment F G)) calculation.op.results → PIR.Proc (Actions F G) A)
+    (cont : ∀ cenv' values, cenv <+: cenv' → cenv'.length = n' → HoldsValues handle cenv' results values →
+      specK context handle (helperTable program F G) rest cenv' kS = kO values) :
+    specK context handle (helperTable program F G) instructions cenv kS =
+      ((Evaluation.componentOperation (.silent _) (plainHelpers program) calculation.op args bodies).interpret
+        CommonAdapter.project).bind kO := by
+  simp only [walkVocabulary] at accepted
+  rw [componentCalculation]
+  have argsHold' : HoldsValues (tys := calculation.op.arguments) handle cenv arguments args := argsHold
+  by_cases absent : arguments.any Slot.isAbsent = true
+  · rw [ite_eq_left absent] at accepted
+    simp only [Except.ok.injEq, Prod.mk.injEq] at accepted
+    obtain ⟨rfl, rfl, rfl⟩ := accepted
+    rw [sequence_none argsHold' argsLength absent]
+    exact cont cenv _ (List.prefix_refl cenv) length (holdsValues_absent cenv _)
+  · rw [ite_eq_right absent] at accepted
+    have notAbsent : arguments.any Slot.isAbsent = false := by simpa using absent
+    cases matched : (if calculation.op.results.all dataType = true then Slot.references arguments
+        else none).bind (fun references => expectCalculation context calculation references instructions) with
+    | some found' =>
+      obtain ⟨rest', count⟩ := found'
+      simp only [matched, Except.ok.injEq, Prod.mk.injEq] at accepted
+      obtain ⟨rfl, rfl, rfl⟩ := accepted
+      by_cases data : calculation.op.results.all dataType = true
+      · rw [ite_eq_left data] at matched
+        cases referenced : Slot.references arguments with
+        | none => simp [referenced] at matched
+        | some references =>
+          simp only [referenced, Option.bind_some] at matched
+          have next := expectCalculation_some context matched
+          obtain ⟨values, readArguments, sequenced, readBack, decoded⟩ :=
+            read_held argsHold' argsLength referenced
+          rw [sequenced]
+          obtain ⟨extra, extraLength, skipEq⟩ :=
+            next_spec context handle (helperTable program F G) next cenv
+          rw [skipEq]
+          simp only [specK, specStep, read_append readBack, Zkc.Construction.calculate, decoded]
+          cases evaluated : calculation.evaluate values with
+          | returned outputs =>
+            simp only [ofOutcome, PIR.Proc.bind, PIR.Proc.interpret]
+            apply cont
+            · exact List.prefix_append_of_prefix (List.prefix_append cenv extra)
+            · simp [length, extraLength, encodeValues_length, Nat.add_assoc]
+              obtain ⟨ty, single⟩ := calculation.single
+              simp [single]
+            · obtain ⟨ty, single⟩ := calculation.single
+              have := holdsValues_single (handle := handle) (cenv ++ extra) outputs
+                (by simp [single]) data
+              rw [show (cenv ++ extra).length = n + count by simp [length, extraLength]] at this
+              exact this
+          | stopped reason => simp [ofOutcome, PIR.Proc.bind, PIR.Proc.interpret]
+      · rw [ite_eq_right data] at matched
+        simp at matched
+    | none =>
+      simp only [matched] at accepted
+      split_ifs at accepted with total
+      simp only [Except.ok.injEq, Prod.mk.injEq] at accepted
+      obtain ⟨rfl, rfl, rfl⟩ := accepted
+      obtain ⟨values, sequenced⟩ := sequence_some argsHold' argsLength notAbsent
+      rw [sequenced]
+      obtain ⟨outputs, evaluated⟩ := calculation.total_returns total values
+      simp only [evaluated, ofOutcome, PIR.Proc.bind, PIR.Proc.interpret]
+      obtain ⟨ty, single⟩ := calculation.single
+      exact cont cenv _ (List.prefix_refl cenv) length
+        (holdsValues_free cenv outputs (by simp [single]))
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+theorem walkVocabulary_length (n : Nat) (calculation : Calculation) (arguments : List Slot)
+    (instructions rest : List Instruction) (results : List Slot) (n' : Nat)
+    (accepted : walkVocabulary context n calculation arguments instructions = .ok (rest, results, n')) :
+    results.length = calculation.op.results.length := by
+  obtain ⟨ty, single⟩ := calculation.single
+  simp only [walkVocabulary] at accepted
+  repeat' split at accepted
+  all_goals first
+    | (simp only [Except.ok.injEq, Prod.mk.injEq] at accepted
+       obtain ⟨_, rfl, _⟩ := accepted
+       simp [single])
+    | cases accepted
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+/-- An inlined helper body's walk returns one slot per output. -/
+theorem walkHelper_length : ∀ (fuel : Nat) {Γ out : List Ty} (slots : List Slot) (n : Nat)
+    (region : Region dialect Γ out) (instructions rest : List Instruction) (outSlots : List Slot) (n' : Nat),
+    walkHelper context fuel slots n region instructions = .ok (rest, outSlots, n') → outSlots.length = out.length
+  | 0, _, _, _, _, _, _, _, _, _, accepted => by simp [walkHelper] at accepted
+  | fuel + 1, _, _, slots, n, region, instructions, rest, outSlots, n', accepted =>
+    match region, accepted with
+    | .ret values, accepted => by
+      simp only [walkHelper, Except.ok.injEq, Prod.mk.injEq] at accepted
+      obtain ⟨_, rfl, _⟩ := accepted
+      simp [Operands.indices_length]
+    | .stop _, accepted => by simp [walkHelper] at accepted
+    | .bind _ _, accepted => by simp [walkHelper] at accepted
+    | .letOp op args bodies next, accepted => by
+      simp only [walkHelper] at accepted
+      cases found : Calculation.ofOp? op with
+      | none => simp [found] at accepted
+      | some calculation =>
+        simp only [found] at accepted
+        cases stepped : walkVocabulary context n calculation ((Operands.indices args).map (Slot.at_ slots))
+            instructions with
+        | error error => simp [stepped] at accepted
+        | ok triple =>
+          obtain ⟨remaining, results, n''⟩ := triple
+          simp only [stepped] at accepted
+          exact walkHelper_length fuel (results ++ slots) n'' next remaining rest outSlots n' accepted
+
+/-- Soundness of an inlined Math helper body: the exported instructions equal
+the body's component evaluation followed by `kO`, whenever the continuations
+agree on related results. -/
+theorem walkHelper_sound : ∀ (fuel : Nat) {Γ out : List Ty} (slots : List Slot) (n : Nat)
+    (region : Region dialect Γ out) (instructions rest : List Instruction) (outSlots : List Slot) (n' : Nat),
+    walkHelper context fuel slots n region instructions = .ok (rest, outSlots, n') →
+    outSlots.length = out.length ∧
+      ∀ (env : Environment (Component (assignment F G)) Γ) (cenv : List (Value F G)),
+        Holds handle cenv slots env → cenv.length = n →
+        ∀ {A : Type} (kS : List (Value F G) → PIR.Proc (Actions F G) A)
+          (kO : Values (Component (assignment F G)) out → PIR.Proc (Actions F G) A),
+          (∀ cenv' outs, cenv <+: cenv' → cenv'.length = n' → HoldsValues handle cenv' outSlots outs →
+            specK context handle (helperTable program F G) rest cenv' kS = kO outs) →
+          specK context handle (helperTable program F G) instructions cenv kS =
+            ((region.component (Evaluation.meaning (.silent _) (plainHelpers program).closed)
+              (Evaluation.componentOperation (.silent _) (plainHelpers program)) env).interpret
+                CommonAdapter.project).bind kO
+  | 0, _, _, _, _, _, _, _, _, _, accepted => by simp [walkHelper] at accepted
+  | fuel + 1, _, _, slots, n, region, instructions, rest, outSlots, n', accepted =>
+    match region, accepted with
+    | .ret values, accepted => by
+      simp only [walkHelper, Except.ok.injEq, Prod.mk.injEq] at accepted
+      obtain ⟨rfl, rfl, rfl⟩ := accepted
+      refine ⟨by simp [Operands.indices_length], ?_⟩
+      intro env cenv holds length A kS kO cont
+      exact cont cenv _ (List.prefix_refl cenv) length (holds.eval values)
+    | .stop _, accepted => by simp [walkHelper] at accepted
+    | .bind _ _, accepted => by simp [walkHelper] at accepted
+    | .letOp op args bodies next, accepted => by
+      simp only [walkHelper] at accepted
+      cases found : Calculation.ofOp? op with
+      | none => simp [found] at accepted
+      | some calculation =>
+        have same := Calculation.ofOp?_some found
+        subst same
+        simp only [found] at accepted
+        cases stepped : walkVocabulary context n calculation ((Operands.indices args).map (Slot.at_ slots))
+            instructions with
+        | error error => simp [stepped] at accepted
+        | ok triple =>
+          obtain ⟨remaining, results, n''⟩ := triple
+          simp only [stepped] at accepted
+          have resultsLength := walkVocabulary_length context n calculation _ instructions remaining results n''
+            stepped
+          obtain ⟨outLength, nextSound⟩ :=
+            walkHelper_sound fuel (results ++ slots) n'' next remaining rest outSlots n' accepted
+          refine ⟨outLength, ?_⟩
+          intro env cenv holds length A kS kO cont
+          simp only [Region.component]
+          rw [PIR.Proc.interpret_bind, PIR.Proc.bind_assoc]
+          apply vocabulary_projects program context handle n calculation _ instructions remaining results n''
+            stepped (args.eval env) _ cenv (holds.eval args) (by simp [Operands.indices_length]) length
+          intro cenv' values prefix_ length' valuesHold
+          exact nextSound (env.prepend values) cenv'
+            ((holds.mono prefix_).prepend values resultsLength valuesHold) length' kS kO
+            (fun cenv'' outs prefix'' length'' outsHold =>
+              cont cenv'' outs (prefix_.trans prefix'') length'' outsHold)
+
 theorem calculate_projects (ctx : ProtocolContext) (n : Nat) (operation : Op)
     (allowed : operation.isCalculation = true) (arguments : List Slot)
     (instructions rest : List Instruction) (results : List Slot) (n' : Nat)
@@ -1174,25 +1367,25 @@ theorem calculate_projects (ctx : ProtocolContext) (n : Nat) (operation : Op)
     | invoke helper =>
       dsimp only at accepted
       have math : helper.kind = .math := by simpa [Op.isCalculation] using allowed
-      by_cases allAbsent : arguments.all Slot.isAbsent = true
-      · rw [ite_eq_left allAbsent] at accepted
-        cases defined : program.payload.definitions.find? (fun definition => definition.helper == helper) with
-        | none => simp [defined] at accepted
-        | some definition =>
-          simp only [defined] at accepted
+      cases defined : program.payload.definitions.find? (fun definition => definition.helper == helper) with
+      | none => simp [defined] at accepted
+      | some definition =>
+        simp only [defined] at accepted
+        have member := List.mem_of_find?_eq_some defined
+        have same : definition.helper = helper := by simpa using List.find?_some defined
+        subst same
+        have regions : (Op.invoke definition.helper).calculationRegions (Value := assignment F G)
+            (I := participantInterface F G) allowed = .nil := by
+          generalize (Op.invoke definition.helper).calculationRegions allowed = regions
+          cases regions
+          rfl
+        by_cases allAbsent : arguments.all Slot.isAbsent = true
+        · rw [ite_eq_left allAbsent] at accepted
           by_cases preserving : absentPreserving definition.body = true
           · rw [ite_eq_left preserving] at accepted
             simp only [Except.ok.injEq, Prod.mk.injEq] at accepted
             obtain ⟨rfl, rfl, rfl⟩ := accepted
-            have member := List.mem_of_find?_eq_some defined
-            have same : definition.helper = helper := by simpa using List.find?_some defined
-            subst same
             have argsAbsent := holdsValues_all_absent handle argsHold argsLength allAbsent
-            have regions : (Op.invoke definition.helper).calculationRegions (Value := assignment F G)
-                (I := participantInterface F G) allowed = .nil := by
-              generalize (Op.invoke definition.helper).calculationRegions allowed = regions
-              cases regions
-              rfl
             have value : Evaluation.componentOperation (.silent (participantInterface F G))
                 (plainHelpers program) (Op.invoke definition.helper) args Values.nil =
                   .done (Values.absent (assignment F G) definition.helper.outputs) := by
@@ -1204,8 +1397,22 @@ theorem calculate_projects (ctx : ProtocolContext) (n : Nat) (operation : Op)
             exact cont cenv _ (List.prefix_refl cenv) length (holdsValues_absent cenv _)
           · rw [ite_eq_right preserving] at accepted
             cases accepted
-      · rw [ite_eq_right allAbsent] at accepted
-        cases accepted
+        · rw [ite_eq_right allAbsent] at accepted
+          by_cases anyAbsent : arguments.any Slot.isAbsent = true
+          · rw [ite_eq_left anyAbsent] at accepted
+            cases accepted
+          · rw [ite_eq_right anyAbsent] at accepted
+            obtain ⟨_, helperSound⟩ :=
+              walkHelper_sound (F := F) (G := G) program context handle projectionFuel arguments n
+                definition.body instructions rest results n' accepted
+            have value : Evaluation.componentOperation (.silent (participantInterface F G))
+                (plainHelpers program) (Op.invoke definition.helper) args Values.nil =
+                  definition.body.component (Evaluation.meaning (.silent _) (plainHelpers program).closed)
+                    (Evaluation.componentOperation (.silent _) (plainHelpers program)) args.get :=
+              (Evaluation.componentOperation_math _ _ _ math _).trans
+                (plainHelpers_component program definition member args)
+            rw [regions, value]
+            exact helperSound args.get cenv argsHold.get length kS kO cont
     | fold spec =>
       dsimp only at accepted
       by_cases anyAbsent : arguments.any Slot.isAbsent = true
@@ -1229,64 +1436,8 @@ theorem calculate_projects (ctx : ProtocolContext) (n : Nat) (operation : Op)
     have same := Calculation.ofOp?_some found
     subst same
     simp only [found] at accepted
-    rw [originalOperation_calculation]
-    have argsHold' : HoldsValues (tys := calculation.op.arguments) handle cenv arguments args := argsHold
-    by_cases absent : arguments.any Slot.isAbsent = true
-    · rw [ite_eq_left absent] at accepted
-      simp only [Except.ok.injEq, Prod.mk.injEq] at accepted
-      obtain ⟨rfl, rfl, rfl⟩ := accepted
-      rw [sequence_none argsHold' argsLength absent]
-      exact cont cenv _ (List.prefix_refl cenv) length (holdsValues_absent cenv _)
-    · rw [ite_eq_right absent] at accepted
-      have notAbsent : arguments.any Slot.isAbsent = false := by simpa using absent
-      cases matched : (if calculation.op.results.all dataType = true then Slot.references arguments
-          else none).bind (fun references => expectCalculation context calculation references instructions) with
-      | some found' =>
-        obtain ⟨rest', count⟩ := found'
-        simp only [matched, Except.ok.injEq, Prod.mk.injEq] at accepted
-        obtain ⟨rfl, rfl, rfl⟩ := accepted
-        by_cases data : calculation.op.results.all dataType = true
-        · rw [ite_eq_left data] at matched
-          cases referenced : Slot.references arguments with
-          | none => simp [referenced] at matched
-          | some references =>
-            simp only [referenced, Option.bind_some] at matched
-            have next := expectCalculation_some context matched
-            obtain ⟨values, readArguments, sequenced, readBack, decoded⟩ :=
-              read_held argsHold' argsLength referenced
-            rw [sequenced]
-            obtain ⟨extra, extraLength, skipEq⟩ :=
-              next_spec context handle (helperTable program F G) next cenv
-            rw [skipEq]
-            simp only [specK, specStep, read_append readBack, Zkc.Construction.calculate, decoded]
-            cases evaluated : calculation.evaluate values with
-            | returned outputs =>
-              simp only [ofOutcome, PIR.Proc.bind, PIR.Proc.interpret]
-              apply cont
-              · exact List.prefix_append_of_prefix (List.prefix_append cenv extra)
-              · simp [length, extraLength, encodeValues_length, Nat.add_assoc]
-                obtain ⟨ty, single⟩ := calculation.single
-                simp [single]
-              · obtain ⟨ty, single⟩ := calculation.single
-                have := holdsValues_single (handle := handle) (cenv ++ extra) outputs
-                  (by simp [single]) data
-                rw [show (cenv ++ extra).length = n + count by simp [length, extraLength]] at this
-                exact this
-            | stopped reason => simp [ofOutcome, PIR.Proc.bind, PIR.Proc.interpret]
-        · rw [ite_eq_right data] at matched
-          simp at matched
-      | none =>
-        simp only [matched] at accepted
-        split_ifs at accepted with total
-        simp only [Except.ok.injEq, Prod.mk.injEq] at accepted
-        obtain ⟨rfl, rfl, rfl⟩ := accepted
-        obtain ⟨values, sequenced⟩ := sequence_some argsHold' argsLength notAbsent
-        rw [sequenced]
-        obtain ⟨outputs, evaluated⟩ := calculation.total_returns total values
-        simp only [evaluated, ofOutcome, PIR.Proc.bind, PIR.Proc.interpret]
-        obtain ⟨ty, single⟩ := calculation.single
-        exact cont cenv _ (List.prefix_refl cenv) length
-          (holdsValues_free cenv outputs (by simp [single]))
+    exact vocabulary_projects program context handle n calculation arguments instructions rest results n' accepted
+      args _ cenv argsHold argsLength length kS kO cont
 
 theorem walkOperation_sound (ctx : ProtocolContext) (n : Nat) (op : ProtocolOp) (arguments : List Slot)
     (instructions rest : List Instruction) (results : List Slot) (n' : Nat)
@@ -1341,19 +1492,26 @@ theorem walkOperation_length (ctx : ProtocolContext) (n : Nat) (op : ProtocolOp)
       cases operation with
       | invoke helper =>
         dsimp only at accepted
-        by_cases allAbsent : arguments.all Slot.isAbsent = true
-        · rw [ite_eq_left allAbsent] at accepted
-          cases defined : program.payload.definitions.find? (fun definition => definition.helper == helper) with
-          | none => simp [defined] at accepted
-          | some definition =>
-            simp only [defined] at accepted
+        cases defined : program.payload.definitions.find? (fun definition => definition.helper == helper) with
+        | none => simp [defined] at accepted
+        | some definition =>
+          simp only [defined] at accepted
+          have same : definition.helper = helper := by simpa using List.find?_some defined
+          subst same
+          by_cases allAbsent : arguments.all Slot.isAbsent = true
+          · rw [ite_eq_left allAbsent] at accepted
             by_cases preserving : absentPreserving definition.body = true
             · rw [ite_eq_left preserving] at accepted
               exact finish accepted (by simp [ProtocolOp.results])
             · rw [ite_eq_right preserving] at accepted
               cases accepted
-        · rw [ite_eq_right allAbsent] at accepted
-          cases accepted
+          · rw [ite_eq_right allAbsent] at accepted
+            by_cases anyAbsent : arguments.any Slot.isAbsent = true
+            · rw [ite_eq_left anyAbsent] at accepted
+              cases accepted
+            · rw [ite_eq_right anyAbsent] at accepted
+              exact walkHelper_length context projectionFuel arguments n definition.body instructions rest results
+                n' accepted
       | fold spec =>
         dsimp only at accepted
         by_cases anyAbsent : arguments.any Slot.isAbsent = true
@@ -1365,24 +1523,8 @@ theorem walkOperation_length (ctx : ProtocolContext) (n : Nat) (op : ProtocolOp)
     | some calculation =>
       have same := Calculation.ofOp?_some found
       subst same
-      obtain ⟨ty, single⟩ := calculation.single
       simp only [found] at accepted
-      by_cases absent : arguments.any Slot.isAbsent = true
-      · rw [ite_eq_left absent] at accepted
-        exact finish accepted (by simp [ProtocolOp.results])
-      · rw [ite_eq_right absent] at accepted
-        cases matched : (if calculation.op.results.all dataType = true then Slot.references arguments
-            else none).bind (fun references => expectCalculation context calculation references instructions) with
-        | some found' =>
-          rw [matched] at accepted
-          exact finish accepted (by simp [ProtocolOp.results, single])
-        | none =>
-          rw [matched] at accepted
-          by_cases total : calculation.total = true
-          · rw [ite_eq_left total] at accepted
-            exact finish accepted (by simp [ProtocolOp.results, single])
-          · rw [ite_eq_right total] at accepted
-            cases accepted
+      exact walkVocabulary_length context n calculation arguments instructions rest results n' accepted
   | localCall helper kind owner site =>
     simp only [walkOperation] at accepted
     by_cases owned : ctx.roles owner = context.validator

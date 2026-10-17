@@ -20,7 +20,9 @@ message by a receive at the same qualified site from the producer, a selected
 draw by a challenge at the same qualified query site, and the delivery of its
 answer by the observation of a message the validator sends at the delivery site.
 Calculations whose operands are all present but which the exported program does
-not keep are admitted only when they cannot stop. A protocol application in
+not keep are admitted only when they cannot stop. A Math helper invoked on
+present operands is walked inline through its checked body, and one invoked on
+absent operands is absent when its body preserves absence. A protocol application in
 which the validator participates is walked through the callee's body in the
 child context, with the callee's input and output masks; the exported program
 has no instruction for the application itself. A repeat in which the validator
@@ -127,6 +129,10 @@ def skip (context : Context) : List Instruction → List Instruction × Nat
         (remaining, count + 1)
   | instructions => (instructions, 0)
 
+/-- Region nesting and instruction counts are bounded by the admitted program;
+this fuel only makes the walk structurally recursive. -/
+def projectionFuel : Nat := 1048576
+
 section Walk
 variable (program : Structured.Program) (context : Context)
 
@@ -193,35 +199,62 @@ def expectCalculation (calculation : Calculation) (references : List Nat)
       else none
   | _ => none
 
-/-- One calculation at the validator role. A calculation of the carrier
-vocabulary is implemented by the same calculation or, if total, may be omitted;
-an absent operand makes it absent. A Math helper invocation with only absent
-operands is absent when the checked helper's body preserves absence; a fold with
-an absent operand is absent. Other calculations are refused. -/
+/-- One carrier calculation at the validator role: implemented by the same
+calculation on the references holding its operands or, if total, omitted; an
+absent operand makes it absent. -/
+def walkVocabulary (n : Nat) (calculation : Calculation) (arguments : List Slot)
+    (instructions : List Instruction) : Except String (List Instruction × List Slot × Nat) :=
+  if arguments.any Slot.isAbsent then
+    .ok (instructions, calculation.op.results.map fun _ => .absent, n)
+  else
+    match (if calculation.op.results.all dataType then Slot.references arguments else none).bind
+        (fun references => expectCalculation context calculation references instructions) with
+    | some (rest, count) => .ok (rest, [.held (n + count)], n + count + 1)
+    | none =>
+        if calculation.total then .ok (instructions, [.free], n)
+        else .error "projection-calculation"
+
+/-- A Math helper's body inlined at the validator role: every operation must be
+a carrier calculation, walked as `walkVocabulary` walks it, and the returned
+slots are the invocation's results. -/
+def walkHelper : Nat → {Γ out : List Ty} → List Slot → Nat → Region dialect Γ out → List Instruction →
+    Except String (List Instruction × List Slot × Nat)
+  | 0, _, _, _, _, _, _ => .error "projection-depth"
+  | fuel + 1, _, _, slots, n, region, instructions =>
+      match region with
+      | .ret values => .ok (instructions, (Operands.indices values).map (Slot.at_ slots), n)
+      | .stop _ => .error "projection-invoke"
+      | .bind _ _ => .error "projection-invoke"
+      | .letOp op arguments _ next =>
+          match Calculation.ofOp? op with
+          | some calculation =>
+              match walkVocabulary context n calculation ((Operands.indices arguments).map (Slot.at_ slots))
+                  instructions with
+              | .ok (remaining, results, n') => walkHelper fuel (results ++ slots) n' next remaining
+              | .error error => .error error
+          | none => .error "projection-invoke"
+
+/-- One calculation at the validator role. A carrier calculation is walked by
+`walkVocabulary`. A Math helper invocation is absent when its operands are all
+absent and the checked helper's body preserves absence; when its operands are
+all present, the helper's body is walked inline. A fold with an absent operand
+is absent. Other calculations are refused. -/
 def walkCalculation (n : Nat) (operation : Op) (arguments : List Slot) (instructions : List Instruction) :
     Except String (List Instruction × List Slot × Nat) :=
   match Calculation.ofOp? operation with
-  | some calculation =>
-      if arguments.any Slot.isAbsent then
-        .ok (instructions, operation.results.map fun _ => .absent, n)
-      else
-        match (if calculation.op.results.all dataType then Slot.references arguments else none).bind
-            (fun references => expectCalculation context calculation references instructions) with
-        | some (rest, count) => .ok (rest, [.held (n + count)], n + count + 1)
-        | none =>
-            if calculation.total then .ok (instructions, [.free], n)
-            else .error "projection-calculation"
+  | some calculation => walkVocabulary context n calculation arguments instructions
   | none =>
       match operation with
       | .invoke helper =>
-          if arguments.all Slot.isAbsent then
-            match program.payload.definitions.find? (fun definition => definition.helper == helper) with
-            | some definition =>
+          match program.payload.definitions.find? (fun definition => definition.helper == helper) with
+          | some definition =>
+              if arguments.all Slot.isAbsent then
                 if absentPreserving definition.body then
                   .ok (instructions, operation.results.map fun _ => .absent, n)
                 else .error "projection-invoke"
-            | none => .error "projection-invoke"
-          else .error "projection-invoke"
+              else if arguments.any Slot.isAbsent then .error "projection-invoke"
+              else walkHelper context projectionFuel arguments n definition.body instructions
+          | none => .error "projection-invoke"
       | .fold _ =>
           if arguments.any Slot.isAbsent then .ok (instructions, operation.results.map fun _ => .absent, n)
           else .error "projection-operation"
@@ -382,10 +415,6 @@ def walk : Nat → Walker
           | .error error => .error error
 
 end Walk
-
-/-- Region nesting and instruction counts are bounded by the admitted program;
-this fuel only makes the walk structurally recursive. -/
-def projectionFuel : Nat := 1048576
 
 section Root
 variable (program : Structured.Program) (context : Context)

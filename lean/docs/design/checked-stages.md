@@ -114,7 +114,9 @@ applies to the compiled verifier with no Entry-specific proof beyond the input
 relation and the position of the acceptance output. The compiled Schnorr and
 Sumcheck proof Entries are both linked this way; for Sumcheck the transformed
 original rewrites further, with an existing source theorem, to the rounds
-followed by the multilinear check.
+followed by the multilinear check. The composed Sumcheck Entry, with two
+applications, needs no Entry-specific proof at all: its admission and the
+composed check are evaluated in the kernel, and the generic theorem applies.
 
 ## Stage meanings
 
@@ -125,6 +127,25 @@ followed by the multilinear check.
 | Constructed | `zkc.constructed-participant/0` | `ideal`, a monadic function of a challenge function and a typed proof |
 | Executable participant and below | Not modeled | Representation refinements of the constructed meaning with resource stops |
 
+## Toward lower stages
+
+The rule from the constructed participant to the executable participant is a
+representation refinement, and the meanings above fix what it must expose:
+
+- the same action interface for receives and replies, with codecs that relate
+  proof bytes to typed messages, refusing on decoding failure where the ideal
+  reading refuses;
+- the transcript capability as an abstract state related to the typed history
+  by the suite's absorption of encoded events, so that a challenge computed from
+  the state is the challenge function applied to the history;
+- the prepared helper bodies. Constructed programs call the original's helpers
+  by name; an executable stage runs prepared bodies, so a helper-preparation
+  rule (inlining and canonicalization with a body correspondence) must relate
+  them before the composed theorem reaches executed code;
+- resource stops (bounds, allocation, capacity) as additional refusals, which
+  preserve acceptance reflection and are excluded from completeness by explicit
+  resource premises.
+
 ## Certificates and scalability
 
 Lockstep rules suit passes that keep operation order and only erase,
@@ -134,7 +155,10 @@ a map from target operations to source operations with a dependency check, or
 a rewriting trace whose algebraic side conditions are checked or proved. The
 projection rule compares operations, not their algebra; an equal comparison
 with swapped operands is refused. A total calculation the export omits is
-admitted only while no later use needs its result.
+admitted only while no later use needs its result. Inlining is absorbed into the
+walk where it is structural: a Math helper whose body consists of carrier
+calculations is walked inline, so the conjunction the compiler inlines from
+`zkc::boolean::both` is matched without a certificate.
 
 Per-compile equations remain the fallback certificate for a stage without a
 general rule. Their cost is kernel time proportional to the unfolded program and
@@ -147,17 +171,19 @@ The random-oracle assumption bundles a probabilistic idealization with
 deterministic correspondence obligations. Of the latter:
 
 - Proved. Typed values round-trip through the transcript value encoding
-  (`Value.decode_encode`). The construction rule's simulation proves that at
-  every exported observation and challenge the ideal transcript state is the
-  transform's absorbed history: each exported occurrence template, read through
-  `Template.origin`, is exactly the event the transform absorbs at the
-  original site, and the transform's challenge input is that history
-  (`Synchronized` in `check_sound`).
+  (`Value.decode_encode`). The canonical occurrence encoding is injective and
+  prefix-free in the template and the iteration coordinates
+  (`occurrence_inj`), and the bridge checks in the kernel that the model
+  encoding of each exported template is its native bytes. The construction
+  rule's simulation proves that at every exported observation and challenge the
+  ideal transcript state is the transform's absorbed history: each exported
+  occurrence template, read through `Template.origin`, is exactly the event the
+  transform absorbs at the original site, and the transform's challenge input is
+  that history (`Synchronized` in `check_sound`).
 - Assumed. The suite's framing, labels and payload codecs encode typed histories
-  injectively, and the native kernels absorb exactly those bytes; proof bytes
-  decode canonically to the typed messages in order. Model origins omit
-  iteration coordinates, which the native occurrence bytes carry: a model
-  history stands for the native bytes only because a deterministic validator's
-  coordinates at each occurrence are determined by its absorbed history. The
-  bridge decodes and re-encodes every exported template exactly; that is
-  tested, not proved.
+  injectively, and the native kernels absorb exactly the encoded occurrences and
+  payloads; proof bytes decode canonically to the typed messages in order. Model
+  origins omit iteration coordinates, which the native occurrence bytes carry: a
+  model history stands for the native bytes only because a deterministic
+  validator's coordinates at each occurrence are determined by its absorbed
+  history.
