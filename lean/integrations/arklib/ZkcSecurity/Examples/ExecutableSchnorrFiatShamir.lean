@@ -26,11 +26,14 @@ budget and expected binding (`knowledge_soundness`). No property of the decoder
 is needed for this bound. The chain runs through general rules: the lowering
 rule (`checkLowering`, `validate_ideal`, `validate_rejects`) and the composed
 transcript-construction and participant projection rules
-(`Zkc.Construction.compiled_transform`, through
-`ZkcExamples.Construction.SchnorrProof.compiled_transform`); no equation about
-the compiled program's meaning specific to this Entry is assumed. On the
-original side, `SchnorrProof.process_equation` equates the admitted original's
-validator with the common Schnorr experiment the VCVio consumer uses.
+(`Zkc.Construction.compiled_transform` applied to the admitted original,
+through `ZkcExamples.Construction.SchnorrProof.compiled_transform`); no equation
+about the compiled program's meaning specific to this Entry is assumed. On the
+original side, the kernel checks by evaluation that the admitted original's
+validator is the common Schnorr experiment the VCVio consumer uses
+(`SchnorrProof.process_equation`) and gives the process of the DLog formula the
+original retains (`SchnorrProofBinding.formula_process`), from which the
+knowledge target is read.
 
 Named assumptions beyond those of `CompiledSchnorrFiatShamir`: the runtime
 executes the admitted program as `validate` describes, its installed operations

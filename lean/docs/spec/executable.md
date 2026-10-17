@@ -130,12 +130,17 @@ transcript-construction and participant projection rules
 any budget of at least 25, under the Entry's checked occurrence context, the
 executable's observations and challenge interaction are those of the
 Fiat–Shamir transform of the original Proof Entry's verifier on the decoded
-proof. The only Entry-specific equation about a program's meaning on the chain
-is on the original side: `SchnorrProof.process_equation`, kernel-checked,
-equates the admitted original Proof Entry's validator with the common Schnorr
-experiment that the VCVio consumer uses. The other Entry-specific facts on the
-chain are wiring: the derived context, the input relation and the position of
-the acceptance output.
+proof. The composed rules are applied to the admitted original
+(`SchnorrProof.imported`). The Entry-specific equations about a program's
+meaning on the chain are all on the original side. Two are checked by the
+kernel's evaluation: `SchnorrProof.process_equation` equates the admitted
+original Proof Entry's validator with the common Schnorr experiment that the
+VCVio consumer uses, and `SchnorrProofBinding.formula_process` gives the process
+of the DLog formula the original retains, from which the knowledge target is
+read. `SchnorrProof.original_verifier` and `verifier_correspondence` are derived
+from these with definitions and general lemmas. The other Entry-specific facts
+on the chain are wiring: the derived context, the input relation and the
+position of the acceptance output.
 `executable_validate` and `executable_rejects` state host validation in the same
 terms.
 

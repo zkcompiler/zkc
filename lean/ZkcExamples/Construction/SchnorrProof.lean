@@ -139,8 +139,9 @@ set_option smartUnfolding true in
 theorem projected : project program context participant = .ok () := by decide +kernel
 
 set_option smartUnfolding true in
-/-- The composed per-compile check accepts the actual export. -/
-theorem compiled : checkCompiled SchnorrProofData.snapshot program participant = .ok () := by
+/-- The composed per-compile check accepts the actual export against the
+admitted original. -/
+theorem compiled : checkCompiled imported participant = .ok () := by
   decide +kernel
 
 theorem validator_eq : context.validator = 1 := by rw [context_eq]
@@ -249,10 +250,10 @@ theorem compiled_transform {m : Type → Type} [Monad m] [LawfulMonad m]
           ((inputs base key).map .data ++ [.transcript initial]) proof =
       transform context challenge (verifier base key handle) initial proof := by
   obtain ⟨context', found, composed⟩ :=
-    Zkc.Construction.compiled_transform (F := F) (G := G) SchnorrProofData.snapshot program participant
-      compiled
+    Zkc.Construction.compiled_transform (F := F) (G := G) imported participant compiled
   rw [context_admitted] at found
   cases found
+  dsimp only [imported] at composed
   rw [composed challenge acceptance decision acceptance_decision handle ((inputs base key).map .data)
     initial proof (verifierInputs base key handle) (inputs_related base key handle initial) rfl,
     original_verifier]

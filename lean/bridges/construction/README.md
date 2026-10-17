@@ -49,9 +49,12 @@ For each subject:
    the security theorems (check
    `regenerated:lean/ZkcExamples/Structured/SumcheckSourceData.lean`).
 4. A generated Lean file runs the composed check `checkCompiled` in the kernel
-   on the fresh export against the admitted original program, which must be
-   accepted with axioms among `propext`, `Classical.choice` and `Quot.sound`; the
-   fresh original snapshot must be the retained one. Mutated exports must be
+   on the fresh export against the admitted original, which must be accepted
+   with axioms among `propext`, `Classical.choice` and `Quot.sound`. The fresh
+   original snapshot must be the retained one (`original_retained`, by `rfl`),
+   so the retained admission is the fresh original's admission
+   (`freshImported`) and the check reads the fresh snapshot and the program it
+   admits. Mutated exports must be
    refused for their named obligations. For Schnorr: the first observation
    absorbs the base instead of the commitment, the challenge reads the host
    transcript before the commitment is observed, the challenge origin names the

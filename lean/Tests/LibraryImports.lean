@@ -212,6 +212,7 @@ import Tests.RegionDerivationAudit
 import Tests.RegionDerivationControls
 import Tests.RegionLaws
 import Tests.RegionViewControls
+import Tests.SigmaProofControls
 import Tests.StructuredApplicationAdmission
 import Tests.StructuredApplicationBounds
 import Tests.StructuredApplicationMetadata

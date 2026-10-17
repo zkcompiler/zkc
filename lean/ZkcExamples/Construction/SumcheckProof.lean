@@ -30,6 +30,9 @@ open Zkc.Source Zkc.Source.Structured Zkc.Construction
 set_option smartUnfolding false
 
 abbrev program := ZkcExamples.Structured.SumcheckSourceViews.program
+/-- The admitted original: the Sumcheck source and the program it admits. -/
+abbrev imported : Structured.Imported ZkcExamples.Structured.SumcheckSourceData.snapshot :=
+  ZkcExamples.Structured.SumcheckSourceViews.imported
 abbrev participant := SumcheckProofParticipant.participant
 
 /-- The occurrence context the check derives from the original roster and the
@@ -51,9 +54,9 @@ set_option smartUnfolding true in
 theorem projected : project program context participant = .ok () := by decide +kernel
 
 set_option smartUnfolding true in
-/-- The composed per-compile check accepts the actual export. -/
-theorem compiled :
-    checkCompiled ZkcExamples.Structured.SumcheckSourceData.snapshot program participant = .ok () := by
+/-- The composed per-compile check accepts the actual export against the
+admitted original. -/
+theorem compiled : checkCompiled imported participant = .ok () := by
   decide +kernel
 
 theorem validator_eq : context.validator = 1 := by rw [show context = _ from rfl]; rfl
@@ -144,10 +147,10 @@ theorem compiled_transform {m : Type → Type} [Monad m] [LawfulMonad m]
           (inputs values claim rounds ++ [.transcript initial]) proof =
       transform context challenge (verifier values claim rounds handle) initial proof := by
   obtain ⟨context', found, composed⟩ :=
-    Zkc.Construction.compiled_transform (F := F) (G := G) ZkcExamples.Structured.SumcheckSourceData.snapshot
-      program participant compiled
+    Zkc.Construction.compiled_transform (F := F) (G := G) imported participant compiled
   rw [context_admitted] at found
   cases found
+  dsimp only [imported, ZkcExamples.Structured.SumcheckSourceViews.imported] at composed
   rw [composed challenge acceptance decision acceptance_decision handle (inputs values claim rounds) initial
     proof (verifierInputs values claim rounds handle) (inputs_related values claim rounds handle initial) rfl]
   unfold verifier

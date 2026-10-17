@@ -164,7 +164,8 @@ compiled candidate. In `ZkcExamples.Construction.SchnorrProof`:
   positions are the validator's original base and statement inputs;
 - `compiled` runs the composed check `checkCompiled` (transcript construction
   and [participant projection](participant-projection.md)) on the actual export
-  in the kernel;
+  in the kernel, against the admitted original `imported` that
+  `structured_views` builds from the snapshot and its admission;
 - `compiled_transform` instantiates the composed theorem: for every challenge
   function, the compiled verifier's ideal meaning is the Fiat–Shamir transform
   of the original Proof Entry's validator. Its Entry-specific premises are the

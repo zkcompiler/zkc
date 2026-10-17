@@ -82,6 +82,7 @@ CHAIN = [
     "ZkcExamples.Executable.SchnorrProof.accepted",
     "ZkcExamples.Executable.SchnorrProof.executable_validate",
     "ZkcExamples.Executable.SchnorrProof.executable_rejects",
+    "ZkcExamples.Construction.SchnorrProof.kernel_admission",
     "ZkcExamples.Construction.SchnorrProof.compiled",
     "ZkcExamples.Construction.SchnorrProof.compiled_transform",
     "Zkc.Executable.execute_metered",
@@ -92,12 +93,13 @@ CHAIN = [
     "Zkc.Construction.project_sound",
 ]
 ALLOWED_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
-# Declarations the byte-level theorem's proof must reach: the general rules and
-# their checks on this Entry.
+# Declarations the byte-level theorem's proof must reach: the general rules, the
+# admitted original they are applied to, and their checks on this Entry.
 USED = [
     "Zkc.Construction.compiled_transform",
     "Zkc.Construction.check_sound",
     "Zkc.Construction.project_sound",
+    "ZkcExamples.Construction.SchnorrProof.imported",
     "ZkcExamples.Construction.SchnorrProof.compiled",
     "Zkc.Executable.validate_ideal",
     "Zkc.Executable.validate_rejects",
@@ -107,11 +109,24 @@ USED = [
 UNUSED = [
     "ZkcExamples.Construction.SchnorrProof.spec_equation",
 ]
-# Per-protocol equations about the original program, recorded in the receipt: they
-# tie the admitted original to the protocol experiment the security library uses.
-ORIGINAL = [
-    "ZkcExamples.Construction.SchnorrProof.process_equation",
+# Example-namespace theorems are Entry-specific. Among those the proof reaches, the
+# walk lists every equation between processes (`PIR.Proc`), whether the kernel
+# checks it by evaluation (`rfl`), and whether its statement names a meaning of a
+# compiled program; the receipt records the original-side ones, and none may name
+# a compiled meaning.
+ENTRY_PREFIXES = ["ZkcExamples", "ZkcSecurity.Examples"]
+COMPILED_MEANINGS = [
+    "Zkc.Construction.spec",
+    "Zkc.Construction.specK",
+    "Zkc.Construction.ideal",
+    "Zkc.Construction.idealK",
+    "Zkc.Executable.execute",
+    "Zkc.Executable.validate",
+    "Zkc.Executable.metered",
 ]
+# A root whose closure contains an Entry-specific equation about the compiled
+# program: the classification must find it.
+CLASSIFIER_CONTROL = "ZkcExamples.Construction.SchnorrProof.spec_equation"
 
 
 def digest(data):
@@ -217,30 +232,70 @@ class Driver:
         """The axiom closure of every theorem in the receipt's chain, and the declarations
         the byte-level theorem's proof reaches."""
         path = self.output / "ReceiptAxioms.lean"
-        queried = USED + UNUSED + ORIGINAL
+        queried = USED + UNUSED
+        prefixes = ", ".join(f"`{name}" for name in ENTRY_PREFIXES)
+        meanings = ", ".join(f"`{name}" for name in COMPILED_MEANINGS)
         path.write_text(
             "import ZkcSecurity.Examples.ExecutableSchnorrFiatShamir\n\n"
             + "".join(f"#print axioms {name}\n" for name in CHAIN)
             + "\nopen Lean in\n"
-            "/-- Whether `target` occurs in the transitive constant dependencies of `root`. -/\n"
-            "def reaches (root target : Name) : CoreM Bool := do\n"
+            "/-- The transitive constant dependencies of `root`, `root` included. -/\n"
+            "def dependencyClosure (root : Name) : CoreM (Array Name) := do\n"
             "  let env ← getEnv\n"
             "  let mut visited : NameSet := {}\n"
+            "  let mut order : Array Name := #[]\n"
             "  let mut pending : List Name := [root]\n"
             "  repeat\n"
             "    match pending with\n"
             "    | [] => break\n"
             "    | name :: rest =>\n"
             "      pending := rest\n"
-            "      if name == target then return true\n"
             "      unless visited.contains name do\n"
             "        visited := visited.insert name\n"
+            "        order := order.push name\n"
             "        if let some info := env.find? name then\n"
             "          for used in info.getUsedConstantsAsSet do\n"
             "            unless visited.contains used do pending := used :: pending\n"
-            "  return false\n\n"
+            "  return order\n\n"
+            "open Lean in\n"
+            "/-- Whether `target` occurs in the transitive constant dependencies of `root`. -/\n"
+            "def reaches (root target : Name) : CoreM Bool :=\n"
+            "  return (← dependencyClosure root).contains target\n\n"
+            "open Lean Meta in\n"
+            "/-- Entry-specific theorems in the closure of `root` whose statement is an\n"
+            "equation between processes: whether the kernel checks each by evaluation\n"
+            "(its proof is `rfl`) and whether its statement names a compiled meaning.\n"
+            "Equation lemmas generated for definitions are unfoldings and are skipped. -/\n"
+            "def processEquations (root : Name) : MetaM (Array (Name × Bool × Bool)) := do\n"
+            "  let env ← getEnv\n"
+            f"  let meanings : List Name := [{meanings}]\n"
+            "  for meaning in meanings do\n"
+            "    unless env.contains meaning do throwError \"unknown compiled meaning {meaning}\"\n"
+            "  let mut found := #[]\n"
+            "  for name in (← dependencyClosure root).qsort Name.lt do\n"
+            f"    unless [{prefixes}].any (·.isPrefixOf name) do continue\n"
+            "    if let .str _ last := name then\n"
+            "      if last.startsWith \"eq_\" then continue\n"
+            "    let some (.thmInfo info) := env.find? name | continue\n"
+            "    let isProcess ← forallTelescope info.type fun _ body => do\n"
+            "      let body ← whnfR body\n"
+            "      if body.isAppOfArity ``Eq 3 then\n"
+            "        return (← whnfR (body.getArg! 0)).isAppOf ``PIR.Proc\n"
+            "      return false\n"
+            "    unless isProcess do continue\n"
+            "    let evaluated ← lambdaTelescope info.value fun _ proof =>\n"
+            "      return proof.isAppOf ``Eq.refl || proof.isAppOf ``rfl\n"
+            "    let compiled := info.type.getUsedConstants.any meanings.contains\n"
+            "    found := found.push (name, evaluated, compiled)\n"
+            "  return found\n\n"
             + "".join(f"#eval do IO.println s!\"reaches {name}: {{← reaches `{THEOREM} `{name}}}\"\n"
-                      for name in queried),
+                      for name in queried)
+            + "\nopen Lean Meta in\n"
+            "#eval show MetaM Unit from do\n"
+            f"  for (name, evaluated, compiled) in ← processEquations `{THEOREM} do\n"
+            "    IO.println s!\"process-equation {name} evaluated={evaluated} compiled={compiled}\"\n"
+            f"  for (name, evaluated, compiled) in ← processEquations `{CLASSIFIER_CONTROL} do\n"
+            "    IO.println s!\"control-equation {name} evaluated={evaluated} compiled={compiled}\"\n",
             encoding="utf-8")
         result = self.run([self.args.lake, "env", "lean", path], cwd=LEAN / "integrations/arklib",
                           name="receipt-axioms")
@@ -257,9 +312,19 @@ class Driver:
             self.check(f"proof-uses:{name}", reached.get(name) == "true", json.dumps(reached.get(name)))
         for name in UNUSED:
             self.check(f"proof-avoids:{name}", reached.get(name) == "false", json.dumps(reached.get(name)))
-        self.dependencies = dict(uses=USED, avoids=UNUSED,
-                                 original_stage_equations={name: reached.get(name) == "true"
-                                                           for name in ORIGINAL})
+        equations = re.findall(r"^process-equation (\S+) evaluated=(true|false) compiled=(true|false)$",
+                               result.stdout, re.M)
+        controls = re.findall(r"^control-equation (\S+) evaluated=(true|false) compiled=(true|false)$",
+                              result.stdout, re.M)
+        self.check("process-equation-classifier", (CLASSIFIER_CONTROL, "false", "true") in controls,
+                   json.dumps(controls))
+        compiled = [name for name, _, flag in equations if flag == "true"]
+        self.check("proof-avoids-compiled-equations", not compiled, json.dumps(compiled))
+        self.dependencies = dict(
+            uses=USED, avoids=UNUSED,
+            original_stage_equations=dict(
+                evaluated=[name for name, flag, _ in equations if flag == "true"],
+                derived=[name for name, flag, _ in equations if flag == "false"]))
         return found
 
     # The Lean lowering rule on the fresh program and on mutations.
@@ -596,6 +661,8 @@ class Driver:
                 {"name": "transcript construction and participant projection",
                  "check": "Zkc.Construction.checkCompiled",
                  "accepts": ["original_export", "constructed_export"],
+                 "subject": "ZkcExamples.Construction.SchnorrProof.imported",
+                 "admission": "ZkcExamples.Construction.SchnorrProof.kernel_admission",
                  "certificate": "ZkcExamples.Construction.SchnorrProof.compiled",
                  "soundness": ["Zkc.Construction.compiled_transform", "Zkc.Construction.check_sound",
                                "Zkc.Construction.project_sound"],

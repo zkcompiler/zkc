@@ -251,7 +251,8 @@ the initial transcript, read through the acceptance output the policy selects.
 - `construction` is the vertical link: for every challenge function the
   compiled verifier is the transform of `importedValidator`. It instantiates
   `SumcheckProof.compiled_transform`, which follows from the composed check
-  `checkCompiled` with no equation specific to the Entry, and
+  `checkCompiled` on the admitted Sumcheck source with no equation specific to
+  the Entry, and
   `verifier_imported`, the definitional equality of the Proof Entry's original
   validator with the imported `example::Interactive` verifier. The construction
   bridge pins the bytes: the Proof Entry's fresh original export must render to

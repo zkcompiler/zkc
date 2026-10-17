@@ -17,7 +17,8 @@ accepted (`accepted`): it reads back as exactly those instructions, with a
 complete run charging 25 instructions, the runtime's measured threshold. With
 the composed rules' theorem for this Entry
 (`ZkcExamples.Construction.SchnorrProof.compiled_transform`, an instance of
-`Zkc.Construction.compiled_transform` with no Entry-specific equation), the
+`Zkc.Construction.compiled_transform` with no Entry-specific equation about the
+compiled program), the
 executable's meaning at any budget of at least 25, under the Entry's checked
 occurrence context, is the Fiat–Shamir transform of the original Proof Entry's
 verifier, on the proof its message bytes decode to, for every decoder and

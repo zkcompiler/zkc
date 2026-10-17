@@ -41,9 +41,13 @@ theorem admitted : Structured.check snapshot = .ok program := by
   revert found
   cases Structured.check snapshot <;> simp [Except.toOption]
 
+/-- The admitted original. -/
+def imported : Structured.Imported snapshot := ⟨program, admitted⟩
+
 set_option smartUnfolding true in
-/-- The composed per-compile check accepts the actual export. -/
-theorem compiled : checkCompiled snapshot program participant = .ok () := by decide +kernel
+/-- The composed per-compile check accepts the actual export against the
+admitted original. -/
+theorem compiled : checkCompiled imported participant = .ok () := by decide +kernel
 
 set_option smartUnfolding true in
 /-- The occurrence context the check derives from the original roster and the
@@ -76,7 +80,9 @@ theorem compiled_transform (F G : Type) [Field F] [DecidableEq F] [AddCommGroup 
             transform context challenge
               (((program.participant F G context.validator inputs).bind fun outputs =>
                 .done (decide (validatorOutputs context.validator program.payload.entry.outputScopes
-                  outputs))).interpret CommonAdapter.project) initial proof :=
-  Zkc.Construction.compiled_transform snapshot program participant compiled
+                  outputs))).interpret CommonAdapter.project) initial proof := by
+  have composed := Zkc.Construction.compiled_transform (F := F) (G := G) imported participant compiled
+  dsimp only [imported] at composed
+  exact composed
 
 end ZkcExamples.Construction.ComposedSumcheckProof

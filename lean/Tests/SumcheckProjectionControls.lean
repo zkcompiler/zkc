@@ -12,6 +12,7 @@ open Zkc.Construction ZkcExamples.Construction
 
 abbrev original := ZkcExamples.Structured.SumcheckSourceData.snapshot
 abbrev program := SumcheckProof.program
+abbrev imported := SumcheckProof.imported
 abbrev actual := SumcheckProof.participant
 
 /-- Change one top-level instruction. -/
@@ -30,7 +31,7 @@ def changeBody (participant : Participant) (index : Nat) (edit : Instruction →
 /-- Accepted by the construction rule and refused by the composed check with
 `code`. -/
 def RefusedByProjection (participant : Participant) (code : String) : Prop :=
-  checkExport original participant = .ok () ∧ checkCompiled original program participant = .error code
+  checkExport original participant = .ok () ∧ checkCompiled imported participant = .error code
 
 instance (participant : Participant) (code : String) : Decidable (RefusedByProjection participant code) :=
   inferInstanceAs (Decidable (_ ∧ _))
@@ -154,6 +155,6 @@ theorem callOnTranscript_refused :
   decide +kernel
 
 /-- Premise satisfiability: the actual export is accepted. -/
-theorem actual_accepted : checkCompiled original program actual = .ok () := SumcheckProof.compiled
+theorem actual_accepted : checkCompiled imported actual = .ok () := SumcheckProof.compiled
 
 end Tests.SumcheckProjectionControls

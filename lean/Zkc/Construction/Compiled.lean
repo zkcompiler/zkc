@@ -7,12 +7,15 @@ public import Zkc.Construction.ProjectionSoundness
 /-! Composition of the construction and projection rules.
 
 `checkCompiled` runs the transcript-construction rule and the participant
-projection rule on one exported validator. `compiled_transform` composes their
-soundness theorems: the compiled validator's ideal meaning is the Fiat–Shamir
-transform of the original validator's participant process, read through
-matching selections of their results. The two rules meet at the exported
-program's interactive reading (`spec`): the construction rule relates it to the
-ideal meaning and the projection rule to the original.
+projection rule on one exported validator. Its subject is an admitted original
+(`Structured.Imported original`): the construction rule reads the original
+snapshot, and the projection rule reads the program that snapshot admits, so
+the two rules cannot be given different originals. `compiled_transform` composes
+their soundness theorems: the compiled validator's ideal meaning is the
+Fiat–Shamir transform of the admitted original validator's participant process,
+read through matching selections of their results. The two rules meet at the
+exported program's interactive reading (`spec`): the construction rule relates
+it to the ideal meaning and the projection rule to the original.
 -/
 
 set_option autoImplicit false
@@ -21,12 +24,13 @@ namespace Zkc.Construction
 open Zkc.Source Zkc.Source.Structured
 
 /-- The composed per-compile check of a compiled validator: the
-transcript-construction rule, then the participant projection rule on the
-same export, against the admitted original. -/
-def checkCompiled (original : Structured.Snapshot) (program : Structured.Program)
+transcript-construction rule against the original snapshot, then the
+participant projection rule on the same export against the program that
+snapshot admits. -/
+def checkCompiled {original : Structured.Snapshot} (imported : Structured.Imported original)
     (participant : Participant) : Except String Unit :=
   match checkExport original participant, exportContext original participant with
-  | .ok (), some context => project program context participant
+  | .ok (), some context => project imported.program context participant
   | .error error, _ => .error error
   | .ok (), none => .error "construction-context"
 
@@ -72,30 +76,32 @@ theorem spec_bind_congr (context : Context) (handle : Nat) (table : Structured.M
     simp only [PIR.Proc.bind]
     rw [agree values (read_length found)]
 
-/-- The composed rules: for every accepted export, the compiled validator's ideal
-meaning, read through a selection of its returned values, is the Fiat–Shamir
-transform of the original validator's process read through the matching
-selection of its outputs, for every challenge function, service handle, data
-input related to the original inputs, initial transcript and proof. -/
-theorem compiled_transform (original : Structured.Snapshot) (program : Structured.Program)
-    (participant : Participant) (accepted : checkCompiled original program participant = .ok ()) :
+/-- The composed rules: for every export accepted against an admitted original,
+the compiled validator's ideal meaning, read through a selection of its returned
+values, is the Fiat–Shamir transform of the admitted original validator's
+process read through the matching selection of its outputs, for every challenge
+function, service handle, data input related to the original inputs, initial
+transcript and proof. -/
+theorem compiled_transform {original : Structured.Snapshot} (imported : Structured.Imported original)
+    (participant : Participant) (accepted : checkCompiled imported participant = .ok ()) :
     ∃ context, exportContext original participant = some context ∧
       ∀ {m : Type → Type} [Monad m] [LawfulMonad m] {B : Type} (challenge : History F G → m F)
         (select : List (Value F G) → B) (decide : List (Option (Value F G)) → B),
         (∀ values, values.length = participant.returned.length →
           select values = decide (values.dropLast.map some)) →
         ∀ (handle : Nat) (data : List (Value F G)) (initial : History F G) (proof : Proof F G)
-          (inputs : Values (Component (assignment F G)) program.payload.entry.inputs),
+          (inputs : Values (Component (assignment F G)) imported.program.payload.entry.inputs),
           HoldsValues handle (data ++ [.transcript initial])
-            (inputSlots context participant.policy program.payload.entry.inputs) inputs →
+            (inputSlots context participant.policy imported.program.payload.entry.inputs) inputs →
           data.length = participant.policy.publicInputs.length →
           (fun result => (mapOutcome select result.1, result.2)) <$>
-              ideal context challenge (helperTable program F G) participant.returned
+              ideal context challenge (helperTable imported.program F G) participant.returned
                 participant.instructions (data ++ [.transcript initial]) proof =
             transform context challenge
-              (((program.participant F G context.validator inputs).bind fun outputs =>
-                .done (decide (validatorOutputs context.validator program.payload.entry.outputScopes
-                  outputs))).interpret CommonAdapter.project) initial proof := by
+              (((imported.program.participant F G context.validator inputs).bind fun outputs =>
+                .done (decide (validatorOutputs context.validator
+                  imported.program.payload.entry.outputScopes outputs))).interpret
+                CommonAdapter.project) initial proof := by
   unfold checkCompiled at accepted
   split at accepted
   · rename_i context exported found
@@ -110,13 +116,13 @@ theorem compiled_transform (original : Structured.Snapshot) (program : Structure
       have positive : 0 < participant.inputs.length := List.length_pos_iff.mpr nonempty
       simp only [List.length_dropLast] at published
       omega
-    rw [check_sound context challenge handle (helperTable program F G) participant checked data initial
-      proof inputsArity, ← transform_bind_done]
+    rw [check_sound context challenge handle (helperTable imported.program F G) participant checked data
+      initial proof inputsArity, ← transform_bind_done]
     congr 1
-    rw [spec_bind_congr context handle (helperTable program F G) participant.returned
+    rw [spec_bind_congr context handle (helperTable imported.program F G) participant.returned
       participant.instructions _ select (fun values => decide (values.dropLast.map some)) agree]
-    have projected := project_sound program context participant accepted handle data initial inputs
-      related arity
+    have projected := project_sound imported.program context participant accepted handle data initial
+      inputs related arity
     have composed := congrArg (fun process => process.bind fun options => .done (decide options))
       projected
     simp only [PIR.Proc.bind_assoc, PIR.Proc.bind] at composed

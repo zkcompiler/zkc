@@ -151,24 +151,29 @@ slots.
 
 ## Composition with transcript construction
 
-`checkCompiled original program participant` runs `checkExport` (the
-transcript-construction rule against the original export) and then `project`
-with the derived context. `compiled_transform` composes the two soundness
-theorems at the exported program's interactive reading: for every accepted
-export, monad, challenge function, service handle, related input, initial
-transcript and proof, and for any final selection of the returned values that
-agrees with a selection of the validator's outputs,
+`checkCompiled imported participant` takes an admitted original,
+`imported : Structured.Imported original`: the program together with the proof
+`Structured.check original = .ok program`. It runs `checkExport` (the
+transcript-construction rule against the original snapshot) and then `project`
+against `imported.program` with the derived context. Both rules therefore read
+the same original: a program admitted from another snapshot cannot be paired
+with this snapshot's export. `compiled_transform` composes the two soundness
+theorems at the exported program's interactive reading: for every export
+accepted against an admitted original, monad, challenge function, service
+handle, related input, initial transcript and proof, and for any final
+selection of the returned values that agrees with a selection of the
+validator's outputs,
 
 ```text
 ideal context challenge (helperTable program) returned instructions (data ++ [transcript initial]) proof
   = transform context challenge (participant validator inputs, read through its outputs) initial proof
 ```
 
-up to that selection. The construction rule supplies
-`ideal = transform ∘ spec` and the projection rule supplies `spec = original`;
-the Fiat–Shamir transform is unchanged and applied to the original validator.
-The consumer provides the original's admission, `Structured.check original =
-.ok program`, which ties the checked program to the export's source digest.
+up to that selection, where `program` is `imported.program`. The construction
+rule supplies `ideal = transform ∘ spec` and the projection rule supplies
+`spec = original`; the Fiat–Shamir transform is unchanged and applied to the
+original validator. The admission ties the checked program to the snapshot and
+so to the export's source digest.
 
 ## The compiled Sumcheck proof Entry
 
@@ -257,3 +262,21 @@ reduction's point and claim (`projection-call`); and of both Sigma exports: the
 second commitment's observation absorbing the first commitment
 (`construction-observe`), a comparison of a base with itself and a conjunction
 reading the first check twice (`projection-unexplained`).
+
+`Tests.ProjectionControls` also shows why the composed check takes an admitted
+original. Changing the original Schnorr root's final comparison into a
+comparison of the sum with itself gives a snapshot that still admits; its
+program and a candidate whose decision compares the sum with itself pass the
+construction rule against the unchanged snapshot and the projection rule
+against the altered program (`unlinked_accepts_mixed`), and the altered pair
+passes the composed check against its own snapshot (`altered_accepted`). The
+unchanged snapshot does not admit the altered program (`mixed_unadmitted`), so
+every admitted subject of the unchanged snapshot is the actual program
+(`subject_unique`) and refuses the altered candidate (`mixed_refused`,
+`projection-unexplained`).
+
+`Tests.SigmaProofControls` evaluates the compiled Sigma verifiers in the kernel
+over `ZMod 3`: each accepts an honest proof exactly at the challenge it answers,
+rejects a wrong response and stops with a refusal on a truncated proof, so the
+instantiated `compiled_transform` equations are not about verifiers that always
+stop.

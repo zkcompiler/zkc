@@ -61,20 +61,30 @@ program instead of requiring it to be unchanged.
    on `propext`, `Classical.choice` and `Quot.sound`. A walk over the constants
    the byte-level theorem's proof uses must reach the general rules
    (`Zkc.Construction.compiled_transform`, `check_sound`, `project_sound`, the
-   lowering rule's `validate_ideal` and `validate_rejects`) and the Entry's
+   lowering rule's `validate_ideal` and `validate_rejects`), the admitted
+   original they are applied to (`SchnorrProof.imported`) and the Entry's
    per-compile checks (`SchnorrProof.compiled`, the executable `accepted`), and
-   must not reach `ZkcExamples.Construction.SchnorrProof.spec_equation`: the
-   chain uses no equation specific to this Entry about the compiled program. The
-   walk also records whether the chain reaches the original-stage equation
-   `SchnorrProof.process_equation`, which ties the admitted original to the
-   Schnorr experiment the VCVio consumer uses.
+   must not reach `ZkcExamples.Construction.SchnorrProof.spec_equation`. The walk
+   then lists the Entry-specific theorems it reaches (in example namespaces)
+   whose statement is an equation between processes, with whether the kernel
+   checks each by evaluation (`rfl`) and whether its statement names a compiled
+   meaning (`spec`, `ideal`, `execute`, `validate` or their steps). None may name
+   a compiled meaning: the chain uses no equation specific to this Entry about
+   the compiled program. The classification must flag `spec_equation` when the
+   walk starts from it. The original-side equations are recorded: today the
+   kernel-evaluated `SchnorrProof.process_equation` (the admitted original's
+   validator is the Schnorr experiment the VCVio consumer uses) and
+   `SchnorrProofBinding.formula_process` (the process of the retained DLog
+   formula), and `original_verifier` and `verifier_correspondence`, derived from
+   them.
 6. `receipt.json` names the compiler, runtime, Lean toolchain and manifest
    identities, the source module, original, export, program, deployment,
    descriptor and package digests, the Lean data digests, the runtime's
    role-map selection, the checked rules (the composed construction and
-   projection check `checkCompiled` with its soundness theorems, and the lowering
-   rule), the theorem, the checked axioms of its chain, the proof dependencies
-   checked in step 5 and the remaining assumptions. Under the receipt's package pin the
+   projection check `checkCompiled` with its admitted subject, its soundness
+   theorems, and the lowering rule), the theorem, the checked axioms of its
+   chain, the proof dependencies checked in step 5 and the remaining
+   assumptions. Under the receipt's package pin the
    runtime must accept the honest proof, report that pin and reject the wrong
    response. A package with a mutated program is refused under that pin;
    re-pinned, it accepts the wrong response but its program digest differs from

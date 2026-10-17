@@ -45,7 +45,7 @@ class Subject:
     this driver then only compares it.
     """
 
-    def __init__(self, name, modules, original, participant, module, program, original_owned,
+    def __init__(self, name, modules, original, participant, module, imported, original_owned,
                  entry="example::Proof"):
         self.name = name
         self.entry = entry
@@ -53,7 +53,7 @@ class Subject:
         self.original = original
         self.participant = participant
         self.module = module
-        self.program = program
+        self.imported = imported
         self.original_owned = original_owned
 
 
@@ -68,29 +68,29 @@ SUBJECTS = [
     Subject("schnorr", ["example=examples/projects/schnorr/main.zkc", "schnorr=libraries/schnorr/lib.zkc"],
             (DATA / "SchnorrProofData.lean", "ZkcExamples.Construction.SchnorrProofData"),
             (DATA / "SchnorrProofParticipant.lean", "ZkcExamples.Construction.SchnorrProofParticipant"),
-            "ZkcExamples.Construction.SchnorrProof", "ZkcExamples.Construction.SchnorrProof.program", True),
+            "ZkcExamples.Construction.SchnorrProof", "ZkcExamples.Construction.SchnorrProof.imported", True),
     Subject("sumcheck", project_modules("examples/projects/sumcheck/zkc.toml"),
             (ROOT / "lean/ZkcExamples/Structured/SumcheckSourceData.lean",
              "ZkcExamples.Structured.SumcheckSourceData"),
             (DATA / "SumcheckProofParticipant.lean", "ZkcExamples.Construction.SumcheckProofParticipant"),
-            "ZkcExamples.Construction.SumcheckProof", "ZkcExamples.Structured.SumcheckSourceViews.program",
+            "ZkcExamples.Construction.SumcheckProof", "ZkcExamples.Structured.SumcheckSourceViews.imported",
             False),
     Subject("composed-sumcheck", project_modules("examples/projects/sumcheck/composed/zkc.toml"),
             (DATA / "ComposedSumcheckProofData.lean", "ZkcExamples.Construction.ComposedSumcheckProofData"),
             (DATA / "ComposedSumcheckProofParticipant.lean",
              "ZkcExamples.Construction.ComposedSumcheckProofParticipant"),
             "ZkcExamples.Construction.ComposedSumcheckProof",
-            "ZkcExamples.Construction.ComposedSumcheckProof.program", True),
+            "ZkcExamples.Construction.ComposedSumcheckProof.imported", True),
     Subject("schnorr-and", project_modules("examples/projects/sigma/zkc.toml"),
             (DATA / "SchnorrAndProofData.lean", "ZkcExamples.Construction.SchnorrAndProofData"),
             (DATA / "SchnorrAndProofParticipant.lean", "ZkcExamples.Construction.SchnorrAndProofParticipant"),
-            "ZkcExamples.Construction.SchnorrAndProof", "ZkcExamples.Construction.SchnorrAndProof.program", True,
+            "ZkcExamples.Construction.SchnorrAndProof", "ZkcExamples.Construction.SchnorrAndProof.imported", True,
             entry="example::AndProof"),
     Subject("chaum-pedersen", project_modules("examples/projects/sigma/zkc.toml"),
             (DATA / "ChaumPedersenProofData.lean", "ZkcExamples.Construction.ChaumPedersenProofData"),
             (DATA / "ChaumPedersenProofParticipant.lean",
              "ZkcExamples.Construction.ChaumPedersenProofParticipant"),
-            "ZkcExamples.Construction.ChaumPedersenProof", "ZkcExamples.Construction.ChaumPedersenProof.program",
+            "ZkcExamples.Construction.ChaumPedersenProof", "ZkcExamples.Construction.ChaumPedersenProof.imported",
             True, entry="example::EqualityProof"),
 ]
 SIGMA = {"schnorr-and", "chaum-pedersen"}
@@ -303,17 +303,21 @@ class Driver:
         parts = [f"import {subject.module}", "import Zkc.Construction.Encoding", "set_option maxRecDepth 20000",
                  body(structured.render(original, "Fresh.Original")),
                  body(constructed.render(exported, "Fresh.Actual"))]
-        # The admitted original program was checked from the retained snapshot,
-        # which must be the fresh one.
-        program = subject.program
+        # The original was admitted from the retained snapshot, which must be the
+        # fresh one; its admission is then the fresh original's admission, and the
+        # composed check runs on that admitted subject.
+        imported = subject.imported
         encoded = json.dumps(list(templates(exported[7])))
         proofs = ["theorem original_retained : Fresh.Original.snapshot = "
                   f"{subject.original[1]}.snapshot := rfl",
+                  "/-- The retained original's admission, for the fresh original. -/\n"
+                  "def freshImported : Zkc.Source.Structured.Imported Fresh.Original.snapshot :=\n"
+                  f"  ⟨{imported}.program, by rw [original_retained]; exact {imported}.admitted⟩",
                   "theorem templates_encoded : (Zkc.Construction.Instruction.templatesList "
                   "Fresh.Actual.participant.instructions).map (fun template => "
                   f"(Zkc.Construction.templateTree template).encode) = {encoded} := by decide +kernel",
-                  "theorem actual_accepted : Zkc.Construction.checkCompiled Fresh.Original.snapshot "
-                  f"{program} Fresh.Actual.participant = .ok () := by decide +kernel"]
+                  "theorem actual_accepted : Zkc.Construction.checkCompiled freshImported "
+                  "Fresh.Actual.participant = .ok () := by decide +kernel"]
         for index, (name, value) in enumerate(mutations.items()):
             namespace = f"Fresh.Mutation{index}"
             parts.append(body(constructed.render(value, namespace)))
@@ -322,7 +326,7 @@ class Driver:
                               f"Zkc.Construction.checkExport Fresh.Original.snapshot {namespace}.participant "
                               "= .ok () := by decide +kernel")
             proofs.append(f"/-- {name} -/\ntheorem mutation{index}_refused : Zkc.Construction.checkCompiled "
-                          f"Fresh.Original.snapshot {program} {namespace}.participant = "
+                          f"freshImported {namespace}.participant = "
                           f".error \"{codes[name]}\" := by decide +kernel")
         proofs.append("#print axioms actual_accepted")
         source = "\n\n".join(parts + proofs) + "\n"

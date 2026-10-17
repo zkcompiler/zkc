@@ -58,8 +58,9 @@ theorem context_admitted : exportContext snapshot participant = some context := 
   rfl
 
 set_option smartUnfolding true in
-/-- The composed per-compile check accepts the actual export. -/
-theorem compiled : checkCompiled snapshot program participant = .ok () := by decide +kernel
+/-- The composed per-compile check accepts the actual export against the
+admitted original. -/
+theorem compiled : checkCompiled imported participant = .ok () := by decide +kernel
 
 theorem validator_eq : context.validator = 1 := by rw [show context = _ from rfl]; rfl
 
@@ -98,8 +99,9 @@ theorem acceptance_decision (values : List (Value F G))
     List.dropLast_singleton, List.map_cons, List.map_nil, List.getElem?_cons_zero]
   rcases first with ⟨_ | _ | _⟩ | _ | _ | _ | _ <;> rfl
 
-/-- Data inputs of the constructed validator: the policy's public inputs, the
-two bases and the two statement points, in original order. -/
+/-- Data inputs of the constructed validator: the policy's public inputs in
+original order, the first base and its statement point, then the second base and
+its statement point. -/
 def inputs (firstBase firstPoint secondBase secondPoint : G) : List (Value F G) :=
   [.data (.group "bls12-381.g1" firstBase), .data (.group "bls12-381.g1" firstPoint),
     .data (.group "bls12-381.g1" secondBase), .data (.group "bls12-381.g1" secondPoint)]
@@ -158,9 +160,10 @@ theorem compiled_transform {m : Type → Type} [Monad m] [LawfulMonad m] (challe
       transform context challenge (verifier firstBase firstPoint secondBase secondPoint handle) initial
         proof := by
   obtain ⟨context', found, composed⟩ :=
-    Zkc.Construction.compiled_transform (F := F) (G := G) snapshot program participant compiled
+    Zkc.Construction.compiled_transform (F := F) (G := G) imported participant compiled
   rw [context_admitted] at found
   cases found
+  dsimp only [imported] at composed
   rw [composed challenge acceptance decision acceptance_decision handle
     (inputs firstBase firstPoint secondBase secondPoint) initial proof
     (verifierInputs firstBase firstPoint secondBase secondPoint handle)

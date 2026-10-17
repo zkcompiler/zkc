@@ -103,7 +103,10 @@ The compiler does not export the interactive role-local program. Both rules
 read the one constructed export: the projection rule as its interactive reading,
 the construction rule as both its interactive and its ideal reading. The
 intermediate stage is a meaning, not an artifact. `checkCompiled` runs both
-checks on the export, and `compiled_transform` composes their equalities:
+checks on the export against one admitted original (`Structured.Imported`): the
+construction rule reads its snapshot and the projection rule the program that
+snapshot admits, so no check can pair a snapshot with a program it does not
+admit. `compiled_transform` composes their equalities:
 
 ```text
 ideal (export) = transform (spec (export))      construction
@@ -134,7 +137,12 @@ imported Sumcheck verifier) and rewrite with the composed equation, so the
 compiled verifiers' ideal interpretations inherit the bounds without a proof
 about the compiled programs. `ExecutableSchnorrFiatShamir` continues one stage
 down through the lowering rule, and a walk over its proof's dependencies shows
-that the proof reaches the general rules and not the Entry's `spec_equation`.
+that the proof reaches the general rules and the Entry's admitted original, and
+not the Entry's `spec_equation`. The walk also lists the Entry-specific
+equations between processes that the proof reaches; all are about the original
+side, and the two the kernel checks by evaluation are the Proof Entry's
+validator process (`SchnorrProof.process_equation`) and its retained DLog
+formula's process (`SchnorrProofBinding.formula_process`).
 
 ## Stage meanings
 
