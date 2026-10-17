@@ -3,11 +3,12 @@
 
 The driver compiles `example::Proof`, retains its original export, native policy,
 constructed candidate and exported validator participant, and requires the
-committed Lean data to be their exact rendering. It then runs the Lean
-transcript-construction rule on the fresh export, together with mutated exports
-that the rule must refuse, and confirms that the native checker refuses a
-mutated candidate before export. This is bounded agreement evidence: native
-exporter correctness and the primitive meanings remain stated boundaries.
+committed Lean data to be their exact rendering. It then runs the composed Lean
+check (transcript construction and participant projection) on the fresh export,
+together with mutated exports that it must refuse, and confirms that the native
+checker refuses a mutated candidate before export. This is bounded agreement
+evidence: native exporter correctness and the primitive meanings remain stated
+boundaries.
 """
 
 import argparse
@@ -107,7 +108,7 @@ class Driver:
                        "committed data differs from the fresh export")
 
     def lean_rule(self, original, exported):
-        """Run the Lean rule on the fresh export and on mutated exports."""
+        """Run the composed Lean check on the fresh export and on mutated exports."""
         mutations = {}
 
         def mutate(name, change):
@@ -133,13 +134,20 @@ class Driver:
             tree[4][2] = exported[3][8][0][1]
             parameters[0] = constructed.encode_tree(tree).hex()
 
+        def decision_compares_base_with_itself(instructions):
+            instruction(instructions, "algebra.group_equal")[3][:] = [0, 0]
+
         mutate("commitment-omitted", first_observation_reads_base)
         mutate("challenge-before-commitment", challenge_reads_host_transcript)
         mutate("wrong-domain-separator", challenge_names_delivery)
-        # Each mutation is refused for the obligation it violates.
+        mutate("decision-compares-base-with-itself", decision_compares_base_with_itself)
+        # Each mutation is refused for the obligation it violates. The last one keeps
+        # the transcript wiring, so the construction rule alone accepts it.
         codes = {"commitment-omitted": "construction-observe",
                  "challenge-before-commitment": "construction-challenge",
-                 "wrong-domain-separator": "construction-challenge-site"}
+                 "wrong-domain-separator": "construction-challenge-site",
+                 "decision-compares-base-with-itself": "projection-unexplained"}
+        construction_accepts = {"decision-compares-base-with-itself"}
 
         def body(text):
             """Drop the module header so several renderings share one check file."""
@@ -147,17 +155,26 @@ class Driver:
                              if line not in ("module", "@[expose] public section")
                              and not line.startswith("public import "))
 
-        parts = ["import Zkc.Construction.Structured", "set_option maxRecDepth 20000",
+        parts = ["import ZkcExamples.Construction.SchnorrProof", "set_option maxRecDepth 20000",
                  body(structured.render(original, "Fresh.Original")),
                  body(constructed.render(exported, "Fresh.Actual"))]
-        proofs = ["theorem actual_accepted : Zkc.Construction.checkExport Fresh.Original.snapshot "
-                  "Fresh.Actual.participant = .ok () := by decide +kernel"]
+        # The admitted original program was checked from the retained snapshot,
+        # which must be the fresh one.
+        program = "ZkcExamples.Construction.SchnorrProof.program"
+        proofs = ["theorem original_retained : Fresh.Original.snapshot = "
+                  f"{ORIGINAL_NAMESPACE}.snapshot := rfl",
+                  "theorem actual_accepted : Zkc.Construction.checkCompiled Fresh.Original.snapshot "
+                  f"{program} Fresh.Actual.participant = .ok () := by decide +kernel"]
         for index, (name, value) in enumerate(mutations.items()):
             namespace = f"Fresh.Mutation{index}"
             parts.append(body(constructed.render(value, namespace)))
-            proofs.append(f"/-- {name} -/\ntheorem mutation{index}_refused : Zkc.Construction.checkExport "
-                          f"Fresh.Original.snapshot {namespace}.participant = .error \"{codes[name]}\" := "
-                          "by decide +kernel")
+            if name in construction_accepts:
+                proofs.append(f"/-- {name} -/\ntheorem mutation{index}_construction_accepted : "
+                              f"Zkc.Construction.checkExport Fresh.Original.snapshot {namespace}.participant "
+                              "= .ok () := by decide +kernel")
+            proofs.append(f"/-- {name} -/\ntheorem mutation{index}_refused : Zkc.Construction.checkCompiled "
+                          f"Fresh.Original.snapshot {program} {namespace}.participant = "
+                          f".error \"{codes[name]}\" := by decide +kernel")
         proofs.append("#print axioms actual_accepted")
         source = "\n\n".join(parts + proofs) + "\n"
         path = self.output / "FreshExport.lean"

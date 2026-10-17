@@ -22,6 +22,9 @@ that all native behavior already has a Lean model.
 - [Fiat–Shamir construction](spec/fiat-shamir.md): the transform of a validator,
   the checked transcript-construction rule and the compiled Schnorr proof
   Entry's random-oracle knowledge soundness.
+- [Participant projection](spec/participant-projection.md): the checked rule
+  relating an exported validator to the original program at its role, and its
+  composition with transcript construction.
 - [Uniform query service](spec/uniform-query-service.md): a concrete structured
   handler with exact all-state query, pass-through and refusal laws, plus
   general-count Sumcheck process transport and actual imported-root bounds.
@@ -34,6 +37,9 @@ that all native behavior already has a Lean model.
   protocol verification targets and evidence boundaries.
 - [Logical contexts](design/logical-contexts.md): port-independent mathematical
   binders, transport along port maps and the contract layer as an instance.
+- [Checked compiler stages](design/checked-stages.md): the common shape of
+  checked stage rules, property-specific relations and their composition, with
+  transcript construction and participant projection as instances.
 - [Research design](design/protocol-verification.md): questions, choices and
   evaluation criteria for extending the implemented architecture.
 - [Native bridge](../bridges/common/README.md): differential and proof-request tests.

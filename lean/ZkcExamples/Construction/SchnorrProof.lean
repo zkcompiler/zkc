@@ -4,8 +4,7 @@ public import Zkc.Source.Structured.UnitViews
 public import ZkcExamples.Construction.SchnorrProofData
 public import ZkcExamples.Construction.SchnorrProofBodies
 public import ZkcExamples.Construction.SchnorrProofParticipant
-public import Zkc.Construction.Soundness
-public import Zkc.Construction.Structured
+public import Zkc.Construction.Compiled
 public import Zkc.Source.Structured.OpenLaws
 public import Zkc.Source.Structured.CommonAdapter
 public import ZkcExamples.NativePrograms.Schnorr
@@ -17,10 +16,11 @@ public import ZkcExamples.NativePrograms.Schnorr
 `SchnorrProofData` is the original-stage export of the Proof Entry, whose
 protocol additionally retains its proof statement. `SchnorrProofParticipant` is
 the compiler's constructed validator for that Entry and its native policy. The
-construction rule accepts the pair, and the constructed program's interactive
-reading is exactly the original validator process. With `check_sound`, the
-compiled verifier's ideal meaning is the Fiat–Shamir transform of the original
-verifier for every challenge function.
+transcript-construction rule and the participant projection rule both accept
+the pair (`compiled`), so by their composed soundness the compiled verifier's
+ideal meaning is the Fiat–Shamir transform of the original verifier for every
+challenge function (`compiled_transform`). No equation specific to this Entry is
+assumed: `spec_equation` is derived from the projection rule.
 -/
 
 namespace ZkcExamples.Construction.SchnorrProof
@@ -134,14 +134,108 @@ theorem inputs_arity (base key : G) :
 helpers. The Schnorr validator calls none. -/
 abbrev table : Structured.Meanings F G := helperTable program F G
 
+set_option smartUnfolding true in
+/-- The participant projection rule accepts the actual export. -/
+theorem projected : project program context participant = .ok () := by decide +kernel
+
+set_option smartUnfolding true in
+/-- The composed per-compile check accepts the actual export. -/
+theorem compiled : checkCompiled SchnorrProofData.snapshot program participant = .ok () := by
+  decide +kernel
+
+theorem validator_eq : context.validator = 1 := by rw [context_eq]
+
+set_option smartUnfolding true in
+theorem acceptancePosition_eq : acceptancePosition = 0 := by decide +kernel
+
+/-- The acceptance decision among the validator's outputs. -/
+def decision (options : List (Option (Value F G))) : Option Bool :=
+  match options[acceptancePosition]? with
+  | some (some (.data (.boolean value))) => some value
+  | _ => none
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+/-- On every list of the returned length, the acceptance output is the decision
+among the validator's outputs. -/
+theorem acceptance_decision (values : List (Value F G))
+    (length : values.length = participant.returned.length) :
+    acceptance values = decision (values.dropLast.map some) := by
+  have returnedLength : participant.returned.length = 2 := rfl
+  rw [returnedLength] at length
+  rcases values with _ | ⟨first, _ | ⟨second, _ | _⟩⟩ <;> simp at length
+  simp only [acceptance, decision, acceptancePosition_eq, List.dropLast_cons_cons,
+    List.dropLast_singleton, List.map_cons, List.map_nil, List.getElem?_cons_zero]
+  rcases first with ⟨_ | _ | _⟩ | _ | _ | _ | _ <;> rfl
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+/-- The constructed program's data inputs hold the validator's original inputs:
+base and statement at their exported positions, and the handle as the replaced
+service. -/
+theorem inputs_related (base key : G) (handle : Nat) (initial : History F G) :
+    HoldsValues handle ((inputs base key).map .data ++ [.transcript initial])
+      (inputSlots context participant.policy program.payload.entry.inputs)
+      (verifierInputs (F := F) base key handle) := by
+  have slotsEq : inputSlots context participant.policy program.payload.entry.inputs =
+      [.held 0, .held 1, .absent, .absent, .service] := by
+    rw [context_eq]
+    rfl
+  rw [slotsEq]
+  refine ⟨⟨base, rfl, ?_⟩, ⟨key, rfl, ?_⟩, rfl, rfl, rfl, trivial⟩ <;>
+    simp [inputs, Value.decode]
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+/-- The decision among the validator's outputs is its acceptance output. -/
+theorem decision_outputs (outputs : Values (Component (assignment F G)) program.payload.entry.outputs) :
+    decision (validatorOutputs 1 program.payload.entry.outputScopes outputs) = outputs.get .here := by
+  have scopesEq : program.payload.entry.outputScopes = [[1]] := rfl
+  rw [scopesEq]
+  rcases outputs with _ | ⟨value, _ | _⟩
+  simp only [decision, acceptancePosition_eq]
+  cases value <;> rfl
+
+/-- The original validator, read through its outputs, is the verifier. -/
+theorem original_verifier (base key : G) (handle : Nat) :
+    ((program.participant F G context.validator (verifierInputs base key handle)).bind fun outputs =>
+      .done (decision (validatorOutputs context.validator program.payload.entry.outputScopes
+        outputs))).interpret CommonAdapter.project = verifier base key handle := by
+  unfold verifier process
+  rw [validator_eq]
+  simp only [decision_outputs]
+
 /-- The constructed program's interactive reading is the original validator,
-with every reply, stop and acceptance decision. -/
+with every reply, stop and acceptance decision. Derived from the projection rule;
+no computation specific to this Entry is involved. -/
 theorem spec_equation (base key : G) (handle : Nat) (initial : History F G) :
     (spec context handle table participant.returned participant.instructions
         ((inputs base key).map .data ++ [.transcript initial])).bind
       (fun values => .done (acceptance values)) =
       Zkc.Protocols.Schnorr.Common.experiment wiring base key handle := by
-  rfl
+  rw [spec_bind_congr context handle table participant.returned participant.instructions _ acceptance
+    (fun values => decision (values.dropLast.map some)) acceptance_decision]
+  have projected' := project_sound program context participant projected handle
+    ((inputs base key).map .data) initial (verifierInputs base key handle)
+    (inputs_related base key handle initial) rfl
+  calc (spec context handle table participant.returned participant.instructions
+          ((inputs base key).map .data ++ [.transcript initial])).bind
+          (fun values => .done (decision (values.dropLast.map some)))
+      = ((spec context handle table participant.returned participant.instructions
+          ((inputs base key).map .data ++ [.transcript initial])).bind
+          (fun values => .done (values.dropLast.map some))).bind
+          (fun options => .done (decision options)) := by
+        rw [PIR.Proc.bind_assoc]
+        rfl
+    _ = (((program.participant F G context.validator (verifierInputs base key handle)).bind
+          fun outputs => .done (validatorOutputs context.validator program.payload.entry.outputScopes
+            outputs)).interpret CommonAdapter.project).bind
+          (fun options => .done (decision options)) := by
+        rw [projected']
+    _ = ((program.participant F G context.validator (verifierInputs base key handle)).bind
+          fun outputs => .done (decision (validatorOutputs context.validator
+            program.payload.entry.outputScopes outputs))).interpret CommonAdapter.project := by
+        rw [PIR.Proc.interpret_bind, PIR.Proc.interpret_bind, PIR.Proc.bind_assoc]
+        rfl
+    _ = Zkc.Protocols.Schnorr.Common.experiment wiring base key handle := by
+        rw [original_verifier, verifier_correspondence]
 
 /-- The compiled verifier, under the ideal transcript model with any challenge
 function in any lawful monad, is the Fiat–Shamir transform of the original
@@ -154,8 +248,13 @@ theorem compiled_transform {m : Type → Type} [Monad m] [LawfulMonad m]
         ideal context challenge table participant.returned participant.instructions
           ((inputs base key).map .data ++ [.transcript initial]) proof =
       transform context challenge (verifier base key handle) initial proof := by
-  rw [verifier_correspondence, ← spec_equation base key handle initial, transform_bind_done,
-    check_sound context challenge handle table participant checked ((inputs base key).map .data)
-      initial proof (by simp [inputs_arity])]
+  obtain ⟨context', found, composed⟩ :=
+    Zkc.Construction.compiled_transform (F := F) (G := G) SchnorrProofData.snapshot program participant
+      compiled
+  rw [context_admitted] at found
+  cases found
+  rw [composed challenge acceptance decision acceptance_decision handle ((inputs base key).map .data)
+    initial proof (verifierInputs base key handle) (inputs_related base key handle initial) rfl,
+    original_verifier]
 
 end ZkcExamples.Construction.SchnorrProof

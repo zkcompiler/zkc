@@ -119,8 +119,9 @@ transcript; `exportAcceptance` gives the returned position of the decision. The
 context is derived from the original roster, the policy and the service's
 contract. Only the installed native construction with one replaced service and
 distinct selected draws is admitted. The rule does not compare the program's
-calculations, guards or results with the original; that is the participant
-projection's obligation.
+calculations, guards or results with the original; that is the obligation of
+the [participant projection](participant-projection.md) rule, which composes
+with this one.
 
 `check_sound` uses only that the instruction walk (`checkFrom`) succeeds from the
 initial state. The final clauses of `check`, the coordinate conditions and the
@@ -156,11 +157,18 @@ compiled candidate. In `ZkcExamples.Construction.SchnorrProof`:
 - `accepted` runs `checkExport` on the actual export in the kernel, and
   `public_values` shows that the values the host binds at the checked public
   positions are the validator's original base and statement inputs;
-- `spec_equation` proves that the export's interactive reading, projected to
-  the selected acceptance output, is that same experiment, by computation;
-- `compiled_transform` composes these: for every challenge function, the
-  compiled verifier's ideal meaning is the Fiat–Shamir transform of the original
-  Proof Entry's validator.
+- `compiled` runs the composed check `checkCompiled` (transcript construction
+  and [participant projection](participant-projection.md)) on the actual export
+  in the kernel;
+- `compiled_transform` instantiates the composed theorem: for every challenge
+  function, the compiled verifier's ideal meaning is the Fiat–Shamir transform
+  of the original Proof Entry's validator. Its Entry-specific premises are the
+  admission, the derived context, the input relation (`inputs_related`) and the
+  position of the acceptance output; no equation about the program's meaning
+  is assumed or computed;
+- `spec_equation`, that the export's interactive reading projected to the
+  selected acceptance output is the common Schnorr experiment, is derived from
+  `project_sound` and `verifier_correspondence`.
 
 `ZkcSecurity.Examples.CompiledSchnorrFiatShamir` answers every challenge with
 one lazily sampled random oracle on histories, which the prover may query at any

@@ -1,8 +1,11 @@
 -- Maintained by audit_imports.py; library, test, example and selected executable consumers are audited.
 import Zkc
 import Zkc.Algebra.RingExpression
+import Zkc.Construction.Compiled
 import Zkc.Construction.FiatShamir
 import Zkc.Construction.Participant
+import Zkc.Construction.Projection
+import Zkc.Construction.ProjectionSoundness
 import Zkc.Construction.Rule
 import Zkc.Construction.Semantics
 import Zkc.Construction.Soundness
@@ -190,6 +193,7 @@ import Tests.Machine
 import Tests.MultilinearListRestriction
 import Tests.MultilinearSumcheck
 import Tests.ParticipantInterface
+import Tests.ProjectionControls
 import Tests.RegionCompatibility
 import Tests.RegionDecoding
 import Tests.RegionDerivation
