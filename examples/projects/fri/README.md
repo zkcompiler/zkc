@@ -33,5 +33,8 @@ uv run --no-sync --locked pytest common/tests/protocol/test_fri.py
 The library also returns the sampled positions and their authenticated initial
 word values. A surrounding polynomial-opening protocol must bind those values
 to its own opening equations. This client demonstrates FRI execution and
-rejection checks; it does not supply an AIR reduction, a FRI proximity theorem,
-a Fiat–Shamir security theorem or zero knowledge.
+rejection checks. The independent Lean model proves round-by-round soundness of
+the library's low-degree test with ideal commitments, including at these
+parameters ([FRI security](../../../lean/docs/spec/fri-security.md)); this client
+does not supply an AIR reduction, commitment security, a Fiat–Shamir security
+theorem for its compiled verifier or zero knowledge.

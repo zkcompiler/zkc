@@ -90,10 +90,11 @@ division by two is not a generic field law. For an even-sized coset,
 `i+n/2`, returning
 `(v_i+v_(i+n/2))/2 + beta*(v_i-v_(i+n/2))/(2*x_i)`.
 Its next domain has shift `s^2` and size `n/2`. This operation is defined on any
-admitted vector. The polynomial identity
-`p(X)=p_even(X^2)+X*p_odd(X^2)` and the degree bound for
-`p_even + beta*p_odd` are proved in `Zkc.Polynomial.EvenOdd`;
-cryptographic FRI proximity soundness is a separate obligation.
+admitted vector. On `p(X)=p_even(X^2)+X*p_odd(X^2)` it returns the evaluations
+of `p_even + beta*p_odd`, whose degree bound halves. The independent
+[FRI model](../../../lean/docs/spec/fri-security.md) relates this formula to
+ArkLib's binary fold; proximity soundness of a low-degree test built from it is a
+separate obligation.
 
 `poly.divide_opening<F>(p,z,y)` checks `p(z)=y` and returns normalized coefficients
 of `(p(X)-y)/(X-z)`, including zero/constant cases. It works over the coefficient

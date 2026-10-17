@@ -32,6 +32,10 @@ that all native behavior already has a Lean model.
   oracle on all typed histories, its instances for the imported Sumcheck
   verifier and the plain GKR verifier, and its composition with the checked
   rules for the compiled Sumcheck and GKR proof Entries.
+- [FRI security](spec/fri-security.md): the verifier of the FRI library's
+  low-degree test at the ideal interpretation of its commitments, its
+  line-by-line correspondence to the source and ArkLib's FRI analysis, and its
+  round-by-round soundness certificate with explicit errors.
 - [Executable stage](spec/executable.md): the meaning of the validator program
   the runtime admits, with loops and helper calls, the checked lowering rule from
   the constructed validator and helper preparation, the executable Schnorr
