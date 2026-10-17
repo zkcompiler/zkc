@@ -57,9 +57,14 @@ Line numbers refer to `libraries/fri/lib.zkc`. Each model definition is in
 | `configured`, `shape` (64–75, 93–99) | static `R` and `s`; nonzero shift and a primitive root for `cosetDomain` | premises of the theorems |
 
 `coset::fold` (115) and `interpolate_coefficients` (118) are honest-prover
-operations. `verify_of_honest` shows that the verifier accepts every position of
-honestly folded layers whose final coefficients satisfy the bound, so the
-checks are consistent with folding.
+operations and are not modelled. `Honest` states that each committed word after
+the first, and the final polynomial's evaluations, are ArkLib's fold of the
+previous word, which is the library's fold formula by `foldedValue_eq`.
+`verify_of_honest` shows that the verifier accepts every position of such layers
+when the final coefficients satisfy the bound, so the checks are consistent with
+folding. Completeness for codewords, that folding a codeword of degree below
+`2^(t + R)` ends at a polynomial with at most `2^t` coefficients, is not proved
+here.
 
 ## Certificate
 
