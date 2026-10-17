@@ -236,6 +236,54 @@ another type, may instead be an outcome image of the transform;
 `acceptance_le_of_image` then carries the fixed-statement bound over when
 acceptance of the image implies acceptance of the transform's outcome.
 
+## The compiled Sumcheck proof Entry
+
+`ZkcSecurity.Examples.CompiledSumcheckFiatShamir` composes these theorems with
+the transcript-construction and
+[participant projection](participant-projection.md#the-compiled-sumcheck-proof-entry)
+rules. Its subject is the compiled verifier itself: `compiledVerifier challenge
+raw claim count initial proof` is the ideal interpretation
+(`Zkc.Construction.ideal`) of the exported validator `SumcheckProof.participant`,
+under the occurrence context the check derives and with helper calls read by the
+original's checked helpers, on the table values, the claim, the round count and
+the initial transcript, read through the acceptance output the policy selects.
+
+- `construction` is the vertical link: for every challenge function the
+  compiled verifier is the transform of `importedValidator`. It instantiates
+  `SumcheckProof.compiled_transform`, which follows from the composed check
+  `checkCompiled` with no equation specific to the Entry, and
+  `verifier_imported`, the definitional equality of the Proof Entry's original
+  validator with the imported `example::Interactive` verifier. The construction
+  bridge pins the bytes: the Proof Entry's fresh original export must render to
+  `SumcheckSourceData`, the admitted source both readings use (the check
+  `regenerated:lean/ZkcExamples/Structured/SumcheckSourceData.lean` of its
+  `sumcheck` subject).
+- `soundness`: for a fixed statement and initial transcript, the compiled
+  verifier accepts a false claim on the raw table values with probability at
+  most `(Q + count) / |F|`, against every prover with at most `Q` queries to the
+  transcript oracle on all typed histories. Acceptance ignores unread proof
+  messages, so the bound also covers host acceptance.
+- `adaptive_soundness`: for well-formed statements chosen after the queries,
+  with decoded challenges, at most `(Q + 2) * (1 / |F| + loss)` when the initial
+  transcripts `initial statement` determine the statement; `reduced_soundness`
+  instantiates the decoding with reduction modulo the field size of a sample
+  below `N`, `loss = |F| / N`.
+
+The adaptive theorems take the binding as a premise. The host binds the
+policy's public inputs, here the table values, the claim and the round count,
+but the binding model covers scalar public inputs only, so it is not proved
+that the deployed Entry's binding determines the statement.
+
+The controls (`TestsSecurity.CompiledSumcheckFiatShamir`) use the one-round
+`ZMod 5` instance of the imported verifier's controls. The premises hold
+together. The compiled program, evaluated in the kernel without the
+construction equation, accepts the cheating proof exactly at the challenge `2`
+and the honest proof for the true claim at every challenge. The query-free
+cheating prover is accepted with probability exactly `1 / 5`, so the bound is
+attained on the compiled Entry. Without a determining binding, a one-query
+prover is accepted on a false claim with probability `4 / 5`, above the adaptive
+bound `3 / 5`.
+
 ## Obligations
 
 The informal "random oracle" assumption separates into four obligations:

@@ -58,10 +58,14 @@ sends; [support](../../docs/support.md#interactive-schnorr) states its premises.
 Fiat–Shamir extraction to the imported verifier's Sigma instance.
 `Examples/CompiledSchnorrFiatShamir` runs the compiled `example::Proof`
 verifier with a random oracle on all transcript histories, through the core
-[transcript-construction rule](../../docs/spec/fiat-shamir.md). Injective
-routing of histories (`Oracle/Encoding`) makes the experiment exactly VCVio's
-Fiat–Shamir verification run, which gives its knowledge-soundness bound under
-named assumptions, for the relation retained by the Proof Entry's own export.
+[transcript-construction](../../docs/spec/fiat-shamir.md) and
+[participant projection](../../docs/spec/participant-projection.md) rules.
+Injective routing of histories (`Oracle/Encoding`) makes the experiment exactly
+VCVio's Fiat–Shamir verification run, which gives its knowledge-soundness bound
+under named assumptions, for the relation retained by the Proof Entry's own
+export. `Examples/ExecutableSchnorrFiatShamir` transfers that bound to provers
+of proof bytes for the validator program the runtime admits, through the core
+[lowering rule](../../docs/spec/executable.md).
 
 `FiatShamir/Replay` and `FiatShamir/Soundness` prove
 [multi-round Fiat–Shamir soundness](../../docs/spec/fiat-shamir-security.md) of
@@ -78,7 +82,11 @@ the theorems for the actual imported Sumcheck verifier, with ArkLib's
 single-round successor bound as the per-round soundness, bounds the composed
 Reduction root as a reduction to a residual evaluation claim, and states
 composition theorems whose only premise about a compiled verifier is its
-construction equality.
+construction equality. `Examples/CompiledSumcheckFiatShamir` discharges that
+premise for the compiled Sumcheck `example::Proof` verifier with the core
+composed rules and states its
+[fixed-statement and adaptive soundness](../../docs/spec/fiat-shamir-security.md#the-compiled-sumcheck-proof-entry);
+the adaptive form keeps the determining binding as a premise.
 
 `VCVio/SigmaAnd` composes two VCVio Σ-protocols with one shared challenge.
 Completeness and special soundness compose directly; zero knowledge composes
