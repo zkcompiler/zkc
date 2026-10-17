@@ -165,6 +165,12 @@ def checkContext (raw : RawContext) :
   let atoms ← checkAtoms resolution signature context raw.atoms
   pure ⟨context, atoms⟩
 
+/-- The first binder of a context decodes at position zero, for any decision
+procedure on sorts; this lets checks over symbolic static arguments compute. -/
+theorem decode_first_binder {T : Type} [DecidableEq T] (head : T) (rest : List T) :
+    Var.decode (head :: rest) head 0 = some .here :=
+  Var.decode_index (Γ := head :: rest) Var.here
+
 /-- A checked atom's predicate carries exactly the exported identity. -/
 theorem checkAtom_identity {context : List (LogicalType V.Sorts)} {raw : RawAtom}
     {atom : Atom V Value signature context}

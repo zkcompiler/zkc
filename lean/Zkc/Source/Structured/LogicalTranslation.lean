@@ -12,7 +12,9 @@ Their meaning is keyed by the relation's table position, so every retained
 application of one relation reads one meaning. A retained clause lowers to an
 atom whose `parameter`/`witness` arguments read the legacy keys and whose
 remaining arguments observe the boundary, exactly as `readSelectors` routes
-them. Existing statements are unchanged; these theorems relate them. -/
+them. For an external terminal only the reads are lowered; its meaning stays
+experiment-authored. Existing statements are unchanged; these theorems relate
+them. -/
 
 set_option autoImplicit false
 namespace Zkc.Source.Structured.Logical
@@ -358,9 +360,10 @@ theorem lowerOutputs_read (protocolContext : ProtocolContext)
     cases first <;> cases others <;> rfl
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
-/-- An existing external terminal reads lowered terms of the same store: its
-parameter sources and output observations become terms in order, and its
-experiment-authored meaning is applied to their values. -/
+/-- Only the reads of an existing external terminal are lowered: its parameter
+sources and output observations become terms of the same store, in order. Its
+experiment-authored meaning is applied unchanged and stays opaque to the
+carrier; it is not translated into a vocabulary predicate. -/
 theorem _root_.Zkc.Source.Structured.ExternalTerminal.holds_iff_lowered (terminal : ExternalTerminal owner F G)
     (protocolContext : ProtocolContext)
     (boundary : BoundaryValuation (assignment F G) owner.protocol.inputs owner.protocol.outputs)
