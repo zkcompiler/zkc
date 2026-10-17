@@ -70,8 +70,10 @@ source-to-plan error. Unsupported cases and timeouts are not agreement.
 
 C++/Rust checks remain bounded native evidence. Lean source/direct-plan models
 have their own interpretations and proofs. A connection to `zkc.program/0` needs an
-explicit interpretation. Native semantics and differential/formal connections remain
-separate work under [assurance](../../docs/assurance.md).
+explicit interpretation; the [executable bridge](../../lean/bridges/executable/README.md)
+supplies one for straight-line proof validators and compares it with the runtime.
+Native semantics and differential/formal connections remain separate work under
+[assurance](../../docs/assurance.md).
 
 
 The source machine tests cover both interaction reductions through separate proof

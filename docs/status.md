@@ -290,6 +290,19 @@ transform. Composition theorems leave the construction equality of the
 compiled Sumcheck proof Entry as their only premise about the compiled program;
 that equality is proved above but not yet composed with the bounds, so the
 Sumcheck Entry has no security theorem.
+The [executable bridge](../lean/bridges/executable/README.md) reads the validator
+of the Schnorr Entry's `zkc.program/0` candidate, which the runtime admits. Lean
+checks it against the constructed validator with a [lowering rule](../lean/docs/spec/executable.md)
+whose meaning covers proof framing, decoding failures, instruction budgets,
+frames and transcript custody, and transfers the knowledge-soundness bound to
+provers of proof bytes through the general construction, projection and lowering
+rules, with no equation specific to the Entry. The bridge compares the runtime's
+stops and observations with that meaning and checks that the runtime executes the
+program a verification receipt names, with the acceptance output and public
+inputs of the Lean statement. The runtime's execution, kernels and codec, the
+program renderer and the structured exporter remain trusted; the runtime refuses
+some inputs the meaning classifies differently, listed in
+[support](../lean/docs/support.md).
 
 The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retained
 PIR programs, proves open-process contracts, and applies selected ArkLib/VCVio

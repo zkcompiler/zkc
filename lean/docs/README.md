@@ -29,6 +29,9 @@ that all native behavior already has a Lean model.
   the transform of any validator from round-by-round soundness, in a random
   oracle on all typed histories, and its instance for the imported Sumcheck
   verifier.
+- [Executable stage](spec/executable.md): the meaning of the validator program
+  the runtime admits, the checked lowering rule from the constructed validator
+  and the executable Schnorr verifier's knowledge soundness for byte provers.
 - [Uniform query service](spec/uniform-query-service.md): a concrete structured
   handler with exact all-state query, pass-through and refusal laws, plus
   general-count Sumcheck process transport and actual imported-root bounds.

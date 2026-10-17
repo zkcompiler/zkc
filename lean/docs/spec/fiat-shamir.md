@@ -244,3 +244,7 @@ what the host absorbs, so statement binding carries no weight in it; binding
 matters when the prover chooses the statement adaptively, which is not covered.
 The theorem bounds no running time, covers no zero knowledge or other suites,
 and makes no claim about Merlin or BLS12-381 implementations.
+
+The [executable stage](executable.md) relates this constructed validator to the
+program the runtime admits and replaces the transport and native-correctness
+assumptions with assumptions about the runtime, its kernels and its codec.

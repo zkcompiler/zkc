@@ -176,7 +176,9 @@ this same program format with distinct Host responsibilities. The single proof
 policy independently constrains actual messages, loops, keys and transcript
 transitions; the program format alone grants no proof authority.
 Independent Lean participant models do not interpret this format. Native checking
-support requires its own interpretation and correspondence evidence.
+support requires its own interpretation and correspondence evidence; the Lean
+[executable stage](../../../lean/docs/spec/executable.md) interprets the
+straight-line validator participants of native proof deployments.
 
 ## Conditional completion extension
 
