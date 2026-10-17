@@ -529,15 +529,20 @@ the decoding, false-claim and query-bound premises hold together and the
 fixed-statement bound is `1 / 5`. Kernel evaluations of the transform under fixed
 challenge tables show that the cheating proof `(0, 0)` is accepted at the
 challenge `2` and rejected at every other challenge, and that for the true claim
-`3` the honest proof `(2, 1)` is accepted at every challenge. A three-event
-binding of the raw vector, claim and count is proved to determine the statement,
-and the adaptive premises then hold together with the bound `2 / 5`. Reduction
-modulo `5` of a uniform sample below `8` satisfies the decoding premise with loss
-`5 / 8` and is proved not to satisfy it with loss zero. The declaration audit
-covers the general modules `ZkcSecurity.FiatShamir.{Replay,Soundness,Decoding}`,
-the Sumcheck instance and its controls; the closures of `soundness`,
-`adaptive_soundness`, `randomized_soundness`, `balanced_reduce`,
-`imported_soundness`, `adaptive_imported_soundness`, `reduced_imported_soundness`
-and `compiled_soundness` are `propext`, `Classical.choice` and `Quot.sound`,
-including the consumed VCVio `prEvent_randomOracle_le_of_bad_queries` and ArkLib
+`3` the honest proof `(2, 1)` is accepted at every challenge. The query-free
+cheating prover's acceptance probability in the oracle experiment is computed to
+be exactly `1 / 5`, so the bound is attained. A three-event binding of the raw
+vector, claim and count is proved to determine the statement, and the adaptive
+premises then hold together with the bound `2 / 5`; with one initial history for
+every statement, a one-query prover that chooses the vector after the challenge
+is accepted on a false claim with probability `4 / 5`, above the adaptive bound,
+so the binding premise is necessary. Reduction modulo `5` of a uniform sample
+below `8` satisfies the decoding premise with loss `5 / 8` and is proved not to
+satisfy it with loss zero. The declaration audit covers the general modules
+`ZkcSecurity.FiatShamir.{Replay,Soundness,Decoding}`, the Sumcheck instance and its
+controls; the closures of `soundness`, `adaptive_soundness`,
+`randomized_soundness`, `balanced_reduce`, `imported_soundness`,
+`adaptive_imported_soundness`, `reduced_imported_soundness` and
+`compiled_soundness` are `propext`, `Classical.choice` and `Quot.sound`, including
+the consumed VCVio `prEvent_randomOracle_le_of_bad_queries` and ArkLib
 `MultivariateRound.uniform_successor_soundness`.

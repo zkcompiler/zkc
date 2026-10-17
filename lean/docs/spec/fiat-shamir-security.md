@@ -215,11 +215,18 @@ The informal "random oracle" assumption is separated into four obligations:
 `[2, 1]`, whose extension is `2 - r` and whose sum is `3`. All premises of
 `imported_soundness` hold together for the false claim `0`, giving the bound
 `1 / 5`. The cheating proof `(0, 0)` passes the boundary check and is accepted
-exactly at the challenge `2`, so the bounded event is not empty. For the true
-claim `3` the honest proof is accepted at every challenge, so the false-claim
-premise cannot be dropped. A binding of the raw vector, the claim and the round
-count in three initial events determines the statement, and all premises of
-`adaptive_imported_soundness` hold together with the bound `2 / 5`. Reducing a
-uniform sample below `8` modulo `5` satisfies the decoding premise with loss
-`5 / 8` and violates it with loss zero, since it hits `0` with probability
-`2 / 8`.
+exactly at the challenge `2`; a prover that sends it without querying is accepted
+with probability exactly `1 / 5` (`cheater_acceptance`), so the bound is attained.
+For the true claim `3` the honest proof is accepted at every challenge, so the
+false-claim premise cannot be dropped.
+
+A binding of the raw vector, the claim and the round count in three initial
+events determines the statement, and all premises of
+`adaptive_imported_soundness` hold together with the bound `2 / 5`. The
+determining premise cannot be dropped: with one initial history for every
+statement (`unbound`, which is not determining), a prover that asks the
+challenge `r` of `(0, 0)` first and then chooses the vector `[r, r - 1]` is
+accepted on a false claim with probability `4 / 5` (`weak_acceptance`), above the
+`3 / 5` the adaptive bound would give for its single query. Reducing a uniform
+sample below `8` modulo `5` satisfies the decoding premise with loss `5 / 8` and
+violates it with loss zero, since it hits `0` with probability `2 / 8`.

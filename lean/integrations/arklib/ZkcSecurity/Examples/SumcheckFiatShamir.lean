@@ -66,7 +66,7 @@ def afterLow (ctx : ProtocolContext) (handle : Nat) (pc : List F × F) (low : F)
     fun high => afterHigh ctx handle pc low high
 
 /-- One verifier round over the common participant actions. -/
-def round (ctx : ProtocolContext) (handle : Nat) (pc : List F × F) :
+def verifierRound (ctx : ProtocolContext) (handle : Nat) (pc : List F × F) :
     PIR.Proc (Actions F G) (List F × F) :=
   .call (.receive (.field "bls12-381.fr") (SumcheckVerifierLaws.lowSite ctx) (ctx.roles 0))
     fun low => afterLow ctx handle pc low
@@ -81,7 +81,7 @@ def terminal (count : Nat) (table : Table F count) (pc : List F × F) :
 the terminal check. -/
 def validator (ctx : ProtocolContext) (handle count : Nat) (table : Table F count) (claim : F) :
     PIR.Proc (Actions F G) (Option Bool) :=
-  (PIR.repeatN count (round ctx handle) ([], claim)).bind (terminal count table)
+  (PIR.repeatN count (verifierRound ctx handle) ([], claim)).bind (terminal count table)
 
 end Process
 
@@ -111,8 +111,8 @@ theorem repeatN_interpret {I J : PIR.Signature} {S : Type}
 omit [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem roundPresent_project (ctx : ProtocolContext) (handle : Nat) (pc : List F × F) :
     (SumcheckVerifierLaws.roundPresent (G := G) ctx handle pc).interpret CommonAdapter.project =
-      round ctx handle pc := by
-  unfold SumcheckVerifierLaws.roundPresent round afterLow afterHigh afterChallenge
+      verifierRound ctx handle pc := by
+  unfold SumcheckVerifierLaws.roundPresent verifierRound afterLow afterHigh afterChallenge
   refine congrArg (PIR.Proc.call _) (funext fun low => ?_)
   refine congrArg (PIR.Proc.call _) (funext fun high => ?_)
   simp only [PIR.Proc.bind]
@@ -174,16 +174,16 @@ produce it. -/
 def residual (ctx : ProtocolContext) (handle count : Nat) (table : Table F count) :
     Phase F → PIR.Proc (Actions F G) (Option Bool)
   | .round remaining point claim =>
-      (PIR.repeatN remaining (round ctx handle) (point, claim)).bind (terminal count table)
+      (PIR.repeatN remaining (verifierRound ctx handle) (point, claim)).bind (terminal count table)
   | .low remaining point claim low =>
       ((afterLow ctx handle (point, claim) low).bind
-        (PIR.repeatN remaining (round ctx handle))).bind (terminal count table)
+        (PIR.repeatN remaining (verifierRound ctx handle))).bind (terminal count table)
   | .high remaining point claim low high =>
       ((afterHigh ctx handle (point, claim) low high).bind
-        (PIR.repeatN remaining (round ctx handle))).bind (terminal count table)
+        (PIR.repeatN remaining (verifierRound ctx handle))).bind (terminal count table)
   | .challenged remaining point claim low high challenge =>
       ((afterChallenge ctx (point, claim) low high challenge).bind
-        (PIR.repeatN remaining (round ctx handle))).bind (terminal count table)
+        (PIR.repeatN remaining (verifierRound ctx handle))).bind (terminal count table)
 
 /-- ArkLib's realized polynomial oracle of the original table. -/
 noncomputable abbrev behavior {count : Nat} (table : Table F count) :=
@@ -263,7 +263,7 @@ theorem falseClaim_successor {count : Nat} (table : Table F count) (point : List
       ¬ FalseClaim table (point ++ [challenge]) ((1 - challenge) * low + challenge * high)] ≤
       1 / (Fintype.card F : ENNReal) := by
   obtain ⟨index, statement, sized, target, challenges, notClosed⟩ := wrong
-  obtain ⟨round, rfl⟩ : ∃ round : Fin count, round.castSucc = index :=
+  obtain ⟨position, rfl⟩ : ∃ position : Fin count, position.castSucc = index :=
     Fin.exists_castSucc_eq.mpr (fun last => by
       rw [last] at sized
       simp at sized
@@ -275,19 +275,19 @@ theorem falseClaim_successor {count : Nat} (table : Table F count) (point : List
       funext (message_evaluate (low, high))
     rw [evaluated, target, checked]
     exact domain_sum_message (low, high)
-  have bound := MultivariateRound.uniform_successor_soundness count 1 F (boolEmbedding F) round
+  have bound := MultivariateRound.uniform_successor_soundness count 1 F (boolEmbedding F) position
     statement (oracleStatement table) (message (low, high)) notClosed passes
   rw [Nat.cast_one] at bound
   refine (prEvent_mono _ _ _ (fun challenge escaped => ?_)).trans bound
   by_contra notClosed'
   apply escaped
-  refine ⟨round.succ, ⟨(message (low, high)).val.eval challenge,
+  refine ⟨position.succ, ⟨(message (low, high)).val.eval challenge,
     Fin.snoc statement.challenges challenge⟩, ?_, ?_, ?_, notClosed'⟩
   · simp [sized]
   · rw [message_evaluate]
     rfl
   · change Fin.snoc (α := fun _ => F) statement.challenges challenge =
-      coordinates (round.val + 1) (point ++ [challenge])
+      coordinates (position.val + 1) (point ++ [challenge])
     rw [challenges]
     exact snoc_coordinates point challenge sized
 
