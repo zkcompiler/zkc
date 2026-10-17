@@ -273,8 +273,8 @@ receives. Neither establishes a Fiat–Shamir reduction or arbitrary polynomial
 or protocol equivalence.
 
 The [transcript-construction bridge](../lean/bridges/construction/README.md)
-exports the compiled Schnorr, Sumcheck and composed Sumcheck proof Entries'
-checked validators
+exports the checked validators of the compiled proof Entries of the Schnorr,
+Sumcheck, composed Sumcheck and Sigma examples
 ([format](spec/formats/constructed-participant.md)). Lean checks their transcript
 construction and their [participant projection](../lean/docs/spec/participant-projection.md)
 against the original exports and proves that each compiled verifier's ideal
@@ -286,10 +286,13 @@ Entries, suites and programmable constructions have no such check. Lean also
 proves [Fiat–Shamir soundness](../lean/docs/spec/fiat-shamir-security.md) of the
 transform of any validator over the common participant actions with a
 round-by-round soundness certificate, and of the imported Sumcheck verifier's
-transform. Composition theorems leave the construction equality of the
-compiled Sumcheck proof Entry as their only premise about the compiled program;
-that equality is proved above but not yet composed with the bounds, so the
-Sumcheck Entry has no security theorem.
+transform. Composed with the Sumcheck Entry's checked transform equation, this
+bounds the compiled Sumcheck verifier's ideal interpretation in the random-oracle
+model: a false claim is accepted with probability at most `(Q + n) / |F|` for a
+fixed statement, and adaptively chosen statements are bounded when the initial
+transcript determines the statement. The host's binding of the Entry's vector
+and count public inputs is not modelled, so that adaptive premise is not
+discharged for the deployed Entry.
 The [executable bridge](../lean/bridges/executable/README.md) reads the validator
 of the Schnorr Entry's `zkc.program/0` candidate, which the runtime admits. Lean
 checks it against the constructed validator with a [lowering rule](../lean/docs/spec/executable.md)

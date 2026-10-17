@@ -27,8 +27,9 @@ that all native behavior already has a Lean model.
   composition with transcript construction.
 - [Multi-round Fiat–Shamir security](spec/fiat-shamir-security.md): soundness of
   the transform of any validator from round-by-round soundness, in a random
-  oracle on all typed histories, and its instance for the imported Sumcheck
-  verifier.
+  oracle on all typed histories, its instance for the imported Sumcheck
+  verifier, and its composition with the checked rules for the compiled
+  Sumcheck proof Entry.
 - [Executable stage](spec/executable.md): the meaning of the validator program
   the runtime admits, the checked lowering rule from the constructed validator
   and the executable Schnorr verifier's knowledge soundness for byte provers.

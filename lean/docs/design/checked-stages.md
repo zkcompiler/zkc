@@ -117,8 +117,18 @@ relation and the position of the acceptance output. The compiled Schnorr and
 Sumcheck proof Entries are both linked this way; for Sumcheck the transformed
 original rewrites further, with an existing source theorem, to the rounds
 followed by the multilinear check. The composed Sumcheck Entry, with two
-applications, needs no Entry-specific proof at all: its admission and the
-composed check are evaluated in the kernel, and the generic theorem applies.
+applications, and the Schnorr AND and Chaum–Pedersen Entries need no
+Entry-specific proof at all: their admissions and the composed check are
+evaluated in the kernel, and the generic theorem applies.
+
+Security composes the same way. `CompiledSchnorrFiatShamir` and
+`CompiledSumcheckFiatShamir` prove their bounds about `transform` of the
+original verifier (VCVio's Schnorr extraction; round-by-round soundness of the
+imported Sumcheck verifier) and rewrite with the composed equation, so the
+compiled verifiers' ideal interpretations inherit the bounds without a proof
+about the compiled programs. `ExecutableSchnorrFiatShamir` continues one stage
+down through the lowering rule, and a walk over its proof's dependencies shows
+that the chain uses the general rules and no Entry-specific equation.
 
 ## Stage meanings
 
@@ -127,12 +137,17 @@ composed check are evaluated in the kernel, and the generic theorem applies.
 | Original protocol | Structured export, admitted to `Program` | `Program.participant` per role, over the participant actions |
 | Role-local interactive | Virtual: the constructed export read by `spec` | `spec`, over the same actions |
 | Constructed | `zkc.constructed-participant/0` | `ideal`, a monadic function of a challenge function and a typed proof |
-| Executable participant and below | Not modeled | Representation refinements of the constructed meaning with resource stops |
+| Executable participant | The validator participant of the `zkc.program/0` candidate, straight-line validators with single-level local calls | `Zkc.Executable.execute`: framed proof bytes, any decoder, an instruction budget, frames and transcript custody, related to the metered `ideal` by the [lowering rule](../spec/executable.md) |
+| Below the executable participant | Not modeled | Representation refinements of the executable meaning with resource stops |
 
 ## Toward lower stages
 
 The rule from the constructed participant to the executable participant is a
-representation refinement, and the meanings above fix what it must expose:
+representation refinement. `Zkc.Executable` realizes it for straight-line
+validators without helper calls or loops: the reading of the program into
+constructed instructions is the certificate, and the relation is outcome class,
+whole-proof consumption and challenge interaction against a metered ideal
+meaning. The meanings above fix what such a rule must expose in general:
 
 - the same action interface for receives and replies, with codecs that relate
   proof bytes to typed messages, refusing on decoding failure where the ideal

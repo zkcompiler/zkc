@@ -175,12 +175,14 @@ compiled candidate. In `ZkcExamples.Construction.SchnorrProof`:
   selected acceptance output is the common Schnorr experiment, is derived from
   `project_sound` and `verifier_correspondence`.
 
-The compiled Sumcheck proof Entries of the Sumcheck example and its composed
-variant are checked the same way
+The compiled proof Entries of the Sumcheck example, its composed variant and
+the Sigma example are checked the same way
 ([participant projection](participant-projection.md#the-compiled-sumcheck-proof-entry)):
 each validator's ideal meaning is the Fiat–Shamir transform of its original
-validator for every challenge function. No security theorem is proved for them
-here.
+validator for every challenge function. For the compiled Sumcheck Entry,
+[multi-round security](fiat-shamir-security.md#the-compiled-sumcheck-proof-entry)
+composes this with the round-by-round soundness of the imported verifier's
+transform; the other compiled Entries have no security theorem here.
 
 `ZkcSecurity.Examples.CompiledSchnorrFiatShamir` answers every challenge with
 one lazily sampled random oracle on histories, which the prover may query at any

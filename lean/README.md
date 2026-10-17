@@ -16,17 +16,17 @@ where a checked rule relates a later artifact: the constructed validators of
 compiled proof Entries and the executable Schnorr validator the runtime admits.
 Providers and production arithmetic are outside them. Fiat–Shamir claims cover
 the Schnorr family (for Schnorr, the transform of the imported interactive
-verifier and the compiled proof Entry; for Schnorr AND and Chaum–Pedersen, the
-transforms of the imported interactive verifiers) and the transform of any
-validator with a round-by-round soundness certificate, applied to the imported
-Sumcheck verifier, under named assumptions. The Schnorr-family claims fix the
-statement; the multi-round ones also cover statements chosen after the oracle
-queries when the initial transcript binds them. The compiled Sumcheck proof
-Entries' ideal meanings, with helper calls read by the original's helpers, are
-proved to be the transforms of their original verifiers; that equation is not
-yet composed with the Sumcheck bound. The [common](bridges/common/README.md) and
-[structured](bridges/structured/README.md) bridges test the native boundary with
-independent execution and negative controls.
+verifier, the compiled proof Entry and its executable validator; for Schnorr AND
+and Chaum–Pedersen, the transforms of the imported interactive verifiers) and
+the transform of any validator with a round-by-round soundness certificate,
+applied to the imported Sumcheck verifier and to the ideal interpretation of the
+compiled Sumcheck proof Entry, under named assumptions. The Schnorr-family
+claims fix the statement; the multi-round ones also cover statements chosen
+after the oracle queries when the initial transcript determines them, which for
+the compiled Sumcheck Entry remains a premise because the host's binding of its
+vector and count inputs is not modelled. The [common](bridges/common/README.md)
+and [structured](bridges/structured/README.md) bridges test the native boundary
+with independent execution and negative controls.
 
 ## What is proved
 
@@ -36,10 +36,10 @@ independent execution and negative controls.
 | Structured import | Independent admission, declaration linking, checked primitives, maps and realizations, protocol applications and repeats | [Structured source](docs/spec/structured-source.md), [support](docs/support.md) |
 | Interactive Schnorr | Verifier contracts over the actual export; an honest prover derived from checked sends; VCVio Sigma completeness, special soundness and fresh-challenge simulation | [Schnorr subject](docs/support.md#interactive-schnorr), [security integration](integrations/arklib/README.md) |
 | Compiled Schnorr proof | Checked transcript-construction and participant projection rules accept the actual compiled validator; by their composed soundness, the ideal interpretation of the exported validator is the Fiat–Shamir transform of the original verifier, with a fixed-statement extraction-probability bound in the random-oracle model via VCVio | [Fiat–Shamir construction](docs/spec/fiat-shamir.md), [participant projection](docs/spec/participant-projection.md), [support](docs/support.md) |
-| Sigma compositions | Actual Schnorr AND and Chaum–Pedersen subjects; shared and independent witness contexts over the retained `DLog` relation; a generic shared-challenge composition theorem; VCVio completeness, special soundness and HVZK of both imported Σ-protocols, and fixed-statement Fiat–Shamir knowledge soundness of their transforms | [Sigma compositions](docs/support.md#sigma-compositions) |
-| Executable Schnorr proof | A checked lowering rule accepts the `zkc.program/0` validator the runtime admits against that constructed validator; its meaning, with proof framing, any decoder, an instruction budget, frames and transcript custody, reflects acceptance at every budget, and the extraction bound transfers to provers of proof bytes through the general construction, projection and lowering rules, with no Entry-specific equation | [Executable stage](docs/spec/executable.md), [support](docs/support.md) |
-| Compiled Sumcheck proofs | The same composed rules accept the actual compiled validators of the Sumcheck example, with a protocol application and a repeat, and of its composed variant, with two applications; the ideal interpretation of each is the Fiat–Shamir transform of the original verifier, for the first the source rounds followed by the multilinear check; no security theorem | [Participant projection](docs/spec/participant-projection.md#the-compiled-sumcheck-proof-entry), [support](docs/support.md) |
-| Multi-round Fiat–Shamir | Soundness of the transform of any validator from round-by-round soundness, `(Q + budget) * error` in a random oracle on all typed histories, also for adaptively chosen statements and decoded challenges; the imported Sumcheck verifier's transform at `(Q + n) / \|F\|`, with composition theorems whose only premise about a compiled verifier is its construction equality | [Multi-round security](docs/spec/fiat-shamir-security.md), [support](docs/support.md) |
+| Executable Schnorr proof | A checked lowering rule accepts the `zkc.program/0` validator the runtime admits against that constructed validator; its meaning, with proof framing, any decoder, an instruction budget, frames and transcript custody, reflects acceptance at every budget, and the extraction bound transfers to provers of proof bytes through the general construction, projection and lowering rules, with no Entry-specific equation about the compiled program | [Executable stage](docs/spec/executable.md), [support](docs/support.md) |
+| Compiled Sumcheck proofs | The same composed rules accept the actual compiled validators of the Sumcheck example, with a protocol application and a repeat, and of its composed variant, with two applications; the ideal interpretation of each is the Fiat–Shamir transform of the original verifier, for the first the source rounds followed by the multilinear check. Composed with the multi-round bound, the first's ideal interpretation accepts a false claim with probability at most `(Q + n) / \|F\|` in the random-oracle model for a fixed statement, attained on a concrete instance, and adaptively chosen statements are bounded under a determining binding; the composed variant has no security theorem | [Participant projection](docs/spec/participant-projection.md#the-compiled-sumcheck-proof-entry), [multi-round security](docs/spec/fiat-shamir-security.md#the-compiled-sumcheck-proof-entry), [support](docs/support.md) |
+| Multi-round Fiat–Shamir | Soundness of the transform of any validator from round-by-round soundness, `(Q + budget) * error` in a random oracle on all typed histories, also for adaptively chosen statements and decoded challenges; the imported Sumcheck verifier's transform at `(Q + n) / \|F\|`, with composition theorems whose only premise about a compiled verifier is its construction equality, discharged for the compiled Sumcheck proof Entry | [Multi-round security](docs/spec/fiat-shamir-security.md), [support](docs/support.md) |
+| Sigma compositions | Actual Schnorr AND and Chaum–Pedersen subjects; shared and independent witness contexts over the retained `DLog` relation; a generic shared-challenge composition theorem; VCVio completeness, special soundness and HVZK of both imported Σ-protocols, and fixed-statement Fiat–Shamir knowledge soundness of their transforms; the composed construction and projection check accepts both compiled proof Entries, whose ideal interpretations are the transforms of their original verifiers | [Sigma compositions](docs/support.md#sigma-compositions), [participant projection](docs/spec/participant-projection.md#the-compiled-sigma-proof-entries) |
 | Logical contexts | Port-independent binders whose atoms transport along port maps; the existing contract layer is an instance; the Sumcheck residual bound holds on the retained and a port-repacked Reduction export | [Logical contexts](docs/design/logical-contexts.md), [support](docs/support.md) |
 | Multilinear Sumcheck | Table laws for any round count; ArkLib `n / \|F\|` complete and `k / \|F\|` residual bounds | [Mathematics](docs/spec/multilinear-sumcheck.md), [security](docs/spec/multilinear-sumcheck-security.md) |
 | Imported Sumcheck and Reduce | Plain verifier and prover equations; the prover's per-round fold invariant; honest-prover completeness of both actual pairs for every challenge tape that supplies the rounds; `n / \|F\|` bounds on the actual admitted roots under the uniform query service | [Verifier equations](docs/support.md#source-only-sumcheck-verifier), [honest prover](docs/support.md#honest-sumcheck-prover), [uniform queries](docs/spec/uniform-query-service.md#actual-imported-roots) |
