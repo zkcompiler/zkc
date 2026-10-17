@@ -23,6 +23,8 @@ import Zkc.Executable.Soundness
 import Zkc.Polynomial.BooleanCube
 import Zkc.Polynomial.Coordinates
 import Zkc.Polynomial.Layout
+import Zkc.Polynomial.Multilinear.Concat
+import Zkc.Polynomial.Multilinear.Line
 import Zkc.Polynomial.Multilinear.ListRestriction
 import Zkc.Polynomial.Multilinear.Marginal
 import Zkc.Polynomial.Multilinear.Prefix
@@ -35,6 +37,7 @@ import Zkc.Probability.UniformTape
 import Zkc.Protocols.AlgebraicRounds.Construction
 import Zkc.Protocols.AlgebraicRounds.Fresh
 import Zkc.Protocols.AlgebraicRounds.Source
+import Zkc.Protocols.Gkr.Circuit
 import Zkc.Protocols.Schnorr.Common
 import Zkc.Protocols.Schnorr
 import Zkc.Protocols.Sumcheck.Acceptance
@@ -324,6 +327,7 @@ import ZkcExamples.Structured.ChaumPedersenBinding
 import ZkcExamples.Structured.ChaumPedersenBodies
 import ZkcExamples.Structured.ChaumPedersenData
 import ZkcExamples.Structured.ChaumPedersenViews
+import ZkcExamples.Structured.GkrVerifierProcess
 import ZkcExamples.Structured.LogicalContextControls
 import ZkcExamples.Structured.MapCombination
 import ZkcExamples.Structured.MapCombinationData

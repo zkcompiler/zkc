@@ -1,4 +1,5 @@
 -- Maintained by audit_imports.py; all library, test and example modules are audit inputs; tooling is separate.
+import ZkcSecurity.ArkLib.Gkr.Layer
 import ZkcSecurity.ArkLib.Sumcheck.Bridge
 import ZkcSecurity.ArkLib.Sumcheck.Domain
 import ZkcSecurity.ArkLib.Sumcheck.Execution
@@ -33,6 +34,7 @@ import ZkcSecurity.Examples.CompiledSchnorrFiatShamir
 import ZkcSecurity.Examples.CompiledSumcheckFiatShamir
 import ZkcSecurity.Examples.ExecutableSchnorrFiatShamir
 import ZkcSecurity.Examples.ExecutableSumcheckFiatShamir
+import ZkcSecurity.Examples.GkrFiatShamir
 import ZkcSecurity.Examples.Schnorr
 import ZkcSecurity.Examples.SchnorrAndSigma
 import ZkcSecurity.Examples.StructuredSchnorr
@@ -42,6 +44,7 @@ import ZkcSecurity.Examples.StructuredSchnorrSigma
 import ZkcSecurity.Examples.Sumcheck
 import ZkcSecurity.Examples.SumcheckFiatShamir
 import ZkcSecurity.Examples.Variants
+import ZkcSecurity.FiatShamir.Composition
 import ZkcSecurity.FiatShamir.Decoding
 import ZkcSecurity.FiatShamir.Grinding
 import ZkcSecurity.FiatShamir.Interface
