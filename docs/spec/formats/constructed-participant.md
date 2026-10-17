@@ -53,8 +53,13 @@ decimal]` (unsigned for unsigned integer types, otherwise signed),
 `operands` are references and `result-types` are printed MLIR types. `regions`
 is empty except for `protocol.loop`, whose single region is
 `[argument-types, instructions, yielded]`: the printed types of its block
-arguments (the induction index, then the carried values), its body, and the
-references its `protocol.yield` returns.
+arguments (the induction index, the carried values, then the captured values),
+its body, and the references its `protocol.yield` returns. A loop's operands are
+its count, the initial carried values and the captured values, whose block
+arguments denote those operands unchanged in every iteration; its `carried`
+attribute counts the carried values. The captured values are the original
+repeat's captures followed, for a loop that carries the transcript, by the
+induction indices of its enclosing loops.
 
 Exported operations are regionless operations of the `algebra`, `arith`,
 `crypto` and `data` dialects, `protocol.receive`, `protocol.send`,

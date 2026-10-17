@@ -92,6 +92,11 @@ recognized one with another shape refuses the export
 decodes each origin's canonical bytes into a template with its application and
 repeat steps, requires the static coordinate array to be empty and re-encodes it
 exactly. It parses printed MLIR types of the scalar, vector, index, transcript
-and coordinate sorts and refuses others. Native exporter correctness, this
+and coordinate sorts and refuses others. A loop's captured block arguments
+denote its captured operands in every iteration, so the rendered body refers
+to those operands directly and the rendered loop keeps its count and carried
+values; a captured transcript, or a capture whose block argument has another
+sort, refuses the export (the renderer check exercises both, and a nested loop
+capturing its enclosing induction index). Native exporter correctness, this
 rendering, and the meanings of native kernels are tested boundaries, not
 theorems.
