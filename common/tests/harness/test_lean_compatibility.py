@@ -35,6 +35,24 @@ def package(tmp_path):
     return tmp_path, source, config
 
 
+@pytest.fixture
+def addition(package):
+    """The same fixture with a patch that also adds a new source file."""
+    root, source, config = package
+    added = 'def added := true\n'
+    patch = (root / 'compatibility.patch').read_text() + ''.join(difflib.unified_diff(
+        [], added.splitlines(keepends=True), fromfile='/dev/null', tofile='b/Added.lean'))
+    patch = patch.replace('--- /dev/null\n+++ b/Added.lean\n',
+                          'diff --git a/Added.lean b/Added.lean\nnew file mode 100644\n'
+                          '--- /dev/null\n+++ b/Added.lean\n')
+    (root / 'compatibility.patch').write_text(patch)
+    config['patch_sha256'] = hashlib.sha256(patch.encode()).hexdigest()
+    config['files']['Added.lean'] = {'base_sha256': None,
+                                     'patched_sha256': hashlib.sha256(added.encode()).hexdigest()}
+    (root / 'compatibility.json').write_text(json.dumps(config))
+    return root, source, config
+
+
 def test_patch_reproduces_and_is_idempotent(package):
     root, source, config = package
     compatibility = load('lean_compatibility', 'lean/support/compatibility.py')
@@ -78,6 +96,51 @@ def test_patch_refuses_undeclared_sources(package, already_patched, name):
     with pytest.raises(ValueError, match='undeclared dependency source changes'):
         compatibility.prepare(root)
     assert (source / 'Example.lean').read_bytes() == before
+
+
+def test_patch_adds_declared_files_and_is_idempotent(addition):
+    root, source, config = addition
+    compatibility = load('lean_compatibility', 'lean/support/compatibility.py')
+    for _ in range(2):
+        assert compatibility.prepare(root) == config
+        assert (source / 'Example.lean').read_text() == 'import New.Module\n'
+        assert (source / 'Added.lean').read_text() == 'def added := true\n'
+
+
+@pytest.mark.parametrize('already_patched', [False, True])
+def test_patch_refuses_undeclared_sources_beside_added_files(addition, already_patched):
+    root, source, _ = addition
+    compatibility = load('lean_compatibility', 'lean/support/compatibility.py')
+    if already_patched:
+        compatibility.prepare(root)
+    (source / 'Untracked.lean').write_text('def unexpected := false\n')
+    with pytest.raises(ValueError, match='undeclared dependency source changes'):
+        compatibility.prepare(root)
+
+
+def test_patch_refuses_unexpected_added_file(addition):
+    root, source, _ = addition
+    (source / 'Added.lean').write_text('def added := false\n')
+    before = (source / 'Example.lean').read_bytes()
+    compatibility = load('lean_compatibility', 'lean/support/compatibility.py')
+    with pytest.raises(ValueError, match='unexpected dependency source'):
+        compatibility.prepare(root)
+    assert (source / 'Example.lean').read_bytes() == before
+
+
+def test_fresh_reproduction_records_arklib_patch():
+    root = Path(__file__).resolve().parents[3]
+    integration = root / 'lean/integrations/arklib'
+    result = subprocess.run(['python3', '-c',
+        'import json, reproduce; print(json.dumps(reproduce.build_inputs(reproduce.HERE, with_arklib=True)))'],
+        cwd=root / 'lean', capture_output=True, text=True, check=True)
+    inputs = json.loads(result.stdout)
+    for name in ['compatibility.json', 'compatibility.patch']:
+        path = integration / name
+        if path.is_file():
+            assert inputs['integrations/arklib/' + name] == hashlib.sha256(path.read_bytes()).hexdigest()
+        else:
+            assert 'integrations/arklib/' + name not in inputs
 
 
 def test_fresh_reproduction_records_clean_wrapper_and_patch():
