@@ -18,8 +18,6 @@ namespace ZkcExamples.Construction.SchnorrProofBinding
 open Zkc.Source Zkc.Source.Structured
 open ZkcExamples.Construction.SchnorrProof
 
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 set_option smartUnfolding false
 
 def owner : ContractBinding imported := by bind_contract

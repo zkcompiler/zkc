@@ -1,6 +1,8 @@
 module
 
+public import Zkc.Source.Structured.UnitViews
 public import ZkcExamples.Construction.SchnorrProofData
+public import ZkcExamples.Construction.SchnorrProofBodies
 public import ZkcExamples.Construction.SchnorrProofParticipant
 public import Zkc.Construction.Soundness
 public import Zkc.Construction.Structured
@@ -24,18 +26,15 @@ verifier for every challenge function.
 namespace ZkcExamples.Construction.SchnorrProof
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 set_option smartUnfolding false
 
 /-! ## The original Proof Entry -/
 
-def program : Program :=
-  (Structured.check SchnorrProofData.snapshot).toOption.get (by decide +kernel)
+structured_views SchnorrProofData.snapshot
+  helpers [formula := SchnorrProofBodies.formula]
+  protocols [proof := SchnorrProofBodies.proof]
 
-theorem admitted : Structured.check SchnorrProofData.snapshot = .ok program := by rfl
-
-def imported : Imported SchnorrProofData.snapshot := ⟨program, admitted⟩
+theorem admitted : Structured.check SchnorrProofData.snapshot = .ok program := kernel_admission
 
 abbrev wiring := ZkcExamples.NativePrograms.Schnorr.wiring
 

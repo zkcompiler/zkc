@@ -125,8 +125,9 @@ transform.
 `example::Proof`, and `SchnorrProofParticipant` the exported validator of its
 compiled candidate. In `ZkcExamples.Construction.SchnorrProof`:
 
-- `admitted` admits the original, and `verifier_correspondence` equates its
-  validator process with the common Schnorr experiment;
+- `admitted` admits the original from the literal bodies in
+  `SchnorrProofBodies`, and `verifier_correspondence` equates its validator
+  process with the common Schnorr experiment;
 - `accepted` runs `checkExport` on the actual export in the kernel, and
   `public_values` shows that the values the host binds at the checked public
   positions are the validator's original base and statement inputs;
