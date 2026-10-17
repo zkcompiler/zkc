@@ -18,8 +18,9 @@ these declarations; `structured_associations` emits each body's membership,
 full signature and raw-tree association. The commands only produce syntax:
 every emitted definition and phase equation is elaborated and kernel-checked as
 if it had been written by hand. Declaration order and nesting depth are
-computed by the admission orderers on the authored bodies, so a stale or
-mistyped body fails a phase equation rather than being accepted. -/
+computed by running the admission orderers on the authored bodies; that choice
+is not trusted. A stale or mistyped body is rejected because the kernel checks
+each phase equation against the retained snapshot. -/
 
 namespace Zkc.Source.Structured
 
@@ -112,7 +113,25 @@ theorem mapM_cons_ok {α β : Type} {f : α → Except String β} {head : α} {t
 theorem mapM_nil_ok {α β : Type} (f : α → Except String β) : ([] : List α).mapM f = .ok [] := rfl
 
 namespace UnitViews
+
+/-- A list of naturals below `2 ^ 20` as one natural. The generator asks the
+kernel for this number, so a whole computed list is evaluated in one reduction
+that shares its intermediate results. -/
+def encodeDigits : List Nat → Nat
+  | [] => 0
+  | digit :: rest => digit + 1048576 * encodeDigits rest
+
+/-- A checker result as one natural: `0` for a refusal, otherwise one plus the
+encoded projection of the accepted value. -/
+def encodeResult {α : Type} (project : α → List Nat) : Except String α → Nat
+  | .ok value => 1 + encodeDigits (project value)
+  | .error _ => 0
+
 open Lean Meta Elab Command Term
+
+/-- The first `count` digits of `encodeDigits`. -/
+meta def decodeDigits (count value : Nat) : List Nat :=
+  (List.range count).map fun index => value / 1048576 ^ index % 1048576
 
 /-- Kernel weak-head reduction, then recursive normalization of constructor
 arguments. Proof arguments are kept unchanged. -/
@@ -120,7 +139,7 @@ meta partial def normalize (expression : Expr) : MetaM Expr := do
   let environment ← getEnv
   let reduced ← match Kernel.whnf environment (← getLCtx) expression with
     | .ok reduced => pure reduced
-    | .error error => throwError "structured_views: kernel reduction failed: {error.toMessageData {}}"
+    | .error error => throwError "kernel reduction failed: {error.toMessageData {}}"
   let .const name _ := reduced.getAppFn | return reduced
   let some (.ctorInfo _) := environment.find? name | return reduced
   let mut arguments := reduced.getAppArgs
@@ -138,10 +157,10 @@ meta partial def literalSyntax (expression : Expr) : MetaM Term := do
   | .const name _ => `(@$(mkCIdent name))
   | .app .. =>
     let .const name _ := expression.getAppFn
-      | throwError "structured_views: unexpected literal head{indentExpr expression}"
+      | throwError "unexpected literal head{indentExpr expression}"
     let arguments ← expression.getAppArgs.mapM literalSyntax
     `(@$(mkCIdent name) $arguments*)
-  | _ => throwError "structured_views: unexpected literal{indentExpr expression}"
+  | _ => throwError "unexpected literal{indentExpr expression}"
 
 meta def normalizeTerm (term : Term) : TermElabM Expr := do
   let expression ← elabTerm term none
@@ -150,24 +169,26 @@ meta def normalizeTerm (term : Term) : TermElabM Expr := do
 
 meta def stringValue (expression : Expr) : MetaM String := do
   let .lit (.strVal value) := expression
-    | throwError "structured_views: expected a string literal{indentExpr expression}"
+    | throwError "expected a string literal{indentExpr expression}"
   return value
 
 meta partial def listValues (expression : Expr) : MetaM (List Expr) := do
   match expression.getAppFn.constName?, expression.getAppArgs with
   | some ``List.nil, _ => return []
   | some ``List.cons, #[_, head, tail] => return head :: (← listValues tail)
-  | _, _ => throwError "structured_views: expected a literal list{indentExpr expression}"
+  | _, _ => throwError "expected a literal list{indentExpr expression}"
 
-meta def optionValue (expression : Expr) : MetaM (Option Expr) := do
+/-- The value of a normalized checker result, or the checker's refusal. -/
+meta def exceptValue (expression : Expr) (phase : String) : MetaM Expr := do
   match expression.getAppFn.constName?, expression.getAppArgs with
-  | some ``Option.none, _ => return none
-  | some ``Option.some, #[_, value] => return some value
-  | _, _ => throwError "structured_views: expected a literal option{indentExpr expression}"
+  | some ``Except.ok, #[_, _, value] => return value
+  | some ``Except.error, #[_, _, .lit (.strVal code)] => throwError "{phase} refused the unit: {code}"
+  | some ``Except.error, #[_, _, error] => throwError "{phase} refused the unit:{indentExpr error}"
+  | _, _ => throwError "expected a literal checker result{indentExpr expression}"
 
 meta def natValue (expression : Expr) : MetaM Nat := do
   let .lit (.natVal value) := expression
-    | throwError "structured_views: expected a natural literal{indentExpr expression}"
+    | throwError "expected a natural literal{indentExpr expression}"
   return value
 
 /-- An authored declaration: its local name and the terms giving its full
@@ -186,6 +207,7 @@ structure Naming where
   helperRaw : String := "_raw"
   helperBody : String := "_body"
   closed : Bool := false
+  command : String := "structured_views"
 
 meta def suffixed (base : Name) (suffix : String) : Name :=
   match base with
@@ -239,78 +261,113 @@ are compared by the kernel, so computed names need not reduce to literals. -/
 meta def matchEntries (retained : List String) (entries : Array Entry) (kind : String) :
     TermElabM (List Entry) := do
   let names ← entries.mapM fun entry => `(($(entry.signature)).name)
+  let retainedTerm ← `([$((retained.map Syntax.mkStrLit).toArray),*])
+  let encoded ← natValue (← normalizeTerm
+    (← `(encodeDigits (List.map (fun (name : String) => List.idxOf name ([$names,*] : List String))
+      ($retainedTerm : List String)))))
   let mut used : Array Bool := entries.map fun _ => false
   let mut result := #[]
-  for name in retained do
-    let index ← natValue (← normalizeTerm (← `(List.idxOf $(Syntax.mkStrLit name) [$names,*])))
+  for (name, index) in retained.zip (decodeDigits retained.length encoded) do
     let some entry := entries[index]?
-      | throwError "structured_views: no authored {kind} body for retained declaration {name}"
+      | throwError "no authored {kind} body for retained declaration {name}"
     used := used.set! index true
     result := result.push entry
   for h : index in [0:entries.size] do
     unless used[index]?.getD false do
-      throwError "structured_views: authored {kind} {entries[index].name} is not retained by the snapshot"
+      throwError "authored {kind} {entries[index].name} is not retained by the snapshot"
   return result.toList
 
-meta def natPairs (expression : Expr) : MetaM (List (Nat × Nat)) := do
-  (← listValues expression).mapM fun pair => do
-    let #[_, _, first, second] := pair.getAppArgs | throwError "structured_views: expected a pair{indentExpr pair}"
-    return (← natValue first, ← natValue second)
+/-- Every declaration name a views command emits. A local name that would make
+two generated names equal is refused before any reduction. In the closed
+profile the entry-protocol names are reserved for every protocol. -/
+meta def generatedNames (helperEntries protocolEntries : Array Entry) (naming : Naming) : Array Name :=
+  Id.run do
+    let simple (entry : Entry) (suffix : String) : Name :=
+      Name.mkSimple ((match entry.name with | .str _ last => last | name => name.toString) ++ suffix)
+    let mut names : Array Name := #[`definitions, `ordered, `headers, `domains, `summaries, `unit,
+      naming.program, `headers_checked, `helpers_checked, `protocols_checked, `native_metadata_checked,
+      `effective_sites_checked, `metadata_checked, `payload_linked, naming.admission, naming.imported,
+      `exact_subject, `complete_protocol_source, `complete_helper_source, `complete_original_protocol]
+    names := names ++ (if naming.closed then
+        #[`root, `payload, `program, `kernel_admission, `imported, `entry_exact, `entry_body_exact]
+      else #[`entry_selection, `entry_signature, `entry_raw])
+    for entry in helperEntries do
+      names := names ++ #[suffixed entry.name "Definition", simple entry naming.helperRaw,
+        simple entry naming.helperBody]
+      if naming.closed then
+        names := names.push (simple entry "_member")
+    for entry in protocolEntries do
+      names := names.push (suffixed entry.name "Definition")
+      for suffix in ["_signature", "_raw", "_body", "_checked", "_member"] do
+        names := names.push (simple entry suffix)
+      if naming.closed then
+        for suffix in ["_selected", "_exact", "_body_exact"] do
+          names := names.push (simple entry suffix)
+    return names
 
 /-- Generated declarations: literal payload, admission phases and source facts. -/
 meta def emitViews (snapshot : Term) (helperEntries protocolEntries : Array Entry)
     (naming : Naming := {}) : CommandElabM Entry := do
+  let mut seen : NameSet := {}
+  for name in generatedNames helperEntries protocolEntries naming do
+    if seen.contains name then
+      throwError "{naming.command}: two generated declarations would be named {name}; rename an authored entry"
+    seen := seen.insert name
   let (helperOrder, protocolOrder, snapshotProtocols, entryIndex, domains, summaries) ←
-      liftTermElabM do
+      tryCatch (liftTermElabM do
     let retainedTerm ← `(List.map Definition.name (List.filter
       (fun definition => definition.kind != .protocol) (Snapshot.definitions $snapshot)))
     let retained ← (← listValues (← normalizeTerm retainedTerm)).mapM fun value => stringValue value
     let helpers ← matchEntries retained helperEntries "helper"
-    let retainedNames ← `([$((retained.map Syntax.mkStrLit).toArray),*])
+    let retainedNames ← `(([$((retained.map Syntax.mkStrLit).toArray),*] : List String))
     let pendingItems ← helpers.toArray.mapM fun entry =>
       `(CheckedDefinition.ofBody $(entry.signature) $(entry.body))
-    let pending ← `([$pendingItems,*])
-    let orderTerm ← `(Option.map
-      (fun ordered => List.map (fun item => (List.idxOf (OrderedDefinition.definition item).name $retainedNames,
-        OrderedDefinition.depth item)) ordered)
-      (Except.toOption (orderDefinitions (List.length $pending) $pending [])))
-    let some order ← optionValue (← normalizeTerm orderTerm)
-      | throwError "structured_views: helper ordering failed"
-    let helperOrder ← (← natPairs order).mapM fun (index, depth) => do
-      let some entry := helpers[index]? | throwError "structured_views: unexpected helper order"
-      return (entry, depth)
+    let pending ← `(([$pendingItems,*] : List CheckedDefinition))
+    let orderTerm ← `(orderDefinitions (List.length $pending) $pending [])
+    let order ← natValue (← normalizeTerm (← `(encodeResult
+      (fun (ordered : List OrderedDefinition) => List.flatMap (fun item =>
+        [List.idxOf (OrderedDefinition.definition item).name $retainedNames, OrderedDefinition.depth item]) ordered)
+      $orderTerm)))
+    if order == 0 then
+      discard <| exceptValue (← normalizeTerm orderTerm) "helper ordering"
+      throwError "helper ordering refused the unit"
+    let digits := decodeDigits (2 * helpers.length) (order - 1)
+    let helperOrder ← (List.range helpers.length).mapM fun position => do
+      let some entry := helpers[digits[2 * position]!]? | throwError "unexpected helper order"
+      return (entry, digits[2 * position + 1]!)
     let protocolTerm ← `(List.map Function.name (Snapshot.protocolFunctions $snapshot))
     let protocolNames ← (← listValues (← normalizeTerm protocolTerm)).mapM fun value => stringValue value
     let protocols ← matchEntries protocolNames protocolEntries "protocol"
-    let protocolRetained ← `([$((protocolNames.map Syntax.mkStrLit).toArray),*])
+    let protocolRetained ← `(([$((protocolNames.map Syntax.mkStrLit).toArray),*] : List String))
     let orderedHelpers ← helperOrder.toArray.mapM fun (entry, depth) =>
       `(OrderedDefinition.mk (CheckedDefinition.ofBody $(entry.signature) $(entry.body))
         $(Syntax.mkNumLit (toString depth)))
     let protocolItems ← protocols.toArray.mapM fun entry =>
       `(CheckedProtocol.ofBody $(entry.signature) $(entry.body))
-    let pendingProtocols ← `([$protocolItems,*])
-    let protocolOrderTerm ← `(Option.map
-      (fun ordered => List.map (fun item =>
-        (List.idxOf (OrderedProtocol.definition item).name $protocolRetained, 0)) ordered)
-      (Except.toOption (orderProtocols [$orderedHelpers,*] (List.length $pendingProtocols) $pendingProtocols [])))
-    let some protocolOrder ← optionValue (← normalizeTerm protocolOrderTerm)
-      | throwError "structured_views: protocol ordering failed"
-    let protocolOrder ← (← natPairs protocolOrder).mapM fun (index, _) => do
-      let some entry := protocols[index]? | throwError "structured_views: unexpected protocol order"
+    let pendingProtocols ← `(([$protocolItems,*] : List CheckedProtocol))
+    let protocolOrderTerm ←
+      `(orderProtocols [$orderedHelpers,*] (List.length $pendingProtocols) $pendingProtocols [])
+    let protocolOrder ← natValue (← normalizeTerm (← `(encodeResult
+      (fun (ordered : List OrderedProtocol) => List.map (fun item =>
+        List.idxOf (OrderedProtocol.definition item).name $protocolRetained) ordered)
+      $protocolOrderTerm)))
+    if protocolOrder == 0 then
+      discard <| exceptValue (← normalizeTerm protocolOrderTerm) "protocol ordering"
+      throwError "protocol ordering refused the unit"
+    let protocolOrder ← (decodeDigits protocols.length (protocolOrder - 1)).mapM fun index => do
+      let some entry := protocols[index]? | throwError "unexpected protocol order"
       return (index, entry)
     let entryName ← stringValue (← normalizeTerm (← `(Snapshot.entry $snapshot)))
     let some retainedEntry := protocolNames.idxOf? entryName
-      | throwError "structured_views: the snapshot entry {entryName} is not a retained protocol"
+      | throwError "the snapshot entry {entryName} is not a retained protocol"
     let some entryIndex := protocolOrder.findIdx? (·.1 == retainedEntry)
-      | throwError "structured_views: the snapshot entry {entryName} was not ordered"
-    let domainsTerm ← `(Except.toOption (List.mapM Domain.resolve (Snapshot.domains $snapshot)))
-    let some domains ← optionValue (← normalizeTerm domainsTerm)
-      | throwError "structured_views: domain resolution failed"
-    let summariesTerm ← `(Except.toOption (Snapshot.identitySummaries $snapshot))
-    let some summaries ← optionValue (← normalizeTerm summariesTerm)
-      | throwError "structured_views: identity summaries failed"
+      | throwError "the snapshot entry {entryName} was not ordered"
+    let domainsTerm ← `(List.mapM Domain.resolve (Snapshot.domains $snapshot))
+    let domains ← exceptValue (← normalizeTerm domainsTerm) "domain resolution"
+    let summaries ← exceptValue (← normalizeTerm (← `(Snapshot.identitySummaries $snapshot))) "identity summaries"
     return (helperOrder, protocolOrder.map (·.2), protocols, entryIndex,
-      ← literalSyntax domains, ← literalSyntax summaries)
+      ← literalSyntax domains, ← literalSyntax summaries))
+    fun error => throwError "{naming.command}: {error.toMessageData}"
   -- Literal declarations.
   for entry in helperEntries do
     let definition := definitionIdent entry
@@ -344,7 +401,7 @@ meta def emitViews (snapshot : Term) (helperEntries protocolEntries : Array Entr
   elabCommand (← `(def $unitId : UnitPayload where
     definitions := $definitionsId
     protocols := [$protocolsList,*]
-    entryIndex := ⟨$(Syntax.mkNumLit (toString entryIndex)), by decide⟩
+    entryIndex := ⟨$(Syntax.mkNumLit (toString entryIndex)), by decide +kernel⟩
     linked := by decide +kernel
     protocolsLinked := by decide +kernel
     available := checkUnitAvailability_ok_of_isOk (by decide +kernel)
@@ -362,14 +419,14 @@ meta def emitViews (snapshot : Term) (helperEntries protocolEntries : Array Entr
     let name := theoremIdent entry "_checked"
     sourceEquations := sourceEquations.push name
     elabCommand (← `(theorem $name : checkProtocol $snapshot $domainsId $summariesId
-        ((Snapshot.protocolFunctions $snapshot)[$(Syntax.mkNumLit (toString index))]'(by decide))
+        ((Snapshot.protocolFunctions $snapshot)[$(Syntax.mkNumLit (toString index))]'(by decide +kernel))
         $headersId = .ok $(definitionIdent entry) := by kernel_rfl))
   let mut sources ← `(mapM_nil_ok _)
   for name in sourceEquations.reverse do
     sources ← `(mapM_cons_ok $name $sources)
   let checkedList ← snapshotProtocols.toArray.mapM fun entry => `($(definitionIdent entry))
   let sourceList ← (List.range snapshotProtocols.length).toArray.mapM fun index =>
-    `((Snapshot.protocolFunctions $snapshot)[$(Syntax.mkNumLit (toString index))]'(by decide))
+    `((Snapshot.protocolFunctions $snapshot)[$(Syntax.mkNumLit (toString index))]'(by decide +kernel))
   elabCommand (← `(theorem $(mkIdent `protocols_checked) :
       checkUnitProtocols $snapshot $domainsId $summariesId $headersId $orderedId =
         .ok ($unitId).protocols :=
@@ -398,7 +455,7 @@ meta def emitViews (snapshot : Term) (helperEntries protocolEntries : Array Entr
   for entry in protocolOrder do
     elabCommand (← `(theorem $(theoremIdent entry "_member") : $(definitionIdent entry) ∈ ($unitId).protocols :=
       by structured_mem))
-  let some entry := protocolOrder[entryIndex]? | throwError "structured_views: missing entry protocol"
+  let some entry := protocolOrder[entryIndex]? | throwError "{naming.command}: missing entry protocol"
   unless naming.closed do
     elabCommand (← `(theorem $(mkIdent `entry_selection) : ($unitId).entry = $(definitionIdent entry) := rfl))
     elabCommand (← `(theorem $(mkIdent `entry_signature) :
@@ -451,7 +508,8 @@ meta def emitViews (snapshot : Term) (helperEntries protocolEntries : Array Entr
   let protocolEntries ← stx[8].getSepArgs.mapM (parseEntry "Signature")
   let entry ← emitViews snapshot helperEntries protocolEntries
     { program := `subject, imported := `subjectImported, admission := `subject_admission,
-      helperRaw := "_exact", helperBody := "_body_exact", closed := true }
+      helperRaw := "_exact", helperBody := "_body_exact", closed := true,
+      command := "structured_closed_views" }
   let signature := entry.signature
   let program := mkIdent `program
   let imported := mkIdent `imported

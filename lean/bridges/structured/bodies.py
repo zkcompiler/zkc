@@ -14,7 +14,10 @@ the data module:
   python3 lean/bridges/structured/bodies.py \\
     --data ZkcExamples.Structured.SchnorrHelpersData \\
     --namespace ZkcExamples.Structured.SchnorrHelpersBodies \\
-    [--closed] [--name DIGEST=localName ...] --output PATH
+    [--closed] [--name DECLARATION=localName ...] --output PATH
+
+DECLARATION is a retained declaration name as the snapshot spells it; local
+names default to helperN and protocolN.
 """
 
 import argparse
@@ -58,6 +61,7 @@ def showRoles (roles : List String) : String :=
 #eval IO.println s!"HELPERS {{program.payload.definitions.length}}"
 #eval for definition in program.payload.definitions do
   IO.println s!"HELPER\t{{definition.name}}\t{{match definition.kind with | .math => ".math" | .local => ".local"}}\t{{showTys definition.inputs}}\t{{showTys definition.outputs}}"
+#eval IO.println s!"ENTRY\t{{program.payload.entry.name}}"
 #eval for protocol in program.payload.protocols do
   IO.println s!"PROTOCOL\t{{protocol.name}}\t{{showRoles protocol.roles}}\t{{showTys protocol.inputs}}\t{{showTys protocol.outputs}}\t{{protocol.inputScopes}}\t{{protocol.outputScopes}}"
 {views}
@@ -160,12 +164,20 @@ def printed(output, name):
     return chain(items)
 
 
+def elaborate(path):
+    """Elaborate a scratch module; on failure, show Lean's diagnostics."""
+    result = subprocess.run(["lake", "env", "lean", str(path)], cwd=LEAN, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise SystemExit(f"elaborating {path.name} failed:\n{result.stdout}{result.stderr}")
+    return result.stdout
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--data", required=True)
     parser.add_argument("--namespace", required=True)
     parser.add_argument("--closed", action="store_true")
-    parser.add_argument("--name", action="append", default=[], help="DIGEST=localName")
+    parser.add_argument("--name", action="append", default=[], help="DECLARATION=localName")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     names = dict(item.split("=", 1) for item in args.name)
@@ -175,8 +187,7 @@ def main():
     with tempfile.TemporaryDirectory(dir=ROOT / "build") as scratch:
         path = Path(scratch) / "Inventory.lean"
         path.write_text(inventory, encoding="utf-8")
-        output = subprocess.run(["lake", "env", "lean", str(path)], cwd=LEAN, capture_output=True,
-                                text=True, check=True).stdout
+        output = elaborate(path)
         helpers = [line.split("\t")[1:] for line in output.splitlines() if line.startswith("HELPER\t")]
         protocols = [line.split("\t")[1:] for line in output.splitlines() if line.startswith("PROTOCOL\t")]
         views = []
@@ -192,8 +203,7 @@ def main():
         views += [f"#print Printed.{view.split()[1]}" for view in list(views)]
         path = Path(scratch) / "Bodies.lean"
         path.write_text(PRINTER.format(data=args.data, views="\n".join(views)), encoding="utf-8")
-        output = subprocess.run(["lake", "env", "lean", str(path)], cwd=LEAN, capture_output=True,
-                                text=True, check=True).stdout
+        output = elaborate(path)
     parts = [f"module\n\npublic import Zkc.Source.Structured.ProtocolOperations\n\n@[expose] public section\n\n"
              f"/-! Literal typed bodies printed from the admitted snapshot of\n`{args.data}`. -/\n"
              f"namespace {args.namespace}\nopen Zkc.Source Zkc.Source.Structured\n"]
@@ -210,7 +220,8 @@ def main():
                      f"def {local}Body : Region protocolDialect {local}Signature.inputs {local}Signature.outputs :=\n"
                      f"{printed(output, f'protocol{index}')}\n")
     if args.closed:
-        entry = protocols[0]
+        entry_name = next(line.split("\t")[1] for line in output.splitlines() if line.startswith("ENTRY\t"))
+        entry = next(protocol for protocol in protocols if protocol[0] == entry_name)
         parts.append(f"def entryBody : Region dialect {entry[2]} {entry[3]} :=\n{printed(output, 'root')}\n")
     parts.append(f"end {args.namespace}\n")
     args.output.parent.mkdir(parents=True, exist_ok=True)

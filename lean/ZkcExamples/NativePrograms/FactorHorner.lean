@@ -12,6 +12,8 @@ public import Lean
 
 /-! Generated candidate: source identity alone proves no semantic property. -/
 set_option autoImplicit false
+set_option maxRecDepth 20000
+set_option maxHeartbeats 1500000
 set_option linter.unusedSimpArgs false
 set_option linter.defProp false
 set_option linter.unusedTactic false
@@ -147,7 +149,6 @@ def sourceScopes : Values (fun _ => Nat → Bool) ZkcExamples.NativePrograms.Var
 
 def imported : Imported := ⟨ZkcExamples.NativePrograms.Variants.FactorHornerData.snapshot, sourceProgram, sourceScopes⟩
 
-set_option maxRecDepth 20000 in
 theorem admitted : ZkcExamples.NativePrograms.Variants.FactorHornerData.snapshot.check = .ok imported := by
   apply ZkcExamples.NativePrograms.Variants.FactorHornerData.snapshot.check_parts sourceProgram sourceScopes
   · decide +kernel
@@ -190,7 +191,6 @@ def sourceProcess (statement : Statement F) (claim : F) (service : Nat) : PIR.Pr
     else .halt .reject
   )
 
-set_option maxHeartbeats 1500000 in
 theorem source_expansion (statement : Statement F) (claim : F) (service : Nat) :
     verifier (F := F) statement claim service = sourceProcess (F := F) statement claim service := by
   change (imported.program.denote (scalarMeaning F F) id 1
@@ -217,7 +217,6 @@ theorem correspondence (statement : Statement F) (claim : F) (service : Nat) :
     | (solve | abel1)
     | fail_if_no_progress congr 1
 
-set_option maxHeartbeats 1500000 in
 theorem contract : VerifierContract wiring publicChecks (verifier (F := F)) :=
   ⟨fun statement claim service => ⟨(source_expansion (F := F) statement claim service).trans
     (correspondence (F := F) statement claim service)⟩⟩

@@ -224,6 +224,7 @@ import Tests.StructuredSumcheckVerifierBodies
 import Tests.StructuredSumcheckVerifierExecution
 import Tests.StructuredSumcheckVerifierMutations
 import Tests.StructuredSumcheckVerifierSupport
+import Tests.StructuredUnitViews
 import Tests.StructuredWire
 import Tests.SumcheckHelperControls
 import Tests.SumcheckHelperMutants

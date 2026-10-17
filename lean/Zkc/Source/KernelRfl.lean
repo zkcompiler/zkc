@@ -20,7 +20,7 @@ syntax (name := kernelRfl) "kernel_rfl" : tactic
   let goal ← getMainGoal
   let type ← instantiateMVars (← goal.getType)
   let some (α, lhs, _) := type.eq? | throwError "kernel_rfl: expected an equality goal, got{indentExpr type}"
-  if type.hasExprMVar || type.hasFVar then
+  if type.hasExprMVar || type.hasLevelMVar || type.hasFVar then
     throwError "kernel_rfl: expected a closed equality goal, got{indentExpr type}"
   let proof := mkApp2 (mkConst ``Eq.refl [← getLevel α]) α lhs
   let levels := (collectLevelParams {} type).params

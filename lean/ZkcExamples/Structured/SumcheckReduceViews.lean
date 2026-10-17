@@ -8,8 +8,9 @@ public import ZkcExamples.Structured.SumcheckRelationContract
 @[expose] public section
 
 /-! Complete checked payload and named kernel admission phases. The four formula
-helpers reuse the relation-contract bodies; every other body is authored in
-`SumcheckReduceBodies`. -/
+helpers reuse the relation-contract bodies; every other body is named in
+`SumcheckReduceBodies`, whose shared helper bodies abbreviate
+`SumcheckHelperBodies`. -/
 namespace ZkcExamples.Structured.SumcheckReduceViews
 open Zkc.Source Zkc.Source.Structured SumcheckReduceBodies
 

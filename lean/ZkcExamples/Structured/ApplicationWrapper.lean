@@ -26,8 +26,8 @@ theorem run_body_view (context : ProtocolContext) (self : Nat)
           (ServiceOrder.inputs go first second)).get).bind
         (fun results => .done (maskValues self
           (context.mapScopes runSignature.outputScopes) results)) :=
-  unit.protocol_body_view_as ServiceOrderViews.runDefinition run_member
-    runSignature ServiceOrderViews.run_signature runBody ServiceOrderViews.run_raw
+  unit.protocol_body_view_as runDefinition run_member
+    runSignature run_signature runBody run_raw
     context self (ServiceOrder.inputs go first second)
 
 /-- The grandchild is transported through the same full table, without lookup reduction. -/
@@ -41,8 +41,8 @@ theorem draw_body_view (context : ProtocolContext) (self : Nat)
           (ServiceOrder.servicesInput first second)).get).bind
         (fun results => .done (maskValues self
           (context.mapScopes drawSignature.outputScopes) results)) :=
-  unit.protocol_body_view_as ServiceOrderViews.drawDefinition draw_member
-    drawSignature ServiceOrderViews.draw_signature drawBody ServiceOrderViews.draw_raw
+  unit.protocol_body_view_as drawDefinition draw_member
+    drawSignature draw_signature drawBody draw_raw
     context self (ServiceOrder.servicesInput first second)
 
 theorem outer_body_view (context : ProtocolContext) (self : Nat)

@@ -298,7 +298,7 @@ def snapshot (json : Json) : Except String Snapshot := do
   | _ => throw "structured-envelope"
 
 /-- Lexical limits precede the recursive JSON parser, including inside unused bodies. -/
-def parse (text : String) (byteLimit : Nat := Limits.applicationSiteBytes) : Except String Json := do
+def parse (text : String) (byteLimit : Nat := Limits.parsedBytes) : Except String Json := do
   if text.utf8ByteSize > byteLimit then throw "byte-limit"
   let mut depth := 0
   let mut quoted := false

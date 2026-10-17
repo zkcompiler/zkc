@@ -10,10 +10,11 @@ open Zkc.Source Zkc.Source.Structured PrimitiveLibrary MapFirstLaws MapPrefixBod
 open SumcheckHelperBodies SumcheckHelperLaws
 open Zkc.Polynomial Zkc.Polynomial.Multilinear
 
-/-! Helper contracts shared by every imported Sumcheck unit. A unit supplies its
-own linked declaration list and the associations of its actual members with
-the shared typed bodies; the laws below then hold for that unit's own closed
-table. No unit's meanings are equated with another unit's table. -/
+/-! Helper contracts shared by the imported Sumcheck source and reduction
+units. A unit supplies its own linked declaration list and the associations of
+its actual members with the shared typed bodies; the laws below then hold for
+that unit's own closed table. No unit's meanings are equated with another
+unit's table. -/
 
 /-- Associations of a unit's actual declarations with the shared helper bodies. -/
 structure Bodies (definitions : List CheckedDefinition) : Prop where
