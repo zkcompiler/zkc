@@ -32,6 +32,8 @@ that all native behavior already has a Lean model.
   regions, explicit captures, operation contracts and reference-profile bridges.
 - [Structured native import](design/structured-native-import.md): import placement,
   protocol verification targets and evidence boundaries.
+- [Logical contexts](design/logical-contexts.md): port-independent mathematical
+  binders, transport along port maps and the contract layer as an instance.
 - [Research design](design/protocol-verification.md): questions, choices and
   evaluation criteria for extending the implemented architecture.
 - [Native bridge](../bridges/common/README.md): differential and proof-request tests.
