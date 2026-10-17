@@ -67,10 +67,12 @@ named assumptions, for the relation retained by the Proof Entry's own export.
 [multi-round Fiat–Shamir soundness](../../docs/spec/fiat-shamir-security.md) of
 the core transform for any validator with a round-by-round certificate, by
 VCVio's adaptive bad-query bound applied directly to the oracle on all typed
-histories; `randomized_soundness` adds private randomness drawn before the
-oracle computation. `Examples/SumcheckFiatShamir` instantiates it for the actual
-imported Sumcheck verifier, with ArkLib's single-round successor bound as the
-per-round soundness, and states the composition point for a compiled verifier.
+histories, for fixed and for adaptively chosen statements; `randomized_soundness`
+adds private randomness drawn before the oracle computation, and
+`FiatShamir/Decoding` bounds challenges reduced from wide uniform samples.
+`Examples/SumcheckFiatShamir` instantiates these for the actual imported Sumcheck
+verifier, with ArkLib's single-round successor bound as the per-round soundness,
+and states the composition point for a compiled verifier.
 
 `TestsSecurity.Audit` checks every owned declaration's transitive axiom closure.
 Only `propext`, `Classical.choice` and `Quot.sound` are allowed. Unrelated upstream

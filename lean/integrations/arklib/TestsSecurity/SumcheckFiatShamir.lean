@@ -97,4 +97,81 @@ theorem premises :
   simpa only [Nat.cast_zero, Nat.cast_one, zero_add, one_mul, ZMod.card, Nat.cast_ofNat]
     using bound
 
+/-! ### Adaptively chosen statements -/
+
+/-- A binding of all public inputs: three initial events carrying the raw
+vector, the claim and the round count. -/
+def binding (statement : PublicStatement Scalar) : History Scalar Scalar :=
+  [.binding "values" (statement.raw.map (.field "bls12-381.fr")),
+    .binding "claim" [.field "bls12-381.fr" statement.claim],
+    .binding "rounds" (List.replicate statement.count (.boolean true))]
+
+/-- This binding determines the statement, so the adaptive premise holds. -/
+theorem binding_determined : Determined binding := by
+  intro statement other rest otherRest same
+  obtain ⟨heads, _⟩ := List.append_inj same (by simp [binding])
+  simp only [binding, List.cons.injEq, Event.binding.injEq, true_and, and_true] at heads
+  obtain ⟨values, claims, rounds⟩ := heads
+  have raws : statement.raw = other.raw :=
+    (List.map_injective_iff.mpr fun _ _ same => by cases same; rfl) values
+  have counts : statement.count = other.count := by
+    simpa using congrArg List.length rounds
+  have fieldClaims : statement.claim = other.claim := by
+    simpa using claims
+  cases statement with
+  | mk raw claim count table decoded =>
+    cases other with
+    | mk raw' claim' count' table' decoded' =>
+      simp only at raws counts fieldClaims
+      subst raws counts fieldClaims
+      cases Option.some.inj (decoded.symm.trans decoded')
+      rfl
+
+/-- The false statement the cheating prover chooses. -/
+def falseStatement : PublicStatement Scalar := ⟨raw, 0, 1, table, decoded⟩
+
+def adaptiveCheater :
+    OracleComp (Spec Scalar Scalar) (PublicStatement Scalar × Proof Scalar Scalar) :=
+  pure (falseStatement, cheat)
+
+/-- Every premise of the adaptive theorem holds together; the bound is `2 / 5`. -/
+theorem adaptive_premises :
+    Pr{let result ← (simulateQ randomOracle (adaptiveExperiment context (id : Scalar → Scalar)
+        (fun statement : PublicStatement Scalar =>
+          importedValidator statement.raw statement.claim statement.count handle)
+        binding adaptiveCheater)).run' ∅}[
+      result.1.claim ≠ result.1.raw.sum ∧ Accepted (· = some true) result.2.1] ≤ 2 / 5 := by
+  have bound := adaptive_imported_soundness context handle (id : Scalar → Scalar) 0 balanced_id
+    binding binding_determined adaptiveCheater 0 trivial
+  simpa only [Nat.cast_zero, zero_add, add_zero, ZMod.card, Nat.cast_ofNat, mul_one_div]
+    using bound
+
+/-! ### Reduced wide samples -/
+
+/-- The canonical numbering of `ZMod 5`. -/
+def numbering : Scalar ≃ Fin (Fintype.card Scalar) := finCongr (ZMod.card 5).symm
+
+/-- The decoding premise holds for reduction of a uniform sample below `8`, with
+loss `5 / 8`. -/
+theorem reduced_premise : Balanced (reduce numbering 8) ((5 : ENNReal) / 8) := by
+  simpa only [ZMod.card, Nat.cast_ofNat] using balanced_reduce numbering 8
+
+/-- The loss is necessary: reduction modulo `5` of a sample below `8` hits `0`
+with probability `2 / 8`, more than the uniform `1 / 5`. -/
+theorem reduced_not_exact : ¬ Balanced (reduce numbering 8) 0 := by
+  intro exact
+  have bound := exact (· = 0)
+  rw [SampleableType.prEvent_uniformSample, SampleableType.prEvent_uniformSample, add_zero]
+    at bound
+  have hits :
+      (Finset.univ.filter fun sample : Fin 8 => reduce numbering 8 sample = 0).card = 2 := by
+    decide +kernel
+  have uniform : (Finset.univ.filter fun challenge : Scalar => challenge = 0).card = 1 := by
+    decide +kernel
+  rw [hits, uniform, Fintype.card_fin, ZMod.card] at bound
+  have real := (ENNReal.toReal_le_toReal (ENNReal.div_ne_top (by simp) (by simp))
+    (ENNReal.div_ne_top (by simp) (by simp))).mpr bound
+  rw [ENNReal.toReal_div, ENNReal.toReal_div] at real
+  norm_num at real
+
 end TestsSecurity.SumcheckFiatShamir

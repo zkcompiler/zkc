@@ -22,13 +22,22 @@ validator starts doomed and makes at most `budget` challenges on every path,
 then a prover with at most `queries` oracle queries makes the transform accept
 with probability at most `(queries + budget) * error` (`soundness`).
 
+Two generalizations share the same proof. The oracle may answer in another
+type `B`, decoded to a field challenge by `decode`; a decoding whose events
+exceed the uniform field's by at most `loss` adds `loss` per query
+(`Balanced`). The prover may also choose the statement after its queries,
+when the initial history determines the statement (`Determined`); the
+transform then runs the statement's validator from the statement's initial
+history (`adaptive_soundness`).
+
 The proof applies VCVio's adaptive bad-query bound
 (`OracleComp.prEvent_randomOracle_le_of_bad_queries`) directly to the history
-oracle. A key is bad when replaying the validator along the key reaches a
-doomed challenge whose answer at the key leaves the doomed set. Replay reads
-the oracle only at shorter histories, so resampling the key's answer leaves the
-replayed residual unchanged; an accepting run from a doomed validator must leave
-the doomed set at one of its own challenges, which are in the query log.
+oracle. A key is bad when replaying a statement's validator along the key
+reaches a doomed challenge whose answer at the key leaves the doomed set.
+Replay reads the oracle only at shorter histories and the key determines the
+statement, so resampling the key's answer leaves the replayed residual
+unchanged; an accepting run from a doomed validator must leave the doomed set
+at one of its own challenges, which are in the query log.
 -/
 
 set_option autoImplicit false
@@ -37,14 +46,25 @@ namespace ZkcSecurity.FiatShamir
 open OracleComp OracleSpec
 open Zkc.Source Zkc.Construction Zkc.Source.Common.Native
 
-variable {F G A : Type}
+variable {F G A B Stmt : Type}
 
-/-- The transcript oracle on all typed histories. -/
-abbrev Spec (F G : Type) := History F G →ₒ F
+/-- The transcript oracle on all typed histories, answering in `B`. -/
+abbrev Oracle (F G B : Type) := History F G →ₒ B
+
+/-- The transcript oracle answering field challenges directly. -/
+abbrev Spec (F G : Type) := Oracle F G F
 
 /-- One transcript challenge: a query of the oracle at the absorbed history. -/
 def historyQuery (history : History F G) : OracleComp (Spec F G) F :=
   liftM ((Spec F G).query history)
+
+/-- One transcript challenge decoded from the oracle's answer. -/
+def decodedQuery (decode : B → F) (history : History F G) : OracleComp (Oracle F G B) F :=
+  decode <$> liftM ((Oracle F G B).query history)
+
+theorem decodedQuery_id : decodedQuery (F := F) (G := G) (id : F → F) = historyQuery := by
+  funext history
+  exact id_map _
 
 /-- A returned value satisfying the acceptance predicate. Stops never accept. -/
 def Accepted (accepts : A → Prop) : PIR.Outcome A → Prop
@@ -60,12 +80,39 @@ def QueryBound : PIR.Proc (Actions F G) A → ℕ → Prop
   | .call (.query _ _ _) next, budget =>
       0 < budget ∧ ∀ challenge, QueryBound (next challenge) (budget - 1)
 
+theorem QueryBound.mono :
+    ∀ (process : PIR.Proc (Actions F G) A) {budget larger : ℕ},
+      QueryBound process budget → budget ≤ larger → QueryBound process larger
+  | .done _, _, _, _, _ => trivial
+  | .halt _, _, _, _, _ => trivial
+  | .call (.receive _ _ _) next, _, _, bounded, le => fun value =>
+      QueryBound.mono (next value) (bounded value) le
+  | .call (.send _ _ _) next, _, _, bounded, le => QueryBound.mono (next ()) bounded le
+  | .call (.query _ _ _) next, _, _, bounded, le =>
+      ⟨Nat.lt_of_lt_of_le bounded.1 le, fun challenge =>
+        QueryBound.mono (next challenge) (bounded.2 challenge) (Nat.sub_le_sub_right le 1)⟩
+
 /-- The prover's oracle computation followed by the transform of `validator`
 from the history `initial`, sharing one oracle. -/
 def experiment (context : Context) (validator : PIR.Proc (Actions F G) A)
     (initial : History F G) (prover : OracleComp (Spec F G) (Proof F G)) :
     OracleComp (Spec F G) (PIR.Outcome A × Proof F G) :=
   prover >>= fun proof => transform context historyQuery validator initial proof
+
+/-- The prover chooses a statement and a proof; the transform runs that
+statement's validator from that statement's initial history. -/
+def adaptiveExperiment (context : Context) (decode : B → F)
+    (validator : Stmt → PIR.Proc (Actions F G) A) (initial : Stmt → History F G)
+    (prover : OracleComp (Oracle F G B) (Stmt × Proof F G)) :
+    OracleComp (Oracle F G B) (Stmt × (PIR.Outcome A × Proof F G)) :=
+  prover >>= fun claimed => (fun result => (claimed.1, result)) <$>
+    transform context (decodedQuery decode) (validator claimed.1) (initial claimed.1) claimed.2
+
+/-- The initial history determines the statement: no initial history is a
+prefix of another statement's history. -/
+def Determined (initial : Stmt → History F G) : Prop :=
+  ∀ statement other (rest otherRest : History F G),
+    initial statement ++ rest = initial other ++ otherRest → statement = other
 
 section RoundByRound
 variable [SampleableType F]
@@ -98,6 +145,19 @@ def Step (doomed : PIR.Proc (Actions F G) A → Prop) (accepts : A → Prop) (er
   | .call (.send _ _ _) next => doomed (next ())
   | .call (.query _ _ _) next => Pr{let challenge ← $ᵗ F}[¬ doomed (next challenge)] ≤ error
 
+/-- Enlarging the doomed set keeps every local obligation. -/
+theorem Step.mono {accepts : A → Prop} {error : ENNReal}
+    {small large : PIR.Proc (Actions F G) A → Prop}
+    (included : ∀ process, small process → large process) :
+    ∀ process, Step small accepts error process → Step large accepts error process
+  | .done _, step => step
+  | .halt _, step => step
+  | .call (.receive _ _ _) _, step => fun value => included _ (step value)
+  | .call (.send _ _ _) _, step => included _ step
+  | .call (.query _ _ _) next, step =>
+      (prEvent_mono _ _ (fun challenge => ¬ small (next challenge))
+        (fun _ outside inside => outside (included _ inside))).trans step
+
 /-- A doomed set whose every member meets its local obligation. -/
 def RoundByRound.ofStep {accepts : A → Prop} {error : ENNReal}
     (doomed : PIR.Proc (Actions F G) A → Prop)
@@ -109,17 +169,40 @@ def RoundByRound.ofStep {accepts : A → Prop} {error : ENNReal}
   send _ _ _ _ _ member := step _ member
   query _ _ _ _ member := step _ member
 
+/-- Decoded oracle answers: every event of the decoded challenge is at most
+`loss` likelier than under the uniform field. -/
+def Balanced [SampleableType B] (decode : B → F) (loss : ENNReal) : Prop :=
+  ∀ event : F → Prop,
+    Pr{let answer ← $ᵗ B}[event (decode answer)] ≤ Pr{let challenge ← $ᵗ F}[event challenge] + loss
+
+theorem balanced_id : Balanced (B := F) (id : F → F) 0 := fun _ => by simp
+
 end RoundByRound
 
 section Execution
 
+theorem map_queryBound {α β : Type} (f : α → β) (computation : OracleComp (Oracle F G B) α)
+    (budget : ℕ) (bounded : IsTotalQueryBound computation budget) :
+    IsTotalQueryBound (f <$> computation) budget := by
+  have composed := isTotalQueryBound_bind (n₂ := 0) bounded
+    (ob := fun value => (pure (f value) : OracleComp (Oracle F G B) β)) fun _ => trivial
+  rw [Nat.add_zero] at composed
+  simpa only [map_eq_bind_pure_comp, Function.comp_def] using composed
+
+theorem tableQueryLog_map {α β : Type} (f : α → β) (computation : OracleComp (Oracle F G B) α)
+    (table : History F G → B) :
+    tableQueryLog (f <$> computation) table = tableQueryLog computation table := by
+  rw [map_eq_bind_pure_comp, tableQueryLog_bind]
+  simp
+
 /-- Deterministic evaluation of the oracle transform against a total table is
-the transform with that table as challenge function. -/
-theorem evalWithAnswerFn_transform (context : Context) (table : History F G → F) :
+the transform with the decoded table as challenge function. -/
+theorem evalWithAnswerFn_transform (context : Context) (decode : B → F)
+    (table : History F G → B) :
     ∀ (process : PIR.Proc (Actions F G) A) (history : History F G) (proof : Proof F G),
       evalWithAnswerFn (QueryImpl.ofFn table)
-          (transform context historyQuery process history proof) =
-        transform (m := Id) context table process history proof := by
+          (transform context (decodedQuery decode) process history proof) =
+        transform (m := Id) context (fun key => decode (table key)) process history proof := by
   intro process
   induction process with
   | done value => intro history proof; rfl
@@ -136,8 +219,8 @@ theorem evalWithAnswerFn_transform (context : Context) (table : History F G → 
               | none => rfl
               | some value => exact ih value _ _
       | query site op arguments =>
-          simp only [transform, historyQuery, evalWithAnswerFn_bind, evalWithAnswerFn_liftM_query,
-            QueryImpl.ofFn_apply]
+          simp only [transform, decodedQuery, bind_map_left, evalWithAnswerFn_bind,
+            evalWithAnswerFn_liftM_query, QueryImpl.ofFn_apply]
           exact ih _ _ _
       | send site receiver sent =>
           simp only [transform]
@@ -146,10 +229,10 @@ theorem evalWithAnswerFn_transform (context : Context) (table : History F G → 
           | some payload => exact ih () _ _
 
 /-- The transform makes at most the validator's challenge budget of queries. -/
-theorem transform_queryBound (context : Context) :
+theorem transform_queryBound (context : Context) (decode : B → F) :
     ∀ (process : PIR.Proc (Actions F G) A) (budget : ℕ) (history : History F G)
       (proof : Proof F G), QueryBound process budget →
-      IsTotalQueryBound (transform context historyQuery process history proof) budget := by
+      IsTotalQueryBound (transform context (decodedQuery decode) process history proof) budget := by
   intro process
   induction process with
   | done value => intro budget history proof _; trivial
@@ -166,9 +249,9 @@ theorem transform_queryBound (context : Context) :
               | none => trivial
               | some value => exact ih value budget _ _ (bounded value)
       | query site op arguments =>
-          simp only [transform, historyQuery]
+          simp only [transform, decodedQuery, bind_map_left]
           exact isTotalQueryBound_query_bind_iff.mpr
-            ⟨bounded.1, fun challenge => ih challenge _ _ _ (bounded.2 challenge)⟩
+            ⟨bounded.1, fun answer => ih _ _ _ _ (bounded.2 _)⟩
       | send site receiver sent =>
           simp only [transform]
           cases Payload.ofValue _ sent with
@@ -189,18 +272,20 @@ def Escapes (doomed : PIR.Proc (Actions F G) A → Prop) (context : Context) :
         doomed (.call (.query site op arguments) next) ∧ ¬ doomed (next challenge)
   | _, _, _ => False
 
-/-- A bad oracle key: replaying the validator from `initial` along the key's
-events before its last one reaches a residual whose challenge, answered by the
-table at the key, escapes the doomed set. -/
-def BadKey (doomed : PIR.Proc (Actions F G) A → Prop) (context : Context)
-    (validator : PIR.Proc (Actions F G) A) (initial key : History F G)
-    (table : History F G → F) : Prop :=
-  ∃ events event process, key = initial ++ events ++ [event] ∧
-    replay context table validator initial events = some process ∧
-    Escapes doomed context process event (table key)
+/-- A bad oracle key: for some statement, replaying its validator from its
+initial history along the key's events before the last one reaches a residual
+whose challenge, answered by the decoded table at the key, escapes the doomed
+set. -/
+def BadKey (doomed : PIR.Proc (Actions F G) A → Prop) (context : Context) (decode : B → F)
+    (validator : Stmt → PIR.Proc (Actions F G) A) (initial : Stmt → History F G)
+    (key : History F G) (table : History F G → B) : Prop :=
+  ∃ statement events event process, key = initial statement ++ events ++ [event] ∧
+    replay context (fun history => decode (table history)) (validator statement)
+      (initial statement) events = some process ∧
+    Escapes doomed context process event (decode (table key))
 
-theorem update_agrees (table : History F G → F) (initial events : History F G)
-    (event : Event F G) (answer : F) :
+theorem update_agrees (table : History F G → B) (initial events : History F G)
+    (event : Event F G) (answer : B) :
     ∀ other : History F G, other.length ≤ initial.length + events.length →
       Function.update table (initial ++ events ++ [event]) answer other = table other := by
   intro other bound
@@ -219,14 +304,15 @@ theorem key_shape {initial events events' : History F G} {event event' : Event F
   exact ⟨prefixes, List.singleton_inj.mp lasts⟩
 
 /-- The replayed residual before a key does not depend on the answer at the key. -/
-theorem replay_update (context : Context) (table : History F G → F)
+theorem replay_update (context : Context) (decode : B → F) (table : History F G → B)
     (validator : PIR.Proc (Actions F G) A) (initial events : History F G)
-    (event : Event F G) (answer : F) :
-    replay context (Function.update table (initial ++ events ++ [event]) answer) validator
-        initial events =
-      replay context table validator initial events :=
-  (replay_congr context table events validator initial
-    (fun other bound => (update_agrees table initial events event answer other bound).symm)).symm
+    (event : Event F G) (answer : B) :
+    replay context (fun history => decode (Function.update table (initial ++ events ++ [event])
+        answer history)) validator initial events =
+      replay context (fun history => decode (table history)) validator initial events :=
+  replay_congr context _ events validator initial
+    (fun other bound =>
+      congrArg decode (update_agrees table initial events event answer other bound))
 
 variable [SampleableType F]
 
@@ -254,49 +340,69 @@ theorem escapes_le {accepts : A → Prop} {error : ENNReal}
               (certificate.query site op arguments next doomed)
           · exact impossible fun _ escapes => doomed escapes.2.1
 
+variable [SampleableType B]
+
 /-- Resampling the answer at any key, under every background table, makes the
-key bad with probability at most `error`. -/
-theorem badKey_resample {accepts : A → Prop} {error : ENNReal}
+key bad with probability at most `error + loss`. -/
+theorem badKey_resample {accepts : A → Prop} {error loss : ENNReal}
     (certificate : RoundByRound (F := F) (G := G) accepts error) (context : Context)
-    (validator : PIR.Proc (Actions F G) A) (initial key : History F G)
-    (table : History F G → F) :
-    Pr{let answer ← $ᵗ F}[
-      BadKey certificate.doomed context validator initial key (Function.update table key answer)] ≤
-      error := by
-  by_cases found : ∃ events event process, key = initial ++ events ++ [event] ∧
-      replay context table validator initial events = some process
-  · obtain ⟨events, event, process, shape, replayed⟩ := found
+    (decode : B → F) (balanced : Balanced decode loss)
+    (validator : Stmt → PIR.Proc (Actions F G) A) (initial : Stmt → History F G)
+    (determined : Determined initial) (key : History F G) (table : History F G → B) :
+    Pr{let answer ← $ᵗ B}[BadKey certificate.doomed context decode validator initial key
+      (Function.update table key answer)] ≤ error + loss := by
+  by_cases found : ∃ statement events event process,
+      key = initial statement ++ events ++ [event] ∧
+      replay context (fun history => decode (table history)) (validator statement)
+        (initial statement) events = some process
+  · obtain ⟨statement, events, event, process, shape, replayed⟩ := found
     subst shape
     have reduced : ∀ answer,
-        BadKey certificate.doomed context validator initial (initial ++ events ++ [event])
-            (Function.update table (initial ++ events ++ [event]) answer) →
-          Escapes certificate.doomed context process event answer := by
-      rintro answer ⟨events', event', process', shape', replayed', escapes⟩
+        BadKey certificate.doomed context decode validator initial
+            (initial statement ++ events ++ [event])
+            (Function.update table (initial statement ++ events ++ [event]) answer) →
+          Escapes certificate.doomed context process event (decode answer) := by
+      rintro answer ⟨statement', events', event', process', shape', replayed', escapes⟩
+      have same : statement = statement' := determined _ _ (events ++ [event])
+        (events' ++ [event']) (by simpa only [List.append_assoc] using shape')
+      subst same
       obtain ⟨rfl, rfl⟩ := key_shape shape'
       rw [replay_update, replayed] at replayed'
       cases replayed'
       simpa using escapes
-    exact (prEvent_mono _ _ _ reduced).trans (escapes_le certificate context process event)
-  · have never : ∀ answer, ¬ BadKey certificate.doomed context validator initial key
+    calc Pr{let answer ← $ᵗ B}[BadKey certificate.doomed context decode validator initial
+            (initial statement ++ events ++ [event])
+            (Function.update table (initial statement ++ events ++ [event]) answer)]
+        ≤ Pr{let answer ← $ᵗ B}[
+            Escapes certificate.doomed context process event (decode answer)] :=
+          prEvent_mono _ _ _ reduced
+      _ ≤ Pr{let challenge ← $ᵗ F}[Escapes certificate.doomed context process event challenge] +
+            loss := balanced _
+      _ ≤ error + loss := add_le_add_left (escapes_le certificate context process event) _
+  · have never : ∀ answer, ¬ BadKey certificate.doomed context decode validator initial key
         (Function.update table key answer) := by
-      rintro answer ⟨events, event, process, shape, replayed, _⟩
+      rintro answer ⟨statement, events, event, process, shape, replayed, _⟩
       subst shape
       rw [replay_update] at replayed
-      exact found ⟨events, event, process, rfl, replayed⟩
+      exact found ⟨statement, events, event, process, rfl, replayed⟩
     exact (prEvent_eq_zero_of_forall_not _ _ never).trans_le zero_le
 
-/-- An accepting run of the transform, against a total challenge table, from a
-doomed residual reached by replay queries a bad key. -/
+omit [SampleableType B] in
+/-- An accepting run of the transform, against a total table, from a doomed
+residual reached by replay queries a bad key. -/
 theorem escape_logged {accepts : A → Prop} {error : ENNReal}
     (certificate : RoundByRound (F := F) (G := G) accepts error) (context : Context)
-    (validator : PIR.Proc (Actions F G) A) (initial : History F G) (table : History F G → F) :
+    (decode : B → F) (validator : Stmt → PIR.Proc (Actions F G) A)
+    (initial : Stmt → History F G) (table : History F G → B) (statement : Stmt) :
     ∀ (process : PIR.Proc (Actions F G) A) (events history : History F G) (proof : Proof F G),
-      replay context table validator initial events = some process →
-      history = initial ++ events →
+      replay context (fun key => decode (table key)) (validator statement) (initial statement)
+        events = some process →
+      history = initial statement ++ events →
       certificate.doomed process →
-      Accepted accepts (transform (m := Id) context table process history proof).1 →
-      ∃ query ∈ tableQueryLog (transform context historyQuery process history proof) table,
-        BadKey certificate.doomed context validator initial query.1 table := by
+      Accepted accepts
+        (transform (m := Id) context (fun key => decode (table key)) process history proof).1 →
+      ∃ query ∈ tableQueryLog (transform context (decodedQuery decode) process history proof) table,
+        BadKey certificate.doomed context decode validator initial query.1 table := by
   intro process
   induction process with
   | done value =>
@@ -325,24 +431,25 @@ theorem escape_logged {accepts : A → Prop} {error : ENNReal}
                     _ rest _ (by rw [shape, List.append_assoc])
                     (certificate.receive ty site sender next doomed value) accepted
                   rw [replay_append, replayed, Option.bind_some, ← shape]
-                  exact replay_receive context table ty site sender next history payload value
+                  exact replay_receive context _ ty site sender next history payload value
                     decoded
       | query site op arguments =>
-          simp only [transform, historyQuery] at accepted ⊢
+          simp only [transform, decodedQuery, bind_map_left] at accepted ⊢
           rw [tableQueryLog_query_bind]
           by_cases stays : certificate.doomed
-              (next (table (history ++ [.challenge (context.query site)])))
-          · obtain ⟨query, logged, bad⟩ := ih (table (history ++ [.challenge (context.query site)]))
+              (next (decode (table (history ++ [.challenge (context.query site)]))))
+          · obtain ⟨query, logged, bad⟩ := ih
+              (decode (table (history ++ [.challenge (context.query site)])))
               (events ++ [.challenge (context.query site)]) _ proof
               (by
                 rw [replay_append, replayed, Option.bind_some, ← shape]
-                exact replay_query context table site op arguments next history)
+                exact replay_query context _ site op arguments next history)
               (by rw [shape, List.append_assoc]) stays accepted
             exact ⟨query, List.mem_cons_of_mem _ logged, bad⟩
           · refine ⟨⟨history ++ [.challenge (context.query site)],
               table (history ++ [.challenge (context.query site)])⟩, List.mem_cons_self, ?_⟩
-            exact ⟨events, .challenge (context.query site), .call (.query site op arguments) next,
-              by rw [shape], replayed, rfl, doomed, stays⟩
+            exact ⟨statement, events, .challenge (context.query site),
+              .call (.query site op arguments) next, by rw [shape], replayed, rfl, doomed, stays⟩
       | send site receiver sent =>
           simp only [transform] at accepted ⊢
           cases encoded : Payload.ofValue _ sent with
@@ -357,7 +464,58 @@ theorem escape_logged {accepts : A → Prop} {error : ENNReal}
                 _ proof _ (by rw [shape, List.append_assoc])
                 (certificate.send _ site receiver sent next doomed) accepted
               rw [replay_append, replayed, Option.bind_some, ← shape]
-              exact replay_send context table site receiver sent next history payload encoded
+              exact replay_send context _ site receiver sent next history payload encoded
+
+/-- Fiat–Shamir soundness with adaptively chosen statements and decoded
+challenges.
+
+The prover is any oracle computation on the transcript oracle answering in `B`,
+making at most `queries` queries on every path (repeats and cache hits
+included); it may hold arbitrary internal state, query any typed history, and
+choose the statement after its queries. The initial history determines the
+statement. The oracle starts with an empty cache and is shared with the
+transform, whose challenges add at most `budget` queries. A statement satisfying
+`falseStatement` has a doomed validator. -/
+theorem adaptive_soundness {accepts : A → Prop} {error loss : ENNReal}
+    (certificate : RoundByRound (F := F) (G := G) accepts error) (context : Context)
+    (decode : B → F) (balanced : Balanced decode loss)
+    (validator : Stmt → PIR.Proc (Actions F G) A) (initial : Stmt → History F G)
+    (determined : Determined initial) (falseStatement : Stmt → Prop)
+    (doomedValidator : ∀ statement, falseStatement statement →
+      certificate.doomed (validator statement))
+    (budget : ℕ) (validatorBound : ∀ statement, QueryBound (validator statement) budget)
+    (prover : OracleComp (Oracle F G B) (Stmt × Proof F G)) (queries : ℕ)
+    (proverBound : IsTotalQueryBound prover queries) :
+    Pr{let result ← (simulateQ randomOracle
+        (adaptiveExperiment context decode validator initial prover)).run' ∅}[
+      falseStatement result.1 ∧ Accepted accepts result.2.1] ≤
+      (queries + budget) * (error + loss) := by
+  have bound := prEvent_randomOracle_le_of_bad_queries
+    (adaptiveExperiment context decode validator initial prover) (queries + budget)
+    (isTotalQueryBound_bind proverBound fun claimed => map_queryBound _ _ budget
+      (transform_queryBound context decode (validator claimed.1) budget (initial claimed.1)
+        claimed.2 (validatorBound claimed.1)))
+    (fun result => falseStatement result.1 ∧ Accepted accepts result.2.1)
+    (BadKey certificate.doomed context decode validator initial) (error + loss)
+    (badKey_resample certificate context decode balanced validator initial determined) (by
+      intro table accepted
+      simp only [adaptiveExperiment, evalWithAnswerFn_bind, evalWithAnswerFn_map,
+        evalWithAnswerFn_transform] at accepted
+      obtain ⟨query, logged, bad⟩ := escape_logged certificate context decode validator initial
+        table (evalWithAnswerFn (QueryImpl.ofFn table) prover).1
+        (validator (evalWithAnswerFn (QueryImpl.ofFn table) prover).1) []
+        (initial (evalWithAnswerFn (QueryImpl.ofFn table) prover).1)
+        (evalWithAnswerFn (QueryImpl.ofFn table) prover).2 (by simp) (by simp)
+        (doomedValidator _ accepted.1) accepted.2
+      refine ⟨query, ?_, bad⟩
+      rw [adaptiveExperiment, tableQueryLog_bind, tableQueryLog_map]
+      exact List.mem_append_right _ logged)
+  simpa only [Nat.cast_add] using bound
+
+end Bad
+
+section Fixed
+variable [DecidableEq F] [DecidableEq G] [SampleableType F]
 
 /-- Fiat–Shamir soundness of the transform from round-by-round soundness.
 
@@ -377,19 +535,24 @@ theorem soundness {accepts : A → Prop} {error : ENNReal}
       Accepted accepts result.1] ≤ (queries + budget) * error := by
   have bound := prEvent_randomOracle_le_of_bad_queries (experiment context validator initial prover)
     (queries + budget)
-    (isTotalQueryBound_bind proverBound fun proof =>
-      transform_queryBound context validator budget initial proof validatorBound)
-    (fun result => Accepted accepts result.1) (BadKey certificate.doomed context validator initial)
-    error (badKey_resample certificate context validator initial) (by
+    (isTotalQueryBound_bind proverBound fun proof => by
+      rw [← decodedQuery_id]
+      exact transform_queryBound context id validator budget initial proof validatorBound)
+    (fun result => Accepted accepts result.1)
+    (BadKey certificate.doomed context id (fun _ : Unit => validator) (fun _ => initial))
+    (error + 0)
+    (badKey_resample certificate context id balanced_id _ _ (fun _ _ _ _ _ => rfl)) (by
       intro table accepted
-      simp only [experiment, evalWithAnswerFn_bind, evalWithAnswerFn_transform] at accepted
-      obtain ⟨query, logged, bad⟩ := escape_logged certificate context validator initial table
-        validator [] initial (evalWithAnswerFn (QueryImpl.ofFn table) prover) (by simp)
-        (by simp) doomedValidator accepted
+      simp only [experiment, ← decodedQuery_id, evalWithAnswerFn_bind,
+        evalWithAnswerFn_transform] at accepted
+      obtain ⟨query, logged, bad⟩ := escape_logged certificate context id
+        (fun _ : Unit => validator) (fun _ => initial) table () validator [] initial
+        (evalWithAnswerFn (QueryImpl.ofFn table) prover) (by simp) (by simp) doomedValidator
+        accepted
       refine ⟨query, ?_, bad⟩
-      rw [experiment, tableQueryLog_bind]
+      rw [experiment, ← decodedQuery_id, tableQueryLog_bind]
       exact List.mem_append_right _ logged)
-  simpa only [Nat.cast_add] using bound
+  simpa only [Nat.cast_add, add_zero] using bound
 
 /-- Private randomness sampled before the oracle computation: every prover in
 the support of `provers` is bounded by `queries`, so the mixture inherits the
@@ -407,6 +570,6 @@ theorem randomized_soundness {accepts : A → Prop} {error : ENNReal}
     soundness certificate context validator doomedValidator budget validatorBound initial prover
       queries (proverBound prover drawn)
 
-end Bad
+end Fixed
 
 end ZkcSecurity.FiatShamir

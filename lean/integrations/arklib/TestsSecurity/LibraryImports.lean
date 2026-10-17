@@ -37,6 +37,7 @@ import ZkcSecurity.Examples.StructuredSchnorrSigma
 import ZkcSecurity.Examples.Sumcheck
 import ZkcSecurity.Examples.SumcheckFiatShamir
 import ZkcSecurity.Examples.Variants
+import ZkcSecurity.FiatShamir.Decoding
 import ZkcSecurity.FiatShamir.Replay
 import ZkcSecurity.FiatShamir.Soundness
 import ZkcSecurity.Oracle.Encoding

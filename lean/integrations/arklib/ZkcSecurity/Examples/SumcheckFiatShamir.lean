@@ -1,6 +1,6 @@
 module
 
-public import ZkcSecurity.FiatShamir.Soundness
+public import ZkcSecurity.FiatShamir.Decoding
 public import ZkcSecurity.Examples.CausalSumcheck.SourceVerifier
 public import ZkcSecurity.ArkLib.Sumcheck.Multilinear.Protocol
 public import ArkLib.ProofSystem.Sumcheck.Interaction.ProtocolSoundness
@@ -460,5 +460,136 @@ theorem compiled_soundness (context : Context)
     proverBound
 
 end Imported
+
+/-! ## Adaptively chosen statements -/
+
+/-- A well-formed public statement of the imported verifier: the raw public
+vector, the claim and the round count, with the vector's table at that count.
+The table is determined by the vector and the count. -/
+structure PublicStatement (F : Type) where
+  raw : List F
+  claim : F
+  count : Nat
+  table : Table F count
+  decoded : ofList? count raw = some table
+
+section Adaptive
+variable [Field F] [Fintype F] [DecidableEq F] [SampleableType F]
+  [AddCommGroup G] [Module F G] [DecidableEq G]
+
+/-- Doomed residuals of every table and claim, and the refused verifier. -/
+def DoomedAny (ctx : ProtocolContext) (handle : Nat)
+    (process : PIR.Proc (Actions F G) (Option Bool)) : Prop :=
+  (∃ count table, Doomed ctx handle count table process) ∨ process = .halt .refused
+
+omit [AddCommGroup G] [Module F G] [DecidableEq G] in
+theorem doomedAny_step (ctx : ProtocolContext) (handle : Nat) :
+    ∀ process : PIR.Proc (Actions F G) (Option Bool), DoomedAny ctx handle process →
+      Step (DoomedAny ctx handle) (· = some true) (1 / (Fintype.card F : ENNReal))
+        process := by
+  rintro process (⟨count, table, member⟩ | refused)
+  · exact Step.mono (fun _ inside => .inl ⟨count, table, inside⟩) process
+      (doomed_step ctx handle count table process member)
+  · subst refused
+    trivial
+
+/-- One certificate for the imported verifier at every statement. -/
+noncomputable def anyCertificate (ctx : ProtocolContext) (handle : Nat) :
+    RoundByRound (F := F) (G := G) (· = some true) (1 / (Fintype.card F : ENNReal)) :=
+  RoundByRound.ofStep (DoomedAny ctx handle) (doomedAny_step ctx handle)
+
+/-- The imported verifier at a statement, in plain form: the plain verifier on
+admitted counts and a refusal above them. -/
+def plainFamily (handle : Nat) (statement : PublicStatement F) :
+    PIR.Proc (Actions F G) (Option Bool) :=
+  if statement.count ≤ 2 then
+    validator SumcheckSourceVerifier.childContext handle statement.count statement.table
+      statement.claim
+  else .halt .refused
+
+omit [Fintype F] [SampleableType F] in
+theorem importedValidator_family (handle : Nat) (statement : PublicStatement F) :
+    importedValidator (G := G) statement.raw statement.claim statement.count handle =
+      plainFamily handle statement := by
+  unfold plainFamily
+  by_cases admitted : statement.count ≤ 2
+  · rw [ite_eq_left admitted, importedValidator_eq statement.count admitted statement.raw
+      statement.table statement.decoded statement.claim handle]
+  · rw [ite_eq_right admitted, importedValidator_excess statement.count (by omega) statement.raw
+      statement.claim handle]
+
+omit [AddCommGroup G] [Module F G] [DecidableEq G] in
+theorem plainFamily_doomed (handle : Nat) (statement : PublicStatement F)
+    (falseClaim : statement.claim ≠ statement.raw.sum) :
+    (anyCertificate (G := G) SumcheckSourceVerifier.childContext handle).doomed
+      (plainFamily handle statement) := by
+  show DoomedAny SumcheckSourceVerifier.childContext handle (plainFamily handle statement)
+  unfold plainFamily
+  by_cases admitted : statement.count ≤ 2
+  · rw [ite_eq_left admitted]
+    refine .inl ⟨statement.count, statement.table, .round statement.count [] statement.claim,
+      ⟨by simp, falseClaim_initial statement.table statement.claim ?_⟩, rfl⟩
+    rwa [booleanSum_ofList? statement.raw statement.table statement.decoded]
+  · rw [ite_eq_right admitted]
+    exact .inr rfl
+
+omit [Fintype F] [SampleableType F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+theorem plainFamily_queryBound (handle : Nat) (statement : PublicStatement F) :
+    QueryBound (plainFamily (G := G) handle statement) 2 := by
+  unfold plainFamily
+  by_cases admitted : statement.count ≤ 2
+  · rw [ite_eq_left admitted]
+    exact QueryBound.mono _ (residual_queryBound SumcheckSourceVerifier.childContext handle
+      statement.count statement.table statement.count [] statement.claim) admitted
+  · rw [ite_eq_right admitted]
+    trivial
+
+/-- Adaptive Fiat–Shamir soundness of the imported Sumcheck verifier.
+
+The prover chooses the well-formed public statement after its oracle queries;
+the initial history must determine the statement (`Determined`), as a binding
+of the public inputs does. Challenges are decoded oracle answers whose events
+exceed the uniform field's by at most `loss`. A false claim on the chosen
+vector is accepted with probability at most `(queries + 2) * (1 / |F| + loss)`,
+where two is the exported maximum count; larger counts are refused. -/
+theorem adaptive_imported_soundness {B : Type} [SampleableType B] (context : Context)
+    (handle : Nat) (decode : B → F) (loss : ENNReal) (balanced : Balanced decode loss)
+    (initial : PublicStatement F → History F G) (determined : Determined initial)
+    (prover : OracleComp (Oracle F G B) (PublicStatement F × Proof F G)) (queries : Nat)
+    (proverBound : IsTotalQueryBound prover queries) :
+    Pr{let result ← (simulateQ randomOracle (adaptiveExperiment context decode
+        (fun statement : PublicStatement F =>
+          importedValidator statement.raw statement.claim statement.count handle)
+        initial prover)).run' ∅}[
+      result.1.claim ≠ result.1.raw.sum ∧ Accepted (· = some true) result.2.1] ≤
+      (queries + 2) * (1 / (Fintype.card F : ENNReal) + loss) := by
+  have family : (fun statement : PublicStatement F =>
+      importedValidator (G := G) statement.raw statement.claim statement.count handle) =
+        plainFamily handle := funext (importedValidator_family handle)
+  rw [family]
+  exact FiatShamir.adaptive_soundness (anyCertificate SumcheckSourceVerifier.childContext handle)
+    context decode balanced (plainFamily handle) initial determined
+    (fun statement => statement.claim ≠ statement.raw.sum) (plainFamily_doomed handle) 2
+    (plainFamily_queryBound handle) prover queries proverBound
+
+/-- The adaptive bound with the suite's challenge derivation modelled as reduction
+modulo the field size of a uniform sample below `N`, read through a numbering of
+the field (for a 64-byte squeeze, `N = 2 ^ 512`). The decoding costs `|F| / N`
+per challenge. -/
+theorem reduced_imported_soundness (context : Context) (handle : Nat)
+    (numbering : F ≃ Fin (Fintype.card F)) (N : Nat) [NeZero N] [SampleableType (Fin N)]
+    (initial : PublicStatement F → History F G) (determined : Determined initial)
+    (prover : OracleComp (Oracle F G (Fin N)) (PublicStatement F × Proof F G)) (queries : Nat)
+    (proverBound : IsTotalQueryBound prover queries) :
+    Pr{let result ← (simulateQ randomOracle (adaptiveExperiment context (reduce numbering N)
+        (fun statement : PublicStatement F =>
+          importedValidator statement.raw statement.claim statement.count handle)
+        initial prover)).run' ∅}[
+      result.1.claim ≠ result.1.raw.sum ∧ Accepted (· = some true) result.2.1] ≤
+      (queries + 2) * (1 / (Fintype.card F : ENNReal) + (Fintype.card F : ENNReal) / N) :=
+  adaptive_imported_soundness context handle (reduce numbering N) _ (balanced_reduce numbering N)
+    initial determined prover queries proverBound
+
+end Adaptive
 
 end ZkcSecurity.Examples.SumcheckFiatShamir
