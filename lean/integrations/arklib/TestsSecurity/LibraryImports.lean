@@ -29,6 +29,7 @@ import ZkcSecurity.Examples.CausalSumcheck.SourceVerifier
 import ZkcSecurity.Examples.CausalSumcheck.Terminal
 import ZkcSecurity.Examples.CausalSumcheck.UniformService
 import ZkcSecurity.Examples.CompiledSchnorrFiatShamir
+import ZkcSecurity.Examples.ExecutableSchnorrFiatShamir
 import ZkcSecurity.Examples.Schnorr
 import ZkcSecurity.Examples.StructuredSchnorr
 import ZkcSecurity.Examples.StructuredSchnorrFiatShamir
@@ -56,6 +57,7 @@ import TestsSecurity.CausalSumcheck.SourceVerifier
 import TestsSecurity.CausalSumcheck.UniformService
 import TestsSecurity.Compatibility
 import TestsSecurity.CompiledSchnorrFiatShamir
+import TestsSecurity.ExecutableSchnorrFiatShamir
 import TestsSecurity.LocalCoupling
 import TestsSecurity.LocalCouplingAudit
 import TestsSecurity.LocalCouplingClients
