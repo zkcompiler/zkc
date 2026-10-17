@@ -42,8 +42,10 @@ import ZkcSecurity.Examples.Sumcheck
 import ZkcSecurity.Examples.SumcheckFiatShamir
 import ZkcSecurity.Examples.Variants
 import ZkcSecurity.FiatShamir.Decoding
+import ZkcSecurity.FiatShamir.Interface
 import ZkcSecurity.FiatShamir.Replay
 import ZkcSecurity.FiatShamir.Soundness
+import ZkcSecurity.FiatShamir.Typed
 import ZkcSecurity.Oracle.Encoding
 import ZkcSecurity.VCVio.Composition
 import ZkcSecurity.VCVio.Coupling

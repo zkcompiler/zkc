@@ -1,5 +1,6 @@
 module
 
+public import ZkcSecurity.FiatShamir.Interface
 public import ZkcSecurity.FiatShamir.Replay
 public import Zkc.Construction.Soundness
 public import VCVio.OracleComp.QueryTracking.RandomOracle.FreshQuery
@@ -74,11 +75,6 @@ def decodedQuery (decode : B → F) (history : History F G) : OracleComp (Oracle
 theorem decodedQuery_id : decodedQuery (F := F) (G := G) (id : F → F) = historyQuery := by
   funext history
   exact id_map _
-
-/-- A returned value satisfying the acceptance predicate. Stops never accept. -/
-def Accepted (accepts : A → Prop) : PIR.Outcome A → Prop
-  | .returned value => accepts value
-  | .stopped _ => False
 
 /-- At most `budget` challenge queries on every path, for every reply. -/
 def QueryBound : PIR.Proc (Actions F G) A → ℕ → Prop
