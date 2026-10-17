@@ -305,6 +305,17 @@ meta def generatedNames (helperEntries protocolEntries : Array Entry) (naming : 
           names := names.push (simple entry suffix)
     return names
 
+/-- Elaborate one generated declaration and stop at the first one that Lean or
+the kernel refuses, naming it; later declarations would otherwise be
+elaborated on top of a failed one. Phase equations are named as such. -/
+meta def emit (naming : Naming) (command : Syntax) : CommandElabM Unit := do
+  elabCommand command
+  if (← get).messages.hasErrors then
+    let name := ((command.find? (·.isOfKind ``Parser.Command.declId)).map (·[0].getId)).getD .anonymous
+    if name.toString.endsWith "_checked" || name == `payload_linked then
+      throwError "{naming.command}: the authored bodies do not satisfy the admission phase {name}"
+    throwError "{naming.command}: generated declaration {name} was not accepted for the authored bodies"
+
 /-- Generated declarations: literal payload, admission phases and source facts. -/
 meta def emitViews (snapshot : Term) (helperEntries protocolEntries : Array Entry)
     (naming : Naming := {}) : CommandElabM Entry := do
@@ -371,16 +382,16 @@ meta def emitViews (snapshot : Term) (helperEntries protocolEntries : Array Entr
   -- Literal declarations.
   for entry in helperEntries do
     let definition := definitionIdent entry
-    elabCommand (← `(def $definition : CheckedDefinition := CheckedDefinition.ofBody $(entry.signature) $(entry.body)))
-    elabCommand (← `(theorem $(theoremIdent entry naming.helperRaw) :
+    emit naming (← `(def $definition : CheckedDefinition := CheckedDefinition.ofBody $(entry.signature) $(entry.body)))
+    emit naming (← `(theorem $(theoremIdent entry naming.helperRaw) :
         ($definition).raw = ($(entry.body)).erase := rfl))
-    elabCommand (← `(theorem $(theoremIdent entry naming.helperBody) : ($definition).body = $(entry.body) := rfl))
+    emit naming (← `(theorem $(theoremIdent entry naming.helperBody) : ($definition).body = $(entry.body) := rfl))
   for entry in protocolEntries do
     let definition := definitionIdent entry
-    elabCommand (← `(def $definition : CheckedProtocol := CheckedProtocol.ofBody $(entry.signature) $(entry.body)))
-    elabCommand (← `(theorem $(theoremIdent entry "_signature") : ($definition).signature = $(entry.signature) := rfl))
-    elabCommand (← `(theorem $(theoremIdent entry "_raw") : ($definition).raw = ($(entry.body)).erase := rfl))
-    elabCommand (← `(theorem $(theoremIdent entry "_body") : ($definition).body = $(entry.body) := rfl))
+    emit naming (← `(def $definition : CheckedProtocol := CheckedProtocol.ofBody $(entry.signature) $(entry.body)))
+    emit naming (← `(theorem $(theoremIdent entry "_signature") : ($definition).signature = $(entry.signature) := rfl))
+    emit naming (← `(theorem $(theoremIdent entry "_raw") : ($definition).raw = ($(entry.body)).erase := rfl))
+    emit naming (← `(theorem $(theoremIdent entry "_body") : ($definition).body = $(entry.body) := rfl))
   let definitionsList ← helperOrder.toArray.mapM fun (entry, _) => `($(definitionIdent entry))
   let orderedList ← helperOrder.toArray.mapM fun (entry, depth) =>
     `(⟨$(definitionIdent entry), $(Syntax.mkNumLit (toString depth))⟩)
@@ -393,12 +404,12 @@ meta def emitViews (snapshot : Term) (helperEntries protocolEntries : Array Entr
   let summariesId := mkIdent `summaries
   let unitId := mkIdent `unit
   let programId := mkIdent naming.program
-  elabCommand (← `(def $definitionsId : List CheckedDefinition := [$definitionsList,*]))
-  elabCommand (← `(def $orderedId : List OrderedDefinition := [$orderedList,*]))
-  elabCommand (← `(def $headersId : List ProtocolSignature := [$headersList,*]))
-  elabCommand (← `(def $domainsId : List DomainSpec := $domains))
-  elabCommand (← `(def $summariesId : IdentitySummaries := $summaries))
-  elabCommand (← `(def $unitId : UnitPayload where
+  emit naming (← `(def $definitionsId : List CheckedDefinition := [$definitionsList,*]))
+  emit naming (← `(def $orderedId : List OrderedDefinition := [$orderedList,*]))
+  emit naming (← `(def $headersId : List ProtocolSignature := [$headersList,*]))
+  emit naming (← `(def $domainsId : List DomainSpec := $domains))
+  emit naming (← `(def $summariesId : IdentitySummaries := $summaries))
+  emit naming (← `(def $unitId : UnitPayload where
     definitions := $definitionsId
     protocols := [$protocolsList,*]
     entryIndex := ⟨$(Syntax.mkNumLit (toString entryIndex)), by decide +kernel⟩
@@ -407,18 +418,18 @@ meta def emitViews (snapshot : Term) (helperEntries protocolEntries : Array Entr
     available := checkUnitAvailability_ok_of_isOk (by decide +kernel)
     realizationClosed := by decide +kernel
     mapClosed := by decide +kernel))
-  elabCommand (← `(def $programId : Program := ⟨$snapshot, $unitId⟩))
+  emit naming (← `(def $programId : Program := ⟨$snapshot, $unitId⟩))
   -- Admission phases, each checked by the kernel.
-  elabCommand (← `(theorem $(mkIdent `headers_checked) : checkUnitHeaders $snapshot =
+  emit naming (← `(theorem $(mkIdent `headers_checked) : checkUnitHeaders $snapshot =
       .ok ($domainsId, $headersId, $summariesId) := by kernel_rfl))
-  elabCommand (← `(theorem $(mkIdent `helpers_checked) :
+  emit naming (← `(theorem $(mkIdent `helpers_checked) :
       checkUnitHelpers $snapshot $domainsId $summariesId = .ok $orderedId := by kernel_rfl))
   let mut sourceEquations : Array Ident := #[]
   for h : index in [0:snapshotProtocols.length] do
     let entry := snapshotProtocols[index]
     let name := theoremIdent entry "_checked"
     sourceEquations := sourceEquations.push name
-    elabCommand (← `(theorem $name : checkProtocol $snapshot $domainsId $summariesId
+    emit naming (← `(theorem $name : checkProtocol $snapshot $domainsId $summariesId
         ((Snapshot.protocolFunctions $snapshot)[$(Syntax.mkNumLit (toString index))]'(by decide +kernel))
         $headersId = .ok $(definitionIdent entry) := by kernel_rfl))
   let mut sources ← `(mapM_nil_ok _)
@@ -427,42 +438,42 @@ meta def emitViews (snapshot : Term) (helperEntries protocolEntries : Array Entr
   let checkedList ← snapshotProtocols.toArray.mapM fun entry => `($(definitionIdent entry))
   let sourceList ← (List.range snapshotProtocols.length).toArray.mapM fun index =>
     `((Snapshot.protocolFunctions $snapshot)[$(Syntax.mkNumLit (toString index))]'(by decide +kernel))
-  elabCommand (← `(theorem $(mkIdent `protocols_checked) :
+  emit naming (← `(theorem $(mkIdent `protocols_checked) :
       checkUnitProtocols $snapshot $domainsId $summariesId $headersId $orderedId =
         .ok ($unitId).protocols :=
       checkUnitProtocols_of_checked [$checkedList,*]
         (by rw [show Snapshot.protocolFunctions $snapshot = [$sourceList,*] from rfl]
             exact $sources)
         (by kernel_rfl)))
-  elabCommand (← `(theorem $(mkIdent `native_metadata_checked) :
+  emit naming (← `(theorem $(mkIdent `native_metadata_checked) :
       (checkNativeApplicationBudgets $snapshot).isOk = true := by decide +kernel))
-  elabCommand (← `(theorem $(mkIdent `effective_sites_checked) :
+  emit naming (← `(theorem $(mkIdent `effective_sites_checked) :
       checkEffectiveProtocolSites $snapshot = .ok () := by kernel_rfl))
-  elabCommand (← `(theorem $(mkIdent `metadata_checked) : checkApplicationMetadata $snapshot = .ok () :=
+  emit naming (← `(theorem $(mkIdent `metadata_checked) : checkApplicationMetadata $snapshot = .ok () :=
       checkApplicationMetadata_of_checks $(mkIdent `native_metadata_checked) $(mkIdent `effective_sites_checked)))
-  elabCommand (← `(theorem $(mkIdent `payload_linked) :
+  emit naming (← `(theorem $(mkIdent `payload_linked) :
       linkUnitPayload $snapshot $orderedId ($unitId).protocols = .ok $unitId :=
       linkUnitPayload_of_payload _ _ _ rfl rfl))
-  elabCommand (← `(/-- All declarations, callback trees and metadata phases of the original unit. -/
+  emit naming (← `(/-- All declarations, callback trees and metadata phases of the original unit. -/
     theorem $(mkIdent naming.admission) : check $snapshot = .ok $programId :=
       check_parts _ $unitId (check_payload_of_phases $(mkIdent `headers_checked) $(mkIdent `helpers_checked)
         $(mkIdent `protocols_checked) $(mkIdent `metadata_checked) $(mkIdent `payload_linked))))
   let importedId := mkIdent naming.imported
-  elabCommand (← `(def $importedId : Imported $snapshot := ⟨$programId, $(mkIdent naming.admission)⟩))
+  emit naming (← `(def $importedId : Imported $snapshot := ⟨$programId, $(mkIdent naming.admission)⟩))
   unless naming.closed do
-    elabCommand (← `(theorem $(mkIdent `exact_subject) : ($programId).snapshot = $snapshot :=
+    emit naming (← `(theorem $(mkIdent `exact_subject) : ($programId).snapshot = $snapshot :=
         ($importedId).exactSubject))
   for entry in protocolOrder do
-    elabCommand (← `(theorem $(theoremIdent entry "_member") : $(definitionIdent entry) ∈ ($unitId).protocols :=
+    emit naming (← `(theorem $(theoremIdent entry "_member") : $(definitionIdent entry) ∈ ($unitId).protocols :=
       by structured_mem))
   let some entry := protocolOrder[entryIndex]? | throwError "{naming.command}: missing entry protocol"
   unless naming.closed do
-    elabCommand (← `(theorem $(mkIdent `entry_selection) : ($unitId).entry = $(definitionIdent entry) := rfl))
-    elabCommand (← `(theorem $(mkIdent `entry_signature) :
+    emit naming (← `(theorem $(mkIdent `entry_selection) : ($unitId).entry = $(definitionIdent entry) := rfl))
+    emit naming (← `(theorem $(mkIdent `entry_signature) :
         ($programId).payload.entry.signature = $(entry.signature) := rfl))
-    elabCommand (← `(theorem $(mkIdent `entry_raw) :
+    emit naming (← `(theorem $(mkIdent `entry_raw) :
         ($programId).payload.entry.raw = ($(entry.body)).erase := rfl))
-  elabCommand (← `(/-- Complete original-to-checked association includes every nested callback. -/
+  emit naming (← `(/-- Complete original-to-checked association includes every nested callback. -/
     theorem $(mkIdent `complete_protocol_source) (definition : CheckedProtocol)
       (member : definition ∈ ($unitId).protocols) :
       ∃ function domains signatures summaries,
@@ -474,7 +485,7 @@ meta def emitViews (snapshot : Term) (helperEntries protocolEntries : Array Entr
         lowerProtocol $snapshot domains summaries signatures function
           definition.signature = .ok definition.raw :=
       ($importedId).protocolSource member))
-  elabCommand (← `(/-- Every checked helper is the exact checked form of a retained declaration. -/
+  emit naming (← `(/-- Every checked helper is the exact checked form of a retained declaration. -/
     theorem $(mkIdent `complete_helper_source) (definition : CheckedDefinition)
       (member : definition ∈ ($unitId).definitions) :
       ∃ original domains headers summaries,
@@ -482,7 +493,7 @@ meta def emitViews (snapshot : Term) (helperEntries protocolEntries : Array Entr
         checkUnitHeaders $snapshot = .ok (domains, headers, summaries) ∧
         checkDefinition $snapshot domains summaries original = .ok definition :=
       ($importedId).helperSource member))
-  elabCommand (← `(/-- Every original protocol is admitted to one exact checked tree. -/
+  emit naming (← `(/-- Every original protocol is admitted to one exact checked tree. -/
     theorem $(mkIdent `complete_original_protocol) (function : Zkc.Source.Structured.Function)
       (member : .function function ∈ ($snapshot).definitions)
       (kind : function.kind = .protocol) :
@@ -496,49 +507,62 @@ meta def emitViews (snapshot : Term) (helperEntries protocolEntries : Array Entr
       ($importedId).protocolChecked member kind))
   return entry
 
-@[command_elab structuredViews] meta def elabStructuredViews : CommandElab := fun stx => do
+/-- Generated declarations are elaborated synchronously, so a refused one is
+seen before the next is emitted. A refused command restores the environment it
+started from: no partial unit is left behind. -/
+meta def synchronously (action : CommandElabM Unit) : CommandElabM Unit := do
+  let environment ← getEnv
+  try
+    withScope (fun scope => { scope with opts := Elab.async.set scope.opts false }) action
+  catch error =>
+    setEnv environment
+    throw error
+
+@[command_elab structuredViews] meta def elabStructuredViews : CommandElab := fun stx => synchronously do
   let helperEntries ← stx[4].getSepArgs.mapM (parseEntry "Helper")
   let protocolEntries ← stx[8].getSepArgs.mapM (parseEntry "Signature")
   discard <| emitViews ⟨stx[1]⟩ helperEntries protocolEntries
 
-@[command_elab structuredClosedViews] meta def elabStructuredClosedViews : CommandElab := fun stx => do
+@[command_elab structuredClosedViews] meta def elabStructuredClosedViews : CommandElab :=
+    fun stx => synchronously do
   let snapshot : Term := ⟨stx[1]⟩
   let rootBody : Term := ⟨stx[11]⟩
   let helperEntries ← stx[4].getSepArgs.mapM (parseEntry "Helper")
   let protocolEntries ← stx[8].getSepArgs.mapM (parseEntry "Signature")
-  let entry ← emitViews snapshot helperEntries protocolEntries
+  let naming : Naming :=
     { program := `subject, imported := `subjectImported, admission := `subject_admission,
       helperRaw := "_exact", helperBody := "_body_exact", closed := true,
       command := "structured_closed_views" }
+  let entry ← emitViews snapshot helperEntries protocolEntries naming
   let signature := entry.signature
   let program := mkIdent `program
   let imported := mkIdent `imported
-  elabCommand (← `(def $(mkIdent `root) : ClosedRoot :=
+  emit naming (← `(def $(mkIdent `root) : ClosedRoot :=
       ⟨($signature).name, ($signature).inputs, ($signature).outputs, ($rootBody).erase, $rootBody,
         ($rootBody).elaborate_erase⟩))
-  elabCommand (← `(def $(mkIdent `payload) : Payload where
+  emit naming (← `(def $(mkIdent `payload) : Payload where
       definitions := $(mkIdent `definitions)
       entry := $(mkIdent `root)
       linked := ($(mkIdent `unit)).linked
       entryLinked := by decide +kernel))
-  elabCommand (← `(def $program : ClosedProgram :=
+  emit naming (← `(def $program : ClosedProgram :=
       ⟨$(mkIdent `subject), $(mkIdent `payload), by kernel_rfl⟩))
-  elabCommand (← `(/-- Complete actual-source admission, including the closed projection. -/
+  emit naming (← `(/-- Complete actual-source admission, including the closed projection. -/
     theorem $(mkIdent `kernel_admission) : checkClosed $snapshot = .ok $program :=
       checkClosed_of_check $(mkIdent `subject_admission) ($program).projected))
-  elabCommand (← `(def $imported : ClosedImported $snapshot := ⟨$program, $(mkIdent `kernel_admission)⟩))
-  elabCommand (← `(theorem $(mkIdent `exact_subject) : ($program).snapshot = $snapshot :=
+  emit naming (← `(def $imported : ClosedImported $snapshot := ⟨$program, $(mkIdent `kernel_admission)⟩))
+  emit naming (← `(theorem $(mkIdent `exact_subject) : ($program).snapshot = $snapshot :=
       ($imported).exactSubject))
-  elabCommand (← `(theorem $(theoremIdent entry "_selected") :
+  emit naming (← `(theorem $(theoremIdent entry "_selected") :
       ($program).subject.payload.entry = $(definitionIdent entry) := rfl))
-  elabCommand (← `(theorem $(theoremIdent entry "_exact") :
+  emit naming (← `(theorem $(theoremIdent entry "_exact") :
       ($program).subject.payload.entry.raw = ($(entry.body)).erase := rfl))
-  elabCommand (← `(theorem $(theoremIdent entry "_body_exact") :
+  emit naming (← `(theorem $(theoremIdent entry "_body_exact") :
       ($program).subject.payload.entry.body = $(entry.body) := rfl))
-  elabCommand (← `(theorem $(mkIdent `entry_exact) : ($program).payload.entry.raw = ($rootBody).erase := rfl))
-  elabCommand (← `(theorem $(mkIdent `entry_body_exact) : ($program).payload.entry.body = $rootBody := rfl))
+  emit naming (← `(theorem $(mkIdent `entry_exact) : ($program).payload.entry.raw = ($rootBody).erase := rfl))
+  emit naming (← `(theorem $(mkIdent `entry_body_exact) : ($program).payload.entry.body = $rootBody := rfl))
   for helper in helperEntries do
-    elabCommand (← `(theorem $(theoremIdent helper "_member") :
+    emit naming (← `(theorem $(theoremIdent helper "_member") :
         $(definitionIdent helper) ∈ ($program).payload.definitions := by structured_mem))
 
 @[command_elab structuredAssociations] meta def elabStructuredAssociations : CommandElab := fun stx => do

@@ -25,8 +25,12 @@ syntax (name := kernelRfl) "kernel_rfl" : tactic
   let proof := mkApp2 (mkConst ``Eq.refl [← getLevel α]) α lhs
   let levels := (collectLevelParams {} type).params
   let lemmaLevels := (← Term.getLevelNames).reverse.filter levels.contains
-  let name ← withOptions (Elab.async.set · false) do
-    mkAuxLemma lemmaLevels type proof
+  let name ← try
+      withOptions (Elab.async.set · false) do
+        mkAuxLemma lemmaLevels type proof
+    catch error =>
+      if error.isInterrupt || error.isRuntime then throw error
+      throwError "kernel_rfl: the kernel does not reduce both sides to the same value{indentExpr type}"
   goal.assign (mkConst name (lemmaLevels.map .param))
   replaceMainGoal []
 
