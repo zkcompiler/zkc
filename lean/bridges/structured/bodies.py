@@ -133,7 +133,10 @@ def shorten(text):
         for _ in range(match.group(0).count(".there")):
             result = f"(.there {result})"
         return result
-    return re.sub(r"\.here(?:\.there)+", var, text)
+    text = re.sub(r"\.here(?:\.there)+", var, text)
+    # Operation side conditions are decidable facts about literal operations;
+    # auxiliary proof constants of the checker are printed back as `rfl`.
+    return re.sub(r"(?<![\w.])[\w.]+\._proof_\d+", "rfl", text)
 
 
 def chain(items, indent="  "):
