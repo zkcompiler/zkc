@@ -328,6 +328,7 @@ import ZkcExamples.Structured.SchnorrHelpersData
 import ZkcExamples.Structured.SchnorrHonestProver
 import ZkcExamples.Structured.SchnorrHonestProverControls
 import ZkcExamples.Structured.SchnorrInteractive
+import ZkcExamples.Structured.SchnorrInteractiveBodies
 import ZkcExamples.Structured.SchnorrInteractiveData
 import ZkcExamples.Structured.SchnorrReorderedData
 import ZkcExamples.Structured.SchnorrResponse
@@ -336,6 +337,7 @@ import ZkcExamples.Structured.SchnorrResponseMutatedData
 import ZkcExamples.Structured.SchnorrResponseOriginalData
 import ZkcExamples.Structured.SchnorrSharedWitness
 import ZkcExamples.Structured.SchnorrVariants
+import ZkcExamples.Structured.SchnorrVariantsBodies
 import ZkcExamples.Structured.ServiceOrder
 import ZkcExamples.Structured.ServiceOrderBodies
 import ZkcExamples.Structured.ServiceOrderControls
