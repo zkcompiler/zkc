@@ -138,6 +138,7 @@ the generic source signature does not promise support for every field or group.
 | `field_reduce_le<F>` | `Bytes` | `F` | Little-endian integer reduced modulo the scalar order |
 | `group_compressed<G>` | `G` | `Bytes` | Canonical compressed point: 48-byte BLS G1, 96-byte BLS G2 or 32-byte Edwards |
 | `group_from_compressed<G>` | `Bytes` | `(bool, G)` | Exact width, canonical encoding and prime-order subgroup check |
+| `fields_from_be<F>` | `Bytes` | `(bool, Vector<F>)` | Consecutive canonical 32-byte big-endian integers below the scalar modulus |
 
 The BLS12-381 compressed point encodings are the big-endian x coordinate (for
 G2, the `c1` then `c0` coefficient) with three flag bits in the most significant
@@ -147,6 +148,13 @@ of infinity is `0xc0` followed by zero bytes; the sign flag on infinity, an x
 coefficient at or above the base-field modulus, an x without a curve point, and
 a point outside the prime-order subgroup are invalid. This is the encoding of
 the Ethereum consensus specifications and the blst library.
+
+`fields_from_be` is the whole-vector inverse of `fields_be`. An empty input
+decodes to an empty vector. A length that is not a multiple of 32, or any
+element at or above the modulus, returns `(false, empty vector)`; no prefix is
+returned and nothing is reduced. Element and output limits precede allocation.
+Like `fields_be` and `field_from_be`, it debits no external work beyond the
+usual operand and result charges.
 
 `index_uleb128` encodes the [unsigned 64-bit index](../language/definitions.md)
 using low seven-bit groups first, setting bit `0x80` on every byte except the
@@ -194,6 +202,10 @@ information, so this operation supplies no constant-time guarantee.
 32-byte Keccak-256 digest with no framing. It uses the original Keccak padding,
 not SHA3-256. Its binding has no domain arguments or attributes. Native execution
 checks input/output capacities and charges one hash call plus the input bytes.
+
+`hash.sha256 : Bytes -> Bytes`, exposed as `zkc::bytes::sha256`, returns the
+32-byte SHA-256 digest of FIPS 180-4 with no framing. It has the same binding
+form, capacity checks and work charge as `hash.keccak256`.
 
 The decoder Boolean reports validity. On invalid encoding the accompanying value
 is zero or the group identity. Decoding has no transcript effect; a caller uses

@@ -13,6 +13,11 @@ pub(super) const CONTRACTS: &[Contract] = &[
     )
     .implemented_by(&["arkworks/encoding.fields_be"]),
     Contract::new(
+        "encoding.fields_from_be",
+        (&[Bytes], &[Bool, Vector], AttributeRule::None),
+    )
+    .implemented_by(&["arkworks/encoding.fields_from_be"]),
+    Contract::new(
         "encoding.fields_le",
         (&[Vector], &[Bytes], AttributeRule::None),
     )

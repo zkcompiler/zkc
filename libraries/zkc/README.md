@@ -86,9 +86,14 @@ the integer. It selects no transcript framing or transport format.
 `bytes::repeat(byte, count)` creates padding and `bytes::join(Sequence<Bytes>)`
 assembles ordered fragments without repeatedly copying their growing prefix.
 `encoding::fields_be`, `fields_le` and `groups_compressed` encode collections
-using the corresponding scalar codecs, with no length prefix. Domain support
-and capacity checks follow the [native encoding contract](../../docs/spec/realization/external-constructions.md#mathematical-byte-encodings).
+using the corresponding scalar codecs, with no length prefix.
+`encoding::fields_from_be` decodes a whole big-endian vector: it returns false
+and an empty vector unless the length is a multiple of 32 and every element is
+canonical. Domain support and capacity checks follow the
+[native encoding contract](../../docs/spec/realization/external-constructions.md#mathematical-byte-encodings).
 These operations do not observe values or choose transcript framing.
+`bytes::keccak256` and `bytes::sha256` are the raw hash functions, with no
+domain separator or framing of their own.
 
 Use `concat` for a few small fixed fragments. `join` is useful when fragments
 already form a sequence or repeated prefix copying dominates; constructing a
