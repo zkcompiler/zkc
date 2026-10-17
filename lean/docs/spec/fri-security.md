@@ -1,10 +1,11 @@
 # FRI security at the ideal interpretation
 
 This page specifies the independent model of the verifier of
-[`fri::LowDegree`](../../../libraries/fri/lib.zkc) and its round-by-round
-soundness theorem. The model reads every commitment as the vector it commits to;
-it makes no claim about Merkle commitments, Fiat–Shamir, the compiled proof Entry
-or native execution. The modules are `ZkcSecurity.ArkLib.Fri.*` in the
+[`fri::LowDegree`](../../../libraries/fri/lib.zkc), its completeness on the
+tested code and its round-by-round soundness theorem. The model reads every
+commitment as the vector it commits to; it makes no claim about Merkle
+commitments, Fiat–Shamir, the compiled proof Entry or native execution. The
+modules are `ZkcSecurity.ArkLib.Fri.*` in the
 [security integration](../../integrations/arklib/README.md).
 
 ## Subject
@@ -56,15 +57,27 @@ Line numbers refer to `libraries/fri/lib.zkc`. Each model definition is in
 | position draws (125–132) | `drawPositions`, `positionAt` | uniform on vectors (`evalDist_drawPositions`); every event has its probability under the uniform draw of all `s` positions together (`prEvent_positions`) |
 | `configured`, `shape` (64–75, 93–99) | static `R` and `s`; nonzero shift and a primitive root for `cosetDomain` | premises of the theorems |
 
-`coset::fold` (115) and `interpolate_coefficients` (118) are honest-prover
-operations and are not modelled. `Honest` states that each committed word after
-the first, and the final polynomial's evaluations, are ArkLib's fold of the
-previous word, which is the library's fold formula by `foldedValue_eq`.
-`verify_of_honest` shows that the verifier accepts every position of such layers
-when the final coefficients satisfy the bound, so the checks are consistent with
-folding. Completeness for codewords, that folding a codeword of degree below
-`2^(t + R)` ends at a polynomial with at most `2^t` coefficients, is not proved
-here.
+`coset::fold` (115) and `interpolate_coefficients` (118) are the honest
+prover's operations. `Honest` states that each committed word after the first,
+and the final polynomial's evaluations, are ArkLib's fold of the previous word,
+which is the library's fold formula by `foldedValue_eq`. `verify_of_honest`
+shows that the verifier accepts every position of such layers when the final
+coefficients satisfy the bound.
+
+## Completeness
+
+The honest prover (`honest`, in `ZkcSecurity.ArkLib.Fri.Completeness`) commits
+ArkLib's fold of the current word with each challenge and, after the last fold,
+sends the coefficients of the folded word's interpolant. On a codeword of degree
+below `2^(t + R)`, each fold is a codeword of half the degree on the next coset
+(ArkLib's `foldWord_mem_code_of_mem_code`), so the last fold evaluates a
+polynomial of degree below `2^t`. `honest_commit` shows that every run of the
+honest commit phase gives honestly folded layers whose final coefficients meet
+the bound, and `honest_accepted` that the verifier accepts every query position:
+the test is perfectly complete on its code, for every folding challenge and every
+position. The verifier reads the final message only through its length and the
+polynomial it defines, so any list of at most `2^t` coefficients of that
+polynomial is accepted alike.
 
 ## Certificate
 
@@ -112,16 +125,54 @@ the parameters of `examples/projects/fri` and the authored STARK tables
 primitive 32nd root of unity, the bound is `(16 + 8 + 4) / |F| + (1 - min (3/8) δ)^8`
 with no remaining premise (`example_bound` in `TestsSecurity.FriSecurity`).
 
+## Certificate over verifier residuals
+
+`ZkcSecurity.ArkLib.Fri.Certificate` states the certificate over the residual
+processes of the verifier after the first commitment, the form a Fiat–Shamir
+transfer consumes. The verifier is a process over four operations
+(`Operation`): a folding challenge, one field element; a committed word, read as
+the vector it commits to; the final coefficient vector; and the query block, all
+`s` positions together in `Fin s → Fin (2^n)`. `afterCommit word` is the
+verifier once the initial word is committed, and `foldPhase`, `finalPhase` and
+`queryPhase` are its residuals.
+
+The doomed residuals (`Doomed`) are those reached while the committed initial
+word is at relative distance at least `δ` from the code and no folding challenge
+has escaped. Each records what every completion of its transcript satisfies: the
+initial word is far, and the completed rounds are safe exactly when the
+remaining rounds are. `certificate` proves the local obligation (`Step`) of every
+doomed residual, with every query answered by a uniform value of its sort:
+
+| Residual | Obligation |
+|---|---|
+| a result | it rejects |
+| a committed word or the final coefficients | every message keeps the residual doomed |
+| the folding challenge of round `r` | the residual leaves the set with probability at most `foldError r` |
+| the query block | the residual leaves the set with probability at most `(1 - min θ δ)^s` |
+
+`afterCommit_doomed` places the verifier after a far initial word in the set,
+given the folding obligations; `afterCommit_doomed_of_proximity` takes them from
+the proximity premise and `afterCommit_doomed_uniqueDecoding` from the
+unique-decoding instance, in which round `r` errs at most `2^(n - r - 1) / |F|`.
+
+A Fiat–Shamir transfer takes the initial word as the statement and its
+commitment as the initial history, which determines the statement. Each query
+site answers with its own decoding of a transcript output, and the errors above
+are under the uniform law of each site's sort: the query block's error
+`(1 - min θ δ)^s` is a bound under the uniform law of `Fin s → Fin (2^n)`. A
+decoding whose law is dominated by the uniform law with a factor multiplies its
+site's error by that factor.
+
 ## Boundaries
 
 - Commitments are ideal. Security of the Merkle-based verifier needs a
   commitment step (binding and extraction) that this model does not contain.
 - The theorems concern this interactive model, not the compiled `Proof` Entry.
-  A Fiat–Shamir transfer must treat the `s` consecutive position draws as one
-  block: in the transform, each draw's history ends with the verifier's send of
-  the previous position, so no prover message separates the draws, but the
-  histories differ. Decoding an index from a transcript output is also part of
-  that transfer.
+  The residual certificate has one query block site, while the source draws the
+  `s` positions one at a time. In the transform, each draw's history ends with the
+  verifier's send of the previous position, so no prover message separates the
+  draws, but the histories differ. Relating these draws to one block site, and
+  decoding indices from transcript outputs, are part of the transfer.
 - No grinding is modelled; the library has none.
 - The returned first-layer values are tied to the initial word
   (`firstValue_eq`); binding them to a caller's opening equations is the caller's

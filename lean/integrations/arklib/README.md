@@ -118,15 +118,18 @@ to the compiled GKR `example::Proof` verifier through the checked reading of its
 exported instructions.
 
 `ArkLib/Fri` models the verifier of the FRI library's low-degree test with
-ideal commitments and proves its
+ideal commitments and proves its completeness and
 [round-by-round soundness](../../docs/spec/fri-security.md). `Protocol`
 transcribes the verifier, the prover's moves and the sequential position draws;
 `Correspondence` shows that its acceptance is ArkLib's FRI query acceptance on the
-committed trace; `Soundness` states the certificate, with the proximity premise as
-a named hypothesis, and bounds acceptance for every adaptive prover;
+committed trace; `Completeness` shows that the honest prover is accepted on every
+codeword; `Soundness` states the certificate, with the proximity premise as a
+named hypothesis, and bounds acceptance for every adaptive prover;
 `UniqueDecoding` discharges the premise with ArkLib's proved unique-decoding
-results. These modules use the per-round lemmas of ArkLib pull request #992,
-which this package applies to its pinned ArkLib revision as a declared patch
+results; and `Certificate` restates the certificate over the verifier's residual
+processes after the first commitment, with an error per query site. These modules
+use the per-round lemmas of ArkLib pull request #992, which this package applies
+to its pinned ArkLib revision as a declared patch
 ([`compatibility.json`](compatibility.json); see the
 [dependency baseline](../../docs/dependencies.md)). Preparation applies it.
 
