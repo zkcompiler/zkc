@@ -116,6 +116,7 @@ import Zkc.Source.Structured.Evaluation
 import Zkc.Source.Structured.Format
 import Zkc.Source.Structured.Formation
 import Zkc.Source.Structured.Frame
+import Zkc.Source.Structured.HelperSources
 import Zkc.Source.Structured.Import
 import Zkc.Source.Structured.Inlining
 import Zkc.Source.Structured.Interpretation
@@ -197,6 +198,7 @@ import Tests.StructuredContractEntry
 import Tests.StructuredContractInvocation
 import Tests.StructuredContracts
 import Tests.StructuredFormation
+import Tests.StructuredHelperSources
 import Tests.StructuredInlining
 import Tests.StructuredLinking
 import Tests.StructuredMapClients

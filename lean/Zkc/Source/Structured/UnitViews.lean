@@ -1,6 +1,6 @@
 module
 
-public import Zkc.Source.Structured.Import
+public import Zkc.Source.Structured.HelperSources
 public import Zkc.Source.Structured.Association
 public import Zkc.Source.Structured.OpenLaws
 public import Zkc.Source.Structured.ClosedProfile
@@ -417,6 +417,14 @@ meta def emitViews (snapshot : Term) (helperEntries protocolEntries : Array Entr
         lowerProtocol $snapshot domains summaries signatures function
           definition.signature = .ok definition.raw :=
       ($importedId).protocolSource member))
+  elabCommand (← `(/-- Every checked helper is the exact checked form of a retained declaration. -/
+    theorem $(mkIdent `complete_helper_source) (definition : CheckedDefinition)
+      (member : definition ∈ ($unitId).definitions) :
+      ∃ original domains headers summaries,
+        original ∈ ($snapshot).definitions ∧ original.kind ≠ .protocol ∧
+        checkUnitHeaders $snapshot = .ok (domains, headers, summaries) ∧
+        checkDefinition $snapshot domains summaries original = .ok definition :=
+      ($importedId).helperSource member))
   elabCommand (← `(/-- Every original protocol is admitted to one exact checked tree. -/
     theorem $(mkIdent `complete_original_protocol) (function : Zkc.Source.Structured.Function)
       (member : .function function ∈ ($snapshot).definitions)
