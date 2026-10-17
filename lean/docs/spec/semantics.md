@@ -138,6 +138,15 @@ Participant contracts and handlers name `Participant.Action` and
 behavior remain separate parameters. These rules define no joint scheduler,
 honest-peer equality or randomness assumption.
 
+`Source.PeerExecution` is a separate handler for honest delivery between two
+endpoints of one invocation. `peerHandler self other service` keeps the other
+endpoint's actual residual process in its state: a receive of `self` takes the
+value of that process's next send when type, site and endpoints match; a send
+of `self` is consumed by that process's next matching receive; queries of
+`self` go to `service`. Every mismatch refuses without inventing a reply, and
+the peer may not query a service of its own. It models no loss, reordering or
+adversarial network and is not a scheduler for more than two endpoints.
+
 `PIR.Proc` is a well-founded interaction tree with returned values, terminal stops and
 typed requests whose continuations consume actual replies. A handler maps an
 operation and state to its outcome, successor state and ordered events. `run`

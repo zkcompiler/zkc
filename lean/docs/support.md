@@ -9,7 +9,7 @@ They do not certify arbitrary DSL programs or the full native lowering pipeline.
 | Structured source | Multi-result closed callbacks and lexical binding; strict formation in both directions; scalar/mathematical/participant/import bridges; contextual equality, totality and compatible effect translation | Shared structural carrier; native transformation correctness requires separate correspondence |
 | [Structured native import](spec/structured-source.md) | Whole-unit original schema, separate protocol roots and kinded named helpers, each checked root and helper traced to its retained source declaration; explicit scalar/group interpretation, owner-only Local calls, shared participant effects, computational availability and service admission; retained formula links, declaration contracts and exact named Entry selections; process equations for the actual [finite fold fixtures](#finite-fold-subjects) | No general availability soundness, eager/demand correspondence, affine resources or native correctness theorem |
 | [Structured contract binding](spec/verification.md#structured-contracts) | Actual formula invocation, typed port/role selection, owner/invocation-scoped logical assignments, shared opaque interpretations and formula-domain translation; actual-outcome boundary projection | Purpose labels do not choose quantifiers or authority. Opaque meanings and logical instantiations are explicit; no security theorem follows from metadata or an inventory |
-| [Logical contexts](design/logical-contexts.md) | Port-independent binders, transport along port maps, translation of the contract layer, exported-metadata checking; the Sumcheck residual request on the retained and a repacked Reduction export with the unchanged `count / \|F\|` bound | Lean modules over manually authored contexts; static sort arities; no native export or source syntax |
+| [Logical contexts](design/logical-contexts.md) | Port-independent binders, transport along port maps, translation of the contract layer, exported-metadata checking; the Sumcheck residual request on the retained and a repacked Reduction export with the unchanged `count / \|F\|` bound; loop frames observing a repeat's carried state, with a step-obligation rule and exported-frame checking | Lean modules over manually authored contexts; static sort arities; frames observe carried state, not actions inside an iteration; no native export or source syntax |
 | Structural proof construction | Source-indexed derivation soundness with local operation/callback laws; exhaustive lexical call inventory and generic checked-callee substitution preserving masks, stops, state and continuations | Local mathematical laws and loop/callback proofs remain required; selected requests do not discover undeclared intentions or prove the exporter correct |
 | Structural authoring automation | `structured_views` emits checked unit payloads and their kernel-checked admission phases from typed bodies; `bind_contract` recovers retained owners, formula helpers and typed selectors; `derive_region` composes local laws over the actual checked body, including callbacks and lexical binds | Kernel-checked proof construction; unsupported mathematics remains a goal. Direct body projection is the default; materializing large views or proofs can be expensive |
 | Optional component semantics | Same typed Region with closed callbacks; generic lookup, optional named Math calls, all-present adequacy, exact resolution and full-table framing; shared scalar/group evaluator | Static availability is a separate computational check; adequacy alone proves neither admission nor native correspondence |
@@ -32,7 +32,8 @@ They do not certify arbitrary DSL programs or the full native lowering pipeline.
 | [Imported Sumcheck Fiat–Shamir](spec/fiat-shamir-security.md#the-imported-sumcheck-verifier) | The actual imported `example::Interactive` verifier, projected to the common participant actions, is the plain round process on every admitted count and refuses above it; its transform accepts a false claim on the raw public vector with probability at most `(Q + count) / \|F\|`, and for adaptively chosen well-formed statements at most `(Q + 2) * (1 / \|F\| + loss)`, `loss = \|F\| / N` for challenges reduced from samples below `N`. The per-round bound is ArkLib's `uniform_successor_soundness` at degree one through the multilinear bridge. The composed `example::Reduction` root's transform returns a true residual evaluation claim from a false initial claim with probability at most `(Q + count) / \|F\|`. Composition theorems transfer the fixed-statement and adaptive bounds to a compiled verifier, with its construction equality as the only premise about it: equality with the transform of the imported verifier, the original validator of the compiled `example::Proof` Entry, or with the transform of the imported participant process followed by a final reading of its outputs (with an accepted reading implying the Boolean output `some true`) | Finite field; the experiments and named obligations of the previous row; verifier role 1 and the root context. Adaptive statements are well-formed (the raw vector decodes to a table at the chosen count); a prover choosing a malformed vector is not covered. The construction equality for the compiled `example::Proof` Entry is proved in the core package (Compiled Sumcheck row above) but not yet composed with these theorems |
 | Local VCVio coupling | Per-action RelTriple premises lift through the same finite reply-adaptive process, preserving exact paired replies/outcomes and related provider state/event views | Same-process theorem; local laws hold at all required related states; demonstrated on typed-region controls, not a generic security theorem for differently transformed programs |
 | Probabilistic call composition | A child's residual-event bound transfers to caller acceptance through an all-state continuation implication; the actual Sumcheck caller reuses this rule for arbitrary returned tuples and a replacement child | Returned-value events; explicit terminal implication and child bound; both prefix and continuation stops are nonaccepting; no losslessness premise or automatic invariant discovery |
-| [Source-only Sumcheck verifier](#source-only-sumcheck-verifier) | Plain verifier equations for both complete original units, exact maxima 2/4, optional inputs and ordered stops; Source composes its actual terminal with multilinear table equality | Ring/module interpretation; no frontend/exporter or native correctness, sampling, honest P completeness, or cryptographic security claim |
+| [Source-only Sumcheck verifier](#source-only-sumcheck-verifier) | Plain verifier equations for both complete original units, exact maxima 2/4, optional inputs and ordered stops; Source composes its actual terminal with multilinear table equality | Ring/module interpretation; no frontend/exporter or native correctness, sampling, or cryptographic security claim; honest P completeness is the next row |
+| [Honest Sumcheck prover](#honest-sumcheck-prover) | Plain prover equations for both complete original units; the per-round fold invariant on the actual callback (partial evaluation of the original table at the received point, correct round messages); honest-prover completeness of the actual Source and Reduction pairs under honest delivery for every challenge tape | Present prover inputs with the true claim and agreeing tables; two-endpoint deterministic delivery; no sampling, scheduler, native or provider correspondence |
 | [Uniform structured queries](spec/uniform-query-service.md) | Concrete service constructor, exact all-state query execution, receive/send delegation and wrong-route refusal | Optional VCVio.StructuredUniform at the structured participant boundary; arbitrary network and callback effects; pinned SampleableType measure law; generic F, without native RNG/provider/exporter or Fiat–Shamir correspondence |
 | [Uniform Sumcheck composition](spec/uniform-query-service.md#actual-imported-roots) | Concrete-service `n / \|F\|` bounds on the actual admitted `Sumcheck` returned-true result and `Reduce` residual observation, nontrivial up to the exported maxima 2 and 4; excess counts refuse with zero mass. One arbitrary-count execution-distribution transport; finite-field controls on the actual roots and a generic client | Verifier role 1, peer 0, root context; arbitrary network, callbacks and initial states. `Sumcheck`: V's raw vector decodes to the table and the claim is false. `Reduce`: an external table of dimension `remaining + n` and a false initial claim; P inputs are arbitrary; the event is the residual observation, since `Reduce` has no acceptance check. Model-level only, without frontend, native or provider correspondence |
 | Source-bound Sumcheck requests | Refutation of the retained source formula transfers through its checked local law to the actual Reduce input; the child residual bound composes with the public wrapper's terminal check, and the Reduction wrapper transports actual returned point/value selectors. `public_target_bound`, `reduction_request_bound` and `source_composed_bound` reach the same two bounds as the direct theorems through the retained source relation or call-boundary composition | Fixed original table, decoding and capacity premises; concrete retained maxima 2/4, explicit fresh uniform queries and arbitrary optional P inputs. The typed residual request is external Lean intent, not a source-authored generic continuation or a native security theorem |
@@ -466,6 +467,51 @@ mapped contexts and later-iteration stops retain complete handler records.
 Re-admitted mutants use the standard checker and participant interpreter. These
 finite executions are controls; the general source equations supply the
 quantified claims.
+
+## Honest Sumcheck prover
+
+`SumcheckProverLaws` derives the prover's plain process from the same literal
+Reduce callback as the verifier's, at the prover's participant: the verifier's
+guard, draw, append and interpolation are skipped, and the prover's actual sums
+helper, two sends, delivery receive, fold helper and append are performed. A
+zero-dimensional table stops at the sums helper before any send.
+`step_honest` and `loop_honest` express every iteration on the prover's own
+received point, for every delivered challenge; `reduce_prover` adds the width
+and dimension guards, the empty point and the six-slot return.
+`SumcheckProverRoots` gives the root equations of both complete units at the
+prover (`source_prover`, `reduction_prover`), including the checked table
+constructor, the masked verifier inputs and, for Reduction, the residual
+projection. Only present prover inputs are covered.
+
+`SumcheckFoldInvariant.prover_frames` is the per-round invariant on the actual
+callback: after any number of iterations, the frame the loop reaches is the
+honest state of the received point, and its entries represent the partial
+evaluation of the original table at that point (`Fold.partialEvaluation_restrict`).
+`prover_messages` shows that the prover's two actual sends are
+`roundEndpoint` at zero and one, the endpoints of the correct round polynomial.
+The original table is a logical binder; its agreement with the prover's input
+is the premise `ofList? count raw = some table`. `frame_export_checks` checks
+the invariant's proposed export form to exactly the proved atoms.
+
+`SumcheckHonestExecution` runs both actual participants of one root invocation
+with the same inputs. `peerHandler` routes the verifier's receives and sends to
+the prover's actual residual process and answers its challenge queries from a
+tape. `coupled_round` and `coupled_rounds` show that each verifier guard holds
+and each claim update equals the sum of the prover's folded table.
+`source_complete` proves that the verifier returns `true`, the prover returns
+and exactly the used challenges are consumed, for every tape with enough
+values, given the true claim, a shaped representable table and the retained
+maximum. `reduction_complete` returns the tape prefix and the true residual sum
+at the verifier and the same point and folded table at the prover;
+`honest_residual` shows that these outputs satisfy the residual request of the
+security consumer.
+
+`SumcheckFoldControls` instantiates every premise over `ZMod 5`, shows that
+the actual loop reaches the honest frame, and refutes a least-significant-first
+meaning of the same atoms at that frame. `Tests.SumcheckFoldMutations` admits
+a mutant whose callback discards the fold: it still accepts one round, because
+the first message is correct regardless, and is rejected by the verifier's
+guard from the second round, while the original accepts both.
 
 ## Multilinear Sumcheck controls
 

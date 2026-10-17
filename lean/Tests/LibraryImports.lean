@@ -45,6 +45,7 @@ import Zkc.Protocols.Sumcheck.Common
 import Zkc.Protocols.Sumcheck.Execution
 import Zkc.Protocols.Sumcheck.FactorOpening.Program
 import Zkc.Protocols.Sumcheck.FactorOpening.Security
+import Zkc.Protocols.Sumcheck.Multilinear.Fold
 import Zkc.Protocols.Sumcheck.Multilinear.Reduction
 import Zkc.Protocols.Sumcheck.Multilinear.Round
 import Zkc.Protocols.Sumcheck.Multilinear
@@ -89,6 +90,7 @@ import Zkc.Source.KernelRfl
 import Zkc.Source.Mathematical.Projection
 import Zkc.Source.Mathematical
 import Zkc.Source.Participant
+import Zkc.Source.PeerExecution
 import Zkc.Source.Program
 import Zkc.Source.Region
 import Zkc.Source.RegionCongruence
@@ -140,6 +142,7 @@ import Zkc.Source.Structured.Limits
 import Zkc.Source.Structured.Linking
 import Zkc.Source.Structured.LogicalChecking
 import Zkc.Source.Structured.LogicalContext
+import Zkc.Source.Structured.LogicalFrames
 import Zkc.Source.Structured.LogicalInstantiation
 import Zkc.Source.Structured.LogicalTranslation
 import Zkc.Source.Structured.LogicalTransport
@@ -249,6 +252,7 @@ import Tests.StructuredSumcheckVerifierMutations
 import Tests.StructuredSumcheckVerifierSupport
 import Tests.StructuredUnitViews
 import Tests.StructuredWire
+import Tests.SumcheckFoldMutations
 import Tests.SumcheckHelperControls
 import Tests.SumcheckHelperMutants
 import Tests.SumcheckProjectionControls
@@ -398,12 +402,19 @@ import ZkcExamples.Structured.SumcheckContractInstantiation
 import ZkcExamples.Structured.SumcheckContractInterpretations
 import ZkcExamples.Structured.SumcheckContractRequests
 import ZkcExamples.Structured.SumcheckContractStops
+import ZkcExamples.Structured.SumcheckFoldControls
+import ZkcExamples.Structured.SumcheckFoldInvariant
 import ZkcExamples.Structured.SumcheckHelperBodies
 import ZkcExamples.Structured.SumcheckHelperBridge
 import ZkcExamples.Structured.SumcheckHelperExpansions
 import ZkcExamples.Structured.SumcheckHelperLaws
+import ZkcExamples.Structured.SumcheckHonestExecution
 import ZkcExamples.Structured.SumcheckLogicalChecking
 import ZkcExamples.Structured.SumcheckLogicalContext
+import ZkcExamples.Structured.SumcheckProverLaws
+import ZkcExamples.Structured.SumcheckProverPrelude
+import ZkcExamples.Structured.SumcheckProverProcess
+import ZkcExamples.Structured.SumcheckProverRoots
 import ZkcExamples.Structured.SumcheckReduceAssociations
 import ZkcExamples.Structured.SumcheckReduceBodies
 import ZkcExamples.Structured.SumcheckReduceContracts

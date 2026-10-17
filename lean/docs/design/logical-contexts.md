@@ -54,6 +54,32 @@ library resolution accepts a code only when its identity is exactly the
 exported one. Unknown identities, unbound or wrongly sorted binders, observations
 of the wrong type or scope and wrong argument counts are refused by name.
 
+## Loop frames
+
+An owner's boundary does not show what a repeat carries between iterations.
+`LogicalFrames` adds loop frames: the masked state that enters one iteration of
+one repeat occurrence at one participant, with the iteration index. A frame
+term reads an owner binder, a carried slot, the index, a supplied constant or a
+view; a frame invariant is a list of atoms over these terms, with the same
+vocabulary and interpretation as boundary atoms. The loop never chooses or
+changes a binder.
+
+Execution records actions, not frames. A frame invariant is therefore
+established by `Repeat.loop_frames`: an obligation on the actual masked
+callback step, for every reply, gives the invariant at the frame the loop
+reaches after any number of iterations. The export form names the repeat by its
+site in the owner body, the observed participant by its local role and carried
+slots by position. `checkFrame` refuses an unknown site, a slot of another type,
+a slot outside the participant's scope, and a misplaced index by name.
+
+`ZkcExamples.Structured.SumcheckFoldInvariant` states the prover's fold
+invariant on the actual Reduce callback. The original table is one binder; the
+prover's entries, remaining dimension, width and received point are carried
+slots. At every frame, the entries represent the partial evaluation of the
+original table at the received point, and their two half sums are the endpoints
+of the correct round polynomial. The binder is the decoding of the prover's own
+input table; this agreement is an explicit premise.
+
 ## Example
 
 `ZkcExamples.Structured.SumcheckLogicalContext` expresses the Sumcheck residual
@@ -65,6 +91,9 @@ roots with the unchanged `repeat_uniform_residual_soundness`.
 
 ## Limits
 
-Sorts have static arities; families indexed by observed values, internal
-operation observations, honest-agreement consumers, identity keying of opaque
-relations, native export and source syntax are not part of these modules.
+Sorts have static arities; a dependency on an observed value, such as the
+remaining dimension of a folded table, stays inside a predicate's meaning.
+Frames observe carried state only: actions inside an iteration are not frame
+terms, and the process events carry no iteration coordinate. Identity keying of
+opaque relations, native export and source syntax are not part of these
+modules.

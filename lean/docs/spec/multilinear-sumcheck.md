@@ -17,6 +17,7 @@ models.
 | `Zkc.Polynomial.Multilinear.Marginal` | `sumRemaining`, total preservation, commutation with restriction, extension as residual sum |
 | `Zkc.Protocols.Sumcheck.Multilinear.Round` | `Message = F × F`, `boundary`, `evaluate`, `honestMessage`, explicit delivery laws |
 | `Zkc.Protocols.Sumcheck.Multilinear.Reduction` | `ResidualClaim`, mathematical `check`, complete discharge and public-input agreement |
+| `Zkc.Protocols.Sumcheck.Multilinear.Fold` | `PartialEvaluation`, `roundEndpoint` and the prover's flat-list fold laws |
 
 `Table F n` is the function type `(Fin n → Bool) → F` of
 `Zkc.Polynomial.Multilinear`. Its first coordinate is the most significant bit
@@ -97,6 +98,33 @@ at the full point with the claim. `check_eq_true_iff` exposes both premises.
 residual computation. `check_zero_iff` states exactly that an empty-point check
 accepts if and only if `values = [claim]`. This pure checker uses the proved
 extension equation; it does not model the source's staged computation or stops.
+
+## Prover fold
+
+An honest prover keeps a flat list and fixes its leading coordinate at each
+received challenge. `PartialEvaluation T p xs` says that `xs` represents the
+partial evaluation of `T` at the ordered point `p`: `p` fits the arity, `xs`
+decodes to a table of the remaining arity, and that table's extension at every
+remaining point `x` equals the extension of `T` at `p ++ x`.
+`roundEndpoint T p b` sums the extension of `T` over the Boolean points that
+complete `p` with `b` in the next coordinate; `b = 0` and `b = 1` are the two
+endpoints of the correct round polynomial after `p`.
+
+```text
+ofList? n raw = some T, |p| ≤ n  ⇒  PartialEvaluation T p (restrictPrefixValues raw p)
+PartialEvaluation T p xs, |p| < n  ⇒  PartialEvaluation T (p ++ [r]) (restrictValues xs r)
+PartialEvaluation T p xs, |p| < n  ⇒  (sum(low half xs), sum(high half xs))
+                                        = (roundEndpoint T p 0, roundEndpoint T p 1)
+PartialEvaluation T p xs, |p| = n  ⇒  sum(xs) = extension T p
+even |xs|  ⇒  sum(restrictValues xs r) = (1-r)*sum(low half xs) + r*sum(high half xs)
+```
+
+The exact results are `partialEvaluation_restrict`, `partialEvaluation_fold`,
+`partialEvaluation_endpoints`, `partialEvaluation_complete` and
+`restrictValues_sum`; `partialEvaluation_sum` gives the residual sum for any
+prefix. They use a commutative ring and assume no interaction, delivery or
+challenge distribution. The [structured honest prover](../support.md#honest-sumcheck-prover)
+applies them to the actual imported prover.
 
 ## Role-local contracts and the execution boundary
 
