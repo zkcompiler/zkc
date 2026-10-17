@@ -72,6 +72,30 @@ theorem gated_step_le {Residual : Type} (doomed : Residual → Prop) (next : G �
         exact ⟨rfl, escaping⟩
       · exact absurd (rejects bits value passing) escaping
 
+/-- The joint law of a gated site's passing values. If the gate passes with
+probability at most `pass` and the challenge's decoding is realized with
+`factor` and `slack`, the decoding that refuses unless the gate passes is
+realized with `pass * factor` and `pass * slack`. The product comes from the
+independence of the two coordinates of a uniform pair (`prEvent_uniform_prod`),
+not from the marginal laws. -/
+theorem gated_realized [SampleableType R] [DecidableEq G] (gate : B₁ → G) (passing : G)
+    (challenge : B₂ → Option R) {pass factor slack : ENNReal}
+    (passes : Pr{let bits ← $ᵗ B₁}[gate bits = passing] ≤ pass)
+    (realized : Realized challenge factor slack) :
+    Realized (fun answer : B₁ × B₂ => if gate answer.1 = passing then challenge answer.2 else none)
+      (pass * factor) (pass * slack) := by
+  intro event
+  rw [prEvent_congr _ _ (fun answer : B₁ × B₂ => gate answer.1 = passing ∧
+      ∃ value, challenge answer.2 = some value ∧ event value) fun answer => by
+        by_cases gated : gate answer.1 = passing <;> simp [gated],
+    prEvent_uniform_prod (fun bits => gate bits = passing)
+      (fun answer => ∃ value, challenge answer = some value ∧ event value)]
+  calc Pr{let bits ← $ᵗ B₁}[gate bits = passing] *
+        Pr{let answer ← $ᵗ B₂}[∃ value, challenge answer = some value ∧ event value]
+      ≤ pass * (factor * Pr{let value ← $ᵗ R}[event value] + slack) :=
+        mul_le_mul' passes (realized event)
+    _ = pass * factor * Pr{let value ← $ᵗ R}[event value] + pass * slack := by ring
+
 end Gate
 
 /-- At zero difficulty the gate has a single value, so masking passes. -/
@@ -121,6 +145,24 @@ theorem koalaBear_queryPhase_escape_le (gateBits indexBits s : ℕ) (gateSmall :
     (· = 0) escapes blockEscapes gated).trans
     (mul_le_mul' (koalaBear_lowBits_pointBound gateBits gateSmall 0)
       ((koalaBear_compound_dominated indexBits s indexSmall).escape_le blockEscapes uniform))
+
+/-- The KoalaBear query phase as a decoder that refuses unless the gate is
+zero: its passing blocks of positions are realized with the gate's point bound
+times the block factor, against the uniform law of the block. -/
+theorem koalaBear_queryPhase_realized (gateBits indexBits s : ℕ) (gateSmall : gateBits ≤ 24)
+    (indexSmall : indexBits ≤ 24) :
+    Realized (fun answer : ZMod koalaBear × (Fin s → ZMod koalaBear) =>
+        if lowBits koalaBear gateBits answer.1 = 0 then
+          some fun index => lowBits koalaBear indexBits (answer.2 index)
+        else none)
+      ((1 + ((2 ^ gateBits - 1 : ℕ) : ENNReal) / koalaBear) / 2 ^ gateBits *
+        (1 + ((2 ^ indexBits - 1 : ℕ) : ENNReal) / koalaBear) ^ s)
+      ((1 + ((2 ^ gateBits - 1 : ℕ) : ENNReal) / koalaBear) / 2 ^ gateBits * 0) :=
+  gated_realized (lowBits koalaBear gateBits) 0
+    (fun answer : Fin s → ZMod koalaBear =>
+      some fun index => lowBits koalaBear indexBits (answer index))
+    (koalaBear_lowBits_pointBound gateBits gateSmall 0)
+    (koalaBear_compound_dominated indexBits s indexSmall).realized
 
 /-- The query phase at a common benchmark setting: a 16-bit proof-of-work and
 100 positions of 21 bits (a `2 ^ 21`-point domain). The gate passes with

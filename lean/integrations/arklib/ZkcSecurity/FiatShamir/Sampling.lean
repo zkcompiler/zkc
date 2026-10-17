@@ -3,6 +3,7 @@ module
 public import ZkcSecurity.FiatShamir.Typed
 public import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
 public import CompPoly.Fields.KoalaBear.Basic
+public import CompPoly.Fields.BLS12_381.Basic
 
 @[expose] public section
 
@@ -80,12 +81,13 @@ theorem Dominated.mono {decode : B → R} {factor larger : ENNReal}
 /-- The undecoded uniform answer is exact. -/
 theorem dominated_id : Dominated (id : R → R) 1 := fun event => by simp
 
-/-- A bijective decoding is exact: the decoded value is uniform. -/
-theorem dominated_of_bijective [Fintype B] [Fintype R] {decode : B → R}
-    (bijective : Function.Bijective decode) : Dominated decode 1 := by
+/-- A bijective decoding is exact: every event of the decoded value has its
+uniform probability. -/
+theorem prEvent_of_bijective [Fintype B] [Fintype R] {decode : B → R}
+    (bijective : Function.Bijective decode) (event : R → Prop) :
+    Pr{let answer ← $ᵗ B}[event (decode answer)] = Pr{let value ← $ᵗ R}[event value] := by
   classical
-  intro event
-  rw [one_mul, SampleableType.prEvent_uniformSample, SampleableType.prEvent_uniformSample,
+  rw [SampleableType.prEvent_uniformSample, SampleableType.prEvent_uniformSample,
     Fintype.card_of_bijective bijective]
   have counted : (Finset.univ.filter fun answer => event (decode answer)).card =
       (Finset.univ.filter event).card :=
@@ -96,6 +98,11 @@ theorem dominated_of_bijective [Fintype B] [Fintype R] {decode : B → R}
         obtain ⟨answer, rfl⟩ := bijective.2 value
         exact ⟨answer, by simpa using member, rfl⟩)
   rw [counted]
+
+/-- A bijective decoding is exact: the decoded value is uniform. -/
+theorem dominated_of_bijective [Fintype B] [Fintype R] {decode : B → R}
+    (bijective : Function.Bijective decode) : Dominated decode 1 :=
+  fun event => by rw [one_mul, prEvent_of_bijective bijective]
 
 /-- Point bounds bound every event by the number of its values. -/
 theorem PointBound.dominated [Fintype R] {decode : B → R} {bound : ENNReal}
@@ -128,6 +135,86 @@ theorem pointBound_of_fibers [Fintype B] [DecidableEq R] (decode : B → R) (fib
   intro value
   rw [SampleableType.prEvent_uniformSample]
   exact ENNReal.div_le_div_right (by exact_mod_cast small value) _
+
+omit [SampleableType R] in
+/-- A refusing decoding whose fiber at `value` has at most `fiber` answers
+yields `value` with probability at most `fiber / |B|`. -/
+theorem pointBound_of_fibers' [Fintype B] [DecidableEq R] (decode : B → Option R) (value : R)
+    (fiber : ℕ)
+    (small : (Finset.univ.filter fun answer => decode answer = some value).card ≤ fiber) :
+    Pr{let answer ← $ᵗ B}[decode answer = some value] ≤ fiber / Fintype.card B := by
+  classical
+  rw [SampleableType.prEvent_uniformSample]
+  exact ENNReal.div_le_div_right (by exact_mod_cast small) _
+
+/-- The realized law of a decoding that may refuse, against the uniform law of
+the sort: every event of the successfully decoded value has probability at most
+`factor` times its uniform probability plus `slack`. The inequality is about the
+joint decoded value, so a block decoded from one answer needs a joint law, not
+one per entry. Refused answers stop the verifier and belong to no event; their
+probability is a separate, completeness-side quantity. -/
+def Realized (decode : B → Option R) (factor slack : ENNReal) : Prop :=
+  ∀ event : R → Prop,
+    Pr{let answer ← $ᵗ B}[∃ value, decode answer = some value ∧ event value] ≤
+      factor * Pr{let value ← $ᵗ R}[event value] + slack
+
+/-- A site whose escape set has uniform probability at most `error` escapes
+under a realized decoding with probability at most `factor * error + slack`. -/
+theorem Realized.escape_le {decode : B → Option R} {factor slack : ENNReal}
+    (realized : Realized decode factor slack) (event : R → Prop) {error : ENNReal}
+    (bounded : Pr{let value ← $ᵗ R}[event value] ≤ error) :
+    Pr{let answer ← $ᵗ B}[∃ value, decode answer = some value ∧ event value] ≤
+      factor * error + slack :=
+  (realized event).trans (by gcongr)
+
+theorem Realized.mono {decode : B → Option R} {factor slack factor' slack' : ENNReal}
+    (realized : Realized decode factor slack) (factorLe : factor ≤ factor')
+    (slackLe : slack ≤ slack') : Realized decode factor' slack' :=
+  fun event => (realized event).trans (by gcongr)
+
+/-- A total decoding dominated by `factor` is realized with that factor and no
+slack. -/
+theorem Dominated.realized {decode : B → R} {factor : ENNReal}
+    (dominated : Dominated decode factor) :
+    Realized (fun answer => some (decode answer)) factor 0 := by
+  intro event
+  rw [add_zero, prEvent_congr _ _ (fun answer => event (decode answer)) fun answer =>
+    ⟨fun ⟨_, decoded, holds⟩ => by
+        cases Option.some.inj decoded
+        exact holds,
+      fun holds => ⟨_, rfl, holds⟩⟩]
+  exact dominated event
+
+/-- A bijective decoding is realized exactly: factor one, no slack. -/
+theorem realized_of_bijective [Fintype B] [Fintype R] {decode : B → R}
+    (bijective : Function.Bijective decode) :
+    Realized (fun answer => some (decode answer)) 1 0 :=
+  (dominated_of_bijective bijective).realized
+
+/-- Point bounds on the successful values give a realized law. -/
+theorem realized_of_pointBound [Fintype R] {decode : B → Option R} {bound : ENNReal}
+    (bounded : ∀ value, Pr{let answer ← $ᵗ B}[decode answer = some value] ≤ bound) :
+    Realized decode (bound * Fintype.card R) 0 := by
+  classical
+  intro event
+  have cover : Pr{let answer ← $ᵗ B}[∃ value, decode answer = some value ∧ event value] ≤
+      ∑ value ∈ Finset.univ.filter event, Pr{let answer ← $ᵗ B}[decode answer = some value] :=
+    (prEvent_mono _ _
+      (fun answer => ∃ value ∈ Finset.univ.filter event, decode answer = some value)
+      fun answer ⟨value, decoded, holds⟩ => ⟨value, by simpa using holds, decoded⟩).trans
+      (prEvent_exists_finset_le _ _ fun value answer => decode answer = some value)
+  have nonzero : (Fintype.card R : ENNReal) ≠ 0 := by
+    exact_mod_cast (Fintype.card_pos (α := R)).ne'
+  calc Pr{let answer ← $ᵗ B}[∃ value, decode answer = some value ∧ event value]
+      ≤ ∑ value ∈ Finset.univ.filter event, Pr{let answer ← $ᵗ B}[decode answer = some value] :=
+        cover
+    _ ≤ ∑ _value ∈ Finset.univ.filter event, bound := Finset.sum_le_sum fun value _ => bounded value
+    _ = (Finset.univ.filter event).card * bound := by rw [Finset.sum_const, nsmul_eq_mul]
+    _ = bound * Fintype.card R * ((Finset.univ.filter event).card / Fintype.card R) := by
+        rw [mul_assoc, ENNReal.mul_div_cancel' (fun zero => absurd zero nonzero)
+          (fun top => absurd top (ENNReal.natCast_ne_top _)), mul_comm]
+    _ = bound * Fintype.card R * Pr{let value ← $ᵗ R}[event value] + 0 := by
+        rw [SampleableType.prEvent_uniformSample, add_zero]
 
 end Laws
 
@@ -226,6 +313,66 @@ theorem lowBits_fiber (p bits : ℕ) [NeZero p] (value : Fin (2 ^ bits)) :
 theorem lowBits_pointBound (p bits : ℕ) [NeZero p] :
     PointBound (lowBits p bits) ((((p + 2 ^ bits - 1) / 2 ^ bits : ℕ) : ENNReal) / p) := by
   simpa only [ZMod.card] using pointBound_of_fibers (lowBits p bits) _ (lowBits_fiber p bits)
+
+/-- Masking with refusal: the low `bits` bits of a residue below the largest
+multiple of `2 ^ bits` not above `p`, and a refusal above it. A sampler that
+reports, instead of resampling, a value outside the range where masking is
+uniform has this law. -/
+def lowBitsRejecting (p bits : ℕ) [NeZero p] (element : ZMod p) : Option (Fin (2 ^ bits)) :=
+  if element.val < 2 ^ bits * (p / 2 ^ bits) then some (lowBits p bits element) else none
+
+theorem lowBitsRejecting_fiber (p bits : ℕ) [NeZero p] (value : Fin (2 ^ bits)) :
+    (Finset.univ.filter fun element : ZMod p =>
+      lowBitsRejecting p bits element = some value).card ≤ p / 2 ^ bits := by
+  classical
+  have positive : 0 < 2 ^ bits := Nat.two_pow_pos bits
+  have injOn : Set.InjOn (fun element : ZMod p => element.val / 2 ^ bits)
+      (Finset.univ.filter fun element : ZMod p =>
+        lowBitsRejecting p bits element = some value) := by
+    intro first firstMember second secondMember same
+    have firstDecoded := (Finset.mem_filter.mp (Finset.mem_coe.mp firstMember)).2
+    have secondDecoded := (Finset.mem_filter.mp (Finset.mem_coe.mp secondMember)).2
+    have residue : ∀ element : ZMod p, lowBitsRejecting p bits element = some value →
+        element.val % 2 ^ bits = value.val := by
+      intro element decoded
+      unfold lowBitsRejecting at decoded
+      split at decoded
+      · rw [← Option.some.inj decoded]
+        rfl
+      · exact absurd decoded (by simp)
+    apply ZMod.val_injective p
+    simp only at same
+    rw [← Nat.div_add_mod first.val (2 ^ bits), ← Nat.div_add_mod second.val (2 ^ bits),
+      residue first firstDecoded, residue second secondDecoded, same]
+  calc (Finset.univ.filter fun element : ZMod p =>
+        lowBitsRejecting p bits element = some value).card
+      ≤ (Finset.range (p / 2 ^ bits)).card := by
+        apply Finset.card_le_card_of_injOn _ _ injOn
+        intro element member
+        simp only [Finset.coe_range, Set.mem_Iio]
+        have decoded := (Finset.mem_filter.mp (Finset.mem_coe.mp member)).2
+        unfold lowBitsRejecting at decoded
+        split at decoded
+        · rename_i below
+          exact (Nat.div_lt_iff_lt_mul positive).mpr (by rw [Nat.mul_comm]; exact below)
+        · exact absurd decoded (by simp)
+    _ = p / 2 ^ bits := Finset.card_range _
+
+/-- Masking with refusal is realized exactly on its successful values: each
+value has probability `⌊p / 2 ^ bits⌋ / p`, at most `2 ^ -bits`. -/
+theorem lowBitsRejecting_realized (p bits : ℕ) [NeZero p] :
+    Realized (lowBitsRejecting p bits) 1 0 := by
+  have bounded : ∀ value, Pr{let element ← $ᵗ ZMod p}[
+      lowBitsRejecting p bits element = some value] ≤ ((p / 2 ^ bits : ℕ) : ENNReal) / p := by
+    intro value
+    simpa only [ZMod.card] using pointBound_of_fibers' (lowBitsRejecting p bits) value _
+      (lowBitsRejecting_fiber p bits value)
+  refine (realized_of_pointBound bounded).mono ?_ le_rfl
+  have nonzero : (p : ENNReal) ≠ 0 := by exact_mod_cast (NeZero.pos p).ne'
+  rw [Fintype.card_fin, div_eq_mul_inv, mul_right_comm, ← div_eq_mul_inv]
+  refine ENNReal.div_le_of_le_mul ?_
+  rw [one_mul]
+  exact_mod_cast Nat.div_mul_le_self p (2 ^ bits)
 
 end Residues
 
@@ -427,5 +574,48 @@ theorem koalaBear_excess21_lt : (2097151 : ENNReal) / 2130706433 < 1 / 1016 := b
   norm_num
 
 end KoalaBear
+
+section ScalarReduction
+
+/-- The order `r` of the BLS12-381 scalar field. -/
+abbrev bls12381 : ℕ := BLS12_381.scalarFieldSize
+
+instance : NeZero bls12381 := ⟨by decide⟩
+
+/-- A uniform 256-bit integer has at most three preimages of every residue
+modulo `r`. -/
+theorem bls12381_ceiling : (2 ^ 256 + bls12381 - 1) / bls12381 = 3 := by decide
+
+/-- Reducing a uniform 256-bit integer modulo the BLS12-381 scalar order, as
+EIP-4844 derives its evaluation and batching challenges from SHA-256, inflates
+every event by at most `3 r / 2 ^ 256`, about `1.3585`. An additive loss for the
+same reduction is at least the statistical distance, about `0.0747`, which no
+round error below it survives. -/
+theorem bls12381_reduce_dominated :
+    Dominated (modulo bls12381 (N := 2 ^ 256)) (3 * bls12381 / 2 ^ 256) := by
+  refine (modulo_pointBound bls12381 (2 ^ 256)).dominated.mono (le_of_eq ?_)
+  rw [bls12381_ceiling, Fintype.card_fin, div_eq_mul_inv, mul_right_comm, ← div_eq_mul_inv]
+  norm_num
+
+/-- The BLS12-381 reduction factor lies between `1.3585` and `1.3586`. -/
+theorem bls12381_factor_bounds :
+    (13585 : ENNReal) / 10000 < 3 * bls12381 / 2 ^ 256 ∧
+      (3 * bls12381 : ENNReal) / 2 ^ 256 < 13586 / 10000 := by
+  have finite : (3 * bls12381 : ENNReal) / 2 ^ 256 ≠ ⊤ :=
+    ENNReal.div_ne_top (ENNReal.mul_ne_top ENNReal.ofNat_ne_top (ENNReal.natCast_ne_top _))
+      (by simp)
+  have bound : ((13585 : ENNReal) / 10000) ≠ ⊤ := ENNReal.div_ne_top (by simp) (by simp)
+  have upper : ((13586 : ENNReal) / 10000) ≠ ⊤ := ENNReal.div_ne_top (by simp) (by simp)
+  constructor
+  · rw [← ENNReal.toReal_lt_toReal bound finite]
+    simp only [ENNReal.toReal_div, ENNReal.toReal_mul, ENNReal.toReal_pow, ENNReal.toReal_ofNat,
+      ENNReal.toReal_natCast, bls12381, BLS12_381.scalarFieldSize]
+    norm_num
+  · rw [← ENNReal.toReal_lt_toReal finite upper]
+    simp only [ENNReal.toReal_div, ENNReal.toReal_mul, ENNReal.toReal_pow, ENNReal.toReal_ofNat,
+      ENNReal.toReal_natCast, bls12381, BLS12_381.scalarFieldSize]
+    norm_num
+
+end ScalarReduction
 
 end ZkcSecurity.FiatShamir

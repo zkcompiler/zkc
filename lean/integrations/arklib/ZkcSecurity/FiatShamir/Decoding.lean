@@ -139,4 +139,17 @@ theorem dominated_reduce [Fintype F] [Nonempty F] [DecidableEq F] [SampleableTyp
     _ = 1 + (Fintype.card F : ENNReal) / N := by
         rw [Nat.cast_add, ENNReal.add_div, ENNReal.div_self nonzero (ENNReal.natCast_ne_top _)]
 
+/-- A balanced total decoding is realized with factor one and its loss as
+slack. -/
+theorem Balanced.realized [SampleableType F] [SampleableType B] {decode : B → F}
+    {loss : ENNReal} (balanced : Balanced decode loss) :
+    Realized (fun answer => some (decode answer)) 1 loss := by
+  intro event
+  rw [one_mul, prEvent_congr _ _ (fun answer => event (decode answer)) fun answer =>
+    ⟨fun ⟨_, decoded, holds⟩ => by
+        cases Option.some.inj decoded
+        exact holds,
+      fun holds => ⟨_, rfl, holds⟩⟩]
+  exact balanced event
+
 end ZkcSecurity.FiatShamir
