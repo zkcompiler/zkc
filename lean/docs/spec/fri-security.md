@@ -125,6 +125,32 @@ the parameters of `examples/projects/fri` and the authored STARK tables
 primitive 32nd root of unity, the bound is `(16 + 8 + 4) / |F| + (1 - min (3/8) δ)^8`
 with no remaining premise (`example_bound` in `TestsSecurity.FriSecurity`).
 
+## Generalized Johnson instance
+
+`ZkcSecurity.ArkLib.Fri.GeneralizedJohnson` discharges the folding obligations
+with the powers-generator bound of Bordage, Chiesa, Guan and Manzur, *All
+Polynomial Generators Preserve Distance with Mutual Correlated Agreement*, in
+ArkLib's form for one FRI folding round
+(`foldingAgreementFailure_prob_le_generalizedJohnson`). For a binary fold the
+generator is the line, and the bound holds at every radius
+`θ ≤ 1 - (1 - δmin + η)^(1/3)`, where `δmin` is the relative minimum distance of
+the code after the fold and `0 < η < δmin` a slack. A Reed–Solomon code of
+degree below `d` on `2^m` points has `δmin = (2^m - d + 1) / 2^m`, more than
+`1 - ρ` (`relativeDistance`), and folding keeps the rate, so every
+`θ ≤ 1 - (ρ + η)^(1/3)` with `0 < η < 1 - ρ` serves every round
+(`foldingEscapes_generalizedJohnson`). Folding round `r` folds onto
+`2^(n - r - 1)` points; with `x = 1 - δmin + η` for the code there, it errs at
+most `2^(n - r - 1) (1 - x^(1/2)) / (η |F|) + max (2 / (η (x^(1/3) - x^(1/2)) |F|)) (6 / (η |F|))`
+(`johnsonError`).
+
+`soundness_generalizedJohnson` and `afterCommit_doomed_generalizedJohnson` state
+the round-by-round bound and the residual certificate with these errors. As `η`
+tends to zero, the radius exceeds the unique-decoding radius exactly when
+`ρ < ((√5 - 1) / 2)^3 ≈ 0.236`, so at rates up to `1/8`. At rate `1/8`
+(`n = 6`, `t = 0`, `R = 3`, `s = 8`) with `η = 1/100`, the radius `12/25` exceeds
+the unique-decoding radius `7/16`, with no remaining premise (`lowRate_bound` in
+`TestsSecurity.FriSecurity`).
+
 ## Certificate over verifier residuals
 
 `ZkcSecurity.ArkLib.Fri.Certificate` states the certificate over the residual
@@ -177,11 +203,9 @@ site's error by that factor.
 - The returned first-layer values are tied to the initial word
   (`firstValue_eq`); binding them to a caller's opening equations is the caller's
   obligation.
-- The unique-decoding instance is proved. Larger radii need other proximity
-  results as the named hypothesis. At the pinned revision ArkLib proves the
-  powers-generator bound of Bordage, Chiesa, Guan and Manzur, which for lines
-  reaches `1 - (1 - δmin + η)^(1/3)` and exceeds the unique-decoding radius only at
-  low rates; its Johnson-range Reed–Solomon bounds are still admitted without
-  proof.
+- The unique-decoding and generalized Johnson instances are proved. Larger
+  radii, up to the Johnson radius `1 - ρ^(1/2)`, need other proximity results as
+  the named hypothesis; at the pinned revision ArkLib's Johnson-range
+  Reed–Solomon bounds are still admitted without proof.
 - ArkLib pull request #992 is applied to the pinned revision as a declared patch
   until it merges ([dependencies](../dependencies.md)).

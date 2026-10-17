@@ -126,7 +126,9 @@ committed trace; `Completeness` shows that the honest prover is accepted on ever
 codeword; `Soundness` states the certificate, with the proximity premise as a
 named hypothesis, and bounds acceptance for every adaptive prover;
 `UniqueDecoding` discharges the premise with ArkLib's proved unique-decoding
-results; and `Certificate` restates the certificate over the verifier's residual
+results; `GeneralizedJohnson` discharges the folding obligations with ArkLib's
+powers-generator bound up to the generalized Johnson radius of lines; and
+`Certificate` restates the certificate over the verifier's residual
 processes after the first commitment, with an error per query site. These modules
 use the per-round lemmas of ArkLib pull request #992, which this package applies
 to its pinned ArkLib revision as a declared patch
