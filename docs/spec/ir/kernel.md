@@ -39,6 +39,9 @@ across guards, effects or stopping operations merely because its body denotes
 total mathematics. The qualified reference must resolve to the public entry of
 a sibling unit. The call implements MLIR's standard `CallOpInterface` and
 `SymbolUserOpInterface`; these interfaces grant no purity or speculation.
+Optional argument and result attribute arrays contain only empty dictionaries.
+When realization changes the call's ports, it preserves these arrays' presence
+and adjusts their lengths to match the new interface.
 
 ## Formation and preservation
 

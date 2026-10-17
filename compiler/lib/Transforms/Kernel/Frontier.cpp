@@ -360,6 +360,15 @@ public:
       step.wrapper.setFunctionType(builder.getFunctionType(
           step.wrapper.getBody().front().getArgumentTypes(),
           step.wrapper.getResultTypes()));
+      // CallOpInterface metadata follows the final port counts. Kernel
+      // admission permits only empty dictionaries, with no per-port premise.
+      auto empty = builder.getDictionaryAttr({});
+      if (step.call.getArgAttrsAttr())
+        step.call.setArgAttrsAttr(builder.getArrayAttr(
+            SmallVector<Attribute>(step.call.getNumOperands(), empty)));
+      if (step.call.getResAttrsAttr())
+        step.call.setResAttrsAttr(builder.getArrayAttr(
+            SmallVector<Attribute>(step.call.getNumResults(), empty)));
     }
     return success();
   }

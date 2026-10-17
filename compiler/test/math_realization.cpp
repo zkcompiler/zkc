@@ -29,7 +29,7 @@ void materialize(ModuleOp module) {
   PassManager manager(module.getContext());
   manager.addPass(protocol::createProjectProtocolPass(false));
   manager.addPass(protocol::createLowerMathPass());
-  manager.addPass(protocol::createLowerKernelsPass());
+  manager.addPass(kernel::createLowerKernelsPass());
   require(succeeded(manager.run(module)), "Kernel realization failed");
 }
 local::FuncOp realized(ModuleOp module) {

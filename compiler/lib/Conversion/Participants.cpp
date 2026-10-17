@@ -84,6 +84,7 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
   }
   void getDependentDialects(DialectRegistry &registry) const final {
     registry.insert<zkc::plan::PlanDialect>();
+    kernel::createLowerKernelsPass()->getDependentDialects(registry);
   }
   void runOnOperation() final {
     LinearContractionStats stats;

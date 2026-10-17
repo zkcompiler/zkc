@@ -32,11 +32,6 @@ createProjectProtocolPass(bool simplify = true,
 std::unique_ptr<mlir::Pass>
 createLowerMathPass(MathematicalSelectionPolicy policy = {},
                     mathematical::RealizationTrace *trace = nullptr);
-/// Realize logical numerical units into existing Local execution before
-/// physical planning. This is a separate independently checked Exec edge.
-std::unique_ptr<mlir::Pass>
-createLowerKernelsPass(MathematicalSelectionPolicy policy = {},
-                       mathematical::RealizationTrace *trace = nullptr);
 /// Distribute prefix fixing through shared sums/products and MLE leaves.
 std::unique_ptr<mlir::Pass> createFixPolynomialFactorsPass();
 /// Eliminate formal polynomial SSA while retaining concrete participant types.
@@ -50,6 +45,13 @@ std::unique_ptr<mlir::Pass> createSelectPhysicalPass(
     protocol::Assignments selections = {}, bool linearContractions = false,
     bool releaseStorage = false, LinearContractionStats *statistics = nullptr);
 } // namespace protocol
+namespace kernel {
+/// Realize logical numerical units into existing Local execution before
+/// physical planning. This is a separate independently checked Exec edge.
+std::unique_ptr<mlir::Pass>
+createLowerKernelsPass(MathematicalSelectionPolicy policy = {},
+                       mathematical::RealizationTrace *trace = nullptr);
+} // namespace kernel
 namespace relation {
 /// Remove only exact duplicate normalized rows; preserve witness/public layout
 /// and relation families.

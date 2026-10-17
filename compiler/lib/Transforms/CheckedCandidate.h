@@ -4,6 +4,7 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "llvm/ADT/STLFunctionalExtras.h"
+#include <utility>
 
 namespace zkc::mathematical {
 /// A complete private proposal against an immutable admitted module. The
@@ -20,6 +21,10 @@ public:
   explicit CheckedCandidate(mlir::ModuleOp source)
       : source(source), candidate(mlir::cast<mlir::ModuleOp>(source->clone())) {
   }
+  /// Take an existing private proposal without copying the source again.
+  CheckedCandidate(mlir::ModuleOp source,
+                   mlir::OwningOpRef<mlir::ModuleOp> proposal)
+      : source(source), candidate(std::move(proposal)) {}
   mlir::ModuleOp operator*() const { return *candidate; }
   mlir::ModuleOp *operator->() { return candidate.operator->(); }
 

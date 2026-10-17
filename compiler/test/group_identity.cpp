@@ -129,7 +129,7 @@ int main() {
   auto lowered = OwningOpRef<ModuleOp>(cast<ModuleOp>((*projected)->clone()));
   run(*lowered, protocol::createLowerMathPass());
   auto logical = OwningOpRef<ModuleOp>(cast<ModuleOp>((*lowered)->clone()));
-  run(*lowered, protocol::createLowerKernelsPass());
+  run(*lowered, kernel::createLowerKernelsPass());
   cases.run("independent recipe accepts exact identity", [&] {
     require(succeeded(mathematical::verifyProjectionPreserved(*projected,
                                                               *logical)) &&

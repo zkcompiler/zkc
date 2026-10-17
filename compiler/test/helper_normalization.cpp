@@ -493,7 +493,7 @@ int main() {
         PassManager pipeline(&context);
         pipeline.addPass(protocol::createProjectProtocolPass(false));
         pipeline.addPass(protocol::createLowerMathPass());
-        pipeline.addPass(protocol::createLowerKernelsPass());
+        pipeline.addPass(kernel::createLowerKernelsPass());
         require(succeeded(pipeline.run(*source)),
                 "later shared helper normalization narrowed existing capacity");
       });
@@ -540,7 +540,7 @@ int main() {
                   pipeline.addPass(
                       protocol::createProjectProtocolPass(false, policy));
                   pipeline.addPass(protocol::createLowerMathPass(policy));
-                  pipeline.addPass(protocol::createLowerKernelsPass());
+                  pipeline.addPass(kernel::createLowerKernelsPass());
                   require(succeeded(pipeline.run(*source)),
                           "finite helper realization failed");
                 });

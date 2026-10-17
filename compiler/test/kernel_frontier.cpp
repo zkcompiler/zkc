@@ -115,6 +115,39 @@ int main() {
     auto after = fixture(context, "frontier-after.mlir");
     accepts(*before, *after);
   });
+  for (StringRef mutation : {"none", "arity", "premise", "presence"})
+    cases.run("numerical port metadata comparison: " + mutation, [&] {
+      auto before = fixture(context, "frontier-before.mlir");
+      auto after = fixture(context, "frontier-after.mlir");
+      auto empty = DictionaryAttr::get(&context);
+      for (auto module : {before.get(), after.get()})
+        module.walk([&](kernel::CallOp call) {
+          call.setArgAttrsAttr(ArrayAttr::get(
+              &context, SmallVector<Attribute>(call.getNumOperands(), empty)));
+          call.setResAttrsAttr(ArrayAttr::get(
+              &context, SmallVector<Attribute>(call.getNumResults(), empty)));
+        });
+      auto call = inner(*after, "second");
+      if (mutation == "arity")
+        call.setArgAttrsAttr(ArrayAttr::get(&context, {}));
+      else if (mutation == "premise") {
+        SmallVector<Attribute> attributes(call.getNumOperands(), empty);
+        attributes.back() = DictionaryAttr::get(
+            &context, {NamedAttribute(StringAttr::get(&context, "assume"),
+                                      UnitAttr::get(&context))});
+        call.setArgAttrsAttr(ArrayAttr::get(&context, attributes));
+      } else if (mutation == "presence")
+        call.removeResAttrsAttr();
+      if (mutation == "none")
+        accepts(*before, *after);
+      else {
+        uint64_t remaining = 100000;
+        rejects(*after, [&] {
+          return kernel::verifyKernelFrontier(*before, *after, origins(*before),
+                                              remaining);
+        });
+      }
+    });
   auto packCase = [&](StringRef name, bool expected,
                       llvm::function_ref<void(
                           mlir::ModuleOp, mlir::ModuleOp,

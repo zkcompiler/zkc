@@ -670,6 +670,34 @@ int main() {
         require(succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
                 "mixed helper cut coordinates failed correspondence");
       });
+  for (unsigned ports : {1u, 2u, 3u})
+    cases.run(
+        "standard call metadata survives concrete port growth " + Twine(ports),
+        [&] {
+          auto source = fixture(context, "kernel/shared-polynomial.mlir");
+          auto logical = exec(*source);
+          logical->walk([&](kernel::CallOp call) {
+            auto empty = DictionaryAttr::get(&context);
+            if (ports & 1)
+              call.setArgAttrsAttr(ArrayAttr::get(
+                  &context,
+                  SmallVector<Attribute>(call.getNumOperands(), empty)));
+            if (ports & 2)
+              call.setResAttrsAttr(ArrayAttr::get(
+                  &context,
+                  SmallVector<Attribute>(call.getNumResults(), empty)));
+          });
+          require(succeeded(verify(*logical)),
+                  "standard empty call metadata was refused");
+          auto normalized = kernel::prepareKernelLowering(*logical);
+          require(bool(normalized) && succeeded(verify(*normalized)),
+                  "port growth invalidated standard call metadata");
+          auto lowered = copy(*logical);
+          require(succeeded(kernel::lowerKernels(*lowered)),
+                  "standard metadata prevented numerical realization");
+          require(succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
+                  "standard metadata lost checked correspondence");
+        });
   cases.run("descriptor operands cannot change across reconstructed cuts", [&] {
     auto source = fixture(context, "kernel/shared-polynomial.mlir");
     auto participant = copy(*source);

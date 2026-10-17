@@ -32,6 +32,33 @@ bool prefix(TypeRange before, TypeRange after) {
 class ContextReader {
   uint64_t &remaining;
 
+  bool portAttributes(Operation *before, Operation *after,
+                      NamedAttrList &expected, NamedAttrList &actual) {
+    for (auto name : {"arg_attrs", "res_attrs"}) {
+      auto a = expected.get(name), b = actual.get(name);
+      if (bool(a) != bool(b))
+        return false;
+      if (!a)
+        continue;
+      for (auto [op, raw] : {std::pair{before, a}, std::pair{after, b}}) {
+        auto attributes = dyn_cast<ArrayAttr>(raw);
+        auto count = StringRef(name) == "arg_attrs" ? op->getNumOperands()
+                                                    : op->getNumResults();
+        if (!attributes || attributes.size() != count || count > remaining)
+          return false;
+        remaining -= count;
+        if (!llvm::all_of(attributes, [](Attribute value) {
+              auto dictionary = dyn_cast<DictionaryAttr>(value);
+              return dictionary && dictionary.empty();
+            }))
+          return false;
+      }
+      expected.erase(name);
+      actual.erase(name);
+    }
+    return true;
+  }
+
 public:
   llvm::DenseMap<Operation *, Operation *> pairs;
   llvm::DenseSet<Operation *> flexibleFunctions, flexibleCalls, flexibleReturns;
@@ -70,10 +97,13 @@ public:
       expected.erase("function_type");
       actual.erase("function_type");
     }
+    bool call = flexibleCalls.contains(before);
+    if (call && isa<CallOp>(before) &&
+        !portAttributes(before, after, expected, actual))
+      return refuse(after, "numerical call port attributes changed");
     if (expected.getDictionary(before->getContext()) !=
         actual.getDictionary(after->getContext()))
       return refuse(after, "attributes, guard, declaration or site changed");
-    bool call = flexibleCalls.contains(before);
     bool returned = flexibleReturns.contains(before);
     if ((call || returned)
             ? before->getNumOperands() > after->getNumOperands()

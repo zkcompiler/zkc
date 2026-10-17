@@ -656,7 +656,7 @@ module { "protocol.module"() ({
           PassManager manager(&context);
           manager.addPass(protocol::createProjectProtocolPass(simplify));
           manager.addPass(protocol::createLowerMathPass());
-          manager.addPass(protocol::createLowerKernelsPass());
+          manager.addPass(kernel::createLowerKernelsPass());
           manager.addPass(protocol::createSelectPhysicalPass());
           require(succeeded(manager.run(*module)),
                   "realized maps did not compile");

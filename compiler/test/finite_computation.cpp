@@ -98,7 +98,7 @@ void pipeline(ModuleOp module, bool optimize = true) {
   PassManager pm(module.getContext());
   pm.addPass(protocol::createProjectProtocolPass(optimize, {optimize, false}));
   pm.addPass(protocol::createLowerMathPass({optimize, false}));
-  pm.addPass(protocol::createLowerKernelsPass());
+  pm.addPass(kernel::createLowerKernelsPass());
   pm.addPass(protocol::createSelectPhysicalPass());
   require(succeeded(pm.run(module)), "finite pipeline failed");
 }
@@ -277,7 +277,7 @@ int main(int argc, char **argv) {
       pm.addPass(
           protocol::createProjectProtocolPass(optimize, {optimize, false}));
       pm.addPass(protocol::createLowerMathPass({optimize, false}));
-      pm.addPass(protocol::createLowerKernelsPass());
+      pm.addPass(kernel::createLowerKernelsPass());
       pm.addPass(protocol::createSelectPhysicalPass());
       require(succeeded(pm.run(*candidate)), "finite pipeline failed");
     });
@@ -322,7 +322,7 @@ int main(int argc, char **argv) {
               demand.addPass(
                   protocol::createProjectProtocolPass(simplify, policy));
               demand.addPass(protocol::createLowerMathPass(policy));
-              demand.addPass(protocol::createLowerKernelsPass());
+              demand.addPass(kernel::createLowerKernelsPass());
               require(succeeded(demand.run(*total)),
                       "total demand policy failed");
               bool totalLoop = false;
@@ -425,7 +425,7 @@ int main(int argc, char **argv) {
           lower.addPass(
               protocol::createProjectProtocolPass(optimize, {optimize, false}));
           lower.addPass(protocol::createLowerMathPass({optimize, false}));
-          lower.addPass(protocol::createLowerKernelsPass());
+          lower.addPass(kernel::createLowerKernelsPass());
           require(succeeded(lower.run(*module)),
                   "ignored capture lowering failed");
           unsigned additions = 0;

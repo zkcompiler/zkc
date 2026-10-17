@@ -122,11 +122,10 @@ LogicalResult lowerKernels(mlir::ModuleOp source,
     return refuse(source, "expected the exec profile");
   mathematical::RealizationScope scope(trace, "lower-kernels", source, policy);
   scope.propose(policy);
-  mathematical::CheckedCandidate candidate(source);
   auto prepared = prepareKernelLowering(source);
   if (!prepared)
     return refuse(source, "checked normalization or concrete frontier refused");
-  candidate->getBodyRegion().takeBody(prepared->getBodyRegion());
+  mathematical::CheckedCandidate candidate(source, std::move(prepared));
   auto proposed =
       cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
   if (failed(materialize(proposed, policy, trace)) ||
@@ -138,8 +137,6 @@ LogicalResult lowerKernels(mlir::ModuleOp source,
   scope.publish(mathematical::PublicationBoundary::PublishedToCaller);
   return success();
 }
-} // namespace zkc::kernel
-namespace zkc::protocol {
 namespace {
 struct LowerKernelsPass
     : PassWrapper<LowerKernelsPass, OperationPass<mlir::ModuleOp>> {
@@ -170,4 +167,4 @@ createLowerKernelsPass(MathematicalSelectionPolicy policy,
                        mathematical::RealizationTrace *trace) {
   return std::make_unique<LowerKernelsPass>(policy, trace);
 }
-} // namespace zkc::protocol
+} // namespace zkc::kernel

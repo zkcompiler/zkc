@@ -868,7 +868,7 @@ int main() {
                 run(*candidate, protocol::createProjectProtocolPass(
                                     simplify, {true, true}));
                 run(*candidate, protocol::createLowerMathPass());
-                run(*candidate, protocol::createLowerKernelsPass());
+                run(*candidate, kernel::createLowerKernelsPass());
                 require(count(*candidate, "algebra.exec.vector_dot") == 1,
                         "fusion not forwarded");
                 run(*candidate, protocol::createSelectPhysicalPass());
@@ -890,7 +890,7 @@ int main() {
       for (auto module : {original.get(), enabled.get()}) {
         run(module, protocol::createProjectProtocolPass(false));
         run(module, protocol::createLowerMathPass());
-        run(module, protocol::createLowerKernelsPass());
+        run(module, kernel::createLowerKernelsPass());
       }
       require(OperationEquivalence::isEquivalentTo(
                   *original, *enabled, OperationEquivalence::IgnoreLocations),

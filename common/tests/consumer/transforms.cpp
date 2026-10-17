@@ -56,7 +56,7 @@ int main() {
   mlir::OwningOpRef<mlir::ModuleOp> logical(
       mlir::cast<mlir::ModuleOp>(module->clone()));
   lowering.clear();
-  lowering.addPass(zkc::protocol::createLowerKernelsPass());
+  lowering.addPass(zkc::kernel::createLowerKernelsPass());
   if (failed(lowering.run(*module)) ||
       failed(zkc::kernel::verifyKernelLowering(*logical, *module)))
     return 1;

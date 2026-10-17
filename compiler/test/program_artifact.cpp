@@ -65,7 +65,7 @@ int main() {
     llvm::consumeError(carrier.takeError());
   });
   auto logical = OwningOpRef<ModuleOp>(cast<ModuleOp>(module->clone()));
-  run(*module, protocol::createLowerKernelsPass());
+  run(*module, kernel::createLowerKernelsPass());
   require(succeeded(kernel::verifyKernelLowering(*logical, *module)),
           "actual Kernel recipes did not correspond");
   require(succeeded(protocol::lowerPhysical(*module)),

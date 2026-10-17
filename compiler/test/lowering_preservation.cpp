@@ -64,7 +64,7 @@ int main() {
   auto logical = copy(*source);
   run(*logical, protocol::createLowerMathPass());
   auto bound = copy(*logical);
-  run(*bound, protocol::createLowerKernelsPass());
+  run(*bound, kernel::createLowerKernelsPass());
   Cases cases;
   cases.run("all Boolean recipes, shared demand, received guard", [&] {
     require(succeeded(mathematical::verifyMathLowering(
@@ -419,7 +419,7 @@ int main() {
     auto candidate = copy(*original);
     run(*candidate, protocol::createLowerMathPass());
     auto logicalCandidate = copy(*candidate);
-    run(*candidate, protocol::createLowerKernelsPass());
+    run(*candidate, kernel::createLowerKernelsPass());
     local::OperationBindingOp generated;
     candidate->walk([&](local::OperationBindingOp binding) {
       if (binding.getContract() == "bool.and" &&
