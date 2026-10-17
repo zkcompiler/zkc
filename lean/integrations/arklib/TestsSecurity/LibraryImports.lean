@@ -1,4 +1,7 @@
 -- Maintained by audit_imports.py; all library, test and example modules are audit inputs; tooling is separate.
+import ZkcSecurity.ArkLib.Fri.Correspondence
+import ZkcSecurity.ArkLib.Fri.Domain
+import ZkcSecurity.ArkLib.Fri.Protocol
 import ZkcSecurity.ArkLib.Gkr.Layer
 import ZkcSecurity.ArkLib.Sumcheck.Bridge
 import ZkcSecurity.ArkLib.Sumcheck.Domain
