@@ -477,6 +477,25 @@ def test_captured_tool_changes_fail_in_shared_setup(
     assert "tool changed during capture" in report["checks"][0]["error"]
 
 
+def test_tools_are_retained_once_per_digest_and_damaged_entries_are_replaced(bridge, tmp_path):
+    evidence = sys.modules["evidence"]
+    source = executable(tmp_path / "input/tool")
+    store = tmp_path / "store"
+    first, second = tmp_path / "first", tmp_path / "second"
+    digests = {evidence.retain_tool(source, store, target) for target in (first, second)}
+    assert digests == {hashlib.sha256(source.read_bytes()).hexdigest()}
+    stored, = store.iterdir()
+    assert first.stat().st_ino == second.stat().st_ino == stored.stat().st_ino
+    assert not stored.stat().st_mode & 0o222
+    stored.chmod(0o755)
+    stored.write_bytes(b"damaged store entry\n")
+    third = tmp_path / "third"
+    evidence.retain_tool(source, store, third)
+    healed, = store.iterdir()
+    assert healed == stored and third.read_bytes() == source.read_bytes()
+    assert hashlib.sha256(healed.read_bytes()).hexdigest() in healed.name
+
+
 @pytest.mark.parametrize("failure", ["namespace", "executable", "directory-link", "file-link",
                                      "unreadable-directory"])
 def test_repeat_inventory_refusals_are_terminal(

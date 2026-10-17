@@ -80,6 +80,8 @@ def execute(scope, args):
         compiler = Path(args.compiler_build).resolve() if args.compiler_build else compiler_directory(args.profile)
         bridge = ROOT / "lean/bridges/common"
         output = reports / "lean/native"
+        # The structured suites of this run share one executable store.
+        os.environ["ZKC_TOOL_STORE"] = str(output / "tool-store")
         run([sys.executable, bridge / "check.py", "--compiler", compiler / "zkc-compile",
              "--reference", compiler / "test/zkc-common_reference-test",
              "--lean", ROOT / "lean/.lake/build/bin/common-source", "--cases", "80",

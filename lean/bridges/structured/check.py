@@ -11,6 +11,7 @@ import copy
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import random
 import shutil
@@ -20,7 +21,7 @@ import time
 from uuid import uuid4
 
 import snapshot as constructors
-from evidence import archive_sources, atomic_json, check_sources
+from evidence import archive_sources, atomic_json, check_sources, retain_tool
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -109,16 +110,14 @@ class Suite:
         self.archives["before"] = self.capture_sources("before")
         tool_dir = self.directory / "tools"
         tool_dir.mkdir()
+        store = Path(os.environ.get("ZKC_TOOL_STORE") or self.directory.parent / "tool-store")
         for name in self.tool_names():
             source = getattr(self.args, name, None)
             if source is None:
                 continue
             source = source.resolve()
-            before = digest(source)
             target = tool_dir / name
-            shutil.copy2(source, target)
-            if before != digest(target) or before != digest(source):
-                raise ValueError(f"tool changed during capture: {source}")
+            before = retain_tool(source, store, target)
             self.tools[name] = target
             self.tool_records[name] = {"path": str(target), "sha256": before,
                                        "source": str(source)}

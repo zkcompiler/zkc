@@ -33,11 +33,14 @@ python3 lean/bridges/structured/check.py \
 
 The report records the source revision, deterministic seed, exact commands,
 exported source and snapshot hashes, and retained executable hashes. Each run
-allocates a fresh directory under `runs/` beside the selected report and copies
-its executables there before testing. The selected report is atomically marked
-`running` before setup, then `pass`, `failed` or `interrupted`; it identifies the
-run directory and its own retained report. Setup, source verification and
-finalization errors exit nonzero; handled interruptions report `interrupted`.
+allocates a fresh directory under `runs/` beside the selected report and links
+its executables there before testing from a store holding one read-only copy
+per content digest: `runs/tool-store`, or `ZKC_TOOL_STORE`, which `lean-native`
+sets to one store in its run directory. Where links are unsupported it copies
+them. The selected report is atomically marked `running` before setup, then
+`pass`, `failed` or `interrupted`; it identifies the run directory and its own
+retained report. Setup, source verification and finalization errors exit
+nonzero; handled interruptions report `interrupted`.
 Both report destinations are attempted even if one fails, and a publication
 error triggers another attempt with failure recorded. A permanently unwritable
 destination or an uncatchable process termination cannot be guaranteed a final
