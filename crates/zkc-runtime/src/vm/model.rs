@@ -17,7 +17,7 @@ impl Limits {
     pub const DEFINITIONS: usize = 4096;
     pub const PORTS: usize = 1024;
     /// Ordered operation parameters (for example gather indices), not SSA ports.
-    /// Still bounded by the artifact byte/node ceilings and per-kernel rules.
+    /// Still bounded by the artifact byte/node ceilings and per-operation rules.
     pub const OPERATION_ATTRIBUTES: usize = 16_384;
     pub const STATIC_INSTRUCTIONS: usize = 32_768;
     pub const BLOCK_DEPTH: usize = 64;
@@ -31,7 +31,7 @@ impl Limits {
     /// Default cumulative fresh-allocation budget; callers may configure another value.
     pub const TOTAL_VALUE_BYTES: usize = 256 * 1024 * 1024;
     /// Hard and default cumulative logical-work ceiling: operand bytes read and
-    /// result bytes allocated by kernels and services, charged at every use.
+    /// result bytes allocated by operations and services, charged at every use.
     pub const LOGICAL_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 }
 
@@ -280,8 +280,9 @@ pub enum AttributeRule {
     NativeChallengeTemplate,
     NativeIndexTemplate,
 }
+/// Port types and attribute rules for an operation, including effectful ones.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct KernelSignature<T = Type> {
+pub struct OperationSignature<T = Type> {
     pub inputs: Vec<T>,
     pub outputs: Vec<T>,
     pub attributes: AttributeRule,

@@ -2,8 +2,8 @@
 use crate::{KoalaBear, Policy, Result, Value, exhausted, refused};
 use std::sync::Arc;
 use zkc_runtime::vm::{
-    AttributeRule, Backing, BoundSignature, Identity, Invocation, KernelSignature, LogicalType,
-    OperationBinding, PhysicalType, Representation, Type,
+    AttributeRule, Backing, BoundSignature, Identity, Invocation, LogicalType, OperationBinding,
+    OperationSignature, PhysicalType, Representation, Type,
 };
 
 #[derive(Clone, Debug)]
@@ -92,7 +92,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         "fixed_vector.dot" => (vec![fixed.clone(), fixed], vec![scalar]),
         _ => return None,
     };
-    Some(KernelSignature {
+    Some(OperationSignature {
         inputs,
         outputs,
         attributes: AttributeRule::None,

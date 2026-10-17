@@ -85,7 +85,7 @@ pub(super) const CONTRACTS: &[Contract] = &[
 fn resolve(
     binding: &OperationBinding,
     contract: &Contract,
-) -> Result<KernelSignature<LogicalType>> {
+) -> Result<OperationSignature<LogicalType>> {
     if binding.contract == "encoding.index_uleb128" {
         return index::resolve(binding, contract);
     }
@@ -115,7 +115,7 @@ fn resolve(
 }
 fn select(
     binding: &OperationBinding,
-    logical: &KernelSignature<LogicalType>,
+    logical: &OperationSignature<LogicalType>,
     selection: Selection,
 ) -> Result<BoundSignature> {
     if binding.contract == "encoding.index_uleb128" {

@@ -26,7 +26,7 @@ own admission boundary; it does not acquire source correspondence from its label
 | Prepared protocol to participants | Role-indexed SSA correspondence, actual receives, action inputs/results, loop captures/yields and outputs | The actual retained prepared object is compared with the actual projected candidate; restrictions are interpreted per role |
 | Participant rewrites | Action operands under supported mathematical laws, unchanged ordered effects and custody | Shared transient value comparison for simplification, fixing and elimination; independent Boolean and polynomial laws |
 | Participant to exec | Demand at the consuming action, captures, recipes, result order and partial-call placement | Separate closed recipe/demand validator |
-| Exec to physical | Logical participant data flow/order plus validated representation and kernel choices | Fresh checked plans plus a separate reader of every materialized kernel, conversion, operand and declaration |
+| Exec to physical | Logical participant data flow/order plus validated representation and implementation choices | Fresh checked plans plus a separate reader of every materialized operation, conversion, operand and declaration |
 | Storage release | Retain computation and authored releases; add only admitted releases | Full module admission and comparison after removing only additional releases in a temporary comparison copy |
 | Native transcript construction | Selected-entry pruning, actual observations, challenges, state, indices, completion and retained declarations | Independent construction reader over the actual projected subject and generated helpers; source occurrence admission and contract semantics remain premises |
 | Checked physical program to emitted artifact | Decoded executable content, entry, host bindings, policy and schedule | Exact program bytes compared directly with physical SSA; run steps checked against retained prepared source; deployment maps checked against original source ports |
@@ -62,7 +62,7 @@ its recognized transformations and remaining interpretation assumptions.
 | Preparation and participant mathematical rewrites | Equal role-component results and ordered action arguments under the same actual inputs, typed open replies and action interpretations; preserve formation obligations before erasure. This is a mathematical relation, not equal native instruction charges. |
 | Protocol to participants | Related entry/result coordinates and each role's ordered actions under the selected open-reply/service meanings. A joint execution claim additionally composes the selected schedule and transport relation; honest delivery is assumed only by a claim that requires it. |
 | Participant to exec | Related logical values, action state, returned/stopped outcomes and ordered observations under the recipe/primitive contracts and sufficient realization capacity. Native exhaustion and implementation failures retain their separate execution-policy contracts; operand validation proves no capacity bound by itself. |
-| Exec to physical | The same logical participant control and related local computation under the selected representation/kernel contracts, related initial states and explicit capacity premises. Native kernel correctness is a remaining implementation assumption. |
+| Exec to physical | The same logical participant control and related local computation under the selected representation/operation contracts, related initial states and explicit capacity premises. Native kernel correctness is a remaining implementation assumption. |
 | Physical to emitted artifact | The same executable description, up to the explicitly permitted naming/representation mapping, including invocation and host policy. This binds actual bytes to the checked subject; it does not prove the interpreter or recover omitted source meaning. |
 
 If a claim includes exhaustion behavior, state the budget relation and compare
@@ -171,7 +171,7 @@ Fiat–Shamir security theorem or the native transcript primitive implementation
 Decode the exact bytes that will be returned, including embedded participant
 programs in bundles/deployments. Compare all execution-relevant content with the
 checked physical subject: ordered inputs/results, operand references, nested
-control, literals, kernel/codec identities, bindings and entry selection. Check
+control, literals, operation/codec identities, bindings and entry selection. Check
 host policy/public-context mappings and the generated schedule against their
 own retained source subjects. Validate after storage release and every other
 pass that changes the published candidate.

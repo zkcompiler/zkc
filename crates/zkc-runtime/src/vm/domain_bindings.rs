@@ -1,6 +1,6 @@
 //! Physical port construction, independent of operation-family admission.
 use super::{
-    AdmissionError, BoundSignature, ErrorCode, KernelSignature, LogicalType, PhysicalType,
+    AdmissionError, BoundSignature, ErrorCode, LogicalType, OperationSignature, PhysicalType,
     Representation, Type,
 };
 
@@ -16,7 +16,7 @@ pub(super) enum PortTransform {
 }
 
 pub(super) fn physical_signature(
-    logical: &KernelSignature<LogicalType>,
+    logical: &OperationSignature<LogicalType>,
     ports: PortTransform,
 ) -> Result<BoundSignature, AdmissionError> {
     let make = |ty: &LogicalType| {
@@ -53,7 +53,7 @@ pub(super) fn physical_signature(
         };
         *port = PhysicalType::new(port.logical(), representation)?;
     }
-    Ok(KernelSignature {
+    Ok(OperationSignature {
         inputs,
         outputs,
         attributes: logical.attributes,

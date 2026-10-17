@@ -349,7 +349,8 @@ pub struct ServiceInvocation<'a> {
 /// The instance prepares handles again on the backend it takes into custody;
 /// admission does not transfer handles from another backend. A handle carries
 /// no input, frame, resource or setup authority.
-pub trait InstalledKernel {
+/// Operations may have effects or fail after a resource transition.
+pub trait InstalledOperation {
     fn signature(&self) -> &BoundSignature;
     /// Read-only installation fact, stable for the instance's lifetime.
     /// Fixed inputs, attributes and backend policy determine this operation's
@@ -361,7 +362,7 @@ pub trait InstalledKernel {
         false
     }
 }
-impl InstalledKernel for BoundSignature {
+impl InstalledOperation for BoundSignature {
     fn signature(&self) -> &BoundSignature {
         self
     }
@@ -376,9 +377,10 @@ impl InstalledKernel for BoundSignature {
 /// validation error, and preserves all completed resource transitions. Both hooks must
 /// preserve resources outside the actual argument view. A Returned exit may
 /// transfer the entry result tuple through an enclosing loop frame. It does not
-/// imply that the loop body reached its yield or completed its iteration. A kernel may access only
-/// resources authorized by its explicit operands AND the active frame, even if
-/// the backend's authoritative store contains other handles.
+/// imply that the loop body reached its yield or completed its iteration.
+/// An operation may access only resources authorized by its explicit operands
+/// AND the active frame, even if the backend's authoritative store contains
+/// other handles.
 ///
 /// Every consume advances authoritative state before a possible failure. Returning
 /// `Err` does not roll back state. Outputs cannot issue capabilities on the caller's
@@ -386,7 +388,7 @@ impl InstalledKernel for BoundSignature {
 /// identities and the host's admitted input policy for this exact role/entry.
 pub trait Backend {
     type Value: Value;
-    type Kernel: InstalledKernel;
+    type Operation: InstalledOperation;
     /// Private backend data for one reached call site. Use `()` when no static
     /// invocation work needs preparation. It carries no resource authority.
     type Call;
@@ -439,13 +441,13 @@ pub trait Backend {
     /// Code selection and signature stay valid for this backend's instance lifetime;
     /// invocation-dependent policy, setup and resource checks remain in `apply`.
     /// The instance calls this once per distinct binding before entering any frame.
-    fn prepare_binding(&self, _binding: &OperationBinding) -> Option<Self::Kernel> {
+    fn prepare_binding(&self, _binding: &OperationBinding) -> Option<Self::Operation> {
         None
     }
     /// Inspect an installed signature without retaining a prepared handle.
     fn binding_signature(&self, binding: &OperationBinding) -> Option<BoundSignature> {
         self.prepare_binding(binding)
-            .map(|kernel| kernel.signature().clone())
+            .map(|operation| operation.signature().clone())
     }
     /// Canonical representation, variant/type consistency and per-value bounds.
     /// This is read-only and must not consume randomness/capabilities.
@@ -488,15 +490,15 @@ pub trait Backend {
     ) -> Result<(), BackendError> {
         self.leave_frame(frame, exit, outputs)
     }
-    /// Upper bound on operand bytes read by this installed kernel body,
-    /// for kernels that access only part of their operands, such as one opening
+    /// Upper bound on operand bytes read by this installed operation body,
+    /// for operations that access only part of their operands, such as one opening
     /// of a committed table. The instance charges it as logical work before
     /// `apply`. `None` charges the full retained bytes of every operand.
     /// A backend that additionally walks nested operands for admission must
     /// bound those walks separately.
     fn operand_work(
         &self,
-        _kernel: &Self::Kernel,
+        _operation: &Self::Operation,
         _context: &CallContext<'_>,
         _arguments: &[Self::Value],
     ) -> Option<u64> {
@@ -509,19 +511,19 @@ pub trait Backend {
     /// the current binding/attributes and keep dynamic checks at every use.
     fn apply_prepared(
         &mut self,
-        kernel: &Self::Kernel,
+        operation: &Self::Operation,
         _call: &mut Option<Self::Call>,
         invocation: &Invocation<'_>,
         arguments: &[Self::Value],
     ) -> Result<Vec<Self::Value>, BackendError> {
-        self.apply(kernel, invocation, arguments)
+        self.apply(operation, invocation, arguments)
     }
     /// Execute with a handle prepared for the invocation's exact binding. Check
     /// dynamic operands, attributes, policy, work and resource custody at use.
     /// Backends with public direct-call support must refuse a mismatched handle.
     fn apply(
         &mut self,
-        kernel: &Self::Kernel,
+        operation: &Self::Operation,
         invocation: &Invocation<'_>,
         arguments: &[Self::Value],
     ) -> Result<Vec<Self::Value>, BackendError>;

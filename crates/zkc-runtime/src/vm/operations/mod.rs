@@ -20,14 +20,14 @@ mod transcript;
 mod vector;
 
 use super::{
-    AdmissionError, AttributeRule, BoundSignature, ErrorCode, Identity, KernelSignature,
-    LogicalType, OperationBinding, Type,
+    AdmissionError, AttributeRule, BoundSignature, ErrorCode, Identity, LogicalType,
+    OperationBinding, OperationSignature, Type,
 };
 use std::{collections::BTreeMap, sync::OnceLock};
 type Result<T> = std::result::Result<T, AdmissionError>;
-type LogicalResolver = fn(&OperationBinding, &Contract) -> Result<KernelSignature<LogicalType>>;
+type LogicalResolver = fn(&OperationBinding, &Contract) -> Result<OperationSignature<LogicalType>>;
 type PhysicalResolver =
-    fn(&OperationBinding, &KernelSignature<LogicalType>, Selection) -> Result<BoundSignature>;
+    fn(&OperationBinding, &OperationSignature<LogicalType>, Selection) -> Result<BoundSignature>;
 
 pub(super) struct Contract {
     name: &'static str,
@@ -78,11 +78,11 @@ impl Contract {
         self.history = true;
         self
     }
-    fn shape(&self) -> Result<KernelSignature> {
+    fn shape(&self) -> Result<OperationSignature> {
         let (inputs, outputs, attributes) = self
             .shape
             .ok_or_else(|| AdmissionError::new(ErrorCode::Signature, "contract-shape-missing"))?;
-        Ok(KernelSignature {
+        Ok(OperationSignature {
             inputs: inputs.to_vec(),
             outputs: outputs.to_vec(),
             attributes,
@@ -238,7 +238,7 @@ pub(super) fn observes_history(contract: &str) -> Result<bool> {
 
 pub(super) fn logical_signature(
     binding: &OperationBinding,
-) -> Result<KernelSignature<LogicalType>> {
+) -> Result<OperationSignature<LogicalType>> {
     let registry = installed()?;
     let (contract, owner) = registry
         .logical
@@ -257,7 +257,7 @@ pub(super) fn signature(binding: &OperationBinding) -> Result<BoundSignature> {
     {
         return select_signature(
             binding,
-            &KernelSignature {
+            &OperationSignature {
                 inputs: vec![],
                 outputs: vec![],
                 attributes: AttributeRule::None,
@@ -268,7 +268,7 @@ pub(super) fn signature(binding: &OperationBinding) -> Result<BoundSignature> {
 }
 pub(super) fn select_signature(
     binding: &OperationBinding,
-    logical: &KernelSignature<LogicalType>,
+    logical: &OperationSignature<LogicalType>,
 ) -> Result<BoundSignature> {
     installed()?.select(binding, logical)
 }
@@ -284,7 +284,7 @@ impl Registry {
     fn select(
         &self,
         binding: &OperationBinding,
-        logical: &KernelSignature<LogicalType>,
+        logical: &OperationSignature<LogicalType>,
     ) -> Result<BoundSignature> {
         let fail = || {
             AdmissionError::new(
@@ -316,7 +316,7 @@ impl Registry {
 
 pub(super) fn default_ports(
     _: &OperationBinding,
-    logical: &KernelSignature<LogicalType>,
+    logical: &OperationSignature<LogicalType>,
     selection: Selection,
 ) -> Result<BoundSignature> {
     selection.require_default()?;

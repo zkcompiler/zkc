@@ -43,7 +43,7 @@ add_zkc_component(Contracts
   lib/Contracts/RingExpression.cpp
   lib/Contracts/RingSharing.cpp
   lib/Contracts/Domains.cpp
-  lib/Contracts/Kernels.cpp
+  lib/Contracts/OperationShapes.cpp
   lib/Contracts/NativePolicy.cpp
   lib/Contracts/NativeOrigin.cpp
   lib/Contracts/Representations.cpp
@@ -170,6 +170,8 @@ add_zkc_component(IR
   lib/Dialect/Local/IR/Control.cpp
   lib/Dialect/Data/IR/DataDialect.cpp
   lib/Dialect/Data/IR/Domains.cpp
+  lib/Analysis/NativeTypes.cpp
+  lib/Analysis/TotalClosure.cpp
   lib/Analysis/Finite.cpp
   lib/Analysis/Computation.cpp
   lib/Analysis/ComputationMeaning.cpp
@@ -179,7 +181,7 @@ add_zkc_component(IR
   lib/Dialect/Algebra/IR/Maps.cpp
   lib/Dialect/Algebra/RingExpression.cpp
   lib/Dialect/Bindings.cpp
-  lib/Dialect/Kernels.cpp
+  lib/Dialect/BoundOperations.cpp
   lib/Dialect/MathematicalInterfaces.cpp
   lib/Dialect/PreparationCallable.cpp
   lib/Dialect/LinearContraction.cpp

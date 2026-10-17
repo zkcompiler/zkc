@@ -6,7 +6,7 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
-include "zkc/Dialect/Kernels.td"
+include "zkc/Dialect/BoundOperations.td"
 include "mlir/IR/OpAsmInterface.td"
 include "mlir/Interfaces/FunctionInterfaces.td"
 include "mlir/Interfaces/CallInterfaces.td"
@@ -100,9 +100,9 @@ def Local_BoolConstantOp : Op<LocalDialect, "bool_constant"> {
   let results = (outs I1:$output);
 }
 
-def RequireOp : KernelOp<LocalDialect, "exec.require", [OpControlRequire]>;
+def RequireOp : BoundOp<LocalDialect, "exec.require", [OpControlRequire]>;
 
-def ResourceUnitConsumeOp : KernelOp<LocalDialect, "exec.resource_unit_consume", [OpResourceUnitConsume]> {
+def ResourceUnitConsumeOp : BoundOp<LocalDialect, "exec.resource_unit_consume", [OpResourceUnitConsume]> {
   let description = [{
     Consumes a resource unit and produces nothing. It must remain even though
     it has no result, since removing it would change the unit's lifetime and the
@@ -110,7 +110,7 @@ def ResourceUnitConsumeOp : KernelOp<LocalDialect, "exec.resource_unit_consume",
   }];
 }
 
-def ResourceUnitCreateOp : KernelOp<LocalDialect, "exec.resource_unit_create", [OpResourceUnitCreate]> {
+def ResourceUnitCreateOp : BoundOp<LocalDialect, "exec.resource_unit_create", [OpResourceUnitCreate]> {
   let description = [{
     Creates one zero-payload logical resource unit of the slot named by the
     binding. The unit is affine: it can be passed or consumed once and is
@@ -118,7 +118,7 @@ def ResourceUnitCreateOp : KernelOp<LocalDialect, "exec.resource_unit_create", [
   }];
 }
 
-def ResourceUnitPassOp : KernelOp<LocalDialect, "exec.resource_unit_pass", [OpResourceUnitPass]> {
+def ResourceUnitPassOp : BoundOp<LocalDialect, "exec.resource_unit_pass", [OpResourceUnitPass]> {
   let description = [{
     Moves a resource unit into a fresh occurrence of the same slot. The input
     occurrence is consumed; the operation grants no copy (docs/spec/domains/values.md).

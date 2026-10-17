@@ -51,7 +51,7 @@ impl Backend for Store {
     type Call = ();
     type Checkpoint = ();
     type Value = Datum;
-    type Kernel = crate::vm::BoundSignature;
+    type Operation = crate::vm::BoundSignature;
     fn supports_boolean_literals(&self) -> bool {
         true
     }
@@ -80,7 +80,7 @@ impl Backend for Store {
     }
     fn apply(
         &mut self,
-        _kernel: &Self::Kernel,
+        _operation: &Self::Operation,
         _: &Invocation<'_>,
         _: &[Datum],
     ) -> Result<Vec<Datum>, BackendError> {

@@ -1,4 +1,5 @@
 #include "zkc/Analysis/Finite.h"
+#include "zkc/Analysis/TotalClosure.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Contracts/TypeProperties.h"
@@ -115,7 +116,7 @@ struct MetadataVerifier {
       if (transition || !declaration)
         return refuse(record, "invalid inserted transcript helper");
       auto contract = declaration.getContract();
-      if (!isa<plan::ExecuteKernelOp>(op) &&
+      if (!isa<plan::ApplyOp>(op) &&
           op.getName().getStringRef() != protocol::boundOperationName(contract))
         return refuse(record, "invalid inserted transcript helper");
       // A UniformIndex helper first materializes its static domain.
@@ -999,7 +1000,7 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
     return refuse(unit, "expected one participant symbol-table block");
   if (unit->getAttrs().size() != 1)
     return refuse(unit, "unexpected attribute in the 'participant' profile");
-  if (failed(finite::verifyClosure(unit)) || failed(verifyHelpers(unit)))
+  if (failed(verifyTotalClosure(unit)))
     return failure();
   unsigned operations = 0;
   NativeTypePolicies types(unit);

@@ -30,11 +30,11 @@ impl ResourceDomain {
 }
 
 use super::operations::{Contract, Contribution};
-use super::{AttributeRule, KernelSignature, LogicalType, OperationBinding};
+use super::{AttributeRule, LogicalType, OperationBinding, OperationSignature};
 fn signature(
     binding: &OperationBinding,
     _: &Contract,
-) -> Result<KernelSignature<LogicalType>, AdmissionError> {
+) -> Result<OperationSignature<LogicalType>, AdmissionError> {
     if binding.arguments.len() != 1 {
         return Err(AdmissionError::new(
             ErrorCode::Signature,
@@ -44,7 +44,7 @@ fn signature(
     let domain = ResourceDomain::parse(&binding.arguments[0])
         .map_err(|_| AdmissionError::new(ErrorCode::Type, "binding-resource-unit-domain"))?;
     let ty = LogicalType::resource_unit(domain);
-    Ok(KernelSignature {
+    Ok(OperationSignature {
         inputs: if binding.contract == "resource_unit.create" {
             vec![]
         } else {

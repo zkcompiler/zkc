@@ -43,14 +43,14 @@ mod observe;
 pub use admit::{EntryRole, Program};
 pub use backend::{
     Backend, BackendError, CallContext, Frame, FrameExit, FrameId, FrameInputs, FrameKind,
-    InstalledKernel, Invocation, ServiceInvocation, Value,
+    InstalledOperation, Invocation, ServiceInvocation, Value,
 };
 pub use bindings::{
     BoundSignature, Identity, LogicalType, OperationBinding, PhysicalType, Representation,
     ResolvedBinding,
 };
 pub use model::{
-    AdmissionError, AttributeRule, ErrorCode, KernelSignature, Limits, LogicalOrigin, Type,
+    AdmissionError, AttributeRule, ErrorCode, Limits, LogicalOrigin, OperationSignature, Type,
 };
 pub use observe::{
     Action, Cut, CutKind, DecodeReason, Envelope, LoadError, LocalAction, LocalContext, Origin,

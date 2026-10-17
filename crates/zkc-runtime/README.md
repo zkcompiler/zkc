@@ -16,6 +16,13 @@ selects an entry and role and enters its resource frame. Execution proceeds thro
 control boundaries. A stopped runner retains its diagnostics and completed
 resource transitions; cancellation closes its active frames.
 
+`vm::Backend::Operation` implements `vm::InstalledOperation`: an immutable
+installed handle for one exact binding. `vm::OperationSignature` describes its
+ports and attribute rules; `vm::BoundSignature` specializes those ports to
+physical types. Operations include effects and partial failures. Installation
+does not grant resource authority or establish numerical purity; the backend
+checks live custody and policy at each invocation.
+
 `vm::ProgramRole` exposes a static layout and `ProgramState` exposes
 non-advancing observations. The application host chooses scheduling and transport.
 `NativeProofEntry` checks the restrictions of the current native proof policy;

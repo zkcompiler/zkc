@@ -1,6 +1,6 @@
-#include "zkc/Contracts/Kernels.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "zkc/Contracts/Bindings.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -12,7 +12,7 @@ using namespace llvm;
 
 namespace zkc {
 namespace {
-LogicalResult verifyKernel(Operation *op, bool physical) {
+LogicalResult verifyOperationContext(Operation *op, bool physical) {
   auto module = op->getParentOfType<zkc::protocol_ir::ProtocolModuleOp>();
   auto *owner = op->getParentOp();
   while (owner && isa<zkc::local::LocalIfOp, zkc::local::LocalForOp,
@@ -33,7 +33,7 @@ LogicalResult verifyKernel(Operation *op, bool physical) {
 }
 } // namespace
 
-bool detail::isLogicalKernelData(Type type) {
+bool detail::isLogicalOperationData(Type type) {
   return isa<algebra::FieldType, poly::MultilinearType, poly::QuadraticType,
              poly::PointType, algebra::GroupType, poly::UnivariateType,
              algebra::FixedVectorType, data::SequenceType, data::BytesType,
@@ -45,8 +45,8 @@ bool detail::isLogicalKernelData(Type type) {
          type.isSignlessInteger(1) || type.isUnsignedInteger(64);
 }
 
-LogicalResult detail::verifyLogicalKernel(Operation *op) {
-  return verifyKernel(op, false);
+LogicalResult detail::verifyLogicalOperation(Operation *op) {
+  return verifyOperationContext(op, false);
 }
 
 LogicalResult zkc::plan::ReleaseOp::verify() {
@@ -83,7 +83,7 @@ LogicalResult zkc::plan::ReleaseOp::verify() {
   }
   return success();
 }
-LogicalResult zkc::plan::ExecuteKernelOp::verify() {
-  return verifyKernel(*this, true);
+LogicalResult zkc::plan::ApplyOp::verify() {
+  return verifyOperationContext(*this, true);
 }
 } // namespace zkc

@@ -11,7 +11,7 @@ use zkc_runtime::{
     },
     ring::Expression,
     vm::{
-        AttributeRule, BoundSignature, Identity, Invocation, KernelSignature, OperationBinding,
+        AttributeRule, BoundSignature, Identity, Invocation, OperationBinding, OperationSignature,
         Type,
     },
 };
@@ -191,7 +191,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         "relation.table_interaction" => (vec![index.clone(); 2], vec![index; 12]),
         _ => (vec![vector.clone()], vec![vector]),
     };
-    Some(KernelSignature {
+    Some(OperationSignature {
         inputs,
         outputs,
         attributes: AttributeRule::AssetIdentity,

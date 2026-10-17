@@ -5,7 +5,7 @@ use serde_json::{Value as Json, json};
 use zkc_backends::*;
 use zkc_runtime::vm::Identity;
 use zkc_runtime::vm::{
-    Action, Backend, BackendError, ErrorCode, Frame, FrameExit, InstalledKernel, Invocation,
+    Action, Backend, BackendError, ErrorCode, Frame, FrameExit, InstalledOperation, Invocation,
     Limits, OperationBinding, PathElement, StopKind, Usage, ValueBudget,
 };
 
@@ -105,11 +105,11 @@ impl Traced {
         }
     }
 }
-struct TracedKernel {
-    inner: NativeKernel,
+struct TracedOperation {
+    inner: NativeOperation,
     deterministic: bool,
 }
-impl InstalledKernel for TracedKernel {
+impl InstalledOperation for TracedOperation {
     fn signature(&self) -> &zkc_runtime::vm::BoundSignature {
         self.inner.signature()
     }
@@ -130,13 +130,13 @@ impl Backend for Traced {
         self.inner.replay_computation(before, after)
     }
     type Value = Value;
-    type Kernel = TracedKernel;
-    fn prepare_binding(&self, b: &OperationBinding) -> Option<Self::Kernel> {
+    type Operation = TracedOperation;
+    fn prepare_binding(&self, b: &OperationBinding) -> Option<Self::Operation> {
         self.prepared.borrow_mut().push(b.clone());
         if self.blocked.as_deref() == Some(&b.contract) {
             None
         } else {
-            self.inner.prepare_binding(b).map(|inner| TracedKernel {
+            self.inner.prepare_binding(b).map(|inner| TracedOperation {
                 deterministic: inner.deterministic()
                     && self.nondeterministic != Some(b.contract.as_str()),
                 inner,
@@ -162,7 +162,7 @@ impl Backend for Traced {
     }
     fn apply(
         &mut self,
-        kernel: &Self::Kernel,
+        operation: &Self::Operation,
         i: &Invocation<'_>,
         args: &[Value],
     ) -> Result<Vec<Value>, BackendError> {
@@ -172,7 +172,7 @@ impl Backend for Traced {
             let other = self.inner.prepare_binding(binding).unwrap();
             return self.inner.apply(&other, i, args);
         }
-        self.inner.apply(&kernel.inner, i, args)
+        self.inner.apply(&operation.inner, i, args)
     }
 }
 fn execute<B: Backend<Value = Value>>(

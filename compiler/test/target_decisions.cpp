@@ -281,12 +281,10 @@ int main() {
         require(succeeded(verify(*module)), "physical verification");
         std::vector<std::string> implementations;
         unsigned conversions = 0;
-        for (auto op : function(*module)
-                           .getBody()
-                           .front()
-                           .getOps<zkc::plan::ExecuteKernelOp>()) {
-          implementations.push_back(op.getKernel().str());
-          if (op.getKernel() == "arkworks/table.relayout") {
+        for (auto op :
+             function(*module).getBody().front().getOps<zkc::plan::ApplyOp>()) {
+          implementations.push_back(op.getImplementation().str());
+          if (op.getImplementation() == "arkworks/table.relayout") {
             ++conversions;
             require(op.getResult(0).hasOneUse(),
                     "conversion result is per-use");
@@ -511,11 +509,9 @@ int main() {
                                              "arkworks-diagonal/vector.dot",
                                              "arkworks-diagonal/vector.dot"};
           std::vector<std::string> actual;
-          for (auto op : function(*module)
-                             .getBody()
-                             .front()
-                             .getOps<zkc::plan::ExecuteKernelOp>())
-            actual.push_back(op.getKernel().str());
+          for (auto op :
+               function(*module).getBody().front().getOps<zkc::plan::ApplyOp>())
+            actual.push_back(op.getImplementation().str());
           require(actual == expected,
                   "independent contraction implementation expectations");
         });
@@ -884,11 +880,9 @@ local.return %result : !R)";
         accept(materializePhysical(*module, checked));
         require(succeeded(verify(*module)), "ordered crossing verification");
         std::vector<std::string> actual;
-        for (auto op : function(*module)
-                           .getBody()
-                           .front()
-                           .getOps<zkc::plan::ExecuteKernelOp>())
-          actual.push_back(op.getKernel().str());
+        for (auto op :
+             function(*module).getBody().front().getOps<zkc::plan::ApplyOp>())
+          actual.push_back(op.getImplementation().str());
         require(actual ==
                     std::vector<std::string>{"arkworks/control.require",
                                              "arkworks/table.relayout",
@@ -1060,32 +1054,31 @@ local.return %result : !R)";
             "validation refusal retains operation location");
   });
   for (bool changeReturn : {false, true}) {
-    cases.run(changeReturn ? "materialized local return changed"
-                           : "materialized kernel operand changed",
-              [&] {
-                auto before = take(executableFixture(arithmetic(), context));
-                auto checked = take(
-                    validatePhysical(*before, take(proposePhysical(*before))));
-                OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
-                auto own = take(
-                    validatePhysical(*after, take(proposePhysical(*after))));
-                accept(materializePhysical(*after, own));
-                accept(verifyPhysicalMaterialization(*before, *after, checked));
-                auto fn = function(*after);
-                if (changeReturn)
-                  fn.getBody().front().back().setOperand(0, fn.getArgument(0));
-                else {
-                  auto kernel = *fn.getBody()
-                                     .front()
-                                     .getOps<zkc::plan::ExecuteKernelOp>()
-                                     .begin();
-                  kernel->setOperand(1, kernel->getOperand(0));
-                }
-                require(succeeded(verify(*after)),
-                        "physical mutation must remain formed");
-                reject(verifyPhysicalMaterialization(*before, *after, checked),
-                       "binding-materialization-correspondence");
-              });
+    cases.run(
+        changeReturn ? "materialized local return changed"
+                     : "materialized kernel operand changed",
+        [&] {
+          auto before = take(executableFixture(arithmetic(), context));
+          auto checked =
+              take(validatePhysical(*before, take(proposePhysical(*before))));
+          OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
+          auto own =
+              take(validatePhysical(*after, take(proposePhysical(*after))));
+          accept(materializePhysical(*after, own));
+          accept(verifyPhysicalMaterialization(*before, *after, checked));
+          auto fn = function(*after);
+          if (changeReturn)
+            fn.getBody().front().back().setOperand(0, fn.getArgument(0));
+          else {
+            auto kernel =
+                *fn.getBody().front().getOps<zkc::plan::ApplyOp>().begin();
+            kernel->setOperand(1, kernel->getOperand(0));
+          }
+          require(succeeded(verify(*after)),
+                  "physical mutation must remain formed");
+          reject(verifyPhysicalMaterialization(*before, *after, checked),
+                 "binding-materialization-correspondence");
+        });
   }
   cases.run("conversion feeds the wrong same-typed table", [&] {
     auto before = take(executableFixture(layouts(), context));
@@ -1096,11 +1089,12 @@ local.return %result : !R)";
     accept(materializePhysical(*after, own));
     auto fn = function(*after);
     Value other;
-    zkc::plan::ExecuteKernelOp crossing;
-    fn.walk([&](zkc::plan::ExecuteKernelOp op) {
+    zkc::plan::ApplyOp crossing;
+    fn.walk([&](zkc::plan::ApplyOp op) {
       if (op.getSite() == "same")
         other = op.getResult(0);
-      if (other && op.getKernel() == "arkworks/table.relayout" && !crossing)
+      if (other && op.getImplementation() == "arkworks/table.relayout" &&
+          !crossing)
         crossing = op;
     });
     require(other && crossing, "missing per-use conversion");

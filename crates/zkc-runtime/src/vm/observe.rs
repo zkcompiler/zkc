@@ -245,7 +245,7 @@ pub struct Usage {
     /// Cumulative fresh allocation: shared allocations when first produced,
     /// plus owned storage at every binding. Release never refunds it.
     pub total_value_bytes: usize,
-    /// Cumulative logical work: kernel and service operand bytes read and
+    /// Cumulative logical work: operation and service operand bytes read and
     /// result bytes allocated, charged at every use regardless of sharing.
     pub logical_bytes: u64,
 }
@@ -255,7 +255,7 @@ pub struct Usage {
 /// bytes count each allocation once when produced and owned storage at every
 /// binding. Equal but separately created allocations are counted separately.
 /// These are retained-payload charges, not allocator/RSS metrics. Individual
-/// values, native kernels, wire decoding and structural execution retain
+/// values, native operations, wire decoding and structural execution retain
 /// their independent hard limits. A protocol cannot change this policy.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ValueBudget {

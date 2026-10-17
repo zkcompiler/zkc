@@ -92,11 +92,11 @@ impl Backend for Divergent {
     type Call = ();
     type Checkpoint = ();
     type Value = Value;
-    type Kernel = zkc_runtime::vm::BoundSignature;
+    type Operation = zkc_runtime::vm::BoundSignature;
     fn validate_value(&self, _: &Value) -> Result<(), BackendError> {
         unreachable!()
     }
-    fn prepare_binding(&self, _: &OperationBinding) -> Option<Self::Kernel> {
+    fn prepare_binding(&self, _: &OperationBinding) -> Option<Self::Operation> {
         Some(BoundSignature {
             inputs: if self.input {
                 vec![PhysicalType::parse("vector:bls12-381.fr@arkworks.fr-vector/0").unwrap()]
@@ -122,7 +122,7 @@ impl Backend for Divergent {
     }
     fn apply(
         &mut self,
-        _kernel: &Self::Kernel,
+        _operation: &Self::Operation,
         _: &Invocation<'_>,
         _: &[Value],
     ) -> Result<Vec<Value>, BackendError> {
@@ -159,7 +159,7 @@ fn unused_retained_bindings_still_require_independent_physical_admission() {
     let b = binding(false, "vector.dot");
     let bytes = program(&[b], &[], vec![], &[], &[]);
     let mut carrier: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    // A retained valid declaration needs no reachable kernel advertisement.
+    // A retained valid declaration needs no reachable operation advertisement.
     zkc_runtime::vm::Program::decode(&bytes)
         .and_then(|program| {
             program.check_installation(&Divergent { input: true })?;

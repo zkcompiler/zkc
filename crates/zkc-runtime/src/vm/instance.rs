@@ -41,7 +41,7 @@ pub(crate) struct Instance<B: Backend> {
     participant: Arc<code::Participant>,
     counts: Counts,
     backend: BackendOwner<B>,
-    kernels: Vec<B::Kernel>,
+    operations: Vec<B::Operation>,
     calls: Vec<Option<B::Call>>,
     arguments: Vec<B::Value>,
     usage: Usage,
@@ -157,7 +157,7 @@ impl<B: Backend> Instance<B> {
             let full = Self::operand_bytes(&arguments);
             let read = self
                 .backend
-                .operand_work(&self.kernels[binding.index], &context, &arguments)
+                .operand_work(&self.operations[binding.index], &context, &arguments)
                 .map_or(full, |declared| declared.min(full));
             charge_logical(
                 &mut self.usage.logical_bytes,
@@ -171,7 +171,7 @@ impl<B: Backend> Instance<B> {
             };
             self.counts.operation(binding.index);
             let values = self.backend.apply_prepared(
-                &self.kernels[binding.index],
+                &self.operations[binding.index],
                 &mut self.calls[call.index],
                 &invocation,
                 &arguments,
@@ -259,7 +259,7 @@ impl<B: Backend> Instance<B> {
         {
             return Err(BackendError::new("service-signature").into());
         }
-        // Service operands are read in full at every use, as kernel operands are.
+        // Service operands are read in full at every use, as operation operands are.
         let read = Self::operand_bytes(&query.arguments);
         self.can_retain_size(
             signature.outputs.len(),

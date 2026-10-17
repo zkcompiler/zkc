@@ -91,7 +91,7 @@ impl Program {
     }
 
     /// Whether this artifact requires the native Boolean constructor, including
-    /// retained unused definitions. This is separate from bound kernel names.
+    /// retained unused definitions. This is separate from bound operation names.
     pub fn requires_boolean_literals(&self) -> bool {
         self.executable.requires_boolean_literals
     }

@@ -43,8 +43,8 @@ impl<B: Backend> Instance<B> {
                 backend,
             });
         }
-        let kernels = match crate::vm::link::install(admitted, &backend) {
-            Ok(kernels) => kernels,
+        let operations = match crate::vm::link::install(admitted, &backend) {
+            Ok(operations) => operations,
             Err(error) => {
                 return Err(LoadError {
                     error: RuntimeError::Admission(error),
@@ -69,7 +69,7 @@ impl<B: Backend> Instance<B> {
             participant,
             counts: Counts::new(admitted.executable.bindings.len()),
             backend: BackendOwner(Some(backend)),
-            kernels,
+            operations,
             calls,
             arguments: Vec::new(),
             usage: Usage::default(),

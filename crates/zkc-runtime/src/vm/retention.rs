@@ -68,7 +68,7 @@ pub(crate) enum Retention {
     Transfer,
     /// Entry inputs, received payloads, literals and constructed variants.
     Input,
-    /// Kernel and service results. Their newly allocated bytes are also
+    /// Operation and service results. Their newly allocated bytes are also
     /// charged as logical work by the caller.
     Result,
 }

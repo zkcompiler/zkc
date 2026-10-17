@@ -1,7 +1,7 @@
 //! Structural materialization; family owners select domains and applicability.
 use super::*;
 use crate::domains::NativeDomain;
-use zkc_runtime::vm::{KernelSignature, PhysicalType};
+use zkc_runtime::vm::{OperationSignature, PhysicalType};
 
 pub(super) fn field_domain(binding: &OperationBinding) -> Option<NativeDomain> {
     let [name] = binding.arguments.as_slice() else {
@@ -88,7 +88,7 @@ pub(super) fn materialize(
         };
         *port = PhysicalType::new(port.logical(), representation).ok()?;
     }
-    Some(KernelSignature {
+    Some(OperationSignature {
         inputs,
         outputs,
         attributes: literal_rule(row.attributes, field),

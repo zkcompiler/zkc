@@ -107,7 +107,7 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
 fn resolve(
     binding: &OperationBinding,
     contract: &Contract,
-) -> Result<KernelSignature<LogicalType>> {
+) -> Result<OperationSignature<LogicalType>> {
     let [field, table] = binding.arguments.as_slice() else {
         return Err(support::failure());
     };

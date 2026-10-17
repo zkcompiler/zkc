@@ -31,17 +31,17 @@ class PhysicalCorrespondence {
         return false;
     return op->getAttrs().size() == 4;
   }
-  bool kernel(Operation *op, const protocol::OperationBinding &binding,
-              ValueRange operands, TypeRange results, Attribute site,
-              ArrayAttr parameters) {
-    if (!op || !charge() || !isa<plan::ExecuteKernelOp>(op) ||
-        op->getNumRegions() || op->getAttrs().size() != 4 ||
+  bool application(Operation *op, const protocol::OperationBinding &binding,
+                   ValueRange operands, TypeRange results, Attribute site,
+                   ArrayAttr parameters) {
+    if (!op || !charge() || !isa<plan::ApplyOp>(op) || op->getNumRegions() ||
+        op->getAttrs().size() != 4 ||
         !llvm::equal(op->getOperands(), operands) ||
         !llvm::equal(op->getResultTypes(), results) ||
         op->getAttr("site") != site || op->getAttr("parameters") != parameters)
       return false;
     auto reference = op->getAttrOfType<FlatSymbolRefAttr>("binding");
-    auto implementation = op->getAttrOfType<StringAttr>("kernel");
+    auto implementation = op->getAttrOfType<StringAttr>("implementation");
     return reference && reference.getValue() == binding.name &&
            implementation &&
            implementation.getValue() == binding.application.implementation;
@@ -78,9 +78,9 @@ class PhysicalCorrespondence {
     if (converted != conversions.end())
       operands = converted->second;
     if (decision.binding) {
-      if (!kernel(actual, plan.bindings[*decision.binding].binding, operands,
-                  decision.outputs, source->getAttr("site"),
-                  source->getAttrOfType<ArrayAttr>("parameters")))
+      if (!application(actual, plan.bindings[*decision.binding].binding,
+                       operands, decision.outputs, source->getAttr("site"),
+                       source->getAttrOfType<ArrayAttr>("parameters")))
         return false;
     } else {
       auto name = source->getName().getStringRef();
@@ -137,11 +137,12 @@ class PhysicalCorrespondence {
             if (cursor == after.end() || crossing.operand >= inputs.size())
               return false;
             auto *conversion = &*cursor++;
-            if (!kernel(conversion, plan.bindings[crossing.binding].binding,
-                        ValueRange{inputs[crossing.operand]},
-                        TypeRange{crossing.to},
-                        StringAttr::get(old.getContext(), crossing.site),
-                        ArrayAttr::get(old.getContext(), {})))
+            if (!application(conversion,
+                             plan.bindings[crossing.binding].binding,
+                             ValueRange{inputs[crossing.operand]},
+                             TypeRange{crossing.to},
+                             StringAttr::get(old.getContext(), crossing.site),
+                             ArrayAttr::get(old.getContext(), {})))
               return false;
             inputs[crossing.operand] = conversion->getResult(0);
           }

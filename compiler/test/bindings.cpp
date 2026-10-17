@@ -1,6 +1,6 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Contracts/Bindings.h"
-#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Program/Admission.h"
 #include "zkc/Program/Codec.h"
@@ -53,7 +53,7 @@ int main() {
   mlir::MLIRContext context(registry);
   context.loadAllAvailableDialects();
   llvm::StringSet<> contracts;
-  for (const auto &kernel : kernels()) {
+  for (const auto &kernel : operationShapes()) {
     require(contracts.insert(kernel.key).second, "unique installed contract");
     auto operation = boundOperationName(kernel.key);
     require(!operation.empty(), kernel.key);

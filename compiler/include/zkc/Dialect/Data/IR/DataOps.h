@@ -7,9 +7,9 @@
 #include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
+#include "zkc/Dialect/BoundOperations.h"
 #include "zkc/Dialect/Data/IR/DataDialect.h"
 #include "zkc/Dialect/Data/IR/DataTypes.h"
-#include "zkc/Dialect/KernelSupport.h"
 #include "zkc/Dialect/Local/IR/LocalTypes.h"
 #include "zkc/Interfaces/Mathematical.h"
 #define GET_OP_CLASSES

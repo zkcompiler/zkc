@@ -2,7 +2,7 @@
 
 Mathematical values retain their domain meaning through the
 [pipeline](pipeline.md). Logical types, operation contracts and role
-availability remain separate from installed storage and kernel choices. A new
+availability remain separate from installed storage and implementation choices. A new
 representation must preserve its declared values, complete outcomes, residual
 state and observations under the [realization laws](../spec/realization/representations.md).
 
@@ -38,7 +38,7 @@ certificate or protection against concurrent mutation of IR.
 Each mismatched operand gets its conversion immediately before its consumer, in
 operand order. Declarations may be shared; dynamic instructions and results are
 not silently shared or hoisted. Function/control ports use installed defaults;
-kernel results retain their chosen representation until a use needs conversion.
+operation results retain their chosen representation until a use needs conversion.
 The candidate catalog supplies preferences for installed implementations and
 direct adapters. It cannot create a conversion law or install a new contract.
 

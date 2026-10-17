@@ -16,6 +16,7 @@ struct OperationSemantics {
 };
 // Exact registered operation identity, never purity or interface presence.
 std::optional<OperationSemantics> classify(mlir::Operation *operation);
+bool isTotal(mlir::Operation *operation);
 // Shared by availability, helper summaries and projection. The current scalar
 // vocabulary requires each primitive result to depend on every operand. A
 // future subset-dependent primitive also needs a reviewed projection

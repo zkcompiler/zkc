@@ -1,7 +1,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "mlir/IR/SymbolTable.h"
 #include "zkc/Contracts/Domains.h"
-#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/TypeAdapters/Support.h"
@@ -26,8 +26,8 @@ struct ContractAssociation {
 bool installedContract(StringRef contract) {
   static const llvm::StringSet<> installed = [] {
     llvm::StringSet<> result;
-    for (const auto &kernel : kernels())
-      result.insert(kernel.key);
+    for (const auto &application : operationShapes())
+      result.insert(application.key);
     return result;
   }();
   return installed.contains(contract);
@@ -159,8 +159,8 @@ LogicalResult verifyBoundOperation(Operation *op, bool physical) {
   if (!signature)
     return diagnostics::emit(op->emitOpError(), signature.takeError());
   if (physical) {
-    auto key = op->getAttrOfType<StringAttr>("kernel");
-    if (!isa<zkc::plan::ExecuteKernelOp>(op) || !key ||
+    auto key = op->getAttrOfType<StringAttr>("implementation");
+    if (!isa<zkc::plan::ApplyOp>(op) || !key ||
         key.getValue() != selected->application.implementation)
       return diagnostics::emit(op->emitOpError(), "binding-implementation");
   } else if (!operationSupportsContract(op->getName().getStringRef(),

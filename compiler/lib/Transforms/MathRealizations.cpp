@@ -5,10 +5,10 @@
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Mathematical.h"
-#include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"
 

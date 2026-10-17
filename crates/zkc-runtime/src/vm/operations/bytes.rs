@@ -48,7 +48,7 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
             return Err(support::failure());
         }
         let bytes = LogicalType::new(Bytes, Identity::None)?;
-        Ok(KernelSignature {
+        Ok(OperationSignature {
             inputs: vec![LogicalType::sequence(bytes.clone())?],
             outputs: vec![bytes],
             attributes: AttributeRule::None,

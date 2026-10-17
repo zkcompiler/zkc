@@ -337,7 +337,7 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
             seen.insert(value.payload_name()),
             "duplicate accounting fixture"
         );
-        // Every payload is safe to clone/drop without executing a kernel.
+        // Every payload is safe to clone/drop without executing an operation.
         drop(cloned);
     };
     check(

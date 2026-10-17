@@ -452,8 +452,11 @@ impl Backend for Probe {
     type Call = ();
     type Checkpoint = ();
     type Value = zkc_backends::Value;
-    type Kernel = zkc_backends::NativeKernel;
-    fn prepare_binding(&self, binding: &zkc_runtime::vm::OperationBinding) -> Option<Self::Kernel> {
+    type Operation = zkc_backends::NativeOperation;
+    fn prepare_binding(
+        &self,
+        binding: &zkc_runtime::vm::OperationBinding,
+    ) -> Option<Self::Operation> {
         self.inner.prepare_binding(binding)
     }
     fn validate_value(&self, v: &Self::Value) -> Result<(), BackendError> {
@@ -475,7 +478,7 @@ impl Backend for Probe {
     }
     fn apply(
         &mut self,
-        kernel: &Self::Kernel,
+        operation: &Self::Operation,
         i: &Invocation<'_>,
         a: &[Self::Value],
     ) -> Result<Vec<Self::Value>, BackendError> {
@@ -485,7 +488,7 @@ impl Backend for Probe {
             .contract
             .starts_with("transcript.native.indexed.")
         {
-            return self.inner.apply(kernel, i, a);
+            return self.inner.apply(operation, i, a);
         }
         if !self.checked {
             self.checked = true;
@@ -493,7 +496,7 @@ impl Backend for Probe {
                 let mut hidden = a.to_vec();
                 hidden[0] = self.hidden.clone();
                 assert_eq!(
-                    self.inner.apply(kernel, i, &hidden).unwrap_err().code,
+                    self.inner.apply(operation, i, &hidden).unwrap_err().code,
                     "refused:capability-out-of-view"
                 );
                 let wrong_frame = Invocation {
@@ -504,7 +507,10 @@ impl Backend for Probe {
                     ..*i
                 };
                 assert_eq!(
-                    self.inner.apply(kernel, &wrong_frame, a).unwrap_err().code,
+                    self.inner
+                        .apply(operation, &wrong_frame, a)
+                        .unwrap_err()
+                        .code,
                     "refused:inactive-frame"
                 );
                 // The active local frame cannot close its active ancestor.
@@ -530,14 +536,14 @@ impl Backend for Probe {
                     max_output_bytes: 0,
                     ..*i
                 };
-                return self.inner.apply(kernel, &small, a);
+                return self.inner.apply(operation, &small, a);
             } else {
                 // A later backend failure does not undo completed transcript state.
-                self.inner.apply(kernel, i, a)?;
+                self.inner.apply(operation, i, a)?;
                 return Err(BackendError::new("refused:injected-after-transition"));
             }
         }
-        self.inner.apply(kernel, i, a)
+        self.inner.apply(operation, i, a)
     }
 }
 #[test]

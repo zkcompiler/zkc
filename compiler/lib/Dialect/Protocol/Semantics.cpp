@@ -22,6 +22,11 @@ std::optional<OperationSemantics> classify(Operation *op) {
 #undef ZKC_MATH_OPERATION
       .Default(std::nullopt);
 }
+bool isTotal(Operation *op) {
+  auto meaning = classify(op);
+  return meaning && meaning->category == Category::Total;
+}
+
 FailureOr<SmallVector<unsigned>> operandDependencies(Operation *op,
                                                      unsigned result) {
   auto refuse = [&](StringRef detail =

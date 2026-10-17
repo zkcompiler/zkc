@@ -647,8 +647,11 @@ impl Backend for OutputLimit {
     type Call = ();
     type Checkpoint = ();
     type Value = Value;
-    type Kernel = zkc_backends::NativeKernel;
-    fn prepare_binding(&self, binding: &zkc_runtime::vm::OperationBinding) -> Option<Self::Kernel> {
+    type Operation = zkc_backends::NativeOperation;
+    fn prepare_binding(
+        &self,
+        binding: &zkc_runtime::vm::OperationBinding,
+    ) -> Option<Self::Operation> {
         self.inner.prepare_binding(binding)
     }
     fn validate_value(&self, v: &Value) -> Result<(), BackendError> {
@@ -662,12 +665,12 @@ impl Backend for OutputLimit {
     }
     fn apply(
         &mut self,
-        kernel: &Self::Kernel,
+        operation: &Self::Operation,
         i: &Invocation<'_>,
         args: &[Value],
     ) -> Result<Vec<Value>, BackendError> {
         self.inner.apply(
-            kernel,
+            operation,
             &Invocation {
                 max_output_bytes: i.max_output_bytes.min(self.bytes),
                 ..*i

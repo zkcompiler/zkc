@@ -21,6 +21,11 @@ environments. An installed operation receives only its admitted binding,
 explicit operands and current call context. Installed operations include effects;
 installation alone does not establish numerical purity.
 
+`Backend::Operation: InstalledOperation` names the installed handle contract.
+`prepare_binding` resolves one exact `OperationBinding`; `OperationSignature`
+describes ports and attributes, with `BoundSignature` using physical port types.
+Dynamic checks and resource transitions remain in backend execution hooks.
+
 Inside `instance`, `loading` admits the initial invocation and participant
 arguments; `frames` owns typed loop-frame construction, entry and terminal
 cleanup; `values` owns validation, scopes and

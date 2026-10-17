@@ -206,8 +206,8 @@ impl Backend for Mock {
     type Call = ();
     type Checkpoint = ();
     type Value = V;
-    type Kernel = crate::vm::BoundSignature;
-    fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {
+    type Operation = crate::vm::BoundSignature;
+    fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Operation> {
         let mut signature = binding.signature().ok()?;
         if self.wrong_signature {
             signature.outputs = vec![];
@@ -272,7 +272,7 @@ impl Backend for Mock {
     }
     fn apply(
         &mut self,
-        _kernel: &Self::Kernel,
+        _operation: &Self::Operation,
         invocation: &Invocation<'_>,
         arguments: &[V],
     ) -> Result<Vec<V>, BackendError> {
@@ -785,7 +785,7 @@ fn installed_signatures_are_not_artifact_authority() {
         )
         .is_err()
     );
-    for kernel in [
+    for operation in [
         "arkworks/field.add",
         "reference/field.add",
         "arkworks/prover",
@@ -794,10 +794,10 @@ fn installed_signatures_are_not_artifact_authority() {
         "arkworks/unknown",
     ] {
         let mut j = j.clone();
-        j[2][0][4][0][2] = json!(kernel);
+        j[2][0][4][0][2] = json!(operation);
         reject(
             &j,
-            if kernel.contains('/') {
+            if operation.contains('/') {
                 ErrorCode::Name
             } else {
                 ErrorCode::Symbol
@@ -1470,8 +1470,8 @@ impl Backend for GroupMock {
     type Call = ();
     type Checkpoint = ();
     type Value = G;
-    type Kernel = crate::vm::BoundSignature;
-    fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {
+    type Operation = crate::vm::BoundSignature;
+    fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Operation> {
         binding.signature().ok()
     }
     fn validate_value(&self, value: &G) -> Result<(), BackendError> {
@@ -1516,7 +1516,7 @@ impl Backend for GroupMock {
     }
     fn apply(
         &mut self,
-        _kernel: &Self::Kernel,
+        _operation: &Self::Operation,
         i: &Invocation<'_>,
         args: &[G],
     ) -> Result<Vec<G>, BackendError> {

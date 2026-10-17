@@ -1,7 +1,7 @@
 //! Exact mathematical encodings, separate from native transport and observation.
 use crate::{GroupPoint, Policy, Result, Scalar, Value, ark, refused, value::size};
 use zkc_runtime::vm::{
-    AttributeRule, BoundSignature, Identity, KernelSignature, LogicalType, OperationBinding,
+    AttributeRule, BoundSignature, Identity, LogicalType, OperationBinding, OperationSignature,
     PhysicalType, Type,
 };
 
@@ -49,7 +49,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         };
         PhysicalType::default_for(LogicalType::new(kind, domain).ok()?).ok()
     };
-    Some(KernelSignature {
+    Some(OperationSignature {
         inputs: inputs.iter().copied().map(port).collect::<Option<_>>()?,
         outputs: outputs.iter().copied().map(port).collect::<Option<_>>()?,
         attributes: AttributeRule::None,

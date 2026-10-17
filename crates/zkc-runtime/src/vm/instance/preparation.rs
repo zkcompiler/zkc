@@ -41,7 +41,7 @@ impl<B: Backend> Instance<B> {
     }
     pub(crate) fn deterministic(&self, code: &LocalCode) -> bool {
         code.instructions.iter().all(|op| match op {
-            Operation::Op { call, .. } => self.kernels[call.binding.index].deterministic(),
+            Operation::Op { call, .. } => self.operations[call.binding.index].deterministic(),
             Operation::Conditional {
                 then_body,
                 else_body,

@@ -40,7 +40,10 @@ for wrong in ('!algebra.field_array<"bls12-381.fr", 4>', '!algebra.field_matrix<
     reject(gather.replace(vector, wrong), 'binding-operation-signature')
 for tensor in ('tensor<?xi64>', f'tensor<?x{field}>', f'tensor<4x{field}>', f'tensor<?x?x{field}>'):
     reject(gather.replace(vector, tensor), 'logical protocol data or capability')
-reject(physical.replace('kernel = "arkworks/vector.gather"', 'kernel = "arkworks/unknown"'), 'binding-implementation')
+selected_call = 'binding = @kernel, implementation = "arkworks/vector.gather"'
+assert physical.count(selected_call) == 1
+reject(physical.replace(selected_call, 'binding = @kernel, implementation = "arkworks/unknown"'),
+       'binding-implementation')
 
 addition = fixture('field.add', 'bls12-381.fr', 'algebra.exec.field_add', [field, field], field, [])
 commands.verified(addition)

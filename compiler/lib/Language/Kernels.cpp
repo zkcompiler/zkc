@@ -1,6 +1,6 @@
-#include "zkc/Contracts/Kernels.h"
 #include "BodyCheck.h"
 #include "zkc/Contracts/Declarations.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Language/Builtins.h"
 #include "llvm/ADT/STLExtras.h"

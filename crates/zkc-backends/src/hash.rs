@@ -11,7 +11,7 @@ use shake::{
 };
 use std::{fmt, sync::Arc};
 use zkc_runtime::vm::{
-    AttributeRule, BoundSignature, Identity, KernelSignature, LogicalType, OperationBinding,
+    AttributeRule, BoundSignature, Identity, LogicalType, OperationBinding, OperationSignature,
     PhysicalType, Type,
 };
 
@@ -60,7 +60,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         _ => return None,
     };
     let port = |kind| PhysicalType::default_for(LogicalType::new(kind, Identity::None).ok()?).ok();
-    Some(KernelSignature {
+    Some(OperationSignature {
         inputs: inputs.iter().copied().map(port).collect::<Option<_>>()?,
         outputs: outputs.iter().copied().map(port).collect::<Option<_>>()?,
         attributes: AttributeRule::None,

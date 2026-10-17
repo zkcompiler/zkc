@@ -117,7 +117,7 @@ int main(int argc, char **argv) {
           replace(fixture, "   %r = \"poly.evaluate\"",
                   "   %unused = \"poly.coefficients\"(%q) : (!P)->!A\n   %r = "
                   "\"poly.evaluate\""),
-          "polynomial", true);
+          "polynomial-formation");
   refusal("non-protocol realization context",
           "module { func.func private @empty() {func.return} }",
           "local-realization-context", true);

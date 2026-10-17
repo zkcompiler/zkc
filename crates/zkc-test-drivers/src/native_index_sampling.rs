@@ -235,7 +235,7 @@ fn check_admission(envelope: &Json) {
         .unwrap();
     let cases: Vec<(&str, Json, &str)> = vec![
         // Runtime proof admission checks the erased source service's result
-        // domain independently of the native kernel's own valid signature.
+        // domain independently of the native operation's own valid signature.
         (
             "native sample differs from source service field",
             with_candidate(envelope, |p| {

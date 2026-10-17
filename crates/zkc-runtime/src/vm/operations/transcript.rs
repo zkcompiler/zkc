@@ -93,7 +93,7 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
 fn resolve(
     binding: &OperationBinding,
     contract: &Contract,
-) -> Result<KernelSignature<LogicalType>> {
+) -> Result<OperationSignature<LogicalType>> {
     if binding.contract == "transcript.native.indexed.observe.data" {
         if binding.arguments.len() != 2 {
             return Err(support::failure());
@@ -107,7 +107,7 @@ fn resolve(
             return Err(support::failure());
         }
         let state = LogicalType::new(Transcript, primary)?;
-        return Ok(KernelSignature {
+        return Ok(OperationSignature {
             inputs: vec![
                 state.clone(),
                 payload,
@@ -145,7 +145,7 @@ fn resolve(
 
 fn select(
     binding: &OperationBinding,
-    logical: &KernelSignature<LogicalType>,
+    logical: &OperationSignature<LogicalType>,
     selection: Selection,
 ) -> Result<BoundSignature> {
     support::select_nominal(binding, logical, selection)

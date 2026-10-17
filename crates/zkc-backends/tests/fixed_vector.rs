@@ -229,7 +229,7 @@ fn one_typed_local_program_executes_conversions_and_dot() {
 
 #[test]
 fn native_invocation_refuses_wrong_types_attributes_and_handles() {
-    for (replacement, attributes, kernel, expected) in [
+    for (replacement, attributes, operation, expected) in [
         (Some(vector(&[1, 2])), None, None, "refused:kernel-operands"),
         (Some(fixed(&[1])), None, None, "refused:kernel-operands"),
         (
@@ -248,7 +248,7 @@ fn native_invocation_refuses_wrong_types_attributes_and_handles() {
         let mut controlled = Controlled::new(backend(Policy::default()));
         controlled.substitute = replacement;
         controlled.attributes = attributes;
-        controlled.binding = kernel;
+        controlled.binding = operation;
         assert_eq!(
             one(
                 controlled,

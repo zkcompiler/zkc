@@ -1,6 +1,6 @@
 #include "MathematicalComparison.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/RingExpression.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"

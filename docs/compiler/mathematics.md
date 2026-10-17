@@ -86,6 +86,18 @@ from source origins and SSA. A query reports proven evidence, missing evidence
 or exhausted work. Learning a count preserves the nominal container family and
 every ordered admission obligation.
 
+`TotalClosure` admits acyclic total functions and finite-domain definitions under
+an explicit symbol-table owner. It checks retained unused definitions, formal
+operand dependencies, bounded access premises and polynomial observations with
+shared work limits. Known non-fitting polynomial observations refuse even when
+unused; unknown bounds on formal polynomial inputs remain obligations when a
+caller supplies their constructors. An owner may designate one public entry;
+other functions are private. Protocol separately checks participant availability
+and ordered actions.
+Moving a mathematical definition to another owner does not grant new operations,
+resource ports or bounds. The enclosing dialect still owns its declaration
+vocabulary and entry rules.
+
 Each analysis describes an immutable subject and its inspected helper closure.
 Source checking retains its occurrence-specific origins and symbolic natural
 dimensions. After checking a concrete Math call's input conditions, it can

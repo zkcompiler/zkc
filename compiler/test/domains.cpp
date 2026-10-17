@@ -1,6 +1,6 @@
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Bindings.h"
-#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/IR.h"
 #include "llvm/Support/raw_ostream.h"

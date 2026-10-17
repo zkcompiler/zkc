@@ -3,7 +3,7 @@ use super::super::{PhysicalType, Representation};
 use super::*;
 pub(super) fn select(
     binding: &OperationBinding,
-    _: &KernelSignature<LogicalType>,
+    _: &OperationSignature<LogicalType>,
     selection: Selection,
 ) -> Result<BoundSignature> {
     selection.require_default()?;
@@ -23,7 +23,7 @@ pub(super) fn select(
     if from == to {
         return Err(fail());
     }
-    Ok(KernelSignature {
+    Ok(OperationSignature {
         inputs: vec![from],
         outputs: vec![to],
         attributes: AttributeRule::None,

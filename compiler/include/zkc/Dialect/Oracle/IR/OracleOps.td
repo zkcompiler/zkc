@@ -6,28 +6,28 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
-include "zkc/Dialect/Kernels.td"
+include "zkc/Dialect/BoundOperations.td"
 
-def OracleCheckOp : KernelOp<OracleDialect, "exec.check", [OpOracleCheck]>;
+def OracleCheckOp : BoundOp<OracleDialect, "exec.check", [OpOracleCheck]>;
 
-def OracleCommitOp : KernelOp<OracleDialect, "exec.commit", [OpOracleCommit]>;
+def OracleCommitOp : BoundOp<OracleDialect, "exec.commit", [OpOracleCommit]>;
 
-def CommitmentsAppendOp : KernelOp<OracleDialect, "exec.commitments_append", [OpCommitmentsAppend]>;
+def CommitmentsAppendOp : BoundOp<OracleDialect, "exec.commitments_append", [OpCommitmentsAppend]>;
 
-def CommitmentsAtOp : KernelOp<OracleDialect, "exec.commitments_at", [OpCommitmentsAt]>;
+def CommitmentsAtOp : BoundOp<OracleDialect, "exec.commitments_at", [OpCommitmentsAt]>;
 
-def CommitmentsEmptyOp : KernelOp<OracleDialect, "exec.commitments_empty", [OpCommitmentsEmpty]>;
+def CommitmentsEmptyOp : BoundOp<OracleDialect, "exec.commitments_empty", [OpCommitmentsEmpty]>;
 
-def CommitmentsLengthOp : KernelOp<OracleDialect, "exec.commitments_length", [OpCommitmentsLength]>;
+def CommitmentsLengthOp : BoundOp<OracleDialect, "exec.commitments_length", [OpCommitmentsLength]>;
 
-def OracleOpenOp : KernelOp<OracleDialect, "exec.open", [OpOracleOpen]>;
+def OracleOpenOp : BoundOp<OracleDialect, "exec.open", [OpOracleOpen]>;
 
-def OpeningStatesAppendOp : KernelOp<OracleDialect, "exec.opening_states_append", [OpOpeningStatesAppend]>;
+def OpeningStatesAppendOp : BoundOp<OracleDialect, "exec.opening_states_append", [OpOpeningStatesAppend]>;
 
-def OpeningStatesAtOp : KernelOp<OracleDialect, "exec.opening_states_at", [OpOpeningStatesAt]>;
+def OpeningStatesAtOp : BoundOp<OracleDialect, "exec.opening_states_at", [OpOpeningStatesAt]>;
 
-def OpeningStatesEmptyOp : KernelOp<OracleDialect, "exec.opening_states_empty", [OpOpeningStatesEmpty]>;
+def OpeningStatesEmptyOp : BoundOp<OracleDialect, "exec.opening_states_empty", [OpOpeningStatesEmpty]>;
 
-def OpeningStatesLengthOp : KernelOp<OracleDialect, "exec.opening_states_length", [OpOpeningStatesLength]>;
+def OpeningStatesLengthOp : BoundOp<OracleDialect, "exec.opening_states_length", [OpOpeningStatesLength]>;
 
 #endif

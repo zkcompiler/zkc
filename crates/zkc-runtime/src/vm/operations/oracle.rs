@@ -96,7 +96,7 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
 pub(super) fn resolve(
     binding: &OperationBinding,
     contract: &Contract,
-) -> Result<KernelSignature<LogicalType>> {
+) -> Result<OperationSignature<LogicalType>> {
     let fail = || AdmissionError::new(ErrorCode::Signature, "uninstalled operation binding");
     let shape = contract.shape()?;
     if binding.arguments.len() != 1 {
@@ -119,7 +119,7 @@ pub(super) fn resolve(
         };
         LogicalType::new(kind, identity)
     };
-    Ok(KernelSignature {
+    Ok(OperationSignature {
         inputs: shape.inputs.into_iter().map(make).collect::<Result<_>>()?,
         outputs: shape.outputs.into_iter().map(make).collect::<Result<_>>()?,
         attributes: shape.attributes,

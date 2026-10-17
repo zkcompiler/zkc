@@ -4,18 +4,18 @@ use sha2::{Digest, Sha256};
 use std::io;
 use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy};
 use zkc_runtime::vm::{
-    AdmissionError, KernelSignature, LogicalType, OperationBinding, PhysicalType,
+    AdmissionError, LogicalType, OperationBinding, OperationSignature, PhysicalType,
 };
 use zkc_tools::entry::Package;
 
 type LogicalResolver =
-    fn(&OperationBinding) -> Result<KernelSignature<LogicalType>, AdmissionError>;
+    fn(&OperationBinding) -> Result<OperationSignature<LogicalType>, AdmissionError>;
 
 // Test-only resolver drift; no declaration, admission rule or serialized result
 // is replaced. Physical resolution continues through the installed runtime.
 fn divergent_logical_resolver(
     binding: &OperationBinding,
-) -> Result<KernelSignature<LogicalType>, AdmissionError> {
+) -> Result<OperationSignature<LogicalType>, AdmissionError> {
     let mut signature = binding.logical_signature()?;
     if binding.contract == "field.add" {
         signature.outputs = vec![LogicalType::parse("bool")?];

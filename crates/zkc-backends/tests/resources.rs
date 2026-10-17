@@ -183,8 +183,11 @@ impl Backend for Probe {
     type Call = ();
     type Checkpoint = ();
     type Value = Value;
-    type Kernel = zkc_backends::NativeKernel;
-    fn prepare_binding(&self, binding: &zkc_runtime::vm::OperationBinding) -> Option<Self::Kernel> {
+    type Operation = zkc_backends::NativeOperation;
+    fn prepare_binding(
+        &self,
+        binding: &zkc_runtime::vm::OperationBinding,
+    ) -> Option<Self::Operation> {
         self.inner.prepare_binding(binding)
     }
     fn validate_value(&self, v: &Value) -> Result<(), BackendError> {
@@ -243,7 +246,7 @@ impl Backend for Probe {
     }
     fn apply(
         &mut self,
-        kernel: &Self::Kernel,
+        operation: &Self::Operation,
         i: &Invocation<'_>,
         args: &[Value],
     ) -> Result<Vec<Value>, BackendError> {
@@ -259,12 +262,12 @@ impl Backend for Probe {
                 max_output_bytes: 0,
                 retained: i.retained,
             };
-            return self.inner.apply(kernel, &invocation, args);
+            return self.inner.apply(operation, &invocation, args);
         }
         if !self.leave_failure {
             let error = self
                 .inner
-                .apply(kernel, i, std::slice::from_ref(&self.hidden))
+                .apply(operation, i, std::slice::from_ref(&self.hidden))
                 .unwrap_err();
             self.findings.lock().unwrap().push(error.code);
             let root = self.root.as_ref().unwrap();
@@ -281,12 +284,12 @@ impl Backend for Probe {
             };
             self.findings.lock().unwrap().push(
                 self.inner
-                    .apply(kernel, &invocation, args)
+                    .apply(operation, &invocation, args)
                     .unwrap_err()
                     .code,
             );
         }
-        self.inner.apply(kernel, i, args)
+        self.inner.apply(operation, i, args)
     }
 }
 fn nested_program() -> Vec<u8> {

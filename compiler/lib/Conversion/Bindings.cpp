@@ -70,7 +70,7 @@ static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
       const auto &binding = plan.bindings[conversion.binding].binding;
       // One instruction per crossing, immediately before this consumer in
       // operand order. The runtime charges and may stop this instruction.
-      auto converted = zkc::plan::ExecuteKernelOp::create(
+      auto converted = zkc::plan::ApplyOp::create(
           builder, op->getLoc(), TypeRange{conversion.to},
           ValueRange{operands[conversion.operand]}, conversion.site,
           binding.application.implementation, builder.getArrayAttr({}),
@@ -82,7 +82,7 @@ static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
       continue;
     }
     const auto &binding = plan.bindings[*decision.binding].binding;
-    auto physical = zkc::plan::ExecuteKernelOp::create(
+    auto physical = zkc::plan::ApplyOp::create(
         builder, op->getLoc(), decision.outputs, operands,
         op->getAttrOfType<StringAttr>("site"),
         builder.getStringAttr(binding.application.implementation),

@@ -1,7 +1,7 @@
 //! Immutable byte strings with bounded allocation and exact slice bounds.
 use crate::{Policy, Result, Value, exhausted, refused, value::size};
 use zkc_runtime::vm::{
-    AttributeRule, BoundSignature, Identity, KernelSignature, LogicalType, OperationBinding,
+    AttributeRule, BoundSignature, Identity, LogicalType, OperationBinding, OperationSignature,
     PhysicalType, Type,
 };
 
@@ -14,7 +14,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
     }
     if binding.contract == "bytes.join" {
         let bytes = LogicalType::new(Bytes, Identity::None).ok()?;
-        return Some(KernelSignature {
+        return Some(OperationSignature {
             inputs: vec![
                 PhysicalType::default_for(LogicalType::sequence(bytes.clone()).ok()?).ok()?,
             ],
@@ -34,7 +34,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         _ => return None,
     };
     let port = |kind| PhysicalType::default_for(LogicalType::new(kind, Identity::None).ok()?).ok();
-    Some(KernelSignature {
+    Some(OperationSignature {
         inputs: inputs.iter().copied().map(port).collect::<Option<_>>()?,
         outputs: outputs.iter().copied().map(port).collect::<Option<_>>()?,
         attributes: AttributeRule::None,

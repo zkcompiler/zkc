@@ -112,7 +112,7 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
 fn resolve(
     binding: &OperationBinding,
     contract: &Contract,
-) -> Result<KernelSignature<LogicalType>> {
+) -> Result<OperationSignature<LogicalType>> {
     let fail = || AdmissionError::new(ErrorCode::Signature, "uninstalled operation binding");
     if matches!(binding.contract.as_str(), "pairing.check" | "pairing.apply") {
         if binding.arguments != ["bn254.fr"] {
@@ -121,7 +121,7 @@ fn resolve(
         let apply = binding.contract == "pairing.apply";
         let kind = if apply { Type::Group } else { Type::Groups };
         let make = LogicalType::new;
-        return Ok(KernelSignature {
+        return Ok(OperationSignature {
             inputs: vec![
                 make(kind, Identity::Bn254G1)?,
                 make(kind, Identity::Bn254G2)?,
@@ -156,7 +156,7 @@ fn resolve(
 
 fn select(
     binding: &OperationBinding,
-    logical: &KernelSignature<LogicalType>,
+    logical: &OperationSignature<LogicalType>,
     selection: Selection,
 ) -> Result<BoundSignature> {
     if matches!(binding.contract.as_str(), "pairing.check" | "pairing.apply") {

@@ -834,7 +834,7 @@ impl<B: Backend> Runner<B> {
         Ok(())
     }
     /// Execute exactly one entire local function at the previously exposed cut.
-    /// A kernel failure becomes a local stopped action; no suffix executes.
+    /// An operation failure becomes a local stopped action; no suffix executes.
     pub fn execute_local(&mut self, expected: &Cut) -> Result<()> {
         self.require_cut(expected, CutKind::Local)?;
         if let Err(e) = self.local() {

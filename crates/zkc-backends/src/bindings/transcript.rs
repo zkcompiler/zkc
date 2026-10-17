@@ -79,7 +79,7 @@ fn observe(
         }
         support::ports(binding, selection, t.provider)?;
         let state = state(t.suite)?;
-        return Some(zkc_runtime::vm::KernelSignature {
+        return Some(zkc_runtime::vm::OperationSignature {
             inputs: vec![state.clone(), payload, t.domain.physical(Type::Indices)?],
             outputs: vec![state],
             attributes: AttributeRule::NativeMessageTemplate,

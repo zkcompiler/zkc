@@ -788,7 +788,8 @@ void emitDescriptors(raw_ostream &os, const Model &m) {
     }
     os << "}; return values; }\n";
   }
-  os << "llvm::ArrayRef<Kernel> kernels() {\nstatic const std::vector<Kernel> "
+  os << "llvm::ArrayRef<OperationShape> operationShapes() {\nstatic const "
+        "std::vector<OperationShape> "
         "values = {\n";
   for (const auto *op : m.operations) {
     os << "{" << quote(name(op)) << ", ";

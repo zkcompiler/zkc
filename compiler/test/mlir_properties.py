@@ -53,7 +53,7 @@ for mode, options, families in (
         ("algebra.exec.field_add", "binding"), ("local.if", "site"))),
     ("physical", ["--zkc-participant-pipeline"], (
         ("protocol.module", "profile"), ("protocol.participant", "instance"),
-        ("protocol.entry", "targets"), ("plan.kernel", "site"),
+        ("protocol.entry", "targets"), ("plan.apply", "site"),
         ("local.if", "site"))),
 ):
     ir = commands.verified(source, None, *options, "--mlir-print-op-generic")

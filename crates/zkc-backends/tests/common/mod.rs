@@ -36,8 +36,8 @@ pub fn token(v: &Value) -> &Capability {
         _ => panic!("not token"),
     }
 }
-pub fn op(site: &str, kernel: &str, inputs: &[&str], outputs: &[&str]) -> Json {
-    json!(["op", site, kernel, [], inputs, outputs])
+pub fn op(site: &str, operation: &str, inputs: &[&str], outputs: &[&str]) -> Json {
+    json!(["op", site, operation, [], inputs, outputs])
 }
 pub fn program(
     ports: &[(&str, &str)],

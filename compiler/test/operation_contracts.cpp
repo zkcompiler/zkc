@@ -1,6 +1,6 @@
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Implementations.h"
-#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "llvm/ADT/STLExtras.h"
@@ -126,7 +126,7 @@ int main() {
   }
   require(fixture.eof(), "invalid history inventory row");
   // This compiler-owned inventory covers the current executable contracts.
-  for (const auto &kernel : kernels()) {
+  for (const auto &kernel : operationShapes()) {
     require(keys.insert(kernel.key.str()).second, "duplicate contract key");
     auto expected = expectedHistory.find(kernel.key.str());
     require(expected != expectedHistory.end(),
@@ -171,10 +171,10 @@ int main() {
                     derived->domain == sample->domain,
                 "construction counterpart has incompatible ports");
         const auto target =
-            llvm::find_if(kernels(), [&](const auto &candidate) {
+            llvm::find_if(operationShapes(), [&](const auto &candidate) {
               return candidate.key == sample->derivedCounterpart;
             });
-        require(target != kernels().end() &&
+        require(target != operationShapes().end() &&
                     target->inputs.size() == kernel.inputs.size() &&
                     target->outputs.size() == kernel.outputs.size(),
                 "construction counterpart arity");

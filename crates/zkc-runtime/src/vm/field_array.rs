@@ -1,13 +1,13 @@
 //! Logical fixed-length public field-array contracts. This layer selects no cryptographic code.
 use super::{
-    AdmissionError, ArgumentKind, AttributeRule, ErrorCode, Identity, KernelSignature, LogicalType,
-    OperationBinding, Type, TypeArgument,
+    AdmissionError, ArgumentKind, AttributeRule, ErrorCode, Identity, LogicalType,
+    OperationBinding, OperationSignature, Type, TypeArgument,
 };
 
 const PARAMETERS: &[ArgumentKind] = &[ArgumentKind::FieldDomain, ArgumentKind::Nat];
 pub(super) fn signature(
     binding: &OperationBinding,
-) -> Result<KernelSignature<LogicalType>, AdmissionError> {
+) -> Result<OperationSignature<LogicalType>, AdmissionError> {
     let values: Vec<_> = binding.arguments.iter().map(String::as_str).collect();
     let args = super::structural::arguments(
         &values,
@@ -38,7 +38,7 @@ pub(super) fn signature(
             ));
         }
     };
-    Ok(KernelSignature {
+    Ok(OperationSignature {
         inputs,
         outputs,
         attributes: if binding.contract == "field_array.at" {

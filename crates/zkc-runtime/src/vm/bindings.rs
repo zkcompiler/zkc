@@ -1,7 +1,7 @@
 //! Closed nominal contracts shared by admission and execution. Installed
 //! backends independently advertise implementations of these contracts.
 
-use super::{AdmissionError, ErrorCode, KernelSignature, Type};
+use super::{AdmissionError, ErrorCode, OperationSignature, Type};
 
 type Result<T> = std::result::Result<T, AdmissionError>;
 fn error(detail: &str) -> AdmissionError {
@@ -951,7 +951,7 @@ pub struct OperationBinding {
     pub implementation: String,
 }
 
-pub type BoundSignature = KernelSignature<PhysicalType>;
+pub type BoundSignature = OperationSignature<PhysicalType>;
 
 /// Immutable admission result. Every invocation retains its independently
 /// checked semantic and implementation binding.
@@ -1003,7 +1003,7 @@ impl OperationBinding {
 
     /// Instantiate logical ports without choosing a representation. A supplied
     /// implementation still constrains selection and must be independently valid.
-    pub fn logical_signature(&self) -> Result<KernelSignature<LogicalType>> {
+    pub fn logical_signature(&self) -> Result<OperationSignature<LogicalType>> {
         let logical = self.instantiate_logical_signature()?;
         if !self.implementation.is_empty() {
             self.select_signature(&logical)?;
@@ -1013,7 +1013,7 @@ impl OperationBinding {
 
     // Shared by logical admission and the production physical decoder. Formation
     // must not depend on the current installation's realization coverage.
-    fn instantiate_logical_signature(&self) -> Result<KernelSignature<LogicalType>> {
+    fn instantiate_logical_signature(&self) -> Result<OperationSignature<LogicalType>> {
         super::operations::logical_signature(self)
     }
 
@@ -1022,7 +1022,10 @@ impl OperationBinding {
         super::operations::signature(self)
     }
 
-    fn select_signature(&self, logical: &KernelSignature<LogicalType>) -> Result<BoundSignature> {
+    fn select_signature(
+        &self,
+        logical: &OperationSignature<LogicalType>,
+    ) -> Result<BoundSignature> {
         super::operations::select_signature(self, logical)
     }
 }

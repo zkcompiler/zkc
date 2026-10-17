@@ -1,4 +1,4 @@
-//! Shared entry, operand and result checks for every native kernel.
+//! Shared entry, operand and result checks for every native operation.
 use super::EntryPolicy;
 use crate::{Policy, Result, Value, exhausted, refused};
 use crate::{SetupRegistry, resource::Resources};

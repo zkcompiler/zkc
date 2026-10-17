@@ -2,7 +2,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/Pass.h"
 #include "zkc/Contracts/Bindings.h"
-#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Support/Json.h"

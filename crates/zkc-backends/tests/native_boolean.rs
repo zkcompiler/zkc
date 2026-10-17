@@ -190,7 +190,7 @@ impl zkc_runtime::vm::Backend for LiteralAdapter {
     type Call = ();
     type Checkpoint = ();
     type Value = WrongBoolean;
-    type Kernel = zkc_runtime::vm::BoundSignature;
+    type Operation = zkc_runtime::vm::BoundSignature;
     fn supports_boolean_literals(&self) -> bool {
         self.installed
     }
@@ -217,7 +217,7 @@ impl zkc_runtime::vm::Backend for LiteralAdapter {
     }
     fn apply(
         &mut self,
-        _kernel: &Self::Kernel,
+        _operation: &Self::Operation,
         _: &zkc_runtime::vm::Invocation<'_>,
         _: &[WrongBoolean],
     ) -> Result<Vec<WrongBoolean>, zkc_runtime::vm::BackendError> {

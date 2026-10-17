@@ -1,6 +1,6 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
-#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
@@ -246,7 +246,7 @@ constexpr ExpectedMapping expected[] = {
 
 void identities(MLIRContext &context) {
   llvm::StringSet<> installed, covered;
-  for (const auto &kernel : protocol::kernels())
+  for (const auto &kernel : protocol::operationShapes())
     check(installed.insert(kernel.key).second, "duplicate installed contract");
   for (const auto &row : expected) {
     check(covered.insert(row.contract).second, "duplicate expected contract");
@@ -266,7 +266,7 @@ void identities(MLIRContext &context) {
           "wrong operation-side association: " + row.operation + " / " +
               other.contract);
   }
-  for (const auto &kernel : protocol::kernels())
+  for (const auto &kernel : protocol::operationShapes())
     check(covered.contains(kernel.key),
           "missing independent oracle: " + kernel.key);
 

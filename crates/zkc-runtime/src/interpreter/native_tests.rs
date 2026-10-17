@@ -92,7 +92,7 @@ impl Backend for Mock {
     type Call = ();
     type Checkpoint = ();
     type Value = V;
-    type Kernel = crate::vm::BoundSignature;
+    type Operation = crate::vm::BoundSignature;
     fn validate_value(&self, v: &V) -> std::result::Result<(), BackendError> {
         if v.valid {
             Ok(())
@@ -120,7 +120,7 @@ impl Backend for Mock {
     }
     fn apply(
         &mut self,
-        _kernel: &Self::Kernel,
+        _operation: &Self::Operation,
         _: &Invocation<'_>,
         _: &[V],
     ) -> std::result::Result<Vec<V>, BackendError> {

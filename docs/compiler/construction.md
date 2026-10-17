@@ -117,5 +117,5 @@ The [native validation map](../../common/tests/native.md) identifies flat, itera
 structured, setup-backed and authored clients and their references.
 
 A new delivery recipe or suite needs explicit admission, encoding, sampling and
-failure contracts. A domain's presence in the kernel catalog does not extend a
+failure contracts. A domain's presence in the operation catalog does not extend a
 construction's allow-list. See the [roadmap](../roadmap.md) for assurance work.

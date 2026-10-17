@@ -579,7 +579,7 @@ fn nested_data_and_external_calls_retain_independent_work_across_failed_frames()
         (backend.sequence_work_spent(), backend.external_work_spent()),
         (6, 65)
     );
-    // This call spends its traversal allowance, then fails in the kernel.
+    // This call spends its traversal allowance, then fails in the operation.
     // A backend that commits work only on success must fail this assertion.
     let (out, backend) = one(
         backend,

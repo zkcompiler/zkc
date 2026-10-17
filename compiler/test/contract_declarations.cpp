@@ -1,6 +1,6 @@
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Declarations.h"
-#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "llvm/ADT/STLExtras.h"
@@ -265,7 +265,7 @@ int main() {
   check(!parameterContract("unknown.call") &&
             authoringStage("unknown.call") == AuthoringStage::CompilerGenerated,
         "unknown operation acquired a source declaration");
-  for (const auto &kernel : kernels())
+  for (const auto &kernel : operationShapes())
     check(parameterContract(kernel.key) != nullptr, kernel.key);
   auto unsupported = parseBoundType("fixture_array:anything", false);
   check(!unsupported, "generation-only constructor admitted");

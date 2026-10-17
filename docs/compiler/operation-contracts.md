@@ -2,8 +2,8 @@
 
 The installed catalog connects exact mathematical contract keys, typed MLIR
 operations and physical implementations. Mathematical meanings belong in the
-[domain specifications](../spec/README.md); selecting a kernel does not change
-the field, operation or resource contract.
+[domain specifications](../spec/README.md); selecting an implementation does not
+change the field, operation or resource contract.
 
 [Neutral declarations](../../compiler/include/zkc/Contracts/Declarations) own
 logical signatures, requirements, static parameter schemas, type permissions and
@@ -12,6 +12,45 @@ validators and backend implementations retain their separate obligations.
 Ordinary library declarations own public function names and argument names.
 The generated inventory exports types and capabilities; it does not duplicate
 source function APIs or turn installed operations into implicit imports.
+
+## Execution ownership
+
+The same operation has three distinct sets of obligations. Existing binding and
+invocation records carry them; no separate contract registry is needed.
+
+| Boundary | Owner and checked facts |
+|---|---|
+| Logical operation | Declarations and IR admission: exact domains, ports, parameters, effects and mathematical laws |
+| Selected implementation | Checked physical plan and independent runtime installation: implementation identity, physical ports and fixed application choices |
+| Reached invocation | VM and provider: actual operands, frame, role, site, remaining allowances, retained backing and current resource/setup authority |
+
+| Fact or obligation | Existing carrier and lifetime |
+|---|---|
+| Nominal domain, ports and mathematical laws | `OperationContracts`, logical types and admitted `BindingApplication`; stable declaration facts |
+| Representation and fixed implementation | `PhysicalPlan`, selected binding and `BoundSignature`; checked against the actual materialized call |
+| Immutable dependencies | Source SSA/helper closure and exact static application attributes; compiler analyses expire when either changes |
+| Installed code | `InstalledOperation`; linked against the instance's owned backend, with no captured frame or resource authority |
+| Role, site, origin and ordered operands | `CallContext` and the active VM frame; derived at the reached invocation |
+| Output allowance and retained backing | `Invocation`, VM storage accounting and provider value contracts; aliases retain their backing, fresh output consumes capacity |
+| Setup authorization, capability generation and resource successors | Provider custody checks at use; a handle or cached validation result cannot replace them |
+
+`plan.apply` represents an installed operation, which may have effects or fail.
+The runtime's `InstalledOperation` establishes its signature and installation
+facts. Neither grants purity or permits inspecting an operation's implementation
+as if it were source mathematics. PCS, transcript and resource operations retain
+their ordered invocation and provider-owned authorization checks.
+
+The VM owns loading, frames, value retention, accounting and reached-call
+preparation. The interpreter owns instruction walking, environments and control
+provenance. Providers own representations, arithmetic and cryptographic resource
+state; Hosts own application authorization, participant scheduling and acceptance.
+See the [VM contract](../spec/runtime/vm.md).
+
+Static structure is checked on admission, installed signatures on linking and
+mutable authority at use. Shared immutable validation evidence can avoid repeated
+structural walks; it cannot replace current custody checks. Compiler mathematical
+rewrites use separate source/candidate comparisons and invalidate analyses when
+the inspected IR changes.
 
 ## Mathematical meaning and realization
 

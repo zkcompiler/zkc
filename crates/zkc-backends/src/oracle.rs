@@ -5,8 +5,8 @@ use crate::plonky3::oracle::{self as tree, Digest, Error, Shape};
 use crate::{Policy, Result, Value, exhausted, refused, value::size};
 use std::sync::Arc;
 use zkc_runtime::vm::{
-    AttributeRule, Backing, BoundSignature, Identity, Invocation, KernelSignature, LogicalType,
-    OperationBinding, PhysicalType, Type,
+    AttributeRule, Backing, BoundSignature, Identity, Invocation, LogicalType, OperationBinding,
+    OperationSignature, PhysicalType, Type,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -122,7 +122,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         "opening_states.length" => (&[OpeningStates], &[Index]),
         _ => return None,
     };
-    Some(KernelSignature {
+    Some(OperationSignature {
         inputs: inputs
             .iter()
             .map(|t| domain.physical(*t))

@@ -1,11 +1,11 @@
-#ifndef ZKC_DIALECT_KERNELS_TD
-#define ZKC_DIALECT_KERNELS_TD
+#ifndef ZKC_DIALECT_BOUNDOPERATIONS_TD
+#define ZKC_DIALECT_BOUNDOPERATIONS_TD
 
 include "zkc/Dialect/Constraints.td"
 include "zkc/Contracts/Declarations.td"
 include "zkc/Interfaces/LinearContraction.td"
 
-class KernelOp<Dialect dialect, string name, list<ZKC_Operation> declarations,
+class BoundOp<Dialect dialect, string name, list<ZKC_Operation> declarations,
                list<Trait> traits = []>
     : Op<dialect, name, traits>, ZKC_ContractMapping {
   let contracts = declarations;
@@ -15,7 +15,7 @@ class KernelOp<Dialect dialect, string name, list<ZKC_Operation> declarations,
   let hasVerifier = 1;
   let extraClassDefinition = [{
     ::llvm::LogicalResult $cppClass::verify() {
-      return ::zkc::detail::verifyLogicalKernel(getOperation());
+      return ::zkc::detail::verifyLogicalOperation(getOperation());
     }
   }];
 }

@@ -18,44 +18,6 @@ LogicalResult refuse(Operation *op, StringRef detail) {
   return diagnostics::emit(op->emitOpError(), "native-local-policy", detail);
 }
 } // namespace
-std::optional<NativeTypePolicy> nativeTypePolicy(Type type) {
-  if (isa<poly::PolynomialType>(type))
-    return NativeTypePolicy{true, false, false, false, false, false};
-  auto logical = protocol::encodeBoundType(type, false);
-  if (!logical) {
-    consumeError(logical.takeError());
-    return std::nullopt;
-  }
-  return protocol::nativeTypePolicy(*logical);
-}
-std::optional<NativeTypePolicy> NativeTypePolicies::get(Type type) {
-  if (isa<poly::PolynomialType>(type))
-    return NativeTypePolicy{true, false, false, false, false, false};
-  if (auto found = cache.find(type); found != cache.end())
-    return found->second;
-  if (limited)
-    return std::nullopt;
-  auto logical = protocol::encodeBoundType(type, false);
-  if (!logical) {
-    consumeError(logical.takeError());
-    cache[type] = std::nullopt;
-    return std::nullopt;
-  }
-  size_t bytes = logical->spelling().size();
-  std::optional<NativeTypePolicy> result;
-  if (bytes > remainingBytes)
-    limited = true;
-  else {
-    remainingBytes -= bytes;
-    result = protocol::nativeTypePolicy(*logical, remaining, limited);
-  }
-  if (limited)
-    (void)diagnostics::emit(owner->emitOpError(), "native-type-policy-limit",
-                            "closed type analysis exceeds its node, depth or "
-                            "distinct spelling budget");
-  cache[type] = result;
-  return result;
-}
 LogicalResult verifyNativeLocals(Operation *unit, bool allowApply) {
   NativeTypePolicies types(unit);
   return verifyNativeLocals(unit, allowApply, types);

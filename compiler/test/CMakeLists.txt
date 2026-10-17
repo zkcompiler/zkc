@@ -12,6 +12,11 @@ function(add_zkc_test name component)
   endif()
 endfunction()
 
+add_zkc_test(total_closure IR total-closure)
+target_compile_definitions(zkc-total_closure-test PRIVATE
+  ZKC_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+mlir_target_link_libraries(zkc-total_closure-test PRIVATE MLIRParser)
+
 add_zkc_test(mathematical_facts Contracts mathematical-facts)
 add_zkc_test(common_reference Translation)
 mlir_target_link_libraries(zkc-common_reference-test PRIVATE MLIRParser)

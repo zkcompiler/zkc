@@ -36,7 +36,7 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
 fn resolve(
     binding: &OperationBinding,
     contract: &Contract,
-) -> Result<KernelSignature<LogicalType>> {
+) -> Result<OperationSignature<LogicalType>> {
     let shape = contract.shape()?;
     let primary = support::primary(binding)?;
     let field = primary.scalar_field().ok_or_else(support::failure)?;
@@ -49,7 +49,7 @@ fn resolve(
 
 fn select(
     binding: &OperationBinding,
-    logical: &KernelSignature<LogicalType>,
+    logical: &OperationSignature<LogicalType>,
     selection: Selection,
 ) -> Result<BoundSignature> {
     selection.require_default()?;

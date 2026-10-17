@@ -13,8 +13,8 @@ impl Backend for AttributeDrift<'_> {
     type Call = ();
     type Checkpoint = ();
     type Value = <NativeBackend as Backend>::Value;
-    type Kernel = zkc_runtime::vm::BoundSignature;
-    fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {
+    type Operation = zkc_runtime::vm::BoundSignature;
+    fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Operation> {
         let mut signature = self.0.binding_signature(binding)?;
         if binding.contract == "field.add" {
             signature.attributes = AttributeRule::Unsigned64;
@@ -37,7 +37,7 @@ impl Backend for AttributeDrift<'_> {
     }
     fn apply(
         &mut self,
-        _kernel: &Self::Kernel,
+        _operation: &Self::Operation,
         _: &Invocation<'_>,
         _: &[Self::Value],
     ) -> Result<Vec<Self::Value>, BackendError> {

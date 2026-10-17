@@ -1,8 +1,8 @@
 //! Logical formation, explicit selection, and the production admission boundary.
 use serde_json::json;
 use zkc_runtime::vm::{
-    AttributeRule, Backend, BackendError, ErrorCode, Frame, FrameExit, Invocation, KernelSignature,
-    LogicalType, OperationBinding, PhysicalType, Representation, Value,
+    AttributeRule, Backend, BackendError, ErrorCode, Frame, FrameExit, Invocation, LogicalType,
+    OperationBinding, OperationSignature, PhysicalType, Representation, Value,
 };
 use zkc_test_support::variants::logical as variant;
 
@@ -14,7 +14,7 @@ fn binding(contract: &str, arguments: &[&str], implementation: &str) -> Operatio
     }
 }
 
-fn assert_ports(signature: &KernelSignature<LogicalType>, inputs: &[&str], outputs: &[&str]) {
+fn assert_ports(signature: &OperationSignature<LogicalType>, inputs: &[&str], outputs: &[&str]) {
     assert_eq!(
         signature
             .inputs
@@ -682,7 +682,7 @@ impl Backend for NoBackend {
     type Call = ();
     type Checkpoint = ();
     type Value = NoValue;
-    type Kernel = zkc_runtime::vm::BoundSignature;
+    type Operation = zkc_runtime::vm::BoundSignature;
     fn validate_value(&self, value: &NoValue) -> Result<(), BackendError> {
         match *value {}
     }
@@ -694,7 +694,7 @@ impl Backend for NoBackend {
     }
     fn apply(
         &mut self,
-        _kernel: &Self::Kernel,
+        _operation: &Self::Operation,
         _: &Invocation<'_>,
         _: &[NoValue],
     ) -> Result<Vec<NoValue>, BackendError> {

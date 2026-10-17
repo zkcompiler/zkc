@@ -1,10 +1,12 @@
 //! Logical sequence contracts, independent of physical storage and codecs.
 use super::operations::{Contract, Contribution};
 use super::{
-    AdmissionError, AttributeRule, ErrorCode, KernelSignature, LogicalType, OperationBinding,
+    AdmissionError, AttributeRule, ErrorCode, LogicalType, OperationBinding, OperationSignature,
 };
 
-fn signature(binding: &OperationBinding) -> Result<KernelSignature<LogicalType>, AdmissionError> {
+fn signature(
+    binding: &OperationBinding,
+) -> Result<OperationSignature<LogicalType>, AdmissionError> {
     let invalid = || AdmissionError::new(ErrorCode::Signature, "sequence-contract");
     let [element] = binding.arguments.as_slice() else {
         return Err(invalid());
@@ -19,7 +21,7 @@ fn signature(binding: &OperationBinding) -> Result<KernelSignature<LogicalType>,
         "sequence.at" => (vec![sequence, index], vec![element]),
         _ => return Err(invalid()),
     };
-    Ok(KernelSignature {
+    Ok(OperationSignature {
         inputs,
         outputs,
         attributes: AttributeRule::None,

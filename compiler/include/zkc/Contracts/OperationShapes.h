@@ -1,5 +1,5 @@
-#ifndef ZKC_CONTRACTS_KERNELS_H
-#define ZKC_CONTRACTS_KERNELS_H
+#ifndef ZKC_CONTRACTS_OPERATIONSHAPES_H
+#define ZKC_CONTRACTS_OPERATIONSHAPES_H
 
 #include "zkc/Contracts/Binding.h"
 #include "zkc/Contracts/Operations.h"
@@ -8,13 +8,13 @@
 
 namespace zkc::protocol {
 /// Installed contract shapes shared by binding resolution.
-struct Kernel {
+struct OperationShape {
   llvm::StringRef key;
   std::vector<std::string> inputs;
   std::vector<std::string> outputs;
   OperationContracts contracts{};
 };
-llvm::ArrayRef<Kernel> kernels();
+llvm::ArrayRef<OperationShape> operationShapes();
 /// Formation of static operation attributes under an installed contract.
 llvm::Error checkParameters(llvm::StringRef key, llvm::ArrayRef<std::string>,
                             llvm::StringRef field = {});

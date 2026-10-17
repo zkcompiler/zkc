@@ -18,7 +18,7 @@ use zkc_runtime::vm::{Backend, Frame, FrameExit, Invocation};
 
 /// Immutable implementation selection, independently resolved by this backend.
 /// Dynamic policy, inputs, resource custody and work limits are checked at use.
-pub struct NativeKernel {
+pub struct NativeOperation {
     declaration: zkc_runtime::vm::OperationBinding,
     signature: zkc_runtime::vm::BoundSignature,
     handler: registry::Handler,
@@ -26,7 +26,7 @@ pub struct NativeKernel {
     sequence: bool,
     deterministic: bool,
 }
-impl zkc_runtime::vm::InstalledKernel for NativeKernel {
+impl zkc_runtime::vm::InstalledOperation for NativeOperation {
     fn signature(&self) -> &zkc_runtime::vm::BoundSignature {
         &self.signature
     }
@@ -51,20 +51,20 @@ pub struct NativeBackend {
 impl NativeBackend {
     fn invoke(
         &mut self,
-        kernel: &NativeKernel,
+        operation: &NativeOperation,
         call: Option<&mut Option<NativeCall>>,
         i: &Invocation<'_>,
         args: &[Value],
     ) -> Result<Vec<Value>> {
         self.core.resources.active(i.frame)?;
-        if kernel.declaration != *i.binding.declaration() {
+        if operation.declaration != *i.binding.declaration() {
             return Err(crate::refused("kernel-binding"));
         }
-        if kernel.sequence {
+        if operation.sequence {
             self.sequence_work.charge(args, i.retained)?;
         }
-        self.core.invoke(i, args, &kernel.signature, call)?;
-        let outputs = (kernel.handler)(self, i, args)?;
+        self.core.invoke(i, args, &operation.signature, call)?;
+        let outputs = (operation.handler)(self, i, args)?;
         self.core.outputs(i, args, outputs)
     }
 
@@ -320,7 +320,7 @@ impl Backend for NativeBackend {
         true
     }
     type Value = Value;
-    type Kernel = NativeKernel;
+    type Operation = NativeOperation;
     fn service_support(
         &self,
         contract: zkc_runtime::vm::ServiceContract,
@@ -362,7 +362,10 @@ impl Backend for NativeBackend {
         }
     }
 
-    fn prepare_binding(&self, binding: &zkc_runtime::vm::OperationBinding) -> Option<NativeKernel> {
+    fn prepare_binding(
+        &self,
+        binding: &zkc_runtime::vm::OperationBinding,
+    ) -> Option<NativeOperation> {
         let implementation = self.implementations.get(&binding.implementation)?;
         let signature = implementation.signature(binding)?;
         // Traversal charging belongs to the operation contract. Observing a
@@ -371,7 +374,7 @@ impl Backend for NativeBackend {
             || crate::sequence::IMPLEMENTATIONS
                 .iter()
                 .any(|(_, contract)| *contract == binding.contract);
-        Some(NativeKernel {
+        Some(NativeOperation {
             declaration: binding.clone(),
             signature,
             handler: implementation.handler,
@@ -441,27 +444,27 @@ impl Backend for NativeBackend {
     }
     fn operand_work(
         &self,
-        kernel: &NativeKernel,
+        operation: &NativeOperation,
         _i: &zkc_runtime::vm::CallContext<'_>,
         args: &[Value],
     ) -> Option<u64> {
-        kernel.read_extent.bytes(args)
+        operation.read_extent.bytes(args)
     }
     fn apply(
         &mut self,
-        kernel: &NativeKernel,
+        operation: &NativeOperation,
         i: &Invocation<'_>,
         args: &[Value],
     ) -> Result<Vec<Value>> {
-        self.invoke(kernel, None, i, args)
+        self.invoke(operation, None, i, args)
     }
     fn apply_prepared(
         &mut self,
-        kernel: &NativeKernel,
+        operation: &NativeOperation,
         call: &mut Option<NativeCall>,
         i: &Invocation<'_>,
         args: &[Value],
     ) -> Result<Vec<Value>> {
-        self.invoke(kernel, Some(call), i, args)
+        self.invoke(operation, Some(call), i, args)
     }
 }

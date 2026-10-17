@@ -302,8 +302,8 @@ impl Backend for Controlled {
     type Call = ();
     type Checkpoint = ();
     type Value = Value;
-    type Kernel = zkc_backends::NativeKernel;
-    fn prepare_binding(&self, b: &OperationBinding) -> Option<Self::Kernel> {
+    type Operation = zkc_backends::NativeOperation;
+    fn prepare_binding(&self, b: &OperationBinding) -> Option<Self::Operation> {
         self.inner.prepare_binding(b)
     }
     fn validate_value(&self, v: &Value) -> Result<(), zkc_runtime::vm::BackendError> {
@@ -328,7 +328,7 @@ impl Backend for Controlled {
     }
     fn apply(
         &mut self,
-        kernel: &Self::Kernel,
+        operation: &Self::Operation,
         i: &zkc_runtime::vm::Invocation<'_>,
         a: &[Value],
     ) -> Result<Vec<Value>, zkc_runtime::vm::BackendError> {
@@ -342,7 +342,7 @@ impl Backend for Controlled {
                 .expect("installed test binding")
         });
         let result = self.inner.apply(
-            replacement.as_ref().unwrap_or(kernel),
+            replacement.as_ref().unwrap_or(operation),
             &zkc_runtime::vm::Invocation {
                 context: zkc_runtime::vm::CallContext {
                     attributes: self.attributes.as_deref().unwrap_or(i.attributes),

@@ -113,8 +113,8 @@ impl Backend for WithoutServices {
     type Call = ();
     type Checkpoint = ();
     type Value = Value;
-    type Kernel = zkc_backends::NativeKernel;
-    fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {
+    type Operation = zkc_backends::NativeOperation;
+    fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Operation> {
         self.0.prepare_binding(binding)
     }
     fn validate_value(&self, value: &Value) -> Result<(), BackendError> {
@@ -133,11 +133,11 @@ impl Backend for WithoutServices {
     }
     fn apply(
         &mut self,
-        kernel: &Self::Kernel,
+        operation: &Self::Operation,
         invocation: &Invocation<'_>,
         args: &[Value],
     ) -> Result<Vec<Value>, BackendError> {
-        self.0.apply(kernel, invocation, args)
+        self.0.apply(operation, invocation, args)
     }
 }
 
@@ -147,7 +147,7 @@ impl Backend for InvalidReply {
     type Call = ();
     type Checkpoint = ();
     type Value = Value;
-    type Kernel = zkc_backends::NativeKernel;
+    type Operation = zkc_backends::NativeOperation;
     fn service_support(
         &self,
         contract: zkc_runtime::vm::ServiceContract,
@@ -171,7 +171,7 @@ impl Backend for InvalidReply {
     fn reject_service_reply(&mut self, invocation: &zkc_runtime::vm::ServiceInvocation<'_>) {
         self.0.reject_service_reply(invocation);
     }
-    fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {
+    fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Operation> {
         self.0.prepare_binding(binding)
     }
     fn validate_value(&self, value: &Value) -> Result<(), BackendError> {
@@ -190,11 +190,11 @@ impl Backend for InvalidReply {
     }
     fn apply(
         &mut self,
-        kernel: &Self::Kernel,
+        operation: &Self::Operation,
         invocation: &Invocation<'_>,
         args: &[Value],
     ) -> Result<Vec<Value>, BackendError> {
-        self.0.apply(kernel, invocation, args)
+        self.0.apply(operation, invocation, args)
     }
 }
 
@@ -203,7 +203,7 @@ impl Backend for ChangingSignature {
     type Call = ();
     type Checkpoint = ();
     type Value = Value;
-    type Kernel = zkc_backends::NativeKernel;
+    type Operation = zkc_backends::NativeOperation;
     fn service_support(
         &self,
         contract: zkc_runtime::vm::ServiceContract,
@@ -225,7 +225,7 @@ impl Backend for ChangingSignature {
     fn reject_service_reply(&mut self, invocation: &zkc_runtime::vm::ServiceInvocation<'_>) {
         self.0.reject_service_reply(invocation);
     }
-    fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {
+    fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Operation> {
         self.0.prepare_binding(binding)
     }
     fn validate_value(&self, value: &Value) -> Result<(), BackendError> {
@@ -244,11 +244,11 @@ impl Backend for ChangingSignature {
     }
     fn apply(
         &mut self,
-        kernel: &Self::Kernel,
+        operation: &Self::Operation,
         invocation: &Invocation<'_>,
         args: &[Value],
     ) -> Result<Vec<Value>, BackendError> {
-        self.0.apply(kernel, invocation, args)
+        self.0.apply(operation, invocation, args)
     }
 }
 

@@ -179,7 +179,7 @@ struct StorageBackend {
     failure: Option<&'static str>,
     /// Produced values report their allocation as shared storage.
     identity: bool,
-    /// Declared operand read extent for the `alias` kernel.
+    /// Declared operand read extent for the `alias` operation.
     declared: Option<u64>,
     allocations: usize,
     first_drops: usize,
@@ -223,8 +223,8 @@ impl Backend for StorageBackend {
     type Call = ();
     type Checkpoint = ();
     type Value = Stored;
-    type Kernel = crate::vm::BoundSignature;
-    fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {
+    type Operation = crate::vm::BoundSignature;
+    fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Operation> {
         binding.signature().ok()
     }
     fn validate_value(&self, value: &Stored) -> Result<(), BackendError> {
@@ -235,7 +235,7 @@ impl Backend for StorageBackend {
     }
     fn operand_work(
         &self,
-        _kernel: &Self::Kernel,
+        _operation: &Self::Operation,
         call: &CallContext<'_>,
         _: &[Stored],
     ) -> Option<u64> {
@@ -261,7 +261,7 @@ impl Backend for StorageBackend {
     }
     fn apply(
         &mut self,
-        _kernel: &Self::Kernel,
+        _operation: &Self::Operation,
         call: &Invocation<'_>,
         args: &[Stored],
     ) -> Result<Vec<Stored>, BackendError> {
@@ -437,7 +437,7 @@ fn run_budgeted(
     };
     let usage = runner.usage();
     // Check while the Runner is alive: dropping it must not hide values retained
-    // by argument scratch after a successful or refused kernel call.
+    // by argument scratch after a successful or refused operation call.
     assert!(runner.backend().all_freed());
     (outcome, usage, runner.into_backend())
 }
@@ -548,7 +548,7 @@ fn storage_release_frees_real_shared_allocation_before_later_allocation() {
     assert_eq!(usage.total_value_bytes, 2 * 8192 + 1); // shared backing charged twice
     assert_eq!(usage.live_values, 0);
     assert_eq!(usage.live_value_bytes, 0);
-    assert_eq!(usage.instructions, 6); // local action + 3 kernels + 2 returns
+    assert_eq!(usage.instructions, 6); // local action + 3 operations + 2 returns
 }
 #[test]
 fn storage_release_preserves_live_and_cumulative_budget_boundaries_and_failures() {

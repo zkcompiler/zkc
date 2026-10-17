@@ -2,7 +2,7 @@
 #include "../Verification.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Contracts/Bindings.h"
-#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -459,11 +459,11 @@ class ExecutionModelReader {
                                  results(op, env)}});
       } else {
         if (!local ||
-            !attributes(op, physical
-                                ? ArrayRef<StringRef>{"site", "binding",
-                                                      "kernel", "parameters"}
-                                : ArrayRef<StringRef>{"site", "binding",
-                                                      "parameters"}) ||
+            !attributes(op, physical ? ArrayRef<StringRef>{"site", "binding",
+                                                           "implementation",
+                                                           "parameters"}
+                                     : ArrayRef<StringRef>{"site", "binding",
+                                                           "parameters"}) ||
             failed(verifyBoundOperation(op, physical))) {
           fail("binding-operation");
           return {};

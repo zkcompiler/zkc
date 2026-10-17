@@ -311,7 +311,7 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
 fn resolve(
     binding: &OperationBinding,
     contract: &Contract,
-) -> Result<KernelSignature<LogicalType>> {
+) -> Result<OperationSignature<LogicalType>> {
     let mut signature = support::field_signature(binding, contract)?;
     if binding.contract == "vector.embed" {
         let base = support::primary(binding)?

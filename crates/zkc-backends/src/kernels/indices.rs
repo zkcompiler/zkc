@@ -2,7 +2,7 @@
 //! and host pointer size; arithmetic never wraps and division by zero refuses.
 use crate::{Policy, Result, Value, exhausted, refused, value::size};
 use zkc_runtime::vm::{
-    AttributeRule, BoundSignature, Identity, KernelSignature, LogicalType, OperationBinding,
+    AttributeRule, BoundSignature, Identity, LogicalType, OperationBinding, OperationSignature,
     PhysicalType, Type,
 };
 
@@ -29,7 +29,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
     };
     let physical =
         |kind| PhysicalType::default_for(LogicalType::new(kind, Identity::None).ok()?).ok();
-    Some(KernelSignature {
+    Some(OperationSignature {
         inputs: inputs
             .iter()
             .copied()

@@ -3,7 +3,7 @@
 use super::NativeBackend;
 use crate::{Result, Value, refused};
 use zkc_runtime::vm::{
-    AttributeRule, BoundSignature, Invocation, KernelSignature, LogicalType, OperationBinding,
+    AttributeRule, BoundSignature, Invocation, LogicalType, OperationBinding, OperationSignature,
     PhysicalType,
 };
 pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
@@ -23,7 +23,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         "resource_unit.consume" => (vec![ty], vec![]),
         _ => return None,
     };
-    Some(KernelSignature {
+    Some(OperationSignature {
         inputs,
         outputs,
         attributes: AttributeRule::None,

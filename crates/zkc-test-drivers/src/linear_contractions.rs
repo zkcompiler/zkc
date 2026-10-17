@@ -113,7 +113,7 @@ fn main() {
             _ => panic!("unexpected contraction result: {actual:?}"),
         }
     }
-    // One local call, four kernels and the local/participant returns.
+    // One local call, four operations and the local/participant returns.
     if control == "direct" {
         assert_eq!(successful.usage().instructions, 7);
     } else {

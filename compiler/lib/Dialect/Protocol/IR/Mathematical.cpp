@@ -1,7 +1,7 @@
 #include "zkc/Dialect/Mathematical.h"
 #include "ResourceOrigins.h"
-#include "mlir/IR/IRMapping.h"
 #include "zkc/Analysis/Finite.h"
+#include "zkc/Analysis/TotalClosure.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/Services.h"
@@ -17,7 +17,6 @@
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSet.h"
-#include <set>
 
 using namespace mlir;
 using namespace llvm;
@@ -35,260 +34,10 @@ bool name(StringRef value) {
   return !value.empty() && (isAlpha(value.front()) || value.front() == '_') &&
          all_of(value, [](char c) { return isAlnum(c) || c == '_'; });
 }
-LogicalResult verifyTotal(Operation *op, NativeTypePolicies &types) {
-  for (auto type : op->getOperandTypes())
-    if (auto policy = types.get(type); !policy || !policy->total)
-      return refuse(op, "unsupported mathematical data type");
-  for (auto type : op->getResultTypes())
-    if (auto policy = types.get(type); !policy || !policy->total)
-      return refuse(op, "unsupported mathematical data type");
-  return success();
-}
-
-// A summary records dependencies, including intermediate expressions that may
-// be unused by the caller. Dropping those constraints would let DCE hide an
-// originally unavailable computation. Caches live only for this analysis.
-struct HelperSummary {
-  SmallVector<BitVector> results;
-  std::set<std::vector<unsigned>> requirements;
-  unsigned expandedOperations = 0;
-  unsigned depth = 1;
-  uint64_t replayIndices = 0;
-  bool observesPolynomial = false;
-};
-class HelperAnalysis {
-  Operation *unit;
-  SymbolTableCollection &tables;
-  NativeTypePolicies types;
-  llvm::DenseMap<Operation *, HelperSummary> summaries;
-  llvm::DenseSet<Operation *> active;
-  uint64_t remainingDependencyWork = 1000000;
-  unsigned remainingOperations = 100000;
-  uint64_t remainingObservationWork = 1000000;
-  bool hasFinite = false;
-
-  LogicalResult charge(Operation *op, uint64_t work) {
-    if (work > remainingDependencyWork)
-      return limit(op, "helper dependency work exceeds 1000000 words/indices");
-    remainingDependencyWork -= work;
-    return success();
-  }
-  LogicalResult limit(Operation *op, StringRef detail) {
-    return diagnostics::emit(op->emitOpError(), "mathematical-analysis-limit",
-                             detail);
-  }
-  static std::vector<unsigned> indices(const BitVector &bits) {
-    std::vector<unsigned> result;
-    for (int bit = bits.find_first(); bit >= 0; bit = bits.find_next(bit))
-      result.push_back(bit);
-    return result;
-  }
-  static BitVector substitute(const BitVector &dependencies, ValueRange inputs,
-                              const Availability &environment, unsigned size) {
-    BitVector result(size);
-    for (int index = dependencies.find_first(); index >= 0;
-         index = dependencies.find_next(index))
-      result |= environment.values.lookup(inputs[index]);
-    return result;
-  }
-
-  LogicalResult checkObservations(func::FuncOp function) {
-    auto chargeObservation = [&](Operation *op) -> LogicalResult {
-      uint64_t work = 1 + op->getNumOperands() + op->getNumResults();
-      if (work > remainingObservationWork)
-        return limit(function,
-                     "polynomial observation expansion exceeds 1000000 slots");
-      remainingObservationWork -= work;
-      return success();
-    };
-    for (auto &op : function.front())
-      if (failed(chargeObservation(&op)))
-        return failure();
-    OwningOpRef<func::FuncOp> scratch(cast<func::FuncOp>(function->clone()));
-    SmallVector<func::CallOp> pending;
-    scratch->walk([&](func::CallOp call) { pending.push_back(call); });
-    while (!pending.empty()) {
-      auto call = pending.pop_back_val();
-      auto helper =
-          tables.lookupSymbolIn<func::FuncOp>(unit, call.getCalleeAttr());
-      // Signatures and the acyclic closure were checked before this replay.
-      if (!helper || helper.isExternal())
-        return refuse(function, "missing polynomial observation helper");
-      IRMapping mapping;
-      for (auto [argument, value] :
-           zip(helper.getArguments(), call.getOperands()))
-        mapping.map(argument, value);
-      OpBuilder builder(call);
-      for (auto &op : helper.front().without_terminator()) {
-        if (failed(chargeObservation(&op)))
-          return failure();
-        auto *copy = builder.clone(op, mapping);
-        if (auto nested = dyn_cast<func::CallOp>(copy))
-          pending.push_back(nested);
-      }
-      for (auto [value, returned] :
-           zip(call.getResults(), helper.front().back().getOperands()))
-        value.replaceAllUsesWith(mapping.lookup(returned));
-      call.erase();
-    }
-    bool formalPolynomial = any_of(function.getArgumentTypes(), [](Type type) {
-      return isa<poly::PolynomialType>(type);
-    });
-    poly::Degrees degrees;
-    return poly::deriveDegrees(scratch->front(), degrees, formalPolynomial);
-  }
-
-public:
-  HelperAnalysis(Operation *unit, SymbolTableCollection &tables)
-      : unit(unit), tables(tables), types(unit) {
-    unit->walk([&](Operation *op) { hasFinite |= finite::isComputation(op); });
-  }
-  LogicalResult get(func::FuncOp function, const HelperSummary *&result) {
-    if (!function)
-      return refuse(unit, "missing pure helper definition");
-    if (failed(function->getName().verifyInvariants(function)))
-      return failure();
-    auto dataType = [&](Type type) {
-      auto policy = types.get(type);
-      return policy && policy->total;
-    };
-    if (function->getParentOp() != unit || function.isExternal() ||
-        !function.isPrivate() || !hasSingleElement(function.getBody()) ||
-        function.front().empty() ||
-        !isa<func::ReturnOp>(function.front().back()) ||
-        function.front().getArgumentTypes() != function.getArgumentTypes() ||
-        function.front().back().getOperandTypes() !=
-            function.getResultTypes() ||
-        !all_of(function.getArgumentTypes(), dataType) ||
-        !all_of(function.getResultTypes(), dataType))
-      return refuse(function, "requires defined private helpers with closed "
-                              "mathematical signatures");
-    for (auto attr : function->getAttrs())
-      if (!is_contained(ArrayRef<StringRef>{"sym_name", "sym_visibility",
-                                            "function_type",
-                                            "data.preconditions"},
-                        attr.getName().getValue()))
-        return refuse(function, "unsupported pure helper attribute");
-    if (auto found = summaries.find(function); found != summaries.end()) {
-      result = &found->second;
-      return success();
-    }
-    if (!active.insert(function).second)
-      return refuse(function, "pure helper calls must be acyclic");
-    if (active.size() > 64)
-      return limit(function, "helper depth exceeds 64");
-    if (function.getNumArguments() > 100000)
-      return limit(function, "helper signature exceeds analysis work bound");
-    HelperSummary summary;
-    Availability environment;
-    const unsigned size = function.getNumArguments();
-    const uint64_t words = (uint64_t(size) + 63) / 64;
-    if (failed(charge(function, words * size)))
-      return failure();
-    for (auto [index, argument] : enumerate(function.getArguments())) {
-      BitVector dependency(size);
-      dependency.set(index);
-      environment.values[argument] = std::move(dependency);
-    }
-    for (auto &operation : function.front()) {
-      auto *op = &operation;
-      if (failed(op->getName().verifyInvariants(op)))
-        return failure();
-      if (failed(verifyOperation(op, Helper)))
-        return failure();
-      if (!remainingOperations-- || ++summary.expandedOperations > 100000)
-        return limit(op, "helper analysis exceeds 100000 operations");
-      if (failed(
-              charge(op, uint64_t(op->getNumResults() + op->getNumOperands()) *
-                             words)))
-        return failure();
-      for (auto operand : op->getOperands())
-        if (!environment.values.count(operand))
-          return refuse(op, "helper operand is outside its closed body");
-      if (auto returned = dyn_cast<func::ReturnOp>(op)) {
-        if (op != &function.front().back())
-          return refuse(op, "helper return must terminate its body");
-        for (auto value : returned.getOperands())
-          summary.results.push_back(environment.values.lookup(value));
-      } else if (isTotal(op)) {
-        summary.observesPolynomial |= isa<poly::PolynomialCoefficientsOp>(op);
-        if (failed(verifyTotal(op, types)))
-          return failure();
-        finite::Summary finiteSummary;
-        if (finite::isComputation(op) &&
-            failed(finite::summarize(op, finiteSummary)))
-          return failure();
-        for (auto [index, value] : enumerate(op->getResults())) {
-          BitVector dependency(size);
-          auto inputs = operandDependencies(op, index);
-          if (failed(inputs))
-            return failure();
-          for (unsigned input : *inputs)
-            dependency |= environment.values.lookup(op->getOperand(input));
-          if (failed(charge(op, dependency.count())))
-            return failure();
-          summary.requirements.insert(indices(dependency));
-          environment.values[value] = std::move(dependency);
-        }
-      } else if (auto call = dyn_cast<func::CallOp>(op)) {
-        const HelperSummary *callee;
-        if (failed(get(call, callee)))
-          return failure();
-        if (callee->expandedOperations > 100000 - summary.expandedOperations)
-          return limit(call, "expanded analysis exceeds 100000 operations");
-        summary.expandedOperations += callee->expandedOperations;
-        summary.observesPolynomial |= callee->observesPolynomial;
-        summary.depth = std::max(summary.depth, callee->depth + 1);
-        if (summary.depth > 64)
-          return limit(call, "helper depth exceeds 64");
-        for (const auto &requirement : callee->requirements) {
-          if (failed(charge(op, uint64_t(requirement.size()) * words)))
-            return failure();
-          BitVector dependency(size);
-          for (unsigned input : requirement)
-            dependency |= environment.values.lookup(call.getOperand(input));
-          if (failed(charge(op, dependency.count())))
-            return failure();
-          summary.requirements.insert(indices(dependency));
-        }
-        for (auto [value, dependency] :
-             zip(call.getResults(), callee->results)) {
-          if (failed(charge(op, uint64_t(dependency.count()) * words)))
-            return failure();
-          environment.values[value] =
-              substitute(dependency, call.getOperands(), environment, size);
-        }
-      } else {
-        return refuse(op,
-                      "helper contains an operation without total semantics");
-      }
-    }
-    if (hasFinite && summary.observesPolynomial &&
-        failed(checkObservations(function)))
-      return failure();
-    for (const auto &requirement : summary.requirements)
-      summary.replayIndices += requirement.size();
-    for (const auto &dependency : summary.results)
-      summary.replayIndices += dependency.count();
-    active.erase(function);
-    result = &summaries.try_emplace(function, std::move(summary)).first->second;
-    return success();
-  }
-  LogicalResult get(func::CallOp call, const HelperSummary *&result) {
-    auto function = tables.lookupNearestSymbolFrom<func::FuncOp>(
-        call, call.getCalleeAttr());
-    if (!function ||
-        !llvm::equal(function.getArgumentTypes(), call.getOperandTypes()) ||
-        !llvm::equal(function.getResultTypes(), call.getResultTypes()))
-      return refuse(call, "requires a matching pure helper");
-    return get(function, result);
-  }
-};
-
 class Analysis {
   zkc::protocol_ir::MathematicalOp program;
   unsigned count;
-  HelperAnalysis &helpers;
+  TotalClosure &helpers;
   SymbolTableCollection &symbols;
   unsigned &remaining;
   uint64_t &remainingAvailabilityWork;
@@ -305,7 +54,7 @@ class Analysis {
     return success();
   }
   LogicalResult helper(func::CallOp call, Availability &env) {
-    const HelperSummary *summary;
+    const TotalSummary *summary;
     if (failed(helpers.get(call, summary)))
       return failure();
     if (summary->expandedOperations > remaining)
@@ -336,7 +85,7 @@ class Analysis {
   }
 
 public:
-  Analysis(zkc::protocol_ir::MathematicalOp program, HelperAnalysis &helpers,
+  Analysis(zkc::protocol_ir::MathematicalOp program, TotalClosure &helpers,
            unsigned &remaining, uint64_t &remainingAvailabilityWork,
            NativeTypePolicies &types, SymbolTableCollection &symbols,
            SmallVectorImpl<protocol_ir::RepeatOp> &originQueries)
@@ -384,7 +133,7 @@ public:
       for (auto type : op->getResultTypes())
         if (!types.get(type))
           return refuse(op, "unsupported mathematical data type");
-      if (isTotal(op) && failed(verifyTotal(op, types)))
+      if (isTotal(op) && failed(verifyTotalTypes(op, types)))
         return failure();
       for (auto input : op->getOperands()) {
         auto policy = types.get(input.getType());
@@ -750,17 +499,6 @@ public:
 };
 } // namespace
 
-LogicalResult verifyHelpers(protocol_ir::ProtocolModuleOp module) {
-  SymbolTableCollection tables;
-  HelperAnalysis helpers(module, tables);
-  for (auto helper : module.getBody().front().getOps<func::FuncOp>()) {
-    const HelperSummary *summary;
-    if (failed(helpers.get(helper, summary)))
-      return failure();
-  }
-  return success();
-}
-
 LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
   if (module.getProfile() == protocol_ir::Profile::Participant)
     return verifyParticipantModule(module);
@@ -774,26 +512,24 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
           "unexpected common mathematical module attribute");
   if (!hasSingleElement(module.getBody()))
     return refuse(module, "expected one mathematical symbol-table block");
-  if (failed(finite::verifyClosure(module)))
-    return failure();
   SymbolTableCollection tables;
-  HelperAnalysis helpers(module, tables);
+  TotalClosure helpers(module, tables);
+  if (failed(helpers.verify()))
+    return failure();
   algebra::MapFormulas maps(tables);
   unsigned programs = 0;
   unsigned remainingRealizations = realizedHelperOperationLimit;
   for (auto &op : module.getBody().front()) {
     if (auto program = dyn_cast<protocol_ir::MathematicalOp>(op)) {
       ++programs;
-    } else if (auto helper = dyn_cast<func::FuncOp>(op)) {
-      const HelperSummary *summary;
-      if (failed(helpers.get(helper, summary)))
-        return failure();
+    } else if (isa<func::FuncOp>(op)) {
+      // TotalClosure checked every retained mathematical definition above.
     } else if (auto realization = dyn_cast<local::RealizeOp>(op)) {
       for (auto attr : realization->getAttrs())
         if (!is_contained(realization.getAttributeNames(),
                           attr.getName().getValue()))
           return refuse(realization, "unsupported realization attribute");
-      const HelperSummary *summary;
+      const TotalSummary *summary;
       auto helper = tables.lookupNearestSymbolFrom<func::FuncOp>(
           realization, realization.getHelperAttr());
       if (failed(helpers.get(helper, summary)))
@@ -815,7 +551,7 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
       // Admitted explicitly: its preparation-callable interface grants
       // nothing. Algebra's formula rule reads the closure that helper analysis
       // has bounded; preparation applies Ring limits to the expanded formula.
-      const HelperSummary *summary;
+      const TotalSummary *summary;
       auto helper = tables.lookupNearestSymbolFrom<func::FuncOp>(
           map, map.getHelperAttr());
       if (failed(helpers.get(helper, summary)) || failed(maps.verify(map)))
@@ -881,15 +617,10 @@ LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module) {
   return success();
 }
 
-bool isTotal(Operation *op) {
-  auto meaning = classify(op);
-  return meaning && meaning->category == Category::Total;
-}
-
 LogicalResult analyze(zkc::protocol_ir::MathematicalOp program,
                       Availability &result, SymbolTableCollection &tables) {
   result.values.clear();
-  HelperAnalysis helpers(program->getParentOp(), tables);
+  TotalClosure helpers(program->getParentOp(), tables);
   unsigned remaining = 100000;
   uint64_t remainingAvailabilityWork = 1000000;
   NativeTypePolicies types(program);

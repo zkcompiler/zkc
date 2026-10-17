@@ -57,11 +57,11 @@ pub(super) fn literal_rule(rule: AttributeRule, field: Identity) -> AttributeRul
 }
 
 pub(super) fn instantiate(
-    shape: KernelSignature,
+    shape: OperationSignature,
     field: Identity,
     make: impl Fn(Type) -> Result<LogicalType>,
-) -> Result<KernelSignature<LogicalType>> {
-    Ok(KernelSignature {
+) -> Result<OperationSignature<LogicalType>> {
+    Ok(OperationSignature {
         inputs: shape.inputs.into_iter().map(&make).collect::<Result<_>>()?,
         outputs: shape.outputs.into_iter().map(make).collect::<Result<_>>()?,
         attributes: literal_rule(shape.attributes, field),
@@ -71,7 +71,7 @@ pub(super) fn instantiate(
 pub(super) fn field_signature(
     binding: &OperationBinding,
     contract: &Contract,
-) -> Result<KernelSignature<LogicalType>> {
+) -> Result<OperationSignature<LogicalType>> {
     let shape = contract.shape()?;
     let primary = primary(binding)?;
     let field = primary.scalar_field().ok_or_else(failure)?;
@@ -83,7 +83,7 @@ pub(super) fn field_signature(
 /// alternative identity matching; default selection checks its nominal provider.
 pub(super) fn select_nominal(
     binding: &OperationBinding,
-    logical: &KernelSignature<LogicalType>,
+    logical: &OperationSignature<LogicalType>,
     selection: Selection,
 ) -> Result<BoundSignature> {
     let ports = match selection {
