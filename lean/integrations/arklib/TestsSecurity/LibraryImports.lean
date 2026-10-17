@@ -44,7 +44,6 @@ import ZkcSecurity.Examples.Variants
 import ZkcSecurity.FiatShamir.Decoding
 import ZkcSecurity.FiatShamir.Grinding
 import ZkcSecurity.FiatShamir.Interface
-import ZkcSecurity.FiatShamir.Replay
 import ZkcSecurity.FiatShamir.Sampling
 import ZkcSecurity.FiatShamir.Soundness
 import ZkcSecurity.FiatShamir.Typed
