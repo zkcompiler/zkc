@@ -1,0 +1,124 @@
+{
+  "package": "Arklib",
+  "revision": "db7005f84a9dbad7ff2abbbb4e8feeeac6f4dfd8",
+  "patch": "compatibility.patch",
+  "patch_sha256": "4e76af0a399170a173a60966a1254fcde95e8bfcacee56f5653643d8b89b914d",
+  "files": {
+    "ArkLib.lean": {
+      "base_sha256": "06c227f3863027d0117745a5d9cc661f182bd23712f12539a2cd315e6297a3f3",
+      "patched_sha256": "98c3e3b183481488d6a7e0a6b7d8a4d8b8e29ee64d00cbf4b86ee51b26a97890"
+    },
+    "ArkLib/Data/CodingTheory/ProximityGap/Folding.lean": {
+      "base_sha256": "f18c54fafe2969843136a931cda4c33e302dc237e2d188cb4b16d5e97a8ab4bd",
+      "patched_sha256": "0228366ef1a27901c002765b8baeddc74f02868948e09bba1949ba85b69912a9"
+    },
+    "ArkLib/Data/Domain/CosetFftDomain/Mem.lean": {
+      "base_sha256": "fd46c45e34a267157ff0d6679ff4193cd80905d3c543d3d5b354da5f95ff2b9d",
+      "patched_sha256": "9ff0c46f1bb7dacf18cd4ea18fb6b5897d113f2e6152c7a2f2444501307c7cd6"
+    },
+    "ArkLib/OracleReduction/Composition/Sequential/General.lean": {
+      "base_sha256": "3689dbb3b50eb60ec169b5976d934a23744e77488102580023723fd6e77033b7",
+      "patched_sha256": "23aca32d1e676080de07471e0daa4afa7aefa0e1dc8f685e7e35b338437d8925"
+    },
+    "ArkLib/OracleReduction/ProtocolSpec/SeqCompose.lean": {
+      "base_sha256": "9d4d805d8e43a7301c88aee2ca6c3dfb51d7d520ad446701fdefc5860174328c",
+      "patched_sha256": "f93e4bf434b6108ab943c74fff7b6c64efc4fe7573d8636926942caf6d54ca76"
+    },
+    "ArkLib/OracleReduction/Security/Acceptance.lean": {
+      "base_sha256": null,
+      "patched_sha256": "5e086901b3d3b396a8528bdba81bf5e48ca36001b5121fad592783221cea3fa0"
+    },
+    "ArkLib/OracleReduction/Security/Accumulation.lean": {
+      "base_sha256": null,
+      "patched_sha256": "d09ca43c0bf85705f8f99a7177ce1fb1ec1283c323c5fb6e7acbb1eeca1fe3bc"
+    },
+    "ArkLib/OracleReduction/Security/BadEvents.lean": {
+      "base_sha256": null,
+      "patched_sha256": "543ec775d56e5d99688cf8f79a8b7e737d65ff45ec8607f71a73fe07891a4d04"
+    },
+    "ArkLib/ProofSystem/BatchedFri/Security.lean": {
+      "base_sha256": "b4ab00211dd83ae8b6a640ceb664d07348887fc0e201ca8dc53318244ace9525",
+      "patched_sha256": "72954586d207860dcfa955d44830ed231ed6b5665dfb130743bc58ff950ec2c3"
+    },
+    "ArkLib/ProofSystem/Fri/ErrorBounds.lean": {
+      "base_sha256": null,
+      "patched_sha256": "ac28daa28fe89270f6c45cef2af019906d327a972fcbb55c2c950a493f0fd83b"
+    },
+    "ArkLib/ProofSystem/Fri/FoldingSoundness.lean": {
+      "base_sha256": null,
+      "patched_sha256": "15a227aab6ce7cd14f228e9b53c06635dabbccc77f0650d676afdb42a3f962d6"
+    },
+    "ArkLib/ProofSystem/Fri/Projection.lean": {
+      "base_sha256": null,
+      "patched_sha256": "c1f6220f70ea46cb09fb76f50a73b684e3eb1a4e7f3ffdd7d5bc140eba43f9c4"
+    },
+    "ArkLib/ProofSystem/Fri/QuerySoundness.lean": {
+      "base_sha256": null,
+      "patched_sha256": "754000f0a72a39d91b7288c33dbf9ab1bdbe7dc237b7c12db72639d939679075"
+    },
+    "ArkLib/ProofSystem/Fri/RoundConsistency.lean": {
+      "base_sha256": "cf9e7ca5ee3f0d2852954364be031496f8ffff4603f00941246d1c1e64fc8183",
+      "patched_sha256": "4a0e13ecd5cc9c9253f18dd4fa46cadfead5b6e9d825e63cb71c1180e1931014"
+    },
+    "ArkLib/ProofSystem/Fri/Spec/AdaptiveSoundness.lean": {
+      "base_sha256": null,
+      "patched_sha256": "afa571a0c01d155e8a2357eb31e7f12e82ac8ec3b915599add1cf3870ee94bf6"
+    },
+    "ArkLib/ProofSystem/Fri/Spec/Agreement.lean": {
+      "base_sha256": null,
+      "patched_sha256": "96ee12c536bf926f8e355d0496a24d4551965f1fc147e145e34e35a7614e92f2"
+    },
+    "ArkLib/ProofSystem/Fri/Spec/BadEvents.lean": {
+      "base_sha256": null,
+      "patched_sha256": "8c75566520342720766655dfab63ced485fd09b58468bf338613a46e9aac3820"
+    },
+    "ArkLib/ProofSystem/Fri/Spec/Execution.lean": {
+      "base_sha256": null,
+      "patched_sha256": "7084b48a586eadc68fe254f5e60ca75bd30ac7092bee90b2b11ba6f4f44dd5cf"
+    },
+    "ArkLib/ProofSystem/Fri/Spec/FoldExecution.lean": {
+      "base_sha256": null,
+      "patched_sha256": "cd28c267212eb9fc51db65acf9765c7941bcf52b1aca62a8b59637df781ef314"
+    },
+    "ArkLib/ProofSystem/Fri/Spec/General.lean": {
+      "base_sha256": "83d20f02d03467dbf0ccb6958b9c8977c6ff0e8f9380872ce29cc3fab4af04fa",
+      "patched_sha256": "c333099eb18bc63b2862cec66be2d61fa4abc4f4fa558797a658060d3fb052a4"
+    },
+    "ArkLib/ProofSystem/Fri/Spec/InputRelation.lean": {
+      "base_sha256": null,
+      "patched_sha256": "6d4b18df84112b99c295215c38a75aaad2d02ac50f17ac9d4749cc31aabb6779"
+    },
+    "ArkLib/ProofSystem/Fri/Spec/QueryExecution.lean": {
+      "base_sha256": null,
+      "patched_sha256": "b18c606189f27f5fa4b35dfe316f4f3717a23f3521c44f4c70ad09c879317760"
+    },
+    "ArkLib/ProofSystem/Fri/Spec/QuerySoundness.lean": {
+      "base_sha256": null,
+      "patched_sha256": "78176ceb3d0e8397a1beea5a29a2a967b586b9274ade90421ac86346eb4ff2b3"
+    },
+    "ArkLib/ProofSystem/Fri/Spec/RoundSoundness.lean": {
+      "base_sha256": null,
+      "patched_sha256": "ed29dafac8eb7694edbd7c51f255d0d75cd01ab65c63d5536bfef93c4534fa91"
+    },
+    "ArkLib/ProofSystem/Fri/Spec/SingleRound.lean": {
+      "base_sha256": "56d8b5af5e48d475aa984770025df4fea40e37b02a6479393b3fd8ff809ec27c",
+      "patched_sha256": "6e73a3e05b96dbd08d8dd7db31fbf18660e201f8818648dfdb3522208fcf847f"
+    },
+    "ArkLib/ProofSystem/Fri/Spec/Soundness.lean": {
+      "base_sha256": null,
+      "patched_sha256": "aba864f8f75ce8f992c2926d964238915bdac4b335f9396bcac8c8eec9d32e4b"
+    },
+    "ArkLib/ProofSystem/Fri/Spec/Transcript.lean": {
+      "base_sha256": null,
+      "patched_sha256": "70274a486ffeecc97ee8285f0d84ec3aea7ac30ef7e08838aff03c2c9bbd3ba9"
+    },
+    "ArkLib/ProofSystem/Fri/Spec/VerifierExecution.lean": {
+      "base_sha256": null,
+      "patched_sha256": "968ac7d1cc51792d3bd4c0160f08a6d991e3407380b7564ffc1084c5f912b19d"
+    },
+    "ArkLibTest/ProofSystem/Fri/Soundness.lean": {
+      "base_sha256": null,
+      "patched_sha256": "da8b114212a5b06c7cf16e7dca0b40d3cd6f8d84227a6768b0d1dabb027c79ba"
+    }
+  }
+}
