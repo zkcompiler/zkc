@@ -4,12 +4,14 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
+#include "support/KernelRecipes.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Mathematical.h"
+#include "zkc/Transforms/MathematicalWork.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Translation/Language.h"
 #include "llvm/ADT/StringSet.h"
@@ -120,6 +122,239 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
+  cases.run("direct Kernel recipe output retains the immutable source", [&] {
+    auto original = parse(demanded, context);
+    auto logical = exec(*original);
+    auto unit = numericalUnit(*logical);
+    auto entry = kernel::getEntry(unit);
+    OpBuilder builder(&context);
+    entry->setAttr("sym_visibility", builder.getStringAttr("public"));
+    entry->setAttr("data.preconditions", builder.getArrayAttr({}));
+    require(succeeded(verify(*logical)), "recipe source metadata refused");
+    auto before = copy(*logical);
+    mathematical::RealizationWork work;
+    uint64_t remaining = 1000000, bytes = 16 * 1024 * 1024;
+    auto output =
+        kernel::realizeEntry(unit, "direct", {}, work, remaining, bytes);
+    require(bool(output) && succeeded(kernel::verifyRecipeOutput(*output)) &&
+                succeeded(kernel::verifyEntryRecipes(unit, *output, "direct")),
+            "direct numerical recipe publication failed");
+    auto executable = kernelRecipeOutput(*output);
+    auto result =
+        SymbolTable(executable).lookup<local::FuncOp>(entry.getSymName());
+    require(
+        result && result.getFunctionType() == entry.getFunctionType() &&
+            result->getAttrs().size() == 3 &&
+            !result->hasAttr("sym_visibility") &&
+            !result->hasAttr("data.preconditions") &&
+            result->getAttr("logical_origin") ==
+                builder.getArrayAttr({builder.getStringAttr(entry.getSymName()),
+                                      builder.getArrayAttr({})}),
+        "recipe entry did not preserve its executable interface");
+    require(OperationEquivalence::isEquivalentTo(
+                *logical, *before, OperationEquivalence::IgnoreLocations),
+            "numerical recipe production changed its source");
+    require(remaining < 1000000 && bytes < 16 * 1024 * 1024,
+            "direct conversion failed to charge source/site work");
+    for (StringRef mutation :
+         {"return", "operand", "site", "interface", "declaration", "module",
+          "owner-argument", "owner-operand", "owner-result", "module-argument",
+          "module-operand"}) {
+      auto changed = copy(*output);
+      auto function = SymbolTable(kernelRecipeOutput(*changed))
+                          .lookup<local::FuncOp>(entry.getSymName());
+      auto &body = function.getBody().front();
+      OpBuilder builder(&context);
+      if (mutation == "return")
+        body.back().setOperand(0, body.back().getOperand(1));
+      else if (mutation == "operand")
+        body.front().setOperand(1, body.front().getOperand(0));
+      else if (mutation == "site")
+        body.front().setAttr("site", builder.getStringAttr("other-call"));
+      else if (mutation == "interface")
+        function->setAttr("logical_origin",
+                          builder.getArrayAttr({builder.getStringAttr("extra"),
+                                                builder.getArrayAttr({})}));
+      else if (mutation == "declaration") {
+        builder.setInsertionPointToEnd(
+            &kernelRecipeOutput(*changed).getBody().front());
+        auto extra = func::FuncOp::create(builder, entry.getLoc(), "extra",
+                                          builder.getFunctionType({}, {}));
+        extra.setPrivate();
+        builder.setInsertionPointToEnd(extra.addEntryBlock());
+        func::ReturnOp::create(builder, entry.getLoc());
+      } else if (mutation == "owner-argument")
+        kernelRecipeOutput(*changed).getBody().front().addArgument(
+            builder.getI1Type(), entry.getLoc());
+      else if (mutation == "owner-operand" || mutation == "owner-result") {
+        auto previous = kernelRecipeOutput(*changed);
+        builder.setInsertionPoint(previous);
+        OperationState state(previous.getLoc(), previous->getName());
+        state.addAttributes(previous->getAttrs());
+        if (mutation == "owner-operand")
+          state.addOperands(function.getArguments()[0]);
+        else
+          state.addTypes(builder.getI1Type());
+        state.addRegion();
+        auto *replacement = builder.create(state);
+        replacement->getRegion(0).takeBody(previous.getBody());
+        previous.erase();
+        require(replacement->getNumOperands() + replacement->getNumResults() ==
+                    1,
+                "owner mutation did not change its structural arity");
+      } else if (mutation == "module-argument")
+        changed->getBody()->addArgument(builder.getI1Type(), entry.getLoc());
+      else if (mutation == "module-operand") {
+        OperationState state(changed->getLoc(), (*changed)->getName());
+        state.addOperands(function.getArguments()[0]);
+        state.addRegion();
+        auto *replacement = Operation::create(state);
+        replacement->getRegion(0).takeBody(changed->getBodyRegion());
+        changed =
+            OwningOpRef<mlir::ModuleOp>(cast<mlir::ModuleOp>(replacement));
+        require((*changed)->getNumOperands() == 1,
+                "module mutation did not add its operand");
+      } else
+        (*changed)->setAttr("unexpected", builder.getUnitAttr());
+      finite::VerificationResult outcome{finite::VerificationStatus::Verified,
+                                         {}};
+      require(failed(kernel::verifyEntryRecipes(unit, *changed, "direct", {},
+                                                {}, &outcome)) &&
+                  outcome.status == finite::VerificationStatus::Mismatch,
+              ("recipe reader accepted " + mutation).str());
+    }
+    uint64_t noCopy = 0, siteBytes = 16 * 1024 * 1024;
+    require(
+        !kernel::realizeEntry(unit, "direct", {}, work, noCopy, siteBytes) &&
+            OperationEquivalence::isEquivalentTo(
+                *logical, *before, OperationEquivalence::IgnoreLocations),
+        "source copy exhaustion published or edited a numerical body");
+  });
+  cases.run("unused helper may call the public Kernel entry", [&] {
+    auto source = parse(R"mlir(
+!F = !algebra.field<"bls12-381.fr">
+module {
+ kernel.module @numerical {
+   func.func @square(%x:!F)->!F {
+     %r = algebra.field_multiply %x,%x : (!F,!F)->!F
+     func.return %r : !F
+   }
+   func.func private @unused_caller(%x:!F)->!F {
+     %r = func.call @square(%x) : (!F)->!F
+     func.return %r : !F
+   }
+ }
+}
+)mlir",
+                        context);
+    require(succeeded(verify(*source)), "unused caller source refused");
+    auto unit = cast<kernel::ModuleOp>(source->getBody()->front());
+    auto before = copy(*source);
+    mathematical::RealizationWork work;
+    auto output = realizeKernelEntry(unit, "square", {}, work);
+    require(output && succeeded(kernel::verifyRecipeOutput(*output)) &&
+                succeeded(kernel::verifyEntryRecipes(unit, *output, "square")),
+            "unused caller prevented recipe publication");
+    auto executable = kernelRecipeOutput(*output);
+    require(SymbolTable(executable).lookup<local::FuncOp>("square") &&
+                !SymbolTable(executable).lookup("unused_caller"),
+            "source helper escaped into executable output");
+    require(OperationEquivalence::isEquivalentTo(
+                *source, *before, OperationEquivalence::IgnoreLocations),
+            "recipe production changed the unused caller or public entry");
+  });
+  cases.run("identity recipe rejects an extra Local return attribute", [&] {
+    auto source = parse(R"mlir(
+!F = !algebra.field<"bls12-381.fr">
+module {
+ kernel.module @numerical {
+   func.func @identity(%x:!F)->!F {
+     func.return %x : !F
+   }
+ }
+}
+)mlir",
+                        context);
+    auto unit = cast<kernel::ModuleOp>(source->getBody()->front());
+    auto before = copy(*source);
+    mathematical::RealizationWork work;
+    auto output = realizeKernelEntry(unit, "identity", {}, work);
+    require(
+        output && succeeded(kernel::verifyRecipeOutput(*output)) &&
+            succeeded(kernel::verifyEntryRecipes(unit, *output, "identity")),
+        "identity recipe publication failed");
+    kernelRecipeOutput(*output);
+    auto changed = copy(*output);
+    auto &body = localFunction(*changed, "identity").getBody().front();
+    require(llvm::hasSingleElement(body) && isa<local::ReturnOp>(body.back()),
+            "identity fixture unexpectedly contains executable work");
+    body.back().setAttr("unexpected", UnitAttr::get(&context));
+    expectRefusal(*changed, "interactive-unknown-attribute",
+                  [&] { return kernel::verifyRecipeOutput(*changed); });
+    expectRefusal(*changed, "mathematical-lowering-preservation", [&] {
+      return kernel::verifyEntryRecipes(unit, *changed, "identity");
+    });
+    require(OperationEquivalence::isEquivalentTo(
+                *source, *before, OperationEquivalence::IgnoreLocations),
+            "identity recipe checking changed its source");
+  });
+  cases.run("data.is recipe rejects duplicate generated sites", [&] {
+    auto source = fixture(context, "mathematical/optional-traces.mlir");
+    auto original = copy(*source);
+    data::IsOp observation;
+    source->walk([&](data::IsOp op) {
+      if (!observation)
+        observation = op;
+    });
+    require(bool(observation), "missing variant observation fixture");
+    auto numerical = kernelRecipeUnit(owner(*source));
+    OpBuilder builder(&numerical->getBody().front(),
+                      numerical->getBody().front().end());
+    auto entry = func::FuncOp::create(
+        builder, observation.getLoc(), "present",
+        builder.getFunctionType(observation->getOperandTypes(),
+                                observation->getResultTypes()));
+    entry.setPublic();
+    builder.setInsertionPointToEnd(entry.addEntryBlock());
+    IRMapping values;
+    values.map(observation->getOperands(), entry.getArguments());
+    auto *result = builder.clone(*observation.getOperation(), values);
+    func::ReturnOp::create(builder, entry.getLoc(), result->getResults());
+    require(succeeded(verify(*numerical)), "variant recipe source refused");
+    OwningOpRef<kernel::ModuleOp> before(
+        cast<kernel::ModuleOp>(numerical->clone()));
+    mathematical::RealizationWork work;
+    auto output = realizeKernelEntry(*numerical, "presence", {}, work);
+    require(output && succeeded(kernel::verifyRecipeOutput(*output)) &&
+                succeeded(kernel::verifyEntryRecipes(*numerical, *output,
+                                                     "presence")),
+            "variant observation recipe publication failed");
+    kernelRecipeOutput(*output);
+    auto changed = copy(*output);
+    SmallVector<local::BoolConstantOp> constants;
+    localFunction(*changed, "present").walk([&](local::BoolConstantOp op) {
+      constants.push_back(op);
+    });
+    require(constants.size() == 2, "variant recipe lost its two alternatives");
+    auto first = constants[0]->getAttrOfType<StringAttr>("site");
+    auto second = constants[1]->getAttrOfType<StringAttr>("site");
+    auto prefix = kernelRecipeSite("presence", 0) + "_recipe_";
+    require(first && second && first != second &&
+                first.getValue().starts_with(prefix) &&
+                second.getValue().starts_with(prefix),
+            "variant recipe did not generate distinct owned sites");
+    constants[1]->setAttr("site", first);
+    expectRefusal(*changed, "interactive-site",
+                  [&] { return kernel::verifyRecipeOutput(*changed); });
+    expectRefusal(*changed, "mathematical-lowering-preservation", [&] {
+      return kernel::verifyEntryRecipes(*numerical, *changed, "presence");
+    });
+    require(OperationEquivalence::isEquivalentTo(
+                *numerical, *before, OperationEquivalence::IgnoreLocations) &&
+                OperationEquivalence::isEquivalentTo(
+                    *source, *original, OperationEquivalence::IgnoreLocations),
+            "variant recipe production or checking changed its source");
+  });
   cases.run(
       "Local realization owns mathematics through public Exec phase", [&] {
         auto source = parse(realization, context);
@@ -301,6 +536,54 @@ int main() {
           require(loop == !optimize,
                   "fallback policy replaced retained per-call policy");
         });
+  cases.run(
+      "domain admission loops cannot authorize a disabled bulk payload", [&] {
+        auto source =
+            fixture(context, "structured-source/realization-finite.mlir");
+        auto domain =
+            SymbolTable(owner(*source)).lookup<data::DomainOp>("items");
+        auto &body = domain.getBody().front();
+        Value values = body.back().getOperand(0);
+        auto type = cast<data::DomainType>(values.getType());
+        SmallVector<Type> items(type.getItemTypes());
+        llvm::append_range(items, type.getItemTypes());
+        OpBuilder builder(&body.back());
+        OperationState product(domain.getLoc(),
+                               data::DomainProductOp::getOperationName());
+        product.addOperands({values, values});
+        product.addTypes(data::DomainType::get(&context, items));
+        builder.create(product);
+        require(succeeded(verify(*source)),
+                "unused product source not admitted");
+        auto logical = exec(*source, {true, false});
+        auto bulk = copy(*logical);
+        require(succeeded(kernel::lowerKernels(*bulk)), "bulk control failed");
+        unsigned admissionLoops = 0, traversals = 0;
+        bool reduction = false;
+        bulk->walk([&](local::LocalForOp loop) {
+          if (loop.getNumResults())
+            ++traversals;
+          else
+            ++admissionLoops;
+        });
+        bulk->walk([&](local::OperationBindingOp binding) {
+          reduction |= binding.getContract() == "vector.sum";
+        });
+        require(
+            admissionLoops && !traversals && reduction,
+            "control lacks bulk reduction beside mandatory admission loops");
+        logical->walk([&](kernel::CallOp call) {
+          call->setAttr("policy", builder.getBoolArrayAttr({false, false}));
+        });
+        require(succeeded(verify(*logical)), "disabled source not admitted");
+        expectRefusal(*bulk, "kernel-lowering-correspondence", [&] {
+          return kernel::verifyKernelLowering(*logical, *bulk);
+        });
+        auto ordered = copy(*logical);
+        require(succeeded(kernel::lowerKernels(*ordered)) &&
+                    succeeded(kernel::verifyKernelLowering(*logical, *ordered)),
+                "ordered fallback lost mandatory domain admission");
+      });
   for (bool optimize : {false, true})
     cases.run(
         optimize ? "omitted policy uses bulk request"

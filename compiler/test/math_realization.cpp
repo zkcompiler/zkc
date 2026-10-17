@@ -3,6 +3,7 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
+#include "support/KernelRecipes.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Program/Admission.h"
@@ -33,11 +34,8 @@ void materialize(ModuleOp module) {
   require(succeeded(manager.run(module)), "Kernel realization failed");
 }
 local::FuncOp realized(ModuleOp module) {
-  local::FuncOp found;
-  module.walk([&](local::FuncOp function) {
-    if (function.getSymName() == "realized")
-      found = function;
-  });
+  auto owner = cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
+  auto found = SymbolTable(owner).lookup<local::FuncOp>("realized");
   require(bool(found), "missing realized function");
   return found;
 }
@@ -160,28 +158,42 @@ int main(int argc, char **argv) {
             "nested realization expansion failed");
   });
   cases.run("independent helper recipe comparison", [&] {
-    auto before = copy(*expanded);
-    auto function = realized(*before);
-    auto &block = function.getBody().front();
+    auto owner =
+        cast<protocol_ir::ProtocolModuleOp>(source->getBody()->front());
+    auto numerical = kernelRecipeSource(owner, "polynomial", "realized");
+    auto function = kernel::getEntry(*numerical);
+    auto &block = function.front();
     while (!block.empty())
       block.back().erase();
     OpBuilder builder(&block, block.end());
     auto product = algebra::FieldMultiplyOp::create(
         builder, function.getLoc(), block.getArgument(0).getType(),
         block.getArgument(0), block.getArgument(1));
-    local::ReturnOp::create(builder, function.getLoc(), product.getResult());
-    auto unit = cast<protocol_ir::ProtocolModuleOp>(before->getBody()->front());
-    auto candidate = copy(*before);
-    auto after =
-        cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
+    func::ReturnOp::create(builder, function.getLoc(), product.getResult());
+    mathematical::RealizationWork work;
+    auto candidate = realizeKernelEntry(*numerical, "product", {}, work);
+    require(bool(candidate), "direct recipe lowering failed");
+    kernelRecipeOutput(*candidate);
     auto result = realized(*candidate);
-    result.getBody().front().front().setAttr("site",
-                                             builder.getStringAttr("product"));
-    require(succeeded(mathematical::lowerCalculations(after, {result})),
-            "direct recipe lowering failed");
     require(succeeded(
-                mathematical::verifyCalculationRecipes(unit, after, {result})),
+                kernel::verifyEntryRecipes(*numerical, *candidate, "product")),
             "valid recipe comparison failed");
+    {
+      finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
+                                         {}};
+      require(failed(kernel::verifyEntryRecipes(
+                  *numerical, *candidate, "different_call", {}, {}, &outcome)),
+              "different call site escaped independent recipe verification");
+      auto wrongSite = copy(*candidate);
+      realized(*wrongSite)
+          .getBody()
+          .front()
+          .front()
+          .setAttr("site", builder.getStringAttr("different_product"));
+      require(failed(kernel::verifyEntryRecipes(*numerical, *wrongSite,
+                                                "product", {}, {}, &outcome)),
+              "changed site escaped independent recipe verification");
+    }
     result.getBody().front().front().setOperand(1, result.getArgument(0));
     bool named = false;
     ScopedDiagnosticHandler handler(&context, [&](Diagnostic &diagnostic) {
@@ -190,7 +202,7 @@ int main(int argc, char **argv) {
       return success();
     });
     require(
-        failed(mathematical::verifyCalculationRecipes(unit, after, {result})) &&
+        failed(kernel::verifyEntryRecipes(*numerical, *candidate, "product")) &&
             named,
         "changed operand escaped independent recipe verification");
   });
@@ -249,9 +261,11 @@ int main(int argc, char **argv) {
     require(found, "byte dimension realization missing");
   });
   cases.run("array recipe rejects shortened vector construction", [&] {
-    auto before = copy(*expanded);
-    auto function = realized(*before);
-    auto &block = function.getBody().front();
+    auto owner =
+        cast<protocol_ir::ProtocolModuleOp>(source->getBody()->front());
+    auto numerical = kernelRecipeSource(owner, "polynomial", "realized");
+    auto function = kernel::getEntry(*numerical);
+    auto &block = function.front();
     while (!block.empty())
       block.back().erase();
     OpBuilder builder(&block, block.end());
@@ -266,31 +280,33 @@ int main(int argc, char **argv) {
     auto at = algebra::ArrayAtOp::create(
         builder, function.getLoc(), block.getArgument(0).getType(),
         array.getResult(), builder.getI64IntegerAttr(1));
-    local::ReturnOp::create(builder, function.getLoc(), at.getResult());
-    auto candidate = copy(*before);
+    func::ReturnOp::create(builder, function.getLoc(), at.getResult());
+    // Deliberately bypass normalization: exact projection folding would remove
+    // the vector construction and contract-instance mutation targets.
+    mathematical::RealizationWork work;
+    auto candidate = realizeKernelEntry(*numerical, "array", {}, work);
+    require(bool(candidate), "array recipe failed");
+    kernelRecipeOutput(*candidate);
     auto result = realized(*candidate);
-    auto unit = cast<protocol_ir::ProtocolModuleOp>(before->getBody()->front());
-    auto after =
-        cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
-    unsigned site = 0;
-    for (auto &op : result.getBody().front().without_terminator())
-      op.setAttr("site",
-                 builder.getStringAttr("array_" + std::to_string(site++)));
-    require(succeeded(mathematical::lowerCalculations(after, {result})),
-            "array recipe failed");
+    require(
+        succeeded(kernel::verifyEntryRecipes(*numerical, *candidate, "array")),
+        "valid array recipe comparison failed");
     auto pristine = copy(*candidate);
     for (bool changeBinding : {false, true}) {
       auto mutated = copy(*pristine);
       auto changed = realized(*mutated);
       bool found = false;
       if (changeBinding)
-        mutated->walk([&](local::OperationBindingOp binding) {
+        for (auto binding : kernelRecipeOutput(*mutated)
+                                .getBody()
+                                .front()
+                                .getOps<local::OperationBindingOp>()) {
           if (binding.getContract() == "field_array.at") {
             binding->setAttr("arguments",
                              builder.getStrArrayAttr({"bls12-381.fr", "3"}));
             found = true;
           }
-        });
+        }
       else
         changed.walk([&](Operation *op) {
           if (op->getName().getStringRef() == "algebra.exec.field_array_at") {
@@ -301,12 +317,8 @@ int main(int argc, char **argv) {
       require(found, "array mutation target missing");
       ScopedDiagnosticHandler handler(&context,
                                       [](Diagnostic &) { return success(); });
-      require(
-          failed(mathematical::verifyCalculationRecipes(
-              unit,
-              cast<protocol_ir::ProtocolModuleOp>(mutated->getBody()->front()),
-              {changed})),
-          "changed array contract instance accepted");
+      require(failed(kernel::verifyEntryRecipes(*numerical, *mutated, "array")),
+              "changed array contract instance accepted");
     }
     Operation *append = nullptr;
     result.walk([&](Operation *op) {
@@ -316,12 +328,12 @@ int main(int argc, char **argv) {
     require(append, "array recipe did not append");
     append->getResult(0).replaceAllUsesWith(append->getOperand(0));
     append->erase();
-    require(succeeded(verify(*candidate)), "short array mutation not formed");
+    require(succeeded(kernel::verifyRecipeOutput(*candidate)),
+            "short array mutation not formed");
     ScopedDiagnosticHandler handler(&context,
                                     [](Diagnostic &) { return success(); });
-    require(
-        failed(mathematical::verifyCalculationRecipes(unit, after, {result})),
-        "short vector accepted by recipe comparison");
+    require(failed(kernel::verifyEntryRecipes(*numerical, *candidate, "array")),
+            "short vector accepted by recipe comparison");
   });
   std::string large;
   large += " func.func private @leaf(%x:!F)->!F {\n";

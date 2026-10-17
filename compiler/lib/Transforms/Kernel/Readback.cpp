@@ -1,9 +1,7 @@
 #include "../HelperNormalization.h"
 #include "Support.h"
 #include "mlir/IR/IRMapping.h"
-#include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
-#include "zkc/Transforms/Algorithms.h"
 #include "llvm/ADT/DenseSet.h"
 
 using namespace mlir;
@@ -106,10 +104,9 @@ OwningOpRef<func::FuncOp> exactReadback(func::FuncOp source, Operation *owner,
 }
 // Normalization is an explicit checked edge, separate from exact substitution.
 // The original unit and all of its dependency/source roots stay immutable.
-OwningOpRef<protocol_ir::ProtocolModuleOp>
-normalizationWorkspace(ModuleOp unit, local::FuncOp &localEntry,
-                       uint64_t &remaining,
-                       llvm::DenseSet<Operation *> &shareable) {
+OwningOpRef<ModuleOp>
+normalizeUnit(ModuleOp unit, uint64_t &remaining,
+              llvm::DenseSet<Operation *> &polynomialGenerated) {
   auto entry = getEntry(unit);
   if (!entry || !entry.getBody().hasOneBlock())
     return {};
@@ -121,102 +118,32 @@ normalizationWorkspace(ModuleOp unit, local::FuncOp &localEntry,
   auto normalized = helpers.lookup(entry);
   if (!normalized)
     return {};
+  for (auto &op : normalized.front().without_terminator())
+    if (!mathematical::isTotal(&op) || isa<func::CallOp>(op) ||
+        op.getName().getDialectNamespace() == "poly")
+      return {};
 
-  OpBuilder builder(unit.getContext());
-  OperationState state(unit.getLoc(),
-                       protocol_ir::ProtocolModuleOp::getOperationName());
-  state.addAttribute("profile",
-                     protocol_ir::ProfileAttr::get(unit.getContext(),
-                                                   protocol_ir::Profile::Exec));
-  state.addRegion();
-  OwningOpRef<protocol_ir::ProtocolModuleOp> scratch(
-      cast<protocol_ir::ProtocolModuleOp>(builder.create(state)));
+  // Clone each selected standard declaration once, retaining unit/function
+  // attributes, positional ports and dependency symbols in their original
+  // owner. Only the helper cache proposes and checks normalized bodies.
+  OwningOpRef<ModuleOp> scratch(cast<ModuleOp>(unit->cloneWithoutRegions()));
   scratch->getBody().emplaceBlock();
+  OpBuilder builder(unit.getContext());
   builder.setInsertionPointToEnd(&scratch->getBody().front());
+  IRMapping mapping;
   for (auto &declaration : unit.getBody().front()) {
-    if (&declaration == entry.getOperation())
-      continue;
     auto checked = helpers.lookup(&declaration);
     auto *selected = checked ? checked.getOperation() : &declaration;
     if (!chargeCopy(selected, remaining))
       return {};
-    builder.clone(*selected);
+    builder.clone(*selected, mapping);
   }
-  localEntry = local::FuncOp::create(
-      builder, entry.getLoc(), entry.getSymName(), entry.getFunctionType());
-  auto *body = localEntry.addEntryBlock();
-  builder.setInsertionPointToEnd(body);
-  IRMapping values;
-  values.map(normalized.getArguments(), body->getArguments());
+  // Publish only identities owned by the completed proposal. A refused copy
+  // leaves both the immutable source and the caller's evidence set unchanged.
   for (auto &op : normalized.front().without_terminator()) {
-    if (!mathematical::isTotal(&op) || isa<func::CallOp>(op) ||
-        op.getName().getDialectNamespace() == "poly")
-      return {};
-    uint64_t cost = 1 + op.getNumOperands() + op.getNumResults();
-    if (cost > remaining)
-      return {};
-    remaining -= cost;
-    auto *copy = builder.clone(op, values);
     if (helpers.isPolynomialGenerated(&op))
-      shareable.insert(copy);
-    copy->removeAttr("site");
+      polynomialGenerated.insert(mapping.lookup(&op));
   }
-  SmallVector<Value> outputs;
-  for (auto value : normalized.front().back().getOperands())
-    outputs.push_back(values.lookup(value));
-  local::ReturnOp::create(builder, entry.getLoc(), outputs);
-  return scratch;
-}
-// Exact adapter for an already checked normalized mathematical subject. This
-// reader never calls a normalizer or any numerical emitter. Recipe verification
-// consumes the actual candidate against this retained mathematical body.
-OwningOpRef<protocol_ir::ProtocolModuleOp>
-recipeWorkspace(ModuleOp unit, local::FuncOp &localEntry, StringRef callSite,
-                uint64_t &remaining, uint64_t &remainingBytes) {
-  auto entry = getEntry(unit);
-  if (!entry || !entry.getBody().hasOneBlock())
-    return {};
-  if (!chargeCopy(unit, remaining))
-    return {};
-  OpBuilder builder(unit.getContext());
-  OperationState state(unit.getLoc(),
-                       protocol_ir::ProtocolModuleOp::getOperationName());
-  state.addAttribute("profile",
-                     protocol_ir::ProfileAttr::get(unit.getContext(),
-                                                   protocol_ir::Profile::Exec));
-  state.addRegion();
-  OwningOpRef<protocol_ir::ProtocolModuleOp> scratch(
-      cast<protocol_ir::ProtocolModuleOp>(builder.create(state)));
-  scratch->getBody().emplaceBlock();
-  builder.setInsertionPointToEnd(&scratch->getBody().front());
-  for (auto &declaration : unit.getBody().front())
-    if (&declaration != entry.getOperation())
-      builder.clone(declaration);
-  localEntry = local::FuncOp::create(
-      builder, entry.getLoc(), entry.getSymName(), entry.getFunctionType());
-  auto *body = localEntry.addEntryBlock();
-  builder.setInsertionPointToEnd(body);
-  IRMapping values;
-  values.map(entry.getArguments(), body->getArguments());
-  unsigned ordinal = 0;
-  for (auto &op : entry.front().without_terminator()) {
-    if (!mathematical::isTotal(&op) || op.getNumRegions() ||
-        op.getName().getDialectNamespace() == "poly")
-      return {};
-    auto site =
-        protocol::algorithmSite({{callSite.str(), "kernel"}},
-                                std::to_string(ordinal++), remainingBytes);
-    if (!site) {
-      diagnostics::emit(entry.emitError(), site.takeError());
-      return {};
-    }
-    auto *copy = builder.clone(op, values);
-    copy->setAttr("site", builder.getStringAttr(*site));
-  }
-  SmallVector<Value> outputs;
-  for (Value value : entry.front().back().getOperands())
-    outputs.push_back(values.lookup(value));
-  local::ReturnOp::create(builder, entry.getLoc(), outputs);
   return scratch;
 }
 } // namespace zkc::kernel

@@ -11,6 +11,7 @@
 #include "RecipeRealizations.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/PatternMatch.h"
+#include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/Computation.h"
 #include "zkc/Contracts/Operations.h"
@@ -142,7 +143,8 @@ OwningOpRef<ModuleOp> normalizeSelectionCallback(Computation &computation,
   return context;
 }
 class Realizer {
-  protocol_ir::ProtocolModuleOp unit;
+  Operation *unit;
+  Operation *sourceRoot = nullptr;
   RewriterBase &builder;
   SymbolTableCollection symbols;
   Location loc;
@@ -387,8 +389,8 @@ class Realizer {
       OwningOpRef<func::FuncOp> scratch(cast<func::FuncOp>(math->clone()));
       SymbolTableCollection tables;
       if (failed(mathematical::inlineHelpers(*scratch, work.helperOperations,
-                                             work.helperSlots, tables, unit,
-                                             nullptr, &outcome)) ||
+                                             work.helperSlots, tables,
+                                             sourceRoot, nullptr, &outcome)) ||
           failed(poly::eliminatePolynomials(scratch->front(), work.polynomial,
                                             &outcome))) {
         if (observation)
@@ -433,20 +435,24 @@ class Realizer {
   }
 
 public:
-  Realizer(protocol_ir::ProtocolModuleOp unit, RewriterBase &builder,
+  Realizer(Operation *unit, RewriterBase &builder,
            mathematical::RealizationWork &work,
            const mathematical::MathematicalRecipes &recipes =
                mathematical::mathematicalRecipes(),
            mathematical::RealizationScope *observation = nullptr,
            bool retryOrdered = false)
-      : unit(unit), builder(builder), loc(unit.getLoc()),
-        index(IntegerType::get(unit.getContext(), 64, IntegerType::Unsigned)),
+      : unit(unit), builder(builder), loc(unit->getLoc()),
+        index(IntegerType::get(unit->getContext(), 64, IntegerType::Unsigned)),
         boolean(builder.getI1Type()), emitter(unit, "_finite_binding_"),
         work(work), recipes(recipes), observation(observation),
         retryOrdered(retryOrdered) {}
   FailureOr<SmallVector<Value>> emitBody(Operation *source, ValueRange entry,
                                          bool optimize) {
-    if (failed(describe(source, computation, unit, &symbols)))
+    // The source closure may be separate from the table receiving bindings.
+    // Detached helper copies keep resolving through this original owner.
+    sourceRoot = SymbolTable::getNearestSymbolTable(source);
+    if (!sourceRoot ||
+        failed(describe(source, computation, sourceRoot, &symbols)))
       return failure();
     auto partitions = partitionEntry(computation, entry);
     if (failed(partitions))
@@ -481,8 +487,8 @@ public:
         }
         if (ready && needsNormalization) {
           normalized = normalizeSelectionCallback(
-              selectionComputation, unit, callbackWork.remaining.structural,
-              selection.diagnostic.outcome);
+              selectionComputation, sourceRoot,
+              callbackWork.remaining.structural, selection.diagnostic.outcome);
           ready = bool(normalized);
         }
       }
@@ -720,7 +726,7 @@ public:
     Computation source;
     if (failed(describe(declaration, source, unit, &symbols)))
       return failure();
-    builder.setInsertionPointToEnd(&unit.getBody().front());
+    builder.setInsertionPointToEnd(&unit->getRegion(0).front());
     auto name = SymbolTable::getSymbolName(declaration);
     auto function = local::FuncOp::create(builder, declaration->getLoc(),
                                           name.getValue(), source.signature);
@@ -758,9 +764,12 @@ realizeExpression(Operation *op, ValueRange inputs, OpBuilder &builder,
   auto &available = work ? *work : standalone;
   mathematical::RealizationScope scope(trace, "finite-expression", op, policy,
                                        &available);
-  auto unit = op->getParentOfType<protocol_ir::ProtocolModuleOp>();
+  auto *block = builder.getInsertionBlock();
+  auto *unit = block ? SymbolTable::getNearestSymbolTable(block->getParentOp())
+                     : nullptr;
   auto site = op->getAttrOfType<StringAttr>("site");
-  if (!unit || !site || site.getValue().empty())
+  if (!unit || unit->getNumRegions() != 1 ||
+      !unit->getRegion(0).hasOneBlock() || !site || site.getValue().empty())
     return failure();
   BodyRewriter rewriter(builder);
   Realizer realizer(unit, rewriter, available,

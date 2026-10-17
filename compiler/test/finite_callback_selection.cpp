@@ -5,6 +5,7 @@
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "support/KernelRecipes.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/IR.h"
@@ -193,7 +194,10 @@ Operation *fold(ModuleOp source) {
               .front();
 }
 local::FuncOp selected(ModuleOp candidate) {
-  return SymbolTable(unit(candidate)).lookup<local::FuncOp>("selected");
+  auto function = SymbolTable(kernelRecipeOutput(candidate))
+                      .lookup<local::FuncOp>("selected");
+  require(bool(function), "missing selected recipe entry");
+  return function;
 }
 bool hasLoop(local::FuncOp function) {
   bool found = false;
@@ -204,35 +208,21 @@ OwningOpRef<ModuleOp> emit(ModuleOp source, RealizationWork &work,
                            bool optimize = true,
                            RealizationTrace *trace = nullptr,
                            finite::VerificationLimits limits = {}) {
-  auto candidate = copy(source);
-  auto total = SymbolTable(unit(*candidate)).lookup<func::FuncOp>("total");
-  OpBuilder builder(source.getContext());
-  builder.setInsertionPointToEnd(&unit(*candidate).getBody().front());
-  auto function = local::FuncOp::create(builder, total.getLoc(), "selected",
-                                        total.getFunctionType());
-  function->setAttr("logical_origin",
-                    builder.getArrayAttr({builder.getStringAttr("selected"),
-                                          builder.getArrayAttr({})}));
-  builder.setInsertionPointToEnd(function.addEntryBlock());
-  // Start at the outlined calculation boundary, before finite emission and
-  // primitive lowering. The complete reader compares against this original
-  // occurrence; all reusable source helpers stay intact.
-  IRMapping mapping;
-  mapping.map(total.getArguments(), function.getArguments());
-  auto *occurrence = builder.clone(*fold(*candidate), mapping);
-  occurrence->setAttr("site", builder.getStringAttr("selection"));
-  local::ReturnOp::create(builder, total.getLoc(), occurrence->getResults());
-  // This service owns both intermediate finite sites and primitive bindings.
-  // Pass the same work object through it so optional and required accounting
-  // assertions cover the checked candidate, including any ordered fallback.
-  require(succeeded(lowerCalculations(unit(*candidate), {function},
-                                      {optimize, false}, &work, limits, trace)),
-          "checked callback lowering failed");
-  require(succeeded(verify(*candidate)), "candidate refused");
+  auto numerical = kernelRecipeSource(unit(source), "total", "selected");
+  OwningOpRef<kernel::ModuleOp> original(
+      cast<kernel::ModuleOp>(numerical->clone()));
+  // The entry contains the original standard-function fold. Optional callback
+  // preparation and required ordered fallback share the caller's work object.
+  auto candidate = realizeKernelEntry(*numerical, "selection",
+                                      {optimize, false}, work, limits, trace);
+  require(bool(candidate), "checked callback lowering failed");
+  kernelRecipeOutput(*candidate);
+  require(succeeded(kernel::verifyRecipeOutput(*candidate)),
+          "candidate refused");
+  require(same(*numerical, *original), "Kernel recipe source changed");
   for (auto helper : unit(source).getBody().front().getOps<func::FuncOp>())
-    require(
-        same(helper, SymbolTable(unit(*candidate)).lookup(helper.getSymName())),
-        "source helper changed");
+    require(same(helper, SymbolTable(*numerical).lookup(helper.getSymName())),
+            "source helper changed");
   return candidate;
 }
 bool compare(ModuleOp source, ModuleOp candidate) {
@@ -245,8 +235,13 @@ bool compare(ModuleOp source, ModuleOp candidate) {
   };
   auto result = finite::verifyExpression(fold(source), function.getArguments(),
                                          cursor, noOrderedReader, unit(source));
-  return succeeded(result) && cursor == &function.getBody().front().back() &&
-         result->size() == 1 && (*result)[0] == cursor->getOperand(0);
+  if (failed(result) || cursor != &function.getBody().front().back() ||
+      result->size() != 1 || (*result)[0] != cursor->getOperand(0))
+    return false;
+  auto numerical = kernelRecipeSource(unit(source), "total", "selected");
+  finite::VerificationResult outcome{finite::VerificationStatus::Mismatch, {}};
+  return succeeded(kernel::verifyEntryRecipes(*numerical, candidate,
+                                              "selection", {}, {}, &outcome));
 }
 } // namespace
 
@@ -354,7 +349,7 @@ int main() {
               }
           }
         });
-        require(changed && succeeded(verify(*malformed)) &&
+        require(changed && succeeded(kernel::verifyRecipeOutput(*malformed)) &&
                     !compare(*source, *malformed),
                 "wrong seed survived independent pointwise comparison");
         malformed = copy(*candidate);
@@ -380,12 +375,13 @@ int main() {
           });
           require(fill != nullptr, "uniform term did not use a broadcast");
           OpBuilder builder(fill);
-          RealizationEmitter emitter(unit(*malformed), "wrong_cardinality_");
+          RealizationEmitter emitter(kernelRecipeOutput(*malformed),
+                                     "wrong_cardinality_");
           auto *one = emitter.emit(builder, fill->getLoc(), "wrong_cardinality",
                                    {"index.constant", {}, ""}, {},
                                    fill->getOperand(1).getType(), {"1"});
           fill->setOperand(1, one->getResult(0));
-          require(succeeded(verify(*malformed)) &&
+          require(succeeded(kernel::verifyRecipeOutput(*malformed)) &&
                       !compare(*source, *malformed),
                   "broadcast lost its admitted cardinality");
         }
@@ -414,7 +410,7 @@ int main() {
         changed = true;
       }
     });
-    require(changed && succeeded(verify(*candidate)) &&
+    require(changed && succeeded(kernel::verifyRecipeOutput(*candidate)) &&
                 !compare(*source, *candidate),
             "equal extents equated different container elements");
   });
@@ -533,8 +529,13 @@ module { "protocol.module"() ({
             if (auto *decision = std::get_if<SelectionDecision>(&event.payload);
                 decision && decision->family == DecisionFamily::Finite) {
               observed = true;
-              require(decision->querySubject.declaration == "selected" &&
-                          decision->querySubject.site == "selection" &&
+              require(event.subject.declaration == "selected" &&
+                          event.subject.site ==
+                              kernelRecipeSite("selection", 0) &&
+                          event.subject.position.empty() &&
+                          decision->querySubject.declaration == "selected" &&
+                          decision->querySubject.site ==
+                              kernelRecipeSite("selection", 0) &&
                           decision->querySubject.position.empty(),
                       "normalized query reported a synthetic source position");
             }
@@ -654,7 +655,8 @@ module { "protocol.module"() ({
             dot->setOperand(1,
                             selected(*candidate).getArgument(repeated ? 0 : 2));
             require(
-                succeeded(verify(*candidate)) && !compare(*source, *candidate),
+                succeeded(kernel::verifyRecipeOutput(*candidate)) &&
+                    !compare(*source, *candidate),
                 "reader equated distinct containers or lost repeated actuals");
           });
   for (bool aliased : {false, true})
@@ -700,7 +702,7 @@ module { "protocol.module"() ({
           require(dot, "missing alias contraction");
           dot->setOperand(0, selected(*candidate).getArgument(aliased ? 2 : 0));
           dot->setOperand(1, selected(*candidate).getArgument(aliased ? 2 : 0));
-          require(succeeded(verify(*candidate)) &&
+          require(succeeded(kernel::verifyRecipeOutput(*candidate)) &&
                       !compare(*source, *candidate),
                   "alias mapping accepted a changed container");
         });
@@ -767,7 +769,7 @@ module { "protocol.module"() ({
           require(dot && length,
                   "matrix contraction or domain admission missing");
           dot->setOperand(2, length->getResult(0));
-          require(succeeded(verify(*candidate)) &&
+          require(succeeded(kernel::verifyRecipeOutput(*candidate)) &&
                       !compare(*source, *candidate),
                   "reader accepted a different fixed selector");
         });
@@ -862,7 +864,8 @@ module { "protocol.module"() ({
                        .getDefiningOp();
     require(result && result->getNumOperands() == 2, "missing seed combiner");
     result->setOperand(0, result->getOperand(1));
-    require(succeeded(verify(*candidate)) && !compare(*source, *candidate),
+    require(succeeded(kernel::verifyRecipeOutput(*candidate)) &&
+                !compare(*source, *candidate),
             "wrong seed escaped original callback comparison");
   });
   for (uint64_t capacity :

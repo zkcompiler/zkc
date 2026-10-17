@@ -17,15 +17,20 @@ using namespace llvm;
 namespace zkc::finite {
 struct ComputationBody {
   OwningOpRef<mlir::ModuleOp> storage;
-  local::FuncOp helper;
+  func::FuncOp helper;
   llvm::DenseMap<Operation *, Operation *> sources;
   llvm::DenseMap<Value, Value> callbackValues;
+  SmallVector<Operation *> numericalCalls;
 };
 Operation *ComputationView::sourceOperation(Operation *operation) const {
   if (numericalBody)
     if (auto *source = numericalBody->sources.lookup(operation))
       return source;
   return operation;
+}
+ArrayRef<Operation *> ComputationView::numericalCalls() const {
+  return numericalBody ? ArrayRef<Operation *>(numericalBody->numericalCalls)
+                       : ArrayRef<Operation *>();
 }
 Value ComputationView::callbackValue(Value source) const {
   return numericalBody ? numericalBody->callbackValues.lookup(source) : source;
@@ -100,13 +105,10 @@ class NumericalBodyReader {
       }
       func::FuncOp callee;
       if (auto call = dyn_cast<kernel::CallOp>(op)) {
-        // A retained compile-time choice cannot be bypassed by a surrounding
-        // collection strategy. Unknown policies remain opaque as well.
-        if (auto policy = call->getAttrOfType<ArrayAttr>("policy"))
-          if (policy.size() != 2 || !isa<BoolAttr>(policy[0]) ||
-              !isa<BoolAttr>(policy[1]) ||
-              !cast<BoolAttr>(policy[0]).getValue())
-            return failure();
+        // Structural substitution does not choose a realization. Preserve each
+        // original occurrence so selection can inspect its actual constraints.
+        // The visit was charged above, including calls with no scalar output.
+        result.numericalCalls.push_back(&op);
         callee = kernel::resolve(call, symbols);
       } else if (auto call = dyn_cast<func::CallOp>(op)) {
         callee = symbols.lookupNearestSymbolFrom<func::FuncOp>(
@@ -198,7 +200,7 @@ public:
     if (failed(outputs))
       return failure();
     builder.setInsertionPointToEnd(body);
-    auto end = local::ReturnOp::create(builder, source.getLoc(), *outputs);
+    auto end = func::ReturnOp::create(builder, source.getLoc(), *outputs);
     result.sources[end] = &source.getBody().front().back();
     for (auto &op : llvm::make_early_inc_range(body->without_terminator())) {
       if (!charge(&op))
@@ -221,14 +223,69 @@ public:
 };
 
 std::shared_ptr<ComputationBody>
-readNumericalBody(local::FuncOp helper, ComputationWork &work,
+readNumericalBody(CallbackView &callback, ComputationWork &work,
                   ComputationDiagnostic &diagnostic) {
+  // The original ABI has already been checked. This standard function is only
+  // owned SSA storage; it does not change the partial callback's contract.
+  auto helper = dyn_cast<local::FuncOp>(callback.symbol);
+  if (!helper || callback.exit != CallbackExit::Return)
+    return {};
   auto result = std::make_shared<ComputationBody>();
   result->storage = mlir::ModuleOp::create(helper.getLoc());
-  result->helper = cast<local::FuncOp>(helper->cloneWithoutRegions());
+  result->helper = func::FuncOp::create(helper.getLoc(), helper.getSymName(),
+                                        callback.signature);
+  result->helper.setPrivate();
+  if (auto premises = helper->getAttr("data.preconditions"))
+    result->helper->setAttr("data.preconditions", premises);
   result->storage->getBody()->push_back(result->helper);
   if (failed(NumericalBodyReader(*result, work, diagnostic).read(helper)))
     return {};
+  auto &body = result->helper.front();
+  auto *terminator = &body.back();
+  ValueRange arguments = body.getArguments();
+  if (arguments.size() != callback.body->getNumArguments() ||
+      !isa<func::ReturnOp>(terminator) ||
+      terminator->getNumOperands() != callback.returned.size())
+    return {};
+  unsigned position = 0;
+  for (ValueRange segment :
+       {callback.formals.state, callback.formals.items, callback.formals.domain,
+        callback.formals.captures})
+    for (Value original : segment) {
+      if (!consumeComputationWork(work.structural, 1, WorkOwner::Structural,
+                                  &diagnostic.outcome))
+        return {};
+      auto formal = dyn_cast<BlockArgument>(original);
+      if (!formal || formal.getOwner() != callback.body ||
+          formal.getArgNumber() != position || position >= arguments.size() ||
+          original.getType() != arguments[position].getType() ||
+          result->callbackValues.lookup(original) != arguments[position])
+        return {};
+      ++position;
+    }
+  if (position != arguments.size())
+    return {};
+  for (auto [original, substituted] :
+       zip(callback.returned, terminator->getOperands())) {
+    if (!consumeComputationWork(work.structural, 1, WorkOwner::Structural,
+                                &diagnostic.outcome) ||
+        original.getType() != substituted.getType() ||
+        result->callbackValues.lookup(original) != substituted)
+      return {};
+  }
+  // Preserve symbol/signature/role/exit as observations of the source callback.
+  // Only body-relative references move to the checked positional SSA view.
+  auto formals = callback.formals;
+  callback.body = &body;
+  callback.formals = {
+      arguments.take_front(formals.state.size()),
+      arguments.slice(formals.state.size(), formals.items.size()),
+      arguments.slice(formals.state.size() + formals.items.size(),
+                      formals.domain.size()),
+      arguments.drop_front(formals.state.size() + formals.items.size() +
+                           formals.domain.size())};
+  callback.terminator = terminator;
+  callback.returned = terminator->getOperands();
   return result;
 }
 
@@ -562,7 +619,10 @@ public:
         !charge(1 + c.signature.getNumInputs() + c.signature.getNumResults() +
                 c.helper->getRegion(0).front().getNumArguments()))
       return std::nullopt;
-    auto callbackComputation = c;
+    auto callback =
+        readCallback(c, c.collect ? CallbackRole::Body : CallbackRole::Step);
+    if (failed(callback))
+      return std::nullopt;
     std::shared_ptr<ComputationBody> numericalBody;
     if (auto helper = dyn_cast<local::FuncOp>(c.helper)) {
       bool calls = false;
@@ -572,17 +632,11 @@ public:
         calls |= isa<kernel::CallOp, func::CallOp>(op);
       }
       if (calls) {
-        numericalBody = readNumericalBody(helper, work, diagnostic);
+        numericalBody = readNumericalBody(*callback, work, diagnostic);
         if (!numericalBody)
           return std::nullopt;
-        callbackComputation.helper = numericalBody->helper;
       }
     }
-    auto callback =
-        readCallback(callbackComputation,
-                     c.collect ? CallbackRole::Body : CallbackRole::Step);
-    if (failed(callback))
-      return std::nullopt;
     auto &body = *callback->body;
     ComputationView result;
     result.computation = c;

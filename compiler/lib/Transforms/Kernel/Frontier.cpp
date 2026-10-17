@@ -394,59 +394,25 @@ OwningOpRef<mlir::ModuleOp> prepareKernelLowering(mlir::ModuleOp source) {
   // One immutable unit can have several actual invocations. Give each proposal
   // a private normalized entry so sharing never changes another invocation.
   SymbolTable outer(owner);
-  unsigned next = 0;
   for (auto sourceCall : calls) {
     auto call = cast<CallOp>(sourceMapping.lookup(sourceCall.getOperation()));
     auto raw = resolve(call, symbols);
     if (!raw)
       return {};
     auto unit = cast<ModuleOp>(raw->getParentOp());
-    local::FuncOp normalized;
     llvm::DenseSet<Operation *> generated;
-    auto scratch =
-        normalizationWorkspace(unit, normalized, remaining, generated);
-    if (!scratch)
+    auto normalized = normalizeUnit(unit, remaining, generated);
+    if (!normalized)
       return {};
-    if (!chargeCopy(*scratch, remaining))
-      return {};
-    OpBuilder builder(unit.getContext());
-    builder.setInsertionPointToEnd(&owner.getBody().front());
-    std::string name;
-    do {
-      name = "_normalized_kernel_" + std::to_string(next++);
-    } while (outer.lookup(name));
-    auto fresh = ModuleOp::create(builder, unit.getLoc(), name);
-    fresh.getBody().emplaceBlock();
-    builder.setInsertionPointToEnd(&fresh.getBody().front());
-    for (auto &declaration : scratch->getBody().front()) {
-      if (&declaration != normalized.getOperation())
-        builder.clone(declaration);
-    }
-    auto entry = func::FuncOp::create(builder, raw.getLoc(), raw.getSymName(),
-                                      normalized.getFunctionType());
-    for (auto attribute : raw->getAttrs())
-      if (attribute.getName() != "sym_name" &&
-          attribute.getName() != "sym_visibility")
-        entry->setAttr(attribute.getName(), attribute.getValue());
-    auto *block = entry.addEntryBlock();
-    builder.setInsertionPointToEnd(block);
-    IRMapping mapping;
-    mapping.map(normalized.getArguments(), block->getArguments());
-    for (auto &op : normalized.getBody().front().without_terminator()) {
-      auto *copy = builder.clone(op, mapping);
-      copy->removeAttr("site");
-      if (generated.contains(&op))
-        shareable.insert(copy);
-    }
-    SmallVector<Value> outputs;
-    for (Value value : normalized.getBody().front().back().getOperands())
-      outputs.push_back(mapping.lookup(value));
-    func::ReturnOp::create(builder, raw.getLoc(), outputs);
-    call->setAttr(
-        "callee",
-        SymbolRefAttr::get(builder.getContext(), name,
-                           {FlatSymbolRefAttr::get(raw.getSymNameAttr())}));
-    outer.insert(fresh);
+    // Adopt the checked Kernel subject without copying its body or replacing
+    // its standard entry. SymbolTable owns collision avoidance; insertion
+    // preserves every independently tracked generated operation identity.
+    SymbolTable::setSymbolName(*normalized, "_normalized_kernel");
+    auto fresh = normalized.release();
+    auto name = outer.insert(fresh, owner.getBody().front().end());
+    call.setCalleeAttr(SymbolRefAttr::get(
+        name, {FlatSymbolRefAttr::get(raw.getSymNameAttr())}));
+    shareable.insert(generated.begin(), generated.end());
     rewrites.push_back({sourceCall, call, fresh});
   }
   if (failed(verifyKernelNormalizationContext(source, *proposal, rewrites,

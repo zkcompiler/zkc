@@ -33,11 +33,11 @@ VerificationResult checkRealizations(mlir::ModuleOp original,
 
 // Typed inline outcome for the containing checked transaction. This overload
 // does not diagnose capacity; the transaction may discard an optional proposal.
-mlir::FailureOr<llvm::SmallVector<mlir::Value>>
-verifyExpression(mlir::Operation *source, mlir::ValueRange inputs,
-                 mlir::Operation *&cursor, HelperReader helper,
-                 mlir::Operation *symbolRoot, VerificationLimits limits,
-                 VerificationResult &outcome);
+// Disabled bulk policy requires the ordered payload after domain admission.
+mlir::FailureOr<llvm::SmallVector<mlir::Value>> verifyExpression(
+    mlir::Operation *source, mlir::ValueRange inputs, mlir::Operation *&cursor,
+    HelperReader helper, mlir::Operation *symbolRoot, VerificationLimits limits,
+    VerificationResult &outcome, MathematicalSelectionPolicy policy = {});
 
 } // namespace zkc::finite
 #endif

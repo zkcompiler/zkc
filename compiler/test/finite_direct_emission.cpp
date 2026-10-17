@@ -1,3 +1,4 @@
+#include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/PatternMatch.h"
@@ -200,6 +201,77 @@ int main(int argc, char **argv) {
         require(failed(finite::verifyExpression(original, inputs, cursor,
                                                 reader, unit(*source))),
                 "same-typed state permutation escaped actual inline reading");
+      });
+  cases.run(
+      "source helpers and emitted bindings have independent symbol roots", [&] {
+        auto source = parseSourceString<ModuleOp>(aliasSource, &context);
+        require(bool(source), "separate source admission failed");
+        prepare(*source);
+        auto *original = expression(*source);
+        original->setAttr("site", StringAttr::get(&context, "separate"));
+        std::string before;
+        llvm::raw_string_ostream(before) << *source;
+
+        SmallVector<Value> unique;
+        for (Value value : original->getOperands())
+          if (!llvm::is_contained(unique, value))
+            unique.push_back(value);
+        OwningOpRef<ModuleOp> candidate(ModuleOp::create(original->getLoc()));
+        OpBuilder builder(candidate->getBody(), candidate->getBody()->end());
+        auto output = protocol_ir::ProtocolModuleOp::create(
+            builder, original->getLoc(), protocol_ir::Profile::Exec);
+        output.getBody().emplaceBlock();
+        builder.setInsertionPointToEnd(&output.getBody().front());
+        auto function = local::FuncOp::create(
+            builder, original->getLoc(), "separate",
+            builder.getFunctionType(ValueRange(unique).getTypes(),
+                                    original->getResultTypes()));
+        function->setAttr(
+            "logical_origin",
+            builder.getArrayAttr(
+                {builder.getStringAttr("separate"), builder.getArrayAttr({})}));
+        auto *block = function.addEntryBlock();
+        builder.setInsertionPointToEnd(block);
+        IRMapping arguments;
+        arguments.map(unique, block->getArguments());
+        SmallVector<Value> inputs;
+        for (Value value : original->getOperands())
+          inputs.push_back(arguments.lookup(value));
+        mathematical::RealizationWork work;
+        auto emitted = finite::realizeExpression(original, inputs, builder,
+                                                 {false, false}, &work);
+        require(succeeded(emitted), "separate-root finite emission failed");
+        auto after =
+            local::ReturnOp::create(builder, original->getLoc(), *emitted);
+        require(succeeded(kernel::verifyRecipeOutput(*candidate)),
+                "separate-root output is malformed");
+        require(!SymbolTable::lookupSymbolIn(output, "step") &&
+                    !SymbolTable::lookupSymbolIn(output, "items"),
+                "emission copied source helper declarations into the target");
+        auto reader = [&](Operation *helper, ValueRange args,
+                          Operation *&) -> FailureOr<SmallVector<Value>> {
+          auto &body = helper->getRegion(0).front();
+          if (body.getOperations().size() != 1 ||
+              !isa<func::ReturnOp>(body.back()))
+            return failure();
+          SmallVector<Value> results;
+          for (Value value : body.back().getOperands()) {
+            auto formal = dyn_cast<BlockArgument>(value);
+            if (!formal || formal.getOwner() != &body ||
+                formal.getArgNumber() >= args.size())
+              return failure();
+            results.push_back(args[formal.getArgNumber()]);
+          }
+          return results;
+        };
+        Operation *cursor = &block->front();
+        auto checked = finite::verifyExpression(original, inputs, cursor,
+                                                reader, unit(*source));
+        require(succeeded(checked) && *checked == *emitted && cursor == after,
+                "independent reader conflated source and target symbol roots");
+        std::string unchanged;
+        llvm::raw_string_ostream(unchanged) << *source;
+        require(before == unchanged, "direct emission mutated its source");
       });
   cases.run("aliased range bounds canonicalize admission branch captures", [&] {
     auto source = parseSourceString<ModuleOp>(rangeAliasSource, &context);

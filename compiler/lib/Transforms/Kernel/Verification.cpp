@@ -47,17 +47,12 @@ class Checker {
         auto policy = selectionPolicy(call, fallback);
         if (!entry || failed(policy))
           return refuse(&op, "invalid original numerical invocation");
-        local::FuncOp recipeSource;
-        auto scratch =
-            recipeWorkspace(cast<ModuleOp>(entry->getParentOp()), recipeSource,
-                            call.getSite(), remaining, remainingBytes);
-        if (!scratch)
-          return refuse(&op,
-                        "unsupported original recipe subset or copy limit");
         auto *begin = cursor;
-        auto outputs = mathematical::verifyKernelRecipes(
-            *scratch, recipeSource, candidate, inputs, cursor, remaining,
-            *policy);
+        finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
+                                           {}};
+        auto outputs = verifyKernelRecipes(
+            entry, candidate, call.getSite(), inputs, cursor, remaining,
+            remainingBytes, *policy, {}, outcome);
         if (failed(outputs) || outputs->size() != call.getNumResults())
           return refuse(
               candidate,

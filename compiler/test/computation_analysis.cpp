@@ -35,6 +35,40 @@ std::string fixture(StringRef name) {
   text << input.rdbuf();
   return text.str();
 }
+std::string printed(Operation *operation) {
+  std::string text;
+  llvm::raw_string_ostream stream(text);
+  operation->print(stream);
+  return text;
+}
+std::string numericalAdditionFixture(StringRef name, StringRef output,
+                                     StringRef operands) {
+  auto text = fixture(name);
+  auto helper = text.find(" local.func private @step");
+  require(helper != std::string::npos, "missing Local step");
+  text.insert(helper, R"mlir(
+ kernel.module @numbers {
+   func.func private @add(%a:!F,%b:!F) -> !F {
+     %sum = algebra.field_add %a,%b : (!F,!F)->!F
+     func.return %sum : !F
+   }
+   func.func @entry(%a:!F,%b:!F) -> !F {
+     %sum = func.call @add(%a,%b) : (!F,!F)->!F
+     func.return %sum : !F
+   }
+ }
+)mlir");
+  auto begin =
+      text.find("   " + output.str() + " = \"algebra.exec.field_add\"");
+  auto end = text.find('\n', begin);
+  require(begin != std::string::npos && end != std::string::npos,
+          "missing addition to replace");
+  text.replace(begin, end - begin,
+               "   " + output.str() + " = kernel.call @numbers::@entry(" +
+                   operands.str() +
+                   ") {site=\"numerical\",policy=[false,false]} : (!F,!F)->!F");
+  return text;
+}
 finite::Computation computation(ModuleOp module) {
   Operation *found = nullptr;
   module.walk([&](Operation *op) {
@@ -110,6 +144,8 @@ int main() {
                      view->admission))
         require(&operation == recorded, "ordered admission changed");
       require(view->items.size() == view->axes.size(), "item axis omitted");
+      require(view->numericalCalls().empty(),
+              "call-free callback invented numerical provenance");
       for (const auto &item : view->items) {
         const auto &axis = view->axes[item.axis];
         require(axis.identity.constructor ==
@@ -119,6 +155,321 @@ int main() {
       }
       require(!finite::analyzeComputation(c, 0), "structural budget ignored");
     });
+  for (unsigned policy = 0; policy < 5; ++policy)
+    cases.run(
+        "numerical structure ignores policy " + std::to_string(policy),
+        [&, policy] {
+          auto module = parseSourceString<ModuleOp>(
+              numericalAdditionFixture("sum", "%next", "%state,%item"),
+              &context);
+          require(bool(module) && succeeded(verify(*module)),
+                  "numerical callback not admitted");
+          auto c = computation(*module);
+          auto *call = &c.helper->getRegion(0).front().front();
+          OpBuilder builder(&context);
+          if (!policy)
+            call->removeAttr("policy");
+          else
+            call->setAttr(
+                "policy",
+                builder.getArrayAttr({builder.getBoolAttr(policy >= 3),
+                                      builder.getBoolAttr(policy % 2 == 0)}));
+          require(succeeded(verify(*module)), "valid call policy refused");
+          auto before = printed(*module);
+          auto view = finite::analyzeComputation(c);
+          require(
+              view && view->numericalCalls().size() == 1 &&
+                  view->numericalCalls().front() == call &&
+                  view->payload.size() == 1 && view->payload.front() != call &&
+                  isa<algebra::FieldAddOp>(view->payload.front()) &&
+                  view->results.front() == view->payload.front()->getResult(0),
+              "call policy changed exact structural substitution");
+          auto storage =
+              dyn_cast<func::FuncOp>(view->callbackBody->getParentOp());
+          require(storage && isa<ModuleOp>(storage->getParentOp()) &&
+                      isa<func::ReturnOp>(view->terminator) &&
+                      view->computation.helper == c.helper &&
+                      view->sourceOperation(view->terminator) ==
+                          &c.helper->getRegion(0).front().back() &&
+                      view->callbackValue(call->getResult(0)) == view->result &&
+                      view->resultMappings[0].sourceYielded ==
+                          call->getResult(0),
+                  "standard storage changed callback or return provenance");
+          for (auto [original, substituted] :
+               llvm::zip(c.helper->getRegion(0).front().getArguments(),
+                         view->callbackBody->getArguments()))
+            require(view->callbackValue(original) == substituted &&
+                        original != substituted,
+                    "callback formal lost its exact positional substitution");
+          checkBindings(*view);
+          auto adapted = c;
+          adapted.helper = storage;
+          require(
+              failed(finite::readCallback(adapted, finite::CallbackRole::Step)),
+              "partial callback ABI accepted standard scratch storage");
+          require(
+              call->getBlock() == &c.helper->getRegion(0).front() &&
+                  view->sourceOperation(view->payload.front()) != call &&
+                  printed(*module) == before && succeeded(verify(*module)),
+              "analysis changed the original call or lost scalar provenance");
+        });
+  for (unsigned mutation = 0; mutation < 4; ++mutation)
+    cases.run(
+        "original numerical callback ABI " + std::to_string(mutation),
+        [&, mutation] {
+          auto module = parseSourceString<ModuleOp>(
+              numericalAdditionFixture("sum", "%next", "%state,%item"),
+              &context);
+          require(bool(module) && succeeded(verify(*module)),
+                  "numerical ABI control not admitted");
+          auto c = computation(*module);
+          auto helper = cast<local::FuncOp>(c.helper);
+          OpBuilder builder(&context);
+          if (mutation == 0)
+            c.total = true;
+          else if (mutation == 1)
+            helper->setAttr("sym_visibility", builder.getStringAttr("public"));
+          else if (mutation == 2)
+            helper->setAttr(
+                "function_type",
+                TypeAttr::get(builder.getFunctionType(
+                    helper.getFunctionType().getInputs().drop_back(),
+                    helper.getFunctionType().getResults())));
+          else {
+            auto *end = &helper.getBody().front().back();
+            builder.setInsertionPoint(end);
+            func::ReturnOp::create(builder, end->getLoc(), end->getOperands());
+            end->erase();
+          }
+          auto before = printed(*module);
+          require(failed(finite::readCallback(c, finite::CallbackRole::Step)) &&
+                      !finite::analyzeComputation(c) &&
+                      printed(*module) == before,
+                  "substitution bypassed original total/partial callback ABI");
+        });
+  for (bool stop : {false, true})
+    cases.run(
+        stop ? "numerical call before stop retains fallback"
+             : "numerical call before region control retains fallback",
+        [&, stop] {
+          auto text = numericalAdditionFixture("sum", "%next", "%state,%item");
+          auto at = text.find("   local.return %next : !F");
+          require(at != std::string::npos, "missing callback return");
+          text.replace(at, StringRef("   local.return %next : !F").size(),
+                       stop ? R"mlir(
+   "local.stop"() {site="stop",reason="abort"} : ()->()
+)mlir"
+                            : R"mlir(
+   %yes = "local.bool_constant"() {value=true,site="yes"} : ()->i1
+   %out = "local.if"(%yes,%next) ({ ^left(%s:!F):
+     "local.yield"(%s) : (!F)->()
+   }, { ^right(%s:!F):
+     "local.yield"(%s) : (!F)->()
+   }) {site="branch"} : (i1,!F)->!F
+   local.return %out : !F
+)mlir");
+          auto module = parseSourceString<ModuleOp>(text, &context);
+          require(bool(module) && succeeded(verify(*module)),
+                  "numerical control barrier not admitted");
+          auto before = printed(*module);
+          require(!finite::analyzeComputation(computation(*module)) &&
+                      printed(*module) == before,
+                  "numerical substitution crossed a stop/control barrier");
+        });
+  cases.run("malformed policies remain selection constraints", [&] {
+    auto module = parseSourceString<ModuleOp>(
+        numericalAdditionFixture("sum", "%next", "%state,%item"), &context);
+    require(bool(module) && succeeded(verify(*module)),
+            "numerical callback not admitted");
+    auto c = computation(*module);
+    auto *call = &c.helper->getRegion(0).front().front();
+    OpBuilder builder(&context);
+    SmallVector<Attribute> policies{
+        builder.getArrayAttr({}),
+        builder.getArrayAttr({builder.getBoolAttr(true)}),
+        builder.getArrayAttr({builder.getBoolAttr(true),
+                              builder.getBoolAttr(false),
+                              builder.getBoolAttr(false)}),
+        builder.getArrayAttr(
+            {builder.getStringAttr("invalid"), builder.getBoolAttr(false)}),
+        builder.getArrayAttr(
+            {builder.getBoolAttr(true), builder.getStringAttr("invalid")})};
+    // These deliberate post-admission mutations exercise policy independence,
+    // not admission of malformed IR. Recompute the view after each mutation.
+    for (Attribute policy : policies) {
+      call->setAttr("policy", policy);
+      require(call->getAttr("policy") == policy,
+              "malformed policy mutation did not reach the source");
+      auto view = finite::analyzeComputation(c);
+      require(view && view->payload.size() == 1 &&
+                  view->numericalCalls().size() == 1 &&
+                  view->numericalCalls().front()->getAttr("policy") == policy,
+              "structural reading consumed or discarded malformed policy");
+    }
+  });
+  cases.run(
+      "standard substitution retains result coordinates and dead work", [&] {
+        auto text = numericalAdditionFixture("sum", "%next", "%state,%item");
+        auto begin = text.find(" kernel.module @numbers");
+        auto end = text.find(" local.func private @step", begin);
+        require(begin != std::string::npos && end != std::string::npos,
+                "missing numerical unit");
+        text.replace(begin, end - begin, R"mlir(
+ kernel.module @numbers {
+   func.func @entry(%a:!F,%b:!F) -> (!F,!F,!F) {
+     %dead = algebra.field_add %a,%b : (!F,!F)->!F
+     func.return %b,%a,%b : !F,!F,!F
+   }
+ }
+)mlir");
+        begin = text.find("   %next = kernel.call");
+        end = text.find('\n', begin);
+        require(begin != std::string::npos && end != std::string::npos,
+                "missing numerical call");
+        text.replace(
+            begin, end - begin,
+            "   %outputs:3 = kernel.call @numbers::@entry(%item,%state) "
+            "{site=\"numerical\"} : (!F,!F)->(!F,!F,!F)");
+        begin = text.find("local.return %next");
+        require(begin != std::string::npos, "missing callback result");
+        text.replace(begin, StringRef("local.return %next").size(),
+                     "local.return %outputs#1");
+        auto module = parseSourceString<ModuleOp>(text, &context);
+        require(bool(module) && succeeded(verify(*module)),
+                "multi-result numerical source not admitted");
+        auto c = computation(*module);
+        auto *call = &c.helper->getRegion(0).front().front();
+        auto before = printed(*module);
+        auto view = finite::analyzeComputation(c);
+        require(view && view->payload.size() == 1 &&
+                    isa<func::FuncOp>(view->callbackBody->getParentOp()) &&
+                    view->callbackValue(call->getResult(0)) ==
+                        view->seeds[0].formal &&
+                    view->callbackValue(call->getResult(1)) ==
+                        view->items[0].formal &&
+                    view->callbackValue(call->getResult(2)) ==
+                        view->seeds[0].formal &&
+                    view->result == view->items[0].formal &&
+                    view->resultMappings[0].sourceYielded ==
+                        call->getResult(1) &&
+                    view->payload[0]->getOperand(0) == view->items[0].formal &&
+                    view->payload[0]->getOperand(1) == view->seeds[0].formal &&
+                    view->payload[0]->use_empty() &&
+                    view->sourceOperation(view->payload[0])
+                            ->getParentOfType<func::FuncOp>()
+                            .getSymName() == "entry" &&
+                    printed(*module) == before,
+                "result aliases/permutations or dead numerical work changed");
+      });
+  cases.run(
+      "numerical call occurrences share source but own substituted SSA", [&] {
+        auto module = parseSourceString<ModuleOp>(
+            numericalAdditionFixture("sum", "%next", "%state,%item"), &context);
+        require(bool(module), "numerical callback did not parse");
+        auto c = computation(*module);
+        auto &body = c.helper->getRegion(0).front();
+        auto *first = &body.front();
+        OpBuilder builder(&body.back());
+        auto *second = builder.clone(*first);
+        second->setAttr("site", builder.getStringAttr("unused_numerical"));
+        second->setAttr("policy",
+                        builder.getArrayAttr({builder.getBoolAttr(true),
+                                              builder.getBoolAttr(false)}));
+        require(succeeded(verify(*module)), "repeated calls not admitted");
+        auto view = finite::analyzeComputation(c);
+        require(view && view->numericalCalls().size() == 2 &&
+                    view->numericalCalls()[0] == first &&
+                    view->numericalCalls()[1] == second &&
+                    view->payload.size() == 2 &&
+                    view->payload[0] != view->payload[1] &&
+                    view->sourceOperation(view->payload[0]) ==
+                        view->sourceOperation(view->payload[1]),
+                "shared helper or unused result collapsed call occurrences");
+        auto retained = *view;
+        view.reset();
+        require(retained.numericalCalls()[1] == second &&
+                    retained.payload[1]->getBlock() == retained.callbackBody &&
+                    retained.result == retained.payload[0]->getResult(0) &&
+                    body.getOperations().size() == 3,
+                "copied view lost its owned SSA or borrowed calls");
+      });
+  cases.run("nested numerical provenance and pins stay occurrence scoped", [&] {
+    auto module = parseSourceString<ModuleOp>(
+        numericalAdditionFixture("nested-matrix", "%out", "%s,%p"), &context);
+    require(bool(module), "nested numerical callback did not parse");
+    auto c = computation(*module);
+    auto &body = c.helper->getRegion(0).front();
+    OpBuilder builder(&body.back());
+    auto *second = builder.clone(body.front());
+    second->setAttr("site", builder.getStringAttr("second_inner"));
+    auto *binding = SymbolTable::lookupNearestSymbolFrom(
+        c.helper, FlatSymbolRefAttr::get(&context, "mul"));
+    require(binding, "missing multiplication binding");
+    binding->setAttr("implementation",
+                     builder.getStringAttr("arkworks/field.mul"));
+    require(succeeded(verify(*module)),
+            "nested numerical callback not admitted");
+    auto view = finite::analyzeComputation(c);
+    require(view && view->numericalCalls().empty() && view->nested.size() == 2,
+            "nested calls were lost or hoisted into outer provenance");
+    const auto &first = view->nested[0], &other = view->nested[1];
+    require(first.numericalCalls().size() == 1 &&
+                other.numericalCalls().size() == 1 &&
+                first.numericalCalls().front() ==
+                    other.numericalCalls().front() &&
+                first.occurrencePath != other.occurrencePath &&
+                first.payload.front() != other.payload.front() &&
+                finite::semantics(first.payload.front()) &&
+                !finite::replaceable(first.payload.front()) &&
+                !finite::replaceable(other.payload.front()),
+            "nested occurrences lost original calls, owned SSA, or pins");
+  });
+  cases.run("alias-only numerical calls retain policy provenance", [&] {
+    auto module = parseSourceString<ModuleOp>(
+        numericalAdditionFixture("sum", "%next", "%state,%item"), &context);
+    require(bool(module), "numerical callback did not parse");
+    func::FuncOp entry;
+    module->walk([&](func::FuncOp function) {
+      if (function.getSymName() == "entry")
+        entry = function;
+    });
+    require(bool(entry), "missing numerical entry");
+    auto &body = entry.getBody().front();
+    body.back().setOperand(0, body.getArgument(0));
+    body.front().erase();
+    require(succeeded(verify(*module)), "alias-only call not admitted");
+    auto view = finite::analyzeComputation(computation(*module));
+    require(view && view->payload.empty() &&
+                view->result == view->seeds.front().formal &&
+                view->numericalCalls().size() == 1,
+            "call without scalar instructions lost its policy provenance");
+  });
+  cases.run(
+      "numerical call substitution shares cumulative structural work", [&] {
+        auto text = numericalAdditionFixture("sum", "%next", "%state,%item");
+        auto first = parseSourceString<ModuleOp>(text, &context);
+        auto second = parseSourceString<ModuleOp>(text, &context);
+        require(bool(first) && bool(second) && succeeded(verify(*first)) &&
+                    succeeded(verify(*second)),
+                "numerical budget controls not admitted");
+        finite::ComputationWork measured;
+        measured.structural = 1000;
+        require(bool(finite::analyzeComputation(computation(*first), measured)),
+                "numerical structural measurement unavailable");
+        uint64_t cost = 1000 - measured.structural;
+        require(cost > 1 && cost < 1000, "numerical visits were not charged");
+        finite::ComputationWork shared;
+        shared.structural = cost;
+        auto view = finite::analyzeComputation(computation(*first), shared);
+        require(view && view->numericalCalls().size() == 1 &&
+                    !shared.structural &&
+                    !finite::analyzeComputation(computation(*second), shared),
+                "numerical substitution replenished structural work");
+        shared.structural = cost - 1;
+        require(!finite::analyzeComputation(computation(*second), shared) &&
+                    !shared.structural,
+                "partial numerical substitution escaped its allowance");
+      });
   cases.run(
       "unused constructors retain admission but add no traversed axes", [&] {
         auto module =

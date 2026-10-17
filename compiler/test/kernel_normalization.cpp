@@ -1,6 +1,8 @@
 #include "../lib/Transforms/HelperNormalization.h"
 #include "../lib/Transforms/Kernel/NormalizationVerification.h"
+#include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/MathematicalSupport.h"
+#include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
@@ -28,6 +30,25 @@ protocol_ir::ProtocolModuleOp unit(mlir::ModuleOp module) {
 func::FuncOp function(mlir::ModuleOp module, StringRef name) {
   auto result = SymbolTable(unit(module)).lookup<func::FuncOp>(name);
   require(bool(result), "missing normalization helper");
+  return result;
+}
+OwningOpRef<kernel::ModuleOp> makeKernelUnit(mlir::ModuleOp module,
+                                             StringRef entryName,
+                                             ArrayRef<StringRef> dependencies) {
+  OpBuilder builder(module.getContext());
+  OwningOpRef<kernel::ModuleOp> result(
+      kernel::ModuleOp::create(builder, module.getLoc(), "numerical"));
+  result->getBody().emplaceBlock();
+  builder.setInsertionPointToEnd(&result->getBody().front());
+  SymbolTable declarations(unit(module));
+  for (auto name : dependencies) {
+    auto *dependency = declarations.lookup(name);
+    require(bool(dependency), "missing Kernel dependency fixture");
+    builder.clone(*dependency);
+  }
+  auto entry = cast<func::FuncOp>(builder.clone(*function(module, entryName)));
+  entry->setAttr("sym_visibility", builder.getStringAttr("public"));
+  entry->setAttr("data.preconditions", builder.getArrayAttr({}));
   return result;
 }
 OwningOpRef<func::FuncOp> copy(func::FuncOp source) {
@@ -67,6 +88,106 @@ int main() {
   registerDialects(registry);
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
+
+  cases.run("owned Kernel normalization preserves metadata and origins", [&] {
+    auto module = fixture(context, "provenance");
+    auto source = makeKernelUnit(*module, "mixed_raw", {"mixed_leaf"});
+    auto entry = kernel::getEntry(*source);
+    auto helper = SymbolTable(*source).lookup<func::FuncOp>("mixed_leaf");
+    require(succeeded(verify(*source)), "Kernel source is malformed");
+    uint64_t remaining = 1000000;
+    llvm::DenseSet<Operation *> generated;
+    auto candidate = kernel::normalizeUnit(*source, remaining, generated);
+    require(bool(candidate) && succeeded(verify(*candidate)),
+            "owned Kernel normalization refused");
+    auto normalized = kernel::getEntry(*candidate);
+    require((*source)->getAttrDictionary() ==
+                    (*candidate)->getAttrDictionary() &&
+                entry->getAttrDictionary() == normalized->getAttrDictionary(),
+            "normalization changed unit or entry declaration metadata");
+    auto retained = SymbolTable(*candidate).lookup<func::FuncOp>("mixed_leaf");
+    require(retained &&
+                OperationEquivalence::isEquivalentTo(
+                    helper, retained, OperationEquivalence::IgnoreLocations),
+            "normalization changed an original helper dependency");
+    auto returned = cast<func::ReturnOp>(normalized.front().back());
+    auto *first = returned.getOperand(0).getDefiningOp();
+    auto *second = returned.getOperand(2).getDefiningOp();
+    require(first && second && first != second,
+            "normalization lost distinct concrete result coordinates");
+    require(!generated.empty() && !generated.contains(first) &&
+                !generated.contains(second) &&
+                generated.contains(returned.getOperand(1).getDefiningOp()),
+            "normalization confused concrete and polynomial origins");
+    for (auto *op : generated)
+      require(op->getBlock() == &normalized.front(),
+              "generated identity does not belong to the returned Kernel");
+    for (auto &op : normalized.front().without_terminator())
+      require(!isa<func::CallOp>(op) &&
+                  op.getName().getDialectNamespace() != "poly",
+              "normalized entry retained unexpanded mathematics");
+    mathematical::HelperNormalizationChecker checker(*source);
+    require(succeeded(checker.check(entry, normalized.front())),
+            "direct Kernel copy lost checked mathematical meaning");
+  });
+
+  cases.run(
+      "owned Kernel normalization retains finite dependency identities", [&] {
+        auto module = fixture(context, "callback");
+        auto source = makeKernelUnit(*module, "fold", {"items", "step"});
+        require(succeeded(verify(*source)), "Kernel source is malformed");
+        uint64_t remaining = 1000000;
+        llvm::DenseSet<Operation *> generated;
+        auto candidate = kernel::normalizeUnit(*source, remaining, generated);
+        require(bool(candidate) && succeeded(verify(*candidate)),
+                "finite Kernel normalization refused");
+        SymbolTable original(*source), normalized(*candidate);
+        auto *domain = normalized.lookup("items");
+        require(domain && OperationEquivalence::isEquivalentTo(
+                              original.lookup("items"), domain,
+                              OperationEquivalence::IgnoreLocations),
+                "finite domain dependency changed");
+        auto step = normalized.lookup<func::FuncOp>("step");
+        require(step && step->getAttrDictionary() ==
+                            original.lookup("step")->getAttrDictionary(),
+                "finite callback lost its signature or preconditions");
+        for (auto &op : step.front().without_terminator())
+          require(op.getName().getDialectNamespace() != "poly",
+                  "finite callback was not normalized");
+        auto entry = kernel::getEntry(*candidate);
+        require(entry.front().front().getAttrDictionary() ==
+                        kernel::getEntry(*source)
+                            .front()
+                            .front()
+                            .getAttrDictionary() &&
+                    generated.empty(),
+                "finite dependency symbols or entry origins changed");
+      });
+
+  cases.run("owned Kernel copy exhaustion is cumulative and read-only", [&] {
+    auto module = fixture(context, "provenance");
+    auto source = makeKernelUnit(*module, "mixed_raw", {"mixed_leaf"});
+    uint64_t remaining = 1000000;
+    llvm::DenseSet<Operation *> generated;
+    auto candidate = kernel::normalizeUnit(*source, remaining, generated);
+    require(bool(candidate), "reference normalization refused");
+    uint64_t spent = 1000000 - remaining;
+    require(spent > 1, "normalization did not charge copying");
+    std::string before, after;
+    llvm::raw_string_ostream(before) << *source;
+    for (uint64_t allowance : {uint64_t(0), spent - 1}) {
+      llvm::DenseSet<Operation *> evidence{source->getOperation()};
+      remaining = allowance;
+      auto refused = kernel::normalizeUnit(*source, remaining, evidence);
+      require(!refused, "exhausted normalization was accepted");
+      require(evidence.size() == 1 && evidence.contains(source->getOperation()),
+              "refused normalization published destroyed identities");
+      require(!allowance || remaining < allowance,
+              "refused normalization refunded spent copying work");
+    }
+    llvm::raw_string_ostream(after) << *source;
+    require(before == after, "refused normalization mutated its source");
+  });
 
   cases.run("handwritten helper substitution includes every invocation", [&] {
     auto module = fixture(context, "provenance");

@@ -47,6 +47,9 @@ Hosts use that interpreter for Entry, proof and joint execution. The
 Logical [Kernel IR](spec/ir/kernel.md) owns total numerical closures and their
 ordered Local invocations. Preparation and participant demand lowering form
 units; checked realization removes them before physical selection and export.
+Normalization and numerical recipe checking consume Kernel-owned standard
+functions directly, with separate structural facts and call-specific selection
+restrictions.
 Existing installed backends execute the resulting operations. Explicit numerical
 schedules and JIT/AOT engines remain unimplemented. This separation establishes
 ownership without claiming a speedup or a formal native correspondence proof.

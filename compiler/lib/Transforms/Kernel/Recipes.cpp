@@ -3,11 +3,8 @@
 #include "../RealizationTrace.h"
 #include "Support.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
-#include "mlir/IR/IRMapping.h"
-#include "mlir/IR/OperationSupport.h"
-#include "mlir/IR/Verifier.h"
 #include "mlir/Transforms/DialectConversion.h"
-#include "zkc/Analysis/Computation.h"
+#include "zkc/Analysis/Finite.h"
 #include "zkc/Contracts/Binding.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/TypeProperties.h"
@@ -19,81 +16,22 @@
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Interfaces/Collection.h"
 #include "zkc/Interfaces/Mathematical.h"
+#include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Finite.h"
 #include "zkc/Transforms/Mathematical.h"
-#include "zkc/Transforms/Passes.h"
-#include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/StringSet.h"
 #include <map>
 
 using namespace mlir;
 using namespace llvm;
-namespace zkc::mathematical {
-bool isCalculationContract(StringRef contract) {
-  return is_contained(ArrayRef<StringRef>{"index.add",
-                                          "index.sub",
-                                          "index.mul",
-                                          "index.div",
-                                          "index.mod",
-                                          "control.require",
-                                          "vector.sum",
-                                          "vector.product",
-                                          "vector.dot",
-                                          "vector.fill",
-                                          "vector.scale",
-                                          "vector.add",
-                                          "vector.sub",
-                                          "vector.mul",
-                                          "curve.msm",
-                                          "curve.empty",
-                                          "curve.append",
-                                          "indices.empty",
-                                          "indices.append",
-                                          "matrix.mul_vector",
-                                          "matrix.transpose_mul_vector",
-                                          "matrix.bilinear",
-                                          "vector.get",
-                                          "curve.get",
-                                          "indices.at",
-                                          "sequence.at",
-                                          "field_array.get",
-                                          "matrix.get",
-                                          "field.constant",
-                                          "field.add",
-                                          "field.sub",
-                                          "field.mul",
-                                          "field.equal",
-                                          "curve.identity",
-                                          "curve.add",
-                                          "curve.scale",
-                                          "curve.equal",
-                                          "curve.length",
-                                          "pairing.apply",
-                                          "field_array.at",
-                                          "field_array.from_vector",
-                                          "vector.empty",
-                                          "vector.append",
-                                          "vector.length",
-                                          "matrix.dimension",
-                                          "bytes.length",
-                                          "indices.length",
-                                          "index.constant",
-                                          "index.equal",
-                                          "index.less",
-                                          "sequence.empty",
-                                          "sequence.append",
-                                          "sequence.length",
-                                          "bool.and",
-                                          "bool.or",
-                                          "bool.not"},
-                      contract);
-}
+using namespace zkc::mathematical;
+namespace zkc::kernel {
 namespace {
-// Names are allocated over the entire isolated symbol table, including retained
-// relation declarations and authored executable definitions.
+// Reserve the complete numerical symbol context before allocating executable
+// bindings. Retained helper/domain names never become generated identities.
 class BindingSymbols {
-  protocol_ir::ProtocolModuleOp unit;
+  mlir::ModuleOp unit;
   llvm::StringSet<> names;
   unsigned next = 0;
   struct Occurrences {
@@ -105,8 +43,8 @@ class BindingSymbols {
       bindings;
 
 public:
-  explicit BindingSymbols(protocol_ir::ProtocolModuleOp unit) : unit(unit) {
-    for (auto &op : unit.getBody().front())
+  explicit BindingSymbols(mlir::ModuleOp unit) : unit(unit) {
+    for (auto &op : *unit.getBody())
       if (auto name = SymbolTable::getSymbolName(&op))
         names.insert(name.getValue());
   }
@@ -117,7 +55,7 @@ public:
     } while (!names.insert(result).second);
     return result;
   }
-  std::string freshSite(local::FuncOp function, StringRef prefix) {
+  std::string freshSite(func::FuncOp function, StringRef prefix) {
     auto &sites = occurrences[function];
     if (!sites) {
       sites = std::make_unique<Occurrences>();
@@ -138,14 +76,14 @@ public:
   }
   FlatSymbolRefAttr get(protocol::BindingApplication application,
                         Location location, OpBuilder &builder) {
-    assert(isCalculationContract(application.contract) &&
-           "mathematical recipe contract is outside the closed vocabulary");
+    assert(!protocol::boundOperationName(application.contract).empty() &&
+           "mathematical recipe requires an installed execution contract");
     auto key = std::make_pair(application.contract, application.arguments);
     auto found = bindings.find(key);
     if (found == bindings.end()) {
       auto name = fresh();
       OpBuilder::InsertionGuard guard(builder);
-      builder.setInsertionPointToStart(&unit.getBody().front());
+      builder.setInsertionPointToStart(unit.getBody());
       SmallVector<Attribute> arguments;
       for (auto &argument : application.arguments)
         arguments.push_back(builder.getStringAttr(argument));
@@ -213,9 +151,9 @@ public:
     // its first mutation, rewriting is infallible.
     if (!isTotal(op))
       return failure();
-    if (!op->getParentOfType<local::FuncOp>())
+    if (!op->getParentOfType<func::FuncOp>())
       return rewriter.notifyMatchFailure(
-          op, "recipe requires an outlined local function");
+          op, "recipe requires a numerical standard function");
     auto site = op->getAttrOfType<StringAttr>("site");
     if (!site)
       return rewriter.notifyMatchFailure(op, "missing generated occurrence");
@@ -379,7 +317,7 @@ public:
         } else {
           auto label = cast<data::IsOp>(op).getAlternative();
           auto occurrence = symbols.freshSite(
-              op->getParentOfType<local::FuncOp>(), site.getValue());
+              op->getParentOfType<func::FuncOp>(), site.getValue());
           value = local::BoolConstantOp::create(
                       rewriter, op->getLoc(), rewriter.getI1Type(),
                       rewriter.getBoolAttr(descriptor->alternatives[i].label ==
@@ -483,7 +421,7 @@ public:
                       bool last) -> Value {
         std::string occurrence = site.getValue().str();
         if (!last)
-          occurrence = symbols.freshSite(op->getParentOfType<local::FuncOp>(),
+          occurrence = symbols.freshSite(op->getParentOfType<func::FuncOp>(),
                                          site.getValue());
         protocol::BindingApplication application;
         application.contract = contract.str();
@@ -529,7 +467,7 @@ public:
                       ArrayRef<std::string> parameters, bool last) -> Value {
         auto occurrence =
             last ? site.getValue().str()
-                 : symbols.freshSite(op->getParentOfType<local::FuncOp>(),
+                 : symbols.freshSite(op->getParentOfType<func::FuncOp>(),
                                      site.getValue());
         protocol::BindingApplication application{
             contract.str(),
@@ -597,12 +535,12 @@ public:
   }
 };
 
-LogicalResult
-lowerRecipes(protocol_ir::ProtocolModuleOp unit,
-             const llvm::DenseSet<Operation *> &generated,
-             BindingSymbols &symbols, MathematicalSelectionPolicy policy = {},
-             RealizationWork *work = nullptr, RealizationTrace *trace = nullptr,
-             RealizationScope *attempt = nullptr, bool orderedRetry = false) {
+LogicalResult lowerRecipes(func::FuncOp entry, BindingSymbols &symbols,
+                           MathematicalSelectionPolicy policy = {},
+                           RealizationWork *work = nullptr,
+                           RealizationTrace *trace = nullptr,
+                           RealizationScope *attempt = nullptr,
+                           bool orderedRetry = false) {
   // Finite bodies emit directly before primitive conversion. Callback
   // expansion and polynomial normalization still use a checked scratch clone
   // and can fail after mutation, so this phase cannot yet satisfy the
@@ -612,9 +550,8 @@ lowerRecipes(protocol_ir::ProtocolModuleOp unit,
   auto &finiteWork = realizationWork.finiteExpressions;
   while (true) {
     Operation *next = nullptr;
-    unit.walk<WalkOrder::PreOrder>([&](Operation *op) {
-      if (!next && finite::isComputation(op) &&
-          generated.contains(op->getParentOfType<local::FuncOp>()))
+    entry.walk<WalkOrder::PreOrder>([&](Operation *op) {
+      if (!next && finite::isComputation(op))
         next = op;
     });
     if (!next)
@@ -636,13 +573,11 @@ lowerRecipes(protocol_ir::ProtocolModuleOp unit,
       return failure();
     builder.replaceOp(next, *result);
   }
-  ConversionTarget target(*unit.getContext());
-  target.markUnknownOpDynamicallyLegal([&](Operation *op) {
-    return !generated.contains(op->getParentOfType<local::FuncOp>()) ||
-           !isTotal(op);
-  });
-  RewritePatternSet patterns(unit.getContext());
-  patterns.add<Recipe>(unit.getContext(), symbols);
+  ConversionTarget target(*entry.getContext());
+  target.markUnknownOpDynamicallyLegal(
+      [&](Operation *op) { return !isTotal(op); });
+  RewritePatternSet patterns(entry.getContext());
+  patterns.add<Recipe>(entry.getContext(), symbols);
   ConversionConfig config;
   // Lowering schedules explicit recipes. Mathematical folding belongs to
   // preparation/simplification, where generated constants have no sites yet.
@@ -651,117 +586,118 @@ lowerRecipes(protocol_ir::ProtocolModuleOp unit,
   // discards the candidate, so conversion need not roll individual recipes
   // back.
   config.allowPatternRollback = false;
-  return applyFullConversion(unit, target, std::move(patterns), config);
+  return applyFullConversion(entry, target, std::move(patterns), config);
 }
 
-} // namespace
-LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
-                                ArrayRef<local::FuncOp> functions,
-                                MathematicalSelectionPolicy policy,
-                                RealizationWork *work,
-                                RealizationTrace *trace) {
-  return lowerCalculations(unit, functions, policy, work, {}, trace);
+// The private builtin module is a conversion workspace. Standard functions
+// retain the mathematical input until recipes have replaced it; only then is
+// the entry converted to the existing executable Local function vocabulary.
+OwningOpRef<mlir::ModuleOp> recipeCandidate(ModuleOp source, StringRef callSite,
+                                            func::FuncOp &function,
+                                            uint64_t &remaining,
+                                            uint64_t &remainingBytes) {
+  auto entry = getEntry(source);
+  if (!entry || !entry.getBody().hasOneBlock() || callSite.empty() ||
+      !chargeCopy(source, remaining))
+    return {};
+  OwningOpRef<mlir::ModuleOp> candidate(
+      mlir::ModuleOp::create(source.getLoc()));
+  OpBuilder builder(candidate->getBody(), candidate->getBody()->end());
+  for (auto &definition : source.getBody().front())
+    builder.clone(definition);
+  // Keep source declarations intact, including dormant references to the
+  // public entry. Only this separately named working copy is converted.
+  if (!chargeCopy(entry, remaining))
+    return {};
+  function = cast<func::FuncOp>(entry->clone());
+  function.setSymName("_recipe_entry");
+  SymbolTable(*candidate).insert(function, candidate->getBody()->end());
+  unsigned ordinal = 0;
+  for (auto &op : function.front().without_terminator()) {
+    if (!isTotal(&op) || op.getNumRegions() || isa<func::CallOp>(op) ||
+        op.getName().getDialectNamespace() == "poly")
+      return {};
+    auto site =
+        protocol::algorithmSite({{callSite.str(), "kernel"}},
+                                std::to_string(ordinal++), remainingBytes);
+    if (!site) {
+      diagnostics::emit(entry.emitError(), site.takeError());
+      return {};
+    }
+    op.setAttr("site", builder.getStringAttr(*site));
+  }
+  return candidate;
 }
-LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
-                                ArrayRef<local::FuncOp> functions,
-                                MathematicalSelectionPolicy policy,
-                                RealizationWork *work,
-                                finite::VerificationLimits limits,
-                                RealizationTrace *trace) {
-  SmallVector<StringAttr> names;
-  for (auto function : functions)
-    names.push_back(function.getSymNameAttr());
-  RealizationWork standalone;
-  auto &available = work ? *work : standalone;
-  RealizationScope scope(trace, "lower-calculations", unit, policy, &available);
-  if (!functions.empty())
-    scope.propose(policy);
+void executableCandidate(mlir::ModuleOp candidate, func::FuncOp working,
+                         func::FuncOp source) {
+  // Completed executable IR uses its existing owner and closed admission.
+  // Mathematical declarations were conversion inputs and do not escape into
+  // the executable result.
+  OpBuilder builder(candidate.getBody(), candidate.getBody()->end());
+  auto owner = protocol_ir::ProtocolModuleOp::create(
+      builder, source.getLoc(), protocol_ir::Profile::Exec);
+  owner.getBody().emplaceBlock();
+  builder.setInsertionPointToEnd(&owner.getBody().front());
+  auto output = local::FuncOp::create(
+      builder, source.getLoc(), source.getSymName(), source.getFunctionType());
+  output->setAttr("logical_origin",
+                  builder.getArrayAttr(
+                      {source.getSymNameAttr(), builder.getArrayAttr({})}));
+  output.getBody().takeBody(working.getBody());
+  auto returned = cast<func::ReturnOp>(output.getBody().front().back());
+  builder.setInsertionPoint(returned);
+  local::ReturnOp::create(builder, returned.getLoc(), returned.getOperands());
+  returned.erase();
+  for (auto &declaration : make_early_inc_range(*candidate.getBody())) {
+    if (&declaration == owner.getOperation())
+      continue;
+    if (isa<local::OperationBindingOp>(declaration))
+      declaration.moveBefore(output);
+    else
+      declaration.erase();
+  }
+}
+} // namespace
+OwningOpRef<mlir::ModuleOp>
+realizeEntry(ModuleOp source, StringRef callSite,
+             MathematicalSelectionPolicy policy, RealizationWork &available,
+             uint64_t &remaining, uint64_t &remainingBytes,
+             finite::VerificationLimits limits, RealizationTrace *trace) {
+  auto entry = getEntry(source);
+  if (!entry)
+    return {};
+  RealizationScope scope(trace, "kernel-recipes", source, policy, &available);
+  scope.propose(policy);
   bool orderedRetry = false;
   for (;;) {
-    // This unit is an intermediate outlined subject, so whole-module formation
-    // belongs to the enclosing service. Keep its exact mathematical bodies
-    // immutable for independent reading and any one ordered retry.
+    // Retry from the immutable numerical unit. Optional matching allowances
+    // remain cumulative; required construction keeps its ordered reserve.
     auto attemptWork = available;
-    RealizationScope attempt(trace, "calculation-attempt", unit, policy);
-    if (!functions.empty())
-      attempt.propose(policy);
-    OwningOpRef<protocol_ir::ProtocolModuleOp> candidate(
-        cast<protocol_ir::ProtocolModuleOp>(unit->clone()));
-    SymbolTable table(*candidate);
-    SmallVector<local::FuncOp> replacements;
-    llvm::DenseSet<Operation *> selected;
-    for (auto name : names) {
-      auto function = table.lookup<local::FuncOp>(name.getValue());
-      if (!function)
-        return failure();
-      replacements.push_back(function);
-      selected.insert(function);
-    }
+    RealizationScope attempt(trace, "kernel-recipe-attempt", source, policy);
+    attempt.propose(policy);
+    func::FuncOp function;
+    auto candidate =
+        recipeCandidate(source, callSite, function, remaining, remainingBytes);
+    if (!candidate)
+      return {};
+    attempt.declarationOrigin(function.getSymName(), entry.getSymName());
     BindingSymbols symbols(*candidate);
-    if (failed(lowerRecipes(*candidate, selected, symbols, policy, &attemptWork,
-                            trace, &attempt, orderedRetry)))
-      return failure();
-    finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
-                                       {}};
-    auto checked = verifyCalculationRecipes(unit, *candidate, replacements,
-                                            limits, outcome);
+    auto lowered = lowerRecipes(function, symbols, policy, &attemptWork, trace,
+                                &attempt, orderedRetry);
     available.matching = attemptWork.matching;
     available.lanes = attemptWork.lanes;
+    if (failed(lowered))
+      return {};
+    executableCandidate(*candidate, function, entry);
+    finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
+                                       {}};
+    auto checked = verifyEntryRecipes(source, *candidate, callSite, policy,
+                                      limits, &outcome);
     if (succeeded(checked)) {
-      // Preserve caller-owned function handles. The only mutable subjects are
-      // these checked bodies and newly emitted bindings; all other declarations
-      // and their order must match before any part is published.
-      SymbolTable originalSymbols(unit);
-      llvm::DenseSet<Operation *> selectedOriginal;
-      for (auto function : functions)
-        selectedOriginal.insert(function);
-      SmallVector<Operation *> newBindings;
-      auto original = unit.getBody().front().begin();
-      bool seenOriginal = false;
-      for (auto &definition : candidate->getBody().front()) {
-        auto name = SymbolTable::getSymbolName(&definition);
-        if (name && !originalSymbols.lookup(name)) {
-          if (seenOriginal || !isa<local::OperationBindingOp>(definition))
-            return diagnostics::emit(unit.emitError(),
-                                     "mathematical-lowering-preservation",
-                                     "unexpected calculation declaration");
-          newBindings.push_back(&definition);
-          continue;
-        }
-        seenOriginal = true;
-        // Projection records and other unnamed definitions still belong to
-        // the ordered context; they are not generated symbol declarations.
-        auto *prior =
-            original == unit.getBody().front().end() ? nullptr : &*original++;
-        if (!prior || SymbolTable::getSymbolName(prior) != name ||
-            (!selectedOriginal.contains(prior) &&
-             !OperationEquivalence::isEquivalentTo(
-                 prior, &definition, OperationEquivalence::IgnoreLocations)))
-          return diagnostics::emit(
-              unit.emitError(), "mathematical-lowering-preservation",
-              "calculation changed surrounding declarations");
-      }
-      if (original != unit.getBody().front().end() ||
-          unit->getAttrDictionary() != (*candidate)->getAttrDictionary())
-        return diagnostics::emit(unit.emitError(),
-                                 "mathematical-lowering-preservation",
-                                 "calculation changed its enclosing unit");
-      auto insertion = unit.getBody().front().begin();
-      for (auto *binding : newBindings)
-        binding->moveBefore(&unit.getBody().front(), insertion);
-      for (unsigned i = 0; i < functions.size(); ++i) {
-        auto originalFunction = functions[i];
-        originalFunction.getBody().takeBody(replacements[i].getBody());
-      }
       available = attemptWork;
-      if (functions.empty()) {
-        attempt.complete(CompletionKind::Unchanged);
-        scope.complete(CompletionKind::Unchanged);
-      } else {
-        attempt.publish();
-        scope.publish();
-      }
-      return success();
+      attempt.publish();
+      scope.publish();
+      return candidate;
     }
     attempt.discard(verificationDecision(outcome));
     if (outcome.status == finite::VerificationStatus::OptionalCapacity &&
@@ -773,9 +709,9 @@ LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
     }
     if (outcome.status == finite::VerificationStatus::OptionalCapacity ||
         outcome.status == finite::VerificationStatus::RequiredCapacity)
-      return diagnostics::emit(unit.emitError(), "finite-verification-capacity",
-                               outcome.detail);
-    return failure();
+      diagnostics::emit(source.emitError(), "finite-verification-capacity",
+                        outcome.detail);
+    return {};
   }
 }
-} // namespace zkc::mathematical
+} // namespace zkc::kernel

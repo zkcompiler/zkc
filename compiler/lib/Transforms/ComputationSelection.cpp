@@ -1,9 +1,22 @@
 #include "ComputationSelection.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include <utility>
 using namespace mlir;
 using namespace llvm;
 namespace zkc::mathematical {
 namespace {
+bool canReplaceNumericalCalls(const finite::ComputationView &view) {
+  return llvm::all_of(view.numericalCalls(), [](Operation *call) {
+    auto raw = call->getAttr("policy");
+    if (!raw)
+      return true;
+    auto policy = dyn_cast<ArrayAttr>(raw);
+    // Only finiteBulk authorizes this family. vectorReductionFusion belongs to
+    // its separate family, but both fields must still have their admitted type.
+    return policy && policy.size() == 2 && isa<BoolAttr>(policy[0]) &&
+           isa<BoolAttr>(policy[1]) && cast<BoolAttr>(policy[0]).getValue();
+  });
+}
 bool laneRecipesAvailable(Block &body, const Elementwise &formula,
                           const MathematicalRecipes &recipes) {
   for (Operation &op : body.without_terminator()) {
@@ -46,11 +59,13 @@ selectReduction(const Reduction &equation, const MathematicalRecipes &recipes) {
 }
 } // namespace
 bool canReplacePayload(const finite::ComputationView &view) {
-  return llvm::all_of(view.payload,
+  return canReplaceNumericalCalls(view) &&
+         llvm::all_of(view.payload,
                       [](Operation *op) { return finite::replaceable(op); });
 }
 bool canReplaceNestedContraction(const finite::ComputationView &view) {
-  if (view.nested.size() != 1 || !canReplacePayload(view.nested.front()))
+  if (view.nested.size() != 1 || !canReplaceNumericalCalls(view) ||
+      !canReplacePayload(view.nested.front()))
     return false;
   Operation *call = view.nested.front().occurrence;
   return llvm::all_of(view.payload, [&](Operation *op) {
@@ -73,6 +88,14 @@ ComputationSelection selectComputation(finite::Computation computation,
   if (!selection.view) {
     return selection;
   }
+  return selectComputation(std::move(*selection.view), policy, work, recipes);
+}
+ComputationSelection selectComputation(finite::ComputationView view,
+                                       MathematicalSelectionPolicy policy,
+                                       finite::ComputationWork &work,
+                                       const MathematicalRecipes &recipes) {
+  ComputationSelection selection;
+  selection.view = std::move(view);
   selection.equations =
       matchComputation(*selection.view, work, &selection.diagnostic);
   if (!policy.finiteBulk) {
@@ -88,7 +111,9 @@ ComputationSelection selectComputation(finite::Computation computation,
   // Replacement and recipe checks also inspect the complete payload. Reserve
   // their optional work before walking it; ordered emission has its own budget.
   if (!finite::consumeComputationWork(
-          work.equations, selection.view->payload.size() + 1,
+          work.equations,
+          selection.view->payload.size() +
+              selection.view->numericalCalls().size() + 1,
           WorkOwner::Equations, &selection.diagnostic.outcome)) {
     return selection;
   }
@@ -146,7 +171,9 @@ selectNestedContraction(const finite::ComputationView &view,
   }
   if (!finite::consumeComputationWork(
           work.equations,
-          view.payload.size() + view.nested.front().payload.size() + 1,
+          view.payload.size() + view.numericalCalls().size() +
+              view.nested.front().payload.size() +
+              view.nested.front().numericalCalls().size() + 1,
           WorkOwner::Equations, &selection.diagnostic.outcome)) {
     return selection;
   }

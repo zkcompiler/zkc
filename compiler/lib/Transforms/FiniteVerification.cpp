@@ -3,6 +3,7 @@
 #include "MathematicalComparison.h"
 #include "RealizationSubject.h"
 #include "mlir/IR/OperationSupport.h"
+#include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/ComputationMeaning.h"
 #include "zkc/Analysis/Finite.h"
@@ -27,6 +28,7 @@ class Reader {
   Type index, boolean;
   llvm::DenseMap<Value, Value> actual, cardinalities, offsets;
   bool valid = true, inlineMode = false;
+  bool allowBulk;
   HelperReader helperReader;
   SmallVector<Value> expressionResults;
   uint64_t remaining;
@@ -327,12 +329,13 @@ class Reader {
 
 public:
   Reader(Computation computation, SymbolTable &symbols,
-         llvm::DenseSet<Operation *> &bindings, VerificationLimits limits = {})
+         llvm::DenseSet<Operation *> &bindings, VerificationLimits limits = {},
+         bool allowBulk = true)
       : c(computation), symbols(symbols), bindings(bindings),
         index(IntegerType::get(c.operation->getContext(), 64,
                                IntegerType::Unsigned)),
         boolean(IntegerType::get(c.operation->getContext(), 1)),
-        remaining(limits.reader), limits(limits) {}
+        allowBulk(allowBulk), remaining(limits.reader), limits(limits) {}
   VerificationResult outcome() const { return result; }
   bool check(local::FuncOp target) {
     if (!target || target.getFunctionType() != c.signature ||
@@ -373,13 +376,14 @@ public:
     if (!valid)
       return false;
     Value rootDomain = c.domain.getBody().front().back().getOperand(0);
-    if (mathematical::hasFinitePayloadContract(cursor, symbols) ||
-        // An identity collect can return an existing vector without emitting
-        // payload. Its ordered alternative starts with an empty container.
-        (c.collect && cursor &&
-         isa<algebra::FieldVectorType>(c.signature.getResult(0)) &&
-         cursor->getName().getStringRef() !=
-             protocol::boundOperationName("vector.empty"))) {
+    if (allowBulk &&
+        (mathematical::hasFinitePayloadContract(cursor, symbols) ||
+         // An identity collect can return an existing vector without emitting
+         // payload. Its ordered alternative starts with an empty container.
+         (c.collect && cursor &&
+          isa<algebra::FieldVectorType>(c.signature.getResult(0)) &&
+          cursor->getName().getStringRef() !=
+              protocol::boundOperationName("vector.empty")))) {
       // Semantic comparison is optional. Its bounded interpretation and
       // normalization cannot spend the ordered reader's admission budget.
       uint64_t comparisonWork = std::min(remaining, limits.comparison);
@@ -535,13 +539,14 @@ verifyExpression(Operation *source, ValueRange inputs, Operation *&cursor,
 FailureOr<SmallVector<Value>>
 verifyExpression(Operation *source, ValueRange inputs, Operation *&cursor,
                  HelperReader helper, Operation *symbolRoot,
-                 VerificationLimits limits, VerificationResult &outcome) {
+                 VerificationLimits limits, VerificationResult &outcome,
+                 MathematicalSelectionPolicy policy) {
   outcome = {VerificationStatus::Mismatch,
              "finite expression differs from its domain/helper"};
   if (!cursor)
     return failure();
-  auto unit = cursor->getParentOfType<protocol_ir::ProtocolModuleOp>();
-  if (!unit)
+  auto *unit = SymbolTable::getNearestSymbolTable(cursor);
+  if (!unit || unit->getNumRegions() != 1 || !unit->getRegion(0).hasOneBlock())
     return failure();
   SymbolTable symbols(unit);
   llvm::DenseSet<Operation *> bindings;
@@ -549,7 +554,7 @@ verifyExpression(Operation *source, ValueRange inputs, Operation *&cursor,
   SymbolTableCollection sourceSymbols;
   if (failed(describe(source, c, symbolRoot, &sourceSymbols)))
     return failure();
-  Reader reader(c, symbols, bindings, limits);
+  Reader reader(c, symbols, bindings, limits, policy.finiteBulk);
   auto result = reader.checkInline(inputs, cursor, helper);
   outcome = succeeded(result)
                 ? VerificationResult{VerificationStatus::Verified, {}}

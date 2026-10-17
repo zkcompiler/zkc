@@ -6,7 +6,9 @@
 #include "zkc/Transforms/MathematicalSelection.h"
 
 namespace zkc::mathematical {
-/// Implementation constraints are queried only at algorithm selection.
+/// Implementation constraints are queried only at algorithm selection,
+/// including the original kernel calls retained by structural substitution.
+/// Callers reserve payload and numerical-call visits in scoped equation work.
 bool canReplacePayload(const finite::ComputationView &view);
 bool canReplaceNestedContraction(const finite::ComputationView &view);
 
@@ -41,6 +43,17 @@ selectComputation(finite::Computation computation,
                   const MathematicalRecipes &recipes = mathematicalRecipes());
 ComputationSelection
 selectComputation(finite::Computation computation,
+                  MathematicalSelectionPolicy policy,
+                  finite::ComputationWork &work,
+                  const MathematicalRecipes &recipes = mathematicalRecipes());
+/// Reuse facts from an admitted immutable source closure. The result owns the
+/// passed view: move it to transfer ownership, or copy it to share temporary
+/// SSA storage. Rebuild after source edits/cloning; no persistent cache is
+/// used. Source IR and enclosing views supplying borrowed SSA must outlive the
+/// result. Recognition and selection debit work on every call;
+/// structural/evidence work already spent producing the view is not repeated.
+ComputationSelection
+selectComputation(finite::ComputationView view,
                   MathematicalSelectionPolicy policy,
                   finite::ComputationWork &work,
                   const MathematicalRecipes &recipes = mathematicalRecipes());

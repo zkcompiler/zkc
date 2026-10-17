@@ -1,9 +1,9 @@
 #include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/MathematicalSupport.h"
-#include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "support/KernelRecipes.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -32,32 +32,6 @@ bool same(ModuleOp a, ModuleOp b) {
 protocol_ir::ProtocolModuleOp unit(ModuleOp module) {
   return cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
 }
-local::FuncOp calculation(ModuleOp module) {
-  return SymbolTable(unit(module)).lookup<local::FuncOp>("calculation");
-}
-void outlineTotal(ModuleOp module) {
-  auto total = SymbolTable(unit(module)).lookup<func::FuncOp>("total");
-  require(bool(total), "missing total helper");
-  OpBuilder builder(total);
-  auto function = local::FuncOp::create(builder, total.getLoc(), "calculation",
-                                        total.getFunctionType());
-  function->setAttr("logical_origin",
-                    builder.getArrayAttr({builder.getStringAttr("calculation"),
-                                          builder.getArrayAttr({})}));
-  builder.setInsertionPointToEnd(function.addEntryBlock());
-  IRMapping mapping;
-  mapping.map(total.getArguments(), function.getArguments());
-  unsigned ordinal = 0;
-  for (auto &operation : total.front().without_terminator()) {
-    auto *copy = builder.clone(operation, mapping);
-    copy->setAttr("site", builder.getStringAttr("calculation_" +
-                                                std::to_string(ordinal++)));
-  }
-  SmallVector<Value> outputs;
-  for (auto value : total.front().back().getOperands())
-    outputs.push_back(mapping.lookup(value));
-  local::ReturnOp::create(builder, total.getLoc(), outputs);
-}
 } // namespace
 int main() {
   DialectRegistry registry;
@@ -80,17 +54,20 @@ int main() {
           auto source = parseSourceString<ModuleOp>(text, &context);
           require(bool(source) && succeeded(verify(*source)),
                   "total source refused");
-          outlineTotal(*source);
-          auto original = copy(*source), ordered = copy(*source),
-               bulk = copy(*source);
-          mathematical::RealizationWork work, orderedWork;
-          require(succeeded(mathematical::lowerCalculations(
-                      unit(*bulk), {calculation(*bulk)})),
-                  "ordinary bulk path refused");
-          require(succeeded(mathematical::lowerCalculations(
-                      unit(*ordered), {calculation(*ordered)}, {false, false},
-                      &orderedWork)),
-                  "ordered total path refused");
+          auto numerical =
+              kernelRecipeSource(unit(*source), "total", "calculation");
+          auto original = copy(*source);
+          OwningOpRef<kernel::ModuleOp> before(
+              cast<kernel::ModuleOp>(numerical->clone()));
+          mathematical::RealizationWork work, orderedWork, bulkWork;
+          auto bulk =
+              realizeKernelEntry(*numerical, "calculation", {}, bulkWork);
+          require(bool(bulk), "ordinary bulk path refused");
+          kernelRecipeOutput(*bulk);
+          auto ordered = realizeKernelEntry(*numerical, "calculation",
+                                            {false, false}, orderedWork);
+          require(bool(ordered), "ordered total path refused");
+          kernelRecipeOutput(*ordered);
           require(!same(*bulk, *ordered),
                   "fixture did not select optional bulk work");
           unsigned diagnostics = 0;
@@ -98,16 +75,21 @@ int main() {
             ++diagnostics;
             return success();
           });
-          require(succeeded(mathematical::lowerCalculations(
-                      unit(*source), {calculation(*source)}, {}, &work,
-                      {100000, 1})),
+          auto candidate = realizeKernelEntry(*numerical, "calculation", {},
+                                              work, {100000, 1});
+          require(bool(candidate),
                   "optional total comparison exhaustion refused");
+          kernelRecipeOutput(*candidate);
           require(
-              !diagnostics && same(*source, *ordered) &&
-                  succeeded(verify(*source)),
-              "retry diagnosed a discarded proposal or changed ordered output");
-          require(succeeded(mathematical::verifyCalculationRecipes(
-                      unit(*original), unit(*source), {calculation(*source)})),
+              !diagnostics && same(*candidate, *ordered) &&
+                  succeeded(kernel::verifyRecipeOutput(*candidate)) &&
+                  same(*source, *original) &&
+                  OperationEquivalence::isEquivalentTo(
+                      *numerical, *before,
+                      OperationEquivalence::IgnoreLocations),
+              "retry diagnosed a discarded proposal or changed source/output");
+          require(succeeded(kernel::verifyEntryRecipes(*numerical, *candidate,
+                                                       "calculation")),
                   "fallback lost original helper correspondence");
           require(work.helperOperations == orderedWork.helperOperations &&
                       work.helperSlots == orderedWork.helperSlots,
@@ -119,17 +101,21 @@ int main() {
   cases.run("required total reader exhaustion refuses atomically", [&] {
     auto source = parseSourceString<ModuleOp>(fixture(), &context);
     require(bool(source), "total source refused");
-    outlineTotal(*source);
+    auto numerical = kernelRecipeSource(unit(*source), "total", "calculation");
     auto original = copy(*source);
+    OwningOpRef<kernel::ModuleOp> before(
+        cast<kernel::ModuleOp>(numerical->clone()));
     std::string diagnostics;
     ScopedDiagnosticHandler record(&context, [&](Diagnostic &diagnostic) {
       diagnostics += diagnostic.str();
       return success();
     });
-    require(failed(mathematical::lowerCalculations(unit(*source),
-                                                   {calculation(*source)}, {},
-                                                   nullptr, {0, 100000})) &&
-                same(*source, *original),
+    mathematical::RealizationWork work;
+    auto candidate =
+        realizeKernelEntry(*numerical, "calculation", {}, work, {0, 100000});
+    require(!candidate && same(*source, *original) &&
+                OperationEquivalence::isEquivalentTo(
+                    *numerical, *before, OperationEquivalence::IgnoreLocations),
             "required capacity published a partial total body");
     require(diagnostics.find("finite-verification-capacity") !=
                 std::string::npos,

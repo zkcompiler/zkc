@@ -1,6 +1,7 @@
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "../Verification.h"
 #include "mlir/IR/OperationSupport.h"
+#include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Bindings.h"
@@ -19,6 +20,23 @@ LogicalResult refuse(Operation *op, StringRef detail) {
   return diagnostics::emit(op->emitOpError(), "native-local-policy", detail);
 }
 } // namespace
+LogicalResult verifyLocalFragment(Operation *unit) {
+  auto owner = dyn_cast_or_null<protocol_ir::ProtocolModuleOp>(unit);
+  if (!owner || !owner.getProfileAttr() ||
+      owner.getProfile() != protocol_ir::Profile::Exec ||
+      owner->getAttrs().size() != 1 || owner->getNumRegions() != 1 ||
+      !owner.getBody().hasOneBlock() ||
+      owner.getBody().front().getNumArguments() ||
+      failed(owner->getName().verifyInvariants(owner)))
+    return failure();
+  for (auto &definition : owner.getBody().front())
+    if (!isa<local::OperationBindingOp, local::FuncOp>(definition) ||
+        failed(verify(&definition)))
+      return failure();
+  if (failed(verifyNativeLocals(owner, false)))
+    return failure();
+  return protocol::verifyLocalDefinitions(owner);
+}
 LogicalResult verifyNativeLocals(Operation *unit, bool allowApply) {
   NativeTypePolicies types(unit);
   return verifyNativeLocals(unit, allowApply, types);

@@ -74,6 +74,21 @@ second mathematical semantics. An optional call `policy` records the selected
 `[finiteBulk, vectorReductionFusion]` compile-time choices. Omitted policy uses
 the lowering request's defaults.
 
+Normalization produces another Kernel unit and retains checked polynomial
+origins in that owned subject. Recipe conversion consumes its standard entry
+and uses a private builtin module for ordinary MLIR conversion. The completed
+Local function and bindings use the existing executable Protocol owner for
+closed admission before the body is inserted at the ordered call. This
+temporary storage is not another public IR stage. Source helpers resolve
+against the numerical owner, while generated bindings belong to the executable
+candidate. The independent numerical reader compares the original entry with
+actual output and never invokes the recipe producer.
+
+Structural analysis retains numerical call occurrences independently of their
+selection policy. An enclosing finite optimization must still honor every
+retained call's replacement restrictions. Analysis views borrow immutable source
+operations and must be rebuilt after body or interface edits.
+
 Numerical instruction sites derive deterministically from the ordered call site
 and normalized operation position. Authored Local sites and protocol event
 identities are preserved. No per-operation provenance list is stored in a call.

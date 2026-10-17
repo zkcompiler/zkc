@@ -251,6 +251,7 @@ add_zkc_component(Transforms
   lib/Transforms/Kernel/Lowering.cpp
   lib/Transforms/Kernel/Verification.cpp
   lib/Transforms/Kernel/Recipes.cpp
+  lib/Transforms/Kernel/RecipeVerification.cpp
   lib/Transforms/Kernel/Frontier.cpp
   lib/Transforms/Kernel/FrontierVerification.cpp
   lib/Transforms/Kernel/NormalizationVerification.cpp

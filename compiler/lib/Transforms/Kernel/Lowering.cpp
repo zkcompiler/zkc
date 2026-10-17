@@ -31,22 +31,21 @@ LogicalResult materialize(protocol_ir::ProtocolModuleOp owner,
     if (!entry || failed(policy))
       return refuse(call, "invalid numerical closure or policy");
     auto unit = cast<ModuleOp>(entry->getParentOp());
-    local::FuncOp function;
-    auto scratch = recipeWorkspace(unit, function, call.getSite(), remaining,
-                                   remainingBytes);
+    auto scratch = realizeEntry(unit, call.getSite(), *policy, work, remaining,
+                                remainingBytes, {}, trace);
     if (!scratch)
-      return refuse(
-          call, "unsupported mathematical recipe subset or expansion limit");
-    if (failed(mathematical::lowerCalculations(*scratch, {function}, *policy,
-                                               &work, trace)))
       return refuse(call, "numerical recipes refused the actual closure");
+    auto output =
+        cast<protocol_ir::ProtocolModuleOp>(scratch->getBody()->front());
+    auto function =
+        SymbolTable(output).lookup<local::FuncOp>(entry.getSymName());
     // Import declarations under fresh outer identities. References are renamed
     // only in this private workspace; nominal domains and source units remain
     // unchanged. Original fixed bindings are never reused or modified.
     StringMap<std::string> renamed;
     SmallVector<local::OperationBindingOp> bindings;
     for (auto binding :
-         scratch->getBody().front().getOps<local::OperationBindingOp>()) {
+         output.getBody().front().getOps<local::OperationBindingOp>()) {
       NamedAttrList signature(binding->getAttrs());
       signature.erase("sym_name");
       auto key = signature.getDictionary(owner.getContext());
