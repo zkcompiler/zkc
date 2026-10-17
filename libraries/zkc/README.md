@@ -89,7 +89,10 @@ assembles ordered fragments without repeatedly copying their growing prefix.
 using the corresponding scalar codecs, with no length prefix.
 `encoding::fields_from_be` decodes a whole big-endian vector: it returns false
 and an empty vector unless the length is a multiple of 32 and every element is
-canonical. Domain support and capacity checks follow the
+canonical. For KoalaBear and its extensions, `field_montgomery_le` and
+`fields_montgomery_le` write the Montgomery residues that Plonky3's binary
+serializers use, and `fields_from_le`/`fields_from_montgomery_le` decode whole
+elements, rejecting any word at or above the modulus. Domain support and capacity checks follow the
 [native encoding contract](../../docs/spec/realization/external-constructions.md#mathematical-byte-encodings).
 These operations do not observe values or choose transcript framing.
 `bytes::keccak256` and `bytes::sha256` are the raw hash functions, with no

@@ -564,6 +564,14 @@ void installedBindings() {
             : sort == "Nat" ? "4"
             : sort == "Field" &&
                     (twoAdic ||
+                     is_contained(
+                         ArrayRef<StringRef>{
+                             "encoding.fields_from_le",
+                             "encoding.field_montgomery_le",
+                             "encoding.field_from_montgomery_le",
+                             "encoding.fields_montgomery_le",
+                             "encoding.fields_from_montgomery_le"},
+                         operation.name) ||
                      StringRef(operation.name).starts_with("relation.table_") ||
                      StringRef(operation.name).starts_with("ring.") ||
                      StringRef(operation.name).starts_with("fixed_vector."))

@@ -4,6 +4,7 @@
 pub(crate) mod numerical;
 pub mod oracle;
 pub mod polynomial;
+pub mod words;
 
 use crate::{Result, refused};
 use p3_field::{Field, PackedValue, PrimeCharacteristicRing, PrimeField32};

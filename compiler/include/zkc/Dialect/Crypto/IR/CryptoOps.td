@@ -121,6 +121,11 @@ def IndexedTranscriptIndexOp : KernelOp<CryptoDialect,
 def EncodingFieldLeOp : KernelOp<CryptoDialect, "exec.encoding_field_le", [OpEncodingFieldLe]>;
 def EncodingFieldFromLeOp : KernelOp<CryptoDialect, "exec.encoding_field_from_le", [OpEncodingFieldFromLe]>;
 def EncodingFieldReduceLeOp : KernelOp<CryptoDialect, "exec.encoding_field_reduce_le", [OpEncodingFieldReduceLe]>;
+def EncodingFieldsFromLeOp : KernelOp<CryptoDialect, "exec.encoding_fields_from_le", [OpEncodingFieldsFromLe]>;
+def EncodingFieldMontgomeryLeOp : KernelOp<CryptoDialect, "exec.encoding_field_montgomery_le", [OpEncodingFieldMontgomeryLe]>;
+def EncodingFieldFromMontgomeryLeOp : KernelOp<CryptoDialect, "exec.encoding_field_from_montgomery_le", [OpEncodingFieldFromMontgomeryLe]>;
+def EncodingFieldsMontgomeryLeOp : KernelOp<CryptoDialect, "exec.encoding_fields_montgomery_le", [OpEncodingFieldsMontgomeryLe]>;
+def EncodingFieldsFromMontgomeryLeOp : KernelOp<CryptoDialect, "exec.encoding_fields_from_montgomery_le", [OpEncodingFieldsFromMontgomeryLe]>;
 def EncodingGroupDecodeCofactorOp : KernelOp<CryptoDialect, "exec.encoding_group_decode_cofactor", [OpEncodingGroupDecodeCofactor]>;
 def EncodingCryptonoteMapOp : KernelOp<CryptoDialect, "exec.encoding_cryptonote_map", [OpEncodingCryptonoteMap]>;
 def Keccak256Op : KernelOp<CryptoDialect, "exec.keccak256", [OpHashKeccak256]>;

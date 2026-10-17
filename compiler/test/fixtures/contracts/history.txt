@@ -206,3 +206,8 @@ encoding.fields_from_be 0
 encoding.fields_le 0
 encoding.groups_compressed 0
 encoding.index_uleb128 0
+encoding.fields_from_le 0
+encoding.field_montgomery_le 0
+encoding.field_from_montgomery_le 0
+encoding.fields_montgomery_le 0
+encoding.fields_from_montgomery_le 0

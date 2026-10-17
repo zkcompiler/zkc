@@ -22,6 +22,14 @@ pub fn group_from_compressed<G: Group>(value: Bytes) -> (bool, G) = primitive("e
 
 pub fn field_le<F: Field>(value: F) -> Bytes = primitive("encoding.field_le");
 pub fn field_from_le<F: Field>(value: Bytes) -> (bool, F) = primitive("encoding.field_from_le");
+// Whole elements only; any invalid word or partial element gives (false, empty).
+pub fn fields_from_le<F: Field>(value: Bytes) -> (bool, Vector<F>) = primitive("encoding.fields_from_le");
+
+// Montgomery residues x*R mod p, as Plonky3's binary serializers write them.
+pub fn field_montgomery_le<F: Field>(value: F) -> Bytes = primitive("encoding.field_montgomery_le");
+pub fn field_from_montgomery_le<F: Field>(value: Bytes) -> (bool, F) = primitive("encoding.field_from_montgomery_le");
+pub fn fields_montgomery_le<F: Field>(values: Vector<F>) -> Bytes = primitive("encoding.fields_montgomery_le");
+pub fn fields_from_montgomery_le<F: Field>(value: Bytes) -> (bool, Vector<F>) = primitive("encoding.fields_from_montgomery_le");
 pub fn field_reduce_le<F: Field>(value: Bytes) -> F = primitive("encoding.field_reduce_le");
 pub fn group_decode_cofactor<G: Group>(value: Bytes) -> (bool, G) = primitive("encoding.group_decode_cofactor");
 // CryptoNote field-element map followed by multiplication by eight.

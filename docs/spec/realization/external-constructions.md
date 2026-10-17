@@ -123,9 +123,10 @@ snapshot, including snapshots inside aggregates. A fork does not refund work.
 
 `zkc::encoding` provides explicit encodings independently of transport and
 transcript observation. The installed implementations use arkworks for
-BLS12-381 Fr, G1 and G2, and dalek for Ristretto scalar and prime-order Edwards25519.
-Other domains require their own installed implementations;
-the generic source signature does not promise support for every field or group.
+BLS12-381 Fr, G1 and G2, dalek for Ristretto scalar and prime-order Edwards25519,
+and Plonky3 0.8.0 for `koala-bear` and its installed extensions. Other domains
+require their own installed implementations; the generic source signature does
+not promise support for every field or group.
 
 | Operation | Inputs | Outputs | Interpretation |
 |---|---|---|---|
@@ -133,9 +134,14 @@ the generic source signature does not promise support for every field or group.
 | `field_be<F>` | `F` | `Bytes` | Canonical 32-byte big-endian integer |
 | `field_from_be<F>` | `Bytes` | `(bool, F)` | Exact width and integer below the scalar modulus |
 | `field_reduce_be<F>` | `Bytes` | `F` | Big-endian integer reduced modulo the scalar modulus |
-| `field_le<F>` | `F` | `Bytes` | Canonical 32-byte little-endian scalar-order integer |
-| `field_from_le<F>` | `Bytes` | `(bool, F)` | Exact width and integer below the scalar order |
+| `field_le<F>` | `F` | `Bytes` | Canonical little-endian encoding of the field's fixed width |
+| `field_from_le<F>` | `Bytes` | `(bool, F)` | Exact width and every integer below its modulus |
+| `fields_from_le<F>` | `Bytes` | `(bool, Vector<F>)` | Whole elements of `field_from_le`, in order |
 | `field_reduce_le<F>` | `Bytes` | `F` | Little-endian integer reduced modulo the scalar order |
+| `field_montgomery_le<F>` | `F` | `Bytes` | Little-endian Montgomery residues of the field's fixed width |
+| `field_from_montgomery_le<F>` | `Bytes` | `(bool, F)` | Exact width and every residue below its modulus |
+| `fields_montgomery_le<F>` | `Vector<F>` | `Bytes` | Concatenated `field_montgomery_le` encodings |
+| `fields_from_montgomery_le<F>` | `Bytes` | `(bool, Vector<F>)` | Whole elements of `field_from_montgomery_le`, in order |
 | `group_compressed<G>` | `G` | `Bytes` | Canonical compressed point: 48-byte BLS G1, 96-byte BLS G2 or 32-byte Edwards |
 | `group_from_compressed<G>` | `Bytes` | `(bool, G)` | Exact width, canonical encoding and prime-order subgroup check |
 | `fields_from_be<F>` | `Bytes` | `(bool, Vector<F>)` | Consecutive canonical 32-byte big-endian integers below the scalar modulus |
@@ -179,7 +185,7 @@ read and result-retention charges also apply. These are explicit bulk operations
 not automatic rewrites of scalar loops or transcript observations.
 
 `field_le`, `field_from_le` and `field_reduce_le` are installed for
-`ristretto255.scalar`. `group_decode_cofactor<edwards25519.prime>` takes `Bytes`
+`ristretto255.scalar`, whose width is 32 bytes. `group_decode_cofactor<edwards25519.prime>` takes `Bytes`
 and returns `(bool,G)`: it checks exact 32-byte width and canonical full-curve
 Edwards decompression, then multiplies by eight. This deliberately differs from
 `group_from_compressed`, which rejects nontrivial torsion. Invalid encodings
@@ -216,6 +222,35 @@ Reduction uses constant auxiliary storage and debits two logical work units per
 input byte before computation.
 The wire format may retain the original bytes for later observation; these
 operations impose no universal re-encoding policy on a protocol.
+
+### Four-byte coordinate words
+
+For a prime field `F_p` whose canonical encoding has width `w` bytes, the
+Montgomery residue of `x` is `x * R mod p` with `R = 2^(8w)`. An element of a
+nominal extension encodes its coordinates in the ascending basis fixed by the
+extension's identity, each with its base field's rule; its width is the
+extension degree times the base width. These codecs are defined for prime
+fields and their extensions only; a field without a canonical integer residue
+has no Montgomery encoding.
+
+`koala-bear` has `w = 4`, so `R = 2^32` and `R mod p = 33554430`. The canonical
+word of `x` is the four-byte little-endian integer `x`; its Montgomery word is
+`x * 2^32 mod p`, the residue that Plonky3 0.8.0's binary serializers write for
+`MontyField31` values. `koala-bear.ext8-binomial3` elements are eight words.
+`field_le`, `field_from_le`, `fields_le`, `fields_from_le` and the four
+Montgomery operations are installed for `koala-bear` and
+`koala-bear.ext8-binomial3`; `field_reduce_le` is not.
+
+A decoder never reduces. `field_from_le` and `field_from_montgomery_le` return
+`(false, 0)` unless the input has exactly one element's width and every word is
+below `p`. `fields_from_le` and `fields_from_montgomery_le` accept the empty
+string as the empty vector; they return `(false, empty)` when the length is not
+a whole number of elements or any word is at or above `p`. Every word is
+validated before decoded elements are allocated. Encoders and decoders preflight
+the output size, element count and wire limit before allocation and charge no
+external work. Montgomery words exchange values with representations that store
+them; they add no arithmetic meaning, and two encodings of one element under
+the two forms are different byte strings.
 
 ## Construction, resources and trust boundaries
 

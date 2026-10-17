@@ -473,6 +473,11 @@ encoding.field_reduce_le 0
 encoding.group_decode_cofactor 0
 encoding.cryptonote_map 0
 encoding.fields_from_be 0
+encoding.fields_from_le 0
+encoding.field_montgomery_le 0
+encoding.field_from_montgomery_le 0
+encoding.fields_montgomery_le 0
+encoding.fields_from_montgomery_le 0
 hash.keccak256 0
 hash.sha256 0";
     for line in fixture
