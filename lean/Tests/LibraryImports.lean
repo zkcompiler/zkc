@@ -275,6 +275,7 @@ import ZkcExamples.Construction.ChaumPedersenProofParticipant
 import ZkcExamples.Construction.ComposedSumcheckProof
 import ZkcExamples.Construction.ComposedSumcheckProofData
 import ZkcExamples.Construction.ComposedSumcheckProofParticipant
+import ZkcExamples.Construction.GkrProofParticipant
 import ZkcExamples.Construction.SchnorrAndProof
 import ZkcExamples.Construction.SchnorrAndProofBodies
 import ZkcExamples.Construction.SchnorrAndProofData
@@ -327,6 +328,9 @@ import ZkcExamples.Structured.ChaumPedersenBinding
 import ZkcExamples.Structured.ChaumPedersenBodies
 import ZkcExamples.Structured.ChaumPedersenData
 import ZkcExamples.Structured.ChaumPedersenViews
+import ZkcExamples.Structured.GkrSourceBodies
+import ZkcExamples.Structured.GkrSourceData
+import ZkcExamples.Structured.GkrSourceViews
 import ZkcExamples.Structured.GkrVerifierProcess
 import ZkcExamples.Structured.LogicalContextControls
 import ZkcExamples.Structured.MapCombination
