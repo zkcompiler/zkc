@@ -3,11 +3,13 @@
 
 This is a tested data boundary. Operations are classified by exact name,
 operation binding and attribute set. An unrecognized operation is retained as
-unsupported for the Lean rule to refuse; a recognized operation with another
+unsupported for the Lean rules to refuse; a recognized operation with another
 shape, an unknown type or a malformed origin refuses the whole export.
-Occurrence origins are decoded from their canonical bytes and re-encoded
-exactly. No proof is generated here and no meaning is assigned to any
-operation.
+Occurrence templates are decoded from their canonical bytes and re-encoded
+exactly. A loop's body is rendered in its own reference scope: the environment
+at the loop, then the block arguments and the body's results; after the loop
+its results take the place of the body's values. No proof is generated here and
+no meaning is assigned to any operation.
 """
 
 import argparse
@@ -19,6 +21,9 @@ import re
 FORMAT = "zkc.constructed-participant/0"
 TEMPLATE = "zkc.native-origin-template/0"
 SCALAR_DOMAINS = {"field": r'!algebra\.field<"([^"\\]+)">', "group": r'!algebra\.group<"([^"\\]+)">'}
+VECTOR_DOMAIN = r'!algebra\.field_vector<"([^"\\]+)">'
+# The BLS12-381 scalar modulus bounds canonical field constants.
+FIELD_MODULUS = 52435875175126190479447740508185965837690552500527637822603658699938581184513
 CALCULATIONS = {
     "algebra.field_add": ("fieldAdd", "field"),
     "algebra.field_subtract": ("fieldSubtract", "field"),
@@ -77,6 +82,11 @@ def sort(value):
     require(isinstance(value, str), "type must be a string")
     if value == "i1":
         return ".data .boolean", ("boolean", None)
+    if value == "ui64":
+        return ".data .index", ("index", None)
+    match = re.fullmatch(VECTOR_DOMAIN, value)
+    if match:
+        return f".data (.vector {text(match[1])})", ("vector", match[1])
     for kind, pattern in SCALAR_DOMAINS.items():
         match = re.fullmatch(pattern, value)
         if match:
@@ -117,6 +127,12 @@ def encode_tree(tree):
     return b"\1" + len(tree).to_bytes(8, "little") + b"".join(encode_tree(item) for item in tree)
 
 
+def step(value):
+    require(isinstance(value, list) and len(value) == 3 and value[0] in ("apply", "repeat")
+            and all(isinstance(item, str) for item in value), "invalid origin step")
+    return f"⟨{text(value[0])}, {text(value[1])}, {text(value[2])}⟩"
+
+
 def origin(hex_text):
     require(isinstance(hex_text, str) and re.fullmatch(r"(?:[0-9a-f]{2})+", hex_text) is not None
             and len(hex_text) <= 4096, "origin must be lowercase even-length hex")
@@ -126,9 +142,10 @@ def origin(hex_text):
     require(encode_tree(tree).hex() == hex_text, "noncanonical origin encoding")
     require(isinstance(tree, list) and len(tree) == 5 and tree[0] == TEMPLATE, "not an origin template")
     _, entry, steps, coordinates, event = tree
-    require(isinstance(entry, str) and steps == [] and coordinates == [], "only flat origins are supported")
+    require(isinstance(entry, str) and isinstance(steps, list) and len(steps) <= 64 and coordinates == [],
+            "invalid origin path")
     require(isinstance(event, list) and event and all(isinstance(item, str) for item in event), "invalid origin event")
-    return f"⟨{text(entry)}, {seq(event, text)}⟩"
+    return f"⟨{text(entry)}, {seq(steps, step)}, {seq(event, text)}⟩"
 
 
 def attributes(value):
@@ -168,6 +185,11 @@ def operation(name, attrs, binding, operand_kinds, result_kinds):
     if name == "algebra.exec.indices_empty" and binding == ["indices.empty", [], ""] \
             and set(attrs) == {"binding", "parameters", "site"} and attrs["parameters"] == ("strings", []):
         return ".indicesEmpty"
+    if name == "algebra.exec.indices_append" and binding == ["indices.append", [], ""] \
+            and set(attrs) == {"binding", "parameters", "site"} and attrs["parameters"] == ("strings", []):
+        require(len(operand_kinds) == 2 and operand_kinds[0][0] == "indices" and operand_kinds[1][0] == "index"
+                and len(result_kinds) == 1 and result_kinds[0][0] == "indices", "indices append shape")
+        return ".indicesAppend"
     # The kernel site is a diagnostic frame name; it never enters transcript identity.
     if name == "crypto.exec.indexed_transcript_observe_data" and set(attrs) == {"binding", "parameters", "site"} \
             and isinstance(binding, list) and len(binding) == 3 \
@@ -191,6 +213,18 @@ def operation(name, attrs, binding, operand_kinds, result_kinds):
         require(len(operand_kinds) == 2 and operand_kinds[0] == operand_kinds[1] and operand_kinds[0][0] == kind,
                 "calculation operands")
         return f".calculate (.{constructor} {text(operand_kinds[0][1])})"
+    if name == "algebra.constant" and set(attrs) == {"value"} and binding == []:
+        require(not operand_kinds and len(result_kinds) == 1 and result_kinds[0][0] == "field",
+                "field constant shape")
+        return (f".calculate (.fieldConstant {text(result_kinds[0][1])} "
+                f"{decimal(string_attribute(attrs, 'value'), FIELD_MODULUS)})")
+    if name == "local.call" and set(attrs) == {"callee", "site"} and binding == []:
+        kind, callee = attrs["callee"]
+        require(kind == "symbol" and isinstance(callee, str), "call callee")
+        return f".call {text(callee)}"
+    if name == "local.guard" and set(attrs) == {"site"} and binding == []:
+        require(operand_kinds == [("boolean", None)] and not result_kinds, "guard shape")
+        return f".guard {text(string_attribute(attrs, 'site'))}"
     return f".unsupported {text(name)}"
 
 
@@ -204,24 +238,56 @@ def policy(value):
             f"{seq(pairs, lambda pair: f'({text(pair[0])}, {text(pair[1])})')}, {text(framing)}, {text(construction)}⟩")
 
 
+def references(values, kinds, what):
+    require(isinstance(values, list) and all(type(o) is int and 0 <= o < len(kinds) for o in values),
+            f"{what} reference out of range")
+    return values
+
+
+def block(instructions, kinds, indent, depth=0):
+    """Render one block; return the rendered instructions and the final kinds."""
+    require(depth <= 64 and isinstance(instructions, list) and len(instructions) <= 4096, "invalid block")
+    rendered = []
+    for item in instructions:
+        name, attrs, binding, operands, results, regions = record(item, 6)
+        require(isinstance(name, str) and isinstance(regions, list), "operation name")
+        references(operands, kinds, "operand")
+        result_kinds = [sort(value)[1] for value in results]
+        result_terms = seq(results, lambda v: sort(v)[0])
+        if name == "protocol.loop":
+            attributes_ = attributes(attrs)
+            require(set(attributes_) == {"carried", "count", "maximum", "parameter", "site"} and binding == []
+                    and attributes_["count"] == ("string", "") and attributes_["parameter"] == ("bool", False)
+                    and attributes_["carried"] == ("integer", str(len(results))), "loop attributes")
+            require(len(regions) == 1 and len(operands) == len(results) + 1, "loop shape")
+            arguments, nested, yielded = record(regions[0], 3)
+            argument_kinds = [sort(value)[1] for value in arguments]
+            require(argument_kinds == [("index", None)] + result_kinds, "loop block arguments")
+            inner, inner_kinds = block(nested, kinds + argument_kinds, indent + "    ", depth + 1)
+            references(yielded, inner_kinds, "yielded")
+            maximum = decimal(attributes_["maximum"][1], 1048577) if attributes_["maximum"][0] == "integer" \
+                else None
+            require(maximum is not None, "loop maximum")
+            term = f".loop {text(string_attribute(attributes_, 'site'))} {maximum} {seq(yielded, nat)}"
+            body = "[]" if not inner else "[\n" + ",\n".join(inner) + "]"
+            rendered.append(f"{indent}⟨{term}, {seq(operands, nat)}, {result_terms}, {body}⟩")
+        else:
+            require(regions == [], "unexpected operation region")
+            term = operation(name, attributes(attrs), binding, [kinds[o] for o in operands], result_kinds)
+            rendered.append(f"{indent}⟨{term}, {seq(operands, nat)}, {result_terms}, []⟩")
+        kinds = kinds + result_kinds
+    return rendered, kinds
+
+
 def render(data, namespace):
     version, source, candidate, selected, symbol, inputs, outputs, instructions, returned = record(data, 9)
     require(version == FORMAT, "wrong participant export version")
     require(re.fullmatch(r"(?:[A-Za-z][A-Za-z0-9_]*\.)*[A-Za-z][A-Za-z0-9_]*", namespace) is not None,
             "invalid Lean namespace")
     kinds = [sort(value)[1] for value in inputs]
-    rendered = []
-    for item in instructions:
-        name, attrs, binding, operands, results = record(item, 5)
-        require(isinstance(name, str), "operation name")
-        require(isinstance(operands, list) and all(type(o) is int and 0 <= o < len(kinds) for o in operands),
-                "operand reference out of range")
-        result_kinds = [sort(value)[1] for value in results]
-        term = operation(name, attributes(attrs), binding, [kinds[o] for o in operands], result_kinds)
-        rendered.append(f"⟨{term}, {seq(operands, nat)}, {seq(results, lambda v: sort(v)[0])}⟩")
-        kinds += result_kinds
-    require(all(type(r) is int and 0 <= r < len(kinds) for r in returned), "returned reference out of range")
-    body = ",\n    ".join(rendered)
+    rendered, kinds = block(instructions, kinds, "    ")
+    references(returned, kinds, "returned")
+    body = ",\n".join(rendered)
     return f'''module
 
 public import Zkc.Construction.Participant
@@ -243,7 +309,7 @@ def participant : Participant where
   inputs := {seq(inputs, lambda v: sort(v)[0])}
   outputs := {seq(outputs, lambda v: sort(v)[0])}
   instructions := [
-    {body}]
+{body}]
   returned := {seq(returned, nat)}
 
 end {namespace}

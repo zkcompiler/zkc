@@ -87,9 +87,9 @@ theorem context_eq : context =
 
 set_option smartUnfolding true in
 /-- The per-compile construction check accepts the actual export. -/
-theorem accepted : checkExport SchnorrProofData.snapshot participant = true := by decide +kernel
+theorem accepted : checkExport SchnorrProofData.snapshot participant = .ok () := by decide +kernel
 
-theorem checked : check context participant = true := by
+theorem checked : check context participant = .ok () := by
   obtain ⟨found, admittedContext, checks⟩ := checkExport_sound accepted
   rw [context_admitted] at admittedContext
   cases admittedContext
@@ -130,11 +130,15 @@ omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem inputs_arity (base key : G) :
     (inputs (F := F) base key).length + 1 = participant.inputs.length := rfl
 
+/-- Helper calls of the constructed program denote the original's checked
+helpers. The Schnorr validator calls none. -/
+abbrev table : Structured.Meanings F G := helperTable program F G
+
 /-- The constructed program's interactive reading is the original validator,
 with every reply, stop and acceptance decision. -/
 theorem spec_equation (base key : G) (handle : Nat) (initial : History F G) :
-    (spec context handle participant.returned participant.instructions
-        ((inputs base key).map .data ++ [.transcript initial]) 0).bind
+    (spec context handle table participant.returned participant.instructions
+        ((inputs base key).map .data ++ [.transcript initial])).bind
       (fun values => .done (acceptance values)) =
       Zkc.Protocols.Schnorr.Common.experiment wiring base key handle := by
   rfl
@@ -147,11 +151,11 @@ theorem compiled_transform {m : Type → Type} [Monad m] [LawfulMonad m]
     (challenge : History F G → m F) (base key : G) (handle : Nat) (initial : History F G)
     (proof : Proof F G) :
     (fun result => (mapOutcome acceptance result.1, result.2)) <$>
-        ideal challenge participant.returned participant.instructions
+        ideal context challenge table participant.returned participant.instructions
           ((inputs base key).map .data ++ [.transcript initial]) proof =
       transform context challenge (verifier base key handle) initial proof := by
   rw [verifier_correspondence, ← spec_equation base key handle initial, transform_bind_done,
-    check_sound context participant checked challenge handle (inputs base key) initial proof
-      (inputs_arity base key)]
+    check_sound context challenge handle table participant checked ((inputs base key).map .data)
+      initial proof (by simp [inputs_arity])]
 
 end ZkcExamples.Construction.SchnorrProof

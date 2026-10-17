@@ -31,11 +31,14 @@ printed MLIR types of its signature, in order.
 
 ## Instructions
 
-References are absolute positions: the participant's inputs first, then every
-operation result in execution order. Each instruction is:
+References are absolute positions in a scoped environment: the participant's
+inputs first, then every operation result in execution order. A loop body sees
+the environment at the loop, then its block arguments and then its own results;
+after the loop, the loop's results take the positions that the body's block
+arguments had. Each instruction is:
 
 ```text
-[operation, attributes, binding, operands, result-types]
+[operation, attributes, binding, operands, result-types, regions]
 ```
 
 `operation` is the MLIR operation name. `attributes` lists the operation's
@@ -45,20 +48,26 @@ decimal]` (unsigned for unsigned integer types, otherwise signed),
 `["strings", [text, ...]]`, or `["text", printed]` for any other attribute kind.
 `binding` is `[]` without an operation binding, otherwise the referenced
 `local.binding` declaration as `[contract, [argument, ...], implementation]`.
-`operands` are references and `result-types` are printed MLIR types.
+`operands` are references and `result-types` are printed MLIR types. `regions`
+is empty except for `protocol.loop`, whose single region is
+`[argument-types, instructions, yielded]`: the printed types of its block
+arguments (the induction index, then the carried values), its body, and the
+references its `protocol.yield` returns.
 
 Exported operations are regionless operations of the `algebra`, `arith`,
 `crypto` and `data` dialects, `protocol.receive`, `protocol.send`,
-`protocol.service_query` and `local.bool_constant`. A `local.call` to a
-single-block `local.func` is expanded in place: its formals denote the actual
-operands and its results denote the operands of the helper's final
-`local.return`, so a helper appears only through the operations it executes. The
-participant's final `protocol.finish` operands become `returned`. Any other
-operation, any region, a successor or a missing reference refuses the export
-with a `constructed-participant-*` diagnostic.
+`protocol.service_query`, `local.bool_constant`, `local.guard`,
+`protocol.loop` and `local.call`. A `local.call` to a helper of the original
+source module remains a call; its callee names that helper. A `local.call` to a
+helper the construction inserted is expanded in place: its formals denote the
+actual operands and its results denote the operands of the helper's final
+`local.return`, so such a helper appears only through the operations it
+executes. The participant's final `protocol.finish` operands become `returned`.
+Any other operation, any other region, a successor or a missing reference
+refuses the export with a `constructed-participant-*` diagnostic.
 
-Limits: 512 inputs and results, 64 nested helper levels, 4096 inspected
-operations, 2048 exported instructions and 1 MiB of printed JSON.
+Limits: 512 inputs and results, 64 nested blocks, 4096 inspected operations,
+2048 exported instructions in total and 1 MiB of printed JSON.
 
 ## Boundary
 
@@ -66,6 +75,10 @@ The exporter is reviewed native code. It reads the checked candidate; it does
 not prove that the printed record denotes that candidate. Its refusals are
 defensive: a candidate that passes the native check uses only exported forms. A
 consumer interprets operation names, bindings and attributes explicitly, and
-refuses what it does not recognize. The [formal
+refuses what it does not recognize. A retained call is interpreted by the
+original source's helper of the same name and checked signature. That the
+candidate's helper of that name computes the same function belongs to the
+native construction, whose check reconstructs the whole candidate from the
+source; the export does not establish it. The [formal
 bridge](../../../lean/bridges/construction/README.md) regenerates its retained
 data from this export and checks the exact bytes.

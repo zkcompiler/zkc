@@ -180,7 +180,8 @@ def historyChallenge (history : History F G) : OracleComp (HistorySpec F G) F :=
 def verify (application : String) (base key : G) (proof : G × F) :
     OracleComp (HistorySpec F G) Bool :=
   (fun result => accepted (mapOutcome SchnorrProof.acceptance result.1, result.2)) <$>
-    ideal historyChallenge SchnorrProof.participant.returned SchnorrProof.participant.instructions
+    ideal SchnorrProof.context historyChallenge SchnorrProof.table SchnorrProof.participant.returned
+      SchnorrProof.participant.instructions
       ((SchnorrProof.inputs base key).map .data ++ [.transcript (initial application base key)])
       [.group groupDomain proof.1, .field fieldDomain proof.2]
 
@@ -197,7 +198,8 @@ theorem verify_eq (application : String) (base key : G) (proof : G × F) :
   rw [SchnorrProof.verifier_correspondence, transform_experiment] at compiled
   have projected : verify application base key proof = accepted <$>
       ((fun result => (mapOutcome SchnorrProof.acceptance result.1, result.2)) <$>
-        ideal historyChallenge SchnorrProof.participant.returned SchnorrProof.participant.instructions
+        ideal SchnorrProof.context historyChallenge SchnorrProof.table SchnorrProof.participant.returned
+          SchnorrProof.participant.instructions
           ((SchnorrProof.inputs base key).map .data ++ [.transcript (initial application base key)])
           [.group groupDomain proof.1, .field fieldDomain proof.2]) := by
     simp only [verify, Functor.map_map]

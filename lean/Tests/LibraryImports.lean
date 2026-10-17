@@ -3,6 +3,8 @@ import Zkc
 import Zkc.Algebra.RingExpression
 import Zkc.Construction.FiatShamir
 import Zkc.Construction.Participant
+import Zkc.Construction.Rule
+import Zkc.Construction.Semantics
 import Zkc.Construction.Soundness
 import Zkc.Construction.Structured
 import Zkc.Polynomial.BooleanCube

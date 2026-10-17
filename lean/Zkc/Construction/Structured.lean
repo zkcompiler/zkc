@@ -1,8 +1,10 @@
 module
 
-public import Zkc.Construction.FiatShamir
+public import Zkc.Construction.Rule
 public import Zkc.Source.Structured.Vocabulary
 public import Zkc.Source.Structured.Algebra
+public import Zkc.Source.Structured.Import
+public import Zkc.Source.Structured.Meaning
 public import Zkc.Source.Component
 
 @[expose] public section
@@ -59,12 +61,10 @@ def dataInputs (inputs : List Structured.Ty) (scopes : List (List String)) (role
   ((inputs.zip scopes).zipIdx.filter fun ((ty, scope), _) =>
     scope.contains role && !(ty matches .service _)).map (·.2)
 
-/-- The data sort of an original input type, if it is a scalar. -/
-def dataSort? : Structured.Ty → Option Common.Native.Ty
-  | .boolean => some .boolean
-  | .field domain => some (.field domain)
-  | .group domain => some (.group domain)
-  | _ => none
+/-- The data sort of an original port type: every type except a service. -/
+def dataSort? : Structured.Ty → Option Structured.Ty
+  | .service _ => none
+  | ty => some ty
 
 /-- The occurrence context fixed by the policy, the original roster and the
 replaced service's contract. Only the installed native construction with one
@@ -126,22 +126,31 @@ def exportAcceptance (original : Structured.Snapshot) (participant : Participant
       else none
   | _, _ => none
 
-/-- The complete per-compile check of a constructed validator against its
-original export. -/
-def checkExport (original : Structured.Snapshot) (participant : Participant) : Bool :=
+/-- The complete per-compile construction check of a constructed validator
+against its original export. -/
+def checkExport (original : Structured.Snapshot) (participant : Participant) : Except String Unit :=
   match exportContext original participant, exportAcceptance original participant with
   | some context, some _ => check context participant
-  | _, _ => false
+  | none, _ => .error "construction-context"
+  | some _, none => .error "construction-acceptance"
 
 theorem checkExport_sound {original : Structured.Snapshot} {participant : Participant}
-    (accepted : checkExport original participant = true) :
+    (accepted : checkExport original participant = .ok ()) :
     ∃ context, exportContext original participant = some context ∧
-      check context participant = true := by
+      check context participant = .ok () := by
   unfold checkExport at accepted
   split at accepted
   · rename_i context _ found _
     exact ⟨context, found, accepted⟩
   · cases accepted
+  · cases accepted
+
+/-- The closed table of an admitted program's checked helpers. It interprets
+the helper calls of the program's exported participants: a call names a helper
+of the original program and is invoked at its checked signature. -/
+def helperTable (program : Structured.Program) (F G : Type) [CommRing F] [AddCommGroup G]
+    [Module F G] [DecidableEq F] [DecidableEq G] : Structured.Meanings F G :=
+  program.payload.definitions.foldl (Structured.Evaluation.extendMeanings .closed) []
 
 /-- A present scalar component of an original input, as transcript data. -/
 def componentPayload {F G : Type} : (ty : Structured.Ty) →

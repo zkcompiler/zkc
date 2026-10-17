@@ -136,6 +136,10 @@ class Driver:
         mutate("commitment-omitted", first_observation_reads_base)
         mutate("challenge-before-commitment", challenge_reads_host_transcript)
         mutate("wrong-domain-separator", challenge_names_delivery)
+        # Each mutation is refused for the obligation it violates.
+        codes = {"commitment-omitted": "construction-observe",
+                 "challenge-before-commitment": "construction-challenge",
+                 "wrong-domain-separator": "construction-challenge-site"}
 
         def body(text):
             """Drop the module header so several renderings share one check file."""
@@ -147,12 +151,13 @@ class Driver:
                  body(structured.render(original, "Fresh.Original")),
                  body(constructed.render(exported, "Fresh.Actual"))]
         proofs = ["theorem actual_accepted : Zkc.Construction.checkExport Fresh.Original.snapshot "
-                  "Fresh.Actual.participant = true := by decide +kernel"]
+                  "Fresh.Actual.participant = .ok () := by decide +kernel"]
         for index, (name, value) in enumerate(mutations.items()):
             namespace = f"Fresh.Mutation{index}"
             parts.append(body(constructed.render(value, namespace)))
             proofs.append(f"/-- {name} -/\ntheorem mutation{index}_refused : Zkc.Construction.checkExport "
-                          f"Fresh.Original.snapshot {namespace}.participant = false := by decide +kernel")
+                          f"Fresh.Original.snapshot {namespace}.participant = .error \"{codes[name]}\" := "
+                          "by decide +kernel")
         proofs.append("#print axioms actual_accepted")
         source = "\n\n".join(parts + proofs) + "\n"
         path = self.output / "FreshExport.lean"
