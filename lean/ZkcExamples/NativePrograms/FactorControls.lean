@@ -11,7 +11,6 @@ public import Mathlib.Algebra.Field.ZMod
 /-! Actual native exports that cannot implement the selected composed contract.
 These are contract counterexamples, not a blanket insecurity claim. -/
 set_option autoImplicit false
-set_option maxRecDepth 20000
 namespace ZkcExamples.NativePrograms.FactorControls
 open Zkc.Protocols.Sumcheck.FactorOpening
 

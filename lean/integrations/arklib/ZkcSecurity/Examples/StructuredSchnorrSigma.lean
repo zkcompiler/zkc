@@ -22,8 +22,6 @@ open ZkcExamples.Structured
 open Zkc.Protocols.Schnorr.Common
 open OracleComp
 
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 set_option smartUnfolding false
 
 variable {F G : Type} [Field F] [DecidableEq F]

@@ -8,7 +8,6 @@ namespace Tests.StructuredMapClients
 open Zkc.Source Zkc.Source.Structured
 open ZkcExamples.Structured
 set_option smartUnfolding false
-set_option backward.isDefEq.respectTransparency false
 
 -- The exact two-role source keeps interleaved scalar broadcasts asymmetric.
 example : MapCombinationViews.program.participant Int Int 0

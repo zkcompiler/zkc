@@ -136,7 +136,6 @@ variable [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq
 
 -- These local options expose dependent port/value aliases during elaboration;
 -- they do not change the kernel or introduce proof assumptions.
-set_option backward.isDefEq.respectTransparency false in
 theorem exec_missing (sites : SiteObservations I) (tables : ComponentTables F G I)
     (primitive : Primitive) (args : Values (Component (assignment F G)) primitive.arguments)
     (missing : RoleFamily.sequence args = none) :

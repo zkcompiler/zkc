@@ -9,8 +9,6 @@ representable-input equation, these expose which later bounds are unnecessary
 when an earlier source guard decides the result. -/
 namespace ZkcExamples.Structured.PrimitiveSourceStops
 open Zkc.Source Zkc.Source.Structured PrimitiveLibrary PrimitiveShapeViews
-set_option maxRecDepth 20000
-set_option maxHeartbeats 600000
 set_option smartUnfolding false
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]

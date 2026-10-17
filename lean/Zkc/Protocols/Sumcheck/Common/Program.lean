@@ -11,8 +11,6 @@ The contract preserves the open process; its security interpretation is separate
 -/
 
 set_option autoImplicit false
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 
 namespace Zkc.Protocols.Sumcheck.Common
 

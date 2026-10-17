@@ -21,10 +21,7 @@ open Zkc.Source Zkc.Source.Structured
 open Zkc.Polynomial Zkc.Polynomial.Multilinear
 open SumcheckRelationContract
 
-set_option backward.isDefEq.respectTransparency false
 set_option smartUnfolding false
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 
 def publicOwner : ContractBinding SumcheckSourceViews.imported := by bind_contract
 
@@ -97,11 +94,13 @@ def publicFormula : FormulaBinding SumcheckSourceViews.imported publicApplicatio
 
 def reductionFormula : FormulaBinding SumcheckReduceViews.imported reductionApplication.relation := by bind_contract
 
+set_option maxRecDepth 20000 in
 theorem sourceBodies : Bodies SumcheckSourceViews.unit.definitions where
   add := by exact_body SumcheckSourceViews.sumAddDefinition
   step := by exact_body SumcheckSourceViews.sumStepDefinition
   total := by exact_body SumcheckSourceViews.sumTotalDefinition
 
+set_option maxRecDepth 20000 in
 theorem reductionBodies : Bodies SumcheckReduceViews.unit.definitions where
   add := by exact_body SumcheckReduceViews.sumAddDefinition
   step := by exact_body SumcheckReduceViews.sumStepDefinition
@@ -178,6 +177,7 @@ def ReductionTruth (raw : List F) (dimension : Nat) (claim : F) : Prop :=
   reductionFormula.invokeRelation (F := F) (G := G)
     (.cons raw (.cons dimension (.cons 1 (.cons claim .nil)))) = .done (.cons true .nil)
 
+set_option backward.isDefEq.respectTransparency false in
 theorem public_formula_equation (raw : List F) (claim : F) (bounded : raw.length < indexLimit) :
     publicFormula.invokeRelation (F := F) (G := G) (.cons raw (.cons claim .nil)) =
       .done (.cons (decide (claim = raw.sum)) .nil) := by
@@ -198,6 +198,7 @@ theorem public_formula_equation (raw : List F) (claim : F) (bounded : raw.length
       | (apply RegionMeaning.OperationLaw.identity; rfl))
   exact derived.sound_identity
 
+set_option maxRecDepth 20000 in
 theorem reduction_formula_equation (raw : List F) (dimension width : Nat) (claim : F)
     (bounded : raw.length < indexLimit) :
     reductionFormula.invokeRelation (F := F) (G := G)
@@ -239,6 +240,7 @@ theorem reduction_formula_law : (reductionInput (F := F) (G := G) (reductionEnvi
   cases rest
   exact reduction_formula_equation raw dimension width claim bounded
 
+set_option backward.isDefEq.respectTransparency false in
 theorem public_target_holds_iff (raw : List F) (claim : F) (context : ProtocolContext)
     (boundary : BoundaryValuation (assignment F G) publicOwner.protocol.inputs publicOwner.protocol.outputs)
     (present : publicClaim.read context boundary = some claim) :
@@ -249,6 +251,7 @@ theorem public_target_holds_iff (raw : List F) (claim : F) (context : ProtocolCo
   simp only [Option.some.injEq, exists_eq_left']
   rfl
 
+set_option backward.isDefEq.respectTransparency false in
 theorem reduction_input_holds_iff (raw : List F) (dimension : Nat) (claim : F) (context : ProtocolContext)
     (boundary : BoundaryValuation (assignment F G) reductionOwner.protocol.inputs reductionOwner.protocol.outputs)
     (present : reductionClaim.read context boundary = some claim) :

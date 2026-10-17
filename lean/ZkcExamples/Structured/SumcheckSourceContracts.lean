@@ -148,7 +148,6 @@ theorem check_all (xs point : List F) (claim : F) :
   · rw [ite_eq_right pointBound]
     exact check_point_exhausted xs point claim pointBound
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Actual helper lookup after forgetting sites returns the proved mathematical Boolean. -/
 theorem check_plain (xs point : List F) (claim : F)
     (vectorBound : xs.length < indexLimit) (pointBound : point.length < indexLimit) :

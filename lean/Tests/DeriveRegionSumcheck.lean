@@ -7,8 +7,6 @@ import ZkcExamples.Structured.SumcheckSourceViews
 
 /-! Automation clients of maintained admitted bodies. No source operation tree
 is restated here. The generated target uses a nondefinitional addition rewrite. -/
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 set_option smartUnfolding false
 
 namespace Tests.DeriveRegionSources
@@ -40,6 +38,7 @@ end Tests.DeriveRegionSources
 
 namespace Tests.DeriveRegionSources
 open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured
+set_option maxRecDepth 20000 in
 private theorem sumBodies :
     SumcheckRelationContract.Bodies SumcheckSourceViews.program.payload.definitions where
   add := by exact_body SumcheckSourceViews.sumAddDefinition

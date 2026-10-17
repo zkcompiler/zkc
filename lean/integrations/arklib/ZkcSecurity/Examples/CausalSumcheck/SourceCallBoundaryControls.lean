@@ -15,9 +15,7 @@ open ZkcSecurity.VCVio.Execution
 open SumcheckCallBoundaryControls
 open scoped ENNReal
 
-set_option backward.isDefEq.respectTransparency false
 set_option smartUnfolding false
-set_option maxRecDepth 20000
 
 local instance primeFive : Fact (Nat.Prime 5) := ⟨by decide⟩
 

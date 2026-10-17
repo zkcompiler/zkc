@@ -4,7 +4,6 @@ import Mathlib.Algebra.Ring.Int.Defs
 open Zkc.Source Zkc.Source.Structured
 namespace Tests.StructuredContractInvocation
 set_option smartUnfolding false
-set_option maxRecDepth 20000
 
 private def leaf : Function :=
   ⟨"leaf", .protocol, .publicDef, [.boolean, .boolean], [.boolean],

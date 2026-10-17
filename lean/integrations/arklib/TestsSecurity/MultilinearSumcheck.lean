@@ -6,7 +6,6 @@ the probability bounds quantify over arbitrary ordinary effectful strategies. -/
 
 namespace TestsSecurity.MultilinearSumcheck
 
-set_option backward.isDefEq.respectTransparency false
 
 open Zkc.Polynomial.Multilinear Zkc.Protocols.Sumcheck.Multilinear
 open ZkcSecurity.ArkLib.Sumcheck.Multilinear
@@ -100,6 +99,7 @@ theorem rejection_keeps_abort {F : Type} [CommRing F] [Nontrivial F] [DecidableE
   simp only [oneRound, pure_bind, failed, ite_false]
   rfl
 
+set_option backward.isDefEq.respectTransparency false in
 /-- A constant zero challenge lets a fixed causal pair prove the false sum 1
 of the zero table. Thus guard order alone cannot replace fresh uniform draws. -/
 theorem nonuniform_false_accepts {F : Type} [CommRing F] [Nontrivial F] [DecidableEq F] :
@@ -133,6 +133,7 @@ example {F : Type} [Field F] [Fintype F] [DecidableEq F] [SampleableType F]
     Pr{let accepted ← experiment table claim ()}[accepted] ≤ 0 := by
   simpa only [Nat.cast_zero, ENNReal.zero_div] using soundness table claim () wrong
 
+set_option backward.isDefEq.respectTransparency false in
 /-- False-initial is essential: a true singleton claim accepts with certainty,
 whereas the putative zero-round soundness bound is zero. -/
 example {F : Type} [Field F] [DecidableEq F] [SampleableType F] (value : F) :

@@ -12,8 +12,6 @@ public import Lean
 
 /-! Generated candidate: source identity alone proves no semantic property. -/
 set_option autoImplicit false
-set_option maxRecDepth 20000
-set_option maxHeartbeats 1500000
 set_option linter.unusedSimpArgs false
 set_option linter.defProp false
 set_option linter.unusedTactic false
@@ -149,6 +147,7 @@ def sourceScopes : Values (fun _ => Nat → Bool) ZkcExamples.NativePrograms.Var
 
 def imported : Imported := ⟨ZkcExamples.NativePrograms.Variants.FactorWrongResidualData.snapshot, sourceProgram, sourceScopes⟩
 
+set_option maxRecDepth 20000 in
 theorem admitted : ZkcExamples.NativePrograms.Variants.FactorWrongResidualData.snapshot.check = .ok imported := by
   apply ZkcExamples.NativePrograms.Variants.FactorWrongResidualData.snapshot.check_parts sourceProgram sourceScopes
   · decide +kernel
@@ -191,6 +190,7 @@ def sourceProcess (statement : Statement F) (claim : F) (service : Nat) : PIR.Pr
     else .halt .reject
   )
 
+set_option maxHeartbeats 1500000 in
 theorem source_expansion (statement : Statement F) (claim : F) (service : Nat) :
     verifier (F := F) statement claim service = sourceProcess (F := F) statement claim service := by
   change (imported.program.denote (scalarMeaning F F) id 1

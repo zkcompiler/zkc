@@ -2,8 +2,6 @@ import ZkcExamples.Structured.SchnorrBinding
 import ZkcExamples.Structured.SchnorrContract
 import ZkcExamples.Structured.SchnorrSharedWitness
 
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 set_option smartUnfolding false
 
 namespace Tests.StructuredSchnorrBinding

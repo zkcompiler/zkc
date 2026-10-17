@@ -7,8 +7,6 @@ import Lean
 /-! Synthetic checker/semantics controls. Actual-export fixtures and their
 binding/proofs are owned by the structured bridge, not these unit tests. -/
 
-set_option maxRecDepth 10000
-set_option maxHeartbeats 4000000
 -- Direct reduction avoids repeatedly unfolding the dependent admission equations.
 set_option smartUnfolding false
 

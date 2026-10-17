@@ -12,8 +12,6 @@ namespace ZkcExamples.Structured.SchnorrHonestProver.Controls
 open Zkc.Source Zkc.Source.Structured
 
 set_option autoImplicit false
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 set_option smartUnfolding false
 
 /-- The verifier key violates the witness relation. Merely changing the unused
@@ -107,23 +105,28 @@ theorem malformed_site_refused : (check malformedSiteSnapshot).isOk = false := b
 def siteProgram : Program :=
   (check (mutatedSnapshot .site)).toOption.get (by decide +kernel)
 
+set_option maxRecDepth 20000 in
 theorem response_admitted : check (mutatedSnapshot .response) = .ok responseProgram := rfl
+set_option maxRecDepth 20000 in
 theorem site_admitted : check (mutatedSnapshot .site) = .ok siteProgram := rfl
 
 section Generic
 variable {F G : Type} [Field F] [DecidableEq F]
   [AddCommGroup G] [Module F G] [DecidableEq G]
 
+set_option maxRecDepth 20000 in
 def responseProcess (base key : G) (secret : F) (service : Nat) :
     PIR.Proc (participantInterface F G) (Option Bool) :=
   (responseProgram.participant F G 0 (SchnorrInteractive.proverInputs base key secret service)).bind
     fun outputs => .done (outputs.get .here)
 
+set_option maxRecDepth 20000 in
 def siteProcess (base key : G) (secret : F) (service : Nat) :
     PIR.Proc (participantInterface F G) (Option Bool) :=
   (siteProgram.participant F G 0 (SchnorrInteractive.proverInputs base key secret service)).bind
     fun outputs => .done (outputs.get .here)
 
+set_option maxRecDepth 20000 in
 /-- Changed arithmetic is observed from another admitted constructor subject. -/
 theorem response_equation (base key : G) (secret : F) (service : Nat) :
     responseProcess base key secret service =
@@ -133,6 +136,7 @@ theorem response_equation (base key : G) (secret : F) (service : Nat) :
       .call (.send (ty := .field scalarDomain) SchnorrInteractive.wiring.responseSite 1 (nonce - challenge * secret))
         (fun _ => .done none)))) := rfl
 
+set_option maxRecDepth 20000 in
 theorem site_equation (base key : G) (secret : F) (service : Nat) :
     siteProcess base key secret service =
       .call (.query SchnorrInteractive.nonceSite scalarDomain (.cons service .nil)) (fun (nonce : F) =>
@@ -143,6 +147,7 @@ theorem site_equation (base key : G) (secret : F) (service : Nat) :
 
 set_option smartUnfolding true
 
+set_option maxRecDepth 20000 in
 theorem response_execution (base key : G) (secret nonce challenge : F) (service : Nat) :
     (responseProcess base key secret service).run
       (replyHandler service (.returned nonce) (.returned challenge)) () =
@@ -156,6 +161,7 @@ theorem response_execution (base key : G) (secret nonce challenge : F) (service 
   simp [PIR.Proc.run, PIR.Execution.follow, replyHandler, services, Values.get]
   rfl
 
+set_option maxRecDepth 20000 in
 theorem response_extracted (base key : G) (secret nonce challenge : F) (service : Nat) :
     extract service ((responseProcess base key secret service).run
       (replyHandler service (.returned nonce) (.returned challenge)) ()) =
@@ -163,6 +169,7 @@ theorem response_extracted (base key : G) (secret nonce challenge : F) (service 
   rw [response_execution]
   simp [extract, services, Values.get]
 
+set_option maxRecDepth 20000 in
 /-- The same extraction-to-Strategy constructor as the original source, applied
 to the actual admitted response mutation with its own success witness. -/
 def responseStrategy (base key : G) (secret nonce : F) (service : Nat) :
@@ -173,6 +180,7 @@ def responseStrategy (base key : G) (secret nonce : F) (service : Nat) :
       rw [response_extracted]
       rfl)
 
+set_option maxRecDepth 20000 in
 theorem changed_site_refused (base key : G) (secret nonce challenge : F) (service : Nat) :
     ((siteProcess base key secret service).run
       (replyHandler service (.returned nonce) (.returned challenge)) ()).outcome =
@@ -181,6 +189,7 @@ theorem changed_site_refused (base key : G) (secret nonce challenge : F) (servic
   simp [PIR.Proc.run, PIR.Execution.follow, replyHandler, services, Values.get,
     SchnorrInteractive.wiring, ZkcExamples.NativePrograms.Schnorr.wiring]
 
+set_option maxRecDepth 20000 in
 theorem changed_site_not_extracted (base key : G) (secret nonce challenge : F) (service : Nat) :
     extract service ((siteProcess base key secret service).run
       (replyHandler service (.returned nonce) (.returned challenge)) ()) = none := by
@@ -204,12 +213,14 @@ theorem extra_action_not_extracted (base key : G) (secret nonce challenge : F)
 
 end Generic
 
+set_option maxRecDepth 20000 in
 theorem changed_response_observed :
     extract 8 ((responseProcess (F := ℚ) (1 : ℚ) 2 2 8).run
       (replyHandler 8 (.returned 3) (.returned 5)) ()) = some (3, -7) := by
   rw [response_extracted]
   decide +kernel
 
+set_option maxRecDepth 20000 in
 theorem changed_response_not_original :
     extract 8 ((responseProcess (F := ℚ) (1 : ℚ) 2 2 8).run
       (replyHandler 8 (.returned 3) (.returned 5)) ()) ≠

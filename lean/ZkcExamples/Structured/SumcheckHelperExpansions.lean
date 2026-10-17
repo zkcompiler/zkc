@@ -9,29 +9,24 @@ namespace ZkcExamples.Structured.SumcheckHelperLaws
 open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured
 open PrimitiveLibrary MapPrefixBodies SumcheckHelperBodies
 
-set_option backward.isDefEq.respectTransparency false in
 theorem prepend_empty {Value : Ty → Type} {types : List Ty}
     (env : Environment Value types) (values : Values Value []) :
     @Eq (Environment Value types) (env.prepend values) env := by cases values; rfl
-set_option backward.isDefEq.respectTransparency false in
 theorem prepend_one {Value : Ty → Type} {types : List Ty} {type : Ty}
     (env : Environment Value types) (values : Values Value [type]) :
     @Eq (Environment Value (type :: types)) (env.prepend values) (env.push (values.get .here)) := by
   cases values with | cons value rest => cases rest; rfl
-set_option backward.isDefEq.respectTransparency false in
 theorem prepend_two {Value : Ty → Type} {types : List Ty} {first second : Ty}
     (env : Environment Value types) (values : Values Value [first, second]) :
     @Eq (Environment Value (first :: second :: types)) (env.prepend values)
       (Environment.push (Environment.push env (values.get (.there .here))) (values.get .here)) := by
   cases values with | cons a rest => cases rest with | cons b rest => cases rest; rfl
 
-set_option backward.isDefEq.respectTransparency false in
 theorem prepend_three {Value : Ty → Type} {types : List Ty} {type0 type1 type2 : Ty}
     (env : Environment Value types) (values : Values Value [type0, type1, type2]) :
     @Eq (Environment Value ([type0, type1, type2] ++ types)) (env.prepend values) (Environment.push (Environment.push (Environment.push env (values.get (.there (.there .here)))) (values.get (.there .here))) (values.get .here)) := by
   cases values with | cons value0 values => cases values with | cons value1 values => cases values with | cons value2 values => cases values; rfl
 
-set_option backward.isDefEq.respectTransparency false in
 theorem singleton_eta {Value : Ty → Type} {a : Ty} (result : Values Value [a]) :
     Values.cons (result.get .here) .nil = result := by
   cases result with | cons x rest => cases rest; rfl

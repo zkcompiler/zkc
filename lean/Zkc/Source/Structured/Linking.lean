@@ -293,7 +293,6 @@ abbrev closedMeanings {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
-set_option backward.isDefEq.respectTransparency false in
 /-- No intended helper result is stored in the association. -/
 theorem BodyIn.invoke {definitions : List CheckedDefinition} {helper : Helper}
     {body : Region dialect helper.inputs helper.outputs}

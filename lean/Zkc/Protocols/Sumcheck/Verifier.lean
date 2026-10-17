@@ -91,7 +91,6 @@ theorem acceptance_step (p : Quadratic F (n + 1)) (claim : F)
       simp [verify, passes]
     rw [acceptance, all, UniformTape.constant, ite_eq_right passes]
 
-set_option maxHeartbeats 800000 in
 /-- Ordinary soundness: a false claimed Boolean sum is accepted with probability
 at most `2*n/|F|`. The bound is valid but may be uninformative in small fields.
 This is neither knowledge soundness nor Fiat–Shamir security. -/

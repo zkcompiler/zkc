@@ -9,8 +9,6 @@ public import Zkc.Protocols.Sumcheck.Common
 /-! Security of the actual imported two-round verifier under fresh uniform coins. -/
 
 set_option autoImplicit false
-set_option maxRecDepth 4000
-set_option maxHeartbeats 500000
 
 namespace ZkcExamples.NativePrograms.Sumcheck
 

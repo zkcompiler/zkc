@@ -12,7 +12,6 @@ open Zkc.Protocols.Sumcheck.Multilinear (honestMessage)
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G] {n : Nat}
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Sums checks dimension representability, but never width or the shape predicate. -/
 theorem sums_honestMessage_generic_body (helpers : Meanings F G) (halves : HalvesLaw helpers)
     (xs : List F) (table : Table F (n + 1)) (columns : Nat)
@@ -32,7 +31,6 @@ theorem sums_honestMessage_generic_body (helpers : Meanings F G) (halves : Halve
   rw [← low, ← high]
   rfl
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The original one-column shaped form is a corollary of the width-independent law. -/
 theorem sums_honestMessage_shaped (helpers : Meanings F G) (halves : HalvesLaw helpers)
     (xs : List F) (table : Table F (n + 1)) (shape : HasShape xs (n + 1) 1)
@@ -42,7 +40,6 @@ theorem sums_honestMessage_shaped (helpers : Meanings F G) (halves : HalvesLaw h
   sums_honestMessage_generic_body helpers halves xs table 1 decoded
     (Nat.lt_trans shape.2.1 (by decide +kernel))
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Public check agrees with the existing mathematical checker, also for malformed vectors. -/
 theorem check_mathematical (helpers : Meanings F G) (laws : MapPrefixContracts.Laws helpers)
     (callback : ∀ (xs point : List F) (claim : F),
@@ -76,7 +73,6 @@ theorem check_mathematical (helpers : Meanings F G) (laws : MapPrefixContracts.L
       rw [empty, point_coordinates (n := 0) point.length point [] rfl rfl, List.append_nil]
     simp only [shape, true_and, Zkc.Protocols.Sumcheck.Multilinear.check, decoded, pointEq]
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Decoding and vector representability imply every successful dimension/point bound. -/
 theorem check_mle_generic_body (helpers : Meanings F G) (laws : MapPrefixContracts.Laws helpers)
     (callback : ∀ (xs point : List F) (claim : F),
@@ -95,7 +91,6 @@ theorem check_mle_generic_body (helpers : Meanings F G) (laws : MapPrefixContrac
     complete_prefix_sum xs point table decoded]
   simp only [shape, true_and]
 
-set_option backward.isDefEq.respectTransparency false in
 /-- A decoded representable table supplies the constructor and point bounds. -/
 theorem checkTable_mle_generic_body (helpers : Meanings F G) (laws : MapPrefixContracts.Laws helpers)
     (xs point : List F) (claim : F) (table : Table F (0 + point.length))

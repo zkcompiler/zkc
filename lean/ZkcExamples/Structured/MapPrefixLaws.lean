@@ -34,7 +34,6 @@ theorem triple_eta {Value : Ty → Type} {a b c : Ty} (value : Values Value [a,b
   cases value with | cons a rest => cases rest with | cons b rest => cases rest with
     | cons c rest => cases rest; rfl
 
-set_option backward.isDefEq.respectTransparency false in
 theorem step_body (table : Meanings F G) (xs : List F) (dimension columns : Nat) (r : F) :
     stepBody.denote (meaning F G table) (firstInputs xs dimension columns r).get =
       invoke table firstHelper (firstInputs xs dimension columns r) := by
@@ -42,7 +41,6 @@ theorem step_body (table : Meanings F G) (xs : List F) (dimension columns : Nat)
   rw [MapSourceExpansions.prefix_step]
   simp only [triple_eta, PIR.Proc.bind_done]
 
-set_option backward.isDefEq.respectTransparency false in
 theorem foldStep_body (table : Meanings F G) (xs : List F) (dimension columns : Nat)
     (r : F) (point : List F) :
     foldStepBody.denote (meaning F G table)
@@ -52,7 +50,6 @@ theorem foldStep_body (table : Meanings F G) (xs : List F) (dimension columns : 
   simp only [triple_eta, PIR.Proc.bind_done]
   rfl
 
-set_option backward.isDefEq.respectTransparency false in
 theorem prefix_body (table : Meanings F G) (xs : List F) (dimension columns : Nat) (point : List F) :
     prefixBody.denote (meaning F G table) (prefixInputs xs dimension columns point).get =
       invoke table foldWrapperHelper (prefixInputs xs dimension columns point) := by
@@ -60,7 +57,6 @@ theorem prefix_body (table : Meanings F G) (xs : List F) (dimension columns : Na
   rw [MapSourceExpansions.prefix_prefix]
   simp only [triple_eta, PIR.Proc.bind_done]
 
-set_option backward.isDefEq.respectTransparency false in
 theorem foldWrapper_body (table : Meanings F G) (xs : List F) (dimension columns : Nat) (point : List F) :
     foldWrapperBody.denote (meaning F G table) (prefixInputs xs dimension columns point).get =
       invoke table foldHelper (.cons point (.cons xs (.cons dimension (.cons columns .nil)))) := by
@@ -68,7 +64,6 @@ theorem foldWrapper_body (table : Meanings F G) (xs : List F) (dimension columns
   rw [MapSourceExpansions.prefix_foldWrapper]
   simp only [triple_eta, PIR.Proc.bind_done]
 
-set_option backward.isDefEq.respectTransparency false in
 theorem fold_body (table : Meanings F G) (xs : List F) (dimension columns : Nat) (point : List F) :
     foldBody.denote (meaning F G table)
       (Values.cons point (.cons xs (.cons dimension (.cons columns .nil)))).get =
@@ -93,7 +88,6 @@ def FirstLaw (table : Meanings F G) : Prop :=
       else .halt .reject
 
 omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
-set_option backward.isDefEq.respectTransparency false in
 /-- Ordered composition, including the first reached zero-dimension rejection. -/
 theorem fold_restriction (table : Meanings F G) (law : FirstLaw table)
     (xs : List F) (dimension columns : Nat) (point : List F)
@@ -124,7 +118,6 @@ theorem fold_restriction (table : Meanings F G) (law : FirstLaw table)
         simp only [List.length_cons]; omega
       simp only [positive, tooLong, ite_false, PIR.Proc.bind]
 
-set_option backward.isDefEq.respectTransparency false in
 theorem wrapper_body (table : Meanings F G)
     (tableLaw : ∀ (xs : List F) (dimension columns : Nat),
       xs.length < indexLimit → dimension < indexLimit → columns < indexLimit →
@@ -189,7 +182,6 @@ theorem wrapper_body (table : Meanings F G)
   · simp only [shape, ite_false, PIR.Proc.bind]
 
 
-set_option backward.isDefEq.respectTransparency false in
 theorem entry_body (table : Meanings F G) (xs : List F) (dimension columns : Nat) (point : List F) :
     entryBody.denote (meaning F G table) (prefixInputs xs dimension columns point).get =
       invoke table wrapperHelper (prefixInputs xs dimension columns point) := by
@@ -209,7 +201,6 @@ def FoldStepLaw (table : Meanings F G) : Prop :=
     invoke table foldStepHelper (.cons xs (.cons dimension (.cons columns (.cons r (.cons point .nil))))) =
       invoke table firstHelper (firstInputs xs dimension columns r)
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Reusable complete finite-body equation, not merely a fold over an ideal helper. -/
 theorem finite_prefix_generic_body (table : Meanings F G) (first : FirstLaw table)
     (step : FoldStepLaw table) (xs : List F) (dimension columns : Nat) (point : List F)

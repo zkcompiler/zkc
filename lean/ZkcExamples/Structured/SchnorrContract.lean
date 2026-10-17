@@ -14,8 +14,6 @@ verifier output. The source formula and exact clause inventory remain explicit. 
 namespace ZkcExamples.Structured.SchnorrContract
 open Zkc.Source Zkc.Source.Structured SchnorrBinding
 
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 set_option smartUnfolding false
 
 theorem only_clause (index : Fin owner.contract.clauses.length) : index = clauseIndex := by

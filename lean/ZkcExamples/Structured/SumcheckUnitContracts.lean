@@ -94,7 +94,6 @@ theorem variables_equation (xs : List F) (dimension columns : Nat) :
 
 end Laws
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The projection preserves its selected optional component without demanding other operands. -/
 theorem width_components {unit : UnitPayload} (bodies : Bodies unit.definitions)
     (xs : Option (List F)) (dimension : Option Nat) (columns : Option Nat) :
@@ -102,7 +101,6 @@ theorem width_components {unit : UnitPayload} (bodies : Bodies unit.definitions)
       (.cons xs (.cons dimension (.cons columns .nil))) = .done (.cons columns .nil) :=
   (unit.component_body_of_bodyIn bodies.width _).trans (by rfl)
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The projection preserves its selected optional component without demanding other operands. -/
 theorem variables_components {unit : UnitPayload} (bodies : Bodies unit.definitions)
     (xs : Option (List F)) (dimension : Option Nat) (columns : Option Nat) :
@@ -110,7 +108,6 @@ theorem variables_components {unit : UnitPayload} (bodies : Bodies unit.definiti
       (.cons xs (.cons dimension (.cons columns .nil))) = .done (.cons dimension .nil) :=
   (unit.component_body_of_bodyIn bodies.«variables» _).trans (by rfl)
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The projection preserves its selected optional component without demanding other operands. -/
 theorem values_components {unit : UnitPayload} (bodies : Bodies unit.definitions)
     (xs : Option (List F)) (dimension : Option Nat) (columns : Option Nat) :
@@ -118,14 +115,12 @@ theorem values_components {unit : UnitPayload} (bodies : Bodies unit.definitions
       (.cons xs (.cons dimension (.cons columns .nil))) = .done (.cons xs .nil) :=
   (unit.component_body_of_bodyIn bodies.values _).trans (by rfl)
 
-set_option backward.isDefEq.respectTransparency false in
 theorem empty_plain {unit : UnitPayload} (bodies : Bodies unit.definitions) :
     (invoke (unit.tables F G).closed emptyHelper .nil).interpret forgetSites =
       .done (.cons [] .nil) := by
   rw [unit.closed_invoke_forgetSites, empty_equation unit.linked bodies]
   rfl
 
-set_option backward.isDefEq.respectTransparency false in
 theorem append_plain {unit : UnitPayload} (bodies : Bodies unit.definitions) (xs : List F) (x : F) :
     (invoke (unit.tables F G).closed appendHelper (.cons xs (.cons x .nil))).interpret forgetSites =
       .done (.cons (xs ++ [x]) .nil) := by
