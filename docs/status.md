@@ -288,9 +288,10 @@ Lean independently checks each structured export's metadata, signatures, helper
 linking, role scopes, service provenance and computational availability, and
 proves its process equations on the shared Region carrier.
 [Formal support](../lean/docs/support.md) states exact experiments and premises,
-including the Interactive Schnorr contracts and Sigma properties, two inlining
-pairs checked against actual prepared exports, and `n / |F|` Sumcheck bounds on
-the actual admitted roots under a uniform query service. No general
+including: the Interactive Schnorr verifier contracts, an honest prover derived
+from the checked source's sends and the Sigma properties; two inlining pairs
+checked against actual prepared exports; and `n / |F|` Sumcheck bounds on the
+actual admitted roots under a uniform query service. No general
 availability-soundness or native execution-correspondence theorem is claimed.
 Full DSL/compiler/runtime correspondence, production arithmetic/sampling,
 backend correctness and complete protocol security remain open.
