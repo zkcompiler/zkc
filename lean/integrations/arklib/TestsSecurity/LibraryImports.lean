@@ -2,6 +2,8 @@
 import ZkcSecurity.ArkLib.Fri.Correspondence
 import ZkcSecurity.ArkLib.Fri.Domain
 import ZkcSecurity.ArkLib.Fri.Protocol
+import ZkcSecurity.ArkLib.Fri.Soundness
+import ZkcSecurity.ArkLib.Fri.UniqueDecoding
 import ZkcSecurity.ArkLib.Gkr.Layer
 import ZkcSecurity.ArkLib.Sumcheck.Bridge
 import ZkcSecurity.ArkLib.Sumcheck.Domain
@@ -78,6 +80,7 @@ import TestsSecurity.CompiledSchnorrFiatShamir
 import TestsSecurity.CompiledSumcheckFiatShamir
 import TestsSecurity.ExecutableSchnorrFiatShamir
 import TestsSecurity.FiatShamirTyped
+import TestsSecurity.FriSecurity
 import TestsSecurity.LocalCoupling
 import TestsSecurity.LocalCouplingAudit
 import TestsSecurity.LocalCouplingClients
