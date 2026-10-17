@@ -1,0 +1,30 @@
+module sample;
+domain Fr = field("bls12-381.fr");
+
+protocol Draw roles(A,B)(left: Random<Fr> @B, right: Random<Fr> @B)
+    -> (p: Fr @A, v: Fr @B) {
+  let a = left.draw();
+  let b = right.draw();
+  let atA = send B -> A(a + b);
+  return (p = atA, v = a + b);
+}
+protocol Run roles(P,V)(n: index @(P,V), first: Random<Fr> @V,
+    second: Random<Fr> @V) -> (p: Fr @P, v: Fr @V) {
+  let before = first.draw();
+  let mut p: Fr @P = 0;
+  let mut v = before;
+  for _ in 0..n roles(P,V) max 3 {
+    let (a,b) = Draw roles(P,V)(first,second);
+    p = p + a;
+    v = v + b;
+  }
+  let after = first.draw();
+  return (p = p, v = v + after);
+}
+protocol Outer roles(X,Y,Z)(n: index @(Z,X), first: Random<Fr> @X,
+    second: Random<Fr> @X, outside: Fr @Y) -> (x: Fr @X, y: Fr @Y, z: Fr @Z) {
+  let (p,v) = Run roles(Z,X)(n,first,second);
+  return (x = v, y = outside, z = p);
+}
+run Demo = Run;
+run Nested = Outer;

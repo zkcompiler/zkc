@@ -58,7 +58,7 @@ def received (prover : Strategy F) (first : F) : Nat → F
 /-- Position counts reached actions. Coins are exposed only at positions three
 and eight of the proved verifier, after each full coefficient message. -/
 def transcriptHandler (prover : Strategy F) (first second : F) :
-    PIR.Handler (actions (F := F)) Nat (Action Nat language services (ScalarValue F F))
+    PIR.Handler (actions (F := F)) Nat (Participant.Action Nat Ty services (ScalarValue F F))
   | action@(.send ..), position => ⟨.returned (), position + 1, [action]⟩
   | action@(.query ..), position =>
       ⟨.returned (if position = 3 then first else second), position + 1, [action]⟩
@@ -71,7 +71,7 @@ def transcriptHandler (prover : Strategy F) (first second : F) :
 
 def run (program : Verifier F) (coefficients : Coefficients F) (claim : F) (service : Nat)
     (prover : Strategy F) (first second : F) :
-    PIR.Execution Nat (Action Nat language services (ScalarValue F F)) (Option Bool) :=
+    PIR.Execution Nat (Participant.Action Nat Ty services (ScalarValue F F)) (Option Bool) :=
   (program coefficients claim service).run (transcriptHandler prover first second) 0
 
 omit [DecidableEq F] in

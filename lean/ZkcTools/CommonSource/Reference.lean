@@ -63,15 +63,15 @@ def inputsMatch {types : List Ty} (role : Nat) :
   | .cons scope scopes, .cons value values =>
       value.isSome == scope role && inputsMatch role scopes values
 
-def request : Action Nat language services meaning.Value → Json
+def request : Participant.Action Nat Ty services meaning.Value → Json
   | .send (ty := ty) site receiver value =>
       .arr #[.str "send", .str site, toJson receiver, encodeType ty, encodeValue ty value]
   | .receive ty site sender => .arr #[.str "receive", .str site, toJson sender, encodeType ty]
   | .query site field (.cons handle .nil) =>
       .arr #[.str "draw", .str site, .str field, toJson handle]
 
-def reply (action : Action Nat language services meaning.Value) (json : Json) :
-    Except String ((interface Nat language services meaning.Value).Reply action) :=
+def reply (action : Participant.Action Nat Ty services meaning.Value) (json : Json) :
+    Except String ((Participant.interface Nat Ty services meaning.Value).Reply action) :=
   match action with
   | .send .. => if json == .null then .ok () else .error "common-run-send-reply"
   | .receive ty .. => decodeValue ty json
@@ -81,7 +81,7 @@ structure Replay where
   entries : Array Json
   position : Nat := 0
 
-def handler : PIR.Handler (interface Nat language services meaning.Value) Replay Json :=
+def handler : PIR.Handler (Participant.interface Nat Ty services meaning.Value) Replay Json :=
   fun action state =>
     let asked := request action
     match state.entries[state.position]? with

@@ -7,6 +7,14 @@ maintains independent research models and checks.
 
 ## Selecting checks
 
+Retained structured protocol changes use the compiler's `structured-source`,
+`structured-applications` and `structured-repeats` CTest cases. The repeat case
+captures complete original sources and interfaces, checks optional participant
+execution and exact refusals, and exercises native preparation, projection,
+Math lowering and physical export. Runner integration and the native affine
+resource suites provide separate evidence; reference agreement is not a
+production correctness theorem.
+
 | Change | Command | Scope |
 |---|---|---|
 | Harness, configuration or command wiring | `just test-harness` | Python controls without compiled project tools |
@@ -102,8 +110,15 @@ of that control runs in `just test-integration` without Lean.
 project/dependency objects. These can be expensive.
 
 `just test-lean-native` prepares the native compiler, main Lean package and ArkLib integration, then
-runs independent finite SSA/Lean comparisons, the source/property request matrix,
-and authored-target controls. To use an existing build, run
+runs independent scalar and structured SSA/Lean comparisons, including primitive
+bindings and unchanged table helpers, the source/property
+request matrix, and authored-target controls. The [structured bridge](../../lean/bridges/structured/README.md)
+also has a standalone command and optional production Runner comparisons.
+The separate [participant probe](../../lean/bridges/structured/participant.md)
+compares actual Schnorr endpoints, native G1 codecs, pending actions and provider
+state; build its test driver explicitly and run the documented standalone command.
+It requires the structured open replay executable and is not a default native check.
+To use an existing build, run
 `python3 common/tests/run.py lean-native --compiler-build=build/compiler`.
 This scope exercises wrong-program, wrong-relation and unproved-certificate
 refusals as well as successful claims. Reports are retained under

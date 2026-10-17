@@ -394,6 +394,37 @@ stop earlier: subsequent ordered work still happens before the return.
 
 ## Statements and retention
 
+Original declarations own source contracts. `relation.declare` optionally has
+a flat symbol reference `formula`; the kind `zkc.language.formula/0` requires it
+in the `protocol` profile. It resolves in the same unit to a defined Math
+`func.func` with exactly the declaration's complete input/output ABI. Other
+kinds have no formula link. A Local helper is not Math, and a generated symbol
+spelling is not a binding rule. Ordinary MLIR symbol replacement updates these
+references. This is a structural association, not a proof of the formula's
+adequacy or totality.
+
+`protocol.func` optionally has `contracts`, an array of declaration clauses;
+absence denotes an empty inventory. Each clause has exactly five fields:
+`[kind, name, subject, residual, decision]`. Applications are
+`[@relation, [selectors...]]`, selectors are
+`["input" | "output", native-port-index : i64, "role"]`, and absent residuals
+or decisions are `unit`. Kinds, directions, exact native ABI, owner roles,
+unique names and clause-specific residual/decision rules follow the
+[structured contract layout](../formats/structured-source.md). A declaration
+admits at most 4096 clauses and 100000 units of application, selector and entry
+agreement work. Invalid contracts use `protocol-contract`; disagreement with an
+entry statement uses `protocol-contract-statement`. Invalid formula links use
+`relation-formula`. These checks also apply to hand-authored original PIR.
+
+Contracts do not add statement operations, guards or witness equalities.
+Application expansion retains the declaration inventory and its symbol
+references; it does not attach callee entry indices to caller instructions.
+Participant projection deliberately erases declaration contracts and formula
+links, and the statement's selected-target reference, because that artifact does
+not retain the original declaration inventory or Math closure. It retains the
+existing statement identity/ABI projection. No certificate for the
+original contracts is transported through these transforms by this metadata.
+
 `protocol.statement` references a non-callable `relation.declare` symbol and
 binds ordered entry operands with explicit role selectors. The declaration has
 an external identity `(kind, key, revision)`, ordered logical input types, one
@@ -401,6 +432,19 @@ Boolean result, and an explicit purpose for every input: `parameter`,
 `statement`, or `witness`. Purpose comes from an author or adapter schema; role
 availability and secrecy do not determine it. The symbol implements no callable
 interface and cannot be invoked as a helper or executable local function.
+
+The statement's optional StringAttr `target` names exactly one `target` clause
+in the containing protocol's `contracts`. Its relation, actual input arguments,
+input roles and acceptance index must match that clause; the clause recovers the
+selected decision role. The reference cannot resolve in another protocol.
+Source proof Entry emission always retains its selected target name, and source
+interface admission checks that name together with the verifier/decision-role
+agreement. Native proof deployment additionally checks the recovered decision
+role against its validator. Hand-authored standalone statements can omit the
+reference; with retained targets they still require some matching projection,
+but supply no exact selected-target evidence. Changing the selected name to
+another well-formed target represents a different selection even when the old
+projection fields are identical. The reference is metadata, not a predicate call.
 
 Declaration inputs admit immutable logical data: Boolean and unsigned index
 scalars, installed field/group scalars, static one-dimensional field arrays,

@@ -1,0 +1,396 @@
+"""Original structured export, exact coordinates and strict profile refusals."""
+import hashlib
+import json
+from pathlib import Path
+
+from cases import case, counted
+from commands import Commands
+from tools import records
+
+commands = Commands(records())
+fixtures = Path(__file__).parent / 'fixtures'
+field = ['field', 'bls12-381.fr']
+vector = ['vector', 'bls12-381.fr']
+boolean = ['bool']
+index = ['index']
+total = (fixtures / 'finite/total-state.mlir').read_text()
+unit = (fixtures / 'finite/unit-state.mlir').read_text()
+loops = (fixtures / 'structured-source/loops-and-captures.mlir').read_text()
+math = (fixtures / 'structured-source/math-operations.mlir').read_text()
+
+
+def export(source, refusal=None, symbol='main'):
+    result = commands.source('protocol-structured', source, '--symbol=' + symbol,
+                             refuses=refusal)
+    return None if refusal else json.loads(result)
+
+
+def table(snapshot):
+    return {definition[1]: definition for definition in snapshot[7]}
+
+
+def instructions(definition):
+    return definition[9][1]
+
+
+def simple(declarations='', body='', result='%flag'):
+    return '''module { "protocol.module"() ({
+''' + declarations + '''
+"protocol.func"() ({ ^entry(%flag:i1):
+''' + body + '''
+"protocol.return"(''' + result + ''') : (i1)->()
+}) {sym_name="main",function_type=(i1)->i1,roles=["P"],input_roles=[["P"]],output_roles=[["P"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }'''
+
+
+with case('original-total-state-and-exact-ssa-order'):
+    data = export(total)
+    assert len(data) == 9
+    assert data[:2] == ['zkc.structured-source/0', 'original']
+    assert data[2] == 'sha256:' + hashlib.sha256(total.encode()).hexdigest()
+    assert data[3] == 'main' and data[5] == []
+    assert table(data)['main'][6] == ['protocol', ['P'], [['P'], ['P'], ['P']], [['P'], ['P']]]
+    assert data[4] == [['domain', 'items', [vector], ['indices', 0, 0]]]
+    defs = table(data)
+    assert list(defs) == ['step', 'main']
+    assert defs['step'][2:4] == ['math', 'private']
+    assert defs['step'][7:9] == [[['index_bound', 2, 3, 0]], []]
+    assert defs['step'][9] == ['block', [
+        [['bounded_at', 'bls12-381.fr'], [3, 2], [field], [], '']
+    ], ['return', [2, 0]]]
+    assert defs['main'][9] == ['block', [
+        [['fold', 'items', 'step', ''], [0, 1, 2], [field, field], [], '']
+    ], ['return', [0, 1]]]
+    assert export(total + '\n')[2] != data[2]
+
+with case('original-unit-state-keeps-zero-result-effects-and-origin'):
+    data = export(unit)
+    defs = table(data)
+    assert data[4] == [['domain', 'items', [vector], ['elements', 0]]]
+    assert defs['fold'] == ['finite', 'fold', 'public', [vector, boolean], [],
+                            'items', 'step', 'predicate']
+    assert defs['step'][8:] == [['step', []], ['block', [], ['stop', 'abort', 'body_stop']]]
+    assert defs['predicate'][9][2] == ['return', [2]]
+    assert defs['work'][9] == ['block', [
+        [['apply', 'fold'], [0, 1], [], [], 'fold']
+    ], ['return', [1]]]
+    assert instructions(defs['main'])[0][0] == ['local_call', 'work', 'P']
+
+with case('semantic-mutations-remain-distinct-accepted-subjects'):
+    reversed_data = export(total.replace('func.return %b,%v', 'func.return %v,%b'))
+    assert table(reversed_data)['step'][9][2] == ['return', [0, 2]]
+    assert table(export(unit.replace('reason="abort"', 'reason="reject"')))['step'][9][2][1] == 'reject'
+    normal = unit.replace('"local.stop"() {site="body_stop",reason="abort"} : ()->()', 'local.return')
+    assert table(export(normal))['step'][9][2] == ['return', []]
+
+with case('nested-multi-result-and-zero-result-conditionals'):
+    data = export((fixtures / 'structured-source/nested-controls.mlir').read_text())
+    defs = table(data)
+    outer = instructions(defs['step'])[0]
+    assert outer[0] == ['if'] and outer[1] == [4, 0, 1, 2, 4]
+    assert outer[2] == [field, field]
+    assert outer[3][0][0] == [field, field, field, boolean]
+    inner = outer[3][0][2][1][0]
+    assert inner[1] == [3, 0, 1, 2]
+    assert inner[3][0][2][2] == ['yield', [1, 2]]
+    empty = instructions(defs['work'])[1]
+    assert empty[2] == [] and empty[1] == [5]
+    assert empty[3][0] == [[], [], ['block', [], ['yield', []]]]
+    assert empty[3][1][2][2] == ['stop', 'abort', 'disabled']
+
+with case('ordinary-and-conditional-for-exact-captures-and-zero-state'):
+    defs = table(export(loops, symbol='entry'))
+    assert defs['swap'][8] == ['original_swap', [['Field', 'bls12-381.fr'], ['Group', 'bls12-381.g1']]]
+    ops = instructions(defs['control'])
+    loop = ops[0]
+    assert loop[0] == ['for'] and loop[1] == [4, 5, 0, 1, 2, 3, 6]
+    region = loop[3][0]
+    assert region[:2] == [[index, field, field, field, field, boolean],
+                           [field, field, field, field, boolean]]
+    assert region[2][1][0][1] == [5, 1, 2, 3, 4]
+    assert region[2][2] == ['yield', [1, 0, 5, 6, 7]]
+    empty = ops[1]
+    assert empty[2] == [] and empty[1] == [6, 7, 8]
+    assert empty[3][0][:2] == [[index, boolean], [boolean]]
+    assert empty[3][0][2][1][0][:3] == [['if'], [1], []]
+    assert empty[3][0][2][1][0][3][1][2][2] == ['stop', 'reject', 'check_failed']
+    conditional = ops[2]
+    assert conditional[0] == ['for_condition']
+    assert conditional[3][0][1] == [boolean, field, field, field, field, boolean]
+    assert conditional[3][0][2][2] == ['condition', [5, 2, 1, 3, 4, 5]]
+    assert ops[3][0] == ops[4][0] == ['apply', 'swap']
+    assert ops[3][1] == [0, 1] and ops[4][1] == [8, 9]
+    assert defs['control'][9][2] == ['return', [2, 1]]
+
+with case('stop-only-loop-keeps-enclosing-output-abi'):
+    stopped = loops.replace('"local.yield"(%next#1,%next#0,%left,%right,%flag) : (!F,!F,!F,!F,i1)->()',
+                            '"local.stop"() {reason="abort",site="loop_stop"} : ()->()')
+    region = instructions(table(export(stopped, symbol='entry'))['control'])[0][3][0]
+    assert region[1] == [field, field, field, field, boolean]
+    assert region[2][2] == ['stop', 'abort', 'loop_stop']
+
+with case('shared-fold-retained-once-with-distinct-actuals'):
+    defs = table(export((fixtures / 'structured-source/shared-fold.mlir').read_text()))
+    folds = instructions(defs['main'])
+    assert folds[0][0] == folds[1][0] == ['fold', 'items', 'step', '']
+    assert folds[0][1] != folds[1][1]
+    assert list(defs).count('step') == 1
+
+with case('math-vocabulary-and-shared-multi-result-helper'):
+    defs = table(export(math))
+    ops = instructions(defs['arithmetic'])
+    assert [op[0][0] for op in ops] == [
+        'field.constant', 'field.add', 'field.subtract', 'field.multiply',
+        'field.equal', 'bool.constant', 'bool.and', 'bool.or', 'bool.xor',
+        'bool.equal', 'bool.not_equal', 'select']
+    assert ops[0][0] == ['field.constant', 'bls12-381.fr', '1']
+    assert all(op[4] == '' for op in ops)
+    calls = instructions(defs['main'])
+    assert calls[0][1] == [0, 1, 2] and calls[1][1] == [3, 2, 4]
+    assert defs['main'][9][2] == ['return', [2, 0, 3, 1]]
+
+with case('unused-definitions-retained-and-names-not-special'):
+    dead = 'func.func private @unused(%x:i1) -> i1 { return %x : i1 }'
+    data = export(simple(dead).replace('sym_name="main"', 'sym_name="alternate"'), symbol='alternate')
+    assert list(table(data)) == ['unused', 'alternate']
+    assert table(data)['unused'][9] == ['block', [], ['return', [0]]]
+
+with case('domain-extra-formals-and-selected-container-retained'):
+    changed = total.replace('^entry(%xs:!V):', '^entry(%other:!V,%xs:!V):').replace(
+        'function_type=(!V)->!data.domain<ui64>', 'function_type=(!V,!V)->!data.domain<ui64>')
+    changed = changed.replace('%i:ui64,%xs:!V)', '%i:ui64,%other:!V,%xs:!V)').replace(
+        '#data.index_bound<2,3,0>', '#data.index_bound<2,4,0>')
+    changed = changed.replace('"algebra.finite_fold"(%xs,%a,%b)', '"algebra.finite_fold"(%xs,%xs,%a,%b)').replace(
+        ': (!V,!F,!F)->(!F,!F)', ': (!V,!V,!F,!F)->(!F,!F)')
+    data = export(changed)
+    assert data[4][0][2:] == [[vector, vector], ['indices', 1, 0]]
+    assert table(data)['step'][7] == [['index_bound', 2, 4, 0]]
+
+with case('local-boolean-constant-site-retained'):
+    changed = unit.replace('local.return %enabled : i1',
+                           '%yes = "local.bool_constant"() {value=true,site="literal"} : ()->i1\nlocal.return %yes : i1')
+    ops = instructions(table(export(changed))['predicate'])
+    assert ops == [[['bool.constant', True], [], [boolean], [], 'literal']]
+
+# Each native failure must retain its stable existing diagnostic and the new
+# whole-original failure. Valid-but-unsupported inputs exercise the whitelist.
+for name, source, code in [
+    ('missing-precondition', total.replace(' attributes {data.preconditions=[#data.index_bound<2,3,0>]}', ''), 'finite-bound'),
+    ('wrong-bound-position', total.replace('index_bound<2,3,0>', 'index_bound<0,3,0>'), 'finite-bound'),
+    ('wrong-axis', total.replace('axis=0:i64', 'axis=1:i64'), 'finite-domain'),
+    ('unused-malformed-helper', simple('func.func private @dead(%x:i1) -> i1 { return }'), 'structured-source-original'),
+    ('loop-capture-identity', loops.replace('%next#1,%next#0,%left,%right,%flag', '%next#1,%next#0,%right,%left,%flag'), 'local-control-capture-forwarding'),
+    ('dormant-arm-yield', loops.replace('"local.yield"(%aa,%dd) : (!F,!F)->()', '"local.yield"(%aa) : (!F)->()'), 'structured-source-original'),
+    ('duplicate-site', loops.replace('site="second"', 'site="first"'), 'structured-source-original'),
+    ('malformed-origin', unit.replace('logical_origin=["work",[]]', 'logical_origin=["work"]'), 'binding-logical-origin'),
+    ('cycle', unit.replace('"local.stop"() {site="body_stop",reason="abort"} : ()->()',
+                           'local.apply @step(%item,%xs,%enabled) {site="recurse"} : (!F,!V,i1)->()\nlocal.return'), 'finite-cycle'),
+]:
+    with case(name):
+        export(source, code, 'entry' if 'sym_name="entry"' in source else 'main')
+
+for name, source, code in [
+    ('unknown-symbol', total, 'structured-source-symbol'),
+    ('wrong-profile', 'module { module {} }', 'structured-source-profile'),
+    ('multiple-units', 'module { module {} module {} }', 'structured-source-module'),
+    ('whole-original-first', 'module { malformed }', 'structured-source-original'),
+    ('outer-attribute', simple().replace('module {', 'module attributes {source.unexpected=true} {', 1), 'structured-source-attribute'),
+    ('unit-attribute', simple().replace('profile=#protocol.profile<protocol>', 'profile=#protocol.profile<protocol>,unexpected=true'), 'structured-source-original'),
+    ('function-attribute', simple().replace('sym_name="main"', 'unexpected=true,sym_name="main"'), 'structured-source-original'),
+    ('return-attribute', simple().replace('"protocol.return"(%flag)', '"protocol.return"(%flag) {unexpected=true}'), 'structured-source-original'),
+    ('unused-math-attribute', simple('func.func private @dead(%x:i1) -> i1 attributes {unexpected=true} { return %x : i1 }'), 'structured-source-original'),
+    ('math-operation-attribute', simple(body='%x = arith.xori %flag,%flag {unexpected=true} : i1'), 'structured-source-original'),
+    ('extra-domain-constructor', total.replace('%d = "data.domain_indices"', '%extra = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>\n%d = "data.domain_indices"'), 'structured-source-domain'),
+    ('unsupported-type', simple('func.func private @dead(%x:!algebra.group<"bn254.g1">) -> !algebra.group<"bn254.g1"> { return %x : !algebra.group<"bn254.g1"> }'), 'structured-source-type'),
+    ('unsupported-index-less', simple('func.func private @dead(%a:ui64,%b:ui64) -> i1 { %x = "data.index_less"(%a,%b) : (ui64,ui64)->i1\n return %x : i1 }'), 'structured-source-operation'),
+    ('unsupported-comparison', simple(body='%x = arith.cmpi ult,%flag,%flag : i1'), 'structured-source-original'),
+    ('role-count-limit', simple().replace('roles=["P"]', 'roles=[' + ','.join(json.dumps(x) for x in ['P'] + [f'R{i}' for i in range(16)]) + ']', 1), 'structured-source-role'),
+    ('long-name', simple().replace('sym_name="main"', 'sym_name="' + 'x' * 513 + '"'), 'structured-source-limit'),
+    ('empty-symbol', simple('func.func private @""(%x:i1) -> i1 { return %x : i1 }'), 'structured-source-symbol'),
+    ('used-empty-symbol', simple('func.func private @""(%x:i1) -> i1 { return %x : i1 }',
+                                '%r = func.call @""(%flag) : (i1)->i1', '%r'), 'structured-source-symbol'),
+    ('depth-limit', 'module {' * 66 + '}' * 66, 'mlir-depth-limit'),
+    ('instruction-limit', simple(body='\n'.join(f'%x{i} = arith.xori %flag,%flag : i1' for i in range(4097))), 'structured-source-limit'),
+    ('definition-limit', simple('\n'.join(f'func.func private @h{i}(%x:i1) -> i1 {{ return %x : i1 }}' for i in range(128))), 'structured-source-limit'),
+]:
+    with case(name):
+        symbol = 'absent' if name == 'unknown-symbol' else 'x' * 513 if name == 'long-name' else 'main'
+        export(source, code, symbol)
+
+with case('strict-command-options'):
+    for options in [[], ['--symbol='], ['--symbol=main', '--no-simplify'],
+                    ['--symbol=main', '--symbol=main']]:
+        commands.source('protocol-structured', total, *options, refuses='unsupported-option')
+
+indexed = (fixtures / 'structured-source/indexed-helper.mlir').read_text()
+with case('bounded-read-preconditions-instantiated-through-helper'):
+    defs = table(export(indexed))
+    assert defs['read'][7] == [['index_bound', 1, 0, 0]]
+    assert defs['step'][7] == [['index_bound', 1, 2, 0]]
+    assert instructions(defs['step'])[0] == [['call', 'read'], [2, 1], [field], [], '']
+
+with case('same-typed-wrong-container-at-call'):
+    export(indexed.replace('func.call @read(%xs,%i)', 'func.call @read(%other,%i)'), 'finite-bound')
+
+with case('native-origin-bindings-retained-exactly'):
+    changed = unit.replace('logical_origin=["work",[]]', 'logical_origin=["work",[["Field","bls12-381.fr"]]]')
+    assert table(export(changed))['work'][8] == ['work', [['Field', 'bls12-381.fr']]]
+
+with case('guard-native-verification-precedes-export-profile'):
+    changed = unit.replace('local.return %enabled : i1', 'local.guard %enabled {site="check"}\nlocal.return %enabled : i1')
+    export(changed, 'structured-source-original')
+
+
+with case('unused-unsupported-provider-declaration'):
+    binding = '"local.binding"() {sym_name="product",contract="vector.product",arguments=["bls12-381.fr"],implementation=""} : ()->()'
+    export(simple(binding), 'structured-source-binding')
+
+with case('unsupported-collect'):
+    export((fixtures / 'finite/total-collect.mlir').read_text(), 'structured-source-operation')
+
+with case('unsupported-affine-helper-signature'):
+    helper = 'local.func @resource(%s:!local.capability<"rng:bls12-381.fr">) -> !local.capability<"rng:bls12-381.fr"> attributes {logical_origin=["resource",[]]} { local.return %s : !local.capability<"rng:bls12-381.fr"> }'
+    export(simple(helper), 'structured-source-type')
+
+with case('unsupported-service-contract'):
+    source = simple().replace('^entry(%flag:i1)', '^entry(%flag:i1,%service:!protocol.service_ref<"random.bn254.fr/0">)').replace(
+        'function_type=(i1)->i1', 'function_type=(i1,!protocol.service_ref<"random.bn254.fr/0">)->i1').replace(
+        'input_roles=[["P"]]', 'input_roles=[["P"],["P"]]')
+    export(source, 'structured-source-type')
+
+with case('communication-and-statement-retained'):
+    data = export((fixtures / 'mathematical/schnorr-services.mlir').read_text())
+    assert len(data[5]) == 1
+    assert instructions(table(data)['main'])[0][0] == ['statement', 'schnorr_relation', ['Bob', 'Bob', 'Alice'], 0, None]
+
+with case('unsupported-static-relation-annotation'):
+    helper = 'func.func private @equal(%a:!algebra.field_vector<"bls12-381.fr">,%b:!algebra.field_vector<"bls12-381.fr">) -> i1 attributes {data.preconditions=[#data.equal_extent<0,0,1,0>]} { %yes = arith.constant true\n return %yes : i1 }'
+    export(simple(helper), 'structured-source-precondition')
+
+with case('invalid-utf8-must-not-crash-or-repair-json'):
+    helper = r'func.func private @"\FF"(%x:i1) -> i1 { return %x : i1 }'
+    export(simple(helper), 'structured-source-string')
+
+with case('source-byte-limit'):
+    export('//' + ' ' * (16 * 1024 * 1024), 'byte-limit')
+
+with case('signature-limit'):
+    args = ','.join(f'%a{i}:i1' for i in range(513))
+    export(simple(f'func.func private @wide({args}) -> i1 {{ return %a0 : i1 }}'), 'structured-source-limit')
+
+with case('maximum-instruction-and-reference-coordinate'):
+    body = '\n'.join(f'%x{i} = arith.xori %flag,%flag : i1' for i in range(4096))
+    data = export(simple(body=body))
+    assert len(instructions(table(data)['main'])) == 4096
+    assert table(data)['main'][9][2] == ['return', [4096]]
+
+with case('reference-coordinate-limit-with-multiple-results'):
+    helper = 'func.func private @pair(%x:i1) -> (i1,i1) { return %x,%x : i1,i1 }'
+    body = '\n'.join(f'%r{i}:2 = func.call @pair(%flag) : (i1)->(i1,i1)' for i in range(2050))
+    export(simple(helper, body), 'structured-source-limit')
+
+with case('domain-table-limit'):
+    declaration = total[total.index(' "data.domain"'):total.index(' func.func')]
+    additions = '\n'.join(declaration.replace('sym_name="items"', f'sym_name="unused{i}"') for i in range(128))
+    export(total.replace(' func.func', additions + '\n func.func', 1), 'structured-source-limit')
+
+with case('wire-depth-counts-all-arrays'):
+    def branch(level, flag):
+        if level == 0:
+            return '"local.yield"() : ()->()'
+        inner = f'%inside{level}'
+        return (f'"local.if"({flag},{flag}) ({{ ^yes({inner}:i1):\n' + branch(level - 1, inner) +
+                f'\n}}, {{ ^no({inner}:i1): "local.yield"() : ()->() }}) {{site="nested{level}"}} : (i1,i1)->()\n' +
+                '"local.yield"() : ()->()')
+    nested = branch(15, '%flag').rsplit('"local.yield"() : ()->()', 1)[0] + 'local.return'
+    helper = 'local.func @nested(%flag:i1) attributes {logical_origin=["nested",[]]} {\n' + nested + '\n}'
+    export(simple(helper), 'structured-source-limit')
+
+with case('helper-dag-keeps-shared-definitions-once'):
+    helpers = ['func.func private @h0(%x:i1) -> i1 { return %x : i1 }']
+    for i in range(1, 11):
+        helpers.append(f'func.func private @h{i}(%x:i1) -> i1 {{ %a = func.call @h{i-1}(%x) : (i1)->i1\n %b = func.call @h{i-1}(%a) : (i1)->i1\n return %b : i1 }}')
+    data = export(simple('\n'.join(helpers), '%r = func.call @h10(%flag) : (i1)->i1', '%r'))
+    assert len(data[7]) == 12
+    assert sum(len(instructions(d)) for d in data[7]) == 21
+    assert len(json.dumps(data)) < 10000
+
+with case('snapshot-byte-limit'):
+    args = ','.join(f'%a{i}:i1' for i in range(512))
+    results = ','.join(['i1'] * 512)
+    values = ','.join(f'%a{i}' for i in range(512))
+    helpers = '\n'.join(f'func.func private @h{i}({args}) -> ({results}) {{ return {values} : {results} }}' for i in range(110))
+    export(simple(helpers), 'structured-source-limit')
+
+with case('exact-file-byte-limit-includes-final-newline'):
+    args = ','.join(f'%a{i}:i1' for i in range(512))
+    results = ','.join(['i1'] * 512)
+    values = ','.join(f'%a{i}' for i in range(512))
+    names = [f'h{i}' for i in range(93)]
+    def sized_source():
+        return simple('\n'.join(f'func.func private @{name}({args}) -> ({results}) '
+                                f'{{ return {values} : {results} }}' for name in names))
+    base = commands.source('protocol-structured', sized_source(), '--symbol=main')
+    padding = 1024 * 1024 - len(base.encode())
+    assert 0 <= padding <= sum(512 - len(name) for name in names)
+    for i, name in enumerate(names):
+        size = min(padding, 512 - len(name))
+        names[i] += 'x' * size
+        padding -= size
+    exact = commands.source('protocol-structured', sized_source(), '--symbol=main')
+    assert exact.endswith('\n') and len(exact.encode()) == 1024 * 1024
+    names[-1] += 'y'
+    assert len(names[-1]) <= 512
+    export(sized_source(), 'structured-source-limit')
+
+with case('all-native-stop-reasons-preserved'):
+    for reason in ['abort', 'reject', 'exhausted', 'incomplete', 'refused']:
+        defs = table(export(unit.replace('reason="abort"', 'reason="' + reason + '"')))
+        assert defs['step'][9][2] == ['stop', reason, 'body_stop']
+
+with case('only-protocol-root-can-be-selected'):
+    export(total, 'structured-source-symbol', 'step')
+
+with case('ordinary-zero-result-math-call-is-retained'):
+    helper = 'func.func private @empty(%x:i1) { func.return }'
+    data = export(simple(helper, 'func.call @empty(%flag) : (i1)->()'))
+    assert table(data)['empty'][5] == []
+    assert instructions(table(data)['main']) == [[['call', 'empty'], [0], [], [], '']]
+
+with case('ordinary-zero-result-local-helper-sharing'):
+    helper = 'local.func private @empty(%x:i1) attributes {logical_origin=["empty",[]]} { local.return }\n'
+    changed = unit.replace(' local.func @work', helper + ' local.func @work')
+    changed = changed.replace('local.apply @fold(%xs,%enabled) {site="fold"} : (!V,i1)->()',
+                              'local.apply @empty(%enabled) {site="first"} : (i1)->()\nlocal.apply @empty(%enabled) {site="second"} : (i1)->()')
+    defs = table(export(changed))
+    assert defs['empty'][9] == ['block', [], ['return', []]]
+    assert instructions(defs['work']) == [
+        [['apply', 'empty'], [1], [], [], 'first'],
+        [['apply', 'empty'], [1], [], [], 'second']]
+    assert defs['work'][9][2] == ['return', [1]]
+
+with case('origin-binding-order-is-subject-data'):
+    changed = loops.replace('[["Field","bls12-381.fr"],["Group","bls12-381.g1"]]',
+                            '[["Group","bls12-381.g1"],["Field","bls12-381.fr"]]')
+    defs = table(export(changed, symbol='entry'))
+    assert defs['swap'][8] == ['original_swap', [['Group', 'bls12-381.g1'], ['Field', 'bls12-381.fr']]]
+
+with case('original-protocol-guard-retains-owner-and-site'):
+    guarded = (fixtures / 'structured-source/guards.mlir').read_text()
+    body = table(export(guarded))['main'][9]
+    assert body[1][0] == [['guard', 'P'], [0], [], [], 'check']
+
+with case('precondition-count-boundary'):
+    bound = '#data.index_bound<2,3,0>'
+    assert bound in total
+    export(total.replace(bound, ','.join([bound] * 512)))
+    export(total.replace(bound, ','.join([bound] * 513)), 'structured-source-limit')
+
+for name in ('forwarded-bounds', 'aliased-indices'):
+    with case('native-exact-provenance-' + name):
+        data = export((fixtures / 'structured-source' / (name + '.mlir')).read_text())
+        assert data[3] == 'main'
+        assert len({definition[1] for definition in data[7]}) == len(data[7])
+
+commands.save()
+print(f"structured-source: {counted()} cases")

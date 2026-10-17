@@ -26,6 +26,13 @@ applications or downstream clients. Probability also excludes source/compiler
 syntax. External theorem ecosystems belong only to their optional packages,
 and neither optional library may depend on tests or on the other package. -/
 def permitted (owner dependency : Name) : Bool := Id.run do
+  -- Only the exact generic execution module is restricted here;
+  -- `ZkcSecurity.VCVio.Schnorr` may still use the Schnorr protocol.
+  if owner == `ZkcSecurity.VCVio.Execution &&
+      [ `ZkcSecurity.ArkLib, `ArkLib, `ZkcSecurity.Examples, `Zkc.Protocols,
+        `Zkc.Source ].any (below · dependency) then return false
+  if below `ZkcSecurity.ArkLib.Sumcheck.Multilinear.Causal owner &&
+      [ `ZkcSecurity.Examples, `Zkc.Source ].any (below · dependency) then return false
   if below `Zkc owner then
     if [ `Tests, `TestsSecurity, `TestsClean, `ZkcExamples, `ZkcTools, `ZkcSecurity, `ZkcClean,
          `ArkLib, `VCVio, `PolyFun, `Clean ].any (below · dependency) then return false

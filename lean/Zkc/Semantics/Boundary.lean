@@ -49,6 +49,22 @@ theorem returns_bind (P : Interaction I) (p : Proc I A) (k : A → Proc I B)
   | halt why => trivial
   | call o cont ih => exact fun a => ih a _ (exits a)
 
+/-- Continuations need agree only at successful returns, for every typed reply. -/
+theorem bind_congr_returns (interaction : Interaction I) (process : Proc I A)
+    (post : A → interaction.Phase → Prop) (phase : interaction.Phase)
+    (returns : Returns interaction post process phase)
+    (left right : A → Proc I B)
+    (same : ∀ value finalPhase, post value finalPhase → left value = right value) :
+    process.bind left = process.bind right := by
+  induction process generalizing phase with
+  | done value => exact same value phase returns
+  | halt reason => rfl
+  | call operation next ih =>
+    simp only [Proc.bind]
+    congr 1
+    funext reply
+    exact ih reply _ (returns reply)
+
 /-- Postconditions refer to the actual instrumented execution's final phase. -/
 theorem actual_return (P : Interaction I) (p : Proc I A) (h : Handler I S E)
     (post : A → P.Phase → Prop) (phase : P.Phase) (s : S)

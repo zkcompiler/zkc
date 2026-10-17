@@ -165,10 +165,10 @@ def inputs (statement : Statement F) (claim : F) (service : Nat) :
     Values (fun ty => Option (ScalarValue F F ty)) ZkcExamples.NativePrograms.Variants.FactorHornerData.snapshot.inputs :=
   .cons (some statement.left.constant) (.cons (some statement.left.second) (.cons (some statement.left.first) (.cons (some statement.left.mixed) (.cons (some statement.right.constant) (.cons (some statement.right.second) (.cons (some statement.right.first) (.cons (some statement.right.mixed) (.cons (some claim) (.cons (some service) (.nil))))))))))
 
-def verifier (statement : Statement F) (claim : F) (service : Nat) : PIR.Proc (interface Nat language services (ScalarValue F F)) (Option Bool) :=
+def verifier (statement : Statement F) (claim : F) (service : Nat) : PIR.Proc (Participant.interface Nat Ty services (ScalarValue F F)) (Option Bool) :=
   imported.denote (scalarMeaning F F) id 1 (inputs (F := F) statement claim service)
 
-def sourceProcess (statement : Statement F) (claim : F) (service : Nat) : PIR.Proc (interface Nat language services (ScalarValue F F)) (Option Bool) :=
+def sourceProcess (statement : Statement F) (claim : F) (service : Nat) : PIR.Proc (Participant.interface Nat Ty services (ScalarValue F F)) (Option Bool) :=
   (
     .call (.receive (.field "bls12-381.fr") "label_666972737430_0" 0) fun reply0 =>
     .call (.receive (.field "bls12-381.fr") "label_666972737431_0" 0) fun reply1 =>
@@ -196,7 +196,13 @@ theorem source_expansion (statement : Statement F) (claim : F) (service : Nat) :
   change (imported.program.denote (scalarMeaning F F) id 1
     (inputs (F := F) statement claim service).get).bind PIR.Proc.done = _
   rw [PIR.Proc.bind_done]
-  rfl
+  repeat' first
+    | (apply PIR.Proc.call_congr; intro reply)
+    | (change (if _ then _ else _ : PIR.Proc _ _).bind _ = _
+       rw [PIR.Proc.bind_ite]
+       simp only [↓reduceIte])
+    | rfl
+    | fail_if_no_progress congr 1
 
 
 theorem correspondence (statement : Statement F) (claim : F) (service : Nat) :

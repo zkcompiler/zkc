@@ -200,7 +200,7 @@ def render_certificate(data, request, proposal):
     generic = 'G' if contract.group else 'F'
     context = ('\n    [AddCommGroup G] [Module F G] [DecidableEq G]' if contract.group else '')
     parameters = '(F := F)' + (' (G := G)' if contract.group else '')
-    actual_type = f'PIR.Proc (interface Nat language services (ScalarValue F {generic})) (Option Bool)'
+    actual_type = f'PIR.Proc (Participant.interface Nat Ty services (ScalarValue F {generic})) (Option Bool)'
     cert_args = 'wiring ' + ('publicChecks ' if contract.composed else '') + f'(verifier {parameters})'
     unfolds = ['sourceProcess', 'wiring'] + [name if '.' in name else namespace + '.' + name for name in contract.unfold]
 
@@ -264,7 +264,13 @@ theorem source_expansion {contract.binders} :
   change (imported.program.denote (scalarMeaning F {generic}) id {request['role']}
     (inputs {parameters} {contract.arguments}).get).bind PIR.Proc.done = _
   rw [PIR.Proc.bind_done]
-  rfl
+  repeat' first
+    | (apply PIR.Proc.call_congr; intro reply)
+    | (change (if _ then _ else _ : PIR.Proc _ _).bind _ = _
+       rw [PIR.Proc.bind_ite]
+       simp only [↓reduceIte])
+    | rfl
+    | fail_if_no_progress congr 1
 
 {('omit [DecidableEq F] in' if contract.group else '')}
 theorem correspondence {contract.binders} :
@@ -337,7 +343,7 @@ def expectedInputs {contract.binders} :
   {values}
 
 def expectedVerifier {contract.binders} :
-    PIR.Proc (interface Nat language services (ScalarValue F {generic})) (Option Bool) :=
+    PIR.Proc (Participant.interface Nat Ty services (ScalarValue F {generic})) (Option Bool) :=
   GeneratedCertificate.imported.denote (scalarMeaning F {generic}) id {request['role']}
     (expectedInputs {parameters} {contract.arguments})
 

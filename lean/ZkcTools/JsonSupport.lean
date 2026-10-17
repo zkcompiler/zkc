@@ -30,11 +30,4 @@ def refused (code : String) : IO UInt32 := do
   emit (Json.mkObj [("status", .str "refused"), ("code", .str code)])
   return 1
 
-/-- Interpreter work capacity is separate from semantic interface-call bounds. -/
-def workBound {Ty Op : Type} : RawProgram Ty Op → Nat
-  | .ret _ | .stop _ => 1
-  | .letOp _ _ next => 1 + workBound next
-  | .branch _ yes no => 1 + max (workBound yes) (workBound no)
-  | .iterate count _ _ body next => 1 + count * (1 + workBound body) + workBound next
-
 end Zkc.Tools

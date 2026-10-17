@@ -37,7 +37,7 @@ structure Coefficients (F : Type) where
 
 variable {F : Type} [Field F] [DecidableEq F]
 
-abbrev actions := interface Nat language services (ScalarValue F F)
+abbrev actions := Participant.interface Nat Ty services (ScalarValue F F)
 
 def rowPolynomial (row : Message F) : Quadratic F 1 :=
   .node (.constant row.constant) (.constant row.linear) (.constant row.quadratic)

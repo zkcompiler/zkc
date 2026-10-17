@@ -69,7 +69,8 @@ theorem soundness {wiring : Wiring} {program : Verifier F}
   simpa only [nativeAcceptance, booleanDomain, Nat.cast_ofNat, roundBound] using bound
 
 /-- Arbitrary private probabilistic choice of a causal strategy, made without
-access to the verifier's fresh challenge draws. Subprobability mass is allowed. -/
+access to the verifier's fresh challenge draws. `ProbComp` supplies a normalized
+private mixture; an additional failure monad requires its own transport law. -/
 theorem randomized_soundness {wiring : Wiring} {program : Verifier F}
     (certificate : VerifierContract wiring program) (coefficients : Coefficients F)
     (claim : F) (service : Nat) (provers : ProbComp (Strategy F))

@@ -1,0 +1,12 @@
+module schnorr_response;
+domain Fr = field("bls12-381.fr");
+
+math fn response(nonce: Fr, challenge: Fr, secret: Fr) -> Fr {
+  return nonce + challenge * secret;
+}
+
+protocol Response roles(P)(nonce: Fr@P, challenge: Fr@P, secret: Fr@P) -> (response: Fr@P) {
+  return response(nonce, challenge, secret);
+}
+
+run Run = Response;

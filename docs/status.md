@@ -202,6 +202,19 @@ projects. This does not supply an LSP server or formatter.
 
 Relation and target/input/output/continuation clauses state intent; declarations
 alone add no runtime guard, satisfaction fact or security theorem.
+Original PIR retains all closed declaration contracts and exact relation
+formula references. Native verification checks ownership, complete Math ABI,
+port types and roles, clause shapes and agreement of an entry statement with
+retained targets. Source proof statements retain the exact selected target name;
+its owned clause supplies the decision role. The logical source interface
+independently checks that selection against the verifier, and native proof
+deployment checks the recovered decision role against its validator.
+The version-0 [structured export](spec/formats/structured-source.md)
+includes formula links and one contract-table row for every protocol, regardless
+of the selected Entry. Application expansion retains declaration metadata;
+participant projection erases contracts, formula links and selected-target
+references explicitly. This adds
+no runtime predicate evaluation or proof transport through those transforms.
 
 ## Foundation capability map
 
@@ -227,6 +240,7 @@ alone add no runtime guard, satisfaction fact or security theorem.
 | Clean export comparison | A [pinned Clean flat AIR export](../lean/integrations/clean/README.md) is compared with native finite-AIR evaluation and the KoalaBear/Ext8 ring provider on fixed honest, invalid and mutated rows. This checks native agreement on those rows; it does not prove the native decoders correct. |
 | Native proofs | Separate producer/validator execution, derived or authored transcripts, structured framing and authorized setups; [proof contract](compiler/construction.md). One policy covers flat, iterated, PCS and structured programs in `zkc.program/0`. |
 | Programmable constructions | [Labelled messages and queries](spec/language/entries.md) select ordinary typed Local handlers, one inherited base and whole-rule overrides. Checked plans preserve state, actual payloads and loop order through participant lowering and independent runtime admission. Providers use private copyable data or an authorized managed transcript with explicit byte-labelled methods. Finite authority sets retain each query's actual service contract; unselected verifier services remain private, with checked dependencies and explicit budgets. Whole-call delegation preserves one live root, actual child-start inputs and root codec coverage across nested, repeated and empty children. Iterated Sumcheck and Schnorr exercise execution and malformed-input order; record codecs support sequential and disjoint round chunks, original-byte observations and conditional completion. |
+| Structured participant comparison | The optional [source-bound native probe](../lean/bridges/structured/participant.md) compares both actual Interactive Schnorr endpoints and generic service fixtures with original-SSA and Lean replay. It checks sampled generator-multiple G1 values, independent inputs/receives, pending prefixes, canonical codec failures and provider residual state. Native cleanup and failure adapters are explicit additional observations; this is bounded evidence, not Rust refinement or arbitrary-point decoding correctness. |
 | Attempts and retained work | [Persistent attempts](runtime/attempts.md) retain provider state, failed work and unpublished buffers under explicit application policy. |
 | Retained storage and work | [Runtime ledgers](spec/runtime/capacity.md#retained-values-and-logical-work) count each shared immutable allocation once while retained and once when produced, with a separate logical-work ceiling charged at every kernel use. 65,536 extension-field rows committed once and opened 64 times complete within default budgets. Only row openings, accessors and length queries declare partial read extents. These are retained-payload charges, not peak-memory measurements. |
 | Authored transcripts | Explicit external initialization, trial/live checks and snapshots under [authored transcript contracts](compiler/construction.md). Source libraries have bounded `Bytes`, repetition and fragment joining, private copyable SHAKE128 snapshots and shortest unsigned LEB128 index encoding, scalar/collection BLS12-381 Fr/G1 and Edwards/scalar byte codecs, plus raw Keccak-256. A format-only construction selects native framing or one raw `Bytes` message. Pinned Spongefish Schnorr tests cover both directions, the fixed 80-byte vector and ordered decoder failures; they do not establish complete parser equivalence or soundness. Admission does not prove transcript completeness or snapshot reachability. |
@@ -276,7 +290,25 @@ The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retain
 PIR programs, proves open-process contracts, and applies selected ArkLib/VCVio
 security results. Its named DSL target path also checks an authored relation body.
 Native SSA/Lean differential tests cover the admitted finite scalar profile.
-[Formal support](../lean/docs/support.md) states exact experiments and premises.
+The separate [structured import](spec/formats/structured-source.md) exports
+original protocol-stage units: shared helpers, protocol roots, retained contracts
+and formula links, checked primitives, maps and realizations, protocol
+applications and repeats. The native exporter and an independent C++ SSA
+reference check this profile, including the 4096-instruction admission budget,
+reference depth 64 and effective-site collisions. The
+[structured bridge](../lean/bridges/structured/README.md) compares native SSA
+evaluation, Lean replay and selected Runner cases; it does not prove native
+transformations. Native affine resources, conditional entry completion and
+construction-start selection are outside this profile.
+
+Lean independently checks each structured export's metadata, signatures, helper
+linking, role scopes, service provenance and computational availability, and
+proves its process equations on the shared Region carrier.
+[Formal support](../lean/docs/support.md) states exact experiments and premises,
+including the Interactive Schnorr contracts and Sigma properties, two inlining
+pairs checked against actual prepared exports, and `n / |F|` Sumcheck bounds on
+the actual admitted roots under a uniform query service. No general
+availability-soundness or native execution-correspondence theorem is claimed.
 Full DSL/compiler/runtime correspondence, production arithmetic/sampling,
 backend correctness and complete protocol security remain open.
 [Assurance](assurance.md) distinguishes these evidence boundaries.

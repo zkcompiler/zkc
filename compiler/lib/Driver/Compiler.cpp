@@ -9,6 +9,7 @@
 #include "zkc/Compiler/PolynomialReduction.h"
 #include "zkc/Compiler/PublicCoin.h"
 #include "zkc/Compiler/Run.h"
+#include "zkc/Compiler/StructuredSource.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
@@ -57,6 +58,7 @@ int zkc::runCompiler(int argc, char **argv,
            "Protocol IR and native participant programs:\n"
            "  protocol-export FILE.mlir\n"
            "  protocol-lean FILE.mlir --symbol=NAME\n"
+           "  protocol-structured FILE.mlir --symbol=NAME\n"
            "  protocol-bundle FILE.mlir [--entry=NAME] [--no-simplify] "
            "[--release-storage] [--fuse-vector-reductions] [--no-finite-bulk]\n"
            "    [--fix-polynomial-factors]\n"
@@ -333,13 +335,15 @@ int zkc::runCompiler(int argc, char **argv,
       outs() << result->bundle;
     return 0;
   }
-  if (mode == "protocol-export" || mode == "protocol-lean") {
+  if (mode == "protocol-export" || mode == "protocol-lean" ||
+      mode == "protocol-structured") {
     StringRef symbol;
-    if (mode == "protocol-lean" && argc == 4) {
+    bool sourceExport = mode != "protocol-export";
+    if (sourceExport && argc == 4) {
       symbol = argv[3];
       if (!symbol.consume_front("--symbol=") || symbol.empty())
         return fail(error("unsupported-option"));
-    } else if (mode == "protocol-lean" || argc != 3)
+    } else if (sourceExport || argc != 3)
       return fail(error("unsupported-option"));
     auto text = readInput(argv[2], 16 * 1024 * 1024);
     if (!text)
@@ -347,7 +351,14 @@ int zkc::runCompiler(int argc, char **argv,
     if (!mlirNestingWithinLimit(*text))
       return fail(error("mlir-depth-limit"));
     mlir::MLIRContext context(registry);
-    if (mode == "protocol-lean") {
+    if (mode == "protocol-structured") {
+      auto result = protocol::exportStructuredSource(*text, symbol, context);
+      if (!result)
+        return fail(result.takeError());
+      outs() << *result;
+      return 0;
+    }
+    if (sourceExport) {
       auto result = protocol::exportCommonSource(*text, symbol, context);
       if (!result)
         return fail(result.takeError());
