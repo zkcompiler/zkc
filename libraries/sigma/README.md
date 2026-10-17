@@ -14,7 +14,7 @@ Each protocol's `knowledge` target applies its relation to the verifier's bases
 and points and the prover's witness ports. `SchnorrAnd` names two witness ports,
 so two extracted witnesses need not agree. `ChaumPedersen` names one, and its
 single response forces one witness for both bases. Sharing the challenge does
-not make witnesses shared; sharing the nonce and response does.
+not make witnesses shared; one response checked at both bases does.
 
 The [example project](../../examples/projects/sigma/README.md) selects BLS12-381 G1
 and the installed Merlin transcript suite. The

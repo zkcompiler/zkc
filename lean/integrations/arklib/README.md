@@ -82,9 +82,9 @@ construction equality.
 
 `VCVio/SigmaAnd` composes two VCVio Σ-protocols with one shared challenge.
 Completeness and special soundness compose directly; zero knowledge composes
-from special HVZK, a simulator given the challenge, which converts to and from
-VCVio's perfect HVZK with a challenge-first simulator over a finite challenge
-space. `VCVio/SigmaAndSchnorr` derives Schnorr's special HVZK from the upstream
+from special HVZK, a simulator given the challenge. It gives VCVio's perfect
+HVZK with a challenge-first simulator, and over a finite challenge space it
+follows from such a simulator. `VCVio/SigmaAndSchnorr` derives Schnorr's special HVZK from the upstream
 simulator. `Examples/SchnorrAndSigma` and `Examples/ChaumPedersenSigma` connect
 the imported Schnorr AND and Chaum–Pedersen verifiers to the composition of two
 Schnorr instances and to Schnorr over `G × G`, and apply VCVio's fixed-statement

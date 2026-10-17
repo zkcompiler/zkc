@@ -78,6 +78,9 @@ Logical assignments are scoped by owner and explicit invocation labels; those
 labels do not prove dynamic reachability. A shared interpretation
 environment fixes opaque relation meanings. `ContractExecution` projects
 boundaries from actual outcomes, preserving absent participants and stops.
+`ReplyScript` fixes the replies of one role-local run by type and site, so a
+transcript's actual returned outputs and ordered sends can be observed; it is an
+experiment choice, not a provider law.
 
 `Structured.UnitViews` emits a unit's literal checked payload from its typed
 bodies: `structured_views` writes the checked declarations, the payload and one
