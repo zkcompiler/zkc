@@ -208,6 +208,11 @@ pub(super) fn installed() -> Result<&'static Registry> {
                 hash,
             )?;
             r.pure_family(
+                crate::plonky3::poseidon2::IMPLEMENTATIONS,
+                Signature::Custom(crate::plonky3::poseidon2::signature),
+                poseidon2,
+            )?;
+            r.pure_family(
                 crate::kernels::bytes::IMPLEMENTATIONS,
                 Signature::Custom(crate::kernels::bytes::signature),
                 bytes,
@@ -365,6 +370,16 @@ fn encoding(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result
 }
 fn hash(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
     crate::hash::apply(
+        &i.binding.declaration().contract,
+        args,
+        i.attributes,
+        &b.core.policy,
+        i.max_output_bytes,
+        &mut b.external_work,
+    )
+}
+fn poseidon2(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
+    crate::plonky3::poseidon2::apply(
         &i.binding.declaration().contract,
         args,
         i.attributes,

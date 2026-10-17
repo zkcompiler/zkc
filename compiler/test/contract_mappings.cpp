@@ -99,6 +99,7 @@ constexpr ExpectedMapping expected[] = {
     {"encoding.cryptonote_map", "crypto.exec.encoding_cryptonote_map"},
     {"hash.keccak256", "crypto.exec.keccak256"},
     {"hash.sha256", "crypto.exec.sha256"},
+    {"hash.poseidon2_16", "crypto.exec.poseidon2_16"},
     {"encoding.index_uleb128", "data.exec.encoding_index_uleb128"},
     {"encoding.fields_be", "crypto.exec.encoding_fields_be"},
     {"encoding.fields_from_be", "crypto.exec.encoding_fields_from_be"},

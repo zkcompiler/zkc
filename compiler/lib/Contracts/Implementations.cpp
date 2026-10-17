@@ -136,6 +136,7 @@ constexpr ContractRow contractRows[] = {
     {"encoding.fields_from_montgomery_le", Plonky3},
     {"hash.keccak256", Native, Compatibility::Independent},
     {"hash.sha256", Native, Compatibility::Independent},
+    {"hash.poseidon2_16", Plonky3, Compatibility::Nominal, "koala-bear"},
     {"shake128.init", Native, Compatibility::Independent},
     {"shake128.absorb", Native, Compatibility::Independent},
     {"shake128.squeeze", Native, Compatibility::Independent},

@@ -1,0 +1,7 @@
+module zkc::permutation;
+use zkc::vector::{Vector};
+
+// The width-16 Poseidon2 permutation of F's installed parameters, applied to
+// each consecutive 16-element state. Library code owns sponge and compression
+// modes, padding and domain separation.
+pub fn poseidon2_16<F: Field>(states: Vector<F>) -> Vector<F> = primitive("hash.poseidon2_16");

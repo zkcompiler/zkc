@@ -482,7 +482,8 @@ encoding.field_from_montgomery_le 0
 encoding.fields_montgomery_le 0
 encoding.fields_from_montgomery_le 0
 hash.keccak256 0
-hash.sha256 0";
+hash.sha256 0
+hash.poseidon2_16 0";
     for line in fixture
         .lines()
         .chain(native.lines())

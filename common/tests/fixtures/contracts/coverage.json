@@ -18,6 +18,7 @@
       "encoding.fields_from_montgomery_le",
       "vector.bit_reverse",
       "vector.bit_reverse_rows",
+      "hash.poseidon2_16",
       "ring.point",
       "ring.rows",
       "ring.coefficients",

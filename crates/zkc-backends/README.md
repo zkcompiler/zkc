@@ -41,6 +41,15 @@ primitives, sequences, variants, field arrays, fixed vectors and resource units
 retain their own type and capacity checks. Domain installation does not imply
 that every domain has every group, transcript or PCS operation.
 
+`plonky3::poseidon2` installs the batched width-16 KoalaBear Poseidon2
+permutation from `p3-koala-bear` 0.8.0's default parameters; it charges one
+external-work permutation per state before computing. `plonky3::words` owns the
+canonical and Montgomery four-byte coordinate words of the KoalaBear codecs.
+Bit reversal of vectors and table rows is a positional kernel of every field
+family. The `poseidon2_permutation` test compares the permutation with the
+upstream known answer, p3-poseidon2's generic round functions and an integer
+implementation.
+
 `backend/registry.rs` assembles exact implementation ownership. Duplicate owners
 and alternatives of alternatives refuse. Alternative implementations inherit the
 installed family resolver and must match their primary domain. Constant-time

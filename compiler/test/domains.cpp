@@ -570,7 +570,8 @@ void installedBindings() {
                              "encoding.field_montgomery_le",
                              "encoding.field_from_montgomery_le",
                              "encoding.fields_montgomery_le",
-                             "encoding.fields_from_montgomery_le"},
+                             "encoding.fields_from_montgomery_le",
+                             "hash.poseidon2_16"},
                          operation.name) ||
                      StringRef(operation.name).starts_with("relation.table_") ||
                      StringRef(operation.name).starts_with("ring.") ||

@@ -213,3 +213,4 @@ encoding.fields_montgomery_le 0
 encoding.fields_from_montgomery_le 0
 vector.bit_reverse 0
 vector.bit_reverse_rows 0
+hash.poseidon2_16 0

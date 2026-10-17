@@ -130,5 +130,6 @@ def EncodingGroupDecodeCofactorOp : KernelOp<CryptoDialect, "exec.encoding_group
 def EncodingCryptonoteMapOp : KernelOp<CryptoDialect, "exec.encoding_cryptonote_map", [OpEncodingCryptonoteMap]>;
 def Keccak256Op : KernelOp<CryptoDialect, "exec.keccak256", [OpHashKeccak256]>;
 def Sha256Op : KernelOp<CryptoDialect, "exec.sha256", [OpHashSha256]>;
+def Poseidon2Width16Op : KernelOp<CryptoDialect, "exec.poseidon2_16", [OpHashPoseidon2Width16]>;
 
 #endif

@@ -4,6 +4,7 @@
 pub(crate) mod numerical;
 pub mod oracle;
 pub mod polynomial;
+pub mod poseidon2;
 pub mod words;
 
 use crate::{Result, refused};
