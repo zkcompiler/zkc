@@ -635,8 +635,8 @@ theorem bls12381_ceiling : (2 ^ 256 + bls12381 - 1) / bls12381 = 3 := by decide
 /-- Reducing a uniform 256-bit integer modulo the BLS12-381 scalar order, as
 EIP-4844 derives its evaluation and batching challenges from SHA-256, inflates
 every event by at most `3 r / 2 ^ 256`, about `1.3585`. An additive loss for the
-same reduction is at least the statistical distance, about `0.0747`, which no
-round error below it survives. -/
+same reduction is at least its statistical distance from the uniform residue,
+which exceeds any useful round error. -/
 theorem bls12381_reduce_dominated :
     Dominated (modulo bls12381 (N := 2 ^ 256)) (3 * bls12381 / 2 ^ 256) := by
   refine (modulo_pointBound bls12381 (2 ^ 256)).dominated.mono (le_of_eq ?_)

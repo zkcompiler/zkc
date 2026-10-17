@@ -200,9 +200,10 @@ with ideal-law error `ε` and a realized decoder has decoded-law error
 A multiplicative factor scales with the event and an additive loss does not:
 for a 16-bit KoalaBear mask the additive loss is `65535 / (p · 2 ^ 16)`, about
 `2 ^ -31`, which no smaller round error survives, while the factor costs
-`1 + 2 ^ -14.99`. For EIP-4844's reduction the statistical distance is about
-`0.0747` and its bound is `r / 2 ^ 256`, about `0.453`, while the factor is
-about `1.36`.
+`1 + 2 ^ -14.99`. For EIP-4844's reduction the additive bound `balanced_reduce`
+gives is `r / 2 ^ 256`, about `0.453`, and even the exact statistical distance,
+about `0.0747` by direct computation, is far above any round error, while the
+factor is about `1.36`.
 
 Independent coordinates of a uniform answer multiply point bounds
 (`prEvent_uniform_prod`, `prEvent_uniform_pi`, `PointBound.prod`,
