@@ -15,8 +15,9 @@ data only; a loop carries the current transcript exactly once, starts and ends
 its body with nothing pending and yields its final state. Occurrence coordinates
 must be exactly the enclosing loop indices. `Zkc.Construction.check_sound`
 proves that every accepted program's ideal meaning is the Fiat–Shamir transform
-of its interactive reading; the final clauses of `check` and the coordinate and
-occurrence-count conditions are deployment checks that the proof does not use.
+of its interactive reading. Apart from the absence of a pending observation at
+the end, the final clauses of `check` and the coordinate and occurrence-count
+conditions are deployment checks that the proof does not use.
 -/
 
 set_option autoImplicit false

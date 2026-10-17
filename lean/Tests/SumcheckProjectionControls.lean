@@ -1,10 +1,11 @@
 import ZkcExamples.Construction.SumcheckProof
 
 /-! Controls for the composed per-compile check on the actual compiled Sumcheck
-validator, whose original has a protocol application and a repeat. Every
-mutation below keeps the transcript wiring, so the transcript-construction rule
-alone accepts it; the participant projection rule refuses it for the named
-obligation. -/
+validator, whose original has a protocol application and a repeat. Each
+mutation in the first group keeps the transcript wiring, so the
+transcript-construction rule alone accepts it; the participant projection rule
+refuses it for the named obligation. The second group exercises the
+transcript-construction rule's deployment checks inside the loop. -/
 
 namespace Tests.SumcheckProjectionControls
 open Zkc.Construction ZkcExamples.Construction
@@ -96,6 +97,60 @@ theorem loopStartsFromTable_refused :
 /-- The terminal check reads the final claim and point in the other order. -/
 theorem terminalOperandsSwapped_refused :
     RefusedByProjection (changeAt actual 2 fun call => { call with operands := [0, 6, 5] }) "projection-call" := by
+  decide +kernel
+
+/-! Deployment checks of the transcript-construction rule inside the loop, which
+`check_sound` does not use. -/
+
+/-- Refused by the transcript-construction rule alone with `code`. -/
+def RefusedByConstruction (participant : Participant) (code : String) : Prop :=
+  checkExport original participant = .error code
+
+instance (participant : Participant) (code : String) : Decidable (RefusedByConstruction participant code) :=
+  inferInstanceAs (Decidable (_ = _))
+
+/-- The first round observation reads coordinates built without the induction
+index; the observation's coordinate condition fails. -/
+theorem coordinatesWithoutIndex_refused :
+    RefusedByConstruction (changeBody actual 3 fun instruction => { instruction with operands := [8, 9, 10] })
+      "construction-observe" := by
+  decide +kernel
+
+/-- The first coordinate vector appends the carried point instead of the
+induction index. -/
+theorem coordinatesFromPoint_refused :
+    RefusedByConstruction (changeBody actual 2 fun instruction => { instruction with operands := [10, 6] })
+      "construction-coordinates" := by
+  decide +kernel
+
+/-- Drop the repeat step from an observation's template. -/
+def withoutRepeatStep : Operation → Operation
+  | .observe suite template => .observe suite { template with steps := template.steps.take 1 }
+  | operation => operation
+
+/-- The first round observation's template omits its repeat step, so it has no
+coordinate for the enclosing loop. -/
+theorem templateWithoutRepeat_refused :
+    RefusedByConstruction (changeBody actual 3 fun instruction =>
+        { instruction with operation := withoutRepeatStep instruction.operation })
+      "construction-observe" := by
+  decide +kernel
+
+/-- The loop count reads the claim. -/
+theorem loopCountFromClaim_refused :
+    RefusedByConstruction (changeAt actual 1 fun loop => { loop with operands := [1, 4, 1, 3] })
+      "construction-loop" := by
+  decide +kernel
+
+/-- The round check guards on the transcript. -/
+theorem guardOnTranscript_refused :
+    RefusedByConstruction (changeBody actual 10 fun instruction => { instruction with operands := [8] })
+      "construction-guard" := by
+  decide +kernel
+
+/-- The terminal check reads the final transcript. -/
+theorem callOnTranscript_refused :
+    RefusedByConstruction (changeAt actual 2 fun call => { call with operands := [0, 5, 7] }) "construction-call" := by
   decide +kernel
 
 /-- Premise satisfiability: the actual export is accepted. -/

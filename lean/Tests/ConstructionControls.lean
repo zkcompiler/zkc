@@ -5,9 +5,9 @@ import ZkcExamples.Structured.SchnorrInteractiveData
 validator. The accepted export satisfies the premises of `check_sound`; each
 mutation below changes one obligation of the same export and must be refused
 with the named code of that obligation. `check_sound` itself uses only the
-instruction walk (`checkFrom`); the final clauses of `check` and the comparisons
-with the original in `checkExport` are deployment checks, exercised here as
-well. -/
+instruction walk (`checkFrom`) and that nothing is pending at its end; the other
+final clauses of `check` and the comparisons with the original in `checkExport`
+are deployment checks, exercised here as well. -/
 
 namespace Tests.ConstructionControls
 open Zkc.Construction ZkcExamples.Construction

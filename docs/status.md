@@ -277,8 +277,9 @@ exports the compiled Schnorr, Sumcheck and composed Sumcheck proof Entries'
 checked validators
 ([format](spec/formats/constructed-participant.md)). Lean checks their transcript
 construction and their [participant projection](../lean/docs/spec/participant-projection.md)
-against the original exports and proves that each compiled verifier is the
-Fiat–Shamir transform of its original verifier. For Schnorr it proves
+against the original exports and proves that each compiled verifier's ideal
+meaning, with helper calls read by the original's helpers, is the Fiat–Shamir
+transform of its original verifier. For Schnorr it proves
 fixed-statement Fiat–Shamir knowledge soundness in the random-oracle model, under
 the [named assumptions](../lean/docs/spec/fiat-shamir.md#named-assumptions); the
 Sumcheck Entry has no security theorem. Other Entries, suites and programmable

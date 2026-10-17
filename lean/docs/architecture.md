@@ -48,6 +48,13 @@ admission modules own lowering, declaration ordering, preparation selection and
 profile checks. Dependency tests enforce this separation for participant
 semantics and the optional VCVio uniform-service adapter.
 
+`Zkc.Construction` owns the compiled-stage carrier: exported constructed
+participants, their ideal and interactive meanings, and the checked stage rules
+between them and the structured original (transcript construction, participant
+projection), with soundness theorems that compose
+([checked compiler stages](design/checked-stages.md)). It depends on structured
+participant semantics; the structured import does not depend on it.
+
 `Zkc.Protocols` owns mathematical experiments and reusable verifier contracts.
 It may use generic source semantics; source semantics may not import protocols.
 `ZkcExamples.NativePrograms` owns particular native exports and correspondence

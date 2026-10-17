@@ -14,8 +14,9 @@ Native compilation below the original stage, providers and production
 arithmetic are outside these claims. Fiat–Shamir security claims cover only
 Schnorr: the transform of the imported interactive verifier and the compiled
 proof Entry, for a fixed statement and under named assumptions. The compiled
-Sumcheck proof Entry is proved to be the transform of its original verifier,
-without a security theorem. The [common](bridges/common/README.md)
+Sumcheck proof Entries' ideal meanings, with helper calls read by the
+original's helpers, are proved to be the transforms of their original
+verifiers, without a security theorem. The [common](bridges/common/README.md)
 and [structured](bridges/structured/README.md) bridges test the native boundary
 with independent execution and negative controls.
 

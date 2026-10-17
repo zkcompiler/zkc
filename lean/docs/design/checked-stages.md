@@ -22,8 +22,10 @@ A checked rule from a source stage to a target stage has five parts.
    the check performs.
 3. **Check.** A total function from source, target and certificate to
    `Except String Unit`, with a named refusal for each obligation. It runs per
-   compile in the kernel (`decide +kernel`), so no compiler component is
-   trusted for the checked property.
+   compile in the kernel (`decide +kernel`), so the compiler pass under check is
+   not trusted for the checked property; what remains trusted is that the
+   checked artifact is the compiled one (the exporter and its rendering into
+   Lean data, which are tested boundaries).
 4. **Relation.** A property-specific relation between the two meanings, chosen
    by what the stage must preserve (below).
 5. **Soundness.** Acceptance implies the relation for every parameter the
@@ -170,8 +172,7 @@ check, not from naming.
 The random-oracle assumption bundles a probabilistic idealization with
 deterministic correspondence obligations. Of the latter:
 
-- Proved. Typed values round-trip through the transcript value encoding
-  (`Value.decode_encode`). The canonical occurrence encoding is injective and
+- Proved. The canonical occurrence encoding is injective and
   prefix-free in the template and the iteration coordinates
   (`occurrence_inj`), and the bridge checks in the kernel that the model
   encoding of each exported template is its native bytes. The construction
@@ -186,4 +187,6 @@ deterministic correspondence obligations. Of the latter:
   origins omit iteration coordinates, which the native occurrence bytes carry: a
   model history stands for the native bytes only because a deterministic
   validator's coordinates at each occurrence are determined by its absorbed
-  history.
+  history. Likewise, the native fields the model origin does not read (protocol
+  names, a query's service port, contract and owner) are fixed by the exported
+  instruction rather than checked against the original.

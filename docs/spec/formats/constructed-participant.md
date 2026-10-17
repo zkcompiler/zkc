@@ -35,8 +35,9 @@ printed MLIR types of its signature, in order.
 References are absolute positions in a scoped environment: the participant's
 inputs first, then every operation result in execution order. A loop body sees
 the environment at the loop, then its block arguments and then its own results;
-after the loop, the loop's results take the positions that the body's block
-arguments had. Each instruction is:
+after the loop, the loop's results take consecutive positions starting at the
+position the induction index had in the body: one position fewer than the block
+arguments, since the induction index has no result. Each instruction is:
 
 ```text
 [operation, attributes, binding, operands, result-types, regions]

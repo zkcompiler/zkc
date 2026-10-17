@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """Check compiled proof Entries' transcript construction and projection in Lean.
 
-For each subject, the compiled Schnorr and Sumcheck `example::Proof` Entries,
-the driver compiles the Entry, retains its original export, native policy,
-constructed candidate and exported validator participant, and requires the
-committed Lean data to be their exact rendering. It then runs the composed Lean
-check (transcript construction and participant projection) on the fresh export,
-together with mutated exports that it must refuse, and for Schnorr confirms that
-the native checker refuses mutated candidates before export. This is bounded
-agreement evidence: native exporter correctness and the primitive meanings
-remain stated boundaries.
+For each subject, the compiled `example::Proof` Entries of the Schnorr, Sumcheck
+and composed Sumcheck examples, the driver compiles the Entry, retains its
+original export, native policy, constructed candidate and exported validator
+participant, and requires the committed Lean data to be their exact rendering.
+It then runs the composed Lean check (transcript construction and participant
+projection) on the fresh export, together with mutated exports that it must
+refuse, checks that the Lean model of the occurrence encoding reproduces every
+exported template's native bytes, and confirms that the native checker refuses
+mutated candidates before export. This is bounded agreement evidence: native
+exporter correctness and the primitive meanings remain stated boundaries.
 """
 
 import argparse
@@ -180,11 +181,19 @@ class Driver:
             observed = instruction(instructions, "crypto.exec.indexed_transcript_challenge")
             observed[3][0] = len(exported[5]) - 1
 
+        def template_tree(item):
+            return constructed.decode_tree(bytes.fromhex(dict(item[1])["parameters"][1][0]))[0]
+
         def challenge_names_delivery(instructions):
+            # The delivery's local site, in the challenge's own protocol: its
+            # application path then qualifies it to the selected delivery site.
+            delivery = next(item for item in nested(instructions)
+                            if item[0] == "crypto.exec.indexed_transcript_observe_data"
+                            and template_tree(item)[4][4] == exported[3][3])
             challenge = instruction(instructions, "crypto.exec.indexed_transcript_challenge")
             parameters = dict(challenge[1])["parameters"][1]
             tree, _ = constructed.decode_tree(bytes.fromhex(parameters[0]))
-            tree[4][2] = exported[3][8][0][1]
+            tree[4][2] = template_tree(delivery)[4][2]
             parameters[0] = constructed.encode_tree(tree).hex()
 
         def decision_compares_base_with_itself(instructions):
@@ -342,12 +351,16 @@ class Driver:
         directory = self.output / subject.name
         calls = [item for item in exported[7] if item[0] == "local.call"]
         callee = dict(calls[-1][1])["callee"][1]
-        start = candidate.index(f"local.func @{callee}(")
-        end = candidate.index("local.func", start + 1)
-        body = candidate[start:end]
+        # The helper ends at the closing brace at its own indentation.
+        lines = candidate.splitlines(keepends=True)
+        first = next(index for index, line in enumerate(lines) if f"local.func @{callee}(" in line)
+        indentation = lines[first][:len(lines[first]) - len(lines[first].lstrip())]
+        last = next(index for index in range(first + 1, len(lines)) if lines[index].rstrip() == indentation + "}")
+        body = "".join(lines[first:last + 1])
         constant = 'parameters = ["1"]'
         self.check(f"{subject.name}:native-helper-constant", body.count(constant) >= 1)
-        mutated = candidate[:start] + body.replace(constant, 'parameters = ["2"]', 1) + candidate[end:]
+        mutated = ("".join(lines[:first]) + body.replace(constant, 'parameters = ["2"]', 1)
+                   + "".join(lines[last + 1:]))
         path = directory / "candidate-terminal-helper-mutated.mlir"
         path.write_text(mutated)
         result = self.run([self.args.compiler, "protocol-constructed-participant",

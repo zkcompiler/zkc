@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Check the constructed-participant renderer's operation classification.
 
-Synthetic exports exercise operations that the compiled examples do not
-contain. Each rendering is elaborated by Lean's parser and kernel, and the
+Synthetic exports exercise operation shapes independently of the compiled
+examples. Each rendering is elaborated by Lean's parser and kernel, and the
 rendered instructions are compared with constructors written independently of
-the renderer. Wrongly shaped operations must refuse the whole export.
+the renderer. Wrongly shaped operations must refuse the whole export with the
+renderer's shape diagnostic.
 """
 
 import argparse
@@ -62,7 +63,9 @@ example : RenderedConjunction.participant.instructions =
     for data in malformed:
         try:
             renderer.render(data, "Rejected")
-        except ValueError:
+        except ValueError as error:
+            if "boolean conjunction shape" not in str(error):
+                raise AssertionError(f"renderer refused a malformed conjunction for another reason: {error}")
             continue
         raise AssertionError("renderer accepted a malformed Boolean conjunction")
     # An attributed conjunction is not the recognized operation; it is retained

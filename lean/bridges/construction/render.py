@@ -218,7 +218,8 @@ def operation(name, attrs, binding, operand_kinds, result_kinds):
                 and result_kinds == [("boolean", None)], "boolean conjunction shape")
         return ".calculate .booleanAnd"
     if name == "algebra.constant" and set(attrs) == {"value"} and binding == []:
-        require(not operand_kinds and len(result_kinds) == 1 and result_kinds[0][0] == "field",
+        # The canonical bound below is the BLS12-381 scalar modulus.
+        require(not operand_kinds and len(result_kinds) == 1 and result_kinds[0] == ("field", "bls12-381.fr"),
                 "field constant shape")
         return (f".calculate (.fieldConstant {text(result_kinds[0][1])} "
                 f"{decimal(string_attribute(attrs, 'value'), FIELD_MODULUS)})")

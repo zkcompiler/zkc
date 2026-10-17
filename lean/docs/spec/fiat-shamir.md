@@ -110,7 +110,9 @@ Each refusal names its obligation (`construction-receive`,
 original. The export must name the original's source digest and entry, with
 native framing. The policy must publish exactly the validator's data inputs, in
 original order, and these must be the exported validator's data inputs with the
-same sorts; `publicValues` reads the values the host binds at those positions.
+same sorts; for scalar inputs, `publicValues` reads the values the host binds at
+those positions. Vector and index inputs, which the Sumcheck Entries publish,
+have no binding model.
 The replaced service must be a validator service input, and every challenge must
 produce that service's field. The selected acceptance output must be a Boolean
 validator output selected by every statement retained in the entry's body, and
@@ -124,9 +126,12 @@ the [participant projection](participant-projection.md) rule, which composes
 with this one.
 
 `check_sound` uses only that the instruction walk (`checkFrom`) succeeds from the
-initial state. The final clauses of `check`, the coordinate conditions and the
-comparisons in `checkExport` are deployment checks; the controls exercise them
-as well.
+initial state and that nothing is pending at its end. The other final clauses of
+`check`, the coordinate conditions and the comparisons in `checkExport` are
+deployment checks; `Tests.ConstructionControls` and
+`Tests.SumcheckProjectionControls` exercise them as well, including coordinates
+not built from the enclosing induction values and a template without its repeat
+step.
 
 `check_sound` proves, for every accepted program, every monad, challenge
 function, helper table, data input, initial history, service handle and proof:
@@ -213,8 +218,10 @@ Sigma instance.
   encoding is injective and prefix-free in the template and the iteration
   coordinates (`Zkc.Construction.occurrence_inj`), and the construction bridge
   checks in the kernel that the model encoding of every exported template is its
-  native bytes; the suite's framing and payload codecs remain assumed. Model
-  occurrences omit the iteration coordinates
+  native bytes; the suite's framing and payload codecs remain assumed. Fields of
+  a native occurrence that the model origin does not read (protocol names in the
+  path and event, and a query's service port, contract and owner) are fixed by
+  the exported instruction. Model occurrences omit the iteration coordinates
   that native occurrences inside loops carry; a typed history stands for the
   absorbed bytes because a validator's coordinates at each occurrence are
   determined by its absorbed history. The suite reduces 64 squeezed bytes to a field

@@ -27,9 +27,9 @@ which the validator participates is walked through the callee's body in the
 child context, with the callee's input and output masks; the exported program
 has no instruction for the application itself. A repeat in which the validator
 participates must be implemented by a loop with the same bound whose carried
-values start with the state components the validator has, followed by
-transcript plumbing; the loop body is walked against the repeat body once, for
-every iteration. Transcript plumbing (coordinates and observations of received
+values start with the state components the validator has, followed by the
+transcript and data that no matched instruction reads; the loop body is walked
+against the repeat body once, for every iteration. Transcript plumbing (coordinates and observations of received
 messages) is skipped. Every exported instruction must be accounted for, and the
 returned references must hold the validator's outputs.
 

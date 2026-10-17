@@ -56,10 +56,10 @@ original operation:
   outputs with no effect or stop). When its operands are all present, the
   checked helper's body is walked inline: every operation in it must be a
   carrier calculation, matched as above, and the body's returned slots are the
-  invocation's results. Compilers inline such helpers, so the export has no call
-  for them. An invocation with both absent and present operands is refused
-  (`projection-invoke`). A fold with an absent operand is absent; other folds at
-  the validator are refused (`projection-operation`);
+  invocation's results: the export must inline the helper, and a Math helper
+  kept as a call is refused. An invocation with both absent and present operands
+  is refused (`projection-invoke`). A fold with an absent operand is absent;
+  other folds at the validator are refused (`projection-operation`);
 - a helper call owned by the validator must be implemented by a call of the
   same checked helper of the original program on the references holding its
   operands, with the helper's data outputs; its results are held. Calls owned by
@@ -88,7 +88,8 @@ original operation:
   exported loop, at the same qualified site, with the same maximum and with its
   count held at the loop's count operand. The loop's carried values must start
   with the references holding the state components the validator has, in order
-  (the others are absent); the remaining carried values are transcript plumbing.
+  (the others are absent); the remaining carried values are not related to the
+  original: the transcript, or data that no matched instruction reads.
   The loop body is walked once against the repeat body, from slots holding the
   induction index, the carried state and the repeat's captures; after its
   instructions only plumbing may remain, and the yielded references must start
@@ -112,8 +113,9 @@ mutated helper body.
 The rule compares operations, not their algebra: a calculation implemented by an
 algebraically equal but different calculation is refused. A total calculation
 the export omits may be omitted only because its result is never needed: a
-later use of a `free` component as an operand, guard condition, message or
-output requires a held reference and is refused.
+later use of a `free` component as a guard condition, message, helper argument
+or output requires a held reference and is refused, and a total calculation on a
+`free` operand can itself only be omitted.
 
 ## Soundness
 
@@ -128,8 +130,9 @@ spec context handle (helperTable program) returned instructions (data ++ [transc
 ```
 
 The two processes take the same actions with the same replies, stop at the same
-points with the same reasons, and return the same validator outputs. Absent
-outputs are omitted; present ones are encoded. The proof is a simulation over
+points with the same reasons, and return the same validator outputs. Outputs
+outside the validator's scopes are omitted; the others are encoded as optional
+values. The proof is a simulation over
 the walk: each accepted operation transports agreement of continuations
 (`OperationSound`, `walkStep_sound`), with the invariant that every slot relates
 its original component to the exported environment (`Holds`). Helper calls use
@@ -203,8 +206,8 @@ the final comparison of the base with itself, the response scaling the
 statement, the challenge scaling the base, a sum with the wrong summand, a
 comparison with swapped operands, and a constant `true` returned as the decision
 (`projection-unexplained`). The other controls are a returned sum instead of the
-decision (`construction-final`), a non-Boolean acceptance selection
-(`construction-acceptance`), the witness published to the validator
+decision (`construction-final`), an acceptance selection of an output the
+validator does not have (`construction-acceptance`), the witness published to the validator
 (`construction-context`), a delivery observed as sent by the producer
 (`projection-delivery`), a challenge drawn at the delivery site
 (`projection-challenge`), a response received at the commitment site
@@ -218,7 +221,12 @@ challenge term (`projection-unexplained`), a loop yielding the claim it started
 with (`projection-repeat-yield`), a changed loop bound, an unqualified loop site
 and a loop starting from the table values (`projection-repeat`), and a terminal
 check with swapped operands (`projection-call`). The transcript-construction
-rule accepts every one of these mutations. The construction bridge also refuses
+rule accepts every one of these mutations. The same module exercises that rule's
+deployment checks inside the loop: coordinates without the induction index and a
+template without its repeat step (`construction-observe`), coordinates appending
+a non-index value (`construction-coordinates`), and a loop count, guard or call
+reading the wrong sort (`construction-loop`, `construction-guard`,
+`construction-call`). The construction bridge also refuses
 mutations of the composed export: a conjunction reading the left check twice
 (`projection-unexplained`) and a right terminal check reading the left
 reduction's point and claim (`projection-call`).
