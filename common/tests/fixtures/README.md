@@ -9,6 +9,9 @@ user-facing protocol examples live in `examples/projects/`.
 - `contracts/` records the current native conformance probe coverage and
   consumer-specific facet observations; see its README for the scope.
 - [Bulletproofs+](bulletproofs-plus/README.md) retains independent Monero proofs with recorded test coins. Its [upstream producer](../reference/monero/README.md) also owns the native Edwards map vectors.
+- `kzg-eip4844/` retains the c-kzg-4844 v2.1.8 EIP-4844 vectors and derived
+  cases whose outcomes the pinned c-kzg-4844 reference computed; see its
+  [reproduction](../reference/c-kzg/README.md).
 - `clean/air-control.json` is the output of the pinned Clean producer in
   `lean/integrations/clean` (`TestsClean/Control.lean`): exported relations
   and arenas, rows and Clean's residuals. The C++ and Rust native comparison
