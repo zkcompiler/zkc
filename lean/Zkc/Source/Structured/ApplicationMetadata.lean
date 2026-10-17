@@ -71,30 +71,30 @@ def originalCosts : Nat → Block → Except String (List SourceCost)
 
 def addOriginal (summary : ApplicationSummary) (cost : SourceCost) :
     Except String ApplicationSummary := do
-  let work ← boundedAdd 100000 summary.work 1
-  let indices ← boundedAdd 1000000 summary.indices (cost.slots + cost.selectors)
-  let siteBytes ← boundedAdd 16777216 summary.siteBytes cost.site.utf8ByteSize
+  let work ← boundedAdd Limits.applicationVisits summary.work 1
+  let indices ← boundedAdd Limits.applicationIndices summary.indices (cost.slots + cost.selectors)
+  let siteBytes ← boundedAdd Limits.applicationSiteBytes summary.siteBytes cost.site.utf8ByteSize
   let longestSite := max summary.longestSite cost.site.utf8ByteSize
-  if longestSite > 4096 then throw "structured-application-limit"
+  if longestSite > Limits.siteBytes then throw "structured-application-limit"
   return { summary with
     work := work, indices := indices, siteBytes := siteBytes, longestSite := longestSite,
     sites := summary.sites + (if cost.site.isEmpty then 0 else 1) }
 
 def addChild (summary child : ApplicationSummary) (boundary selectors sitePrefix : Nat)
     (application : Bool) : Except String ApplicationSummary := do
-  let work ← boundedAdd 100000 summary.work child.work
-  let work ← boundedAdd 100000 work boundary
-  let indices ← boundedAdd 1000000 summary.indices child.indices
-  let indices ← boundedAdd 1000000 indices (2 * boundary + selectors)
+  let work ← boundedAdd Limits.applicationVisits summary.work child.work
+  let work ← boundedAdd Limits.applicationVisits work boundary
+  let indices ← boundedAdd Limits.applicationIndices summary.indices child.indices
+  let indices ← boundedAdd Limits.applicationIndices indices (2 * boundary + selectors)
   let depth := max summary.depth (child.depth + 1)
-  if depth > 64 then throw "structured-application-limit"
+  if depth > Limits.nesting then throw "structured-application-limit"
   if application then
-    let extra ← boundedMultiply 16777216 child.sites sitePrefix
-    let siteBytes ← boundedAdd 16777216 summary.siteBytes child.siteBytes
-    let siteBytes ← boundedAdd 16777216 siteBytes extra
+    let extra ← boundedMultiply Limits.applicationSiteBytes child.sites sitePrefix
+    let siteBytes ← boundedAdd Limits.applicationSiteBytes summary.siteBytes child.siteBytes
+    let siteBytes ← boundedAdd Limits.applicationSiteBytes siteBytes extra
     let longestSite := if child.sites == 0 then summary.longestSite
       else max summary.longestSite (child.longestSite + sitePrefix)
-    if longestSite > 4096 then throw "structured-application-limit"
+    if longestSite > Limits.siteBytes then throw "structured-application-limit"
     return {
       work := work, depth := depth, indices := indices, sites := summary.sites + child.sites, siteBytes := siteBytes, longestSite := longestSite }
   else return { summary with work, indices, depth }
@@ -122,7 +122,7 @@ def summarizeFunction (snapshot : Snapshot) : Nat → Function → SummaryM Appl
   | 0, _ => throw "structured-application-depth"
   | depth + 1, function => do
     if let some (_, cached) := (← get).find? (·.1 == function.name) then return cached
-    let costs ← originalCosts 64 function.body
+    let costs ← originalCosts Limits.nesting function.body
     let summary ← costs.foldlM (fun summary cost => do
       let summary ← addOriginal summary cost
       match cost.descriptor with
@@ -185,7 +185,7 @@ abbrev SiteM := StateT SiteState (Except String)
 
 def chargeVisit : SiteM Unit := do
   let state ← get
-  if state.visits >= 100000 then throw "structured-effective-site-limit"
+  if state.visits >= Limits.applicationVisits then throw "structured-effective-site-limit"
   set { state with visits := state.visits + 1 }
 
 /-- Check exact byte costs before constructing the shared process label.
@@ -193,20 +193,20 @@ The empty synthetic sentinel has zero cost; original traversal calls this only
 for nonempty source sites. No generated-label concatenation precedes preflight. -/
 def renderSite (sitePrefix : Option String) (site : String) : SiteM String := fun state =>
   let overhead := if site = "" then 0 else protocolSiteOverhead sitePrefix
-  if overhead > 4096 || site.utf8ByteSize > 4096 - overhead then
+  if overhead > Limits.siteBytes || site.utf8ByteSize > Limits.siteBytes - overhead then
     .error "structured-effective-site-limit"
   else
     let size := overhead + site.utf8ByteSize
-    if size > 16777216 - state.bytes then .error "structured-effective-site-limit"
+    if size > Limits.applicationSiteBytes - state.bytes then .error "structured-effective-site-limit"
     else .ok (qualifyProtocolSite sitePrefix site, { state with bytes := state.bytes + size })
 
 /-- Preflight checks precede construction of the shared label. -/
 theorem renderSite_run (sitePrefix : Option String) (site : String) (before : SiteState) :
     (renderSite sitePrefix site).run before =
       let overhead := if site = "" then 0 else protocolSiteOverhead sitePrefix
-      if overhead > 4096 || site.utf8ByteSize > 4096 - overhead then
+      if overhead > Limits.siteBytes || site.utf8ByteSize > Limits.siteBytes - overhead then
         .error "structured-effective-site-limit"
-      else if overhead + site.utf8ByteSize > 16777216 - before.bytes then
+      else if overhead + site.utf8ByteSize > Limits.applicationSiteBytes - before.bytes then
         .error "structured-effective-site-limit"
       else .ok (qualifyProtocolSite sitePrefix site,
         { before with bytes := before.bytes + (overhead + site.utf8ByteSize) }) := rfl
@@ -240,7 +240,7 @@ theorem renderSite_accounting {sitePrefix : Option String} {site : String}
 
 /-- An overlong prefix refuses before the generated label is constructed. -/
 theorem renderSite_overlong (sitePrefix : Option String) (site : String) (before : SiteState)
-    (nonempty : site ≠ "") (overlong : 4096 < protocolSiteOverhead sitePrefix) :
+    (nonempty : site ≠ "") (overlong : Limits.siteBytes < protocolSiteOverhead sitePrefix) :
     (renderSite sitePrefix site).run before = .error "structured-effective-site-limit" := by
   rw [renderSite_run]
   simp [nonempty, overlong]
@@ -266,7 +266,7 @@ def visitBlock (application : Nat → Option String → Function → SiteM Unit)
           set { state with seen := state.seen.insert rendered }
       let nested ← match descriptor with
         | .protocolRepeat .. => do
-          if nesting >= 64 then throw "structured-repeat-depth"
+          if nesting >= Limits.nesting then throw "structured-repeat-depth"
           pure (nesting + 1)
         | _ => pure nesting
       for .region _ _ body in regions do
@@ -286,7 +286,7 @@ Entering an application resets stored-block capacity, but preserves nesting. -/
 def visitProtocolWith (snapshot : Snapshot) : Nat → Nat → Option String → Function → SiteM Unit
   | 0, _, _, _ => throw "structured-effective-site-depth"
   | frames + 1, nesting, sitePrefix, function =>
-    visitBlock (visitProtocolWith snapshot frames) snapshot 64 nesting sitePrefix function.body
+    visitBlock (visitProtocolWith snapshot frames) snapshot Limits.nesting nesting sitePrefix function.body
 
 def visitProtocol (snapshot : Snapshot) (frames : Nat) (sitePrefix : Option String)
     (function : Function) : SiteM Unit :=
@@ -302,10 +302,10 @@ def checkNativeApplicationBudgets (snapshot : Snapshot) :
     let mut indices := 0
     let mut bytes := 0
     for function in snapshot.protocolFunctions do
-      let summary ← ApplicationMetadata.summarizeFunction snapshot 64 function
-      work ← ApplicationMetadata.boundedAdd 100000 work summary.work
-      indices ← ApplicationMetadata.boundedAdd 1000000 indices summary.indices
-      bytes ← ApplicationMetadata.boundedAdd 16777216 bytes summary.siteBytes
+      let summary ← ApplicationMetadata.summarizeFunction snapshot Limits.nesting function
+      work ← ApplicationMetadata.boundedAdd Limits.applicationVisits work summary.work
+      indices ← ApplicationMetadata.boundedAdd Limits.applicationIndices indices summary.indices
+      bytes ← ApplicationMetadata.boundedAdd Limits.applicationSiteBytes bytes summary.siteBytes
   let (_, summaries) ← computation.run []
   return summaries
 
@@ -314,6 +314,6 @@ def checkEffectiveProtocolSites (snapshot : Snapshot) : Except String Unit :=
   (do
     for function in snapshot.protocolFunctions do
       modify fun state : ApplicationMetadata.SiteState => { state with seen := ∅ }
-      ApplicationMetadata.visitProtocol snapshot 64 none function).run' {}
+      ApplicationMetadata.visitProtocol snapshot Limits.nesting none function).run' {}
 
 end Zkc.Source.Structured

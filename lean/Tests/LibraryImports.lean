@@ -121,6 +121,7 @@ import Zkc.Source.Structured.Import
 import Zkc.Source.Structured.Inlining
 import Zkc.Source.Structured.Interpretation
 import Zkc.Source.Structured.Laws
+import Zkc.Source.Structured.Limits
 import Zkc.Source.Structured.Linking
 import Zkc.Source.Structured.MapEvaluation
 import Zkc.Source.Structured.MapLaws

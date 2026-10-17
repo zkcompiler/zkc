@@ -180,7 +180,7 @@ def lowerProtocol (snapshot : Snapshot) (domains : List DomainSpec)
     (function : Function) (signature : ProtocolSignature) : Except String (RawRegion Ty ProtocolOp) := do
   let some interface := function.interface | throw "structured-protocol-interface"
   (lowerProtocolBlock snapshot domains summaries function headers interface signature.inputScopes
-    64 .entryReturn function.inputs ((List.range function.inputs.length).map some) []
+    Limits.nesting .entryReturn function.inputs ((List.range function.inputs.length).map some) []
     (List.range interface.roles.length) function.body).run' {}
 
 /-- Check a complete protocol using the supplied full header table. The empty

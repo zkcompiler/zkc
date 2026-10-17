@@ -235,7 +235,7 @@ def orderProtocols (helperDepths : List OrderedDefinition) :
     let helpers : List OrderedDefinition ← next.helpers.mapM fun helper =>
       requireSome (helperDepths.find? (·.definition.helper == helper)) "structured-root-link"
     let depth := ((protocols.map (fun value : OrderedProtocol => value.depth + 1)) ++ (helpers.map (fun value : OrderedDefinition => value.depth + 1))).foldl max 0
-    if depth > 64 then throw "structured-reference-depth"
+    if depth > Limits.nesting then throw "structured-reference-depth"
     orderProtocols helperDepths remaining rest
       (ordered ++ [⟨next, depth⟩])
 

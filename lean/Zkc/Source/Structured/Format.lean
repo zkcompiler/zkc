@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Source.Structured.Primitives
+public import Zkc.Source.Structured.Limits
 public import Zkc.Source.Format
 
 @[expose] public section
@@ -21,7 +22,7 @@ def string (json : Json) (empty : Bool := false) : Except String String := do
   if value.utf8ByteSize > 512 || (!empty && value.isEmpty) then throw "structured-string"
   return value
 
-def natural (json : Json) (limit : Nat := 4096) : Except String Nat := do
+def natural (json : Json) (limit : Nat := Limits.instructions) : Except String Nat := do
   let value ← Source.Format.natural json |>.mapError fun _ => "structured-natural"
   if value > limit then throw "structured-number-limit"
   return value
@@ -155,7 +156,7 @@ def block : Nat → Json → Except String Block
   | depth + 1, json => do
     match ← array json with
     | [.str "block", instructions, terminal] =>
-      let instructions ← (← array instructions 4096).mapM fun instruction => do
+      let instructions ← (← array instructions Limits.instructions).mapM fun instruction => do
         match ← array instruction with
         | [op, operands, results, regions, site] =>
           let regions ← (← array regions 2).mapM fun region => do
@@ -199,7 +200,7 @@ def origin (json : Json) : Except String (Option (String × List (String × Stri
   match ← array json with
   | [] => return none
   | [name, bindings] =>
-    let bindings ← (← array bindings 128).mapM fun binding => do
+    let bindings ← (← array bindings Limits.originBindings).mapM fun binding => do
       match ← array binding with
       | [key, value] => return (← string key, ← string value)
       | _ => throw "structured-origin-binding"
@@ -271,7 +272,7 @@ def definition (json : Json) : Except String Definition := do
   | [.str "function", name, mode, visible, inputs, outputs, ports, premises, source, body] =>
     return .function ⟨← string name, ← kind mode, ← visibility visible,
       ← types inputs, ← types outputs, ← interface ports, ← (← array premises).mapM bound,
-      ← origin source, ← block 64 body⟩
+      ← origin source, ← block Limits.nesting body⟩
   | [.str "finite", name, visible, inputs, outputs, domain, step, predicate] =>
     return .finite ⟨← string name, ← visibility visible, ← types inputs, ← types outputs,
       ← string domain, ← string step, ← string predicate true⟩
@@ -290,14 +291,14 @@ def snapshot (json : Json) : Except String Snapshot := do
   | [.str "zkc.structured-source/0", .str "original", digest, entry, domains, relations, bindings, definitions, contracts] =>
     let source ← string digest
     if !digestValid source then throw "structured-source-digest"
-    return ⟨source, ← string entry, ← (← array domains 128).mapM domain,
-      ← (← array relations 128).mapM relation, ← (← array bindings 128).mapM binding,
-      ← (← array definitions 128).mapM definition,
-      ← (← array contracts 128).mapM protocolContract⟩
+    return ⟨source, ← string entry, ← (← array domains Limits.tableEntries).mapM domain,
+      ← (← array relations Limits.tableEntries).mapM relation, ← (← array bindings Limits.tableEntries).mapM binding,
+      ← (← array definitions Limits.tableEntries).mapM definition,
+      ← (← array contracts Limits.tableEntries).mapM protocolContract⟩
   | _ => throw "structured-envelope"
 
 /-- Lexical limits precede the recursive JSON parser, including inside unused bodies. -/
-def parse (text : String) (byteLimit : Nat := 16 * 1024 * 1024) : Except String Json := do
+def parse (text : String) (byteLimit : Nat := Limits.applicationSiteBytes) : Except String Json := do
   if text.utf8ByteSize > byteLimit then throw "byte-limit"
   let mut depth := 0
   let mut quoted := false
@@ -312,7 +313,7 @@ def parse (text : String) (byteLimit : Nat := 16 * 1024 * 1024) : Except String 
     else if char == '{' || char == '}' then throw "invalid-shape"
     else if char == '[' then
       depth := depth + 1
-      if depth > 64 then throw "depth-limit"
+      if depth > Limits.nesting then throw "depth-limit"
     else if char == ']' then depth := depth - 1
   Source.Format.parse byteLimit text |>.mapError Source.Format.Error.code
 

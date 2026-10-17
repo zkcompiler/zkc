@@ -18,7 +18,7 @@ def checkDefinition (snapshot : Snapshot) (domains : List DomainSpec)
     | .local => pure HelperKind.local
   let raw ← match definition with
     | .function f =>
-      (lowerBlock snapshot domains summaries f.kind 64 f.inputs
+      (lowerBlock snapshot domains summaries f.kind Limits.nesting f.inputs
         (f.preconditions.map fun bound => (bound.index, bound.container)) .function f.body).run' {}
     | .finite f => do
       let spec ← resolveFold snapshot domains .local f.domain f.step f.predicate
@@ -75,7 +75,7 @@ def orderDefinitions : Nat → List CheckedDefinition → List OrderedDefinition
     let dependencies : List OrderedDefinition ← next.dependencies.mapM fun name =>
       requireSome (ordered.find? (·.definition.name == name)) "structured-helper-resolution"
     let depth : Nat := (dependencies.map (·.depth + 1)).foldl max 0
-    if depth > 64 then throw "structured-reference-depth"
+    if depth > Limits.nesting then throw "structured-reference-depth"
     orderDefinitions remaining (pending.filter (·.name != next.name))
       (ordered ++ [⟨next, depth⟩])
 

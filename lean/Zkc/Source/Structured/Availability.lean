@@ -133,7 +133,7 @@ def visit : Summarizing Unit :=
   chargeOperations 1
 
 def reference (summary : DependencySummary) : Summarizing Unit := do
-  if summary.depth + 1 > 64 then throw "structured-availability-depth-limit"
+  if summary.depth + 1 > Limits.nesting then throw "structured-availability-depth-limit"
   modify fun state => { state with
     depth := max state.depth (summary.depth + 1)
     «partial» := state.partial || summary.partial }
@@ -283,7 +283,7 @@ def availableCalculation (summaries : List DependencySummary) (roles : Nat)
   | .invoke helper =>
     let summary ← findSummary summaries helper
     if roles > 1 && summary.partial then throw "structured-availability-partial-math"
-    if summary.depth + 1 > 64 then throw "structured-availability-depth-limit"
+    if summary.depth + 1 > Limits.nesting then throw "structured-availability-depth-limit"
     for footprint in summary.requirements do
       if ((← available roles arguments footprint).filter active.contains).isEmpty then
         throw "structured-availability-requirement"
@@ -297,7 +297,7 @@ def availableCalculation (summaries : List DependencySummary) (roles : Nat)
     | _ => pure ()
     for helper in op.helpers do
       let summary ← findSummary summaries helper
-      if summary.depth + 1 > 64 then throw "structured-availability-depth-limit"
+      if summary.depth + 1 > Limits.nesting then throw "structured-availability-depth-limit"
     chargeReplay arguments.length
     let scope := (← available roles arguments (List.range arguments.length)).filter active.contains
     if scope.isEmpty then throw "structured-availability-requirement"
@@ -360,7 +360,7 @@ def operation (summaries : List DependencySummary) (roster : List String)
     noServices helper.inputs
     noServices helper.outputs
     let summary ← findSummary summaries helper
-    if summary.depth + 1 > 64 then throw "structured-availability-depth-limit"
+    if summary.depth + 1 > Limits.nesting then throw "structured-availability-depth-limit"
     owned roles owner arguments
     chargeReplay (helper.outputs.length + 1)
     return List.replicate helper.outputs.length [owner]
