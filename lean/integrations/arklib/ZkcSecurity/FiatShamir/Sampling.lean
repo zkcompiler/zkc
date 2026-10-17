@@ -374,6 +374,33 @@ theorem lowBitsRejecting_realized (p bits : ℕ) [NeZero p] :
   rw [one_mul]
   exact_mod_cast Nat.div_mul_le_self p (2 ^ bits)
 
+/-- Masking with refusal refuses exactly the residues at or above the largest
+multiple of `2 ^ bits` not above `p`: with probability `(p mod 2 ^ bits) / p`,
+the completeness cost of a sampler that does not resample. -/
+theorem prEvent_lowBitsRejecting_refuses (p bits : ℕ) [NeZero p] :
+    Pr{let element ← $ᵗ ZMod p}[lowBitsRejecting p bits element = none] =
+      ((p % 2 ^ bits : ℕ) : ENNReal) / p := by
+  classical
+  rw [SampleableType.prEvent_uniformSample, ZMod.card]
+  congr 2
+  have counted : (Finset.univ.filter fun element : ZMod p =>
+      lowBitsRejecting p bits element = none).card =
+        (Finset.Ico (2 ^ bits * (p / 2 ^ bits)) p).card := by
+    refine Finset.card_bij (fun element _ => element.val) (fun element member => ?_)
+      (fun _ _ _ _ same => ZMod.val_injective p same) (fun index member => ?_)
+    · have refused := (Finset.mem_filter.mp member).2
+      unfold lowBitsRejecting at refused
+      split at refused
+      · exact absurd refused (by simp)
+      · rename_i above
+        exact Finset.mem_Ico.mpr ⟨Nat.le_of_not_lt above, ZMod.val_lt element⟩
+    · obtain ⟨lower, upper⟩ := Finset.mem_Ico.mp member
+      refine ⟨(index : ZMod p), Finset.mem_filter.mpr ⟨Finset.mem_univ _, ?_⟩, ?_⟩
+      · unfold lowBitsRejecting
+        simp [ZMod.val_natCast_of_lt upper, Nat.not_lt.mpr lower]
+      · exact ZMod.val_natCast_of_lt upper
+  rw [counted, Nat.card_Ico, Nat.mod_eq_sub_mul_div]
+
 end Residues
 
 section Products
@@ -572,6 +599,25 @@ theorem koalaBear_excess21_lt : (2097151 : ENNReal) / 2130706433 < 1 / 1016 := b
       (ENNReal.div_ne_top (by norm_num) (by norm_num))]
   simp only [ENNReal.toReal_div, ENNReal.toReal_one, ENNReal.toReal_ofNat]
   norm_num
+
+/-- KoalaBear masked to between 1 and 24 bits with refusal refuses only `p - 1`,
+with probability `1 / p`. -/
+theorem koalaBear_lowBitsRejecting_refuses (bits : ℕ) (positive : 0 < bits)
+    (small : bits ≤ 24) :
+    Pr{let element ← $ᵗ ZMod koalaBear}[lowBitsRejecting koalaBear bits element = none] =
+      1 / koalaBear := by
+  rw [prEvent_lowBitsRejecting_refuses]
+  congr 2
+  have split : 2 ^ 24 = 2 ^ bits * 2 ^ (24 - bits) := by
+    rw [← Nat.pow_add, Nat.add_sub_cancel' small]
+  have multiple : koalaBear = 2 ^ bits * (127 * 2 ^ (24 - bits)) + 1 := by
+    have := koalaBear_sub_one
+    rw [split] at this
+    have atLeast : 1 ≤ koalaBear := NeZero.pos koalaBear
+    rw [Nat.mul_left_comm, ← this]
+    omega
+  rw [multiple, Nat.mul_add_mod, Nat.mod_eq_of_lt (Nat.one_lt_two_pow_iff.mpr (by omega)),
+    Nat.cast_one]
 
 end KoalaBear
 

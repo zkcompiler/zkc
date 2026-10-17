@@ -176,7 +176,9 @@ with ideal-law error `ε` and a realized decoder has decoded-law error
   of uniform bit strings are of this kind.
 - **Exact with refusal.** Masking a residue modulo `p` to `bits` bits below the
   largest multiple of `2 ^ bits` and refusing above it (`lowBitsRejecting`) has
-  factor one on its successful values (`lowBitsRejecting_realized`).
+  factor one on its successful values (`lowBitsRejecting_realized`); it refuses
+  with probability `(p mod 2 ^ bits) / p` (`prEvent_lowBitsRejecting_refuses`),
+  `1 / p` for KoalaBear at 1 to 24 bits (`koalaBear_lowBitsRejecting_refuses`).
 - **Point ratio.** If every value has probability at most `(1 + η) / |R|`, the
   factor is `1 + η` (`PointBound.dominated`, `Dominated.realized`). Masking a
   uniform residue modulo `p` to `bits` bits gives each value at most
