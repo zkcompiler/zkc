@@ -3,13 +3,14 @@
 //! scalar types, and against a reference model written from the scheme's
 //! definition in docs/spec/domains/oracles.md. The reference makes every
 //! permutation call explicit: one call per absorbed leaf block, one per
-//! compression. These are deterministic agreement checks with the pinned
-//! upstream layout; they establish nothing about collision resistance,
-//! binding or extraction.
+//! compression. Quartic-extension rows are compared with Plonky3's
+//! `ExtensionMmcs` over the same scalar tree. These are deterministic
+//! agreement checks with the pinned upstream layout; they establish nothing
+//! about collision resistance, binding or extraction.
 #[path = "domains/support.rs"]
 mod support;
 
-use p3_commit::Mmcs;
+use p3_commit::{ExtensionMmcs, Mmcs};
 use p3_field::{PrimeCharacteristicRing, PrimeField32};
 use p3_koala_bear::{KoalaBear, Poseidon2KoalaBear, default_koalabear_poseidon2_16};
 use p3_matrix::{Dimensions, dense::RowMajorMatrix};
@@ -17,7 +18,7 @@ use p3_merkle_tree::{MerkleTreeMmcs, PrunedMerklePaths};
 use p3_symmetric::{PaddingFreeSponge, Permutation, TruncatedPermutation};
 use std::collections::BTreeSet;
 use support::{backend, one};
-use zkc_backends::{Policy, Value};
+use zkc_backends::{KoalaBearExt4, Policy, Value};
 use zkc_runtime::interactive::{OperationBinding, Value as RuntimeValue};
 
 type Perm = Poseidon2KoalaBear<16>;
@@ -33,6 +34,8 @@ type Digest = [u32; 8];
 /// A tampering class: its name, the supplied proof digests, rows and root.
 type Tampered = (&'static str, Vec<Digest>, Vec<Vec<u32>>, Digest);
 const SCHEME: &str = "rows.merkle-poseidon2-16.koala-bear/0";
+const QUARTIC: &str = "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0";
+type UpstreamQuartic = ExtensionMmcs<KoalaBear, KoalaBearExt4, Upstream>;
 
 fn upstream() -> Upstream {
     Upstream::new(
@@ -127,15 +130,18 @@ fn words(digests: &[[KoalaBear; 8]]) -> Vec<Digest> {
         .map(|d| d.map(|x| x.as_canonical_u32()))
         .collect()
 }
-fn binding(name: &str) -> OperationBinding {
+fn binding(scheme: &str, name: &str) -> OperationBinding {
     OperationBinding {
         contract: name.into(),
-        arguments: vec![SCHEME.into()],
+        arguments: vec![scheme.into()],
         implementation: format!("plonky3/{name}"),
     }
 }
+fn kernel_in(scheme: &str, name: &str, args: Vec<Value>) -> Result<Vec<Value>, String> {
+    one(backend(Policy::default()), binding(scheme, name), &[], args).0
+}
 fn kernel(name: &str, args: Vec<Value>) -> Result<Vec<Value>, String> {
-    one(backend(Policy::default()), binding(name), &[], args).0
+    kernel_in(SCHEME, name, args)
 }
 fn vector(values: &[u32]) -> Value {
     Value::KoalaBearVector(
@@ -145,6 +151,12 @@ fn vector(values: &[u32]) -> Value {
             .collect::<Vec<_>>()
             .into(),
     )
+}
+fn quartic(coordinates: [u32; 4]) -> KoalaBearExt4 {
+    KoalaBearExt4::from(coordinates.map(KoalaBear::new))
+}
+fn quartic_vector(values: &[KoalaBearExt4]) -> Value {
+    Value::koala_bear_ext4_vector(values, &Policy::default()).unwrap()
 }
 fn indices(values: &[usize]) -> Value {
     Value::Indices(values.iter().map(|x| *x as u64).collect::<Vec<_>>().into())
@@ -381,6 +393,122 @@ fn committed_scheme(value: &Value) -> zkc_backends::merkle::Scheme {
 }
 
 #[test]
+fn quartic_rows_hash_their_ascending_base_coordinates() {
+    let upstream = UpstreamQuartic::new(upstream());
+    for (width, height, queries) in [
+        (1, 1, vec![0]),
+        (2, 5, vec![4, 0, 2, 2]),
+        (3, 16, vec![15, 1, 2, 9]),
+        (5, 13, (0..13).rev().collect::<Vec<_>>()),
+    ] {
+        let table: Vec<[u32; 4]> = (0..width * height)
+            .map(|i| {
+                std::array::from_fn(|j| {
+                    ((4 * i + j) as u32).wrapping_mul(2_654_435_761) % 2_130_706_433
+                })
+            })
+            .collect();
+        let values: Vec<KoalaBearExt4> = table.iter().copied().map(quartic).collect();
+        // Reference: a row of w extension elements is the base row of 4w
+        // coordinates, each element contributing c0, c1, c2, c3 in order.
+        let rows: Vec<Vec<u32>> = table
+            .chunks(width)
+            .map(|row| row.iter().flatten().copied().collect())
+            .collect();
+        let mut reference = Reference { calls: 0 };
+        let layers = reference.layers(&rows);
+        let root = *layers.last().unwrap().first().unwrap();
+        let frontier = Reference::frontier(&layers, &queries);
+        // Upstream extension adapter over the scalar tree.
+        let (cap, data) = upstream.commit(vec![RowMajorMatrix::new(values.clone(), width)]);
+        let (opened, pruned) = upstream.open_multi_batch(&queries, &data);
+        assert_eq!(words(cap.roots()), [root]);
+        assert_eq!(words(&pruned.sibling_hashes), frontier);
+        // Kernels.
+        let committed = kernel_in(
+            QUARTIC,
+            "oracle.commit",
+            vec![quartic_vector(&values), Value::Index(width as u64)],
+        )
+        .unwrap();
+        assert_eq!(digest_bytes(&committed[0]), bytes(&[root]));
+        let opening = kernel_in(
+            QUARTIC,
+            "oracle.open_many",
+            vec![committed[1].clone(), indices(&queries)],
+        )
+        .unwrap();
+        let expected: Vec<KoalaBearExt4> = queries
+            .iter()
+            .flat_map(|q| values[q * width..(q + 1) * width].to_vec())
+            .collect();
+        assert!(matches!(&opening[0], Value::KoalaBearExt4Vector(v) if v[..] == expected[..]));
+        assert_eq!(
+            opened.iter().flat_map(|o| o[0].clone()).collect::<Vec<_>>(),
+            expected
+        );
+        assert_eq!(digest_bytes(&opening[1]), bytes(&frontier));
+        let check = |rows: &[KoalaBearExt4], proof: Value| {
+            kernel_in(
+                QUARTIC,
+                "oracle.check_many",
+                vec![
+                    committed[0].clone(),
+                    Value::Index(width as u64),
+                    Value::Index(height as u64),
+                    indices(&queries),
+                    quartic_vector(rows),
+                    proof,
+                ],
+            )
+            .unwrap()
+        };
+        assert!(matches!(
+            check(&expected, opening[1].clone())[..],
+            [Value::Bool(true)]
+        ));
+        let dims = [Dimensions { width, height }];
+        let upstream_verify = |rows: &[KoalaBearExt4]| {
+            let opened: Vec<Vec<Vec<KoalaBearExt4>>> =
+                rows.chunks(width).map(|r| vec![r.to_vec()]).collect();
+            upstream
+                .verify_multi_batch(&cap, &dims, &queries, &opened, &pruned)
+                .is_ok()
+        };
+        assert!(upstream_verify(&expected));
+        // Changing any one coordinate of an opened element is rejected by both.
+        for coordinate in 0..4 {
+            let mut changed = expected.clone();
+            let mut parts = table[queries[0] * width];
+            parts[coordinate] = (parts[coordinate] + 1) % 2_130_706_433;
+            changed[0] = quartic(parts);
+            assert!(matches!(
+                check(&changed, opening[1].clone())[..],
+                [Value::Bool(false)]
+            ));
+            assert!(!upstream_verify(&changed));
+        }
+        // The same table flattened into base rows of width 4w commits to the
+        // same root and opens with the same pruned proof.
+        let flat: Vec<u32> = table.iter().flatten().copied().collect();
+        let base = kernel(
+            "oracle.commit",
+            vec![vector(&flat), Value::Index(4 * width as u64)],
+        )
+        .unwrap();
+        assert_eq!(digest_bytes(&base[0]), digest_bytes(&committed[0]));
+        let base_opening =
+            kernel("oracle.open_many", vec![base[1].clone(), indices(&queries)]).unwrap();
+        assert_eq!(digest_bytes(&base_opening[1]), digest_bytes(&opening[1]));
+        // Roots and proofs are scheme-bound carriers: equal bytes under the
+        // base scheme are a different physical type, which an Entry or a
+        // quartic verifier port does not admit.
+        assert_ne!(base[0].physical_type(), committed[0].physical_type());
+        assert_ne!(base_opening[1].physical_type(), opening[1].physical_type());
+    }
+}
+
+#[test]
 fn reference_hash_calls_match_the_documented_counts() {
     // A table of height h and width w costs h * ceil(w/8) leaf calls and one
     // call per compressed pair on every layer.
@@ -439,13 +567,26 @@ fn empty_position_lists_refuse_instead_of_accepting_vacuously() {
 #[test]
 fn native_frames_carry_canonical_digest_words_only() {
     let b = backend(Policy::default());
-    let committed = kernel("oracle.commit", vec![vector(&[5, 6, 7]), Value::Index(1)]).unwrap();
-    let opening = kernel(
-        "oracle.open_many",
-        vec![committed[1].clone(), indices(&[2, 0])],
-    )
-    .unwrap();
-    for (value, tag, prefix) in [(&committed[0], 71, 6), (&opening[1], 72, 10)] {
+    let base = vector(&[5, 6, 7]);
+    let extension = quartic_vector(&[
+        quartic([5, 0, 1, 2]),
+        quartic([6, 7, 8, 9]),
+        quartic([3; 4]),
+    ]);
+    for (scheme, values) in [(SCHEME, base), (QUARTIC, extension)] {
+        let committed = kernel_in(scheme, "oracle.commit", vec![values, Value::Index(1)]).unwrap();
+        let opening = kernel_in(
+            scheme,
+            "oracle.open_many",
+            vec![committed[1].clone(), indices(&[2, 0])],
+        )
+        .unwrap();
+        frames(&b, &committed[0], &opening[1]);
+    }
+}
+
+fn frames(b: &zkc_backends::NativeBackend, root: &Value, proof: &Value) {
+    for (value, tag, prefix) in [(root, 71, 6), (proof, 72, 10)] {
         assert!(value.physical_type().logical().is_native_message_data());
         let frame = b.encode_native_value(value).unwrap();
         assert_eq!(&frame[..6], [b'Z', b'K', b'C', b'V', 0, tag]);
@@ -454,6 +595,7 @@ fn native_frames_carry_canonical_digest_words_only() {
             .decode_native_value(&value.physical_type(), &frame)
             .unwrap();
         assert_eq!(digest_bytes(&back), digest_bytes(value));
+        assert_eq!(back.physical_type(), value.physical_type());
         // A word at the modulus is not canonical; a truncated frame is not whole.
         let mut noncanonical = frame.clone();
         noncanonical[prefix..prefix + 4].copy_from_slice(&2_130_706_433u32.to_le_bytes());

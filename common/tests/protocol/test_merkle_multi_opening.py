@@ -2,10 +2,11 @@
 
 The prover commits a table, sends the root, receives a challenge, opens several
 public positions with one pruned proof and sends the rows and the proof; the
-verifier checks them with `oracle.check_many`. The proof's digest count is
-compared with a frontier computed here from the positions and the height
-alone. These runs check execution, framing and refusal agreement; they make
-no binding or extraction claim.
+verifier checks them with `oracle.check_many`. Both installed instances run,
+over `koala-bear` rows and over quartic-extension rows. The proof's digest
+count is compared with a frontier computed here from the positions and the
+height alone. These runs check execution, framing and refusal agreement; they
+make no binding or extraction claim.
 """
 import hashlib
 
@@ -18,8 +19,8 @@ SOURCE = '''module sample;
 use zkc::oracle as oracle;
 use zkc::indices::{Indices};
 domain E = field("koala-bear.ext8-binomial3");
-domain F = field("koala-bear");
-domain Rows = commitment("rows.merkle-poseidon2-16.koala-bear/0");
+domain F = field("@FIELD@");
+domain Rows = commitment("rows.merkle-poseidon2-16.@FIELD@/0");
 type Vector<T: Field> = builtin("vector", T);
 fn table(size: index) -> Vector<F> { return kernel<F>("vector.geometric", 3, size); }
 fn rows(size: index, width: index) -> index { return kernel("index.div", size, width); }
@@ -43,6 +44,8 @@ proof Demo=Open {
 }
 '''
 
+FIELDS = ['koala-bear', 'koala-bear.ext4-binomial3']
+
 
 def frontier(height, positions):
     """Digests a pruned proof sends: siblings of the queried nodes' parents
@@ -64,10 +67,10 @@ def proof_frame(proof):
 
 
 class Case:
-    def __init__(self, toolchain, journal, directory):
+    def __init__(self, toolchain, journal, directory, field):
         self.journal, self.directory, self.runtime = journal, directory, toolchain.runtime
         source = directory / 'opening.zkc'
-        source.write_text(SOURCE)
+        source.write_text(SOURCE.replace('@FIELD@', field))
         self.package = directory / 'opening.zkpkg'
         report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                                f'--module=sample={source}', 'sample::Demo',
@@ -95,6 +98,7 @@ class Case:
                                   f'--proof={proof}'], refuses=refuses)
 
 
+@pytest.mark.parametrize('field', FIELDS)
 @pytest.mark.parametrize('width,height,positions', [
     (1, 1, [0]),
     (3, 16, [5]),
@@ -102,8 +106,9 @@ class Case:
     (16, 64, [63, 1, 2, 40, 41, 17]),
     (2, 32, list(range(32))),
 ])
-def test_multi_opening_proves_and_verifies(toolchain, journal, directory, width, height, positions):
-    case = Case(toolchain, journal, directory)
+def test_multi_opening_proves_and_verifies(toolchain, journal, directory, field, width, height,
+                                           positions):
+    case = Case(toolchain, journal, directory, field)
     produced, proof = case.prove(width * height, width, positions)
     assert produced['status'] == 'produced'
     bytes_ = proof.read_bytes()
@@ -121,8 +126,9 @@ def test_multi_opening_proves_and_verifies(toolchain, journal, directory, width,
         assert report['status'] != 'accepted'
 
 
-def test_positions_are_checked_before_opening(toolchain, journal, directory):
-    case = Case(toolchain, journal, directory)
+@pytest.mark.parametrize('field', FIELDS)
+def test_positions_are_checked_before_opening(toolchain, journal, directory, field):
+    case = Case(toolchain, journal, directory, field)
     report, proof = case.prove(8, 2, [], refuses=True)
     assert 'oracle-positions' in str(report) and not proof.exists()
     report, proof = case.prove(8, 2, [4], refuses=True)

@@ -114,7 +114,9 @@ inline bool nativeMessageData(const BoundType &type) {
            type.identity == "rows.merkle-keccak256.koala-bear/0" ||
            type.identity ==
                "rows.merkle-keccak256.koala-bear.ext8-binomial3/0" ||
-           type.identity == "rows.merkle-poseidon2-16.koala-bear/0"));
+           type.identity == "rows.merkle-poseidon2-16.koala-bear/0" ||
+           type.identity ==
+               "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"));
 }
 // Frames introduced by the structured message profile, including standalone
 // numeric collections. Existing scalar and fixed-array frames keep their IDs.

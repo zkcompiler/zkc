@@ -104,8 +104,10 @@ rows and columns occupy offsets 6 and 10. Each coordinate/count is `u32`.
 
 Digest-generic Merkle frames carry digests of the scheme's width `w` in its
 canonical encoding: `w = 32` and eight canonical four-byte little-endian words
-for `rows.merkle-poseidon2-16.koala-bear/0`. Decoding refuses a noncanonical
-word. A proof frame holds a single path or a pruned multi-opening proof in the
+for both [Poseidon2 instances](../domains/oracles.md#poseidon2-instances); the
+frame does not name the scheme, which the declared type supplies. Decoding
+refuses a noncanonical word. A proof frame holds a single path or a pruned
+multi-opening proof in the
 [documented order](../domains/oracles.md#openings-and-the-pruned-proof); its
 count is bounded by the element ceiling, not by a path depth.
 

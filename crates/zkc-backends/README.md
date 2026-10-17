@@ -49,9 +49,11 @@ Bit reversal of vectors and table rows is a positional kernel of every field
 family. `merkle` installs digest-generic row commitments: an `Instance` names a
 leaf hash, compression, element type and canonical digest encoding over a
 Plonky3 `Mmcs`, and every carrier holds digests as fixed-width bytes. Its
-Poseidon2 instance adds pruned multi-openings; `merkle_differential` compares
-roots, rows and pruned proofs with Plonky3's `MerkleTreeMmcs` and with a
-reference model that makes each permutation call explicit. The `poseidon2_permutation` test compares the permutation with the
+Poseidon2 instances, over `koala-bear` rows and over quartic-extension rows
+flattened to base coordinates, add pruned multi-openings; `merkle_differential`
+compares roots, rows and pruned proofs with Plonky3's `MerkleTreeMmcs` and
+`ExtensionMmcs` and with a reference model that makes each permutation call
+explicit. The `poseidon2_permutation` test compares the permutation with the
 upstream known answer, p3-poseidon2's generic round functions and an integer
 implementation.
 

@@ -40,6 +40,7 @@ constexpr ProviderDomain providerDomains[] = {
     {"plonky3", "rows.merkle-keccak256.koala-bear/0"},
     {"plonky3", "rows.merkle-keccak256.koala-bear.ext8-binomial3/0"},
     {"plonky3", "rows.merkle-poseidon2-16.koala-bear/0"},
+    {"plonky3", "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"},
     {"spongefish", "spongefish0.8.0.keccak.bls12-381.fr64be/0"}};
 
 // These finite rows are the implementation inventory, not a walk over logical

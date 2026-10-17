@@ -309,6 +309,8 @@ const DomainCatalog &installedDomains() {
     // Digest-generic Merkle schemes: one instance per leaf hash, compression
     // and value field, sharing carriers, codecs and operations.
     const std::string poseidonRows = "rows.merkle-poseidon2-16.koala-bear/0";
+    const std::string poseidonQuarticRows =
+        "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0";
     auto result = DomainCatalog::create(
         {{extensionTranscript,
           "Transcript",
@@ -322,6 +324,10 @@ const DomainCatalog &installedDomains() {
          {poseidonRows,
           "Commitment",
           {{"ValueField", koala}},
+          {"VectorCommitment", "MultiOpening"}},
+         {poseidonQuarticRows,
+          "Commitment",
+          {{"ValueField", quartic}},
           {"VectorCommitment", "MultiOpening"}},
          {extension,
           "Field",
@@ -471,7 +477,12 @@ const DomainCatalog &installedDomains() {
          {"proof", poseidonRows},
          {"opening_state", poseidonRows},
          {"commitments", poseidonRows},
-         {"opening_states", poseidonRows}},
+         {"opening_states", poseidonRows},
+         {"commitment", poseidonQuarticRows},
+         {"proof", poseidonQuarticRows},
+         {"opening_state", poseidonQuarticRows},
+         {"commitments", poseidonQuarticRows},
+         {"opening_states", poseidonQuarticRows}},
         {{"zkcv.commitment.rows-merkle-keccak256.koala-bear/0", "commitment",
           rowBase},
          {"zkcv.proof.rows-merkle-keccak256.koala-bear/0", "proof", rowBase},
@@ -489,6 +500,14 @@ const DomainCatalog &installedDomains() {
           poseidonRows},
          {"zkcv.commitments.rows-merkle-poseidon2-16.koala-bear/0",
           "commitments", poseidonRows},
+         {"zkcv.commitment.rows-merkle-poseidon2-16.koala-bear.ext4-binomial3/"
+          "0",
+          "commitment", poseidonQuarticRows},
+         {"zkcv.proof.rows-merkle-poseidon2-16.koala-bear.ext4-binomial3/0",
+          "proof", poseidonQuarticRows},
+         {"zkcv.commitments.rows-merkle-poseidon2-16.koala-bear.ext4-binomial3/"
+          "0",
+          "commitments", poseidonQuarticRows},
          {"zkcv.field.koala-bear.ext8-binomial3/0", "field", extension},
          {"zkcv.vector.koala-bear.ext8-binomial3/0", "vector", extension},
          {"zkcv.polynomial.koala-bear.ext8-binomial3/0", "polynomial",
@@ -557,6 +576,15 @@ const DomainCatalog &installedDomains() {
          {"plonky3.merkle-tree/0", "opening_state", poseidonRows, true, ""},
          {"plonky3.merkle-digests/0", "commitments", poseidonRows, true, ""},
          {"plonky3.merkle-trees/0", "opening_states", poseidonRows, true, ""},
+         {"plonky3.merkle-digest/0", "commitment", poseidonQuarticRows, true,
+          ""},
+         {"plonky3.merkle-proof/0", "proof", poseidonQuarticRows, true, ""},
+         {"plonky3.merkle-tree/0", "opening_state", poseidonQuarticRows, true,
+          ""},
+         {"plonky3.merkle-digests/0", "commitments", poseidonQuarticRows, true,
+          ""},
+         {"plonky3.merkle-trees/0", "opening_states", poseidonQuarticRows, true,
+          ""},
          {"plonky3.koala-bear.ext8-binomial3/0", "field", extension, true, ""},
          {"plonky3.koala-bear.ext8-binomial3-vector/0", "vector", extension,
           true, ""},
@@ -647,7 +675,8 @@ const DomainCatalog &installedDomains() {
          {extension, "plonky3"},     {quartic, "plonky3"},
          {extensionTranscript, "plonky3"},
          {rowBase, "plonky3"},       {rowExtension, "plonky3"},
-         {poseidonRows, "plonky3"}});
+         {poseidonRows, "plonky3"},
+         {poseidonQuarticRows, "plonky3"}});
     if (!result)
       report_fatal_error(Twine("invalid installed domain catalog: ") +
                              toString(result.takeError()),

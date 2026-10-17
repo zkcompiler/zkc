@@ -24,6 +24,7 @@ pub enum Identity {
     MerkleKoalaBear,
     MerkleKoalaBearExt8,
     MerklePoseidon2KoalaBear,
+    MerklePoseidon2KoalaBearExt4,
     Merlin3KoalaBearExt8,
     Merlin3Fr64Be,
     Spongefish080KeccakFr64Be,
@@ -100,7 +101,7 @@ impl Identity {
             Self::KoalaBearExt8 | Self::MerkleKoalaBearExt8 | Self::Merlin3KoalaBearExt8 => {
                 Some(Self::KoalaBearExt8)
             }
-            Self::KoalaBearExt4 => Some(Self::KoalaBearExt4),
+            Self::KoalaBearExt4 | Self::MerklePoseidon2KoalaBearExt4 => Some(Self::KoalaBearExt4),
             Self::None => None,
         }
     }
@@ -108,13 +109,19 @@ impl Identity {
     pub fn is_row_commitment(self) -> bool {
         matches!(
             self,
-            Self::MerkleKoalaBear | Self::MerkleKoalaBearExt8 | Self::MerklePoseidon2KoalaBear
+            Self::MerkleKoalaBear
+                | Self::MerkleKoalaBearExt8
+                | Self::MerklePoseidon2KoalaBear
+                | Self::MerklePoseidon2KoalaBearExt4
         )
     }
     /// A row commitment whose installed scheme opens several positions with
     /// one pruned proof.
     pub fn has_multi_opening(self) -> bool {
-        self == Self::MerklePoseidon2KoalaBear
+        matches!(
+            self,
+            Self::MerklePoseidon2KoalaBear | Self::MerklePoseidon2KoalaBearExt4
+        )
     }
     /// A nominal extension has an explicit base; other fields have no embedding contract.
     pub fn base_field(self) -> Option<Self> {
@@ -181,6 +188,9 @@ impl Identity {
             Self::MerkleKoalaBear => "rows.merkle-keccak256.koala-bear/0",
             Self::MerkleKoalaBearExt8 => "rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
             Self::MerklePoseidon2KoalaBear => "rows.merkle-poseidon2-16.koala-bear/0",
+            Self::MerklePoseidon2KoalaBearExt4 => {
+                "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"
+            }
             Self::Ristretto255Scalar => "ristretto255.scalar",
             Self::Ristretto255Group => "ristretto255.group",
             Self::Edwards25519Prime => "edwards25519.prime",
@@ -203,6 +213,7 @@ impl Identity {
             Self::MerkleKoalaBear,
             Self::MerkleKoalaBearExt8,
             Self::MerklePoseidon2KoalaBear,
+            Self::MerklePoseidon2KoalaBearExt4,
             Self::Merlin3KoalaBearExt8,
             Self::Merlin3Fr64Be,
             Self::Spongefish080KeccakFr64Be,
@@ -255,6 +266,8 @@ pub(crate) fn valid_static_argument(name: &str) -> bool {
         Identity::MerkleKoalaBearExt8.name()
     } else if nominal == "rows-merkle-poseidon2-16.koala-bear" {
         Identity::MerklePoseidon2KoalaBear.name()
+    } else if nominal == "rows-merkle-poseidon2-16.koala-bear.ext4-binomial3" {
+        Identity::MerklePoseidon2KoalaBearExt4.name()
     } else {
         nominal
     };
@@ -364,6 +377,9 @@ impl LogicalType {
             Identity::MultilinearKzgBls12381 => ".multilinear-kzg.bls12-381".into(),
             Identity::MerkleKoalaBear => ".rows-merkle-keccak256.koala-bear".into(),
             Identity::MerklePoseidon2KoalaBear => ".rows-merkle-poseidon2-16.koala-bear".into(),
+            Identity::MerklePoseidon2KoalaBearExt4 => {
+                ".rows-merkle-poseidon2-16.koala-bear.ext4-binomial3".into()
+            }
             Identity::MerkleKoalaBearExt8 => {
                 ".rows-merkle-keccak256.koala-bear.ext8-binomial3".into()
             }
@@ -445,6 +461,7 @@ impl LogicalType {
                         | Identity::MerkleKoalaBear
                         | Identity::MerkleKoalaBearExt8
                         | Identity::MerklePoseidon2KoalaBear
+                        | Identity::MerklePoseidon2KoalaBearExt4
                 )
             )
     }
@@ -937,7 +954,7 @@ impl PhysicalType {
             },
             // Digest-generic Merkle schemes: each digest is the scheme's
             // fixed-width byte encoding, whatever its hash.
-            (kind, I::MerklePoseidon2KoalaBear) => match kind {
+            (kind, I::MerklePoseidon2KoalaBear | I::MerklePoseidon2KoalaBearExt4) => match kind {
                 T::Commitment => R::MerkleDigest,
                 T::Proof => R::MerkleProof,
                 T::OpeningState => R::MerkleTree,

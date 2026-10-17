@@ -128,9 +128,11 @@ exactly `|S|` leaf-hash computations and one compression per parent node
 visited; these are the hash calls an extraction argument over this scheme
 observes. The Boolean is not acceptance until the authored verifier consumes it.
 
-### Poseidon2 instance
+### Poseidon2 instances
 
-`rows.merkle-poseidon2-16.koala-bear/0` commits `koala-bear` rows and holds
+`rows.merkle-poseidon2-16.koala-bear/0` commits `koala-bear` rows and
+`rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0` commits rows of the
+[quartic extension](values.md#nominal-field-extensions); both hold
 `VectorCommitment` and `MultiOpening`. `P` is the
 [width-16 Poseidon2 permutation](permutations.md) with Plonky3 0.8.0's default
 KoalaBear parameters, and a digest is eight `koala-bear` elements, encoded as
@@ -143,13 +145,21 @@ eight canonical four-byte little-endian words (`w = 32`).
   `ceil(m/8)` permutation calls. There is no length padding: the verifier's
   width fixes the input length.
 - `C(a, b)`: apply `P` once to `a || b` and keep the first eight elements.
+- A quartic row `(e_1 … e_m)` is hashed as the base row of `4m` coordinates
+  `(c_{1,0}, c_{1,1}, c_{1,2}, c_{1,3}, …, c_{m,3})`, where
+  `e_k = c_{k,0} + c_{k,1} X + c_{k,2} X^2 + c_{k,3} X^3`. The tree, digests,
+  proof and verifier are those of the base instance over that flattened table
+  of width `4m`, so both instances give the same root and proof for the same
+  coordinates; the scheme identity, not the root, says which value field the
+  rows belong to.
 
 These are exactly Plonky3 0.8.0's `PaddingFreeSponge<Perm16, 16, 8, 8>` and
 `TruncatedPermutation<Perm16, 2, 8, 16>` in `MerkleTreeMmcs` with cap height
-zero, and the proof is its `PrunedMerklePaths` sibling list. Table, digest and
-proof limits are the oracle limits above; these kernels charge no external
-work. Hashing and the tree are delegated to that pinned implementation, and the
-adapter checks shape, positions, widths and digest encodings before calling it.
+zero, with `ExtensionMmcs` for quartic rows, and the proof is its
+`PrunedMerklePaths` sibling list. Table, digest and proof limits are the oracle
+limits above; these kernels charge no external work. Hashing and the tree are
+delegated to that pinned implementation, and the adapter checks shape,
+positions, widths and digest encodings before calling it.
 
 ## Publication, queries and acceptance
 

@@ -118,13 +118,15 @@ def required_atomic_types():
         "rows.merkle-keccak256.koala-bear/0": "commitment proof opening_state commitments opening_states",
         "rows.merkle-keccak256.koala-bear.ext8-binomial3/0": "commitment proof opening_state commitments opening_states",
         "rows.merkle-poseidon2-16.koala-bear/0": "commitment proof opening_state commitments opening_states",
+        "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0":
+            "commitment proof opening_state commitments opening_states",
         "merlin3.bls12-381.fr64be/0": "transcript",
         "merlin3.ristretto255.scalar64le/0": "transcript",
         "spongefish0.8.0.keccak.bls12-381.fr64be/0": "transcript",
         "merlin3.koala-bear.ext8-binomial3.rejection31le/0": "transcript",
     }
     result = {(kind, domain) for domain, kinds in families.items() for kind in kinds.split()}
-    assert len(result) == 75
+    assert len(result) == 80
     return result
 
 
@@ -277,7 +279,9 @@ def candidates(inventory):
                         "opening_state:rows.merkle-keccak256.koala-bear/0",
                         "commitments:rows.merkle-keccak256.koala-bear/0",
                         "commitment:rows.merkle-poseidon2-16.koala-bear/0",
-                        "proof:rows.merkle-poseidon2-16.koala-bear/0"]]
+                        "proof:rows.merkle-poseidon2-16.koala-bear/0",
+                        "commitment:rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0",
+                        "proof:rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"]]
         else:
             sort = {"field": "Field", "fixed": "Field", "array": "Field", "group": "Group",
                     "commitment": "Commitment", "transcript": "Transcript"}[group]
@@ -537,6 +541,10 @@ def test_explicit_semantic_witnesses(drivers, directory):
         ("oracle.open_many", ["rows.merkle-poseidon2-16.koala-bear/0"],
          ["opening_state:rows.merkle-poseidon2-16.koala-bear/0", "indices"],
          ["vector:koala-bear", "proof:rows.merkle-poseidon2-16.koala-bear/0"]),
+        ("oracle.check_many", ["rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"],
+         ["commitment:rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0", "index", "index",
+          "indices", "vector:koala-bear.ext4-binomial3",
+          "proof:rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"], ["bool"]),
         ("transcript.native.indexed.challenge", ["merlin3.bls12-381.fr64be/0"],
          ["transcript:merlin3.bls12-381.fr64be/0", "indices"],
          ["field:bls12-381.fr", "transcript:merlin3.bls12-381.fr64be/0"]),

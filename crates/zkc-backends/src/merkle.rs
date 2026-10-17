@@ -222,16 +222,19 @@ pub fn verify<I: Instance>(
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Scheme {
     Poseidon2KoalaBear,
+    Poseidon2KoalaBearExt4,
 }
 impl Scheme {
     pub fn identity(self) -> Identity {
         match self {
             Self::Poseidon2KoalaBear => Identity::MerklePoseidon2KoalaBear,
+            Self::Poseidon2KoalaBearExt4 => Identity::MerklePoseidon2KoalaBearExt4,
         }
     }
     pub fn from_identity(identity: Identity) -> Option<Self> {
         match identity {
             Identity::MerklePoseidon2KoalaBear => Some(Self::Poseidon2KoalaBear),
+            Identity::MerklePoseidon2KoalaBearExt4 => Some(Self::Poseidon2KoalaBearExt4),
             _ => None,
         }
     }
@@ -245,22 +248,26 @@ impl Scheme {
     pub fn field(self) -> Identity {
         match self {
             Self::Poseidon2KoalaBear => Identity::KoalaBear,
+            Self::Poseidon2KoalaBearExt4 => Identity::KoalaBearExt4,
         }
     }
     pub fn digest_bytes(self) -> usize {
         match self {
             Self::Poseidon2KoalaBear => poseidon2::Base::DIGEST_BYTES,
+            Self::Poseidon2KoalaBearExt4 => poseidon2::Quartic::DIGEST_BYTES,
         }
     }
     fn element_bytes(self) -> usize {
         match self {
             Self::Poseidon2KoalaBear => std::mem::size_of::<crate::KoalaBear>(),
+            Self::Poseidon2KoalaBearExt4 => std::mem::size_of::<crate::KoalaBearExt4>(),
         }
     }
     /// Whether the bytes are whole digests in this scheme's canonical encoding.
     pub fn valid_digests(self, bytes: &[u8]) -> bool {
         match self {
             Self::Poseidon2KoalaBear => poseidon2::Base::valid_digests(bytes),
+            Self::Poseidon2KoalaBearExt4 => poseidon2::Quartic::valid_digests(bytes),
         }
     }
     fn physical(self, kind: Type) -> Option<PhysicalType> {
@@ -276,21 +283,27 @@ impl Scheme {
 #[derive(Clone, Debug)]
 pub enum State {
     Poseidon2KoalaBear(Arc<Tree<poseidon2::Base>>),
+    Poseidon2KoalaBearExt4(Arc<Tree<poseidon2::Quartic>>),
 }
 impl State {
     pub fn scheme(&self) -> Scheme {
         match self {
             Self::Poseidon2KoalaBear(_) => Scheme::Poseidon2KoalaBear,
+            Self::Poseidon2KoalaBearExt4(_) => Scheme::Poseidon2KoalaBearExt4,
         }
     }
     pub fn shape(&self) -> Shape {
         match self {
             Self::Poseidon2KoalaBear(tree) => tree.shape(),
+            Self::Poseidon2KoalaBearExt4(tree) => tree.shape(),
         }
     }
     pub fn retained_bytes(&self) -> Result<usize> {
         match self {
             Self::Poseidon2KoalaBear(tree) => retained_bytes::<poseidon2::Base>(tree.shape()),
+            Self::Poseidon2KoalaBearExt4(tree) => {
+                retained_bytes::<poseidon2::Quartic>(tree.shape())
+            }
         }
         .ok_or_else(|| exhausted("oracle-byte-limit"))
     }
@@ -299,6 +312,7 @@ impl State {
         let bytes = self.retained_bytes()?;
         Ok(match self {
             Self::Poseidon2KoalaBear(tree) => Backing::of(tree, bytes),
+            Self::Poseidon2KoalaBearExt4(tree) => Backing::of(tree, bytes),
         })
     }
     /// Bytes `count` openings read: their rows and at most their full paths.
@@ -429,6 +443,13 @@ fn open_state(
                 Value::MerkleProof(scheme, proof.into()),
             ]
         }
+        State::Poseidon2KoalaBearExt4(tree) => {
+            let (rows, proof) = open(tree, at).map_err(failure)?;
+            vec![
+                Value::KoalaBearExt4Vector(rows.into()),
+                Value::MerkleProof(scheme, proof.into()),
+            ]
+        }
     })
 }
 
@@ -447,6 +468,9 @@ fn check_state(
     let result = match (scheme, rows) {
         (Scheme::Poseidon2KoalaBear, Value::KoalaBearVector(rows)) => {
             verify::<poseidon2::Base>(root, shape, at, rows, proof)
+        }
+        (Scheme::Poseidon2KoalaBearExt4, Value::KoalaBearExt4Vector(rows)) => {
+            verify::<poseidon2::Quartic>(root, shape, at, rows, proof)
         }
         _ => return Err(refused("oracle-operands")),
     };
@@ -492,6 +516,30 @@ pub(crate) fn apply(
             vec![
                 Value::MerkleDigest(scheme, root.into()),
                 Value::MerkleTree(State::Poseidon2KoalaBear(Arc::new(tree))),
+            ]
+        }
+        ("oracle.commit", [Value::KoalaBearExt4Vector(values), width])
+            if scheme == Scheme::Poseidon2KoalaBearExt4 =>
+        {
+            let width = index(width)?;
+            if width == 0 || !values.len().is_multiple_of(width) {
+                return Err(refused("oracle-shape"));
+            }
+            let shape = table_shape(width, values.len() / width, policy)?;
+            let bytes = retained_bytes::<poseidon2::Quartic>(shape)
+                .ok_or_else(|| exhausted("oracle-byte-limit"))?;
+            policy.output(
+                bytes
+                    .checked_add(size(1, digest_bytes)?)
+                    .ok_or_else(|| exhausted("size-overflow"))?,
+                available,
+            )?;
+            let (root, tree) =
+                commit::<poseidon2::Quartic>(values.to_vec(), shape, policy.max_value_bytes)
+                    .map_err(failure)?;
+            vec![
+                Value::MerkleDigest(scheme, root.into()),
+                Value::MerkleTree(State::Poseidon2KoalaBearExt4(Arc::new(tree))),
             ]
         }
         ("oracle.open", [Value::MerkleTree(state), at]) if state.scheme() == scheme => {
