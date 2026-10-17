@@ -1,0 +1,309 @@
+module gkr;
+
+use zkc::vector::{Vector, empty, append, sum, elements, length, split};
+use zkc::multilinear as multilinear;
+use zkc::multilinear::{Evaluation, fix_prefix};
+use zkc::indices::{divide, remainder};
+
+// Layered arithmetic circuits of uniform width. Every layer has 2^width gates;
+// layer 0 is the output layer and layer `layers` the input layer. Gate z of
+// layer i < layers adds or multiplies two gates x, y of layer i + 1, as recorded
+// by the wiring tables add_i(z, x, y) and mul_i(z, x, y) over MSB-first
+// coordinates (z, x, y). The tables of all layers are stacked into one table
+// whose leading `selector` coordinates are the MSB-first bits of the layer
+// index; blocks beyond the last layer are padding and are never read.
+
+// Pure field arithmetic used by the local helpers below. Native participant
+// functions keep scalar arithmetic in mathematical helpers.
+math fn zero<F: Field>() -> F { return 0; }
+math fn interpolate<F: Field>(low: F, high: F, r: F) -> F { return low + (high - low) * r; }
+math fn difference<F: Field>(left: F, right: F) -> F { return left - right; }
+math fn total<F: Field>(left: F, right: F) -> F { return left + right; }
+math fn slope<F: Field>(low: F, high: F, delta: F) -> F { return (high - low) * delta; }
+
+// The value of one gate polynomial term: add * (left + right) + mul * left * right.
+math fn gate_value<F: Field>(add: F, mul: F, left: F, right: F) -> F {
+  return add * (left + right) + mul * left * right;
+}
+
+// The coefficient of X^2 in gate(a0 + (a1 - a0) X, ..., r0 + (r1 - r0) X).
+math fn gate_quadratic<F: Field>(a0: F, a1: F, m0: F, m1: F, l0: F, l1: F, r0: F, r1: F) -> F {
+  let da = a1 - a0;
+  let dm = m1 - m0;
+  let dl = l1 - l0;
+  let dr = r1 - r0;
+  return da * (dl + dr) + dm * (dl * r0 + l0 * dr) + m0 * dl * dr;
+}
+
+math fn linear_coefficient<F: Field>(at_zero: F, at_one: F, quadratic: F) -> F {
+  return at_one - at_zero - quadratic;
+}
+
+math fn power_step<F: Field>(accumulated: F, power: F, coefficient: F, point: F) -> (F, F) {
+  return (accumulated + coefficient * power, power * point);
+}
+
+math fn power_start<F: Field>() -> (F, F) { return (0, 1); }
+
+fn power_of_two(exponent: index) -> index {
+  let mut value: index = 1;
+  for _ in 0..exponent { value = value * 2; }
+  return value;
+}
+
+// The block of a stacked table whose leading `bits` coordinates are the
+// MSB-first bits of `position`: the table restricted to those Boolean values.
+pub fn select_block<F: Field>(values: Vector<F>, position: index, bits: index) -> Vector<F> {
+  let mut block = values;
+  let mut remaining = bits;
+  for _ in 0..bits {
+    remaining = remaining - 1;
+    let bit = remainder(divide(position, power_of_two(remaining)), 2);
+    let halves = split(block);
+    block = if bit == 1 { halves.1 } else { halves.0 };
+  }
+  return block;
+}
+
+// The multilinear extension of a table at a point that fixes every variable.
+pub fn evaluate<F: Field>(values: Vector<F>, point: Vector<F>) -> F {
+  let table = multilinear::table(values, length(point), 1);
+  return sum(multilinear::values(fix_prefix(table, point)));
+}
+
+// The multilinear extension of a wiring block at (gate, left, right).
+pub fn evaluate_wiring<F: Field>(values: Vector<F>, gate: Vector<F>, left: Vector<F>,
+    right: Vector<F>) -> F {
+  let table = multilinear::table(values, length(gate) + length(left) + length(right), 1);
+  return sum(multilinear::values(fix_prefix(fix_prefix(fix_prefix(table, gate), left), right)));
+}
+
+// Coefficients are ordered from the constant term upward.
+pub fn evaluate_coefficients<F: Field>(coefficients: Vector<F>, point: F) -> F {
+  let state = zkc::finite::fold(elements(coefficients), power_start<F>(),
+    fn(current, coefficient) => power_step<F>(current.0, current.1, coefficient, point));
+  return state.0;
+}
+
+// The point (1 - t) start + t end of the line through start and end.
+pub fn line_point<F: Field>(start: Vector<F>, end: Vector<F>, t: F) -> Vector<F> {
+  return map interpolate(each start, each end, t);
+}
+
+// Prover helpers.
+
+fn element<F: Field>(values: Vector<F>, position: index) -> F {
+  let initial: (F, index) = (zero<F>(), 0);
+  let state = zkc::finite::fold(elements(values), initial,
+    fn(current, value) => (if current.1 == position { value } else { current.0 }, current.1 + 1));
+  return state.0;
+}
+
+fn element_after<F: Field>(values: Vector<F>, position: index) -> F {
+  return element(values, position + 1);
+}
+
+fn repeat_value<F: Field>(values: Vector<F>, value: F, count: index) -> Vector<F> {
+  let mut result = values;
+  for _ in 0..count { result = append(result, value); }
+  return result;
+}
+
+// f(x, y) = values[x] over MSB-first (x, y), with `count` values of y.
+fn replicate<F: Field>(values: Vector<F>, count: index) -> Vector<F> {
+  return zkc::finite::fold(elements(values), empty<F>(),
+    fn(result, value) => repeat_value(result, value, count));
+}
+
+// f(x, y) = values[y] over MSB-first (x, y), with `count` values of x.
+fn tile<F: Field>(values: Vector<F>, count: index) -> Vector<F> {
+  let mut result = empty<F>();
+  for _ in 0..count {
+    result = zkc::finite::fold(elements(values), result, fn(current, value) => append(current, value));
+  }
+  return result;
+}
+
+// Gate values of a layer from the values of the layer below it.
+fn layer_values<F: Field>(add: Vector<F>, mul: Vector<F>, below: Vector<F>, width: index)
+    -> Vector<F> {
+  let gates = power_of_two(width);
+  let left = replicate(below, gates);
+  let right = tile(below, gates);
+  let mut values = empty<F>();
+  for position in 0..gates {
+    let add_row = select_block(add, position, width);
+    let mul_row = select_block(mul, position, width);
+    values = append(values, sum(map gate_value(each add_row, each mul_row, each left, each right)));
+  }
+  return values;
+}
+
+// The values of layer `layer + 1`, evaluated upward from the inputs.
+fn values_below<F: Field>(add: Vector<F>, mul: Vector<F>, inputs: Vector<F>, layers: index,
+    selector: index, width: index, layer: index) -> Vector<F> {
+  let mut values = inputs;
+  let mut current = layers;
+  for _ in 0..(layers - layer - 1) {
+    current = current - 1;
+    values = layer_values(select_block(add, current, selector),
+      select_block(mul, current, selector), values, width);
+  }
+  return values;
+}
+
+// The four factor tables of a layer's gate polynomial over (x, y).
+pub struct Gates<F: Field> {
+  pub add: Vector<F>,
+  pub mul: Vector<F>,
+  pub left: Vector<F>,
+  pub right: Vector<F>
+}
+
+fn restrict<F: Field>(values: Vector<F>, dimensions: index, point: Vector<F>) -> Vector<F> {
+  return multilinear::values(fix_prefix(multilinear::table(values, dimensions, 1), point));
+}
+
+fn layer_gates<F: Field>(add: Vector<F>, mul: Vector<F>, point: Vector<F>, below: Vector<F>,
+    width: index) -> Gates<F> {
+  let gates = power_of_two(width);
+  let dimensions = length(point) + width + width;
+  return Gates<F> {
+    add: restrict(add, dimensions, point),
+    mul: restrict(mul, dimensions, point),
+    left: replicate(below, gates),
+    right: tile(below, gates)
+  };
+}
+
+fn round_message<F: Field>(gates: Gates<F>) -> (F, F, F) {
+  let add = split(gates.add);
+  let mul = split(gates.mul);
+  let left = split(gates.left);
+  let right = split(gates.right);
+  let at_zero = sum(map gate_value(each add.0, each mul.0, each left.0, each right.0));
+  let at_one = sum(map gate_value(each add.1, each mul.1, each left.1, each right.1));
+  let quadratic = sum(map gate_quadratic(each add.0, each add.1, each mul.0, each mul.1,
+    each left.0, each left.1, each right.0, each right.1));
+  return (at_zero, linear_coefficient<F>(at_zero, at_one, quadratic), quadratic);
+}
+
+fn fix<F: Field>(values: Vector<F>, r: F) -> Vector<F> {
+  let halves = split(values);
+  return map interpolate(each halves.0, each halves.1, r);
+}
+
+fn fix_gates<F: Field>(gates: Gates<F>, r: F) -> Gates<F> {
+  return Gates<F> {
+    add: fix(gates.add, r), mul: fix(gates.mul, r),
+    left: fix(gates.left, r), right: fix(gates.right, r)
+  };
+}
+
+fn constant_row<F: Field>(rows: Vector<F>, value: F, width: index) -> Vector<F> {
+  return repeat_value(append(rows, value), zero<F>(), width);
+}
+
+// Multiply each row polynomial of a row-major table by t. The highest
+// coefficient of every row must be zero.
+fn shift_rows<F: Field>(values: Vector<F>, count: index) -> Vector<F> {
+  let initial: (Vector<F>, F, index) = (empty<F>(), zero<F>(), 0);
+  let state = zkc::finite::fold(elements(values), initial,
+    fn(current, value) => (
+      append(current.0, if remainder(current.2, count) == 0 { zero<F>() } else { current.1 }),
+      value, current.2 + 1));
+  return state.0;
+}
+
+// Coefficients of t -> W((1 - t) start + t end), constant term first, where W
+// is the multilinear extension of `values`; the degree is at most `width`.
+fn line_coefficients<F: Field>(values: Vector<F>, start: Vector<F>, end: Vector<F>,
+    width: index) -> Vector<F> {
+  let count = width + 1;
+  let mut table = zkc::finite::fold(elements(values), empty<F>(),
+    fn(rows, value) => constant_row(rows, value, width));
+  let mut position: index = 0;
+  for _ in 0..width {
+    let low = element(start, position);
+    let high = element(end, position);
+    let halves = split(table);
+    let base = map interpolate(each halves.0, each halves.1, low);
+    let rise = map slope(each halves.0, each halves.1, difference<F>(high, low));
+    table = map total(each base, each shift_rows(rise, count));
+    position = position + 1;
+  }
+  return table;
+}
+
+// Degree-two Sumcheck rounds over the leading variables of a gate polynomial
+// gate(add, mul, left, right) summed over the Boolean cube. Each round sends
+// the coefficients (c0, c1, c2) of the round polynomial; V checks
+// g(0) + g(1) = 2 c0 + c1 + c2 against its current claim before drawing.
+pub protocol Rounds<F: Field, Max: nat> roles(P,V)
+    (gates: Gates<F> @P, claim: F @V, rounds: index @(P,V), challenges: Random<F> @V)
+    -> (point: Vector<F> @P, residual: Gates<F> @P, evaluation: Evaluation<F> @V)
+{
+  let mut tablesP = gates;
+  let mut pointP @P = empty<F>();
+  let mut pointV @V = empty<F>();
+  let mut current = claim;
+  for _ in 0..rounds roles(P,V) max Max {
+    #[site(round)] let message = send P -> V(round_message(tablesP));
+    require current == message.0 + message.0 + message.1 + message.2;
+    #[site(challenge)] let cv = challenges.draw();
+    #[site(delivery)] let cp = send V -> P(cv);
+    tablesP = fix_gates(tablesP, cp);
+    pointP = append(pointP, cp);
+    pointV = append(pointV, cv);
+    current = message.0 + cv * (message.1 + cv * message.2);
+  }
+  let evaluation @V = Evaluation<F> { point: pointV, value: current };
+  return (point = pointP, residual = tablesP, evaluation = evaluation);
+}
+
+// GKR for a layered circuit with public wiring: V checks that `outputs` are
+// the outputs of the circuit on `inputs`.
+pub protocol Gkr<F: Field, MaxLayers: nat, MaxWidth: nat> roles(P,V)
+    (inputs: Vector<F> @(P,V), outputs: Vector<F> @V,
+     add: Vector<F> @(P,V), mul: Vector<F> @(P,V),
+     layers: index @(P,V), selector: index @(P,V), width: index @(P,V),
+     challenges: Random<F> @V) -> (accepted: bool @V)
+{
+  let mut pointV @V = empty<F>();
+  let mut pointP @P = empty<F>();
+  for _ in 0..width roles(P,V) max MaxWidth {
+    #[site(output)] let r = challenges.draw();
+    #[site(output_delivery)] let rp = send V -> P(r);
+    pointV = append(pointV, r);
+    pointP = append(pointP, rp);
+  }
+  let mut claim @V = evaluate(outputs, pointV);
+  for layer in 0..layers roles(P,V) max MaxLayers {
+    let below @P = values_below(add, mul, inputs, layers, selector, width, layer);
+    let gates @P = layer_gates(select_block(add, layer, selector),
+      select_block(mul, layer, selector), pointP, below, width);
+    #[site(left)] let (leftP, leftGates, left) = Rounds<F, MaxWidth>(gates, claim, width, challenges);
+    #[site(right)] let (rightP, _, right) =
+      Rounds<F, MaxWidth>(leftGates, left.value, width, challenges);
+    let line @P = line_coefficients(below, leftP, rightP, width);
+    #[site(line_constant)] let first = send P -> V(element(line, 0));
+    let mut coefficients @V = append(empty<F>(), first);
+    for position in 0..width roles(P,V) max MaxWidth {
+      #[site(line_coefficient)] let coefficient = send P -> V(element_after(line, position));
+      coefficients = append(coefficients, coefficient);
+    }
+    let at_one @V = sum(coefficients);
+    let wiring_add @V = evaluate_wiring(select_block(add, layer, selector), pointV,
+      left.point, right.point);
+    let wiring_mul @V = evaluate_wiring(select_block(mul, layer, selector), pointV,
+      left.point, right.point);
+    require right.value == wiring_add * (first + at_one) + wiring_mul * first * at_one;
+    #[site(line_challenge)] let t = challenges.draw();
+    #[site(line_delivery)] let tp = send V -> P(t);
+    claim = evaluate_coefficients(coefficients, t);
+    pointV = line_point(left.point, right.point, t);
+    pointP = line_point(leftP, rightP, tp);
+  }
+  let accepted @V = evaluate(inputs, pointV) == claim;
+  return accepted;
+}

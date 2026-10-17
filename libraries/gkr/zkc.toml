@@ -1,0 +1,7 @@
+format = "zkc.project/0"
+
+[modules]
+"gkr" = "lib.zkc"
+
+[dependencies]
+zkc = "../zkc"
