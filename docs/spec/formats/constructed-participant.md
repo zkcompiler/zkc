@@ -9,8 +9,9 @@ inserted transcript helper. A refused candidate produces no export. The command
 accepts the same mathematical-selection options as `protocol-check-proof`.
 
 The export is the input of the formal
-[transcript-construction rule](../../../lean/docs/spec/fiat-shamir.md). It neither
-constructs a validator nor assigns a meaning to any operation.
+[transcript-construction](../../../lean/docs/spec/fiat-shamir.md) and
+[participant projection](../../../lean/docs/spec/participant-projection.md) rules.
+It neither constructs a validator nor assigns a meaning to any operation.
 
 ## Envelope
 

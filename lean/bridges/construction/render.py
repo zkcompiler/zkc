@@ -213,6 +213,10 @@ def operation(name, attrs, binding, operand_kinds, result_kinds):
         require(len(operand_kinds) == 2 and operand_kinds[0] == operand_kinds[1] and operand_kinds[0][0] == kind,
                 "calculation operands")
         return f".calculate (.{constructor} {text(operand_kinds[0][1])})"
+    if name == "arith.andi" and not attrs and binding == []:
+        require(operand_kinds == [("boolean", None), ("boolean", None)]
+                and result_kinds == [("boolean", None)], "boolean conjunction shape")
+        return ".calculate .booleanAnd"
     if name == "algebra.constant" and set(attrs) == {"value"} and binding == []:
         require(not operand_kinds and len(result_kinds) == 1 and result_kinds[0][0] == "field",
                 "field constant shape")

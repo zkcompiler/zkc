@@ -273,14 +273,15 @@ receives. Neither establishes a Fiat–Shamir reduction or arbitrary polynomial
 or protocol equivalence.
 
 The [transcript-construction bridge](../lean/bridges/construction/README.md)
-exports the compiled Schnorr proof Entry's checked validator
-([format](spec/formats/constructed-participant.md)). Lean checks its transcript
-construction and its [participant projection](../lean/docs/spec/participant-projection.md)
-against the original export and proves fixed-statement
-Fiat–Shamir knowledge soundness for it in the random-oracle model, under the
-[named assumptions](../lean/docs/spec/fiat-shamir.md#named-assumptions). The
-projection check covers roots without protocol applications or repeats. Other
-Entries, suites and programmable constructions have no such check.
+exports the compiled Schnorr and Sumcheck proof Entries' checked validators
+([format](spec/formats/constructed-participant.md)). Lean checks their transcript
+construction and their [participant projection](../lean/docs/spec/participant-projection.md)
+against the original exports and proves that each compiled verifier is the
+Fiat–Shamir transform of its original verifier. For Schnorr it proves
+fixed-statement Fiat–Shamir knowledge soundness in the random-oracle model, under
+the [named assumptions](../lean/docs/spec/fiat-shamir.md#named-assumptions); the
+Sumcheck Entry has no security theorem. Other Entries, suites and programmable
+constructions have no such check.
 
 The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retained
 PIR programs, proves open-process contracts, and applies selected ArkLib/VCVio

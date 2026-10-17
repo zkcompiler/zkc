@@ -1,6 +1,7 @@
 # Transcript-construction bridge
 
-`check.py` connects the compiled `example::Proof` Schnorr Entry to the
+`check.py` connects two compiled `example::Proof` Entries, from the Schnorr and
+Sumcheck example projects, to the
 [formal transcript-construction rule](../../docs/spec/fiat-shamir.md) and the
 [participant projection rule](../../docs/spec/participant-projection.md). It is
 part of `python3 common/tests/run.py lean-native`.
@@ -14,11 +15,14 @@ python3 lean/bridges/construction/check.py --output build/experiments/constructi
 ```
 
 `--compiler` selects `zkc-compile` (default `build/compiler/zkc-compile`) and
-`--lake` the Lake executable. `--output` must be a new or empty directory.
-`--write` rewrites the retained Lean data from the fresh export instead of
-requiring it to be unchanged.
+`--lake` the Lake executable. `--output` must be a new or empty directory; each
+subject writes into its own subdirectory. `--write` rewrites the retained Lean
+data this bridge owns from the fresh export instead of requiring it to be
+unchanged.
 
 ## What is checked
+
+For each subject:
 
 1. `language-emit` and `language-bundle` produce the Entry's original source and
    native deployment; the deployment must name the emitted bytes, and its
@@ -27,33 +31,45 @@ requiring it to be unchanged.
    [`protocol-constructed-participant`](../../../docs/spec/formats/constructed-participant.md)
    checks and exports its validator. `protocol-structured` exports the original.
    Both exports must name the same source bytes and policy.
-3. `lean/ZkcExamples/Construction/SchnorrProofData.lean` (rendered by the
+3. The retained Lean data must equal the fresh renderings byte for byte: for
+   Schnorr `lean/ZkcExamples/Construction/SchnorrProofData.lean` (rendered by the
    structured bridge's `snapshot.py`) and `SchnorrProofParticipant.lean`
-   (rendered by `render.py`) must equal the fresh renderings byte for byte.
+   (rendered by `render.py`); for Sumcheck the structured bridge's own
+   `lean/ZkcExamples/Structured/SumcheckSourceData.lean`, which this bridge only
+   compares, and `SumcheckProofParticipant.lean`.
 4. A generated Lean file runs the composed check `checkCompiled` in the kernel
    on the fresh export against the admitted original program, which must be
    accepted with axioms among `propext`, `Classical.choice` and `Quot.sound`; the
-   fresh original snapshot must be the retained one. Four mutated exports must
-   be refused for their named obligations: the first observation absorbs the
-   base instead of the commitment, the challenge reads the host transcript
-   before the commitment is observed, the challenge origin names the delivery
-   site, and the final comparison compares the base with itself. The last keeps
-   the transcript wiring: `checkExport` alone accepts it, and the projection rule
-   refuses it.
-5. Two mutated candidates must be refused by the native checker before export:
-   the validator's challenge reusing its host transcript (exactly
+   fresh original snapshot must be the retained one. Mutated exports must be
+   refused for their named obligations. For Schnorr: the first observation
+   absorbs the base instead of the commitment, the challenge reads the host
+   transcript before the commitment is observed, the challenge origin names the
+   delivery site, and the final comparison compares the base with itself. For
+   Sumcheck: the challenge origin names the delivery site, the round check is
+   dropped, the claim update adds the low term twice, and the loop yields the
+   claim it started with. Every mutation that keeps the transcript wiring is
+   accepted by `checkExport` alone and refused by the projection rule.
+5. Mutated candidates must be refused by the native checker before export. For
+   Schnorr: the validator's challenge reusing its host transcript (exactly
    `native-proof-candidate` with the affine-reuse diagnostic) and a challenge
-   origin naming the delivery site (exactly `native-proof-correspondence`).
+   origin naming the delivery site (exactly `native-proof-correspondence`). For
+   Sumcheck: a constant changed in the prepared body of the terminal check helper
+   (exactly `native-proof-correspondence`); the Lean rules read helper calls
+   with the original's checked helpers, so this is the native boundary.
 
-The retained `report.json` lists commands, exit statuses, hashes and checks.
+The retained `report.json` lists commands, exit statuses, hashes and checks per
+subject.
 
 ## Boundaries
 
 `render.py` classifies operations by exact name, operation binding and attribute
-set. An unrecognized operation is retained as unsupported for the rule to
-refuse; a recognized one with another shape refuses the export. It decodes each
-origin's canonical bytes into a template with its application and repeat steps,
-requires the static coordinate array to be empty and re-encodes it exactly. It
-parses printed MLIR types of the scalar, vector, index, transcript and
-coordinate sorts and refuses others. Native exporter correctness, this rendering, and the meanings of
-native kernels are tested boundaries, not theorems.
+set, including `arith.andi` on Booleans as the Boolean conjunction. An
+unrecognized operation is retained as unsupported for the rule to refuse; a
+recognized one with another shape refuses the export
+(`lean/checks/check_construction_renderer.py` exercises the conjunction). It
+decodes each origin's canonical bytes into a template with its application and
+repeat steps, requires the static coordinate array to be empty and re-encodes it
+exactly. It parses printed MLIR types of the scalar, vector, index, transcript
+and coordinate sorts and refuses others. Native exporter correctness, this
+rendering, and the meanings of native kernels are tested boundaries, not
+theorems.

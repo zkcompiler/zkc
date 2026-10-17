@@ -15,7 +15,12 @@ public import Zkc.Source.Structured.OpenLaws
 slot. Each accepted operation transports agreement of continuations
 (`OperationSound`): the exported instructions it consumed, followed by any
 continuation, equal the original operation followed by any continuation that
-agrees on related results. `walk_sound` composes these along a region and
+agrees on related results. A protocol application is the callee's body walked
+in the child context between the callee's masks; a repeat is a loop whose
+iterations each implement one step of the repeat's fold, with carried values
+related to the masked state (`iterate_projects`). `walkStep_sound` covers one
+operation given the soundness of the walk it recurses with, `walk_sound`
+composes the steps along a region by induction on the walk's fuel, and
 `project_sound` instantiates it at the entry, with the original's input and
 output masks.
 -/
@@ -1010,6 +1015,148 @@ theorem holdsValues_single {handle : Nat} (cenv : List (Value F G)) :
   | [], .nil, length, _ => by cases length
   | _ :: _ :: _, .cons _ (.cons _ _), length, _ => by simp at length
 
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+theorem Operands.indices_length {Ty : Type} {Γ : List Ty} :
+    ∀ {tys : List Ty} (operands : Operands Γ tys), (Operands.indices operands).length = tys.length
+  | [], .nil => rfl
+  | _ :: _, .cons _ rest => by simp [Operands.indices, Operands.indices_length rest]
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+/-- Arguments related to absent slots are absent. -/
+theorem holdsValues_all_absent {cenv : List (Value F G)} :
+    ∀ {slots : List Slot} {tys : List Ty} {values : Values (Component (assignment F G)) tys},
+      HoldsValues handle cenv slots values → slots.length = tys.length → slots.all Slot.isAbsent = true →
+      values = Values.absent (assignment F G) tys
+  | [], [], .nil, _, _, _ => rfl
+  | slot :: rest, _ :: _, .cons value others, holds, length, absent => by
+      obtain ⟨head, tail⟩ := holds
+      simp only [List.all_cons, Bool.and_eq_true] at absent
+      cases slot with
+      | absent =>
+        simp only [SlotHolds, List.headD_cons] at head
+        subst head
+        rw [holdsValues_all_absent tail (by simpa using length) absent.2]
+        rfl
+      | _ => simp [Slot.isAbsent] at absent
+  | [], _ :: _, _, _, length, _ => by cases length
+  | _ :: _, [], _, _, length, _ => by cases length
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+theorem operands_absent {Γ : List Ty} {env : Environment (Component (assignment F G)) Γ}
+    (absent : ∀ ty (v : Var Γ ty), env v = none) :
+    ∀ {tys : List Ty} (operands : Operands Γ tys),
+      Operands.eval env operands = Values.absent (assignment F G) tys
+  | [], .nil => rfl
+  | _ :: _, .cons v rest => by
+      simp only [Operands.eval, Values.absent, absent, operands_absent absent rest]
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+theorem prepend_absent {Γ : List Ty} {env : Environment (Component (assignment F G)) Γ}
+    (absent : ∀ ty (v : Var Γ ty), env v = none) (tys : List Ty) :
+    ∀ ty (v : Var (tys ++ Γ) ty), (env.prepend (Values.absent (assignment F G) tys)) v = none := by
+  intro ty v
+  induction tys with
+  | nil => exact absent ty v
+  | cons head rest ih =>
+    cases v with
+    | here => rfl
+    | there v => exact ih v
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+theorem get_absent {tys : List Ty} :
+    ∀ ty (v : Var tys ty), (Values.absent (assignment F G) tys).get v = none := by
+  intro ty v
+  induction tys with
+  | nil => cases v
+  | cons head rest ih =>
+    cases v with
+    | here => rfl
+    | there v => exact ih v
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+theorem sequence_absent : ∀ {tys : List Ty}, tys ≠ [] →
+    RoleFamily.sequence (Values.absent (assignment F G) tys) = none
+  | [], nonempty => absurd rfl nonempty
+  | _ :: _, _ => rfl
+
+/-- Strict operations on absent operands are absent. -/
+theorem componentOperation_absent {I : PIR.Signature} (observations : SiteObservations I)
+    (tables : Evaluation.ComponentTables F G I) (op : Op) (strict : strictOperation op = true)
+    (nonempty : op.arguments ≠ []) (bodies : Values (RegionFunction (assignment F G) I) op.regions) :
+    Evaluation.componentOperation observations tables op (Values.absent (assignment F G) op.arguments) bodies =
+      .done (Values.absent (assignment F G) op.results) := by
+  have strictCase : strictComponent (Evaluation.meaning observations tables.closed) op
+      (Values.absent (assignment F G) op.arguments) bodies =
+      .done (Values.absent (assignment F G) op.results) := by
+    simp only [strictComponent, sequence_absent nonempty]
+  cases op with
+  | exec primitive => simp [strictOperation] at strict
+  | map spec => simp [strictOperation] at strict
+  | invoke helper =>
+    have local_ : helper.kind ≠ .math := by simpa [strictOperation] using strict
+    cases bodies
+    simp only [Evaluation.componentOperation, local_]
+    exact strictCase
+  | _ => exact strictCase
+
+/-- A helper body that preserves absence evaluates absent inputs to absent
+outputs, with no effect or stop. -/
+theorem absentPreserving_component {I : PIR.Signature} (observations : SiteObservations I)
+    (tables : Evaluation.ComponentTables F G I) :
+    ∀ {Γ out : List Ty} (region : Region dialect Γ out), absentPreserving region = true →
+    ∀ (env : Environment (Component (assignment F G)) Γ), (∀ ty (v : Var Γ ty), env v = none) →
+      region.component (Evaluation.meaning observations tables.closed)
+          (Evaluation.componentOperation observations tables) env =
+        .done (Values.absent (assignment F G) out)
+  | _, _, .ret values, _, env, absent => by
+      simp only [Region.component, operands_absent absent values]
+  | _, _, .stop _, preserving, _, _ => by simp [absentPreserving] at preserving
+  | _, _, .letOp op arguments bodies next, preserving, env, absent => by
+      simp only [absentPreserving, Bool.and_eq_true, bne_iff_ne, ne_eq] at preserving
+      obtain ⟨⟨nonempty, strict⟩, rest⟩ := preserving
+      have argumentsNonempty : op.arguments ≠ [] := by
+        intro empty
+        apply nonempty
+        have lengths : arguments.indices.length = op.arguments.length := Operands.indices_length arguments
+        rw [empty] at lengths
+        exact List.eq_nil_of_length_eq_zero lengths
+      simp only [Region.component, operands_absent absent arguments]
+      rw [componentOperation_absent observations tables op strict argumentsNonempty]
+      simp only [PIR.Proc.bind]
+      exact absentPreserving_component observations tables next rest _ (prepend_absent absent _)
+  | _, _, .bind body next, preserving, env, absent => by
+      simp only [absentPreserving, Bool.and_eq_true] at preserving
+      simp only [Region.component, absentPreserving_component observations tables body preserving.1 env absent,
+        PIR.Proc.bind]
+      exact absentPreserving_component observations tables next preserving.2 _ (prepend_absent absent _)
+
+/-- A checked helper's component meaning in the plain participant tables is its
+body's component evaluation. -/
+theorem plainHelpers_component (definition : CheckedDefinition)
+    (member : definition ∈ program.payload.definitions)
+    (args : Values (Component (assignment F G)) definition.inputs) :
+    invoke (plainHelpers (F := F) (G := G) program).components definition.helper args =
+      definition.body.component (Evaluation.meaning (.silent _) (plainHelpers program).closed)
+        (Evaluation.componentOperation (.silent _) (plainHelpers program)) args.get := by
+  calc
+    _ = (invoke (program.payload.tables F G).components definition.helper args).interpret forgetSites :=
+      ((Evaluation.ComponentTables.fold_forgetSites program.payload.definitions).components
+        definition.helper args).symm
+    _ = _ := by
+      rw [program.payload.component_invoke_body definition member args]
+      exact Evaluation.component_interpret forgetSites observedSites_forgetSites
+        (Evaluation.ComponentTables.fold_forgetSites program.payload.definitions) definition.body args.get
+
+/-- A Math helper whose body preserves absence returns absent outputs on absent
+inputs. -/
+theorem invoke_absent (definition : CheckedDefinition) (member : definition ∈ program.payload.definitions)
+    (preserving : absentPreserving definition.body = true) :
+    invoke (plainHelpers (F := F) (G := G) program).components definition.helper
+        (Values.absent (assignment F G) definition.inputs) =
+      .done (Values.absent (assignment F G) definition.outputs) := by
+  rw [plainHelpers_component program definition member]
+  exact absentPreserving_component _ _ definition.body preserving _ get_absent
+
 theorem calculate_projects (ctx : ProtocolContext) (n : Nat) (operation : Op)
     (allowed : operation.isCalculation = true) (arguments : List Slot)
     (instructions rest : List Instruction) (results : List Slot) (n' : Nat)
@@ -1018,9 +1165,66 @@ theorem calculate_projects (ctx : ProtocolContext) (n : Nat) (operation : Op)
     OperationSound (F := F) (G := G) program context handle ctx n (.calculate operation allowed)
       arguments instructions rest results n' := by
   intro args callbacks cenv argsHold argsLength length A kS kO cont
-  simp only [walkOperation] at accepted
+  simp only [walkOperation, walkCalculation] at accepted
   cases found : Calculation.ofOp? operation with
-  | none => simp [found] at accepted
+  | none =>
+    simp only [found] at accepted
+    rw [originalOperation_calculate]
+    cases operation with
+    | invoke helper =>
+      dsimp only at accepted
+      have math : helper.kind = .math := by simpa [Op.isCalculation] using allowed
+      by_cases allAbsent : arguments.all Slot.isAbsent = true
+      · rw [ite_eq_left allAbsent] at accepted
+        cases defined : program.payload.definitions.find? (fun definition => definition.helper == helper) with
+        | none => simp [defined] at accepted
+        | some definition =>
+          simp only [defined] at accepted
+          by_cases preserving : absentPreserving definition.body = true
+          · rw [ite_eq_left preserving] at accepted
+            simp only [Except.ok.injEq, Prod.mk.injEq] at accepted
+            obtain ⟨rfl, rfl, rfl⟩ := accepted
+            have member := List.mem_of_find?_eq_some defined
+            have same : definition.helper = helper := by simpa using List.find?_some defined
+            subst same
+            have argsAbsent := holdsValues_all_absent handle argsHold argsLength allAbsent
+            have regions : (Op.invoke definition.helper).calculationRegions (Value := assignment F G)
+                (I := participantInterface F G) allowed = .nil := by
+              generalize (Op.invoke definition.helper).calculationRegions allowed = regions
+              cases regions
+              rfl
+            have value : Evaluation.componentOperation (.silent (participantInterface F G))
+                (plainHelpers program) (Op.invoke definition.helper) args Values.nil =
+                  .done (Values.absent (assignment F G) definition.helper.outputs) := by
+              subst argsAbsent
+              exact (Evaluation.componentOperation_math _ _ _ math _).trans
+                (invoke_absent program definition member preserving)
+            rw [regions, value]
+            simp only [PIR.Proc.interpret, PIR.Proc.bind]
+            exact cont cenv _ (List.prefix_refl cenv) length (holdsValues_absent cenv _)
+          · rw [ite_eq_right preserving] at accepted
+            cases accepted
+      · rw [ite_eq_right allAbsent] at accepted
+        cases accepted
+    | fold spec =>
+      dsimp only at accepted
+      by_cases anyAbsent : arguments.any Slot.isAbsent = true
+      · rw [ite_eq_left anyAbsent] at accepted
+        simp only [Except.ok.injEq, Prod.mk.injEq] at accepted
+        obtain ⟨rfl, rfl, rfl⟩ := accepted
+        have sequenced := sequence_none (tys := (Op.fold spec).arguments) argsHold argsLength anyAbsent
+        have value : Evaluation.componentOperation (.silent (participantInterface F G)) (plainHelpers program)
+            (Op.fold spec) args ((Op.fold spec).calculationRegions allowed) =
+              .done (Values.absent (assignment F G) (Op.fold spec).results) := by
+          change strictComponent (Evaluation.meaning (.silent (participantInterface F G))
+            (plainHelpers program).closed) (Op.fold spec) args _ = _
+          simp only [strictComponent, sequenced]
+        rw [value]
+        simp only [PIR.Proc.interpret, PIR.Proc.bind]
+        exact cont cenv _ (List.prefix_refl cenv) length (holdsValues_absent cenv _)
+      · rw [ite_eq_right anyAbsent] at accepted
+        cases accepted
+    | _ => cases accepted
   | some calculation =>
     have same := Calculation.ofOp?_some found
     subst same
@@ -1130,9 +1334,34 @@ theorem walkOperation_length (ctx : ProtocolContext) (n : Nat) (op : ProtocolOp)
     exact length
   cases op with
   | calculate operation allowed =>
-    simp only [walkOperation] at accepted
+    simp only [walkOperation, walkCalculation] at accepted
     cases found : Calculation.ofOp? operation with
-    | none => simp [found] at accepted
+    | none =>
+      simp only [found] at accepted
+      cases operation with
+      | invoke helper =>
+        dsimp only at accepted
+        by_cases allAbsent : arguments.all Slot.isAbsent = true
+        · rw [ite_eq_left allAbsent] at accepted
+          cases defined : program.payload.definitions.find? (fun definition => definition.helper == helper) with
+          | none => simp [defined] at accepted
+          | some definition =>
+            simp only [defined] at accepted
+            by_cases preserving : absentPreserving definition.body = true
+            · rw [ite_eq_left preserving] at accepted
+              exact finish accepted (by simp [ProtocolOp.results])
+            · rw [ite_eq_right preserving] at accepted
+              cases accepted
+        · rw [ite_eq_right allAbsent] at accepted
+          cases accepted
+      | fold spec =>
+        dsimp only at accepted
+        by_cases anyAbsent : arguments.any Slot.isAbsent = true
+        · rw [ite_eq_left anyAbsent] at accepted
+          exact finish accepted (by simp [ProtocolOp.results])
+        · rw [ite_eq_right anyAbsent] at accepted
+          cases accepted
+      | _ => cases accepted
     | some calculation =>
       have same := Calculation.ofOp?_some found
       subst same
@@ -1265,10 +1494,163 @@ theorem walkOperation_length (ctx : ProtocolContext) (n : Nat) (op : ProtocolOp)
 end Operations
 
 
-theorem Operands.indices_length {Ty : Type} {Γ : List Ty} :
-    ∀ {tys : List Ty} (operands : Operands Γ tys), (Operands.indices operands).length = tys.length
-  | [], .nil => rfl
-  | _ :: _, .cons _ rest => by simp [Operands.indices, Operands.indices_length rest]
+section Carried
+variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+/-- Masking keeps the related components the role has. -/
+theorem HoldsValues.mask {handle : Nat} {cenv : List (Value F G)} (self : Nat) :
+    ∀ (scopes : List (List Nat)) {slots : List Slot} {tys : List Ty}
+      {values : Values (Component (assignment F G)) tys},
+      HoldsValues handle cenv slots values → slots.length = tys.length →
+      HoldsValues handle cenv (Slot.mask self scopes slots) (maskValues self scopes values)
+  | _, [], [], .nil, _, _ => trivial
+  | scopes, slot :: rest, _ :: _, .cons value others, holds, length => by
+      obtain ⟨head, tail⟩ := holds
+      refine ⟨?_, HoldsValues.mask self scopes.tail tail (by simpa using length)⟩
+      simp only [Slot.mask, List.headD_cons, Participant.restrict]
+      split
+      · simpa using head
+      · rfl
+  | _, [], _ :: _, _, _, length => by cases length
+  | _, _ :: _, [], _, _, length => by cases length
+
+theorem Slot.mask_length (self : Nat) : ∀ (scopes : List (List Nat)) (slots : List Slot),
+    (Slot.mask self scopes slots).length = slots.length
+  | _, [] => rfl
+  | scopes, _ :: rest => by simp [Slot.mask, Slot.mask_length self scopes.tail rest]
+
+theorem carriedSlots_length (self : Nat) : ∀ (scopes : List (List Nat)) (base count : Nat),
+    (carriedSlots self scopes base count).length = count
+  | _, _, 0 => rfl
+  | scopes, base, count + 1 => by
+      simp only [carriedSlots]
+      split <;> simp [carriedSlots_length]
+
+/-- Masking carried slots changes nothing: the components the role lacks are
+already absent. -/
+theorem mask_carriedSlots (self : Nat) : ∀ (scopes : List (List Nat)) (base count : Nat),
+    Slot.mask self scopes (carriedSlots self scopes base count) = carriedSlots self scopes base count
+  | _, _, 0 => rfl
+  | scopes, base, count + 1 => by
+      by_cases visible : (scopes.headD []).contains self = true
+      · simp only [carriedSlots, visible, ite_true, Slot.mask, mask_carriedSlots]
+      · have hidden : (scopes.headD []).contains self = false := by simpa using visible
+        simp only [carriedSlots, hidden, Bool.false_eq_true, ↓reduceIte, Slot.mask, mask_carriedSlots]
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+/-- Related tuples concatenate. -/
+theorem HoldsValues.append {handle : Nat} {cenv : List (Value F G)} :
+    ∀ {first second : List Slot} {tys tys' : List Ty} {left : Values (Component (assignment F G)) tys}
+      {right : Values (Component (assignment F G)) tys'},
+      HoldsValues handle cenv first left → first.length = tys.length → HoldsValues handle cenv second right →
+      HoldsValues handle cenv (first ++ second) (left.append right)
+  | [], _, [], _, .nil, _, _, _, holds => holds
+  | _ :: _, _, _ :: _, _, .cons _ _, _, holds, length, other => by
+      obtain ⟨head, tail⟩ := holds
+      exact ⟨head, HoldsValues.append tail (by simpa using length) other⟩
+  | [], _, _ :: _, _, _, _, _, length, _ => by cases length
+  | _ :: _, _, [], _, _, _, _, length, _ => by cases length
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+/-- A related tuple splits into related parts. -/
+theorem HoldsValues.split {handle : Nat} {cenv : List (Value F G)} :
+    ∀ (added : List Ty) {tys : List Ty} {slots : List Slot}
+      {values : Values (Component (assignment F G)) (added ++ tys)},
+      HoldsValues handle cenv slots values →
+      HoldsValues handle cenv (slots.take added.length) (Values.split added values).1 ∧
+        HoldsValues handle cenv (slots.drop added.length) (Values.split added values).2
+  | [], _, _, _, holds => ⟨trivial, holds⟩
+  | _ :: added, _, slots, .cons value values, holds => by
+      obtain ⟨head, tail⟩ := holds
+      obtain ⟨first, second⟩ := HoldsValues.split added tail
+      cases slots with
+      | nil =>
+        exact ⟨⟨head, (by simpa using first : HoldsValues handle cenv [] (Values.split added values).1)⟩,
+          (by simpa using second : HoldsValues handle cenv [] (Values.split added values).2)⟩
+      | cons slot rest => exact ⟨⟨head, first⟩, second⟩
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+/-- Carried slots read the same values after a prefix of the environment. -/
+theorem HoldsValues.shift {handle : Nat} (self : Nat) (front : List (Value F G)) :
+    ∀ (scopes : List (List Nat)) (base : Nat) {tys : List Ty}
+      {values : Values (Component (assignment F G)) tys} {carried : List (Value F G)},
+      HoldsValues handle carried (carriedSlots self scopes base tys.length) values →
+      HoldsValues handle (front ++ carried) (carriedSlots self scopes (front.length + base) tys.length) values
+  | _, _, [], .nil, _, _ => trivial
+  | scopes, base, _ :: _, .cons value rest, carried, holds => by
+      by_cases visible : (scopes.headD []).contains self = true
+      · simp only [List.length_cons, carriedSlots, visible, ite_true] at holds ⊢
+        obtain ⟨head, tail⟩ := holds
+        refine ⟨?_, ?_⟩
+        · obtain ⟨x, valueEq, decoded⟩ := head
+          refine ⟨x, valueEq, ?_⟩
+          simpa [List.getElem?_append_right] using decoded
+        · have shifted := HoldsValues.shift self front scopes.tail (base + 1) tail
+          simpa [Nat.add_assoc] using shifted
+      · simp only [List.length_cons, carriedSlots, visible] at holds ⊢
+        obtain ⟨head, tail⟩ := holds
+        exact ⟨head, HoldsValues.shift self front scopes.tail base tail⟩
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+/-- Values read at references that hold the role's components are related to
+the masked components by carried slots. -/
+theorem carried_holds {handle : Nat} {cenv cenv' read_ : List (Value F G)} (self : Nat)
+    (prefix_ : cenv <+: cenv') (list : List Nat) (found : read cenv' list = some read_) :
+    ∀ (scopes : List (List Nat)) (base : Nat) {slots : List Slot} {tys : List Ty}
+      {values : Values (Component (assignment F G)) tys} {references : List Nat},
+      outputReferences self scopes slots = some references → HoldsValues handle cenv slots values →
+      slots.length = tys.length → (list.drop base).take references.length = references →
+      HoldsValues handle read_ (carriedSlots self scopes base tys.length) (maskValues self scopes values)
+  | _, _, [], [], .nil, _, _, _, _, _ => trivial
+  | scopes, base, slot :: rest, _ :: _, .cons value others, references, referenced, holds, length,
+      positioned => by
+      obtain ⟨head, tail⟩ := holds
+      simp only [outputReferences] at referenced
+      by_cases visible : (scopes.headD []).contains self = true
+      · simp only [visible, ↓reduceIte] at referenced
+        cases slot with
+        | held reference =>
+          cases restFound : outputReferences self scopes.tail rest with
+          | none => simp [restFound] at referenced
+          | some restReferences =>
+            simp only [restFound, Option.map_some, Option.some.injEq] at referenced
+            subst referenced
+            cases dropped : list.drop base with
+            | nil => simp [dropped] at positioned
+            | cons first others =>
+            rw [dropped] at positioned
+            simp only [List.length_cons, List.take_succ_cons, List.cons.injEq] at positioned
+            obtain ⟨rfl, restEq⟩ := positioned
+            have atBase : list[base]? = some first := by
+              have heads := congrArg List.head? dropped
+              simpa [List.head?_drop] using heads
+            have restPositioned : (list.drop (base + 1)).take restReferences.length = restReferences := by
+              rw [← List.tail_drop, dropped]
+              exact restEq
+            simp only [List.length_cons, carriedSlots, visible, ite_true, maskValues, Participant.restrict]
+            refine ⟨?_, carried_holds self prefix_ list found scopes.tail (base + 1) restFound tail
+              (by simpa using length) restPositioned⟩
+            obtain ⟨x, valueEq, decoded⟩ := head
+            refine ⟨x, valueEq, ?_⟩
+            cases at_ : cenv[first]? with
+            | none => simp [at_] at decoded
+            | some stored =>
+              have stored' : cenv'[first]? = some stored := getElem?_of_prefix prefix_ at_
+              rw [read_getElem? found base, atBase]
+              simpa [stored', at_] using decoded
+        | absent => simp at referenced
+        | free => simp at referenced
+        | service => simp at referenced
+      · simp only [visible] at referenced
+        simp only [List.length_cons, carriedSlots, visible, maskValues, Participant.restrict]
+        exact ⟨rfl, carried_holds self prefix_ list found scopes.tail base referenced tail
+          (by simpa using length) positioned⟩
+  | _, _, [], _ :: _, _, _, _, _, length, _ => by cases length
+  | _, _, _ :: _, [], _, _, _, _, length, _ => by cases length
+
+end Carried
+
 
 section Walk
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
@@ -1279,52 +1661,356 @@ abbrev plainMeaning (ctx : ProtocolContext) : RegionMeaning protocolDialect (par
   participantMeaningWith (.silent _) (participantActions F G) (plainHelpers program) context.validator
     (program.payload.plainProtocolTable F G) ctx
 
-/-- Soundness of the projection walk for one region: the exported program from
-`instructions` equals the original region followed by `kO`, whenever the
-exported continuation from the remaining instructions agrees with `kO` on
-related results. -/
-theorem walk_sound : ∀ (fuel : Nat) {Γ out : List Ty} (ctx : ProtocolContext) (slots : List Slot)
-    (n : Nat) (region : Region protocolDialect Γ out) (instructions rest : List Instruction)
-    (outSlots : List Slot) (n' : Nat),
-    walk program context fuel ctx slots n region instructions = .ok (rest, outSlots, n') →
-    ∀ (env : Environment (Component (assignment F G)) Γ) (cenv : List (Value F G)),
-      Holds handle cenv slots env → cenv.length = n →
-      ∀ {A : Type} (kS : List (Value F G) → PIR.Proc (Actions F G) A)
-        (kO : Values (Component (assignment F G)) out → PIR.Proc (Actions F G) A),
-        (∀ cenv' outs, cenv <+: cenv' → cenv'.length = n' → HoldsValues handle cenv' outSlots outs →
-          specK context handle (helperTable program F G) rest cenv' kS = kO outs) →
-        specK context handle (helperTable program F G) instructions cenv kS =
-          ((region.denote (plainMeaning program context ctx) env).interpret CommonAdapter.project).bind kO
-  | 0, _, _, _, _, _, _, _, _, _, _, accepted => by simp [walk] at accepted
-  | fuel + 1, _, _, ctx, slots, n, .ret values, instructions, rest, outSlots, n', accepted => by
-    intro env cenv holds length A kS kO cont
-    simp only [walk, Except.ok.injEq, Prod.mk.injEq] at accepted
-    obtain ⟨rfl, rfl, rfl⟩ := accepted
-    exact cont cenv _ (List.prefix_refl cenv) length (holds.eval values)
-  | fuel + 1, _, _, _, _, _, .stop _, _, _, _, _, accepted => by simp [walk] at accepted
-  | fuel + 1, _, _, _, _, _, .bind _ _, _, _, _, _, accepted => by simp [walk] at accepted
-  | fuel + 1, _, _, ctx, slots, n, .letOp op args bodies next, instructions, rest, outSlots, n',
-      accepted => by
-    intro env cenv holds length A kS kO cont
-    simp only [walk] at accepted
-    cases stepped : walkOperation program context ctx n op
-        ((Operands.indices args).map (Slot.at_ slots)) instructions with
-    | error error => simp [stepped] at accepted
-    | ok triple =>
-      obtain ⟨remaining, results, n''⟩ := triple
-      simp only [stepped] at accepted
-      have resultsLength := walkOperation_length program context ctx n op _ instructions remaining
-        results n'' stepped
-      simp only [Region.denote]
+/-- What a walk's soundness states for every region it accepts: one slot per
+output, and the exported program from `instructions` equals the original region
+followed by `kO` whenever the exported continuation from the remaining
+instructions agrees with `kO` on related results. -/
+def WalkSound (recurse : Walker) : Prop :=
+  ∀ {Γ out : List Ty} (ctx : ProtocolContext) (slots : List Slot) (n : Nat)
+    (region : Region protocolDialect Γ out) (instructions rest : List Instruction) (outSlots : List Slot)
+    (n' : Nat), recurse ctx slots n region instructions = .ok (rest, outSlots, n') →
+    outSlots.length = out.length ∧
+      ∀ (env : Environment (Component (assignment F G)) Γ) (cenv : List (Value F G)),
+        Holds handle cenv slots env → cenv.length = n →
+        ∀ {A : Type} (kS : List (Value F G) → PIR.Proc (Actions F G) A)
+          (kO : Values (Component (assignment F G)) out → PIR.Proc (Actions F G) A),
+          (∀ cenv' outs, cenv <+: cenv' → cenv'.length = n' → HoldsValues handle cenv' outSlots outs →
+            specK context handle (helperTable program F G) rest cenv' kS = kO outs) →
+          specK context handle (helperTable program F G) instructions cenv kS =
+            ((region.denote (plainMeaning program context ctx) env).interpret CommonAdapter.project).bind kO
+
+/-- A loop's iterations implement the repeat's fold when each iteration's body
+implements one repeat step, with the carried values related to the masked state
+by carried slots. -/
+theorem iterate_projects {B : Type} (self : Nat) (scopes : List (List Nat)) (spec : RepeatSpec)
+    (ctx : ProtocolContext) (env : List (Value F G)) (yielded : List Nat) (loopBody : List Instruction)
+    (count : Nat) (captures : Values (Component (assignment F G)) spec.captures)
+    (callback : RegionFunction (Component (assignment F G)) (participantInterface F G)
+      (.index :: (spec.state ++ spec.captures), spec.state))
+    (stepSound : ∀ (index : Nat) (carried : List (Value F G))
+      (state : Values (Component (assignment F G)) spec.state),
+      carried.length = count → HoldsValues handle carried (carriedSlots self scopes 0 spec.state.length) state →
+      ∀ (K : List (Value F G) → PIR.Proc (Actions F G) B)
+        (K' : Values (Component (assignment F G)) spec.state → PIR.Proc (Actions F G) B),
+        (∀ carried' state', carried'.length = count →
+          HoldsValues handle carried' (carriedSlots self scopes 0 spec.state.length) state' →
+            K carried' = K' state') →
+        specK context handle (helperTable program F G) loopBody (env ++ .index index :: carried)
+            (fun final => match read final yielded with
+              | some carried' => K carried'
+              | none => .halt .refused) =
+          ((Repeat.step spec ctx self captures callback state index).interpret CommonAdapter.project).bind K') :
+    ∀ (indices : List Nat) (carried : List (Value F G)) (state : Values (Component (assignment F G)) spec.state),
+      carried.length = count → HoldsValues handle carried (carriedSlots self scopes 0 spec.state.length) state →
+      ∀ (K : List (Value F G) → PIR.Proc (Actions F G) B)
+        (K' : Values (Component (assignment F G)) spec.state → PIR.Proc (Actions F G) B),
+        (∀ carried' state', carried'.length = count →
+          HoldsValues handle carried' (carriedSlots self scopes 0 spec.state.length) state' →
+            K carried' = K' state') →
+        iterate (fun start continuation => specK context handle (helperTable program F G) loopBody start
+            continuation) env yielded indices carried K =
+          ((Finite.fold (Repeat.step spec ctx self captures callback) indices state).interpret
+            CommonAdapter.project).bind K'
+  | [], carried, state, length, holds, K, K', agree => by
+      simp only [iterate, Finite.fold, PIR.Proc.interpret, PIR.Proc.bind]
+      exact agree carried state length holds
+  | index :: rest, carried, state, length, holds, K, K', agree => by
+      simp only [iterate, Finite.fold]
       rw [PIR.Proc.interpret_bind, PIR.Proc.bind_assoc]
-      apply walkOperation_sound program context handle ctx n op _ instructions remaining results n''
-        stepped (args.eval env) (bodies.denote (plainMeaning program context ctx)) cenv (holds.eval args)
-        (by simp [Operands.indices_length]) length
-      intro cenv' values prefix_ length' valuesHold
-      exact walk_sound fuel ctx (results ++ slots) n'' next remaining rest outSlots n' accepted
-        (env.prepend values) cenv' ((holds.mono prefix_).prepend values resultsLength valuesHold)
-        length' kS kO (fun cenv'' outs prefix'' length'' outsHold =>
-          cont cenv'' outs (prefix_.trans prefix'') length'' outsHold)
+      exact stepSound index carried state length holds _ _ (fun carried' state' length' holds' =>
+        iterate_projects self scopes spec ctx env yielded loopBody count captures callback stepSound rest
+          carried' state' length' holds' K K' agree)
+
+/-- Soundness of one walk step, given the soundness of the walk it recurses
+with: applications and repeats, and every other operation through
+`walkOperation_sound`. -/
+theorem walkStep_sound (recurse : Walker) (sound : WalkSound (F := F) (G := G) program context handle recurse)
+    (ctx : ProtocolContext) (n : Nat) (op : ProtocolOp) (arguments : List Slot)
+    (bodies : Regions protocolDialect op.regions) (instructions rest : List Instruction)
+    (results : List Slot) (n' : Nat)
+    (accepted : walkStep program context recurse ctx n op arguments bodies instructions =
+      .ok (rest, results, n')) :
+    results.length = op.results.length ∧
+      ∀ (args : Values (Component (assignment F G)) op.arguments) (cenv : List (Value F G)),
+        HoldsValues handle cenv arguments args → arguments.length = op.arguments.length → cenv.length = n →
+        ∀ {A : Type} (kS : List (Value F G) → PIR.Proc (Actions F G) A)
+          (kO : Values (Component (assignment F G)) op.results → PIR.Proc (Actions F G) A),
+          (∀ cenv' values, cenv <+: cenv' → cenv'.length = n' → HoldsValues handle cenv' results values →
+            specK context handle (helperTable program F G) rest cenv' kS = kO values) →
+          specK context handle (helperTable program F G) instructions cenv kS =
+            (((plainMeaning program context ctx).operation op args
+              (bodies.denote (plainMeaning program context ctx))).interpret CommonAdapter.project).bind kO := by
+  have generic : walkOperation program context ctx n op arguments instructions = .ok (rest, results, n') →
+      results.length = op.results.length ∧
+      ∀ (args : Values (Component (assignment F G)) op.arguments) (cenv : List (Value F G)),
+        HoldsValues handle cenv arguments args → arguments.length = op.arguments.length → cenv.length = n →
+        ∀ {A : Type} (kS : List (Value F G) → PIR.Proc (Actions F G) A)
+          (kO : Values (Component (assignment F G)) op.results → PIR.Proc (Actions F G) A),
+          (∀ cenv' values, cenv <+: cenv' → cenv'.length = n' → HoldsValues handle cenv' results values →
+            specK context handle (helperTable program F G) rest cenv' kS = kO values) →
+          specK context handle (helperTable program F G) instructions cenv kS =
+            (((plainMeaning program context ctx).operation op args
+              (bodies.denote (plainMeaning program context ctx))).interpret CommonAdapter.project).bind kO :=
+    fun stepped => ⟨walkOperation_length program context ctx n op arguments instructions rest results n' stepped,
+      fun args cenv argsHold argsLength length _ kS kO cont =>
+        walkOperation_sound program context handle ctx n op arguments instructions rest results n' stepped args
+          _ cenv argsHold argsLength length kS kO cont⟩
+  cases op with
+  | protocolApply signature roles site =>
+    simp only [walkStep] at accepted
+    by_cases contains : (ctx.enter site roles).contains signature context.validator = true
+    · simp only [contains, ↓reduceIte] at accepted
+      cases found : program.payload.protocols.find? (fun definition => definition.signature == signature) with
+      | none => simp [found] at accepted
+      | some definition =>
+        simp only [found] at accepted
+        cases recursed : recurse (ctx.enter site roles)
+            (Slot.mask context.validator ((ctx.enter site roles).mapScopes definition.inputScopes) arguments) n
+            definition.body instructions with
+        | error error => simp [recursed] at accepted
+        | ok triple =>
+          obtain ⟨remaining, outputs, n''⟩ := triple
+          simp only [recursed, Except.ok.injEq, Prod.mk.injEq] at accepted
+          obtain ⟨rfl, rfl, rfl⟩ := accepted
+          have member := List.mem_of_find?_eq_some found
+          have same : definition.signature = signature := by simpa using List.find?_some found
+          subst same
+          obtain ⟨outputsLength, bodySound⟩ := sound _ _ _ definition.body _ _ _ _ recursed
+          refine ⟨by rw [Slot.mask_length, outputsLength]; rfl, ?_⟩
+          intro args cenv argsHold argsLength length A kS kO cont
+          have invoked := protocol_invoke_body (.silent _) (participantActions F G) (plainHelpers program)
+            program.payload.protocols program.payload.protocolsLinked definition member (ctx.enter site roles)
+            context.validator args
+          change specK context handle (helperTable program F G) instructions cenv kS =
+            ((if (ctx.enter site roles).contains definition.signature context.validator then
+                invokeProtocol (program.payload.plainProtocolTable F G) definition.signature
+                  (ctx.enter site roles) context.validator args
+              else .done (Values.absent (assignment F G) definition.signature.outputs)).interpret
+                CommonAdapter.project).bind kO
+          rw [ite_eq_left contains, show invokeProtocol (program.payload.plainProtocolTable F G) definition.signature
+            (ctx.enter site roles) context.validator args = _ from invoked]
+          simp only [CheckedProtocol.denoteWith, PIR.Proc.interpret_bind]
+          refine (bodySound _ cenv (HoldsValues.mask context.validator _ argsHold
+            (by simpa using argsLength)).get length kS _ ?_).trans (PIR.Proc.bind_assoc _ _ _).symm
+          intro cenv' outs prefix_ length' outsHold
+          simp only [PIR.Proc.interpret, PIR.Proc.bind]
+          exact cont cenv' _ prefix_ length' (HoldsValues.mask context.validator _ outsHold outputsLength)
+    · simp only [contains, Bool.false_eq_true, ↓reduceIte, Except.ok.injEq, Prod.mk.injEq] at accepted
+      obtain ⟨rfl, rfl, rfl⟩ := accepted
+      refine ⟨by simp [ProtocolOp.results], ?_⟩
+      intro args cenv argsHold argsLength length A kS kO cont
+      change specK context handle (helperTable program F G) instructions cenv kS =
+        ((if (ctx.enter site roles).contains signature context.validator then
+            invokeProtocol (program.payload.plainProtocolTable F G) signature (ctx.enter site roles)
+              context.validator args
+          else .done (Values.absent (assignment F G) signature.outputs)).interpret CommonAdapter.project).bind kO
+      rw [ite_eq_right contains]
+      simp only [PIR.Proc.interpret, PIR.Proc.bind]
+      exact cont cenv _ (List.prefix_refl cenv) length (holdsValues_absent cenv _)
+  | «repeat» spec site =>
+    match bodies with
+    | .cons body .nil =>
+    simp only [walkStep] at accepted
+    by_cases participates : (spec.roles.map ctx.roles).contains context.validator = true
+    · simp only [participates, ↓reduceIte] at accepted
+      split at accepted
+      · rename_i _ _ _ site' maximum yielded count initial sorts loopBody rest' skipped countReference
+          references nexted countSlot referenced
+        split_ifs at accepted with conditions
+        obtain ⟨siteEq, maximumEq, countEq, initialEq, initialBound, yieldedLength⟩ := conditions
+        split at accepted
+        · rename_i bodyRest outputs bodyEnd recursed
+          split at accepted
+          · rename_i _ _ bodySkipped yieldedReferences bodySkip yieldedFound
+            split_ifs at accepted with yieldConditions
+            obtain ⟨yieldedEq, yieldedBound⟩ := yieldConditions
+            simp only [Except.ok.injEq, Prod.mk.injEq] at accepted
+            obtain ⟨rfl, rfl, rfl⟩ := accepted
+            subst maximumEq countEq
+            refine ⟨by simp [carriedSlots_length, ProtocolOp.results], ?_⟩
+            intro args cenv argsHold argsLength length A kS kO cont
+            cases arguments with
+            | nil => simp at countSlot
+            | cons countSlot' argumentsTail =>
+            simp only [List.headD_cons] at countSlot
+            subst countSlot
+            simp only [List.drop_succ_cons, List.drop_zero] at referenced recursed
+            match args, argsHold with
+            | .cons countValue values, ⟨countHolds, valuesHold⟩ =>
+            obtain ⟨bound, countSome, countDecoded⟩ := countHolds
+            subst countSome
+            have tailHold : HoldsValues handle cenv argumentsTail values := valuesHold
+            obtain ⟨stateHold, captureHold⟩ := HoldsValues.split spec.state tailHold
+            have tailLength : argumentsTail.length = spec.state.length + spec.captures.length := by
+              simpa [ProtocolOp.arguments] using argsLength
+            have stateLength : (argumentsTail.take spec.state.length).length = spec.state.length := by
+              simp [tailLength]
+            obtain ⟨outputsLength, bodySound⟩ := sound ctx _ _ body loopBody bodyRest outputs bodyEnd recursed
+            obtain ⟨extra, extraLength, nextEq⟩ :=
+              next_spec context handle (helperTable program F G) nexted cenv
+            rw [nextEq]
+            have envLength : (cenv ++ extra).length = n + skipped := by simp [length, extraLength]
+            have countAt : indexAt (cenv ++ extra) count = some bound := by
+              cases at_ : cenv[count]? with
+              | none => simp [at_] at countDecoded
+              | some stored =>
+                have stored' : (cenv ++ extra)[count]? = some stored :=
+                  getElem?_of_prefix (List.prefix_append cenv extra) at_
+                simp only [at_, Option.bind_some] at countDecoded
+                cases stored <;> simp [Value.decode] at countDecoded
+                subst countDecoded
+                simp [indexAt, stored']
+            obtain ⟨carried, readInitial⟩ := read_some (env := cenv ++ extra) (references := initial)
+              (fun reference member => by
+                have bounded := List.all_eq_true.mp initialBound reference member
+                simp only [decide_eq_true_eq] at bounded
+                rw [envLength]
+                exact bounded)
+            have initialHolds := carried_holds context.validator (List.prefix_append cenv extra) initial
+              readInitial (ctx.mapScopes spec.stateScopes) 0 referenced stateHold stateLength
+              (by simpa using initialEq)
+            have stepSound : ∀ (index : Nat) (carried : List (Value F G))
+                (state : Values (Component (assignment F G)) spec.state),
+                carried.length = initial.length →
+                HoldsValues handle carried
+                  (carriedSlots context.validator (ctx.mapScopes spec.stateScopes) 0 spec.state.length) state →
+                ∀ (K : List (Value F G) → PIR.Proc (Actions F G) A)
+                  (K' : Values (Component (assignment F G)) spec.state → PIR.Proc (Actions F G) A),
+                  (∀ carried' state', carried'.length = initial.length →
+                    HoldsValues handle carried'
+                      (carriedSlots context.validator (ctx.mapScopes spec.stateScopes) 0 spec.state.length) state' →
+                      K carried' = K' state') →
+                  specK context handle (helperTable program F G) loopBody
+                      ((cenv ++ extra) ++ .index index :: carried)
+                      (fun final => match read final yielded with
+                        | some carried' => K carried'
+                        | none => .halt .refused) =
+                    ((Repeat.step spec ctx context.validator (Values.split spec.state values).2
+                      (fun vs => body.denote (plainMeaning program context ctx) vs.get) state index).interpret
+                        CommonAdapter.project).bind K' := by
+              intro index carried state carriedLength carriedHolds K K' agree
+              simp only [Repeat.step, PIR.Proc.interpret_bind]
+              have masked : HoldsValues handle ((cenv ++ extra) ++ .index index :: carried)
+                  (carriedSlots context.validator (ctx.mapScopes spec.stateScopes) (n + skipped + 1)
+                    spec.state.length)
+                  (maskValues context.validator (ctx.mapScopes spec.stateScopes) state) := by
+                have shifted := HoldsValues.shift context.validator ((cenv ++ extra) ++ [.index index])
+                  (ctx.mapScopes spec.stateScopes) 0 carriedHolds
+                have maskedShifted := HoldsValues.mask context.validator (ctx.mapScopes spec.stateScopes) shifted
+                  (carriedSlots_length _ _ _ _)
+                rw [mask_carriedSlots] at maskedShifted
+                simpa [length, extraLength, Nat.add_assoc] using maskedShifted
+              have bodyHolds : HoldsValues handle ((cenv ++ extra) ++ .index index :: carried)
+                  (.held (n + skipped) :: (carriedSlots context.validator (ctx.mapScopes spec.stateScopes)
+                    (n + skipped + 1) spec.state.length ++ argumentsTail.drop spec.state.length))
+                  (show Values (Component (assignment F G)) (.index :: (spec.state ++ spec.captures)) from
+                    .cons (some index) ((maskValues context.validator (ctx.mapScopes spec.stateScopes)
+                      state).append (Values.split spec.state values).2)) := by
+                refine ⟨⟨index, rfl, ?_⟩, ?_⟩
+                · rw [List.getElem?_append_right (by omega)]
+                  simp [envLength, Value.decode]
+                · exact HoldsValues.append masked (carriedSlots_length _ _ _ _)
+                    (captureHold.mono ((List.prefix_append cenv extra).trans (List.prefix_append _ _)))
+              refine (bodySound _ ((cenv ++ extra) ++ .index index :: carried) bodyHolds.get
+                (by simp [carriedLength]; omega) _ _ ?_).trans (PIR.Proc.bind_assoc _ _ _).symm
+              intro cenv'' outs prefix'' length'' outsHold
+              obtain ⟨extra', extraLength', skipEq⟩ :=
+                skip_spec context handle (helperTable program F G) bodyRest cenv''
+              rw [skipEq, bodySkip]
+              simp only [specK]
+              obtain ⟨carried', readYielded⟩ := read_some (env := cenv'' ++ extra') (references := yielded)
+                (fun reference member => by
+                  have bounded := List.all_eq_true.mp yieldedBound reference member
+                  simp only [decide_eq_true_eq] at bounded
+                  simp only [bodySkip] at extraLength'
+                  simp [length'', extraLength']
+                  omega)
+              simp only [readYielded, PIR.Proc.interpret, PIR.Proc.bind]
+              exact agree carried' _ (by rw [read_length readYielded, yieldedLength])
+                (carried_holds context.validator (List.prefix_append cenv'' extra') yielded readYielded
+                  (ctx.mapScopes spec.stateScopes) 0 yieldedFound outsHold outputsLength (by simpa using yieldedEq))
+            change specK context handle (helperTable program F G) (_ :: rest') (cenv ++ extra) kS =
+              ((denoteRepeat spec ctx context.validator (some bound) (Values.split spec.state values).1
+                (Values.split spec.state values).2
+                (fun vs => body.denote (plainMeaning program context ctx) vs.get)).interpret
+                  CommonAdapter.project).bind kO
+            simp only [denoteRepeat, participates, ↓reduceIte, specK, specStep, countAt, readInitial]
+            by_cases bounded : bound ≤ spec.maximum
+            · simp only [bounded, ↓reduceIte]
+              exact iterate_projects program context handle context.validator (ctx.mapScopes spec.stateScopes) spec
+                ctx (cenv ++ extra) yielded loopBody initial.length (Values.split spec.state values).2
+                (fun vs => body.denote (plainMeaning program context ctx) vs.get) stepSound (List.range bound) carried _
+                (read_length readInitial) initialHolds _ _ (fun carried' state' carriedLength' holds' => by
+                  have shifted := HoldsValues.shift context.validator (cenv ++ extra)
+                    (ctx.mapScopes spec.stateScopes) 0 holds'
+                  rw [envLength] at shifted
+                  exact cont ((cenv ++ extra) ++ carried') state'
+                    ((List.prefix_append cenv extra).trans (List.prefix_append _ _))
+                    (by simp [length, extraLength, carriedLength']; omega) shifted)
+            · simp only [bounded, ↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]
+          · cases accepted
+          · cases accepted
+        · cases accepted
+      · cases accepted
+    · simp only [participates, Bool.false_eq_true, ↓reduceIte, Except.ok.injEq, Prod.mk.injEq] at accepted
+      obtain ⟨rfl, rfl, rfl⟩ := accepted
+      refine ⟨by simp [ProtocolOp.results], ?_⟩
+      intro args cenv argsHold argsLength length A kS kO cont
+      match args with
+      | .cons countValue values =>
+      change specK context handle (helperTable program F G) instructions cenv kS =
+        ((denoteRepeat spec ctx context.validator countValue (Values.split spec.state values).1
+          (Values.split spec.state values).2
+          (fun vs => body.denote (plainMeaning program context ctx) vs.get)).interpret
+            CommonAdapter.project).bind kO
+      simp only [denoteRepeat, participates, Bool.false_eq_true, ↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]
+      exact cont cenv _ (List.prefix_refl cenv) length (holdsValues_absent cenv _)
+  | calculate => exact generic accepted
+  | localCall => exact generic accepted
+  | guard => exact generic accepted
+  | exchange => exact generic accepted
+  | restrict => exact generic accepted
+  | draw => exact generic accepted
+  | statement => exact generic accepted
+  | mark => exact generic accepted
+
+/-- Soundness of the projection walk for one region. -/
+theorem walk_sound : ∀ (fuel : Nat), WalkSound (F := F) (G := G) program context handle (walk program context fuel)
+  | 0 => by
+    intro ctx slots n region instructions rest outSlots n' accepted
+    simp [walk] at accepted
+  | fuel + 1 => by
+    intro ctx slots n region instructions rest outSlots n' accepted
+    match region, accepted with
+    | .ret values, accepted =>
+      simp only [walk, Except.ok.injEq, Prod.mk.injEq] at accepted
+      obtain ⟨rfl, rfl, rfl⟩ := accepted
+      refine ⟨by simp [Operands.indices_length], ?_⟩
+      intro env cenv holds length A kS kO cont
+      exact cont cenv _ (List.prefix_refl cenv) length (holds.eval values)
+    | .stop _, accepted => simp [walk] at accepted
+    | .bind _ _, accepted => simp [walk] at accepted
+    | .letOp op args bodies next, accepted =>
+      simp only [walk] at accepted
+      cases stepped : walkStep program context (walk program context fuel) ctx n op
+          ((Operands.indices args).map (Slot.at_ slots)) bodies instructions with
+      | error error => simp [stepped] at accepted
+      | ok triple =>
+        obtain ⟨remaining, results, n''⟩ := triple
+        simp only [stepped] at accepted
+        obtain ⟨resultsLength, stepSound⟩ := walkStep_sound program context handle (walk program context fuel)
+          (walk_sound fuel) ctx n op _ bodies instructions remaining results n'' stepped
+        obtain ⟨outLength, nextSound⟩ := walk_sound fuel ctx (results ++ slots) n'' next remaining rest outSlots
+          n' accepted
+        refine ⟨outLength, ?_⟩
+        intro env cenv holds length A kS kO cont
+        simp only [Region.denote]
+        rw [PIR.Proc.interpret_bind, PIR.Proc.bind_assoc]
+        apply stepSound (args.eval env) cenv (holds.eval args) (by simp [Operands.indices_length]) length
+        intro cenv' values prefix_ length' valuesHold
+        exact nextSound (env.prepend values) cenv' ((holds.mono prefix_).prepend values resultsLength valuesHold)
+          length' kS kO (fun cenv'' outs prefix'' length'' outsHold =>
+            cont cenv'' outs (prefix_.trans prefix'') length'' outsHold)
 
 end Walk
 
@@ -1477,24 +2163,6 @@ def validatorOutputs (self : Nat) : List (List Nat) → {tys : List Ty} →
         validatorOutputs self scopes.tail rest
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
-/-- Masking keeps the related components the role has. -/
-theorem HoldsValues.mask {handle : Nat} {cenv : List (Value F G)} (self : Nat) :
-    ∀ (scopes : List (List Nat)) {slots : List Slot} {tys : List Ty}
-      {values : Values (Component (assignment F G)) tys},
-      HoldsValues handle cenv slots values → slots.length = tys.length →
-      HoldsValues handle cenv (Slot.mask self scopes slots) (maskValues self scopes values)
-  | _, [], [], .nil, _, _ => trivial
-  | scopes, slot :: rest, _ :: _, .cons value others, holds, length => by
-      obtain ⟨head, tail⟩ := holds
-      refine ⟨?_, HoldsValues.mask self scopes.tail tail (by simpa using length)⟩
-      simp only [Slot.mask, List.headD_cons, Participant.restrict]
-      split
-      · simpa using head
-      · rfl
-  | _, [], _ :: _, _, _, length => by cases length
-  | _, _ :: _, [], _, _, length => by cases length
-
-omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 /-- The returned references read the validator's outputs. -/
 theorem outputs_read {handle : Nat} {cenv : List (Value F G)} (self : Nat) :
     ∀ (scopes : List (List Nat)) {slots : List Slot} {tys : List Ty}
@@ -1565,31 +2233,6 @@ variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [D
 variable (program : Structured.Program) (context : Context)
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
-/-- The walk returns one slot per region output. -/
-theorem walk_length : ∀ (fuel : Nat) {Γ out : List Ty} (ctx : ProtocolContext) (slots : List Slot)
-    (n : Nat) (region : Region protocolDialect Γ out) (instructions rest : List Instruction)
-    (outSlots : List Slot) (n' : Nat),
-    walk program context fuel ctx slots n region instructions = .ok (rest, outSlots, n') →
-    outSlots.length = out.length
-  | 0, _, _, _, _, _, _, _, _, _, _, accepted => by simp [walk] at accepted
-  | fuel + 1, _, _, _, slots, _, .ret values, _, _, _, _, accepted => by
-      simp only [walk, Except.ok.injEq, Prod.mk.injEq] at accepted
-      obtain ⟨_, rfl, _⟩ := accepted
-      simp [Operands.indices_length]
-  | fuel + 1, _, _, _, _, _, .stop _, _, _, _, _, accepted => by simp [walk] at accepted
-  | fuel + 1, _, _, _, _, _, .bind _ _, _, _, _, _, accepted => by simp [walk] at accepted
-  | fuel + 1, _, _, ctx, slots, n, .letOp op args bodies next, instructions, rest, outSlots, n',
-      accepted => by
-      simp only [walk] at accepted
-      cases stepped : walkOperation program context ctx n op
-          ((Operands.indices args).map (Slot.at_ slots)) instructions with
-      | error error => simp [stepped] at accepted
-      | ok triple =>
-        obtain ⟨remaining, results, n''⟩ := triple
-        simp only [stepped] at accepted
-        exact walk_length fuel ctx (results ++ slots) n'' next remaining rest outSlots n' accepted
-
-omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem read_eq_some {env values : List (Value F G)} :
     ∀ {references : List Nat}, read env references = some values ↔
       references.map (env[·]?) = values.map some
@@ -1643,7 +2286,9 @@ theorem project_sound (participant : Participant)
         rw [participant_plain program context.validator inputs]
         simp only [spec, specK_bind]
         rw [PIR.Proc.bind_assoc, PIR.Proc.interpret_bind]
-        apply walk_sound program context handle projectionFuel {} _ _ _ _ _ _ _ walked
+        obtain ⟨outputsLength, walkedSound⟩ :=
+          walk_sound (F := F) (G := G) program context handle projectionFuel {} _ _ _ _ _ _ _ walked
+        apply walkedSound
         · exact (HoldsValues.mask context.validator _ related (by simp [inputSlots])).get
         · simp [arity]
         · intro cenv' outs prefix_ length' outsHold
@@ -1653,7 +2298,7 @@ theorem project_sound (participant : Participant)
           simp only [skipEq] at extraLength
           simp only [specK]
           obtain ⟨read_, readReferences, readEq⟩ := outputs_read context.validator _ referenced outsHold
-            (walk_length program context projectionFuel {} _ _ _ _ _ _ _ walked)
+            outputsLength
           obtain ⟨values, readValues⟩ := read_some (env := cenv' ++ extra) (references := participant.returned)
             (fun reference member => by
               have := List.all_eq_true.mp bounded reference member

@@ -2,8 +2,8 @@
 
 This chapter defines the formal check of the compiler's native
 [transcript construction](../../../docs/spec/ir/construction.md) for a role-local
-validator, and the security theorem it supports for the compiled Schnorr proof
-Entry. The native [export](../../../docs/spec/formats/constructed-participant.md)
+validator, the transform theorems it supports for the compiled Schnorr and
+Sumcheck proof Entries, and the security theorem for the Schnorr Entry. The native [export](../../../docs/spec/formats/constructed-participant.md)
 supplies the checked candidate's validator; the
 [structured import](structured-source.md) supplies the original program.
 
@@ -170,6 +170,12 @@ compiled candidate. In `ZkcExamples.Construction.SchnorrProof`:
   selected acceptance output is the common Schnorr experiment, is derived from
   `project_sound` and `verifier_correspondence`.
 
+The compiled Sumcheck proof Entry is checked the same way
+([participant projection](participant-projection.md#the-compiled-sumcheck-proof-entry)):
+its validator's ideal meaning is the Fiat–Shamir transform of the original
+Sumcheck validator for every challenge function. No security theorem is proved
+for it here.
+
 `ZkcSecurity.Examples.CompiledSchnorrFiatShamir` answers every challenge with
 one lazily sampled random oracle on histories, which the prover may query at any
 history. `verify_eq` shows that the compiled verifier asks one challenge, at its
@@ -202,7 +208,10 @@ Sigma instance.
 - Random oracle: the suite's challenge on an absorbed history is a uniformly
   random function of that history, shared by the prover and final verification.
   Canonical value and occurrence encodings are injective, so typed histories
-  stand for absorbed bytes. The suite reduces 64 squeezed bytes to a field
+  stand for absorbed bytes. Model occurrences omit the iteration coordinates
+  that native occurrences inside loops carry; a typed history stands for the
+  absorbed bytes because a validator's coordinates at each occurrence are
+  determined by its absorbed history. The suite reduces 64 squeezed bytes to a field
   element, which is close to, not exactly, uniform; the model treats it as
   exactly uniform.
 - Binding: the deployed host initializes the transcript with exactly the

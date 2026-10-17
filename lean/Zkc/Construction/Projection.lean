@@ -20,10 +20,16 @@ message by a receive at the same qualified site from the producer, a selected
 draw by a challenge at the same qualified query site, and the delivery of its
 answer by the observation of a message the validator sends at the delivery site.
 Calculations whose operands are all present but which the exported program does
-not keep are admitted only when they cannot stop. Transcript plumbing
-(coordinates and observations of received messages) is skipped. Every exported
-instruction must be accounted for, and the returned references must hold the
-validator's outputs.
+not keep are admitted only when they cannot stop. A protocol application in
+which the validator participates is walked through the callee's body in the
+child context, with the callee's input and output masks; the exported program
+has no instruction for the application itself. A repeat in which the validator
+participates must be implemented by a loop with the same bound whose carried
+values start with the state components the validator has, followed by
+transcript plumbing; the loop body is walked against the repeat body once, for
+every iteration. Transcript plumbing (coordinates and observations of received
+messages) is skipped. Every exported instruction must be accounted for, and the
+returned references must hold the validator's outputs.
 
 `Zkc.Construction.project_sound` proves that the exported program's interactive
 reading equals the original validator's participant process, read through its
@@ -66,6 +72,42 @@ def isAbsent : Slot → Bool
   | _ => false
 
 end Slot
+
+/-- Operations the component evaluator applies strictly: an absent operand makes
+every result absent, with no effect. -/
+def strictOperation : Op → Bool
+  | .exec _ | .map _ => false
+  | .invoke helper => helper.kind != .math
+  | _ => true
+
+/-- Whether a helper body yields only absent outputs, with no effect or stop,
+when every input is absent: each operation has an operand, which is then absent,
+and is evaluated strictly. -/
+def absentPreserving {Γ out : List Ty} : Region dialect Γ out → Bool
+  | .ret _ => true
+  | .stop _ => false
+  | .letOp op arguments _ next =>
+      (Operands.indices arguments) != [] && strictOperation op && absentPreserving next
+  | .bind body next => absentPreserving body && absentPreserving next
+
+/-- Slots of carried repeat state: each of `count` components that the role has
+is held at the next carried position, from `base`; the others are absent. -/
+def carriedSlots (self : Nat) : List (List Nat) → Nat → Nat → List Slot
+  | _, _, 0 => []
+  | scopes, base, count + 1 =>
+      if (scopes.headD []).contains self then .held base :: carriedSlots self scopes.tail (base + 1) count
+      else .absent :: carriedSlots self scopes.tail base count
+
+/-- The references the role holds for the components in its scopes, in order;
+every such component must be held. -/
+def outputReferences (self : Nat) : List (List Nat) → List Slot → Option (List Nat)
+  | _, [] => some []
+  | scopes, slot :: rest =>
+      if (scopes.headD []).contains self then
+        match slot with
+        | .held reference => (outputReferences self scopes.tail rest).map (reference :: ·)
+        | _ => none
+      else outputReferences self scopes.tail rest
 
 /-- Leading instructions that the interactive reading runs without any action:
 coordinate constructions and observations of messages the validator does not
@@ -151,9 +193,44 @@ def expectCalculation (calculation : Calculation) (references : List Nat)
       else none
   | _ => none
 
+/-- One calculation at the validator role. A calculation of the carrier
+vocabulary is implemented by the same calculation or, if total, may be omitted;
+an absent operand makes it absent. A Math helper invocation with only absent
+operands is absent when the checked helper's body preserves absence; a fold with
+an absent operand is absent. Other calculations are refused. -/
+def walkCalculation (n : Nat) (operation : Op) (arguments : List Slot) (instructions : List Instruction) :
+    Except String (List Instruction × List Slot × Nat) :=
+  match Calculation.ofOp? operation with
+  | some calculation =>
+      if arguments.any Slot.isAbsent then
+        .ok (instructions, operation.results.map fun _ => .absent, n)
+      else
+        match (if calculation.op.results.all dataType then Slot.references arguments else none).bind
+            (fun references => expectCalculation context calculation references instructions) with
+        | some (rest, count) => .ok (rest, [.held (n + count)], n + count + 1)
+        | none =>
+            if calculation.total then .ok (instructions, [.free], n)
+            else .error "projection-calculation"
+  | none =>
+      match operation with
+      | .invoke helper =>
+          if arguments.all Slot.isAbsent then
+            match program.payload.definitions.find? (fun definition => definition.helper == helper) with
+            | some definition =>
+                if absentPreserving definition.body then
+                  .ok (instructions, operation.results.map fun _ => .absent, n)
+                else .error "projection-invoke"
+            | none => .error "projection-invoke"
+          else .error "projection-invoke"
+      | .fold _ =>
+          if arguments.any Slot.isAbsent then .ok (instructions, operation.results.map fun _ => .absent, n)
+          else .error "projection-operation"
+      | _ => .error "projection-operation"
+
 /-- One original operation without nested regions, at the validator role.
 Returns the remaining instructions, the slots of the operation's results and the
-extended reference count. -/
+extended reference count. Applications and repeats are walked by `walkStep`;
+here they refuse. -/
 def walkOperation (ctx : ProtocolContext) (n : Nat) (op : ProtocolOp) (arguments : List Slot)
     (instructions : List Instruction) : Except String (List Instruction × List Slot × Nat) :=
   let self := context.validator
@@ -163,19 +240,7 @@ def walkOperation (ctx : ProtocolContext) (n : Nat) (op : ProtocolOp) (arguments
   | .restrict _ roles =>
       .ok (instructions,
         [if (roles.map ctx.roles).contains self then arguments.headD .absent else .absent], n)
-  | .calculate operation _ =>
-      match Calculation.ofOp? operation with
-      | some calculation =>
-          if arguments.any Slot.isAbsent then
-            .ok (instructions, operation.results.map fun _ => .absent, n)
-          else
-            match (if calculation.op.results.all dataType then Slot.references arguments else none).bind
-                (fun references => expectCalculation context calculation references instructions) with
-            | some (rest, count) => .ok (rest, [.held (n + count)], n + count + 1)
-            | none =>
-                if calculation.total then .ok (instructions, [.free], n)
-                else .error "projection-calculation"
-      | none => .error "projection-operation"
+  | .calculate operation _ => walkCalculation program context n operation arguments instructions
   | .localCall helper _ owner _ =>
       if ctx.roles owner = self then
         match Slot.references arguments with
@@ -232,19 +297,87 @@ def walkOperation (ctx : ProtocolContext) (n : Nat) (op : ProtocolOp) (arguments
   | .protocolApply .. => .error "projection-application"
   | .repeat .. => .error "projection-repeat"
 
-/-- The projection walk of one region at the validator role. -/
-def walk : Nat → {Γ out : List Ty} → ProtocolContext → List Slot → Nat →
-    Region protocolDialect Γ out → List Instruction →
+/-- A walk of a region in a context: the remaining instructions, the result
+slots and the extended reference count. -/
+abbrev Walker := ∀ {Γ out : List Ty}, ProtocolContext → List Slot → Nat → Region protocolDialect Γ out →
+  List Instruction → Except String (List Instruction × List Slot × Nat)
+
+/-- One original operation at the validator role. A protocol application walks
+the callee's body with `recurse` in the child context; a repeat walks its body
+with `recurse` against the exported loop's body. -/
+def walkStep (recurse : Walker) (ctx : ProtocolContext) (n : Nat) :
+    (op : ProtocolOp) → List Slot → Regions protocolDialect op.regions → List Instruction →
       Except String (List Instruction × List Slot × Nat)
+  | .protocolApply signature roles site, arguments, _, instructions =>
+      let self := context.validator
+      let child := ctx.enter site roles
+      if child.contains signature self then
+        match program.payload.protocols.find? (fun definition => definition.signature == signature) with
+        | some definition =>
+            match recurse child (Slot.mask self (child.mapScopes definition.inputScopes) arguments) n
+                definition.body instructions with
+            | .ok (remaining, outputs, n') =>
+                .ok (remaining, Slot.mask self (child.mapScopes definition.outputScopes) outputs, n')
+            | .error error => .error error
+        | none => .error "projection-application"
+      else .ok (instructions, signature.outputs.map fun _ => .absent, n)
+  | .repeat spec site, arguments, .cons body .nil, instructions =>
+      let self := context.validator
+      if (spec.roles.map ctx.roles).contains self then
+        let scopes := ctx.mapScopes spec.stateScopes
+        let stateSlots := (arguments.drop 1).take spec.state.length
+        let captureSlots := (arguments.drop 1).drop spec.state.length
+        match next? context instructions, arguments.headD .absent, outputReferences self scopes stateSlots with
+        | some (⟨.loop site' maximum yielded, count :: initial, _, loopBody⟩, rest, skipped),
+            .held countReference, some references =>
+            let start := n + skipped
+            if site' = qualifyProtocolSite ctx.applicationPrefix site ∧ maximum = spec.maximum ∧
+                count = countReference ∧ initial.take references.length = references ∧
+                initial.all (· < start) = true ∧ yielded.length = initial.length then
+              match recurse ctx (.held start :: (carriedSlots self scopes (start + 1) spec.state.length ++
+                  captureSlots)) (start + 1 + initial.length) body loopBody with
+              | .ok (bodyRest, outputs, bodyEnd) =>
+                  match skip context bodyRest, outputReferences self scopes outputs with
+                  | ([], bodySkipped), some yieldedReferences =>
+                      if yielded.take yieldedReferences.length = yieldedReferences ∧
+                          yielded.all (· < bodyEnd + bodySkipped) = true then
+                        .ok (rest, carriedSlots self scopes start spec.state.length, start + initial.length)
+                      else .error "projection-repeat-yield"
+                  | (_ :: _, _), _ => .error "projection-unexplained"
+                  | ([], _), none => .error "projection-repeat-yield"
+              | .error error => .error error
+            else .error "projection-repeat"
+        | _, _, _ => .error "projection-repeat"
+      else .ok (instructions, spec.state.map fun _ => .absent, n)
+  | .calculate operation allowed, arguments, _, instructions =>
+      walkOperation program context ctx n (.calculate operation allowed) arguments instructions
+  | .localCall helper kind owner site, arguments, _, instructions =>
+      walkOperation program context ctx n (.localCall helper kind owner site) arguments instructions
+  | .guard owner site, arguments, _, instructions =>
+      walkOperation program context ctx n (.guard owner site) arguments instructions
+  | .exchange ty sender receiver site, arguments, _, instructions =>
+      walkOperation program context ctx n (.exchange ty sender receiver site) arguments instructions
+  | .restrict ty roles, arguments, _, instructions =>
+      walkOperation program context ctx n (.restrict ty roles) arguments instructions
+  | .draw owner field site, arguments, _, instructions =>
+      walkOperation program context ctx n (.draw owner field site) arguments instructions
+  | .statement relation types selectors acceptance, arguments, _, instructions =>
+      walkOperation program context ctx n (.statement relation types selectors acceptance) arguments
+        instructions
+  | .mark site, arguments, _, instructions =>
+      walkOperation program context ctx n (.mark site) arguments instructions
+
+/-- The projection walk of one region at the validator role. -/
+def walk : Nat → Walker
   | 0, _, _, _, _, _, _, _ => .error "projection-depth"
   | fuel + 1, _, _, ctx, slots, n, region, instructions =>
       match region with
       | .ret values => .ok (instructions, (Operands.indices values).map (Slot.at_ slots), n)
       | .stop _ => .error "projection-stop"
       | .bind _ _ => .error "projection-bind"
-      | .letOp op arguments _ next =>
-          match walkOperation program context ctx n op
-              ((Operands.indices arguments).map (Slot.at_ slots)) instructions with
+      | .letOp op arguments bodies next =>
+          match walkStep program context (walk fuel) ctx n op
+              ((Operands.indices arguments).map (Slot.at_ slots)) bodies instructions with
           | .ok (remaining, results, n') => walk fuel ctx (results ++ slots) n' next remaining
           | .error error => .error error
 
@@ -265,16 +398,6 @@ def inputSlots (policy : Policy) (inputs : List Ty) : List Slot :=
     match policy.publicInputs.idxOf? index with
     | some position => .held position
     | none => if index = context.service then .service else .absent
-
-/-- The references the validator returns for its outputs, in original order. -/
-def outputReferences (self : Nat) : List (List Nat) → List Slot → Option (List Nat)
-  | _, [] => some []
-  | scopes, slot :: rest =>
-      if (scopes.headD []).contains self then
-        match slot with
-        | .held reference => (outputReferences self scopes.tail rest).map (reference :: ·)
-        | _ => none
-      else outputReferences self scopes.tail rest
 
 /-- The participant projection rule: the exported validator, read interactively,
 is the validator's projection of the original entry. The walk matches every

@@ -244,6 +244,7 @@ import Tests.StructuredUnitViews
 import Tests.StructuredWire
 import Tests.SumcheckHelperControls
 import Tests.SumcheckHelperMutants
+import Tests.SumcheckProjectionControls
 import Tests.SumcheckSourceComposition
 import Tests.SumcheckSourceControls
 import ZkcExamples.Construction.SchnorrProof
@@ -251,6 +252,8 @@ import ZkcExamples.Construction.SchnorrProofBinding
 import ZkcExamples.Construction.SchnorrProofBodies
 import ZkcExamples.Construction.SchnorrProofData
 import ZkcExamples.Construction.SchnorrProofParticipant
+import ZkcExamples.Construction.SumcheckProof
+import ZkcExamples.Construction.SumcheckProofParticipant
 import ZkcExamples.NativePrograms.ContractControls
 import ZkcExamples.NativePrograms.CustomProperty
 import ZkcExamples.NativePrograms.FactorControls

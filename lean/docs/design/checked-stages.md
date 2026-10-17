@@ -74,12 +74,16 @@ assumptions above.
   validator role, `Program.participant`.
 - Target meaning: the exported validator's interactive reading `spec`.
 - Certificate: none besides the export. A deterministic lockstep walk recomputes
-  which exported reference holds which original component (`Slot`), so the
-  check is linear in the program.
+  which exported reference holds which original component (`Slot`). It follows
+  protocol applications into the callee's body in the child context and matches
+  each repeat with one exported loop whose body it walks once, so the check is
+  linear in the program, not in the number of iterations.
 - Check: `project`.
 - Relation: equality of the two processes read through the validator's outputs,
   for inputs related by the published input positions.
 - Soundness: `project_sound` ([specification](../spec/participant-projection.md)).
+  A repeat's soundness is an induction on its iterations inside the walk's
+  soundness, which is itself an induction on the walk.
 
 The rule replaces the per-Entry equation that previously tied the compiled
 Schnorr validator's interactive reading to the original verifier. That equation
@@ -107,7 +111,10 @@ ideal (export) = transform (original validator) composed
 
 A security theorem about `transform` of the original verifier therefore
 applies to the compiled verifier with no Entry-specific proof beyond the input
-relation and the position of the acceptance output.
+relation and the position of the acceptance output. The compiled Schnorr and
+Sumcheck proof Entries are both linked this way; for Sumcheck the transformed
+original rewrites further, with an existing source theorem, to the rounds
+followed by the multilinear check.
 
 ## Stage meanings
 

@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Check the compiled Schnorr proof Entry's transcript construction in Lean.
+"""Check compiled proof Entries' transcript construction and projection in Lean.
 
-The driver compiles `example::Proof`, retains its original export, native policy,
+For each subject, the compiled Schnorr and Sumcheck `example::Proof` Entries,
+the driver compiles the Entry, retains its original export, native policy,
 constructed candidate and exported validator participant, and requires the
 committed Lean data to be their exact rendering. It then runs the composed Lean
 check (transcript construction and participant projection) on the fresh export,
-together with mutated exports that it must refuse, and confirms that the native
-checker refuses a mutated candidate before export. This is bounded agreement
-evidence: native exporter correctness and the primitive meanings remain stated
-boundaries.
+together with mutated exports that it must refuse, and for Schnorr confirms that
+the native checker refuses mutated candidates before export. This is bounded
+agreement evidence: native exporter correctness and the primitive meanings
+remain stated boundaries.
 """
 
 import argparse
@@ -28,11 +29,49 @@ import render as constructed  # noqa: E402
 sys.path.append(str(ROOT / "lean/bridges/structured"))
 import snapshot as structured  # noqa: E402
 
-MODULES = ["example=examples/projects/schnorr/main.zkc", "schnorr=libraries/schnorr/lib.zkc"]
-ENTRY = "example::Proof"
+sys.path.append(str(ROOT / "common/tests/support"))
+from project import project_inputs  # noqa: E402
+
 DATA = ROOT / "lean/ZkcExamples/Construction"
-ORIGINAL_NAMESPACE = "ZkcExamples.Construction.SchnorrProofData"
-PARTICIPANT_NAMESPACE = "ZkcExamples.Construction.SchnorrProofParticipant"
+
+
+class Subject:
+    """One compiled proof Entry and the Lean data and proofs that consume it.
+
+    `original_owned` is false when another bridge owns the original's rendering;
+    this driver then only compares it.
+    """
+
+    def __init__(self, name, modules, original, participant, module, program, original_owned):
+        self.name = name
+        self.entry = "example::Proof"
+        self.modules = modules
+        self.original = original
+        self.participant = participant
+        self.module = module
+        self.program = program
+        self.original_owned = original_owned
+
+
+def project_modules(manifest):
+    modules, assets = project_inputs(ROOT / manifest)
+    if assets:
+        raise ValueError(f"{manifest} has assets")
+    return [f"{name}={source}" for name, source in sorted(modules.items())]
+
+
+SUBJECTS = [
+    Subject("schnorr", ["example=examples/projects/schnorr/main.zkc", "schnorr=libraries/schnorr/lib.zkc"],
+            (DATA / "SchnorrProofData.lean", "ZkcExamples.Construction.SchnorrProofData"),
+            (DATA / "SchnorrProofParticipant.lean", "ZkcExamples.Construction.SchnorrProofParticipant"),
+            "ZkcExamples.Construction.SchnorrProof", "ZkcExamples.Construction.SchnorrProof.program", True),
+    Subject("sumcheck", project_modules("examples/projects/sumcheck/zkc.toml"),
+            (ROOT / "lean/ZkcExamples/Structured/SumcheckSourceData.lean",
+             "ZkcExamples.Structured.SumcheckSourceData"),
+            (DATA / "SumcheckProofParticipant.lean", "ZkcExamples.Construction.SumcheckProofParticipant"),
+            "ZkcExamples.Construction.SumcheckProof", "ZkcExamples.Structured.SumcheckSourceViews.program",
+            False),
+]
 
 
 def digest(data):
@@ -70,44 +109,46 @@ class Driver:
         if not passed:
             raise RuntimeError(f"check failed: {name} {detail}")
 
-    def export(self):
-        modules = [f"--module={module}" for module in MODULES]
-        common = ["--source-format=zkc", f"--entry={ENTRY}", *modules]
-        source = self.compile("language-emit", *common, name="emit").encode()
-        (self.output / "source.mlir").write_bytes(source)
-        deployment = json.loads(self.compile("language-bundle", *common, name="bundle"))
-        self.check("deployment-source", deployment[1] == digest(source))
+    def export(self, subject):
+        directory = self.output / subject.name
+        directory.mkdir()
+        modules = [f"--module={module}" for module in subject.modules]
+        common = ["--source-format=zkc", f"--entry={subject.entry}", *modules]
+        source = self.compile("language-emit", *common, name=f"{subject.name}:emit").encode()
+        (directory / "source.mlir").write_bytes(source)
+        deployment = json.loads(self.compile("language-bundle", *common, name=f"{subject.name}:bundle"))
+        self.check(f"{subject.name}:deployment-source", deployment[1] == digest(source))
         policy = deployment[2][1]
-        (self.output / "policy.json").write_text(json.dumps(policy))
+        (directory / "policy.json").write_text(json.dumps(policy))
         entry = policy[1]
-        candidate = self.compile("protocol-construct-proof", self.output / "source.mlir",
-                                 self.output / "policy.json", name="construct")
-        (self.output / "candidate.mlir").write_text(candidate)
+        candidate = self.compile("protocol-construct-proof", directory / "source.mlir",
+                                 directory / "policy.json", name=f"{subject.name}:construct")
+        (directory / "candidate.mlir").write_text(candidate)
         exported = json.loads(self.compile(
-            "protocol-constructed-participant", self.output / "source.mlir",
-            self.output / "policy.json", self.output / "candidate.mlir", name="participant"))
-        original = json.loads(self.compile("protocol-structured", self.output / "source.mlir",
-                                           f"--symbol={entry}", name="original"))
-        self.check("participant-source", exported[1] == "sha256:" + digest(source))
-        self.check("participant-policy", exported[3] == policy)
-        self.check("original-source", original[2] == "sha256:" + digest(source))
-        (self.output / "participant.json").write_text(json.dumps(exported))
-        (self.output / "original.json").write_text(json.dumps(original))
+            "protocol-constructed-participant", directory / "source.mlir",
+            directory / "policy.json", directory / "candidate.mlir", name=f"{subject.name}:participant"))
+        original = json.loads(self.compile("protocol-structured", directory / "source.mlir",
+                                           f"--symbol={entry}", name=f"{subject.name}:original"))
+        self.check(f"{subject.name}:participant-source", exported[1] == "sha256:" + digest(source))
+        self.check(f"{subject.name}:participant-policy", exported[3] == policy)
+        self.check(f"{subject.name}:original-source", original[2] == "sha256:" + digest(source))
+        (directory / "participant.json").write_text(json.dumps(exported))
+        (directory / "original.json").write_text(json.dumps(original))
         return source, policy, candidate, exported, original
 
-    def compare(self, original, exported):
+    def compare(self, subject, original, exported):
         files = {
-            DATA / "SchnorrProofData.lean": structured.render(original, ORIGINAL_NAMESPACE),
-            DATA / "SchnorrProofParticipant.lean": constructed.render(exported, PARTICIPANT_NAMESPACE),
+            subject.original[0]: (structured.render(original, subject.original[1]), subject.original_owned),
+            subject.participant[0]: (constructed.render(exported, subject.participant[1]), True),
         }
-        for path, text in files.items():
-            if self.args.write:
+        for path, (text, owned) in files.items():
+            if self.args.write and owned:
                 path.write_text(text, encoding="utf-8")
             current = path.read_text(encoding="utf-8") if path.exists() else None
             self.check(f"regenerated:{path.relative_to(ROOT)}", current == text,
                        "committed data differs from the fresh export")
 
-    def lean_rule(self, original, exported):
+    def lean_rule(self, subject, original, exported):
         """Run the composed Lean check on the fresh export and on mutated exports."""
         mutations = {}
 
@@ -116,8 +157,14 @@ class Driver:
             change(value[7])
             mutations[name] = value
 
+        def nested(instructions):
+            for item in instructions:
+                yield item
+                for region in item[5]:
+                    yield from nested(region[1])
+
         def instruction(instructions, operation, occurrence=0):
-            matches = [item for item in instructions if item[0] == operation]
+            matches = [item for item in nested(instructions) if item[0] == operation]
             return matches[occurrence]
 
         def first_observation_reads_base(instructions):
@@ -137,17 +184,49 @@ class Driver:
         def decision_compares_base_with_itself(instructions):
             instruction(instructions, "algebra.group_equal")[3][:] = [0, 0]
 
-        mutate("commitment-omitted", first_observation_reads_base)
-        mutate("challenge-before-commitment", challenge_reads_host_transcript)
-        mutate("wrong-domain-separator", challenge_names_delivery)
-        mutate("decision-compares-base-with-itself", decision_compares_base_with_itself)
-        # Each mutation is refused for the obligation it violates. The last one keeps
-        # the transcript wiring, so the construction rule alone accepts it.
-        codes = {"commitment-omitted": "construction-observe",
-                 "challenge-before-commitment": "construction-challenge",
-                 "wrong-domain-separator": "construction-challenge-site",
-                 "decision-compares-base-with-itself": "projection-unexplained"}
-        construction_accepts = {"decision-compares-base-with-itself"}
+        def loop_body(instructions):
+            return instruction(instructions, "protocol.loop")[5][0][1]
+
+        def round_check_dropped(instructions):
+            body = loop_body(instructions)
+            body.remove(instruction(body, "local.guard"))
+
+        def claim_update_mutated(instructions):
+            body = loop_body(instructions)
+            update = [item for item in body if item[0] == "algebra.field_add"][-1]
+            update[3][:] = [update[3][0], update[3][0]]
+
+        def stale_claim_yielded(instructions):
+            # The body's references start after the loop's environment: the
+            # inputs and the results of the top-level instructions before it,
+            # then the induction index and the carried values.
+            loop = instruction(instructions, "protocol.loop")
+            position = next(index for index, item in enumerate(instructions) if item is loop)
+            base = len(exported[5]) + sum(len(item[4]) for item in instructions[:position])
+            loop[5][0][2][1] = base + 2
+
+        # Each mutation is refused for the obligation it violates. Those that keep
+        # the transcript wiring are accepted by the construction rule alone.
+        if subject.name == "schnorr":
+            mutate("commitment-omitted", first_observation_reads_base)
+            mutate("challenge-before-commitment", challenge_reads_host_transcript)
+            mutate("wrong-domain-separator", challenge_names_delivery)
+            mutate("decision-compares-base-with-itself", decision_compares_base_with_itself)
+            codes = {"commitment-omitted": "construction-observe",
+                     "challenge-before-commitment": "construction-challenge",
+                     "wrong-domain-separator": "construction-challenge-site",
+                     "decision-compares-base-with-itself": "projection-unexplained"}
+            construction_accepts = {"decision-compares-base-with-itself"}
+        else:
+            mutate("wrong-domain-separator", challenge_names_delivery)
+            mutate("round-check-dropped", round_check_dropped)
+            mutate("claim-update-mutated", claim_update_mutated)
+            mutate("stale-claim-yielded", stale_claim_yielded)
+            codes = {"wrong-domain-separator": "construction-challenge-site",
+                     "round-check-dropped": "projection-guard",
+                     "claim-update-mutated": "projection-unexplained",
+                     "stale-claim-yielded": "projection-repeat-yield"}
+            construction_accepts = {"round-check-dropped", "claim-update-mutated", "stale-claim-yielded"}
 
         def body(text):
             """Drop the module header so several renderings share one check file."""
@@ -155,14 +234,14 @@ class Driver:
                              if line not in ("module", "@[expose] public section")
                              and not line.startswith("public import "))
 
-        parts = ["import ZkcExamples.Construction.SchnorrProof", "set_option maxRecDepth 20000",
+        parts = [f"import {subject.module}", "set_option maxRecDepth 20000",
                  body(structured.render(original, "Fresh.Original")),
                  body(constructed.render(exported, "Fresh.Actual"))]
         # The admitted original program was checked from the retained snapshot,
         # which must be the fresh one.
-        program = "ZkcExamples.Construction.SchnorrProof.program"
+        program = subject.program
         proofs = ["theorem original_retained : Fresh.Original.snapshot = "
-                  f"{ORIGINAL_NAMESPACE}.snapshot := rfl",
+                  f"{subject.original[1]}.snapshot := rfl",
                   "theorem actual_accepted : Zkc.Construction.checkCompiled Fresh.Original.snapshot "
                   f"{program} Fresh.Actual.participant = .ok () := by decide +kernel"]
         for index, (name, value) in enumerate(mutations.items()):
@@ -177,19 +256,21 @@ class Driver:
                           f".error \"{codes[name]}\" := by decide +kernel")
         proofs.append("#print axioms actual_accepted")
         source = "\n\n".join(parts + proofs) + "\n"
-        path = self.output / "FreshExport.lean"
+        path = self.output / subject.name / "FreshExport.lean"
         path.write_text(source, encoding="utf-8")
-        result = self.run([self.args.lake, "env", "lean", path], cwd=ROOT / "lean", name="lean-rule")
+        result = self.run([self.args.lake, "env", "lean", path], cwd=ROOT / "lean",
+                          name=f"{subject.name}:lean-rule")
         marker = "'actual_accepted' depends on axioms: ["
         axioms = result.stdout.split(marker, 1)[1].split("]", 1)[0] if marker in result.stdout else None
         allowed = {"propext", "Classical.choice", "Quot.sound"}
-        self.check("lean-rule", axioms is not None
+        self.check(f"{subject.name}:lean-rule", axioms is not None
                    and {name.strip() for name in axioms.split(",") if name.strip()} <= allowed,
                    result.stdout[-400:])
         return list(mutations)
 
-    def native_refusal(self, candidate, exported):
-        """The native checker refuses mutated candidates before any export."""
+    def native_refusal(self, subject, candidate, exported):
+        """The native checker refuses mutated Schnorr candidates before any export."""
+        directory = self.output / subject.name
         lines = candidate.splitlines()
         calls = [i for i, line in enumerate(lines) if "local.call @_transcript_4(" in line]
         self.check("native-mutation-site", len(calls) == 2)
@@ -211,16 +292,38 @@ class Driver:
 
         reasons = {}
         for name, (text, code, detail) in refusals.items():
-            path = self.output / f"candidate-{name}.mlir"
+            path = directory / f"candidate-{name}.mlir"
             path.write_text(text)
             result = self.run([self.args.compiler, "protocol-constructed-participant",
-                               self.output / "source.mlir", self.output / "policy.json", path],
+                               directory / "source.mlir", directory / "policy.json", path],
                               expect=None, name=f"native-refusal:{name}")
             reason = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else ""
             self.check(f"native-refusal:{name}", result.returncode != 0 and reason == code
                        and detail in result.stderr, result.stderr[-400:])
             reasons[name] = reason
         return reasons
+
+
+    def native_helper_refusal(self, subject, candidate, exported):
+        """The Lean rules read a helper call with the original's checked helper; the
+        native checker must refuse a candidate whose prepared helper body differs."""
+        directory = self.output / subject.name
+        callee = dict(exported[7][-1][1])["callee"][1]
+        start = candidate.index(f"local.func @{callee}(")
+        end = candidate.index("local.func", start + 1)
+        body = candidate[start:end]
+        constant = 'parameters = ["1"]'
+        self.check(f"{subject.name}:native-helper-constant", body.count(constant) >= 1)
+        mutated = candidate[:start] + body.replace(constant, 'parameters = ["2"]', 1) + candidate[end:]
+        path = directory / "candidate-terminal-helper-mutated.mlir"
+        path.write_text(mutated)
+        result = self.run([self.args.compiler, "protocol-constructed-participant",
+                           directory / "source.mlir", directory / "policy.json", path],
+                          expect=None, name=f"{subject.name}:native-refusal:terminal-helper-mutated")
+        reason = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else ""
+        self.check(f"{subject.name}:native-refusal:terminal-helper-mutated",
+                   result.returncode != 0 and reason == "native-proof-correspondence", result.stderr[-400:])
+        return {"terminal-helper-mutated": reason}
 
 
 def main():
@@ -236,15 +339,20 @@ def main():
     if any(args.output.iterdir()):
         parser.error("--output must be a new or empty directory")
     driver = Driver(args)
-    report = dict(format="zkc.construction-check/0", entry=ENTRY, started=now(), status="failed")
+    report = dict(format="zkc.construction-check/0", started=now(), status="failed", subjects={})
     try:
-        source, policy, candidate, exported, original = driver.export()
-        report.update(source_sha256=digest(source), policy=policy,
-                      candidate_sha256=digest(candidate.encode()),
-                      participant_sha256=digest(json.dumps(exported).encode()))
-        driver.compare(original, exported)
-        report["refused_mutations"] = driver.lean_rule(original, exported)
-        report["native_refusals"] = driver.native_refusal(candidate, exported)
+        for subject in SUBJECTS:
+            source, policy, candidate, exported, original = driver.export(subject)
+            result = dict(entry=subject.entry, source_sha256=digest(source), policy=policy,
+                          candidate_sha256=digest(candidate.encode()),
+                          participant_sha256=digest(json.dumps(exported).encode()))
+            report["subjects"][subject.name] = result
+            driver.compare(subject, original, exported)
+            result["refused_mutations"] = driver.lean_rule(subject, original, exported)
+            if subject.name == "schnorr":
+                result["native_refusals"] = driver.native_refusal(subject, candidate, exported)
+            else:
+                result["native_refusals"] = driver.native_helper_refusal(subject, candidate, exported)
         report["status"] = "pass"
     except (RuntimeError, ValueError, KeyError, IndexError) as error:
         report["error"] = str(error)
