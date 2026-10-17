@@ -300,7 +300,8 @@ theorem escape_logged {absorb : Interface I E P B} {accepts : A → Prop} {error
       · simp only [Step, absorbed] at step
         rw [transform_send absorb _ absorbed] at accepted
         rw [transform_send absorb _ absorbed]
-        apply ih value (events ++ [event]) _ proof _ (by rw [shape, List.append_assoc]) step accepted
+        apply ih value (events ++ [event]) _ proof _ (by rw [shape, List.append_assoc]) step
+          accepted
         rw [replay_append, replayed, Option.bind_some, ← shape]
         exact replay_send absorb table absorbed history
       · rw [transform_query absorb _ absorbed] at accepted

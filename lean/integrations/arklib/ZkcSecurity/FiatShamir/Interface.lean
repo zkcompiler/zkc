@@ -282,7 +282,8 @@ def QueryBound (absorb : Interface I E P B) : PIR.Proc I A → ℕ → Prop
       match absorb operation with
       | .receive _ _ => ∀ value, QueryBound absorb (next value) budget
       | .send _ value => QueryBound absorb (next value) budget
-      | .query _ decode => 0 < budget ∧ ∀ reply, QueryBound absorb (next (decode reply)) (budget - 1)
+      | .query _ decode =>
+          0 < budget ∧ ∀ reply, QueryBound absorb (next (decode reply)) (budget - 1)
       | .refuse => True
 
 /-- The queries on every path charge at most `cost` in total, each query the
