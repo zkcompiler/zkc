@@ -1,16 +1,22 @@
-import ZkcSecurity.ArkLib.Fri.UniqueDecoding
+import ZkcSecurity.ArkLib.Fri.Certificate
+import ZkcSecurity.ArkLib.Fri.Completeness
 
-/-! Controls for the round-by-round soundness of `fri::LowDegree` at the ideal interpretation.
+/-! Controls for the completeness and round-by-round soundness of `fri::LowDegree` at the ideal
+interpretation.
 
 * The library verifier is consistent with honest folding: honestly folded layers are accepted at
-  every query position (`honest_accepted`). The soundness bound is therefore not obtained from a
-  verifier that rejects everything.
+  every query position (`honest_folding_accepted`). The soundness bound is therefore not obtained
+  from a verifier that rejects everything.
 * `examples/projects/fri` and the authored STARK tables run `LowDegree<_, 5, 0, 3, 8>`: a 32-point
   coset, a constant final polynomial, three folds and eight queries, at rate `1/4`. On the coset of
-  any primitive 32nd root of unity and nonzero shift, the unique-decoding premises hold at the
-  radius `3/8`, and every prover is accepted with a committed initial word at relative distance
-  at least `δ` from the degree-below-8 code with probability at most
-  `(16 + 8 + 4) / |F| + (1 - min (3/8) δ)^8` (`example_bound`). -/
+  any primitive 32nd root of unity and nonzero shift:
+  * the honest prover is accepted at every query position on every codeword of degree below 8
+    (`codeword_accepted`);
+  * the unique-decoding premises hold at the radius `3/8`, and every prover is accepted with a
+    committed initial word at relative distance at least `δ` from the degree-below-8 code with
+    probability at most `(16 + 8 + 4) / |F| + (1 - min (3/8) δ)^8` (`example_bound`);
+  * the verifier after such a committed word is a doomed residual of the certificate over
+    verifier residuals, with the unique-decoding folding errors (`doomed_after_commit`). -/
 
 namespace TestsSecurity.FriSecurity
 
@@ -21,7 +27,7 @@ open scoped NNReal ENNReal
 variable {F : Type} [Field F] [DecidableEq F]
 
 /-- Honestly folded layers pass every query of the library verifier. -/
-theorem honest_accepted (roots : ℕ → F) (t : ℕ) {n R s : ℕ}
+theorem honest_folding_accepted (roots : ℕ → F) (t : ℕ) {n R s : ℕ}
     (D : Domain.SmoothCosetFftDomain (n + 1) F) (shift : F)
     (hD : ∀ i : Fin (2 ^ (n + 1)), D i = point roots shift (n + 1) i)
     (hcompat : Compatible roots (n + 1) (R + 1)) (layers : Layers F (n + 1) (R + 1))
@@ -56,5 +62,36 @@ theorem example_bound (ω shift : F) (hω : IsPrimitiveRoot ω (2 ^ 5)) (hshift 
   simp only [Finset.sum_range_succ, Finset.sum_range_zero, uniqueDecodingError, zero_add]
   rw [← ENNReal.coe_add, ← ENNReal.coe_add, ← add_div, ← add_div]
   norm_num
+
+omit [Fintype F] in
+/-- Every codeword of degree below 8 on the 32-point coset passes every query of the library
+verifier, after every run of the honest prover. -/
+theorem codeword_accepted (ω shift : F) (hω : IsPrimitiveRoot ω (2 ^ 5)) (hshift : shift ≠ 0)
+    (word : Fin (2 ^ 5) → F)
+    (codeword : word ∈ ReedSolomon.code (cosetDomain shift ω hshift hω : Fin (2 ^ 5) ↪ F) 8)
+    (layers : Layers F 5 3)
+    (member : layers ∈ support
+      (commit (honest (R := 2) 0 (by omega) (cosetDomain shift ω hshift hω) word) word))
+    (positions : Fin 8 → Fin (2 ^ 5)) :
+    verify (fun m => ω ^ 2 ^ (5 - m)) 0 shift layers positions = true :=
+  ZkcSecurity.ArkLib.Fri.honest_accepted (fun m => ω ^ 2 ^ (5 - m)) 0 (n := 4) (R := 2)
+    (by omega) (cosetDomain shift ω hshift hω) shift
+    (fun i => by rw [cosetDomain_apply]; simp [point]) (compatible_powers ω 5 3) word codeword
+    layers member positions
+
+/-- At the same parameters, the verifier after a committed initial word at relative distance at
+least `δ` from the degree-below-8 code is doomed, with the unique-decoding folding errors and no
+remaining premise. -/
+theorem doomed_after_commit (ω shift : F) (hω : IsPrimitiveRoot ω (2 ^ 5)) (hshift : shift ≠ 0)
+    (δ : ℝ) (word : Fin (2 ^ 5) → F) (far : Far (cosetDomain shift ω hshift hω) 8 δ word) :
+    Doomed (R₀ := 3) (fun m => ω ^ 2 ^ (5 - m)) 0 shift 8 (cosetDomain shift ω hshift hω)
+      ((3 / 8 : ℝ≥0) : ℝ) δ (uniqueDecodingError F 5)
+      (afterCommit (R := 2) (fun m => ω ^ 2 ^ (5 - m)) 0 shift 8 word) :=
+  afterCommit_doomed_uniqueDecoding (N := 4) (K := 2) (cosetDomain shift ω hshift hω) (3 / 8)
+    (by norm_num) (by decide)
+    (by
+      norm_num [degreeBound]
+      rw [show (1 : ℝ≥0) - 1 / 4 = 3 / 4 from tsub_eq_of_eq_add (by norm_num)]
+      norm_num) δ word far
 
 end TestsSecurity.FriSecurity
