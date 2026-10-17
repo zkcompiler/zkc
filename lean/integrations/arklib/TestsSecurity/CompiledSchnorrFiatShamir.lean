@@ -6,9 +6,11 @@ import Mathlib.Algebra.Field.ZMod
 `ZMod 5` as both scalar field and additive group, with no hardness claim. The
 compiled program, run directly, accepts the honest proof, rejects a wrong
 response and a trailing message, and asks for its challenge at a history that
-binds the statement and the application context. The query-bound premise is
-satisfiable, the honest prover is accepted with probability one, and the
-conclusion gives a strictly positive extraction bound. -/
+contains the statement and the application context it was initialized with.
+These controls exercise the model's own initial history (`initial`); that the
+deployed host absorbs the same binding is an assumption. The query-bound
+premise is satisfiable, the honest prover is accepted with probability one, and
+the conclusion gives a strictly positive extraction bound. -/
 
 namespace TestsSecurity.CompiledSchnorrFiatShamir
 open OracleComp OracleSpec
@@ -72,7 +74,8 @@ theorem compiled_rejects_trailing_message : evalWithAnswerFn (fixed 4)
         [.group groupDomain 3, .field fieldDomain (3 + 4 * 2), .field fieldDomain 0]) = false := by
   decide +kernel
 
-/-- The challenge history binds the statement. The proof `(3, 3 + 4 * 3)` is valid
+/-- The challenge history contains the statement of `initial`. The proof
+`(3, 3 + 4 * 3)` is valid
 for the statement `3` exactly at challenge `4`: it is accepted when the history
 for statement `3` answers `4`, and rejected when only the history for `key`
 does. -/
@@ -83,7 +86,7 @@ theorem statement_bound :
         (verify application base 3 (3, 3 + 4 * 3)) = false := by
   decide +kernel
 
-/-- The challenge history binds the application context. -/
+/-- The challenge history contains the application context of `initial`. -/
 theorem context_bound :
     evalWithAnswerFn (pointed (challengeHistory (initial application base key)))
       (verify "other-application" base key (3, 3 + 4 * 2)) = false := by
@@ -136,7 +139,7 @@ theorem positive_extraction : (2⁻¹ - 5⁻¹ : ENNReal) ≤
     Pr{let witness ← _root_.FiatShamir.knowledgeExtractor (_root_.Schnorr.sigma Scalar Scalar base)
         (ZkcSecurity.Examples.StructuredSchnorrFiatShamir.generable base) (Message ⊕ Message)
         (reduce honest) (.inl (initial application base key)) 1 key}[
-      ZkcExamples.Structured.SchnorrBinding.Relation base key witness] := by
+      ZkcExamples.Construction.SchnorrProofBinding.Relation base key witness] := by
   have bound := knowledge_soundness honest application base key 1 honest_bound
   dsimp only at bound
   rw [honest_acceptance] at bound

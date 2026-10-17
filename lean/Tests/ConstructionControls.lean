@@ -1,9 +1,12 @@
 import ZkcExamples.Construction.SchnorrProof
+import ZkcExamples.Structured.SchnorrInteractiveData
 
 /-! Controls for the transcript-construction rule on the actual compiled Schnorr
 validator. The accepted export satisfies the premises of `check_sound`; each
-mutation below changes one transcript obligation of the same export and must be
-rejected. -/
+mutation below changes one obligation of the same export and must be rejected.
+`check_sound` itself uses only the instruction walk (`checkFrom`); the final
+clauses of `check` and the comparisons with the original in `checkExport` are
+deployment checks, exercised here as well. -/
 
 namespace Tests.ConstructionControls
 open Zkc.Construction ZkcExamples.Construction
@@ -219,6 +222,38 @@ theorem proverService_rejected :
 theorem wrongInputSort_rejected :
     checkExport original { actual with inputs := [.data (.field "bls12-381.fr"),
       .data (.group "bls12-381.g1"), .transcript "merlin3.bls12-381.fr64be/0"] } = false := by
+  decide +kernel
+
+/-! Identity of the pair. -/
+
+/-- The export names another source digest than the original. -/
+theorem otherSource_rejected :
+    checkExport original { actual with source := ZkcExamples.Structured.SchnorrInteractiveData.snapshot.source } =
+      false := by
+  decide +kernel
+
+/-- The Interactive Entry's export, with the same protocol but another source
+digest, does not certify this compiled validator. -/
+theorem otherOriginal_rejected :
+    checkExport ZkcExamples.Structured.SchnorrInteractiveData.snapshot actual = false := by
+  decide +kernel
+
+/-- The policy selects raw-byte framing. -/
+theorem rawFraming_rejected :
+    checkExport original { actual with policy := { actual.policy with format := "raw.bytes/0" } } =
+      false := by
+  decide +kernel
+
+/-- The policy selects an acceptance output the validator does not have. -/
+theorem wrongAcceptance_rejected :
+    checkExport original { actual with policy := { actual.policy with acceptance := 1 } } =
+      false := by
+  decide +kernel
+
+/-- The export returns an extra data output. -/
+theorem extraOutput_rejected :
+    checkExport original { actual with outputs := [.data .boolean, .data .boolean,
+      .transcript "merlin3.bls12-381.fr64be/0"] } = false := by
   decide +kernel
 
 end Tests.ConstructionControls

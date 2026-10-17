@@ -35,6 +35,8 @@ def program : Program :=
 
 theorem admitted : Structured.check SchnorrProofData.snapshot = .ok program := by rfl
 
+def imported : Imported SchnorrProofData.snapshot := ⟨program, admitted⟩
+
 abbrev wiring := ZkcExamples.NativePrograms.Schnorr.wiring
 
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
@@ -94,15 +96,36 @@ theorem checked : check context participant = true := by
   cases admittedContext
   exact checks
 
+set_option smartUnfolding true in
+/-- Where the export returns the selected acceptance output. -/
+def acceptancePosition : Nat :=
+  (exportAcceptance SchnorrProofData.snapshot participant).get (by decide +kernel)
+
+theorem acceptance_admitted :
+    exportAcceptance SchnorrProofData.snapshot participant = some acceptancePosition := by
+  rfl
+
 /-- The acceptance output selected by the policy, read from returned values. -/
 def acceptance (values : List (Value F G)) : Option Bool :=
-  match values[participant.policy.acceptance]? with
+  match values[acceptancePosition]? with
   | some (.data (.boolean decision)) => some decision
   | _ => none
 
 /-- Data inputs of the constructed validator, in original order. -/
 def inputs (base key : G) : List (Payload F G) :=
   [.group "bls12-381.g1" base, .group "bls12-381.g1" key]
+
+/-- The validator's original inputs, by original position. -/
+def originalValue (base key : G) (challengeService : Nat) (index : Nat) : Option (Payload F G) :=
+  ((inputPayloads (verifierInputs (F := F) base key challengeService))[index]?).join
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+/-- The host binds exactly `inputs`: the validator's original inputs at the
+checked policy's public positions, in order. -/
+theorem public_values (base key : G) (challengeService : Nat) :
+    publicValues participant.policy (originalValue (F := F) base key challengeService) =
+      some (inputs base key) := by
+  rfl
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem inputs_arity (base key : G) :

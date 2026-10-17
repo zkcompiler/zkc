@@ -236,6 +236,7 @@ import Tests.SumcheckHelperMutants
 import Tests.SumcheckSourceComposition
 import Tests.SumcheckSourceControls
 import ZkcExamples.Construction.SchnorrProof
+import ZkcExamples.Construction.SchnorrProofBinding
 import ZkcExamples.Construction.SchnorrProofData
 import ZkcExamples.Construction.SchnorrProofParticipant
 import ZkcExamples.NativePrograms.ContractControls

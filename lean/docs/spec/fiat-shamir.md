@@ -83,19 +83,26 @@ The rule is narrower than the native construction, which may keep
 calculations between a draw and its delivery: such programs are refused here,
 and `spec` places each delivery immediately after its query.
 
-`checkExport original participant` additionally derives the context from the
-original entry's roster, the exported policy and the replaced service's
-contract. It requires the policy to publish exactly the validator's data
-inputs, in original order, which must be the exported validator's data inputs
-with the same sorts; the replaced service must be a validator service input,
-and every challenge must produce that service's field. The host's binding
-absorbs those values, so a policy omitting the statement is refused. Only the
-installed native construction with one replaced service and distinct selected
-draws is admitted. The
-query and delivery sites, the acceptance index and the framing come from the
-policy and are not compared with the original by the rule; the per-compile
-equation between the interactive reading and the original validator
-(`spec_equation` below) establishes that correspondence.
+`checkExport original participant` additionally compares the export with the
+original. The export must name the original's source digest and entry, with
+native framing. The policy must publish exactly the validator's data inputs, in
+original order, and these must be the exported validator's data inputs with the
+same sorts; `publicValues` reads the values the host binds at those positions.
+The replaced service must be a validator service input, and every challenge must
+produce that service's field. The selected acceptance output must be a Boolean
+validator output selected by every statement retained in the entry's body, and
+the exported outputs must be the validator's outputs followed by the final
+transcript; `exportAcceptance` gives the returned position of the decision. The
+context is derived from the original roster, the policy and the service's
+contract. Only the installed native construction with one replaced service and
+distinct selected draws is admitted. The query and delivery sites come from the
+policy; the per-compile equation between the interactive reading and the
+original validator (`spec_equation` below) ties them to the original.
+
+`check_sound` uses only that the instruction walk (`checkFrom`) succeeds from the
+initial state. The final clauses of `check` (every draw occurs, nothing remains
+pending, the final state and the outputs are returned) and the comparisons in
+`checkExport` are deployment checks; the controls exercise them as well.
 
 `check_sound` proves, for every accepted program, every lawful monad, challenge
 function, data input, initial history, service handle and proof:
@@ -120,7 +127,9 @@ compiled candidate. In `ZkcExamples.Construction.SchnorrProof`:
 
 - `admitted` admits the original, and `verifier_correspondence` equates its
   validator process with the common Schnorr experiment;
-- `accepted` runs `checkExport` on the actual export in the kernel;
+- `accepted` runs `checkExport` on the actual export in the kernel, and
+  `public_values` shows that the values the host binds at the checked public
+  positions are the validator's original base and statement inputs;
 - `spec_equation` proves that the export's interactive reading, projected to
   the selected acceptance output, is that same experiment, by computation;
 - `compiled_transform` composes these: for every challenge function, the
@@ -145,7 +154,11 @@ acc * (acc / (Q + 1) - 1 / |F|) <= Pr[extractor finds w with key = w • base]
 ```
 
 where `acc` is the compiled verifier's acceptance probability and the relation is
-the authored one of the imported library. `ZkcSecurity.Examples.StructuredSchnorrFiatShamir`
+the authored one retained by the Proof Entry's export
+(`SchnorrProofBinding.Relation`, the retained formula's process; it equals the
+Interactive import's relation, `relation_iff_interactive`). The experiment's
+initial history is the binding of the checked public values
+(`initial_binds_public`). `ZkcSecurity.Examples.StructuredSchnorrFiatShamir`
 states the same bound for the transform of the imported interactive verifier's
 Sigma instance.
 
@@ -157,8 +170,11 @@ Sigma instance.
   stand for absorbed bytes. The suite reduces 64 squeezed bytes to a field
   element, which is close to, not exactly, uniform; the model treats it as
   exactly uniform.
-- Binding: the host initializes the transcript with exactly the authorized
-  context and the policy's public inputs.
+- Binding: the deployed host initializes the transcript with exactly the
+  authorized context and the values at the policy's public inputs. The
+  experiment starts from that binding (`initial_binds_public`); that the host
+  does so, and that the context identifies source, policy and application, is
+  assumed, not checked.
 - Transport: proof bytes decode canonically to the typed messages in order.
 - Native correctness: the exporter prints the checked candidate, the bridge
   decodes it, and native field, group and transcript kernels implement their

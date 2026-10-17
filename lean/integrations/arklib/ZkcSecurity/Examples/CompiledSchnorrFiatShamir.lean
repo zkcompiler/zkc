@@ -1,6 +1,7 @@
 module
 
 public import ZkcExamples.Construction.SchnorrProof
+public import ZkcExamples.Construction.SchnorrProofBinding
 public import ZkcSecurity.Examples.StructuredSchnorrFiatShamir
 public import ZkcSecurity.Oracle.Encoding
 public import VCVio.OracleComp.SimSemantics.StateT.StateProjection
@@ -122,9 +123,10 @@ theorem route_injective : Function.Injective (route (F := F) (G := G)) := by
           rw [challengeKey_some firstKey, challengeKey_some secondKey, same.1, same.2]
 
 /-- The host's initial binding: the authorized application context and the
-policy's public inputs, base then statement. -/
+values at the checked policy's public inputs, base then statement
+(`initial_binds_public`). -/
 def initial (application : String) (base key : G) : History F G :=
-  [.binding application [.group groupDomain base, .group groupDomain key]]
+  [.binding application (SchnorrProof.inputs base key)]
 
 /-- Acceptance requires the selected true output and a completely read proof. -/
 def accepted (result : PIR.Outcome (Option Bool) × Proof F G) : Bool :=
@@ -133,6 +135,15 @@ def accepted (result : PIR.Outcome (Option Bool) × Proof F G) : Bool :=
   | _, _ => false
 
 end Routing
+
+/-- The initial history binds exactly the values the checked policy publishes:
+the validator's original inputs at `policy.publicInputs`, in order. -/
+theorem initial_binds_public {F G : Type} [AddCommGroup G] (application : String) (base key : G)
+    (challengeService : Nat) :
+    ∃ values, publicValues SchnorrProof.participant.policy
+        (SchnorrProof.originalValue (F := F) base key challengeService) = some values ∧
+      initial application base key = [.binding application values] :=
+  ⟨_, SchnorrProof.public_values base key challengeService, rfl⟩
 
 section Experiment
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
@@ -357,8 +368,10 @@ variable [Fintype F] [Inhabited F]
 the named assumptions above, for every prover with the transcript oracle on all
 histories. `budget` bounds the prover's oracle queries, including repeated
 histories; final verification adds one. The extractor runs VCVio's replay
-reduction on the routed prover, and the conclusion is the authored relation of
-the imported library. Subtraction is truncated in `ENNReal`. -/
+reduction on the routed prover, and the conclusion is the authored relation
+retained by the Proof Entry's own export (`SchnorrProofBinding.Relation`, equal
+to the Interactive import's by `relation_iff_interactive`). Subtraction is
+truncated in `ENNReal`. -/
 theorem knowledge_soundness (prover : Prover F G) (application : String) (base key : G)
     (budget : Nat)
     (bounded : IsQueryBoundP (prover key (initial application base key)) (· matches .inr _) budget) :
@@ -367,7 +380,7 @@ theorem knowledge_soundness (prover : Prover F G) (application : String) (base k
       Pr{let witness ← _root_.FiatShamir.knowledgeExtractor (_root_.Schnorr.sigma F G base)
           (generable base) (History F G ⊕ History F G) (reduce prover)
           (.inl (initial application base key)) budget key}[
-        ZkcExamples.Structured.SchnorrBinding.Relation base key witness] := by
+        ZkcExamples.Construction.SchnorrProofBinding.Relation base key witness] := by
   have upstream := _root_.FiatShamir.knowledgeExtractor_success (_root_.Schnorr.sigma F G base)
     (generable base) (History F G ⊕ History F G) (_root_.Schnorr.sigma_speciallySound F G base)
     (reduce prover) key (.inl (initial application base key)) budget
@@ -378,7 +391,7 @@ theorem knowledge_soundness (prover : Prover F G) (application : String) (base k
     unfold acceptance _root_.FiatShamir.knowledgeAcceptance
     rw [run_eq]
   simp only [same]
-  simpa only [ZkcSecurity.Examples.StructuredSchnorrSigma.relation_eq] using upstream
+  simpa only [ZkcExamples.Construction.SchnorrProofBinding.relation_eq] using upstream
 
 end Experiment
 

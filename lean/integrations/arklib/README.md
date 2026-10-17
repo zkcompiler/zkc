@@ -61,7 +61,7 @@ verifier with a random oracle on all transcript histories, through the core
 [transcript-construction rule](../../docs/spec/fiat-shamir.md). Injective
 routing of histories (`Oracle/Encoding`) makes the experiment exactly VCVio's
 Fiat–Shamir verification run, which gives its knowledge-soundness bound under
-named assumptions.
+named assumptions, for the relation retained by the Proof Entry's own export.
 
 `TestsSecurity.Audit` checks every owned declaration's transitive axiom closure.
 Only `propext`, `Classical.choice` and `Quot.sound` are allowed. Unrelated upstream
