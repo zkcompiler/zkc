@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Check compiled proof Entries' transcript construction and projection in Lean.
 
-For each subject, the compiled `example::Proof` Entries of the Schnorr, Sumcheck
-and composed Sumcheck examples and the compiled `example::AndProof` and
+For each subject, the compiled `example::Proof` Entries of the Schnorr, Sumcheck,
+composed Sumcheck and GKR examples and the compiled `example::AndProof` and
 `example::EqualityProof` Entries of the Sigma example, the driver compiles the
 Entry, retains its
 original export, native policy, constructed candidate and exported validator
@@ -92,6 +92,10 @@ SUBJECTS = [
              "ZkcExamples.Construction.ChaumPedersenProofParticipant"),
             "ZkcExamples.Construction.ChaumPedersenProof", "ZkcExamples.Construction.ChaumPedersenProof.imported",
             True, entry="example::EqualityProof"),
+    Subject("gkr", project_modules("examples/projects/gkr/zkc.toml"),
+            (ROOT / "lean/ZkcExamples/Structured/GkrSourceData.lean", "ZkcExamples.Structured.GkrSourceData"),
+            (DATA / "GkrProofParticipant.lean", "ZkcExamples.Construction.GkrProofParticipant"),
+            "ZkcExamples.Construction.GkrProof", "ZkcExamples.Structured.GkrSourceViews.imported", True),
 ]
 SIGMA = {"schnorr-and", "chaum-pedersen"}
 
@@ -243,6 +247,39 @@ class Driver:
             checks = [item for item in instructions if item[0] == "local.call" and len(item[3]) == 3]
             checks[1][3][1:] = checks[0][3][1:]
 
+        def regions(instructions):
+            """Each instruction list: the top level, then every region body in program order."""
+            yield instructions
+            for item in instructions:
+                for region in item[5]:
+                    yield from regions(region[1])
+
+        def layer_loop(instructions):
+            return [item for item in instructions if item[0] == "protocol.loop"][1]
+
+        def first_round_check_dropped(instructions):
+            # The first guard in program order is the first layer's first round check.
+            body = next(region for region in regions(instructions)
+                        if any(item[0] == "local.guard" for item in region))
+            body.remove(next(item for item in body if item[0] == "local.guard"))
+
+        def wiring_check_dropped(instructions):
+            body = layer_loop(instructions)[5][0][1]
+            body.remove(next(item for item in body if item[0] == "local.guard"))
+
+        def round_claim_update_mutated(instructions):
+            rounds = instruction(layer_loop(instructions)[5][0][1], "protocol.loop")[5][0][1]
+            update = [item for item in rounds if item[0] == "algebra.field_add"][-1]
+            update[3][:] = [update[3][0], update[3][0]]
+
+        def stale_layer_claim_yielded(instructions):
+            # As for Sumcheck: the layer loop's body starts after its environment,
+            # then the layer index, the point and the claim.
+            loop = layer_loop(instructions)
+            position = next(index for index, item in enumerate(instructions) if item is loop)
+            base = len(exported[5]) + sum(len(item[4]) for item in instructions[:position])
+            loop[5][0][2][1] = base + 2
+
         def second_commitment_omitted(instructions):
             # The second observation absorbs the first commitment again.
             first = instruction(instructions, "crypto.exec.indexed_transcript_observe_data")
@@ -271,6 +308,19 @@ class Driver:
                      "claim-update-mutated": "projection-unexplained",
                      "stale-claim-yielded": "projection-repeat-yield"}
             construction_accepts = {"round-check-dropped", "claim-update-mutated", "stale-claim-yielded"}
+        elif subject.name == "gkr":
+            mutate("wrong-domain-separator", challenge_names_delivery)
+            mutate("round-check-dropped", first_round_check_dropped)
+            mutate("wiring-check-dropped", wiring_check_dropped)
+            mutate("claim-update-mutated", round_claim_update_mutated)
+            mutate("stale-claim-yielded", stale_layer_claim_yielded)
+            codes = {"wrong-domain-separator": "construction-challenge-site",
+                     "round-check-dropped": "projection-guard",
+                     "wiring-check-dropped": "projection-guard",
+                     "claim-update-mutated": "projection-unexplained",
+                     "stale-claim-yielded": "projection-repeat-yield"}
+            construction_accepts = {"round-check-dropped", "wiring-check-dropped", "claim-update-mutated",
+                                    "stale-claim-yielded"}
         elif subject.name in SIGMA:
             mutate("second-commitment-omitted", second_commitment_omitted)
             mutate("decision-compares-base-with-itself", decision_compares_base_with_itself)
