@@ -10,7 +10,7 @@ may capture its own mathematical assets through its manifest.
 | Layer | Responsibility | Examples |
 |---|---|---|
 | [Common operations](zkc/README.md) | Collections, algebra, polynomial representations, encoding and local commitment operations | `zkc::vector`, `zkc::multilinear`, `zkc::coset`, `zkc::oracle` |
-| Protocol families | Reusable equations, interaction and returned obligations | [Sumcheck](sumcheck/README.md), [FRI](fri/lib.zkc), [AIR](air/README.md), [STARK](stark/README.md), [Bulletproofs+](bulletproofs/README.md), [KZG](kzg/README.md) |
+| Protocol families | Reusable equations, interaction and returned obligations | [Sumcheck](sumcheck/README.md), [FRI](fri/lib.zkc), [AIR](air/README.md), [STARK](stark/README.md), [Bulletproofs+](bulletproofs/README.md), [KZG](kzg/README.md), [Sigma compositions](sigma/README.md) |
 | Concrete constructions | Selected transcript transitions and wire encodings | [Spongefish](spongefish/README.md), Monero Bulletproofs+, Ethereum EIP-4844 KZG |
 | [Projects](../examples/projects/README.md) | Domains, captured relations, complete compositions and Entries | Schnorr, composed Sumcheck, AIR and machine clients |
 
@@ -22,8 +22,11 @@ services when composing protocols.
 
 The [Schnorr module](schnorr/lib.zkc) provides the discrete-log relation and
 three-message protocol. It is generic over the group; the client chooses the
-field/group implementation and construction. The library implementations and
-small example parameters provide execution evidence, not general security proofs.
+field/group implementation and construction. The [Sigma module](sigma/README.md)
+composes the same pattern into an AND of two statements with one shared
+challenge and a Chaum–Pedersen proof of one discrete logarithm at two bases.
+The library implementations and small example parameters provide execution
+evidence, not general security proofs.
 
 ## Select a family
 

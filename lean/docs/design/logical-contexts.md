@@ -96,6 +96,14 @@ atoms apply to the retained Reduction export and to an export whose root ports
 are reordered. The security integration proves the `count / |F|` bound on both
 roots with the unchanged `repeat_uniform_residual_soundness`.
 
+`ZkcExamples.Structured.SigmaLogicalContexts` reads the targets of two composed
+protocols through atoms of the `DLog` relation retained by the Interactive
+Schnorr subject, observing the composed verifier's bases and keys. The
+Chaum–Pedersen context uses one witness binder in both atoms and the Schnorr AND
+context two; each holds exactly when the composed protocol's own retained
+formula holds, and the shared one fails on an AND statement whose transcripts
+are accepted.
+
 ## Limits
 
 Sorts have static arities; a dependency on an observed value, such as the

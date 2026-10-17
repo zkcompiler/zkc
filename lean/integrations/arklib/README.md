@@ -80,6 +80,17 @@ Reduction root as a reduction to a residual evaluation claim, and states
 composition theorems whose only premise about a compiled verifier is its
 construction equality.
 
+`VCVio/SigmaAnd` composes two VCVio Σ-protocols with one shared challenge.
+Completeness and special soundness compose directly; zero knowledge composes
+from special HVZK, a simulator given the challenge, which converts to and from
+VCVio's perfect HVZK with a challenge-first simulator over a finite challenge
+space. `VCVio/SigmaAndSchnorr` derives Schnorr's special HVZK from the upstream
+simulator. `Examples/SchnorrAndSigma` and `Examples/ChaumPedersenSigma` connect
+the imported Schnorr AND and Chaum–Pedersen verifiers to the composition of two
+Schnorr instances and to Schnorr over `G × G`, and apply VCVio's fixed-statement
+Fiat–Shamir extraction to both; [support](../../docs/support.md#sigma-compositions)
+states the scope.
+
 `TestsSecurity.Audit` checks every owned declaration's transitive axiom closure.
 Only `propext`, `Classical.choice` and `Quot.sound` are allowed. Unrelated upstream
 `sorry` declarations are not claims of this package. `clients/ArkLib.lean` in the
