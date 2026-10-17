@@ -68,6 +68,7 @@ import TestsSecurity.Compatibility
 import TestsSecurity.CompiledSchnorrFiatShamir
 import TestsSecurity.CompiledSumcheckFiatShamir
 import TestsSecurity.ExecutableSchnorrFiatShamir
+import TestsSecurity.FiatShamirTyped
 import TestsSecurity.LocalCoupling
 import TestsSecurity.LocalCouplingAudit
 import TestsSecurity.LocalCouplingClients
