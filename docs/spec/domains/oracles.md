@@ -170,10 +170,18 @@ depend on a random draw without being that draw or having its distribution.
 A sampled bound must have the intended relationship to the table height.
 
 A transcript construction must observe the required public context before its
-derived query. A construction that leaves an opening out of its transcript meets
-the [certified-opening conditions](../ir/construction-obligations.md#certified-openings);
-the scheme identity and the table's dimensions come from bound or authenticated
-data, never from the root or the opening. Observing a statistic, a different received copy or another
+derived query. A construction that leaves out of its transcript an opening
+followed by a reachable selected request meets the
+[certified-opening conditions](../ir/construction-obligations.md#certified-openings).
+An opening after which no selected request is reachable may be omitted as a
+[terminal message](../ir/construction-obligations.md#observation-policy): the
+abstract transform's outcome is unchanged for every challenge function, and the
+omitting construction is a distinct construction with its own construction
+theorem. In either case a concrete security claim about the committed table needs
+the commitment bridge, which relates roots and openings to committed tables
+through extraction and needs authentication to dominate every use of an opened
+row. The scheme identity and the table's dimensions come from bound or
+authenticated data, never from the root or the opening. Observing a statistic, a different received copy or another
 provider's history is not automatically observation of the checked root. Neither
 source ordering nor a matching dependency label proves an injective encoding or
 sampling law. Repeated coordinates remain repeated logical occurrences.

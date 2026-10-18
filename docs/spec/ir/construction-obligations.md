@@ -168,7 +168,10 @@ of an OR proof, is a producer message.
 
 ### Certified openings
 
-An opening may be omitted from the transcript only if all four conditions hold.
+An opening followed by a reachable selected request may be omitted from the
+transcript only if all four conditions hold. An opening after which no selected
+request is reachable is a terminal message instead, with that class's
+obligation.
 
 - **Fixed at the receive point.** The root, the positions, the dimensions and
   the interpretation (the committed table, its leaf layout and codec) are
@@ -382,7 +385,10 @@ A history provider meets six obligations.
   injectively and prefix-free, or with collision-bounded binding. Injectivity
   holds under shape and domain facts the validator checks or reconstructs; a
   variable-length observation encodes its length unless authenticated
-  configuration fixes it. Prover-message codecs have an efficient left inverse.
+  configuration fixes it. Prover-message codecs have an efficient left inverse,
+  which governs extraction time. Challenge codecs admit preimage sampling; this
+  condition is reserved for zero-knowledge claims and is not an obligation of a
+  soundness claim.
   An imported codec carries no security claim until this obligation is
   discharged for it.
 - **Execution simulation.** The adaptive execution of the chain or sponge in
@@ -410,23 +416,34 @@ and one class of bounded executions. Its query-cost relation has this type.
 | Families | a finite type | The primitive families of the namespace |
 | Concrete budget | family → natural number | Primitive calls the adversary may make on every path, per family |
 | Execution bound | the verifier's static maxima | Loop and operand maxima, message and request counts |
-| Translation | concrete adversary → ideal adversary | From primitive access to the history-oracle experiment |
+| Private tape | budget → finite type | Randomness the translated adversary draws uniformly before its oracle computation; it is never charged |
+| Translation | concrete adversary → (tape → ideal adversary) | From primitive access to the history-oracle experiment, through a simulator |
 | Cost | budget → natural number, monotone | The TranscriptQuery budget of the translated adversary |
 | Verifier expansion | execution bound → natural number | Primitive calls of one verifier run within the bound, initialization included: `v_init + Σ_e n_e · v_e + Σ_r n_r · v_r`, with `v_e`, `v_r` the calls per absorbed event kind and per request kind and `n_e`, `n_r` their counts at the bound's maxima |
 | Loss | budget → natural number → probability | Applied to the adversary's budget and the verifier expansion |
 
-The relation is defined on traces and consumed as a bound. On every path each
-primitive call of the concrete adversary maps to at most one TranscriptQuery of
-the translated adversary; a stated simulator answers the calls that map to none.
-A grinding attempt is one TranscriptQuery whatever its primitive cost; in
-split-hash gate forms both calls of one attempt map to one TranscriptQuery and
-are answered from one ideal answer. A per-family bound on the concrete adversary
-transports to a total query bound, and through it to the pathwise weighted
-budget, of the translated adversary. For every adversary `A` within budget `q`
-and every execution bound `b`:
+The translation is a simulator run against the concrete adversary, and the
+relation is defined on its traces. In each state of the simulator a primitive
+call either belongs to an **attempt**, the TranscriptQuery it realizes, or is
+answered by the simulator from its state and the private tape with no
+TranscriptQuery, as a hash-chain simulator answers a query at a state no
+history reaches with a fresh digest. The first call of an attempt on a path,
+whichever call of the attempt comes first, asks the history oracle once and the
+simulator records the answer; every call of the attempt, in any order and
+interleaved with any other calls, is answered from that one recorded answer. A
+grinding attempt is therefore one TranscriptQuery whatever its primitive cost,
+and both calls of a split-hash gate attempt, or the counter blocks of an
+extended output, are answered from one ideal answer. On every path each
+primitive call makes at most one TranscriptQuery, and only calls of the families
+that carry attempts make any; a per-family bound on the concrete adversary
+transports to a total query bound on every translated program, and through it to
+the pathwise weighted budget. The ideal adversary is the mixture over the tape,
+so the ideal experiment is the typed engine's experiment for provers drawn from
+a distribution, each bounded on its support. For every adversary `A` within
+budget `q` and every execution bound `b`:
 
 ```text
-Pr_concrete[property fails](A, b) ≤ Pr_ideal[property fails](translate A, b) + loss q (expansion b)
+Pr_concrete[property fails](A, b) ≤ Pr_ideal[property fails](translate q A, b) + loss q (expansion b)
 ```
 
 The ideal side is the typed history-oracle experiment with per-key charges; the
@@ -458,9 +475,28 @@ hash-effect calls and no provider state machine. It meets six obligations.
   input binds the blob and the commitment; its batch input binds commitments,
   evaluation points, evaluations and proofs, and not blobs.
 - **Composition theorem.** The construction's own security theorem over the hash
-  effect, which specifies any extraction it needs, fixed before the answer it
-  is used against, with its failure term, and budgets that count the verifier's
-  own hash queries.
+  effect, stated per property. It specifies:
+  - each extraction it relies on, with its failure term, fixed before the oracle
+    answer it is used against is sampled. For EIP-4844, a polynomial of degree
+    below 4096 is extracted from each commitment before the evaluation-namespace
+    answer for that commitment's input is sampled, under KZG evaluation
+    extractability in the algebraic group model or an explicitly named
+    alternative assumption. Opening binding alone does not suffice: the
+    adversary produces a single opening, so no second opening contradicts it;
+  - each namespace's term. In EIP-4844's evaluation namespace, if `C_i` is not
+    the commitment to `blob_i`, then `y_i = p_{C_i}(z_i)` holds with probability at
+    most `κ · 4095 / r` per evaluation query, `κ` being the hash-to-field factor;
+  - multi-instance soundness where a check covers several items: the false
+    statement of a batch is that some item is false, and in EIP-4844's batch
+    namespace a combination with weights `r^0 … r^(n−1)` passes an invalid opening
+    with probability at most `κ · (n − 1) / r` per batch query;
+  - the chained-namespace term where one namespace's input contains another's
+    answers: a batch query made before the matching evaluation queries commits
+    to guessed evaluation points, and a later evaluation answer may hit any of
+    them, at most `q_eval · q_batch · n · κ / r` in EIP-4844;
+  - budgets that count the verifier's own hash queries alongside the
+    adversary's: an EIP-4844 batch verification makes `n` evaluation queries and
+    one batch query.
 - **Challenge-input coverage.** For every explicit-input challenge `c` and every
   check that uses `c`, each value the check reads that the producer controls or
   that is a statement input is in `c`'s encoded input, is determined by values

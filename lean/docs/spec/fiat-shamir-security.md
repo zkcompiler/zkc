@@ -616,8 +616,12 @@ projection `scope : C → K` that keeps its admitted part.
 - `ExactWithRefusal decode`: every event of the successful decoded value has
   the success probability times its ideal probability; such a decoding is
   realized with factor one and no slack (`ExactWithRefusal.realized`).
-- `ConsistentHandler hashing handler`: every selected call returns a fixed
-  function of its operation, whatever the handler's state, and never stops.
+- `HashLaws hashing handler`: the outcome of every selected call, a reply or a
+  stop, is a function of its operation alone, whatever the handler's state:
+  equal inputs receive equal answers and no stop depends on the number or order
+  of earlier calls, while a stop the input determines is allowed.
+  `TotalConsistentHandler` is the stronger specialization that never stops
+  (`TotalConsistentHandler.hashLaws`).
 - `ConstructionCorrect`: a constructed meaning equals the transform of the
   original for every challenge function.
 - `AuthenticatedOperand fixed operand checked admissible`: the statement inputs
@@ -625,10 +629,14 @@ projection `scope : C → K` that keeps its admitted part.
   validator lets through has an admissible value. `ProductionRange` requires
   every admitted value to support the claim. `AuthenticatedConfiguration`
   requires the configuration to be the same in every context.
-- `GateSite` records a gate's primitive input, the state before it, the witness
-  and the input of the gated value. `Placement` (the gate's input determines the
-  gated value's input), `ReadsState` and `AbsorbsWitness` are the admission
-  conditions.
+- `GateSite` records a gate's primitive input, the state before it, the
+  witness, the events absorbed between the gate step and the request, and the
+  input of the gated value. `Placement` (no event absorbed in between),
+  `ReadsState` (the gate's input determines the state) and `AbsorbsWitness` (the
+  gated value's input determines the witness) are the admission conditions.
+  `GateDetermines` (the gate's input determines the gated value's input) is a
+  weaker, necessary dependency condition of placement; a fixed constant absorbed
+  in between meets it.
 
 Exact statement determination is `Typed.Determined`, a realized law is
 `Realized` and the per-prefix local obligation is `Typed.Step`. The
@@ -654,18 +662,35 @@ one property, one provider and one class of bounded executions.
   `expansion : ExecBound → ℕ` and `loss : Budget Family → ℕ → ENNReal`.
   `QueryCost.ofCounts` builds the expansion from an `Expansion` and the counts of
   each execution bound.
-- On traces, an `Assignment Call D` charges each call, given the calls before
-  it, at most one key or none; `charged` collects the charged keys, at most one
-  per call (`charged_length_le`). `ChargesAttemptsOnce` states that the two calls
-  of a split-hash grinding attempt are charged once.
-- `Simulation primitive family R concreteFailure idealFailure` carries
-  `translate`, a `QueryCost`, the transport of a family bound to the translated
-  adversary's total bound, and the inequality
-  `concreteFailure A b ≤ idealFailure (translate A) b + loss q (expansion b)` for
-  every adversary `A` within `q`. The transported bound gives the typed engine's
-  weighted budget (`Simulation.weightedBudget`), and an ideal bound in the
-  adversary's query count transfers with the loss added
-  (`Simulation.concrete_le`).
+- `Simulator primitive R Tape` answers the primitive families from the history
+  oracle `OracleSpec.ofFn R`, a state started from a private tape (`start`), and
+  the attempt each call belongs to in a state (`attempt`), with recorded ideal
+  answers (`recorded`, `record`), the reply `shared` read from an attempt's
+  answer, and the private reply `respond` with no TranscriptQuery. `handle` is
+  the simulator as a stateful oracle implementation: the first call of an
+  attempt asks the history oracle at its key and records the answer
+  (`handle_fresh`), a later call of the attempt reuses it (`handle_recorded`),
+  and a call outside every attempt is answered privately (`handle_private`). A
+  recorded answer persists through every later call (`recorded_persists`), so
+  every call of an attempt, in any order, is answered from one ideal answer
+  (`attempt_answer`), and each call makes at most one TranscriptQuery, none
+  outside an attempt (`handle_queryBound`). `translate adversary tape` runs the
+  adversary against `handle`; with a family bound it makes at most the budget
+  of the families that carry attempts (`chargedBudget`) on every path
+  (`translate_queryBound`).
+- `Simulation primitive family R concreteFailure idealFailure` carries a tape
+  type per budget with its uniform sampler, the simulator per budget, the
+  families that carry attempts (`charged`, with `carries`), a `QueryCost` whose
+  cost covers their budget (`covers`), and the inequality
+  `concreteFailure A b ≤ idealFailure (translate q A) b + loss q (expansion b)` for
+  every adversary `A` within `q`, where `translate q A` draws the tape and runs the
+  translated program, a mixture of provers. Every program in the mixture's
+  support makes at most `cost q` TranscriptQueries (`Simulation.transport`),
+  hence the typed engine's weighted budget (`Simulation.weightedBudget`). An
+  ideal bound for mixtures bounded on their support transfers with the loss
+  added (`Simulation.concrete_le`); for fixed statements the typed engine gives
+  such a bound, `(queries + budget) · bound`
+  (`randomized_soundness_of_queryBound`, from `Typed.randomized_soundness_weighted`).
 
 ### The committed-opening experiment
 
