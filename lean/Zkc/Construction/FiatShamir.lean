@@ -88,7 +88,8 @@ abbrev Actions (F G : Type) := Participant.interface Nat Ty services (ScalarValu
 
 /-- Deployment facts that fix occurrence identities: original entry, role
 roster, producer and validator positions, the replaced service's original input
-index and contract, and the ordered query/delivery sites. -/
+index, contract and the typed request its challenges carry, and the ordered
+query/delivery sites. -/
 structure Context where
   entry : String
   roles : List String
@@ -96,6 +97,7 @@ structure Context where
   validator : Nat
   service : Nat
   contract : String
+  request : Option Request
   suite : String
   draws : List (String × String)
   deriving DecidableEq, Repr
@@ -125,10 +127,11 @@ def message (context : Context) (site : String) (sender receiver : Nat) : Origin
   .message context.entry site (context.role sender) (context.role receiver)
 
 /-- The selected query's occurrence names the replaced service's original port
-and contract, which the original export fixes. -/
-def query (context : Context) (site : String) : Origin :=
+and contract, which the original export fixes, and carries the query's typed
+request. -/
+def query (context : Context) (site : String) (request : Request) : Origin :=
   .query context.entry site ("input_" ++ decimal context.service) context.contract
-    (context.role context.validator)
+    (context.role context.validator) request
 
 end Context
 
@@ -138,7 +141,8 @@ variable {m : Type → Type} [Monad m]
 /-- The Fiat–Shamir transform of a validator process whose every query is a
 selected challenge. Receives read the proof in order and absorb the decoded
 message; a decoding failure refuses without consuming. Every query is answered
-by `challenge` on the history ending with its occurrence, which is absorbed. A
+by `challenge` on the history ending with its occurrence, which is absorbed;
+the occurrence carries the query's typed request, the draw of its field. A
 send is absorbed with its message occurrence and produces no proof data. Returns
 the outcome and the unread proof suffix. -/
 def transform {A : Type} (context : Context) (challenge : History F G → m F) :
@@ -153,8 +157,8 @@ def transform {A : Type} (context : Context) (challenge : History F G → m F) :
           | some value => transform context challenge (next value)
               (history ++ [.message (context.message site sender context.validator) payload]) rest
           | none => pure (.stopped .refused, payload :: rest)
-  | .call (.query site _ _) next, history, proof => do
-      let event := Event.challenge (context.query site)
+  | .call (.query site field _) next, history, proof => do
+      let event := Event.challenge (context.query site (.draw field))
       let answer ← challenge (history ++ [event])
       transform context challenge (next answer) (history ++ [event]) proof
   | .call (.send (ty := ty) site receiver sent) next, history, proof =>

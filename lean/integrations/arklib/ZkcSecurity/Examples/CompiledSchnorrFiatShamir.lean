@@ -58,7 +58,7 @@ def commitmentOrigin : Origin :=
 
 /-- The challenge occurrence fixed by the checked context. -/
 def challengeOrigin : Origin :=
-  SchnorrProof.context.query SchnorrProof.wiring.challengeSite
+  SchnorrProof.context.query SchnorrProof.wiring.challengeSite (.draw fieldDomain)
 
 section Routing
 variable {F G : Type}

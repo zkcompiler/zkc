@@ -24,22 +24,42 @@ set_option autoImplicit false
 namespace Zkc.Construction
 open Zkc.Source
 
-/-- A model occurrence: the original entry and the ordered event fields that
-the Fiat–Shamir transform absorbs. -/
+/-- A typed request identity: the method, the operands fixed before sampling
+and the result sort. `draw` is the only method the construction model carries:
+it has no operands, and its result sort is the field its service contract
+names. -/
+structure Request where
+  method : String
+  operands : List Nat
+  sort : Structured.Ty
+  deriving DecidableEq, Repr
+
+namespace Request
+
+/-- The draw adapter: a field challenge, with no operands. -/
+def draw (field : String) : Request := ⟨"draw", [], .field field⟩
+
+end Request
+
+/-- A model occurrence: the original entry, the ordered event fields that the
+Fiat–Shamir transform absorbs, and, for a challenge, its typed request. -/
 structure Origin where
   entry : String
   event : List String
+  request : Option Request
   deriving DecidableEq, Repr
 
 namespace Origin
 
 /-- A message occurrence; its schema is the original source site. -/
 def message (entry site sender receiver : String) : Origin :=
-  ⟨entry, ["message", entry, site, site, sender, receiver]⟩
+  ⟨entry, ["message", entry, site, site, sender, receiver], none⟩
 
-/-- A field challenge replacing the validator's `draw` query. -/
-def query (entry site port contract owner : String) : Origin :=
-  ⟨entry, ["query", entry, site, port, contract, "draw", owner]⟩
+/-- A challenge occurrence at a query site of the replaced service, with its
+typed request: the key spells the kind, the occurrence (entry, site, port and
+contract), the owner, and the request's method, operands and result sort. -/
+def query (entry site port contract owner : String) (request : Request) : Origin :=
+  ⟨entry, ["query", entry, site, port, contract, owner], some request⟩
 
 end Origin
 
@@ -257,5 +277,21 @@ structure Participant where
   instructions : List Instruction
   returned : List Nat
   deriving DecidableEq, Repr
+
+mutual
+/-- The field of the first challenge operation of an instruction, searching loop
+bodies. -/
+def Instruction.challengeField : Instruction → Option String
+  | ⟨.challenge _ field _, _, _, _⟩ => some field
+  | ⟨_, _, _, body⟩ => Instruction.challengeFieldList body
+
+/-- The field of the first challenge operation of an instruction list. -/
+def Instruction.challengeFieldList : List Instruction → Option String
+  | [] => none
+  | instruction :: rest =>
+      match Instruction.challengeField instruction with
+      | some field => some field
+      | none => Instruction.challengeFieldList rest
+end
 
 end Zkc.Construction

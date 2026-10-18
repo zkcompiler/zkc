@@ -62,7 +62,7 @@ theorem false_claim : (0 : Scalar) ≠ raw.sum := by decide +kernel
 /-- A concrete deployment context; the theorems quantify over all of them. -/
 def context : Context :=
   ⟨"zkl_sumcheck", ["role00000000", "role00000001"], 0, 1, 3, "random.bls12-381.fr/0",
-    "merlin3.bls12-381.fr64be/0", [("challenge", "delivery")]⟩
+    some (.draw "bls12-381.fr"), "merlin3.bls12-381.fr64be/0", [("challenge", "delivery")]⟩
 
 def initial : History Scalar Scalar := [.binding "statement" [.field "bls12-381.fr" 0]]
 
@@ -128,7 +128,8 @@ def cheatKey : History Scalar Scalar :=
         (SumcheckSourceVerifier.childContext.roles 0) context.validator)
       (.field "bls12-381.fr" 0)] ++
     [.challenge
-      (context.query (SumcheckVerifierLaws.challengeSite SumcheckSourceVerifier.childContext))]
+      (context.query (SumcheckVerifierLaws.challengeSite SumcheckSourceVerifier.childContext)
+        (.draw "bls12-381.fr"))]
 
 /-- The verifier's result on the cheating proof at the challenge `answer`. -/
 def cheatDecision (answer : Scalar) : PIR.Outcome (Option Bool) × Proof Scalar Scalar :=

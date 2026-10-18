@@ -68,24 +68,26 @@ def dataSort? : Structured.Ty → Option Structured.Ty
   | ty => some ty
 
 /-- The occurrence context fixed by the policy, the original roster and the
-replaced service's contract. Only the installed native construction with one
-replaced service is admitted. -/
-def Context.ofPolicy (policy : Policy) (roles : List String) (contract : String) :
-    Option Context :=
+replaced service's contract and the typed request its challenges carry. Only
+the installed native construction with one replaced service is admitted. -/
+def Context.ofPolicy (policy : Policy) (roles : List String) (contract : String)
+    (request : Option Request) : Option Context :=
   match policy.services with
   | [service] =>
       if policy.construction = "" ∧ service < 1024 ∧ policy.producer ∈ roles ∧
           policy.validator ∈ roles ∧ policy.producer ≠ policy.validator ∧
           policy.draws.Nodup then
         some ⟨policy.entry, roles, roles.idxOf policy.producer, roles.idxOf policy.validator,
-          service, contract, policy.suite, policy.draws⟩
+          service, contract, request, policy.suite, policy.draws⟩
       else none
   | _ => none
 
 /-- The context of an export checked against its original entry: same entry;
 the policy publishes exactly the validator's data inputs, which are the
 exported data inputs with the same sorts; the replaced service is a validator
-service input of the original, whose contract the challenges must carry. -/
+service input of the original, whose contract the challenges must carry. The
+typed request is the draw of the export's challenge field, which the
+construction check ties to that contract. -/
 def exportContext (original : Structured.Snapshot) (participant : Participant) : Option Context :=
   match entryInterface original with
   | some (inputs, interface) =>
@@ -100,6 +102,7 @@ def exportContext (original : Structured.Snapshot) (participant : Participant) :
                     policy.publicInputs.map (fun index =>
                       (inputs[index]? >>= dataSort?).map ValueSort.data) then
                 Context.ofPolicy policy interface.roles contract
+                  ((Instruction.challengeFieldList participant.instructions).map Request.draw)
               else none
           | _, _ => none
       | _ => none
