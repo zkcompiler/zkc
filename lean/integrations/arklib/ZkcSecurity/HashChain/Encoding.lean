@@ -331,6 +331,17 @@ theorem NativeEvent.encode_injective {first second : NativeEvent} (firstBounded 
           simp only [Frame.mk.injEq, true_and] at frames
           rw [frames.1, u64be_injective firstBounded.2 secondBounded.2 frames.2]
 
+/-- The encoding of bounded native events, as the event encoding of a hash chain,
+is injective. -/
+theorem NativeEvent.encode_injective_bounded :
+    Function.Injective fun event : {event : NativeEvent // event.Bounded} => event.val.encode :=
+  fun first second same => Subtype.ext (encode_injective first.property second.property same)
+
+/-- Fixed-length digests as bytes are injective with one length. -/
+theorem ofFn_injective {length : ℕ} :
+    Function.Injective fun digest : Fin length → UInt8 => List.ofFn digest :=
+  fun _ _ same => List.ofFn_injective same
+
 end NativeEvents
 
 end ZkcSecurity.HashChain.Encoding
