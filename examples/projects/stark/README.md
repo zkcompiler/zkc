@@ -34,5 +34,5 @@ it reconstructs the leaf from its own value. The proof is about 2.3 KB, against
 The [library tests](../../../common/tests/protocol/test_stark_library.py)
 prove these Entries under several compilation modes, alter every proof message,
 change public inputs, open wrong rows, run two dishonest provers, and repeat
-the protocol with a bit-reversed configuration. Commitments are nonhiding and
-the proof format is zkc's own, not Plonky3's.
+the protocol with bit-reversed rows and with one FRI value per leaf.
+Commitments are nonhiding and the proof format is zkc's own, not Plonky3's.

@@ -429,11 +429,9 @@ def test_dishonest_quotients_are_refused(toolchain, journal, directory):
     assert identity['site'] != terminal['site']
 
 
-def test_bit_reversed_layout_is_a_configuration(toolchain, journal, directory):
-    """The same protocol with another layout: rows and FRI pairs in
-    bit-reversed order. The proofs differ in their roots and both verify."""
-    reversed_configuration = '''
-use stark::configurations::{Configuration, reversed_rows, reversed_pairs, reverse_positions};
+CONFIGURATIONS = '''
+use stark::configurations::{Configuration, reversed_rows, reversed_pairs, reverse_positions,
+  pair_positions};
 use stark::koala_bear::quartic::{Quartic, KoalaBearRows, QuarticRows};
 use zkc::indices::{Indices};
 use zkc::oracle as oracle;
@@ -484,20 +482,80 @@ module Reversed: Configuration {
     return oracle::check_many<QuarticRows>(root, 2, half, reverse_positions(pairs, half), rows, proof);
   }
 }
+module Separate: Configuration {
+  type Base: Field = stark::koala_bear::Base;
+  type Extension: Field = Quartic;
+  type Challenge: Field = stark::koala_bear::Extension;
+  type BaseRows: Commitment = KoalaBearRows;
+  type ExtensionRows: Commitment = QuarticRows;
+  fn challenge(draw: stark::koala_bear::Extension) -> Quartic { return Poseidon2::challenge(draw); }
+  fn embed(values: Vector<stark::koala_bear::Base>) -> Vector<Quartic> { return Poseidon2::embed(values); }
+  fn lift(value: stark::koala_bear::Base) -> Quartic { return Poseidon2::lift(value); }
+  fn shift() -> stark::koala_bear::Base { return 3; }
+  fn commit_base(rows: Vector<stark::koala_bear::Base>, width: index) -> (Root<KoalaBearRows>, State<KoalaBearRows>) {
+    return Poseidon2::commit_base(rows, width);
+  }
+  fn open_base(state: State<KoalaBearRows>, positions: Indices, height: index)
+      -> (Vector<stark::koala_bear::Base>, Path<KoalaBearRows>) {
+    return Poseidon2::open_base(state, positions, height);
+  }
+  fn check_base(root: Root<KoalaBearRows>, width: index, height: index, positions: Indices,
+      rows: Vector<stark::koala_bear::Base>, proof: Path<KoalaBearRows>) -> bool {
+    return Poseidon2::check_base(root, width, height, positions, rows, proof);
+  }
+  fn commit_extension(rows: Vector<Quartic>, width: index) -> (Root<QuarticRows>, State<QuarticRows>) {
+    return Poseidon2::commit_extension(rows, width);
+  }
+  fn open_extension(state: State<QuarticRows>, positions: Indices, height: index)
+      -> (Vector<Quartic>, Path<QuarticRows>) {
+    return Poseidon2::open_extension(state, positions, height);
+  }
+  fn check_extension(root: Root<QuarticRows>, width: index, height: index, positions: Indices,
+      rows: Vector<Quartic>, proof: Path<QuarticRows>) -> bool {
+    return Poseidon2::check_extension(root, width, height, positions, rows, proof);
+  }
+  fn commit_pairs(word: Vector<Quartic>) -> (Root<QuarticRows>, State<QuarticRows>) {
+    return oracle::commit<QuarticRows>(word, 1);
+  }
+  fn open_pairs(state: State<QuarticRows>, pairs: Indices, half: index)
+      -> (Vector<Quartic>, Path<QuarticRows>) {
+    return oracle::open_many<QuarticRows>(state, pair_positions(pairs, half));
+  }
+  fn check_pairs(root: Root<QuarticRows>, half: index, pairs: Indices, rows: Vector<Quartic>,
+      proof: Path<QuarticRows>) -> bool {
+    return oracle::check_many<QuarticRows>(root, 1, 2 * half, pair_positions(pairs, half), rows, proof);
+  }
+}
 '''
+
+
+def test_layout_and_leaf_grouping_are_configurations(toolchain, journal, directory):
+    """The same protocol with two other configurations: rows and FRI pairs in
+    bit-reversed order, and natural rows with one FRI value per leaf. All three
+    verify with the same message sequence; the layout changes the trace root,
+    and separate leaves need two authentication paths per pair."""
     height, final, blowup, queries = 32, 1, 2, 16
     bundle, public_data, trace = quadratic_air(height, 3)
     asset = journal.write('bundle.json', bundle)
     proofs = {}
-    for configuration in ['Poseidon2', 'Reversed']:
-        source = generated(height, final, blowup, queries, configuration, reversed_configuration)
+    for configuration in ['Poseidon2', 'Reversed', 'Separate']:
+        source = generated(height, final, blowup, queries, configuration, CONFIGURATIONS)
         package = Package.source(toolchain, journal, directory, source, {'trace': asset},
                                  name=configuration)
         proofs[configuration] = frames(package.honest({'public_data': public_data},
                                                       {'trace': trace}).read_bytes())
-    natural, reversed_ = proofs['Poseidon2'], proofs['Reversed']
-    assert [tag(m) for m in natural] == [tag(m) for m in reversed_]
-    assert natural[0] != reversed_[0] and natural[1] != reversed_[1]
+    natural, reversed_, separate = proofs['Poseidon2'], proofs['Reversed'], proofs['Separate']
+    rounds = height.bit_length() - 1 - final
+    assert [tag(m) for m in natural] == [tag(m) for m in reversed_] == [tag(m) for m in separate]
+    # The trace root is committed before any challenge. The deployment differs
+    # between configurations, so later challenges and roots differ anyway.
+    assert natural[0] != reversed_[0] and natural[0] == separate[0]
+    # Separate leaves k and k + half lie in the two equal halves of a tree of
+    # 2*half leaves, so each layer proof holds the same boundary twice: an even
+    # digest count, below a root whose both children are covered.
+    layer_proofs = range(len(natural) - 2 * rounds + 1, len(natural), 2)
+    assert all(int.from_bytes(separate[i][6:10], 'little') % 2 == 0 for i in layer_proofs)
+    journal.write('sizes.json', {name: sum(map(len, value)) for name, value in proofs.items()})
 
 
 DERIVATION = '''module sample;

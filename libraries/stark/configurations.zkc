@@ -67,6 +67,19 @@ pub fn natural_pairs<F: Field>(word: Vector<F>) -> Vector<F> {
   return transpose(word, 2, half);
 }
 
+// Leaf grouping: a configuration may instead commit an FRI word as a width-one
+// table, one value per leaf, and open both members of pair k as positions k
+// and k + half. Its open and check members then return and check the same
+// (low, high) rows, with two authentication paths per pair.
+pub fn pair_positions(pairs: Indices, half: index) -> Indices {
+  let mut result = indices::empty();
+  for pair in 0..indices::length(pairs) {
+    let low = indices::get(pairs, pair);
+    result = indices::append(indices::append(result, low), low + half);
+  }
+  return result;
+}
+
 // Bit-reversed order commits natural position i at row reverse(i). Its pair
 // table is the bit-reversed word read as width-two rows: row k holds natural
 // positions reverse(2k) and reverse(2k) + half, so natural pair j sits at row

@@ -91,8 +91,12 @@ Positions are always natural: position `i` of a size-`n` table is the value at
 `shift * g_n^i`. A configuration that commits rows in another order translates
 positions inside its own open and check members, so the data layout is a
 configuration choice. `natural_pairs`, `reversed_rows`, `reversed_pairs` and
-`reverse_positions` implement natural and bit-reversed layouts; the tests run
-the argument with both.
+`reverse_positions` implement natural and bit-reversed layouts. Leaf grouping
+is one as well: a configuration can commit an FRI word with one value per leaf
+and open pair `k` as the two positions `pair_positions` gives, `k` and
+`k + h`, returning the same rows with two authentication paths per pair. The
+tests run the argument with all three. Folding is binary: grouping several
+folds into one committed layer is not a parameter.
 
 `stark::koala_bear::quartic::Poseidon2` is the installed configuration:
 
@@ -153,8 +157,8 @@ proof, change public inputs and the configuration, open trace, quotient and FRI
 rows at the wrong positions, and run a prover with a false trace and a truncated
 quotient, which fails the out-of-domain identity, and one that also chooses its
 quotient claim to satisfy that identity and truncates its final polynomial,
-which fails FRI. A second configuration with bit-reversed rows and pairs proves
-the same statements with different roots. The `stark` [benchmark
+which fails FRI. Two further configurations, one with bit-reversed rows and
+pairs and one with a single FRI value per leaf, prove the same statements. The `stark` [benchmark
 family](../../common/benchmarks/README.md) measures the `air` family's AIR and
 sizes through this argument.
 
