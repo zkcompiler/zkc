@@ -205,6 +205,57 @@ families use the same explicit `F,G` assignment and evaluator.
 There is no separate scalar arithmetic or unsupported-sort fallback.
 Selection is interpreted for every admitted type, including vectors and indices.
 
+### Domain carriers and models
+
+Exported sorts name domain identities by their native catalogue strings. The
+semantics interprets identities in two layers. `Carriers` assigns a type to
+every field identity and every group identity and nothing else, so
+`Carriers.Value` interprets every sort without instance arguments. A
+`FieldModel` adds a commutative ring and decidable equality per field identity,
+an optional computable inverse and embeddings between field identities; a
+`DomainModel` adds an additive group and decidable equality per group identity
+and the scalar actions between field and group identities. No layer assumes a
+characteristic, a prime field or a particular identity. Which identities exist,
+which pairs are related and which laws a theorem may assume are facts of the
+catalogue rows that admission checks.
+
+The evaluator over models (`Primitive.evaluateOn`, `Evaluation.operationOn`,
+`Evaluation.meaningOn`) gives each field operation the ring of its own field
+identity, each group operation the group of its own group identity and scaling
+the model's action of the named field on the named group. Helper tables,
+component tables (`ComponentTablesOn`), the participant interface and site
+observations (`participantInterfaceOn`, `ObservedActionOn`), protocol
+operations, retained repeats, protocol tables and participant views
+(`protocolOperationWithOn`, `Program.participantOn`), and relation and contract
+interpretations (`RelationInterpretationOn`, `ContractInterpretationOn`) are
+defined over carriers or models in the same way. Definitions that only name
+values take carriers; definitions that compute take a model.
+
+The uniform interpretation is the instance of this semantics: `uniformCarriers F
+G` reads every field identity as `F` and every group identity as `G`, and
+`ringModel F G` adds the instance structures, the module action of `F` on `G`
+for every pair and no inverse. `assignment F G` and `(uniformCarriers F G).Value`
+share one case analysis and are equal by reducible unfolding. The uniform
+definitions keep their own text, so existing statements and the proofs that
+unfold them are unchanged, and equations relate each to the generic definition at
+the uniform model: `Primitive.evaluate_eq_evaluateOn`,
+`Evaluation.operation_eq_operationOn`,
+`Evaluation.componentOperation_eq_componentOperationOn`,
+`protocolOperationWith_eq_protocolOperationWithOn` for every effect interface,
+`UnitPayload.plainProtocolTable_eq_plainProtocolTableOn`,
+`Program.participant_eq_participantOn`, and the `toOn` readings of relation
+environments and interpretations with the same truth of every application. The
+uniform site-observation interface is its own inductive type; `observedToOn`
+translates it, and the observed views agree after that translation.
+
+`Evaluation.denote_inverse_free` transfers denotations between models that
+differ only in the inverse, for bodies that never invert; every body of the
+current vocabulary is such a body. A model built from a commutative ring has no
+inverse, and a model built from a field supplies one, so theorems proved for a
+lawful model apply at the ring model for these bodies. The congruence behind it
+is `Region.denote_congr`. The executable tools evaluate at `scalarModel`, the
+uniform model over the BLS12-381 scalar field with its computable inverse.
+
 `Evaluation.inline_invoke` replaces a helper invocation by
 `Region.bind (body.rename arguments.get) next` under an explicit equation
 between lookup and body denotation for every actual argument tuple. It applies

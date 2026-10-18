@@ -136,6 +136,12 @@ import Zkc.Source.Structured.ContractInstantiation
 import Zkc.Source.Structured.ContractMeaning
 import Zkc.Source.Structured.ContractObligations
 import Zkc.Source.Structured.DerivationRules
+import Zkc.Source.Structured.DomainComponent
+import Zkc.Source.Structured.DomainContract
+import Zkc.Source.Structured.DomainEvaluation
+import Zkc.Source.Structured.DomainModels
+import Zkc.Source.Structured.DomainParticipant
+import Zkc.Source.Structured.DomainTransfer
 import Zkc.Source.Structured.EqualityDerivationRules
 import Zkc.Source.Structured.Evaluation
 import Zkc.Source.Structured.Format
@@ -235,6 +241,7 @@ import Tests.StructuredContractAuthority
 import Tests.StructuredContractEntry
 import Tests.StructuredContractInvocation
 import Tests.StructuredContracts
+import Tests.StructuredDomainModels
 import Tests.StructuredFormation
 import Tests.StructuredHelperSources
 import Tests.StructuredInlining
