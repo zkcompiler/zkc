@@ -1004,14 +1004,16 @@ class Driver:
         self.check(f"{prefix}:role-map-validator", selection is not None)
         self.check(f"{prefix}:role-map-public-inputs", selection["inputs_match"], json.dumps(selection))
         self.check(f"{prefix}:role-map-acceptance", selection["acceptance_match"], json.dumps(selection))
-        # Controls: a policy selecting another output, or public inputs in another order, fails.
+        # Controls: a policy selecting another output, or other public inputs (in another order,
+        # or none when there is one), fails.
         other = copy.deepcopy(deployment)
         other[2][1][4] = str(int(other[2][1][4]) + 1)
         reordered = copy.deepcopy(deployment)
-        reordered[2][1][7] = list(reversed(reordered[2][1][7]))
+        inputs = reordered[2][1][7]
+        reordered[2][1][7] = list(reversed(inputs)) if len(inputs) > 1 else []
         self.check(f"{prefix}:role-map-refuses-other-acceptance",
                    not self.role_selection(other)["acceptance_match"])
-        self.check(f"{prefix}:role-map-refuses-reordered-inputs",
+        self.check(f"{prefix}:role-map-refuses-other-inputs",
                    not self.role_selection(reordered)["inputs_match"])
         return dict(symbol=selection["symbol"], data_inputs=selection["data_inputs"],
                     acceptance=selection["acceptance"])
