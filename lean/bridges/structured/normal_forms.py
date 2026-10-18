@@ -673,7 +673,8 @@ class Evaluator:
     def math_call(self, descriptor, args, results, rest, terminator, env, proof, indent, step):
         if not self.shared and not any(key in self.frame.laws for key in
                                        (descriptor[1], self.helper_term(descriptor[1]))):
-            if all(arg.kind == "present" for arg in args):
+            if all(arg.kind in ("present", "absent") for arg in args):
+                # Math calls propagate each input's availability through the body.
                 values = self.inline(descriptor[1], args, results)
                 if values is not None:
                     return self.run(rest, terminator, values + env, proof, indent)
