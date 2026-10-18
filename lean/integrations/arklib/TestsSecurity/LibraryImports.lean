@@ -85,6 +85,14 @@ import TestsSecurity.CausalSumcheck.UniformService
 import TestsSecurity.Compatibility
 import TestsSecurity.CompiledSchnorrFiatShamir
 import TestsSecurity.CompiledSumcheckFiatShamir
+import TestsSecurity.Counterexamples.Couplings
+import TestsSecurity.Counterexamples.Encodings
+import TestsSecurity.Counterexamples.Imports
+import TestsSecurity.Counterexamples.Laws
+import TestsSecurity.Counterexamples.Observations
+import TestsSecurity.Counterexamples.Openings
+import TestsSecurity.Counterexamples.Operands
+import TestsSecurity.Counterexamples.Support
 import TestsSecurity.ExecutableSchnorrFiatShamir
 import TestsSecurity.FiatShamirTyped
 import TestsSecurity.FriSecurity
