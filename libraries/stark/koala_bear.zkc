@@ -1,6 +1,7 @@
 module stark::koala_bear;
 pub module table;
 pub module bundle;
+pub module quartic;
 use zkc::vector::{Vector};
 pub domain Base = field("koala-bear");
 pub domain Extension = field("koala-bear.ext8-binomial3");
