@@ -103,6 +103,96 @@ runs. It does not equate the full native event, diagnostic or resource model to
 the Lean process. A nonzero Runner exit can report an expected semantic stop;
 the bridge checks the structured result before classifying it.
 
+## Lean reference executable
+
+The `structured-source` executable in `ZkcTools.StructuredSource` checks and
+runs admitted snapshots:
+
+```text
+structured-source check SNAPSHOT.json
+structured-source run SNAPSHOT.json INPUTS.json
+structured-source open SNAPSHOT.json REQUEST.json
+```
+
+Closed runs take and return typed input/output arrays. Open requests and
+results follow the native schema: optional ordered inputs, selected role,
+scripted replies, full request/reply/stop records, stop site and consumed reply
+index. Missing replies stop `incomplete`; mismatches stop `refused` without
+consuming the mismatching reply; valid scripted stops consume their reply.
+Unused script suffixes remain unconsumed.
+An oversized received vector is an observer capacity error; a malformed reply
+shape or element type remains an unconsumed semantic refusal. Requests are
+limited to 1 MiB; snapshot admission limits belong to the
+[formal contract](../../docs/spec/structured-source.md#checked-subject).
+
+The CLI chooses `F = G = ZMod scalarModulus`, an explicit additive test group.
+This is not native BLS G1 semantics. Typed arbitrary-group equations protect
+distinctions that commutative scalar test arithmetic cannot detect.
+
+### Bounds preflight
+
+Executable work bounds are separate from fuel-free denotation. The Lean observer
+and native SSA evaluator count different work, so their exact exhaustion
+thresholds are not equated. Comparisons of outcomes, traces, sites and consumed
+replies use sufficient capacities; capacity refusals are tested separately.
+
+Before interpretation, `ZkcTools.StructuredSource.Bounds` propagates per-value
+index intervals, vector-length intervals and optional presence through the
+checked source. This includes generated constants, arithmetic, append, helper
+bodies, loops and folds; an input maximum alone is insufficient. Typed received
+values use conservative bounds from all matching reply envelopes, including
+unused suffixes. A reversed array stores the abstract SSA context while ordered
+argument/result tuples retain their list ABI. Protocol transfers capture their
+strict prefix, compare complete signatures, compose the same root-coordinate
+context and preserve actual optional inputs and mapped masks. An outside call
+returns the abstract absent tuple; no returning path is distinct from a returning
+empty tuple. Typed receives use independent reply envelopes, never the sender's
+operand. The preflight never infers a helper's behavior from its spelling and
+does not replace the typed evaluator.
+
+The map transfer intersects all retained row-length intervals and charges every
+length extraction before helper work. On a possible nonempty return, it analyzes
+the actual helper once on the complete scalar atom tuple and reserves that
+helper's logical work for each possible row, including dead nested calls. The
+resulting vector is bounded by the common successful length; aggregate tuple
+work does not consume a different per-vector capacity. Empty rows avoid helper
+work only after all shapes pass. Maps add no separate analysis, execution or
+vector limit. The workload meter counts logical tuple selections; it does not
+count the depth of concrete positional list indexing as processor steps.
+
+Repeat preflight reuses conservative `Bounds.iterate`. An outside participant
+returns abstract absent state without analyzing callback execution. An absent
+active count or an interval whose lower bound exceeds maximum has no returning
+path. Otherwise `min(upper, maximum)` bounds abstract exploration only; concrete
+counts above maximum still stop `refused`. The analysis masks initial and
+yielded state and preserves optional captures and the captured protocol table.
+It joins the initial state and analyzed prefixes, even when a callback has no
+returning path, and may analyze later abstract steps. These joins can include
+states unreachable at a known positive count. No-return (`none`) remains
+distinct from a successful empty state (`some []`). Planned traversal work is
+charged before callback analysis, under the same work, vector and reply limits.
+
+Separate analysis and expanded logical-work meters each allow 1000000 units;
+generated vectors are capped at 4096 elements. Work includes nodes, selected
+operands, tuples, allocated ranges and vector traversal/serialization. It is
+not an exact host instruction, allocation or wall-time bound. Analysis charges
+its own expansion and context operations. A known branch or select condition
+chooses its reachable alternative after strict/optional presence handling;
+unknown conditions join both alternatives. Loop joins and typed unused replies
+can still overapproximate the executed path, so a cheap logical run may fail
+preflight; a valid source equation does not imply preflight success. Such
+diagnostics are tool-capacity refusals, distinct from the process's semantic
+stops. Analysis exhaustion reports `structured-bounds-analysis-limit`;
+unsupported or mismatched abstract shapes report `structured-bounds-unknown`.
+Work and generated value caps retain separate closed/open diagnostics. Helpers
+are resolved in a bounded per-preflight table with full signature validation,
+preserving their checked bodies and ordinary linking.
+
+These transfers are conservative executable controls. Their soundness,
+agreement with native capacity thresholds and processor costs are not proved,
+and finite controls do not show that every input satisfying a source theorem is
+admitted by this observer.
+
 ## Actual proof subjects
 
 The native [`total-state.mlir`](../../../compiler/test/fixtures/finite/total-state.mlir)
@@ -136,12 +226,8 @@ python3 lean/checks/check_structured_renderer.py
 This check runs in `just test-lean`. It does not turn the renderer into a proved
 translator.
 
-`TotalState.process_eq_checked_reference` proves the ordered pair fold for
-arbitrary lists, including refusal outside the unsigned-index domain.
-`UnitState.process_eq_checked_reference` proves the complete result: an admitted
-nonempty list aborts exactly when its predicate enables the zero-result step.
-Both are parametric in the scalar commutative ring. They are equations for the
-actual admitted constructor subjects; no finite test enumeration supplies them.
+[Formal support](../../docs/support.md#finite-fold-subjects) states the proved
+process equations for both subjects.
 
 ## Open participants
 
@@ -164,19 +250,12 @@ Entries exercise both roles, altered replies, helper factoring, declaration
 permutation and an early-challenge mutation. The latter can accept the same
 sample while exposing a different first action.
 
-`SchnorrInteractive` proves equations for both participants of the retained
-library-derived source, and connects the verifier through an explicit effect
-adapter to its reusable Schnorr contract. The dormant relation declaration and
-Math formula are both retained with an explicit checked formula symbol. The
-contract table retains every protocol's clauses, including empty inventories.
-`SchnorrBinding` uses this metadata to select the actual target's ports, roles,
-decision and formula body. These source equations keep received values and stopping continuations.
-They do not establish that the native runtime or provider implements them.
+[Formal support](../../docs/support.md#interactive-schnorr) states the proved
+equations for these Schnorr subjects.
 
 `open_protocol.py --write-fixtures` regenerates each retained MLIR, JSON and
 constructor-data subject. As for the closed suite, semantic proofs are maintained
-separately. The native reference and Lean observer have separate work budgets;
-normal results are compared with sufficient capacity. Missing replay input is
+separately. Missing replay input is
 reported as `incomplete`, an observation of an unfinished interaction rather than
 a claim that a production endpoint has terminated.
 
@@ -196,20 +275,11 @@ ingredients of protocols, without group operations or interactive security
 claims.
 
 [`SchnorrResponse`](../../ZkcExamples/Structured/SchnorrResponse.lean) and
-[`SumcheckClaim`](../../ZkcExamples/Structured/SumcheckClaim.lean) prove complete
-process equality between each exact imported original and the actual prepared
-candidate, for every input in any `CommRing F` with `DecidableEq F`. Each client
-uses named checked-body contracts. The response proof applies
-`Structured.inline_invoke`, whose lookup/body premise covers every actual tuple;
-it preserves stops and the caller's suffix without a totality assumption.
-The controls in `Tests.StructuredInlining` cover stopping and returning
-zero-result helpers, suffix stops, retained caller values, repeated arguments
-and ordered multiple results.
-
-The retained mutation changes only the prepared response entry's addition to
-subtraction. It passes native formation and Lean admission. The kernel proves
-that `(nonce, challenge, secret) = (2, 3, 5)` returns `17` in the original model
-and `-13` in the mutated integer model.
+[`SumcheckClaim`](../../ZkcExamples/Structured/SumcheckClaim.lean) are the proof
+clients for these pairs. The retained mutation changes only the prepared
+response entry's addition to subtraction. It passes native formation and Lean
+admission. [Formal support](../../docs/support.md#helper-inlining-pairs) states
+the proved original/candidate equations and the mutation's counterexample.
 
 After building Lean and the existing native tools, reproduce from the root:
 
@@ -280,9 +350,9 @@ selection and binding-as-callable mutations exercise the independent reader.
 The suite compares retained original MLIR, exported JSON and transparent Lean
 constructor data byte-for-byte. `--write-fixtures` updates those subjects and
 requires review of their semantic proofs; it does not produce a proof. The
-ordinary `lean-native` check includes this suite. Executable capacity checks and
-logical range/shape premises remain separate; passing these finite comparisons
-does not establish universal exporter, native arithmetic or resource correctness.
+ordinary `lean-native` check includes this suite. Passing these finite
+comparisons does not establish universal exporter, native arithmetic or resource
+correctness.
 
 ## Retained maps and realizations
 
@@ -342,7 +412,10 @@ closures over earlier protocol declarations. Calls preserve optional inputs;
 only owned Local helpers impose strict input presence. A participant outside a
 callee's mapped roster skips that call, including a zero-result child that
 would stop for an inside participant. Nested action sites follow the native
-naming rule; helper-internal sites keep their existing namespace.
+naming rule; helper-internal sites keep their own namespace. Native one-role
+closed execution also supports calls, which the Lean closed projection refuses;
+paired application comparisons therefore use open execution and record the
+closed-view refusal separately.
 
 Independent expectations check arithmetic results, received values, aliased and
 distinct service handles, every reached service/message stop, missing replies,

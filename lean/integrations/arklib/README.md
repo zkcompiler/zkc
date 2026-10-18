@@ -49,14 +49,10 @@ and actual verifier result. The simulator uses only the public key and a uniform
 response. Challenges are fixed independently of nonces. It does not prove
 malicious-verifier or Fiat–Shamir security.
 
-`Examples/StructuredSchnorrHonestView` derives the Interactive prover's public
-messages from its actual checked source's ordered sends, then proves equality
-with the existing `VCVio/Schnorr.honestView` and transfers its simulation law.
-It uses fixed successful replies/send acknowledgements and honest delivery to
-the actual checked verifier. The nonce is uniform in the VCVio experiment and
-the challenge is fixed outside sampling; native providers and joint scheduling
-are not modeled. `Examples/StructuredSchnorr` and the generic theorem retain
-their handwritten honest strategy and imported verifier contracts.
+`Examples/StructuredSchnorr` applies this law to the imported verifier contract
+with a handwritten honest strategy. `Examples/StructuredSchnorrHonestView`
+transfers it to the public view derived from the Interactive prover's checked
+sends; [support](../../docs/support.md#interactive-schnorr) states its premises.
 
 `TestsSecurity.Audit` checks every owned declaration's transitive axiom closure.
 Only `propext`, `Classical.choice` and `Quot.sound` are allowed. Unrelated upstream

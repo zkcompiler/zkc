@@ -38,7 +38,7 @@ The source digest identifies retained native text. It does not prove semantics.
 The native `language-interface` identity and chosen symbol are compared before
 verification. Constructor data is freshly rendered, admitted by `Snapshot.check`,
 and tied to a separately generated requested-subject theorem. The renderer,
-parser and interface-name resolution remain tested software boundaries.
+parser and interface-name resolution are tested software boundaries.
 
 The finite reference request `zkc.common-run/0` is
 `[format, role, input-values, replay-entries]`. Both reference readers require
