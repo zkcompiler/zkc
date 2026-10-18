@@ -378,6 +378,11 @@ import ZkcExamples.Structured.MapPrefixViews
 import ZkcExamples.Structured.MapProjectionContracts
 import ZkcExamples.Structured.MapSourceExpansions
 import ZkcExamples.Structured.NormalFormSteps
+import ZkcExamples.Structured.Okamoto
+import ZkcExamples.Structured.OkamotoBodies
+import ZkcExamples.Structured.OkamotoData
+import ZkcExamples.Structured.OkamotoNormalForms
+import ZkcExamples.Structured.OkamotoViews
 import ZkcExamples.Structured.PrimitiveContracts
 import ZkcExamples.Structured.PrimitiveExpansions
 import ZkcExamples.Structured.PrimitiveHalvesData
