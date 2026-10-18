@@ -3,6 +3,7 @@
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Support/Json.h"
+#include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 using namespace llvm;
@@ -185,10 +186,22 @@ public:
 Error verifyPhysicalMaterialization(
     ModuleOp before, ModuleOp after,
     const target::CheckedPhysicalPlan &checked) {
-  if (auto e = checked.checkInput(before))
-    return e;
+  auto selected = checked.choices().selectedSubject(before);
+  if (!selected)
+    return selected.takeError();
   if (failed(verify(before)) || failed(verify(after)))
     return error("binding-materialization-formation");
-  return PhysicalCorrespondence(before, checked.choices()).check(before, after);
+  // Decisions index this exact selected Local subject, never original Kernel
+  // operations. Its numerical edge was checked before constructing the checked
+  // plan; reading actual physical output requires no numerical producer.
+  if (auto e = PhysicalCorrespondence(*selected, checked.choices())
+                   .check(*selected, after))
+    return e;
+  // Preserve the existing participant/source postcondition on the physical
+  // edge. Kernel frontier/interface changes belong to the independently checked
+  // original-to-Local edge, not an unchecked exception to preservation.
+  if (failed(mathematical::verifyProjectionPreserved(*selected, after)))
+    return error("mathematical-projection");
+  return Error::success();
 }
 } // namespace zkc::protocol

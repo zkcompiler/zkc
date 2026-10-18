@@ -22,21 +22,32 @@ not authorize moving a failure, erasing a draw or reusing a consumed capability.
 
 ## Checked physical decisions
 
-The compiler first checks and materializes any [logical Kernel calls](../spec/ir/kernel.md)
-into the existing Local vocabulary. The physical planner receives that exact
-lowered subject; a plan is never reused across Kernel expansion.
+One physical plan retains the original subject, including any
+[logical Kernel units](../spec/ir/kernel.md), until selection and checking finish.
+Kernel transforms propose a complete Local candidate without changing that
+subject. The candidate records the actual numerical choices, including ordered
+fallbacks; compile-time permission flags alone do not determine those choices.
+Numerical selection currently proposes one candidate independently of catalog
+preferences. If the catalog withholds an operation required by that candidate,
+planning refuses even if an ordered numerical alternative could execute.
 
-Physical lowering separates three steps inside Target and Conversion:
+Physical lowering separates three steps:
 
-1. Propose binding implementations, physical ports and direct conversions against
-   unchanged logical IR. Keep explicit application choices fixed.
-2. Independently validate the proposal against installed Contracts, actual SSA
-   uses and the selected policy. Only validation constructs a checked plan.
-3. Materialize that plan on an owned candidate, verify the resulting IR and
-   publish it. Materialization does not search for another implementation.
+1. Retain the numerical candidate and propose binding implementations, physical
+   ports and direct conversions for its actual operations. Keep explicit
+   application choices fixed.
+2. Independently check numerical correspondence with the original Kernel subject,
+   then validate physical decisions against installed Contracts and actual SSA
+   uses in the candidate. Only validation constructs a checked plan.
+3. Clone the retained candidate, apply the checked decisions, independently check
+   the actual physical output and publish once. Materialization performs no
+   numerical selection or catalog search.
 
-The checked object owns choices and binds the current module identity and input
-content. Stale input refuses. This is an invocation-local guard, not a persisted
+Physical operation indices refer to the selected Local candidate. They are not
+indices into the original Kernel subject. The checked object privately retains
+that candidate and owns the physical choices. Inspection returns a separate clone.
+Module identity and complete source content guard validation and publication;
+stale input refuses. This is an invocation-local guard, not a persisted
 certificate or protection against concurrent mutation of IR.
 
 Each mismatched operand gets its conversion immediately before its consumer, in

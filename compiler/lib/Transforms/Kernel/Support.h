@@ -23,6 +23,13 @@ mlir::OwningOpRef<mlir::func::FuncOp> exactReadback(mlir::func::FuncOp source,
 // Temporary normalized mathematical subject, including checked extra concrete
 // ports on uniquely invoked generated calculation wrappers. No recipe emission.
 mlir::OwningOpRef<mlir::ModuleOp> prepareKernelLowering(mlir::ModuleOp source);
+// Return the actual complete, admitted executable candidate while preserving
+// the original Kernel source. The caller owns independent source/candidate
+// correspondence checking before publication.
+mlir::OwningOpRef<mlir::ModuleOp>
+proposeKernelLowering(mlir::ModuleOp source,
+                      MathematicalSelectionPolicy policy = {},
+                      mathematical::RealizationTrace *trace = nullptr);
 // Checked Kernel-to-Kernel normalization; generated-operation identities refer
 // to the returned owned unit and remain valid when that unit is adopted.
 mlir::OwningOpRef<ModuleOp>

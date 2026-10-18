@@ -1,10 +1,7 @@
 #include "Bindings.h"
 #include "../Target/PhysicalPlan.h"
-#include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Dialect/Mathematical.h"
-#include "zkc/Transforms/Mathematical.h"
 
 using namespace llvm;
 using namespace mlir;
@@ -15,7 +12,8 @@ static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
       cast<zkc::protocol_ir::ProtocolModuleOp>(&module.getBody()->front());
   OpBuilder builder(module.getContext());
   // All choices, including names and ports, have been checked on this exact
-  // logical input. Application contains no selection/default/adapter policy.
+  // selected Local payload. Application contains no numerical producer,
+  // selection/default/adapter policy or catalog query.
   for (const auto &decision : plan.bindings) {
     if (decision.purpose == target::BindingPurpose::Original) {
       cast<zkc::local::OperationBindingOp>(work[*decision.declaration])
@@ -32,8 +30,8 @@ static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
         binding.application.contract, builder.getArrayAttr(arguments),
         binding.application.implementation);
   }
-  // Apply interface ports without changing operation order. Kernel definitions
-  // get their own selected result ports when replaced below.
+  // Apply interface ports without changing operation order. Bound operations
+  // get their selected result ports when replaced below.
   for (auto [op, decision] : zip(work, plan.operations)) {
     size_t blockIndex = 0;
     for (auto &region : op->getRegions())
@@ -97,45 +95,41 @@ static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
 
 Error materializePhysical(ModuleOp module,
                           const target::CheckedPhysicalPlan &checked) {
-  if (auto e = checked.checkInput(module))
+  auto candidate = checked.cloneSelectedSubject(module);
+  if (!candidate)
+    return candidate.takeError();
+  if (auto e = applyPhysical(**candidate, checked.choices()))
     return e;
-  OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(module->clone()));
-  if (auto e = applyPhysical(*candidate, checked.choices()))
+  if (auto e = verifyPhysicalMaterialization(module, **candidate, checked))
     return e;
-  if (auto e = verifyPhysicalMaterialization(module, *candidate, checked))
-    return e;
-  module.getBodyRegion().takeBody(candidate->getBodyRegion());
+  module.getBodyRegion().takeBody((*candidate)->getBodyRegion());
   return Error::success();
 }
 LogicalResult
 lowerBoundPhysical(ModuleOp original,
                    ArrayRef<std::pair<std::string, std::string>> selections,
                    bool linearContractions, LinearContractionStats *stats) {
-  // Preserve the original transaction: publish only a verified owned clone.
-  OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(original->clone()));
-  Location failureLocation = candidate->getLoc();
+  // One plan binds the original Kernel-bearing input through both checked
+  // edges. Materialization owns the candidate and publishes only after all
+  // admission, physical correspondence and projection checks succeed.
+  Location failureLocation = original->getLoc();
   auto proposal =
-      target::proposePhysical(*candidate, target::installedCandidates(),
+      target::proposePhysical(original, target::installedCandidates(),
                               selections, linearContractions, &failureLocation);
   if (!proposal) {
     diagnostics::emit(emitError(failureLocation), proposal.takeError());
     return failure();
   }
   auto checked = target::validatePhysical(
-      *candidate, *proposal, target::installedCandidates(), &failureLocation);
+      original, *proposal, target::installedCandidates(), &failureLocation);
   if (!checked) {
     diagnostics::emit(emitError(failureLocation), checked.takeError());
     return failure();
   }
-  if (auto e = materializePhysical(*candidate, *checked)) {
-    diagnostics::emit(candidate->emitError(), std::move(e));
+  if (auto e = materializePhysical(original, *checked)) {
+    diagnostics::emit(original.emitError(), std::move(e));
     return failure();
   }
-  if (failed(verify(*candidate)))
-    return failure();
-  if (failed(mathematical::verifyProjectionPreserved(original, *candidate)))
-    return failure();
-  original.getBodyRegion().takeBody(candidate->getBodyRegion());
   if (stats)
     *stats = checked->stats();
   return success();

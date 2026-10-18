@@ -60,9 +60,10 @@ ordered actions and dynamic occurrence coordinates.
 ## Realization and publication
 
 Demand lowering forms [Kernel units](../spec/ir/kernel.md) at consuming actions.
-Checked Kernel lowering materializes their ordered recipes before physical
-planning, preserving the complete operation contracts, including failure. Physical selection
-chooses an installed implementation and validated conversions; storage handling
+Physical planning retains the original units and a proposed Local realization.
+Independent numerical and physical checks connect that realization to the original
+subject and the selected implementations and conversions. Publication applies the
+retained choices once, preserving ordered calls and failure contracts; storage handling
 respects copy/drop permissions and affine custody. [Representation](representation.md)
 describes selection and [verification](verification.md) describes the independent
 comparisons of the actual candidate and emitted bytes.

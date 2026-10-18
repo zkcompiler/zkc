@@ -108,27 +108,45 @@ LogicalResult materialize(protocol_ir::ProtocolModuleOp owner,
   return success();
 }
 } // namespace
-LogicalResult lowerKernels(mlir::ModuleOp source,
-                           MathematicalSelectionPolicy policy,
-                           mathematical::RealizationTrace *trace) {
+OwningOpRef<mlir::ModuleOp>
+proposeKernelLowering(mlir::ModuleOp source, MathematicalSelectionPolicy policy,
+                      mathematical::RealizationTrace *trace) {
   source.getContext()->getOrLoadDialect<algebra::AlgebraDialect>();
   source.getContext()->getOrLoadDialect<local::LocalDialect>();
   if (failed(verify(source)) || !hasSingleElement(*source.getBody()))
-    return failure();
+    return {};
   auto owner =
       dyn_cast<protocol_ir::ProtocolModuleOp>(source.getBody()->front());
-  if (!owner || owner.getProfile() != protocol_ir::Profile::Exec)
-    return refuse(source, "expected the exec profile");
-  mathematical::RealizationScope scope(trace, "lower-kernels", source, policy);
+  if (!owner || owner.getProfile() != protocol_ir::Profile::Exec) {
+    (void)refuse(source, "expected the exec profile");
+    return {};
+  }
+  mathematical::RealizationScope scope(trace, "propose-kernel-lowering", source,
+                                       policy);
   scope.propose(policy);
-  auto prepared = prepareKernelLowering(source);
-  if (!prepared)
-    return refuse(source, "checked normalization or concrete frontier refused");
-  mathematical::CheckedCandidate candidate(source, std::move(prepared));
+  auto candidate = prepareKernelLowering(source);
+  if (!candidate) {
+    (void)refuse(source, "checked normalization or concrete frontier refused");
+    return {};
+  }
   auto proposed =
       cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
   if (failed(materialize(proposed, policy, trace)) ||
-      failed(
+      failed(verify(*candidate)))
+    return {};
+  scope.publish(mathematical::PublicationBoundary::ReturnedCandidate);
+  return candidate;
+}
+LogicalResult lowerKernels(mlir::ModuleOp source,
+                           MathematicalSelectionPolicy policy,
+                           mathematical::RealizationTrace *trace) {
+  mathematical::RealizationScope scope(trace, "lower-kernels", source, policy);
+  scope.propose(policy);
+  auto proposal = proposeKernelLowering(source, policy, trace);
+  if (!proposal)
+    return failure();
+  mathematical::CheckedCandidate candidate(source, std::move(proposal));
+  if (failed(
           candidate.publish([&](mlir::ModuleOp before, mlir::ModuleOp after) {
             return verifyKernelLowering(before, after, policy);
           })))

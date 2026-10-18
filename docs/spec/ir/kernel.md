@@ -67,8 +67,13 @@ view uses numerical signatures only; it cannot be encoded as `zkc.program/0`.
 ## Realization
 
 `zkc-lower-kernels` transactionally realizes calls in their existing Local
-positions and removes the units. Physical selection invokes this checked edge
-before constructing a representation plan. Normalization and native recipes use
+positions and removes the units. Physical planning uses the same proposal and
+independent reader while retaining the original Kernel-bearing subject. Its
+checked plan owns the selected Local candidate and the binding, port and
+conversion decisions for that candidate. Materialization applies those decisions
+without rerunning numerical selection. The [physical plan](../../compiler/representation.md#checked-physical-decisions)
+checks both correspondence edges before publishing the physical result.
+Normalization and native recipes use
 the existing bounded mechanisms and independent readers; they do not define a
 second mathematical semantics. An optional call `policy` records the selected
 `[finiteBulk, vectorReductionFusion]` compile-time choices. Omitted policy uses

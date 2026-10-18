@@ -1,4 +1,5 @@
 #include "PhysicalPlan.h"
+#include "../Transforms/Kernel/Support.h"
 #include "mlir/IR/RegionKindInterface.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/Operations.h"
@@ -44,6 +45,10 @@ struct InputSnapshot {
   SmallVector<const void *> addresses;
   protocol::Assignments selections;
   bool linearContractions;
+  // This owned payload is the numerical decision, including actual recipes,
+  // generated bindings, sites and SSA. Policy flags are not a replay format.
+  // Accessible only inside Target; callers can obtain independent clones.
+  OwningOpRef<ModuleOp> numerical;
   Error check(ModuleOp module) const {
     // Compare only fresh live IR against opaque saved addresses. Never walk or
     // dereference a saved operation/value, including after erasure/replacement.
@@ -61,6 +66,20 @@ SmallVector<Operation *> physicalPlanOperations(ModuleOp module) {
 }
 Error CheckedPhysicalPlan::checkInput(ModuleOp module) const {
   return plan.input->check(module);
+}
+Expected<ModuleOp> PhysicalPlan::selectedSubject(ModuleOp source) const {
+  if (!input)
+    return error("binding-stale-selection");
+  if (auto e = input->check(source))
+    return e;
+  return input->numerical ? *input->numerical : source;
+}
+Expected<OwningOpRef<ModuleOp>>
+PhysicalPlan::cloneSelectedSubject(ModuleOp source) const {
+  auto selected = selectedSubject(source);
+  if (!selected)
+    return selected.takeError();
+  return OwningOpRef<ModuleOp>(cast<ModuleOp>((*selected)->clone()));
 }
 namespace {
 void locate(Location *failureLocation, Operation *op) {
@@ -474,19 +493,49 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
   if (root.getProfile() != zkc::protocol_ir::Profile::Exec)
     return error("interactive-physical-stage");
   PhysicalPlan plan;
-  plan.input = std::make_shared<InputSnapshot>(
-      InputSnapshot{module, structure(module), identities(module),
+  auto input = std::make_shared<InputSnapshot>(
+      InputSnapshot{module,
+                    structure(module),
+                    identities(module),
                     protocol::Assignments(selections.begin(), selections.end()),
-                    linearContractions});
-  Proposer proposer(module, catalog, failureLocation);
+                    linearContractions,
+                    {}});
+  bool hasKernels = false;
+  root.walk([&](Operation *op) {
+    hasKernels |= isa<kernel::ModuleOp, kernel::CallOp>(op);
+  });
+  ModuleOp selected = module;
+  if (hasKernels) {
+    input->numerical = kernel::proposeKernelLowering(module);
+    if (!input->numerical)
+      return error("kernel-lowering");
+    selected = *input->numerical;
+    // Admit the actual payload before physical indexing. Its numerical
+    // correspondence is independently checked by validatePhysical, never
+    // inferred from the producer returning a well-formed candidate.
+    if (failed(verify(selected)) || !hasSingleElement(*selected.getBody()) ||
+        !isa<zkc::protocol_ir::ProtocolModuleOp>(selected.getBody()->front()))
+      return error("binding-operation");
+    root =
+        cast<zkc::protocol_ir::ProtocolModuleOp>(selected.getBody()->front());
+    if (root.getProfile() != zkc::protocol_ir::Profile::Exec)
+      return error("interactive-physical-stage");
+  }
+  if (auto e = input->check(module))
+    return e;
+  plan.input = std::move(input);
+  Proposer proposer(selected, catalog, failureLocation);
   if (auto e = proposer.initialize(selections, linearContractions))
     return e;
   size_t groupLimit = 4096;
   for (;;) {
     if (auto e = proposer.populate(plan, groupLimit))
       return e;
-    if (plan.bindings.size() <= 4096)
+    if (plan.bindings.size() <= 4096) {
+      if (auto e = plan.input->check(module))
+        return e;
       return plan;
+    }
     // Reserve space for real conversions as well as clones. Drop the last
     // selected atomic group deterministically, retaining dense execution.
     locate(failureLocation, root);
@@ -632,12 +681,20 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
     return error("binding-stale-selection");
   if (auto e = plan.input->check(module))
     return e;
-  // Verify the unchanged logical subject, not a mutated physical candidate.
+  // Check the original Kernel-bearing source independently against the exact
+  // retained Local payload, before checking any installed physical choices.
+  // This reader does not emit or select numerical recipes.
   if (failed(verify(module)))
     return error("binding-operation");
+  ModuleOp selected = module;
+  if (plan.input->numerical) {
+    selected = *plan.input->numerical;
+    if (failed(kernel::verifyKernelLowering(module, selected)))
+      return error("kernel-lowering-correspondence");
+  }
   auto root =
-      cast<zkc::protocol_ir::ProtocolModuleOp>(&module.getBody()->front());
-  auto operations = physicalPlanOperations(module);
+      cast<zkc::protocol_ir::ProtocolModuleOp>(&selected.getBody()->front());
+  auto operations = physicalPlanOperations(selected);
   auto indices = indexOperations(operations);
   if (plan.operations.size() != operations.size())
     return error("binding-plan-coverage");
@@ -784,7 +841,7 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
     }
   }
 
-  // Original preorder and operand order determine every instruction position.
+  // Selected Local preorder and operand order determine instruction positions.
   // No sharing, hoisting, path search, or inferred purity is permitted here.
   std::map<Operation *, std::set<std::string>> sites;
   for (auto *op : operations)
@@ -901,6 +958,8 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
   if (plan.input->linearContractions)
     for (auto function : root.getBody().front().getOps<zkc::local::FuncOp>())
       (void)findLinearContractions(function, stats);
+  if (auto e = plan.input->check(module))
+    return e;
   return CheckedPhysicalPlan(plan, stats);
 }
 } // namespace zkc::target

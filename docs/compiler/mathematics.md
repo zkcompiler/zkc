@@ -82,8 +82,10 @@ operational limits.
 [Logical Kernel units](../spec/ir/kernel.md) own numerical bodies and their
 helper/domain dependencies. Preparation forms units for executable helper
 requests; demand lowering forms them for participant calculations. Both retain
-an ordered Local wrapper. One checked realization service removes the units
-before physical selection, using the existing normalization and recipe readers.
+an ordered Local wrapper. Physical planning retains those units alongside the
+selected Local realization, using the existing normalization and recipe readers.
+The checked plan connects numerical correspondence and physical choices before
+publication removes the units.
 The shared mathematical vocabulary is owned outside the Protocol dialect, so
 Protocol and Kernel admission apply the same laws under explicit symbol owners.
 

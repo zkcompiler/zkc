@@ -18,12 +18,13 @@ independently.
 
 ## Make numerical realization explicit
 
-Build on the separated VM and logical Kernel units. Consolidate numerical
-planning around their owned mathematical bodies, preserving domains, indexing,
-reductions and failure obligations before choosing explicit schedules and
-storage. Reuse physical planning and installed operation contracts. Establish
-field representations, layouts, aliasing and work bounds before adding generated
-arithmetic. VM control retains participant order and authority.
+Build on the checked physical plan, which retains original Kernel bodies and
+selected Local realizations together. Extend this boundary with explicit
+numerical schedules and storage, preserving domains, indexing, reductions and
+failure obligations. Compare numerical variants through the same checked
+transaction and installed operation contracts. Establish field representations,
+layouts, aliasing and work bounds before adding generated arithmetic. VM control
+retains participant order and authority.
 
 Validate realization refinements across representative operations and protocol
 families. Keep alternate interpreters, JIT and AOT dependent on evidence and the

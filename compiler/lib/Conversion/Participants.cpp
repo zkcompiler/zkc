@@ -38,8 +38,7 @@ lowerPhysical(ModuleOp module,
     return diagnostics::emit(root.emitError(), "interactive-physical-stage");
   OwningOpRef<ModuleOp> selected(cast<ModuleOp>(module->clone()));
   LinearContractionStats selectedStats;
-  if (failed(kernel::lowerKernels(*selected)) ||
-      failed(lowerBoundPhysical(*selected, selections, linearContractions,
+  if (failed(lowerBoundPhysical(*selected, selections, linearContractions,
                                 &selectedStats)) ||
       (releaseStorage && failed(releaseLocalStorage(*selected))) ||
       failed(verify(*selected)))

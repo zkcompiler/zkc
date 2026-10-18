@@ -97,7 +97,9 @@ introduces no artifact format or alternative execution path.
 
 [Kernel IR](spec/ir/kernel.md) owns closed logical numerical units, using existing
 mathematical operations and standard functions. Ordered Local calls invoke them;
-checked realization expands them before physical planning. This boundary keeps
+physical planning retains their source and selected Local realization together.
+Independent numerical and physical readers check the result before publication.
+This boundary keeps
 the complete numerical body available independently of participant control.
 Normalization, analysis and recipe verification read standard-function bodies;
 Local functions are the executable output. Source symbol context and output
