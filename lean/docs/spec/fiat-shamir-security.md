@@ -399,13 +399,20 @@ The ideal model is a random oracle on typed transcript histories whose answer at
 a gated or compound key is the whole tuple the site decodes. Deployed transcripts
 realize it from a hash function or permutation:
 
-- **Tagged hash chain.** A Merkle–Damgård chain of a compression function over
-  tagged blocks, where each absorbed event, squeeze and proof-of-work step is a
-  block with its own tag. It needs an injective, prefix-free encoding of
-  histories into tagged blocks, and the chain idealization: the chaining value of
-  every block prefix acts as a random oracle on prefixes, up to the collision
-  terms of the chaining values. Several outputs read at one key with distinct
-  tags are then role-separated answers of that oracle.
+- **Hash chain.** A chain of full-digest calls of one byte hash, read as a
+  random oracle, as in the
+  [native hash-chain suites](../../../docs/spec/ir/construction.md#native-hash-chain-suites):
+  one call binds the first event, each further absorbed event is one call on the
+  current digest and the event's frame, and a request's answer is read from
+  counter-block calls at the current digest. It needs an injective, prefix-free
+  encoding of events and requests with distinct role tags. The digest after a
+  history then stands for that history: outside a bad event of the joint
+  primitive-query trace, a fresh call that returns a digest an earlier call
+  already generated (a collision) or already read as a state (a prediction), the
+  chain is one oracle on histories, with loss at most `(q + V)² / |S|` for `q`
+  adversary calls and `V` verifier calls ([provider simulations](#provider-simulations)).
+  Several outputs read at one key with distinct tags are role-separated answers
+  of that oracle.
 - **Duplex sponge.** Absorbing the encoded history and squeezing the answer
   stream. It needs the same injective encoding and the sponge idealization: the
   squeeze stream after an absorbed prefix acts as a random oracle on absorbed
@@ -427,7 +434,8 @@ states shared between calls, collisions between derived inputs, and the query
 cost of each grinding attempt. This is a separate obligation of each transcript
 construction, stated with the idealization above; role separation at one key
 does not discharge it. Its type is fixed in
-[provider simulations](#provider-simulations).
+[provider simulations](#provider-simulations), where it is proved for the
+hash-chain suites; for the duplex suites it remains a named obligation.
 
 ## The participant transform
 
