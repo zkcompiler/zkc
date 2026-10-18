@@ -666,18 +666,44 @@ one property, one provider and one class of bounded executions.
   oracle `OracleSpec.ofFn R`, a state started from a private tape (`start`), and
   the attempt each call belongs to in a state (`attempt`), with recorded ideal
   answers (`recorded`, `record`), the reply `shared` read from an attempt's
-  answer, and the private reply `respond` with no TranscriptQuery. `handle` is
-  the simulator as a stateful oracle implementation: the first call of an
-  attempt asks the history oracle at its key and records the answer
-  (`handle_fresh`), a later call of the attempt reuses it (`handle_recorded`),
-  and a call outside every attempt is answered privately (`handle_private`). A
-  recorded answer persists through every later call (`recorded_persists`), so
-  every call of an attempt, in any order, is answered from one ideal answer
-  (`attempt_answer`), and each call makes at most one TranscriptQuery, none
-  outside an attempt (`handle_queryBound`). `translate adversary tape` runs the
-  adversary against `handle`; with a family bound it makes at most the budget
-  of the families that carry attempts (`chargedBudget`) on every path
-  (`translate_queryBound`).
+  answer, the private reply `respond` with no TranscriptQuery, and the calls
+  declared to make up one concrete attempt (`together`). Its laws: no answer is
+  recorded at the start (`recorded_start`); recording an answer sets exactly
+  that key (`recorded_record`, `recorded_record_of_ne`) and a private reply
+  keeps every recorded answer (`recorded_respond`); recording and private
+  replies keep every call assigned to an attempt assigned to it
+  (`attempt_record`, `attempt_respond`); and declared constituents belong to one
+  attempt in every state (`attempt_together`). `handle` is the simulator as a
+  stateful oracle implementation: a call of an attempt with no recorded answer
+  asks the history oracle at its key and records the answer (`handle_fresh`), a
+  call of an attempt with a recorded answer reuses it (`handle_recorded`,
+  `attempt_answer`), and a call outside every attempt is answered privately
+  (`handle_private`). Recorded answers and assignments persist through every
+  call (`recorded_persists`, `attempt_persists`), and each call makes at most
+  one TranscriptQuery, none outside an attempt (`handle_queryBound`).
+- `Simulator.Runs tape trace state` is the path relation: `trace` lists the
+  calls of a path from `start tape` as `Answered` entries, each with the attempt
+  the call belonged to when it was made and its reply, and `state` is the state
+  after them. `Runs.invariant` proves, by induction on runs, that assignments
+  persist, that an answer is recorded exactly for the attempts of earlier
+  calls, that every recorded answer is the one every call of its attempt was
+  answered from, and that a call made after a call of the same concrete attempt
+  (`Constituents`: the same call, or a declared constituent in either order)
+  belongs to that call's attempt. Hence the first call of an attempt on a run,
+  whichever call of the attempt it is, makes exactly the attempt's
+  TranscriptQuery (`Runs.first_call`); a later call reuses the answer earlier
+  calls were answered from (`Runs.later_call`); any two calls of one attempt,
+  in either order with any calls between them, are answered from one ideal
+  answer (`Runs.shared_answer`, `Runs.constituent_attempt`,
+  `Runs.constituents_share`); and every path of the translated program is a run
+  (`translate_runs`). The laws constrain assigned calls: a call answered
+  privately may later join an attempt, and the simulation's loss accounts for
+  the difference from the concrete primitive. `TestsSecurity.ProviderSimulation`
+  instantiates the laws with a split-hash simulator and shows that a preloaded
+  start and a counter assignment violate them.
+- `Simulator.translate adversary tape` runs the adversary against `handle`;
+  with a family bound it makes at most the budget of the families that carry
+  attempts (`chargedBudget`) on every path (`translate_queryBound`).
 - `Simulation primitive family R concreteFailure idealFailure` carries a tape
   type per budget with its uniform sampler, the simulator per budget, the
   families that carry attempts (`charged`, with `carries`), a `QueryCost` whose

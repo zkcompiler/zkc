@@ -427,13 +427,20 @@ relation is defined on its traces. In each state of the simulator a primitive
 call either belongs to an **attempt**, the TranscriptQuery it realizes, or is
 answered by the simulator from its state and the private tape with no
 TranscriptQuery, as a hash-chain simulator answers a query at a state no
-history reaches with a fresh digest. The first call of an attempt on a path,
-whichever call of the attempt comes first, asks the history oracle once and the
-simulator records the answer; every call of the attempt, in any order and
-interleaved with any other calls, is answered from that one recorded answer. A
-grinding attempt is therefore one TranscriptQuery whatever its primitive cost,
-and both calls of a split-hash gate attempt, or the counter blocks of an
-extended output, are answered from one ideal answer. On every path each
+history reaches with a fresh digest. The simulator starts with no recorded
+answer. A call's assignment to an attempt persists through every later call, so
+a repeated call stays in its attempt, and the calls the simulator declares to
+make up one concrete attempt, such as both calls of a split-hash gate attempt or
+the counter blocks of an extended output, belong to one attempt in every state.
+The first call of an attempt on a path, whichever call of the attempt comes
+first, therefore asks the history oracle once and the simulator records the
+answer; every later call of the attempt, interleaved with any other calls, is
+answered from that one recorded answer, and any two calls of one attempt are
+answered from one ideal answer in either order. A grinding attempt is therefore
+one TranscriptQuery whatever its primitive cost. A call the simulator answers
+privately may later join an attempt, as a query at a state that a later answer
+reaches does; the difference this makes from the concrete primitive belongs to
+the loss. On every path each
 primitive call makes at most one TranscriptQuery, and only calls of the families
 that carry attempts make any; a per-family bound on the concrete adversary
 transports to a total query bound on every translated program, and through it to
