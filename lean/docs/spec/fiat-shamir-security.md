@@ -936,8 +936,12 @@ straight-line extractor in
   `FrozenAt key extract` states that an extraction reads only the record before
   the key's first query.
 - **Event and bound.** `Far` holds of no extracted table, or of a table with at
-  least `δ · 2 ^ k` rejected rows. `AcceptsFar` is acceptance with the frozen
-  extraction at the validator's key far. `IntendedBound` is the proposition
+  least `δ · 2 ^ k` rejected rows, so the extractor must be total: it returns a
+  table for every record, with arbitrary rows where the record determines none.
+  An extractor that returns no table when a row is missing makes the bound false:
+  a tree with honest accepted rows at half the indices and no row elsewhere is
+  accepted with probability one half while `Far` holds. `AcceptsFar` is
+  acceptance with the frozen extraction at the validator's key far. `IntendedBound` is the proposition
   `Pr[AcceptsFar] ≤ (q_T + 1) · κ · (1 - δ) + ε_ext + ε_ns` for every prover within
   the budgets: the history-oracle term, the extraction and drift term over at
   most `q_T + 1` checkpoints, and the namespace term. The extractor must be

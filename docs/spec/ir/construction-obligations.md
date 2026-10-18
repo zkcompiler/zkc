@@ -318,7 +318,12 @@ extraction is fixed before the answer at `K` is sampled, and resampling that
 answer cannot change it; any later disagreement between the frozen table and an
 accepted opening is the drift event. The extracted object `T*[c, K]` is indexed
 by the authenticated configuration `c` and the key `K`, not by the root alone:
-one root under two configurations has two checkpoints. Re-extraction at a
+one root under two configurations has two checkpoints. The extractor is total:
+it returns a table for every record, with arbitrary rows where the record
+determines none. A missing extraction counts as far, so an extractor that
+returns nothing when a row is missing makes the bound false: a tree with honest
+accepted rows at half the indices and no row elsewhere is accepted with
+probability one half while no table is extracted. Re-extraction at a
 repetition is admissible only as a separately specified checkpoint, charged in
 the multi-checkpoint bound. The convention is stated against an abstract query
 record, a classical log or a compressed-oracle database. Extraction from the
