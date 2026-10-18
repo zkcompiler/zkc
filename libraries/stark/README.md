@@ -6,10 +6,22 @@ The [Fibonacci client](../../examples/projects/fibonacci/README.md) uses AIRs
 exported from Clean and Plonky3. The protocol is authored in `.zkc`; the compiler has no
 STARK-specific dispatch or proof callback.
 
+There are two single-table arguments. The
+[parameterized argument](#parameterized-single-table-argument) is generic over a
+configuration that fixes its fields, challenge derivation, Merkle instance and
+data layout; the [parameterized STARK client](../../examples/projects/stark/README.md)
+runs it at the KoalaBear quartic Poseidon2 configuration. The older
+`stark::koala_bear::table` profile below is fixed to the octic extension and
+Keccak rows and stays as a regression fixture; the three-table argument builds on it.
+
 ## Ownership
 
 | Module | Responsibility |
 |---|---|
+| `stark::configurations` | The `Configuration` interface and layout helpers |
+| `stark::koala_bear::quartic` | The KoalaBear quartic Poseidon2 configuration |
+| `stark::argument` | The parameterized single-table argument |
+| `stark::low_degree` | Its FRI: pair-leaf commit phase and multi-opening query phase |
 | `air::polynomial` | Scope vanishing polynomials and coefficient-block quotient splitting |
 | `air::table` | Interpret the Bundle's ordered inputs and scopes; construct quotient and opening equations |
 | `stark::koala_bear` | Concrete fields, row commitments, embedding and characteristic |
@@ -48,6 +60,110 @@ coset. Both use the complement shortcut where its denominator is nonzero;
 the scalar helper falls back at a removable pole, and the vector helper uses
 direct products on intersecting cosets. Full scopes keep geometric evaluation.
 The STARK profiles use disjoint evaluation domains and retain the fast path.
+
+## Parameterized single-table argument
+
+`stark::argument::TableArgument<K, Table, B, LogFinal, Rounds, LogBlowup, Queries>`
+proves the assertions of one present table of Bundle `B`, with the same
+statement, scopes and quotient equations as the [older profile](#single-table-statement-and-supported-relation).
+The trace has height `n = 2^(LogFinal + Rounds)` and is extended to
+`N = n * 2^LogBlowup` points of the configuration's coset. FRI makes `Rounds`
+binary folds, ends with a polynomial of `2^LogFinal` coefficients and checks
+`Queries` positions. The statement holds configuration and public columns
+(row-major) and public slots; the configuration fixes the coset shift, so it is
+not a statement input. Round and query counts are static, not public inputs.
+
+### Configurations
+
+A module implementing `stark::configurations::Configuration` is one
+configuration. The protocol modules name no concrete field, hash or layout.
+
+| Member | Meaning |
+|---|---|
+| `Base`, `Extension` | Trace field; field of challenges, quotient, DEEP word and FRI |
+| `Challenge`, `challenge` | Field the selected transcript draws; a uniform `Extension` element from one uniform draw |
+| `embed`, `lift`, `shift` | Base-to-extension embedding; the coset shift, avoiding every trace subgroup |
+| `BaseRows`, `ExtensionRows` | Row commitments over each field; the Merkle and hash instance |
+| `commit_*`, `open_*`, `check_*` | Commit natural-order row-major tables; open and check one pruned multi-opening at natural positions |
+| `commit_pairs`, `open_pairs`, `check_pairs` | FRI layers: leaf `k` of a word of length `2h` holds `(w_k, w_(k+h))`, the two values one fold combines |
+
+Positions are always natural: position `i` of a size-`n` table is the value at
+`shift * g_n^i`. A configuration that commits rows in another order translates
+positions inside its own open and check members, so the data layout is a
+configuration choice. `natural_pairs`, `reversed_rows`, `reversed_pairs` and
+`reverse_positions` implement natural and bit-reversed layouts; the tests run
+the argument with both.
+
+`stark::koala_bear::quartic::Poseidon2` is the installed configuration:
+
+| Choice | Value |
+|---|---|
+| Fields | `koala-bear` trace; `koala-bear.ext4-binomial3` (`X^4 - 3`) for challenges, quotient, DEEP and FRI |
+| Merkle instance | `rows.merkle-poseidon2-16.koala-bear/0` and `rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0`, with pruned multi-openings |
+| Layout and leaves | Natural row order; both fold siblings in one FRI leaf |
+| Coset shift | 3, a generator of the multiplicative group |
+| Challenges | The first four coordinates of a draw of the octic Merlin suite `merlin3.koala-bear.ext8-binomial3.rejection31le/0` |
+
+The installed KoalaBear suites draw octic elements only. The octic suite
+rejection-samples each coordinate independently, so under its uniformity
+premise the first four coordinates of a draw are a uniform quartic element.
+A suite drawing quartic elements directly replaces the `challenge` member
+alone. Index draws use the same suite's `UniformIndex` transition.
+
+### Protocol order
+
+1. Commit the base-field trace extended to the coset, as rows.
+2. Draw the constraint-composition challenge `alpha`; commit the quotient chunks
+   as extension rows.
+3. Draw one out-of-domain point `zeta`. Both roles stop unless `zeta^n != 1` and
+   `zeta^N != shift^N`; rotations by the trace generator then also avoid the coset.
+4. Send the input evaluations at their opening points and the chunk evaluations
+   at `zeta`; the verifier recomputes known inputs and checks the AIR identity.
+5. Draw `gamma` and form the DEEP word: every witness read
+   `(T(X) - v)/(X - zeta*g^r)`, then every chunk `(Q_j(X) - q_j)/(X - zeta)`,
+   weighted by successive powers of `gamma`. It has degree below `n - 1`; FRI
+   tests degree below `n`, with no degree adjustment.
+6. FRI commit phase (`stark::low_degree::Commit`): per round, commit the word as
+   pair leaves, then draw the fold challenge; then send the final polynomial's
+   coefficients.
+7. Draw every query position in `[0, N)`, consecutively, before any opening.
+8. Openings, after the last request: the trace rows and the quotient rows at
+   the positions, one pruned multi-opening each, then one multi-opening per FRI
+   layer (`stark::low_degree::Open`).
+
+The verifier computes each query's DEEP value from the authenticated rows. In
+each layer it receives only the sibling of the query's pair, reconstructs the
+leaf with its own value, authenticates all leaves of the layer at once, and
+folds. The last folded values must equal the final polynomial at the query
+points. Duplicate positions are opened again and must carry equal rows. Every
+failed requirement stops.
+
+The proof holds the two roots, the two claim vectors, one root per round and
+the final coefficients, then the trace rows and proof, the quotient rows and
+proof, and one sibling vector and proof per round: `9 + 3 * Rounds` messages.
+
+### Evidence and limits
+
+The [library tests](../../common/tests/protocol/test_stark_library.py) prove
+the Fibonacci example under four compilation modes, a generated quadratic
+recurrence at heights 16 to 256 with final polynomials of 1 to 4 coefficients,
+blowups 2 and 4 and up to 100 queries, and the Plonky3 recurrence fixture with
+a configuration column. They alter every proof message, truncate and extend the
+proof, change public inputs and the configuration, open trace, quotient and FRI
+rows at the wrong positions, and run a prover with a false trace and a truncated
+quotient, which fails the out-of-domain identity, and one that also chooses its
+quotient claim to satisfy that identity and truncates its final polynomial,
+which fails FRI. A second configuration with bit-reversed rows and pairs proves
+the same statements with different roots. The `stark` [benchmark
+family](../../common/benchmarks/README.md) measures the `air` family's AIR and
+sizes through this argument.
+
+Query positions are separate `index` draws; they are consecutive so that one
+block request can replace them. There is no proof-of-work grinding. The
+argument covers one table, without interactions. As for the older profile,
+these checks are execution and rejection evidence: no theorem here bounds the
+soundness of this composition, its sampling or its Fiat–Shamir transform, and
+commitments are nonhiding. The proof format is zkc's own, not Plonky3's.
 
 ## Single-table statement and supported relation
 
