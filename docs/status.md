@@ -338,6 +338,23 @@ program renderer and the structured exporter remain trusted; the runtime refuses
 some inputs the meaning classifies differently, listed in
 [support](../lean/docs/support.md).
 
+The [construction obligations](spec/ir/construction-obligations.md) specify
+query identities, construction classes, realized laws, observation classes with
+certified openings, blocks, gates, cryptographic effects, binding, provider and
+explicit-input obligations, equivalence notions and the model of claims. The
+native construction implements the profile that absorbs every message, over the
+installed Merlin and spongefish suites, and its request operands are `index`
+bounds defined by `data.index` constants, which meets operand provenance
+statically. Programmable handlers may ignore values, and nothing checks the
+omission classes for them. No gate, block request, declared role of hash calls,
+challenge-input coverage, configuration provenance check or interaction-pattern
+digest is implemented, and no provider has a simulation theorem. Lean states
+formal readings of the obligations, refutes each with a model counterexample
+([support](../lean/docs/support.md#construction-obligation-counterexamples)),
+fixes the type of provider simulations and states the joint experiment of a
+committed opening with its extraction checkpoint convention, without proving its
+bound.
+
 The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retained
 PIR programs, proves open-process contracts, and applies selected ArkLib/VCVio
 security results. Its named DSL target path also checks an authored relation body.
