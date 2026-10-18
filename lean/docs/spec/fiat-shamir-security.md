@@ -805,6 +805,75 @@ authenticated opening; its bound is a proposition, not a theorem.
   the budgets: the history-oracle term, the extraction and drift term over at
   most `q_T + 1` checkpoints, and the namespace term.
 
+## Verifiers with committed tables
+
+`ZkcSecurity.Commitment` bounds a verifier that sees roots and openings instead of
+committed tables by the typed certificate of its ideal reading.
+
+- **Verifiers.** A verifier with committed tables is a process over
+  `committed J Shape Value`: the operations of a typed transcript interface, the
+  commitment of a table of a given shape, and the read of one entry of a
+  committed table. Its ideal reading `withTables` receives every committed table
+  in the clear through a word operation of `J` and answers reads from the
+  received tables. Its concrete reading `run` reads a root from the proof for a
+  commitment and absorbs it, takes the next opening of the proof for a read and
+  authenticates it against the root with hash calls, and asks the transcript
+  oracle at each query.
+- **Joint oracle.** One lazily sampled oracle answers transcript keys and hash
+  calls (`joint`). A transcript key is the absorbed history before a query and
+  the query's occurrence, answered in the occurrence's raw type `R [occurrence]`.
+- **Extractable commitments.** `Extractable` states two deterministic laws of a
+  straight-line extractor reading the record of hash calls: an opening accepted
+  by recorded calls agrees with the extraction from a record without two calls
+  answered alike, and recording one more call changes an extraction only when
+  the call is new and is answered by the root or an earlier input label. Merkle
+  trees with raw leaves satisfy them through VCVio's transcript extractor
+  (`MerkleTrees.scheme`), and Merkle trees with hashed leaves through a leaf
+  layer (`LeafHashing.scheme`).
+- **Checkpoints and the event.** The tables committed by a transcript key's roots
+  are extracted from the hash calls before the key's first query
+  (`checkpointExtract`). `FalseAcceptance` holds when the verifier accepts and the
+  statement is false for its tables extracted at the checkpoint of one of the
+  verifier's transcript queries; it is empty for a verifier without transcript
+  queries.
+- **Theorem.** `soundness_weighted`: in the joint experiment
+  (`experiment`), the probability of `FalseAcceptance` is at most the prover's
+  charge plus the verifier's charge, where a transcript key is charged the error
+  of its occurrence in a typed certificate of the ideal reading, the certificate
+  that also gives the ideal reading's
+  [typed-site bound](#the-typed-site-theorems), and every hash call is charged
+  `targetBound / |Y|`. `soundness` takes `targetBound` from query counts:
+  `(rootBound + inputBound + 1) · (proverQueries + verifierQueries)`, where
+  `rootBound` bounds the roots of the verifier's transcript keys and `inputBound`
+  the input labels of one hash call. The premises on the verifier are
+  structural: committed tables are received by receives of the ideal reading,
+  the statement's roots are the roots of its initial history, the verifier
+  commits at most `rootBound` roots counting the statement's, the ideal reading's
+  word operation carries every extracted entry, and a false statement's ideal
+  reading is doomed.
+- **Proof.** One application of VCVio's weighted bad-query bound to the joint
+  oracle. A transcript key is bad when the replay of a statement's verifier along
+  it, with every root read as its checkpoint extraction, reaches a doomed query
+  whose answer escapes; a hash call is bad when its answer hits a target of the
+  record before its first query: an earlier answer, an earlier input label, or one
+  of the first `rootBound` roots of an earlier transcript key, whoever queried
+  it. Without a bad hash call the record is good: distinct calls have distinct
+  answers (`responseInjective_of_good`), every checkpoint extraction of a root of a
+  transcript key equals the extraction from the whole record
+  (`extract_checkpoint_eq`), and an accepting concrete run is an accepting ideal
+  run on the extracted tables, so it escapes the doomed set at one of its own
+  transcript queries (`runTable_escape`). The proof does not use that reads
+  follow the verifier's last query.
+- **The committed-opening experiment.** `intendedBound` proves `IntendedBound` of
+  [the committed-opening experiment](#the-committed-opening-experiment) for a
+  straight-line extractor that reads the tree with hashed leaves committed by the
+  checkpoint key's root, with the empty row where nothing is extracted, at factor
+  `1`, extraction term `(q_M + k + 1) · 4 (q_T + q_M + k + 2) / |Digest|` and
+  namespace term `0`, for the absorbed and the omitted terminal opening. An
+  extractor that returned no table when a row is missing would make the
+  proposition false. `CommittedOpeningBridge.soundness` applies the general
+  theorem to the same verifier with every premise discharged.
+
 ## Obligations
 
 The informal "random oracle" assumption separates into five obligations:
