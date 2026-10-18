@@ -129,7 +129,8 @@ fn squares<F: Field>(points: Vector<F>) -> Vector<F> {
   }
   return result;
 }
-fn query_points<F: Field>(shift: F, size: index, positions: Indices) -> Vector<F> {
+// The coset points of natural positions, in query order.
+pub fn query_points<F: Field>(shift: F, size: index, positions: Indices) -> Vector<F> {
   let mut result = empty<F>();
   for query in 0..indices::length(positions) {
     result = append(result, coset::point<F>(shift, size, indices::get(positions, query)));

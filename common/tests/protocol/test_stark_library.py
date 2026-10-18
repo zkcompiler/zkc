@@ -339,9 +339,10 @@ def dishonest(toolchain, journal, directory, name, overrides):
 
 SHIFTED = '''
 fn shifted(positions: Indices, size: index) -> Indices {
-  let mut result = indices::empty();
-  for query in 0..indices::length(positions) {
-    result = indices::append(result, indices::remainder(indices::get(positions, query) + 1, size));
+  let mut result = zkc::indices::empty();
+  for query in 0..zkc::indices::length(positions) {
+    let next = zkc::indices::remainder(zkc::indices::get(positions, query) + 1, size);
+    result = zkc::indices::append(result, next);
   }
   return result;
 }
@@ -362,7 +363,7 @@ def test_wrong_openings_are_refused(toolchain, journal, directory, variant):
                   'quotient-rows': 'K::open_extension(quotient_tree.1, positionsP, sizeP)'}[variant]
         path = edited(directory, LIBRARY / 'argument.zkc', [
             (target, target.replace('positionsP', 'shifted(positionsP, sizeP)')),
-            ('fn query_points<', SHIFTED + 'fn query_points<')], 'argument.zkc')
+            ('fn deep_values<', SHIFTED + 'fn deep_values<')], 'argument.zkc')
         overrides = {'stark::argument': path}
     package = dishonest(toolchain, journal, directory, variant, overrides)
     public, witness = fibonacci_inputs('Plonky3Proof')
@@ -412,7 +413,7 @@ def test_dishonest_quotients_are_refused(toolchain, journal, directory):
          '  let honest_quotient @P = opening_claims(chunks, factsP.chunks, shift_extensionP, sizeP, zetaP);\n'
          '  let proposed_quotient @P = compensated<K::Extension,Table,B>(honest_quotient, proposed,\n'
          '    heightP, zetaP, alphaP);'),
-        ('fn query_points<', COMPENSATED + 'fn query_points<')], 'argument.zkc')
+        ('fn deep_values<', COMPENSATED + 'fn deep_values<')], 'argument.zkc')
     final = edited(directory, LIBRARY / 'low_degree.zkc', [(
         '  require !less(count, length(coefficients));\n'
         '  return concat(coefficients, fill<F>(0, count - length(coefficients)));',

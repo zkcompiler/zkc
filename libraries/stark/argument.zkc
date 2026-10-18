@@ -1,10 +1,8 @@
 module stark::argument;
 use stark::configurations::{Configuration};
-use stark::low_degree::{Commit, Open};
+use stark::low_degree::{Commit, Open, query_points};
 use zkc::vector::{Vector, length, get, append, empty, fill, transpose};
 use zkc::indices::{Indices, less};
-use zkc::indices as indices;
-use zkc::coset as coset;
 use zkc::coset::{extend_columns, disjoint_coset, outside_domains};
 use zkc::opening::{opening_claims, deep_columns, deep_column_values, same_rotation};
 use air::polynomial::{split_quotient};
@@ -44,13 +42,6 @@ fn deep_values<F: Field>(slots: Inputs, chunks: (Indices, Indices), witness_rows
     let combined = deep_column_values(zkc::vector::slice(quotient_rows, query * count, count),
       chunks.0, chunks.1, opened_quotient, height, x, zeta, gamma, reads.0, reads.1);
     result = append(result, combined.0);
-  }
-  return result;
-}
-fn query_points<F: Field>(shift: F, size: index, positions: Indices) -> Vector<F> {
-  let mut result = empty<F>();
-  for query in 0..indices::length(positions) {
-    result = append(result, coset::point<F>(shift, size, indices::get(positions, query)));
   }
   return result;
 }
