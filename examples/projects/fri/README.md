@@ -35,7 +35,8 @@ word values. A surrounding polynomial-opening protocol must bind those values
 to its own opening equations. This client demonstrates FRI execution and
 rejection checks. The independent Lean model proves completeness on codewords
 and round-by-round soundness of the library's low-degree test with ideal
-commitments, including at these parameters
+commitments, including an interactive bound in the unique-decoding regime at
+these parameters
 ([FRI security](../../../lean/docs/spec/fri-security.md)); this client
 does not supply an AIR reduction, commitment security, a Fiat–Shamir security
 theorem for its compiled verifier or zero knowledge.

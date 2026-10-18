@@ -122,15 +122,18 @@ round `r` therefore contributes `2^(n - r - 1) / |F|` (`uniqueDecodingError`).
 `soundness_uniqueDecoding_le` its closed form `2^n / |F| + (1 - min θ δ)^s`. At
 the parameters of `examples/projects/fri` and the authored STARK tables
 (`n = 5`, `t = 0`, `R = 3`, `s = 8`, rate `1/4`, `θ = 3/8`), on the coset of any
-primitive 32nd root of unity, the bound is `(16 + 8 + 4) / |F| + (1 - min (3/8) δ)^8`
-with no remaining premise (`example_bound` in `TestsSecurity.FriSecurity`).
+primitive 32nd root of unity, the interactive acceptance bound, with commitments read as the committed words,
+is `(16 + 8 + 4) / |F| + (1 - min (3/8) δ)^8` with no remaining premise
+(`example_bound` in `TestsSecurity.FriSecurity`).
 
-## Generalized Johnson instance
+## Cube-root radius instance
 
 `ZkcSecurity.ArkLib.Fri.GeneralizedJohnson` discharges the folding obligations
-with the powers-generator bound of Bordage, Chiesa, Guan and Manzur, *All
-Polynomial Generators Preserve Distance with Mutual Correlated Agreement*, in
-ArkLib's form for one FRI folding round
+up to the cube-root proximity radius `1 - (ρ + η)^(1/3)`, strictly inside the
+Johnson radius `1 - ρ^(1/2)`, with the powers-generator bound of Bordage,
+Chiesa, Guan and Manzur, *All Polynomial Generators Preserve Distance with
+Mutual Correlated Agreement*, in ArkLib's form for one FRI folding round, which
+ArkLib names after the generalized Johnson bound
 (`foldingAgreementFailure_prob_le_generalizedJohnson`). For a binary fold the
 generator is the line, and the bound holds at every radius
 `θ ≤ 1 - (1 - δmin + η)^(1/3)`, where `δmin` is the relative minimum distance of
@@ -203,7 +206,7 @@ site's error by that factor.
 - The returned first-layer values are tied to the initial word
   (`firstValue_eq`); binding them to a caller's opening equations is the caller's
   obligation.
-- The unique-decoding and generalized Johnson instances are proved. Larger
+- The unique-decoding and cube-root radius instances are proved. Larger
   radii, up to the Johnson radius `1 - ρ^(1/2)`, need other proximity results as
   the named hypothesis; at the pinned revision ArkLib's Johnson-range
   Reed–Solomon bounds are still admitted without proof.
