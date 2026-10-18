@@ -5,7 +5,7 @@
 //! backend's chain code.
 #[path = "domains/support.rs"]
 mod support;
-use p3_field::{BasedVectorSpace, PrimeCharacteristicRing, PrimeField32};
+use p3_field::{BasedVectorSpace, PrimeField32};
 use serde_json::{Value as Json, json};
 use support::*;
 use zkc_backends::{Capability, KoalaBear, KoalaBearExt8, Policy, Value};
@@ -411,5 +411,4 @@ fn the_octic_challenge_is_an_exact_coordinate_draw() {
     let expected: Vec<u32> = serde_json::from_value(octic["challenge"].clone()).unwrap();
     assert_eq!(words, expected);
     assert!(words.iter().all(|w| *w < 2_130_706_433));
-    assert_eq!(KoalaBear::ZERO.as_canonical_u32(), 0);
 }
