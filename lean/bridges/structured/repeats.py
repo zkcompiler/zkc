@@ -26,6 +26,7 @@ SUBJECTS = [
     ("repeat-service-wrapper", "RepeatServiceWrapper", "sample::Nested", "compiler/test/fixtures/structured-source/repeat-service-order.zkc"),
     ("sumcheck-reduce", "SumcheckReduce", "example::Reduction", "examples/projects/sumcheck/composed/zkc.toml"),
     ("sumcheck-source", "SumcheckSource", "example::Interactive", "examples/projects/sumcheck/zkc.toml"),
+    ("sumcheck-repacked", "SumcheckRepacked", "example::Reduction", "lean/bridges/structured/fixtures/sumcheck-repacked/zkc.toml"),
 ]
 
 

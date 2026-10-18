@@ -154,7 +154,8 @@ oracle queries number at most `Q`,
 acc * (acc / (Q + 1) - 1 / |F|) <= Pr[extractor finds w with key = w • base]
 ```
 
-where `acc` is the compiled verifier's acceptance probability and the relation is
+where `acc` is the acceptance probability of the ideal experiment run on the
+compiled verifier's modeled meaning, and the relation is
 the authored one retained by the Proof Entry's export
 (`SchnorrProofBinding.Relation`, the retained formula's process; it equals the
 Interactive import's relation, `relation_iff_interactive`). The experiment's

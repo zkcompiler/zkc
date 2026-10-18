@@ -1,0 +1,35 @@
+module sums;
+
+use sumcheck::{Reduce, check};
+use zkc::vector::{Vector};
+use zkc::boolean::{both};
+use zkc::multilinear as mle;
+
+// A client of the round protocol: check two independent public-table claims.
+// Each role supplies its own data; each obligation is checked against its own
+// table. One random service is threaded through both calls in source order.
+pub protocol TwoSums<F: Field, Max: nat> roles(P,V)
+    (left: Vector<F> @(P,V), right: Vector<F> @(P,V),
+     left_sum: F @V, right_sum: F @V, rounds: index @(P,V),
+     challenges: Random<F> @V) -> (accepted: bool @V) {
+  let left_table @P = mle::table(left, rounds, 1);
+  #[site(left)] let (left_point, left_residual, left_claim) =
+    Reduce<F,Max>(left_table, left_sum, rounds, challenges);
+  let left_ok = check(left, left_claim);
+  let right_table @P = mle::table(right, rounds, 1);
+  #[site(right)] let (right_point, right_residual, right_claim) =
+    Reduce<F,Max>(right_table, right_sum, rounds, challenges);
+  let right_ok = check(right, right_claim);
+  return both(left_ok, right_ok);
+}
+
+// External data enters through the checked view constructor. A parent can keep
+// the residual Table directly and pass it to another reduction.
+pub protocol Reduction<F: Field, Max: nat> roles(P,V)
+    (claim: F @V, rounds: index @(P,V), challenges: Random<F> @V,
+     variables: index @P, values: Vector<F> @P)
+    -> (evaluation: mle::Evaluation<F> @V, residual: Vector<F> @P, point: Vector<F> @P) {
+  let input @P = mle::table(values, variables, 1);
+  let (point, residual, evaluation) = Reduce<F,Max>(input, claim, rounds, challenges);
+  return (evaluation=evaluation, residual=mle::values(residual), point=point);
+}

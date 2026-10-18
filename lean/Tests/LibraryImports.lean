@@ -127,6 +127,11 @@ import Zkc.Source.Structured.Interpretation
 import Zkc.Source.Structured.Laws
 import Zkc.Source.Structured.Limits
 import Zkc.Source.Structured.Linking
+import Zkc.Source.Structured.LogicalChecking
+import Zkc.Source.Structured.LogicalContext
+import Zkc.Source.Structured.LogicalInstantiation
+import Zkc.Source.Structured.LogicalTranslation
+import Zkc.Source.Structured.LogicalTransport
 import Zkc.Source.Structured.MapEvaluation
 import Zkc.Source.Structured.MapLaws
 import Zkc.Source.Structured.Meaning
@@ -271,6 +276,7 @@ import ZkcExamples.Structured.ApplicationViews
 import ZkcExamples.Structured.ApplicationWrapper
 import ZkcExamples.Structured.ApplicationWrapperData
 import ZkcExamples.Structured.ApplicationWrapperViews
+import ZkcExamples.Structured.LogicalContextControls
 import ZkcExamples.Structured.MapCombination
 import ZkcExamples.Structured.MapCombinationData
 import ZkcExamples.Structured.MapCombinationViews
@@ -375,6 +381,8 @@ import ZkcExamples.Structured.SumcheckHelperBodies
 import ZkcExamples.Structured.SumcheckHelperBridge
 import ZkcExamples.Structured.SumcheckHelperExpansions
 import ZkcExamples.Structured.SumcheckHelperLaws
+import ZkcExamples.Structured.SumcheckLogicalChecking
+import ZkcExamples.Structured.SumcheckLogicalContext
 import ZkcExamples.Structured.SumcheckReduceAssociations
 import ZkcExamples.Structured.SumcheckReduceBodies
 import ZkcExamples.Structured.SumcheckReduceContracts
@@ -384,6 +392,10 @@ import ZkcExamples.Structured.SumcheckReduceVerifier
 import ZkcExamples.Structured.SumcheckReduceViews
 import ZkcExamples.Structured.SumcheckReductionRequests
 import ZkcExamples.Structured.SumcheckRelationContract
+import ZkcExamples.Structured.SumcheckRepackedBodies
+import ZkcExamples.Structured.SumcheckRepackedData
+import ZkcExamples.Structured.SumcheckRepackedVerifier
+import ZkcExamples.Structured.SumcheckRepackedViews
 import ZkcExamples.Structured.SumcheckSourceAssociations
 import ZkcExamples.Structured.SumcheckSourceBodies
 import ZkcExamples.Structured.SumcheckSourceContracts
