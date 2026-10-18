@@ -48,10 +48,10 @@ def roundTemplate (index : Nat) : Template :=
 
 /-- The occurrence a round's observation or challenge names under the Entry's
 context. -/
-def roundOrigin (index : Nat) : Origin := ((roundTemplate index).origin context).getD ⟨"", []⟩
+def roundOrigin (index : Nat) : Origin := ((roundTemplate index).origin context).getD ⟨"", [], none⟩
 
 theorem origin_of_isSome {template : Template} (present : (template.origin context).isSome = true) :
-    template.origin context = some ((template.origin context).getD ⟨"", []⟩) := by
+    template.origin context = some ((template.origin context).getD ⟨"", [], none⟩) := by
   cases found : template.origin context with
   | none => simp [found] at present
   | some origin => rfl
