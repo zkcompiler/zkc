@@ -3,9 +3,11 @@
 The optional `ZkcSecurity.ArkLib.Sumcheck.Multilinear` package connects the
 [independent table and endpoint contracts](multilinear-sumcheck.md) to ArkLib's
 actual interactive Sumcheck development. It proves complete soundness,
-honest completeness and partial residual soundness for arbitrary round counts.
-It does not import `libraries/sumcheck/lib.zkc` or establish native execution
-correspondence. The existing imported two-round quadratic examples are separate.
+honest completeness and partial residual soundness for arbitrary round counts
+without importing `libraries/sumcheck/lib.zkc`;
+[uniform queries](uniform-query-service.md#actual-imported-roots) connect these
+results to the admitted library roots, and native execution correspondence is a
+separate claim. The imported two-round quadratic examples are separate models.
 
 ## Representations and ordering
 
@@ -18,32 +20,34 @@ commutative ring. No division by two or odd-characteristic assumption occurs.
 
 `Table.lean` applies upstream `MvPolynomial.MLE` to
 `fun assignment => table (fun i => decide (assignment i = 1))`.
-This converts `Fin 2` to `Bool` coordinate by coordinate and reuses the existing
-MSB `Table`, `ofVector`, `extension`, `fixFirst` and `fixPrefix`. It never uses
-upstream `MLE'` or assumes agreement with `finFunctionFinEquiv`.
+This converts `Fin 2` to `Bool` coordinate by coordinate and reuses the
+most-significant-bit-first `Table`, `ofVector`, `extension`, `fixFirst` and
+`fixPrefix`. It never uses upstream `MLE'` or assumes agreement with
+`finFunctionFinEquiv`.
 
 - `statement_evaluate` proves equality at every field/ring point, including
   zero coordinates, over a commutative ring.
 - `statement_degree` uses `MvPolynomial.MLE_mem_restrictDegree` to construct
   `oracleStatement`, an actual upstream polynomial of individual degree one.
-- `statement_fixFirst` and `statement_fixPrefix` preserve the existing ordered
+- `statement_fixFirst` and `statement_fixPrefix` preserve the ordered
   concatenation of the challenge prefix and remaining coordinates.
 - `statement_sum` and `statement_sum_ofVector` equate the upstream Boolean-cube
   sum with the ordered table/vector sum. The Boolean embedding requires only
   nontriviality of the ring, so characteristic two is included.
 
-These are evaluation and degree laws, not an unnecessary equality between two
-large polynomial encodings or an assertion about upstream flat storage.
+These are evaluation and degree laws; they neither equate two polynomial
+encodings nor describe upstream flat storage.
 
 ## Causal interaction and the original oracle
 
 `Protocol.lean` specializes `Sumcheck.Interaction.Native.Core.protocol` with
-the existing endpoint type and interpolation function. `EndpointProver` is
+the core endpoint type and interpolation function. `Native.Core` names ArkLib's
+mathematical interaction interface, not zkc native execution. `EndpointProver` is
 ArkLib's ordinary `Prover.Strategy`, with arbitrary ambient computations before
-message selection and in every public response continuation. There is no new
+message selection and in every public response continuation. There is no separate
 process IR, recursive interpreter or protocol kernel.
 
-`execute_round` exposes the existing execution equation:
+`execute_round` exposes ArkLib's execution equation:
 
 1. Run the prover computation that chooses a pair and its continuation.
 2. Check `a0+a1 = current`.
@@ -126,12 +130,12 @@ truth is proved by upstream completeness, not supplied as an assumption.
 The core `Zkc.Polynomial.Multilinear.Marginal` defines
 `sumRemaining remaining count table`: retain the first
 `count` Boolean coordinates and sum the other `remaining` coordinates of the
-same fixed table. It uses the existing coordinate concatenation.
+same fixed table. It uses the same coordinate concatenation.
 
 `booleanSum_sumRemaining` preserves the original total. `honestMessage_sumRemaining`
 preserves the honest endpoint pair in the core round contract, and
-`fixFirst_sumRemaining` commutes with restriction. These algebraic laws remain
-available without ArkLib. The central law is
+`fixFirst_sumRemaining` commutes with restriction. These algebraic laws do not
+depend on ArkLib. The central law is
 
 ```text
 extension count (sumRemaining remaining count table) point
@@ -148,11 +152,11 @@ against every causal effectful endpoint prover, including zero rounds.
 `residual_perfectCompleteness` proves probability one for the marginal honest
 strategy and the true original sum, by transporting the complete honest result.
 
-This avoids a second partial executor or a new probabilistic induction.
+No second partial executor or separate probabilistic induction is needed.
 The exported marginal oracle is a proved view derived from the original table;
 it is not the original higher-dimensional oracle's raw interface. The theorem
 observes residual truth. It neither pads the point nor asserts a complete
-evaluation of the original table. It is not a native `Reduce` correspondence.
+evaluation of the original table.
 
 ## Stop-aware joint execution and completion
 
@@ -167,9 +171,12 @@ The order is LOW, HIGH, boundary guard, pre-draw work, fresh `$ᵗ F`, post-draw
 work, challenge delivery, trusted advance, and the next round. Zero rounds run
 a trusted terminal phase before the mathematical observation. Any inner stop
 is nonaccepting, with its actual residual state and ordered observation prefix.
+Role-local received challenges remain distinct from sent or queried values until
+an explicit delivery theorem relates them.
 The phases describe joint execution, including trusted work, rather than only
-adversary actions. A `ProbComp` always returns an Execution record; native
-nontermination is not supplied by this finite model.
+adversary actions. A `ProbComp` is normalized and always returns an Execution
+record; arbitrary strategies retain their effects and the public rejection
+branch, and the finite model has no nontermination, timeout or retry policy.
 
 Bare participant rejection uses `publicAbort = noOp`.
 `noOp_abort_is_bare` proves this equality through arbitrary probabilistic
@@ -188,7 +195,7 @@ chosen completion's strict inequality on a delivery-stop control demonstrates
 this distinction; it is not an impossibility theorem about every completion.
 
 The initial claim may be verifier-private. For each fixed claim the completion
-can hardcode it, because existing soundness quantifies over every endpoint
+can hardcode it, because complete soundness quantifies over every endpoint
 strategy for that claim. No future challenge is available before its explicit
 draw. `history_domination` integrates pointwise completion over outer histories;
 it does not establish freshness or independence of a random outer claim.
@@ -198,7 +205,7 @@ accepted event with a caller predicate. This differs from an explicit delivery
 stop and never conditions or renormalizes probability.
 
 `endpointGame_execute` proves equality with ArkLib's actual `Native.Core.execute`
-observation. Together with the existing table oracle realization and soundness,
+observation. Together with the table oracle realization and soundness above,
 `phase_soundness` gives n/card(F). `phase_publicTable_soundness` gives the raw
 public-vector form using `check_eq_true_iff`, `booleanSum_ofList?` and
 `publicTable_observation`. `MSBChronology` identifies chronological challenges
@@ -212,7 +219,7 @@ incorrect vector length, without a freshness or false-claim premise.
 
 ## Local distribution and computed-value contracts
 
-`ZkcSecurity.VCVio.Execution` owns reusable probability laws over existing PIR
+`ZkcSecurity.VCVio.Execution` owns reusable probability laws over PIR
 execution. `SameDist` compares full distributions with every output set
 measurable, including outcome, private state and event order. Its equivalence
 and bind laws preserve arbitrary measured suffix observations. `Reaches`
@@ -225,7 +232,7 @@ without invoking suffixes on stopped prefixes.
 
 The upstream Stateful handler equivalence quantifies over OracleComp clients
 and projects hidden state. These laws instead operate on full PIR Execution
-records, reusing upstream evalDist/bind/support mechanisms without a new
+records, reusing upstream evalDist/bind/support mechanisms without a separate
 interpreter. They compare the same state type; a different-state interpretation
 needs its own correspondence.
 
@@ -239,7 +246,7 @@ mathematical terminal predicate. A conservative checker is sufficient.
 The `Operations`, `ExactRound`, `CalculatedRound`, `DistributionalRound` and
 `Terminal` modules of `Examples.CausalSumcheck` are canonical structured
 regressions, not the imported Sumcheck body; `Iteration`, `UniformService` and
-`SourceVerifier` connect the imported roots. It uses the current `participantInterface F G`, root-local Nat
+`SourceVerifier` connect the imported roots. It uses `participantInterface F G`, root-local Nat
 roles, service operands, ownership restriction/masking and explicit site/action
 interpretations. Each operation supplies the actual typed empty callback tuple,
 empty `ProtocolTable`, and identity root `ProtocolContext` to
@@ -258,61 +265,3 @@ and full local query `SameDist` against `freshQuery` on that invariant,
 `calculatedRound_soundness` and `checked_calculatedRound_soundness` derive the
 one-round bound. Entire-game equality or domination is never a premise. The
 original syntactic query law remains a stronger sufficient regression.
-
-## Validation and remaining integration boundary
-
-`TestsSecurity.MultilinearSumcheck` exercises endpoint/coefficient distinction,
-characteristic two, MSB coordinate order, residual versus full evaluation,
-zero rounds, arbitrary effectful strategies and abort preservation. It reuses
-the core F97 early-challenge attack through the polynomial adapter. A separate
-control proves that a constant zero challenge accepts a false zero-table sum
-with the fixed causal pair `(0,1)`: guard order alone is insufficient.
-An explicit `SampleableType.ofFintype (ZMod 97)` instantiation applies the
-general soundness theorem to every one-round strategy with bound `1 / 97`.
-It checks that all quantitative typeclass premises are inhabited together.
-True singleton acceptance shows that the false-initial premise is necessary.
-These controls use ordinary proofs and kernel reduction, never `native_decide`.
-
-`TestsSecurity.CausalSumcheck` additionally checks stopped prefixes before HIGH,
-after guard/query/delivery and during terminal work; adaptive HIGH after the
-first acknowledgment; public abort effects; zero rounds; honest mass one;
-constant-provider failure; and the early-LOW attack. In ZMod 2 that actual
-structured handler has uniform query marginal and false-claim acceptance one,
-so it cannot satisfy even the reachable full-distribution contract. A literal
-fresh-HIGH-only sample has mass one half in this control. The bijective sampler
-r ↦ 1-r satisfies the law on the reached false flag and composes through two
-queries; an unreachable constant-provider flag violates the specified law.
-Effectful determined values and Proc-level conservative checker contracts are
-also exercised.
-
-The exhaustive optional audit covers every owned declaration and its transitive
-axioms. Unrelated upstream files contain `sorry`; selected proof dependency
-closures must contain only `propext`, `Classical.choice` and `Quot.sound`.
-Import and declaration guards keep the exact `ZkcSecurity.VCVio.Execution`
-module independent of ArkLib, protocol applications, source syntax and examples;
-the Causal module family cannot depend on source syntax or examples. The rules
-do not restrict `ZkcSecurity.VCVio.Schnorr`'s existing Schnorr protocol dependency.
-Enforcement controls check rejected type/body dependencies and permitted owners.
-The standalone client consumes complete, residual and stop-aware phase bounds,
-plus the local distribution composition API. Core imports
-remain independent of ArkLib/VCVio, and existing quadratic/factor examples remain.
-
-[Uniform queries](uniform-query-service.md#actual-imported-roots) connect these
-phases to the admitted `Sumcheck` and `Reduce` roots for an arbitrary adversarial
-network handler and every initial state. The source receives each endpoint pair
-as two ordered scalar receives, and the iteration module builds the causal
-strategy from those receives while retaining intermediate state and stops.
-
-Role-local received challenges remain distinct from sent or queried values until
-an explicit delivery theorem relates them. The imported-root theorems state the
-table, decoding, count and false-claim premises they use. Native capacity,
-providers and the lowering of helpers, vectors, folds and repeats below the
-original stage are outside these results; no special Sumcheck kernel is
-provided. Native.Core in this document is ArkLib's mathematical interface, not
-zkc native execution.
-
-No result here establishes production field arithmetic, a CSPRNG/provider,
-Fiat–Shamir, transcript encoding, retries/grinding, PCS binding, extraction or
-knowledge soundness. Plain `ProbComp` is normalized; arbitrary strategies retain
-their effects and the public rejection branch, but this does not model arbitrary
-nontermination or a native timeout/retry policy.

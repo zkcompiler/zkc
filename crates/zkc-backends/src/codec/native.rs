@@ -59,8 +59,13 @@ fn frame(ty: &PhysicalType) -> Option<(u8, usize)> {
             (Group, Bn254G1) => Some((46, 38)),
             (Group, Bn254Gt) => Some((50, 390)),
             (Group, Bn254G2) => Some((48, 70)),
+            (Group, Bls12381G2) => Some((51, 102)),
+            (Group, Bls12381Gt) => Some((53, 582)),
             (Field, KoalaBear) => Some((19, 10)),
             (Field, KoalaBearExt8) => Some((26, 38)),
+            (Field, KoalaBearExt4) => Some((21, 22)),
+            (Field, Binary64) => Some((73, 14)),
+            (Field, Binary64Ext3) => Some((76, 30)),
             (Field, Ristretto255Scalar) => Some((13, 38)),
             (Group, Ristretto255Group) => Some((16, 38)),
             (Group, Edwards25519Prime) => Some((68, 38)),
@@ -179,9 +184,18 @@ fn encode_fixed(value: &Value, policy: &Policy) -> Result<Vec<u8>, NativeWireErr
         Value::Bn254G1(v) => bytes.extend_from_slice(&v.to_bytes().map_err(encoding)?),
         Value::Bn254Gt(v) => bytes.extend_from_slice(&v.to_bytes().map_err(encoding)?),
         Value::Bn254G2(v) => bytes.extend_from_slice(&v.to_bytes().map_err(encoding)?),
+        Value::Bls12381G2(v) => bytes.extend_from_slice(&v.to_bytes().map_err(encoding)?),
+        Value::Bls12381Gt(v) => bytes.extend_from_slice(&v.to_bytes().map_err(encoding)?),
         Value::KoalaBearField(v) => bytes.extend_from_slice(&crate::plonky3::encode_scalar(*v)),
         Value::KoalaBearExt8Field(v) => {
             bytes.extend_from_slice(&crate::plonky3::encode_extension(*v))
+        }
+        Value::KoalaBearExt4Field(v) => {
+            bytes.extend_from_slice(&crate::plonky3::encode_quartic(*v))
+        }
+        Value::Binary64Field(v) => bytes.extend_from_slice(&crate::plonky3::binary::encode(*v)),
+        Value::Binary64Ext3Field(v) => {
+            bytes.extend_from_slice(&crate::plonky3::binary::encode_ext3(*v))
         }
         Value::RistrettoField(v) => bytes.extend_from_slice(&v.to_bytes()),
         Value::RistrettoGroup(v) => bytes.extend_from_slice(&v.compress().to_bytes()),
@@ -294,10 +308,14 @@ impl NativeBackend {
         }
         self.policy().wire(width).map_err(|_| Limit)?;
         if tag != 64 {
-            // Every installed fixed scalar/group wrapper retains 512 bytes.
-            // Reject insufficient capacity before canonical/subgroup decoding;
-            // fixed arrays reserve their shape-dependent backing below.
-            self.policy().output(512, usize::MAX).map_err(|_| Limit)?;
+            // Installed fixed scalar/group wrappers retain 512 bytes, except the
+            // 1024-byte BLS12-381 target. Reject insufficient capacity before
+            // canonical/subgroup decoding; fixed arrays reserve their
+            // shape-dependent backing below.
+            let retained = if tag == 53 { 1024 } else { 512 };
+            self.policy()
+                .output(retained, usize::MAX)
+                .map_err(|_| Limit)?;
         }
         let value = match tag {
             64 => {
@@ -354,12 +372,33 @@ impl NativeBackend {
                 crate::Bn254G2::from_bytes(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Group))?,
             ),
+            51 => Value::Bls12381G2(
+                crate::Bls12381G2::from_bytes(&bytes[6..])
+                    .map_err(|_| Invalid(DecodeReason::Group))?,
+            ),
+            53 => Value::Bls12381Gt(std::sync::Arc::new(
+                crate::Bls12381Gt::from_bytes(&bytes[6..])
+                    .map_err(|_| Invalid(DecodeReason::Group))?,
+            )),
             19 => Value::KoalaBearField(
                 crate::plonky3::decode_scalar(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Scalar))?,
             ),
             26 => Value::KoalaBearExt8Field(
                 crate::plonky3::decode_extension(&bytes[6..])
+                    .map_err(|_| Invalid(DecodeReason::Scalar))?,
+            ),
+            21 => Value::KoalaBearExt4Field(
+                crate::plonky3::decode_quartic(&bytes[6..])
+                    .map_err(|_| Invalid(DecodeReason::Scalar))?,
+            ),
+            // Every bit pattern of the exact width is an element.
+            73 => Value::Binary64Field(
+                crate::plonky3::binary::decode(&bytes[6..])
+                    .map_err(|_| Invalid(DecodeReason::Scalar))?,
+            ),
+            76 => Value::Binary64Ext3Field(
+                crate::plonky3::binary::decode_ext3(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Scalar))?,
             ),
             13 => Value::RistrettoField(
@@ -427,4 +466,113 @@ fn decode_table(policy: &Policy, bytes: &[u8]) -> Result<Value, NativeWireError>
         .output(value.retained_bytes(), usize::MAX)
         .map_err(|_| Limit)?;
     Ok(value)
+}
+
+#[cfg(test)]
+mod tag_tests {
+    use super::*;
+    use zkc_runtime::vm::{Identity, LogicalType};
+
+    /// The frame tag of every default physical type over the listed identities.
+    fn tag(ty: &PhysicalType) -> Option<u8> {
+        frame(ty)
+            .map(|(tag, _)| tag)
+            .or_else(|| bulk::format(ty).map(|(tag, _, _)| tag))
+            .or_else(|| pcs::tag(ty))
+            .or_else(|| structured::tag(ty))
+            .or_else(|| table_type(ty).then_some(2))
+    }
+
+    #[test]
+    fn binary_field_frame_tags_are_unique() {
+        let identities = [
+            "",
+            "bn254.fr",
+            "bn254.g1",
+            "bn254.g2",
+            "bn254.gt",
+            "bls12-381.fr",
+            "bls12-381.g1",
+            "bls12-381.g2",
+            "bls12-381.gt",
+            "multilinear.kzg.bls12-381/0",
+            "rows.merkle-keccak256.koala-bear/0",
+            "rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
+            "rows.merkle-poseidon2-16.koala-bear/0",
+            "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0",
+            "merlin3.koala-bear.ext8-binomial3.rejection31le/0",
+            "merlin3.bls12-381.fr64be/0",
+            "merlin3.ristretto255.scalar64le/0",
+            "spongefish0.8.0.keccak.bls12-381.fr64be/0",
+            "hash-chain.keccak256.bls12-381.fr64be/0",
+            "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0",
+            "ristretto255.scalar",
+            "ristretto255.group",
+            "edwards25519.prime",
+            "koala-bear",
+            "koala-bear.ext8-binomial3",
+            "koala-bear.ext4-binomial3",
+            "gf2-64.pentanomial-4-3-1",
+            "gf2-64.pentanomial-4-3-1.ext3-trinomial1",
+        ];
+        let kinds = [
+            "bool",
+            "index",
+            "indices",
+            "bytes",
+            "shake128_state",
+            "field",
+            "vector",
+            "polynomial",
+            "round",
+            "matrix",
+            "table",
+            "point",
+            "rng",
+            "nonce",
+            "group",
+            "groups",
+            "transcript",
+            "commitment",
+            "proof",
+            "opening_state",
+            "commitments",
+            "opening_states",
+            "prover_key",
+            "verifier_key",
+        ];
+        let mut owners: std::collections::BTreeMap<u8, Vec<String>> = Default::default();
+        for identity in identities {
+            for kind in kinds {
+                let spelling = if identity.is_empty() {
+                    kind.to_string()
+                } else {
+                    format!("{kind}:{identity}")
+                };
+                let Ok(logical) = LogicalType::parse(&spelling) else {
+                    continue;
+                };
+                let ty = PhysicalType::default_for(logical).unwrap();
+                if let Some(tag) = tag(&ty) {
+                    owners.entry(tag).or_default().push(spelling);
+                }
+            }
+        }
+        let expected = [
+            (73, "field:gf2-64.pentanomial-4-3-1"),
+            (74, "vector:gf2-64.pentanomial-4-3-1"),
+            (75, "matrix:gf2-64.pentanomial-4-3-1"),
+            (76, "field:gf2-64.pentanomial-4-3-1.ext3-trinomial1"),
+            (77, "vector:gf2-64.pentanomial-4-3-1.ext3-trinomial1"),
+            (78, "matrix:gf2-64.pentanomial-4-3-1.ext3-trinomial1"),
+        ];
+        for (tag, spelling) in expected {
+            assert_eq!(owners[&tag], vec![spelling.to_string()], "tag {tag}");
+        }
+        // Appended after every earlier tag, so no earlier frame can collide.
+        let earlier = owners.keys().copied().filter(|t| *t < 73).max();
+        assert_eq!(earlier, Some(72));
+        assert!(owners.keys().all(|t| *t <= 78));
+        assert!(Identity::Binary64.bit_pattern_width().is_some());
+    }
 }

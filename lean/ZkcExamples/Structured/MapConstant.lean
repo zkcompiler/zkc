@@ -30,7 +30,6 @@ theorem formula_body {I : PIR.Signature} (sites : SiteObservations I)
       (Values.cons a (.cons b (.cons unusedScalar .nil))).get =
         .done (.cons (7 : F) .nil) := rfl
 
-set_option backward.isDefEq.respectTransparency false in
 theorem formula_equation (a b unusedScalar : F) :
     invoke (program.payload.tables F G).closed formulaHelper
       (.cons a (.cons b (.cons unusedScalar .nil))) = .done (.cons (7 : F) .nil) :=
@@ -61,7 +60,6 @@ private theorem singleton_return {I : PIR.Signature}
   simp only [Values.singleton_get, PIR.Proc.bind_done]
 
 set_option smartUnfolding true in
-set_option backward.isDefEq.respectTransparency false in
 theorem map_body {I : PIR.Signature} (sites : SiteObservations I)
     (table : Evaluation.Meanings F G I) (a b : List F) (unusedScalar : F) :
     mapBody.denote (Evaluation.meaning sites table) (inputs a b unusedScalar).get =
@@ -71,7 +69,6 @@ theorem map_body {I : PIR.Signature} (sites : SiteObservations I)
     Environment.prepend, Environment.push, PIR.Proc.bind]
   exact singleton_return _
 
-set_option backward.isDefEq.respectTransparency false in
 theorem map_invocation (a b : List F) (unusedScalar : F) :
     invoke (program.payload.tables F G).closed mapHelper (inputs a b unusedScalar) =
       Evaluation.denoteMap (program.payload.tables F G).closed mapSpec (inputs a b unusedScalar) :=
@@ -79,7 +76,6 @@ theorem map_invocation (a b : List F) (unusedScalar : F) :
     mapBody map_exact (inputs a b unusedScalar)).trans (map_body _ _ a b unusedScalar)
 
 set_option smartUnfolding true in
-set_option backward.isDefEq.respectTransparency false in
 theorem wrapper_body {I : PIR.Signature} (sites : SiteObservations I)
     (table : Evaluation.Meanings F G I) (a b : List F) (unusedScalar : F) :
     wrapperBody.denote (Evaluation.meaning sites table) (inputs a b unusedScalar).get =
@@ -92,7 +88,6 @@ theorem wrapper_body {I : PIR.Signature} (sites : SiteObservations I)
   exact singleton_return _
 
 set_option smartUnfolding true in
-set_option backward.isDefEq.respectTransparency false in
 theorem owner_body {I : PIR.Signature} (sites : SiteObservations I)
     (table : Evaluation.Meanings F G I) (a b : List F) (unusedScalar : F) :
     ownerBody.denote (Evaluation.meaning sites table) (inputs a b unusedScalar).get =
@@ -104,7 +99,6 @@ theorem owner_body {I : PIR.Signature} (sites : SiteObservations I)
   funext _
   exact singleton_return _
 
-set_option backward.isDefEq.respectTransparency false in
 theorem wrapper_invocation (a b : List F) (unusedScalar : F) :
     invoke (program.payload.tables F G).closed wrapperHelper (inputs a b unusedScalar) =
       .call (.mark "s0") (fun _ =>

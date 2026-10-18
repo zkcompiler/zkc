@@ -481,8 +481,11 @@ refused. The structural identity is SHA-256 of the canonical compact encoding.
 
 Fields must be installed. Public slots and groups additionally need an element
 encoding: a prime field element is one canonical decimal residue; an element of
-`koala-bear.ext8-binomial3` is eight base residues in the ascending basis of its
-[presentation](values.md#nominal-field-extensions).
+`koala-bear.ext8-binomial3` or `koala-bear.ext4-binomial3` is eight or four base
+residues in the ascending basis of its
+[presentation](values.md#nominal-field-extensions). An installed field without
+a residue presentation, such as a [binary field](values.md#binary-fields),
+refuses with `bundle-field-presentation`.
 
 Each table has one arena whose ordered outputs are its checks' expressions. The
 table's `inputs` list binds every arena input, in order, to a public slot or to a

@@ -78,6 +78,10 @@ requirements before accepting the upgrade. The helper refuses conflicting
 resolved revisions; it does not silently choose a winner. Lake lockfiles and
 Nix hashes are committed, while `.lake` output is not.
 
+An integration may apply a declared patch to one dependency at its exact pinned
+revision (`compatibility.json` beside its manifest). Preparation refuses the
+patch once the pin changes, so a pin change also updates or removes the patch.
+
 Run the main build, both integration builds, independent consumers and
 reached-axiom audits after changing this set. A successful resolution alone is
 not compatibility evidence. If a current stable release cannot build a

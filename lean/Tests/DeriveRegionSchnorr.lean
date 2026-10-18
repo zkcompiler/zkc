@@ -4,8 +4,6 @@ import Zkc.Source.Structured.ProjectedBody
 import Zkc.Source.Structured.EqualityDerivationRules
 import ZkcExamples.Structured.SchnorrInteractive
 
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 set_option smartUnfolding false
 noncomputable section
 

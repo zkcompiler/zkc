@@ -22,15 +22,32 @@ Use ArkLib's tested VCVio pin until an upstream migration or maintained adapter
 makes a newer joint closure work. These are revisable compatibility decisions,
 not a requirement to remain on older Lean indefinitely.
 
+ArkLib's selected revision carries a declared patch at
+[the integration boundary](../integrations/arklib/compatibility.json): the Lean
+sources of ArkLib pull request #992, "prove end-to-end soundness of the
+computable IOP" (head `768b1dba0e4e028156d052488ba8e3f6d01b1a0a`, based on
+`0b5b67c63d74b26e38715bb90fa5d7d5a07def25`). The pull request's changes from its
+base to its head apply to `db7005f84` by a three-way apply without conflicts and
+build there without modification; its kernel checks
+(`ArkLibTest/ProofSystem/Fri/Soundness.lean`) pass at this revision. The patch
+covers `ArkLib.lean`, `ArkLib/` and `ArkLibTest/` (29 files, 20 of them new); the
+pull request's blueprint, knowledge-base, wiki and axiom-baseline files are
+omitted because no Lean module reads them. The FRI security modules use its
+per-round lemmas. This patch is temporary: when the pull request merges, the
+ArkLib pin moves to a revision that contains it and the patch is removed.
+
 Clean's selected adapter and native example cone uses a declared compatibility
 patch at [the integration boundary](../integrations/clean/compatibility.json).
 Upstream still imports the renamed `Mathlib.Logic.Basic`, and a `ring_nf` call
 in `Clean.Air.Balance` now fails under the changed normalization order. The patch updates the
 import and proves the required reassociation directly with ring arithmetic; theorem
-statements and executable definitions are unchanged. Preparation checks the
-exact upstream revision and before/after file hashes. Both cache preparation
-and fresh source reproduction apply the same patch. This is a patched Clean
-source claim, not an unmodified upstream or whole-Clean build claim.
+statements and executable definitions are unchanged.
+
+Preparation checks a patch's exact upstream revision and the before/after hashes
+of every file it changes; a file absent on one side has a null hash, so a patch
+may add files. Cache preparation, fresh source reproduction and the Nix ArkLib
+package apply the same patches. These are patched-source claims, not unmodified
+upstream or whole-library build claims.
 
 Upgrades must build actual protocol consumers, check their axiom closures,
 regenerate the native Clean fixture, and run source/target negative controls.

@@ -202,8 +202,23 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
 
     contracts: CONTRACTS,
     resolve,
-    select: support::select_nominal,
+    select,
 };
+
+/// The ring provider substitutes integer residue coordinates, so no binary
+/// field is implemented, although the logical contract needs only a field.
+fn select(
+    binding: &OperationBinding,
+    logical: &OperationSignature<LogicalType>,
+    selection: Selection,
+) -> Result<BoundSignature> {
+    if binding.contract.starts_with("ring.")
+        && !support::primary(binding)?.has_residue_coordinates()
+    {
+        return Err(support::failure());
+    }
+    support::select_nominal(binding, logical, selection)
+}
 
 fn resolve(
     binding: &OperationBinding,
@@ -226,7 +241,7 @@ fn resolve(
             | "poly.opening_quotient"
     ) && !matches!(
         field,
-        Identity::Bn254Fr | Identity::KoalaBear | Identity::KoalaBearExt8
+        Identity::Bn254Fr | Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4
     ) {
         return Err(support::failure());
     }

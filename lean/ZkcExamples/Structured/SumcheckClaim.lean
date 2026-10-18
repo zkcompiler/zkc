@@ -4,6 +4,7 @@ public import ZkcExamples.Structured.SumcheckClaimOriginalData
 public import ZkcExamples.Structured.SumcheckClaimCandidateData
 public import Zkc.Source.Structured.Inlining
 public import Zkc.Source.Structured.ClosedProfile
+public import Zkc.Source.Structured.UnitViews
 
 @[expose] public section
 
@@ -14,37 +15,23 @@ computation is not the interactive Sumcheck protocol or a soundness theorem. -/
 namespace ZkcExamples.Structured.SumcheckClaim
 open Zkc.Source Zkc.Source.Structured
 
-set_option maxRecDepth 20000
 -- Keep reductions of admitted subjects direct; body constructors use normal unfolding.
 set_option smartUnfolding false
-set_option maxHeartbeats 4000000
 
-def original : ClosedProgram := (checkClosed SumcheckClaimOriginalData.snapshot).toOption.get (by decide +kernel)
-def candidate : ClosedProgram := (checkClosed SumcheckClaimCandidateData.snapshot).toOption.get (by decide +kernel)
-
-def originalImported : ClosedImported SumcheckClaimOriginalData.snapshot := ⟨original, rfl⟩
-def candidateImported : ClosedImported SumcheckClaimCandidateData.snapshot := ⟨candidate, rfl⟩
-
-private abbrev scalar : Ty := .field "bls12-381.fr"
-private abbrev weightedHelper : Helper :=
+abbrev scalar : Ty := .field "bls12-381.fr"
+abbrev weightedHelper : Helper :=
   ⟨"s14h73756d636865636b5f636c61696d8h7765696768746564", .math, [scalar, scalar], [scalar]⟩
-private abbrev claimHelper : Helper :=
+abbrev claimHelper : Helper :=
   ⟨"s14h73756d636865636b5f636c61696d5h636c61696d", .math, [scalar, scalar, scalar], [scalar]⟩
 
-private def weightedDefinition : CheckedDefinition :=
-  (original.payload.definitions.find? fun definition => definition.name == weightedHelper.name).get
-    (by decide +kernel)
-private def claimDefinition : CheckedDefinition :=
-  (original.payload.definitions.find? fun definition => definition.name == claimHelper.name).get
-    (by decide +kernel)
 
 set_option smartUnfolding true in
-private def weightedBody : Region dialect [scalar, scalar] [scalar] :=
+def weightedBody : Region dialect [scalar, scalar] [scalar] :=
   .letOp (.fieldMultiply "bls12-381.fr") (.cons (.there .here) (.cons .here .nil)) .nil
     (.ret (.cons .here .nil))
 
 set_option smartUnfolding true in
-private def claimBody : Region dialect [scalar, scalar, scalar] [scalar] :=
+def claimBody : Region dialect [scalar, scalar, scalar] [scalar] :=
   .letOp (.fieldConstant "bls12-381.fr" 1) .nil .nil
     (.letOp (.fieldSubtract "bls12-381.fr")
       (.cons .here (.cons (.there (.there (.there .here))) .nil)) .nil
@@ -57,12 +44,12 @@ private def claimBody : Region dialect [scalar, scalar, scalar] [scalar] :=
             (.ret (.cons .here .nil))))))
 
 set_option smartUnfolding true in
-private def originalBody : Region dialect [scalar, scalar, scalar] [scalar] :=
+def originalBody : Region dialect [scalar, scalar, scalar] [scalar] :=
   .letOp (.mark "") .nil .nil <|
   .letOp (.invoke claimHelper) (Operands.identity _) .nil (.ret (.cons .here .nil))
 
 set_option smartUnfolding true in
-private def candidateBody : Region dialect [scalar, scalar, scalar] [scalar] :=
+def candidateBody : Region dialect [scalar, scalar, scalar] [scalar] :=
   .letOp (.mark "") .nil .nil <|
   .letOp (.fieldConstant "bls12-381.fr" 1) .nil .nil
     (.letOp (.mark "") .nil .nil <|
@@ -79,10 +66,62 @@ private def candidateBody : Region dialect [scalar, scalar, scalar] [scalar] :=
             .letOp (.fieldAdd "bls12-381.fr") (.cons (.there .here) (.cons .here .nil)) .nil
             (.ret (.cons .here .nil))))))
 
-private theorem weighted_exact : weightedDefinition.raw = weightedBody.erase := rfl
-private theorem claim_exact : claimDefinition.raw = claimBody.erase := rfl
-private theorem original_exact : original.payload.entry.raw = originalBody.erase := rfl
-private theorem candidate_exact : candidate.payload.entry.raw = candidateBody.erase := rfl
+
+namespace Original
+def protocolSignature : ProtocolSignature where
+  name := "s14h73756d636865636b5f636c61696d5h436c61696d"
+  roles := ["role00000000"]
+  inputs := [(.field "bls12-381.fr"), (.field "bls12-381.fr"), (.field "bls12-381.fr")]
+  outputs := [(.field "bls12-381.fr")]
+  inputScopes := [[0], [0], [0]]
+  outputScopes := [[0]]
+
+set_option smartUnfolding true in
+def protocolBody : Region protocolDialect protocolSignature.inputs protocolSignature.outputs :=
+  .letOp (.mark "") .nil .nil <|
+  .letOp (.calculate (.invoke {name := "s14h73756d636865636b5f636c61696d5h636c61696d", kind := .math, inputs := [.field "bls12-381.fr", .field "bls12-381.fr", .field "bls12-381.fr"], outputs := [.field "bls12-381.fr"]}) rfl) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
+  .ret (.cons .here .nil)
+
+structured_closed_views SumcheckClaimOriginalData.snapshot
+  helpers [weighted := (weightedHelper, weightedBody), claim := (claimHelper, claimBody)]
+  protocols [protocol]
+  root originalBody
+end Original
+
+namespace Candidate
+def protocolSignature : ProtocolSignature where
+  name := "s14h73756d636865636b5f636c61696d5h436c61696d"
+  roles := ["role00000000"]
+  inputs := [(.field "bls12-381.fr"), (.field "bls12-381.fr"), (.field "bls12-381.fr")]
+  outputs := [(.field "bls12-381.fr")]
+  inputScopes := [[0], [0], [0]]
+  outputScopes := [[0]]
+
+set_option smartUnfolding true in
+def protocolBody : Region protocolDialect protocolSignature.inputs protocolSignature.outputs :=
+  .letOp (.mark "") .nil .nil <|
+  .letOp (.calculate (.fieldConstant "bls12-381.fr" 1) rfl) .nil .nil <|
+  .letOp (.mark "") .nil .nil <|
+  .letOp (.calculate (.fieldSubtract "bls12-381.fr") rfl) (.cons .here (.cons (.there (.there (.there .here))) .nil)) .nil <|
+  .letOp (.mark "") .nil .nil <|
+  .letOp (.calculate (.fieldMultiply "bls12-381.fr") rfl) (.cons .here (.cons (.there (.there .here)) .nil)) .nil <|
+  .letOp (.mark "") .nil .nil <|
+  .letOp (.calculate (.fieldMultiply "bls12-381.fr") rfl) (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there (.there (.there (.there .here)))) .nil)) .nil <|
+  .letOp (.mark "") .nil .nil <|
+  .letOp (.calculate (.fieldAdd "bls12-381.fr") rfl) (.cons (.there .here) (.cons .here .nil)) .nil <|
+  .ret (.cons .here .nil)
+
+structured_closed_views SumcheckClaimCandidateData.snapshot
+  helpers [weighted := (weightedHelper, weightedBody), claim := (claimHelper, claimBody)]
+  protocols [protocol]
+  root candidateBody
+end Candidate
+
+def original : ClosedProgram := Original.program
+def candidate : ClosedProgram := Candidate.program
+
+def originalImported : ClosedImported SumcheckClaimOriginalData.snapshot := Original.imported
+def candidateImported : ClosedImported SumcheckClaimCandidateData.snapshot := Candidate.imported
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
@@ -101,8 +140,8 @@ private theorem invoke_weighted (value weight : F) :
     invoke (table F G) weightedHelper (.cons value (.cons weight .nil)) =
       .done (.cons (weight * value) .nil) :=
   (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-    original.payload weightedDefinition (List.get_find?_mem _)
-    weightedBody weighted_exact (.cons value (.cons weight .nil))).trans (by rfl)
+    original.payload Original.weightedDefinition Original.weighted_member
+    weightedBody Original.weighted_exact (.cons value (.cons weight .nil))).trans (by rfl)
 
 private theorem claim_contract (a0 a1 r : F) :
     claimBody.denote (meaning F G (table F G)) (inputs a0 a1 r).get =
@@ -118,13 +157,13 @@ private theorem invoke_claim (a0 a1 r : F) :
     invoke (table F G) claimHelper (inputs a0 a1 r) =
       .done (.cons ((1 - r) * a0 + r * a1) .nil) :=
   (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-    original.payload claimDefinition (List.get_find?_mem _)
-    claimBody claim_exact (inputs a0 a1 r)).trans (claim_contract a0 a1 r)
+    original.payload Original.claimDefinition Original.claim_member
+    claimBody Original.claim_exact (inputs a0 a1 r)).trans (claim_contract a0 a1 r)
 
 theorem original_eq_claim (a0 a1 r : F) :
     original.denote F G (inputs a0 a1 r) = .done (.cons ((1 - r) * a0 + r * a1) .nil) := by
   refine (Evaluation.payload_denote_body_view (F := F) (G := G) SiteObservations.closed
-    original.payload originalBody original_exact (inputs a0 a1 r)).trans ?_
+    original.payload originalBody Original.entry_exact (inputs a0 a1 r)).trans ?_
   change (invoke (table F G) claimHelper (inputs a0 a1 r)).bind
     (fun result => .done (output (result.get .here))) = .done (output ((1 - r) * a0 + r * a1))
   rw [invoke_claim]
@@ -133,7 +172,7 @@ theorem original_eq_claim (a0 a1 r : F) :
 theorem candidate_eq_claim (a0 a1 r : F) :
     candidate.denote F G (inputs a0 a1 r) = .done (.cons ((1 - r) * a0 + r * a1) .nil) :=
   (Evaluation.payload_denote_body_view (F := F) (G := G) SiteObservations.closed
-    candidate.payload candidateBody candidate_exact (inputs a0 a1 r)).trans (by
+    candidate.payload candidateBody Candidate.entry_exact (inputs a0 a1 r)).trans (by
     change PIR.Proc.done (output (((1 : Nat) - r) * a0 + r * a1)) =
       (PIR.Proc.done (output ((1 - r) * a0 + r * a1)) : Closed _)
     simp only [Nat.cast_one])

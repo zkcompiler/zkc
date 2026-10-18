@@ -19,15 +19,47 @@ that all native behavior already has a Lean model.
   endpoint-message and residual/discharge laws.
 - [Multilinear interactive security](spec/multilinear-sumcheck-security.md): optional
   ArkLib adapters with complete and residual bounds and honest completeness.
+- [Fiat–Shamir construction](spec/fiat-shamir.md): the transform of a validator,
+  the checked transcript-construction rule and the compiled Schnorr proof
+  Entry's random-oracle knowledge soundness.
+- [Participant projection](spec/participant-projection.md): the checked rule
+  relating an exported validator to the original program at its role, and its
+  composition with transcript construction.
+- [Multi-round Fiat–Shamir security](spec/fiat-shamir-security.md): soundness
+  over typed query sites with per-site errors and realized decoding laws,
+  including proof-of-work-gated and compound sites; as its instance, soundness of
+  the transform of any validator from round-by-round soundness, in a random
+  oracle on all typed histories, its instances for the imported Sumcheck
+  verifier and the plain GKR verifier, and its composition with the checked
+  rules for the compiled Sumcheck and GKR proof Entries; formal readings of the
+  construction obligations, the type of provider simulations and the joint
+  experiment of a committed opening.
+- [FRI security](spec/fri-security.md): the verifier of the FRI library's
+  low-degree test at the ideal interpretation of its commitments, its
+  line-by-line correspondence to the source and ArkLib's FRI analysis, its
+  completeness on codewords, its round-by-round soundness certificate with
+  explicit errors, also over the verifier's residual processes, and its
+  Fiat–Shamir transfer with one query-block site.
+- [Executable stage](spec/executable.md): the meaning of the validator program
+  the runtime admits, with loops and helper calls, the checked lowering rule from
+  the constructed validator and helper preparation, the executable Schnorr
+  verifier's knowledge soundness and the executable Sumcheck verifier's
+  soundness for byte provers.
 - [Uniform query service](spec/uniform-query-service.md): a concrete structured
   handler with exact all-state query, pass-through and refusal laws, plus
   general-count Sumcheck process transport and actual imported-root bounds.
-- [Support](support.md): theorem scope, assumptions and tested boundaries.
+- [Support](support.md): theorem scope, assumptions, proved subjects and tested
+  boundaries.
 - [Dependencies](dependencies.md): exact pins and compatibility decisions.
 - [Structured computations](design/structured-computations.md): canonical multi-result
   regions, explicit captures, operation contracts and reference-profile bridges.
-- [Structured native import](design/structured-native-import.md): checked subjects,
-  participant contracts and source-derived honest-prover observations.
+- [Structured native import](design/structured-native-import.md): import placement,
+  protocol verification targets and evidence boundaries.
+- [Logical contexts](design/logical-contexts.md): port-independent mathematical
+  binders, transport along port maps and the contract layer as an instance.
+- [Checked compiler stages](design/checked-stages.md): the common shape of
+  checked stage rules, property-specific relations and their composition, with
+  transcript construction and participant projection as instances.
 - [Research design](design/protocol-verification.md): questions, choices and
   evaluation criteria for extending the implemented architecture.
 - [Native bridge](../bridges/common/README.md): differential and proof-request tests.

@@ -193,6 +193,8 @@ def VectorPrefixProductOp : BoundOp<AlgebraDialect, "exec.vector_prefix_product"
 def VectorPrefixSumOp : BoundOp<AlgebraDialect, "exec.vector_prefix_sum", [OpVectorPrefixSum]>;
 
 def VectorRotateOp : BoundOp<AlgebraDialect, "exec.vector_rotate", [OpVectorRotate]>;
+def VectorBitReverseOp : BoundOp<AlgebraDialect, "exec.vector_bit_reverse", [OpVectorBitReverse]>;
+def VectorBitReverseRowsOp : BoundOp<AlgebraDialect, "exec.vector_bit_reverse_rows", [OpVectorBitReverseRows]>;
 
 def VectorScaleOp : BoundOp<AlgebraDialect, "exec.vector_scale", [OpVectorScale]>;
 

@@ -159,10 +159,7 @@ theorem source_returned_true_bound [Fintype F] [SampleableType F]
     simp [PIR.Proc.runM, returnedSatisfies]
 
 section ContractComposition
-set_option backward.isDefEq.respectTransparency false
 set_option smartUnfolding false
-set_option maxRecDepth 20000
-set_option maxHeartbeats 1000000
 
 omit [Field F] [DecidableEq F] in
 private theorem decoded_reindex {n m : Nat} (same : n = m) (raw : List F)
@@ -467,10 +464,7 @@ theorem reduction_residual_bound [Fintype F] [SampleableType F]
     simp [PIR.Proc.runM, returnedSatisfies]
 
 section ReductionRequests
-set_option backward.isDefEq.respectTransparency false
 set_option smartUnfolding false
-set_option maxRecDepth 20000
-set_option maxHeartbeats 1000000
 
 /-- Typed terminal on the actual residual wrapper's returned boundary. -/
 def wrapperResidualRequest (raw : List F) (remaining count : Nat)

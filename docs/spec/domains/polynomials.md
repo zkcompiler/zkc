@@ -33,7 +33,7 @@ polynomial when its actual degree is below the node count, and differs when
 its actual degree reaches that count. A structural degree bound below the
 node count is sufficient for recovery. A
 [native comparison](../../../common/tests/kernels/test_pointwise_polynomials.py) checks
-this on KoalaBear and Ext8 cosets against integer arithmetic: the interpolant of
+this on KoalaBear, Ext8 and Ext4 cosets against integer arithmetic: the interpolant of
 pointwise products is the formal product reduced modulo `X^n - s^n`.
 
 The [structured native profile](../ir/mathematics.md)
@@ -66,7 +66,7 @@ Neither depends on a prover's intended construction of the coefficients.
 `TwoAdicField(F)` supplies a declared compatible family of two-power roots,
 in addition to `Field(F)`. A particular installation states its maximum order
 and root convention. This capability does not follow merely from being a field.
-The current KoalaBear and octic-extension installations admit power-of-two
+The current KoalaBear, octic-extension and quartic-extension installations admit power-of-two
 sizes through `2^24`, with smaller execution limits. Their size-`n` root is
 `1791270792^(2^24/n)` in the base field, embedded explicitly for the extension.
 Extension challenges and coset shifts may be outside the base field; domain
@@ -90,10 +90,11 @@ division by two is not a generic field law. For an even-sized coset,
 `i+n/2`, returning
 `(v_i+v_(i+n/2))/2 + beta*(v_i-v_(i+n/2))/(2*x_i)`.
 Its next domain has shift `s^2` and size `n/2`. This operation is defined on any
-admitted vector. The polynomial identity
-`p(X)=p_even(X^2)+X*p_odd(X^2)` and the degree bound for
-`p_even + beta*p_odd` are proved in `Zkc.Polynomial.EvenOdd`;
-cryptographic FRI proximity soundness is a separate obligation.
+admitted vector. On `p(X)=p_even(X^2)+X*p_odd(X^2)` it returns the evaluations
+of `p_even + beta*p_odd`, whose degree bound halves. The independent
+[FRI model](../../../lean/docs/spec/fri-security.md) relates this formula to
+ArkLib's binary fold; proximity soundness of a low-degree test built from it is a
+separate obligation.
 
 `poly.divide_opening<F>(p,z,y)` checks `p(z)=y` and returns normalized coefficients
 of `(p(X)-y)/(X-z)`, including zero/constant cases. It works over the coefficient

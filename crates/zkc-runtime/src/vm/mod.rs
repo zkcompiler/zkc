@@ -47,7 +47,7 @@ pub use backend::{
 };
 pub use bindings::{
     BoundSignature, Identity, LogicalType, OperationBinding, PhysicalType, Representation,
-    ResolvedBinding,
+    ResolvedBinding, bit_pattern_literal,
 };
 pub use model::{
     AdmissionError, AttributeRule, ErrorCode, Limits, LogicalOrigin, OperationSignature, Type,

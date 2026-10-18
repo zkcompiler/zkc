@@ -15,7 +15,6 @@ set_option smartUnfolding false
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
-set_option backward.isDefEq.respectTransparency false in
 theorem wrapper_equation (xs : List F) (dimension columns : Nat) (point : List F)
     (lengthBound : xs.length < indexLimit) (dimensionBound : dimension < indexLimit)
     (columnsBound : columns < indexLimit) :
@@ -33,7 +32,6 @@ theorem wrapper_equation (xs : List F) (dimension columns : Nat) (point : List F
     variablesRealization_equation widthRealization_equation prefix_equation prefix_exhausted
     xs dimension columns point lengthBound dimensionBound columnsBound
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Universal equation of the complete retained singleton protocol's checked projection. -/
 theorem process_equation (xs : List F) (dimension columns : Nat) (point : List F)
     (lengthBound : xs.length < indexLimit) (dimensionBound : dimension < indexLimit)
@@ -50,7 +48,6 @@ theorem process_equation (xs : List F) (dimension columns : Nat) (point : List F
   exact (MapPrefixLaws.entry_body _ xs dimension columns point).trans
     (wrapper_equation xs dimension columns point lengthBound dimensionBound columnsBound)
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Empty points preserve the complete ordered table triple, including dimension zero. -/
 theorem process_empty (xs : List F) (dimension columns : Nat)
     (shape : HasShape xs dimension columns) (lengthBound : xs.length < indexLimit)
@@ -61,7 +58,6 @@ theorem process_empty (xs : List F) (dimension columns : Nat)
     (Nat.lt_trans shape.2.1 (by decide +kernel)) columnsBound, ite_eq_left shape]
   rfl
 
-set_option backward.isDefEq.respectTransparency false in
 /-- A representable overlong point reaches the zero-dimension First guard. -/
 theorem process_too_long (xs : List F) (dimension columns : Nat) (point : List F)
     (shape : HasShape xs dimension columns) (lengthBound : xs.length < indexLimit)
@@ -72,7 +68,6 @@ theorem process_too_long (xs : List F) (dimension columns : Nat) (point : List F
     (Nat.lt_trans shape.2.1 (by decide +kernel)) columnsBound, ite_eq_left shape,
     ite_eq_left pointBound, ite_eq_right (by omega)]
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Each coordinate removes one leading row bit while retaining every column. -/
 theorem process_shape (xs : List F) (dimension columns : Nat) (point : List F)
     (shape : HasShape xs dimension columns) (lengthBound : xs.length < indexLimit)
@@ -89,7 +84,6 @@ theorem process_shape (xs : List F) (dimension columns : Nat) (point : List F)
     apply Zkc.Polynomial.Multilinear.restrictPrefixValues_length_mul
     simpa only [Nat.sub_add_cancel fits] using shape.length
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Actual source composition follows the supplied coordinate order. -/
 theorem process_ordered_append (xs : List F) (dimension columns : Nat)
     (first second : List F) (shape : HasShape xs dimension columns)
@@ -103,7 +97,6 @@ theorem process_ordered_append (xs : List F) (dimension columns : Nat)
   simpa only [Zkc.Polynomial.Multilinear.restrictPrefixValues_append,
     List.length_append, Nat.sub_sub] using actual
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The residual scalar table fixes exactly the leading MSB-first prefix. -/
 theorem process_msb (xs point : List F) (n : Nat)
     (table : Zkc.Polynomial.Multilinear.Table F (n + point.length))

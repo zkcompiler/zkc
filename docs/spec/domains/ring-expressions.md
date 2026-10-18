@@ -180,12 +180,17 @@ on formal ring expressions. For `ring.affine_sum`, the polynomial is exactly
 `sum_i P(low_i + (high_i - low_i) X)`, componentwise over ordered outputs.
 It reuses one coefficient scratch allocation across all rows.
 
-KoalaBear inputs and constants can be interpreted in Ext8 or Ext8 polynomials.
-In that interpretation, an input originally declared over KoalaBear may hold an
-extension value after polynomial substitution. An explicit KoalaBear-to-Ext8
-embedding becomes the compatible map into the selected algebra. The converse
-interpretation, Ext8 in KoalaBear, refuses. Arbitrary field identities and
-uninstalled embeddings refuse even if their characteristics agree.
+KoalaBear inputs and constants can be interpreted in an installed KoalaBear
+extension (Ext8 or Ext4) or its polynomials. In that interpretation, an input
+originally declared over KoalaBear may hold an extension value after polynomial
+substitution. An explicit embedding from KoalaBear into that extension becomes
+the compatible map into the selected algebra. The converse interpretation, an
+extension in KoalaBear, refuses, as does one extension in the other. Arbitrary field identities and
+uninstalled embeddings refuse even if their characteristics agree. The bulk
+`ring.*` kernels substitute integer residue coordinates, so they are installed
+for KoalaBear carriers only; arenas over other fields, including the
+[binary fields](values.md#binary-fields), still form and serve other
+consumers such as pointwise maps.
 
 The row provider gathers SIMD lanes from the same row-major assignments as the
 scalar reference and preserves output order. Both charge the same logical work:

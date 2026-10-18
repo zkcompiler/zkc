@@ -10,8 +10,6 @@ public import ZkcExamples.NativePrograms.Variants.SchnorrReorderedData
 /-! Several native source forms share one semantic contract and its property theorems. -/
 
 set_option autoImplicit false
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 
 namespace ZkcExamples.NativePrograms.SchnorrVariants
 open Zkc.Source Zkc.Source.Common Zkc.Source.Common.Native

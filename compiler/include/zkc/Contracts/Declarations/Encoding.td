@@ -60,6 +60,43 @@ def OpEncodingGroupsCompressed : ZKC_Operation<"encoding.groups_compressed", [En
     [ZKC_Apply<TypeGroups, [EncodingGroupsCompressedDomain]>],
     [ZKC_Apply<TypeBytes, []>], []> { int ordinal = 189; }
 
+// Whole-vector decoding of consecutive 32-byte big-endian scalars. Either the
+// length is a multiple of 32 and every element is canonical, or the flag is
+// false and the vector is empty; there is no modular reduction.
+def EncodingFieldsFromBeDomain : ZKC_Root<"T", FieldDomain>;
+def OpEncodingFieldsFromBe : ZKC_Operation<"encoding.fields_from_be", [EncodingFieldsFromBeDomain],
+    [ZKC_Apply<TypeBytes, []>],
+    [ZKC_Apply<TypeBool, []>, ZKC_Apply<TypeVector, [EncodingFieldsFromBeDomain]>], []> { int ordinal = 192; }
+
 // Shortest unsigned LEB128 of an entire u64 index; zero emits one byte.
 def OpEncodingIndexUleb128 : ZKC_Operation<"encoding.index_uleb128", [],
     [ZKC_Apply<TypeIndex, []>], [ZKC_Apply<TypeBytes, []>], []> { int ordinal = 190; }
+
+// Ordered concatenation of each element's exact encoding; the decoder accepts
+// only whole elements whose words are all canonical.
+def EncodingFieldsFromLeDomain : ZKC_Root<"T", FieldDomain>;
+def OpEncodingFieldsFromLe : ZKC_Operation<"encoding.fields_from_le", [EncodingFieldsFromLeDomain],
+    [ZKC_Apply<TypeBytes, []>],
+    [ZKC_Apply<TypeBool, []>, ZKC_Apply<TypeVector, [EncodingFieldsFromLeDomain]>], []> { int ordinal = 193; }
+
+// Little-endian Montgomery residues x*R mod p with R = 2^(8*w) for the
+// field's canonical encoding width w; extension elements encode coordinatewise.
+def EncodingFieldMontgomeryLeDomain : ZKC_Root<"F", FieldDomain>;
+def OpEncodingFieldMontgomeryLe : ZKC_Operation<"encoding.field_montgomery_le", [EncodingFieldMontgomeryLeDomain],
+    [ZKC_Apply<TypeField, [EncodingFieldMontgomeryLeDomain]>],
+    [ZKC_Apply<TypeBytes, []>], []> { int ordinal = 194; }
+
+def EncodingFieldFromMontgomeryLeDomain : ZKC_Root<"F", FieldDomain>;
+def OpEncodingFieldFromMontgomeryLe : ZKC_Operation<"encoding.field_from_montgomery_le", [EncodingFieldFromMontgomeryLeDomain],
+    [ZKC_Apply<TypeBytes, []>],
+    [ZKC_Apply<TypeBool, []>, ZKC_Apply<TypeField, [EncodingFieldFromMontgomeryLeDomain]>], []> { int ordinal = 195; }
+
+def EncodingFieldsMontgomeryLeDomain : ZKC_Root<"T", FieldDomain>;
+def OpEncodingFieldsMontgomeryLe : ZKC_Operation<"encoding.fields_montgomery_le", [EncodingFieldsMontgomeryLeDomain],
+    [ZKC_Apply<TypeVector, [EncodingFieldsMontgomeryLeDomain]>],
+    [ZKC_Apply<TypeBytes, []>], []> { int ordinal = 196; }
+
+def EncodingFieldsFromMontgomeryLeDomain : ZKC_Root<"T", FieldDomain>;
+def OpEncodingFieldsFromMontgomeryLe : ZKC_Operation<"encoding.fields_from_montgomery_le", [EncodingFieldsFromMontgomeryLeDomain],
+    [ZKC_Apply<TypeBytes, []>],
+    [ZKC_Apply<TypeBool, []>, ZKC_Apply<TypeVector, [EncodingFieldsFromMontgomeryLeDomain]>], []> { int ordinal = 197; }

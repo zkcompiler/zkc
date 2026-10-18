@@ -477,7 +477,8 @@ terms in declaration order; their kinds come from the catalog. Projections and
 input/output types follow that signature. Multiple native results form a source
 tuple, and no results form unit. Constant parameters use the contract's own
 validation, including field-literal bounds. A generic field admits only `0` and
-`1` as literals; concrete field parameters are checked against that field.
+`1` as literals; concrete field parameters are checked against that field,
+including a binary field's bit-pattern literals.
 
 A contract whose parameter is an asset identity takes an asset term of the
 accepted sort instead of a literal: `kernel<F>("ring.point", v; A)` or
@@ -1043,6 +1044,9 @@ Chained equality requires parentheses. No implicit field conversion occurs. Fiel
 expected field from an annotation, operand, call or result. Installed contracts
 check canonical spelling and characteristic bounds without modular reduction.
 For an abstract field, only the universally valid literals `0` and `1` are admitted.
+A binary field's characteristic is two, so its other constants are
+[bit-pattern literals](../domains/values.md#bit-pattern-literals) passed as
+`field.constant` parameters, such as `kernel<K>("field.constant"; "0x1b")`.
 Boolean literals need no domain. Record construction supplies every field exactly
 once. Variant construction uses `Choice::Some<Fr>(x)` in local code.
 

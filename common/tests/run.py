@@ -14,9 +14,9 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
-from workspace import compiler_directory, reports_root, validate_environment  # noqa: E402
+from workspace import compiler_directory, output_directory, reports_root, validate_environment  # noqa: E402
 from processes import Interrupted, checked  # noqa: E402
-from reporting import run_report  # noqa: E402
+from reporting import new_directory, run_report  # noqa: E402
 
 
 def run(arguments, *, cwd=ROOT, env=None, stdout=None):
@@ -80,6 +80,8 @@ def execute(scope, args):
         compiler = Path(args.compiler_build).resolve() if args.compiler_build else compiler_directory(args.profile)
         bridge = ROOT / "lean/bridges/common"
         output = reports / "lean/native"
+        # The structured suites of this run share one executable store.
+        os.environ["ZKC_TOOL_STORE"] = str(output / "tool-store")
         run([sys.executable, bridge / "check.py", "--compiler", compiler / "zkc-compile",
              "--reference", compiler / "test/zkc-common_reference-test",
              "--lean", ROOT / "lean/.lake/build/bin/common-source", "--cases", "80",
@@ -124,6 +126,11 @@ def execute(scope, args):
              "--output", output / "requests"])
         run([sys.executable, bridge / "intent_tests.py", "--compiler", compiler / "zkc-compile",
              "--output", output / "intent"])
+        run([sys.executable, ROOT / "lean/bridges/construction/check.py",
+             "--compiler", compiler / "zkc-compile", "--output", new_directory(output, "construction")])
+        run([sys.executable, ROOT / "lean/bridges/executable/check.py",
+             "--compiler", compiler / "zkc-compile", "--native", output_directory("native") / "zkc",
+             "--output", new_directory(output, "executable")])
     elif scope == "install":
         from check_sdk import check_install
         check_install(args, run)

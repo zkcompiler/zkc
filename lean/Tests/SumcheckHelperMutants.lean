@@ -151,7 +151,6 @@ theorem check_accept_malformed_expansion (table : Meanings F G) (xs point : List
       rfl
   · rfl
 
-set_option backward.isDefEq.respectTransparency false in
 set_option linter.unusedSimpArgs false in
 theorem check_ignore_claim_expansion (table : Meanings F G) (xs point : List F) (claim : F) :
     checkTableIgnoreClaimBody.denote (meaning F G table) (checkInputs xs point claim).get =

@@ -46,6 +46,24 @@ pub(super) const CONTRACTS: &[Contract] = &[
         "plonky3/vector.rotate",
     ]),
     Contract::selectable(
+        "vector.bit_reverse",
+        (&[Vector], &[Vector], AttributeRule::None),
+    )
+    .implemented_by(&[
+        "arkworks/vector.bit_reverse",
+        "dalek/vector.bit_reverse",
+        "plonky3/vector.bit_reverse",
+    ]),
+    Contract::selectable(
+        "vector.bit_reverse_rows",
+        (&[Vector, Index], &[Vector], AttributeRule::None),
+    )
+    .implemented_by(&[
+        "arkworks/vector.bit_reverse_rows",
+        "dalek/vector.bit_reverse_rows",
+        "plonky3/vector.bit_reverse_rows",
+    ]),
+    Contract::selectable(
         "vector.interleave",
         (&[Vector, Vector], &[Vector], AttributeRule::None),
     )

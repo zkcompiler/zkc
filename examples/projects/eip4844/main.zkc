@@ -1,0 +1,31 @@
+module example;
+use kzg::eip4844::{Commit, Prove, Challenge, PointEvaluation};
+use kzg::eip4844::{PointOpening, Point, BlobOpening, Blob, BlobBatch, Batch};
+
+// The polynomial-commitment functions of EIP-4844 as Entries.
+run BlobToCommitment = Commit;
+run ComputeKzgProof = Prove;
+run ComputeChallenge = Challenge;
+run PointEvaluationPrecompile = PointEvaluation;
+
+proof KzgProof = PointOpening {
+  prover P;
+  verifier V;
+  public { commitment, z, y };
+  accept accepted;
+  construction Point;
+}
+proof BlobProof = BlobOpening {
+  prover P;
+  verifier V;
+  public { blob, commitment };
+  accept accepted;
+  construction Blob;
+}
+proof BlobBatchProof = BlobBatch<64> {
+  prover P;
+  verifier V;
+  public { blobs, commitments, count };
+  accept accepted;
+  construction Batch<64>;
+}

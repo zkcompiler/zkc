@@ -3,6 +3,7 @@ module
 public import ZkcExamples.Structured.TotalStateData
 public import Zkc.Source.Structured.Linking
 public import Zkc.Source.Structured.ClosedProfile
+public import Zkc.Source.Structured.UnitViews
 
 @[expose] public section
 
@@ -13,49 +14,54 @@ the unsigned index limit. These theorems concern the imported logical process. -
 namespace ZkcExamples.Structured.TotalState
 open Zkc.Source Zkc.Source.Structured
 
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
+abbrev scalar : Ty := .field "bls12-381.fr"
+abbrev vector : Ty := .vector "bls12-381.fr"
 
-/-- The program is computed by admission of the exact exported constructor data. -/
-def program : ClosedProgram := (checkClosed TotalStateData.snapshot).toOption.get (by decide +kernel)
-
-theorem admitted : checkClosed TotalStateData.snapshot = .ok program := by
-  have accepted : (checkClosed TotalStateData.snapshot).toOption.isSome = true := by decide +kernel
-  cases checked : checkClosed TotalStateData.snapshot with
-  | error code => simp [checked, Except.toOption] at accepted
-  | ok value => simp [program, checked, Except.toOption]
-
-def imported : ClosedImported TotalStateData.snapshot := ⟨program, admitted⟩
-
-private abbrev scalar : Ty := .field "bls12-381.fr"
-private abbrev vector : Ty := .vector "bls12-381.fr"
-
-private abbrev foldSpec : FoldSpec :=
+abbrev foldSpec : FoldSpec :=
   ⟨⟨"items", [vector], "bls12-381.fr", .here, true⟩,
     [scalar, scalar], [], "step", "", .math⟩
 
-private def stepReturn : Region dialect
+def stepReturn : Region dialect
     [scalar, scalar, scalar, .index, vector] [scalar, scalar] :=
   .ret (.cons (.there (.there .here)) (.cons .here .nil))
 
 /-- A typed view of the checked helper, retaining the actual checked read. -/
-private def stepBody : Region dialect [scalar, scalar, .index, vector] [scalar, scalar] :=
+def stepBody : Region dialect [scalar, scalar, .index, vector] [scalar, scalar] :=
   .letOp (.boundedAt "bls12-381.fr")
     (.cons (.there (.there (.there .here))) (.cons (.there (.there .here)) .nil))
     .nil stepReturn
 
-private def mainBody : Region dialect [vector, scalar, scalar] [scalar, scalar] :=
+def mainBody : Region dialect [vector, scalar, scalar] [scalar, scalar] :=
   .letOp (.mark "") .nil .nil <|
   .letOp (.fold foldSpec)
     (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil)))
     .nil (.ret (.cons .here (.cons (.there .here) .nil)))
 
-private abbrev stepHelper : Helper :=
+abbrev stepHelper : Helper :=
   ⟨"step", .math, [scalar, scalar, .index, vector], [scalar, scalar]⟩
 
-private def stepDefinition : CheckedDefinition :=
-  (program.payload.definitions.find? fun definition => definition.name == "step").get
-    (by decide +kernel)
+def protocolSignature : ProtocolSignature where
+  name := "main"
+  roles := ["P"]
+  inputs := [(.vector "bls12-381.fr"), (.field "bls12-381.fr"), (.field "bls12-381.fr")]
+  outputs := [(.field "bls12-381.fr"), (.field "bls12-381.fr")]
+  inputScopes := [[0], [0], [0]]
+  outputScopes := [[0], [0]]
+
+set_option smartUnfolding true in
+def protocolBody : Region protocolDialect protocolSignature.inputs protocolSignature.outputs :=
+  .letOp (.mark "") .nil .nil <|
+  .letOp (.calculate (.fold {domain := {name := "items", inputs := [.vector "bls12-381.fr"], field := "bls12-381.fr", container := .here, indices := true}, state := [.field "bls12-381.fr", .field "bls12-381.fr"], captures := [], step := "step", predicate := "", kind := .math}) rfl) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
+  .ret (.cons .here (.cons (.there .here) .nil))
+
+-- The program is the literal checked unit admitted from the exact exported
+-- constructor data, with its closed single-role projection.
+structured_closed_views TotalStateData.snapshot
+  helpers [step]
+  protocols [protocol]
+  root mainBody
+
+theorem admitted : checkClosed TotalStateData.snapshot = .ok program := kernel_admission
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
@@ -72,7 +78,7 @@ private theorem invoke_step (arguments : Values (assignment F G)
     invoke (table F G) stepHelper arguments =
       stepBody.denote (meaning F G (table F G)) arguments.get :=
   Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-    program.payload stepDefinition (List.get_find?_mem _)
+    program.payload stepDefinition step_member
     stepBody (by rfl) arguments
 
 def inputs (xs : List F) (a b : F) :
@@ -217,10 +223,6 @@ theorem process_append_pair (xs : List F) (x y a b : F)
     process (G := G) (xs ++ [x, y]) a b = .done (outputs x y) := by
   simpa [reference, List.foldl_append] using
     process_eq_reference (xs ++ [x, y]) a b lengthValid
-
-/-- The exported source descriptor is retained by the admitted subject. -/
-theorem exact_subject : imported.program.snapshot = TotalStateData.snapshot :=
-  imported.exactSubject
 
 set_option smartUnfolding false in
 /-- A downstream client consumes the equation through the exact imported subject. -/

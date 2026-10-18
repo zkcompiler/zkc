@@ -82,7 +82,6 @@ theorem ClosedProjection.exact {inputs outputs}
     simp [Region.erase, closedRootTree, bodyIH, nextIH]
     rfl
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Every successful raw projection of a typed protocol body has a typed witness. -/
 theorem ClosedProjection.exists_of_exact {inputs outputs}
     (source : Region protocolDialect inputs outputs) (raw : RawRegion Ty Op)
@@ -344,7 +343,6 @@ theorem maskValues_single_role {Value : Ty → Type} {types : List Ty}
   | cons value rest ih =>
     simp [maskValues, List.replicate_succ, Participant.restrict, ih]
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The explicit checked closed view is semantically tied to the actual subject.
 The checked view supplies complete singleton scopes, including for manually
 formed Programs. Both sides use identical values, tables and site observations. -/

@@ -374,10 +374,10 @@ selection, proof construction and source/candidate checking. Its `finiteBulk`
 choice defaults to true; `vectorReductionFusion` and `collectFoldFusion` default
 to false.
 `selectNativeProofDraws`, `constructNativeProof` and `checkNativeProof` receive
-this shared policy. The `protocol-proof`, `protocol-construct-proof` and
-`protocol-check-proof` commands forward `--no-finite-bulk` and
-`--fuse-vector-reductions` and `--fuse-collect-fold`; source proof Entries forward
-the same choices.
+this shared policy. The `protocol-proof`, `protocol-construct-proof`,
+`protocol-check-proof` and `protocol-constructed-participant` commands forward
+`--no-finite-bulk`, `--fuse-vector-reductions` and `--fuse-collect-fold`;
+source proof Entries forward the same choices.
 They change local preparation while preserving protocol event origins, and
 add no cryptographic construction or security claim.
 

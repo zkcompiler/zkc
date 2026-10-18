@@ -6,8 +6,8 @@ They select no application relation, participant protocol or transcript policy.
 | Family | Modules |
 |---|---|
 | Collections and traversal | `vector`, `indices`, `sequence`, `matrix`, `field_array`, `finite`, `finite_math`, `finite_domain`, `accumulation` |
-| Algebra and polynomials | `scalar`, `curve`, `linear`, `polynomial`, `multilinear`, `coset`, `opening`, `symbolic`, `boolean` |
-| Commitments and encoding | `oracle`, `bytes`, `encoding`, `proof`, `shake128`, `transcript`, `sampling` |
+| Algebra and polynomials | `scalar`, `curve`, `pairing`, `linear`, `polynomial`, `multilinear`, `coset`, `opening`, `symbolic`, `boolean` |
+| Commitments and encoding | `oracle`, `bytes`, `encoding`, `permutation`, `proof`, `shake128`, `transcript`, `sampling` |
 
 Names above are under `zkc::`. The [manifest](zkc.toml) captures this family.
 
@@ -39,6 +39,10 @@ domain validity, not polynomial identity, a degree bound or authentication.
 requires the root, width, number of rows, position, row and path. A successful
 row check establishes no polynomial evaluation or low-degree claim. `State`
 contains prover opening data; `Root` and `Path` are distinct native values.
+For schemes with `MultiOpening`, `open_many` returns the rows at several
+positions with one pruned proof and `check_many` authenticates them; the
+verifier supplies the positions, which must be nonempty. The proof layout is in
+the [oracle contract](../../docs/spec/domains/oracles.md#openings-and-the-pruned-proof).
 
 `scalar::inverse` and vector inversion refuse zero. Vector arithmetic and
 layout operations retain native shape checks. `scalar::power` uses an unsigned
@@ -86,9 +90,24 @@ the integer. It selects no transcript framing or transport format.
 `bytes::repeat(byte, count)` creates padding and `bytes::join(Sequence<Bytes>)`
 assembles ordered fragments without repeatedly copying their growing prefix.
 `encoding::fields_be`, `fields_le` and `groups_compressed` encode collections
-using the corresponding scalar codecs, with no length prefix. Domain support
-and capacity checks follow the [native encoding contract](../../docs/spec/realization/external-constructions.md#mathematical-byte-encodings).
+using the corresponding scalar codecs, with no length prefix.
+`encoding::fields_from_be` decodes a whole big-endian vector: it returns false
+and an empty vector unless the length is a multiple of 32 and every element is
+canonical. For KoalaBear and its extensions, `field_montgomery_le` and
+`fields_montgomery_le` write the Montgomery residues that Plonky3's binary
+serializers use, and `fields_from_le`/`fields_from_montgomery_le` decode whole
+elements, rejecting any word at or above the modulus. Domain support and capacity
+checks follow the
+[native encoding contract](../../docs/spec/realization/external-constructions.md#mathematical-byte-encodings).
 These operations do not observe values or choose transcript framing.
+`bytes::keccak256` and `bytes::sha256` are the raw hash functions, with no
+domain separator or framing of their own.
+
+`permutation::poseidon2_16(states)` applies the installed width-16 Poseidon2
+permutation to each consecutive 16-element state of a KoalaBear vector, as one
+batched call. It is a raw permutation: sponge and compression modes, padding,
+capacity and domain separation belong to the calling library. Parameters and
+work charges follow the [permutation contract](../../docs/spec/domains/permutations.md).
 
 Use `concat` for a few small fixed fragments. `join` is useful when fragments
 already form a sequence or repeated prefix copying dominates; constructing a
@@ -276,6 +295,9 @@ lengths and use the selected group's associated scalar field. `curve::add` and
 `empty`, `append`, `length`, `get`, `split` and `concat` provide the matching
 collection operations; `generator`, `neg` and `nonidentity` operate on points.
 These source names select existing contracts, not new group families or providers.
+`pairing::check<F>(left, right)` and `pairing::apply<F>(a, b)` use the ordered
+source groups `F::PairingG1` and `F::PairingG2` of a field with
+`zkc::algebra::PairingField(F)`; the empty product is the target identity.
 `scalar::from_index<F>` embeds an index by reduction in `F`.
 
 `encoding::cryptonote_map` is specific to `edwards25519.prime`; its signature

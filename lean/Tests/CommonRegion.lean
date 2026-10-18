@@ -268,8 +268,6 @@ open ZkcExamples.NativePrograms
 variable {F G : Type} [Field F] [DecidableEq F]
     [AddCommGroup G] [Module F G] [DecidableEq G]
 
-set_option maxRecDepth 10000
-set_option maxHeartbeats 2000000
 
 -- Imported output filtering is tied to the same role as action interpretation.
 example : True := by

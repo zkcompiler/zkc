@@ -15,7 +15,6 @@ set_option smartUnfolding false
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
-set_option backward.isDefEq.respectTransparency false in
 theorem wrapper_equation (xs : List F) (dimension columns : Nat) (r : F)
     (lengthBound : xs.length < indexLimit) (dimensionBound : dimension < indexLimit)
     (columnsBound : columns < indexLimit) :
@@ -31,7 +30,6 @@ theorem wrapper_equation (xs : List F) (dimension columns : Nat) (r : F)
     variablesRealization_equation widthRealization_equation first_equation
     xs dimension columns r lengthBound dimensionBound columnsBound
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Universal equation of the complete retained singleton protocol's checked projection. -/
 theorem process_equation (xs : List F) (dimension columns : Nat) (r : F)
     (lengthBound : xs.length < indexLimit) (dimensionBound : dimension < indexLimit)
@@ -57,7 +55,6 @@ theorem shape_iff (xs : List F) (dimension columns : Nat) :
   · rintro ⟨positive, small, size⟩
     exact hasShape_of_length xs dimension columns positive small size
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The full source equation with every authored table validation exposed. -/
 theorem process_checked_equation (xs : List F) (dimension columns : Nat) (r : F)
     (lengthBound : xs.length < indexLimit) (dimensionBound : dimension < indexLimit)
@@ -71,7 +68,6 @@ theorem process_checked_equation (xs : List F) (dimension columns : Nat) (r : F)
   simpa only [shape_iff, restrictValues] using
     process_equation (G := G) xs dimension columns r lengthBound dimensionBound columnsBound
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Valid source execution preserves the exact flattened shape and output ABI. -/
 theorem process_shape (xs : List F) (dimension columns : Nat) (r : F)
     (shape : HasShape xs dimension columns) (positive : 0 < dimension)
@@ -84,7 +80,6 @@ theorem process_shape (xs : List F) (dimension columns : Nat) (r : F)
       (Nat.lt_trans shape.2.1 (by decide +kernel)) columnsBound, ite_eq_left shape, ite_eq_left positive]
   · exact restrict_shape xs dimension columns r shape positive
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The returned scalar table fixes the leading MSB-first Boolean coordinate. -/
 theorem process_msb (xs : List F) (n : Nat) (r : F)
     (table : Zkc.Polynomial.Multilinear.Table F (n + 1))

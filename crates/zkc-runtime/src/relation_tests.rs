@@ -409,6 +409,16 @@ const MUTATIONS: &[(&str, &[Edit], &str)] = &[
         &[(0, r#"["start","koala-bear"]"#, r#"["start","bn254.g1"]"#)],
         "bundle-field",
     ),
+    // A binary field has no residue coordinates to evaluate a Bundle in.
+    (
+        "binary public slot",
+        &[(
+            0,
+            r#"["start","koala-bear"]"#,
+            r#"["start","gf2-64.pentanomial-4-3-1"]"#,
+        )],
+        "bundle-field-presentation",
+    ),
 ];
 
 fn outcome(texts: &[String; 4]) -> String {

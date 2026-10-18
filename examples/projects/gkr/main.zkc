@@ -1,0 +1,12 @@
+module example;
+use gkr::{Gkr};
+domain Fr = field("bls12-381.fr");
+
+proof Proof = Gkr<Fr, 4, 4> {
+  prover P;
+  verifier V;
+  public { inputs, outputs, add, mul, layers, selector, width };
+  accept accepted;
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
+}
+run Interactive = Gkr<Fr, 4, 4>;

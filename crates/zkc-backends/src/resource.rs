@@ -382,10 +382,12 @@ impl Resources {
             bytes
         };
         let value = match suite {
-            Identity::Merlin3KoalaBearExt8 => {
+            Identity::Merlin3KoalaBearExt8 | Identity::HashChainKeccak256KoalaBearExt8 => {
                 Value::KoalaBearExt8Field(crate::sampling::extension(block)?)
             }
-            Identity::Merlin3Fr64Be | Identity::Spongefish080KeccakFr64Be => {
+            Identity::Merlin3Fr64Be
+            | Identity::Spongefish080KeccakFr64Be
+            | Identity::HashChainKeccak256Fr64Be => {
                 Value::Field(zkc_arkworks::scalar_from_wide_be(&block()))
             }
             Identity::Merlin3Ristretto64Le => {
@@ -408,7 +410,7 @@ impl Resources {
         origin: &[u8],
         bound: u64,
     ) -> Result<(Value, Capability)> {
-        if t.identity != Identity::Merlin3KoalaBearExt8 {
+        if !t.identity.has_index_transcript() {
             return Err(refused("transcript-suite"));
         }
         crate::sampling::index_bound(bound)?;

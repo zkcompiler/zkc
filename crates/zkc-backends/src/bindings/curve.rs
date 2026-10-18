@@ -42,21 +42,27 @@ fn check_pairing(
     selection: Selection,
 ) -> Option<BoundSignature> {
     if !matches!(selection, Selection::Default)
-        || binding.arguments != ["bn254.fr"]
         || binding.implementation != format!("arkworks/{}", binding.contract)
     {
         return None;
     }
+    // Each installed pairing field fixes its ordered source and target groups.
+    let (g1, g2, gt) = match binding.arguments.as_slice() {
+        [field] if field == "bn254.fr" => (Identity::Bn254G1, Identity::Bn254G2, Identity::Bn254Gt),
+        [field] if field == "bls12-381.fr" => (
+            Identity::Bls12381G1,
+            Identity::Bls12381G2,
+            Identity::Bls12381Gt,
+        ),
+        _ => return None,
+    };
     let make =
         |kind, identity| PhysicalType::default_for(LogicalType::new(kind, identity).ok()?).ok();
     let [left, right] = row.inputs else {
         return None;
     };
     Some(OperationSignature {
-        inputs: vec![
-            make(*left, Identity::Bn254G1)?,
-            make(*right, Identity::Bn254G2)?,
-        ],
+        inputs: vec![make(*left, g1)?, make(*right, g2)?],
         outputs: row
             .outputs
             .iter()
@@ -64,7 +70,7 @@ fn check_pairing(
                 make(
                     kind,
                     if kind == Type::Group {
-                        Identity::Bn254Gt
+                        gt
                     } else {
                         Identity::None
                     },

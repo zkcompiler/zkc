@@ -85,6 +85,9 @@ int zkc::runCompiler(int argc, char **argv,
            "[--no-finite-bulk]\n"
            "  protocol-check-proof FILE.mlir POLICY CANDIDATE.mlir "
            "[--fuse-vector-reductions] [--fuse-collect-fold] "
+           "[--no-finite-bulk]\n"
+           "  protocol-constructed-participant FILE.mlir POLICY CANDIDATE.mlir "
+           "[--fuse-vector-reductions] [--fuse-collect-fold] "
            "[--no-finite-bulk]\n\n"
            "Relation data (binary R1CS or canonical JSON):\n"
            "  relation-read | relation-inspect | relation-matrices FILE\n"
@@ -111,7 +114,8 @@ int zkc::runCompiler(int argc, char **argv,
   };
   StringRef mode(argv[1]);
   if (mode == "protocol-proof" || mode == "protocol-construct-proof" ||
-      mode == "protocol-check-proof") {
+      mode == "protocol-check-proof" ||
+      mode == "protocol-constructed-participant") {
     if (argc < 4)
       return fail(error("native-proof-options"));
     auto source = readInput(argv[2], 16 * 1024 * 1024);
@@ -147,7 +151,8 @@ int zkc::runCompiler(int argc, char **argv,
       outs() << compiled->deployment << '\n';
       return 0;
     }
-    bool check = mode == "protocol-check-proof";
+    bool exportParticipant = mode == "protocol-constructed-participant";
+    bool check = mode == "protocol-check-proof" || exportParticipant;
     const int required = check ? 5 : 4;
     MathematicalSelectionPolicy mathematicalSelection;
     std::set<std::string> seen;
@@ -184,6 +189,14 @@ int zkc::runCompiler(int argc, char **argv,
           mlir::parseSourceString<mlir::ModuleOp>(*bytes, &context);
       if (!candidate)
         return fail(error("native-proof-candidate"));
+      if (exportParticipant) {
+        auto exported = exportConstructedParticipant(
+            *original, *candidate, *source, *policy, mathematicalSelection);
+        if (!exported)
+          return fail(exported.takeError());
+        outs() << printJson(*exported) << '\n';
+        return 0;
+      }
       if (auto e = checkNativeProof(*original, *candidate, *policy,
                                     mathematicalSelection))
         return fail(std::move(e));

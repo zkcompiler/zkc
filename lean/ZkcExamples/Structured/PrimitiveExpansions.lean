@@ -1,5 +1,7 @@
 module
 
+public import Zkc.Source.DeriveRegion
+public import Zkc.Source.Structured.DerivationRules
 public import ZkcExamples.Structured.PrimitiveShapeViews
 public import ZkcExamples.Structured.PrimitiveTableViews
 public import ZkcExamples.Structured.PrimitiveHalvesViews
@@ -8,13 +10,12 @@ public import ZkcExamples.Structured.PrimitiveSequenceViews
 @[expose] public section
 
 /-! Exact body-expansion lemmas. These are proof normal forms for the
-retained typed bodies, not a new execution path or assumed helper semantics. -/
+retained typed bodies, not a new execution path or assumed helper semantics.
+Closed-site expansions are derived operation by operation with `derive_process`. -/
 namespace ZkcExamples.Structured.PrimitiveExpansions
 open Zkc.Source Zkc.Source.Structured
--- Local transparency options below elaborate dependent source-view aliases;
--- every resulting equation is still checked by the kernel.
-set_option maxRecDepth 20000
-set_option maxHeartbeats 600000
+-- The two observed-site expansions reassociate abstract mark effects with
+-- `simp`; every resulting equation is still checked by the kernel.
 set_option linter.unusedSimpArgs false
 private theorem prepend_empty {Value : Ty → Type} {types : List Ty}
     (env : Environment Value types) (values : Values Value []) :
@@ -41,7 +42,6 @@ private theorem prepend_eight {Value : Ty → Type} {types : List Ty} {type0 typ
     @Eq (Environment Value ([type0, type1, type2, type3, type4, type5, type6, type7] ++ types)) (env.prepend values) (Environment.push (Environment.push (Environment.push (Environment.push (Environment.push (Environment.push (Environment.push (Environment.push env (values.get (.there (.there (.there (.there (.there (.there (.there .here))))))))) (values.get (.there (.there (.there (.there (.there (.there .here)))))))) (values.get (.there (.there (.there (.there (.there .here))))))) (values.get (.there (.there (.there (.there .here)))))) (values.get (.there (.there (.there .here))))) (values.get (.there (.there .here)))) (values.get (.there .here))) (values.get .here)) := by
   cases values with | cons value0 values => cases values with | cons value1 values => cases values with | cons value2 values => cases values with | cons value3 values => cases values with | cons value4 values => cases values with | cons value5 values => cases values with | cons value6 values => cases values with | cons value7 values => cases values; rfl
 
-set_option backward.isDefEq.respectTransparency false in
 theorem shape_body (table : Meanings F G) (input0 : List F) (input1 : Nat) (input2 : Nat) :
     PrimitiveShapeViews.shapeBody.denote (meaning F G table)
       ((.cons input0 (.cons input1 (.cons input2 .nil))) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index]).get =
@@ -70,13 +70,8 @@ theorem shape_body (table : Meanings F G) (input0 : List F) (input1 : Nat) (inpu
     else (.done (.cons false .nil) : Closed (Values (assignment F G) [.boolean])).bind fun result16 =>
     .done (.cons (result16.get .here) .nil) : Closed (Values (assignment F G) [.boolean])).bind fun result17 =>
     .done (.cons (result17.get .here) .nil) := by
-  simp only [PrimitiveShapeViews.shapeBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
-    Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_empty, prepend_one, prepend_two, prepend_three, prepend_eight,
-    Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Proc.bind, PIR.Proc.bind_assoc, Evaluation.invokeCallback, ite_apply]
-  all_goals rfl
+  derive_process using (exact branch_law _ _ _ _ _ _)
 
-set_option backward.isDefEq.respectTransparency false in
 theorem table_body (table : Meanings F G) (input0 : List F) (input1 : Nat) (input2 : Nat) :
     PrimitiveTableViews.tableBody.denote (meaning F G table)
       ((.cons input0 (.cons input1 (.cons input2 .nil))) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index]).get =
@@ -85,13 +80,8 @@ theorem table_body (table : Meanings F G) (input0 : List F) (input1 : Nat) (inpu
     .done .nil
     else .halt .reject : Closed (Values (assignment F G) [])).bind fun _ =>
     .done (.cons input0 (.cons input1 (.cons input2 .nil))) := by
-  simp only [PrimitiveTableViews.tableBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
-    Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_empty, prepend_one, prepend_two, prepend_three, prepend_eight,
-    Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Proc.bind, PIR.Proc.bind_assoc, Evaluation.invokeCallback, ite_apply]
-  all_goals rfl
+  derive_process using (exact branch_law _ _ _ _ _ _)
 
-set_option backward.isDefEq.respectTransparency false in
 theorem halves_body (table : Meanings F G) (input0 : List F) (input1 : Nat) (input2 : Nat) :
     PrimitiveHalvesViews.halvesBody.denote (meaning F G table)
       ((.cons input0 (.cons input1 (.cons input2 .nil))) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index]).get =
@@ -102,13 +92,8 @@ theorem halves_body (table : Meanings F G) (input0 : List F) (input1 : Nat) (inp
     else .halt .reject : Closed (Values (assignment F G) [])).bind fun _ =>
     (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.vectorSplit "bls12-381.fr") (.cons input0 .nil)) : Closed (Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr"])).bind fun result3 =>
     .done (.cons (result3.get .here) (.cons (result3.get (.there .here)) .nil)) := by
-  simp only [PrimitiveHalvesViews.halvesBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
-    Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_empty, prepend_one, prepend_two, prepend_three, prepend_eight,
-    Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Proc.bind, PIR.Proc.bind_assoc, Evaluation.invokeCallback, ite_apply]
-  all_goals rfl
+  derive_process using (exact branch_law _ _ _ _ _ _)
 
-set_option backward.isDefEq.respectTransparency false in
 theorem appendSummary_body (table : Meanings F G) (input0 : List F) (input1 : F) (input2 : Nat) :
     PrimitiveSequenceViews.appendSummaryBody.denote (meaning F G table)
       ((.cons input0 (.cons input1 (.cons input2 .nil))) : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr", .index]).get =
@@ -125,60 +110,36 @@ theorem appendSummary_body (table : Meanings F G) (input0 : List F) (input1 : F)
     (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.fieldEqual "bls12-381.fr") (.cons (result8.get .here) (.cons input1 .nil))) : Closed (Values (assignment F G) [.boolean])).bind fun result10 =>
     (primitiveOutcome (Primitive.evaluate (F := F) (G := G) (.vectorEmpty "bls12-381.fr") .nil) : Closed (Values (assignment F G) [.vector "bls12-381.fr"])).bind fun result11 =>
     .done (.cons (result3.get .here) (.cons (result4.get .here) (.cons (result5.get .here) (.cons (result7.get .here) (.cons (result8.get .here) (.cons (result9.get .here) (.cons (result10.get .here) (.cons (result11.get .here) .nil)))))))) := by
-  simp only [PrimitiveSequenceViews.appendSummaryBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
-    Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_empty, prepend_one, prepend_two, prepend_three, prepend_eight,
-    Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Proc.bind, PIR.Proc.bind_assoc, Evaluation.invokeCallback, ite_apply]
-  all_goals rfl
+  derive_process using (exact branch_law _ _ _ _ _ _)
 
-set_option backward.isDefEq.respectTransparency false in
 theorem shape_entry (table : Meanings F G) (input0 : List F) (input1 : Nat) (input2 : Nat) :
     PrimitiveShapeViews.entryBody.denote (meaning F G table)
       ((.cons input0 (.cons input1 (.cons input2 .nil))) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index]).get =
     (invoke table ⟨"zkl_84866a528a9e472fae644df45c457b704b5e44f2a5edb0a5aa068a3ce5519655", .local, [.vector "bls12-381.fr", .index, .index], [.boolean]⟩ (.cons input0 (.cons input1 (.cons input2 .nil))) : Closed (Values (assignment F G) [.boolean])).bind fun result0 =>
     .done (.cons (result0.get .here) .nil) := by
-  simp only [PrimitiveShapeViews.entryBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
-    Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_empty, prepend_one, prepend_two, prepend_three, prepend_eight,
-    Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Proc.bind, PIR.Proc.bind_assoc, Evaluation.invokeCallback, ite_apply]
-  all_goals rfl
+  derive_process using (exact branch_law _ _ _ _ _ _)
 
-set_option backward.isDefEq.respectTransparency false in
 theorem table_entry (table : Meanings F G) (input0 : List F) (input1 : Nat) (input2 : Nat) :
     PrimitiveTableViews.entryBody.denote (meaning F G table)
       ((.cons input0 (.cons input1 (.cons input2 .nil))) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index]).get =
     (invoke table ⟨"zkl_8ef40b11d6cf00ead63fb713e26ae93987287c607cdcdc4860180f6744dc588a", .local, [.vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr", .index, .index]⟩ (.cons input0 (.cons input1 (.cons input2 .nil))) : Closed (Values (assignment F G) [.vector "bls12-381.fr", .index, .index])).bind fun result0 =>
     .done (.cons (result0.get .here) (.cons (result0.get (.there .here)) (.cons (result0.get (.there (.there .here))) .nil))) := by
-  simp only [PrimitiveTableViews.entryBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
-    Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_empty, prepend_one, prepend_two, prepend_three, prepend_eight,
-    Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Proc.bind, PIR.Proc.bind_assoc, Evaluation.invokeCallback, ite_apply]
-  all_goals rfl
+  derive_process using (exact branch_law _ _ _ _ _ _)
 
-set_option backward.isDefEq.respectTransparency false in
 theorem halves_entry (table : Meanings F G) (input0 : List F) (input1 : Nat) (input2 : Nat) :
     PrimitiveHalvesViews.entryBody.denote (meaning F G table)
       ((.cons input0 (.cons input1 (.cons input2 .nil))) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index]).get =
     (invoke table ⟨"zkl_8ef40b11d6cf00ead63fb713e26ae93987287c607cdcdc4860180f6744dc588a", .local, [.vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr", .index, .index]⟩ (.cons input0 (.cons input1 (.cons input2 .nil))) : Closed (Values (assignment F G) [.vector "bls12-381.fr", .index, .index])).bind fun result0 =>
     (invoke table ⟨"zkl_46021cb00c22207246296c081a0fe3ef9fa4e1d20f4a866fd01bfa4b37888087", .local, [.vector "bls12-381.fr", .index, .index], [.vector "bls12-381.fr", .vector "bls12-381.fr"]⟩ (.cons (result0.get .here) (.cons (result0.get (.there .here)) (.cons (result0.get (.there (.there .here))) .nil))) : Closed (Values (assignment F G) [.vector "bls12-381.fr", .vector "bls12-381.fr"])).bind fun result1 =>
     .done (.cons (result1.get .here) (.cons (result1.get (.there .here)) .nil)) := by
-  simp only [PrimitiveHalvesViews.entryBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
-    Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_empty, prepend_one, prepend_two, prepend_three, prepend_eight,
-    Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Proc.bind, PIR.Proc.bind_assoc, Evaluation.invokeCallback, ite_apply]
-  all_goals rfl
+  derive_process using (exact branch_law _ _ _ _ _ _)
 
-set_option backward.isDefEq.respectTransparency false in
 theorem sequence_entry (table : Meanings F G) (input0 : List F) (input1 : F) (input2 : Nat) :
     PrimitiveSequenceViews.entryBody.denote (meaning F G table)
       ((.cons input0 (.cons input1 (.cons input2 .nil))) : Values (assignment F G) [.vector "bls12-381.fr", .field "bls12-381.fr", .index]).get =
     (invoke table ⟨"s18h7072696d69746976655f6578616d706c657314h617070656e645f73756d6d617279", .local, [.vector "bls12-381.fr", .field "bls12-381.fr", .index], [.vector "bls12-381.fr", .index, .index, .index, .field "bls12-381.fr", .boolean, .boolean, .vector "bls12-381.fr"]⟩ (.cons input0 (.cons input1 (.cons input2 .nil))) : Closed (Values (assignment F G) [.vector "bls12-381.fr", .index, .index, .index, .field "bls12-381.fr", .boolean, .boolean, .vector "bls12-381.fr"])).bind fun result0 =>
     .done (.cons (result0.get .here) (.cons (result0.get (.there .here)) (.cons (result0.get (.there (.there .here))) (.cons (result0.get (.there (.there (.there .here)))) (.cons (result0.get (.there (.there (.there (.there .here))))) (.cons (result0.get (.there (.there (.there (.there (.there .here)))))) (.cons (result0.get (.there (.there (.there (.there (.there (.there .here))))))) (.cons (result0.get (.there (.there (.there (.there (.there (.there (.there .here)))))))) .nil)))))))) := by
-  simp only [PrimitiveSequenceViews.entryBody, Region.denote, meaning, Evaluation.meaning, Evaluation.operation,
-    Operands.eval, Regions.denote, Values.get_cons, Values.get, prepend_empty, prepend_one, prepend_two, prepend_three, prepend_eight,
-    Environment.prepend, Environment.push, SiteObservations.closed, SiteObservations.silent,
-    PIR.Proc.bind, PIR.Proc.bind_assoc, Evaluation.invokeCallback, ite_apply]
-  all_goals rfl
+  derive_process using (exact branch_law _ _ _ _ _ _)
 
 set_option backward.isDefEq.respectTransparency false in
 theorem appendSummary_body_observed {I : PIR.Signature} (sites : SiteObservations I) (table : Evaluation.Meanings F G I) (input0 : List F) (input1 : F) (input2 : Nat) :

@@ -17,50 +17,41 @@ def sourceCheck (xs point : List F) (claim : F) : Closed (Values (assignment F F
   invoke (SumcheckSourceContracts.helperMeanings (F := F) (G := F))
     checkHelper (checkInputs xs point claim)
 
-set_option backward.isDefEq.respectTransparency false in
 theorem source_check_equation (xs point : List F) (claim : F)
     (vectorBound : xs.length < indexLimit) (pointBound : point.length < indexLimit) :
     sourceCheck xs point claim = .done (boolResult (decide (HasShape xs point.length 1 ∧
       (restrictPrefixValues xs point).sum = claim))) :=
   SumcheckSourceContracts.check_equation xs point claim vectorBound pointBound
 
-set_option backward.isDefEq.respectTransparency false in
 theorem integer_valid : sourceCheck ([1,2,3,4] : List ℤ) [2,3] 8 = .done (boolResult true) := by
   rw [source_check_equation _ _ _ (by decide +kernel) (by decide +kernel)]
   rfl
 
-set_option backward.isDefEq.respectTransparency false in
 theorem integer_wrong_claim : sourceCheck ([1,2,3,4] : List ℤ) [2,3] 9 = .done (boolResult false) := by
   rw [source_check_equation _ _ _ (by decide +kernel) (by decide +kernel)]
   rfl
 
-set_option backward.isDefEq.respectTransparency false in
 theorem integer_point_order : sourceCheck ([1,2,3,4] : List ℤ) [3,2] 8 = .done (boolResult false) := by
   rw [source_check_equation _ _ _ (by decide +kernel) (by decide +kernel)]
   rfl
 
-set_option backward.isDefEq.respectTransparency false in
 theorem malformed_returns_false : sourceCheck ([1,2,3] : List ℤ) [2] 0 = .done (boolResult false) := by
   rw [source_check_equation _ _ _ (by decide +kernel) (by decide +kernel)]
   rfl
 
-set_option backward.isDefEq.respectTransparency false in
 theorem zero_dimension_accept : sourceCheck ([9] : List ℤ) [] 9 = .done (boolResult true) := by
   rw [source_check_equation _ _ _ (by decide +kernel) (by decide +kernel)]
   rfl
 
-set_option backward.isDefEq.respectTransparency false in
 theorem zero_dimension_reject_claim : sourceCheck ([9] : List ℤ) [] 8 = .done (boolResult false) := by
   rw [source_check_equation _ _ _ (by decide +kernel) (by decide +kernel)]
   rfl
 
-set_option backward.isDefEq.respectTransparency false in
 /-- ZMod 4 has zero divisors; the helper formula only needs CommRing. -/
 theorem nonfield_accept : sourceCheck ([1,2,3,0] : List (ZMod 4)) [2,3] 0 = .done (boolResult true) := by
   rw [source_check_equation _ _ _ (by decide +kernel) (by decide +kernel)]
   rfl
 
-set_option backward.isDefEq.respectTransparency false in
 theorem nonfield_wrong_claim : sourceCheck ([1,2,3,0] : List (ZMod 4)) [2,3] 1 = .done (boolResult false) := by
   rw [source_check_equation _ _ _ (by decide +kernel) (by decide +kernel)]
   rfl
@@ -71,7 +62,6 @@ def nonBooleanCoordinate : ZMod 2 × ZMod 2 := (0, 1)
 theorem coordinate_not_boolean : nonBooleanCoordinate ≠ 0 ∧ nonBooleanCoordinate ≠ 1 := by
   decide +kernel
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The public checker accepts at a coordinate distinct from both Boolean values. -/
 theorem characteristic_two_nonboolean_accept :
     sourceCheck ([0,1,1,0] : List (ZMod 2 × ZMod 2))
@@ -79,7 +69,6 @@ theorem characteristic_two_nonboolean_accept :
   rw [source_check_equation _ _ _ (by decide +kernel) (by decide +kernel)]
   rfl
 
-set_option backward.isDefEq.respectTransparency false in
 theorem characteristic_two_wrong_claim :
     sourceCheck ([0,1,1,0] : List (ZMod 2 × ZMod 2))
       [nonBooleanCoordinate, nonBooleanCoordinate] nonBooleanCoordinate =
@@ -104,7 +93,6 @@ theorem permuted_capture_lookup :
   rw [SumcheckSourceContracts.checkTable_equation _ _ _ (by decide +kernel) (by decide +kernel)]
   rfl
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Each original source independently supplies the same ordered message, even at unused width zero. -/
 theorem both_original_sums :
     invoke (SumcheckSourceContracts.helperMeanings (F := ℤ) (G := ℤ))
@@ -115,7 +103,6 @@ theorem both_original_sums :
   · rw [SumcheckSourceContracts.sums_all]; rfl
   · rw [SumcheckReduceContracts.sums_all]; rfl
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The actual source sums cancel pairs of ones; the same integer input sums to two. -/
 theorem characteristic_two_sums_cancel :
     invoke (SumcheckSourceContracts.helperMeanings (F := ZMod 2) (G := ZMod 2))
@@ -124,7 +111,6 @@ theorem characteristic_two_sums_cancel :
       sumsHelper (inputs [1,1,1,1] 2 7) = .done (messageResult 2 2) := by
   constructor <;> rw [SumcheckSourceContracts.sums_all] <;> rfl
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The actual malformed source checker is also the existing mathematical check. -/
 theorem original_malformed_mathematical_check :
     invoke (SumcheckSourceContracts.helperMeanings (F := ℤ) (G := ℤ))
@@ -134,7 +120,6 @@ theorem original_malformed_mathematical_check :
           (Zkc.Polynomial.Quadratic.point [2].length (coordinates [2].length [2]) Fin.elim0) 0)) :=
   SumcheckSourceContracts.check_mathematical _ _ _ (by decide +kernel) (by decide +kernel)
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The capture permutation cannot satisfy the actual source's complete-body association. -/
 theorem permuted_capture_not_associated :
     ¬ BodyIn SumcheckSourceViews.unit.definitions checkHelper checkPermutedBody := by
@@ -192,7 +177,6 @@ theorem ignores_claim_lookup :
   rfl
 
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The same-name malformed-input mutation cannot be associated with the original source. -/
 theorem accepts_malformed_not_associated :
     ¬ BodyIn SumcheckSourceViews.unit.definitions checkHelper checkAcceptMalformedBody := by
@@ -206,7 +190,6 @@ theorem accepts_malformed_not_associated :
   have impossible := malformed_returns_false.symm.trans (body.trans changed)
   cases impossible
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Ignoring the claim contradicts the actual source callback's result. -/
 theorem ignores_claim_not_associated :
     ¬ BodyIn SumcheckSourceViews.unit.definitions checkTableHelper checkTableIgnoreClaimBody := by

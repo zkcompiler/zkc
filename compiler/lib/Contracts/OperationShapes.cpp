@@ -36,6 +36,33 @@ StringRef fieldModulus(StringRef identity) {
                                            : StringRef{};
 }
 
+unsigned fieldBitPatternWidth(StringRef identity) {
+  // Closed presentations; see docs/spec/domains/values.md. The catalogue must
+  // agree that the row is a field of characteristic two without PrimeField.
+  static const struct {
+    StringRef field;
+    unsigned width;
+  } binaryFields[] = {{"gf2-64.pentanomial-4-3-1", 64},
+                      {"gf2-64.pentanomial-4-3-1.ext3-trinomial1", 192}};
+  const auto &catalog = installedDomains();
+  for (const auto &entry : binaryFields)
+    if (entry.field == identity && fieldModulus(identity) == "2" &&
+        !catalog.hasFact("PrimeField", {identity.str()}))
+      return entry.width;
+  return 0;
+}
+
+bool isBitPatternLiteral(StringRef text, unsigned width) {
+  if (!text.consume_front("0x") || text.empty() || width % 4 ||
+      text.size() > width / 4 || text.front() == '0' ||
+      !all_of(text, [](char c) {
+        return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+      }))
+    return false;
+  // Zero and one keep their natural spellings.
+  return text.size() > 1 || text.front() >= '2';
+}
+
 namespace {
 Error checkParametersImpl(StringRef key, llvm::ArrayRef<std::string> parameters,
                           StringRef field, bool genericField) {
@@ -70,6 +97,14 @@ Error checkParametersImpl(StringRef key, llvm::ArrayRef<std::string> parameters,
                     ? "interactive-constant"
                 : key == "curve.at" ? "interactive-index"
                                     : "interactive-kernel-parameters";
+    // A binary field's constants other than zero and one are bit patterns.
+    if ((validator == ParameterValidator::FieldLiteral ||
+         validator == ParameterValidator::FieldLiterals) &&
+        !genericField && n.starts_with("0x")) {
+      if (!isBitPatternLiteral(n, fieldBitPatternWidth(field)))
+        return error(code);
+      continue;
+    }
     if (n.empty() || !all_of(n, [](char c) { return c >= '0' && c <= '9'; }))
       return error("expected-natural");
     if (n.size() > 1 && n.front() == '0')

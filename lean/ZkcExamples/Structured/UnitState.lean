@@ -3,6 +3,7 @@ module
 public import ZkcExamples.Structured.UnitStateData
 public import Zkc.Source.Structured.Linking
 public import Zkc.Source.Structured.ClosedProfile
+public import Zkc.Source.Structured.UnitViews
 
 @[expose] public section
 
@@ -13,64 +14,58 @@ the resulting equality is of complete imported logical processes. -/
 namespace ZkcExamples.Structured.UnitState
 open Zkc.Source Zkc.Source.Structured
 
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
+abbrev scalar : Ty := .field "bls12-381.fr"
+abbrev vector : Ty := .vector "bls12-381.fr"
 
-/-- The program is computed by admission of the exact exported constructor data. -/
-def program : ClosedProgram := (checkClosed UnitStateData.snapshot).toOption.get (by decide +kernel)
-
-theorem admitted : checkClosed UnitStateData.snapshot = .ok program := by
-  have accepted : (checkClosed UnitStateData.snapshot).toOption.isSome = true := by decide +kernel
-  cases checked : checkClosed UnitStateData.snapshot with
-  | error code => simp [checked, Except.toOption] at accepted
-  | ok value => simp [program, checked, Except.toOption]
-
-def imported : ClosedImported UnitStateData.snapshot := ⟨program, admitted⟩
-
-private abbrev scalar : Ty := .field "bls12-381.fr"
-private abbrev vector : Ty := .vector "bls12-381.fr"
-
-private abbrev foldSpec : FoldSpec :=
+abbrev foldSpec : FoldSpec :=
   ⟨⟨"items", [vector], "bls12-381.fr", .here, false⟩,
     [], [.boolean], "step", "predicate", .local⟩
 
-private def stepBody : Region dialect [scalar, vector, .boolean] [] :=
+def stepBody : Region dialect [scalar, vector, .boolean] [] :=
   .letOp (.mark "body_stop") .nil .nil (.stop .abort)
 
-private def predicateBody : Region dialect [scalar, vector, .boolean] [.boolean] :=
+def predicateBody : Region dialect [scalar, vector, .boolean] [.boolean] :=
   .ret (.cons (.there (.there .here)) .nil)
 
-private abbrev foldHelper : Helper := ⟨"fold", .local, [vector, .boolean], []⟩
-private abbrev workHelper : Helper := ⟨"work", .local, [vector, .boolean], [.boolean]⟩
+abbrev foldHelper : Helper := ⟨"fold", .local, [vector, .boolean], []⟩
+abbrev workHelper : Helper := ⟨"work", .local, [vector, .boolean], [.boolean]⟩
 
-private def foldBody : Region dialect [vector, .boolean] [] :=
+def foldBody : Region dialect [vector, .boolean] [] :=
   .letOp (.fold foldSpec) (.cons .here (.cons (.there .here) .nil)) .nil (.ret .nil)
 
-private def workBody : Region dialect [vector, .boolean] [.boolean] :=
+def workBody : Region dialect [vector, .boolean] [.boolean] :=
   .letOp (.mark "fold") .nil .nil <|
   .letOp (.invoke foldHelper) (.cons .here (.cons (.there .here) .nil))
     .nil (.ret (.cons (.there .here) .nil))
 
-private def mainBody : Region dialect [vector, .boolean] [.boolean] :=
+def mainBody : Region dialect [vector, .boolean] [.boolean] :=
   .letOp (.mark "work") .nil .nil <|
   .letOp (.invoke workHelper) (.cons .here (.cons (.there .here) .nil))
     .nil (.ret (.cons .here .nil))
 
-private def stepDefinition : CheckedDefinition :=
-  (program.payload.definitions.find? fun definition => definition.name == "step").get
-    (by decide +kernel)
+def protocolSignature : ProtocolSignature where
+  name := "main"
+  roles := ["P"]
+  inputs := [(.vector "bls12-381.fr"), .boolean]
+  outputs := [.boolean]
+  inputScopes := [[0], [0]]
+  outputScopes := [[0]]
 
-private def predicateDefinition : CheckedDefinition :=
-  (program.payload.definitions.find? fun definition => definition.name == "predicate").get
-    (by decide +kernel)
+set_option smartUnfolding true in
+def protocolBody : Region protocolDialect protocolSignature.inputs protocolSignature.outputs :=
+  .letOp (.mark "work") .nil .nil <|
+  .letOp (.localCall {name := "work", kind := .local, inputs := [.vector "bls12-381.fr", .boolean], outputs := [.boolean]} rfl 0 "work") (.cons .here (.cons (.there .here) .nil)) .nil <|
+  .ret (.cons .here .nil)
 
-private def foldDefinition : CheckedDefinition :=
-  (program.payload.definitions.find? fun definition => definition.name == "fold").get
-    (by decide +kernel)
+-- The program is the literal checked unit admitted from the exact exported
+-- constructor data, with its closed single-role projection.
+structured_closed_views UnitStateData.snapshot
+  helpers [step := (foldSpec.stepHelper, stepBody), predicate := (foldSpec.predicateHelper, predicateBody),
+    fold, work]
+  protocols [protocol]
+  root mainBody
 
-private def workDefinition : CheckedDefinition :=
-  (program.payload.definitions.find? fun definition => definition.name == "work").get
-    (by decide +kernel)
+theorem admitted : checkClosed UnitStateData.snapshot = .ok program := kernel_admission
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
@@ -93,7 +88,7 @@ private theorem invoke_step (xs : List F) (enabled : Bool) (item : F) :
     invoke (table F G) foldSpec.stepHelper (.cons item (.cons xs (.cons enabled .nil))) =
       .halt .abort :=
   Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-    program.payload stepDefinition (List.get_find?_mem _)
+    program.payload stepDefinition step_member
     stepBody (by rfl) (.cons item (.cons xs (.cons enabled .nil)))
 
 set_option smartUnfolding false in
@@ -101,7 +96,7 @@ private theorem invoke_predicate (xs : List F) (enabled : Bool) (item : F) :
     invoke (table F G) foldSpec.predicateHelper (.cons item (.cons xs (.cons enabled .nil))) =
       .done (outputs enabled) :=
   Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-    program.payload predicateDefinition (List.get_find?_mem _)
+    program.payload predicateDefinition predicate_member
     predicateBody (by rfl) (.cons item (.cons xs (.cons enabled .nil)))
 
 set_option smartUnfolding false in
@@ -120,7 +115,7 @@ private theorem invoke_fold (xs : List F) (enabled : Bool) :
       rfl
     · exact PIR.Proc.bind_done _
   exact (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-    program.payload foldDefinition (List.get_find?_mem _)
+    program.payload foldDefinition fold_member
     foldBody (by rfl) (inputs xs enabled)).trans bodyLaw
 
 set_option smartUnfolding false in
@@ -141,7 +136,7 @@ private theorem invoke_work (xs : List F) (enabled : Bool) :
     cases result
     rfl
   exact (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-    program.payload workDefinition (List.get_find?_mem _)
+    program.payload workDefinition work_member
     workBody (by rfl) (inputs xs enabled)).trans (bodyLaw.trans
       (congrArg (fun action : Closed (Values (assignment F G) []) =>
         action.bind fun _ => .done (outputs enabled)) (invoke_fold xs enabled)))
@@ -266,9 +261,6 @@ theorem process_pair (x y : F) (enabled : Bool) :
     process (G := G) [x, y] enabled = if enabled then .halt .abort else .done (outputs enabled) := by
   simpa [reference] using
     process_eq_reference [x, y] enabled (by change 2 < indexLimit; decide +kernel)
-
-theorem exact_subject : imported.program.snapshot = UnitStateData.snapshot :=
-  imported.exactSubject
 
 set_option smartUnfolding false in
 theorem imported_eq_reference (xs : List F) (enabled : Bool)

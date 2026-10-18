@@ -231,11 +231,15 @@ fn attributes(
         AttributeRule::Bn254Decimals
         | AttributeRule::FieldDecimals
         | AttributeRule::RistrettoDecimals
-        | AttributeRule::KoalaBearDecimals => {
+        | AttributeRule::KoalaBearDecimals
+        | AttributeRule::Binary64Literals
+        | AttributeRule::Binary64Ext3Literals => {
             let scalar = match rule {
                 AttributeRule::Bn254Decimals => AttributeRule::Bn254Decimal,
                 AttributeRule::RistrettoDecimals => AttributeRule::RistrettoDecimal,
                 AttributeRule::KoalaBearDecimals => AttributeRule::KoalaBearDecimal,
+                AttributeRule::Binary64Literals => AttributeRule::Binary64Literal,
+                AttributeRule::Binary64Ext3Literals => AttributeRule::Binary64Ext3Literal,
                 _ => AttributeRule::FieldDecimal,
             };
             for attr in attrs {
@@ -273,6 +277,26 @@ fn attributes(
             Ok(())
         }
 
+        // A binary field's constant is a natural literal below the characteristic
+        // or a canonical bit-pattern literal: docs/spec/domains/values.md.
+        AttributeRule::Binary64Literal | AttributeRule::Binary64Ext3Literal if attrs.len() == 1 => {
+            let field = if rule == AttributeRule::Binary64Literal {
+                super::Identity::Binary64
+            } else {
+                super::Identity::Binary64Ext3
+            };
+            if !attrs[0].starts_with("0x") {
+                natural_syntax(&attrs[0])?;
+            }
+            if field.canonical_constant_literal(&attrs[0]) {
+                Ok(())
+            } else {
+                Err(err(
+                    ErrorCode::Attributes,
+                    "interactive-constant: out-of-field constant",
+                ))
+            }
+        }
         AttributeRule::Bn254Decimal
         | AttributeRule::FieldDecimal
         | AttributeRule::RistrettoDecimal

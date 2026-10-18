@@ -29,21 +29,18 @@ variable {definitions : List CheckedDefinition}
     (linked : DeclarationsLinked [] definitions) (bodies : Bodies definitions)
 include linked bodies
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Actual membership plus raw-body equality discharges the comparison premise. -/
 theorem less_law : LessLaw (closedMeanings (F := F) (G := G) definitions) := by
   intro a b aBound bBound
   exact (bodies.less.invoke linked (.cons a (.cons b .nil))).trans
       (less_body _ a b aBound bBound)
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The full table supplies the loop equation, including every checked step. -/
 theorem rows_law : RowsLaw (closedMeanings (F := F) (G := G) definitions) := by
   intro dimension bound
   exact (bodies.rows.invoke linked (indexResult dimension)).trans
       (rows_body _ (less_law linked bodies) dimension bound)
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The actual retained has_shape helper has this universal conditional equation. -/
 theorem shape_equation (xs : List F) (dimension columns : Nat)
     (lengthBound : xs.length < indexLimit) (dimensionBound : dimension < indexLimit)
@@ -53,7 +50,6 @@ theorem shape_equation (xs : List F) (dimension columns : Nat)
   (bodies.shape.invoke linked (inputs xs dimension columns)).trans
       (shape_body _ (less_law linked bodies) (rows_law linked bodies) xs dimension columns lengthBound dimensionBound columnsBound)
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The checked constructor preserves all three original outputs in order. -/
 theorem table_equation (xs : List F) (dimension columns : Nat)
     (lengthBound : xs.length < indexLimit) (dimensionBound : dimension < indexLimit)
@@ -67,7 +63,6 @@ theorem table_equation (xs : List F) (dimension columns : Nat)
   simp only [decide_eq_true_eq] at equation
   exact actual.trans equation
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The source helper itself checks dimension and split shape, not columns. -/
 theorem halves_equation (xs : List F) (dimension columns : Nat)
     (dimensionBound : dimension < indexLimit) :
@@ -80,7 +75,6 @@ theorem halves_equation (xs : List F) (dimension columns : Nat)
   (bodies.halves.invoke linked (inputs xs dimension columns)).trans
       (halves_body _ (less_law linked bodies) xs dimension columns dimensionBound)
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Arithmetic is established from the retained Math body, not its symbol name. -/
 theorem interpolate_equation (low high r : F) :
     invoke (closedMeanings (F := F) (G := G) definitions) interpolateHelper
@@ -90,7 +84,6 @@ theorem interpolate_equation (low high r : F) :
   rw [MapSourceExpansions.first_interpolate]
   rfl
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Complete actual table discharges the generic map helper premise. -/
 theorem map_law : MapLaw (closedMeanings (F := F) (G := G) definitions) := by
   intro low high r sameLength small
@@ -104,7 +97,6 @@ theorem map_law : MapLaw (closedMeanings (F := F) (G := G) definitions) := by
       (.done (.cons (result.get .here) .nil) : Closed (Values (assignment F G) [vector])))
     mapped).trans (by rfl)
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Checked body lookup is repeated for this complete Payload. -/
 theorem first_equation (xs : List F) (dimension columns : Nat) (r : F)
     (shape : HasShape xs dimension columns) (lengthBound : xs.length < indexLimit) :
@@ -135,7 +127,6 @@ structure Laws (table : Meanings F G) : Prop where
         .done (inputs (Zkc.Polynomial.Multilinear.restrictValues xs r) (dimension - 1) columns)
       else .halt .reject
 
-set_option backward.isDefEq.respectTransparency false in
 theorem less_all : LessAllLaw (closedMeanings (F := F) (G := G) definitions) := by
   intro a b
   exact (bodies.less.invoke linked (.cons a (.cons b .nil))).trans

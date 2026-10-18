@@ -22,6 +22,10 @@ def CommitmentsLengthOp : BoundOp<OracleDialect, "exec.commitments_length", [OpC
 
 def OracleOpenOp : BoundOp<OracleDialect, "exec.open", [OpOracleOpen]>;
 
+def OracleOpenManyOp : BoundOp<OracleDialect, "exec.open_many", [OpOracleOpenMany]>;
+
+def OracleCheckManyOp : BoundOp<OracleDialect, "exec.check_many", [OpOracleCheckMany]>;
+
 def OpeningStatesAppendOp : BoundOp<OracleDialect, "exec.opening_states_append", [OpOpeningStatesAppend]>;
 
 def OpeningStatesAtOp : BoundOp<OracleDialect, "exec.opening_states_at", [OpOpeningStatesAt]>;

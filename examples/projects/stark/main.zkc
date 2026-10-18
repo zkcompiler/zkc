@@ -1,0 +1,45 @@
+module example;
+use stark::koala_bear::{Base, Extension};
+use stark::koala_bear::quartic::{Poseidon2};
+use stark::argument::{Statement, TableArgument};
+use zkc::vector::{Vector};
+use zkc::vector as vec;
+
+domain Clean = bundle(asset clean);
+domain Plonky3 = bundle(asset plonky3);
+
+fn statement(initial_x: Base, initial_y: Base, final_x: Base, final_y: Base) -> Statement<Base> {
+  let public_data = vec::append(vec::append(vec::append(vec::fill(initial_x, 1),
+    initial_y), final_x), final_y);
+  return Statement<Base> { configuration: vec::empty<Base>(),
+    public_columns: vec::empty<Base>(), public_data };
+}
+
+// Eight rows, so LogFinal + Rounds = 3. The evaluation coset has 32 points.
+protocol Fibonacci<B: Bundle> roles(P,V)
+    (trace: Vector<Base> @P, initial_x: Base @(P,V), initial_y: Base @(P,V),
+     final_x: Base @(P,V), final_y: Base @(P,V), coins: Random<Extension> @V)
+    -> (accepted: bool @V)
+    where B::Tables <= 1, B::Channels <= 0 {
+  let statementP @P = statement(initial_x, initial_y, final_x, final_y);
+  let statementV @V = statement(initial_x, initial_y, final_x, final_y);
+  let accepted = TableArgument<Poseidon2, 0, B, LogFinal = 0, Rounds = 3, LogBlowup = 2,
+    Queries = 8>(trace, statementP, statementV, coins);
+  return accepted;
+}
+
+proof CleanProof = Fibonacci<Clean> {
+  prover P;
+  verifier V;
+  public { initial_x, initial_y, final_x, final_y };
+  accept accepted;
+  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0", coins);
+}
+
+proof Plonky3Proof = Fibonacci<Plonky3> {
+  prover P;
+  verifier V;
+  public { initial_x, initial_y, final_x, final_y };
+  accept accepted;
+  construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0", coins);
+}

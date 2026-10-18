@@ -1,7 +1,5 @@
 import ZkcSecurity.Examples.StructuredSchnorrSigma
 
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 set_option smartUnfolding false
 
 namespace TestsSecurity.StructuredSchnorrSigma

@@ -132,6 +132,20 @@ int main() {
           "ring-literal");
   refuses(Expression::create({}, {N::literal("missing-field", "0")}, {0}),
           "ring-field");
+  // Formulas over binary fields form like any field's; their literals are
+  // natural, so a bit-pattern constant must be a bound input.
+  for (StringRef binary : {"gf2-64.pentanomial-4-3-1",
+                           "gf2-64.pentanomial-4-3-1.ext3-trinomial1"}) {
+    require(
+        bool(Expression::create(
+            {{binary.str()}},
+            {N::slot(0), N::literal(binary.str(), "1"), N::add(0, 1)}, {2})),
+        "binary formula");
+    refuses(Expression::create({}, {N::literal(binary.str(), "2")}, {0}),
+            "ring-literal");
+    refuses(Expression::create({}, {N::literal(binary.str(), "0x1b")}, {0}),
+            "ring-literal");
+  }
   refuses(Expression::create({{base}}, {N::slot(1)}, {0}), "ring-input");
   refuses(Expression::create({{base}}, {N::slot(0), N::mul(0, 2)}, {1}),
           "ring-edge");

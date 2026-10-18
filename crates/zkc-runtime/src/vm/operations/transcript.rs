@@ -123,12 +123,12 @@ fn resolve(
     if binding.arguments.len() != 1 || primary.transcript() != Some(primary) {
         return Err(support::failure());
     }
-    // UniformIndex transitions exist only for the suite whose challenge field
+    // UniformIndex transitions exist only for suites whose challenge field
     // has index randomness; other suites' byte samplers are not installed.
     if matches!(
         binding.contract.as_str(),
         "transcript.native.indexed.index" | "transcript.index"
-    ) && primary != Identity::Merlin3KoalaBearExt8
+    ) && !primary.has_index_transcript()
     {
         return Err(support::failure());
     }

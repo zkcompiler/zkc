@@ -1,6 +1,8 @@
 module
 
+public import Zkc.Source.Structured.UnitViews
 public import ZkcExamples.Structured.PrimitivePureIndexData
+public import ZkcExamples.Structured.PrimitivePureIndexBodies
 public import Zkc.Source.Structured.OpenMeaning
 
 @[expose] public section
@@ -9,15 +11,10 @@ public import Zkc.Source.Structured.OpenMeaning
 its actual optional input; a public constant does not create knowledge of it. -/
 namespace ZkcExamples.Structured.PrimitivePureIndex
 open Zkc.Source Zkc.Source.Structured
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 set_option smartUnfolding false
 
-def program : Program := (check PrimitivePureIndexData.snapshot).toOption.get (by decide +kernel)
-def imported : Imported PrimitivePureIndexData.snapshot := ⟨program, rfl⟩
-
-theorem exact_subject : imported.program.snapshot = PrimitivePureIndexData.snapshot :=
-  imported.exactSubject
+structured_views PrimitivePureIndexData.snapshot
+  helpers [] protocols [pureIndex := PrimitivePureIndexBodies.pureIndex]
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]

@@ -66,7 +66,7 @@ representative controls and states their evidence limits.
   signatures, including independently authored witnesses and deliberate drift.
   Relation-bundle and machine relation tests send the same carriers to the C++
   and Rust evaluators and require identical reports.
-- `kernels/` compares extension-field arithmetic, sparse matrices, vector
+- `kernels/` compares extension-field and binary-field arithmetic, sparse matrices, vector
   scatter, coset evaluation/interpolation/folding and pointwise maps beside the
   Ring provider and formal products against independent integer calculations
   through `.zkc` Entries, including disabled simplification, storage release
@@ -109,7 +109,7 @@ of that control runs in `just test-integration` without Lean.
 `just test-lean-fresh` rebuilds research packages without previous
 project/dependency objects. These can be expensive.
 
-`just test-lean-native` prepares the native compiler, main Lean package and ArkLib integration, then
+`just test-lean-native` prepares the native compiler, the runtime CLI, the main Lean package and the ArkLib integration, then
 runs independent scalar and structured SSA/Lean comparisons, including primitive
 bindings and unchanged table helpers, the source/property
 request matrix, and authored-target controls. The [structured bridge](../../lean/bridges/structured/README.md)
@@ -118,6 +118,12 @@ The separate [participant probe](../../lean/bridges/structured/participant.md)
 compares actual Schnorr endpoints, native G1 codecs, pending actions and provider
 state; build its test driver explicitly and run the documented standalone command.
 It requires the structured open replay executable and is not a default native check.
+`lean-native` also runs the [transcript-construction bridge](../../lean/bridges/construction/README.md),
+which checks the validators of the compiled Schnorr, Sumcheck, composed Sumcheck,
+Schnorr AND and Chaum–Pedersen proof Entries with the Lean rules, and the
+[executable bridge](../../lean/bridges/executable/README.md), which checks the validator
+program the runtime admits with the Lean lowering rule and compares the runtime CLI
+selected by `ZKC_NATIVE_BIN` with the Lean executable meaning.
 To use an existing build, run
 `python3 common/tests/run.py lean-native --compiler-build=build/compiler`.
 This scope exercises wrong-program, wrong-relation and unproved-certificate

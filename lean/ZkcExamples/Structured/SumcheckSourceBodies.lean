@@ -1,7 +1,7 @@
 module
 
 public import Zkc.Source.Structured.ProtocolOperations
-public import ZkcExamples.Structured.MapPrefixBodies
+public import ZkcExamples.Structured.SumcheckHelperBodies
 
 @[expose] public section
 
@@ -34,9 +34,11 @@ abbrev widthBody := MapFirstBodies.widthBody
 abbrev variablesHelper := MapFirstBodies.variablesHelper
 abbrev variablesBody := MapFirstBodies.variablesBody
 
-abbrev emptyHelper : Helper := ⟨"zkl_411728361dd91cce996681067ff835983db4b50a2c76153019bcfb3dff123b46", .local, [], [.vector "bls12-381.fr"]⟩
+abbrev emptyHelper := SumcheckHelperBodies.emptyHelper
+abbrev emptyBody := SumcheckHelperBodies.emptyBody
 
-abbrev sumsHelper : Helper := ⟨"zkl_532a609cf36a935835501ca51308940142121e647ca360843a880bf231f04aa6", .local, [.vector "bls12-381.fr", .index, .index], [.field "bls12-381.fr", .field "bls12-381.fr"]⟩
+abbrev sumsHelper := SumcheckHelperBodies.sumsHelper
+abbrev sumsBody := SumcheckHelperBodies.sumsBody
 
 abbrev halvesHelper := MapFirstBodies.halvesHelper
 abbrev halvesBody := MapFirstBodies.halvesBody
@@ -47,11 +49,14 @@ abbrev firstBody := MapFirstBodies.firstBody
 abbrev interpolateHelper := MapFirstBodies.interpolateHelper
 abbrev interpolateBody := MapFirstBodies.interpolateBody
 
-abbrev appendHelper : Helper := ⟨"zkl_e9d4e02b4f3bba21b953f31470da5acb0cd796fdc4c7898da74fbc3f5af04e58", .local, [.vector "bls12-381.fr", .field "bls12-381.fr"], [.vector "bls12-381.fr"]⟩
+abbrev appendHelper := SumcheckHelperBodies.appendHelper
+abbrev appendBody := SumcheckHelperBodies.appendBody
 
-abbrev checkHelper : Helper := ⟨"zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc", .local, [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"], [.boolean]⟩
+abbrev checkHelper := SumcheckHelperBodies.checkHelper
+abbrev checkBody := SumcheckHelperBodies.checkBody
 
-abbrev checkTableHelper : Helper := ⟨"zkl_3b67bb5451d0deeed7ab9379c12e7c154a5c16946b7db9b65bc0d4be6b613f1d", .local, [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"], [.boolean]⟩
+abbrev checkTableHelper := SumcheckHelperBodies.checkTableHelper
+abbrev checkTableBody := SumcheckHelperBodies.checkTableBody
 
 abbrev prefixHelper := MapPrefixBodies.prefixHelper
 abbrev prefixBody := MapPrefixBodies.prefixBody
@@ -86,59 +91,6 @@ def reduceSignature : ProtocolSignature where
   outputs := [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr"]
   inputScopes := [[0], [0], [0], [1], [0, 1], [1]]
   outputScopes := [[0], [0], [0], [0], [1], [1]]
-
-def emptyBody : Region dialect [] [.vector "bls12-381.fr"] :=
-  .letOp (.mark "s0") .nil .nil <|
-  .letOp (.exec (.vectorEmpty "bls12-381.fr")) .nil .nil <|
-  .ret (.cons .here .nil)
-
-def sumsBody : Region dialect [.vector "bls12-381.fr", .index, .index] [.field "bls12-381.fr", .field "bls12-381.fr"] :=
-  .letOp (.mark "s0") .nil .nil <|
-  .letOp (.invoke halvesHelper) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
-  .letOp (.mark "s3") .nil .nil <|
-  .letOp (.exec (.vectorSum "bls12-381.fr")) (.cons .here .nil) .nil <|
-  .letOp (.mark "s5") .nil .nil <|
-  .letOp (.exec (.vectorSum "bls12-381.fr")) (.cons (.there (.there .here)) .nil) .nil <|
-  .ret (.cons (.there .here) (.cons .here .nil))
-
-def appendBody : Region dialect [.vector "bls12-381.fr", .field "bls12-381.fr"] [.vector "bls12-381.fr"] :=
-  .letOp (.mark "s0") .nil .nil <|
-  .letOp (.exec (.vectorAppend "bls12-381.fr")) (.cons .here (.cons (.there .here) .nil)) .nil <|
-  .ret (.cons .here .nil)
-
-def checkBody : Region dialect [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] [.boolean] :=
-  .letOp (.mark "s1") .nil .nil <|
-  .letOp (.exec (.vectorLength "bls12-381.fr")) (.cons (.there .here) .nil) .nil <|
-  .letOp (.mark "s2") .nil .nil <|
-  .letOp (.exec (.indexConstant 1)) .nil .nil <|
-  .letOp (.mark "s3") .nil .nil <|
-  .letOp (.invoke shapeHelper) (.cons (.there (.there .here)) (.cons (.there .here) (.cons .here .nil))) .nil <|
-  .letOp (.mark "s6") .nil .nil <|
-  .letOp (.branch [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] [.boolean]) (.cons .here (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) .nil)))) (.cons (
-  .letOp (.mark "s7") .nil .nil <|
-  .letOp (.invoke checkTableHelper) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
-  .ret (.cons .here .nil)) (.cons (
-  .letOp (.mark "s9") .nil .nil <|
-  .letOp (.booleanConstant false) .nil .nil <|
-  .ret (.cons .here .nil)) .nil)) <|
-  .ret (.cons .here .nil)
-
-def checkTableBody : Region dialect [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] [.boolean] :=
-  .letOp (.mark "s1") .nil .nil <|
-  .letOp (.exec (.vectorLength "bls12-381.fr")) (.cons (.there .here) .nil) .nil <|
-  .letOp (.mark "s2") .nil .nil <|
-  .letOp (.exec (.indexConstant 1)) .nil .nil <|
-  .letOp (.mark "s3") .nil .nil <|
-  .letOp (.invoke tableHelper) (.cons (.there (.there .here)) (.cons (.there .here) (.cons .here .nil))) .nil <|
-  .letOp (.mark "s6") .nil .nil <|
-  .letOp (.invoke prefixHelper) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there (.there (.there (.there .here)))))) .nil)))) .nil <|
-  .letOp (.mark "s8") .nil .nil <|
-  .letOp (.invoke valuesRealizationHelper) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
-  .letOp (.mark "s9") .nil .nil <|
-  .letOp (.exec (.vectorSum "bls12-381.fr")) (.cons .here .nil) .nil <|
-  .letOp (.mark "s11") .nil .nil <|
-  .letOp (.exec (.fieldEqual "bls12-381.fr")) (.cons .here (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))))))) .nil)) .nil <|
-  .ret (.cons .here .nil)
 
 /-- The six repeat-carried slots precede the unchanged outer SSA environment. -/
 abbrev repeatState : List Ty :=

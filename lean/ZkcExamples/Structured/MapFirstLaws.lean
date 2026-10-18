@@ -36,7 +36,6 @@ def HalvesLaw (table : Meanings F G) : Prop :=
         else .halt .refused
       else .halt .reject
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Split guard, exact two-row map, checked subtraction, and ordered triple. -/
 theorem first_body (table : Meanings F G) (halves : HalvesLaw table) (map : MapLaw table)
     (xs : List F) (dimension columns : Nat) (r : F)
@@ -94,7 +93,6 @@ theorem restrict_length_bound (xs : List F) (r : F) (bound : xs.length < indexLi
   simp only [restrictValues, List.length_zipWith, List.length_take, List.length_drop]
   exact le_trans (Nat.min_le_left _ _) (Nat.min_le_right _ _)
 
-set_option backward.isDefEq.respectTransparency false in
 theorem wrapper_body (table : Meanings F G)
     (tableLaw : ∀ (xs : List F) (dimension columns : Nat),
       xs.length < indexLimit → dimension < indexLimit → columns < indexLimit →
@@ -147,7 +145,6 @@ theorem wrapper_body (table : Meanings F G)
   · simp only [shape, ite_false, PIR.Proc.bind]
 
 
-set_option backward.isDefEq.respectTransparency false in
 theorem entry_body (table : Meanings F G) (xs : List F) (dimension columns : Nat) (r : F) :
     entryBody.denote (meaning F G table) (firstInputs xs dimension columns r).get =
       invoke table wrapperHelper (firstInputs xs dimension columns r) := by

@@ -31,8 +31,15 @@ fn embed(
     row: &Contract,
     selection: Selection,
 ) -> Option<BoundSignature> {
+    // Installed extensions embed their declared base field.
+    use crate::domains::{BINARY64, BINARY64_EXT3, KOALA_BEAR, KOALA_BEAR_EXT4, KOALA_BEAR_EXT8};
+    let (base, extension) = match binding.arguments.as_slice() {
+        [name] if name == "koala-bear.ext8-binomial3" => (KOALA_BEAR, KOALA_BEAR_EXT8),
+        [name] if name == "koala-bear.ext4-binomial3" => (KOALA_BEAR, KOALA_BEAR_EXT4),
+        [name] if name == "gf2-64.pentanomial-4-3-1.ext3-trinomial1" => (BINARY64, BINARY64_EXT3),
+        _ => return None,
+    };
     if !matches!(selection, Selection::Default)
-        || binding.arguments != ["koala-bear.ext8-binomial3"]
         || binding.implementation != format!("plonky3/{}", binding.contract)
     {
         return None;
@@ -41,12 +48,12 @@ fn embed(
         inputs: row
             .inputs
             .iter()
-            .map(|&kind| crate::domains::KOALA_BEAR.physical(kind))
+            .map(|&kind| base.physical(kind))
             .collect::<Option<_>>()?,
         outputs: row
             .outputs
             .iter()
-            .map(|&kind| crate::domains::KOALA_BEAR_EXT8.physical(kind))
+            .map(|&kind| extension.physical(kind))
             .collect::<Option<_>>()?,
         attributes: row.attributes,
     })

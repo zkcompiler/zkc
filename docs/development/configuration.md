@@ -109,6 +109,12 @@ stores are still shared. Concurrent builds of one profile or Lake package are
 not isolated by report allocation. The
 [test guide](../../common/tests/README.md) owns the report and cancellation contract.
 
+`lean-native` sets `ZKC_TOOL_STORE` to a store inside its run directory, from
+which the structured bridge suites of that run link their executables, one
+read-only copy per content digest. A direct structured bridge invocation
+without it uses `runs/tool-store` beside its selected report. The variable is
+set by the driver and is not a public override.
+
 A test's explicit `--output` overrides its default where supported. Drivers that capture published artifacts require an absent output directory, preserving previous evidence on
 reruns. `just test` does not delete reports; `just clean-reports` explicitly
 removes them and must not run concurrently with tests. Cleanup refuses a

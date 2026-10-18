@@ -27,5 +27,12 @@ llvm::Error checkParameters(const BindingApplication &,
                             llvm::ArrayRef<std::string>);
 /// Canonical modulus if installed; empty means no admitted constant domain.
 llvm::StringRef fieldModulus(llvm::StringRef identity);
+/// Coordinates over GF(2) of an installed binary field, whose constants also
+/// have the bit-pattern literal form; zero for every other identity.
+unsigned fieldBitPatternWidth(llvm::StringRef identity);
+/// Whether `text` is the canonical bit-pattern literal of an element of a
+/// binary field with `width` coordinates: `0x`, then lowercase hexadecimal
+/// digits without leading zeros, denoting a value from 2 below 2^width.
+bool isBitPatternLiteral(llvm::StringRef text, unsigned width);
 } // namespace zkc::protocol
 #endif

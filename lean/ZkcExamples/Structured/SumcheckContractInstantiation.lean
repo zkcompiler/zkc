@@ -11,9 +11,7 @@ is explicitly inherited from the caller's fixed public table instead. -/
 namespace ZkcExamples.Structured.SumcheckContractInstantiation
 open Zkc.Source Zkc.Source.Structured SumcheckRelationContract SumcheckContractBindings
 
-set_option backward.isDefEq.respectTransparency false
 set_option smartUnfolding false
-set_option maxRecDepth 20000
 
 def childOwner : ContractBinding SumcheckSourceViews.imported where
   ownerIndex := ⟨1, by decide⟩

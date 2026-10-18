@@ -1,6 +1,7 @@
 //! Derived UniformIndex transcripts through the general independent proof host.
-//! The replay below calls upstream Merlin directly; it does not use the host's
-//! origin, transition or sampler constructors.
+//! The replay below calls upstream Merlin, or Keccak-256 for the hash-chain
+//! suite, directly; it does not use the host's origin, transition or sampler
+//! constructors.
 #[allow(dead_code)]
 #[path = "support/native_transcript.rs"]
 mod encoding;
@@ -83,15 +84,14 @@ struct Replay<'a> {
     proof: &'a [u8],
     position: usize,
     event: usize,
-    transcript: merlin::Transcript,
+    transcript: encoding::Transcript,
 }
 impl<'a> Replay<'a> {
     fn new(envelope: &'a Json, input: &Json, proof: &'a [u8]) -> Self {
         let root = encoding::root(envelope, input);
         assert_eq!(&proof[..8], b"ZKCPRF00");
         assert_eq!(&proof[8..40], &Sha256::digest(&root)[..]);
-        let mut transcript = merlin::Transcript::new(b"zkc.artifact/0");
-        transcript.append_message(b"binding", &root);
+        let transcript = encoding::Transcript::new(envelope[2][1][5].as_str().unwrap(), &root);
         Self {
             events: envelope[2][3].as_array().unwrap(),
             proof,
@@ -109,13 +109,12 @@ impl<'a> Replay<'a> {
         let mut tree = logical::decode_tree(&unhex(row[1].as_str().unwrap())).unwrap();
         tree[0] = json!("zkc.native-origin/0");
         tree[3] = json!([round.to_string()]);
-        self.transcript
-            .append_message(b"origin", &encoding::tree(&tree));
+        self.transcript.absorb(b"origin", &encoding::tree(&tree));
         row
     }
     fn observe(&mut self, round: u64, wire: &[u8]) {
         self.origin("message", round);
-        self.transcript.append_message(b"value", wire);
+        self.transcript.absorb(b"value", wire);
     }
     fn receive(&mut self, round: u64) -> &'a [u8] {
         let at = self.position;
@@ -150,8 +149,7 @@ impl<'a> Replay<'a> {
     fn index(&mut self, round: u64, bound: u64) -> u64 {
         let row = self.origin("index", round);
         assert_eq!(row[2], bound.to_string());
-        self.transcript
-            .append_message(b"bound", &bound.to_le_bytes());
+        self.transcript.absorb(b"bound", &bound.to_le_bytes());
         let mut bytes = [0; 64];
         self.transcript.challenge_bytes(b"index", &mut bytes);
         u64::from_le_bytes(bytes[..8].try_into().unwrap()) % bound
@@ -354,8 +352,9 @@ fn main() {
             (envelope, deployment)
         })
         .collect();
-    let mut first_positions = None;
+    let mut first_positions = std::collections::BTreeMap::new();
     for (case, (envelope, deployment)) in cases.iter().zip(&deployments) {
+        let suite = &envelope[2][1][5];
         let bound = case["bound"].as_u64().unwrap();
         let rounds = case["rounds"].as_u64().unwrap();
         // Six ordered transitions per round, including both erased deliveries.
@@ -367,14 +366,25 @@ fn main() {
         let positions = replay(envelope, &producer, &proof, rounds, bound);
         // Lowering options are not part of the binding: every compilation of
         // the same source and policy derives the same transcript.
-        assert_eq!(*first_positions.get_or_insert(positions.clone()), positions);
+        assert_eq!(
+            *first_positions
+                .entry(suite.to_string())
+                .or_insert(positions.clone()),
+            positions
+        );
         for (other, other_deployment) in &deployments {
-            run(
+            let outcome = run(
                 other_deployment,
                 &inputs(other, rounds, false, transitions),
                 Some(&proof),
-            )
-            .unwrap();
+            );
+            // The suite is part of the policy, so another suite's deployment
+            // has a different binding root.
+            if other[2][1][5] == *suite {
+                outcome.unwrap();
+            } else {
+                assert_eq!(outcome.unwrap_err(), "proof-header");
+            }
         }
         assert_eq!(
             run(deployment, &producer, None).unwrap(),

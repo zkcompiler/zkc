@@ -106,7 +106,12 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
     {
         return None;
     }
-    let domain = Domain::from_identity(Identity::parse(&binding.arguments[0]).ok()?)?;
+    let identity = Identity::parse(&binding.arguments[0]).ok()?;
+    // Digest-generic schemes share these contracts and own their carriers.
+    if crate::merkle::Scheme::from_identity(identity).is_some() {
+        return crate::merkle::signature(binding);
+    }
+    let domain = Domain::from_identity(identity)?;
     // Independent native advertisement, not admission's operation-shape table.
     let (inputs, outputs): (&[Type], &[Type]) = match binding.contract.as_str() {
         "oracle.commit" => (&[Vector, Index], &[Commitment, OpeningState]),
@@ -208,12 +213,19 @@ pub(crate) fn apply(
     {
         return Err(refused("kernel-operands"));
     }
-    let domain = invocation
+    let identity = invocation
         .binding
         .declaration()
         .arguments
         .first()
-        .and_then(|s| Identity::parse(s).ok())
+        .and_then(|s| Identity::parse(s).ok());
+    if identity
+        .and_then(crate::merkle::Scheme::from_identity)
+        .is_some()
+    {
+        return crate::merkle::apply(name, args, invocation, policy);
+    }
+    let domain = identity
         .and_then(Domain::from_identity)
         .ok_or_else(|| refused("oracle-domain"))?;
     let available = invocation.max_output_bytes;

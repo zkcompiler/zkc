@@ -23,22 +23,32 @@ pub enum Identity {
     MultilinearKzgBls12381,
     MerkleKoalaBear,
     MerkleKoalaBearExt8,
+    MerklePoseidon2KoalaBear,
+    MerklePoseidon2KoalaBearExt4,
     Merlin3KoalaBearExt8,
     Merlin3Fr64Be,
     Spongefish080KeccakFr64Be,
     Ristretto255Scalar,
     KoalaBear,
     KoalaBearExt8,
+    KoalaBearExt4,
     Ristretto255Group,
     Edwards25519Prime,
     Merlin3Ristretto64Le,
+    Bls12381G2,
+    Bls12381Gt,
+    HashChainKeccak256Fr64Be,
+    HashChainKeccak256KoalaBearExt8,
+    Binary64,
+    Binary64Ext3,
 }
 impl Identity {
     /// Characteristic of an installed field, including nominal extensions.
     /// A group or service with an associated scalar field is not itself a field.
     pub(crate) fn field_characteristic(self) -> Option<&'static str> {
         match self {
-            Self::KoalaBear | Self::KoalaBearExt8 => Some("2130706433"),
+            Self::KoalaBear | Self::KoalaBearExt8 | Self::KoalaBearExt4 => Some("2130706433"),
+            Self::Binary64 | Self::Binary64Ext3 => Some("2"),
             Self::Bls12381Fr => Some(
                 "52435875175126190479447740508185965837690552500527637822603658699938581184513",
             ),
@@ -50,6 +60,37 @@ impl Identity {
             }
             _ => None,
         }
+    }
+    /// A prime field with an integer residue representation. A binary field has
+    /// characteristic two but is not a prime field.
+    pub fn is_prime_field(self) -> bool {
+        matches!(
+            self,
+            Self::Bn254Fr | Self::Bls12381Fr | Self::Ristretto255Scalar | Self::KoalaBear
+        )
+    }
+    /// A prime field or a nominal extension of one: every coordinate is an
+    /// integer residue below the characteristic. Relation bundles and ring
+    /// arenas use this presentation; binary fields do not have it.
+    pub fn has_residue_coordinates(self) -> bool {
+        self.is_prime_field() || self.base_field().is_some_and(Self::is_prime_field)
+    }
+    /// Width in bits of a binary field's bit-pattern presentation: the number
+    /// of its coordinates over GF(2) (docs/spec/domains/values.md).
+    pub fn bit_pattern_width(self) -> Option<u32> {
+        match self {
+            Self::Binary64 => Some(64),
+            Self::Binary64Ext3 => Some(192),
+            _ => None,
+        }
+    }
+    /// Canonical constant attribute: a natural literal below the characteristic
+    /// or, for a binary field, a canonical bit-pattern literal of at least two.
+    pub(crate) fn canonical_constant_literal(self, text: &str) -> bool {
+        self.canonical_field_literal(text)
+            || self
+                .bit_pattern_width()
+                .is_some_and(|width| bit_pattern_literal(text, width).is_some())
     }
     /// Canonical prime-subfield natural literal; never reduces modulo the field.
     pub(crate) fn canonical_field_literal(self, text: &str) -> bool {
@@ -72,6 +113,7 @@ impl Identity {
                 | Self::Ristretto255Scalar
                 | Self::KoalaBear
                 | Self::KoalaBearExt8
+                | Self::KoalaBearExt4
         )
     }
     /// Installed associations, independent of the value kind.
@@ -80,35 +122,64 @@ impl Identity {
             Self::Bn254Fr | Self::Bn254G1 | Self::Bn254G2 | Self::Bn254Gt => Some(Self::Bn254Fr),
             Self::Bls12381Fr
             | Self::Bls12381G1
+            | Self::Bls12381G2
+            | Self::Bls12381Gt
             | Self::Spongefish080KeccakFr64Be
             | Self::Merlin3Fr64Be
+            | Self::HashChainKeccak256Fr64Be
             | Self::MultilinearKzgBls12381 => Some(Self::Bls12381Fr),
             Self::Ristretto255Scalar
             | Self::Ristretto255Group
             | Self::Edwards25519Prime
             | Self::Merlin3Ristretto64Le => Some(Self::Ristretto255Scalar),
-            Self::KoalaBear | Self::MerkleKoalaBear => Some(Self::KoalaBear),
-            Self::KoalaBearExt8 | Self::MerkleKoalaBearExt8 | Self::Merlin3KoalaBearExt8 => {
-                Some(Self::KoalaBearExt8)
+            Self::KoalaBear | Self::MerkleKoalaBear | Self::MerklePoseidon2KoalaBear => {
+                Some(Self::KoalaBear)
             }
+            Self::KoalaBearExt8
+            | Self::MerkleKoalaBearExt8
+            | Self::Merlin3KoalaBearExt8
+            | Self::HashChainKeccak256KoalaBearExt8 => Some(Self::KoalaBearExt8),
+            Self::KoalaBearExt4 | Self::MerklePoseidon2KoalaBearExt4 => Some(Self::KoalaBearExt4),
+            Self::Binary64 => Some(Self::Binary64),
+            Self::Binary64Ext3 => Some(Self::Binary64Ext3),
             Self::None => None,
         }
     }
     /// A row commitment has no polynomial opening capability.
     pub fn is_row_commitment(self) -> bool {
-        matches!(self, Self::MerkleKoalaBear | Self::MerkleKoalaBearExt8)
+        matches!(
+            self,
+            Self::MerkleKoalaBear
+                | Self::MerkleKoalaBearExt8
+                | Self::MerklePoseidon2KoalaBear
+                | Self::MerklePoseidon2KoalaBearExt4
+        )
+    }
+    /// A row commitment whose installed scheme opens several positions with
+    /// one pruned proof.
+    pub fn has_multi_opening(self) -> bool {
+        matches!(
+            self,
+            Self::MerklePoseidon2KoalaBear | Self::MerklePoseidon2KoalaBearExt4
+        )
     }
     /// A nominal extension has an explicit base; other fields have no embedding contract.
     pub fn base_field(self) -> Option<Self> {
         match self {
-            Self::KoalaBearExt8 => Some(Self::KoalaBear),
+            Self::KoalaBearExt8 | Self::KoalaBearExt4 => Some(Self::KoalaBear),
+            Self::Binary64Ext3 => Some(Self::Binary64),
             _ => None,
         }
     }
     pub fn group(self) -> Option<Self> {
         if matches!(
             self,
-            Self::Bn254G1 | Self::Bn254G2 | Self::Bn254Gt | Self::Edwards25519Prime
+            Self::Bn254G1
+                | Self::Bn254G2
+                | Self::Bn254Gt
+                | Self::Bls12381G2
+                | Self::Bls12381Gt
+                | Self::Edwards25519Prime
         ) {
             return Some(self);
         }
@@ -124,9 +195,19 @@ impl Identity {
             Self::Merlin3Fr64Be
             | Self::Merlin3Ristretto64Le
             | Self::Spongefish080KeccakFr64Be
-            | Self::Merlin3KoalaBearExt8 => Some(self),
+            | Self::Merlin3KoalaBearExt8
+            | Self::HashChainKeccak256Fr64Be
+            | Self::HashChainKeccak256KoalaBearExt8 => Some(self),
             _ => None,
         }
+    }
+    /// The installed transcript suites with a UniformIndex byte sampler. Other
+    /// suites keep field challenges only.
+    pub fn has_index_transcript(self) -> bool {
+        matches!(
+            self,
+            Self::Merlin3KoalaBearExt8 | Self::HashChainKeccak256KoalaBearExt8
+        )
     }
     pub fn provider(self) -> Option<&'static str> {
         if self == Self::Spongefish080KeccakFr64Be {
@@ -135,7 +216,8 @@ impl Identity {
         match self.scalar_field()? {
             Self::Bls12381Fr | Self::Bn254Fr => Some("arkworks"),
             Self::Ristretto255Scalar => Some("dalek"),
-            Self::KoalaBear | Self::KoalaBearExt8 => Some("plonky3"),
+            Self::KoalaBear | Self::KoalaBearExt8 | Self::KoalaBearExt4 => Some("plonky3"),
+            Self::Binary64 | Self::Binary64Ext3 => Some("plonky3"),
             _ => None,
         }
     }
@@ -149,11 +231,20 @@ impl Identity {
 
             Self::KoalaBear => "koala-bear",
             Self::KoalaBearExt8 => "koala-bear.ext8-binomial3",
+            Self::KoalaBearExt4 => "koala-bear.ext4-binomial3",
+            Self::Binary64 => "gf2-64.pentanomial-4-3-1",
+            Self::Binary64Ext3 => "gf2-64.pentanomial-4-3-1.ext3-trinomial1",
             Self::Bls12381Fr => "bls12-381.fr",
             Self::Bls12381G1 => "bls12-381.g1",
+            Self::Bls12381G2 => "bls12-381.g2",
+            Self::Bls12381Gt => "bls12-381.gt",
             Self::MultilinearKzgBls12381 => "multilinear.kzg.bls12-381/0",
             Self::MerkleKoalaBear => "rows.merkle-keccak256.koala-bear/0",
             Self::MerkleKoalaBearExt8 => "rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
+            Self::MerklePoseidon2KoalaBear => "rows.merkle-poseidon2-16.koala-bear/0",
+            Self::MerklePoseidon2KoalaBearExt4 => {
+                "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"
+            }
             Self::Ristretto255Scalar => "ristretto255.scalar",
             Self::Ristretto255Group => "ristretto255.group",
             Self::Edwards25519Prime => "edwards25519.prime",
@@ -161,6 +252,10 @@ impl Identity {
             Self::Merlin3KoalaBearExt8 => "merlin3.koala-bear.ext8-binomial3.rejection31le/0",
             Self::Merlin3Fr64Be => "merlin3.bls12-381.fr64be/0",
             Self::Spongefish080KeccakFr64Be => "spongefish0.8.0.keccak.bls12-381.fr64be/0",
+            Self::HashChainKeccak256Fr64Be => "hash-chain.keccak256.bls12-381.fr64be/0",
+            Self::HashChainKeccak256KoalaBearExt8 => {
+                "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"
+            }
         }
     }
     pub fn parse(name: &str) -> Result<Self> {
@@ -175,20 +270,59 @@ impl Identity {
             Self::MultilinearKzgBls12381,
             Self::MerkleKoalaBear,
             Self::MerkleKoalaBearExt8,
+            Self::MerklePoseidon2KoalaBear,
+            Self::MerklePoseidon2KoalaBearExt4,
             Self::Merlin3KoalaBearExt8,
             Self::Merlin3Fr64Be,
             Self::Spongefish080KeccakFr64Be,
             Self::Ristretto255Scalar,
             Self::KoalaBear,
             Self::KoalaBearExt8,
+            Self::KoalaBearExt4,
             Self::Ristretto255Group,
             Self::Edwards25519Prime,
             Self::Merlin3Ristretto64Le,
+            Self::Bls12381G2,
+            Self::Bls12381Gt,
+            Self::HashChainKeccak256Fr64Be,
+            Self::HashChainKeccak256KoalaBearExt8,
+            Self::Binary64,
+            Self::Binary64Ext3,
         ]
         .into_iter()
         .find(|i| i.name() == name)
         .ok_or_else(|| error("uninstalled nominal identity"))
     }
+}
+
+/// Canonical bit-pattern literal of a binary field with `width` coordinates
+/// over GF(2): `0x` followed by lowercase hexadecimal digits without leading
+/// zeros, read as an unsigned integer whose bit `i` is coordinate `i`. Zero and
+/// one keep their natural spellings `0` and `1`, so the value is at least two
+/// and below `2^width`. Returns the value as little-endian 64-bit words.
+pub fn bit_pattern_literal(text: &str, width: u32) -> Option<[u64; 3]> {
+    let digits = text.strip_prefix("0x")?;
+    let width = usize::try_from(width)
+        .ok()
+        .filter(|w| *w <= 192 && w % 4 == 0)?;
+    if digits.is_empty()
+        || digits.len() > width / 4
+        || digits.starts_with('0')
+        || !digits
+            .bytes()
+            .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+    {
+        return None;
+    }
+    let mut words = [0u64; 3];
+    for (position, digit) in digits.bytes().rev().enumerate() {
+        let nibble = u64::from(match digit {
+            b'0'..=b'9' => digit - b'0',
+            _ => digit - b'a' + 10,
+        });
+        words[position / 16] |= nibble << (4 * (position % 16));
+    }
+    (words != [0, 0, 0] && words != [1, 0, 0]).then_some(words)
 }
 
 /// Ground origin arguments retain canonical Domain, Type, Nat, and existing
@@ -222,6 +356,10 @@ pub(crate) fn valid_static_argument(name: &str) -> bool {
         Identity::MerkleKoalaBear.name()
     } else if nominal == "rows-merkle-keccak256.koala-bear.ext8-binomial3" {
         Identity::MerkleKoalaBearExt8.name()
+    } else if nominal == "rows-merkle-poseidon2-16.koala-bear" {
+        Identity::MerklePoseidon2KoalaBear.name()
+    } else if nominal == "rows-merkle-poseidon2-16.koala-bear.ext4-binomial3" {
+        Identity::MerklePoseidon2KoalaBearExt4.name()
     } else {
         nominal
     };
@@ -263,7 +401,14 @@ impl LogicalType {
             Type::Field | Type::Matrix | Type::Vector | Type::Polynomial | Type::Round => {
                 matches!(
                     identity,
-                    Bn254Fr | Bls12381Fr | Ristretto255Scalar | KoalaBear | KoalaBearExt8
+                    Bn254Fr
+                        | Bls12381Fr
+                        | Ristretto255Scalar
+                        | KoalaBear
+                        | KoalaBearExt8
+                        | KoalaBearExt4
+                        | Binary64
+                        | Binary64Ext3
                 )
             }
             Type::Rng => matches!(
@@ -274,11 +419,18 @@ impl LogicalType {
             Type::Table | Type::Point => identity == Bls12381Fr,
             Type::Group => matches!(
                 identity,
-                Bn254Gt | Bn254G1 | Bn254G2 | Bls12381G1 | Ristretto255Group | Edwards25519Prime
+                Bn254Gt
+                    | Bn254G1
+                    | Bn254G2
+                    | Bls12381G1
+                    | Bls12381G2
+                    | Bls12381Gt
+                    | Ristretto255Group
+                    | Edwards25519Prime
             ),
             Type::Groups => matches!(
                 identity,
-                Bn254G1 | Bn254G2 | Bls12381G1 | Ristretto255Group | Edwards25519Prime
+                Bn254G1 | Bn254G2 | Bls12381G1 | Bls12381G2 | Ristretto255Group | Edwards25519Prime
             ),
             Type::Transcript => matches!(
                 identity,
@@ -286,6 +438,8 @@ impl LogicalType {
                     | Merlin3Ristretto64Le
                     | Spongefish080KeccakFr64Be
                     | Merlin3KoalaBearExt8
+                    | HashChainKeccak256Fr64Be
+                    | HashChainKeccak256KoalaBearExt8
             ),
             Type::Commitments | Type::OpeningStates => identity.is_row_commitment(),
             Type::Commitment | Type::Proof | Type::OpeningState => {
@@ -318,6 +472,10 @@ impl LogicalType {
             Identity::None => String::new(),
             Identity::MultilinearKzgBls12381 => ".multilinear-kzg.bls12-381".into(),
             Identity::MerkleKoalaBear => ".rows-merkle-keccak256.koala-bear".into(),
+            Identity::MerklePoseidon2KoalaBear => ".rows-merkle-poseidon2-16.koala-bear".into(),
+            Identity::MerklePoseidon2KoalaBearExt4 => {
+                ".rows-merkle-poseidon2-16.koala-bear.ext4-binomial3".into()
+            }
             Identity::MerkleKoalaBearExt8 => {
                 ".rows-merkle-keccak256.koala-bear.ext8-binomial3".into()
             }
@@ -364,7 +522,8 @@ impl LogicalType {
         if let Some(descriptor) = self.variant_descriptor() {
             return descriptor.is_native_message_data();
         }
-        (self.kind() == Type::Group && self.identity() == Identity::Bn254Gt)
+        (self.kind() == Type::Group
+            && matches!(self.identity(), Identity::Bn254Gt | Identity::Bls12381Gt))
             || self
                 .field_array_parts()
                 .is_some_and(|(f, n)| f == Identity::Bls12381Fr && n <= 1_048_576)
@@ -379,6 +538,9 @@ impl LogicalType {
                         | Identity::Ristretto255Scalar
                         | Identity::KoalaBear
                         | Identity::KoalaBearExt8
+                        | Identity::KoalaBearExt4
+                        | Identity::Binary64
+                        | Identity::Binary64Ext3
                 ) | (
                     Type::Group | Type::Groups,
                     Identity::Bn254G1
@@ -388,13 +550,17 @@ impl LogicalType {
                 ) | (
                     Type::Field | Type::Vector | Type::Matrix,
                     Identity::Bls12381Fr
-                ) | (Type::Group | Type::Groups, Identity::Bls12381G1)
-                    | (
-                        Type::Commitment | Type::Proof,
-                        Identity::MultilinearKzgBls12381
-                            | Identity::MerkleKoalaBear
-                            | Identity::MerkleKoalaBearExt8
-                    )
+                ) | (
+                    Type::Group | Type::Groups,
+                    Identity::Bls12381G1 | Identity::Bls12381G2
+                ) | (
+                    Type::Commitment | Type::Proof,
+                    Identity::MultilinearKzgBls12381
+                        | Identity::MerkleKoalaBear
+                        | Identity::MerkleKoalaBearExt8
+                        | Identity::MerklePoseidon2KoalaBear
+                        | Identity::MerklePoseidon2KoalaBearExt4
+                )
             )
     }
     /// Logical program-port permission, independent of codec and target support.
@@ -537,6 +703,21 @@ pub enum Representation {
     KoalaBearExt8Vector,
     KoalaBearExt8Polynomial,
     KoalaBearExt8Round,
+    KoalaBearExt4SparseCoo,
+    KoalaBearExt4Vector,
+    KoalaBearExt4Polynomial,
+    KoalaBearExt4Round,
+    KoalaBearExt4,
+    Binary64,
+    Binary64Vector,
+    Binary64Polynomial,
+    Binary64Round,
+    Binary64SparseCoo,
+    Binary64Ext3,
+    Binary64Ext3Vector,
+    Binary64Ext3Polynomial,
+    Binary64Ext3Round,
+    Binary64Ext3SparseCoo,
     KoalaBearSparseCoo,
     KoalaBear,
     KoalaBearExt8,
@@ -575,6 +756,14 @@ pub enum Representation {
     MerkleState,
     MerkleRoots,
     MerkleStates,
+    Bls12381G2,
+    Bls12381G2Vector,
+    Bls12381Gt,
+    MerkleDigest,
+    MerkleProof,
+    MerkleTree,
+    MerkleDigests,
+    MerkleTrees,
 }
 impl Representation {
     pub fn name(self) -> &'static str {
@@ -601,6 +790,27 @@ impl Representation {
             Self::KoalaBearExt8Polynomial => "plonky3.koala-bear.ext8-binomial3-polynomial/0",
             Self::KoalaBearExt8Round => "plonky3.koala-bear.ext8-binomial3-quadratic/0",
             Self::KoalaBearExt8SparseCoo => "plonky3.koala-bear.ext8-binomial3-sparse-coo/0",
+            Self::KoalaBearExt4 => "plonky3.koala-bear.ext4-binomial3/0",
+            Self::KoalaBearExt4Vector => "plonky3.koala-bear.ext4-binomial3-vector/0",
+            Self::KoalaBearExt4Polynomial => "plonky3.koala-bear.ext4-binomial3-polynomial/0",
+            Self::KoalaBearExt4Round => "plonky3.koala-bear.ext4-binomial3-quadratic/0",
+            Self::KoalaBearExt4SparseCoo => "plonky3.koala-bear.ext4-binomial3-sparse-coo/0",
+            Self::Binary64 => "plonky3.gf2-64.pentanomial-4-3-1/0",
+            Self::Binary64Vector => "plonky3.gf2-64.pentanomial-4-3-1-vector/0",
+            Self::Binary64Polynomial => "plonky3.gf2-64.pentanomial-4-3-1-polynomial/0",
+            Self::Binary64Round => "plonky3.gf2-64.pentanomial-4-3-1-quadratic/0",
+            Self::Binary64SparseCoo => "plonky3.gf2-64.pentanomial-4-3-1-sparse-coo/0",
+            Self::Binary64Ext3 => "plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1/0",
+            Self::Binary64Ext3Vector => "plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1-vector/0",
+            Self::Binary64Ext3Polynomial => {
+                "plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1-polynomial/0"
+            }
+            Self::Binary64Ext3Round => {
+                "plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1-quadratic/0"
+            }
+            Self::Binary64Ext3SparseCoo => {
+                "plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1-sparse-coo/0"
+            }
             Self::KoalaBear => "plonky3.koala-bear/0",
             Self::KoalaBearVector => "plonky3.koala-bear-vector/0",
             Self::KoalaBearPolynomial => "plonky3.koala-bear-polynomial/0",
@@ -638,6 +848,14 @@ impl Representation {
             Self::MerkleState => "plonky3.merkle-state/0",
             Self::MerkleRoots => "plonky3.merkle-roots/0",
             Self::MerkleStates => "plonky3.merkle-states/0",
+            Self::Bls12381G2 => "arkworks.bls12-381-g2/0",
+            Self::Bls12381G2Vector => "arkworks.bls12-381-g2-vector/0",
+            Self::Bls12381Gt => "arkworks.bls12-381-gt/0",
+            Self::MerkleDigest => "plonky3.merkle-digest/0",
+            Self::MerkleProof => "plonky3.merkle-proof/0",
+            Self::MerkleTree => "plonky3.merkle-tree/0",
+            Self::MerkleDigests => "plonky3.merkle-digests/0",
+            Self::MerkleTrees => "plonky3.merkle-trees/0",
         }
     }
     pub(super) fn parse(name: &str) -> Result<Self> {
@@ -665,6 +883,21 @@ impl Representation {
             Self::KoalaBearExt8Vector,
             Self::KoalaBearExt8Polynomial,
             Self::KoalaBearExt8Round,
+            Self::KoalaBearExt4SparseCoo,
+            Self::KoalaBearExt4Vector,
+            Self::KoalaBearExt4Polynomial,
+            Self::KoalaBearExt4Round,
+            Self::KoalaBearExt4,
+            Self::Binary64,
+            Self::Binary64Vector,
+            Self::Binary64Polynomial,
+            Self::Binary64Round,
+            Self::Binary64SparseCoo,
+            Self::Binary64Ext3,
+            Self::Binary64Ext3Vector,
+            Self::Binary64Ext3Polynomial,
+            Self::Binary64Ext3Round,
+            Self::Binary64Ext3SparseCoo,
             Self::KoalaBearSparseCoo,
             Self::KoalaBear,
             Self::KoalaBearExt8,
@@ -703,6 +936,14 @@ impl Representation {
             Self::MerkleState,
             Self::MerkleRoots,
             Self::MerkleStates,
+            Self::Bls12381G2,
+            Self::Bls12381G2Vector,
+            Self::Bls12381Gt,
+            Self::MerkleDigest,
+            Self::MerkleProof,
+            Self::MerkleTree,
+            Self::MerkleDigests,
+            Self::MerkleTrees,
         ]
         .into_iter()
         .find(|r| r.name() == name)
@@ -802,6 +1043,21 @@ impl PhysicalType {
             (T::Polynomial, I::KoalaBearExt8) => R::KoalaBearExt8Polynomial,
             (T::Round, I::KoalaBearExt8) => R::KoalaBearExt8Round,
             (T::Matrix, I::KoalaBearExt8) => R::KoalaBearExt8SparseCoo,
+            (T::Field, I::KoalaBearExt4) => R::KoalaBearExt4,
+            (T::Vector, I::KoalaBearExt4) => R::KoalaBearExt4Vector,
+            (T::Polynomial, I::KoalaBearExt4) => R::KoalaBearExt4Polynomial,
+            (T::Round, I::KoalaBearExt4) => R::KoalaBearExt4Round,
+            (T::Matrix, I::KoalaBearExt4) => R::KoalaBearExt4SparseCoo,
+            (T::Field, I::Binary64) => R::Binary64,
+            (T::Vector, I::Binary64) => R::Binary64Vector,
+            (T::Polynomial, I::Binary64) => R::Binary64Polynomial,
+            (T::Round, I::Binary64) => R::Binary64Round,
+            (T::Matrix, I::Binary64) => R::Binary64SparseCoo,
+            (T::Field, I::Binary64Ext3) => R::Binary64Ext3,
+            (T::Vector, I::Binary64Ext3) => R::Binary64Ext3Vector,
+            (T::Polynomial, I::Binary64Ext3) => R::Binary64Ext3Polynomial,
+            (T::Round, I::Binary64Ext3) => R::Binary64Ext3Round,
+            (T::Matrix, I::Binary64Ext3) => R::Binary64Ext3SparseCoo,
             (T::Field, I::KoalaBear) => R::KoalaBear,
             (T::Vector, I::KoalaBear) => R::KoalaBearVector,
             (T::Polynomial, I::KoalaBear) => R::KoalaBearPolynomial,
@@ -827,6 +1083,9 @@ impl PhysicalType {
             (T::Round, I::Bls12381Fr) => R::Round,
             (T::Group, I::Bls12381G1) => R::G1,
             (T::Groups, I::Bls12381G1) => R::Groups,
+            (T::Group, I::Bls12381G2) => R::Bls12381G2,
+            (T::Groups, I::Bls12381G2) => R::Bls12381G2Vector,
+            (T::Group, I::Bls12381Gt) => R::Bls12381Gt,
             (T::Rng | T::Nonce | T::Transcript, _) => R::Resource,
             (_, I::MultilinearKzgBls12381) => R::Pcs,
             (kind, I::MerkleKoalaBear | I::MerkleKoalaBearExt8) => match kind {
@@ -835,6 +1094,16 @@ impl PhysicalType {
                 T::OpeningState => R::MerkleState,
                 T::Commitments => R::MerkleRoots,
                 T::OpeningStates => R::MerkleStates,
+                _ => return Err(representation_error("unrepresented logical type")),
+            },
+            // Digest-generic Merkle schemes: each digest is the scheme's
+            // fixed-width byte encoding, whatever its hash.
+            (kind, I::MerklePoseidon2KoalaBear | I::MerklePoseidon2KoalaBearExt4) => match kind {
+                T::Commitment => R::MerkleDigest,
+                T::Proof => R::MerkleProof,
+                T::OpeningState => R::MerkleTree,
+                T::Commitments => R::MerkleDigests,
+                T::OpeningStates => R::MerkleTrees,
                 _ => return Err(representation_error("unrepresented logical type")),
             },
             _ => return Err(representation_error("unrepresented logical type")),

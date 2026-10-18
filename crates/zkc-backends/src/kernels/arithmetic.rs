@@ -1,6 +1,6 @@
 //! Shared dense scalar/vector/coefficient arithmetic. Mathematical meanings do
 //! not depend on physical layout. Callers preflight sizes before allocating.
-use crate::{KoalaBear, KoalaBearExt8};
+use crate::{Binary64, Binary64Ext3, KoalaBear, KoalaBearExt4, KoalaBearExt8};
 use crate::{Policy, Result, RistrettoScalar, Scalar, Value, exhausted, refused, value::size};
 use ark_ff::Field;
 use std::{
@@ -82,6 +82,16 @@ pub(crate) fn boundary<S: Coefficient>(coefficients: &[S]) -> S {
 pub(crate) fn normalized<S: Coefficient>(coefficients: &[S]) -> bool {
     coefficients.last().is_none_or(|c| *c != S::zero())
 }
+/// The index of `position` with its `log2(count)` low bits reversed; `count`
+/// is a power of two.
+pub(crate) fn reverse_bits(position: usize, count: usize) -> usize {
+    let bits = count.trailing_zeros();
+    if bits == 0 {
+        0
+    } else {
+        position.reverse_bits() >> (usize::BITS - bits)
+    }
+}
 pub(crate) fn reserve<T>(n: usize) -> Result<Vec<T>> {
     let mut v = Vec::new();
     v.try_reserve_exact(n)
@@ -135,6 +145,41 @@ impl Coefficient for KoalaBear {
     }
 }
 impl Coefficient for KoalaBearExt8 {
+    fn zero() -> Self {
+        <Self as p3_field::PrimeCharacteristicRing>::ZERO
+    }
+    fn one() -> Self {
+        <Self as p3_field::PrimeCharacteristicRing>::ONE
+    }
+    fn inverse(self) -> Option<Self> {
+        p3_field::Field::try_inverse(&self)
+    }
+}
+impl Coefficient for KoalaBearExt4 {
+    fn zero() -> Self {
+        <Self as p3_field::PrimeCharacteristicRing>::ZERO
+    }
+    fn one() -> Self {
+        <Self as p3_field::PrimeCharacteristicRing>::ONE
+    }
+    fn inverse(self) -> Option<Self> {
+        p3_field::Field::try_inverse(&self)
+    }
+}
+// Binary fields: addition is exclusive or and every element is its own
+// negation. Inversion of zero is refused, as for every installed field.
+impl Coefficient for Binary64 {
+    fn zero() -> Self {
+        <Self as p3_field::PrimeCharacteristicRing>::ZERO
+    }
+    fn one() -> Self {
+        <Self as p3_field::PrimeCharacteristicRing>::ONE
+    }
+    fn inverse(self) -> Option<Self> {
+        p3_field::Field::try_inverse(&self)
+    }
+}
+impl Coefficient for Binary64Ext3 {
     fn zero() -> Self {
         <Self as p3_field::PrimeCharacteristicRing>::ZERO
     }
@@ -264,6 +309,36 @@ family!(
     crate::plonky3::parse_extension_decimal
 );
 
+family!(
+    KoalaBearExt4,
+    KoalaBearExt4Field,
+    KoalaBearExt4Vector,
+    KoalaBearExt4Matrix,
+    KoalaBearExt4Polynomial,
+    KoalaBearExt4Round,
+    crate::plonky3::parse_quartic_decimal
+);
+
+family!(
+    Binary64,
+    Binary64Field,
+    Binary64Vector,
+    Binary64Matrix,
+    Binary64Polynomial,
+    Binary64Round,
+    crate::plonky3::binary::parse_literal
+);
+
+family!(
+    Binary64Ext3,
+    Binary64Ext3Field,
+    Binary64Ext3Vector,
+    Binary64Ext3Matrix,
+    Binary64Ext3Polynomial,
+    Binary64Ext3Round,
+    crate::plonky3::binary::parse_ext3_literal
+);
+
 pub(crate) fn apply(
     name: &str,
     field: Option<Identity>,
@@ -271,28 +346,52 @@ pub(crate) fn apply(
     i: &Invocation<'_>,
     p: &Policy,
 ) -> Result<Vec<Value>> {
+    // The binding's output port names the extension; its declared base field
+    // supplies the operand.
+    let target = i
+        .binding
+        .signature()
+        .outputs
+        .first()
+        .map(|t| t.logical().identity());
     if name == "vector.embed" {
-        let [Value::KoalaBearVector(xs)] = args else {
-            return Err(refused("kernel-operands"));
+        fn embed<B: Copy, E: From<B>>(
+            xs: &[B],
+            p: &Policy,
+            i: &Invocation<'_>,
+            value: fn(Arc<[E]>) -> Value,
+        ) -> Result<Vec<Value>> {
+            let width = std::mem::size_of::<E>();
+            p.vector_width(xs.len(), width)?;
+            p.output(size(xs.len(), width)?, i.max_output_bytes)?;
+            let mut out = reserve(xs.len())?;
+            out.extend(xs.iter().copied().map(E::from));
+            Ok(vec![value(out.into())])
+        }
+        return match (target, args) {
+            (Some(Identity::KoalaBearExt8), [Value::KoalaBearVector(xs)]) => {
+                embed::<KoalaBear, KoalaBearExt8>(xs, p, i, Value::KoalaBearExt8Vector)
+            }
+            (Some(Identity::KoalaBearExt4), [Value::KoalaBearVector(xs)]) => {
+                embed::<KoalaBear, KoalaBearExt4>(xs, p, i, Value::KoalaBearExt4Vector)
+            }
+            (Some(Identity::Binary64Ext3), [Value::Binary64Vector(xs)]) => {
+                embed::<Binary64, Binary64Ext3>(xs, p, i, Value::Binary64Ext3Vector)
+            }
+            _ => Err(refused("kernel-operands")),
         };
-        p.vector_width(xs.len(), 32)?;
-        p.output(size(xs.len(), 32)?, i.max_output_bytes)?;
-        let mut out = reserve(xs.len())?;
-        out.extend(xs.iter().copied().map(KoalaBearExt8::from));
-        return Ok(vec![Value::KoalaBearExt8Vector(out.into())]);
     }
     if name == "field.embed" {
         p.output(512, i.max_output_bytes)?;
-        return match (
-            i.binding
-                .signature()
-                .outputs
-                .first()
-                .map(|t| t.logical().identity()),
-            args,
-        ) {
+        return match (target, args) {
             (Some(Identity::KoalaBearExt8), [Value::KoalaBearField(x)]) => {
                 Ok(vec![Value::KoalaBearExt8Field((*x).into())])
+            }
+            (Some(Identity::KoalaBearExt4), [Value::KoalaBearField(x)]) => {
+                Ok(vec![Value::KoalaBearExt4Field((*x).into())])
+            }
+            (Some(Identity::Binary64Ext3), [Value::Binary64Field(x)]) => {
+                Ok(vec![Value::Binary64Ext3Field((*x).into())])
             }
             _ => Err(refused("kernel-operands")),
         };
@@ -302,7 +401,10 @@ pub(crate) fn apply(
         Some(Identity::Bls12381Fr) => dense::<Scalar>(name, args, i, p),
         Some(Identity::Ristretto255Scalar) => dense::<RistrettoScalar>(name, args, i, p),
         Some(Identity::KoalaBearExt8) => dense::<KoalaBearExt8>(name, args, i, p),
+        Some(Identity::KoalaBearExt4) => dense::<KoalaBearExt4>(name, args, i, p),
         Some(Identity::KoalaBear) => dense::<KoalaBear>(name, args, i, p),
+        Some(Identity::Binary64) => dense::<Binary64>(name, args, i, p),
+        Some(Identity::Binary64Ext3) => dense::<Binary64Ext3>(name, args, i, p),
         _ => Err(refused("kernel-operands")),
     }
 }
@@ -546,6 +648,27 @@ fn dense<S: Family>(
             out.extend_from_slice(&a[..k]);
             Ok(vec![S::vector_value(out.into())])
         }
+        "vector.bit_reverse" | "vector.bit_reverse_rows" => {
+            let a = v(0)?;
+            let width = if name == "vector.bit_reverse" {
+                1
+            } else {
+                index(1)?
+            };
+            if width == 0 || !a.len().is_multiple_of(width) {
+                return Err(refused("vector-shape"));
+            }
+            let height = a.len() / width;
+            if !height.is_power_of_two() {
+                return Err(refused("vector-bit-reversal"));
+            }
+            let mut out = allocation(a.len())?;
+            for row in 0..height {
+                let source = crate::kernels::arithmetic::reverse_bits(row, height);
+                out.extend_from_slice(&a[source * width..(source + 1) * width]);
+            }
+            Ok(vec![S::vector_value(out.into())])
+        }
         "vector.interleave" => {
             let (a, b) = (v(0)?, v(1)?);
             equal_len(a.len(), b.len())?;
@@ -751,23 +874,48 @@ impl Value {
     }
     /// Bounded vector of validated BN254 G1 points.
     pub fn bn254_g1_vector(values: &[crate::Bn254G1], policy: &Policy) -> Result<Self> {
-        policy.bn254_groups::<crate::Bn254G1>(values.len())?;
+        policy.typed_groups::<crate::Bn254G1>(values.len())?;
         let mut v = reserve(values.len())?;
         v.extend_from_slice(values);
         Ok(Self::Bn254G1Vector(v.into()))
     }
     /// Bounded vector of validated BN254 G2 points.
     pub fn bn254_g2_vector(values: &[crate::Bn254G2], policy: &Policy) -> Result<Self> {
-        policy.bn254_groups::<crate::Bn254G2>(values.len())?;
+        policy.typed_groups::<crate::Bn254G2>(values.len())?;
         let mut v = reserve(values.len())?;
         v.extend_from_slice(values);
         Ok(Self::Bn254G2Vector(v.into()))
+    }
+    /// Bounded vector of validated BLS12-381 G2 points.
+    pub fn bls12381_g2_vector(values: &[crate::Bls12381G2], policy: &Policy) -> Result<Self> {
+        policy.typed_groups::<crate::Bls12381G2>(values.len())?;
+        let mut v = reserve(values.len())?;
+        v.extend_from_slice(values);
+        Ok(Self::Bls12381G2Vector(v.into()))
     }
     pub fn koala_bear_ext8_vector(values: &[KoalaBearExt8], policy: &Policy) -> Result<Self> {
         policy.vector_width(values.len(), std::mem::size_of::<KoalaBearExt8>())?;
         let mut v = reserve(values.len())?;
         v.extend_from_slice(values);
         Ok(Self::KoalaBearExt8Vector(v.into()))
+    }
+    pub fn koala_bear_ext4_vector(values: &[KoalaBearExt4], policy: &Policy) -> Result<Self> {
+        policy.vector_width(values.len(), std::mem::size_of::<KoalaBearExt4>())?;
+        let mut v = reserve(values.len())?;
+        v.extend_from_slice(values);
+        Ok(Self::KoalaBearExt4Vector(v.into()))
+    }
+    pub fn binary64_vector(values: &[Binary64], policy: &Policy) -> Result<Self> {
+        policy.vector_width(values.len(), std::mem::size_of::<Binary64>())?;
+        let mut v = reserve(values.len())?;
+        v.extend_from_slice(values);
+        Ok(Self::Binary64Vector(v.into()))
+    }
+    pub fn binary64_ext3_vector(values: &[Binary64Ext3], policy: &Policy) -> Result<Self> {
+        policy.vector_width(values.len(), std::mem::size_of::<Binary64Ext3>())?;
+        let mut v = reserve(values.len())?;
+        v.extend_from_slice(values);
+        Ok(Self::Binary64Ext3Vector(v.into()))
     }
     pub fn koala_bear_vector(values: &[KoalaBear], policy: &Policy) -> Result<Self> {
         policy.vector_width(values.len(), std::mem::size_of::<KoalaBear>())?;
@@ -884,6 +1032,28 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             "arkworks/vector.rotate",
             "dalek/vector.rotate",
             "plonky3/vector.rotate",
+        ]),
+        field::operation(
+            "vector.bit_reverse",
+            &[Vector],
+            &[Vector],
+            AttributeRule::None,
+        )
+        .implemented_by(&[
+            "arkworks/vector.bit_reverse",
+            "dalek/vector.bit_reverse",
+            "plonky3/vector.bit_reverse",
+        ]),
+        field::operation(
+            "vector.bit_reverse_rows",
+            &[Vector, Index],
+            &[Vector],
+            AttributeRule::None,
+        )
+        .implemented_by(&[
+            "arkworks/vector.bit_reverse_rows",
+            "dalek/vector.bit_reverse_rows",
+            "plonky3/vector.bit_reverse_rows",
         ]),
         field::operation(
             "vector.interleave",
@@ -1368,15 +1538,17 @@ pub(crate) const EMBEDDINGS: &[crate::bindings::Contract] = &[crate::bindings::f
 mod batch_inversion_tests {
     use super::*;
 
+    /// Distinct nonzero values: successive sums of one in odd characteristic.
     fn check<S: Coefficient>() {
+        let mut x = S::one();
+        check_values(|_| {
+            x = x + S::one();
+            x
+        });
+    }
+    fn check_values<S: Coefficient>(mut element: impl FnMut(usize) -> S) {
         for n in [0, 1, 2, 17, 257] {
-            let mut x = S::one();
-            let values: Vec<_> = (0..n)
-                .map(|_| {
-                    x = x + S::one();
-                    x
-                })
-                .collect();
+            let values: Vec<_> = (0..n).map(&mut element).collect();
             let mut output = Vec::with_capacity(n);
             invert_nonzero(&values, &mut output).unwrap();
             assert_eq!(output.len(), n);
@@ -1401,5 +1573,9 @@ mod batch_inversion_tests {
         check::<RistrettoScalar>();
         check::<KoalaBear>();
         check::<KoalaBearExt8>();
+        check::<KoalaBearExt4>();
+        // In characteristic two, one plus one is zero: use bit patterns instead.
+        check_values(|k| crate::plonky3::binary::from_bits(k as u64 + 2));
+        check_values(|k| crate::plonky3::binary::ext3_from_bits([3, k as u64, 5]));
     }
 }

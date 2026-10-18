@@ -9,7 +9,6 @@ import Zkc.Source.DeriveRegion
 nested caller composition. These controls do not prove security or reachability. -/
 set_option autoImplicit false
 set_option smartUnfolding false
-set_option maxRecDepth 20000
 namespace Tests.ContractSourceCalls
 open Zkc.Source Zkc.Source.Structured ZkcExamples.Structured
 
@@ -23,7 +22,9 @@ example : (callSites SumcheckReduceViews.runDefinition.body).map (·.signature) 
     [SumcheckReduceBodies.reduceSignature] := rfl
 example : (callSites SumcheckReduceViews.runDefinition.body).map (fun c => c.operands.indices) =
     [[0, 1, 2, 6, 7, 8]] := rfl
+set_option maxRecDepth 20000 in
 example : (callInventory SumcheckSourceViews.reduceDefinition.body).length = 0 := rfl
+set_option maxRecDepth 20000 in
 example : (callInventory SumcheckReduceViews.reduceDefinition.body).length = 0 := rfl
 
 example : (callSites ApplicationWrapperViews.outerDefinition.body).map (·.signature) =

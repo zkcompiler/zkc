@@ -14,8 +14,6 @@ namespace ZkcExamples.Structured.SchnorrBinding
 open Zkc.Source Zkc.Source.Structured
 open SchnorrInteractive
 
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 set_option smartUnfolding false
 
 def owner : ContractBinding imported := by bind_contract

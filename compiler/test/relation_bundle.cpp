@@ -1490,6 +1490,11 @@ static const std::vector<Mutation> SHARED_MUTATIONS = {
     {"non-field public slot",
      {{0, R"FX(["start","koala-bear"])FX", R"FX(["start","bn254.g1"])FX"}},
      "bundle-field"},
+    // A binary field has no residue coordinates to evaluate a Bundle in.
+    {"binary public slot",
+     {{0, R"FX(["start","koala-bear"])FX",
+       R"FX(["start","gf2-64.pentanomial-4-3-1"])FX"}},
+     "bundle-field-presentation"},
 };
 static std::string sharedOutcome(const std::vector<std::string> &texts) {
   auto bundle = readBundleText(texts[0]);

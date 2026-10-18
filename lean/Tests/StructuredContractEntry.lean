@@ -3,7 +3,6 @@ import Zkc.Source.Structured.ContractEntry
 open Zkc.Source Zkc.Source.Structured
 namespace Tests.StructuredContractEntry
 set_option smartUnfolding false
-set_option maxRecDepth 20000
 
 private def digest := "sha256:" ++ String.ofList (List.replicate 64 '0')
 private def clause (name role : String) : ContractClause :=

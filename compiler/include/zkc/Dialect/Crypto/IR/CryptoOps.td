@@ -9,6 +9,7 @@ include "mlir/Interfaces/InferTypeOpInterface.td"
 include "zkc/Dialect/BoundOperations.td"
 
 def EncodingFieldsBeOp : BoundOp<CryptoDialect, "exec.encoding_fields_be", [OpEncodingFieldsBe]>;
+def EncodingFieldsFromBeOp : BoundOp<CryptoDialect, "exec.encoding_fields_from_be", [OpEncodingFieldsFromBe]>;
 def EncodingFieldsLeOp : BoundOp<CryptoDialect, "exec.encoding_fields_le", [OpEncodingFieldsLe]>;
 def EncodingGroupsCompressedOp : BoundOp<CryptoDialect, "exec.encoding_groups_compressed", [OpEncodingGroupsCompressed]>;
 def EncodingFieldBeOp : BoundOp<CryptoDialect, "exec.encoding_field_be", [OpEncodingFieldBe]>;
@@ -120,8 +121,15 @@ def IndexedTranscriptIndexOp : BoundOp<CryptoDialect,
 def EncodingFieldLeOp : BoundOp<CryptoDialect, "exec.encoding_field_le", [OpEncodingFieldLe]>;
 def EncodingFieldFromLeOp : BoundOp<CryptoDialect, "exec.encoding_field_from_le", [OpEncodingFieldFromLe]>;
 def EncodingFieldReduceLeOp : BoundOp<CryptoDialect, "exec.encoding_field_reduce_le", [OpEncodingFieldReduceLe]>;
+def EncodingFieldsFromLeOp : BoundOp<CryptoDialect, "exec.encoding_fields_from_le", [OpEncodingFieldsFromLe]>;
+def EncodingFieldMontgomeryLeOp : BoundOp<CryptoDialect, "exec.encoding_field_montgomery_le", [OpEncodingFieldMontgomeryLe]>;
+def EncodingFieldFromMontgomeryLeOp : BoundOp<CryptoDialect, "exec.encoding_field_from_montgomery_le", [OpEncodingFieldFromMontgomeryLe]>;
+def EncodingFieldsMontgomeryLeOp : BoundOp<CryptoDialect, "exec.encoding_fields_montgomery_le", [OpEncodingFieldsMontgomeryLe]>;
+def EncodingFieldsFromMontgomeryLeOp : BoundOp<CryptoDialect, "exec.encoding_fields_from_montgomery_le", [OpEncodingFieldsFromMontgomeryLe]>;
 def EncodingGroupDecodeCofactorOp : BoundOp<CryptoDialect, "exec.encoding_group_decode_cofactor", [OpEncodingGroupDecodeCofactor]>;
 def EncodingCryptonoteMapOp : BoundOp<CryptoDialect, "exec.encoding_cryptonote_map", [OpEncodingCryptonoteMap]>;
 def Keccak256Op : BoundOp<CryptoDialect, "exec.keccak256", [OpHashKeccak256]>;
+def Sha256Op : BoundOp<CryptoDialect, "exec.sha256", [OpHashSha256]>;
+def Poseidon2Width16Op : BoundOp<CryptoDialect, "exec.poseidon2_16", [OpHashPoseidon2Width16]>;
 
 #endif

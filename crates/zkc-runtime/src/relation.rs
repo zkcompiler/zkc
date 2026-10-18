@@ -76,15 +76,27 @@ impl AnalysisBudget {
 }
 
 fn is_prime(field: Identity) -> bool {
-    field.field_characteristic().is_some() && field != Identity::KoalaBearExt8
+    field.is_prime_field()
+}
+/// An installed field without a residue presentation, such as a binary field,
+/// is refused as the C++ reader refuses it; an unknown identity is not a field.
+fn presentation(field: Identity) -> Result<usize> {
+    degree(field).ok_or(if field.field_characteristic().is_some() {
+        Error("bundle-field-presentation")
+    } else {
+        Error("bundle-field")
+    })
 }
 /// Coordinates per element: `koala-bear.ext8-binomial3` is F_p[X]/(X^8 - 3)
-/// in the ascending basis (docs/spec/domains/values.md).
+/// and `koala-bear.ext4-binomial3` is F_p[X]/(X^4 - 3), each in the ascending
+/// basis (docs/spec/domains/values.md).
 pub fn degree(field: Identity) -> Option<usize> {
     if is_prime(field) {
         Some(1)
     } else if field == Identity::KoalaBearExt8 {
         Some(8)
+    } else if field == Identity::KoalaBearExt4 {
+        Some(4)
     } else {
         None
     }
@@ -506,8 +518,8 @@ impl Bundle {
         if tables.is_empty() {
             return Err(Error("bundle-tables"));
         }
-        if publics.iter().any(|s| degree(s.field).is_none()) {
-            return Err(Error("bundle-field"));
+        for slot in &publics {
+            presentation(slot.field)?;
         }
         unique_names(publics.iter().map(|s| s.name.as_str()))?;
         for c in &channels {
@@ -535,9 +547,7 @@ impl Bundle {
                 return Err(Error("bundle-limit"));
             }
             for g in &table.groups {
-                if degree(g.field).is_none() {
-                    return Err(Error("bundle-field"));
-                }
+                presentation(g.field)?;
                 if g.width < 1 || g.width > WIDTH_LIMIT {
                     return Err(Error("bundle-width"));
                 }

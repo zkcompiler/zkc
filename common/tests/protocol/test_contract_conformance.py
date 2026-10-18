@@ -108,6 +108,9 @@ def required_atomic_types():
         "bn254.fr": "field vector polynomial round matrix rng",
         "koala-bear": "field vector polynomial round matrix",
         "koala-bear.ext8-binomial3": "field vector polynomial round matrix rng",
+        "koala-bear.ext4-binomial3": "field vector polynomial round matrix",
+        "gf2-64.pentanomial-4-3-1": "field vector polynomial round matrix",
+        "gf2-64.pentanomial-4-3-1.ext3-trinomial1": "field vector polynomial round matrix",
         "bls12-381.g1": "group groups",
         "ristretto255.group": "group groups",
         "edwards25519.prime": "group groups",
@@ -116,13 +119,18 @@ def required_atomic_types():
         "multilinear.kzg.bls12-381/0": "commitment proof opening_state prover_key verifier_key",
         "rows.merkle-keccak256.koala-bear/0": "commitment proof opening_state commitments opening_states",
         "rows.merkle-keccak256.koala-bear.ext8-binomial3/0": "commitment proof opening_state commitments opening_states",
+        "rows.merkle-poseidon2-16.koala-bear/0": "commitment proof opening_state commitments opening_states",
+        "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0":
+            "commitment proof opening_state commitments opening_states",
         "merlin3.bls12-381.fr64be/0": "transcript",
         "merlin3.ristretto255.scalar64le/0": "transcript",
         "spongefish0.8.0.keccak.bls12-381.fr64be/0": "transcript",
         "merlin3.koala-bear.ext8-binomial3.rejection31le/0": "transcript",
+        "hash-chain.keccak256.bls12-381.fr64be/0": "transcript",
+        "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0": "transcript",
     }
     result = {(kind, domain) for domain, kinds in families.items() for kind in kinds.split()}
-    assert len(result) == 65
+    assert len(result) == 92
     return result
 
 
@@ -262,6 +270,11 @@ def candidates(inventory):
                         "vector:bn254.fr", "rng:bls12-381.fr", "matrix:bls12-381.fr",
                         "field:bn254.fr", "group:bn254.g1", "group:bn254.g2",
                         "field:koala-bear", "field:koala-bear.ext8-binomial3",
+                        "field:koala-bear.ext4-binomial3", "vector:koala-bear.ext4-binomial3",
+                        "matrix:koala-bear.ext4-binomial3",
+                        # No installed transcript observes a binary field.
+                        "field:gf2-64.pentanomial-4-3-1",
+                        "vector:gf2-64.pentanomial-4-3-1.ext3-trinomial1",
                         "field:ristretto255.scalar", "group:ristretto255.group",
                         "sequence<group:bn254.g2>", "group:bn254.gt", "sequence<group:bn254.gt>",
                         "vector:koala-bear", "vector:koala-bear.ext8-binomial3",
@@ -271,7 +284,11 @@ def candidates(inventory):
                         "proof:rows.merkle-keccak256.koala-bear/0",
                         "proof:rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
                         "opening_state:rows.merkle-keccak256.koala-bear/0",
-                        "commitments:rows.merkle-keccak256.koala-bear/0"]]
+                        "commitments:rows.merkle-keccak256.koala-bear/0",
+                        "commitment:rows.merkle-poseidon2-16.koala-bear/0",
+                        "proof:rows.merkle-poseidon2-16.koala-bear/0",
+                        "commitment:rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0",
+                        "proof:rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"]]
         else:
             sort = {"field": "Field", "fixed": "Field", "array": "Field", "group": "Group",
                     "commitment": "Commitment", "transcript": "Transcript"}[group]
@@ -281,7 +298,7 @@ def candidates(inventory):
         for arguments, provider in choices:
             assert provider, (name, arguments, "no explicit catalog provider")
             rows.append((operation, arguments, f"{provider}/{name}"))
-    assert len(rows) < 1500, "review enumeration growth; avoid combinatorial testing"
+    assert len(rows) < 1700, "review enumeration growth; avoid combinatorial testing"
     return rows
 
 
@@ -513,7 +530,8 @@ def test_explicit_semantic_witnesses(drivers, directory):
         ("field.add", ["koala-bear"], ["field:koala-bear"] * 2, ["field:koala-bear"]),
         *(("vector.product", [field], [f"vector:{field}"], [f"field:{field}"])
           for field in ("bls12-381.fr", "bn254.fr", "ristretto255.scalar",
-                        "koala-bear", "koala-bear.ext8-binomial3")),
+                        "koala-bear", "koala-bear.ext8-binomial3",
+                        "koala-bear.ext4-binomial3")),
         ("poly.univariate_evaluate", ["bls12-381.fr"],
          ["polynomial:bls12-381.fr", "field:bls12-381.fr"], ["field:bls12-381.fr"]),
         ("poly.evaluate", ["bls12-381.fr"],
@@ -527,9 +545,23 @@ def test_explicit_semantic_witnesses(drivers, directory):
           "point:bls12-381.fr", "field:bls12-381.fr", "proof:multilinear.kzg.bls12-381/0"], ["bool"]),
         ("oracle.commit", ["rows.merkle-keccak256.koala-bear/0"], ["vector:koala-bear", "index"],
          ["commitment:rows.merkle-keccak256.koala-bear/0", "opening_state:rows.merkle-keccak256.koala-bear/0"]),
+        ("oracle.open_many", ["rows.merkle-poseidon2-16.koala-bear/0"],
+         ["opening_state:rows.merkle-poseidon2-16.koala-bear/0", "indices"],
+         ["vector:koala-bear", "proof:rows.merkle-poseidon2-16.koala-bear/0"]),
+        ("oracle.check_many", ["rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"],
+         ["commitment:rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0", "index", "index",
+          "indices", "vector:koala-bear.ext4-binomial3",
+          "proof:rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"], ["bool"]),
         ("transcript.native.indexed.challenge", ["merlin3.bls12-381.fr64be/0"],
          ["transcript:merlin3.bls12-381.fr64be/0", "indices"],
          ["field:bls12-381.fr", "transcript:merlin3.bls12-381.fr64be/0"]),
+        ("transcript.native.indexed.challenge", ["hash-chain.keccak256.bls12-381.fr64be/0"],
+         ["transcript:hash-chain.keccak256.bls12-381.fr64be/0", "indices"],
+         ["field:bls12-381.fr", "transcript:hash-chain.keccak256.bls12-381.fr64be/0"]),
+        ("transcript.native.indexed.index",
+         ["hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"],
+         ["transcript:hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0", "index", "indices"],
+         ["index", "transcript:hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"]),
     ]
     requests = [binding(name, args) for name, args, _, _ in witnesses]
     expected = [{"accepted": True, "physical": False, "inputs": inputs, "outputs": outputs}
@@ -567,6 +599,9 @@ def test_unknowns_and_malformed_arguments(drivers, directory):
             ("fixed_vector.dot", ["koala-bear", "1048577"]),
             ("transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/0"]),
             ("transcript.native.indexed.observe.data", ["unknown.suite", "field:bls12-381.fr"]),
+            # A field-only suite has no UniformIndex transition.
+            ("transcript.native.indexed.index", ["hash-chain.keccak256.bls12-381.fr64be/0"]),
+            ("transcript.index", ["hash-chain.keccak256.bls12-381.fr64be/0"]),
             ("transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/0",
                                                       "field_array<bls12-381.g1,4>"]),
             ("transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/0",
@@ -935,7 +970,8 @@ def test_checked_access_independent_signatures(physical_drivers, directory):
     # Literal expectations, independent of declaration enumeration and each resolver.
     fields = [("bls12-381.fr", "arkworks"), ("bn254.fr", "arkworks"),
               ("ristretto255.scalar", "dalek"), ("koala-bear", "plonky3"),
-              ("koala-bear.ext8-binomial3", "plonky3")]
+              ("koala-bear.ext8-binomial3", "plonky3"),
+              ("koala-bear.ext4-binomial3", "plonky3")]
     requests, expected = [], []
     for field, _ in fields:
         requests.append(binding("matrix.get", [field]))
@@ -999,7 +1035,8 @@ def test_checked_access_admits_only_dynamic_operands_without_attributes(drivers,
 def test_matrix_contraction_independent_signatures(physical_drivers, directory):
     fields = [("bls12-381.fr", "arkworks"), ("bn254.fr", "arkworks"),
               ("ristretto255.scalar", "dalek"), ("koala-bear", "plonky3"),
-              ("koala-bear.ext8-binomial3", "plonky3")]
+              ("koala-bear.ext8-binomial3", "plonky3"),
+              ("koala-bear.ext4-binomial3", "plonky3")]
     logical, logical_expected, physical, physical_expected = [], [], [], []
     for contract in ("matrix.row_dot", "matrix.column_dot"):
         for field, provider in fields:
@@ -1070,7 +1107,7 @@ def admission_failures(cases, replies):
 def test_actual_parameter_and_program_admission(drivers, directory):
     cases = json.loads((FIXTURES / "attribute-admission.json").read_text())
     assert len({case["name"] for case in cases}) == len(cases)
-    assert 60 <= len(cases) <= 106, "review the bounded attribute witness set"
+    assert 60 <= len(cases) <= 120, "review the bounded attribute witness set"
     replies = query(drivers, [attribute_request(case) for case in cases], directory)
     finish(directory, admission_failures(cases, replies))
 

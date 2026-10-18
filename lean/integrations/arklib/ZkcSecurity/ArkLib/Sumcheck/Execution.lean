@@ -71,8 +71,6 @@ def game (coefficients : Coefficients F) (claim : F) (prover : Strategy F) : Pro
     else return False
   else return False
 
-set_option maxRecDepth 4000 in
-set_option maxHeartbeats 800000 in
 theorem execution_game {wiring : Wiring} {program : Verifier F}
     (certificate : VerifierContract wiring program) (coefficients : Coefficients F)
     (claim : F) (service : Nat) (prover : Strategy F) :

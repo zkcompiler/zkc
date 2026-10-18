@@ -12,7 +12,6 @@ open Zkc.Polynomial.Multilinear (restrictPrefixValues)
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Arbitrary raw triples: no shape, width, or vector-length premise is smuggled in. -/
 theorem sums_generic_body (table : Meanings F G) (halves : HalvesLaw table)
     (xs : List F) (dimension columns : Nat) (dimensionBound : dimension < indexLimit) :
@@ -27,7 +26,6 @@ theorem sums_generic_body (table : Meanings F G) (halves : HalvesLaw table)
   · split <;> rfl
   · rfl
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Any actual split stop suppresses both subsequent sums. -/
 theorem sums_stopped (table : Meanings F G) (xs : List F) (dimension columns : Nat)
     (reason : PIR.Stop)
@@ -35,7 +33,6 @@ theorem sums_stopped (table : Meanings F G) (xs : List F) (dimension columns : N
     sumsBody.denote (meaning F G table) (inputs xs dimension columns).get = .halt reason := by
   rw [sums_expansion, stopped]; rfl
 
-set_option backward.isDefEq.respectTransparency false in
 /-- A shaped positive-dimensional input returns the two ordered half sums. -/
 theorem sums_shaped (table : Meanings F G) (halves : HalvesLaw table)
     (xs : List F) (dimension columns : Nat) (shape : HasShape xs dimension columns)
@@ -45,7 +42,6 @@ theorem sums_shaped (table : Meanings F G) (halves : HalvesLaw table)
   rw [sums_generic_body table halves xs dimension columns
     (Nat.lt_trans shape.2.1 (by decide +kernel)), ite_eq_left positive, ite_eq_left (shape.split_valid positive)]
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Complete constructor → finite prefix → realization → sum → equality equation. -/
 theorem checkTable_generic_body (table : Meanings F G) (laws : MapPrefixContracts.Laws table)
     (xs point : List F) (claim : F) (vectorBound : xs.length < indexLimit)
@@ -65,7 +61,6 @@ theorem checkTable_generic_body (table : Meanings F G) (laws : MapPrefixContract
     rfl
   · simp only [shape, ite_false, PIR.Proc.bind]
 
-set_option backward.isDefEq.respectTransparency false in
 /-- No semantic premise about check_table is needed for the malformed branch. -/
 theorem check_malformed_generic_body (table : Meanings F G)
     (shapeLaw : ∀ (xs : List F) (dimension columns : Nat),
@@ -79,7 +74,6 @@ theorem check_malformed_generic_body (table : Meanings F G)
     shapeLaw xs point.length 1 vectorBound pointBound (by decide +kernel)]
   simp only [boolResult, PIR.Proc.bind, Values.get, decide_eq_false malformed, Bool.false_eq_true, ite_false]
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The only callback premise is an exact body equation; no intended result is assumed. -/
 theorem check_generic_body (table : Meanings F G) (laws : MapPrefixContracts.Laws table)
     (callback : ∀ (xs point : List F) (claim : F),
@@ -99,7 +93,6 @@ theorem check_generic_body (table : Meanings F G) (laws : MapPrefixContracts.Law
   · simp only [boolResult, PIR.Proc.bind, Values.get,
       shape, false_and, decide_false, Bool.false_eq_true, ite_false]
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Point-length exhaustion occurs before shape or constructor in both bodies. -/
 theorem check_point_exhausted (table : Meanings F G) (xs point : List F) (claim : F)
     (overflow : ¬ point.length < indexLimit) :
@@ -116,7 +109,6 @@ def ShapeBodyLaw (table : Meanings F G) : Prop :=
   ∀ (xs : List F) (n w : Nat), invoke table shapeHelper (inputs xs n w) =
     shapeBody.denote (meaning F G table) (inputs xs n w).get
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Full generic raw-triple contract, including checked-index refusal. -/
 theorem sums_generic_body_all (table : Meanings F G) (less : LessAllLaw table)
     (association : HalvesBodyLaw table) (xs : List F) (dimension columns : Nat) :
@@ -135,7 +127,6 @@ theorem sums_generic_body_all (table : Meanings F G) (less : LessAllLaw table)
     · rfl
   · rfl
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Too-large dimensions return false before reading xs.length; no vector bound is needed. -/
 theorem check_large_dimension_generic_body (table : Meanings F G) (less : LessLaw table)
     (association : ShapeBodyLaw table) (xs point : List F) (claim : F)
@@ -145,7 +136,6 @@ theorem check_large_dimension_generic_body (table : Meanings F G) (less : LessLa
     shape_large_dimension table less xs point.length 1 (by decide) (by decide +kernel) pointBound large]
   rfl
 
-set_option backward.isDefEq.respectTransparency false in
 /-- A small dimension reaches the independent vector-length check, which may exhaust. -/
 theorem check_vector_exhausted_generic_body (table : Meanings F G) (less : LessLaw table)
     (association : ShapeBodyLaw table) (xs point : List F) (claim : F)
@@ -156,7 +146,6 @@ theorem check_vector_exhausted_generic_body (table : Meanings F G) (less : LessL
     shape_length_exhausted table less xs point.length 1 (by decide) (by decide +kernel) small vectorOverflow]
   rfl
 
-set_option backward.isDefEq.respectTransparency false in
 /-- A constructor stop suppresses prefix, projection, sum and equality. -/
 theorem checkTable_constructor_stopped (table : Meanings F G) (xs point : List F)
     (claim : F) (pointBound : point.length < indexLimit) (reason : PIR.Stop)
@@ -166,17 +155,14 @@ theorem checkTable_constructor_stopped (table : Meanings F G) (xs point : List F
   rfl
 
 
-set_option backward.isDefEq.respectTransparency false in
 theorem empty_body (table : Meanings F G) :
     emptyBody.denote (meaning F G table) Values.nil.get = .done (.cons [] .nil) := rfl
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The actual append body has no allocation or checked-length premise. -/
 theorem append_body (table : Meanings F G) (xs : List F) (x : F) :
     appendBody.denote (meaning F G table) (Values.cons xs (.cons x .nil)).get =
       .done (.cons (xs ++ [x]) .nil) := rfl
 
-set_option backward.isDefEq.respectTransparency false in
 /-- A later length operation can exhaust after append itself succeeds. -/
 theorem append_then_length (table : Meanings F G) (xs : List F) (x : F) :
     (appendBody.denote (meaning F G table) (Values.cons xs (.cons x .nil)).get).bind

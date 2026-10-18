@@ -35,6 +35,8 @@ stdenvNoCC.mkDerivation {
         git -C "integrations/arklib/.lake/packages/$name" reset --mixed HEAD
       fi
     done
+    # Apply a declared dependency patch, if any, to its exact pinned revision.
+    python3 -c 'from pathlib import Path; from support.compatibility import prepare; prepare(Path("integrations/arklib").resolve())'
     export LEAN_NUM_THREADS="$NIX_BUILD_CORES"
     export MATHLIB_NO_CACHE_ON_UPDATE=1
     (cd integrations/arklib && lake --no-cache build)

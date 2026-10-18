@@ -289,6 +289,31 @@ covers pre-execution formation or admission failures, it supplies that boundary'
 correspondence explicitly; a theorem quantified only over already-formed source
 programs does not automatically prove it.
 
+### Normalization across transcript operations
+
+Normalization that reschedules pure, total calculations keeps one invariant:
+
+- it never reorders, adds, removes or changes the arguments of transcript
+  operations (absorptions, requests, deliveries, gate steps), effects or stops;
+- it never moves a computation that can stop or has an effect across one of
+  them;
+- it moves a pure, total calculation across them only when the calculation's
+  result flows into none of the operations it crosses.
+
+In the abstract, unmetered meaning, absorbed values, request operands and stop
+conditions are then unchanged, so the abstract trace, the identity of every
+transcript query and the abstract stop behavior are preserved. A metered meaning
+that charges every instruction and checks the budget before each charge is
+different: moving charged arithmetic across a transcript operation can move the
+point where a bounded run exhausts, although the arithmetic cannot fail. A claim
+about metered executions of a rescheduled program needs a separate metered
+refinement, such as pruning at every budget, or a sufficient-budget premise under
+which the metered meaning is the abstract one. Equal abstract results do not
+imply equal resources, so a rescheduled program is not claimed operationally
+equivalent. Rules that prune or merge effects, such as law-conditioned pruning of
+repeated hash calls ([construction obligations](../ir/construction-obligations.md#cryptographic-effects)),
+are outside this invariant and carry their own contracts.
+
 Phase admission also concerns every interface-typed reply, rather than only runs
 under a selected handler. Combining source phase evidence with an execution
 refinement requires a law transporting that admission to the actual target, or

@@ -13,10 +13,15 @@ pub(super) const CONTRACTS: &[Contract] = &[
     )
     .implemented_by(&["arkworks/encoding.fields_be"]),
     Contract::new(
+        "encoding.fields_from_be",
+        (&[Bytes], &[Bool, Vector], AttributeRule::None),
+    )
+    .implemented_by(&["arkworks/encoding.fields_from_be"]),
+    Contract::new(
         "encoding.fields_le",
         (&[Vector], &[Bytes], AttributeRule::None),
     )
-    .implemented_by(&["dalek/encoding.fields_le"]),
+    .implemented_by(&["dalek/encoding.fields_le", "plonky3/encoding.fields_le"]),
     Contract::new(
         "encoding.groups_compressed",
         (&[Groups], &[Bytes], AttributeRule::None),
@@ -29,12 +34,40 @@ pub(super) const CONTRACTS: &[Contract] = &[
         "encoding.field_le",
         (&[Field], &[Bytes], AttributeRule::None),
     )
-    .implemented_by(&["dalek/encoding.field_le"]),
+    .implemented_by(&["dalek/encoding.field_le", "plonky3/encoding.field_le"]),
     Contract::new(
         "encoding.field_from_le",
         (&[Bytes], &[Bool, Field], AttributeRule::None),
     )
-    .implemented_by(&["dalek/encoding.field_from_le"]),
+    .implemented_by(&[
+        "dalek/encoding.field_from_le",
+        "plonky3/encoding.field_from_le",
+    ]),
+    Contract::new(
+        "encoding.fields_from_le",
+        (&[Bytes], &[Bool, Vector], AttributeRule::None),
+    )
+    .implemented_by(&["plonky3/encoding.fields_from_le"]),
+    Contract::new(
+        "encoding.field_montgomery_le",
+        (&[Field], &[Bytes], AttributeRule::None),
+    )
+    .implemented_by(&["plonky3/encoding.field_montgomery_le"]),
+    Contract::new(
+        "encoding.field_from_montgomery_le",
+        (&[Bytes], &[Bool, Field], AttributeRule::None),
+    )
+    .implemented_by(&["plonky3/encoding.field_from_montgomery_le"]),
+    Contract::new(
+        "encoding.fields_montgomery_le",
+        (&[Vector], &[Bytes], AttributeRule::None),
+    )
+    .implemented_by(&["plonky3/encoding.fields_montgomery_le"]),
+    Contract::new(
+        "encoding.fields_from_montgomery_le",
+        (&[Bytes], &[Bool, Vector], AttributeRule::None),
+    )
+    .implemented_by(&["plonky3/encoding.fields_from_montgomery_le"]),
     Contract::new(
         "encoding.field_reduce_le",
         (&[Bytes], &[Field], AttributeRule::None),
@@ -122,19 +155,34 @@ fn select(
         return default_ports(binding, logical, selection);
     }
     let primary = support::primary(binding)?;
+    // Four-byte coordinate words cover KoalaBear and its installed extensions.
+    let koala_bear = matches!(
+        primary,
+        Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4
+    );
+    // Binary fields have little-endian bit patterns; Montgomery residues are
+    // defined only for prime fields and their extensions.
+    let binary = primary.bit_pattern_width().is_some();
     let allowed = match binding.contract.as_str() {
-        "encoding.field_le"
-        | "encoding.fields_le"
-        | "encoding.field_from_le"
-        | "encoding.field_reduce_le" => primary == Identity::Ristretto255Scalar,
+        "encoding.field_le" | "encoding.fields_le" | "encoding.field_from_le" => {
+            primary == Identity::Ristretto255Scalar || koala_bear || binary
+        }
+        "encoding.field_reduce_le" => primary == Identity::Ristretto255Scalar,
+        "encoding.fields_from_le" => koala_bear || binary,
+        "encoding.field_montgomery_le"
+        | "encoding.field_from_montgomery_le"
+        | "encoding.fields_montgomery_le"
+        | "encoding.fields_from_montgomery_le" => koala_bear,
         "encoding.group_decode_cofactor" | "encoding.cryptonote_map" => {
             primary == Identity::Edwards25519Prime
         }
-        "encoding.group_compressed"
-        | "encoding.groups_compressed"
-        | "encoding.group_from_compressed" => {
+        "encoding.groups_compressed" => {
             matches!(primary, Identity::Bls12381G1 | Identity::Edwards25519Prime)
         }
+        "encoding.group_compressed" | "encoding.group_from_compressed" => matches!(
+            primary,
+            Identity::Bls12381G1 | Identity::Bls12381G2 | Identity::Edwards25519Prime
+        ),
         _ => primary == Identity::Bls12381Fr,
     };
     if !allowed {

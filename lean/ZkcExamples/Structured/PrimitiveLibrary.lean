@@ -13,13 +13,10 @@ open Zkc.Source Zkc.Source.Structured
 open PrimitiveShapeViews (shapeBody shapeHelper)
 -- Local transparency options below elaborate dependent source-view aliases;
 -- every resulting equation is still checked by the kernel.
-set_option maxRecDepth 20000
-set_option maxHeartbeats 600000
 set_option linter.unusedSimpArgs false
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Under explicit representation bounds, the complete checked helper returns
 exactly the authored guard/modulus/quotient predicate. -/
 theorem shape_body (table : Meanings F G) (less : LessLaw table) (rows : RowsLaw table)
@@ -64,7 +61,6 @@ theorem shape_body (table : Meanings F G) (less : LessLaw table) (rows : RowsLaw
       HasShape, positive, Evaluation.invokeCallback, show 0 < indexLimit by decide +kernel]
 
 
-set_option backward.isDefEq.respectTransparency false in
 /-- A zero column guard returns false without observing the vector or dimension. -/
 theorem shape_zero_columns (table : Meanings F G) (less : LessLaw table)
     (xs : List F) (dimension : Nat) :
@@ -79,7 +75,6 @@ theorem shape_zero_columns (table : Meanings F G) (less : LessLaw table)
     SiteObservations.silent, PIR.Proc.bind, Primitive.evaluate, primitiveOutcome,
     first, boolResult, Evaluation.invokeCallback, show 0 < indexLimit by decide +kernel]
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The high-dimension guard also precedes every length, division and loop. -/
 theorem shape_large_dimension (table : Meanings F G) (less : LessLaw table)
     (xs : List F) (dimension columns : Nat) (positive : 0 < columns)
@@ -98,7 +93,6 @@ theorem shape_large_dimension (table : Meanings F G) (less : LessLaw table)
     first, second, boolResult, positive, large, Evaluation.invokeCallback,
     show 0 < indexLimit by decide +kernel, show 64 < indexLimit by decide +kernel]
 
-set_option backward.isDefEq.respectTransparency false in
 /-- An unrepresentable vector length exhausts only after both initial guards. -/
 theorem shape_length_exhausted (table : Meanings F G) (less : LessLaw table)
     (xs : List F) (dimension columns : Nat) (positive : 0 < columns)
@@ -116,7 +110,6 @@ theorem shape_length_exhausted (table : Meanings F G) (less : LessLaw table)
     first, second, boolResult, positive, dimensionSmall, lengthInvalid, Evaluation.invokeCallback,
     show 0 < indexLimit by decide +kernel, show 64 < indexLimit by decide +kernel]
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The table constructor returns the original ordered tuple or rejects. -/
 theorem table_body (table : Meanings F G) (xs : List F) (dimension columns : Nat) (valid : Bool)
     (shape : invoke table shapeHelper (inputs xs dimension columns) = .done (boolResult valid)) :
@@ -132,7 +125,6 @@ theorem table_body (table : Meanings F G) (xs : List F) (dimension columns : Nat
       SiteObservations.closed, SiteObservations.silent, PIR.Proc.bind,
       shape, boolResult, Evaluation.invokeCallback]
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Halves checks positive dimension before executing the two-result split.
 Columns are retained source inputs, but this helper itself never validates them. -/
 theorem halves_body (table : Meanings F G) (less : LessLaw table)
@@ -163,7 +155,6 @@ theorem halves_body (table : Meanings F G) (less : LessLaw table)
       Evaluation.invokeCallback, show 0 < indexLimit by decide +kernel]
 
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Source halves refuses an unrepresentable dimension before the positive guard. -/
 theorem halves_dimension_refused (table : Meanings F G) (less : LessAllLaw table)
     (xs : List F) (dimension columns : Nat) (invalid : ¬ dimension < indexLimit) :
@@ -176,7 +167,6 @@ theorem halves_dimension_refused (table : Meanings F G) (less : LessAllLaw table
     primitiveOutcome, PIR.Proc.bind, Values.get_cons, Values.get, Environment.push,
     comparison]
 
-set_option backward.isDefEq.respectTransparency false in
 /-- No raw table triple is excluded; width is unused and vector split has its own guard. -/
 theorem halves_generic_body_all (table : Meanings F G) (less : LessAllLaw table)
     (xs : List F) (dimension columns : Nat) :

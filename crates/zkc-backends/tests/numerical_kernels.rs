@@ -139,6 +139,7 @@ fn capabilities_are_nominal_and_embedding_preserves_all_coordinates() {
                 zkc_runtime::vm::Identity::Bn254Fr
                     | zkc_runtime::vm::Identity::KoalaBear
                     | zkc_runtime::vm::Identity::KoalaBearExt8
+                    | zkc_runtime::vm::Identity::KoalaBearExt4
             )
         );
         assert_eq!(
@@ -171,4 +172,98 @@ fn capabilities_are_nominal_and_embedding_preserves_all_coordinates() {
     let literal = Value::KoalaBearExt8Field(e);
     assert!(domains::KOALA_BEAR_EXT8.physical(Type::Field).is_some());
     assert!(b.encode_native_value(&literal).is_ok());
+}
+
+/// Reverse the low `bits` bits of `i` one digit at a time, independently of
+/// the kernel's word-level reversal.
+fn reversed(i: usize, bits: u32) -> usize {
+    (0..bits).fold(0, |r, b| (r << 1) | ((i >> b) & 1))
+}
+#[test]
+fn bit_reversal_permutes_elements_and_whole_rows() {
+    for bits in 0..=6 {
+        let n = 1usize << bits;
+        let input: Vec<u32> = (0..n as u32).map(|i| 1000 + i).collect();
+        let expected: Vec<u32> = (0..n).map(|i| input[reversed(i, bits)]).collect();
+        assert_value(
+            &call("vector.bit_reverse", vec![vector(&input)]),
+            &vector(&expected),
+        );
+        // An involution: applying it twice restores the input.
+        let once = call("vector.bit_reverse", vec![vector(&input)]);
+        assert_value(&call("vector.bit_reverse", vec![once]), &vector(&input));
+        for width in [1usize, 2, 3] {
+            let table: Vec<u32> = (0..(n * width) as u32).collect();
+            let expected: Vec<u32> = (0..n)
+                .flat_map(|row| {
+                    let source = reversed(row, bits);
+                    table[source * width..(source + 1) * width].to_vec()
+                })
+                .collect();
+            assert_value(
+                &call(
+                    "vector.bit_reverse_rows",
+                    vec![vector(&table), Value::Index(width as u64)],
+                ),
+                &vector(&expected),
+            );
+        }
+    }
+    for (name, args, diagnostic) in [
+        (
+            "vector.bit_reverse",
+            vec![vector(&[])],
+            "vector-bit-reversal",
+        ),
+        (
+            "vector.bit_reverse",
+            vec![vector(&[1, 2, 3])],
+            "vector-bit-reversal",
+        ),
+        (
+            "vector.bit_reverse_rows",
+            vec![vector(&[1, 2, 3, 4, 5, 6]), Value::Index(2)],
+            "vector-bit-reversal",
+        ),
+        (
+            "vector.bit_reverse_rows",
+            vec![vector(&[1, 2, 3]), Value::Index(2)],
+            "vector-shape",
+        ),
+        (
+            "vector.bit_reverse_rows",
+            vec![vector(&[1, 2]), Value::Index(0)],
+            "vector-shape",
+        ),
+        (
+            "vector.bit_reverse_rows",
+            vec![vector(&[]), Value::Index(1)],
+            "vector-bit-reversal",
+        ),
+        (
+            "vector.bit_reverse_rows",
+            vec![vector(&[1, 2]), Value::Index(u64::MAX)],
+            "vector-shape",
+        ),
+    ] {
+        assert!(
+            one(
+                backend(Policy::default()),
+                binding(name, domains::KOALA_BEAR),
+                &[],
+                args
+            )
+            .0
+            .unwrap_err()
+            .contains(diagnostic),
+            "{name}"
+        );
+    }
+    // Positional only: every installed field family binds it.
+    let b = backend(Policy::default());
+    for d in domains::INSTALLED {
+        for name in ["vector.bit_reverse", "vector.bit_reverse_rows"] {
+            assert!(b.binding_signature(&binding(name, *d)).is_some(), "{name}");
+        }
+    }
 }

@@ -25,11 +25,15 @@ fn resolve(
             | "poly.opening_quotient"
     ) && !matches!(
         domain.field,
-        Identity::Bn254Fr | Identity::KoalaBear | Identity::KoalaBearExt8
+        Identity::Bn254Fr | Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4
     ) {
         return None;
     }
     if binding.contract == "poly.even_odd_fold" && !domain.field.has_characteristic_not_two() {
+        return None;
+    }
+    // Ring arenas substitute integer residue coordinates.
+    if binding.contract.starts_with("ring.") && !domain.field.has_residue_coordinates() {
         return None;
     }
     support::domain_signature(binding, row, selection, domain)

@@ -4,8 +4,6 @@ import ZkcTools.StructuredSource.OpenEvaluation
 subjects are hand-built; native-export comparisons belong to the parent bridge. -/
 
 set_option autoImplicit false
-set_option maxRecDepth 10000
-set_option maxHeartbeats 4000000
 
 namespace Tests.StructuredOpenEvaluation
 open Lean Zkc.Source Zkc.Source.Structured ZkcTools.StructuredSource

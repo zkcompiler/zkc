@@ -233,8 +233,92 @@ fn identical_ports_preserve_exact_handler_selection() {
 }
 
 #[test]
+fn opening_state_lists_validate_every_members_nominal_domain_before_entry() {
+    use crate::{KoalaBear, KoalaBearExt4, KoalaBearExt8, merkle, oracle};
+    use std::sync::Arc;
+    use zkc_runtime::vm::{Backend, Program, RuntimeError, Usage, Value as RuntimeValue};
+
+    let shape = crate::plonky3::oracle::Shape::new(1, 2, 8).unwrap();
+    let base = vec![KoalaBear::new(3); 2];
+    let (_, base_tree) = crate::plonky3::oracle::commit(base.clone(), shape, 1 << 20).unwrap();
+    let (_, extension_tree) = crate::plonky3::oracle::commit(
+        vec![KoalaBearExt8::from(KoalaBear::new(3)); 2],
+        shape,
+        1 << 20,
+    )
+    .unwrap();
+    let (_, merkle_base) = merkle::commit::<merkle::poseidon2::Base>(base, shape, 1 << 20).unwrap();
+    let (_, merkle_quartic) = merkle::commit::<merkle::poseidon2::Quartic>(
+        vec![KoalaBearExt4::from(KoalaBear::new(3)); 2],
+        shape,
+        1 << 20,
+    )
+    .unwrap();
+    let keccak_base = oracle::State::Base(Arc::new(base_tree));
+    let keccak_extension = oracle::State::Extension(Arc::new(extension_tree));
+    let poseidon_base = merkle::State::Poseidon2KoalaBear(Arc::new(merkle_base));
+    let poseidon_extension = merkle::State::Poseidon2KoalaBearExt4(Arc::new(merkle_quartic));
+    for (valid, invalid) in [
+        (
+            Value::OracleStates(oracle::Domain::Base, vec![keccak_base.clone()].into()),
+            Value::OracleStates(
+                oracle::Domain::Base,
+                vec![keccak_base.clone(), keccak_extension.clone()].into(),
+            ),
+        ),
+        (
+            Value::OracleStates(oracle::Domain::Extension, vec![keccak_extension].into()),
+            Value::OracleStates(oracle::Domain::Extension, vec![keccak_base].into()),
+        ),
+        (
+            Value::MerkleTrees(
+                merkle::Scheme::Poseidon2KoalaBear,
+                vec![poseidon_base.clone()].into(),
+            ),
+            Value::MerkleTrees(
+                merkle::Scheme::Poseidon2KoalaBear,
+                vec![poseidon_base.clone(), poseidon_extension.clone()].into(),
+            ),
+        ),
+        (
+            Value::MerkleTrees(
+                merkle::Scheme::Poseidon2KoalaBearExt4,
+                vec![poseidon_extension].into(),
+            ),
+            Value::MerkleTrees(
+                merkle::Scheme::Poseidon2KoalaBearExt4,
+                vec![poseidon_base].into(),
+            ),
+        ),
+    ] {
+        let native = backend();
+        native.validate_value(&valid).unwrap();
+        assert_eq!(
+            native.validate_value(&invalid).unwrap_err().code,
+            "refused:oracle-domain"
+        );
+        // The entry declares the malformed list's full physical type. Its
+        // contents still have to agree before any instruction or frame enters.
+        let operation = binding(
+            "opening_states.length",
+            &[invalid.physical_type().logical().identity().name()],
+            "plonky3/opening_states.length",
+        );
+        let admitted = Program::decode(&program(&operation, &[])).unwrap();
+        let error = Runner::new(&admitted, "main", "P", "session", native, vec![invalid])
+            .err()
+            .expect("mismatched list member must refuse loading");
+        assert!(matches!(error.error, RuntimeError::Backend(ref error)
+            if error.code == "refused:oracle-domain"));
+        assert_eq!(error.usage, Usage::default());
+        let (outputs, _) = run(backend(), &operation, &[], vec![valid]);
+        assert!(matches!(&outputs.unwrap()[..], [Value::Index(1)]));
+    }
+}
+
+#[test]
 fn every_payload_has_explicit_identity_and_retained_charge() {
-    use crate::{Bn254Scalar, KoalaBear, KoalaBearExt8, RistrettoScalar};
+    use crate::{Bn254Scalar, KoalaBear, KoalaBearExt4, KoalaBearExt8, RistrettoScalar};
     use std::{collections::HashSet, sync::Arc};
     use zkc_runtime::vm::{
         Identity as I, LogicalType, PhysicalType, Representation as R, ResourceDomain, Type,
@@ -275,11 +359,19 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
             "Bn254G1Vector" => R::Bn254G1Vector,
             "Bn254G2" => R::Bn254G2,
             "Bn254G2Vector" => R::Bn254G2Vector,
+            "Bls12381G2" => R::Bls12381G2,
+            "Bls12381G2Vector" => R::Bls12381G2Vector,
+            "Bls12381Gt" => R::Bls12381Gt,
             "OracleRoot" => R::MerkleRoot,
             "OraclePath" => R::MerklePath,
             "OracleState" => R::MerkleState,
             "OracleRoots" => R::MerkleRoots,
             "OracleStates" => R::MerkleStates,
+            "MerkleDigest" => R::MerkleDigest,
+            "MerkleProof" => R::MerkleProof,
+            "MerkleTree" => R::MerkleTree,
+            "MerkleDigests" => R::MerkleDigests,
+            "MerkleTrees" => R::MerkleTrees,
             "Index" => R::Index,
             "Indices" => R::Indices,
             "Bytes" => R::Bytes,
@@ -292,6 +384,21 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
             "KoalaBearExt8Vector" => R::KoalaBearExt8Vector,
             "KoalaBearExt8Polynomial" => R::KoalaBearExt8Polynomial,
             "KoalaBearExt8Round" => R::KoalaBearExt8Round,
+            "KoalaBearExt4Matrix" => R::KoalaBearExt4SparseCoo,
+            "KoalaBearExt4Field" => R::KoalaBearExt4,
+            "KoalaBearExt4Vector" => R::KoalaBearExt4Vector,
+            "KoalaBearExt4Polynomial" => R::KoalaBearExt4Polynomial,
+            "KoalaBearExt4Round" => R::KoalaBearExt4Round,
+            "Binary64Matrix" => R::Binary64SparseCoo,
+            "Binary64Field" => R::Binary64,
+            "Binary64Vector" => R::Binary64Vector,
+            "Binary64Polynomial" => R::Binary64Polynomial,
+            "Binary64Round" => R::Binary64Round,
+            "Binary64Ext3Matrix" => R::Binary64Ext3SparseCoo,
+            "Binary64Ext3Field" => R::Binary64Ext3,
+            "Binary64Ext3Vector" => R::Binary64Ext3Vector,
+            "Binary64Ext3Polynomial" => R::Binary64Ext3Polynomial,
+            "Binary64Ext3Round" => R::Binary64Ext3Round,
             "KoalaBearField" => R::KoalaBear,
             "KoalaBearVector" => R::KoalaBearVector,
             "KoalaBearPolynomial" => R::KoalaBearPolynomial,
@@ -422,6 +529,36 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         KoalaBearExt8Matrix,
         32
     );
+    scalar_family!(
+        KoalaBearExt4::from(KoalaBear::new(1)),
+        KoalaBearExt4,
+        KoalaBearExt4Field,
+        KoalaBearExt4Vector,
+        KoalaBearExt4Polynomial,
+        KoalaBearExt4Round,
+        KoalaBearExt4Matrix,
+        16
+    );
+    scalar_family!(
+        crate::plonky3::binary::from_bits(3),
+        Binary64,
+        Binary64Field,
+        Binary64Vector,
+        Binary64Polynomial,
+        Binary64Round,
+        Binary64Matrix,
+        8
+    );
+    scalar_family!(
+        crate::plonky3::binary::ext3_from_bits([3, 1, 2]),
+        Binary64Ext3,
+        Binary64Ext3Field,
+        Binary64Ext3Vector,
+        Binary64Ext3Polynomial,
+        Binary64Ext3Round,
+        Binary64Ext3Matrix,
+        24
+    );
     macro_rules! group_family {
         ($point:expr, $identity:ident, $point_variant:ident, $vector_variant:ident, $width:expr) => {{
             let point = $point;
@@ -463,6 +600,13 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         std::mem::size_of::<crate::Bn254G2>()
     );
     group_family!(
+        crate::Bls12381G2::generator(),
+        Bls12381G2,
+        Bls12381G2,
+        Bls12381G2Vector,
+        std::mem::size_of::<crate::Bls12381G2>()
+    );
+    group_family!(
         curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT,
         Ristretto255Group,
         RistrettoGroup,
@@ -474,6 +618,12 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         Type::Group,
         I::Bn254Gt,
         512,
+    );
+    check(
+        Value::Bls12381Gt(std::sync::Arc::new(crate::Bls12381Gt::generator())),
+        Type::Group,
+        I::Bls12381Gt,
+        1024,
     );
     check(Value::Bool(true), Type::Bool, I::None, 512);
     check(Value::Index(3), Type::Index, I::None, 512);
@@ -593,6 +743,46 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         Type::OpeningStates,
         I::MerkleKoalaBear,
         616 + std::mem::size_of::<crate::oracle::State>(),
+    );
+    // Digest-generic carriers share one byte allocation per digest list.
+    let (root, tree) = crate::merkle::commit::<crate::merkle::poseidon2::Base>(
+        vec![KoalaBear::new(1); 2],
+        shape,
+        4096,
+    )
+    .unwrap();
+    let proof = crate::merkle::open(&tree, &[0]).unwrap().1;
+    let tree = crate::merkle::State::Poseidon2KoalaBear(Arc::new(tree));
+    let scheme = crate::merkle::Scheme::Poseidon2KoalaBear;
+    check(
+        Value::MerkleDigest(scheme, root.clone().into()),
+        Type::Commitment,
+        I::MerklePoseidon2KoalaBear,
+        288,
+    );
+    check(
+        Value::MerkleProof(scheme, proof.into()),
+        Type::Proof,
+        I::MerklePoseidon2KoalaBear,
+        288,
+    );
+    check(
+        Value::MerkleTree(tree.clone()),
+        Type::OpeningState,
+        I::MerklePoseidon2KoalaBear,
+        360,
+    );
+    check(
+        Value::MerkleDigests(scheme, [root.clone(), root].concat().into()),
+        Type::Commitments,
+        I::MerklePoseidon2KoalaBear,
+        320,
+    );
+    check(
+        Value::MerkleTrees(scheme, [tree].into()),
+        Type::OpeningStates,
+        I::MerklePoseidon2KoalaBear,
+        616 + std::mem::size_of::<crate::merkle::State>(),
     );
     let logical = LogicalType::parse("fixed_vector<field:koala-bear,2>").unwrap();
     let fixed = Value::FixedVector(
@@ -727,6 +917,8 @@ fn wrong_kind_capability_wrappers_refuse_without_panicking() {
         I::Merlin3KoalaBearExt8,
         I::Merlin3Ristretto64Le,
         I::Spongefish080KeccakFr64Be,
+        I::HashChainKeccak256Fr64Be,
+        I::HashChainKeccak256KoalaBearExt8,
     ] {
         values.push(
             native
@@ -1147,6 +1339,8 @@ fn alternative_eligibility_matches_the_reviewed_native_set() {
         "vector.prefix_product",
         "vector.prefix_sum",
         "vector.rotate",
+        "vector.bit_reverse",
+        "vector.bit_reverse_rows",
         "vector.scale",
         "vector.scatter_sum",
         "vector.slice",
@@ -1329,6 +1523,7 @@ fn every_exact_installation_has_a_supported_binding_and_impossible_owners_are_ab
         &["multilinear.kzg.bls12-381/0"],
         &["rows.merkle-keccak256.koala-bear/0"],
         &["rows.merkle-keccak256.koala-bear.ext8-binomial3/0"],
+        &["rows.merkle-poseidon2-16.koala-bear/0"],
         &["merlin3.bls12-381.fr64be/0"],
         &["merlin3.ristretto255.scalar64le/0"],
         &["merlin3.koala-bear.ext8-binomial3.rejection31le/0"],

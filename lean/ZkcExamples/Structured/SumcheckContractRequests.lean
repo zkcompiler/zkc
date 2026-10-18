@@ -18,10 +18,7 @@ open SumcheckRelationContract SumcheckContractBindings SumcheckContractInterpret
 open SumcheckContractInstantiation
 open Zkc.Polynomial Zkc.Polynomial.Multilinear
 
-set_option backward.isDefEq.respectTransparency false
 set_option smartUnfolding false
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
@@ -219,6 +216,7 @@ def childSelection : SelectedApplication childOwner F G sourceEnvironment where
       (fun args => (args.get .here).length < indexLimit)
       (fun args => args.get (.there (.there (.there .here))) = (args.get .here).sum) inferInstance }
 
+set_option maxRecDepth 20000 in
 theorem child_formula_law :
     (childSelection (G := G) (sourceEnvironment := sourceEnvironment)).interpreted.interpretation.FormulaLaw := by
   intro args bounded
@@ -246,6 +244,7 @@ def childProcess (raw : List F) (claim : F) (count handle : Nat) :=
   (publicReductionCall.componentInput {} 1 (publicCallEnvironment (G := G) raw claim count handle)).process.interpret
     forgetSites
 
+set_option backward.isDefEq.respectTransparency false in
 /-- This request's component is the actual maximum-two callee in the Source
 snapshot. The equation preserves the exact six-slot returned tuple and stops. -/
 theorem child_present (raw : List F) (claim : F) (count handle : Nat) (admitted : count ≤ 2) :

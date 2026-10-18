@@ -18,7 +18,6 @@ set_option smartUnfolding false
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Full-table lookup of the actual Math helper projects the original vector. -/
 theorem projection_equation (xs : List F) (dimension columns : Nat) :
     invoke (program.payload.meanings F G) projectionHelper (inputs xs dimension columns) =
@@ -28,7 +27,6 @@ theorem projection_equation (xs : List F) (dimension columns : Nat) :
     projectionBody projection_exact (inputs xs dimension columns)).trans ?_
   rfl
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The retained realization invokes the exact full Math ABI in the same table. -/
 theorem realization_equation (xs : List F) (dimension columns : Nat) :
     invoke (program.payload.meanings F G) realizationHelper (inputs xs dimension columns) =
@@ -41,7 +39,6 @@ theorem realization_equation (xs : List F) (dimension columns : Nat) :
   rw [projection_equation]
   rfl
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The unchanged Local values wrapper adds no validation after realization. -/
 theorem values_equation (xs : List F) (dimension columns : Nat) :
     invoke (program.payload.meanings F G) valuesHelper (inputs xs dimension columns) =
@@ -60,7 +57,6 @@ theorem realization_returns (xs : List F) (dimension columns : Nat) :
       (inputs xs dimension columns)) :=
   ⟨_, realization_equation xs dimension columns⟩
 
-set_option backward.isDefEq.respectTransparency false in
 private theorem less_law : LessLaw (program.payload.meanings F G) := by
   intro a b aBound bBound
   exact (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
@@ -68,7 +64,6 @@ private theorem less_law : LessLaw (program.payload.meanings F G) := by
     PrimitiveTableViews.lessBody less_exact (.cons a (.cons b .nil))).trans
       (less_body _ a b aBound bBound)
 
-set_option backward.isDefEq.respectTransparency false in
 private theorem rows_law : RowsLaw (program.payload.meanings F G) := by
   intro dimension bound
   exact (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
@@ -76,7 +71,6 @@ private theorem rows_law : RowsLaw (program.payload.meanings F G) := by
     PrimitiveTableViews.rowsBody rows_exact (indexResult dimension)).trans
       (rows_body _ less_law dimension bound)
 
-set_option backward.isDefEq.respectTransparency false in
 private theorem shape_equation (xs : List F) (dimension columns : Nat)
     (lengthBound : xs.length < indexLimit) (dimensionBound : dimension < indexLimit)
     (columnsBound : columns < indexLimit) :
@@ -88,7 +82,6 @@ private theorem shape_equation (xs : List F) (dimension columns : Nat)
     PrimitiveTableViews.shapeBody shape_exact (inputs xs dimension columns)).trans
       (shape_body _ less_law rows_law xs dimension columns lengthBound dimensionBound columnsBound)
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Validation is supplied by this payload, including its complete helper closure. -/
 theorem table_equation (xs : List F) (dimension columns : Nat)
     (lengthBound : xs.length < indexLimit) (dimensionBound : dimension < indexLimit)
@@ -106,7 +99,6 @@ theorem table_equation (xs : List F) (dimension columns : Nat)
   simp only [decide_eq_true_eq] at equation
   exact actual.trans equation
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Exact source composition, before imposing any representation or shape premise. -/
 theorem process_expansion (xs : List F) (dimension columns : Nat) :
     program.denote F G (inputs xs dimension columns) =
@@ -148,7 +140,6 @@ theorem process_stops_of_table (xs : List F) (dimension columns : Nat) (reason :
   rw [process_expansion, stops]
   rfl
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Per-result Math dependencies ignore both unused optional dimensions. -/
 theorem projection_optional (xs : Option (List F)) (dimension columns : Option Nat) :
     invoke (program.payload.componentTables F G).components projectionHelper
@@ -205,7 +196,6 @@ theorem values_nonowner (self owner : Nat) (different : owner ≠ self)
       .done (.cons none .nil) :=
   Participant.owned_other self owner different _ args
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The actual selected Math closure satisfies the generic admission-totality law. -/
 theorem projection_admitted_returns (args : Values (assignment F G) tableTypes) :
     Returns (invoke (program.payload.meanings F G) projectionHelper args) :=
@@ -213,7 +203,6 @@ theorem projection_admitted_returns (args : Values (assignment F G) tableTypes) 
     program.subject.payload projectionHelper
     (subjectImported.realizationRootSelected realization_retained) args
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Imported retained-root evidence proves actual realization invocation total. -/
 theorem realization_admitted_returns (args : Values (assignment F G) tableTypes) :
     Returns (invoke (program.payload.meanings F G) realizationHelper args) :=

@@ -108,6 +108,20 @@ fn installed_bindings_have_exact_logical_ports() {
             AttributeRule::None,
         ),
         (
+            "pairing.check",
+            &["bls12-381.fr"],
+            &["groups:bls12-381.g1", "groups:bls12-381.g2"],
+            &["bool"],
+            AttributeRule::None,
+        ),
+        (
+            "pairing.apply",
+            &["bls12-381.fr"],
+            &["group:bls12-381.g1", "group:bls12-381.g2"],
+            &["group:bls12-381.gt"],
+            AttributeRule::None,
+        ),
+        (
             "poly.domain_root",
             &["koala-bear"],
             &["index"],
@@ -239,7 +253,7 @@ fn open_selection_does_not_relax_nominal_requirements() {
         ("field.add", vec!["koala-bear", "extra"]),
         ("field.embed", vec!["bls12-381.fr"]),
         ("curve.msm", vec!["koala-bear"]),
-        ("pairing.check", vec!["bls12-381.fr"]),
+        ("pairing.check", vec!["ristretto255.scalar"]),
         ("poly.domain_root", vec!["bls12-381.fr"]),
         ("oracle.commit", vec!["multilinear.kzg.bls12-381/0"]),
         ("pcs.commit", vec!["koala-bear"]),
@@ -328,6 +342,21 @@ fn selected_observations_keep_the_installed_suite_policy() {
             "merlin3.koala-bear.ext8-binomial3.rejection31le/0",
             "plonky3",
             "proof:rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
+        ),
+        (
+            "hash-chain.keccak256.bls12-381.fr64be/0",
+            "arkworks",
+            "group:bls12-381.g1",
+        ),
+        (
+            "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0",
+            "plonky3",
+            "vector:koala-bear",
+        ),
+        (
+            "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0",
+            "plonky3",
+            "commitment:rows.merkle-keccak256.koala-bear/0",
         ),
     ] {
         let ty = LogicalType::parse(payload).unwrap();

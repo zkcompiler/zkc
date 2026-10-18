@@ -16,7 +16,6 @@ set_option smartUnfolding false
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
-set_option backward.isDefEq.respectTransparency false in
 theorem step_equation (xs : List F) (dimension columns : Nat) (r : F) :
     invoke (program.payload.meanings F G) stepHelper (firstInputs xs dimension columns r) =
       invoke (program.payload.meanings F G) firstHelper (firstInputs xs dimension columns r) :=
@@ -25,7 +24,6 @@ theorem step_equation (xs : List F) (dimension columns : Nat) (r : F) :
     stepBody step_exact (firstInputs xs dimension columns r)).trans
       (step_body _ xs dimension columns r)
 
-set_option backward.isDefEq.respectTransparency false in
 theorem foldStep_equation (xs : List F) (dimension columns : Nat) (r : F) (point : List F) :
     invoke (program.payload.meanings F G) foldStepHelper
       (.cons xs (.cons dimension (.cons columns (.cons r (.cons point .nil))))) =
@@ -35,7 +33,6 @@ theorem foldStep_equation (xs : List F) (dimension columns : Nat) (r : F) (point
     foldStepBody foldStep_exact (.cons xs (.cons dimension (.cons columns (.cons r (.cons point .nil)))))).trans
       ((foldStep_body _ xs dimension columns r point).trans (step_equation xs dimension columns r))
 
-set_option backward.isDefEq.respectTransparency false in
 theorem fold_equation (xs : List F) (dimension columns : Nat) (point : List F) :
     invoke (program.payload.meanings F G) foldHelper
       (.cons point (.cons xs (.cons dimension (.cons columns .nil)))) =
@@ -46,7 +43,6 @@ theorem fold_equation (xs : List F) (dimension columns : Nat) (point : List F) :
     foldBody fold_exact (.cons point (.cons xs (.cons dimension (.cons columns .nil))))).trans
       (fold_body _ xs dimension columns point)
 
-set_option backward.isDefEq.respectTransparency false in
 theorem foldWrapper_equation (xs : List F) (dimension columns : Nat) (point : List F) :
     invoke (program.payload.meanings F G) foldWrapperHelper (prefixInputs xs dimension columns point) =
       Evaluation.denoteFold (program.payload.meanings F G) foldSpec
@@ -56,7 +52,6 @@ theorem foldWrapper_equation (xs : List F) (dimension columns : Nat) (point : Li
     foldWrapperBody foldWrapper_exact (prefixInputs xs dimension columns point)).trans
       ((foldWrapper_body _ xs dimension columns point).trans (fold_equation xs dimension columns point))
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Every reached finite callback uses the same full captured domain vector. -/
 theorem transition_equation (point : List F)
     (state : Values (assignment F G) [vector, .index, .index]) (r : F) :
@@ -69,7 +64,6 @@ theorem transition_equation (point : List F)
         (.cons xs (.cons dimension (.cons columns (.cons r (.cons point .nil))))) = _
       exact foldStep_equation xs dimension columns r point
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Finite admission precedes the fold; accepted points compose in list order. -/
 theorem prefix_equation (xs : List F) (dimension columns : Nat) (point : List F)
     (shape : HasShape xs dimension columns) (lengthBound : xs.length < indexLimit)
@@ -99,7 +93,6 @@ theorem prefix_equation (xs : List F) (dimension columns : Nat) (point : List F)
   rw [transition]
   exact fold_restriction _ first_equation xs dimension columns point shape lengthBound
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The empty point never reaches the positive-dimension guard. -/
 theorem prefix_empty (xs : List F) (dimension columns : Nat)
     (shape : HasShape xs dimension columns) (lengthBound : xs.length < indexLimit) :
@@ -108,7 +101,6 @@ theorem prefix_empty (xs : List F) (dimension columns : Nat)
   rw [prefix_equation xs dimension columns [] shape lengthBound (by change 0 < indexLimit; decide +kernel)]
   rfl
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Too many coordinates reject only through a reached source First callback. -/
 theorem prefix_too_long (xs : List F) (dimension columns : Nat) (point : List F)
     (shape : HasShape xs dimension columns) (lengthBound : xs.length < indexLimit)
@@ -118,7 +110,6 @@ theorem prefix_too_long (xs : List F) (dimension columns : Nat) (point : List F)
   rw [prefix_equation xs dimension columns point shape lengthBound pointBound,
     ite_eq_right (by omega)]
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Logical point-length exhaustion precedes every finite callback. -/
 theorem prefix_exhausted (xs : List F) (dimension columns : Nat) (point : List F)
     (invalid : ¬ point.length < indexLimit) :

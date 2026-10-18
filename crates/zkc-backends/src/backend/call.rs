@@ -99,6 +99,22 @@ impl NativeCall {
             AttributeRule::KoalaBearDecimal if attributes.len() == 1 => {
                 let _ = crate::plonky3::parse_decimal(&attributes[0])?;
             }
+            AttributeRule::Binary64Literal if attributes.len() == 1 => {
+                let _ = crate::plonky3::binary::parse_literal(&attributes[0])?;
+            }
+            AttributeRule::Binary64Ext3Literal if attributes.len() == 1 => {
+                let _ = crate::plonky3::binary::parse_ext3_literal(&attributes[0])?;
+            }
+            AttributeRule::Binary64Literals => {
+                for literal in attributes {
+                    let _ = crate::plonky3::binary::parse_literal(literal)?;
+                }
+            }
+            AttributeRule::Binary64Ext3Literals => {
+                for literal in attributes {
+                    let _ = crate::plonky3::binary::parse_ext3_literal(literal)?;
+                }
+            }
             AttributeRule::RistrettoDecimal if attributes.len() == 1 => {
                 crate::parse_ristretto_decimal(&attributes[0])?;
             }

@@ -31,6 +31,24 @@ pub(super) const CONTRACTS: &[Contract] = &[
     )
     .implemented_by(&["plonky3/oracle.check"]),
     Contract::new(
+        "oracle.open_many",
+        (
+            &[OpeningState, Indices],
+            &[Vector, Proof],
+            AttributeRule::None,
+        ),
+    )
+    .implemented_by(&["plonky3/oracle.open_many"]),
+    Contract::new(
+        "oracle.check_many",
+        (
+            &[Commitment, Index, Index, Indices, Vector, Proof],
+            &[Bool],
+            AttributeRule::None,
+        ),
+    )
+    .implemented_by(&["plonky3/oracle.check_many"]),
+    Contract::new(
         "commitments.empty",
         (&[], &[Commitments], AttributeRule::None),
     )
@@ -106,9 +124,18 @@ pub(super) fn resolve(
     if !scheme.is_row_commitment() {
         return Err(fail());
     }
+    // Pruned multi-opening is a capability of the scheme, not of every row
+    // commitment.
+    if matches!(
+        binding.contract.as_str(),
+        "oracle.open_many" | "oracle.check_many"
+    ) && !scheme.has_multi_opening()
+    {
+        return Err(fail());
+    }
     let make = |kind| {
         let identity = match kind {
-            Type::Bool | Type::Index => Identity::None,
+            Type::Bool | Type::Index | Type::Indices => Identity::None,
             Type::Vector => scheme.scalar_field().ok_or_else(fail)?,
             Type::Commitment
             | Type::OpeningState

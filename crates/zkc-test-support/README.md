@@ -23,3 +23,10 @@ Spongefish 0.8.0. The outputs were independently evaluated with the Keccak-f[160
 permutation and overwrite-mode duplex (136-byte rate), after reproducing the
 previous frozen vector and the zero-state XKCP permutation vector. Suite-name
 changes alter absorbed bytes and require independent vector regeneration.
+
+`fixtures/hash-chain-vectors.json` fixes the native hash-chain suites' states,
+request answers and decoded challenges for one binding root and fixed
+occurrences. It is the output of the independent Python reference
+`common/tests/support/hash_chain_reference.py`, whose own Keccak-f[1600] is
+checked against published Keccak-256 answers and Python's SHA3-256; the
+integration suite checks that the file equals the reference's output.

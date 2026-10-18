@@ -42,6 +42,35 @@ impl IdentityCoefficient for crate::KoalaBear {
         self.as_canonical_u32().to_string()
     }
 }
+impl IdentityCoefficient for crate::KoalaBearExt4 {
+    const IDENTITY: Identity = Identity::KoalaBearExt4;
+    fn canonical(self) -> String {
+        // As for the octic extension: sum(c_i * p^i) in the ascending basis.
+        let radix = BigInt::<4>::from(crate::plonky3::MODULUS);
+        let mut value = BigInt::<4>::default();
+        let coordinates: &[crate::KoalaBear] = self.as_basis_coefficients_slice();
+        for c in coordinates.iter().rev() {
+            value = value.mul_low(&radix);
+            value.add_with_carry(&BigInt::from(c.as_canonical_u32()));
+        }
+        value.to_string()
+    }
+}
+// A binary field's coefficient is the decimal integer of its bit pattern,
+// sum(c_i * 2^i) over its coordinates c_i in GF(2): the extension rule above
+// with characteristic two (docs/spec/domains/vectors.md).
+impl IdentityCoefficient for crate::Binary64 {
+    const IDENTITY: Identity = Identity::Binary64;
+    fn canonical(self) -> String {
+        crate::plonky3::binary::bits(self).to_string()
+    }
+}
+impl IdentityCoefficient for crate::Binary64Ext3 {
+    const IDENTITY: Identity = Identity::Binary64Ext3;
+    fn canonical(self) -> String {
+        BigInt::<3>::new(crate::plonky3::binary::ext3_bits(self)).to_string()
+    }
+}
 impl IdentityCoefficient for crate::KoalaBearExt8 {
     const IDENTITY: Identity = Identity::KoalaBearExt8;
     fn canonical(self) -> String {
@@ -359,6 +388,48 @@ impl Wire for crate::KoalaBearExt8 {
         Value::KoalaBearExt8Matrix(m)
     }
 }
+impl Wire for crate::KoalaBearExt4 {
+    const WIDTH: usize = 16;
+    const TAG: u8 = 28;
+    fn decode(bytes: &[u8]) -> Result<Self> {
+        crate::plonky3::decode_quartic(bytes)
+    }
+    fn encode(self, out: &mut Vec<u8>) -> Result<()> {
+        out.extend(crate::plonky3::encode_quartic(self));
+        Ok(())
+    }
+    fn value(m: SparseCoo<Self>) -> Value {
+        Value::KoalaBearExt4Matrix(m)
+    }
+}
+impl Wire for crate::Binary64 {
+    const WIDTH: usize = crate::plonky3::binary::WIDTH;
+    const TAG: u8 = 75;
+    fn decode(bytes: &[u8]) -> Result<Self> {
+        crate::plonky3::binary::decode(bytes)
+    }
+    fn encode(self, out: &mut Vec<u8>) -> Result<()> {
+        out.extend(crate::plonky3::binary::encode(self));
+        Ok(())
+    }
+    fn value(m: SparseCoo<Self>) -> Value {
+        Value::Binary64Matrix(m)
+    }
+}
+impl Wire for crate::Binary64Ext3 {
+    const WIDTH: usize = crate::plonky3::binary::EXT3_WIDTH;
+    const TAG: u8 = 78;
+    fn decode(bytes: &[u8]) -> Result<Self> {
+        crate::plonky3::binary::decode_ext3(bytes)
+    }
+    fn encode(self, out: &mut Vec<u8>) -> Result<()> {
+        out.extend(crate::plonky3::binary::encode_ext3(self));
+        Ok(())
+    }
+    fn value(m: SparseCoo<Self>) -> Value {
+        Value::Binary64Ext3Matrix(m)
+    }
+}
 fn wire_size<S: Wire>(n: usize) -> Result<usize> {
     n.checked_mul(8 + S::WIDTH)
         .and_then(|n| n.checked_add(18))
@@ -393,6 +464,9 @@ pub(crate) fn encode(v: &Value, p: &Policy) -> Option<Result<Vec<u8>>> {
         Value::RistrettoMatrix(m) => encode_matrix(m, p),
         Value::KoalaBearMatrix(m) => encode_matrix(m, p),
         Value::KoalaBearExt8Matrix(m) => encode_matrix(m, p),
+        Value::KoalaBearExt4Matrix(m) => encode_matrix(m, p),
+        Value::Binary64Matrix(m) => encode_matrix(m, p),
+        Value::Binary64Ext3Matrix(m) => encode_matrix(m, p),
         _ => return None,
     })
 }
@@ -420,6 +494,18 @@ constructor!(
     koala_bear_ext8_matrix,
     KoalaBearExt8Matrix,
     crate::KoalaBearExt8
+);
+constructor!(
+    koala_bear_ext4_matrix,
+    KoalaBearExt4Matrix,
+    crate::KoalaBearExt4
+);
+
+constructor!(binary64_matrix, Binary64Matrix, crate::Binary64);
+constructor!(
+    binary64_ext3_matrix,
+    Binary64Ext3Matrix,
+    crate::Binary64Ext3
 );
 
 constructor!(bn254_matrix, Bn254Matrix, crate::Bn254Scalar);

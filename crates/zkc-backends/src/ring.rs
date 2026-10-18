@@ -1,4 +1,5 @@
-//! Bulk substitution of admitted ring expressions over KoalaBear and Ext8.
+//! Bulk substitution of admitted ring expressions over KoalaBear and its
+//! installed extensions.
 //! Assets are immutable Host configuration; a proof message cannot install one.
 use crate::{Policy, Result, Value, exhausted, refused};
 use p3_field::{Field, PackedValue, PrimeCharacteristicRing};
@@ -17,6 +18,7 @@ mod sealed {
     pub trait Sealed {}
     impl Sealed for crate::KoalaBear {}
     impl Sealed for crate::KoalaBearExt8 {}
+    impl Sealed for crate::KoalaBearExt4 {}
 }
 pub trait Carrier: Field + sealed::Sealed {
     const IDENTITY: Identity;
@@ -26,6 +28,9 @@ impl Carrier for crate::KoalaBear {
 }
 impl Carrier for crate::KoalaBearExt8 {
     const IDENTITY: Identity = Identity::KoalaBearExt8;
+}
+impl Carrier for crate::KoalaBearExt4 {
+    const IDENTITY: Identity = Identity::KoalaBearExt4;
 }
 
 /// The expected digest must come from the authorized program's closed reference.
@@ -130,16 +135,17 @@ fn checked_product(a: usize, b: usize) -> Result<usize> {
     a.checked_mul(b).ok_or_else(|| exhausted("ring-shape"))
 }
 fn field_compatible(expression: &Expression, carrier: Identity) -> Result<()> {
-    if !matches!(carrier, Identity::KoalaBear | Identity::KoalaBearExt8) {
+    if !matches!(
+        carrier,
+        Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4
+    ) {
         return Err(refused("ring-carrier"));
     }
     if expression
         .inputs()
         .iter()
         .chain(expression.facts().iter().map(|f| &f.field))
-        .any(|f| {
-            *f != carrier && !(carrier == Identity::KoalaBearExt8 && *f == Identity::KoalaBear)
-        })
+        .any(|f| *f != carrier && carrier.base_field() != Some(*f))
     {
         return Err(refused("ring-carrier"));
     }
@@ -548,6 +554,9 @@ pub(crate) fn apply(
         Some(Value::KoalaBearVector(_)) => dispatch!(KoalaBearVector, Identity::KoalaBear),
         Some(Value::KoalaBearExt8Vector(_)) => {
             dispatch!(KoalaBearExt8Vector, Identity::KoalaBearExt8)
+        }
+        Some(Value::KoalaBearExt4Vector(_)) => {
+            dispatch!(KoalaBearExt4Vector, Identity::KoalaBearExt4)
         }
         _ => Err(refused("ring-carrier")),
     }

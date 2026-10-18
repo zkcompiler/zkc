@@ -16,3 +16,4 @@ pub fn length(value: Bytes) -> index = primitive("bytes.length");
 pub fn equal(left: Bytes, right: Bytes) -> bool = primitive("bytes.equal");
 
 pub fn keccak256(value: Bytes) -> Bytes = primitive("hash.keccak256");
+pub fn sha256(value: Bytes) -> Bytes = primitive("hash.sha256");

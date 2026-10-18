@@ -1,7 +1,7 @@
 //! The polynomial view against hand-derived descriptors, the dense table view
 //! and an independent integer model of `koala-bear.ext8-binomial3`.
 use super::*;
-use crate::{KoalaBearExt8, ring::Budget};
+use crate::{KoalaBearExt4, KoalaBearExt8, ring::Budget};
 use zkc_runtime::relation::{
     Assertion, Authority, Channel, ChannelKind, Columns, Group, Height, HeightAuthority, Input,
     Interaction, Locality, PolynomialInput, PolynomialShape, ReadModel, Scope, Slot, Table,
@@ -951,6 +951,7 @@ fn registry_references_and_signatures_cover_the_polynomial_kernels() {
         for (field, table, accepted) in [
             ("koala-bear", "0", true),
             ("koala-bear.ext8-binomial3", "1048576", true),
+            ("koala-bear.ext4-binomial3", "1048576", true),
             ("koala-bear", "1048577", false),
             ("bls12-381.fr", "0", false),
         ] {
@@ -970,7 +971,11 @@ fn registry_references_and_signatures_cover_the_polynomial_kernels() {
             assert!(signature(&binding).is_none());
         }
     }
-    for field in ["koala-bear", "koala-bear.ext8-binomial3"] {
+    for field in [
+        "koala-bear",
+        "koala-bear.ext8-binomial3",
+        "koala-bear.ext4-binomial3",
+    ] {
         for (contract, inputs) in [("relation.table_point", 1), ("relation.table_points", 2)] {
             let binding = OperationBinding {
                 contract: contract.into(),
@@ -1054,6 +1059,28 @@ fn batches_match_scalar_points_and_dense_rows_on_the_subgroup() {
         batch
             .into_iter()
             .map(KoalaBearExt8::from)
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn quartic_carriers_lift_base_rows_like_the_octic_extension() {
+    let (witness, configuration, public, _) = changed_recurrence();
+    let bundle = recurrence();
+    let view = bundle.polynomial_view(0, KB).unwrap();
+    let matrix: Vec<u64> = (0..8)
+        .flat_map(|row| assignment(&view, 8, row, [&public, &witness, &configuration, &[]]))
+        .collect();
+    let (batch, _) = batch_and_rows(&view, &kb(&matrix), 8);
+    let quartic = bundle.polynomial_view(0, Identity::KoalaBearExt4).unwrap();
+    let lifted: Vec<_> = kb(&matrix).into_iter().map(KoalaBearExt4::from).collect();
+    let (extended, singles) = batch_and_rows(&quartic, &lifted, 8);
+    assert_eq!(extended, singles);
+    assert_eq!(
+        extended,
+        batch
+            .into_iter()
+            .map(KoalaBearExt4::from)
             .collect::<Vec<_>>()
     );
 }

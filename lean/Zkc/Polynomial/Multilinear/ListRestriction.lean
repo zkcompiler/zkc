@@ -194,7 +194,6 @@ theorem restrictPrefixValues_complete (values fixed : List F)
   rw [singleton, Option.some.inj entry, fixPrefix_complete]
 
 omit [CommRing F] in
-set_option backward.isDefEq.respectTransparency false in
 /-- The low contiguous half is the MSB=false mathematical half, without padding. -/
 theorem decode_low_half (xs : List F) (table : Table F (n+1))
     (decoded : ofList? (n+1) xs = some table) :
@@ -216,7 +215,6 @@ theorem decode_low_half (xs : List F) (table : Table F (n+1))
   · contradiction
 
 omit [CommRing F] in
-set_option backward.isDefEq.respectTransparency false in
 /-- The high contiguous half is the MSB=true mathematical half. -/
 theorem decode_high_half (xs : List F) (table : Table F (n+1))
     (decoded : ofList? (n+1) xs = some table) :
@@ -235,7 +233,6 @@ theorem decode_high_half (xs : List F) (table : Table F (n+1))
     rfl
   · contradiction
 
-set_option backward.isDefEq.respectTransparency false in
 /-- This is the existing MSB MLE at the actual complete point, not a constant formula. -/
 theorem complete_prefix_sum (xs point : List F) (table : Table F (0 + point.length))
     (decoded : ofList? (0 + point.length) xs = some table) :

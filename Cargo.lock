@@ -1065,6 +1065,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "p3-binary-field"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fae8d58121ed5478834484dc0371302c8a4684287c3e90781d9872580b92c88"
+dependencies = [
+ "num-bigint 0.5.1",
+ "p3-challenger 0.8.0",
+ "p3-field 0.8.0",
+ "p3-maybe-rayon 0.8.0",
+ "p3-symmetric 0.8.0",
+ "rand 0.10.3",
+ "serde",
+ "tracing",
+]
+
+[[package]]
 name = "p3-challenger"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1089,6 +1105,21 @@ dependencies = [
  "p3-monty-31 0.6.3",
  "p3-symmetric 0.6.3",
  "p3-util 0.6.3",
+ "tracing",
+]
+
+[[package]]
+name = "p3-challenger"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92cccaed1c107ad279e76dfd10aa71cff1c1898eb282f406288ad556e65e5a8f"
+dependencies = [
+ "p3-field 0.8.0",
+ "p3-keccak",
+ "p3-maybe-rayon 0.8.0",
+ "p3-symmetric 0.8.0",
+ "p3-util 0.8.0",
+ "thiserror",
  "tracing",
 ]
 
@@ -2476,6 +2507,7 @@ dependencies = [
  "curve25519-dalek",
  "merlin",
  "p3-baby-bear",
+ "p3-binary-field",
  "p3-challenger 0.4.3",
  "p3-commit",
  "p3-dft 0.8.0",
@@ -2485,6 +2517,7 @@ dependencies = [
  "p3-koala-bear 0.8.0",
  "p3-matrix 0.8.0",
  "p3-merkle-tree",
+ "p3-poseidon2 0.8.0",
  "p3-symmetric 0.4.3",
  "p3-symmetric 0.8.0",
  "rand 0.10.3",

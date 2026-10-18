@@ -65,6 +65,12 @@ Update neutral declarations and their exact consumers together. Catalog presence
 does not grant a source spelling, codec, total recipe or transcript construction.
 Each boundary needs explicit admission.
 
+A base declaration's `ordinal` fixes its row in the generated inventory. Give a
+new base record the next unused ordinal of its category and never reuse or
+renumber one, including a retired ordinal. Generation refuses a repeated base
+ordinal, and the contribution-assembly test pins the base inventory digest.
+Extension contributions are ordered by semantic key and need no ordinal.
+
 An operation that can stop, consume a resource, query a service or change history
 belongs to ordered execution. Do not mark it pure/speculatable merely because
 its successful arithmetic is deterministic. Unknown facets yield no positive

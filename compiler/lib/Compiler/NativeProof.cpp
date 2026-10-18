@@ -26,6 +26,7 @@
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/MathExtras.h"
+#include "llvm/Support/SHA256.h"
 #include <map>
 #include <set>
 using namespace llvm;
@@ -1630,5 +1631,295 @@ Error checkNativeProof(ModuleOp source, ModuleOp candidate,
           OperationEquivalence::IgnoreLocations))
     return error("native-proof-correspondence");
   return Error::success();
+}
+} // namespace zkc
+
+namespace zkc {
+namespace {
+std::string printedText(Type value) {
+  std::string text;
+  raw_string_ostream out(text);
+  value.print(out);
+  return text;
+}
+std::string printedText(Attribute value) {
+  std::string text;
+  raw_string_ostream out(text);
+  value.print(out);
+  return text;
+}
+std::string printedText(Operation *value) {
+  std::string text;
+  raw_string_ostream out(text);
+  value->print(out, OpPrintingFlags().printGenericOpForm());
+  return text;
+}
+std::string sha256Identity(StringRef text) {
+  return "sha256:" + toHex(SHA256::hash(arrayRefFromStringRef(text)), true);
+}
+json::Array printedTypes(TypeRange types) {
+  json::Array result;
+  for (Type type : types)
+    result.push_back(printedText(type));
+  return result;
+}
+// Attribute values keep their kind. Unrecognized kinds keep their exact
+// printed form; consumers refuse what they do not interpret.
+json::Value attributeValue(Attribute value) {
+  if (auto text = dyn_cast<StringAttr>(value))
+    return json::Array{"string", text.getValue().str()};
+  if (auto symbol = dyn_cast<FlatSymbolRefAttr>(value))
+    return json::Array{"symbol", symbol.getValue().str()};
+  if (auto flag = dyn_cast<BoolAttr>(value))
+    return json::Array{"bool", flag.getValue()};
+  // Unsigned integer types print unsigned; signless and signed print signed.
+  if (auto integer = dyn_cast<IntegerAttr>(value))
+    return json::Array{"integer",
+                       toString(integer.getValue(), 10,
+                                !integer.getType().isUnsignedInteger())};
+  if (auto array = dyn_cast<ArrayAttr>(value);
+      array && all_of(array, [](Attribute a) { return isa<StringAttr>(a); })) {
+    json::Array strings;
+    for (Attribute element : array)
+      strings.push_back(cast<StringAttr>(element).getValue().str());
+    return json::Array{"strings", std::move(strings)};
+  }
+  return json::Array{"text", printedText(value)};
+}
+
+// Reads the supplied, independently checked candidate. It never reconstructs an
+// expected participant or substitutes a mathematical reference. References are
+// absolute positions in a scoped environment: inputs first, then every
+// operation result in execution order. A loop body extends the environment at
+// the loop with its block arguments; after the loop, its results take the place
+// of the body's values. Calls to helpers inserted by construction are expanded
+// with their formals bound to the actual operands; calls to helpers of the
+// original source remain calls.
+class ParticipantExporter {
+  SymbolTable symbols, sourceSymbols;
+  llvm::DenseMap<Value, unsigned> references;
+  unsigned next = 0, work = 0, exported = 0;
+
+  Expected<unsigned> reference(Value value) {
+    auto found = references.find(value);
+    if (found == references.end())
+      return error("constructed-participant-reference");
+    return found->second;
+  }
+  Expected<json::Array> operands(Operation &op) {
+    json::Array result;
+    for (Value operand : op.getOperands()) {
+      auto index = reference(operand);
+      if (!index)
+        return index.takeError();
+      result.push_back(*index);
+    }
+    return result;
+  }
+  Expected<json::Value> binding(Operation &op) {
+    auto symbol = op.getAttrOfType<FlatSymbolRefAttr>("binding");
+    if (!symbol)
+      return json::Array{};
+    Operation *declaration = symbols.lookup(symbol.getValue());
+    if (!declaration ||
+        declaration->getName().getStringRef() != "local.binding")
+      return error("constructed-participant-binding");
+    auto contract = declaration->getAttrOfType<StringAttr>("contract");
+    auto arguments = declaration->getAttrOfType<ArrayAttr>("arguments");
+    auto implementation =
+        declaration->getAttrOfType<StringAttr>("implementation");
+    if (!contract || !arguments || !implementation)
+      return error("constructed-participant-binding");
+    json::Array values;
+    for (Attribute argument : arguments) {
+      auto text = dyn_cast<StringAttr>(argument);
+      if (!text)
+        return error("constructed-participant-binding");
+      values.push_back(text.getValue().str());
+    }
+    return json::Array{contract.getValue().str(), std::move(values),
+                       implementation.getValue().str()};
+  }
+  json::Array attributes(Operation &op) {
+    json::Array result;
+    for (NamedAttribute attribute : op.getAttrs())
+      result.push_back(json::Array{attribute.getName().getValue().str(),
+                                   attributeValue(attribute.getValue())});
+    return result;
+  }
+  Expected<SmallVector<unsigned>> terminal(Operation &op) {
+    SmallVector<unsigned> returned;
+    for (Value value : op.getOperands()) {
+      auto index = reference(value);
+      if (!index)
+        return index.takeError();
+      returned.push_back(*index);
+    }
+    return returned;
+  }
+  Error emit(Operation &op, json::Array &out, json::Array regions) {
+    if (++exported > 2048)
+      return error("constructed-participant-limit");
+    auto declaration = binding(op);
+    if (!declaration)
+      return declaration.takeError();
+    auto arguments = operands(op);
+    if (!arguments)
+      return arguments.takeError();
+    out.push_back(json::Array{op.getName().getStringRef().str(), attributes(op),
+                              std::move(*declaration), std::move(*arguments),
+                              printedTypes(op.getResultTypes()),
+                              std::move(regions)});
+    return Error::success();
+  }
+
+public:
+  ParticipantExporter(pir::ProtocolModuleOp module,
+                      pir::ProtocolModuleOp source)
+      : symbols(module), sourceSymbols(source) {}
+
+  // Exports one block into `out`. `terminator` names the operation that must
+  // end it; its operand references are returned.
+  Expected<SmallVector<unsigned>> body(Block &block, StringRef terminator,
+                                       unsigned depth, json::Array &out) {
+    if (depth > 64)
+      return error("constructed-participant-limit");
+    for (Operation &op : block) {
+      if (++work > 4096)
+        return error("constructed-participant-limit");
+      StringRef name = op.getName().getStringRef();
+      if (name == terminator) {
+        if (&op != &block.back())
+          return error("constructed-participant-return");
+        return terminal(op);
+      }
+      if (name == "local.call") {
+        auto callee = op.getAttrOfType<FlatSymbolRefAttr>("callee");
+        Operation *helper =
+            callee ? symbols.lookup(callee.getValue()) : nullptr;
+        if (!helper || helper->getName().getStringRef() != "local.func")
+          return error("constructed-participant-helper");
+        if (sourceSymbols.lookup(callee.getValue())) {
+          if (auto e = emit(op, out, json::Array{}))
+            return std::move(e);
+          for (Value result : op.getResults())
+            references[result] = next++;
+          continue;
+        }
+        if (helper->getNumRegions() != 1 ||
+            !hasSingleElement(helper->getRegion(0)))
+          return error("constructed-participant-helper");
+        Block &nested = helper->getRegion(0).front();
+        if (nested.getNumArguments() != op.getNumOperands())
+          return error("constructed-participant-helper");
+        for (auto [formal, actual] :
+             zip(nested.getArguments(), op.getOperands())) {
+          auto index = reference(actual);
+          if (!index)
+            return index.takeError();
+          references[formal] = *index;
+        }
+        auto returned = body(nested, "local.return", depth + 1, out);
+        if (!returned)
+          return returned.takeError();
+        if (returned->size() != op.getNumResults())
+          return error("constructed-participant-helper");
+        for (auto [result, index] : zip(op.getResults(), *returned))
+          references[result] = index;
+        continue;
+      }
+      if (name == "protocol.loop") {
+        if (op.getNumRegions() != 1 || !hasSingleElement(op.getRegion(0)) ||
+            op.getNumSuccessors())
+          return error("constructed-participant-control", name);
+        Block &loop = op.getRegion(0).front();
+        unsigned outer = next;
+        for (BlockArgument argument : loop.getArguments())
+          references[argument] = next++;
+        json::Array nested;
+        auto yielded = body(loop, "protocol.yield", depth + 1, nested);
+        if (!yielded)
+          return yielded.takeError();
+        next = outer;
+        json::Array yieldedList;
+        for (unsigned index : *yielded)
+          yieldedList.push_back(index);
+        json::Array region{printedTypes(loop.getArgumentTypes()),
+                           std::move(nested), std::move(yieldedList)};
+        if (auto e = emit(op, out, json::Array{std::move(region)}))
+          return std::move(e);
+        for (Value result : op.getResults())
+          references[result] = next++;
+        continue;
+      }
+      if (op.getNumRegions() || op.getNumSuccessors())
+        return error("constructed-participant-control", name);
+      if (!(name.starts_with("algebra.") || name.starts_with("arith.") ||
+            name.starts_with("crypto.") || name.starts_with("data.") ||
+            name == "protocol.receive" || name == "protocol.send" ||
+            name == "protocol.service_query" || name == "local.bool_constant" ||
+            name == "local.guard"))
+        return error("constructed-participant-operation", name);
+      if (auto e = emit(op, out, json::Array{}))
+        return std::move(e);
+      for (Value result : op.getResults())
+        references[result] = next++;
+    }
+    return error("constructed-participant-return");
+  }
+
+  Expected<json::Value> run(pir::ParticipantOp participant, StringRef source,
+                            StringRef candidate,
+                            const NativeProofPolicy &policy) {
+    Block &entry = participant.getBody().front();
+    auto type = participant.getFunctionType();
+    if (entry.getNumArguments() > 512 || type.getNumResults() > 512)
+      return error("constructed-participant-limit");
+    for (BlockArgument argument : entry.getArguments())
+      references[argument] = next++;
+    json::Array instructions;
+    auto returned = body(entry, "protocol.finish", 0, instructions);
+    if (!returned)
+      return returned.takeError();
+    json::Array results;
+    for (unsigned index : *returned)
+      results.push_back(index);
+    json::Value record(json::Array{
+        "zkc.constructed-participant/0", sha256Identity(source),
+        sha256Identity(candidate), encodeNativeProofPolicy(policy),
+        participant.getSymName().str(), printedTypes(type.getInputs()),
+        printedTypes(type.getResults()), std::move(instructions),
+        std::move(results)});
+    if (printJson(record).size() > 1024 * 1024)
+      return error("constructed-participant-limit");
+    return record;
+  }
+};
+} // namespace
+
+Expected<json::Value> exportConstructedParticipant(
+    ModuleOp source, ModuleOp candidate, StringRef sourceBytes,
+    const NativeProofPolicy &policy,
+    MathematicalSelectionPolicy mathematicalSelection) {
+  if (auto e =
+          checkNativeProof(source, candidate, policy, mathematicalSelection))
+    return std::move(e);
+  auto module = unit(candidate);
+  auto original = unit(source);
+  if (!module || !original)
+    return error("constructed-participant-module");
+  pir::ParticipantOp selected;
+  for (auto participant : module.getBody().front().getOps<pir::ParticipantOp>())
+    if (participant.getInstance() == policy.entry &&
+        participant.getRole() == policy.validator) {
+      if (selected)
+        return error("constructed-participant-validator");
+      selected = participant;
+    }
+  if (!selected)
+    return error("constructed-participant-validator");
+  return ParticipantExporter(module, original)
+      .run(selected, sourceBytes, printedText(candidate.getOperation()),
+           policy);
 }
 } // namespace zkc

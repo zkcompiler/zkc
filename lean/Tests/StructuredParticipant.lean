@@ -253,7 +253,6 @@ theorem checked_projection_exact :
     ClosedProjection checkedProjection.subject.payload.entry.body checkedProjection.projectedBody :=
   checkedProjection.root_projection
 
-set_option maxHeartbeats 1000000 in
 /-- The general bridge applies to the actual checked subject, including marks. -/
 theorem checked_observed_projection (condition : Bool) :
     checkedProjection.subject.observed F G 0 (.cons (some condition) .nil) =
@@ -263,12 +262,10 @@ theorem checked_observed_projection (condition : Bool) :
         (Values.cons condition .nil).get).bind fun results => .done results.present :=
   checkedProjection.observed_projected (.cons condition .nil)
 
-set_option maxHeartbeats 1000000 in
 theorem checked_observed_reject :
     checkedProjection.subject.observed F G 0 (.cons (some false) .nil) =
       .call (.mark "checked_guard") (fun _ => .halt .reject) := rfl
 
-set_option maxHeartbeats 1000000 in
 theorem checked_participant_projection (condition : Bool) :
     checkedProjection.subject.participant F G 0 (.cons (some condition) .nil) =
       ((checkedProjection.projectedBody.denote
@@ -279,7 +276,6 @@ theorem checked_participant_projection (condition : Bool) :
   checkedProjection.participant_projected (.cons condition .nil)
 
 
-set_option maxHeartbeats 1000000 in
 /-- The checked closed denotation now shares exactly the participant value family. -/
 theorem checked_closed_denote (condition : Bool) :
     checkedProjection.subject.participant F G 0 (.cons (some condition) .nil) =

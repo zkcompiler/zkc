@@ -11,7 +11,8 @@ from tools import compiler, records
 OUT = records()
 commands = Commands(OUT)
 FIXTURES = Path(__file__).parent / 'fixtures/mathematical'
-SUITES = ['merlin3.bls12-381.fr64be/0', 'spongefish0.8.0.keccak.bls12-381.fr64be/0']
+SUITES = ['merlin3.bls12-381.fr64be/0', 'spongefish0.8.0.keccak.bls12-381.fr64be/0',
+          'hash-chain.keccak256.bls12-381.fr64be/0']
 manifest = []
 schnorr = (FIXTURES / 'schnorr-services.mlir').read_text()
 field = '!algebra.field<"bls12-381.fr">'
@@ -191,6 +192,24 @@ with case('source-relative actual candidate checking'):
     assert count == 1
     candidate_path.write_text(changed)
     commands.run([compiler, 'protocol-check-proof', source_path, policy_path, candidate_path], refuses='native-proof-correspondence')
+
+with case('constructed validator export checks the candidate first'):
+    candidate_path.write_text(candidate)
+    exported = json.loads(commands.run([compiler, 'protocol-constructed-participant', source_path, policy_path, candidate_path]))
+    assert exported[0] == 'zkc.constructed-participant/0'
+    assert exported[1] == 'sha256:' + hashlib.sha256(source_path.read_bytes()).hexdigest()
+    assert exported[3] == json.loads(policy_path.read_text())
+    names = [instruction[0] for instruction in exported[7]]
+    # Helper calls are inlined: receives, transcript transitions and the equation remain.
+    assert 'local.call' not in names and names.count('protocol.receive') == 2
+    assert names.count('crypto.exec.indexed_transcript_challenge') == 1
+    assert names.count('crypto.exec.indexed_transcript_observe_data') == 3
+    sorts = exported[5] + [ty for instruction in exported[7] for ty in instruction[4]]
+    assert sorts[exported[8][-1]].startswith('!local.capability<"transcript:')
+    candidate_path.write_text(changed)
+    commands.run([compiler, 'protocol-constructed-participant', source_path, policy_path, candidate_path],
+                 refuses='native-proof-correspondence')
+    candidate_path.write_text(candidate)
 
 with case('constructed transcript helpers have a closed body and one use per role'):
     # These mutations preserve ordinary types and action occurrences. The

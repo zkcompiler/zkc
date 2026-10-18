@@ -11,8 +11,13 @@ MODULES = [f'--module=zkc::{name}={ROOT}/libraries/zkc/{name}.zkc'
                         'finite', 'sequence', 'accumulation', 'curve')]
 
 
+# Extension degree of each installed KoalaBear extension; other fields have one.
+DEGREE = {'koala-bear.ext8-binomial3': 8, 'koala-bear.ext4-binomial3': 4}
+
+
 @pytest.mark.parametrize('field', ['bls12-381.fr', 'bn254.fr', 'ristretto255.scalar',
-                                  'koala-bear', 'koala-bear.ext8-binomial3'])
+                                  'koala-bear', 'koala-bear.ext8-binomial3',
+                                  'koala-bear.ext4-binomial3'])
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
 def test_matrix_library_checked_access(toolchain, journal, directory, field, flags):
     source = f'''module sample;
@@ -27,9 +32,9 @@ protocol Run roles(P)(m:Matrix<F>@P,row:index@P,column:index@P)->(result:F@P) {{
 run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
-    extension = field == 'koala-bear.ext8-binomial3'
-    coefficient = ['7', '2', '0', '0', '0', '0', '0', '1'] if extension else '7'
-    zero = ['0'] * 8 if extension else '0'
+    degree = DEGREE.get(field, 1)
+    coefficient = ['7', '2'] + ['0'] * (degree - 3) + ['1'] if degree > 1 else '7'
+    zero = ['0'] * degree if degree > 1 else '0'
     matrix = {'rows': '2', 'columns': '3', 'entries': [['0', '1', coefficient]]}
     inputs = {'m': matrix, 'row': '0', 'column': '1'}
     assert entry.run('present', inputs)['result'] == coefficient

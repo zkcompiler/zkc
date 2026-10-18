@@ -24,6 +24,7 @@ spongefish = { workspace = true, features = ["keccak", "zeroize"] }
 curve25519-dalek = { workspace = true, features = ["rand_core"] }
 ark-poly.workspace = true
 ark-ff.workspace = true
+p3-binary-field.workspace = true
 p3-field.workspace = true
 p3-koala-bear.workspace = true
 p3-dft.workspace = true
@@ -39,4 +40,5 @@ workspace = true
 
 [dev-dependencies]
 p3-challenger-043.workspace = true
+p3-poseidon2.workspace = true
 zkc-test-support.workspace = true

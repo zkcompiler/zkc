@@ -106,7 +106,7 @@ carrier is the field of the operation's first vector operand, taken from the
 admitted signature. The referenced arena must be admitted, else
 `entry-asset-missing`, and its inputs and facts must be interpretable in that
 carrier under the kernels' own rule, else `entry-asset-carrier`: KoalaBear
-arenas under an Ext8 carrier are permitted, the converse is not.
+arenas under an Ext8 or Ext4 carrier are permitted, the converse is not.
 For `relation.table_rows`, the Host checks the selected static table index and
 the Bundle view's exact field requirements. It does not promote a base-field
 trace to arbitrary extension-field values. For `relation.table_shape`,
@@ -115,7 +115,7 @@ trace to arbitrary extension-field values. For `relation.table_shape`,
 contracts share one rule, checked once per asset, table and carrier without
 allocating: the static table index, the
 [polynomial view's](../domains/relation-bundles.md#compiler-visible-polynomial-view)
-carrier rule, which lets a KoalaBear table be substituted in Ext8. No height
+carrier rule, which lets a KoalaBear table be substituted in Ext8 or Ext4. No height
 or polynomial domain is selected or required to exist. The
 [interaction view's](../domains/relation-bundles.md#compiler-visible-interaction-view)
 `relation.table_interactions`, `relation.table_interaction` and
@@ -414,12 +414,16 @@ records use exact field-name objects. Variants contain exactly `case` and `field
 with numeric names for positional fields. Associated representations are
 transparent. Fields and indices use canonical unsigned decimal strings: zero is
 `"0"`, other values have no leading zeros. Signs, fractions, exponents, numeric
-JSON and out-of-range values refuse; there is no modular reduction.
+JSON and out-of-range values refuse; there is no modular reduction. A
+[binary-field](../domains/values.md#binary-fields) element is never a decimal:
+it is `0x` and its bit pattern in lowercase hexadecimal without leading zeros,
+so zero is `"0x0"`.
 
 The native codec supplies readable forms for installed mathematical leaves:
-field/group vectors and index collections use arrays; KoalaBear Ext8 uses eight
-ascending base-field coordinates, with a base-field string accepted as an
-embedding. A sparse matrix has exactly `rows`, `columns` and `entries`; each
+field/group vectors and index collections use arrays; KoalaBear Ext8 and Ext4
+use eight or four ascending base-field coordinates, and the binary cubic
+extension three base-field elements in the basis `(1, y, y^2)`, each with a
+base-field string accepted as an embedding. A sparse matrix has exactly `rows`, `columns` and `entries`; each
 entry is `[row,column,coefficient]`, in the native canonical sparse order.
 Group elements use `{"bytes":"lowercase-canonical-element-hex"}`. The explicit
 fallback `{"wire":"lowercase-complete-native-frame-hex"}` remains type checked.

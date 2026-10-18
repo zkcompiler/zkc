@@ -1,4 +1,9 @@
-"""Apply a declared dependency patch only to its exact recorded source revision."""
+"""Apply a declared dependency patch only to its exact recorded source revision.
+
+Each changed file is declared with its digest before and after the patch. A
+null digest means the file is absent in that state, so a patch may add or
+remove files; an added file is the only untracked source preparation accepts.
+"""
 import argparse
 import hashlib
 import json
@@ -8,6 +13,14 @@ import subprocess
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def matches(source, name, expected):
+    """Whether a declared file is in the state named by `expected`."""
+    path = source / name
+    if expected is None:
+        return not path.exists()
+    return path.is_file() and digest(path) == expected
 
 
 def prepare(package):
@@ -26,14 +39,16 @@ def prepare(package):
     patch = package / config['patch']
     if digest(patch) != config['patch_sha256']:
         raise ValueError('compatibility patch digest mismatch')
-    changed = subprocess.check_output(
-        ['git', '-C', str(source), 'diff', '--name-only', '-z', 'HEAD']).decode().split('\0')
-    untracked = subprocess.check_output(
-        ['git', '-C', str(source), 'ls-files', '--others', '--exclude-standard', '-z']).decode().split('\0')
-    if (set(changed) - {''} - config['files'].keys()) or any(untracked):
+    files = config['files']
+    added = {name for name, values in files.items() if values['base_sha256'] is None}
+    changed = set(subprocess.check_output(
+        ['git', '-C', str(source), 'diff', '--name-only', '-z', 'HEAD']).decode().split('\0')) - {''}
+    untracked = set(subprocess.check_output(
+        ['git', '-C', str(source), 'ls-files', '--others', '--exclude-standard', '-z']).decode().split('\0')) - {''}
+    if (changed - files.keys()) or (untracked - added):
         raise ValueError('undeclared dependency source changes; compatibility patch refused')
-    states = [{kind for kind in ('base_sha256', 'patched_sha256')
-               if digest(source / name) == values[kind]} for name, values in config['files'].items()]
+    states = [{kind for kind in ('base_sha256', 'patched_sha256') if matches(source, name, values[kind])}
+              for name, values in files.items()]
     if not states:
         raise ValueError('compatibility patch must declare its changed files')
     if all('patched_sha256' in state for state in states):
@@ -42,7 +57,7 @@ def prepare(package):
         raise ValueError('unexpected dependency source contents; compatibility patch refused')
     subprocess.run(['git', '-C', str(source), 'apply', '--check', str(patch.resolve())], check=True)
     subprocess.run(['git', '-C', str(source), 'apply', str(patch.resolve())], check=True)
-    if any(digest(source / name) != values['patched_sha256'] for name, values in config['files'].items()):
+    if not all(matches(source, name, values['patched_sha256']) for name, values in files.items()):
         raise ValueError('compatibility patch produced unexpected source contents')
     return config
 

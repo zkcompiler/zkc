@@ -1,7 +1,9 @@
 module
 
 
+public import Zkc.Source.Structured.UnitViews
 public import ZkcExamples.Structured.SchnorrInteractiveData
+public import ZkcExamples.Structured.SchnorrInteractiveBodies
 public import Zkc.Source.Structured.OpenLaws
 public import Zkc.Source.Structured.CommonAdapter
 public import ZkcExamples.NativePrograms.Schnorr
@@ -14,17 +16,13 @@ typed replies. SchnorrBinding selects the authored contract and formula. -/
 namespace ZkcExamples.Structured.SchnorrInteractive
 open Zkc.Source Zkc.Source.Structured
 
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 set_option smartUnfolding false
 
-def program : Program := (check SchnorrInteractiveData.snapshot).toOption.get (by decide +kernel)
+structured_views SchnorrInteractiveData.snapshot
+  helpers [formula := SchnorrInteractiveBodies.formula]
+  protocols [interactive := SchnorrInteractiveBodies.interactive]
 
-theorem admitted : check SchnorrInteractiveData.snapshot = .ok program := by rfl
-
-def imported : Imported SchnorrInteractiveData.snapshot := ⟨program, admitted⟩
-
-theorem exact_subject : imported.program.snapshot = SchnorrInteractiveData.snapshot := imported.exactSubject
+theorem admitted : check SchnorrInteractiveData.snapshot = .ok program := kernel_admission
 
 theorem retained_relation : program.snapshot.relations.length = 1 := rfl
 
@@ -37,9 +35,7 @@ abbrev wiring := ZkcExamples.NativePrograms.Schnorr.wiring
 
 /-- The retained formula is an ordinary named Math helper. SchnorrBinding proves
 its authored relation association using the typed admitted contract tables. -/
-def formula : Helper :=
-  ⟨"zkf_6d5ed5928b9bea74d6d7736ea8056c9f06e280ffdc4dbcaf2e00bf4f639c1873", .math,
-    [.group groupDomain, .group groupDomain, .field scalarDomain], [.boolean]⟩
+def formula : Helper := SchnorrInteractiveBodies.formulaHelper
 
 theorem formula_present : formula ∈ program.payload.definitions.map CheckedDefinition.helper := by
   decide +kernel

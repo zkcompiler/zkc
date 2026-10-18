@@ -6,8 +6,6 @@ open Zkc.Source Zkc.Source.Structured
 
 namespace Tests.StructuredContracts
 set_option smartUnfolding false
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 
 private def digest := "sha256:" ++ String.ofList (List.replicate 64 '0')
 private def predicate : Function :=

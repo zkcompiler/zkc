@@ -32,8 +32,8 @@ int main() {
   DialectRegistry registry;
   registerDialects(registry);
   MLIRContext context(registry);
-  for (StringRef group : {"ristretto255.group", "bls12-381.g1", "bn254.g1",
-                          "bn254.g2", "bn254.gt"}) {
+  for (StringRef group : {"ristretto255.group", "bls12-381.g1", "bls12-381.g2",
+                          "bls12-381.gt", "bn254.g1", "bn254.g2", "bn254.gt"}) {
     for (bool primitive : {false, true})
       cases.run("source identity and realization: " + group, [&] {
         auto source =
