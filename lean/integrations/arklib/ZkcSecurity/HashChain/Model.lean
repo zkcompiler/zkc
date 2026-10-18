@@ -7,8 +7,9 @@ public import ZkcSecurity.FiatShamir.Interface
 /-! A hash-chain transcript over an abstract hash with full-digest states.
 
 The chain realizes the transcript oracle on event histories with one hash `H`
-whose outputs, the digests `S`, are the chain states. Every primitive input
-begins with a role tag, so an input is one of:
+whose outputs, the digests `S`, are the chain states, as in the
+[native hash-chain suites](../../../../../docs/spec/ir/construction.md#native-hash-chain-suites).
+Every primitive input begins with a role tag, so an input is one of:
 
 - `bind e`: `H(t_bind ‖ enc e)`, the state after the one-event history `[e]`;
 - `absorb s e`: `H(t_absorb ‖ s ‖ enc e)`, the state after absorbing `e` at

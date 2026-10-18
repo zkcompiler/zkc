@@ -7,9 +7,8 @@ public import ZkcSecurity.FiatShamir.Obligations
 
 /-! The byte encoding of hash-chain inputs.
 
-A native hash-chain suite feeds its byte hash with inputs of three shapes, each
-beginning with a role tag (`docs/spec/ir/construction-obligations.md`, history
-providers):
+A [native hash-chain suite](../../../../../docs/spec/ir/construction.md#native-hash-chain-suites)
+feeds its byte hash with inputs of three shapes, each beginning with a role tag:
 
 ```text
 bind:     t_bind    ‖ enc(e)
@@ -28,7 +27,8 @@ frame(kind, label, data) = kind:u8 ‖ |label|:u64be ‖ label ‖ |data|:u64be 
 
 A frame determines its own length, so a frame followed by any bytes parses
 uniquely (`frame_append_inj`) and the encoding of bounded frames is injective
-and prefix-free in the sense of the history-provider obligation
+and prefix-free in the sense of the serialization obligation of
+[history providers](../../../../../docs/spec/ir/construction-obligations.md#history-providers)
 (`frame_prefixFree`). The events of the installed suites are the binding (the
 domain, the suite name and the invocation root, as three frames), messages
 (kind 1) and requests (kind 2, the requested length as data); their encoding is
