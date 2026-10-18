@@ -1,6 +1,7 @@
 module
 
 public import ZkcTools.StructuredSource.Bounds
+public import Zkc.Source.Structured.DomainTransfer
 public import Mathlib.Data.ZMod.Basic
 
 @[expose] public section
@@ -12,6 +13,11 @@ namespace ZkcTools.StructuredSource
 open Lean Zkc.Source Zkc.Source.Structured
 
 abbrev Scalar := ZMod scalarModulus
+
+/-- The executable domain model: every field identity and every group identity
+read in `Scalar`, with its computable inverse. -/
+abbrev scalarModel : DomainModel :=
+  (ringModel Scalar Scalar).withInverse fun _ => some (·⁻¹)
 
 def scalar (json : Json) : Except String Scalar := do
   let value ← Format.decimal (← Format.string json)
@@ -73,6 +79,6 @@ def evaluate (program : Program) (json : Json) : Except String Json := do
   let payload ← program.closedPayload
   let values ← inputs payload.entry.inputs (← Format.array json)
   preflight payload values
-  outcome (closedOutcome (payload.denote Scalar Scalar values))
+  outcome (closedOutcome (payload.denoteOn scalarModel values))
 
 end ZkcTools.StructuredSource
