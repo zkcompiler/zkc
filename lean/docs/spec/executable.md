@@ -364,6 +364,24 @@ the claim as one field element and the round count in unary. These events
 determine the statement (`initial_determined`), which discharges the determining
 premise of the compiled adaptive theorem.
 
+## A rescheduled program
+
+`ZkcExamples.Executable.DeferredRounds` applies the rule to the validator of the
+`zkc.program/0` candidate of the
+[deferred-rounds fixture](../../../common/tests/fixtures/projects/deferred-rounds/README.md),
+a two-round Fiat–Shamir proof whose verifier consumes the first round's product
+only at the end. The constructed validator computes that product after the
+first draw; the program computes it, with every other product, in one
+calculation call after the second draw. The rule accepts the pair (`accepted`)
+by normalization (`rescheduled`: the reading is not the constructed validator
+instruction for instruction), and a complete run charges 35 instructions.
+`executable_prunes` and `executable_validate` state host validation in terms of
+the constructed validator's ideal acceptance of the decoded proof, at every
+budget and at a budget of at least 35. The transcript-construction check
+accepts the Entry's export (`ZkcExamples.Construction.DeferredRounds.accepted`);
+the participant projection rule is not applied to it, so these theorems stop
+at the constructed validator.
+
 ## Named assumptions and trusted links
 
 The security statements keep the random-oracle and encoding assumptions of the

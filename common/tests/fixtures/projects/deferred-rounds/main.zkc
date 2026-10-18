@@ -1,0 +1,23 @@
+module example;
+domain Fr = field("bls12-381.fr");
+
+protocol Rounds<F: Field> roles(P, V)
+    (x: F @(P,V), w: F @P, challenges: Random<F> @V) -> (accepted: bool @V) {
+  #[site(m0)] let a0 = send P -> V(w);
+  #[site(c0)] let r0 = challenges.draw();
+  #[site(d0)] let q0 = send V -> P(r0);
+  let s0 = a0 * r0;
+  #[site(m1)] let a1 = send P -> V(w * q0);
+  #[site(c1)] let r1 = challenges.draw();
+  #[site(d1)] let q1 = send V -> P(r1);
+  let s1 = s0 * r1 + x;
+  return (accepted = s1 == a1 * r1 + x);
+}
+
+proof Proof = Rounds<Fr> {
+  prover P;
+  verifier V;
+  public { x };
+  accept accepted;
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
+}

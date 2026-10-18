@@ -1,8 +1,10 @@
 # Executable bridge
 
 `check.py` connects the `zkc.program/0` validators that the runtime admits for
-the compiled `example::Proof` Entries of the Schnorr and Sumcheck examples to
-the [executable stage](../../docs/spec/executable.md) and to the runtime itself.
+the compiled `example::Proof` Entries of the Schnorr and Sumcheck examples and
+of the [deferred-rounds fixture](../../../common/tests/fixtures/projects/deferred-rounds/README.md)
+to the [executable stage](../../docs/spec/executable.md) and to the runtime
+itself.
 It is part of `python3 common/tests/run.py lean-native`.
 
 ## Reproduce
@@ -16,9 +18,11 @@ python3 bridges/executable/check.py --compiler ../build/compiler/zkc-compile \
 ```
 
 `--lake` selects the Lake executable. `--output` must be a new or empty
-directory. `--subject schnorr` or `--subject sumcheck` checks one subject
-(default: both). `--write` rewrites the committed program data from the fresh
-programs instead of requiring it to be unchanged.
+directory. `--subject schnorr`, `--subject sumcheck` or
+`--subject deferred-rounds` checks one subject (default: all). `--write`
+rewrites the committed program data, and the construction data this driver
+owns, from the fresh programs and exports instead of requiring them to be
+unchanged.
 
 ## What is checked
 
@@ -30,7 +34,8 @@ For each subject:
    deployment's inner digest the SHA-256 of its `zkc.program/0` candidate, and
    the constructed export's policy the deployment's policy.
 2. The committed program data (`SchnorrProofProgramData.lean`,
-   `SumcheckProofProgramData.lean`), rendered by `render.py` from the
+   `SumcheckProofProgramData.lean`, `DeferredRoundsProgramData.lean`), rendered
+   by `render.py` from the
    deployment with one definition per local function, and the construction data
    (the original's structured rendering and the constructed participant) must
    equal the fresh renderings byte for byte. The Sumcheck original,
@@ -40,7 +45,11 @@ For each subject:
    rendering against the fresh constructed-validator export, which must be
    accepted with axioms among `propext`, `Classical.choice` and `Quot.sound`:
    for Schnorr with a total charge of 25, for Sumcheck with the three helpers
-   the constructed validator calls by name. It runs the rule on mutated
+   the constructed validator calls by name, and for the deferred rounds with a
+   total charge of 35 and through normalization, since the program computes the
+   first round's product after the second draw and so differs from the
+   constructed validator instruction for instruction. It runs the rule on
+   mutated
    programs. Pure calculations are compared by the terms they denote, so a
    changed calculation is refused where its value first reaches an anchor or the
    returned values. For Schnorr nine are refused for their named reasons:
@@ -60,19 +69,26 @@ For each subject:
    the rule reads a helper body for its sorts and transcript freedom only, and
    what it computes is the obligation `SumcheckHelpers.check_prepared`
    discharges for the committed program, which step 2 ties to the fresh one.
+   For the deferred rounds four are refused: the first product taken with the
+   second challenge, the final comparison made trivial and returned values
+   swapped (the returned decision denotes another term), and the second
+   observation absorbing the first message (the sixth anchor's second
+   operand).
    The validator's row of the deployment's role map, which the runtime uses,
    must select the policy's acceptance output and take the policy's public
    inputs in order, and the same file proves that the Lean statement's
    acceptance position and public inputs are that row's.
 4. The runtime proves and verifies with the package under its pin. The verifier
    runs on the honest proof at every instruction budget from 0 to one past its
-   acceptance threshold (26 for Schnorr, 191 for Sumcheck) and on mutated
-   proofs. Schnorr's eight are undecodable commitments, an out-of-range
+   acceptance threshold (26 for Schnorr, 191 for Sumcheck, 36 for the deferred
+   rounds) and on mutated proofs. Schnorr's eight are undecodable commitments, an out-of-range
    response, a wrong response, a missing or truncated response, a trailing byte
    and another header binding. Sumcheck's eight are an out-of-range and a
    wrongly tagged round message, a changed round message in the first and in
    the second round, a missing or truncated last message, a trailing byte and
-   another header binding. For each case, the runtime's outcome, stop site,
+   another header binding. The deferred rounds' seven are an out-of-range first
+   message, a changed first and a changed second message, a missing or truncated
+   second message, a trailing byte and another header binding. For each case, the runtime's outcome, stop site,
    local call, charged instructions, transcript transitions, read messages and
    whole-proof consumption must equal those `execute` predicts for the same
    bytes, under the Entry's checked occurrence context, with every value read
@@ -80,9 +96,10 @@ For each subject:
    mutation corrupted and reads a changed message as one. The changed Sumcheck
    messages stop both meanings at the round check's explicit rejection inside
    its local call, in the round where they occur. The runtime must accept
-   exactly the honest proof at the threshold budget (25 and 190), one past it,
-   and without a budget. It must reject the wrong Schnorr response as
-   `artifact-rejected`, which the value-free prediction cannot distinguish. For
+   exactly the honest proof at the threshold budget (25, 190 and 35), one past
+   it, and without a budget. It must reject the wrong Schnorr response and the
+   changed deferred-rounds messages as `artifact-rejected`, which the value-free
+   prediction cannot distinguish. For
    Sumcheck, the charge bound of the completeness theorem
    (`SumcheckCharges.charge`, which `SumcheckCompleteness.honest_accepted`
    proves sufficient for the honest proof) must equal the runtime's threshold at
@@ -109,18 +126,25 @@ For each subject:
    None may name a compiled meaning: the chains use no equation specific to an
    Entry about the compiled program. The classification must flag
    `spec_equation` when the walk starts from it. The original-side equations
-   are recorded in each receipt.
+   are recorded in each receipt. The deferred rounds' chain ends at the
+   constructed validator (`DeferredRounds.executable_validate`, host validation
+   as its ideal acceptance at a budget of at least 35), whose proof must reach
+   `validate_ideal`, `checkLowering_sound`, `checkNormalized_sound` and the
+   executable `accepted`: the participant projection rule is not applied to
+   that Entry, so no theorem relates it to the original protocol.
 6. `receipt.json` names the compiler, runtime, Lean toolchain and manifest
    identities, the source module, original, export, program, deployment,
    descriptor and package digests, the Lean data digests, the runtime's
    role-map selection, the checked rules (the composed construction and
-   projection check `checkCompiled` with its admitted subject, its soundness
-   theorems, and the lowering rule with, for Sumcheck, the helper preparation),
+   projection check `checkCompiled` with its admitted subject and its soundness
+   theorems, or for the deferred rounds the construction check `checkExport`
+   alone, and the lowering rule with, for Sumcheck, the helper preparation),
    the theorem, the checked axioms of its chain, the proof dependencies checked
    in step 5 and the remaining assumptions. Under the receipt's package pin the
    runtime must accept the honest proof, report that pin and reject the wrong
-   proof. A package with a mutated program (the Schnorr comparison made trivial;
-   the Sumcheck round check and terminal comparison made trivial) is refused
+   proof. A package with a mutated program (the Schnorr and deferred-rounds
+   comparisons made trivial; the Sumcheck round check and terminal comparison
+   made trivial) is refused
    under that pin; re-pinned, it accepts the wrong proof but its program digest
    differs from the receipt's; a program changed without its inner digest is
    refused by the runtime's candidate binding.

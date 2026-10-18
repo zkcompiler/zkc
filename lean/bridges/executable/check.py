@@ -573,7 +573,153 @@ class Sumcheck:
         ]
 
 
-SUBJECTS = {subject.name: subject for subject in (Schnorr(), Sumcheck())}
+
+class DeferredRounds:
+    """The two-round `example::Proof` Entry of the deferred-rounds fixture, whose program
+    computes the verifier's products after the second draw (calculation batching)."""
+
+    name = "deferred-rounds"
+    entry = "example::Proof"
+    modules = ["example=common/tests/fixtures/projects/deferred-rounds/main.zkc"]
+    public = ROOT / "common/tests/fixtures/projects/deferred-rounds/inputs/example.Proof/public.json"
+    witness = ROOT / "common/tests/fixtures/projects/deferred-rounds/inputs/example.Proof/witness.json"
+    data = LEAN / "ZkcExamples/Executable/DeferredRoundsProgramData.lean"
+    namespace = "ZkcExamples.Executable.DeferredRoundsProgramData"
+    construction = "ZkcExamples.Construction.DeferredRounds"
+    # The executable takes the public value; values are mapped to zero.
+    prediction_data = '[.data (.field "bls12-381.fr" 0)]'
+    threshold = 35
+    charge = None
+    theorem = "ZkcExamples.Executable.DeferredRounds.executable_validate"
+    security_module = "ZkcExamples.Executable.DeferredRounds"
+    chain = [
+        theorem,
+        "ZkcExamples.Executable.DeferredRounds.executable_prunes",
+        "ZkcExamples.Executable.DeferredRounds.accepted",
+        "ZkcExamples.Executable.DeferredRounds.rescheduled",
+        "ZkcExamples.Construction.DeferredRounds.accepted",
+        "Zkc.Executable.validate_ideal",
+        "Zkc.Executable.validate_prunes_export",
+        "Zkc.Executable.checkLowering_sound",
+        "Zkc.Executable.checkNormalized_sound",
+        "Zkc.Executable.checkNormalized_flow",
+        "Zkc.Executable.execute_cleaned",
+    ]
+    used = [
+        "Zkc.Executable.validate_ideal",
+        "Zkc.Executable.checkLowering_sound",
+        "Zkc.Executable.checkNormalized_sound",
+        "ZkcExamples.Executable.DeferredRounds.accepted",
+    ]
+    unused = []
+    lean_files = ["lean/ZkcExamples/Construction/DeferredRoundsData.lean",
+                  "lean/ZkcExamples/Construction/DeferredRoundsParticipant.lean",
+                  "lean/ZkcExamples/Executable/DeferredRoundsProgramData.lean"]
+    assumptions = [
+        "Lean kernel and the installed Lean toolchain",
+        "the protocol-structured exporter and its renderer denote the original MLIR",
+        "the zkc.program/0 renderer reads the admitted program bytes as the runtime's program loader does",
+        "the runtime accepts proof bytes for the admitted validator only when "
+        "Zkc.Executable.validate accepts them under the Entry's checked occurrence context "
+        "ZkcExamples.Construction.DeferredRounds.context",
+        "installed kernels implement the meanings of Zkc.Executable.installed",
+        "the native codec is a function of a message's bytes and type",
+        "the participant projection rule is not applied to this Entry: the theorems relate host "
+        "validation to the constructed validator, not to the original protocol",
+    ]
+    wrong_case = "first-message-wrong-value"
+
+    def construction_data(self, artifacts):
+        return [
+            (LEAN / "ZkcExamples/Construction/DeferredRoundsData.lean",
+             "ZkcExamples.Construction.DeferredRoundsData",
+             lambda namespace: structured.render(json.loads(artifacts["original_text"]), namespace), True),
+            (LEAN / "ZkcExamples/Construction/DeferredRoundsParticipant.lean",
+             "ZkcExamples.Construction.DeferredRoundsParticipant",
+             lambda namespace: constructed.render(artifacts["exported"], namespace), True),
+        ]
+
+    def rule_theorems(self):
+        return ["theorem actual_total : (checkLowering installed Fresh.Constructed.participant "
+                "Fresh.Actual.validator).toOption.map (·.total?) = some (some 35) := by decide +kernel",
+                # The rule accepts the program through normalization, not by equality.
+                "theorem actual_rescheduled : (checkLowering installed Fresh.Constructed.participant "
+                "Fresh.Actual.validator).toOption.map (fun lowered => decide (Code.instructionList "
+                "lowered.code = Fresh.Constructed.participant.instructions)) = some false := by decide +kernel"]
+
+    def mutations(self, deployment):
+        # The batched calculation's formals are the first message, the first challenge, the
+        # second challenge, the public value and the second message.
+        def first_product_retargeted(program):
+            operation = function_step(program, "_calculation_1", "value_0")
+            operation[4] = [operation[4][0], "v17"]
+
+        def comparison_trivial(program):
+            operation = function_step(program, "_calculation_1", "value_5")
+            operation[4] = [operation[4][0], operation[4][0]]
+
+        def second_observation_retargeted(program):
+            participant = program_validator(program, deployment)
+            receive = next(item for item in participant[6] if item[0] == "receive")
+            call = next(item for item in participant[6] if item[:2] == ["local", "_transcript_18"])
+            call[3] = [call[3][0], receive[4]]
+
+        def results_swapped(program):
+            body = program_validator(program, deployment)[6]
+            body[-1][1] = list(reversed(body[-1][1]))
+
+        return {
+            "first-product-retargeted": (first_product_retargeted, "some (.returned 0)"),
+            "comparison-trivial": (comparison_trivial, "some (.returned 0)"),
+            "second-observation-retargeted": (second_observation_retargeted, "some (.anchorOperand 5 1)"),
+            "results-swapped": (results_swapped, "some (.returned 0)"),
+        }
+
+    def scenarios(self, proof):
+        """Proof mutations, the payloads the runtime codec refuses in each, and the
+        payloads it reads as another value."""
+        assert proof[:8] == b"ZKCPRF00" and len(proof) == 132
+        first = proof[48:86]
+        return {
+            "honest": (proof, [], []),
+            "first-message-out-of-range": (replace(proof, 54, b"\xff" * 32), [replace(first, 6, b"\xff" * 32)], []),
+            "first-message-wrong-value": (replace(proof, 54, b"\x00" * 31 + b"\x01"), [], []),
+            "second-message-wrong-value": (replace(proof, 100, b"\x00" * 31 + b"\x01"), [], []),
+            "second-message-missing": (proof[:86], [], []),
+            "second-message-truncated": (proof[:110], [], []),
+            "trailing-byte": (proof + b"\x00", [], []),
+            "header-binding": (replace(proof, 8, bytes([proof[8] ^ 0x01])), [], []),
+        }
+
+    def runtime_only(self, driver, codes):
+        # With every value mapped to zero the prediction cannot tell a wrong message from the
+        # right one; the runtime must reject wrong messages itself.
+        for name in ("first-message-wrong-value", "second-message-wrong-value"):
+            driver.check(f"deferred-rounds:runtime-rejects-{name}",
+                         codes[name][0] != 0 and codes[name][1] == "artifact-rejected", json.dumps(codes[name]))
+
+    @staticmethod
+    def receipt_mutation(program):
+        operation = function_step(program, "_calculation_1", "value_5")
+        operation[4] = [operation[4][0], operation[4][0]]
+
+    def rules_entry(self):
+        return [
+            {"name": "transcript construction", "check": "Zkc.Construction.checkExport",
+             "accepts": ["original_export", "constructed_export"],
+             "certificate": "ZkcExamples.Construction.DeferredRounds.accepted"},
+            {"name": "executable lowering", "check": "Zkc.Executable.checkLowering",
+             "vocabulary": "Zkc.Executable.installed",
+             "accepts": ["constructed_export", "program"],
+             "certificate": "ZkcExamples.Executable.DeferredRounds.accepted",
+             "normalization": "ZkcExamples.Executable.DeferredRounds.rescheduled",
+             "soundness": ["Zkc.Executable.execute_metered", "Zkc.Executable.validate_ideal",
+                           "Zkc.Executable.validate_prunes_export", "Zkc.Executable.checkLowering_sound",
+                           "Zkc.Executable.checkNormalized_sound", "Zkc.Executable.execute_cleaned"]},
+        ]
+
+
+SUBJECTS = {subject.name: subject for subject in (Schnorr(), Sumcheck(), DeferredRounds())}
 
 
 class Driver:
@@ -644,16 +790,24 @@ class Driver:
         (output / "original.json").write_text(original_text)
         self.check(f"{prefix}:participant-source", exported[1] == "sha256:" + digest(source))
         self.check(f"{prefix}:participant-policy", exported[3] == policy, json.dumps([exported[3], policy]))
+        # Programs of the same Entry compiled with other options, for the rule's theorems.
+        variants = {}
+        for name, flags in getattr(subject, "variants", {}).items():
+            text = self.run([compiler, "language-bundle", *common, *flags],
+                            name=f"{prefix}:bundle:{name}").stdout.rstrip("\n")
+            (output / f"deployment-{name}.json").write_text(text)
+            variants[name] = json.loads(text)
         return dict(source=source, deployment=deployment, deployment_text=deployment_text,
                     package=package, package_bytes=package_bytes, program=program,
-                    exported=exported, export_text=export_text, original_text=original_text)
+                    exported=exported, export_text=export_text, original_text=original_text,
+                    variants=variants)
 
     def regenerate(self, subject, artifacts):
         files = {subject.data: (executable.render(artifacts["deployment"], subject.namespace), True)}
         for path, namespace, render, owned in subject.construction_data(artifacts):
             files[path] = (render(namespace), owned)
         for path, (text, owned) in files.items():
-            if self.args.write and owned and path == subject.data:
+            if self.args.write and owned:
                 path.write_text(text, encoding="utf-8")
             current = path.read_text(encoding="utf-8") if path.exists() else None
             self.check(f"regenerated:{path.relative_to(ROOT)}", current == text,
@@ -788,6 +942,8 @@ class Driver:
                  "set_option maxRecDepth 20000",
                  body(constructed.render(exported, "Fresh.Constructed")),
                  body(executable.render(deployment, "Fresh.Actual")),
+                 *[body(executable.render(variant, f"Fresh.{name}"))
+                   for name, variant in artifacts["variants"].items()],
                  "open Zkc.Construction Zkc.Executable",
                  "def refusal : Except Refusal Lowered → Option Refusal\n"
                  "  | .error refusal => some refusal\n  | .ok _ => none"]
@@ -1111,7 +1267,8 @@ def main():
     parser.add_argument("--subject", action="append", choices=sorted(SUBJECTS),
                         help="check only the named subjects (default: all)")
     parser.add_argument("--write", action="store_true",
-                        help="rewrite the committed program data from the fresh programs")
+                        help="rewrite the committed program data and the construction data this driver "
+                             "owns from the fresh programs and exports")
     args = parser.parse_args()
     args.output = args.output.resolve()
     args.compiler = args.compiler.resolve()
