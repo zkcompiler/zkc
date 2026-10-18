@@ -67,9 +67,10 @@ is never a value of the other.
 Both hold `ExtensionField`, `TwoAdicField`, `Field`, `CommRing` and
 `CharacteristicNotTwo`; their evaluation domains are the base field's
 power-of-two subgroups and cosets. The octic extension additionally holds
-`IndexRandomness` and is the challenge field of the installed octic Merlin suite
-and random service. A sampling service, transcript suite or row-commitment
-scheme for another field is a separate installation with its own identity.
+`IndexRandomness` and is the challenge field of the installed octic Merlin and
+hash-chain suites and of the random service. A sampling service, transcript
+suite or row-commitment scheme for another field is a separate installation with
+its own identity.
 
 Natural casts land in the prime subfield. Generic source natural constants are
 specialized modulo the characteristic; closed `field.constant` and

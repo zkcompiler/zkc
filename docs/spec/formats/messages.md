@@ -227,8 +227,10 @@ Its static arguments are the suite and canonical complete logical type. The
 installed implementation requires an installed native challenge suite, the closed
 message grammar and exact default physical representations. The suites are the
 existing BLS Merlin/Spongefish suites, Ristretto Merlin
-`merlin3.ristretto255.scalar64le/0` and KoalaBear ext8 Merlin
-`merlin3.koala-bear.ext8-binomial3.rejection31le/0`. The selected random-service
+`merlin3.ristretto255.scalar64le/0`, KoalaBear ext8 Merlin
+`merlin3.koala-bear.ext8-binomial3.rejection31le/0` and the
+[hash-chain suites](../ir/construction.md#native-hash-chain-suites) over BLS12-381
+Fr and the KoalaBear ext8 field. The selected random-service
 contract and draw result must match the suite's challenge field.
 
 Complete-type observation absorbs bytes, so its payload domain need not equal
