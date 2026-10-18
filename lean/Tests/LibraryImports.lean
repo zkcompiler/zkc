@@ -5,6 +5,7 @@ import Zkc.Construction.Compiled
 import Zkc.Construction.Encoding
 import Zkc.Construction.FiatShamir
 import Zkc.Construction.Participant
+import Zkc.Construction.Pattern
 import Zkc.Construction.Projection
 import Zkc.Construction.ProjectionSoundness
 import Zkc.Construction.Reading
@@ -188,6 +189,7 @@ import Zkc.Specification
 import Tests.CommonRegion
 import Tests.Component
 import Tests.ConstructionControls
+import Tests.ConstructionPattern
 import Tests.ContractCallDerivation
 import Tests.ContractCallRequests
 import Tests.ContractCalls

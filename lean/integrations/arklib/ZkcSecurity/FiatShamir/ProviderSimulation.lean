@@ -82,8 +82,11 @@ Every translated program in the support of `translate q A` has at most
 typed engine's weighted budget (`Simulation.weightedBudget`). An ideal bound for
 mixtures of provers bounded on their support transfers to the concrete
 experiment with the loss added (`Simulation.concrete_le`); the typed engine's
-fixed-statement theorem for such mixtures (`randomized_soundness_of_queryBound`,
-from `Typed.randomized_soundness_weighted`) is one such bound.
+theorems for such mixtures are such bounds, for a fixed statement
+(`randomized_soundness_of_queryBound`, from `Typed.randomized_soundness_weighted`)
+and for statements each prover chooses after its queries
+(`randomized_adaptive_soundness_of_queryBound`; with a weighted budget,
+`Typed.randomized_adaptive_soundness_weighted`).
 -/
 
 set_option autoImplicit false
@@ -887,6 +890,29 @@ theorem randomized_soundness_of_queryBound {absorb : Typed.Interface I E P R} {a
       Typed.worstCaseCostBound_of_isTotalQueryBound _ keyBounded prover queries
         (proverBound prover member)
   rwa [← add_mul] at total
+
+/-- The typed engine's adaptive bound for a mixture of provers, each choosing
+its statement after at most `queries` TranscriptQueries on every path:
+`(queries + budget) * bound` when every site's error is at most `bound`. With a
+simulation whose ideal failure is this experiment's, it is the ideal bound that
+`Simulation.concrete_le` takes, at `queries = cost q`. -/
+theorem randomized_adaptive_soundness_of_queryBound {Stmt : Type}
+    {absorb : Typed.Interface I E P R} {accepts : A → Prop} {error : E → ENNReal}
+    (certificate : Typed.Certificate absorb accepts error) {bound : ENNReal}
+    (bounded : ∀ event, error event ≤ bound) (validator : Stmt → PIR.Proc I A)
+    (initial : Stmt → List E) (determined : Typed.Determined initial)
+    (falseStatement : Stmt → Prop)
+    (doomedValidator : ∀ statement, falseStatement statement →
+      certificate.doomed (validator statement))
+    (budget : ℕ) (validatorBound : ∀ statement, Typed.QueryBound absorb (validator statement) budget)
+    (provers : ProbComp (OracleComp (OracleSpec.ofFn R) (Stmt × List P))) (queries : ℕ)
+    (proverBound : ∀ prover ∈ support provers, IsTotalQueryBound prover queries) :
+    Pr{let result ← provers >>= fun prover =>
+        (simulateQ randomOracle (Typed.experiment absorb validator initial prover)).run' ∅}[
+      falseStatement result.1 ∧ Accepted accepts result.2.1] ≤ (queries + budget) * bound :=
+  prEvent_bind_le_of_forall_le_of_support _ _ _ fun prover drawn =>
+    Typed.adaptive_soundness certificate bounded validator initial determined falseStatement
+      doomedValidator budget validatorBound prover queries (proverBound prover drawn)
 
 end TypedEngine
 

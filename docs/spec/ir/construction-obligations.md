@@ -51,6 +51,11 @@ commitment lets the producer pick `z` and set `R = g^z · Y^(-e)` (informative).
   configuration that changes the step sequence (counts, maxima, gate
   difficulties); it does not replace statement binding, authenticated
   configuration that leaves the shape unchanged, or key correctness.
+- The **salt** step and event kind is reserved. Zero-knowledge Fiat–Shamir
+  variants absorb salts before their challenges, and adding the kind later would
+  change request and transcript identities, so it belongs to the vocabulary now;
+  it has no semantics yet, and admission refuses a pattern or a construction
+  that contains one.
 - There is one oracle per primitive namespace, not per deployment. Deployments
   are separated only by their encoded inputs: identical inputs to one primitive
   share cells, and composition arguments keep that sharing.
@@ -313,7 +318,12 @@ extraction is fixed before the answer at `K` is sampled, and resampling that
 answer cannot change it; any later disagreement between the frozen table and an
 accepted opening is the drift event. The extracted object `T*[c, K]` is indexed
 by the authenticated configuration `c` and the key `K`, not by the root alone:
-one root under two configurations has two checkpoints. Re-extraction at a
+one root under two configurations has two checkpoints. The extractor is total:
+it returns a table for every record, with arbitrary rows where the record
+determines none. A missing extraction counts as far, so an extractor that
+returns nothing when a row is missing makes the bound false: a tree with honest
+accepted rows at half the indices and no row elsewhere is accepted with
+probability one half while no table is extracted. Re-extraction at a
 repetition is admissible only as a separately specified checkpoint, charged in
 the multi-checkpoint bound. The convention is stated against an abstract query
 record, a classical log or a compressed-oracle database. Extraction from the
@@ -331,7 +341,11 @@ Four obligations bind what a TranscriptQuery's scope stands for.
   injectivity of typed public-value binding events (vectors, indices and
   canonical rows as well as scalars) and prefix freedom over every statement the
   adversary can output, malformed ones included. A count is encoded before its
-  vector, or the vector carries its length.
+  vector, or the vector carries its length. A **binding codec** is such an
+  encoding: injective and prefix-free on the whole statement type. Binding a
+  statement as one typed public-value event, the application context with the
+  canonical row of the statement's public values, is a binding codec whenever
+  the row determines the statement.
 - **Collision-bounded binding.** When the scope holds a digest, the experiment
   with digests equals the one with full statements outside a collision event.
   The event ranges over every relevant hashing operation: the adversary's

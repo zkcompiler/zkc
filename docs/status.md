@@ -348,12 +348,18 @@ bounds defined by `data.index` constants, which meets operand provenance
 statically. Programmable handlers may ignore values, and nothing checks the
 omission classes for them. No gate, block request, declared role of hash calls,
 challenge-input coverage, configuration provenance check or interaction-pattern
-digest is implemented, and no provider has a simulation theorem. Lean states
-formal readings of the obligations, refutes each with a model counterexample
+digest is implemented, the salt kind is not admitted natively, and no provider
+has a simulation theorem. Lean states formal readings of the obligations,
+refutes each with a model counterexample
 ([support](../lean/docs/support.md#construction-obligation-counterexamples)),
 fixes the type of provider simulations and states the joint experiment of a
 committed opening with its extraction checkpoint convention, without proving its
-bound.
+bound. It also states law records with their five constructors and the gated
+accepted-value decoder, per-key charges in the typed Fiat–Shamir theorems,
+raw answer types by the last event and the lifting of uniform-sort certificates,
+binding codecs over typed public-value binding events, and the data shape of the
+interaction pattern with the reserved salt kind; no compiled theorem uses them
+yet.
 
 The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retained
 PIR programs, proves open-process contracts, and applies selected ArkLib/VCVio

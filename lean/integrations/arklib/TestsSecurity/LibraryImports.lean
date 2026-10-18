@@ -70,10 +70,13 @@ import ZkcSecurity.Examples.StructuredSchnorrSigma
 import ZkcSecurity.Examples.Sumcheck
 import ZkcSecurity.Examples.SumcheckFiatShamir
 import ZkcSecurity.Examples.Variants
+import ZkcSecurity.FiatShamir.Binding
 import ZkcSecurity.FiatShamir.Composition
 import ZkcSecurity.FiatShamir.Decoding
 import ZkcSecurity.FiatShamir.Grinding
 import ZkcSecurity.FiatShamir.Interface
+import ZkcSecurity.FiatShamir.Laws
+import ZkcSecurity.FiatShamir.Lifting
 import ZkcSecurity.FiatShamir.Obligations
 import ZkcSecurity.FiatShamir.ProviderSimulation
 import ZkcSecurity.FiatShamir.Roles
@@ -101,6 +104,7 @@ import ZkcSecurity.VCVio.SigmaAnd
 import ZkcSecurity.VCVio.SigmaAndSchnorr
 import ZkcSecurity.VCVio.StructuredUniform
 import ZkcSecurity.VCVio.UntilBad
+import TestsSecurity.BindingCodecs
 import TestsSecurity.CallComposition
 import TestsSecurity.CausalSumcheck.Contracts
 import TestsSecurity.CausalSumcheck.Execution
@@ -125,6 +129,7 @@ import TestsSecurity.Counterexamples.Support
 import TestsSecurity.ExecutableSchnorrFiatShamir
 import TestsSecurity.FiatShamirTyped
 import TestsSecurity.FriSecurity
+import TestsSecurity.LawRecords
 import TestsSecurity.LocalCoupling
 import TestsSecurity.LocalCouplingAudit
 import TestsSecurity.LocalCouplingClients

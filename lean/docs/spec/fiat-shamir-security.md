@@ -50,6 +50,32 @@ already includes its sampling correction (see [realized laws](#realized-sampling
 `Typed.QueryBound` counts the queries on every path of a validator, and
 `Typed.CostBound` charges each query the error of its occurrence.
 
+**Per-key charges.** A charge `charge : List E → E → ENNReal` is a function of
+the whole key: the absorbed history before a query and its occurrence. It can
+count loop iterations that the history determines and read operands carried in
+the occurrence. A **charged certificate** `Typed.ChargedCertificate absorb
+accepts charge` has a doomed set of pairs of an absorbed history and a residual
+process, so one residual shape can be doomed with a different error at each
+place it is reached. Its local obligations `Typed.ChargedStep` at a doomed pair
+`(history, process)` are: a doomed result does not accept; after a receive whose
+event recovers a reply, and after a send, the residual is doomed at the extended
+history; and a doomed query with occurrence `e` escapes, at
+`history ++ [e]`, with probability at most `charge history e`. A loop whose
+occurrence carries no iteration coordinate is thus charged each round's own
+error, read from the history (`TestsSecurity.LawRecords.loop_soundness`), where
+a certificate whose doomed set ignores the history must charge every round the
+largest error (`historyFree_error_ge`). The security argument uses a doomed pair
+only where replaying a validator along the history reaches the residual
+(`Typed.BadKeyAt`, `Typed.EscapesAt`), not an honest execution. A certificate
+with an error per occurrence is the charged certificate whose doomed set and
+charge ignore the history (`Certificate.charged`, `Step.charged`).
+`Typed.ChargedCostBound absorb charge process history cost` bounds the charges
+on every path of a validator started from the absorbed `history`, a receive
+constraining only the replies its absorbed event recovers; a cost bound with an
+error per occurrence is one from every history (`CostBound.charged`), and a
+query count with every charge at most `bound` charges at most `budget * bound`
+(`QueryBound.chargedCostBound`).
+
 ## The ideal experiment
 
 The transcript oracle on all event histories is `OracleSpec.ofFn R`.
@@ -76,8 +102,10 @@ The adversary interface is:
   computation with arbitrary internal state that may ask any history, including
   histories no honest execution produces, in any order and repeatedly.
 - **Query accounting.** Every oracle key is charged the error of its last event
-  (`Typed.keyError`); a key that ends with no query occurrence of the validator
-  can be charged zero. `WorstCaseCostBound prover ⟨keyError error⟩ proverCost`
+  (`Typed.keyError`), or, with a per-key charge, the charge of its last event
+  after the history before it (`Typed.keyCharge`, which is `keyError` for a
+  charge that ignores the history, `keyCharge_const`); a key that ends with no
+  query occurrence of the validator can be charged zero. `WorstCaseCostBound prover ⟨keyError error⟩ proverCost`
   bounds the prover's charge on every path, counting repeated and cached
   queries. With every error at most `bound`, a prover with
   `IsTotalQueryBound prover queries` is charged at most `queries * bound`. The
@@ -116,10 +144,24 @@ Pr[falseStatement result.1 ∧ Accepted accepts result.2.1
 `Typed.adaptive_soundness` is the case of errors at most `bound`, `queries`
 prover queries and validators with at most `budget` queries:
 `(queries + budget) * bound`. `Typed.soundness_weighted` and `Typed.soundness`
-are the fixed-statement forms, and `Typed.randomized_soundness_weighted` adds
+are the fixed-statement forms, and `Typed.randomized_soundness_weighted` and,
+for adaptive statements, `Typed.randomized_adaptive_soundness_weighted` add
 private randomness drawn before the oracle computation. Charging each key its
 own error gives the sum over the asked keys; the uniform form is
 `(queries + budget) * max` over the sites.
+
+The per-key forms are `Typed.adaptive_soundness_charged`,
+`Typed.soundness_charged`, `Typed.randomized_soundness_charged` and
+`Typed.randomized_adaptive_soundness_charged`: a charged
+certificate, validators whose queries from their initial histories charge at
+most `validatorCost` (`ChargedCostBound`) and a prover whose queries charge at
+most `proverCost` with every key charged `keyCharge charge` give the same bound
+`proverCost + validatorCost`. The theorems with an error per occurrence are
+their instances at the charge that ignores the history, and the uniform forms
+follow from those; their statements are unchanged. A per-key charge discharges
+neither obligation of the weighted bound: the all-table resampling bound and the
+pathwise weighted budget are proved for each certificate. With law records, the
+charge of a query site is `κ · ε + λ` at its key.
 
 The proofs apply VCVio's weighted adaptive bad-query bound
 `OracleComp.prEvent_randomOracle_le_of_bad_queries_weighted` directly to the
@@ -135,13 +177,15 @@ history oracle, with no routing to library keys:
   replay reads the table only at histories no longer than the replayed prefix
   (`Typed.replay_congr`). Resampling the answer at a key therefore leaves the
   replayed residual unchanged, and the key is bad with probability at most the
-  error of its last event under every background table (`Typed.badKey_resample`).
+  charge of the key under every background table (`Typed.badKey_resample_charged`
+  for a doomed set indexed by the replayed history; `Typed.badKey_resample` for an
+  error per occurrence).
 - **Trace.** An accepting deterministic run from a doomed validator must leave
   the doomed set at one of its own queries, whose key is in the query log and is
-  bad (`Typed.escape_logged`).
+  bad (`Typed.escape_logged_charged`, `Typed.escape_logged`).
 - **Cost.** The transform charges at most the validator's cost
-  (`Typed.transform_costBound`), so the whole execution charges at most
-  `proverCost + validatorCost`.
+  (`Typed.transform_chargedCostBound`, `Typed.transform_costBound`), so the
+  whole execution charges at most `proverCost + validatorCost`.
 
 The proofs use four properties of the transform: every received reply is
 determined by the event absorbed for it; every query is answered at the history
@@ -175,10 +219,13 @@ with ideal-law error `ε` and a realized decoder has decoded-law error
   elements read from machine words of a binary field and power-of-two windows
   of uniform bit strings are of this kind.
 - **Exact with refusal.** Masking a residue modulo `p` to `bits` bits below the
-  largest multiple of `2 ^ bits` and refusing above it (`lowBitsRejecting`) has
-  factor one on its successful values (`lowBitsRejecting_realized`); it refuses
-  with probability `(p mod 2 ^ bits) / p` (`prEvent_lowBitsRejecting_refuses`),
-  `1 / p` for KoalaBear at 1 to 24 bits (`koalaBear_lowBitsRejecting_refuses`).
+  largest multiple of `2 ^ bits` and refusing above it (`lowBitsRejecting`) is
+  dominated with factor one (`lowBitsRejecting_realized`) and, since every value
+  has exactly `⌊p / 2 ^ bits⌋` preimages (`lowBitsRejecting_fiber_eq`), its
+  successful values have exactly the success probability times the uniform law
+  (`lowBitsRejecting_exactWithRefusal`); it refuses with probability
+  `(p mod 2 ^ bits) / p` (`prEvent_lowBitsRejecting_refuses`), `1 / p` for
+  KoalaBear at 1 to 24 bits (`koalaBear_lowBitsRejecting_refuses`).
 - **Point ratio.** If every value has probability at most `(1 + η) / |R|`, the
   factor is `1 + η` (`PointBound.dominated`, `Dominated.realized`). Masking a
   uniform residue modulo `p` to `bits` bits gives each value at most
@@ -210,6 +257,54 @@ Independent coordinates of a uniform answer multiply point bounds
 `PointBound.pi`), and a site that reads one coordinate of a uniform pair keeps
 its factor (`Dominated.comp_fst`, `Dominated.comp_snd`). These are the proved
 factorizations from which joint laws of pairs and blocks follow.
+
+### Law records
+
+A law record `LawRecord Raw Value` (`ZkcSecurity.FiatShamir.Laws`) is the
+proof-bearing realized law of a request class, stated on the raw answer: a
+decoder `decode : Raw → Option Value`, a coefficient `factor` and a slack
+`slack` in `[0, ∞]` with `Realized decode factor slack` against the uniform law
+of the sort, and a refusal bound `refusal` with
+`Pr[decode raw = none] ≤ refusal`, a completeness quantity. The ideal law of the
+sort is its uniform law: uniform field elements, `UniformIndex(N)` for an index
+below `N`, and the product law of a block, which is the uniform law of the
+function type. A gated accepted-value decoder may have a coefficient below one. A
+site with ideal-law error `ε` escapes with probability at most
+`factor · ε + slack` (`LawRecord.escape_le`).
+
+Five constructors present a record from a checked claim about the realized
+subdistribution `μ` against the ideal law `ν`:
+
+- `LawRecord.exact`: a total decoding with `μ = ν` (`ExactLaw`); a bijection is
+  exact (`exactLaw_of_bijective`), and so is any total decoding dominated with
+  factor one, because the complements of its events are dominated too
+  (`Dominated.exactLaw`).
+- `LawRecord.exactWithRefusal`: `μ = p_success · ν`
+  (`Obligations.ExactWithRefusal`), with the success probability as coefficient;
+  a decoder whose every value has the same number of preimages is of this kind
+  (`exactWithRefusal_of_fibers`).
+- `LawRecord.dominated`: `μ ≤ κ · ν + λ` with refusal allowed. It suffices for
+  soundness but says nothing about the success-conditional law: a decoder that
+  returns `0` on one outcome of a fair bit and refuses on the other is dominated
+  with coefficient one but not exact with refusal
+  (`TestsSecurity.LawRecords.constantOnSuccess_not_exact`).
+- `LawRecord.pointRatio`: `μ(x) ≤ κ · ν(x)` for every value (`PointRatio`,
+  `PointRatio.realized`).
+- `LawRecord.additive`: a total decoding with coefficient one and its additive
+  loss as slack (`Balanced`).
+
+`LawRecord.gated` is the accepted-value decoder of a gated site: from gate bits
+and a challenge answer it refuses unless the gate passes, with coefficient and
+slack a bound on the gate's passing probability times the challenge record's
+(`gated_realized`) and refusal at most a bound on the gate's failure probability plus the
+challenge's refusal. The sampling lemmas above instantiate the constructors:
+`LawRecord.identity` and `LawRecord.modulo` (exact), `LawRecord.lowBitsRejecting`
+(exact with refusal), `LawRecord.koalaBearLowBits` (point ratio
+`1 + (2 ^ bits - 1) / p`, `koalaBear_lowBits_pointRatio`),
+`LawRecord.bls12381Reduction` and `LawRecord.koalaBearCompound` (dominated),
+`LawRecord.reduce` (additive, loss `|F| / N`) and `LawRecord.koalaBearQueryPhase`
+(gated, with the factor of `koalaBear_queryPhase_realized`,
+`LawRecord.koalaBearQueryPhase_factor`).
 
 ## Gated and compound sites
 
@@ -249,19 +344,79 @@ These are errors of one query site; a complete Fiat–Shamir bound charges the
 site errors along every prover query and validator path
 (`adaptive_soundness_weighted`).
 
+## Raw answers by the last event and lifting
+
+In the history class the request is the last event of its TranscriptQuery, so
+the raw answer type of a key is a function of its last event
+(`ZkcSecurity.FiatShamir.Lifting`). `Typed.ByLast Raw key` is `Raw` of the key's
+last event, and `Unit` at the empty key, which no query reaches; it is uniform
+when every `Raw event` is (`ByLast.sampleable`). At a key `preceding ++ [event]`
+the answer reads as a value of `Raw event` (`ByLast.read`), with the same
+uniform law (`prEvent_read`), and `Absorption.queryLast` is a query whose
+decoder takes that value.
+
+A **law interface** `Typed.LawInterface I E P Raw` presents a validator's
+operations to the transform with every query decoded by a law record from the
+raw answer of its occurrence into the operation's reply sort; its transcript
+interface is `LawInterface.absorb`. A **uniform-sort certificate**
+`Typed.UniformCertificate laws accepts error` is a round-by-round certificate,
+with doomed pairs of an absorbed history and a residual, in which a doomed
+query's uniform reply of its sort leaves the doomed set with probability at most
+`error history operation` (`Typed.UniformStep`), the form a protocol's own
+analysis produces. It lifts to a charged certificate over `LawInterface.absorb`,
+with the same doomed pairs, whenever every query's charge at a history covers its
+record's `factor · error + slack` there (`UniformCertificate.charged`).
+Law-record decoders read only the raw answer: the operands they depend on are
+carried in the occurrence. In `TestsSecurity.LawRecords` a validator with an
+exact challenge in `Fin 5` and a gated block of positions has uniform errors
+`1 / 5` and `1 / 4`; the lifted certificate charges `1 / 5` and `1 / 2 · 1 / 4`,
+and the typed engine bounds its acceptance by `(queries + 2) / 5`. A loop that
+draws twice at one occurrence, with first-round error `1 / 4` and second-round
+error `1 / 2`, is charged `1 / 4 + 1 / 2`.
+
+## Binding codecs
+
+`Typed.Determined` quantifies over every statement the prover can output,
+malformed ones included, so a codec that discharges it is injective and
+prefix-free on the whole statement type (`ZkcSecurity.FiatShamir.Binding`). A
+typed public value (`PublicValue`) is a scalar, a vector whose length is part of
+the value, an index with its bound, or a count; a row (`Row`) is a statement's
+public values, each labelled by its input; and the **typed public-value binding
+event** (`PublicBinding`) is the application context with a row. These are
+binding representations: an index need not lie below its bound and a row need
+not be in canonical order; validity and canonical order are established
+separately, by the statement's own checks and by the codec that builds the row,
+and keeping malformed values representable is what lets a codec bind every
+statement. A **binding codec** `BindingCodec Stmt E` is an
+injective, prefix-free encoding of statements as initial histories, and it
+discharges `Typed.Determined` (`BindingCodec.determined`). Binding a statement as
+one typed public-value binding event is such a codec when the event embeds
+injectively into the transcript events and the row determines the statement
+(`BindingCodec.single`, `determined_single`). In `TestsSecurity.BindingCodecs`
+the raw Sumcheck statement (table values, claim and round count, with no length
+check) is bound by one event and determined, while binding the table entries one
+event each with no count or length is not prefix-free and is not determined.
+
 ## Role separation and transcript constructions
 
 The ideal model is a random oracle on typed transcript histories whose answer at
 a gated or compound key is the whole tuple the site decodes. Deployed transcripts
 realize it from a hash function or permutation:
 
-- **Tagged hash chain.** A Merkle–Damgård chain of a compression function over
-  tagged blocks, where each absorbed event, squeeze and proof-of-work step is a
-  block with its own tag. It needs an injective, prefix-free encoding of
-  histories into tagged blocks, and the chain idealization: the chaining value of
-  every block prefix acts as a random oracle on prefixes, up to the collision
-  terms of the chaining values. Several outputs read at one key with distinct
-  tags are then role-separated answers of that oracle.
+- **Hash chain.** A chain of full-digest calls of one byte hash, read as a
+  random oracle, as in the
+  [native hash-chain suites](../../../docs/spec/ir/construction.md#native-hash-chain-suites):
+  one call binds the first event, each further absorbed event is one call on the
+  current digest and the event's frame, and a request's answer is read from
+  counter-block calls at the current digest. It needs an injective, prefix-free
+  encoding of events and requests with distinct role tags. The digest after a
+  history then stands for that history: outside a bad event of the joint
+  primitive-query trace, a fresh call that returns a digest an earlier call
+  already generated (a collision) or already read as a state (a prediction), the
+  chain is one oracle on histories, with loss at most `(q + V)² / |S|` for `q`
+  adversary calls and `V` verifier calls ([provider simulations](#provider-simulations)).
+  Several outputs read at one key with distinct tags are role-separated answers
+  of that oracle.
 - **Duplex sponge.** Absorbing the encoded history and squeezing the answer
   stream. It needs the same injective encoding and the sponge idealization: the
   squeeze stream after an absorbed prefix acts as a random oracle on absorbed
@@ -283,7 +438,8 @@ states shared between calls, collisions between derived inputs, and the query
 cost of each grinding attempt. This is a separate obligation of each transcript
 construction, stated with the idealization above; role separation at one key
 does not discharge it. Its type is fixed in
-[provider simulations](#provider-simulations).
+[provider simulations](#provider-simulations), where it is proved for the
+hash-chain suites; for the duplex suites it remains a named obligation.
 
 ## The participant transform
 
@@ -714,9 +870,13 @@ one property, one provider and one class of bounded executions.
   support makes at most `cost q` TranscriptQueries (`Simulation.transport`),
   hence the typed engine's weighted budget (`Simulation.weightedBudget`). An
   ideal bound for mixtures bounded on their support transfers with the loss
-  added (`Simulation.concrete_le`); for fixed statements the typed engine gives
-  such a bound, `(queries + budget) · bound`
-  (`randomized_soundness_of_queryBound`, from `Typed.randomized_soundness_weighted`).
+  added (`Simulation.concrete_le`); the typed engine gives such bounds,
+  `(queries + budget) · bound`, for fixed statements
+  (`randomized_soundness_of_queryBound`, from `Typed.randomized_soundness_weighted`)
+  and for statements each prover chooses after its queries
+  (`randomized_adaptive_soundness_of_queryBound`); with a weighted budget, the
+  mixture forms are `Typed.randomized_adaptive_soundness_weighted` and
+  `Typed.randomized_adaptive_soundness_charged`.
 
 **Hash-chain suites.** `ZkcSecurity.HashChain` instantiates this type for the
 [native hash-chain suites](../../../docs/spec/ir/construction.md#native-hash-chain-suites),
@@ -806,7 +966,8 @@ straight-line extractor in
   `Pr[AcceptsFar] ≤ (q_T + 1) · κ · (1 - δ) + ε_ext + ε_ns` for every prover within
   the budgets: the history-oracle term, the extraction and drift term over at
   most `q_T + 1` checkpoints, and the namespace term. The extractor must be
-  total: one that returns no table when a row is missing makes the proposition
+  total, returning a table for every record with arbitrary rows where the record
+  determines none: one that returns no table when a row is missing makes the proposition
   false at `δ = 1` for small `ε_ext + ε_ns`, since a prover that builds one half
   of the tree from accepted rows is accepted with probability one half while
   `Far` holds of the missing table.

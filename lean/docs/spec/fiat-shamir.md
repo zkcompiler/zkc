@@ -213,6 +213,25 @@ initial history is the binding of the checked public values
 states the same bound for the transform of the imported interactive verifier's
 Sigma instance.
 
+## Interaction patterns
+
+A programmable history provider binds its construction identity through the
+digest of an interaction pattern the compiler emits
+([construction obligations](../../../docs/spec/ir/construction-obligations.md#query-identities)).
+`Zkc.Construction.Pattern` defines its data shape only: a `Pattern ValueSort` is
+a list of `PatternStep`s, each with a kind (`StepKind`: a public value, an
+absorbed message, a hint that is not absorbed, a challenge, a proof-of-work step
+or a salt), the sort of its values (a parameter, to which a catalogue's sort
+vocabulary attaches), how many values it carries (`StepCount`: none, one, a
+static number, or at most a static maximum; a proof-of-work step carries its
+difficulty in bits) and its label. No digest, encoding or semantics is defined.
+The salt kind is reserved: it is part of the vocabulary because adding it later
+would change request and transcript identities, but it has no semantics, and an
+admissible pattern has no salt step (`Pattern.Admissible`).
+`Tests.ConstructionPattern` checks that Schnorr-shaped and gated query-phase
+patterns are admissible, that a salted one is refused, and that patterns
+differing only in a difficulty or a maximum are different data.
+
 ## Named assumptions
 
 - Random oracle: the suite's challenge on an absorbed history is a uniformly

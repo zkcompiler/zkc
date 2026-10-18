@@ -68,6 +68,11 @@ counterexample is in `TestsSecurity`).
 
 **The event and the intended bound.** `Far` holds of an extracted table when no
 table was extracted or when at least `δ · 2 ^ k` of its rows are not accepted.
+The extractor must therefore be total: it returns a table for every record,
+with arbitrary rows where the record determines none. An extractor that returns
+no table when a row is missing makes `IntendedBound` false: a prover whose tree
+has honest accepted rows at half the indices and no row elsewhere is accepted
+with probability one half while `Far` holds.
 `IntendedBound` states, as a proposition and not a theorem,
 `Pr[Accept ∧ Far(T*[c, K])] ≤ (q_T + 1) · κ · (1 - δ) + ε_ext + ε_ns`: the
 history-oracle term, the extraction and drift term over at most `q_T + 1`
@@ -809,7 +814,8 @@ def beforeFirst (key : List (Event Context Scheme Row Digest))
   record.takeWhile fun entry => decide (entry.1 ≠ .transcript key)
 
 /-- An extractor reads a table of rows for a configuration and a checkpoint key
-from a query record. -/
+from a query record. `Far` counts a missing table as far, so the intended bound
+needs an extractor that returns a table for every record (a total extractor). -/
 abbrev Extractor (Context Scheme Coordinate Digest : Type) :=
   (configuration : Configuration Scheme) → List (Event Context Scheme (List Coordinate) Digest) →
     Record Context Scheme (List Coordinate) Digest →

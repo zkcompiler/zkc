@@ -358,8 +358,11 @@ theorem lowBitsRejecting_fiber (p bits : ℕ) [NeZero p] (value : Fin (2 ^ bits)
         · exact absurd decoded (by simp)
     _ = p / 2 ^ bits := Finset.card_range _
 
-/-- Masking with refusal is realized exactly on its successful values: each
-value has probability `⌊p / 2 ^ bits⌋ / p`, at most `2 ^ -bits`. -/
+/-- Masking with refusal is dominated by the uniform law of its sort with factor
+one and no slack: each successful value has probability at most
+`⌊p / 2 ^ bits⌋ / p`, which is at most `2 ^ -bits`. This is a domination, not an
+equality; the exact form, the success probability times the uniform law, is
+`lowBitsRejecting_exactWithRefusal` (`ZkcSecurity.FiatShamir.Laws`). -/
 theorem lowBitsRejecting_realized (p bits : ℕ) [NeZero p] :
     Realized (lowBitsRejecting p bits) 1 0 := by
   have bounded : ∀ value, Pr{let element ← $ᵗ ZMod p}[
