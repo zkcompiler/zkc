@@ -590,6 +590,8 @@ class DeferredRounds:
     prediction_data = '[.data (.field "bls12-381.fr" 0)]'
     threshold = 35
     charge = None
+    # The same Entry compiled without calculation batching.
+    variants = {"Unbatched": ["--no-calculation-batching"]}
     theorem = "ZkcExamples.Executable.DeferredRounds.executable_validate"
     security_module = "ZkcExamples.Executable.DeferredRounds"
     chain = [
@@ -645,7 +647,12 @@ class DeferredRounds:
                 # The rule accepts the program through normalization, not by equality.
                 "theorem actual_rescheduled : (checkLowering installed Fresh.Constructed.participant "
                 "Fresh.Actual.validator).toOption.map (fun lowered => decide (Code.instructionList "
-                "lowered.code = Fresh.Constructed.participant.instructions)) = some false := by decide +kernel"]
+                "lowered.code = Fresh.Constructed.participant.instructions)) = some false := by decide +kernel",
+                # Without calculation batching the program computes every value where the source
+                # defines it, so the rule accepts it by equality.
+                "theorem unbatched_exact : (checkLowering installed Fresh.Constructed.participant "
+                "Fresh.Unbatched.validator).toOption.map (fun lowered => decide (Code.instructionList "
+                "lowered.code = Fresh.Constructed.participant.instructions)) = some true := by decide +kernel"]
 
     def mutations(self, deployment):
         # The batched calculation's formals are the first message, the first challenge, the

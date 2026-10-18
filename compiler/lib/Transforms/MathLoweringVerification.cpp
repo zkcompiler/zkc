@@ -33,6 +33,9 @@ class LoweringVerifier {
   finite::VerificationResult finiteOutcome{finite::VerificationStatus::Mismatch,
                                            {}};
   finite::VerificationResult *reportedOutcome = nullptr;
+  // The calculation schedule: at the first demand, or before the first action
+  // that follows the operation in source order.
+  bool batching = true;
 
   LogicalResult refuse(Operation *op, StringRef detail) {
     if (finiteOutcome.status == finite::VerificationStatus::OptionalCapacity ||
@@ -467,26 +470,58 @@ class LoweringVerifier {
     unsigned index = 0;
     for (auto &op : original)
       order[&op] = index++;
-    auto *cursor = &candidate.front();
-    for (auto &action : original) {
-      if (isTotal(&action))
-        continue;
-      // Stop at operations realized at an earlier cut, even when an internal
-      // result was not exported. A later demand for that result must then fail
-      // capture matching, rather than silently permit recomputation.
-      SmallVector<Value> pending(action.getOperands());
-      SmallVector<Operation *> needed;
-      llvm::DenseSet<Operation *> visited;
+    // Without batching, every operation some action demands is expected
+    // before the first action that follows it.
+    llvm::DenseSet<Operation *> demanded;
+    if (!batching) {
+      SmallVector<Value> pending;
+      for (auto &action : original)
+        if (!isTotal(&action))
+          append_range(pending, action.getOperands());
       while (!pending.empty()) {
         auto value = pending.pop_back_val();
         if (!charge())
           return refuse(target, "lowering comparison work limit exceeded");
         auto *definition = value.getDefiningOp();
         if (!definition || !isTotal(definition) ||
-            realized.contains(definition) || !visited.insert(definition).second)
+            !demanded.insert(definition).second)
           continue;
-        needed.push_back(definition);
         append_range(pending, definition->getOperands());
+      }
+    }
+    auto *cursor = &candidate.front();
+    for (auto &action : original) {
+      if (isTotal(&action))
+        continue;
+      SmallVector<Operation *> needed;
+      if (batching) {
+        // Stop at operations realized at an earlier cut, even when an
+        // internal result was not exported. A later demand for that result
+        // must then fail capture matching, rather than silently permit
+        // recomputation.
+        SmallVector<Value> pending(action.getOperands());
+        llvm::DenseSet<Operation *> visited;
+        while (!pending.empty()) {
+          auto value = pending.pop_back_val();
+          if (!charge())
+            return refuse(target, "lowering comparison work limit exceeded");
+          auto *definition = value.getDefiningOp();
+          if (!definition || !isTotal(definition) ||
+              realized.contains(definition) ||
+              !visited.insert(definition).second)
+            continue;
+          needed.push_back(definition);
+          append_range(pending, definition->getOperands());
+        }
+      } else {
+        for (auto &op : original) {
+          if (&op == &action)
+            break;
+          if (!charge())
+            return refuse(target, "lowering comparison work limit exceeded");
+          if (demanded.contains(&op) && !realized.contains(&op))
+            needed.push_back(&op);
+        }
       }
       llvm::sort(needed, [&](Operation *a, Operation *b) {
         return order[a] < order[b];
@@ -624,10 +659,11 @@ public:
                    protocol_ir::ProtocolModuleOp after,
                    const CheckedHelperNormalizations &helpers,
                    finite::VerificationLimits finiteLimits = {},
-                   finite::VerificationResult *outcome = nullptr)
+                   finite::VerificationResult *outcome = nullptr,
+                   bool batching = true)
       : before(before), after(after), sourceSymbols(before), symbols(after),
-        helpers(helpers), finiteLimits(finiteLimits), reportedOutcome(outcome) {
-  }
+        helpers(helpers), finiteLimits(finiteLimits), reportedOutcome(outcome),
+        batching(batching) {}
   LogicalResult calculations(ArrayRef<local::FuncOp> functions,
                              bool realization = false) {
     for (auto target : functions) {
@@ -880,12 +916,14 @@ verifyRealizedHelperRecipes(protocol_ir::ProtocolModuleOp original,
       .calculations(functions, true);
 }
 LogicalResult verifyMathLowering(protocol_ir::ProtocolModuleOp original,
-                                 protocol_ir::ProtocolModuleOp candidate) {
+                                 protocol_ir::ProtocolModuleOp candidate,
+                                 bool batching) {
   CheckedHelperNormalizations helpers(original);
   for (auto participant :
        original.getBody().front().getOps<protocol_ir::ParticipantOp>())
     if (failed(helpers.prepare(participant)))
       return failure();
-  return LoweringVerifier(original, candidate, helpers).run();
+  return LoweringVerifier(original, candidate, helpers, {}, nullptr, batching)
+      .run();
 }
 } // namespace zkc::mathematical

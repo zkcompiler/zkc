@@ -48,7 +48,8 @@ For each subject:
    the constructed validator calls by name, and for the deferred rounds with a
    total charge of 35 and through normalization, since the program computes the
    first round's product after the second draw and so differs from the
-   constructed validator instruction for instruction. It runs the rule on
+   constructed validator instruction for instruction; the same Entry compiled
+   with `--no-calculation-batching` is accepted by equality. It runs the rule on
    mutated
    programs. Pure calculations are compared by the terms they denote, so a
    changed calculation is refused where its value first reaches an anchor or the

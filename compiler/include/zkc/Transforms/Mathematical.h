@@ -104,8 +104,11 @@ llvm::Error checkMapFormulas(mlir::ModuleOp original, uint64_t &remaining);
 // ignoring locations and SSA names. Materialization and storage rewrites use
 // their dedicated checks. Skipped or backward edges refuse. Executable inputs
 // without projection records acquire no common-source claim.
-mlir::LogicalResult verifyProjectionPreserved(mlir::ModuleOp original,
-                                              mlir::ModuleOp candidate);
+/// Lowering of participant mathematics is checked against the calculation
+/// schedule of `policy`.
+mlir::LogicalResult
+verifyProjectionPreserved(mlir::ModuleOp original, mlir::ModuleOp candidate,
+                          MathematicalSelectionPolicy policy = {});
 mlir::LogicalResult verifyProtocolPreparationPreserved(mlir::Operation *before,
                                                        mlir::Operation *after);
 mlir::LogicalResult verifyAuthoredLocalsPreserved(mlir::Operation *before,
