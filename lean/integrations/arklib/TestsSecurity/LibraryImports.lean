@@ -101,6 +101,7 @@ import TestsSecurity.LocalCoupling
 import TestsSecurity.LocalCouplingAudit
 import TestsSecurity.LocalCouplingClients
 import TestsSecurity.MultilinearSumcheck
+import TestsSecurity.ProviderSimulation
 import TestsSecurity.SigmaComposition
 import TestsSecurity.SigmaCompositionFiatShamir
 import TestsSecurity.StructuredSchnorrFiatShamir
