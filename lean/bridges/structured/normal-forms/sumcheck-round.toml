@@ -13,7 +13,6 @@ helper_modules = ["lean/ZkcExamples/Structured/SumcheckHelperBodies.lean",
 protocol = "zkl_145fec0475c3361a656f102bec3f8b514a2557e3ec22afda8a8f34050f1bff6d"
 repeat = "s15"
 body = "SumcheckVerifierBodies.roundBody"
-unfold = ["SumcheckVerifierBodies.roundBody", "SumcheckVerifierBodies.roundGuard", "SumcheckVerifierBodies.roundTail"]
 function = "roundFn"
 parameters = "(U : UnitPayload)"
 meaning = "participantMeaningWith (.silent _) (participantActions F G) (plainHelpers U) self (U.plainProtocolTable F G) ctx"

@@ -26,7 +26,6 @@ theorem helperBodies : SumcheckVerifierHelpers.Bodies unit.definitions :=
 theorem reduce_raw : reduceDefinition.raw = (SumcheckVerifierBodies.reduceBody 2).erase := by
   refine SumcheckSourceViews.reduce_raw.trans ?_
   unfold SumcheckVerifierBodies.reduceBody SumcheckVerifierBodies.roundBody
-    SumcheckVerifierBodies.roundGuard SumcheckVerifierBodies.roundTail
     SumcheckVerifierBodies.reduceReturn
   rfl
 

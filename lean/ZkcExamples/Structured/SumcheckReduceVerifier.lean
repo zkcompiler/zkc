@@ -25,7 +25,6 @@ theorem reduce_raw_shared :
     reduceDefinition.raw = (SumcheckVerifierBodies.reduceBody 4).erase := by
   refine SumcheckReduceViews.reduce_raw.trans ?_
   unfold SumcheckVerifierBodies.reduceBody SumcheckVerifierBodies.roundBody
-    SumcheckVerifierBodies.roundGuard SumcheckVerifierBodies.roundTail
     SumcheckVerifierBodies.reduceReturn
   rfl
 
