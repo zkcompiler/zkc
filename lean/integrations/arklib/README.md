@@ -42,6 +42,10 @@ both `n / |F|`. The bounds are nontrivial up to the exported maxima of two and
 four rounds; excess counts refuse and contribute zero mass. The concrete
 service discharges query and route premises for arbitrary network/callbacks and
 all initial states. Reduction has no Boolean acceptance checker.
+`Examples/CausalSumcheck/LogicalResidual` states the Reduction residual request
+through a port-independent [logical context](../../docs/design/logical-contexts.md)
+and applies the same bound through the retained root and through a separately
+exported repacked root.
 [Support](../../docs/support.md) records scope and validation.
 
 `VCVio/Schnorr` proves perfect honest-verifier simulation of the public transcript
