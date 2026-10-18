@@ -23,7 +23,7 @@ components = "(plainHelpers (F := F) (G := G) U).components"
 role = 1
 name = "verifier"
 binders = "(bodies : SumcheckVerifierHelpers.Bodies U.definitions)"
-slots = [{ slot = 4, name = "point", mode = "optional" }, { slot = 5, name = "claim", mode = "optional" }]
+slots = [{ name = "point", mode = "optional" }, { name = "claim", mode = "optional" }]
 captures = [{ name = "service", mode = "optional" }]
 laws.appendHelper = { term = "append_plain U bodies {0} {1}", results = ["{0} ++ [{1}]"] }
 
@@ -32,8 +32,7 @@ role = 0
 name = "prover"
 binders = "(bodies : SumcheckUnitContracts.Bodies U.definitions)"
 premises = "(shape : HasShape entries dimension width) (bound : entries.length < indexLimit) (positive : 0 < dimension)"
-slots = [{ slot = 0, name = "entries" }, { slot = 1, name = "dimension" }, { slot = 2, name = "width" },
-         { slot = 3, name = "point" }]
+slots = [{ name = "entries" }, { name = "dimension" }, { name = "width" }, { name = "point" }]
 captures = [{ name = "service", mode = "optional" }]
 laws.sumsHelper = { term = "SumcheckProverLaws.sums_present U bodies {0} {1} {2} shape positive", results = ["({0}.take ({0}.length / 2)).sum", "({0}.drop ({0}.length / 2)).sum"] }
 laws.firstHelper = { term = "SumcheckProverLaws.first_present U bodies {0} {1} {2} {3} shape bound positive", results = ["Zkc.Polynomial.Multilinear.restrictValues {0} {3}", "{1} - 1", "{2}"] }
@@ -46,8 +45,7 @@ state = "proverState"
 reuse_state = true
 theorem = "prover_empty_process"
 binders = "(bodies : SumcheckUnitContracts.Bodies U.definitions)"
-slots = [{ slot = 0, name = "entries" }, { slot = 1, name = "dimension", value = "0" }, { slot = 2, name = "width" },
-         { slot = 3, name = "point" }]
+slots = [{ name = "entries" }, { name = "dimension", value = "0" }, { name = "width" }, { name = "point" }]
 captures = [{ name = "service", mode = "optional" }]
 laws.sumsHelper = { term = "SumcheckProverLaws.sums_zero U bodies {0} {2}", stop = "reject" }
 

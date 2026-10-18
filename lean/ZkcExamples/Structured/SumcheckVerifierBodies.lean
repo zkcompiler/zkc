@@ -27,7 +27,12 @@ abbrev repeatSpec (maximum : Nat) : RepeatSpec :=
   ⟨repeatState, [.service "random.bls12-381.fr/0"], [0, 1],
     [[0], [0], [0], [0], [1], [1]], maximum⟩
 
-/-- The retained return permutation of the repeat's state. -/
+/-- The retained return permutation of the repeat's state, for any value family. -/
+def reduceReturnValues {Value : Ty → Type} (state : Values Value repeatState) :
+    Values Value reduceOutputs :=
+  .cons (state.get (.there (.there (.there .here)))) (.cons (state.get .here) (.cons (state.get (.there .here)) (.cons (state.get (.there (.there .here))) (.cons (state.get (.there (.there (.there (.there .here))))) (.cons (state.get (.there (.there (.there (.there (.there .here)))))) .nil)))))
+
+/-- The retained return of the repeat's state. -/
 def reduceReturn (tail : List Ty) : Region protocolDialect (repeatState ++ tail)
     reduceOutputs :=
   .ret (.cons (.there (.there (.there .here))) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) .nil))))))

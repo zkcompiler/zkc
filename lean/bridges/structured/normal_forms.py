@@ -1208,10 +1208,14 @@ class Module:
                                         for scope in scopes) + "]"
         out.append(f"abbrev repeatSpec ({maximum} : Nat) : RepeatSpec :=\n"
                    f"  ⟨repeatState, {ty_list(captures, True)}, {role_indices},\n    {scope_indices}, {maximum}⟩\n")
-        out.append(f"/-- The retained return permutation of the repeat's state. -/")
+        returned = values_literal([f"state.get {variable(index)}" for index in terminator[1]])
+        out.append("/-- The retained return permutation of the repeat's state, for any value family. -/")
+        out.append(f"def {name}ReturnValues {{Value : Ty → Type}} (state : Values Value repeatState) :\n"
+                   f"    Values Value {name}Outputs :=\n  {returned}\n")
+        out.append("/-- The retained return of the repeat's state. -/")
         out.append(f"def {name}Return (tail : List Ty) : Region protocolDialect (repeatState ++ tail)\n"
                    f"    {name}Outputs :=\n  .ret {paren(operands(terminator[1]))}\n")
-        out.append(f"/-- One iteration of the repeat: every retained operation, with its site mark. -/")
+        out.append("/-- One iteration of the repeat: every retained operation, with its site mark. -/")
         out.append(f"def {callback_name}Body : Region protocolDialect\n"
                    f"    (.index :: (repeatState ++ {ty_list(captures, True)})) repeatState :=\n"
                    f"{self.chain(callback, roles, '  ')}\n")
@@ -1220,7 +1224,7 @@ class Module:
         last = (f"  .letOp (.mark {json.dumps(repeat[4])}) .nil .nil <|\n"
                 f"  .letOp {repeat_op} {paren(operands(repeat[1]))} (.cons {callback_name}Body .nil) <|\n"
                 f"  {name}Return _")
-        out.append(f"/-- The whole body, with the repeat maximum as a parameter. -/")
+        out.append("/-- The whole body, with the repeat maximum as a parameter. -/")
         out.append(f"def {name}Body ({maximum} : Nat) : Region protocolDialect {ty_list(protocol.inputs, True)}\n"
                    f"    {ty_list(protocol.outputs, True)} :=\n"
                    f"{self.chain(prelude, roles, '  ', last)}\n")
@@ -1452,9 +1456,12 @@ class Module:
         if state_scopes is None:
             raise GeneratorError("normal forms of a whole protocol body need a repeat site")
         owned = [index for index, scope in enumerate(state_scopes) if role in scope]
-        if sorted(slot["slot"] for slot in slots) != owned and not role_spec.get("partial"):
-            raise GeneratorError(f"{name}: the role's state slots are {owned}; the request lists "
-                                 f"{[slot['slot'] for slot in slots]}")
+        if len(slots) != len(owned):
+            raise GeneratorError(f"{name}: the role holds {len(owned)} carried slots; the request names "
+                                 f"{len(slots)}")
+        # Slots are named in the role's own order, so a layout change of the other role's
+        # slots, or a reordering that keeps this role's order, needs no request change.
+        slots = [dict(slot, slot=index) for slot, index in zip(slots, owned)]
         def slot_type(slot):
             base = value_type(state[slot["slot"]])
             return f"Option {paren(base)}" if slot.get("mode", "present") == "optional" else base

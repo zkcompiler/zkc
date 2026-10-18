@@ -19,11 +19,7 @@ abbrev reduceOutputScopes : List (List Nat) := [[0], [0], [0], [0], [1], [1]]
 /-- The literal source permutation, before any participant mask is applied. -/
 def returnValues {Value : Ty → Type} (state : Values Value repeatState) :
     Values Value reduceOutputs :=
-  .cons (state.get (.there (.there (.there .here))))
-    (.cons (state.get .here) (.cons (state.get (.there .here))
-      (.cons (state.get (.there (.there .here)))
-        (.cons (state.get (.there (.there (.there (.there .here)))))
-          (.cons (state.get (.there (.there (.there (.there (.there .here)))))) .nil)))))
+  SumcheckVerifierBodies.reduceReturnValues state
 
 theorem return_indices : (reduceReturn []).erase = .ret [3, 0, 1, 2, 4, 5] := rfl
 

@@ -22,8 +22,7 @@ variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
 
 /-- The four prover components occupy the first slots; the verifier's two are absent. -/
 def embedP (state : ProverState F) : Values (Component (assignment F G)) repeatState :=
-  .cons (some state.1) (.cons (some state.2.1) (.cons (some state.2.2.1)
-    (.cons (some state.2.2.2) (.cons none (.cons none .nil)))))
+  SumcheckRoundNormalForms.proverState state.1 state.2.1 state.2.2.1 state.2.2.2
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
 theorem mask_embedP (ctx : ProtocolContext) (self : Nat)

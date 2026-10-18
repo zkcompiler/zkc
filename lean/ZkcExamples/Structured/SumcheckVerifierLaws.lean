@@ -22,7 +22,7 @@ variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
 /-- The two optional verifier components occupy the actual last two slots. -/
 def embedV (pc : Option (List F) × Option F) :
     Values (Component (assignment F G)) repeatState :=
-  .cons none (.cons none (.cons none (.cons none (.cons pc.1 (.cons pc.2 .nil)))))
+  SumcheckRoundNormalForms.verifierState pc.1 pc.2
 
 def cap (service : Option Nat) :
     Values (Component (assignment F G)) [.service "random.bls12-381.fr/0"] :=
