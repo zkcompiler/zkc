@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.FiatShamir.Interface
+public import Zkc.Construction.Binding
 
 @[expose] public section
 
@@ -13,18 +14,13 @@ quantifies over every statement the prover can output, malformed ones included
 discharges it must be injective and prefix-free on the whole statement type,
 not only on well-formed statements.
 
-- `PublicValue Scalar` is a typed public value: a scalar, a vector (its length
-  carried by the list), an index below a bound, or a count. A canonical row
-  (`Row Scalar`) is the statement's public values in canonical order, each
-  labelled by its input; `PublicBinding Scalar` is the typed public-value
-  binding event, the application context with a canonical row. Equal events
-  have equal rows by constructor injectivity, so a count is never confused
-  with a vector's length, nor a vector with another's prefix. These are binding
-  representations: an index is not required to lie below its bound, and a row
-  is not required to be in canonical order. Validity and canonical order are
-  established separately, by the statement's own checks and by the codec that
-  builds the row; keeping malformed values representable is what lets a codec
-  bind every statement the prover can output.
+- The typed public-value binding event `Zkc.Construction.PublicBinding Scalar`
+  is the application context with a row (`Zkc.Construction.Row`) of the
+  statement's typed public values (`Zkc.Construction.PublicValue`): scalars,
+  vectors whose length is part of the value, indices with their bounds, and
+  counts. Equal events have equal rows by constructor injectivity. These are
+  binding representations; validity and canonical order are established
+  separately, which keeps malformed values representable.
 - `BindingCodec Stmt E` is an injective, prefix-free encoding of statements
   as initial histories of events `E`; it discharges `Typed.Determined`
   (`BindingCodec.determined`).
@@ -38,31 +34,7 @@ not only on well-formed statements.
 set_option autoImplicit false
 
 namespace ZkcSecurity.FiatShamir
-
-/-- A typed public value a statement binds. -/
-inductive PublicValue (Scalar : Type) where
-  /-- One scalar, a field or group element. -/
-  | scalar (value : Scalar)
-  /-- A vector of scalars; its length is part of the value. -/
-  | vector (values : List Scalar)
-  /-- An index with its bound. The representation does not require `value < bound`;
-  validity is established separately. -/
-  | index (bound value : ℕ)
-  /-- A count, such as a number of rounds. -/
-  | count (value : ℕ)
-  deriving DecidableEq
-
-/-- A canonical row: the statement's public values in canonical order, each
-labelled by its input. The type does not enforce the order; the codec that
-builds a row from a statement establishes it. -/
-abbrev Row (Scalar : Type) := List (String × PublicValue Scalar)
-
-/-- The typed public-value binding event: the application context and a
-canonical row of the statement's public values. -/
-structure PublicBinding (Scalar : Type) where
-  context : String
-  row : Row Scalar
-  deriving DecidableEq
+open Zkc.Construction (PublicValue Row PublicBinding)
 
 /-- A binding codec: an encoding of every statement, malformed ones included,
 as an initial transcript history, injective and prefix-free. -/

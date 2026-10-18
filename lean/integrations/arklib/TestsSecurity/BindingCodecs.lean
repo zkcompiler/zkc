@@ -20,6 +20,7 @@ table's, and `Typed.Determined` fails (`unprefixed_not_determined`). -/
 
 namespace TestsSecurity.BindingCodecs
 open ZkcSecurity.FiatShamir
+open Zkc.Construction (PublicValue Row PublicBinding)
 
 /-- A raw Sumcheck statement, as the prover outputs it. -/
 structure RawStatement (F : Type) where

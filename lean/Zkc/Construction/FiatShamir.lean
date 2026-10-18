@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Construction.Participant
+public import Zkc.Construction.Binding
 public import Zkc.Source.Participant
 public import Zkc.Source.Common.Scalar
 
@@ -66,11 +67,15 @@ theorem value_isSome {ty : Ty} {payload : Payload F G} :
 end Payload
 
 /-- Absorbed transcript events. `binding` is the host's initialization with the
-authorized public context; it is not an operation of the participant program. -/
+authorized public context and scalar public values, and `publicBinding` the
+initialization with a typed public-value binding event, whose vectors, indices
+and counts are bound as typed values; neither is an operation of the
+participant program. -/
 inductive Event (F G : Type) where
   | binding (context : String) (values : List (Payload F G))
   | message (origin : Origin) (value : Payload F G)
   | challenge (origin : Origin)
+  | publicBinding (binding : PublicBinding (Payload F G))
   deriving DecidableEq, Repr
 
 abbrev History (F G : Type) := List (Event F G)
