@@ -16,9 +16,9 @@ The complete logical message grammar is:
 
 - `bool`, `index`, `indices`, `bytes`;
 - scalar fields BLS12-381 Fr, BN254 Fr, Ristretto scalar, KoalaBear base and
-  KoalaBear ext8; groups BLS12-381 G1, BN254 G1/G2/GT, Ristretto and prime-order Edwards25519;
+  KoalaBear ext8; groups BLS12-381 G1/G2/GT, BN254 G1/G2/GT, Ristretto and prime-order Edwards25519;
 - field `vector` and sparse `matrix` in each installed scalar domain;
-- `groups` in BLS12-381 G1, BN254 G1/G2, Ristretto and prime-order Edwards25519;
+- `groups` in BLS12-381 G1/G2, BN254 G1/G2, Ristretto and prime-order Edwards25519;
 - `field_array<bls12-381.fr,N>`, including zero, with `N <= 1048576`;
 - commitments and opening proofs of `multilinear.kzg.bls12-381/0`;
 - root and path leaves for both installed KoalaBear Merkle row schemes;
