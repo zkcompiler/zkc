@@ -11,7 +11,7 @@ They do not certify arbitrary DSL programs or the full native lowering pipeline.
 | [Structured contract binding](spec/verification.md#structured-contracts) | Actual formula invocation, typed port/role selection, owner/invocation-scoped logical assignments, shared opaque interpretations and formula-domain translation; actual-outcome boundary projection | Purpose labels do not choose quantifiers or authority. Opaque meanings and logical instantiations are explicit; no security theorem follows from metadata or an inventory |
 | [Logical contexts](design/logical-contexts.md) | Port-independent binders, transport along port maps, translation of the contract layer, exported-metadata checking; the Sumcheck residual request on the retained and a repacked Reduction export with the unchanged `count / \|F\|` bound; loop frames observing a repeat's carried state, with a step-obligation rule and exported-frame checking | Lean modules over manually authored contexts; static sort arities; frames observe carried state, not actions inside an iteration; no native export or source syntax; the residual bound is the optional security package's, under the uniform query service (`ZkcSecurity.Examples.CausalSumcheck.LogicalResidual`) |
 | Structural proof construction | Source-indexed derivation soundness with local operation/callback laws; exhaustive lexical call inventory and generic checked-callee substitution preserving masks, stops, state and continuations | Local mathematical laws and loop/callback proofs remain required; selected requests do not discover undeclared intentions or prove the exporter correct |
-| Structural authoring automation | `structured_views` emits checked unit payloads and their kernel-checked admission phases from typed bodies; `bind_contract` recovers retained owners, formula helpers and typed selectors; `derive_region` composes local laws over the actual checked body, including callbacks and lexical binds | Kernel-checked proof construction; unsupported mathematics remains a goal. Direct body projection is the default; materializing large views or proofs can be expensive |
+| Structural authoring automation | `structured_views` emits checked unit payloads and their kernel-checked admission phases from typed bodies; `bind_contract` recovers retained owners, formula helpers and typed selectors; `derive_region` composes local laws over the actual checked body, including callbacks and lexical binds; `bridges/structured/normal_forms.py` generates participant normal forms with their process equations, positional builders, embeddings and contract bindings | Kernel-checked proof construction; unsupported mathematics remains a goal. Direct body projection is the default; materializing large views or proofs can be expensive |
 | Optional component semantics | Same typed Region with closed callbacks; generic lookup, optional named Math calls, all-present adequacy, exact resolution and full-table framing; shared scalar/group evaluator | Static availability is a separate computational check; adequacy alone proves neither admission nor native correspondence |
 | [Structured primitives](#library-primitive-subjects) | Conditional u64 index arithmetic, list length/sum/split/append/equality laws and strict exec sequencing; complete library Shape/Table/Halves wrappers, an arithmetic/vector Sequence caller and a two-role pure-index caller | Library equations state their representation premises; logical lists, without host allocation or native resource correspondence; no observed Shape/Table/Halves site law |
 | [Retained protocol applications](#protocol-application-subjects) | Exact original/checked association in both directions; complete-signature linking, contextual prefix/full-table laws, optional call masks, outside-roster skip and effect interpretation | Supported static native profile; no generic availability/preflight soundness or native execution correspondence |
@@ -413,6 +413,11 @@ commits one nonce at both bases and sends one response. A
 site, which observes the verifier's actual returned decision for one
 transcript and the prover's actual ordered sends.
 
+For Chaum–Pedersen, these processes, the reply scripts and runs, and the
+binding below are generated (`ChaumPedersenNormalForms`, from
+`bridges/structured/normal-forms/chaum-pedersen.toml`); the authored modules
+keep their statements as consequences of the generated ones.
+
 `SchnorrAndBinding` and `ChaumPedersenBinding` bind the retained `knowledge`
 targets with `bind_contract`. The `DLogPair` target has two witness selectors on
 different prover ports; the `DLogEquality` target has one. Each module proves
@@ -490,7 +495,10 @@ literal Reduce body has maximum 2 in Source
 and maximum 4 in Reduction; the actual child return order is `[3, 0, 1, 2, 4, 5]`.
 The six carried slots are P entries,
 P dimension, P width, P point, V point and V claim; the verifier embedding
-leaves the first four absent.
+leaves the first four absent. The shared typed body (`SumcheckVerifierBodies`)
+and the verifier's round and whole-body normal forms with their process
+equations (`SumcheckRoundNormalForms`) are generated from the retained
+Reduction unit by `bridges/structured/normal_forms.py`.
 
 `Zkc.Source.DenotationLaws` provides operation-step proof rules for the
 Region interpreter. Its general bind rule retains an arbitrary operation process;
@@ -560,7 +568,9 @@ quantified claims.
 ## Honest Sumcheck prover
 
 `SumcheckProverLaws` derives the prover's plain process from the same literal
-Reduce callback as the verifier's, at the prover's participant: the verifier's
+Reduce callback as the verifier's, at the prover's participant (the generated
+`SumcheckRoundNormalForms`, which cites the helper laws of
+`SumcheckRoundLaws`): the verifier's
 guard, draw, append and interpolation are skipped, and the prover's actual sums
 helper, two sends, delivery receive, fold helper and append are performed. A
 zero-dimensional table stops at the sums helper before any send.
