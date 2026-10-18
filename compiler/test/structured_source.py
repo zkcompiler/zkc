@@ -279,6 +279,24 @@ with case('other-installed-identities-export-their-rows'):
     assert services == [['service', 'random.bn254.fr/0', 'bn254.fr', ['draw']]]
     assert [row[1] for row in nominals] == ['bn254.fr', 'bn254.g1', 'bn254.g2', 'bn254.gt']
 
+with case('binary-and-extension-identities-export-their-rows'):
+    # Rows are native data whatever the characteristic: a binary field records
+    # its characteristic as its modulus, and an extension exports its base.
+    def dead(identity):
+        value = f'!algebra.field<"{identity}">'
+        return simple(f'func.func private @dead(%x:{value}) -> {value} {{ return %x : {value} }}')
+    binary = 'gf2-64.pentanomial-4-3-1'
+    nominals, services = export(dead(binary + '.ext3-trinomial1'))[9]
+    assert nominals == [
+        ['nominal', binary, 'Field', [], ['Field', 'CommRing'], '2'],
+        ['nominal', binary + '.ext3-trinomial1', 'Field', [['BaseField', binary]],
+         ['ExtensionField', 'Field', 'CommRing'], '2']] and services == []
+    nominals, _ = export(dead('koala-bear.ext4-binomial3'))[9]
+    assert [row[1] for row in nominals] == ['koala-bear.ext4-binomial3', 'koala-bear']
+    assert nominals[0][3:] == [[['BaseField', 'koala-bear']],
+                               ['ExtensionField', 'TwoAdicField', 'Field', 'CommRing', 'CharacteristicNotTwo'],
+                               '2130706433']
+
 with case('unsupported-service-contract'):
     source = simple().replace('^entry(%flag:i1)', '^entry(%flag:i1,%service:!protocol.service_ref<"random.other/0">)').replace(
         'function_type=(i1)->i1', 'function_type=(i1,!protocol.service_ref<"random.other/0">)->i1').replace(
