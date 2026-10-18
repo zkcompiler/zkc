@@ -1,6 +1,7 @@
 //! Pinned Plonky3 numerical primitives used by the native execution adapter.
 //! No RNG, transcript, group, table or PCS implementation is installed here.
 //! Slice kernels expose the same arithmetic used by Runtime for matched benchmarks.
+pub mod binary;
 pub(crate) mod numerical;
 pub mod oracle;
 pub mod polynomial;

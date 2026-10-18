@@ -32,5 +32,9 @@ fn resolve(
     if binding.contract == "poly.even_odd_fold" && !domain.field.has_characteristic_not_two() {
         return None;
     }
+    // Ring arenas substitute integer residue coordinates.
+    if binding.contract.starts_with("ring.") && !domain.field.has_residue_coordinates() {
+        return None;
+    }
     support::domain_signature(binding, row, selection, domain)
 }

@@ -125,6 +125,36 @@ impl Core {
                 }
                 None
             }
+            Value::Binary64Matrix(m) => {
+                m.policy(&self.policy)?;
+                None
+            }
+            Value::Binary64Vector(a) => {
+                self.policy.vector_width(a.len(), 8)?;
+                None
+            }
+            Value::Binary64Polynomial(a) => {
+                self.policy.vector_width(a.len(), 8)?;
+                if !crate::kernels::arithmetic::normalized(a) {
+                    return Err(refused("polynomial-normalization"));
+                }
+                None
+            }
+            Value::Binary64Ext3Matrix(m) => {
+                m.policy(&self.policy)?;
+                None
+            }
+            Value::Binary64Ext3Vector(a) => {
+                self.policy.vector_width(a.len(), 24)?;
+                None
+            }
+            Value::Binary64Ext3Polynomial(a) => {
+                self.policy.vector_width(a.len(), 24)?;
+                if !crate::kernels::arithmetic::normalized(a) {
+                    return Err(refused("polynomial-normalization"));
+                }
+                None
+            }
             Value::KoalaBearExt8Vector(a) => {
                 self.policy.vector_width(a.len(), 32)?;
                 None
@@ -250,6 +280,10 @@ impl Core {
             | Value::KoalaBearExt8Round(..)
             | Value::KoalaBearExt4Field(..)
             | Value::KoalaBearExt4Round(..)
+            | Value::Binary64Field(..)
+            | Value::Binary64Round(..)
+            | Value::Binary64Ext3Field(..)
+            | Value::Binary64Ext3Round(..)
             | Value::KoalaBearField(..)
             | Value::KoalaBearRound(..)
             | Value::RistrettoField(..)

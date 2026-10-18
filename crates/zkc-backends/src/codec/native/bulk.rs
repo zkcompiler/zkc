@@ -32,6 +32,8 @@ pub(super) fn format(ty: &PhysicalType) -> Option<(u8, usize, usize)> {
         (Vector, KoalaBear) => (20, 4, 4),
         (Vector, KoalaBearExt8) => (27, 32, 32),
         (Vector, KoalaBearExt4) => (22, 16, 16),
+        (Vector, Binary64) => (74, 8, 8),
+        (Vector, Binary64Ext3) => (77, 24, 24),
         (Groups, Bls12381G1) => (67, 48, 128),
         (Groups, Bn254G1) => (47, 32, std::mem::size_of::<crate::Bn254G1>()),
         (Groups, Bn254G2) => (49, 64, std::mem::size_of::<crate::Bn254G2>()),
@@ -44,6 +46,8 @@ pub(super) fn format(ty: &PhysicalType) -> Option<(u8, usize, usize)> {
         (Matrix, KoalaBear) => (25, 12, 12),
         (Matrix, KoalaBearExt8) => (30, 40, 40),
         (Matrix, KoalaBearExt4) => (28, 24, 24),
+        (Matrix, Binary64) => (75, 16, 16),
+        (Matrix, Binary64Ext3) => (78, 32, 32),
         (Commitment, MerkleKoalaBear) => (33, 32, 32),
         (Proof, MerkleKoalaBear) => (34, 32, 32),
         (Commitment, MerkleKoalaBearExt8) => (35, 32, 32),
@@ -79,6 +83,8 @@ fn count(value: &Value) -> Result<usize> {
         Value::KoalaBearVector(v) => v.len(),
         Value::KoalaBearExt8Vector(v) => v.len(),
         Value::KoalaBearExt4Vector(v) => v.len(),
+        Value::Binary64Vector(v) => v.len(),
+        Value::Binary64Ext3Vector(v) => v.len(),
         Value::Groups(v) => v.len(),
         Value::Bn254G1Vector(v) => v.len(),
         Value::Bn254G2Vector(v) => v.len(),
@@ -91,6 +97,8 @@ fn count(value: &Value) -> Result<usize> {
         Value::KoalaBearMatrix(v) => v.entries().len(),
         Value::KoalaBearExt8Matrix(v) => v.entries().len(),
         Value::KoalaBearExt4Matrix(v) => v.entries().len(),
+        Value::Binary64Matrix(v) => v.entries().len(),
+        Value::Binary64Ext3Matrix(v) => v.entries().len(),
         Value::OracleRoot(..) => 1,
         Value::OraclePath(_, v) => v.len(),
         Value::MerkleDigest(..) => 1,
@@ -261,6 +269,8 @@ fn decode_value(backend: &NativeBackend, ty: &PhysicalType, bytes: &[u8]) -> Res
             25 => matrix::<crate::KoalaBear>(bytes, backend.policy()),
             30 => matrix::<crate::KoalaBearExt8>(bytes, backend.policy()),
             28 => matrix::<crate::KoalaBearExt4>(bytes, backend.policy()),
+            75 => matrix::<crate::Binary64>(bytes, backend.policy()),
+            78 => matrix::<crate::Binary64Ext3>(bytes, backend.policy()),
             _ => Err(unsupported()),
         };
     }
@@ -324,6 +334,13 @@ fn decode_value(backend: &NativeBackend, ty: &PhysicalType, bytes: &[u8]) -> Res
             16,
             crate::plonky3::decode_quartic,
             KoalaBearExt4Vector,
+            Scalar
+        ),
+        74 => values!(8, crate::plonky3::binary::decode, Binary64Vector, Scalar),
+        77 => values!(
+            24,
+            crate::plonky3::binary::decode_ext3,
+            Binary64Ext3Vector,
             Scalar
         ),
         14 => values!(

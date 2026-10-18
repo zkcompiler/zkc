@@ -62,6 +62,17 @@ pub const KOALA_BEAR_EXT4: NativeDomain = NativeDomain {
     group: None,
     provider: "plonky3",
 };
+/// Characteristic-two fields from Plonky3 0.8.0's `p3-binary-field`.
+pub const BINARY64: NativeDomain = NativeDomain {
+    field: Identity::Binary64,
+    group: None,
+    provider: "plonky3",
+};
+pub const BINARY64_EXT3: NativeDomain = NativeDomain {
+    field: Identity::Binary64Ext3,
+    group: None,
+    provider: "plonky3",
+};
 pub const INSTALLED: &[NativeDomain] = &[
     BLS,
     RISTRETTO,
@@ -69,6 +80,8 @@ pub const INSTALLED: &[NativeDomain] = &[
     KOALA_BEAR,
     KOALA_BEAR_EXT8,
     KOALA_BEAR_EXT4,
+    BINARY64,
+    BINARY64_EXT3,
     BN254_G1,
     BN254_G2,
     BN254_GT,
@@ -128,6 +141,16 @@ impl NativeDomain {
             (Identity::KoalaBearExt4, Polynomial) => (self.field, R::KoalaBearExt4Polynomial),
             (Identity::KoalaBearExt4, Round) => (self.field, R::KoalaBearExt4Round),
             (Identity::KoalaBearExt4, Matrix) => (self.field, R::KoalaBearExt4SparseCoo),
+            (Identity::Binary64, Field) => (self.field, R::Binary64),
+            (Identity::Binary64, Vector) => (self.field, R::Binary64Vector),
+            (Identity::Binary64, Polynomial) => (self.field, R::Binary64Polynomial),
+            (Identity::Binary64, Round) => (self.field, R::Binary64Round),
+            (Identity::Binary64, Matrix) => (self.field, R::Binary64SparseCoo),
+            (Identity::Binary64Ext3, Field) => (self.field, R::Binary64Ext3),
+            (Identity::Binary64Ext3, Vector) => (self.field, R::Binary64Ext3Vector),
+            (Identity::Binary64Ext3, Polynomial) => (self.field, R::Binary64Ext3Polynomial),
+            (Identity::Binary64Ext3, Round) => (self.field, R::Binary64Ext3Round),
+            (Identity::Binary64Ext3, Matrix) => (self.field, R::Binary64Ext3SparseCoo),
             (Identity::KoalaBear, Field) => (self.field, R::KoalaBear),
             (Identity::KoalaBear, Vector) => (self.field, R::KoalaBearVector),
             (Identity::KoalaBear, Polynomial) => (self.field, R::KoalaBearPolynomial),

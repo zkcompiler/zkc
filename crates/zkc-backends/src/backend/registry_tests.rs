@@ -299,6 +299,16 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
             "KoalaBearExt4Vector" => R::KoalaBearExt4Vector,
             "KoalaBearExt4Polynomial" => R::KoalaBearExt4Polynomial,
             "KoalaBearExt4Round" => R::KoalaBearExt4Round,
+            "Binary64Matrix" => R::Binary64SparseCoo,
+            "Binary64Field" => R::Binary64,
+            "Binary64Vector" => R::Binary64Vector,
+            "Binary64Polynomial" => R::Binary64Polynomial,
+            "Binary64Round" => R::Binary64Round,
+            "Binary64Ext3Matrix" => R::Binary64Ext3SparseCoo,
+            "Binary64Ext3Field" => R::Binary64Ext3,
+            "Binary64Ext3Vector" => R::Binary64Ext3Vector,
+            "Binary64Ext3Polynomial" => R::Binary64Ext3Polynomial,
+            "Binary64Ext3Round" => R::Binary64Ext3Round,
             "KoalaBearField" => R::KoalaBear,
             "KoalaBearVector" => R::KoalaBearVector,
             "KoalaBearPolynomial" => R::KoalaBearPolynomial,
@@ -438,6 +448,26 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         KoalaBearExt4Round,
         KoalaBearExt4Matrix,
         16
+    );
+    scalar_family!(
+        crate::plonky3::binary::from_bits(3),
+        Binary64,
+        Binary64Field,
+        Binary64Vector,
+        Binary64Polynomial,
+        Binary64Round,
+        Binary64Matrix,
+        8
+    );
+    scalar_family!(
+        crate::plonky3::binary::ext3_from_bits([3, 1, 2]),
+        Binary64Ext3,
+        Binary64Ext3Field,
+        Binary64Ext3Vector,
+        Binary64Ext3Polynomial,
+        Binary64Ext3Round,
+        Binary64Ext3Matrix,
+        24
     );
     macro_rules! group_family {
         ($point:expr, $identity:ident, $point_variant:ident, $vector_variant:ident, $width:expr) => {{
