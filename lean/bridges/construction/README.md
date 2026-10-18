@@ -1,7 +1,7 @@
 # Transcript-construction bridge
 
-`check.py` connects five compiled proof Entries, `example::Proof` of the
-Schnorr, Sumcheck and composed Sumcheck example projects and
+`check.py` connects six compiled proof Entries, `example::Proof` of the
+Schnorr, Sumcheck, composed Sumcheck and GKR example projects and
 `example::AndProof` and `example::EqualityProof` of the Sigma example project, to
 the
 [formal transcript-construction rule](../../docs/spec/fiat-shamir.md) and the
@@ -44,7 +44,11 @@ For each subject:
    `SchnorrAndProofParticipant.lean`, `ChaumPedersenProofData.lean` and
    `ChaumPedersenProofParticipant.lean` (their typed bodies, printed by the
    structured bridge's `bodies.py`, are not compared: `structured_views` admits
-   the original from them in the kernel). For Sumcheck the comparison is also the
+   the original from them in the kernel); for GKR
+   `lean/ZkcExamples/Structured/GkrSourceData.lean` and `GkrProofParticipant.lean`
+   (its typed bodies `GkrSourceBodies.lean` are likewise admitted in the kernel,
+   and `GkrProofInstructions` names the participant's loop bodies, checked equal
+   to it by `rfl`). For Sumcheck the comparison is also the
    pin that the Proof Entry's original export is the admitted Sumcheck source of
    the security theorems (check
    `regenerated:lean/ZkcExamples/Structured/SumcheckSourceData.lean`).
@@ -65,7 +69,10 @@ For each subject:
    left check twice, and the right terminal check reads the left reduction's
    point and claim. For both Sigma Entries: the second observation absorbs the
    first commitment, a comparison compares the base with itself, and the
-   conjunction reads the first check twice. Every mutation that keeps the transcript wiring is accepted
+   conjunction reads the first check twice. For GKR: the challenge origin names
+   the delivery site, the first round check and the wiring check are dropped,
+   the round claim update adds the constant term twice, and the layer loop
+   yields the claim it started with. Every mutation that keeps the transcript wiring is accepted
    by `checkExport` alone and refused by the projection rule. The same file
    checks that the Lean model of the canonical occurrence encoding
    (`templateTree`) encodes every exported template to exactly its native bytes.
@@ -92,6 +99,11 @@ recognized one with another shape refuses the export
 decodes each origin's canonical bytes into a template with its application and
 repeat steps, requires the static coordinate array to be empty and re-encodes it
 exactly. It parses printed MLIR types of the scalar, vector, index, transcript
-and coordinate sorts and refuses others. Native exporter correctness, this
+and coordinate sorts and refuses others. A loop's captured block arguments
+denote its captured operands in every iteration, so the rendered body refers
+to those operands directly and the rendered loop keeps its count and carried
+values; a captured transcript, or a capture whose block argument has another
+sort, refuses the export (the renderer check exercises both, and a nested loop
+capturing its enclosing induction index). Native exporter correctness, this
 rendering, and the meanings of native kernels are tested boundaries, not
 theorems.

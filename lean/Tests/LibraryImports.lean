@@ -7,6 +7,7 @@ import Zkc.Construction.FiatShamir
 import Zkc.Construction.Participant
 import Zkc.Construction.Projection
 import Zkc.Construction.ProjectionSoundness
+import Zkc.Construction.Reading
 import Zkc.Construction.Rule
 import Zkc.Construction.Semantics
 import Zkc.Construction.Soundness
@@ -23,6 +24,8 @@ import Zkc.Executable.Soundness
 import Zkc.Polynomial.BooleanCube
 import Zkc.Polynomial.Coordinates
 import Zkc.Polynomial.Layout
+import Zkc.Polynomial.Multilinear.Concat
+import Zkc.Polynomial.Multilinear.Line
 import Zkc.Polynomial.Multilinear.ListRestriction
 import Zkc.Polynomial.Multilinear.Marginal
 import Zkc.Polynomial.Multilinear.Prefix
@@ -35,6 +38,7 @@ import Zkc.Probability.UniformTape
 import Zkc.Protocols.AlgebraicRounds.Construction
 import Zkc.Protocols.AlgebraicRounds.Fresh
 import Zkc.Protocols.AlgebraicRounds.Source
+import Zkc.Protocols.Gkr.Circuit
 import Zkc.Protocols.Schnorr.Common
 import Zkc.Protocols.Schnorr
 import Zkc.Protocols.Sumcheck.Acceptance
@@ -272,6 +276,10 @@ import ZkcExamples.Construction.ChaumPedersenProofParticipant
 import ZkcExamples.Construction.ComposedSumcheckProof
 import ZkcExamples.Construction.ComposedSumcheckProofData
 import ZkcExamples.Construction.ComposedSumcheckProofParticipant
+import ZkcExamples.Construction.GkrProof
+import ZkcExamples.Construction.GkrProofInstructions
+import ZkcExamples.Construction.GkrProofParticipant
+import ZkcExamples.Construction.GkrProofReading
 import ZkcExamples.Construction.SchnorrAndProof
 import ZkcExamples.Construction.SchnorrAndProofBodies
 import ZkcExamples.Construction.SchnorrAndProofData
@@ -324,6 +332,11 @@ import ZkcExamples.Structured.ChaumPedersenBinding
 import ZkcExamples.Structured.ChaumPedersenBodies
 import ZkcExamples.Structured.ChaumPedersenData
 import ZkcExamples.Structured.ChaumPedersenViews
+import ZkcExamples.Structured.GkrSourceBodies
+import ZkcExamples.Structured.GkrSourceData
+import ZkcExamples.Structured.GkrSourceLaws
+import ZkcExamples.Structured.GkrSourceViews
+import ZkcExamples.Structured.GkrVerifierProcess
 import ZkcExamples.Structured.LogicalContextControls
 import ZkcExamples.Structured.MapCombination
 import ZkcExamples.Structured.MapCombinationData

@@ -1,0 +1,8 @@
+format = "zkc.project/0"
+
+[modules]
+"example" = "main.zkc"
+
+[dependencies]
+gkr = "../../../libraries/gkr"
+zkc = "../../../libraries/zkc"

@@ -108,6 +108,15 @@ rejections at every budget, so it accepts at most as often. Its adaptive form
 uses a binding of the table values, claim and round count whose events
 determine the statement, which discharges the premise.
 
+`Examples/GkrFiatShamir` gives the plain GKR verifier a round-by-round
+certificate composed per phase (`FiatShamir/Composition`), with ArkLib's
+single-round successor bound at degree two for the layer rounds (`ArkLib/Gkr/Layer`)
+and Schwartz–Zippel for the line restriction, and
+`Examples/CompiledGkrFiatShamir` transfers its
+[fixed-statement bound](../../docs/spec/fiat-shamir-security.md#the-compiled-gkr-proof-entry)
+to the compiled GKR `example::Proof` verifier through the checked reading of its
+exported instructions.
+
 `VCVio/SigmaAnd` composes two VCVio Σ-protocols with one shared challenge.
 Completeness and special soundness compose directly; zero knowledge composes
 from special HVZK, a simulator given the challenge. It gives VCVio's perfect

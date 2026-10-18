@@ -498,6 +498,77 @@ attained on the compiled Entry. Without a determining binding, a one-query
 prover is accepted on a false claim with probability `4 / 5`, above the adaptive
 bound `3 / 5`.
 
+## The plain GKR verifier
+
+`ZkcSecurity.Examples.GkrFiatShamir` bounds the transform of
+`ZkcExamples.Structured.GkrVerifier.verifier`, the verifier of the
+[GKR library](../../../libraries/gkr/README.md) for a statement already decoded
+to tables: the claimed outputs and the inputs as tables of the width, and each
+layer's add and mul wiring as a table over `(z, x, y)`. Its round-by-round
+certificate composes one certificate per phase with
+`ZkcSecurity.FiatShamir.Reduction`, whose sequential composition (`bind`,
+`repeatN`, `union`, `receive`) keeps the error of each challenge:
+
+- **Output point.** While the claimed outputs differ from the circuit's
+  outputs, their difference is nonzero at some Boolean values of the remaining
+  coordinates; a fresh challenge loses that with probability at most `1 / |F|`,
+  since the extension is affine in each coordinate.
+- **Layer rounds.** A false claim `m ≠ W~_i(r)` about a layer is a false claim
+  about the Boolean sum of the layer's gate polynomial
+  (`ZkcSecurity.ArkLib.Gkr.gatePolynomial`, `Zkc.Protocols.Gkr.extension_layer`),
+  which has degree at most two in each variable. Across both `Rounds`
+  applications each round keeps the claim false except with probability
+  `2 / |F|` (`falseClaim_successor`, ArkLib's
+  `MultivariateRound.uniform_successor_soundness` at degree two).
+- **Line.** After the wiring check passes on a false claim at the complete
+  point `(b, c)`, the received coefficients describe a polynomial other than
+  the restriction `q(t) = W~_{i+1}((1 - t) b + t c)`, which has degree at most
+  the width; the line challenge makes the next layer's claim true with
+  probability at most `width / |F|` (`agreements_card_le`, Schwartz–Zippel for
+  the line restriction).
+- **Inputs.** A false claim about the input layer fails the input check.
+
+With error `max 2 width / |F|` per challenge and `width + layers (2 width + 1)`
+challenges, `soundness` bounds the probability that claimed outputs other than
+the circuit's outputs on the inputs are accepted by
+`(Q + width + layers (2 width + 1)) max 2 width / |F|`, for a fixed statement and
+initial transcript, in the random-oracle experiment of the general theorems.
+
+## The compiled GKR proof Entry
+
+`ZkcSecurity.Examples.CompiledGkrFiatShamir` states the bound for the compiled
+`example::Proof` verifier of the GKR example. `compiledVerifier challenge inputs
+outputs add mul layers selector width initial proof` is the ideal interpretation
+of the exported validator `GkrProof.participant`, as for Sumcheck, on the raw
+public statement: the input values, the claimed outputs, the stacked add and
+mul tables, the number of layers, the number of selector coordinates and the
+width.
+
+- `construction`: on a well-formed statement (`WellFormed`), for every
+  challenge function, the compiled verifier is the transform of the plain GKR
+  verifier at the decoded tables. It composes two equations.
+  `GkrProof.spec_transform` follows from the transcript-construction rule
+  alone: the compiled meaning is the transform of the interactive reading
+  (`spec`) of the exported instructions. `GkrProof.reading` proves that reading
+  equal to the plain verifier. Each loop of the export reads as repeated steps
+  of the plain verifier (`Zkc.Construction.iterate_range_repeatN`), because the
+  reading never inspects transcript histories (`specK_similar`); helper calls
+  are read with the admitted unit's own helper equations
+  (`ZkcExamples.Structured.GkrSourceLaws`). The composed check also accepts the
+  export, so the same meaning is the transform of the original GKR validator
+  (`GkrProof.compiled_transform`).
+- `soundness`: for a fixed well-formed statement and initial transcript, the
+  compiled verifier accepts claimed outputs other than the circuit's outputs on
+  its inputs with probability at most
+  `(Q + width + layers (2 width + 1)) max 2 width / |F|`.
+
+A statement is well-formed when the input values and claimed outputs decode to
+tables of the width, the stacked tables have `2 ^ selector` blocks of
+`2 ^ (3 width)` values, every layer has a block and its add and mul blocks decode
+to that layer's wiring, and the width and the number of layers are at most the
+Entry's maxima, four each. Acceptance ignores unread proof messages; no
+adaptive statement choice and no executable meaning of this Entry is covered.
+
 ## Obligations
 
 The informal "random oracle" assumption separates into five obligations:

@@ -7,9 +7,13 @@ unsupported for the Lean rules to refuse; a recognized operation with another
 shape, an unknown type or a malformed origin refuses the whole export.
 Occurrence templates are decoded from their canonical bytes and re-encoded
 exactly. A loop's body is rendered in its own reference scope: the environment
-at the loop, then the block arguments and the body's results; after the loop
-its results take the place of the body's values. No proof is generated here and
-no meaning is assigned to any operation.
+at the loop, then the induction index, the carried values and the body's
+results; after the loop its results take the place of the body's values. A
+loop's captured block arguments (operands after the count and the carried
+values) denote their capture operands, unchanged in every iteration, so the
+rendered body refers to those operands directly and the rendered loop keeps
+only the count and the carried values. No proof is generated here and no
+meaning is assigned to any operation.
 """
 
 import argparse
@@ -243,45 +247,60 @@ def policy(value):
             f"{seq(pairs, lambda pair: f'({text(pair[0])}, {text(pair[1])})')}, {text(framing)}, {text(construction)}⟩")
 
 
-def references(values, kinds, what):
-    require(isinstance(values, list) and all(type(o) is int and 0 <= o < len(kinds) for o in values),
+# Sorts a loop may capture: immutable data, never a transcript.
+CAPTURED = {"boolean", "index", "field", "vector", "group"}
+
+
+def references(values, places, what):
+    """Map exported references to rendered ones; `places[r]` renders reference r."""
+    require(isinstance(values, list) and all(type(o) is int and 0 <= o < len(places) for o in values),
             f"{what} reference out of range")
-    return values
+    return [places[o] for o in values]
 
 
-def block(instructions, kinds, indent, depth=0):
-    """Render one block; return the rendered instructions and the final kinds."""
+def block(instructions, kinds, places, indent, depth=0):
+    """Render one block. `kinds` are the sorts of the rendered environment and
+    `places` maps every exported reference in scope to its rendered reference.
+    Return the rendered instructions, the final kinds and the final map."""
     require(depth <= 64 and isinstance(instructions, list) and len(instructions) <= 4096, "invalid block")
     rendered = []
     for item in instructions:
         name, attrs, binding, operands, results, regions = record(item, 6)
         require(isinstance(name, str) and isinstance(regions, list), "operation name")
-        references(operands, kinds, "operand")
+        mapped = references(operands, places, "operand")
         result_kinds = [sort(value)[1] for value in results]
         result_terms = seq(results, lambda v: sort(v)[0])
+        fresh = len(kinds)
         if name == "protocol.loop":
             attributes_ = attributes(attrs)
+            carried = len(results)
             require(set(attributes_) == {"carried", "count", "maximum", "parameter", "site"} and binding == []
                     and attributes_["count"] == ("string", "") and attributes_["parameter"] == ("bool", False)
-                    and attributes_["carried"] == ("integer", str(len(results))), "loop attributes")
-            require(len(regions) == 1 and len(operands) == len(results) + 1, "loop shape")
+                    and attributes_["carried"] == ("integer", str(carried)), "loop attributes")
+            require(len(regions) == 1 and len(operands) >= carried + 1, "loop shape")
             arguments, nested, yielded = record(regions[0], 3)
             argument_kinds = [sort(value)[1] for value in arguments]
-            require(argument_kinds == [("index", None)] + result_kinds, "loop block arguments")
-            inner, inner_kinds = block(nested, kinds + argument_kinds, indent + "    ", depth + 1)
-            references(yielded, inner_kinds, "yielded")
+            captured = mapped[1 + carried:]
+            captured_kinds = [kinds[o] for o in captured]
+            require(argument_kinds == [("index", None)] + result_kinds + captured_kinds, "loop block arguments")
+            require(all(kind[0] in CAPTURED for kind in captured_kinds), "loop capture sort")
+            inner, _, inner_places = block(
+                nested, kinds + argument_kinds[:1 + carried],
+                places + list(range(fresh, fresh + 1 + carried)) + captured, indent + "    ", depth + 1)
+            yielded = references(yielded, inner_places, "yielded")
             maximum = decimal(attributes_["maximum"][1], 1048577) if attributes_["maximum"][0] == "integer" \
                 else None
             require(maximum is not None, "loop maximum")
             term = f".loop {text(string_attribute(attributes_, 'site'))} {maximum} {seq(yielded, nat)}"
             body = "[]" if not inner else "[\n" + ",\n".join(inner) + "]"
-            rendered.append(f"{indent}⟨{term}, {seq(operands, nat)}, {result_terms}, {body}⟩")
+            rendered.append(f"{indent}⟨{term}, {seq(mapped[:1 + carried], nat)}, {result_terms}, {body}⟩")
         else:
             require(regions == [], "unexpected operation region")
-            term = operation(name, attributes(attrs), binding, [kinds[o] for o in operands], result_kinds)
-            rendered.append(f"{indent}⟨{term}, {seq(operands, nat)}, {result_terms}, []⟩")
+            term = operation(name, attributes(attrs), binding, [kinds[o] for o in mapped], result_kinds)
+            rendered.append(f"{indent}⟨{term}, {seq(mapped, nat)}, {result_terms}, []⟩")
         kinds = kinds + result_kinds
-    return rendered, kinds
+        places = places + list(range(fresh, fresh + len(result_kinds)))
+    return rendered, kinds, places
 
 
 def render(data, namespace):
@@ -290,8 +309,8 @@ def render(data, namespace):
     require(re.fullmatch(r"(?:[A-Za-z][A-Za-z0-9_]*\.)*[A-Za-z][A-Za-z0-9_]*", namespace) is not None,
             "invalid Lean namespace")
     kinds = [sort(value)[1] for value in inputs]
-    rendered, kinds = block(instructions, kinds, "    ")
-    references(returned, kinds, "returned")
+    rendered, kinds, places = block(instructions, kinds, list(range(len(kinds))), "    ")
+    returned = references(returned, places, "returned")
     body = ",\n".join(rendered)
     return f'''module
 
