@@ -232,10 +232,43 @@ gate and positions of `n` bits, `g, n ≤ 24`, its query term is
 the KoalaBear modulus. `koalaBear_queryPhase` states the same query error as a
 probability over the raw answer.
 
+## Committed words
+
+`ZkcSecurity.Examples.CommittedFri` replaces the word events of the transfer by
+commitments, as a [verifier with committed tables](fiat-shamir-security.md#verifiers-with-committed-tables):
+
+- Verifier: `verifier` receives the root of the next word after the folding
+  challenge of every round but the last, with the round and the word's
+  logarithmic size as its shape; the initial word is the statement's root. After
+  the final coefficients and the query block, each query reads the two entries
+  of its pair from the word of every round (`walkReads`), in the order of the
+  source's checks, and rejects at the first failed check.
+- Ideal reading: answering every read from the words in the clear, the verifier
+  is the transfer's verifier after the initial word (`withTables_verifier`). The
+  reads of one query decide as that query's checks on the committed transcript
+  (`withTables_walkReads`), and the commit phase is the transfer's commit phase
+  under the invariant that the received tables are the words of every transcript
+  it completes (`withTables_foldPhaseReads`).
+- Commitments: Merkle trees with hashed leaves of one field element and depth
+  the word's logarithmic size; an authentication makes at most `n + 1` hash
+  calls. An extracted table is read as the word with zero at every entry the
+  extraction misses.
+- Bound: the verifier commits at most `R - 1` words besides the statement's and
+  makes `R` folding queries, one block query and at most `2 s R` reads. With the
+  transfer's typed certificate, `soundness` bounds the probability that the
+  verifier accepts while the initial word extracted at the checkpoint of one of
+  its transcript queries is at relative distance at least `δ` by the prover's
+  charge plus `∑ r < R, foldError r`, the query block's error and
+  `2 s R (n + 1) · hashError`, with
+  `hashError = (R + 3) (Q + R + 1 + 2 s R (n + 1)) / |Digest|` for a prover
+  with at most `Q` oracle calls, from the proximity premise.
+
 ## Boundaries
 
-- Commitments are ideal. Security of the Merkle-based verifier needs a
-  commitment step (binding and extraction) that this model does not contain.
+- Commitments are ideal in the theorems before [committed words](#committed-words),
+  which adds the commitment step for Merkle trees with hashed leaves of one field
+  element. The installed schemes' leaf encoding (tag, codec, width and height)
+  and its relation to that leaf hash are not modeled.
 - The theorems concern this interactive model, not the compiled `Proof` Entry.
   The residual certificate has one query block site, while the source draws the
   `s` positions one at a time. In the transform, each draw's history ends with the
@@ -243,7 +276,7 @@ probability over the raw answer.
   draws, but the histories differ. The Fiat–Shamir transfer above has one
   query-block key; relating the source's draws to it, and decoding indices from
   the deployed transcript's outputs, remain open. Its events carry whole words;
-  a commitment step would replace them by roots with extraction.
+  [committed words](#committed-words) replaces them by roots with extraction.
 - The library has no grinding. The gated KoalaBear block is a sampler of the
   Fiat–Shamir model, not of the library.
 - The returned first-layer values are tied to the initial word

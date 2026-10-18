@@ -143,6 +143,22 @@ to its pinned ArkLib revision as a declared, hashed patch
 upstream. Preparation applies it; the patch names its upstream source and keeps
 ArkLib's Apache 2.0 file headers.
 
+`Commitment` bounds verifiers that see roots and openings instead of committed
+tables by the typed certificate of their ideal reading, in one random oracle
+shared by the transcript keys and the hash calls
+([verifiers with committed tables](../../docs/spec/fiat-shamir-security.md#verifiers-with-committed-tables)):
+`Verifier` states the verifiers and their ideal and concrete readings,
+`Extractable` the two laws of a straight-line extractor, `Merkle` and
+`HashedLeaves` Merkle trees with raw and with hashed leaves as extractable
+schemes, `Record` the good records of hash calls, `Replay` and `Escape` the
+deterministic run of an accepting verifier, `Experiment` the joint experiment and
+its bad keys, and `Soundness` the bound. `Examples/CommittedOpeningBound` proves
+the committed-opening experiment's intended bound, and
+`Examples/CommittedOpeningBridge` applies the general bound to the same
+verifier. `Cost` charges the concrete reading by the charges on the verifier's
+paths, and `Examples/CommittedFri` applies the bound to the FRI verifier with
+committed words ([committed words](../../docs/spec/fri-security.md#committed-words)).
+
 `VCVio/SigmaAnd` composes two VCVio Σ-protocols with one shared challenge.
 Completeness and special soundness compose directly; zero knowledge composes
 from special HVZK, a simulator given the challenge. It gives VCVio's perfect
