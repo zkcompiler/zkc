@@ -258,6 +258,135 @@ them as `<|` chains. `--name DECLARATION=local` replaces the default
 The printed module is ordinary source, not an admission certificate: a wrong
 or stale body fails the generated phase equations.
 
+### Generated participant normal forms
+
+`normal_forms.py` writes the role-local facts that connect an admitted unit to
+its theorems: what each participant does, stated as a process, and the
+equation that the actual admitted body has that process. A short request
+names the retained snapshot, the bodies to read and the inputs each role holds:
+
+```sh
+python3 lean/bridges/structured/normal_forms.py \
+  lean/bridges/structured/normal-forms/chaum-pedersen.toml
+python3 lean/bridges/structured/normal_forms.py REQUEST.toml --check
+```
+
+The generator walks the retained instructions at one participant, following
+the participant rules of the [formal contract](../../docs/spec/structured-source.md),
+and writes the module the request's `output` names. `--check` fails when that
+module is not the generated one; `--output PATH` writes elsewhere. The module
+is ordinary Lean source: every definition and equation is elaborated and checked
+by the kernel, so a stale request or a changed unit is a failed equation, not a
+trusted claim. The maintained requests are in [`normal-forms/`](normal-forms):
+
+| Request | Subject |
+|---|---|
+| [`chaum-pedersen.toml`](normal-forms/chaum-pedersen.toml) | Both roles of the original-stage `sigma::ChaumPedersen` root and its `knowledge` clause |
+| [`sumcheck-bodies.toml`](normal-forms/sumcheck-bodies.toml) | The typed `Reduce` body shared by the Sumcheck units, with its repeat maximum as a parameter |
+| [`sumcheck-round.toml`](normal-forms/sumcheck-round.toml) | One round and the whole `Reduce` body at both roles, for every unit whose checked body is the shared one |
+
+A request is TOML. `fixture` is the retained JSON snapshot, `output` the Lean
+module to write, `namespace` its namespace, `imports` and `open` its imports
+and opened namespaces, `options` extra `set_option` lines, and `carrier` the
+field structure (`CommRing` by default, or `Field`). Site constants are named
+from source labels: `#[site(first_commitment)]` gives `firstCommitmentSite`, and
+the position suffix an exchange's label carries is dropped unless the label has
+several positions (`round0Site`, `round1Site`). `sites` names only the sites
+without a source label, which export positionally (`s0 = "nonceSite"`); labelling
+every action in the source makes it unnecessary. `helper_modules` lists
+typed-body modules whose `abbrev NAME : Helper := ⟨"RAW", ...⟩` declarations
+name retained helpers; `helpers` maps further retained names to Lean terms.
+Each of the following sections is optional:
+
+| Section | Generated declarations |
+|---|---|
+| `[root]` with `inputs` (one name per root input) and `roles` (one name per role) | A constant per action site, named from its source label (`#[site(first_commitment)]` gives `firstCommitmentSite`). Per role: `<role>Inputs` (the role's own inputs present, the others absent), the normal form `<role>Process`, its equation `<role>_process` against `program.participant F G r`, and, when the role's process has no branches, the reply script `<role>Replies` (received values by type and site, drawn values by site) and the observed run `<role>_run` |
+| `[contract]` with `clause` | For a target clause whose relation is a Boolean formula over root inputs and whose decision is a root output: `owner`, `clause`, `application`, `<argument>Selector` per relation argument, `decisionSelector`, `formulaBinding`, `arguments`, `Relation`, `formula_process`, `relation_iff` (the formula as a proposition), `environment`, `target`, `target_formula_law`, `assignments` (parameters and witnesses by selector), `observedBoundary` (the deciding role's run on its replies), `observed_accepts_iff`, `observed_read` and `observed_target_iff` |
+| `[bodies]` with `protocol`, `name`, `callback` | A typed protocol body that ends in one repeat followed by its return: `<name>Body maximum` with the repeat maximum as a parameter, `<callback>Body`, `repeatState`, `repeatSpec`, `<name>Return` and `<name>ReturnValues` |
+| `[[shared]]` with `[[shared.roles]]` | Normal forms over a typed body that several units share (the request's `body`): a repeat callback (`repeat = SITE`) or a whole protocol body, at each listed role, with the process equation of the role's normal form for every unit whose tables satisfy the named helper laws |
+
+Root equations are definitional. Shared equations are proved by explicit
+operation steps generated together with the normal form. A shared entry names
+the typed `body`, the `function` to define, its `parameters`, the participant
+`meaning`, the `closed` and `components` helper tables, and, for a body with a
+repeat, the `repeat_spec` and the `callback` function. Each role names its
+`role` index and `name`, extra `binders` and `premises` of its equation, and
+either its carried `slots` in the role's own order (a repeat callback; `mode =
+"optional"` covers every presence, `value` fixes a slot) with its `captures`, or
+one entry per protocol input (`mode` present, optional or absent, or a fixed
+`value`). Its `laws` table gives, per helper, a Lean `term` proving the helper's
+invocation equation and either the `results` it yields or the `stop` it reaches;
+templates refer to the call's operands as `{0}`, `{1}`, ..., and `components =
+true` makes them the optional components of a Math call. `guards` gives a proof
+for a guard whose condition is not a decided proposition, and `rewrites` states
+facts (`expr`, `value`, `proof`) that the proof rewrites with, for example a
+comparison that a premise decides.
+
+The supported fragment is closed. A role's normal form branches on an optional
+input where an operation first demands it, and on a guard's decided
+proposition; missing owned inputs stop `incomplete`, and a false guard
+rejects. Calculations of literals fold. Shared normal forms cover two-role
+bodies with calculations, Math and owned Local calls with named laws, exchanges,
+restrictions, draws, guards and a repeat followed by the return. Anything else is
+refused with a named diagnostic, for example `no law for helper ... at role 0`,
+`guard 's8' condition ... is not a decided proposition`, `only the return may
+follow a repeat` or `unsupported instruction protocol_apply`.
+
+What remains authored: the helper laws in the participant tables (once per
+helper family, for example `SumcheckRoundLaws`), the premises and facts a role's
+equation needs, the protocol's own mathematics (extraction, completeness
+inductions, invariants) and the connection to a proof library.
+
+### Adding a structured subject
+
+From the repository root in the pinned development environment, with the
+compiler built (`just build`) and Lean set up
+([development guide](../../../docs/development/README.md)):
+
+1. Write the protocol and an Entry that runs it, for example
+   `run EqualityInteractive = ChaumPedersen<G>;` in a project module.
+2. Emit and export the Entry, and render its constructor data:
+
+   ```sh
+   build/compiler/zkc-compile language-emit --source-format=zkc \
+     --entry=example::EqualityInteractive \
+     --module=example=examples/projects/sigma/main.zkc \
+     --module=sigma=libraries/sigma/lib.zkc > lean/bridges/structured/fixtures/chaum-pedersen.mlir
+   build/compiler/zkc-compile language-interface --source-format=zkc \
+     --entry=example::EqualityInteractive \
+     --module=example=examples/projects/sigma/main.zkc \
+     --module=sigma=libraries/sigma/lib.zkc   # its "protocol" field is the root symbol
+   build/compiler/zkc-compile protocol-structured \
+     lean/bridges/structured/fixtures/chaum-pedersen.mlir --symbol=ROOT_SYMBOL \
+     > lean/bridges/structured/fixtures/chaum-pedersen.json
+   python3 lean/bridges/structured/snapshot.py \
+     lean/bridges/structured/fixtures/chaum-pedersen.json \
+     lean/ZkcExamples/Structured/ChaumPedersenData.lean \
+     --namespace ZkcExamples.Structured.ChaumPedersenData
+   ```
+
+3. Build the data module (`lake build ZkcExamples.Structured.ChaumPedersenData`
+   in `lean/`) and print its typed bodies with `bodies.py`, naming each retained
+   declaration (`--name RETAINED=local`). `bodies.py` elaborates a scratch module
+   with Lake itself, so run it in the Lean development shell like a build.
+4. Admit the unit from the printed bodies with `structured_views`, as in
+   [`ChaumPedersenViews`](../../ZkcExamples/Structured/ChaumPedersenViews.lean):
+   `helpers [formula := ChaumPedersenBodies.formula]` and
+   `protocols [interactive := ChaumPedersenBodies.interactive]` use
+   `formulaHelper`/`formulaBody` and `interactiveSignature`/`interactiveBody`.
+5. Write a normal-form request and generate the module.
+6. State the protocol's mathematics over the generated declarations and connect
+   it to a library, as
+   [`ChaumPedersenBinding`](../../ZkcExamples/Structured/ChaumPedersenBinding.lean)
+   (extraction from two accepting transcripts) and
+   [`ChaumPedersenSigma`](../../integrations/arklib/ZkcSecurity/Examples/ChaumPedersenSigma.lean)
+   (VCVio's Schnorr Σ-protocol at the base pair) do. The package treats warnings
+   as errors: a lemma that does not use every section instance needs
+   `omit [...] in`, written before its docstring.
+7. List the new modules with `python3 lean/checks/audit_imports.py --write`, build
+   (`python3 scripts/develop.py lean --deps main`, and `--deps arklib` for a
+   library connection) and run `python3 common/tests/run.py lean`.
+
 ## Open participants
 
 The open suite compares the original native SSA interpreter with the independently

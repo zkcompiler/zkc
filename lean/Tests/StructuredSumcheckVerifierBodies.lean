@@ -14,7 +14,7 @@ theorem original_source_maximum_two :
     SumcheckSourceViews.reduceDefinition.raw = (reduceBody 2).erase := by
   refine SumcheckSourceViews.reduce_raw.trans ?_
   have same : SumcheckSourceBodies.reduceBody = reduceBody 2 := by
-    unfold reduceBody roundBody roundGuard roundTail reduceReturn
+    unfold reduceBody roundBody reduceReturn
     rfl
   exact congrArg Region.erase same
 
@@ -22,7 +22,7 @@ theorem original_reduction_maximum_four :
     SumcheckReduceViews.reduceDefinition.raw = (reduceBody 4).erase := by
   refine SumcheckReduceViews.reduce_raw.trans ?_
   have same : SumcheckReduceBodies.reduceBody = reduceBody 4 := by
-    unfold reduceBody roundBody roundGuard roundTail reduceReturn
+    unfold reduceBody roundBody reduceReturn
     rfl
   exact congrArg Region.erase same
 

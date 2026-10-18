@@ -96,6 +96,15 @@ declarations, so a stale or mistyped body fails a phase equation. Phase
 equations use `kernel_rfl`, which checks a closed definitional equality in the
 kernel only.
 
+`bridges/structured/normal_forms.py` generates the role-local facts of an
+admitted unit from its retained snapshot and a short request: site constants,
+positional input builders, each participant's normal form with its process
+equation (definitional for a root; explicit operation steps citing named helper
+laws for a typed body several units share), carried-state embeddings, reply
+scripts and observed runs, and the relation binding and observed decision of a
+contract clause. Its output is ordinary source that the kernel checks; what it
+cannot derive (helper laws, premises, protocol mathematics) stays authored.
+
 `Source.RegionDerivation` and its tactics derive process correspondence from the
 same typed body using local rules. `Structured.ContractCalls` enumerates lexical
 calls; `ContractComposition` proves actual callee substitution and continuation

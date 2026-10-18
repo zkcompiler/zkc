@@ -343,6 +343,7 @@ import ZkcExamples.Structured.ChaumPedersen
 import ZkcExamples.Structured.ChaumPedersenBinding
 import ZkcExamples.Structured.ChaumPedersenBodies
 import ZkcExamples.Structured.ChaumPedersenData
+import ZkcExamples.Structured.ChaumPedersenNormalForms
 import ZkcExamples.Structured.ChaumPedersenViews
 import ZkcExamples.Structured.GkrSourceBodies
 import ZkcExamples.Structured.GkrSourceData
@@ -376,6 +377,12 @@ import ZkcExamples.Structured.MapPrefixTable
 import ZkcExamples.Structured.MapPrefixViews
 import ZkcExamples.Structured.MapProjectionContracts
 import ZkcExamples.Structured.MapSourceExpansions
+import ZkcExamples.Structured.NormalFormSteps
+import ZkcExamples.Structured.Okamoto
+import ZkcExamples.Structured.OkamotoBodies
+import ZkcExamples.Structured.OkamotoData
+import ZkcExamples.Structured.OkamotoNormalForms
+import ZkcExamples.Structured.OkamotoViews
 import ZkcExamples.Structured.PrimitiveContracts
 import ZkcExamples.Structured.PrimitiveExpansions
 import ZkcExamples.Structured.PrimitiveHalvesData
@@ -483,6 +490,8 @@ import ZkcExamples.Structured.SumcheckRepackedBodies
 import ZkcExamples.Structured.SumcheckRepackedData
 import ZkcExamples.Structured.SumcheckRepackedVerifier
 import ZkcExamples.Structured.SumcheckRepackedViews
+import ZkcExamples.Structured.SumcheckRoundLaws
+import ZkcExamples.Structured.SumcheckRoundNormalForms
 import ZkcExamples.Structured.SumcheckSourceAssociations
 import ZkcExamples.Structured.SumcheckSourceBodies
 import ZkcExamples.Structured.SumcheckSourceContracts
