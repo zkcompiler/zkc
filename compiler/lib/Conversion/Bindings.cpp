@@ -1,5 +1,6 @@
 #include "Bindings.h"
 #include "../Target/PhysicalPlan.h"
+#include "Storage.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 
@@ -8,6 +9,9 @@ using namespace mlir;
 namespace zkc::protocol {
 static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
   auto work = target::physicalPlanOperations(module);
+  SmallVector<SmallVector<Value>, 0> conversions;
+  if (!plan.releases.empty())
+    conversions.resize(work.size());
   auto root =
       cast<zkc::protocol_ir::ProtocolModuleOp>(&module.getBody()->front());
   OpBuilder builder(module.getContext());
@@ -47,7 +51,8 @@ static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
       for (auto [result, type] : zip(op->getResults(), decision.outputs))
         result.setType(type);
   }
-  for (auto [op, decision] : zip(work, plan.operations)) {
+  for (auto [index, decision] : enumerate(plan.operations)) {
+    auto *op = work[index];
     if (auto literal = dyn_cast<zkc::local::BoolConstantOp>(op)) {
       if (decision.outputs.size() != 1 || decision.binding ||
           !decision.conversions.empty())
@@ -58,6 +63,7 @@ static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
           literal.getValueAttr(), literal.getSiteAttr());
       op->replaceAllUsesWith(physical->getResults());
       op->erase();
+      work[index] = physical;
       continue;
     }
     if (!decision.binding && decision.conversions.empty())
@@ -74,6 +80,8 @@ static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
           binding.application.implementation, builder.getArrayAttr({}),
           FlatSymbolRefAttr::get(module.getContext(), binding.name));
       operands[conversion.operand] = converted.getResult(0);
+      if (!plan.releases.empty())
+        conversions[index].push_back(converted.getResult(0));
     }
     if (!decision.binding) {
       op->setOperands(operands);
@@ -88,7 +96,10 @@ static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
         FlatSymbolRefAttr::get(module.getContext(), binding.name));
     op->replaceAllUsesWith(physical->getResults());
     op->erase();
+    work[index] = physical;
   }
+  if (auto e = applyStorage(module, plan.releases, work, conversions))
+    return e;
   root.setProfile(zkc::protocol_ir::Profile::Physical);
   return Error::success();
 }
@@ -108,14 +119,15 @@ Error materializePhysical(ModuleOp module,
 LogicalResult
 lowerBoundPhysical(ModuleOp original,
                    ArrayRef<std::pair<std::string, std::string>> selections,
-                   bool linearContractions, LinearContractionStats *stats) {
+                   bool linearContractions, LinearContractionStats *stats,
+                   bool releaseStorage) {
   // One plan binds the original Kernel-bearing input through both checked
   // edges. Materialization owns the candidate and publishes only after all
   // admission, physical correspondence and projection checks succeed.
   Location failureLocation = original->getLoc();
-  auto proposal =
-      target::proposePhysical(original, target::installedCandidates(),
-                              selections, linearContractions, &failureLocation);
+  auto proposal = target::proposePhysical(
+      original, target::installedCandidates(), selections,
+      {linearContractions, releaseStorage}, &failureLocation);
   if (!proposal) {
     diagnostics::emit(emitError(failureLocation), proposal.takeError());
     return failure();

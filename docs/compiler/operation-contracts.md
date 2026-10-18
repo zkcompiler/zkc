@@ -28,6 +28,7 @@ invocation records carry them; no separate contract registry is needed.
 |---|---|
 | Nominal domain, ports and mathematical laws | `OperationContracts`, logical types and admitted `BindingApplication`; stable declaration facts |
 | Representation and fixed implementation | `PhysicalPlan`, selected binding and `BoundSignature`; checked against the actual materialized call |
+| Binding lifetime | Checked physical schedule and actual `plan.release` instructions; block-local uses and discardability, without ownership of shared backing |
 | Immutable dependencies | Source SSA/helper closure and exact static application attributes; compiler analyses expire when either changes |
 | Installed code | `InstalledOperation`; linked against the instance's owned backend, with no captured frame or resource authority |
 | Role, site, origin and ordered operands | `CallContext` and the active VM frame; derived at the reached invocation |

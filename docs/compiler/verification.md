@@ -26,8 +26,8 @@ own admission boundary; it does not acquire source correspondence from its label
 | Prepared protocol to participants | Role-indexed SSA correspondence, actual receives, action inputs/results, loop captures/yields and outputs | The actual retained prepared object is compared with the actual projected candidate; restrictions are interpreted per role |
 | Participant rewrites | Action operands under supported mathematical laws, unchanged ordered effects and custody | Shared transient value comparison for simplification, fixing and elimination; independent Boolean and polynomial laws |
 | Participant to exec | Demand at the consuming action, captures, recipes, result order and partial-call placement | Separate closed recipe/demand validator |
-| Exec to physical | Logical participant data flow/order plus validated representation and implementation choices | Fresh checked plans plus a separate reader of every materialized operation, conversion, operand and declaration |
-| Storage release | Retain computation and authored releases; add only admitted releases | Full module admission and comparison after removing only additional releases in a temporary comparison copy |
+| Exec to physical | Logical participant data flow/order plus validated representation, implementation and lifetime choices | Fresh checked plans plus a separate reader of every materialized operation, conversion, release position, operand and declaration |
+| Storage release | Retain computation and authored releases; add only admitted releases | Full module admission, independent lifetime validation and direct structural comparison of computation and added releases |
 | Native transcript construction | Selected-entry pruning, actual observations, challenges, state, indices, completion and retained declarations | Independent construction reader over the actual projected subject and generated helpers; source occurrence admission and contract semantics remain premises |
 | Checked physical program to emitted artifact | Decoded executable content, entry, host bindings, policy and schedule | Exact program bytes compared directly with physical SSA; run steps checked against retained prepared source; deployment maps checked against original source ports |
 
@@ -141,8 +141,10 @@ Local algorithms are checked by virtual argument substitution into the source
 body while reading the actual expansion, including stop and capture/yield rules.
 The six polynomial-recipe realizations are checked by a separate body reader for
 shape guards, coefficient convolution, prefix state and declared degree padding.
-Algorithm/recipe expansion, physical materialization and storage insertion publish
-only after their checks pass on an owned candidate.
+Algorithm/recipe expansion and physical materialization publish only after their
+checks pass on an owned candidate. Physical planning checks selected releases
+before publication; its output reader compares the exact release schedule.
+Standalone storage insertion retains its separate preservation check.
 
 Keep the existing independent lowering recipe walk. Producer and validator may
 share operation descriptors, types and contract identities; sharing the routine
@@ -204,7 +206,8 @@ still pins the actual selected bytes.
 | Algorithm expansion | One million charged steps and depth 64; `algorithm-correspondence` or `algorithm-correspondence-limit`. Capture deduplication uses value-indexed lookup. |
 | Polynomial recipes | One million steps, within the admitted recipe slot/degree/operation bounds; `polynomial-recipe-correspondence` with the failed obligation. |
 | Pointwise maps | One million steps, with the live scalar formula rederived from the retained original under the shared helper-expansion budget and matched against the candidate body operation by operation. The reader never builds a body and checks every operation kind, operand and binding, but it shares the formula derivation, helper expansion and live-operation selection, with the realizer; `algebra-map-correspondence` with the failed obligation. |
-| Physical materialization and storage | Fresh validated selection, full module admission, bounded traversal and exact retained computation; `binding-materialization-correspondence` and `storage-correspondence` diagnostics. |
+| Physical materialization | Fresh validated selection, full module admission, one million comparison steps and depth 128; exact operations, conversions and releases. Refusals are `binding-materialization-correspondence` or `binding-materialization-limit`. |
+| Storage scheduling | One million charged traversal steps per proposal or validation, separately bounded proposed release operands, and at most 1024 operands per release; `storage-schedule-context`, `storage-schedule-coordinate`, `storage-schedule-lifetime`, `storage-schedule-permission` or `storage-schedule-limit`. The standalone output reader has its own one million-step and depth-128 bounds; it reports `storage-correspondence`, `storage-materialization-correspondence` or `storage-schedule-limit`. These are per-phase bounds, not a cumulative compilation budget. |
 | Executable bytes and construction | Program admission bounds, one million checker steps, body depth 64; `artifact-correspondence`, `native-transcript-correspondence` and their separate subject/limit refusals. |
 | Outer bytes and schedules | At most 16 MiB, 250,000 JSON nodes and depth 256 before parsing; exact unsigned numbers, scalar Unicode and unique decoded keys. Source schedules have depth 64 and one million comparison steps. `artifact-json[-limit]`, `run-correspondence[-limit]` and `native-deployment-correspondence` distinguish these boundaries. |
 

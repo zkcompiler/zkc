@@ -1,7 +1,13 @@
 """General finite source functions through independent compilation and Host execution."""
 import pytest
-
 from entry import Entry
+
+EXECUTION_FLAGS = [
+    [],
+    ['--no-simplify'],
+    ['--release-storage'],
+    ['--no-simplify', '--release-storage'],
+]
 
 PREFIX = '''module sample;
 domain F=field("koala-bear");
@@ -36,7 +42,7 @@ protocol Run roles(P)(a:F@P,b:F@P,enabled:bool@P)->(xs:Sequence<Row>@P){return m
     return Entry(toolchain, journal, path, source, flags)
 
 
-@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+@pytest.mark.parametrize('flags', EXECUTION_FLAGS)
 def test_ordered_fold_initial_state_and_mixed_state(toolchain, journal, directory, flags):
     source = PREFIX + '''
 fn work(xs:Vector<F>,initial:F,offset:F)->(F,(F,F)){
@@ -51,7 +57,7 @@ protocol Run roles(P)(xs:Vector<F>@P,initial:F@P,offset:F@P)->(result:(F,(F,F))@
     assert entry.run('ordered', {'xs': ['2', '3'], 'initial': '1', 'offset': '4'})['result'] == ['167', ['2', '3']]
 
 
-@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+@pytest.mark.parametrize('flags', EXECUTION_FLAGS)
 def test_filtered_body_skips_stops_and_still_admits_zip(toolchain, journal, directory, flags):
     source = PREFIX + '''
 protocol Run roles(P)(xs:Vector<F>@P,ys:Vector<F>@P,enabled:bool@P)->(result:F@P){
@@ -66,7 +72,7 @@ protocol Run roles(P)(xs:Vector<F>@P,ys:Vector<F>@P,enabled:bool@P)->(result:F@P
     entry.run('mismatch', {'xs': [], 'ys': ['3'], 'enabled': False}, refuses='entry-run-incomplete')
 
 
-@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+@pytest.mark.parametrize('flags', EXECUTION_FLAGS)
 def test_sequence_records_collect_and_unit_state(toolchain, journal, directory, flags):
     source = PREFIX + '''
 struct Row {pub value:F,pub enabled:bool}
@@ -86,7 +92,7 @@ protocol Run roles(P)(xs:Sequence<Row>@P)->(result:Sequence<Row>@P){return work(
     entry.run('failed', {'xs': rejected}, refuses='entry-run-incomplete')
 
 
-@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+@pytest.mark.parametrize('flags', EXECUTION_FLAGS)
 def test_dependent_inner_domain_and_snapshot_order(toolchain, journal, directory, flags):
     source = PREFIX + '''
 fn work(xs:Vector<F>,offset:F)->(F,F){
@@ -103,7 +109,7 @@ protocol Run roles(P)(xs:Vector<F>@P,offset:F@P)->(result:(F,F)@P){return work(x
     assert entry.run('nested', {'xs': ['2', '3', '5'], 'offset': '4'})['result'] == ['7', '22']
 
 
-@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+@pytest.mark.parametrize('flags', EXECUTION_FLAGS)
 def test_repeated_zipped_record_computations(toolchain, journal, directory, flags):
     source = PREFIX + '''
 struct Row {pub value:F,pub enabled:bool}
@@ -122,7 +128,7 @@ protocol Run roles(P)(xs:Sequence<Row>@P)->(result:(F,F)@P){return work(xs);}run
     assert entry.run('records', {'xs': xs})['result'] == ['13', '11']
 
 
-@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+@pytest.mark.parametrize('flags', EXECUTION_FLAGS)
 def test_generic_item_restrictions_through_nested_scopes(toolchain, journal, directory, flags):
     source = PREFIX + '''
 fn apply<A:Type,B:Type>(value:A,body:fn(A)->B effects(stop))->B effects(stop){return body(value);}
@@ -143,7 +149,7 @@ protocol Run roles(P)(xs:Vector<F>@P,flag:bool@P,shift:F@P)->(result:F@P){
     assert entry.run('skipped', {'xs': ['2', '3'], 'flag': False, 'shift': '4'})['result'] == '0'
 
 
-@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+@pytest.mark.parametrize('flags', EXECUTION_FLAGS)
 def test_fixed_arrays_preserve_elements_indices_and_empty_unit(toolchain, journal, directory, flags):
     source = PREFIX + '''
 domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->domain<T>=domain("source_array");
@@ -164,7 +170,7 @@ protocol Run roles(P)(a:F@P,b:F@P)->(result:(F,F,F,F)@P){return work(a,b);}run D
     assert entry.run('arrays', {'a': '2', 'b': '7'})['result'] == ['27', '2', '2', '3']
 
 
-@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+@pytest.mark.parametrize('flags', EXECUTION_FLAGS)
 def test_fixed_record_arrays_zip_and_capture_original(toolchain, journal, directory, flags):
     source = PREFIX + '''
 struct Row {pub value:F,pub enabled:bool}
@@ -183,7 +189,7 @@ protocol Run roles(P)(a:F@P,b:F@P)->(result:F@P){return work(a,b);}run Demo=Run;
     assert entry.run('records', {'a': '2', 'b': '7'})['result'] == '32'
 
 
-@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+@pytest.mark.parametrize('flags', EXECUTION_FLAGS)
 def test_total_fixed_array_fold_realization(toolchain, journal, directory, flags):
     source = PREFIX + '''
 domain fn array<T:Type+Copy+Drop,N:nat>(xs:[T;N])->domain<T>=domain("source_array");
@@ -195,7 +201,7 @@ protocol Run roles(P)(a:F@P,b:F@P)->(result:F@P){return work(a,b);}run Demo=Run;
     assert entry.run('total', {'a': '2', 'b': '7'})['result'] == '2772'
 
 
-@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+@pytest.mark.parametrize('flags', EXECUTION_FLAGS)
 def test_total_index_range_and_predicate(toolchain, journal, directory, flags):
     source = PREFIX + '''
 math fn total_filtered<I:Type+Copy+Drop,S:Type+Copy+Drop>(rows:domain<I>,initial:S,keep:math fn(item:I)->bool where item_from(item, rows),step:math fn(S,item:I)->S where item_from(item, rows))->S=finite("math.fold_where");
@@ -212,7 +218,7 @@ protocol Run roles(P)(n:index@P)->(result:(F,bool,index)@P){return work(n);}run 
     assert entry.run('filtered', {'n': 5})['result'] == ['2', False, '18446744073709551615']
 
 
-@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+@pytest.mark.parametrize('flags', EXECUTION_FLAGS)
 def test_total_bounds_on_distinct_captures_records_and_coordinates(toolchain, journal, directory, flags):
     source = PREFIX + '''
 type Matrix<E:Field>=builtin("matrix",E);
@@ -243,7 +249,7 @@ protocol Run roles(P)(xs:Vector<F>@P,rows:Sequence<Row>@P,matrix:Matrix<F>@P)->(
     assert entry.run('total', {'xs': ['5', '8'], 'rows': rows, 'matrix': matrix})['result'] == ['13', '12', '9', '9']
 
 
-@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+@pytest.mark.parametrize('flags', EXECUTION_FLAGS)
 def test_total_fixed_zip_collection(toolchain, journal, directory, flags):
     source = '''module sample;
 domain F=field("bls12-381.fr");
@@ -258,7 +264,7 @@ protocol Run roles(P)(xs:[F;2]@P,ys:[F;2]@P)->(result:Array<F,2>@P){return work(
     assert entry.run('total', {'xs': ['2', '3'], 'ys': ['7', '11']})['result'] == ['72', '113']
 
 
-@pytest.mark.parametrize('flags', [[], ['--no-simplify']])
+@pytest.mark.parametrize('flags', EXECUTION_FLAGS)
 def test_callback_origins_arbitrary_slots_and_independent_inputs(toolchain, journal, directory, flags):
     source = PREFIX + '''
 fn item_first(rows:domain<F>,initial:F,

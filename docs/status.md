@@ -52,8 +52,10 @@ Export receives the resulting physical program without Kernel operations.
 Normalization and numerical recipe checking consume Kernel-owned standard
 functions directly, with separate structural facts and call-specific selection
 restrictions.
-Existing installed backends execute the resulting operations. Explicit numerical
-schedules and JIT/AOT engines remain unimplemented. This separation establishes
+Existing installed backends execute the resulting operations. The checked physical
+schedule records optional binding releases, including conversion temporaries;
+materialization performs no lifetime selection. Generated numerical loop schedules,
+writable-buffer layouts and JIT/AOT engines remain unimplemented. This separation establishes
 ownership without claiming a speedup or a formal native correspondence proof.
 
 ## Source and application boundary

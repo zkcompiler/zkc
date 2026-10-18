@@ -24,6 +24,7 @@ llvm::Error materializePhysical(mlir::ModuleOp,
 mlir::LogicalResult lowerBoundPhysical(
     mlir::ModuleOp,
     llvm::ArrayRef<std::pair<std::string, std::string>> selections,
-    bool linearContractions, LinearContractionStats *stats);
+    bool linearContractions, LinearContractionStats *stats,
+    bool releaseStorage = false);
 } // namespace zkc::protocol
 #endif

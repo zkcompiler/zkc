@@ -36,17 +36,8 @@ lowerPhysical(ModuleOp module,
   // without reconstructing and discarding the same admitted records.
   if (root.getProfile() != zkc::protocol_ir::Profile::Exec)
     return diagnostics::emit(root.emitError(), "interactive-physical-stage");
-  OwningOpRef<ModuleOp> selected(cast<ModuleOp>(module->clone()));
-  LinearContractionStats selectedStats;
-  if (failed(lowerBoundPhysical(*selected, selections, linearContractions,
-                                &selectedStats)) ||
-      (releaseStorage && failed(releaseLocalStorage(*selected))) ||
-      failed(verify(*selected)))
-    return failure();
-  module.getBodyRegion().takeBody(selected->getBodyRegion());
-  if (stats)
-    *stats = selectedStats;
-  return success();
+  return lowerBoundPhysical(module, selections, linearContractions, stats,
+                            releaseStorage);
 }
 namespace {
 struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {

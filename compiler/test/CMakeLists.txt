@@ -416,6 +416,11 @@ target_compile_definitions(zkc-kernel_physical_plan-test PRIVATE
   ZKC_KERNEL_PHYSICAL_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 mlir_target_link_libraries(zkc-kernel_physical_plan-test PRIVATE MLIRParser MLIRPass)
 
+add_zkc_test(physical_schedule Transforms physical-schedule)
+target_compile_definitions(zkc-physical_schedule-test PRIVATE
+  ZKC_SCHEDULE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
+mlir_target_link_libraries(zkc-physical_schedule-test PRIVATE MLIRParser MLIRPass)
+
 add_zkc_test(kernel_frontier Transforms kernel-frontier)
 target_compile_definitions(zkc-kernel_frontier-test PRIVATE
   ZKC_FRONTIER_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/kernel")

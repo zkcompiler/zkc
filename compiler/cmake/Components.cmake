@@ -238,6 +238,7 @@ add_zkc_component(Translation
 add_zkc_component(Transforms
   lib/Conversion/Bindings.cpp
   lib/Conversion/PhysicalVerification.cpp
+  lib/Conversion/Storage.cpp
   lib/Conversion/Participants.cpp
   lib/Transforms/Algorithms.cpp
   lib/Transforms/AlgorithmVerification.cpp
@@ -285,6 +286,7 @@ add_zkc_component(Transforms
   lib/Target/Selection.cpp
   lib/Target/Catalog.cpp
   lib/Target/PhysicalPlan.cpp
+  lib/Target/StorageSchedule.cpp
 )
 add_zkc_component(Compiler
   lib/Compiler/AssetSharing.cpp

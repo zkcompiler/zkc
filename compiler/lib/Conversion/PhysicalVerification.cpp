@@ -1,5 +1,6 @@
 #include "../Target/PhysicalPlan.h"
 #include "Bindings.h"
+#include "Storage.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Support/Json.h"
@@ -12,12 +13,14 @@ namespace zkc::protocol {
 namespace {
 class PhysicalCorrespondence {
   const target::PhysicalPlan &plan;
+  StorageReleaseReader storage;
+  std::map<target::StorageValue, Value> storageValues;
   llvm::DenseMap<Operation *, unsigned> indices;
   llvm::DenseMap<Value, Value> values;
   llvm::DenseSet<Operation *> newBindings;
   llvm::StringMap<const target::BindingDecision *> added;
   llvm::DenseMap<unsigned, const target::BindingDecision *> originals;
-  unsigned remaining = 1000000;
+  size_t remaining = 1000000;
   bool charge() { return remaining && (--remaining, true); }
   bool binding(local::OperationBindingOp op,
                const protocol::OperationBinding &expected) {
@@ -61,6 +64,16 @@ class PhysicalCorrespondence {
       ++cursor;
     }
     return true;
+  }
+  bool releases(target::StoragePoint point, Block &block,
+                Block::iterator &cursor) {
+    return storage.read(
+        point, block, cursor,
+        [&](target::StorageValue value) {
+          auto found = storageValues.find(value);
+          return found == storageValues.end() ? Value{} : found->second;
+        },
+        remaining);
   }
   bool operation(Operation *source, Operation *actual, unsigned depth) {
     if (!charge() || depth > 128)
@@ -119,14 +132,24 @@ class PhysicalCorrespondence {
       if (left.getBlocks().size() != right.getBlocks().size())
         return false;
       for (auto [before, after] : zip(left, right)) {
+        unsigned block = blockIndex;
         if (blockIndex >= decision.blockArguments.size() ||
             before.getNumArguments() != after.getNumArguments() ||
             !llvm::equal(after.getArgumentTypes(),
                          decision.blockArguments[blockIndex++]))
           return false;
-        for (auto [x, y] : zip(before.getArguments(), after.getArguments()))
+        for (auto [x, y] : zip(before.getArguments(), after.getArguments())) {
           values[x] = y;
+          if (!plan.releases.empty())
+            storageValues[{target::StorageValue::BlockArgument,
+                           indices.lookup(source), x.getArgNumber(), block}] =
+                y;
+        }
         auto cursor = after.begin();
+        if (!releases({target::StoragePoint::BlockEntry, indices.lookup(source),
+                       block},
+                      after, cursor))
+          return false;
         for (Operation &old : before) {
           if (!skipBindings(after, cursor))
             return false;
@@ -134,7 +157,7 @@ class PhysicalCorrespondence {
           SmallVector<Value> inputs;
           for (Value input : old.getOperands())
             inputs.push_back(values.lookup(input));
-          for (const auto &crossing : choice.conversions) {
+          for (auto [crossingIndex, crossing] : enumerate(choice.conversions)) {
             if (cursor == after.end() || crossing.operand >= inputs.size())
               return false;
             auto *conversion = &*cursor++;
@@ -146,10 +169,24 @@ class PhysicalCorrespondence {
                              ArrayAttr::get(old.getContext(), {})))
               return false;
             inputs[crossing.operand] = conversion->getResult(0);
+            if (!plan.releases.empty())
+              storageValues[{target::StorageValue::ConversionResult,
+                             indices.lookup(&old),
+                             static_cast<unsigned>(crossingIndex)}] =
+                  conversion->getResult(0);
+            if (!releases({target::StoragePoint::AfterConversion,
+                           indices.lookup(&old),
+                           static_cast<unsigned>(crossingIndex)},
+                          after, cursor))
+              return false;
           }
           if (!choice.conversions.empty())
             conversions[&old] = std::move(inputs);
           if (cursor == after.end() || !operation(&old, &*cursor++, depth + 1))
+            return false;
+          if (!releases(
+                  {target::StoragePoint::AfterOperation, indices.lookup(&old)},
+                  after, cursor))
             return false;
         }
         if (!skipBindings(after, cursor) || cursor != after.end())
@@ -158,15 +195,19 @@ class PhysicalCorrespondence {
     }
     if (blockIndex != decision.blockArguments.size())
       return false;
-    for (auto [x, y] : zip(source->getResults(), actual->getResults()))
+    for (auto [x, y] : zip(source->getResults(), actual->getResults())) {
       values[x] = y;
+      if (!plan.releases.empty())
+        storageValues[{target::StorageValue::OperationResult,
+                       indices.lookup(source), x.getResultNumber()}] = y;
+    }
     return true;
   }
   llvm::DenseMap<Operation *, SmallVector<Value>> conversions;
 
 public:
   PhysicalCorrespondence(ModuleOp before, const target::PhysicalPlan &plan)
-      : plan(plan) {
+      : plan(plan), storage(plan.releases) {
     for (auto [index, op] : enumerate(target::physicalPlanOperations(before)))
       indices[op] = index;
     for (const auto &decision : plan.bindings)
@@ -176,7 +217,8 @@ public:
         originals[*decision.declaration] = &decision;
   }
   Error check(ModuleOp before, ModuleOp after) {
-    if (!operation(before, after, 0) || newBindings.size() != added.size())
+    if (!operation(before, after, 0) || newBindings.size() != added.size() ||
+        !storage.complete())
       return error(remaining ? "binding-materialization-correspondence"
                              : "binding-materialization-limit");
     return Error::success();

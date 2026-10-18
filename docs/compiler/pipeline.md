@@ -63,8 +63,8 @@ Demand lowering forms [Kernel units](../spec/ir/kernel.md) at consuming actions.
 Physical planning retains the original units and a proposed Local realization.
 Independent numerical and physical checks connect that realization to the original
 subject and the selected implementations and conversions. Publication applies the
-retained choices once, preserving ordered calls and failure contracts; storage handling
-respects copy/drop permissions and affine custody. [Representation](representation.md)
+retained choices once, including checked storage-release positions, while
+preserving ordered calls, failure contracts and affine custody. [Representation](representation.md)
 describes selection and [verification](verification.md) describes the independent
 comparisons of the actual candidate and emitted bytes.
 

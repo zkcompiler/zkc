@@ -121,7 +121,10 @@ contract remain applicable. Compile-time work is bounded independently of
 runtime capacity. Total mathematical meaning does not promise execution under
 arbitrary work or memory limits.
 
-The current unit is logical. Explicit loop schedules, buffer layouts and
-cross-operation numerical planning are later refinements of this boundary.
+The current unit is logical. Its selected Local realization and physical
+conversions supply the ordered executable schedule. The physical plan also
+checks optional binding-lifetime decisions before publication. Explicit generated
+loop schedules, writable-buffer layouts and cross-operation numerical planning
+are later refinements of this boundary.
 Participant scheduling, transcript state, transport and capability authority
 remain with their existing owners.

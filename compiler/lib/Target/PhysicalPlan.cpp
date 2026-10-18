@@ -483,7 +483,7 @@ public:
 Expected<PhysicalPlan>
 proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
                 ArrayRef<std::pair<std::string, std::string>> selections,
-                bool linearContractions, Location *failureLocation) {
+                PhysicalPlanOptions options, Location *failureLocation) {
   locate(failureLocation, module);
   if (failed(verify(module)) || module.getBody()->empty() ||
       !isa<zkc::protocol_ir::ProtocolModuleOp>(module.getBody()->front()))
@@ -498,7 +498,7 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
                     structure(module),
                     identities(module),
                     protocol::Assignments(selections.begin(), selections.end()),
-                    linearContractions,
+                    options.linearContractions,
                     {}});
   bool hasKernels = false;
   root.walk([&](Operation *op) {
@@ -525,13 +525,20 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
     return e;
   plan.input = std::move(input);
   Proposer proposer(selected, catalog, failureLocation);
-  if (auto e = proposer.initialize(selections, linearContractions))
+  if (auto e = proposer.initialize(selections, options.linearContractions))
     return e;
   size_t groupLimit = 4096;
   for (;;) {
     if (auto e = proposer.populate(plan, groupLimit))
       return e;
     if (plan.bindings.size() <= 4096) {
+      if (options.releaseStorage) {
+        auto releases =
+            proposeStorage(selected, plan.operations, failureLocation);
+        if (!releases)
+          return releases.takeError();
+        plan.releases = std::move(*releases);
+      }
       if (auto e = plan.input->check(module))
         return e;
       return plan;
@@ -958,6 +965,9 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
   if (plan.input->linearContractions)
     for (auto function : root.getBody().front().getOps<zkc::local::FuncOp>())
       (void)findLinearContractions(function, stats);
+  if (auto e = validateStorage(selected, plan.operations, plan.releases,
+                               failureLocation))
+    return e;
   if (auto e = plan.input->check(module))
     return e;
   return CheckedPhysicalPlan(plan, stats);

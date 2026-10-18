@@ -1,6 +1,7 @@
 #ifndef ZKC_TARGET_PHYSICAL_PLAN_H
 #define ZKC_TARGET_PHYSICAL_PLAN_H
 
+#include "StorageSchedule.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "zkc/Program/Model.h"
 #include "zkc/Target/Catalog.h"
@@ -51,6 +52,11 @@ struct ContractionDecision {
   OperationIndex producer;
   llvm::SmallVector<OperationIndex> consumers;
 };
+struct PhysicalPlanOptions {
+  bool linearContractions = false;
+  // Propose earliest legal releases; validation also accepts safe alternatives.
+  bool releaseStorage = false;
+};
 class PhysicalPlan {
   // Own the original identity/content snapshot and, for Kernel input, the
   // actual selected Local payload. Copies share private immutable state; no
@@ -59,8 +65,8 @@ class PhysicalPlan {
   std::shared_ptr<const InputSnapshot> input;
   friend llvm::Expected<PhysicalPlan>
   proposePhysical(mlir::ModuleOp, const CandidateCatalog &,
-                  llvm::ArrayRef<std::pair<std::string, std::string>>, bool,
-                  mlir::Location *);
+                  llvm::ArrayRef<std::pair<std::string, std::string>>,
+                  PhysicalPlanOptions, mlir::Location *);
   friend llvm::Expected<CheckedPhysicalPlan>
   validatePhysical(mlir::ModuleOp, const PhysicalPlan &,
                    const CandidateCatalog &, mlir::Location *);
@@ -76,6 +82,7 @@ public:
   llvm::SmallVector<BindingDecision> bindings;
   llvm::SmallVector<OperationDecision, 0> operations;
   llvm::SmallVector<ContractionDecision> contractions;
+  llvm::SmallVector<StorageRelease> releases;
   /// Freshness-check source and return an independently owned inspection copy
   /// of the selected Local subject (a source clone for the no-Kernel path).
   /// Its preorder corresponds to all decision indices. Editing or destroying
@@ -112,7 +119,8 @@ public:
 llvm::Expected<PhysicalPlan> proposePhysical(
     mlir::ModuleOp, const CandidateCatalog & = installedCandidates(),
     llvm::ArrayRef<std::pair<std::string, std::string>> selections = {},
-    bool linearContractions = false, mlir::Location *failureLocation = nullptr);
+    PhysicalPlanOptions options = {},
+    mlir::Location *failureLocation = nullptr);
 llvm::Expected<CheckedPhysicalPlan>
 validatePhysical(mlir::ModuleOp, const PhysicalPlan &,
                  const CandidateCatalog & = installedCandidates(),
