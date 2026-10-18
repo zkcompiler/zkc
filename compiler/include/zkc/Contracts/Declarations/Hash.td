@@ -28,4 +28,4 @@ def HashPoseidon2Width16Domain : ZKC_Root<"F", FieldDomain>;
 def OpHashPoseidon2Width16 : ZKC_Operation<"hash.poseidon2_16", [HashPoseidon2Width16Domain],
     [ZKC_Apply<TypeVector, [HashPoseidon2Width16Domain]>],
     [ZKC_Apply<TypeVector, [HashPoseidon2Width16Domain]>],
-    [ZKC_Holds<CapabilityField, [HashPoseidon2Width16Domain]>]> { int ordinal = 198; }
+    [ZKC_Holds<CapabilityField, [HashPoseidon2Width16Domain]>]> { int ordinal = 200; }

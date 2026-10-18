@@ -43,14 +43,14 @@ def OpVectorBitReverseF : ZKC_Root<"F", FieldDomain>;
 def OpVectorBitReverse : ZKC_Operation<"vector.bit_reverse", [OpVectorBitReverseF],
     [ZKC_Apply<TypeVector, [OpVectorBitReverseF]>],
     [ZKC_Apply<TypeVector, [OpVectorBitReverseF]>], [ZKC_Holds<CapabilityField, [OpVectorBitReverseF]>]> {
-  int ordinal = 196;
+  int ordinal = 198;
 }
 
 def OpVectorBitReverseRowsF : ZKC_Root<"F", FieldDomain>;
 def OpVectorBitReverseRows : ZKC_Operation<"vector.bit_reverse_rows", [OpVectorBitReverseRowsF],
     [ZKC_Apply<TypeVector, [OpVectorBitReverseRowsF]>, ZKC_Apply<TypeIndex, []>],
     [ZKC_Apply<TypeVector, [OpVectorBitReverseRowsF]>], [ZKC_Holds<CapabilityField, [OpVectorBitReverseRowsF]>]> {
-  int ordinal = 197;
+  int ordinal = 199;
 }
 
 def OpVectorInterleaveF : ZKC_Root<"F", FieldDomain>;

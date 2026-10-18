@@ -96,7 +96,7 @@ def OpOracleOpenMany : ZKC_Operation<"oracle.open_many", [OpOracleOpenManyC, OpO
     [ZKC_Apply<TypeVector, [OpOracleOpenManyValueField]>, ZKC_Apply<TypeProof, [OpOracleOpenManyC]>],
     [ZKC_Holds<CapabilityVectorCommitment, [OpOracleOpenManyC]>,
      ZKC_Holds<CapabilityMultiOpening, [OpOracleOpenManyC]>]> {
-  int ordinal = 199;
+  int ordinal = 201;
 }
 
 def OpOracleCheckManyC : ZKC_Root<"C", CommitmentDomain>;
@@ -106,5 +106,5 @@ def OpOracleCheckMany : ZKC_Operation<"oracle.check_many", [OpOracleCheckManyC, 
     [ZKC_Apply<TypeBool, []>],
     [ZKC_Holds<CapabilityVectorCommitment, [OpOracleCheckManyC]>,
      ZKC_Holds<CapabilityMultiOpening, [OpOracleCheckManyC]>]> {
-  int ordinal = 200;
+  int ordinal = 202;
 }
