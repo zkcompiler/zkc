@@ -573,7 +573,8 @@ module {
             admissionLoops && !traversals && reduction,
             "control lacks bulk reduction beside mandatory admission loops");
         logical->walk([&](kernel::CallOp call) {
-          call->setAttr("policy", builder.getBoolArrayAttr({false, false}));
+          call->setAttr("policy",
+                        builder.getBoolArrayAttr({false, false, false}));
         });
         require(succeeded(verify(*logical)), "disabled source not admitted");
         expectRefusal(*bulk, "kernel-lowering-correspondence", [&] {
@@ -1064,22 +1065,27 @@ module {
         require(succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
                 "original-source recipe edge differed");
       });
-  cases.run("call policy mutation cannot admit a forbidden bulk recipe", [&] {
-    auto source = fixture(context, "structured-source/realization-finite.mlir");
-    auto logical = exec(*source, {true, false});
-    auto lowered = copy(*logical);
-    require(succeeded(kernel::lowerKernels(*lowered)), "bulk fixture failed");
-    logical->walk([&](kernel::CallOp call) {
-      Builder builder(call.getContext());
-      call->setAttr("policy",
-                    builder.getArrayAttr({builder.getBoolAttr(false),
-                                          builder.getBoolAttr(false)}));
-    });
-    require(succeeded(verify(*logical)), "policy mutation malformed");
-    expectRefusal(*lowered, "kernel-lowering-correspondence", [&] {
-      return kernel::verifyKernelLowering(*logical, *lowered);
-    });
-  });
+  for (bool collectFoldFusion : {false, true})
+    cases.run(
+        Twine("call policy mutation cannot admit a forbidden bulk recipe") +
+            (collectFoldFusion ? " with collect-fold fusion" : ""),
+        [&] {
+          auto source =
+              fixture(context, "structured-source/realization-finite.mlir");
+          auto logical = exec(*source, {true, false});
+          auto lowered = copy(*logical);
+          require(succeeded(kernel::lowerKernels(*lowered)),
+                  "bulk fixture failed");
+          logical->walk([&](kernel::CallOp call) {
+            Builder builder(call.getContext());
+            call->setAttr("policy", builder.getBoolArrayAttr(
+                                        {false, false, collectFoldFusion}));
+          });
+          require(succeeded(verify(*logical)), "policy mutation malformed");
+          expectRefusal(*lowered, "kernel-lowering-correspondence", [&] {
+            return kernel::verifyKernelLowering(*logical, *lowered);
+          });
+        });
   cases.run("empty helper premises remain part of the immutable closure", [&] {
     auto source = fixture(context, "structured-source/realization-finite.mlir");
     auto prepared = copy(*source);

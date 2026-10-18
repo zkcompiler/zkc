@@ -1,6 +1,8 @@
 #include "../CheckedCandidate.h"
 #include "../RealizationTrace.h"
 #include "Support.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -158,15 +160,26 @@ namespace {
 struct LowerKernelsPass
     : PassWrapper<LowerKernelsPass, OperationPass<mlir::ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerKernelsPass)
-  MathematicalSelectionPolicy policy;
+  Option<bool> finiteBulk{*this, "optimize-finite", llvm::cl::init(true)};
+  Option<bool> vectorReductionFusion{*this, "fuse-vector-reductions",
+                                     llvm::cl::init(false)};
+  Option<bool> collectFoldFusion{*this, "fuse-collect-fold",
+                                 llvm::cl::init(false)};
   mathematical::RealizationTrace *trace = nullptr;
   LowerKernelsPass() = default;
   LowerKernelsPass(MathematicalSelectionPolicy policy,
                    mathematical::RealizationTrace *trace)
-      : policy(policy), trace(trace) {}
+      : trace(trace) {
+    finiteBulk = policy.finiteBulk;
+    vectorReductionFusion = policy.vectorReductionFusion;
+    collectFoldFusion = policy.collectFoldFusion;
+  }
+  LowerKernelsPass(const LowerKernelsPass &other)
+      : PassWrapper(other), trace(other.trace) {}
   void getDependentDialects(DialectRegistry &registry) const final {
     registry.insert<local::LocalDialect, algebra::AlgebraDialect,
-                    kernel::KernelDialect, func::FuncDialect>();
+                    kernel::KernelDialect, func::FuncDialect, scf::SCFDialect,
+                    arith::ArithDialect>();
   }
   StringRef getArgument() const final { return "zkc-lower-kernels"; }
   StringRef getDescription() const final {
@@ -174,7 +187,9 @@ struct LowerKernelsPass
            "execution";
   }
   void runOnOperation() final {
-    if (failed(kernel::lowerKernels(getOperation(), policy, trace)))
+    if (failed(kernel::lowerKernels(
+            getOperation(),
+            {finiteBulk, vectorReductionFusion, collectFoldFusion}, trace)))
       signalPassFailure();
   }
 };

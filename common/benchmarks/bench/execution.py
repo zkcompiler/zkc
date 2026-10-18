@@ -37,7 +37,8 @@ def compile_program(args, output, capture, manifest, case, program):
     flags += [f'--asset={name}={kind}={copied[path]}' for name, (kind, path) in sorted(assets.items())]
     package = directory/'entry.zkpkg'
     record = Journal(directory/'compile', args.timeout).command(
-        [args.compiler, 'language-package', '--source-format=zkc', f'--entry={program.entry}', *flags],
+        [args.compiler, 'language-package', '--source-format=zkc', f'--entry={program.entry}',
+         *args.compiler_option, *flags],
         cwd=root, stdout=package)
     capture.add(package)
     manifest.setdefault('compilation', {})[case.identifier] = [{'wall_seconds': record['wall_seconds'],

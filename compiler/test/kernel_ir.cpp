@@ -154,13 +154,17 @@ int main() {
               [&] { accepts(profileUnit(profile), context); });
   for (StringRef profile : {"protocol", "participant", "exec"})
     cases.run("Kernel selection policy in " + profile, [&] {
-      accepts(profileUnit(profile,
-                          replace(work, "site=\"numerical\"",
-                                  "site=\"numerical\",policy=[true,false]")),
-              context);
+      accepts(
+          profileUnit(profile,
+                      replace(work, "site=\"numerical\"",
+                              "site=\"numerical\",policy=[true,false,false]")),
+          context);
     });
-  for (StringRef evidence : {"policy=[false,false]", "policy=[false,true]",
-                             "policy=[true,false]", "policy=[true,true]"})
+  for (StringRef evidence :
+       {"policy=[false,false,false]", "policy=[false,true,false]",
+        "policy=[true,false,false]", "policy=[true,true,false]",
+        "policy=[false,false,true]", "policy=[false,true,true]",
+        "policy=[true,false,true]", "policy=[true,true,true]"})
     cases.run("independent optional Kernel evidence " + evidence, [&] {
       auto module =
           parse(standalone(numbers.str() +
@@ -187,8 +191,10 @@ int main() {
     )mlir"),
             context);
   });
-  for (StringRef policy : {"[]", "[true]", "[true,false,true]", "[1:i64,false]",
-                           "[true,0:i64]", "[\"true\",false]"})
+  for (StringRef policy :
+       {"[]", "[true]", "[true,false]", "[true,false,true,false]",
+        "[1:i64,false,true]", "[true,0:i64,false]", "[true,false,0:i64]",
+        "[\"true\",false,true]"})
     cases.run("malformed Kernel policy " + policy, [&] {
       rejects(
           standalone(numbers.str() +
@@ -221,11 +227,11 @@ int main() {
        {"entry visibility", "helper visibility", "entry signature",
         "external entry", "empty block", "multiple blocks", "missing return"})
     cases.run("safe early call admission with malformed " + mutation, [&] {
-      auto module =
-          parse(standalone(numbers.str() +
-                           replace(work, "site=\"numerical\"",
-                                   "site=\"numerical\",policy=[true,false]")),
-                context);
+      auto module = parse(
+          standalone(numbers.str() +
+                     replace(work, "site=\"numerical\"",
+                             "site=\"numerical\",policy=[true,false,false]")),
+          context);
       auto unit = *module->getOps<kernel::ModuleOp>().begin();
       auto entry = kernel::getEntry(unit);
       auto function = *module->getOps<local::FuncOp>().begin();
@@ -251,7 +257,7 @@ int main() {
       rejects(call, mutation == "entry signature" ? "kernel-call-signature"
                                                   : "kernel-call-symbol");
     });
-  for (StringRef evidence : {"policy=[true,false]"})
+  for (StringRef evidence : {"policy=[true,false,false]"})
     cases.run("ordinary Local calls refuse Kernel evidence " + evidence, [&] {
       rejects(replace(profileUnit("exec"), "site=\"work\"",
                       ("site=\"work\"," + evidence).str()),
@@ -287,11 +293,11 @@ int main() {
         %go = "local.bool_constant"() {value=true,site="go"} : ()->i1
         %v = "local.if"(%go,%x) ({
         ^then(%a:!F):
-          %v = kernel.call @numbers::@entry(%a) {site="yes",policy=[true,false]} : (!F)->!F
+          %v = kernel.call @numbers::@entry(%a) {site="yes",policy=[true,false,false]} : (!F)->!F
           "local.yield"(%v) : (!F)->()
         }, {
         ^else(%a:!F):
-          %v = kernel.call @numbers::@entry(%a) {site="no",policy=[false,true]} : (!F)->!F
+          %v = kernel.call @numbers::@entry(%a) {site="no",policy=[false,true,false]} : (!F)->!F
           "local.yield"(%v) : (!F)->()
         }) {site="branch"} : (i1,!F)->!F
         local.return %v : !F
@@ -542,7 +548,7 @@ int main() {
     rejects(profileUnit("protocol", R"mlir(
       local.func @work(%x:!F) -> !F attributes {logical_origin=["work",[]]} {
         %v = kernel.call @numbers::@entry(%x) {site="same"} : (!F)->!F
-        %w = kernel.call @numbers::@entry(%v) {site="same",policy=[true,false]} : (!F)->!F
+        %w = kernel.call @numbers::@entry(%v) {site="same",policy=[true,false,false]} : (!F)->!F
         local.return %w : !F
       }
     )mlir"),

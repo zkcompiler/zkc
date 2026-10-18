@@ -12,7 +12,7 @@ using namespace llvm;
 
 namespace zkc {
 namespace {
-LogicalResult verifyOperationContext(Operation *op, bool physical) {
+LogicalResult verifyPhysicalOperation(Operation *op) {
   auto module = op->getParentOfType<zkc::protocol_ir::ProtocolModuleOp>();
   auto *owner = op->getParentOp();
   while (owner && isa<zkc::local::LocalIfOp, zkc::local::LocalForOp,
@@ -25,11 +25,10 @@ LogicalResult verifyOperationContext(Operation *op, bool physical) {
   if (!profile)
     return diagnostics::emit(op->emitOpError(), "interactive-kernel-context",
                              "missing profile");
-  if (physical ? profile.getValue() != protocol_ir::Profile::Physical
-               : profile.getValue() == protocol_ir::Profile::Physical)
+  if (profile.getValue() != protocol_ir::Profile::Physical)
     return diagnostics::emit(op->emitOpError(), "interactive-kernel-stage");
 
-  return protocol::verifyBoundOperation(op, physical);
+  return protocol::verifyBoundOperation(op, true);
 }
 } // namespace
 
@@ -46,7 +45,10 @@ bool detail::isLogicalOperationData(Type type) {
 }
 
 LogicalResult detail::verifyLogicalOperation(Operation *op) {
-  return verifyOperationContext(op, false);
+  // Logical primitives also appear in standard numerical functions and SCF
+  // regions. Check their binding and ports here; the containing program profile
+  // owns callable placement and its permitted execution vocabulary.
+  return protocol::verifyBoundOperation(op, false);
 }
 
 LogicalResult zkc::plan::ReleaseOp::verify() {
@@ -84,6 +86,6 @@ LogicalResult zkc::plan::ReleaseOp::verify() {
   return success();
 }
 LogicalResult zkc::plan::ApplyOp::verify() {
-  return verifyOperationContext(*this, true);
+  return verifyPhysicalOperation(*this);
 }
 } // namespace zkc

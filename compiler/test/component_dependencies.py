@@ -13,7 +13,7 @@ ALLOWED = {
     "ZkcContracts": {"ZkcSupport"},
     "ZkcRelation": {"ZkcContracts"},
     "ZkcProgram": {"ZkcContracts"},
-    "ZkcTransforms": {"ZkcIR", "MLIRPass", "MLIRTransforms", "MLIRTransformUtils"},
+    "ZkcTransforms": {"ZkcIR", "MLIRPass", "MLIRTransforms", "MLIRTransformUtils", "MLIRSCFDialect"},
     "ZkcCompiler": {"ZkcTransforms", "ZkcTranslation", "MLIRParser"},
     "ZkcDriver": {"ZkcCompiler", "MLIRParser"},
     "ZkcTranslation": {"ZkcIR", "ZkcLanguage"},
@@ -160,6 +160,8 @@ def main():
         "lib/Transforms/Kernel/Formation.cpp": "ZkcTransforms",
         "lib/Transforms/Kernel/Lowering.cpp": "ZkcTransforms",
         "lib/Transforms/Kernel/Verification.cpp": "ZkcTransforms",
+        "lib/Transforms/Kernel/Schedule.cpp": "ZkcTransforms",
+        "lib/Transforms/CollectFold.cpp": "ZkcTransforms",
     }.items():
         assert owners[ROOT / source] == owner, f"mandatory component ownership: {source} belongs to {owner}"
     private_headers = {
@@ -187,6 +189,7 @@ def main():
         ROOT / "lib/Transforms/NestedContractionVerification.h",
         ROOT / "lib/Transforms/RecipeRealizations.h",
         ROOT / "lib/Transforms/FiniteVerification.h",
+        ROOT / "lib/Transforms/CollectFold.h",
         ROOT / "lib/Transforms/FinitePreparation.h",
         ROOT / "lib/Transforms/CheckedCandidate.h",
         ROOT / "lib/Transforms/CollectionInterpretation.h",
@@ -201,7 +204,7 @@ def main():
     }
     private_headers["ZkcTransforms"].update(
         ROOT / f"lib/Transforms/Kernel/{name}.h"
-        for name in ("Support", "FrontierVerification", "NormalizationVerification")
+        for name in ("Support", "FrontierVerification", "NormalizationVerification", "Schedule")
     )
     private_headers["ZkcCompiler"] = {
         ROOT / "lib/Compiler/CompilationState.h",
@@ -378,7 +381,8 @@ def main():
     }
     for reader in ("FiniteVerification", "MathLoweringVerification",
                    "MathematicalComparison", "NestedContractionVerification",
-                   "HelperNormalizationVerification", "AlgorithmVerification"):
+                   "HelperNormalizationVerification", "AlgorithmVerification",
+                   "Kernel/RecipeVerification"):
         pending = [ROOT / f"lib/Transforms/{reader}.cpp"]
         visited = set()
         while pending:

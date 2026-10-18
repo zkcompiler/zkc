@@ -934,6 +934,7 @@ OwningOpRef<ModuleOp> rewriteLocalAlgorithms(ModuleOp source,
     llvm::raw_string_ostream out(configuration);
     out << "finite-bulk=" << policy.finiteBulk
         << ", vector-reduction-fusion=" << policy.vectorReductionFusion
+        << ", collect-fold-fusion=" << policy.collectFoldFusion
         << ", lane-work=" << work.lanes
         << ", helper-operations=" << work.helperOperations
         << ", helper-slots=" << work.helperSlots
@@ -1085,6 +1086,7 @@ struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
     simplify = value;
     optimizeFinite = policy.finiteBulk;
     fuseVectorReductions = policy.vectorReductionFusion;
+    fuseCollectFold = policy.collectFoldFusion;
   }
   PreparePass(const PreparePass &other)
       : PassWrapper(other), observer(other.observer) {}
@@ -1099,6 +1101,10 @@ struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
       *this, "fuse-vector-reductions",
       llvm::cl::desc(
           "Fuse admitted vector reductions under sufficient resources"),
+      llvm::cl::init(false)};
+  Option<bool> fuseCollectFold{
+      *this, "fuse-collect-fold",
+      llvm::cl::desc("Compose total collect and ordered fold traversals"),
       llvm::cl::init(false)};
   Option<bool> traceMathematics{
       *this, "trace-mathematics",
@@ -1128,11 +1134,13 @@ struct PreparePass : PassWrapper<PreparePass, OperationPass<ModuleOp>> {
     auto *output =
         observer ? observer
                  : (traceMathematics || dumpMathematics ? &trace : nullptr);
-    RealizationScope scope(output, "prepare-pass", source,
-                           {optimizeFinite, fuseVectorReductions});
-    scope.propose({optimizeFinite, fuseVectorReductions});
+    RealizationScope scope(
+        output, "prepare-pass", source,
+        {optimizeFinite, fuseVectorReductions, fuseCollectFold});
+    scope.propose({optimizeFinite, fuseVectorReductions, fuseCollectFold});
     auto candidate = prepareSource(
-        source, simplify, {optimizeFinite, fuseVectorReductions}, {}, output);
+        source, simplify,
+        {optimizeFinite, fuseVectorReductions, fuseCollectFold}, {}, output);
     if (!candidate)
       return signalPassFailure();
     source->setAttrs(candidate->getOperation()->getAttrs());
@@ -1182,6 +1190,7 @@ struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
     simplify = value;
     optimizeFinite = policy.finiteBulk;
     fuseVectorReductions = policy.vectorReductionFusion;
+    fuseCollectFold = policy.collectFoldFusion;
   }
   ProjectPass(const ProjectPass &other) : PassWrapper(other) {}
   Option<bool> simplify{*this, "simplify",
@@ -1196,6 +1205,10 @@ struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
       llvm::cl::desc(
           "Fuse admitted vector reductions under sufficient resources"),
       llvm::cl::init(false)};
+  Option<bool> fuseCollectFold{
+      *this, "fuse-collect-fold",
+      llvm::cl::desc("Compose total collect and ordered fold traversals"),
+      llvm::cl::init(false)};
   StringRef getArgument() const final { return "zkc-project-protocol"; }
   StringRef getDescription() const final {
     return "Project total mathematics and ordered actions into participant "
@@ -1209,7 +1222,8 @@ struct ProjectPass : PassWrapper<ProjectPass, OperationPass<ModuleOp>> {
   void runOnOperation() final {
     auto source = getOperation();
     auto candidate =
-        prepareSource(source, simplify, {optimizeFinite, fuseVectorReductions});
+        prepareSource(source, simplify,
+                      {optimizeFinite, fuseVectorReductions, fuseCollectFold});
     if (!candidate)
       return signalPassFailure();
     auto output = projectPrepared(*candidate);

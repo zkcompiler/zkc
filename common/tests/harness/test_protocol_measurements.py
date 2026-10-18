@@ -124,7 +124,7 @@ def small_package():
     return {'format': 'zkc.entry/0', 'original': original,
             'artifact': json.dumps(['zkc.native-proof/0', '', [], '', json.dumps(program), '', [], [], []]),
             'options': {'simplify': True, 'release_storage': False,
-                        'finite_bulk': True, 'fuse_vector_reductions': False}}
+                        'finite_bulk': True, 'fuse_vector_reductions': False, 'fuse_collect_fold': False}}
 
 
 def test_inventory_counts_static_sites_and_bound_contracts(measurement):

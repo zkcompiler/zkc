@@ -251,6 +251,7 @@ add_zkc_component(Transforms
   lib/Transforms/Kernel/Readback.cpp
   lib/Transforms/Kernel/Lowering.cpp
   lib/Transforms/Kernel/Verification.cpp
+  lib/Transforms/Kernel/Schedule.cpp
   lib/Transforms/Kernel/Recipes.cpp
   lib/Transforms/Kernel/RecipeVerification.cpp
   lib/Transforms/Kernel/Frontier.cpp
@@ -258,6 +259,7 @@ add_zkc_component(Transforms
   lib/Transforms/Kernel/NormalizationVerification.cpp
   lib/Transforms/HelperNormalization.cpp
   lib/Transforms/HelperNormalizationVerification.cpp
+  lib/Transforms/CollectFold.cpp
   lib/Transforms/FiniteRealizations.cpp
   lib/Transforms/FiniteVerification.cpp
   lib/Transforms/RealizationEmission.cpp
@@ -352,7 +354,7 @@ mlir_target_link_libraries(ZkcIR PUBLIC
   MLIRFuncDialect MLIRArithDialect)
 target_link_libraries(ZkcTransforms PUBLIC ZkcIR)
 mlir_target_link_libraries(ZkcTransforms PUBLIC
-  MLIRPass MLIRTransforms MLIRTransformUtils)
+  MLIRPass MLIRTransforms MLIRTransformUtils MLIRSCFDialect)
 target_link_libraries(ZkcCompiler PUBLIC ZkcTransforms ZkcTranslation)
 target_link_libraries(ZkcDriver PUBLIC ZkcCompiler)
 mlir_target_link_libraries(ZkcCompiler PUBLIC MLIRParser)

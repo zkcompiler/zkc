@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -38,13 +39,41 @@ def test_coverage_has_matched_forms_and_independent_stark_dimensions(modules):
     for field in ('koala-bear', 'bls12-381.fr'):
         for n in (0, 17, 1024, 8192):
             forms = [c for c in cases if c.name == 'finite' and c.shape['field'] == field and c.shape['elements'] == n]
-            assert {c.shape['form'] for c in forms} == {'reduce', 'collect', 'bulk'}
+            assert {c.shape['form'] for c in forms} == {'reduce', 'collect', 'bulk', 'total-collect-fold', 'total-fold'}
             programs = [modules['programs'].finite(c.shape) for c in forms]
-            assert programs[0].inputs == programs[1].inputs == programs[2].inputs
+            assert all(program.inputs == programs[0].inputs for program in programs)
     air = [c.shape for c in cases if c.name == 'air']
     assert len({s['height'] for s in air if s['width'] == 1}) >= 3
     assert len({s['width'] for s in air if s['height'] == 32 and s['evaluation_size'] == 128}) >= 3
     assert len({s['evaluation_size'] for s in air if s['height'] == 32 and s['width'] == 4}) >= 2
+
+
+def test_generated_compilation_forwards_explicit_policy(modules, tmp_path):
+    execution = importlib.import_module('bench.execution')
+    root = tmp_path / 'source'
+    root.mkdir()
+    output = tmp_path / 'output'
+    output.mkdir()
+    compiler = tmp_path / 'compiler'
+    arguments = tmp_path / 'arguments.json'
+    compiler.write_text(f'''#!{sys.executable}
+import json,sys
+from pathlib import Path
+Path({str(arguments)!r}).write_text(json.dumps(sys.argv[1:]))
+print('{{}}')
+''')
+    compiler.chmod(0o755)
+    args = SimpleNamespace(source=root, compiler=compiler, timeout=5,
+                           compiler_option=['--fuse-collect-fold', '--no-finite-bulk'])
+    case = next(c for c in modules['coverage'].cases() if c.identifier == 'finite-kb-total-collect-fold-17')
+    program = modules['programs'].Program('module example;', [], dependencies=())
+    manifest = {}
+    capture = modules['runner'].Capture(output / 'capture')
+    _, package = execution.compile_program(args, output, capture, manifest, case, program)
+    forwarded = json.loads(arguments.read_text())
+    assert all(forwarded.count(option) == 1 for option in args.compiler_option)
+    assert forwarded[0] == 'language-package'
+    assert manifest['compilation'][case.identifier][0]['sha256'] == modules['io'].digest(package)
 
 
 def test_distinct_stark_statements_keep_the_same_program(modules, tmp_path):
@@ -127,7 +156,7 @@ def test_lifecycle_evidence_is_checked(modules, fault):
 
 def test_changing_statements_keep_individual_first_visits_and_distributions(modules):
     job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call'}
-    manifest = {'format': 'zkc.benchmark/0', 'observation': 'timing', 'status': 'passed', 'processes': 2,
+    manifest = {'format': 'zkc.benchmark/0', 'compiler_options': [], 'observation': 'timing', 'status': 'passed', 'processes': 2,
                 'plan': {'warmups': 2, 'samples': 2, 'iterations': 1}, 'matrix': [job],
                 'results': [job | {'status': 'passed', 'repetition': i, 'worker': lifecycle_worker(times)}
                             for i, times in enumerate(((10, 100, 30, 300), (20, 200, 50, 500)))]}
@@ -224,7 +253,7 @@ def test_monero_response_control_refuses_framed_or_noncanonical_layout(modules):
 def test_comparison_rejects_changed_native_preparation_defaults(modules):
     from copy import deepcopy
     job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call'}
-    baseline = {'format': 'zkc.benchmark/0', 'observation': 'timing', 'status': 'passed', 'processes': 1,
+    baseline = {'format': 'zkc.benchmark/0', 'compiler_options': [], 'observation': 'timing', 'status': 'passed', 'processes': 1,
                 'plan': {'warmups': 2, 'samples': 2, 'iterations': 1}, 'matrix': [job], 'host': {}, 'contracts': {},
                 'results': [job | {'status': 'passed', 'repetition': 0, 'worker': lifecycle_worker()}]}
     changed = deepcopy(baseline)
@@ -250,7 +279,7 @@ sys.path.insert(0, {str(root/'common/benchmarks')!r})
 from bench import io, runner
 io.MEASUREMENT_LOCK = Path({str(tmp_path/'slot')!r})
 args = SimpleNamespace(output=Path({str(output)!r}), samples=1, warmups=0, iterations=1,
-    processes=1, seed=0, cpu=None, threads=1, label='signal', timeout=1, execution_counts=False)
+    processes=1, seed=0, cpu=None, threads=1, label='signal', timeout=1, execution_counts=False, compiler_option=[])
 def prepare(*args):
     os.kill(os.getpid(), signal.SIGTERM)
 raise SystemExit(runner.run(args, prepare))
@@ -276,7 +305,7 @@ def counted_manifest():
     for call in worker['lifecycle']['calls']:
         call['execution_counts'] = {'events': dict.fromkeys(EVENTS, 0), 'operations': {}}
     job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call'}
-    return {'format': 'zkc.benchmark/0', 'observation': 'execution_counts', 'status': 'passed',
+    return {'format': 'zkc.benchmark/0', 'compiler_options': [], 'observation': 'execution_counts', 'status': 'passed',
             'processes': 1, 'plan': {'warmups': 2, 'samples': 2, 'iterations': 1},
             'matrix': [job], 'contracts': {},
             'results': [job | {'status': 'passed', 'repetition': 0, 'worker': worker}]}

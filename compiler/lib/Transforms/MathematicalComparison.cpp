@@ -29,7 +29,9 @@ namespace {
 Operation *sourceCallee(Operation *op) {
   if (auto call = dyn_cast<kernel::CallOp>(op)) {
     if (auto policy = call.getPolicyAttr())
-      if (!cast<BoolAttr>(policy[0]).getValue())
+      if (policy.size() != 3 || !isa<BoolAttr>(policy[0]) ||
+          !isa<BoolAttr>(policy[1]) || !isa<BoolAttr>(policy[2]) ||
+          !cast<BoolAttr>(policy[0]).getValue())
         return nullptr;
     SymbolTableCollection symbols;
     return kernel::resolve(call, symbols);

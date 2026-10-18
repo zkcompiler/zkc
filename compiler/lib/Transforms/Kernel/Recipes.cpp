@@ -1,6 +1,8 @@
+#include "../CollectFold.h"
 #include "../CollectionRealization.h"
 #include "../MathematicalSupport.h"
 #include "../RealizationTrace.h"
+#include "Schedule.h"
 #include "Support.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Transforms/DialectConversion.h"
@@ -566,6 +568,21 @@ LogicalResult lowerRecipes(func::FuncOp entry, BindingSymbols &symbols,
     --finiteWork;
     IRRewriter builder(next->getContext());
     builder.setInsertionPoint(next);
+    if (policy.collectFoldFusion && finiteWork) {
+      auto pair = finite::readCollectFold(next, next->getNextNode(),
+                                          realizationWork.collectFoldDiscovery);
+      if (succeeded(pair)) {
+        auto results = finite::realizeCollectFold(
+            *pair, next->getOperands(), pair->consumer.operation->getOperands(),
+            builder, realizationWork);
+        if (failed(results))
+          return failure();
+        --finiteWork;
+        builder.replaceOp(pair->consumer.operation, *results);
+        builder.eraseOp(next);
+        continue;
+      }
+    }
     auto result =
         finite::realizeExpression(next, next->getOperands(), builder, policy,
                                   &realizationWork, trace, orderedRetry);
@@ -686,13 +703,27 @@ realizeEntry(ModuleOp source, StringRef callSite,
                                 &attempt, orderedRetry);
     available.matching = attemptWork.matching;
     available.lanes = attemptWork.lanes;
+    available.collectFoldDiscovery = attemptWork.collectFoldDiscovery;
     if (failed(lowered))
       return {};
     executableCandidate(*candidate, function, entry);
     finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
                                        {}};
-    auto checked = verifyEntryRecipes(source, *candidate, callSite, policy,
-                                      limits, &outcome);
+    auto schedule = scheduleEntry(*candidate, remaining);
+    if (!schedule)
+      return {};
+    auto checked = verifyEntrySchedule(source, *schedule, callSite, policy,
+                                       limits, &outcome);
+    if (succeeded(checked)) {
+      // The returned executable is consumed from the actual scheduled payload.
+      // The earlier recipe workspace supplies no final body or SSA values.
+      auto executable = consumeSchedule(*schedule, remaining);
+      if (!executable || failed(verifyScheduleLowering(*schedule, *executable)))
+        return {};
+      candidate = std::move(executable);
+      checked = verifyEntryRecipes(source, *candidate, callSite, policy, limits,
+                                   &outcome);
+    }
     if (succeeded(checked)) {
       available = attemptWork;
       attempt.publish();

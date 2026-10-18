@@ -45,6 +45,8 @@ Expected<EntryPackage> packageEntry(const CompiledEntry &entry,
       out.attribute(
           "fuse_vector_reductions",
           entry.options().mathematicalSelection.vectorReductionFusion);
+      out.attribute("fuse_collect_fold",
+                    entry.options().mathematicalSelection.collectFoldFusion);
     });
   });
   if (stream.overflow())

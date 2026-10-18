@@ -287,7 +287,8 @@ class RealizationScope {
   static void render(llvm::raw_ostream &out, const ProposalDecision &value) {
     out << " proposal finite-bulk=" << value.effectivePolicy.finiteBulk
         << " vector-reduction-fusion="
-        << value.effectivePolicy.vectorReductionFusion;
+        << value.effectivePolicy.vectorReductionFusion
+        << " collect-fold-fusion=" << value.effectivePolicy.collectFoldFusion;
   }
   static void render(llvm::raw_ostream &out, const DiscardDecision &value) {
     out << " discard";
@@ -305,7 +306,8 @@ class RealizationScope {
   }
   static void render(llvm::raw_ostream &out, const RetryDecision &value) {
     out << " retry discarded=" << value.discardedScope
-        << " finite-bulk=" << value.effectivePolicy.finiteBulk;
+        << " finite-bulk=" << value.effectivePolicy.finiteBulk
+        << " collect-fold-fusion=" << value.effectivePolicy.collectFoldFusion;
   }
   static void render(llvm::raw_ostream &out, const PublicationDecision &value) {
     out << " publication=" << decisionName(value.boundary);

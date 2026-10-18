@@ -433,6 +433,14 @@ int main(int argc, char **argv) {
                      [](auto &a) { (*a[7].getAsArray())[2] = "true"; });
   deploymentMutation("recorded finite choice changed",
                      [](auto &a) { (*a[7].getAsArray())[3] = "false"; });
+  deploymentMutation("recorded collect-fold choice changed",
+                     [](auto &a) { (*a[7].getAsArray())[4] = "true"; });
+  deploymentMutation("obsolete four-choice deployment",
+                     [](auto &a) { a[7].getAsArray()->pop_back(); });
+  deploymentMutation("extra deployment choice",
+                     [](auto &a) { a[7].getAsArray()->push_back("false"); });
+  deploymentMutation("non-string collect-fold choice",
+                     [](auto &a) { (*a[7].getAsArray())[4] = false; });
   deploymentMutation("selected policy changed", [](auto &a) {
     (*(*a[2].getAsArray())[1].getAsArray())[1] = "other";
   });

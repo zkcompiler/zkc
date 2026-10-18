@@ -1,4 +1,5 @@
 #include "CheckedCandidate.h"
+#include "CollectFold.h"
 #include "CollectionRealization.h"
 #include "ComputationSelection.h"
 #include "FinitePreparation.h"
@@ -153,6 +154,9 @@ class Realizer {
   unsigned occurrence = 0;
   llvm::DenseMap<Value, Value> values, sizes, lowers;
   Computation computation;
+  const CollectFold *composition = nullptr;
+  SmallVector<Value> consumerEnvironment;
+  Value substitutedElement, substitutedPosition;
   mathematical::RealizationWork &work;
   const mathematical::MathematicalRecipes &recipes;
   mathematical::RealizationScope *observation;
@@ -403,6 +407,21 @@ class Realizer {
       for (auto [a, b] : zip(scratch->getArguments(), arguments))
         mapping.map(a, b);
       for (auto &op : scratch->front().without_terminator()) {
+        if (composition &&
+            computation.operation == composition->consumer.operation) {
+          if (auto read = dyn_cast<data::BoundedAtOp>(op);
+              read &&
+              mapping.lookup(read.getInput()) == composition->collected &&
+              mapping.lookup(read.getIndex()) == substitutedPosition) {
+            mapping.map(op.getResult(0), substitutedElement);
+            continue;
+          }
+          for (Value operand : op.getOperands())
+            if (mapping.lookup(operand) == composition->collected) {
+              failedHelper = true;
+              return {};
+            }
+        }
         auto *copy = builder.clone(op, mapping);
         builder.modifyOpInPlace(copy, [&] {
           copy->setAttr("site", builder.getStringAttr(site()));
@@ -419,7 +438,40 @@ class Realizer {
     return SmallVector<Value>(call.getResults());
   }
   SmallVector<Value> transition(ValueRange state, ValueRange item,
-                                ValueRange environment) {
+                                ValueRange environment, Value position = {}) {
+    if (composition) {
+      auto producer = computation;
+      auto producerEnvironment =
+          environment.take_front(producer.arguments + producer.captures);
+      auto element =
+          apply(CallbackRole::Body,
+                {{},
+                 item,
+                 producerEnvironment.take_front(producer.arguments),
+                 producerEnvironment.drop_front(producer.arguments)});
+      if (failedHelper || element.size() != 1) {
+        failedHelper = true;
+        return {};
+      }
+      auto env = environment.drop_front(producer.arguments + producer.captures);
+      SmallVector<Value> consumerEnv;
+      unsigned next = 0;
+      for (Value value : consumerEnvironment)
+        consumerEnv.push_back(value == composition->collected ? value
+                                                              : env[next++]);
+      computation = composition->consumer;
+      substitutedElement = element[0];
+      substitutedPosition = position;
+      SmallVector<Value> consumerItem{composition->indexed ? position
+                                                           : element[0]};
+      auto result =
+          apply(CallbackRole::Step,
+                {state, consumerItem,
+                 ValueRange(consumerEnv).take_front(computation.arguments),
+                 ValueRange(consumerEnv).drop_front(computation.arguments)});
+      computation = producer;
+      return result;
+    }
     auto result =
         apply(computation.collect ? CallbackRole::Body : CallbackRole::Step,
               {computation.collect ? ValueRange{} : state, item,
@@ -447,7 +499,10 @@ public:
         work(work), recipes(recipes), observation(observation),
         retryOrdered(retryOrdered) {}
   FailureOr<SmallVector<Value>> emitBody(Operation *source, ValueRange entry,
-                                         bool optimize) {
+                                         bool optimize,
+                                         const CollectFold *pair = nullptr,
+                                         ValueRange consumerInputs = {}) {
+    composition = pair;
     // The source closure may be separate from the table receiving bindings.
     // Detached helper copies keep resolving through this original owner.
     sourceRoot = SymbolTable::getNearestSymbolTable(source);
@@ -615,7 +670,19 @@ public:
       // A declined optional formula has emitted no payload or bindings. Keep
       // the complete admission above and continue with the ordinary loop.
     }
-    if (computation.collect) {
+    if (composition) {
+      auto consumer = partitionEntry(composition->consumer, consumerInputs);
+      if (failed(consumer))
+        return failure();
+      initial.assign(consumer->initialState.begin(),
+                     consumer->initialState.end());
+      consumerEnvironment.clear();
+      append_range(consumerEnvironment, consumer->domain);
+      append_range(consumerEnvironment, consumer->captures);
+      for (Value value : consumerEnvironment)
+        if (value != composition->collected)
+          environment.push_back(value);
+    } else if (computation.collect) {
       auto result = computation.signature.getResult(0);
       auto col = mathematical::collectionRealization(result);
       assert(col && col->empty && "admitted collection construction required");
@@ -705,14 +772,14 @@ public:
       builder.setInsertionPointAfter(branch);
       append_range(next, branch->getResults());
     } else
-      next = transition(state, item, env);
+      next = transition(state, item, env, body->getArgument(0));
     if (failedHelper)
       return failure();
     append_range(next, captured);
     yield(next);
     builder.setInsertionPointAfter(loop);
     SmallVector<Value> results(loop->getResults());
-    if (computation.collect &&
+    if (!composition && computation.collect &&
         computation.signature.getResult(0) != results[0].getType()) {
       auto col = mathematical::collectionRealization(
           computation.signature.getResult(0));
@@ -778,6 +845,24 @@ realizeExpression(Operation *op, ValueRange inputs, OpBuilder &builder,
   builder.restoreInsertionPoint(rewriter.saveInsertionPoint());
   if (succeeded(results))
     scope.complete();
+  return results;
+}
+
+FailureOr<SmallVector<Value>>
+realizeCollectFold(const CollectFold &pair, ValueRange producerInputs,
+                   ValueRange consumerInputs, OpBuilder &builder,
+                   mathematical::RealizationWork &work) {
+  auto *block = builder.getInsertionBlock();
+  auto *unit = block ? SymbolTable::getNearestSymbolTable(block->getParentOp())
+                     : nullptr;
+  auto site = pair.producer.operation->getAttrOfType<StringAttr>("site");
+  if (!unit || !site || site.getValue().empty())
+    return failure();
+  BodyRewriter rewriter(builder);
+  Realizer realizer(unit, rewriter, work);
+  auto results = realizer.emitBody(pair.producer.operation, producerInputs,
+                                   false, &pair, consumerInputs);
+  builder.restoreInsertionPoint(rewriter.saveInsertionPoint());
   return results;
 }
 

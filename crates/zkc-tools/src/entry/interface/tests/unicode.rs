@@ -12,7 +12,7 @@ use zkc_runtime::vm::{LogicalType, PhysicalType};
 fn package(document: &Value, artifact: &str) -> Package {
     let bytes =
         json!({"format":"zkc.entry/0", "original":"original", "interface":document.to_string(),
-        "artifact":artifact,"options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false},"assets":[]})
+        "artifact":artifact,"options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false},"assets":[]})
         .to_string();
     Package::capture(
         bytes.as_bytes(),
@@ -615,7 +615,7 @@ fn proof_fixture() -> (Value, String) {
                 ""
             ]
         ],
-        ["true", "false", "false", "true"],
+        ["true", "false", "false", "true", "false"],
         []
     ])
     .to_string();
@@ -837,6 +837,7 @@ fn proof_package_binds_every_compilation_choice_to_the_deployment() {
         "release_storage",
         "fuse_vector_reductions",
         "finite_bulk",
+        "fuse_collect_fold",
     ] {
         let mut frame: Value = serde_json::from_slice(original.bytes()).unwrap();
         frame["options"][key] = json!(!frame["options"][key].as_bool().unwrap());
@@ -858,21 +859,46 @@ fn proof_package_binds_every_compilation_choice_to_the_deployment() {
             "{key}"
         );
     }
-    let mut frame: Value = serde_json::from_slice(original.bytes()).unwrap();
-    frame["options"]["fuse_vector_reductions"] = json!(true);
-    let mut deployment: Value = serde_json::from_str(&artifact).unwrap();
-    deployment[7][2] = json!("true");
-    frame["artifact"] = json!(deployment.to_string());
-    let raw = frame.to_string();
-    let changed = Package::capture(
-        raw.as_bytes(),
-        &Sha256::digest(raw.as_bytes()).into(),
-        Package::MAX_BYTES,
-    )
-    .unwrap();
-    let options = ProofOptions {
-        binding: BindingPolicy::AllowAuthored,
-        ..Default::default()
-    };
-    assert!(ProofEntry::admit(changed, options, SetupAuthority::default()).is_ok());
+    for (index, key) in [
+        "simplify",
+        "release_storage",
+        "fuse_vector_reductions",
+        "finite_bulk",
+        "fuse_collect_fold",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut frame: Value = serde_json::from_slice(original.bytes()).unwrap();
+        let enabled = !frame["options"][key].as_bool().unwrap();
+        let mut deployment: Value = serde_json::from_str(&artifact).unwrap();
+        deployment[7][index] = json!(if enabled { "true" } else { "false" });
+        frame["artifact"] = json!(deployment.to_string());
+        let capture = |frame: &Value| {
+            let raw = frame.to_string();
+            Package::capture(
+                raw.as_bytes(),
+                &Sha256::digest(raw.as_bytes()).into(),
+                Package::MAX_BYTES,
+            )
+            .unwrap()
+        };
+        let options = ProofOptions {
+            binding: BindingPolicy::AllowAuthored,
+            ..Default::default()
+        };
+        assert_eq!(
+            ProofEntry::admit(capture(&frame), options, SetupAuthority::default())
+                .err()
+                .unwrap()
+                .to_string(),
+            "entry-interface-native-binding",
+            "deployment-only {key}"
+        );
+        frame["options"][key] = json!(enabled);
+        assert!(
+            ProofEntry::admit(capture(&frame), options, SetupAuthority::default()).is_ok(),
+            "matching {key}"
+        );
+    }
 }

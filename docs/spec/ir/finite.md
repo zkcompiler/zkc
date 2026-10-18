@@ -138,6 +138,11 @@ executes once, after every collected body has succeeded. It is not implicitly
 streamed: a later map failure must precede a reducer failure that would have
 occurred on the first item.
 
+For total numerical computations, the explicit
+[collect–fold realization](kernel.md#collectfold-composition) can eliminate a
+private field vector or field sequence when both callbacks and every collection use meet its
+checked composition rules. Partial Local computations retain the order above.
+
 ## Total bounds and formation
 
 `data.bounded_at(container, index)` and

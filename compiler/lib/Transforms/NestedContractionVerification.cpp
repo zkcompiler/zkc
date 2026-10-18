@@ -150,8 +150,8 @@ private:
       func::FuncOp helper;
       if (auto call = dyn_cast<kernel::CallOp>(op)) {
         if (auto policy = call->getAttrOfType<ArrayAttr>("policy"))
-          if (policy.size() != 2 || !isa<BoolAttr>(policy[0]) ||
-              !isa<BoolAttr>(policy[1]) ||
+          if (policy.size() != 3 || !isa<BoolAttr>(policy[0]) ||
+              !isa<BoolAttr>(policy[1]) || !isa<BoolAttr>(policy[2]) ||
               !cast<BoolAttr>(policy[0]).getValue()) {
             valid = false;
             return {};

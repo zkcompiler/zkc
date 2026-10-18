@@ -115,7 +115,8 @@ Expected<BoundType> encodeBoundType(Type type, bool physical) {
 Expected<protocol::OperationBinding> readBinding(Operation *op) {
   auto declaration = dyn_cast_or_null<zkc::local::OperationBindingOp>(op);
   if (!declaration ||
-      !isa_and_nonnull<zkc::protocol_ir::ProtocolModuleOp>(op->getParentOp()))
+      !isa_and_nonnull<zkc::protocol_ir::ProtocolModuleOp, mlir::ModuleOp>(
+          op->getParentOp()))
     return error("binding-declaration-context");
   auto name = declaration.getSymNameAttr();
   auto contract = declaration.getContractAttr();
@@ -130,8 +131,8 @@ Expected<protocol::OperationBinding> readBinding(Operation *op) {
       return error("binding-static-identity");
     values.push_back(value.getValue().str());
   }
-  auto root = cast<zkc::protocol_ir::ProtocolModuleOp>(op->getParentOp());
-  bool physical = root.getProfileAttr() &&
+  auto root = dyn_cast<zkc::protocol_ir::ProtocolModuleOp>(op->getParentOp());
+  bool physical = root && root.getProfileAttr() &&
                   root.getProfile() == zkc::protocol_ir::Profile::Physical;
   protocol::OperationBinding binding{name.getValue().str(),
                                      {contract.getValue().str(),
@@ -144,7 +145,9 @@ Expected<protocol::OperationBinding> readBinding(Operation *op) {
 }
 
 Expected<protocol::OperationBinding> operationBinding(Operation *user) {
-  auto root = user->getParentOfType<zkc::protocol_ir::ProtocolModuleOp>();
+  // Resolve in this lexical symbol table only. Compiler schedules use a
+  // builtin module; executable profile admission owns its closed vocabulary.
+  auto *root = SymbolTable::getNearestSymbolTable(user);
   auto reference = user->getAttrOfType<FlatSymbolRefAttr>("binding");
   if (!root || !reference)
     return error("binding-reference");

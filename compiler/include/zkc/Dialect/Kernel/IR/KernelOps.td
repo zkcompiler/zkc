@@ -28,7 +28,7 @@ def Kernel_CallOp : Op<KernelDialect, "call",
     within local.func and its structured Local control. It has no purity,
     speculation or runtime frame contract. Physical publication requires its
     checked realization into existing executable operations and Local control.
-    Optional policy selects [finiteBulk, vectorReductionFusion] at compile time.
+    Optional policy selects [finiteBulk, vectorReductionFusion, collectFoldFusion] at compile time.
   }];
   let arguments = (ins Variadic<AnyType>:$inputs,
     SymbolRefAttr:$callee, StrAttr:$site,

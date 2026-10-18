@@ -36,11 +36,14 @@ An explicit name is resolved before kind checking; filtering cannot hide an
 ambiguous short name. With no name, exactly one eligible Entry is required.
 The application CLI offers `zkc check` with the same behavior and optional
 [project inputs](README.md#project-inputs). Module and Asset capture is explicit.
-`--no-simplify`, `--release-storage` and `--fuse-vector-reductions` select
+`--no-simplify`, `--no-finite-bulk`, `--release-storage`,
+`--fuse-vector-reductions` and `--fuse-collect-fold` select
 downstream compiler options for bundle production. Vector reduction fusion is
 disabled by default and independent of the other choices; its
 [preparation contract](../spec/ir/protocols.md#optional-vector-reduction-fusion)
 compares values and ordered shape refusals under sufficient resources.
+Collect–fold [composition](../spec/ir/kernel.md#collectfold-composition) is a
+separate opt-in family for total collection/reduction pairs.
 `language-check` and `zkc check` reject executable optimization options.
 
 `--asset=NAME=FORMAT=FILE` adds explicitly captured relation data. Supported

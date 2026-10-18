@@ -139,12 +139,12 @@ LogicalResult CallOp::verify() {
                     "argument or result count");
   if (auto raw = (*this)->getAttr("policy")) {
     auto policy = dyn_cast<ArrayAttr>(raw);
-    if (!policy || policy.size() != 2 ||
+    if (!policy || policy.size() != 3 ||
         !llvm::all_of(policy,
                       [](Attribute value) { return isa<BoolAttr>(value); }))
       return refuse(*this, "kernel-call-policy",
                     "expected [BoolAttr finiteBulk, BoolAttr "
-                    "vectorReductionFusion]");
+                    "vectorReductionFusion, BoolAttr collectFoldFusion]");
   }
   return success();
 }

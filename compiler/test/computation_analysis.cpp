@@ -63,10 +63,11 @@ std::string numericalAdditionFixture(StringRef name, StringRef output,
   auto end = text.find('\n', begin);
   require(begin != std::string::npos && end != std::string::npos,
           "missing addition to replace");
-  text.replace(begin, end - begin,
-               "   " + output.str() + " = kernel.call @numbers::@entry(" +
-                   operands.str() +
-                   ") {site=\"numerical\",policy=[false,false]} : (!F,!F)->!F");
+  text.replace(
+      begin, end - begin,
+      "   " + output.str() + " = kernel.call @numbers::@entry(" +
+          operands.str() +
+          ") {site=\"numerical\",policy=[false,false,false]} : (!F,!F)->!F");
   return text;
 }
 finite::Computation computation(ModuleOp module) {
@@ -155,7 +156,8 @@ int main() {
       }
       require(!finite::analyzeComputation(c, 0), "structural budget ignored");
     });
-  for (unsigned policy = 0; policy < 5; ++policy)
+  // Include omitted defaults and every combination of the three policy bits.
+  for (unsigned policy = 0; policy < 9; ++policy)
     cases.run(
         "numerical structure ignores policy " + std::to_string(policy),
         [&, policy] {
@@ -170,10 +172,10 @@ int main() {
           if (!policy)
             call->removeAttr("policy");
           else
-            call->setAttr(
-                "policy",
-                builder.getArrayAttr({builder.getBoolAttr(policy >= 3),
-                                      builder.getBoolAttr(policy % 2 == 0)}));
+            call->setAttr("policy",
+                          builder.getBoolArrayAttr({((policy - 1) & 2) != 0,
+                                                    ((policy - 1) & 1) != 0,
+                                                    ((policy - 1) & 4) != 0}));
           require(succeeded(verify(*module)), "valid call policy refused");
           auto before = printed(*module);
           auto view = finite::analyzeComputation(c);
@@ -287,13 +289,17 @@ int main() {
     SmallVector<Attribute> policies{
         builder.getArrayAttr({}),
         builder.getArrayAttr({builder.getBoolAttr(true)}),
+        builder.getBoolArrayAttr({true, false}),
+        builder.getBoolArrayAttr({true, false, false, false}),
+        builder.getArrayAttr({builder.getBoolAttr(true),
+                              builder.getStringAttr("invalid"),
+                              builder.getBoolAttr(false)}),
         builder.getArrayAttr({builder.getBoolAttr(true),
                               builder.getBoolAttr(false),
-                              builder.getBoolAttr(false)}),
-        builder.getArrayAttr(
-            {builder.getStringAttr("invalid"), builder.getBoolAttr(false)}),
-        builder.getArrayAttr(
-            {builder.getBoolAttr(true), builder.getStringAttr("invalid")})};
+                              builder.getStringAttr("invalid")}),
+        builder.getArrayAttr({builder.getStringAttr("invalid"),
+                              builder.getBoolAttr(false),
+                              builder.getBoolAttr(false)})};
     // These deliberate post-admission mutations exercise policy independence,
     // not admission of malformed IR. Recompute the view after each mutation.
     for (Attribute policy : policies) {
@@ -373,8 +379,7 @@ int main() {
         auto *second = builder.clone(*first);
         second->setAttr("site", builder.getStringAttr("unused_numerical"));
         second->setAttr("policy",
-                        builder.getArrayAttr({builder.getBoolAttr(true),
-                                              builder.getBoolAttr(false)}));
+                        builder.getBoolArrayAttr({true, false, false}));
         require(succeeded(verify(*module)), "repeated calls not admitted");
         auto view = finite::analyzeComputation(c);
         require(view && view->numericalCalls().size() == 2 &&

@@ -152,6 +152,8 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
     object["finite_bulk"] = options.mathematicalSelection.finiteBulk;
     object["fuse_vector_reductions"] =
         options.mathematicalSelection.vectorReductionFusion;
+    object["fuse_collect_fold"] =
+        options.mathematicalSelection.collectFoldFusion;
     object["fix_polynomial_factors"] = options.fixPolynomialFactors;
     json::Array passes;
     if (options.simplify) {
@@ -192,17 +194,18 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
     auto digest = [](StringRef value) {
       return llvm::toHex(SHA256::hash(arrayRefFromStringRef(value)), true);
     };
-    json::Value record(
-        json::Object{{"format", "zkc.compiled-public-coin/0"},
-                     {"view", std::move(*publicCoin)},
-                     {"source_sha256", digest(text)},
-                     {"bundle_sha256", digest(*bundle)},
-                     {"simplify", options.simplify},
-                     {"release_storage", options.releaseStorage},
-                     {"finite_bulk", options.mathematicalSelection.finiteBulk},
-                     {"fuse_vector_reductions",
-                      options.mathematicalSelection.vectorReductionFusion},
-                     {"fix_polynomial_factors", options.fixPolynomialFactors}});
+    json::Value record(json::Object{
+        {"format", "zkc.compiled-public-coin/0"},
+        {"view", std::move(*publicCoin)},
+        {"source_sha256", digest(text)},
+        {"bundle_sha256", digest(*bundle)},
+        {"simplify", options.simplify},
+        {"release_storage", options.releaseStorage},
+        {"finite_bulk", options.mathematicalSelection.finiteBulk},
+        {"fuse_vector_reductions",
+         options.mathematicalSelection.vectorReductionFusion},
+        {"fuse_collect_fold", options.mathematicalSelection.collectFoldFusion},
+        {"fix_polynomial_factors", options.fixPolynomialFactors}});
     // Describe semantic pipeline stages with their public pass names. This is
     // not a PassManager execution trace: preparation is implicit here, and
     // projection consumes the privately owned prepared subject above.
@@ -333,7 +336,9 @@ compileNativeProof(StringRef text, StringRef filename,
                   options.releaseStorage ? "true" : "false",
                   options.mathematicalSelection.vectorReductionFusion ? "true"
                                                                       : "false",
-                  options.mathematicalSelection.finiteBulk ? "true" : "false"},
+                  options.mathematicalSelection.finiteBulk ? "true" : "false",
+                  options.mathematicalSelection.collectFoldFusion ? "true"
+                                                                  : "false"},
       json::Array(constructed->wireSites)});
   auto encoded = printJson(deployment);
   if (encoded.size() > 16 * 1024 * 1024)

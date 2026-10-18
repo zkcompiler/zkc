@@ -49,10 +49,11 @@ std::string numericalAdditionFixture(StringRef name, StringRef output,
   auto end = text.find('\n', begin);
   require(begin != std::string::npos && end != std::string::npos,
           "missing addition to replace");
-  text.replace(begin, end - begin,
-               "   " + output.str() + " = kernel.call @numbers::@entry(" +
-                   operands.str() +
-                   ") {site=\"numerical\",policy=[false,false]} : (!F,!F)->!F");
+  text.replace(
+      begin, end - begin,
+      "   " + output.str() + " = kernel.call @numbers::@entry(" +
+          operands.str() +
+          ") {site=\"numerical\",policy=[false,false,false]} : (!F,!F)->!F");
   return text;
 }
 finite::Computation computation(ModuleOp module) {
@@ -184,7 +185,8 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
-  for (unsigned callPolicy = 0; callPolicy < 5; ++callPolicy)
+  // Include omitted defaults and every combination of the three policy bits.
+  for (unsigned callPolicy = 0; callPolicy < 9; ++callPolicy)
     cases.run(
         "reused scalar view and policy " + std::to_string(callPolicy),
         [&, callPolicy] {
@@ -198,10 +200,10 @@ int main() {
           if (!callPolicy)
             call->removeAttr("policy");
           else
-            call->setAttr("policy",
-                          builder.getArrayAttr(
-                              {builder.getBoolAttr(callPolicy >= 3),
-                               builder.getBoolAttr(callPolicy % 2 == 0)}));
+            call->setAttr("policy", builder.getBoolArrayAttr(
+                                        {((callPolicy - 1) & 2) != 0,
+                                         ((callPolicy - 1) & 1) != 0,
+                                         ((callPolicy - 1) & 4) != 0}));
           require(succeeded(verify(*module)), "numerical policy not admitted");
           auto before = printed(*module);
           auto view = finite::analyzeComputation(c);
@@ -213,7 +215,7 @@ int main() {
           auto enabled = mathematical::selectComputation(*view, {}, work);
           auto disabled =
               mathematical::selectComputation(*view, {false, true}, work);
-          bool allowed = !callPolicy || callPolicy >= 3;
+          bool allowed = !callPolicy || ((callPolicy - 1) & 2) != 0;
           require(
               enabled.equations.reduction && disabled.equations.reduction &&
                   enabled.kind ==
@@ -303,8 +305,7 @@ int main() {
         auto &otherBody = otherHelper.getBody().front();
         auto *otherCall = &otherBody.front();
         otherCall->setAttr("policy",
-                           builder.getArrayAttr({builder.getBoolAttr(true),
-                                                 builder.getBoolAttr(false)}));
+                           builder.getBoolArrayAttr({true, false, false}));
         otherCall->setOperands(
             {otherBody.getArgument(1), otherBody.getArgument(0)});
         auto *other = builder.clone(*first.operation);
@@ -351,13 +352,17 @@ int main() {
     SmallVector<Attribute> policies{
         builder.getArrayAttr({}),
         builder.getArrayAttr({builder.getBoolAttr(true)}),
+        builder.getBoolArrayAttr({true, false}),
+        builder.getBoolArrayAttr({true, false, false, false}),
+        builder.getArrayAttr({builder.getBoolAttr(true),
+                              builder.getStringAttr("invalid"),
+                              builder.getBoolAttr(false)}),
         builder.getArrayAttr({builder.getBoolAttr(true),
                               builder.getBoolAttr(false),
-                              builder.getBoolAttr(false)}),
-        builder.getArrayAttr(
-            {builder.getStringAttr("invalid"), builder.getBoolAttr(false)}),
-        builder.getArrayAttr(
-            {builder.getBoolAttr(true), builder.getStringAttr("invalid")})};
+                              builder.getStringAttr("invalid")}),
+        builder.getArrayAttr({builder.getStringAttr("invalid"),
+                              builder.getBoolAttr(false),
+                              builder.getBoolAttr(false)})};
     // Deliberate post-admission mutations probe conservative selection only.
     // Each mutation invalidates the previous borrowed structural view.
     for (Attribute policy : policies) {

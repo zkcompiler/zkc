@@ -281,6 +281,7 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
       : observer(trace) {
     optimizeFinite = policy.finiteBulk;
     fuseVectorReductions = policy.vectorReductionFusion;
+    fuseCollectFold = policy.collectFoldFusion;
   }
   LowerMathPass(const LowerMathPass &other)
       : PassWrapper(other), observer(other.observer) {}
@@ -291,6 +292,10 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
   Option<bool> fuseVectorReductions{
       *this, "fuse-vector-reductions",
       llvm::cl::desc("Select admitted vector reduction fusion"),
+      llvm::cl::init(false)};
+  Option<bool> fuseCollectFold{
+      *this, "fuse-collect-fold",
+      llvm::cl::desc("Compose total collect and ordered fold traversals"),
       llvm::cl::init(false)};
   Option<bool> traceMathematics{
       *this, "trace-mathematics",
@@ -317,8 +322,9 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
                       ? observer
                       : (traceMathematics || dumpMathematics ? &diagnosticTrace
                                                              : nullptr);
-    RealizationScope scope(trace, "lower-math", source,
-                           {optimizeFinite, fuseVectorReductions});
+    RealizationScope scope(
+        trace, "lower-math", source,
+        {optimizeFinite, fuseVectorReductions, fuseCollectFold});
     if (trace && trace->ir) {
       *trace->ir << "// Before mathematical demand lowering\n";
       source.print(*trace->ir);
@@ -334,7 +340,7 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
                         "expected the 'participant' profile");
       return signalPassFailure();
     }
-    scope.propose({optimizeFinite, fuseVectorReductions});
+    scope.propose({optimizeFinite, fuseVectorReductions, fuseCollectFold});
     OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(source->clone()));
     auto unit =
         cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
@@ -358,7 +364,8 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
         calculations.push_back(cast<local::FuncOp>(definition));
     for (auto function : calculations)
       if (failed(kernel::formCalculation(
-              function, unit, {optimizeFinite, fuseVectorReductions})))
+              function, unit,
+              {optimizeFinite, fuseVectorReductions, fuseCollectFold})))
         return signalPassFailure();
     for (auto &declaration : make_early_inc_range(unit.getBody().front()))
       if (isa<data::DomainOp, func::FuncOp>(declaration))

@@ -143,6 +143,7 @@ def run_locked(args, prepare):
     manifest = {'format': FORMAT, 'status': 'running', 'phase': 'preparation', 'results': [], 'contracts': {},
                 'plan': {'samples': args.samples, 'warmups': args.warmups, 'iterations': args.iterations},
                 'processes': args.processes, 'seed': args.seed, 'label': args.label,
+                'compiler_options': args.compiler_option,
                 'observation': 'execution_counts' if args.execution_counts else 'timing',
                 'argv': sys.argv, 'host': {}, 'files': capture.files, 'checks': []}
     try:

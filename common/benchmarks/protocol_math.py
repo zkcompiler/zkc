@@ -296,7 +296,8 @@ def trial(case, variant, flags, inputs, directory, tools, timeout, interactive_s
         package = json.loads(package_path.read_text())
         require(package['format'] == 'zkc.entry/0', 'unexpected package format')
         require(package['options'] == {'simplify': True, 'finite_bulk': policy != 'no-finite-bulk',
-                'release_storage': policy == 'release-storage', 'fuse_vector_reductions': False},
+                'release_storage': policy == 'release-storage', 'fuse_vector_reductions': False,
+                'fuse_collect_fold': False},
                 'compiler did not apply requested policy')
         record['package'] = identity(package_path)
         record['original_inventory'] = logical_inventory(package['original'])

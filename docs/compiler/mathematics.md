@@ -247,7 +247,7 @@ states its precise admission and zero-trip obligations.
 Source binders reach general finite IR through ordinary scoped consumers. Its
 checked lowering recognizes admitted native contractions and retains an ordered
 loop fallback. `MathematicalSelectionPolicy` enables the finite bulk family by
-default and leaves vector reduction fusion disabled. `--no-finite-bulk` selects
+default and leaves both fusion families disabled. `--no-finite-bulk` selects
 the ordered finite fallback while retaining the same domain admission.
 `--no-simplify` controls generic total-expression folding independently; it does
 not disable mathematical selection. Explicit authored `map` plus reducer calls keep the separate
@@ -267,18 +267,19 @@ The [IR contract](../spec/ir/protocols.md#optional-vector-reduction-fusion)
 defines exact eligibility and shared bounds.
 
 `EntryOptions`, `RunOptions` and `NativeProofOptions` carry one
-`mathematicalSelection` policy, with independent `finiteBulk` and
-`vectorReductionFusion` family controls. Preparation, total Math demand
+`mathematicalSelection` policy, with independent `finiteBulk`,
+`vectorReductionFusion` and `collectFoldFusion` family controls. Preparation, total Math demand
 lowering, proof construction and polynomial correspondence reconstruction all
 receive the same policy. Public preparation, projection and lowering passes
-expose `optimize-finite` and `fuse-vector-reductions` options; the participant
-pipeline forwards both choices to its stages. Physical storage release remains
+expose `optimize-finite`, `fuse-vector-reductions` and `fuse-collect-fold` options;
+the participant pipeline forwards these choices to its stages. Physical storage release remains
 a separate control.
 
-Entry packages and compilation reports record `finite_bulk` and
-`fuse_vector_reductions` alongside their separate simplify and storage choices.
-Native-proof deployments record simplify, storage release, fusion and finite
-bulk in that order; readers require all four choices. Reconstruction uses the
+Entry packages and compilation reports record `finite_bulk`,
+`fuse_vector_reductions` and `fuse_collect_fold` alongside their separate simplify
+and storage choices. Native-proof deployments record simplify, storage release,
+vector reduction fusion, finite bulk and collect–fold fusion in that order;
+readers require all five choices. Reconstruction uses the
 selected policy, including when generic simplification is disabled.
 
 The explicit `rewriteLocalAlgorithms` preparation service admits the immutable

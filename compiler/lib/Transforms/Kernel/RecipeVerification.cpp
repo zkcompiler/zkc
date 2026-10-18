@@ -1,3 +1,4 @@
+#include "../CollectFold.h"
 #include "../CollectionInterpretation.h"
 #include "../HelperNormalization.h"
 #include "../MathematicalSupport.h"
@@ -29,6 +30,7 @@ class RecipeReader {
   const CheckedHelperNormalizations &helpers;
   uint64_t remaining = 1000000;
   bool allowFiniteBulk = true;
+  uint64_t compositionInspection = 100000;
   finite::VerificationLimits finiteLimits;
   finite::VerificationResult finiteOutcome{finite::VerificationStatus::Mismatch,
                                            "numerical recipes differ"};
@@ -97,6 +99,65 @@ class RecipeReader {
     return true;
   }
 
+  FailureOr<SmallVector<Value>> readHelper(Operation *helper, ValueRange args,
+                                           Operation *&at, Value collected = {},
+                                           Value position = {},
+                                           Value element = {}) {
+    // Only exact bounded closure snapshots are available here. Lookup
+    // is read-only: this verifier cannot run either normalizer.
+    auto normalized = helpers.lookup(helper);
+    if (!normalized || normalized.getNumArguments() != args.size())
+      return failure();
+    auto &body = normalized.front();
+    llvm::DenseMap<Value, Value> values;
+    for (auto [a, b] : zip(body.getArguments(), args)) {
+      if (a.getType() != b.getType())
+        return failure();
+      values[a] = b;
+    }
+    for (auto &op : body.without_terminator()) {
+      if (!charge(1 + op.getNumOperands() + op.getNumResults()))
+        return failure();
+      SmallVector<Value> operands;
+      for (Value v : op.getOperands()) {
+        auto value = values.lookup(v);
+        if (!value)
+          return failure();
+        operands.push_back(value);
+      }
+      if (collected && isa<data::BoundedAtOp>(op) && operands.size() == 2 &&
+          operands[0] == collected && operands[1] == position) {
+        if (op.getNumResults() != 1 ||
+            op.getResult(0).getType() != element.getType())
+          return failure();
+        values[op.getResult(0)] = element;
+        continue;
+      }
+      if (collected && is_contained(operands, collected))
+        return failure();
+      if (finite::isComputation(&op)) {
+        auto results = finiteRecipe(&op, at, operands);
+        if (failed(results) || results->size() != op.getNumResults())
+          return failure();
+        for (auto [a, b] : zip(op.getResults(), *results))
+          values[a] = b;
+      } else {
+        auto value = recipe(&op, at, operands);
+        if (!value || op.getNumResults() != 1 ||
+            value.getType() != op.getResult(0).getType())
+          return failure();
+        values[op.getResult(0)] = value;
+      }
+    }
+    SmallVector<Value> results;
+    for (Value v : body.back().getOperands()) {
+      auto value = values.lookup(v);
+      if (!value)
+        return failure();
+      results.push_back(value);
+    }
+    return results;
+  }
   FailureOr<SmallVector<Value>>
   finiteRecipe(Operation *source, Operation *&cursor, ValueRange inputs) {
     finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
@@ -105,50 +166,7 @@ class RecipeReader {
         source, inputs, cursor,
         [&](Operation *helper, ValueRange args,
             Operation *&at) -> FailureOr<SmallVector<Value>> {
-          // Only exact bounded closure snapshots are available here. Lookup
-          // is read-only: this verifier cannot run either normalizer.
-          auto normalized = helpers.lookup(helper);
-          if (!normalized || normalized.getNumArguments() != args.size())
-            return failure();
-          auto &body = normalized.front();
-          llvm::DenseMap<Value, Value> values;
-          for (auto [a, b] : zip(body.getArguments(), args)) {
-            if (a.getType() != b.getType())
-              return failure();
-            values[a] = b;
-          }
-          for (auto &op : body.without_terminator()) {
-            if (!charge(1 + op.getNumOperands() + op.getNumResults()))
-              return failure();
-            SmallVector<Value> operands;
-            for (Value v : op.getOperands()) {
-              auto value = values.lookup(v);
-              if (!value)
-                return failure();
-              operands.push_back(value);
-            }
-            if (finite::isComputation(&op)) {
-              auto results = finiteRecipe(&op, at, operands);
-              if (failed(results) || results->size() != op.getNumResults())
-                return failure();
-              for (auto [a, b] : zip(op.getResults(), *results))
-                values[a] = b;
-            } else {
-              auto value = recipe(&op, at, operands);
-              if (!value || op.getNumResults() != 1 ||
-                  value.getType() != op.getResult(0).getType())
-                return failure();
-              values[op.getResult(0)] = value;
-            }
-          }
-          SmallVector<Value> results;
-          for (Value v : body.back().getOperands()) {
-            auto value = values.lookup(v);
-            if (!value)
-              return failure();
-            results.push_back(value);
-          }
-          return results;
+          return readHelper(helper, args, at);
         },
         sourceRoot, finiteLimits, outcome, {allowFiniteBulk, false});
     // A recursive finite callback may already have reported capacity; its
@@ -444,7 +462,19 @@ public:
       values[source] = actual;
     }
     unsigned ordinal = 0;
+    Operation *consumed = nullptr;
     for (auto &op : entry.getBody().front()) {
+      if (&op == consumed) {
+        auto skippedSite =
+            protocol::algorithmSite({{callSite.str(), "kernel"}},
+                                    std::to_string(ordinal++), remainingBytes);
+        if (!skippedSite) {
+          consumeError(skippedSite.takeError());
+          return finish(false);
+        }
+        consumed = nullptr;
+        continue;
+      }
       if (!charge(1 + op.getNumOperands() + op.getNumResults()))
         return finish(false);
       SmallVector<Value> inputs;
@@ -459,10 +489,58 @@ public:
       auto *begin = cursor;
       SmallVector<Value> results;
       bool finite = finite::isComputation(&op);
-      if (finite) {
+      Operation *resultSource = &op;
+      bool composed = false;
+      std::optional<finite::VerificationResult> compositionFailure;
+      if (finite && policy.collectFoldFusion) {
+        auto pair = finite::readCollectFold(&op, op.getNextNode(),
+                                            compositionInspection);
+        if (succeeded(pair)) {
+          SmallVector<Value> consumerInputs;
+          bool complete = true;
+          for (Value operand : pair->consumer.operation->getOperands()) {
+            auto value =
+                operand == pair->collected ? operand : values.lookup(operand);
+            if (!value)
+              complete = false;
+            consumerInputs.push_back(value);
+          }
+          auto *at = cursor;
+          if (complete) {
+            finite::VerificationResult composedOutcome{
+                finite::VerificationStatus::Mismatch, {}};
+            auto read = finite::verifyCollectFold(
+                *pair, inputs, consumerInputs, at,
+                [&](Operation *helper, ValueRange args, Operation *&where) {
+                  return readHelper(helper, args, where);
+                },
+                [&](Operation *helper, ValueRange args, Operation *&where,
+                    Value collected, Value position, Value element) {
+                  return readHelper(helper, args, where, collected, position,
+                                    element);
+                },
+                finiteLimits, composedOutcome);
+            if (succeeded(read)) {
+              results = *read;
+              cursor = at;
+              consumed = pair->consumer.operation;
+              resultSource = consumed;
+              composed = true;
+            } else
+              compositionFailure = composedOutcome;
+          }
+        }
+      }
+      if (composed) {
+        // Both source callbacks have been read against this actual traversal.
+      } else if (finite) {
         auto read = finiteRecipe(&op, cursor, inputs);
-        if (failed(read))
+        if (failed(read)) {
+          if (compositionFailure &&
+              finiteOutcome.status == finite::VerificationStatus::Mismatch)
+            finiteOutcome = *compositionFailure;
           return finish(false);
+        }
         results = *read;
       } else {
         auto value = recipe(&op, cursor, inputs);
@@ -477,7 +555,7 @@ public:
         consumeError(site.takeError());
         return finish(false);
       }
-      if (results.size() != op.getNumResults() ||
+      if (results.size() != resultSource->getNumResults() ||
           !occurrences(begin, cursor, *site, finite))
         return finish(false);
       // Primitive roots keep the original occurrence, while a finite recipe
@@ -488,7 +566,7 @@ public:
         if (!rootSite || rootSite.getValue() != *site)
           return finish(false);
       }
-      for (auto [source, actual] : zip(op.getResults(), results)) {
+      for (auto [source, actual] : zip(resultSource->getResults(), results)) {
         if (source.getType() != actual.getType())
           return finish(false);
         values[source] = actual;

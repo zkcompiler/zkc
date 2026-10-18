@@ -42,7 +42,8 @@ int zkc::runCompiler(int argc, char **argv,
            "--module=MODULE=FILE.zkc\n"
            "    [--module=MODULE=FILE.zkc ...] [--asset=NAME=FORMAT=FILE ...]\n"
            "    [--no-simplify] [--release-storage] "
-           "[--fuse-vector-reductions] [--no-finite-bulk]\n"
+           "[--fuse-vector-reductions] [--fuse-collect-fold] "
+           "[--no-finite-bulk]\n"
            "    language-check may omit --entry to check definitions alone.\n"
            "    Output commands accept [--entry-kind=run|proof] and select the "
            "sole eligible Entry when --entry is omitted.\n"
@@ -60,23 +61,31 @@ int zkc::runCompiler(int argc, char **argv,
            "  protocol-lean FILE.mlir --symbol=NAME\n"
            "  protocol-structured FILE.mlir --symbol=NAME\n"
            "  protocol-bundle FILE.mlir [--entry=NAME] [--no-simplify] "
-           "[--release-storage] [--fuse-vector-reductions] [--no-finite-bulk]\n"
+           "[--release-storage] [--fuse-vector-reductions] "
+           "[--fuse-collect-fold] [--no-finite-bulk]\n"
            "    [--fix-polynomial-factors]\n"
            "  protocol-checked-bundle FILE.mlir [--requirements=FILE] "
            "[--public-coin=FILE] [--entry=NAME] [--no-simplify] "
-           "[--release-storage] [--fuse-vector-reductions] [--no-finite-bulk]\n"
+           "[--release-storage] [--fuse-vector-reductions] "
+           "[--fuse-collect-fold] [--no-finite-bulk]\n"
            "  protocol-check-reductions SOURCE.mlir REQUIREMENTS.json "
-           "CANDIDATE.mlir [--fuse-vector-reductions] [--no-finite-bulk]\n"
+           "CANDIDATE.mlir [--fuse-vector-reductions] [--fuse-collect-fold] "
+           "[--no-finite-bulk]\n"
            "  protocol-public-coin SOURCE.mlir REQUIREMENT.json "
-           "[--fuse-vector-reductions] [--no-finite-bulk]\n"
+           "[--fuse-vector-reductions] [--fuse-collect-fold] "
+           "[--no-finite-bulk]\n"
            "  protocol-check-public-coin SOURCE.mlir REQUIREMENT.json "
-           "REPORT.json [--fuse-vector-reductions] [--no-finite-bulk]\n"
+           "REPORT.json [--fuse-vector-reductions] [--fuse-collect-fold] "
+           "[--no-finite-bulk]\n"
            "  protocol-proof FILE.mlir POLICY [--no-simplify] "
-           "[--release-storage] [--fuse-vector-reductions] [--no-finite-bulk]\n"
+           "[--release-storage] [--fuse-vector-reductions] "
+           "[--fuse-collect-fold] [--no-finite-bulk]\n"
            "  protocol-construct-proof FILE.mlir POLICY "
-           "[--fuse-vector-reductions] [--no-finite-bulk]\n"
+           "[--fuse-vector-reductions] [--fuse-collect-fold] "
+           "[--no-finite-bulk]\n"
            "  protocol-check-proof FILE.mlir POLICY CANDIDATE.mlir "
-           "[--fuse-vector-reductions] [--no-finite-bulk]\n\n"
+           "[--fuse-vector-reductions] [--fuse-collect-fold] "
+           "[--no-finite-bulk]\n\n"
            "Relation data (binary R1CS or canonical JSON):\n"
            "  relation-read | relation-inspect | relation-matrices FILE\n"
            "  relation-import FILE [SYMBOL] | relation-export FILE.mlir\n"
@@ -127,6 +136,8 @@ int zkc::runCompiler(int argc, char **argv,
           options.mathematicalSelection.finiteBulk = false;
         else if (option == "--fuse-vector-reductions")
           options.mathematicalSelection.vectorReductionFusion = true;
+        else if (option == "--fuse-collect-fold")
+          options.mathematicalSelection.collectFoldFusion = true;
         else
           return fail(error("native-proof-options"));
       }
@@ -146,6 +157,8 @@ int zkc::runCompiler(int argc, char **argv,
         return fail(error("native-proof-options"));
       if (option == "--fuse-vector-reductions")
         mathematicalSelection.vectorReductionFusion = true;
+      else if (option == "--fuse-collect-fold")
+        mathematicalSelection.collectFoldFusion = true;
       else if (option == "--no-finite-bulk")
         mathematicalSelection.finiteBulk = false;
       else
@@ -198,6 +211,8 @@ int zkc::runCompiler(int argc, char **argv,
         return fail(error("public-coin-options"));
       if (option == "--fuse-vector-reductions")
         mathematicalSelection.vectorReductionFusion = true;
+      else if (option == "--fuse-collect-fold")
+        mathematicalSelection.collectFoldFusion = true;
       else if (option == "--no-finite-bulk")
         mathematicalSelection.finiteBulk = false;
       else
@@ -244,6 +259,8 @@ int zkc::runCompiler(int argc, char **argv,
         return fail(error("polynomial-requirement-options"));
       if (option == "--fuse-vector-reductions")
         mathematicalSelection.vectorReductionFusion = true;
+      else if (option == "--fuse-collect-fold")
+        mathematicalSelection.collectFoldFusion = true;
       else if (option == "--no-finite-bulk")
         mathematicalSelection.finiteBulk = false;
       else
@@ -292,6 +309,8 @@ int zkc::runCompiler(int argc, char **argv,
         options.mathematicalSelection.finiteBulk = false;
       else if (argument == "--fuse-vector-reductions")
         options.mathematicalSelection.vectorReductionFusion = true;
+      else if (argument == "--fuse-collect-fold")
+        options.mathematicalSelection.collectFoldFusion = true;
       else if (argument == "--fix-polynomial-factors")
         options.fixPolynomialFactors = true;
       else if (mode == "protocol-checked-bundle" &&

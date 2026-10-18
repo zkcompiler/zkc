@@ -20,6 +20,7 @@ pub struct CompileOptions {
     pub release_storage: bool,
     pub finite_bulk: bool,
     pub fuse_vector_reductions: bool,
+    pub fuse_collect_fold: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -209,7 +210,7 @@ mod tests {
     fn frame() -> String {
         json!({"format":"zkc.entry/0","original":"module\n{}",
             "interface":"{\"job\":{\"kind\":\"run\"}}", "artifact":"[]",
-            "options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false},"assets":[]})
+            "options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false},"assets":[]})
         .to_string()
     }
     fn capture(bytes: &[u8]) -> Result<Package, PackageError> {
@@ -238,6 +239,7 @@ mod tests {
                 release_storage: false,
                 finite_bulk: true,
                 fuse_vector_reductions: false,
+                fuse_collect_fold: false,
             }
         );
         assert_eq!(package.clone().identity(), package.identity());
@@ -267,6 +269,42 @@ mod tests {
             Err(PackageError::Identity)
         ));
         assert!(matches!(capture(b"not JSON"), Err(PackageError::Format)));
+    }
+    #[test]
+    fn collect_fold_option_is_a_required_unique_boolean() {
+        let original = frame();
+        let field = "\"fuse_collect_fold\":false";
+        for enabled in [false, true] {
+            let bytes = original.replace(field, &format!("\"fuse_collect_fold\":{enabled}"));
+            assert_eq!(
+                capture(bytes.as_bytes())
+                    .unwrap()
+                    .options()
+                    .fuse_collect_fold,
+                enabled
+            );
+        }
+        let missing = original.replace(&format!("{field},"), "");
+        assert_ne!(missing, original);
+        assert!(matches!(
+            capture(missing.as_bytes()),
+            Err(PackageError::Format)
+        ));
+        for value in ["\"false\"", "0", "1", "null", "[]", "{}"] {
+            let bytes = original.replace(field, &format!("\"fuse_collect_fold\":{value}"));
+            assert!(
+                matches!(capture(bytes.as_bytes()), Err(PackageError::Format)),
+                "{value}"
+            );
+        }
+        for duplicate in [false, true] {
+            let bytes =
+                original.replace(field, &format!("{field},\"fuse_collect_fold\":{duplicate}"));
+            assert!(
+                matches!(capture(bytes.as_bytes()), Err(PackageError::Format)),
+                "duplicate {duplicate}"
+            );
+        }
     }
     #[test]
     fn strict_frame_rejects_duplicates_unknown_formats_fields_and_types() {
@@ -369,12 +407,12 @@ mod tests {
     #[test]
     fn carrier_records_require_objects() {
         assert!(matches!(
-            capture(br#"["zkc.entry/0","o","i","a",[true,false],[]]"#),
+            capture(br#"["zkc.entry/0","o","i","a",[true,false,true,false,false],[]]"#),
             Err(PackageError::Format)
         ));
         let value = frame().replace(
-            r#"{"finite_bulk":true,"fuse_vector_reductions":false,"release_storage":false,"simplify":true}"#,
-            "[true,false]",
+            r#"{"finite_bulk":true,"fuse_collect_fold":false,"fuse_vector_reductions":false,"release_storage":false,"simplify":true}"#,
+            "[true,false,true,false,false]",
         );
         assert_ne!(value, frame());
         assert!(matches!(

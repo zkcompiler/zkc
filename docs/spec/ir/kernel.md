@@ -1,4 +1,4 @@
-# Logical numerical units
+# Numerical units and schedules
 
 The `kernel` dialect owns closed numerical computations between mathematical
 SSA and executable Local operations. It reuses standard `func.func` and the
@@ -76,8 +76,8 @@ checks both correspondence edges before publishing the physical result.
 Normalization and native recipes use
 the existing bounded mechanisms and independent readers; they do not define a
 second mathematical semantics. An optional call `policy` records the selected
-`[finiteBulk, vectorReductionFusion]` compile-time choices. Omitted policy uses
-the lowering request's defaults.
+`[finiteBulk, vectorReductionFusion, collectFoldFusion]` compile-time choices.
+Omitted policy uses the lowering request's defaults.
 
 Normalization produces another Kernel unit and retains checked polynomial
 origins in that owned subject. Recipe conversion consumes its standard entry
@@ -121,10 +121,62 @@ contract remain applicable. Compile-time work is bounded independently of
 runtime capacity. Total mathematical meaning does not promise execution under
 arbitrary work or memory limits.
 
-The current unit is logical. Its selected Local realization and physical
-conversions supply the ordered executable schedule. The physical plan also
-checks optional binding-lifetime decisions before publication. Explicit generated
-loop schedules, writable-buffer layouts and cross-operation numerical planning
-are later refinements of this boundary.
+The unit remains the logical source. Numerical realization produces a private
+scheduled function before its selected Local realization and physical
+conversions. The physical plan also checks optional binding-lifetime decisions
+before publication. Writable-buffer layouts and target-specific vectorization
+remain separate work.
 Participant scheduling, transcript state, transport and capability authority
 remain with their existing owners.
+
+## Numerical loop schedule
+
+The private schedule uses standard `func.func` and sequential `scf.for` with
+nominal field and container values. It is compiler IR, consumed before executable
+publication; the VM continues to execute Local control and bound operations.
+The schedule must pass ordinary MLIR verification as well as its closed-profile
+checks. Local control verifies its isolated frames and logical primitives verify
+their bound ports. Bindings resolve within the nearest lexical symbol table;
+an enclosing module cannot supply a missing schedule binding. The containing
+executable profile owns placement and vocabulary restrictions.
+
+A scheduled loop has unsigned signless `i64` control, unit stride, an explicit
+state prefix and invariant captures. Exact `ui64`/`i64` representation bridges
+preserve all index bits. No host-sized `index` conversion is permitted.
+Zero-trip Local admission checks retain the original lower/upper resource checks
+before the SCF loop, including empty and reversed intervals. The closed profile
+requires explicit captures, unchanged invariant backedges and unused invariant
+result suffixes. Free casts, altered strides and implicit captures refuse.
+
+The finite reader checks the original domain, callbacks and state against the
+actual schedule. A separate structural reader checks the actual scheduled
+function against the emitted Local function. Neither reader regenerates an
+expected candidate. The Local consumer preserves nominal types, operands,
+bindings, sites and state order. General SCF canonicalization is not an admitted
+transformation of this profile without its own preservation check.
+
+## Collect–fold composition
+
+`--fuse-collect-fold` enables checked streaming composition of an unfiltered total
+field-vector or field-sequence collect and its adjacent total fold. It defaults
+to false and is independent of finite bulk selection and vector reduction fusion.
+
+The collected vector must be used only by that fold. The consumer domain is
+exactly its elements or indices. Element callbacks cannot observe the whole
+vector; indexed callbacks may read it only at their current position through
+bounded access. Duplicate argument/capture aliases are checked at every use.
+The composition retains the producer's complete domain admission and enumeration,
+then executes its body followed by the fold step for each item. Original seeds
+and ordered state coordinates are preserved, including mixed or empty state
+tuples; no associativity law is required.
+
+Shared or escaping collections, filtering, nested finite callback computations
+and unsupported whole-vector observations retain the materialized path.
+The independent reader compares both original callbacks with the actual composed
+traversal. A fusion label or synthetic source fold is not correspondence evidence.
+Fixed implementation restrictions and ordered call boundaries remain applicable.
+
+Removing a collection can reduce storage and traversal work, but scalar streaming
+may be slower than native bulk kernels. This is an explicit compilation choice
+with the usual sufficient-capacity mathematical contract; it does not promise
+identical resource exhaustion or faster execution for every workload.

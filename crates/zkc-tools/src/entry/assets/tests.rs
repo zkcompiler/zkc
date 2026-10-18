@@ -212,7 +212,7 @@ fn package(interface: &Json, artifact: &str, assets: &[(String, String)]) -> Pac
     assets.sort();
     let frame =
         json!({"format":"zkc.entry/0","original":ORIGINAL,"interface":interface.to_string(),
-        "artifact":artifact,"options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false},"assets":assets})
+        "artifact":artifact,"options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false},"assets":assets})
         .to_string();
     Package::capture(
         frame.as_bytes(),
@@ -537,7 +537,7 @@ fn deployment(field: &str, arenas: &Arenas) -> String {
                 "0"
             ]
         ],
-        ["true", "false", "false", "true"],
+        ["true", "false", "false", "true", "false"],
         []
     ])
     .to_string()

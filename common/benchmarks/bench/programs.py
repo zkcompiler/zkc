@@ -63,10 +63,19 @@ def finite(shape):
         'reduce': 'finite::sum(xs, fn(x)=>x*x+x)',
         'collect': 'v::sum(v::collect(xs, fn(x)=>x*x+x))',
         'bulk': 'v::sum(v::add(v::hadamard(xs,xs),xs))',
+        'total-collect-fold': 'total::fold(v::elements(collect(v::elements(xs),fn(x)=>x*x+x)),seed,fn(s,x)=>s+x)',
+        'total-fold': 'total::fold(v::elements(xs),seed,fn(s,x)=>s+x*x+x)',
     }
-    return local(field, 'xs:Vector<F>, expected:F',
-                 f'return {bodies[form]} == expected;',
-                 {'xs': list(map(str, values)), 'expected': str(sum(x*x+x for x in values) % modulus)})
+    seed = 'let seed:F=0; ' if form.startswith('total-') else ''
+    program = local(field, 'xs:Vector<F>, expected:F',
+                    f'{seed}return {bodies[form]} == expected;',
+                    {'xs': list(map(str, values)), 'expected': str(sum(x*x+x for x in values) % modulus)})
+    if form.startswith('total-'):
+        program.source = program.source.replace('fn compute(', '''use zkc::finite_math as total;
+math fn collect<I:Type+Copy+Drop>(rows:domain<I>,body:math fn(item:I)->F where item_from(item,rows))->Vector<F>
+  = finite("math.collect.vector");
+math fn compute(''')
+    return program
 
 
 def scan(shape):

@@ -502,6 +502,7 @@ Expected<json::Value> analyzePublicCoin(ModuleOp original, StringRef text,
   (*view)["requirement_sha256"] = digest(text);
   (*view)["finite_bulk"] = policy.finiteBulk;
   (*view)["fuse_vector_reductions"] = policy.vectorReductionFusion;
+  (*view)["fuse_collect_fold"] = policy.collectFoldFusion;
   return json::Value(std::move(*view));
 }
 Error checkPublicCoin(ModuleOp original, StringRef requirement, StringRef text,

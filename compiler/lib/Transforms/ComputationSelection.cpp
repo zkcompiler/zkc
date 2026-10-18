@@ -12,9 +12,10 @@ bool canReplaceNumericalCalls(const finite::ComputationView &view) {
       return true;
     auto policy = dyn_cast<ArrayAttr>(raw);
     // Only finiteBulk authorizes this family. vectorReductionFusion belongs to
-    // its separate family, but both fields must still have their admitted type.
-    return policy && policy.size() == 2 && isa<BoolAttr>(policy[0]) &&
-           isa<BoolAttr>(policy[1]) && cast<BoolAttr>(policy[0]).getValue();
+    // its separate family. All three fields retain their admitted types.
+    return policy && policy.size() == 3 && isa<BoolAttr>(policy[0]) &&
+           isa<BoolAttr>(policy[1]) && isa<BoolAttr>(policy[2]) &&
+           cast<BoolAttr>(policy[0]).getValue();
   });
 }
 bool laneRecipesAvailable(Block &body, const Elementwise &formula,

@@ -299,6 +299,7 @@ fn pair_metadata(a: &serde_json::Value, b: &serde_json::Value) -> Option<Vec<(us
         "post_check_passes",
         "finite_bulk",
         "fuse_vector_reductions",
+        "fuse_collect_fold",
     ] {
         if left[key] != right[key] {
             return None;
@@ -346,6 +347,10 @@ fn sumcheck(directory: &Path, suffix: &str) {
     let a = read("reduction");
     let b = read("terminal");
     let connector = pair_metadata(&a, &b).expect("matching checked reduction and terminal");
+    let mut changed = b.clone();
+    changed["correspondence"]["fuse_collect_fold"] =
+        serde_json::json!(!b["correspondence"]["fuse_collect_fold"].as_bool().unwrap());
+    assert!(pair_metadata(&a, &changed).is_none());
     let mut changed = b.clone();
     changed["bundle"] = serde_json::Value::String(format!("{} ", b["bundle"].as_str().unwrap()));
     assert!(pair_metadata(&a, &changed).is_none());

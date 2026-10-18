@@ -173,10 +173,11 @@ LogicalResult formCalculation(local::FuncOp wrapper, Operation *sourceOwner,
   // Numerical names are derived later from this actual ordered invocation.
   std::string callSite = freshSite(wrapper, "kernel");
   state.addAttribute("site", builder.getStringAttr(callSite));
-  state.addAttribute("policy",
-                     builder.getArrayAttr(
-                         {builder.getBoolAttr(policy.finiteBulk),
-                          builder.getBoolAttr(policy.vectorReductionFusion)}));
+  state.addAttribute(
+      "policy",
+      builder.getArrayAttr({builder.getBoolAttr(policy.finiteBulk),
+                            builder.getBoolAttr(policy.vectorReductionFusion),
+                            builder.getBoolAttr(policy.collectFoldFusion)}));
   auto call = cast<CallOp>(builder.create(state));
   if (guard)
     emitGuard(builder, guard.getLoc(), call.getResult(condition),
@@ -192,11 +193,12 @@ FailureOr<MathematicalSelectionPolicy>
 selectionPolicy(CallOp call, MathematicalSelectionPolicy fallback) {
   if (auto raw = call->getAttr("policy")) {
     auto policy = dyn_cast<ArrayAttr>(raw);
-    if (!policy || policy.size() != 2 || !isa<BoolAttr>(policy[0]) ||
-        !isa<BoolAttr>(policy[1]))
+    if (!policy || policy.size() != 3 || !isa<BoolAttr>(policy[0]) ||
+        !isa<BoolAttr>(policy[1]) || !isa<BoolAttr>(policy[2]))
       return failure();
     return MathematicalSelectionPolicy{cast<BoolAttr>(policy[0]).getValue(),
-                                       cast<BoolAttr>(policy[1]).getValue()};
+                                       cast<BoolAttr>(policy[1]).getValue(),
+                                       cast<BoolAttr>(policy[2]).getValue()};
   }
   return fallback;
 }

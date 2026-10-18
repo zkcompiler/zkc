@@ -35,10 +35,13 @@ project, or explicit `--module=NAME=FILE` and `--asset=NAME=FORMAT=FILE` mapping
 from absolute directories in trusted `PATH`. Execution compiles in memory and
 reports the resulting package identity. It does not publish an intermediate package.
 
-`--no-simplify`, `--release-storage` and `--fuse-vector-reductions` choose
+`--no-simplify`, `--no-finite-bulk`, `--release-storage`,
+`--fuse-vector-reductions` and `--fuse-collect-fold` choose
 compilation options without skipping source comparison, for `compile` and
-commands that compile source before invocation. Fusion is disabled by default;
-it can replace an eligible multiply-map/sum with shape guards and dot under the
+commands that compile source before invocation. Both fusion options default to
+false. Collect–fold [composition](../spec/ir/kernel.md#collectfold-composition)
+streams eligible total collection/reduction pairs. Vector reduction fusion
+can replace an eligible multiply-map/sum with shape guards and dot under the
 [preparation contract](../spec/ir/protocols.md#optional-vector-reduction-fusion).
 Its values and ordered shape refusals agree under sufficient resources, while
 resource exhaustion can differ. The package records the choice, including for

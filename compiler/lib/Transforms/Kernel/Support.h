@@ -39,7 +39,7 @@ mlir::FailureOr<MathematicalSelectionPolicy>
 selectionPolicy(CallOp call, MathematicalSelectionPolicy fallback);
 
 // Convert one immutable normalized Kernel entry into an owned executable
-// candidate. Standard functions are the mathematical input; Local is output.
+// candidate through a checked standard numerical schedule. Local is output.
 // Callers share copy/site and realization budgets across the entire module.
 // Failure publishes nothing. Only optional comparison capacity permits retry.
 mlir::OwningOpRef<mlir::ModuleOp>
@@ -64,7 +64,7 @@ verifyEntryRecipes(ModuleOp source, mlir::ModuleOp candidate,
                    finite::VerificationLimits limits = {},
                    finite::VerificationResult *outcome = nullptr);
 
-// Match the original Kernel function at an arbitrary actual Local cursor.
+// Match the original Kernel function at an actual Local or scheduled cursor.
 // Source and target symbol contexts are distinct; call-specific identity and
 // policy are supplied explicitly and never stored in the mathematical source.
 mlir::FailureOr<llvm::SmallVector<mlir::Value>> verifyKernelRecipes(

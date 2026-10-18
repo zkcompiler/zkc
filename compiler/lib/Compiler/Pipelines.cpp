@@ -17,6 +17,9 @@ struct ParticipantOptions : mlir::PassPipelineOptions<ParticipantOptions> {
   Option<bool> fuseVectorReductions{
       *this, "fuse-vector-reductions", llvm::cl::init(false),
       llvm::cl::desc("Fuse admitted vector maps and reductions")};
+  Option<bool> fuseCollectFold{
+      *this, "fuse-collect-fold", llvm::cl::init(false),
+      llvm::cl::desc("Compose total collect and ordered fold traversals")};
   Option<bool> release{*this, "release-storage", llvm::cl::init(false),
                        llvm::cl::desc("Release local storage after last use")};
 };
@@ -26,7 +29,8 @@ void registerCompilerPipelines() {
       "zkc-participant-pipeline", "Project and plan an interactive protocol",
       [](mlir::OpPassManager &pm, const ParticipantOptions &options) {
         MathematicalSelectionPolicy policy{options.optimizeFinite,
-                                           options.fuseVectorReductions};
+                                           options.fuseVectorReductions,
+                                           options.fuseCollectFold};
         pm.addPass(protocol::createProjectProtocolPass(true, policy));
         if (!options.projectOnly) {
           pm.addPass(protocol::createLowerMathPass(policy));

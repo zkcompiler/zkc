@@ -30,7 +30,7 @@ def cases():
         result.append(Case(name, family, shape, category, mix, limitation))
     for field, short in [('koala-bear', 'kb'), ('bls12-381.fr', 'fr')]:
         for n in (0, 17, 1024, 8192):
-            for form in ('reduce', 'collect', 'bulk'):
+            for form in ('reduce', 'collect', 'bulk', 'total-collect-fold', 'total-fold'):
                 add(f'finite-{short}-{form}-{n}', 'finite', {'field': field, 'elements': n, 'form': form},
                     'operation', ('pointwise multiply/add', 'sum'), 'Same formula across source forms; includes equality check and Host costs.')
     for n in (17, 1024, 4096):

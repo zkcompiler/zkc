@@ -12,6 +12,7 @@ namespace zkc::mathematical {
 /// These counters are separate from runtime resource accounting.
 struct RealizationWork {
   finite::ComputationWork matching;
+  uint64_t collectFoldDiscovery = 100000;
   uint64_t lanes = 1000000;
   unsigned helperOperations = 100000;
   uint64_t helperSlots = 1000000;

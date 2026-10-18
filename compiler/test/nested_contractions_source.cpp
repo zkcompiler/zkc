@@ -441,8 +441,7 @@ int main() {
         input.module->walk([&](kernel::CallOp call) {
           Builder builder(&context);
           call->setAttr("policy",
-                        builder.getArrayAttr({builder.getBoolAttr(false),
-                                              builder.getBoolAttr(true)}));
+                        builder.getBoolArrayAttr({false, true, false}));
         });
       }
       refusesSource(*input.module, *candidate, input.expansion, accepted);

@@ -46,6 +46,12 @@ A correctness trial can use `--processes 1 --warmups 0 --samples 1`; it is not a
 stable performance estimate. `--source` selects project/library sources; the
 executing harness remains this checkout. Both are identified and captured.
 
+Use `--compiler-option=--fuse-collect-fold` to measure an explicit compilation
+choice; repeat `--compiler-option` to combine supported switches. The manifest
+records the choices and captures the resulting packages. Compare separate runs
+with identical sources, inputs and worker settings. A smaller intermediate or
+instruction count does not by itself establish a timing improvement.
+
 `--threads` sets `RAYON_NUM_THREADS` (default one), not a universal thread limit.
 `--cpu` pins the suite and children to one allowed CPU. Workers check the requested
 environment and affinity. The harness records governor/turbo/SMT settings but does
@@ -72,7 +78,7 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 | `schnorr` | BLS12-381 G1/Fr, Spongefish 0.7.4 SHAKE128 | Cross-verification with independent arkworks/Spongefish client |
 | `monero` | BP+ proving/verification, 64-bit amounts, 1–16 commitments | Upstream C++ comparison; fixture amounts and small masks, not a sampled wallet workload |
 | `sumcheck` | Public tables of 16–65,536 elements | Independent Rust algorithm; verifier includes linear public-table evaluation, no PCS |
-| `finite` | Identical pointwise polynomial + sum as reduction, collect + sum, and bulk operations; KoalaBear and BLS12-381 Fr; 0/17/1,024/8,192 elements | Independent Python expectations; exposes source-form recognition differences |
+| `finite` | Identical pointwise polynomial + sum as reduction, collect + sum, bulk operations, total collect–fold and total fold; KoalaBear and BLS12-381 Fr; 0/17/1,024/8,192 elements | Independent Python expectations; exposes source-form recognition and materialization differences |
 | `scan` | Scalar ordered scan and bulk prefix sum; 17/1,024/4,096 elements | Full output check; source-form comparison, no presumed storage-release benefit |
 | `control` | Rectangular nested loops, branches, indexing and carried state | Independent of machine libraries; not an unseen statistical holdout |
 | `matrix` | Rectangular matrix-vector multiplication, dense and sparse occupancy | Python expectations; R1CS-like arithmetic, not a full proof system |
@@ -89,6 +95,9 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 The [source catalog](bench/coverage.py) records exact dimensions, operation mix,
 category and limitations. Each run also records its oracle, input identities and
 generated source/asset digests.
+The two total finite forms use one explicit `math fn`, so collect and fold share
+a numerical unit. Ordinary function calls can introduce separate ordered units;
+collect–fold composition does not cross those boundaries.
 Python oracles execute outside the SDK timer. They use dense deterministic field
 values, including nonzero higher extension coordinates; the curve and pairing
 controls explicitly use weaker algebraic consistency checks.

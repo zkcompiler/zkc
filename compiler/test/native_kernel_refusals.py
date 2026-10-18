@@ -56,6 +56,6 @@ extra_result = addition.replace('%r = "algebra.exec.field_add"', '%r:2 = "algebr
 extra_result = extra_result.replace(f' : ({field},{field})->{field}', f' : ({field},{field})->({field},{field})', 1)
 extra_result = extra_result.replace('local.return %r :', 'local.return %r#0 :')
 reject(extra_result, 'binding-operation-signature')
-# A well-typed kernel outside any admitted native owner must not export.
-reject(f'module {{ %r = "algebra.exec.field_constant"() {{site="value",parameters=["1"]}} : ()->{field} }}', 'interactive-kernel-context')
+# A logical primitive without a lexical binding must not verify or export.
+reject(f'module {{ %r = "algebra.exec.field_constant"() {{site="value",parameters=["1"]}} : ()->{field} }}', 'binding-reference')
 print(f'native kernel boundary: {commands.save()} checks')

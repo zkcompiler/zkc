@@ -430,3 +430,13 @@ add_zkc_test(kernel_normalization Transforms kernel-normalization)
 target_compile_definitions(zkc-kernel_normalization-test PRIVATE
   ZKC_NORMALIZATION_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/kernel_normalization")
 mlir_target_link_libraries(zkc-kernel_normalization-test PRIVATE MLIRParser)
+
+add_zkc_test(collect_fold Transforms collect-fold)
+target_compile_definitions(zkc-collect_fold-test PRIVATE
+  ZKC_LOOP_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
+mlir_target_link_libraries(zkc-collect_fold-test PRIVATE MLIRParser MLIRSCFDialect)
+
+add_zkc_test(kernel_schedule Transforms kernel-schedule)
+target_compile_definitions(zkc-kernel_schedule-test PRIVATE
+  ZKC_LOOP_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/finite")
+mlir_target_link_libraries(zkc-kernel_schedule-test PRIVATE MLIRParser MLIRSCFDialect)

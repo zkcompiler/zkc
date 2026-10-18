@@ -69,7 +69,7 @@ kernel.module @difference {
   %inner = "local.if"(%condition,%left,%right,%condition) ({
   ^calculate(%x:!F,%y:!F,%allowed:i1):
     "local.exec.require"(%allowed) {binding=@require,site="before",parameters=[]} : (i1)->()
-    %difference = kernel.call @difference::@evaluate(%x,%y) {site="calculate",policy=[false,false]} : (!F,!F)->!F
+    %difference = kernel.call @difference::@evaluate(%x,%y) {site="calculate",policy=[false,false,false]} : (!F,!F)->!F
     "local.exec.require"(%allowed) {binding=@require,site="after",parameters=[]} : (i1)->()
     "local.yield"(%difference) : (!F)->()
   }, {
@@ -268,7 +268,10 @@ void mutateSource(ModuleOp module, StringRef mutation) {
                                 call.getCalleeAttr().getNestedReferences()));
   } else if (mutation == "policy") {
     OpBuilder builder(module.getContext());
-    call->setAttr("policy", builder.getBoolArrayAttr({false, true}));
+    call->setAttr("policy", builder.getBoolArrayAttr({false, true, false}));
+  } else if (mutation == "collect-fold-policy") {
+    OpBuilder builder(module.getContext());
+    call->setAttr("policy", builder.getBoolArrayAttr({true, false, true}));
   } else if (mutation == "operand") {
     require(call->getNumOperands() == 2 &&
                 call->getOperand(0) != call->getOperand(1),
@@ -421,8 +424,8 @@ int main() {
               application(*candidate, "arkworks/field.mul");
             });
 
-  for (StringRef mutation :
-       {"body", "callee", "policy", "operand", "private-helper", "dormant"})
+  for (StringRef mutation : {"body", "callee", "policy", "collect-fold-policy",
+                             "operand", "private-helper", "dormant"})
     for (bool afterValidation : {false, true})
       cases.run(
           Twine("Kernel source ") + mutation +
@@ -623,11 +626,12 @@ int main() {
             fixtureText("structured-source/realization-finite.mlir"), context);
         auto bulk = first<kernel::CallOp>(*module);
         OpBuilder builder(&context);
-        bulk->setAttr("policy", builder.getBoolArrayAttr({true, false}));
+        bulk->setAttr("policy", builder.getBoolArrayAttr({true, false, false}));
         builder.setInsertionPointAfter(bulk);
         auto ordered = cast<kernel::CallOp>(builder.clone(*bulk));
         ordered->setAttr("site", builder.getStringAttr("ordered_repeat"));
-        ordered->setAttr("policy", builder.getBoolArrayAttr({false, false}));
+        ordered->setAttr("policy",
+                         builder.getBoolArrayAttr({false, false, false}));
         require(succeeded(verify(*module)),
                 "mixed numerical policy input did not admit");
         auto checked = checkedPlan(*module);

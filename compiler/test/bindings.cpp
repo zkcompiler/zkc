@@ -1,4 +1,6 @@
 #include "zkc/Dialect/Bindings.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Dialect/IR.h"
@@ -72,6 +74,42 @@ int main() {
   refuse(readBinding(detached), "binding-declaration-context");
   detached->destroy();
   refuse(readBinding(nullptr), "binding-declaration-context");
+  {
+    // A numerical schedule resolves only within its own lexical symbol table.
+    // A surrounding declaration cannot silently authorize a missing binding.
+    mlir::OwningOpRef<mlir::ModuleOp> outer(
+        mlir::ModuleOp::create(mlir::UnknownLoc::get(&context)));
+    mlir::OpBuilder builder(outer->getBody(), outer->getBody()->end());
+    auto loc = outer->getLoc();
+    auto declare = [&] {
+      local::OperationBindingOp::create(builder, loc, "combine", "bool.and",
+                                        builder.getArrayAttr({}), "");
+    };
+    declare();
+    auto inner = mlir::ModuleOp::create(loc, "schedule");
+    outer->getBody()->push_back(inner);
+    builder.setInsertionPointToEnd(inner.getBody());
+    auto type = builder.getI1Type();
+    auto fn = mlir::func::FuncOp::create(
+        builder, loc, "evaluate",
+        builder.getFunctionType({type, type}, {type}));
+    builder.setInsertionPointToEnd(fn.addEntryBlock());
+    mlir::OperationState call(loc, boundOperationName("bool.and"));
+    call.addOperands(fn.getArguments());
+    call.addTypes(type);
+    call.addAttribute("binding",
+                      mlir::FlatSymbolRefAttr::get(&context, "combine"));
+    call.addAttribute("parameters", builder.getArrayAttr({}));
+    call.addAttribute("site", builder.getStringAttr("combine"));
+    auto *use = builder.create(call);
+    mlir::func::ReturnOp::create(builder, loc, use->getResults());
+    refuse(operationBinding(use), "binding-declaration-context");
+    builder.setInsertionPointToStart(inner.getBody());
+    declare();
+    require(accept(operationBinding(use)).application.contract == "bool.and" &&
+                mlir::succeeded(mlir::verify(*outer)),
+            "standard numerical module binding did not verify lexically");
+  }
   refuse(parseBoundType("bool@", false), "binding-representation");
   refuse(parseBoundType("field:bls12-381.fr@", false),
          "binding-representation");

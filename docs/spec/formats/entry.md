@@ -252,8 +252,9 @@ existing ASCII grammars.
 with exactly `format`, `original`, `interface`, `artifact`, `options` and
 `assets`. Original MLIR, interface JSON and native run bundle or proof
 deployment are exact strings. Options contain exactly the required JSON Booleans
-`simplify`, `release_storage`, `fuse_vector_reductions` and `finite_bulk`.
-Finite bulk selection defaults to true and fusion to false; both fields are
+`simplify`, `release_storage`, `fuse_vector_reductions`, `finite_bulk` and
+`fuse_collect_fold`. Finite bulk selection defaults to true and both fusion
+choices to false; all fields are
 required and independent of generic simplification. Missing,
 duplicate, unknown or non-Boolean option fields refuse. The job kind and complete
 source interface remain in the retained interface, avoiding a second name or
@@ -262,7 +263,7 @@ covers the exact emitted bytes, including source capture, selected Entry,
 toolchain, compilation options and assets. Complete Entry aliases can share
 executable bytes while naming different packages.
 
-For proof Entries, native artifact binding checks agreement between all four
+For proof Entries, native artifact binding checks agreement between all five
 package options and the deployment's ordered
 [compiler choices](proof.md#deployment-and-invocation-records), as well as the
 original and selected artifact identities. This remains one current version-0

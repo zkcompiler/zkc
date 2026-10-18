@@ -10,6 +10,7 @@ namespace zkc {
 struct MathematicalSelectionPolicy {
   bool finiteBulk = true;
   bool vectorReductionFusion = false;
+  bool collectFoldFusion = false;
 };
 } // namespace zkc
 #endif
