@@ -828,6 +828,162 @@ theorem adversary_commute {slots : ℕ} (input : Input E S X) (tables : Simulate
             (suffix ⟨_, tapeRoom⟩), completed tables rows)) : ProbComp _)]
         simp only [Function.update_self]
 
+omit [Inhabited S] in
+theorem auxCell_support (input : Input E S X) (tables : Simulated E S X width) :
+    ∀ step ∈ support ((auxCell width input).run tables),
+      step.2 = tables ∨ step.2 = tables.recordAux width input step.1 := by
+  intro step member
+  cases cached : tables.aux input with
+  | some value =>
+      rw [auxCell_run_some cached] at member
+      simp only [support_pure, Set.mem_singleton_iff] at member
+      exact Or.inl (by rw [member])
+  | none =>
+      rw [auxCell_run_none cached] at member
+      simp only [mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at member
+      obtain ⟨value, -, rfl⟩ := member
+      exact Or.inr rfl
+
+omit [Inhabited S] in
+/-- One lazy simulator step keeps the read keys organized and reads at most one
+private answer and at most one new history key. -/
+theorem simulator_step_support (input : Input E S X) (tables : Simulated E S X width)
+    (organized : Organized tables) :
+    ∀ step ∈ support ((simulator width input).run tables),
+      Organized step.2 ∧ step.2.consumed.length ≤ tables.consumed.length + 1 ∧
+        step.2.touched.length ≤ tables.touched.length + 1 := by
+  intro step member
+  by_cases routed : ∃ state event block history, input = .request state event block ∧
+      tables.reached state = some history ∧ block < width
+  · obtain ⟨state, event, block, history, rfl, recorded, below⟩ := routed
+    rw [simulator_run_routed tables recorded event below] at member
+    rcases historyBlock_support _ _ tables step member with same | updated
+    · rw [same]; exact ⟨organized, by omega, by omega⟩
+    · rw [updated]
+      refine ⟨organized.recordHistory _ _ _, by simp [Simulated.recordHistory], ?_⟩
+      rw [touched_recordHistory]
+      split_ifs <;> simp
+  · have unrouted : ∀ state event block history, input = .request state event block →
+        tables.reached state = some history → width ≤ block := by
+      rintro state event block history rfl recorded
+      by_contra below
+      exact routed ⟨state, event, block, history, rfl, recorded, by omega⟩
+    rw [simulator_run_unrouted tables unrouted] at member
+    rcases auxCell_support input tables step member with same | updated
+    · rw [same]; exact ⟨organized, by omega, by omega⟩
+    · rw [updated]
+      exact ⟨fun key block present => organized key block present,
+        by simp [Simulated.recordAux], by simp [Simulated.recordAux]⟩
+
+/-- The lazy simulator's run of an adversary within its query bound, filled, has the
+law of the hash-chain simulator's run from the filled state. -/
+theorem adversary_eq {slots : ℕ} {α : Type} (adversary : OracleComp (Primitive E S X) α)
+    {calls : ℕ} (bounded : IsTotalQueryBound adversary calls) (tables : Simulated E S X width)
+    (organized : Organized tables) (tapeRoom : tables.consumed.length + calls ≤ length)
+    (slotRoom : tables.touched.length + calls ≤ slots) :
+    𝒮[fillAll (length := length) slots tables >>= fun filled =>
+        (simulateQ (flatSimulator width length) adversary).run filled] =
+      𝒮[(simulateQ (simulator width) adversary).run tables >>= fun result =>
+        (fun filled => (result.1, filled)) <$> fillAll slots result.2] :=
+  evalSPMF_simulateQ_fill (simulator width) (flatSimulator width length) (fillAll slots)
+    (fun remaining current => Organized current ∧ current.consumed.length + remaining ≤ length ∧
+      current.touched.length + remaining ≤ slots)
+    (fun _ input current inv => adversary_commute input current inv.1 (by omega) (by omega))
+    (fun remaining input current inv step member => by
+      obtain ⟨stepOrganized, consumed, touched⟩ :=
+        simulator_step_support input current inv.1 step member
+      exact ⟨stepOrganized, by omega, by omega⟩)
+    adversary calls tables bounded ⟨organized, tapeRoom, slotRoom⟩
+
 end AdversaryCommute
+
+section Experiments
+variable {E S X : Type} [DecidableEq E] [DecidableEq S] [DecidableEq X] [Inhabited S]
+  [SampleableType S] {width : ℕ} {I : PIR.Signature} {P A Stmt : Type}
+
+omit [DecidableEq S] [DecidableEq X] [SampleableType S] in
+theorem completed_empty {slots : ℕ} (rows : Fin slots → Fin width → S) :
+    completed (Simulated.empty width : Simulated E S X width) rows = ∅ := by
+  apply QueryCache.ext
+  intro key
+  simp [completed, Simulated.empty]
+
+omit [SampleableType S] in
+theorem completedWith_empty {length : ℕ} (suffix : Fin length → S) :
+    completedWith (Simulated.empty width : Simulated E S X width) suffix ∅ =
+      (chainSimulator width length).start suffix := by
+  simp only [completedWith, Simulated.empty, List.length_nil, Nat.not_lt_zero, ↓reduceDIte]
+  rfl
+
+/-- The simulated experiment has the law of the translated experiment: the
+adversary against the hash-chain simulator with a uniform private tape, then the
+typed transform, over one lazily sampled history oracle. -/
+theorem simulatedExperiment_eq_translated (positive : 0 < width)
+    (absorb : Typed.Interface I E P (Raw E S width)) (validator : Stmt → PIR.Proc I A)
+    (initial : Stmt → List E) {queries : ℕ}
+    (queryBounded : ∀ statement, Typed.QueryBound absorb (validator statement) queries)
+    (adversary : OracleComp (Primitive E S X) (Stmt × List P)) {calls : ℕ}
+    (bounded : IsTotalQueryBound adversary calls) :
+    𝒮[simulatedExperiment width absorb validator initial adversary] =
+      𝒮[($ᵗ (Fin calls → S)) >>= fun tape =>
+        (simulateQ randomOracle (Typed.experiment absorb validator initial
+          ((chainSimulator width calls).translate adversary tape))).run' ∅] := by
+  have right : ∀ tape : Fin calls → S,
+      (simulateQ randomOracle (Typed.experiment absorb validator initial
+          ((chainSimulator width calls).translate adversary tape))).run' ∅ =
+        (simulateQ (flatSimulator width calls) adversary).run
+            ((chainSimulator width calls).start tape, ∅) >>= fun result =>
+          (fun outcome => (result.1.1, outcome)) <$>
+            (simulateQ randomOracle (Typed.transform absorb Typed.answer (validator result.1.1)
+              (initial result.1.1) result.1.2)).run' result.2.2 := by
+    intro tape
+    simp only [Typed.experiment, Provider.Simulator.translate, StateT.run'_eq, simulateQ_bind,
+      simulateQ_map, StateT.run_bind, StateT.run_map]
+    rw [simulateQ_flatten]
+    simp only [flatSimulator, map_bind, bind_map_left, Functor.map_map]
+  let slots := calls + queries
+  let finish : (Stmt × List P) × (ChainState E S X width calls ×
+      (OracleSpec.ofFn (Raw E S width)).QueryCache) → ProbComp (Stmt × (PIR.Outcome A × List P)) :=
+    fun result => (fun outcome => (result.1.1, outcome)) <$>
+      (simulateQ randomOracle (Typed.transform absorb Typed.answer (validator result.1.1)
+        (initial result.1.1) result.1.2)).run' result.2.2
+  have filled : 𝒮[($ᵗ (Fin calls → S)) >>= fun tape =>
+        (simulateQ randomOracle (Typed.experiment absorb validator initial
+          ((chainSimulator width calls).translate adversary tape))).run' ∅] =
+      𝒮[(fillAll (length := calls) slots (Simulated.empty width : Simulated E S X width) >>=
+          fun state => (simulateQ (flatSimulator width calls) adversary).run state) >>= finish] := by
+    simp only [right, fillAll, completed_empty, completedWith_empty, bind_assoc, pure_bind]
+    exact (evalSPMF_uniform_drop _).symm
+  rw [filled, evalSPMF_bind, adversary_eq adversary bounded (Simulated.empty width)
+    (fun _ _ absent => absurd rfl absent) (by simp [Simulated.empty])
+    (by simp [Simulated.empty, slots]),
+    ← evalSPMF_bind, bind_assoc]
+  simp only [simulatedExperiment]
+  refine evalSPMF_bind_congr fun started member => ?_
+  obtain ⟨left, -, organized, room⟩ := support_simulateQ_invariant (simulator width)
+    (fun remaining current => Organized current ∧ current.touched.length + remaining ≤ calls)
+    (fun remaining input current inv step stepMember => by
+      obtain ⟨stepOrganized, -, touched⟩ :=
+        simulator_step_support input current inv.1 step stepMember
+      exact ⟨stepOrganized, by omega⟩)
+    adversary calls (Simulated.empty width) bounded
+    ⟨fun _ _ absent => absurd rfl absent, by simp [Simulated.empty]⟩ started member
+  have verified := verifier_eq positive absorb (validator started.1.1) (initial started.1.1)
+    started.1.2 (queryBounded started.1.1) started.2 organized
+    (show started.2.touched.length + queries ≤ slots by omega)
+  simp only [map_bind, finish, fillAll, bind_assoc, map_pure, pure_bind]
+  rw [evalSPMF_bind_congr' _ fun rows => evalSPMF_uniform_drop _]
+  have regroup : (($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
+      (fun outcome => (started.1.1, outcome)) <$>
+        (simulateQ randomOracle (Typed.transform absorb Typed.answer (validator started.1.1)
+          (initial started.1.1) started.1.2)).run' (completed started.2 rows)) =
+      (fun outcome => (started.1.1, outcome)) <$> (fillHistory slots started.2 >>= fun cache =>
+        (simulateQ randomOracle (Typed.transform absorb Typed.answer (validator started.1.1)
+          (initial started.1.1) started.1.2)).run' cache) := by
+    simp only [fillHistory, bind_assoc, pure_bind, map_bind]
+  rw [regroup, evalSPMF_map, verified, ← evalSPMF_map, map_eq_bind_pure_comp]
+  rfl
+
+end Experiments
 
 end ZkcSecurity.HashChain

@@ -74,6 +74,34 @@ theorem evalSPMF_simulateQ_fill
                 (preserve left query state inv step member)
         _ = _ := by rw [bind_assoc]
 
+/-- An invariant indexed by the remaining queries, kept by every step, holds
+after every run within the query bound, for some remaining count. -/
+theorem support_simulateQ_invariant (impl : QueryImpl spec (StateT σ₁ ProbComp))
+    (Inv : ℕ → σ₁ → Prop)
+    (preserve : ∀ (remaining : ℕ) query state, Inv (remaining + 1) state →
+      ∀ step ∈ support ((impl query).run state), Inv remaining step.2)
+    {α : Type} (computation : OracleComp spec α) :
+    ∀ (remaining : ℕ) (state : σ₁), IsTotalQueryBound computation remaining → Inv remaining state →
+      ∀ result ∈ support ((simulateQ impl computation).run state),
+        ∃ left ≤ remaining, Inv left result.2 := by
+  induction computation using OracleComp.inductionOn with
+  | pure value =>
+      intro remaining state _ inv result member
+      simp only [simulateQ_pure, StateT.run_pure, support_pure, Set.mem_singleton_iff] at member
+      subst member
+      exact ⟨remaining, le_rfl, inv⟩
+  | query_bind query next ih =>
+      intro remaining state bounded inv result member
+      obtain ⟨positive, rest⟩ := isTotalQueryBound_query_bind_iff.mp bounded
+      obtain ⟨left, rfl⟩ : ∃ left, remaining = left + 1 :=
+        ⟨remaining - 1, (Nat.succ_pred_eq_of_pos positive).symm⟩
+      simp only [simulateQ_bind, simulateQ_spec_query, StateT.run_bind, mem_support_bind_iff]
+        at member
+      obtain ⟨step, stepMember, restMember⟩ := member
+      obtain ⟨final, below, finalInv⟩ := ih step.1 left step.2 (by simpa using rest step.1)
+        (preserve left query state inv step stepMember) result restMember
+      exact ⟨final, by omega, finalInv⟩
+
 section Flatten
 variable {ι' : Type} {spec' : OracleSpec ι'} {τ : Type}
 
