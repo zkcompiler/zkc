@@ -11,10 +11,14 @@ import Zkc.Construction.Rule
 import Zkc.Construction.Semantics
 import Zkc.Construction.Soundness
 import Zkc.Construction.Structured
+import Zkc.Executable.Cleanup
+import Zkc.Executable.Evaluation
 import Zkc.Executable.Execution
 import Zkc.Executable.Installed
 import Zkc.Executable.Lowering
 import Zkc.Executable.Program
+import Zkc.Executable.Pruning
+import Zkc.Executable.Relation
 import Zkc.Executable.Soundness
 import Zkc.Polynomial.BooleanCube
 import Zkc.Polynomial.Coordinates
@@ -199,6 +203,7 @@ import Tests.DeriveRegionSchnorr
 import Tests.DeriveRegionSources
 import Tests.DeriveRegionSumcheck
 import Tests.ExecutableControls
+import Tests.ExecutableSumcheckControls
 import Tests.Finite
 import Tests.Machine
 import Tests.MultilinearListRestriction
@@ -280,6 +285,9 @@ import ZkcExamples.Construction.SumcheckProof
 import ZkcExamples.Construction.SumcheckProofParticipant
 import ZkcExamples.Executable.SchnorrProof
 import ZkcExamples.Executable.SchnorrProofProgramData
+import ZkcExamples.Executable.SumcheckHelpers
+import ZkcExamples.Executable.SumcheckProof
+import ZkcExamples.Executable.SumcheckProofProgramData
 import ZkcExamples.NativePrograms.ContractControls
 import ZkcExamples.NativePrograms.CustomProperty
 import ZkcExamples.NativePrograms.FactorControls

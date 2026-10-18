@@ -1,4 +1,5 @@
 import ZkcExamples.Executable.SchnorrProof
+import Zkc.Executable.Cleanup
 import Mathlib.Algebra.Field.ZMod
 
 /-! Controls for the lowering rule on the actual executable Schnorr validator.
@@ -193,7 +194,7 @@ def challengeToy (_ : History F G) : Id F := 2
 
 def runAt (budget : Nat) (bytes : List UInt8) : Run F G :=
   Id.run (execute installed actual SchnorrProof.context challengeToy decodeToy budget
-    (SchnorrProof.inputs (F := F) (1 : G) 3) [] bytes)
+    ((SchnorrProof.inputs (F := F) (1 : G) 3).map .data) [] bytes)
 
 /-- The observations the native report carries: stop site and local call,
 charged instructions, applied transitions and read messages. -/
@@ -225,7 +226,7 @@ theorem budget_dropped :
       (Id.run (ideal SchnorrProof.context challengeToy SchnorrProof.table constructed.returned
         constructed.instructions
         ((SchnorrProof.inputs (F := F) (1 : G) 3).map .data ++ [.transcript []])
-        (decodeProof decodeToy ZkcExamples.Executable.SchnorrProof.lowered.receives honest))).1 := by
+        (decodeProof decodeToy ZkcExamples.Executable.SchnorrProof.receives honest))).1 := by
   decide +kernel
 
 /-- A commitment that does not decode stops at its receive after one charged
@@ -268,17 +269,15 @@ decoding stop the metered equation fails on an undecodable commitment, while
 the rule's classification satisfies it. -/
 theorem stop_misclassified :
     misclassified (runAt 25 (frame 9 ++ frame 0)).result ≠
-      (Id.run (metered SchnorrProof.context challengeToy SchnorrProof.table
-        ZkcExamples.Executable.SchnorrProof.lowered.returned
-        ZkcExamples.Executable.SchnorrProof.lowered.total 25 ZkcExamples.Executable.SchnorrProof.lowered.code
+      (Id.run (metered SchnorrProof.context challengeToy SchnorrProof.table (helperCost installed actual) 25
+        ZkcExamples.Executable.SchnorrProof.lowered
         ((SchnorrProof.inputs (F := F) (1 : G) 3).map .data ++ [.transcript []])
-        (decodeProof decodeToy ZkcExamples.Executable.SchnorrProof.lowered.receives (frame 9 ++ frame 0)))).1 ∧
+        (decodeProof decodeToy ZkcExamples.Executable.SchnorrProof.receives (frame 9 ++ frame 0)))).1 ∧
     (runAt 25 (frame 9 ++ frame 0)).result.outcome =
-      (Id.run (metered SchnorrProof.context challengeToy SchnorrProof.table
-        ZkcExamples.Executable.SchnorrProof.lowered.returned
-        ZkcExamples.Executable.SchnorrProof.lowered.total 25 ZkcExamples.Executable.SchnorrProof.lowered.code
+      (Id.run (metered SchnorrProof.context challengeToy SchnorrProof.table (helperCost installed actual) 25
+        ZkcExamples.Executable.SchnorrProof.lowered
         ((SchnorrProof.inputs (F := F) (1 : G) 3).map .data ++ [.transcript []])
-        (decodeProof decodeToy ZkcExamples.Executable.SchnorrProof.lowered.receives (frame 9 ++ frame 0)))).1 := by
+        (decodeProof decodeToy ZkcExamples.Executable.SchnorrProof.receives (frame 9 ++ frame 0)))).1 := by
   decide +kernel
 
 /-- A stop inside a helper leaves that frame and then the participant frame,

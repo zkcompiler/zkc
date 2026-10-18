@@ -4,14 +4,16 @@
 The input is a `zkc.native-proof/0` deployment. The renderer selects, in its
 exact `zkc.program/0` candidate, the participant that the program's entry map
 assigns to the deployment policy's entry and validator role, and renders it
-with the local functions it calls and the operation bindings they use, in
-program order. Physical types are split into a logical sort and a
-representation and re-encoded exactly. A transcript operation's single
-parameter is decoded as an occurrence template by the construction bridge's
-decoder, which re-encodes it exactly; other parameters stay text.
-Instructions outside the admitted subset are kept as unsupported for the Lean
-rule to refuse; a malformed record refuses the whole program. This is a tested
-data boundary: no meaning is assigned here.
+with the local functions it calls, including from loop bodies, and the
+operation bindings they use, in program order. Participant loops and their
+yields, and local conditionals, counted iterations, Boolean literals, stops and
+yields are rendered with their nested bodies. Physical types are split into a
+logical sort and a representation and re-encoded exactly. A transcript
+operation's single parameter is decoded as an occurrence template by the
+construction bridge's decoder, which re-encodes it exactly; other parameters
+stay text. Instructions outside the admitted subset are kept as unsupported for
+the Lean rule to refuse; a malformed record refuses the whole program. This is
+a tested data boundary: no meaning is assigned here.
 """
 
 import argparse
@@ -49,7 +51,9 @@ def physical(value):
     require(re.fullmatch(r"[A-Za-z0-9_.:/-]+", representation) is not None, "invalid representation")
     if logical == "bool":
         sort = ".data .boolean"
-    elif re.fullmatch(r"(field|group):[A-Za-z0-9_.-]+", logical):
+    elif logical == "index":
+        sort = ".data .index"
+    elif re.fullmatch(r"(field|group|vector):[A-Za-z0-9_.-]+", logical):
         kind, domain = logical.split(":")
         sort = f".data (.{kind} {text(domain)})"
     elif re.fullmatch(r"transcript:[A-Za-z0-9_.:/-]+", logical):
@@ -78,6 +82,16 @@ def parameter(contract, value, count):
     return f".text {text(value)}"
 
 
+def pairs(values):
+    """Carried values: `[name, initial]` pairs."""
+    return seq(values, lambda pair: (lambda p: f"({text(p[0])}, {text(p[1])})")(record(pair, 2)))
+
+
+def region(items, bindings):
+    require(isinstance(items, list), "local region")
+    return "[" + ", ".join(step(item, bindings) for item in items) + "]"
+
+
 def step(item, bindings):
     require(isinstance(item, list) and item and isinstance(item[0], str), "local instruction")
     if item[0] == "op":
@@ -87,6 +101,24 @@ def step(item, bindings):
         require(isinstance(parameters, list), "parameters")
         rendered = seq(parameters, lambda value: parameter(contract, value, len(parameters)))
         return f".operation {text(site)} {text(binding)} {rendered} {names(inputs)} {names(outputs)}"
+    if item[0] == "bool_constant":
+        _, site, output, value = record(item, 4)
+        require(isinstance(value, bool), "Boolean literal")
+        return f".constant {text(site)} {text(output)} {'true' if value else 'false'}"
+    if item[0] == "if":
+        _, site, condition, captures, yes, no, outputs = record(item, 7)
+        return (f".cond {text(site)} {text(condition)} {names(captures)} {region(yes, bindings)} "
+                f"{region(no, bindings)} {names(outputs)}")
+    if item[0] == "for":
+        _, site, induction, lower, upper, carried, captures, body, outputs = record(item, 9)
+        return (f".iterate {text(site)} {text(induction)} {text(lower)} {text(upper)} {pairs(carried)} "
+                f"{names(captures)} {region(body, bindings)} {names(outputs)}")
+    if item[0] == "stop":
+        _, site, reason = record(item, 3)
+        return f".stop {text(site)} {text(reason)}"
+    if item[0] == "yield":
+        _, values = record(item, 2)
+        return f".yield {names(values)}"
     if item[0] == "return":
         _, values = record(item, 2)
         return f".ret {names(values)}"
@@ -101,10 +133,50 @@ def action(item):
     if item[0] == "local":
         _, site, function, inputs, outputs = record(item, 5)
         return f".call {text(site)} {text(function)} {names(inputs)} {names(outputs)}"
+    if item[0] == "loop":
+        _, site, count, carried, captures, body, outputs = record(item, 7)
+        kind, value, maximum, induction = record(count, 4)
+        require(kind == "value", "loop count")
+        require(isinstance(maximum, str) and re.fullmatch(r"0|[1-9][0-9]*", maximum) is not None
+                and int(maximum) <= 1048576, "loop maximum")
+        require(isinstance(body, list), "loop body")
+        return (f".loop {text(site)} {text(value)} {int(maximum)} {text(induction)} {pairs(carried)} "
+                f"{names(captures)} [" + ", ".join(action(inner) for inner in body) + f"] {names(outputs)}")
+    if item[0] == "yield":
+        _, values = record(item, 2)
+        return f".yield {names(values)}"
     if item[0] == "return":
         _, values = record(item, 2)
         return f".ret {names(values)}"
     return f".unsupported {text(item[0])}"
+
+
+def called(body):
+    """The local functions a participant body calls, including from loop bodies."""
+    found = set()
+    for item in body:
+        if isinstance(item, list) and item[:1] == ["local"] and len(item) == 5:
+            found.add(item[2])
+        if isinstance(item, list) and item[:1] == ["loop"] and len(item) == 7 and isinstance(item[5], list):
+            found |= called(item[5])
+    return found
+
+
+def used_bindings(steps):
+    """The operation bindings a local body uses, including inside its regions."""
+    found = set()
+    for item in steps:
+        if not isinstance(item, list) or not item:
+            continue
+        if item[0] == "op" and len(item) == 6:
+            found.add(item[2])
+        elif item[0] == "if" and len(item) == 7:
+            for nested in (item[4], item[5]):
+                if isinstance(nested, list):
+                    found |= used_bindings(nested)
+        elif item[0] == "for" and len(item) == 9 and isinstance(item[7], list):
+            found |= used_bindings(item[7])
+    return found
 
 
 def select(deployment):
@@ -144,21 +216,24 @@ def render(deployment, namespace):
         require(isinstance(contract, str) and isinstance(implementation, str)
                 and isinstance(arguments, list) and all(isinstance(a, str) for a in arguments), "binding shape")
         declared[name] = (name, contract, arguments, implementation)
-    called = {item[2] for item in body if isinstance(item, list) and item[:1] == ["local"] and len(item) == 5}
+    reached = called(body)
     selected_functions, used = [], set()
     for function in functions:
         kind, name, arguments, outputs, steps, _origin = record(function, 6)
         require(kind == "function" and isinstance(steps, list), "function shape")
-        if name not in called:
+        if name not in reached:
             continue
         rendered_steps = [step(item, declared) for item in steps]
-        used |= {item[2] for item in steps if isinstance(item, list) and item[:1] == ["op"] and len(item) == 6}
-        selected_functions.append(f"⟨{text(name)}, {ports(arguments)}, {seq(outputs, physical)}, [\n"
-                                  + ",\n".join(f"      {s}" for s in rendered_steps) + "]⟩")
+        used |= used_bindings(steps)
+        selected_functions.append((name, f"⟨{text(name)}, {ports(arguments)}, {seq(outputs, physical)}, [\n"
+                                  + ",\n".join(f"    {s}" for s in rendered_steps) + "]⟩"))
     rendered_bindings = [f"⟨{text(name)}, {text(contract)}, {seq(arguments, text)}, {text(implementation)}⟩"
                          for name, contract, arguments, implementation in declared.values() if name in used]
     actions = ",\n    ".join(action(item) for item in body)
-    function_text = ",\n    ".join(selected_functions)
+    function_definitions = "".join(
+        f"/-- The local function `{name}`. -/\ndef function{index} : Function :=\n  {literal}\n\n"
+        for index, (name, literal) in enumerate(selected_functions))
+    function_text = ", ".join(f"function{index}" for index in range(len(selected_functions)))
     binding_text = ",\n    ".join(rendered_bindings)
     return f'''module
 
@@ -177,7 +252,7 @@ open Zkc.Construction Zkc.Executable
 /-- SHA-256 of the exact `zkc.program/0` bytes this data was read from. -/
 def program : String := {text("sha256:" + digest)}
 
-def validator : Validator where
+{function_definitions}def validator : Validator where
   entry := {text(entry)}
   role := {text(role)}
   symbol := {text(symbol)}
@@ -185,8 +260,7 @@ def validator : Validator where
   results := {seq(results, physical)}
   body := [
     {actions}]
-  functions := [
-    {function_text}]
+  functions := [{function_text}]
   bindings := [
     {binding_text}]
 

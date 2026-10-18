@@ -57,7 +57,7 @@ variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [D
 default pair. -/
 def decodePair (decode : PhysicalType → List UInt8 → Option (Payload F G)) (bytes : List UInt8) :
     G × F :=
-  match decodeProof decode lowered.receives (bytes.drop 40) with
+  match decodeProof decode ZkcExamples.Executable.SchnorrProof.receives (bytes.drop 40) with
   | [.group _ commitment, .field _ response] => (commitment, response)
   | _ => (0, 0)
 
@@ -146,7 +146,8 @@ def verifyBytes (decode : PhysicalType → List UInt8 → Option (Payload F G)) 
     (binding : List UInt8) (application : String) (base key : G) (bytes : List UInt8) :
     OracleComp (HistorySpec F G) Bool :=
   validate installed executable SchnorrProof.context historyChallenge decode budget binding
-    SchnorrProof.acceptancePosition (SchnorrProof.inputs base key) (initial application base key) bytes
+    SchnorrProof.acceptancePosition (ZkcExamples.Executable.SchnorrProof.data base key)
+    (initial application base key) bytes
 
 /-- Proof bytes with the expected framing header whose messages decode to a
 commitment and a response are validated, at a budget of at least 25, exactly as
@@ -155,7 +156,7 @@ theorem verifyBytes_eq_verify (decode : PhysicalType → List UInt8 → Option (
     {budget : Nat} (sufficient : 25 ≤ budget) (binding : List UInt8) (application : String)
     (base key : G) (bytes : List UInt8) (header : bytes.take 40 = magic ++ binding)
     {commitment : G} {response : F}
-    (decoded : decodeProof decode lowered.receives (bytes.drop 40) =
+    (decoded : decodeProof decode ZkcExamples.Executable.SchnorrProof.receives (bytes.drop 40) =
       [.group groupDomain commitment, .field fieldDomain response]) :
     verifyBytes decode budget binding application base key bytes =
       verify application base key (commitment, response) := by
@@ -184,7 +185,7 @@ theorem validate_cases (decode : PhysicalType → List UInt8 → Option (Payload
     have exec := ZkcExamples.Executable.SchnorrProof.executable_validate historyChallenge decode
       sufficient binding base key (initial application base key) bytes header
     by_cases good : ∃ (commitment : G) (response : F),
-        decodeProof decode lowered.receives (bytes.drop 40) =
+        decodeProof decode ZkcExamples.Executable.SchnorrProof.receives (bytes.drop 40) =
           [.group groupDomain commitment, .field fieldDomain response]
     · obtain ⟨commitment, response, decoded⟩ := good
       left
@@ -196,21 +197,21 @@ theorem validate_cases (decode : PhysicalType → List UInt8 → Option (Payload
     · right
       refine ⟨_, transform SchnorrProof.context historyChallenge
         (Zkc.Protocols.Schnorr.Common.experiment SchnorrProof.wiring base key 0)
-        (initial application base key) (decodeProof decode lowered.receives (bytes.drop 40)), ?_⟩
+        (initial application base key) (decodeProof decode ZkcExamples.Executable.SchnorrProof.receives (bytes.drop 40)), ?_⟩
       have compiled := SchnorrProof.compiled_transform historyChallenge base key 0
-        (initial application base key) (decodeProof decode lowered.receives (bytes.drop 40))
+        (initial application base key) (decodeProof decode ZkcExamples.Executable.SchnorrProof.receives (bytes.drop 40))
       rw [SchnorrProof.verifier_correspondence] at compiled
       rw [verifyBytes, exec]
       calc (fun result => Accepts SchnorrProof.acceptancePosition (idealObservation result)) <$>
             ideal SchnorrProof.context historyChallenge SchnorrProof.table SchnorrProof.participant.returned
               SchnorrProof.participant.instructions
               ((SchnorrProof.inputs base key).map .data ++ [.transcript (initial application base key)])
-              (decodeProof decode lowered.receives (bytes.drop 40))
+              (decodeProof decode ZkcExamples.Executable.SchnorrProof.receives (bytes.drop 40))
           = accepted <$> ((fun result => (mapOutcome SchnorrProof.acceptance result.1, result.2)) <$>
               ideal SchnorrProof.context historyChallenge SchnorrProof.table SchnorrProof.participant.returned
                 SchnorrProof.participant.instructions
                 ((SchnorrProof.inputs base key).map .data ++ [.transcript (initial application base key)])
-                (decodeProof decode lowered.receives (bytes.drop 40))) := by
+                (decodeProof decode ZkcExamples.Executable.SchnorrProof.receives (bytes.drop 40))) := by
             rw [Functor.map_map]
             simp only [accepted_eq]
         _ = _ := by

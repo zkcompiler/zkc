@@ -13,18 +13,19 @@ The [formal reference](docs/README.md) defines the models, and
 [support](docs/support.md) states the exact scope and assumptions of each claim.
 Native compilation below the original stage is outside these claims except
 where a checked rule relates a later artifact: the constructed validators of
-compiled proof Entries and the executable Schnorr validator the runtime admits.
+compiled proof Entries and the executable Schnorr and Sumcheck validators the
+runtime admits.
 Providers and production arithmetic are outside them. Fiat–Shamir claims cover
 the Schnorr family (for Schnorr, the transform of the imported interactive
 verifier, the compiled proof Entry and its executable validator; for Schnorr AND
 and Chaum–Pedersen, the transforms of the imported interactive verifiers) and
 the transform of any validator with a round-by-round soundness certificate,
-applied to the imported Sumcheck verifier and to the ideal interpretation of the
-compiled Sumcheck proof Entry, under named assumptions. The Schnorr-family
-claims fix the statement; the multi-round ones also cover statements chosen
-after the oracle queries when the initial transcript determines them, which for
-the compiled Sumcheck Entry remains a premise because the host's binding of its
-vector and count inputs is not modelled. The [common](bridges/common/README.md)
+applied to the imported Sumcheck verifier, to the ideal interpretation of the
+compiled Sumcheck proof Entry and to its executable validator, under named
+assumptions. The Schnorr-family claims fix the statement; the multi-round ones
+also cover statements chosen after the oracle queries when the initial
+transcript determines them, which the executable Sumcheck statement discharges
+with a binding of its table values, claim and round count. The [common](bridges/common/README.md)
 and [structured](bridges/structured/README.md) bridges test the native boundary
 with independent execution and negative controls.
 
