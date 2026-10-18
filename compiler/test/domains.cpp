@@ -323,6 +323,10 @@ void installedInventory() {
        {"field", "vector", "polynomial", "round", "matrix", "rng"}},
       {"koala-bear.ext4-binomial3",
        {"field", "vector", "polynomial", "round", "matrix"}},
+      {"gf2-64.pentanomial-4-3-1",
+       {"field", "vector", "polynomial", "round", "matrix"}},
+      {"gf2-64.pentanomial-4-3-1.ext3-trinomial1",
+       {"field", "vector", "polynomial", "round", "matrix"}},
       {"bls12-381.g1", {"group", "groups"}},
       {"bls12-381.g2", {"group", "groups"}},
       {"bls12-381.gt", {"group"}},
@@ -360,7 +364,7 @@ void installedInventory() {
   for (const auto &type : catalog.allLogicalTypes())
     require(actual.emplace(type.kind, type.domain).second,
             "logical inventory contains no duplicate instances");
-  require(pairs.size() == 88 && actual == pairs,
+  require(pairs.size() == 98 && actual == pairs,
           "the complete installed logical inventory is unchanged");
 
   std::vector<std::string> identities{"", "missing"};
@@ -405,6 +409,8 @@ void installedInventory() {
       {"koala-bear", "plonky3"},
       {"koala-bear.ext8-binomial3", "plonky3"},
       {"koala-bear.ext4-binomial3", "plonky3"},
+      {"gf2-64.pentanomial-4-3-1", "plonky3"},
+      {"gf2-64.pentanomial-4-3-1.ext3-trinomial1", "plonky3"},
       {"merlin3.koala-bear.ext8-binomial3.rejection31le/0", "plonky3"},
       {"hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0",
        "plonky3"},
