@@ -1,7 +1,8 @@
 module kzg::eip4844::transcript;
 
-// The two Fiat-Shamir transcripts of EIP-4844 as copyable data. Each query
-// handler returns the hash of exactly the bytes the specification hashes.
+// The two challenge hash inputs of EIP-4844, as c-kzg-4844 computes them, as
+// copyable data. Each query handler returns the hash of exactly the bytes the
+// specification hashes; no Fiat-Shamir security claim follows from them.
 
 // Statement binding: the evaluation point of a blob opening is the hash of the
 // blob and its commitment (compute_challenge).

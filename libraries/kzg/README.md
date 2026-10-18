@@ -1,8 +1,8 @@
 # KZG commitments
 
 This family provides univariate KZG commitments to polynomials in evaluation
-form and Ethereum's EIP-4844 blob commitments. Evaluation, quotients,
-statement and batch transcripts, proof layout and setup admission are ordinary
+form and Ethereum's EIP-4844 blob commitments. Evaluation, quotients, the
+reproduced challenge hash inputs, proof layout and setup admission are ordinary
 `.zkc` code. The runtime supplies BLS12-381 field and group operations, the
 pairing check, byte encodings and SHA-256.
 
@@ -12,7 +12,7 @@ pairing check, byte encodings and SHA-256.
 |---|---|
 | `kzg` | `evaluate`, `quotient`, `in_domain`, `position`, `unit`: evaluation-form algebra over the `n`-th roots of unity of any field |
 | `kzg::eip4844` | The EIP-4844 functions, the `Commit`, `Prove`, `Challenge` and `PointEvaluation` protocols, the proof protocols `PointOpening`, `BlobOpening` and `BlobBatch<MaxBlobs>` with their constructions `Point`, `Blob` and `Batch<MaxBlobs>`, plus `F`, `G1`, `G2`, `roots`, `bit_reverse`, `verifier_key` and `admit_setup` |
-| `kzg::eip4844::transcript` | `Statement` and `Combination`: the two Fiat-Shamir transcripts as copyable data |
+| `kzg::eip4844::transcript` | `Statement` and `Combination`: c-kzg-4844's two challenge hash inputs as copyable transcript data |
 
 `kzg::evaluate(values, points, z)` returns `p(z)` for `values[i] = p(points[i])`,
 where `points` lists every `n`-th root of unity in some fixed order. At a domain
@@ -86,6 +86,14 @@ values, not messages.
 The proof is the concatenation of the 48-byte proofs. The public `count` sizes
 the loop up to the static bound `MaxBlobs`; both participants check it against
 the commitments and blobs.
+
+Both constructions reproduce c-kzg-4844's explicit hash inputs, tagged
+`FSBLOBVERIFY_V1_` and `RCKZGBATCH___V1_`, byte for byte; the upstream vectors
+and derived cases check that agreement. They follow c-kzg-4844 rather than a
+Fiat–Shamir transformation of the interactive protocols: `Statement::draw`
+returns `compute_challenge(blob, commitment)` without advancing its state, and
+`BlobBatch` computes each `z_i` with SHA-256 in the protocol body. No
+Fiat–Shamir security theorem covers these constructions.
 
 `PointOpening` has no verifier randomness: the prover, holding the blob behind
 the commitment, sends the proof for the stated `z` and `y`. Its construction
