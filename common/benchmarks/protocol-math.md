@@ -11,11 +11,14 @@ scripts and their small adapter dependencies.
 
 For SDK-call measurements, growing trace shapes, dense polynomial workloads and
 changing statements, use the common [execution benchmark suite](README.md).
-The two tools share process journals and the exclusive
-`/tmp/zkc-benchmark-execution.lock`. Each harness acquires the lock itself across
-preparation, timing and validation; do not wrap it in a second acquisition.
-Exit 75 means the slot is busy. Use the same lock for other CPU-heavy builds or
-experiments, and never unlink it. Command start/end times are recorded.
+The two tools share process journals and run without a host-wide lock by default.
+Pass `--exclusive` for a scheduled precision measurement to acquire
+`/tmp/zkc-benchmark-execution.lock` across preparation, timing and validation.
+Do not wrap that mode in a second acquisition. Exit 75 means the slot is busy.
+Never unlink a live lock file. `coordination.json` records the selected mode and
+run start/end times. Ordinary builds do not take this lock, so arrange a quiet
+interval explicitly when precise timings are needed. Concurrent measurements
+are useful for exploratory trends, with variability checked before conclusions.
 
 ## Run a comparison
 

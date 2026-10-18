@@ -53,6 +53,8 @@ def main(argv=None):
                             choices=['--no-simplify', '--no-finite-bulk', '--release-storage',
                                      '--fuse-vector-reductions', '--fuse-collect-fold'],
                             help='explicit compilation policy, for example --compiler-option=--fuse-collect-fold; repeat to combine')
+    run_parser.add_argument('--exclusive', action='store_true',
+                            help='acquire the shared measurement lock; fail with exit 75 if busy')
     run_parser.add_argument('--label', default='current')
     args = parser.parse_args(argv)
     try:

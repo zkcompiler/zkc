@@ -12,8 +12,7 @@ Use explicit, already-built executables. The harness does not build dependencies
 tune the host, raise execution limits or retry failed samples.
 
 ```sh
-flock -n -E 75 /tmp/zkc-benchmark-execution.lock \
-  cargo build --release --locked -p zkc-benchmarks
+cargo build --release --locked -p zkc-benchmarks
 python3 common/benchmarks/run.py list
 python3 common/benchmarks/run.py run --preset smoke \
   --compiler build/compiler/zkc-compile --runtime target/release/zkc \
@@ -21,14 +20,23 @@ python3 common/benchmarks/run.py run --preset smoke \
   --output build/experiments/benchmarks
 ```
 
-The output directory must be new. Both benchmark entry points acquire
-`/tmp/zkc-benchmark-execution.lock` before preparation and retain it through
-validation. Exit 75 means another cooperating session owns the slot; retry later.
-Do not wrap the harness in another acquisition of that lock, or delete the lock
-file. Use the same lock for external builds, profilers and timing experiments.
-This is advisory coordination, not isolation from unrelated host activity.
-Acquisition and command start/end times are retained in the evidence. Workers
-inherit the owned descriptor so the slot remains held if the supervisor is killed.
+The output directory must be new. Runs are exploratory by default: they do not
+acquire a host-wide lock and can overlap with development work. Use repeated
+baseline/current comparisons under similar load to identify broad trends;
+concurrent timings do not establish small speedups.
+
+Pass `--exclusive` to either benchmark entry point to acquire
+`/tmp/zkc-benchmark-execution.lock` across preparation, timing and validation.
+Exit 75 means another cooperating session owns the slot. Do not wrap the harness
+in another acquisition or delete the lock file. Workers inherit the owned
+descriptor so the slot remains held if the supervisor is killed.
+
+`coordination.json` records whether the run was `uncoordinated` or `exclusive`,
+its start/end times and, for exclusive runs, lock acquisition time. An exclusive
+lock coordinates cooperating suites; it does not stop ordinary builds or isolate
+unrelated host activity. Schedule a quiet interval explicitly for precise results.
+Ordinary builds and tests should use separate output directories and bounded
+parallelism, without a host-wide benchmark lock.
 
 Selection options intersect:
 
@@ -174,8 +182,7 @@ floor is recorded and never subtracted.
 For runtime attribution, build a separate worker with execution observations:
 
 ```sh
-flock -n -E 75 /tmp/zkc-benchmark-execution.lock \
-  cargo build --release --locked -p zkc-benchmarks --features execution-counts \
+cargo build --release --locked -p zkc-benchmarks --features execution-counts \
   --target-dir target/counts
 python3 common/benchmarks/run.py run --preset execution --execution-counts \
   --compiler build/compiler/zkc-compile --runtime target/release/zkc \
@@ -276,7 +283,7 @@ own source cases. Both use [`runner.py`](bench/runner.py), [`io.py`](bench/io.py
 workload and oracle, not a production protocol-specific executor.
 
 [`protocol_math.py`](protocol-math.md) retains its distinct compiler-policy/CLI
-comparison contract and shares the journal and execution lock. Research drivers
+comparison contract and shares the journal and optional execution lock. Research drivers
 remain supporting evidence. This design follows worker/warmup separation in
 [pyperf](https://pyperf.readthedocs.io/en/stable/run_benchmark.html) and explicit
 boundaries/interleaving in [Google Benchmark](https://google.github.io/benchmark/user_guide.html).

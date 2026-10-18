@@ -79,7 +79,7 @@ def worker(tmp_path, plan, suffix='', response=None):
 
 
 def arguments(tmp_path):
-    return SimpleNamespace(output=tmp_path / 'output', samples=2, warmups=1, iterations=1,
+    return SimpleNamespace(output=tmp_path / 'output', exclusive=False, samples=2, warmups=1, iterations=1,
                            execution_counts=False, compiler_option=[], processes=2, seed=17,
                            cpu=None, threads=1, label='test', timeout=1)
 

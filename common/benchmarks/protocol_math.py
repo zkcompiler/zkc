@@ -399,6 +399,8 @@ def parse_args(argv=None):
     parser.add_argument('--baseline-only', action='store_true', help='prototype only the baseline')
     parser.add_argument('--output', required=True, type=Path, help='new, exclusive result directory')
     parser.add_argument('--case', action='append', choices=[c['name'] for c in case_catalog()])
+    parser.add_argument('--exclusive', action='store_true',
+                        help='acquire the shared measurement lock; fail with exit 75 if busy')
     parser.add_argument('--repetitions', type=positive_integer, default=3)
     parser.add_argument('--timeout', type=positive_timeout, default=300)
     parser.add_argument('--release-storage', action='store_true', help='add a separate current policy')
@@ -418,7 +420,8 @@ def parse_args(argv=None):
 def main(argv=None):
     args = parse_args(argv)
     try:
-        with measurement_slot(args.output.expanduser().resolve() / 'coordination.json'):
+        with measurement_slot(args.output.expanduser().resolve() / 'coordination.json',
+                              exclusive=args.exclusive):
             return run(args, argv)
     except MeasurementBusy as error:
         print(str(error), file=sys.stderr)

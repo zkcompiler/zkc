@@ -91,21 +91,21 @@ def test_distinct_stark_statements_keep_the_same_program(modules, tmp_path):
 def test_shared_slot_is_exclusive_fail_fast_and_preserves_evidence(modules, tmp_path):
     io = modules['io']
     output = tmp_path/'new'
-    with io.measurement_slot(output/'coordination.json'):
+    with io.measurement_slot(output/'coordination.json', exclusive=True):
         output.mkdir()
         code = ('import fcntl,sys; f=open(sys.argv[1],"a"); '
                 'fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB)')
         other = subprocess.run([sys.executable, '-c', code, io.MEASUREMENT_LOCK], capture_output=True)
         assert other.returncode > 0 and b'BlockingIOError' in other.stderr
         with pytest.raises(io.MeasurementBusy):
-            with io.measurement_slot(tmp_path/'other/coordination.json'):
+            with io.measurement_slot(tmp_path/'other/coordination.json', exclusive=True):
                 pytest.fail('nested slot acquired')
     evidence = output/'coordination.json'
     original = evidence.read_bytes()
     record = json.loads(original)
     assert record['attempted_utc'] <= record['acquired_utc'] <= record['finished_utc']
     with pytest.raises(FileExistsError):
-        with io.measurement_slot(evidence):
+        with io.measurement_slot(evidence, exclusive=True):
             pytest.fail('existing evidence accepted')
     assert evidence.read_bytes() == original
     assert io.MEASUREMENT_LOCK.exists()
@@ -113,7 +113,7 @@ def test_shared_slot_is_exclusive_fail_fast_and_preserves_evidence(modules, tmp_
 
 def test_command_inherits_the_owned_lock_descriptor(modules, tmp_path):
     io = modules['io']
-    with io.measurement_slot(tmp_path/'run/coordination.json'):
+    with io.measurement_slot(tmp_path/'run/coordination.json', exclusive=True):
         fd = io._measurement_fd.get()
         script = 'import os,sys; assert os.fstat(int(sys.argv[1])).st_ino == os.stat(sys.argv[2]).st_ino'
         io.Journal(tmp_path/'run/commands', 10).command(
@@ -278,7 +278,7 @@ from types import SimpleNamespace
 sys.path.insert(0, {str(root/'common/benchmarks')!r})
 from bench import io, runner
 io.MEASUREMENT_LOCK = Path({str(tmp_path/'slot')!r})
-args = SimpleNamespace(output=Path({str(output)!r}), samples=1, warmups=0, iterations=1,
+args = SimpleNamespace(output=Path({str(output)!r}), exclusive=True, samples=1, warmups=0, iterations=1,
     processes=1, seed=0, cpu=None, threads=1, label='signal', timeout=1, execution_counts=False, compiler_option=[])
 def prepare(*args):
     os.kill(os.getpid(), signal.SIGTERM)
@@ -372,3 +372,41 @@ def test_failed_count_report_keeps_run_and_cell_errors(modules, tmp_path):
     assert 'worker refused input' in text
     assert 'No comparison is published' in text
     assert json.loads((tmp_path/'summary.json').read_text())['comparisons'] == []
+
+
+def test_exploratory_run_does_not_create_a_lock_and_records_failure(modules, tmp_path):
+    io = modules['io']
+    output = tmp_path/'exploratory'
+    with pytest.raises(RuntimeError, match='worker failed'):
+        with io.measurement_slot(output/'coordination.json'):
+            output.mkdir()
+            assert io._measurement_fd.get() is None
+            raise RuntimeError('worker failed')
+    assert not io.MEASUREMENT_LOCK.exists()
+    record = json.loads((output/'coordination.json').read_text())
+    assert record['mode'] == 'uncoordinated'
+    assert record['path'] is None and record['acquired_utc'] is None
+    assert record['attempted_utc'] <= record['started_utc'] <= record['finished_utc']
+    with pytest.raises(FileExistsError):
+        with io.measurement_slot(output/'coordination.json'):
+            pytest.fail('existing results accepted')
+
+
+def test_exploratory_run_proceeds_while_another_process_holds_the_slot(modules, tmp_path):
+    io = modules['io']
+    code = ('import fcntl,sys; f=open(sys.argv[1],"a"); '
+            'fcntl.flock(f,fcntl.LOCK_EX); print("locked",flush=True); sys.stdin.read()')
+    holder = subprocess.Popen([sys.executable, '-c', code, io.MEASUREMENT_LOCK],
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    try:
+        assert holder.stdout.readline().strip() == 'locked'
+        output = tmp_path/'parallel'
+        with io.measurement_slot(output/'coordination.json'):
+            output.mkdir()
+            assert io._measurement_fd.get() is None
+        with pytest.raises(io.MeasurementBusy):
+            with io.measurement_slot(tmp_path/'exclusive/coordination.json', exclusive=True):
+                pytest.fail('exclusive acquisition accepted')
+    finally:
+        holder.communicate(timeout=10)
+    assert holder.returncode == 0
