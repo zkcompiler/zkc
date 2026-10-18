@@ -83,6 +83,7 @@ import ZkcSecurity.FiatShamir.Roles
 import ZkcSecurity.FiatShamir.Sampling
 import ZkcSecurity.FiatShamir.Soundness
 import ZkcSecurity.FiatShamir.Typed
+import ZkcSecurity.FiatShamir.Upstream
 import ZkcSecurity.HashChain.Bound
 import ZkcSecurity.HashChain.Bridge
 import ZkcSecurity.HashChain.Bytes
@@ -141,3 +142,4 @@ import TestsSecurity.StructuredSchnorrFiatShamir
 import TestsSecurity.StructuredSchnorrSigma
 import TestsSecurity.StructuredSemanticDependencies
 import TestsSecurity.SumcheckFiatShamir
+import TestsSecurity.UpstreamImports
