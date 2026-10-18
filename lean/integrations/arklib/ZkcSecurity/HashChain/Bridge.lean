@@ -570,4 +570,264 @@ theorem verifier_eq (positive : 0 < width) (absorb : Typed.Interface I E P (Raw 
 end VerifierPhase
 
 
+section AdversaryPhase
+variable {E S X : Type} [DecidableEq E] [DecidableEq S] [DecidableEq X] [Inhabited S]
+  [SampleableType S] {width length : ℕ}
+
+/-- The hash-chain simulator's state a lazy state determines, with the unread tape
+entries and the history answers given. -/
+def completedWith (tables : Simulated E S X width) (suffix : Fin length → S)
+    (cache : (OracleSpec.ofFn (Raw E S width)).QueryCache) : ChainState E S X width length where
+  tape index := if below : index.val < tables.consumed.length then tables.consumed[index.val]
+    else suffix index
+  position := tables.consumed.length
+  answers := tables.aux
+  reached := tables.reached
+  recorded key := cache key
+
+/-- The lazy state filled ahead: uniform rows for the history answers and a
+uniform tape after the consumed entries. -/
+def fillAll (slots : ℕ) (tables : Simulated E S X width) :
+    ProbComp (ChainState E S X width length × (OracleSpec.ofFn (Raw E S width)).QueryCache) :=
+  ($ᵗ (Fin slots → Fin width → S)) >>= fun rows => ($ᵗ (Fin length → S)) >>= fun suffix =>
+    pure (completedWith tables suffix (completed tables rows), completed tables rows)
+
+/-- The hash-chain simulator against the lazy history oracle, as one simulation. -/
+def flatSimulator (width length : ℕ) :
+    QueryImpl (Primitive E S X)
+      (StateT (ChainState E S X width length × (OracleSpec.ofFn (Raw E S width)).QueryCache)
+        ProbComp) :=
+  flatten (chainSimulator width length).handle randomOracle
+
+end AdversaryPhase
+
+section FlatSteps
+variable {E S X : Type} [DecidableEq E] [DecidableEq S] [DecidableEq X] [Inhabited S]
+  [SampleableType S] {width length : ℕ}
+
+theorem flat_run_private {state : ChainState E S X width length}
+    {cache : (OracleSpec.ofFn (Raw E S width)).QueryCache} {input : Input E S X}
+    (outside : chainAttempt width state.reached input = none) :
+    (flatSimulator width length input).run (state, cache) =
+      pure ((state.respond input).1, ((state.respond input).2, cache)) := by
+  simp only [flatSimulator, flatten, StateT.run_mk]
+  rw [(chainSimulator width length).handle_private (state := state) (query := input) outside]
+  simp
+
+theorem flat_run_recorded {state : ChainState E S X width length}
+    {cache : (OracleSpec.ofFn (Raw E S width)).QueryCache} {input : Input E S X} {key : List E}
+    (belongs : chainAttempt width state.reached input = some key) {answer : Fin width → S}
+    (recorded : state.recorded key = some answer) :
+    (flatSimulator width length input).run (state, cache) =
+      pure (chainShared width input answer, (state, cache)) := by
+  simp only [flatSimulator, flatten, StateT.run_mk]
+  rw [(chainSimulator width length).handle_recorded (state := state) (query := input)
+    (key := key) (ideal := answer) belongs recorded]
+  simp
+
+theorem flat_run_fresh {state : ChainState E S X width length}
+    {cache : (OracleSpec.ofFn (Raw E S width)).QueryCache} {input : Input E S X} {key : List E}
+    (belongs : chainAttempt width state.reached input = some key)
+    (recorded : state.recorded key = none) :
+    (flatSimulator width length input).run (state, cache) =
+      (randomOracle (spec := OracleSpec.ofFn (Raw E S width)) key).run cache >>= fun step =>
+        pure (chainShared width input step.1,
+          ({ state with recorded := Function.update state.recorded key (some step.1) }, step.2)) := by
+  simp only [flatSimulator, flatten, StateT.run_mk]
+  rw [(chainSimulator width length).handle_fresh (state := state) (query := input) (key := key)
+    belongs recorded]
+  simp only [simulateQ_map, simulateQ_spec_query, StateT.run_map, Functor.map_map]
+  rw [map_eq_bind_pure_comp]
+  rfl
+
+end FlatSteps
+
+section AdversaryCommute
+variable {E S X : Type} [DecidableEq E] [DecidableEq S] [DecidableEq X] [Inhabited S]
+  [SampleableType S] {width length : ℕ}
+
+/-- The simulator's state after its next private answer, read from the tape. -/
+def afterPrivate (tables : Simulated E S X width) (input : Input E S X) (suffix : Fin length → S)
+    (cache : (OracleSpec.ofFn (Raw E S width)).QueryCache) (answer : S) :
+    ChainState E S X width length :=
+  { completedWith tables suffix cache with
+    position := tables.consumed.length + 1
+    answers := Function.update tables.aux input (some answer)
+    reached := noteReached tables.reached input answer }
+
+omit [SampleableType S] in
+theorem respond_completedWith_fresh {tables : Simulated E S X width} {input : Input E S X}
+    (fresh : tables.aux input = none) (room : tables.consumed.length < length)
+    (suffix : Fin length → S) (cache : (OracleSpec.ofFn (Raw E S width)).QueryCache) :
+    (completedWith tables suffix cache).respond input =
+      (suffix ⟨_, room⟩, afterPrivate tables input suffix cache (suffix ⟨_, room⟩)) := by
+  have read : tapeAt (completedWith tables suffix cache).tape tables.consumed.length =
+      suffix ⟨_, room⟩ := by
+    simp [tapeAt, completedWith, room]
+  simp only [ChainState.respond]
+  rw [show (completedWith tables suffix cache).answers input = none from fresh]
+  rw [show (completedWith tables suffix cache).position = tables.consumed.length from rfl, read]
+  rfl
+
+omit [Inhabited S] [SampleableType S] in
+theorem completedWith_recordAux (tables : Simulated E S X width) (input : Input E S X)
+    (room : tables.consumed.length < length) (suffix : Fin length → S)
+    (cache : (OracleSpec.ofFn (Raw E S width)).QueryCache) (answer : S) :
+    completedWith (tables.recordAux width input answer) suffix cache =
+      afterPrivate tables input (Function.update suffix ⟨_, room⟩ answer) cache answer := by
+  simp only [completedWith, afterPrivate, Simulated.recordAux, List.length_append,
+    List.length_singleton, ChainState.mk.injEq, and_true]
+  funext index
+  by_cases before : index.val < tables.consumed.length
+  · have alsoBefore : index.val < tables.consumed.length + 1 := by omega
+    simp [before, alsoBefore, List.getElem_append_left before]
+  · by_cases at_ : index.val = tables.consumed.length
+    · have same : index = ⟨_, room⟩ := Fin.ext at_
+      subst same
+      simp
+    · have after : ¬ index.val < tables.consumed.length + 1 := by omega
+      have different : index ≠ ⟨_, room⟩ := fun equal => at_ (congrArg Fin.val equal)
+      simp [before, after, Function.update_of_ne different]
+
+omit [DecidableEq S] [DecidableEq X] [Inhabited S] [SampleableType S] in
+theorem completedWith_cacheQuery (tables : Simulated E S X width) (suffix : Fin length → S)
+    (cache : (OracleSpec.ofFn (Raw E S width)).QueryCache) (key : List E)
+    (answer : Fin width → S) :
+    ({ completedWith tables suffix cache with
+        recorded := Function.update (completedWith tables suffix cache).recorded key
+          (some answer) } : ChainState E S X width length) =
+      completedWith tables suffix (cache.cacheQuery key answer) := by
+  simp only [completedWith, ChainState.mk.injEq, true_and]
+  funext other
+  by_cases same : other = key
+  · subst same
+    simp
+  · rw [Function.update_of_ne same, QueryCache.cacheQuery_of_ne _ _ same]
+
+/-- One primitive call of the adversary: filling then running the hash-chain
+simulator has the law of running the lazy simulator then filling. -/
+theorem adversary_commute {slots : ℕ} (input : Input E S X) (tables : Simulated E S X width)
+    (organized : Organized tables) (tapeRoom : tables.consumed.length < length)
+    (slotRoom : tables.touched.length < slots) :
+    𝒮[fillAll (length := length) slots tables >>= fun filled =>
+        (flatSimulator width length input).run filled] =
+      𝒮[(simulator width input).run tables >>= fun step =>
+        (fun filled => (step.1, filled)) <$> fillAll slots step.2] := by
+  by_cases routed : ∃ state event block history, input = .request state event block ∧
+      tables.reached state = some history ∧ block < width
+  · obtain ⟨state, event, block, history, rfl, recorded, below⟩ := routed
+    rw [simulator_run_routed tables recorded event below]
+    have belongs : ∀ (suffix : Fin length → S) cache,
+        chainAttempt width (completedWith tables suffix cache).reached
+          (.request state event block : Input E S X) = some (history ++ [event]) := by
+      intro _ _
+      simp [chainAttempt, completedWith, recorded, below]
+    cases cell : tables.history (history ++ [event], ⟨block, below⟩) with
+    | some value =>
+        have touched := organized (history ++ [event]) ⟨block, below⟩ (by rw [cell]; simp)
+        rw [historyBlock_run_some cell, pure_bind]
+        simp only [fillAll, bind_assoc, pure_bind, map_bind, map_pure]
+        congr 1
+        refine bind_congr fun rows => bind_congr fun suffix => ?_
+        rw [flat_run_recorded (belongs _ _)
+          (show (completedWith tables suffix (completed tables rows)).recorded (history ++ [event]) =
+            _ from completed_apply_touched touched rows)]
+        simp [chainShared, below, cell]
+    | none =>
+        rw [historyBlock_run_none cell]
+        simp only [fillAll, bind_assoc, pure_bind, map_bind, map_pure]
+        by_cases touched : history ++ [event] ∈ tables.touched
+        · have lhs : ∀ (rows : Fin slots → Fin width → S) (suffix : Fin length → S),
+              (flatSimulator width length (.request state event block)).run
+                  (completedWith tables suffix (completed tables rows), completed tables rows) =
+                pure (rowAt rows (tables.touched.idxOf (history ++ [event])) ⟨block, below⟩,
+                  (completedWith tables suffix (completed tables rows), completed tables rows)) := by
+            intro rows suffix
+            rw [flat_run_recorded (belongs _ _)
+              (show (completedWith tables suffix (completed tables rows)).recorded
+                (history ++ [event]) = _ from completed_apply_touched touched rows)]
+            simp [chainShared, below, cell]
+          simp only [lhs]
+          exact touched_law touched cell
+            ((List.idxOf_lt_length_of_mem touched).trans slotRoom)
+            fun value cache => ($ᵗ (Fin length → S)) >>= fun suffix =>
+              pure (value, (completedWith tables suffix cache, cache))
+        · have lhs : ∀ (rows : Fin slots → Fin width → S) (suffix : Fin length → S),
+              (flatSimulator width length (.request state event block)).run
+                  (completedWith tables suffix (completed tables rows), completed tables rows) =
+                ($ᵗ (Fin width → S)) >>= fun answer =>
+                  pure (answer ⟨block, below⟩,
+                    (completedWith tables suffix ((completed tables rows).cacheQuery
+                      (history ++ [event]) answer),
+                      (completed tables rows).cacheQuery (history ++ [event]) answer)) := by
+            intro rows suffix
+            rw [flat_run_fresh (belongs _ _)
+              (show (completedWith tables suffix (completed tables rows)).recorded
+                (history ++ [event]) = none from completed_apply_untouched touched rows),
+              randomOracle.run_eq, completed_apply_untouched touched rows]
+            simp only [bind_assoc, pure_bind, chainShared, below, ↓reduceDIte]
+            refine bind_congr fun answer => ?_
+            rw [completedWith_cacheQuery]
+          simp only [lhs]
+          rw [evalSPMF_bind, funext fun rows => evalSPMF_uniform_swap fun suffix answer =>
+            (pure (answer ⟨block, below⟩,
+              (completedWith tables suffix ((completed tables rows).cacheQuery
+                (history ++ [event]) answer),
+                (completed tables rows).cacheQuery (history ++ [event]) answer)) :
+              ProbComp _), ← evalSPMF_bind]
+          exact untouched_law organized touched slotRoom
+            fun value cache => ($ᵗ (Fin length → S)) >>= fun suffix =>
+              pure (value, (completedWith tables suffix cache, cache))
+  · have outside : ∀ (suffix : Fin length → S) cache,
+        chainAttempt width (completedWith tables suffix cache).reached input = none := by
+      intro _ _
+      cases input with
+      | request state event block =>
+          simp only [chainAttempt, completedWith]
+          split_ifs with below
+          · cases recorded : tables.reached state with
+            | none => rfl
+            | some history => exact absurd ⟨state, event, block, history, rfl, recorded, below⟩ routed
+          · rfl
+      | bind => rfl
+      | absorb => rfl
+      | other => rfl
+    have unrouted : ∀ state event block history, input = .request state event block →
+        tables.reached state = some history → width ≤ block := by
+      rintro state event block history rfl recorded
+      by_contra below
+      exact routed ⟨state, event, block, history, rfl, recorded, by omega⟩
+    rw [simulator_run_unrouted tables unrouted]
+    cases cachedAux : tables.aux input with
+    | some value =>
+        rw [auxCell_run_some cachedAux, pure_bind]
+        simp only [fillAll, bind_assoc, pure_bind, map_bind, map_pure]
+        congr 1
+        refine bind_congr fun rows => bind_congr fun suffix => ?_
+        rw [flat_run_private (outside _ _)]
+        simp [ChainState.respond, completedWith, cachedAux]
+    | none =>
+        rw [auxCell_run_none cachedAux]
+        simp only [fillAll, bind_assoc, pure_bind, map_bind, map_pure]
+        have lhs : ∀ (rows : Fin slots → Fin width → S) (suffix : Fin length → S),
+            (flatSimulator width length input).run
+                (completedWith tables suffix (completed tables rows), completed tables rows) =
+              pure (suffix ⟨_, tapeRoom⟩, (afterPrivate tables input suffix
+                (completed tables rows) (suffix ⟨_, tapeRoom⟩), completed tables rows)) := by
+          intro rows suffix
+          rw [flat_run_private (outside _ _), respond_completedWith_fresh cachedAux tapeRoom]
+        simp only [lhs]
+        have recordAuxCompleted : ∀ (value : S) (rows : Fin slots → Fin width → S),
+            completed (tables.recordAux width input value) rows = completed tables rows :=
+          fun _ _ => rfl
+        simp only [recordAuxCompleted, completedWith_recordAux tables input tapeRoom]
+        rw [evalSPMF_uniform_swap (A := S)]
+        refine evalSPMF_bind_congr' _ fun rows => ?_
+        rw [← evalSPMF_uniform_update ⟨_, tapeRoom⟩ fun suffix =>
+          (pure (suffix ⟨_, tapeRoom⟩, (afterPrivate tables input suffix (completed tables rows)
+            (suffix ⟨_, tapeRoom⟩), completed tables rows)) : ProbComp _)]
+        simp only [Function.update_self]
+
+end AdversaryCommute
+
 end ZkcSecurity.HashChain
