@@ -19,6 +19,9 @@ that all native behavior already has a Lean model.
   endpoint-message and residual/discharge laws.
 - [Multilinear interactive security](spec/multilinear-sumcheck-security.md): optional
   ArkLib adapters with complete and residual bounds and honest completeness.
+- [Fiat–Shamir construction](spec/fiat-shamir.md): the transform of a validator,
+  the checked transcript-construction rule and the compiled Schnorr proof
+  Entry's random-oracle knowledge soundness.
 - [Uniform query service](spec/uniform-query-service.md): a concrete structured
   handler with exact all-state query, pass-through and refusal laws, plus
   general-count Sumcheck process transport and actual imported-root bounds.

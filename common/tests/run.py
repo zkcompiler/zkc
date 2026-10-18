@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 from workspace import compiler_directory, reports_root, validate_environment  # noqa: E402
 from processes import Interrupted, checked  # noqa: E402
-from reporting import run_report  # noqa: E402
+from reporting import new_directory, run_report  # noqa: E402
 
 
 def run(arguments, *, cwd=ROOT, env=None, stdout=None):
@@ -126,6 +126,8 @@ def execute(scope, args):
              "--output", output / "requests"])
         run([sys.executable, bridge / "intent_tests.py", "--compiler", compiler / "zkc-compile",
              "--output", output / "intent"])
+        run([sys.executable, ROOT / "lean/bridges/construction/check.py",
+             "--compiler", compiler / "zkc-compile", "--output", new_directory(output, "construction")])
     elif scope == "install":
         from check_sdk import check_install
         check_install(args, run)

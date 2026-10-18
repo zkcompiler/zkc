@@ -54,6 +54,15 @@ with a handwritten honest strategy. `Examples/StructuredSchnorrHonestView`
 transfers it to the public view derived from the Interactive prover's checked
 sends; [support](../../docs/support.md#interactive-schnorr) states its premises.
 
+`Examples/StructuredSchnorrFiatShamir` applies VCVio's fixed-statement
+Fiat–Shamir extraction to the imported verifier's Sigma instance.
+`Examples/CompiledSchnorrFiatShamir` runs the compiled `example::Proof`
+verifier with a random oracle on all transcript histories, through the core
+[transcript-construction rule](../../docs/spec/fiat-shamir.md). Injective
+routing of histories (`Oracle/Encoding`) makes the experiment exactly VCVio's
+Fiat–Shamir verification run, which gives its knowledge-soundness bound under
+named assumptions, for the relation retained by the Proof Entry's own export.
+
 `TestsSecurity.Audit` checks every owned declaration's transitive axiom closure.
 Only `propext`, `Classical.choice` and `Quot.sound` are allowed. Unrelated upstream
 `sorry` declarations are not claims of this package. `clients/ArkLib.lean` in the

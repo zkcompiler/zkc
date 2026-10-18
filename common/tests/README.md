@@ -118,6 +118,8 @@ The separate [participant probe](../../lean/bridges/structured/participant.md)
 compares actual Schnorr endpoints, native G1 codecs, pending actions and provider
 state; build its test driver explicitly and run the documented standalone command.
 It requires the structured open replay executable and is not a default native check.
+`lean-native` also runs the [transcript-construction bridge](../../lean/bridges/construction/README.md),
+which checks the compiled Schnorr proof Entry's validator with the Lean rule.
 To use an existing build, run
 `python3 common/tests/run.py lean-native --compiler-build=build/compiler`.
 This scope exercises wrong-program, wrong-relation and unproved-certificate

@@ -1,6 +1,10 @@
 -- Maintained by audit_imports.py; library, test, example and selected executable consumers are audited.
 import Zkc
 import Zkc.Algebra.RingExpression
+import Zkc.Construction.FiatShamir
+import Zkc.Construction.Participant
+import Zkc.Construction.Soundness
+import Zkc.Construction.Structured
 import Zkc.Polynomial.BooleanCube
 import Zkc.Polynomial.Coordinates
 import Zkc.Polynomial.Layout
@@ -155,6 +159,7 @@ import Zkc.Source.Structured.Vocabulary
 import Zkc.Specification
 import Tests.CommonRegion
 import Tests.Component
+import Tests.ConstructionControls
 import Tests.ContractCallDerivation
 import Tests.ContractCallRequests
 import Tests.ContractCalls
@@ -230,6 +235,11 @@ import Tests.SumcheckHelperControls
 import Tests.SumcheckHelperMutants
 import Tests.SumcheckSourceComposition
 import Tests.SumcheckSourceControls
+import ZkcExamples.Construction.SchnorrProof
+import ZkcExamples.Construction.SchnorrProofBinding
+import ZkcExamples.Construction.SchnorrProofBodies
+import ZkcExamples.Construction.SchnorrProofData
+import ZkcExamples.Construction.SchnorrProofParticipant
 import ZkcExamples.NativePrograms.ContractControls
 import ZkcExamples.NativePrograms.CustomProperty
 import ZkcExamples.NativePrograms.FactorControls

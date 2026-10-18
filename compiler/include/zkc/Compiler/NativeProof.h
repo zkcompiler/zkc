@@ -52,6 +52,16 @@ llvm::Error
 checkNativeProof(mlir::ModuleOp source, mlir::ModuleOp candidate,
                  const NativeProofPolicy &policy,
                  MathematicalSelectionPolicy mathematicalSelection = {});
+/// Check the supplied candidate as `checkNativeProof` does, then export its
+/// validator participant as a flat `zkc.constructed-participant/0` record.
+/// Local helper calls are inlined at their actual operands; every remaining
+/// operation keeps its name, attributes, operation binding and result types.
+/// Exporter correctness and the meaning of each primitive remain explicit
+/// boundaries of the formal consumer.
+llvm::Expected<llvm::json::Value> exportConstructedParticipant(
+    mlir::ModuleOp source, mlir::ModuleOp candidate,
+    llvm::StringRef sourceBytes, const NativeProofPolicy &policy,
+    MathematicalSelectionPolicy mathematicalSelection = {});
 /// Request service-based occurrence selection inside the owned compiler
 /// context. The policy fixes every choice except draws, which must be empty.
 struct NativeProofSelection {
