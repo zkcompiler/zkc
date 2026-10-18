@@ -37,7 +37,9 @@ Three proved links carry that certificate to the compiled verifier:
 
 `soundness` bounds the probability that the compiled verifier accepts, for a
 fixed offset and initial transcript, in a random oracle on all typed histories,
-against a prover with `Q` queries, by `(Q + 1) / |F|`.
+against a prover with `Q` queries, by `(Q + 1) / |F|`. The bound is attained at
+zero queries: a prover that sends a guess without querying is accepted with
+probability exactly `1 / |F|` (`guess_accepted`).
 -/
 
 set_option autoImplicit false
@@ -215,6 +217,37 @@ theorem soundness (offset : F) (initial : History F G)
   rw [ENNReal.coe_inv (by simp [Fintype.card_ne_zero]), ENNReal.coe_natCast,
     Nat.cast_one] at bound
   exact image.trans bound
+
+omit [Fintype F] [SampleableType F] in
+/-- With the proof `[guess]`, the compiled verifier asks the challenge function
+once, at the initial transcript followed by the guess message and the challenge
+occurrence, and accepts when the guess plus the offset is the challenge. -/
+theorem compiledVerifier_guess (offset guess : F) (initial : History F G) :
+    compiledVerifier historyQuery offset initial [.field GuessProof.fieldDomain guess] =
+      historyQuery (initial ++ [.message (GuessProof.context.message GuessProof.guessSite 0
+          GuessProof.context.validator) (.field GuessProof.fieldDomain guess),
+        .challenge (GuessProof.context.query GuessProof.challengeSite
+          (.draw GuessProof.fieldDomain))]) >>= fun challenge =>
+        pure (.returned (some (decide (guess + offset = challenge))), []) := by
+  rw [compiledVerifier, GuessProof.compiled_transform historyQuery offset 0 initial,
+    GuessProof.verifier_correspondence]
+  simp [GuessProof.experiment, transform, Payload.value, Payload.ofValue]
+
+/-- A prover that sends a guess without querying is accepted by the compiled
+verifier with probability exactly `1 / |F|`: `soundness` is attained at zero
+queries, so the compiled experiment accepts and the imported bound is tight
+there. -/
+theorem guess_accepted (offset guess : F) (initial : History F G) :
+    Pr{let result ← (simulateQ randomOracle
+        ((pure [.field GuessProof.fieldDomain guess] : OracleComp (FieldOracle F G) (Proof F G)) >>=
+          compiledVerifier historyQuery offset initial)).run' ∅}[
+      Accepted (· = some true) result.1] = (Fintype.card F : ℝ≥0∞)⁻¹ := by
+  rw [pure_bind, compiledVerifier_guess, historyQuery, simulateQ_bind, simulateQ_spec_query,
+    StateT.run'_eq, StateT.run_bind, map_bind, randomOracle.run_eq]
+  simp only [Accepted, QueryCache.empty_apply, simulateQ_pure, StateT.run_pure, map_pure,
+    bind_assoc, pure_bind, Option.some.injEq, decide_eq_true_eq]
+  exact (prEvent_congr _ _ (fun challenge : F => challenge = guess + offset)
+    fun _ => eq_comm).trans (SampleableType.prEvent_uniformSample_eq_singleton (α := F) _)
 
 end Compiled
 

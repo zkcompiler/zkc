@@ -377,8 +377,9 @@ template keep their draw spelling until the first method with operands. ArkLib's
 worst-case round-by-round soundness imports into the typed engine for verifiers
 with a guarded verdict, each challenge round charged its own error, and a
 process-form certificate transports to a participant validator that realizes the
-process form: an ArkLib proof bounds the compiled verifier of a guessing fixture
-Entry. The import of ArkLib's interaction-stack soundness is deferred, blocked
+process form: a worst-case round-by-round proof stated in ArkLib's framework
+(written for the example) bounds the compiled verifier of a guessing fixture
+Entry, and the bound is attained at zero queries. The import of ArkLib's interaction-stack soundness is deferred, blocked
 upstream by its execution prefixes in `Type 1`, its challenge models that sample
 arbitrary distributions and its private Sumcheck instance.
 

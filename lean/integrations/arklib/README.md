@@ -124,8 +124,9 @@ process form, each challenge round charged its own error, with weighted and
 uniform bounds for fixed and adaptively chosen inputs. `FiatShamir/Realization`
 transports such a certificate to a participant validator that realizes the
 process form, and `Examples/CompiledGuessFiatShamir` uses it to bound the
-compiled verifier of the construction bridge's guessing fixture by an ArkLib
-proof.
+compiled verifier of the construction bridge's guessing fixture by a worst-case
+round-by-round proof stated in ArkLib's framework (written for the example); a
+query-free prover attains the bound.
 
 `ArkLib/Fri` models the verifier of the FRI library's low-degree test with
 ideal commitments and proves its completeness and

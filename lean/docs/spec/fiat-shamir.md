@@ -184,7 +184,8 @@ each validator's ideal meaning is the Fiat–Shamir transform of its original
 validator for every challenge function. For the compiled Sumcheck Entry,
 [multi-round security](fiat-shamir-security.md#the-compiled-sumcheck-proof-entry)
 composes this with the round-by-round soundness of the imported verifier's
-transform. The compiled guessing Entry's bound is imported from an ArkLib proof
+transform. The compiled guessing Entry's bound is imported from a worst-case
+round-by-round proof stated in ArkLib's framework (written for the example)
 ([imported certificates](fiat-shamir-security.md#imported-certificates-for-compiled-verifiers));
 the other compiled Entries have no security theorem here.
 

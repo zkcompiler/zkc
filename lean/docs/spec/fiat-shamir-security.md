@@ -498,7 +498,9 @@ compiled Entry's original validator realizes that verifier's process form
 (`realizes`), the construction bridge checks the compiled verifier against it
 (`ZkcExamples.Construction.GuessProof.compiled`), and `soundness` bounds the
 compiled verifier's acceptance against a prover with `queries` queries by
-`(queries + 1) / |F|` through `acceptance_le_of_image`. No protocol of ArkLib's
+`(queries + 1) / |F|` through `acceptance_le_of_image`. The bound is attained at
+zero queries: a prover that sends a guess without querying is accepted with
+probability exactly `1 / |F|` (`guess_accepted`). No protocol of ArkLib's
 own library reaches a compiled Entry this way yet: the worst-case forms ArkLib
 proves for its protocols are knowledge-soundness forms, which this import does
 not read.
