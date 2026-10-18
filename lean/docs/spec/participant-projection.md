@@ -175,6 +175,22 @@ rule supplies `ideal = transform ∘ spec` and the projection rule supplies
 original validator. The admission ties the checked program to the snapshot and
 so to the export's source digest.
 
+## Reading exported programs
+
+`Zkc.Construction.Reading` gives general laws of the interactive reading `spec`
+itself. Observations and challenges extend transcript values as inert
+histories, and no action, stop or data value reads one, so environments that
+agree except for transcript histories (`Similar`) give the same reading for
+continuations that also ignore histories (`specK_similar`). A loop whose body
+reads, on the encoding of every valid state at its induction index, as one step
+of a plain process followed by the encoding of the step's result reads as that
+many repeated steps (`iterate_repeatN`, `iterate_range_repeatN`), whatever
+histories its yielded transcript values carry; `Yields` states what every
+result of a plain step satisfies, which the loop laws may assume of earlier
+steps. `specK_append` reads concatenated instruction lists in sequence. With
+`spec_transform`-style uses of the construction rule these laws relate an
+export's reading to a plain verifier directly, without the projection rule.
+
 ## The compiled Sumcheck proof Entry
 
 `ZkcExamples.Construction.SumcheckProof` checks the compiled `example::Proof`
@@ -226,6 +242,25 @@ meaning specific to the Entry. The Fiat–Shamir theorems of the Sigma
 compositions are about the transforms of the imported interactive verifiers; no
 security theorem is stated for these compiled Entries.
 
+## The compiled GKR proof Entry
+
+`ZkcExamples.Construction.GkrProof` checks the compiled `example::Proof` of
+`examples/projects/gkr`. Its original export is the admitted GKR source
+(`GkrSourceData`); the whole unit, honest prover included, is admitted from
+typed bodies by `structured_views` in the kernel. The validator has an
+output-point loop and a layer loop whose body holds three inner loops, the two
+`Rounds` applications and the line coefficients, with guards for the round and
+wiring checks and helper calls for the extensions, blocks, line point and power
+sum. `compiled` runs the composed check in the kernel, and `compiled_transform`
+is the generic equation at the Entry's public inputs and acceptance output, as
+for Sumcheck. `spec_transform` uses the transcript-construction rule alone: the
+compiled meaning is the Fiat–Shamir transform of the interactive reading of the
+exported instructions, read through the acceptance output. `GkrProof.reading`
+(module `GkrProofReading`) proves that reading, on a well-formed statement,
+equal to the plain GKR verifier, which
+`ZkcSecurity.Examples.CompiledGkrFiatShamir` bounds
+([multi-round security](fiat-shamir-security.md#the-compiled-gkr-proof-entry)).
+
 ## Controls
 
 `Tests.ProjectionControls` runs the composed check on mutations of the actual
@@ -261,7 +296,11 @@ mutations of the composed export: a conjunction reading the left check twice
 reduction's point and claim (`projection-call`); and of both Sigma exports: the
 second commitment's observation absorbing the first commitment
 (`construction-observe`), a comparison of a base with itself and a conjunction
-reading the first check twice (`projection-unexplained`).
+reading the first check twice (`projection-unexplained`). For the GKR export it refuses a
+dropped first round check and a dropped wiring check (`projection-guard`), a
+mutated round claim update (`projection-unexplained`), a layer loop yielding the
+claim it started with (`projection-repeat-yield`) and a challenge origin naming
+the delivery site (`construction-challenge-site`).
 
 `Tests.ProjectionControls` also shows why the composed check takes an admitted
 original. Changing the original Schnorr root's final comparison into a

@@ -30,6 +30,7 @@ import ZkcSecurity.Examples.CausalSumcheck.SourceVerifier
 import ZkcSecurity.Examples.CausalSumcheck.Terminal
 import ZkcSecurity.Examples.CausalSumcheck.UniformService
 import ZkcSecurity.Examples.ChaumPedersenSigma
+import ZkcSecurity.Examples.CompiledGkrFiatShamir
 import ZkcSecurity.Examples.CompiledSchnorrFiatShamir
 import ZkcSecurity.Examples.CompiledSumcheckFiatShamir
 import ZkcSecurity.Examples.ExecutableSchnorrFiatShamir

@@ -66,6 +66,16 @@ tables. V's work is dominated by the dense wiring evaluations,
 `O(2^(3 * width))` field operations per layer; there is no succinct wiring
 representation, commitment or zero-knowledge claim.
 
+## Lean
+
+The [multi-round security chapter](../../lean/docs/spec/fiat-shamir-security.md#the-plain-gkr-verifier)
+gives the plain verifier a round-by-round certificate with error
+`max(2, width) / |F|` per challenge and bounds its Fiat–Shamir transform. For
+the compiled `example::Proof` Entry of the GKR project, Lean reads the exported
+validator's instructions as that plain verifier on well-formed statements and
+transfers the bound
+([compiled Entry](../../lean/docs/spec/fiat-shamir-security.md#the-compiled-gkr-proof-entry)).
+
 ## Participant code
 
 Local helpers keep scalar field arithmetic in mathematical helpers and select
