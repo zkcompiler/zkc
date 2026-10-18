@@ -378,7 +378,10 @@ error `1 / 2`, is charged `1 / 4 + 1 / 2`.
 
 `Typed.Determined` quantifies over every statement the prover can output,
 malformed ones included, so a codec that discharges it is injective and
-prefix-free on the whole statement type (`ZkcSecurity.FiatShamir.Binding`). A
+prefix-free on the whole statement type (`ZkcSecurity.FiatShamir.Binding`). The
+typed public values and binding events are part of the construction model
+(`Zkc.Construction.Binding`), whose transcript events include a typed
+public-value binding event (`Zkc.Construction.Event.publicBinding`). A
 typed public value (`PublicValue`) is a scalar, a vector whose length is part of
 the value, an index with its bound, or a count; a row (`Row`) is a statement's
 public values, each labelled by its input; and the **typed public-value binding
@@ -396,6 +399,40 @@ injectively into the transcript events and the row determines the statement
 the raw Sumcheck statement (table values, claim and round count, with no length
 check) is bound by one event and determined, while binding the table entries one
 event each with no count or length is not prefix-free and is not determined.
+
+## Imports from ArkLib's round-by-round soundness
+
+`ZkcSecurity.FiatShamir.Upstream` imports ArkLib's worst-case-per-prefix
+round-by-round soundness (`Verifier.rbrSoundnessWorstCase`) into the typed
+engine. An ArkLib verifier for a protocol specification of `n` rounds with a
+pure verdict (`Verifier.PureForm`) has a **process form** (`validator`): one
+operation per round (`signature`), receiving a prover message at a message
+round and querying the challenge at a challenge round, in round order, then
+returning the verdict on the full transcript. Its transcript interface
+(`absorb`) binds the statement as one event (`initial`, which determines it),
+absorbs a message with its round, and reads a challenge from the raw answer of
+its occurrence, uniform on the round's challenge type.
+
+`ofWorstCase` turns a worst-case proof into a `Typed.Certificate` of the process
+form: the doomed residuals are those at false states of false inputs, prover
+messages keep them doomed by the state function's `toFun_next`, a doomed full
+transcript is rejected by `toFun_full` read through the pure verdict
+(`verdict_rejected`, with `prEvent_verdict_eq_zero` as the converse a pure
+verifier's state function uses), and a challenge round's escape is the
+worst-case bound for the fixed prefix. Each challenge occurrence is charged its
+round's error (`eventError`). `worstCase_soundness` and
+`worstCase_adaptive_soundness` bound the transform's acceptance by
+`(queries + n) · bound`. `TestsSecurity.UpstreamImports` imports a two-round
+guessing protocol with error `1 / 4` and obtains `(queries + 2) / 4`.
+
+The averaged form `Verifier.rbrSoundness` is not imported: its bound is over a
+mixture of prefixes the prover samples, not a per-prefix step. ArkLib's
+interaction-stack `OrdinaryState` and `LocalSoundness` are not imported yet:
+their protocols are trees whose residuals and prefixes live in `Type 1`, while a
+validator's operation signature is in `Type`, and their challenge models sample
+an arbitrary distribution rather than a uniform raw answer, so the import needs
+a process form over those trees and a law-record premise relating each challenge
+model to a uniform raw answer.
 
 ## Role separation and transcript constructions
 
@@ -645,11 +682,13 @@ the initial transcript, read through the acceptance output the policy selects.
   below `N`, `loss = |F| / N`.
 
 The adaptive theorems take the binding as a premise. The host binds the
-policy's public inputs, here the table values, the claim and the round count.
-The [executable statement](executable.md#the-compiled-sumcheck-proof-verifier)
-discharges the premise for a binding with one event per public input, the
-table as its field entries and the round count in unary, whose events
-determine the statement.
+policy's public inputs, here the table values, the claim and the round count,
+as one typed public-value binding event (`publicInitial`): the table as a
+vector, the claim as a scalar and the round count as a count. Its row determines
+the statement (`publicInitial_determined`, from `determined_single`), and
+`adaptive_soundness_public` is the adaptive bound with no determination premise
+left; the [executable statement](executable.md#the-compiled-sumcheck-proof-verifier)
+uses the same binding.
 
 The controls (`TestsSecurity.CompiledSumcheckFiatShamir`) use the one-round
 `ZMod 5` instance of the imported verifier's controls. The premises hold

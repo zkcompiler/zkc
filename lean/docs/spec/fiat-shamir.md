@@ -213,6 +213,25 @@ initial history is the binding of the checked public values
 states the same bound for the transform of the imported interactive verifier's
 Sigma instance.
 
+## Typed requests
+
+A selected challenge's occurrence carries its typed request
+(`Zkc.Construction.Request`): the method, the operands fixed before sampling and
+the result sort. `draw` is the only method of the construction model: it has no
+operands, and its result sort is the field its service contract names
+(`Request.draw`). The model key of a challenge (`Origin.query`) spells the kind,
+the occurrence (entry, site, port and contract) and the owner, and carries the
+request. The transform reads the request from the validator's query, the draw of
+its field; the construction rule and occurrence templates read it from the
+replaced service (`Context.request`, the draw of the export's challenge field),
+and the rule checks that each challenge carries the draw of its own field. The
+exported structured key `["draw", owner, field]` and the native occurrence
+template, which already carries the method, are unchanged: with `draw` the only
+method, they encode the typed request injectively. The respelling of the export
+key as `["query", owner, method, [operand…]]`, with the occurrence encoding's
+injectivity (`occurrence_inj`) extended to the operand list, lands with the
+first method that has operands (`index`, `indices`).
+
 ## Interaction patterns
 
 A programmable history provider binds its construction identity through the
