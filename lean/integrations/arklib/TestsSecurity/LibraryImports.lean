@@ -38,6 +38,7 @@ import ZkcSecurity.Examples.CausalSumcheck.SourceVerifier
 import ZkcSecurity.Examples.CausalSumcheck.Terminal
 import ZkcSecurity.Examples.CausalSumcheck.UniformService
 import ZkcSecurity.Examples.ChaumPedersenSigma
+import ZkcSecurity.Examples.CommittedOpening
 import ZkcSecurity.Examples.CompiledGkrFiatShamir
 import ZkcSecurity.Examples.CompiledSchnorrFiatShamir
 import ZkcSecurity.Examples.CompiledSumcheckFiatShamir
@@ -58,6 +59,8 @@ import ZkcSecurity.FiatShamir.Composition
 import ZkcSecurity.FiatShamir.Decoding
 import ZkcSecurity.FiatShamir.Grinding
 import ZkcSecurity.FiatShamir.Interface
+import ZkcSecurity.FiatShamir.Obligations
+import ZkcSecurity.FiatShamir.ProviderSimulation
 import ZkcSecurity.FiatShamir.Roles
 import ZkcSecurity.FiatShamir.Sampling
 import ZkcSecurity.FiatShamir.Soundness
