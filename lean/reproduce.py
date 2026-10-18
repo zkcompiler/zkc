@@ -48,6 +48,9 @@ def build_inputs(root, with_arklib=False, with_clean=False):
     if with_arklib:
         files.append(root / 'clients/ArkLib.lean')
         optional = root / INTEGRATION
+        # A declared dependency patch is present only while an upstream change is pending.
+        files.extend(path for name in ('compatibility.json', 'compatibility.patch')
+                     if (path := optional / name).is_file())
         files.extend(optional / name for name in ('lakefile.toml', 'lake-manifest.json', 'lean-toolchain'))
         for directory in ('ZkcSecurity', 'TestsSecurity'):
             files.extend((optional / directory).rglob('*.lean'))

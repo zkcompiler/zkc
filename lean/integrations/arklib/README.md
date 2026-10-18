@@ -117,6 +117,32 @@ and Schwartz–Zippel for the line restriction, and
 to the compiled GKR `example::Proof` verifier through the checked reading of its
 exported instructions.
 
+`ArkLib/Fri` models the verifier of the FRI library's low-degree test with
+ideal commitments and proves its completeness and
+[round-by-round soundness](../../docs/spec/fri-security.md). `Protocol`
+transcribes the verifier, the prover's moves and the sequential position draws;
+`Correspondence` shows that its acceptance is ArkLib's FRI query acceptance on the
+committed trace; `Completeness` shows that the honest prover is accepted on every
+codeword; `Soundness` states the certificate, with the proximity premise as a
+named hypothesis, and bounds acceptance for every adaptive prover;
+`UniqueDecoding` discharges the premise with ArkLib's proved unique-decoding
+results; `GeneralizedJohnson` discharges the folding obligations with ArkLib's
+generalized Johnson folding bound for lines up to the cube-root radius
+`1 - (ρ + η)^(1/3)`, inside the Johnson radius `1 - ρ^(1/2)`; and
+`Certificate` restates the certificate over the verifier's residual
+processes after the first commitment, with an error per query site.
+`Examples/FriFiatShamir` presents that verifier through a typed transcript
+interface, with a block sampler for the query positions, and applies
+`FiatShamir/Typed` for a
+[Fiat–Shamir bound](../../docs/spec/fri-security.md#fiatshamir-transfer)
+with commitments read in the clear. These modules
+use the per-round lemmas of ArkLib pull request #992, which this package applies
+to its pinned ArkLib revision as a declared, hashed patch
+([`compatibility.json`](compatibility.json); see the
+[dependency baseline](../../docs/dependencies.md)) until the pull request merges
+upstream. Preparation applies it; the patch names its upstream source and keeps
+ArkLib's Apache 2.0 file headers.
+
 `VCVio/SigmaAnd` composes two VCVio Σ-protocols with one shared challenge.
 Completeness and special soundness compose directly; zero knowledge composes
 from special HVZK, a simulator given the challenge. It gives VCVio's perfect

@@ -1,4 +1,12 @@
 -- Maintained by audit_imports.py; all library, test and example modules are audit inputs; tooling is separate.
+import ZkcSecurity.ArkLib.Fri.Certificate
+import ZkcSecurity.ArkLib.Fri.Completeness
+import ZkcSecurity.ArkLib.Fri.Correspondence
+import ZkcSecurity.ArkLib.Fri.Domain
+import ZkcSecurity.ArkLib.Fri.GeneralizedJohnson
+import ZkcSecurity.ArkLib.Fri.Protocol
+import ZkcSecurity.ArkLib.Fri.Soundness
+import ZkcSecurity.ArkLib.Fri.UniqueDecoding
 import ZkcSecurity.ArkLib.Gkr.Layer
 import ZkcSecurity.ArkLib.Sumcheck.Bridge
 import ZkcSecurity.ArkLib.Sumcheck.Domain
@@ -35,6 +43,7 @@ import ZkcSecurity.Examples.CompiledSchnorrFiatShamir
 import ZkcSecurity.Examples.CompiledSumcheckFiatShamir
 import ZkcSecurity.Examples.ExecutableSchnorrFiatShamir
 import ZkcSecurity.Examples.ExecutableSumcheckFiatShamir
+import ZkcSecurity.Examples.FriFiatShamir
 import ZkcSecurity.Examples.GkrFiatShamir
 import ZkcSecurity.Examples.Schnorr
 import ZkcSecurity.Examples.SchnorrAndSigma
@@ -75,6 +84,7 @@ import TestsSecurity.CompiledSchnorrFiatShamir
 import TestsSecurity.CompiledSumcheckFiatShamir
 import TestsSecurity.ExecutableSchnorrFiatShamir
 import TestsSecurity.FiatShamirTyped
+import TestsSecurity.FriSecurity
 import TestsSecurity.LocalCoupling
 import TestsSecurity.LocalCouplingAudit
 import TestsSecurity.LocalCouplingClients

@@ -120,6 +120,7 @@ let
       "lean/clients"
       "lean/support/lake.py"
       "lean/support/evidence.py"
+      "lean/support/compatibility.py"
     ];
     leanChecks.paths = [
       "lean"

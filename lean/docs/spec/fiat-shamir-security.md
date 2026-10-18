@@ -233,8 +233,11 @@ which passes with probability one (`lowBits_zero_difficulty`,
 **Compound sites.** A compound site decodes one answer into several values, for
 example the `s` query positions of a FRI query phase squeezed from one absorbed
 prefix. Its error is the joint escape probability of the block under the uniform
-law of the block, `(1 - δ) ^ s` for a query phase over a word `δ`-far from the
-code, times the block's factor. Positions masked from `s` uniform KoalaBear
+law of the block, times the block's factor; for the FRI query phase over a
+committed word at relative distance at least `δ` from the code, at a proximity
+radius `θ` in the unique-decoding regime or up to the cube-root radius and with
+commitments read as the committed words, that law gives `(1 - min θ δ) ^ s`
+([FRI security](fri-security.md)). Positions masked from `s` uniform KoalaBear
 elements have factor `(1 + (2 ^ bits - 1) / p) ^ s`
 (`koalaBear_compound_dominated`). A query phase gated by a proof-of-work
 combines both (`koalaBear_queryPhase_escape_le`, `koalaBear_queryPhase_realized`).
@@ -242,6 +245,9 @@ With a 16-bit proof-of-work and 100 positions of 21 bits, the phase escapes with
 probability at most `32513 / p` times `(1 + 2097151 / p) ^ 100` times the block's
 uniform-law error (`koalaBear_benchmark_queryPhase_escape_le`); the block factor
 is below `1.104` (`koalaBear_benchmark_block_factor_le`), less than `0.143` bits.
+These are errors of one query site; a complete Fiat–Shamir bound charges the
+site errors along every prover query and validator path
+(`adaptive_soundness_weighted`).
 
 ## Role separation and transcript constructions
 

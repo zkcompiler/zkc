@@ -1,2 +1,3 @@
 # Unified diff context lines intentionally contain one space on empty lines.
 lean/integrations/clean/compatibility.patch whitespace=-blank-at-eol
+lean/integrations/arklib/compatibility.patch whitespace=-blank-at-eol
