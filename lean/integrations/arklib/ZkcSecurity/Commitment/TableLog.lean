@@ -159,6 +159,13 @@ theorem evalWithAnswerFn_withQueryLog (table : (d : D) → R d) :
         evalWithAnswerFn_liftM_query, QueryImpl.ofFn_apply]
       rfl
 
+/-- Mapping the result makes no query of its own. -/
+theorem tableQueryLog_map (f : α → β) (computation : OracleComp (ofFn R) α)
+    (table : (d : D) → R d) :
+    tableQueryLog (f <$> computation) table = tableQueryLog computation table := by
+  rw [map_eq_bind_pure_comp, tableQueryLog_bind]
+  simp
+
 /-- Logging makes no query of its own. -/
 theorem tableQueryLog_withQueryLog (table : (d : D) → R d) :
     ∀ oa : OracleComp (ofFn R) α, tableQueryLog oa.withQueryLog table = tableQueryLog oa table := by
@@ -168,12 +175,19 @@ theorem tableQueryLog_withQueryLog (table : (d : D) → R d) :
   | query_bind queried next ih =>
       rw [withQueryLog_bind, withQueryLog_query, bind_assoc, tableQueryLog_query_bind,
         pure_bind, tableQueryLog_map, ih (table queried), tableQueryLog_query_bind]
-where
-  tableQueryLog_map {γ δ : Type} (f : γ → δ) (computation : OracleComp (ofFn R) γ)
-      (answers : (d : D) → R d) :
-      tableQueryLog (f <$> computation) answers = tableQueryLog computation answers := by
-    rw [map_eq_bind_pure_comp, tableQueryLog_bind]
-    simp
+
+/-- A logged run of an implementation is the implementation's run of the logged computation. -/
+theorem run_simulateQ_withLogging {ι : Type} {spec : OracleSpec.{0, 0} ι} {m : Type → Type}
+    [Monad m] [LawfulMonad m] (implementation : QueryImpl spec m) :
+    ∀ oa : OracleComp spec α,
+      (simulateQ implementation.withLogging oa).run = simulateQ implementation oa.withQueryLog := by
+  intro oa
+  induction oa using OracleComp.inductionOn with
+  | pure value => simp
+  | query_bind queried next ih =>
+      rw [withQueryLog_bind, withQueryLog_query]
+      simp [simulateQ_bind, ih]
+      rfl
 
 /-- Forgetting the log recovers the computation. -/
 theorem fst_map_withQueryLog {ι : Type} {spec : OracleSpec ι} :

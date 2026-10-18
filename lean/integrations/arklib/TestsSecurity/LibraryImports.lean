@@ -49,6 +49,7 @@ import ZkcSecurity.Examples.CausalSumcheck.Terminal
 import ZkcSecurity.Examples.CausalSumcheck.UniformService
 import ZkcSecurity.Examples.ChaumPedersenSigma
 import ZkcSecurity.Examples.CommittedOpening
+import ZkcSecurity.Examples.CommittedOpeningBound
 import ZkcSecurity.Examples.CompiledGkrFiatShamir
 import ZkcSecurity.Examples.CompiledSchnorrFiatShamir
 import ZkcSecurity.Examples.CompiledSumcheckFiatShamir
@@ -104,6 +105,7 @@ import TestsSecurity.CausalSumcheck.Iteration
 import TestsSecurity.CausalSumcheck.Phases
 import TestsSecurity.CausalSumcheck.SourceVerifier
 import TestsSecurity.CausalSumcheck.UniformService
+import TestsSecurity.CommitmentBridge
 import TestsSecurity.Compatibility
 import TestsSecurity.CompiledSchnorrFiatShamir
 import TestsSecurity.CompiledSumcheckFiatShamir
