@@ -471,9 +471,10 @@ the initial transcript, read through the acceptance output the policy selects.
   `(Q + count) / |F|`, against every prover with at most `Q` queries to the
   transcript oracle on all typed histories. Acceptance ignores unread proof
   messages, so the bound also covers an acceptance of the same ideal
-  interpretation that requires the whole proof to be read. No executable meaning
-  of this Entry is covered: its validator uses loops, outside the
-  [executable subset](executable.md).
+  interpretation that requires the whole proof to be read. The
+  [executable stage](executable.md#the-compiled-sumcheck-proof-verifier)
+  transfers the bound to provers of proof bytes for the program the runtime
+  admits.
 - `adaptive_soundness`: for well-formed statements chosen after the queries,
   with decoded challenges, at most `(Q + 2) * (1 / |F| + loss)` when the initial
   transcripts `initial statement` determine the statement; `reduced_soundness`
@@ -481,9 +482,11 @@ the initial transcript, read through the acceptance output the policy selects.
   below `N`, `loss = |F| / N`.
 
 The adaptive theorems take the binding as a premise. The host binds the
-policy's public inputs, here the table values, the claim and the round count,
-but the binding model covers scalar public inputs only, so it is not proved
-that the deployed Entry's binding determines the statement.
+policy's public inputs, here the table values, the claim and the round count.
+The [executable statement](executable.md#the-compiled-sumcheck-proof-verifier)
+discharges the premise for a binding with one event per public input, the
+table as its field entries and the round count in unary, whose events
+determine the statement.
 
 The controls (`TestsSecurity.CompiledSumcheckFiatShamir`) use the one-round
 `ZMod 5` instance of the imported verifier's controls. The premises hold
