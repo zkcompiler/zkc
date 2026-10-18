@@ -766,7 +766,9 @@ the same number of blocks.
 
 `ZkcSecurity.Examples.CommittedOpening` states the joint security experiment of
 a protocol with commitment metadata, transcript binding, one challenge and one
-authenticated opening; its bound is a proposition, not a theorem.
+authenticated opening; its bound is a proposition, proved for a total
+straight-line extractor in
+[verifiers with committed tables](#verifiers-with-committed-tables).
 
 - **Protocol.** The authenticated `Configuration` fixes the scheme identity, the
   depth `k` of a binary Merkle tree and the row width. The binding event absorbs
@@ -803,7 +805,11 @@ authenticated opening; its bound is a proposition, not a theorem.
   extraction at the validator's key far. `IntendedBound` is the proposition
   `Pr[AcceptsFar] ≤ (q_T + 1) · κ · (1 - δ) + ε_ext + ε_ns` for every prover within
   the budgets: the history-oracle term, the extraction and drift term over at
-  most `q_T + 1` checkpoints, and the namespace term.
+  most `q_T + 1` checkpoints, and the namespace term. The extractor must be
+  total: one that returns no table when a row is missing makes the proposition
+  false at `δ = 1` for small `ε_ext + ε_ns`, since a prover that builds one half
+  of the tree from accepted rows is accepted with probability one half while
+  `Far` holds of the missing table.
 
 ## Verifiers with committed tables
 
