@@ -32,6 +32,7 @@ import ZkcSecurity.Examples.ChaumPedersenSigma
 import ZkcSecurity.Examples.CompiledSchnorrFiatShamir
 import ZkcSecurity.Examples.CompiledSumcheckFiatShamir
 import ZkcSecurity.Examples.ExecutableSchnorrFiatShamir
+import ZkcSecurity.Examples.ExecutableSumcheckFiatShamir
 import ZkcSecurity.Examples.Schnorr
 import ZkcSecurity.Examples.SchnorrAndSigma
 import ZkcSecurity.Examples.StructuredSchnorr
@@ -52,6 +53,7 @@ import ZkcSecurity.Oracle.Encoding
 import ZkcSecurity.VCVio.Composition
 import ZkcSecurity.VCVio.Coupling
 import ZkcSecurity.VCVio.Execution
+import ZkcSecurity.VCVio.Pruning
 import ZkcSecurity.VCVio.Schnorr
 import ZkcSecurity.VCVio.SigmaAnd
 import ZkcSecurity.VCVio.SigmaAndSchnorr
