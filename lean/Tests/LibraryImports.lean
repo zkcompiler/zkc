@@ -301,6 +301,10 @@ import ZkcExamples.Construction.GkrProof
 import ZkcExamples.Construction.GkrProofInstructions
 import ZkcExamples.Construction.GkrProofParticipant
 import ZkcExamples.Construction.GkrProofReading
+import ZkcExamples.Construction.GuessProof
+import ZkcExamples.Construction.GuessProofBodies
+import ZkcExamples.Construction.GuessProofData
+import ZkcExamples.Construction.GuessProofParticipant
 import ZkcExamples.Construction.SchnorrAndProof
 import ZkcExamples.Construction.SchnorrAndProofBodies
 import ZkcExamples.Construction.SchnorrAndProofData

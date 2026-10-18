@@ -2,8 +2,9 @@
 """Check compiled proof Entries' transcript construction and projection in Lean.
 
 For each subject, the compiled `example::Proof` Entries of the Schnorr, Sumcheck,
-composed Sumcheck and GKR examples and the compiled `example::AndProof` and
-`example::EqualityProof` Entries of the Sigma example, the driver compiles the
+composed Sumcheck and GKR examples, the compiled `example::AndProof` and
+`example::EqualityProof` Entries of the Sigma example and the compiled
+`example::Proof` Entry of the guessing fixture, the driver compiles the
 Entry, retains its
 original export, native policy, constructed candidate and exported validator
 participant, and requires the committed Lean data to be their exact rendering.
@@ -96,8 +97,14 @@ SUBJECTS = [
             (ROOT / "lean/ZkcExamples/Structured/GkrSourceData.lean", "ZkcExamples.Structured.GkrSourceData"),
             (DATA / "GkrProofParticipant.lean", "ZkcExamples.Construction.GkrProofParticipant"),
             "ZkcExamples.Construction.GkrProof", "ZkcExamples.Structured.GkrSourceViews.imported", True),
+    Subject("guess", ["example=lean/bridges/construction/fixtures/guess.zkc"],
+            (DATA / "GuessProofData.lean", "ZkcExamples.Construction.GuessProofData"),
+            (DATA / "GuessProofParticipant.lean", "ZkcExamples.Construction.GuessProofParticipant"),
+            "ZkcExamples.Construction.GuessProof", "ZkcExamples.Construction.GuessProof.imported", True),
 ]
 SIGMA = {"schnorr-and", "chaum-pedersen"}
+# Subjects whose native refusal is the generic domain-separator mutation alone.
+DOMAIN_SEPARATED = SIGMA | {"guess"}
 
 
 def digest(data):
@@ -218,6 +225,10 @@ class Driver:
         def decision_compares_base_with_itself(instructions):
             instruction(instructions, "algebra.group_equal")[3][:] = [0, 0]
 
+        def decision_compares_sum_with_itself(instructions):
+            comparison = instruction(instructions, "algebra.field_equal")
+            comparison[3][:] = [comparison[3][0], comparison[3][0]]
+
         def loop_body(instructions):
             return instruction(instructions, "protocol.loop")[5][0][1]
 
@@ -321,6 +332,12 @@ class Driver:
                      "stale-claim-yielded": "projection-repeat-yield"}
             construction_accepts = {"round-check-dropped", "wiring-check-dropped", "claim-update-mutated",
                                     "stale-claim-yielded"}
+        elif subject.name == "guess":
+            mutate("wrong-domain-separator", challenge_names_delivery)
+            mutate("decision-compares-sum-with-itself", decision_compares_sum_with_itself)
+            codes = {"wrong-domain-separator": "construction-challenge-site",
+                     "decision-compares-sum-with-itself": "projection-unexplained"}
+            construction_accepts = {"decision-compares-sum-with-itself"}
         elif subject.name in SIGMA:
             mutate("second-commitment-omitted", second_commitment_omitted)
             mutate("decision-compares-base-with-itself", decision_compares_base_with_itself)
@@ -488,7 +505,7 @@ def main():
             result["refused_mutations"] = driver.lean_rule(subject, original, exported)
             if subject.name == "schnorr":
                 result["native_refusals"] = driver.native_refusal(subject, candidate, exported)
-            elif subject.name in SIGMA:
+            elif subject.name in DOMAIN_SEPARATED:
                 prefix = f"{subject.name}:"
                 result["native_refusals"] = driver.native_refusals(
                     subject, driver.domain_separator_refusal(candidate, exported, prefix), prefix)
