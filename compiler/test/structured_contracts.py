@@ -99,7 +99,7 @@ with case('source-component-contracts-use-the-existing-product-layout'):
 
 with case('all-contracts-and-explicit-formula-independent-of-selected-entry'):
     snapshot = export(source)
-    assert len(snapshot) == 9 and len(snapshot[5][0]) == 10
+    assert len(snapshot) == 10 and len(snapshot[5][0]) == 10
     assert snapshot[5][0][-1] == 'predicate'
     assert [row[0] for row in snapshot[8]] == ['child', 'main']
     table = dict(snapshot[8])

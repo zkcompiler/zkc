@@ -37,20 +37,13 @@ def indexDecimal (text : String) : Except String Nat := do
   if value ≥ indexLimit then throw "structured-index-canonical"
   return value
 
-def field (json : Json) : Except String String := do
-  let name ← string json
-  if name != scalarDomain then throw "structured-field-domain"
-  return name
+/-- Identities are decoded as strings; admission resolves them against the
+unit's catalogue rows. -/
+def field (json : Json) : Except String String := string json
 
-def group (json : Json) : Except String String := do
-  let name ← string json
-  if name != groupDomain then throw "structured-group-domain"
-  return name
+def group (json : Json) : Except String String := string json
 
-def service (json : Json) : Except String String := do
-  let name ← string json
-  if name != scalarServiceContract then throw "structured-service-contract"
-  return name
+def service (json : Json) : Except String String := string json
 
 def type (json : Json) : Except String Ty := do
   match ← array json with
@@ -99,8 +92,7 @@ def descriptor (json : Json) : Except String Descriptor := do
   | [.str "index.equal"] => return .indexEqual
   | [.str "field.constant", d, n] =>
       let text ← string n
-      let value ← decimal text
-      if value ≥ scalarModulus then throw "structured-field-canonical"
+      let _ ← decimal text
       return .fieldConstant (← field d) text
   | [.str "field.add", d] => return .fieldAdd (← field d)
   | [.str "field.subtract", d] => return .fieldSubtract (← field d)
@@ -282,19 +274,53 @@ def definition (json : Json) : Except String Definition := do
     return .map ⟨← string name, ← types inputs, ← types outputs, ← string helper, ← booleans rowwise⟩
   | _ => throw "structured-definition"
 
+def domainSort (json : Json) : Except String DomainSort := do
+  let some sort := DomainSort.ofSpelling (← string json) | throw "structured-catalogue-sort"
+  return sort
+
+def modulus : Json → Except String (Option Nat)
+  | .null => pure none
+  | json => do
+    let text ← json.getStr?.mapError fun _ => "structured-catalogue-modulus"
+    let some value := Source.Format.canonicalDecimal text 1024 | throw "structured-catalogue-modulus"
+    return some value
+
+def nominal (json : Json) : Except String Nominal := do
+  match ← array json with
+  | [.str "nominal", identity, sort, members, capabilities, value] =>
+    let members ← (← array members).mapM fun member => do
+      match ← array member with
+      | [name, identity] => return (← string name, ← string identity)
+      | _ => throw "structured-catalogue-member"
+    return ⟨← string identity, ← domainSort sort, members, ← strings capabilities, ← modulus value⟩
+  | _ => throw "structured-catalogue"
+
+def serviceRow (json : Json) : Except String Service := do
+  match ← array json with
+  | [.str "service", contract, sampled, methods] =>
+    return ⟨← string contract, ← string sampled, ← strings methods⟩
+  | _ => throw "structured-catalogue"
+
+def catalogue (json : Json) : Except String Catalogue := do
+  match ← array json with
+  | [nominals, services] =>
+    return { nominals := ← (← array nominals Limits.tableEntries).mapM nominal,
+             services := ← (← array services Limits.tableEntries).mapM serviceRow }
+  | _ => throw "structured-catalogue"
+
 def digestValid (source : String) : Bool :=
   source.length == 71 && source.toList.take 7 == "sha256:".toList &&
     (source.toList.drop 7).all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f'))
 
 def snapshot (json : Json) : Except String Snapshot := do
   match ← array json with
-  | [.str "zkc.structured-source/0", .str "original", digest, entry, domains, relations, bindings, definitions, contracts] =>
+  | [.str "zkc.structured-source/0", .str "original", digest, entry, domains, relations, bindings, definitions, contracts, rows] =>
     let source ← string digest
     if !digestValid source then throw "structured-source-digest"
     return ⟨source, ← string entry, ← (← array domains Limits.tableEntries).mapM domain,
       ← (← array relations Limits.tableEntries).mapM relation, ← (← array bindings Limits.tableEntries).mapM binding,
       ← (← array definitions Limits.tableEntries).mapM definition,
-      ← (← array contracts Limits.tableEntries).mapM protocolContract⟩
+      ← (← array contracts Limits.tableEntries).mapM protocolContract, ← catalogue rows⟩
   | _ => throw "structured-envelope"
 
 /-- Lexical limits precede the recursive JSON parser, including inside unused bodies. -/

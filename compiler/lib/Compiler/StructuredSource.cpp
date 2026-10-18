@@ -3,7 +3,9 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/Services.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/Operations.h"
@@ -25,6 +27,12 @@ constexpr uint64_t staticVisitLimit = 100000;
 constexpr size_t effectiveSiteByteLimit = 4096;
 constexpr uint64_t staticSiteByteLimit = 16 * 1024 * 1024;
 
+/// Catalogue identities and random services a unit uses. Their rows are
+/// exported with the unit, closed under associated members.
+struct UsedIdentities {
+  llvm::StringSet<> domains, services;
+};
+
 // This profile is deliberately smaller than the installed native catalogue.
 // Catalogue resolution below still owns nominal arguments, full ordered ports,
 // and parameters; membership alone never authorizes an execution.
@@ -38,7 +46,7 @@ bool primitiveContract(StringRef contract) {
       contract);
 }
 
-Expected<OperationBinding> primitiveBinding(Operation *op) {
+Expected<OperationBinding> primitiveBinding(Operation *op, UsedIdentities &used) {
   auto binding = readBinding(op);
   if (!binding)
     return binding.takeError();
@@ -46,8 +54,12 @@ Expected<OperationBinding> primitiveBinding(Operation *op) {
   if (!primitiveContract(application.contract) ||
       (StringRef(application.contract).starts_with("index.")
            ? !application.arguments.empty()
-           : application.arguments != std::vector<std::string>{"bls12-381.fr"}))
+           : application.arguments.size() != 1 ||
+                 installedDomains().identitySort(application.arguments[0]) !=
+                     "Field"))
     return error("structured-source-binding");
+  for (const auto &argument : application.arguments)
+    used.domains.insert(argument);
   if (!application.implementation.empty())
     return error("structured-source-implementation");
   auto resolved = resolveLogicalBinding(application);
@@ -91,43 +103,100 @@ json::Value contractValue(Attribute attr) {
   return values;
 }
 
-Expected<json::Value> sort(Type type) {
+// Field, vector and group sorts name catalogue identities admitted for those
+// logical kinds; services name installed random services. The exported
+// catalogue carries the rows of every identity used, so Lean resolves each
+// sort against rows rather than against fixed spellings.
+Expected<json::Value> encodeSort(Type type, UsedIdentities &used) {
+  const auto &catalog = installedDomains();
+  auto nominal = [&](StringRef kind, StringRef sort,
+                     StringRef identity) -> Expected<json::Value> {
+    if (catalog.identitySort(identity) != sort ||
+        !catalog.admitsLogicalType(kind, identity))
+      return error("structured-source-type");
+    used.domains.insert(identity);
+    return json::Array{kind, identity};
+  };
   if (type.isSignlessInteger(1))
     return json::Array{"bool"};
   if (type.isUnsignedInteger(64))
     return json::Array{"index"};
-  if (auto field = dyn_cast<algebra::FieldType>(type)) {
-    if (field.getDomain() == "bls12-381.fr")
-      return json::Array{"field", field.getDomain()};
-  }
-  if (auto vector = dyn_cast<algebra::FieldVectorType>(type)) {
-    if (vector.getDomain() == "bls12-381.fr")
-      return json::Array{"vector", vector.getDomain()};
-  }
-  if (auto group = dyn_cast<algebra::GroupType>(type)) {
-    if (group.getDomain() == "bls12-381.g1")
-      return json::Array{"group", group.getDomain()};
-  }
+  if (auto field = dyn_cast<algebra::FieldType>(type))
+    return nominal("field", "Field", field.getDomain());
+  if (auto vector = dyn_cast<algebra::FieldVectorType>(type))
+    return nominal("vector", "Field", vector.getDomain());
+  if (auto group = dyn_cast<algebra::GroupType>(type))
+    return nominal("group", "Group", group.getDomain());
   if (auto service = dyn_cast<protocol_ir::ServiceReferenceType>(type)) {
-    if (service.getContract() == "random.bls12-381.fr/0")
-      return json::Array{"service", service.getContract()};
+    StringRef sampled = randomServiceField(service.getContract());
+    if (sampled.empty())
+      return error("structured-source-type");
+    used.services.insert(service.getContract());
+    used.domains.insert(sampled);
+    return json::Array{"service", service.getContract()};
   }
   return error("structured-source-type");
 }
 
-Expected<json::Array> sorts(TypeRange types, bool services = false) {
+Expected<json::Array> encodeSorts(TypeRange types, UsedIdentities &used,
+                                  bool services = false) {
   if (types.size() > signatureLimit)
     return error("structured-source-limit");
   json::Array result;
   for (Type type : types) {
     if (!services && isa<protocol_ir::ServiceReferenceType>(type))
       return error("structured-source-service");
-    auto encoded = sort(type);
+    auto encoded = encodeSort(type, used);
     if (!encoded)
       return encoded.takeError();
     result.push_back(std::move(*encoded));
   }
   return result;
+}
+
+// Rows of the used identities, closed under associated members, in catalogue
+// order: ["nominal", identity, sort, [[member, identity]...], [capability...],
+// modulus or null]. Services: ["service", contract, sampled field, [method...]],
+// with "index" exactly where the sampled field has IndexRandomness.
+json::Value catalogueSlot(const UsedIdentities &used) {
+  const auto &catalog = installedDomains();
+  llvm::StringSet<> closure;
+  SmallVector<std::string> pending;
+  for (const auto &identity : used.domains)
+    pending.push_back(identity.getKey().str());
+  while (!pending.empty()) {
+    std::string identity = pending.pop_back_val();
+    if (!closure.insert(identity).second)
+      continue;
+    if (const auto *domain = catalog.domain(identity))
+      for (const auto &member : domain->associated)
+        pending.push_back(member.identity);
+  }
+  json::Array nominals, services;
+  for (const auto &domain : catalog.allDomains()) {
+    if (!closure.contains(domain.identity))
+      continue;
+    json::Array members, capabilities;
+    for (const auto &member : domain.associated)
+      members.push_back(json::Array{member.member, member.identity});
+    for (const auto &capability : domain.capabilities)
+      capabilities.push_back(capability);
+    nominals.push_back(json::Array{
+        "nominal", domain.identity, domain.sort, std::move(members),
+        std::move(capabilities),
+        domain.modulus.empty() ? json::Value(nullptr)
+                               : json::Value(domain.modulus)});
+  }
+  for (const auto &service : randomServices) {
+    if (!used.services.contains(service.contract))
+      continue;
+    json::Array methods{"draw"};
+    if (serviceMethod(service.contract, "index"))
+      methods.push_back("index");
+    services.push_back(json::Array{"service", service.contract, service.field,
+                                   std::move(methods)});
+  }
+  return json::Array{std::move(nominals), std::move(services)};
 }
 
 // Count lexical JSON arrays, rather than only native region nesting. A native
@@ -186,6 +255,12 @@ class Exporter {
   llvm::StringSet<> sites;
   llvm::DenseMap<Operation *, SmallVector<Operation *>> dependencies;
   unsigned instructions = 0;
+  UsedIdentities used;
+
+  Expected<json::Value> sort(Type type) { return encodeSort(type, used); }
+  Expected<json::Array> sorts(TypeRange types, bool services = false) {
+    return encodeSorts(types, used, services);
+  }
 
   Expected<StringRef> reference(Operation &op, StringRef attribute,
                                 ArrayRef<StringRef> allowedKinds,
@@ -316,7 +391,7 @@ class Exporter {
         return std::move(e);
       auto ref = op.getAttrOfType<FlatSymbolRefAttr>("binding");
       auto binding =
-          primitiveBinding(ref ? symbols.lookup(ref.getValue()) : nullptr);
+          primitiveBinding(ref ? symbols.lookup(ref.getValue()) : nullptr, used);
       if (!binding)
         return binding.takeError();
       std::string expected = "algebra.exec." + binding->application.contract;
@@ -413,8 +488,12 @@ class Exporter {
       if (auto e = attributes(op, {"owner", "method", "site"}))
         return std::move(e);
       auto result = dyn_cast<algebra::FieldType>(op.getResult(0).getType());
-      if (query.getMethod() != "draw" || op.getNumOperands() != 1 || !result ||
-          result.getDomain() != "bls12-381.fr")
+      auto service = op.getNumOperands() == 1
+                         ? dyn_cast<protocol_ir::ServiceReferenceType>(
+                               op.getOperand(0).getType())
+                         : protocol_ir::ServiceReferenceType();
+      if (query.getMethod() != "draw" || !service || !result ||
+          result.getDomain() != randomServiceField(service.getContract()))
         return error("structured-source-service");
       return json::Array{"draw", query.getOwner(), result.getDomain()};
     }
@@ -791,9 +870,13 @@ class Exporter {
     json::Array rowwise;
     if (map) {
       auto mask = op.getAttrOfType<DenseBoolArrayAttr>("rowwise");
-      Type field = algebra::FieldType::get(op.getContext(), "bls12-381.fr");
-      Type vector =
-          algebra::FieldVectorType::get(op.getContext(), "bls12-381.fr");
+      auto lifted = type.getNumResults() == 1
+                        ? dyn_cast<algebra::FieldVectorType>(type.getResult(0))
+                        : algebra::FieldVectorType();
+      if (!lifted)
+        return error(code, "scalar helper ABI or row mask");
+      Type field = algebra::FieldType::get(op.getContext(), lifted.getDomain());
+      Type vector = lifted;
       if (!mask || mask.size() != type.getNumInputs() ||
           !llvm::is_contained(mask.asArrayRef(), true) ||
           type.getNumResults() != 1 || type.getResult(0) != vector ||
@@ -821,11 +904,13 @@ class Exporter {
   // cycle/depth checks. These two memoized profiles additionally constrain
   // every transitive instruction, including unused calls and discarded results.
   Error preparationProfiles() {
-    llvm::DenseSet<Operation *> totalChecked, ringChecked;
-    std::function<Error(Operation *, bool)> check = [&](Operation *op,
-                                                        bool ring) -> Error {
-      auto &checked = ring ? ringChecked : totalChecked;
-      if (checked.contains(op))
+    llvm::DenseSet<Operation *> totalChecked;
+    llvm::DenseMap<Operation *, Type> ringChecked;
+    // A ring closure is checked against the one field its map lifts.
+    std::function<Error(Operation *, Type)> check = [&](Operation *op,
+                                                        Type field) -> Error {
+      bool ring = static_cast<bool>(field);
+      if (ring ? ringChecked.lookup(op) == field : totalChecked.contains(op))
         return Error::success();
       StringRef code =
           ring ? "structured-source-map" : "structured-source-realization";
@@ -838,7 +923,8 @@ class Exporter {
           premises && !premises.empty())
         return error(code, "helper preconditions");
       if (ring) {
-        Type field = algebra::FieldType::get(op->getContext(), "bls12-381.fr");
+        if (ringChecked.contains(op))
+          return error(code, "scalar closure ABI");
         auto type = helper.getFunctionType();
         for (Type port :
              llvm::concat<const Type>(type.getInputs(), type.getResults()))
@@ -847,7 +933,7 @@ class Exporter {
       }
       for (Operation &instruction : helper.getBody().front()) {
         if (auto call = dyn_cast<func::CallOp>(instruction)) {
-          if (auto e = check(symbols.lookup(call.getCallee()), ring))
+          if (auto e = check(symbols.lookup(call.getCallee()), field))
             return e;
           continue;
         }
@@ -864,16 +950,32 @@ class Exporter {
         if (!allowed || instruction.getNumRegions())
           return error(code, instruction.getName().getStringRef());
       }
-      checked.insert(op);
+      if (ring)
+        ringChecked[op] = field;
+      else
+        totalChecked.insert(op);
       return Error::success();
     };
-    for (Operation &op : unit.getBody().front())
-      if (isa<local::RealizeOp, algebra::MapRealizeOp>(op))
-        if (auto e = check(
-                symbols.lookup(
-                    op.getAttrOfType<FlatSymbolRefAttr>("helper").getValue()),
-                isa<algebra::MapRealizeOp>(op)))
-          return e;
+    for (Operation &op : unit.getBody().front()) {
+      if (!isa<local::RealizeOp, algebra::MapRealizeOp>(op))
+        continue;
+      Type field;
+      if (isa<algebra::MapRealizeOp>(op)) {
+        auto type = signature(op);
+        auto lifted =
+            type && type.getNumResults() == 1
+                ? dyn_cast<algebra::FieldVectorType>(type.getResult(0))
+                : algebra::FieldVectorType();
+        if (!lifted)
+          return error("structured-source-map", "scalar closure ABI");
+        field = algebra::FieldType::get(op.getContext(), lifted.getDomain());
+      }
+      if (auto e = check(
+              symbols.lookup(
+                  op.getAttrOfType<FlatSymbolRefAttr>("helper").getValue()),
+              field))
+        return e;
+    }
     return Error::success();
   }
 
@@ -1146,7 +1248,7 @@ public:
         if (auto e = attributes(
                 op, {"sym_name", "contract", "arguments", "implementation"}))
           return std::move(e);
-        auto binding = primitiveBinding(&op);
+        auto binding = primitiveBinding(&op, used);
         if (!binding)
           return binding.takeError();
         bindings.push_back(
@@ -1212,7 +1314,8 @@ public:
                        std::move(relations),
                        std::move(bindings),
                        std::move(definitions),
-                       std::move(contracts)};
+                       std::move(contracts),
+                       catalogueSlot(used)};
   }
 };
 } // namespace

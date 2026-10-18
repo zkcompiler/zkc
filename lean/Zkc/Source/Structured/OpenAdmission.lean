@@ -66,12 +66,16 @@ def resolveProtocolOp (snapshot : Snapshot) (domains : List DomainSpec)
     return .restrict type (← resolveScope interface.roles selected)
   | .draw owner field =>
     recordSite site true
-    if field != scalarDomain then throw "structured-field-domain"
+    snapshot.catalogue.require field .field "Field"
     let owner ← role owner
     let [operand] := operands | throw "structured-draw-signature"
     let some (some input) := origins[operand]? | throw "structured-service-root"
     if inputScopes[input]? != some [owner] then throw "structured-service-owner"
-    if arguments != [.service scalarServiceContract] then throw "structured-service-contract"
+    -- The catalogue row says the service samples the field and offers `draw`;
+    -- the participant query signature names the service by its field.
+    let [.service contract] := arguments | throw "structured-service-contract"
+    snapshot.catalogue.requireDraw contract field
+    if contract != "random." ++ field ++ "/0" then throw "structured-service-contract"
     return .draw owner field site
   | .statement relation selectors acceptance target =>
     if !site.isEmpty then throw "structured-pure-site"

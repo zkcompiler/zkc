@@ -27,8 +27,8 @@ instructions. Admission refuses operations outside the vocabulary specified on
 this page, including conditional completion and construction-start, even in
 dormant declarations.
 
-Bindings are separate noncallable metadata in the exact nine-slot envelope
-`[format, original, digest, entry, domains, relations, bindings, definitions, contracts]`.
+Bindings are separate noncallable metadata in the exact ten-slot envelope
+`[format, original, digest, entry, domains, relations, bindings, definitions, contracts, catalogue]`.
 Each row is `["binding", name, contract, arguments, implementation]`. All rows,
 including unused rows, are checked. Names match ASCII
 `[A-Za-z_][A-Za-z0-9_.-]*`, occupy at most 256 bytes and share the domain,
@@ -172,12 +172,67 @@ uniform sampling does not follow from handle identity.
 `UnitPayload.available` records `checkUnitAvailability ... = .ok ()`, which is
 computational admission evidence. Denotation alone never licenses admission.
 
+## Domain catalogue
+
+Every identity a unit names resolves against catalogue rows
+(`Structured.Catalogue`): the field and group identities of types and
+operations, binding roots, map fields and random-service contracts. Admission
+never compares an identity with a fixed name. The last envelope slot is
+`[nominal-rows, service-rows]`, the rows of the identities the unit uses, with
+the spelling and meaning of the [native export contract](../../../docs/spec/formats/structured-source.md#envelope-and-types).
+A nominal row is `["nominal", identity, sort, members, capabilities, modulus]`
+and a service row is `["service", contract, sampled-field, methods]`.
+
+`Catalogue.check` applies the rules of the native catalogue constructor to the
+exported rows: identities are valid and unique; a modulus appears only on a
+field row, is canonical and at least two, and has at most 1024 digits; members
+are unique, each declared for the row's sort and naming a row of the member's
+sort; capability facts are unique and declared for the row's sort; a
+`PairingField` row names distinct source groups, and a target group when
+present, that act by scalars of that field; a service samples a field row,
+offers `draw`, and offers `index` exactly when that field has
+`IndexRandomness`. The modulus of a field row is its characteristic, for a
+prime field and for an extension alike. No rule assumes a characteristic: a
+characteristic-two prime field and an extension field without `PrimeField` are
+well-formed rows.
+
+`Catalogue.agrees` requires every exported row to equal the environment's row
+for its identity. The importer's environment is `admittedCatalogue`: the
+BLS12-381 scalar field `bls12-381.fr` with its pairing groups `bls12-381.g1`,
+`bls12-381.g2` and `bls12-381.gt`, and the service `random.bls12-381.fr/0`. The
+environment also lists the admitted sort instances: field and vector over
+`bls12-381.fr`, group over `bls12-381.g1` and that service. Every stored type,
+in all signatures, results, selected types and region signatures including
+dormant bodies, names exported rows of its sort and is an admitted instance.
+
+Operations require facts of their rows. Field arithmetic, constants and
+equality require `Field`, and a constant is below the field's modulus. Group
+identity, addition and equality require `ScalarAction`, and scaling also
+requires the group's `Scalar` member to be the named field. A bounded read
+names a field row. A binding root is a field row with its family's capability.
+A draw requires a service row that samples the field and offers `draw`, and its
+participant query names that service `random.` followed by the field identity
+and `/0`. A map lifts the field of its vector result, which requires `Field`.
+Admission refuses with the failed condition: `structured-catalogue-identity`,
+`-modulus`, `-duplicate`, `-member`, `-capability`, `-pairing`, `-service`,
+`-unknown` and `-mismatch` for rows; `structured-domain-unknown`, `-sort`,
+`-capability` and `-member` for resolution; `structured-type-unadmitted` for a
+sort instance outside the environment; `structured-field-canonical` for a
+constant at or above the modulus; and `structured-service-contract` for
+services.
+
+`Catalogue.Justified` states the data facts that meanings rely on: the modulus
+of a field row is prime, and the modulus of a `CharacteristicNotTwo` row is not
+two. `blsCatalogue_justified` proves it for the environment, with the
+BLS12-381 scalar modulus prime by a Lucas certificate whose modular powers the
+kernel evaluates (`blsModulus_prime`).
+
 ## Shared mathematical and component meaning
 
 `assignment F G` maps Boolean/index/field/vector/group/service sorts to
-`Bool`, `Nat`, `F`, `List F`, `G`, and `Nat`. Admission permits exactly the
-BLS12-381 scalar and G1 nominal tags and the corresponding random-service
-contract. The evaluator uses explicit `CommRing F`, `AddCommGroup G`,
+`Bool`, `Nat`, `F`, `List F`, `G`, and `Nat`. Admission resolves the nominal
+identities of these sorts against the [domain catalogue](#domain-catalogue).
+The evaluator uses explicit `CommRing F`, `AddCommGroup G`,
 `Module F G` and decidable equality laws. Group scaling is scalar action with
 group operand first in the source. No arbitrary group is silently equated to
 its scalar field.
@@ -284,10 +339,12 @@ one canonical u64 decimal string; every other primitive takes no parameters.
 No leading zero except `"0"`, sign, whitespace, non-ASCII digit, field reduction
 or wrapping is accepted. Values through `18446744073709551615` are admitted.
 
-Here `I` is index, `B` Boolean, `F` the exact nominal `bls12-381.fr` scalar,
-and `V` its ordered vector. Every native operation has literal prefix
-`algebra.exec.`; the suffixes in the table are exhaustive. Index contracts have
-no domain arguments; vector and field contracts have exactly `["bls12-381.fr"]`.
+Here `I` is index, `B` Boolean, `F` the binding's root field identity, and `V`
+its ordered vector. Every native operation has literal prefix `algebra.exec.`;
+the suffixes in the table are exhaustive. Index contracts have no domain
+arguments; vector and field contracts have exactly one argument, a field row
+of the [domain catalogue](#domain-catalogue) with `Field`, or with `CommRing`
+for `vector.equal`.
 
 | Native suffix | Binding contract | Inputs | Outputs |
 |---|---|---|---|
@@ -336,7 +393,7 @@ arithmetic must state those bounds.
 
 ## Retained realization and map declarations
 
-The nine-slot envelope retains two additional definition variants, in original
+The ten-slot envelope retains two additional definition variants, in original
 encounter order:
 
 ```text
@@ -442,7 +499,7 @@ prescan: the stopping decision follows the ordered shape prefix above.
 The exact five-field instruction row is
 `[["protocol_apply", callee, roles], operands, resultTypes, [], site]`.
 The descriptor has exactly three fields and occupies an ordinary instruction
-row of the nine-slot snapshot envelope. Admission requires a flat nonempty target, exact ordered full ABI,
+row of the ten-slot snapshot envelope. Admission requires a flat nonempty target, exact ordered full ABI,
 zero regions, a nonempty site, and one caller role for every ordered callee role.
 The substitution is injective and in range. Protocol declaration names, role names and real sites
 use ASCII `[A-Za-z_][A-Za-z0-9_]*` with the separate 512-byte source limit;
@@ -543,7 +600,7 @@ values.
 
 The descriptor is exactly
 `["protocol_repeat", carried, maximum, roles, carried_roles]` in the
-five-field instruction row of the nine-slot snapshot envelope. `carried` is a natural
+five-field instruction row of the ten-slot snapshot envelope. `carried` is a natural
 at most 512; `maximum` is a natural at most 1048576. The first operand is the
 count. The next `carried` operands are state, and the remaining operands are
 immutable captures. Ordered result types equal the state types. There is exactly

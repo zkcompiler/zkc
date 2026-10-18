@@ -362,7 +362,8 @@ Native SSA/Lean differential tests cover the admitted finite scalar profile.
 The separate [structured import](spec/formats/structured-source.md) exports
 original protocol-stage units: shared helpers, protocol roots, retained contracts
 and formula links, checked primitives, maps and realizations, protocol
-applications and repeats. The native exporter and an independent C++ SSA
+applications and repeats, with the native catalogue rows of every domain
+identity and random service they use. The native exporter and an independent C++ SSA
 reference check this profile, including the 4096-instruction admission budget,
 reference depth 64 and effective-site collisions. The
 [structured bridge](../lean/bridges/structured/README.md) compares native SSA
@@ -372,7 +373,11 @@ construction-start selection are outside this profile.
 
 Lean independently checks each structured export's metadata, signatures, helper
 linking, role scopes, service provenance and computational availability, and
-proves its process equations on the shared Region carrier.
+proves its process equations on the shared Region carrier. It resolves every
+domain identity against the exported catalogue rows and admits the rows that
+agree with its environment: the BLS12-381 scalar field, its pairing groups and
+its random service, at field, vector, G1 and service types. Other installed
+identities export their rows and are refused by Lean admission.
 [Formal support](../lean/docs/support.md) states exact experiments and premises,
 including: the Interactive Schnorr verifier contracts, an honest prover derived
 from the checked source's sends and the Sigma properties; the Schnorr AND and
