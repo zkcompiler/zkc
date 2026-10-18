@@ -68,6 +68,49 @@ dynamic bounds,
 reference results, ownership transfer,
 asynchronous providers and other service contracts require explicit extensions.
 
+## Operands fixed before sampling
+
+A request's operands are the values it reads besides its service reference,
+such as the `index` bound. The constant-bound rule above is the static instance
+of this contract, which every request operand meets, including dynamic operands
+that a future method or construction admits.
+
+1. **Reconstruction.** Both roles compute the operand before the request from
+   data both hold: bound public inputs, authenticated configuration, absorbed
+   messages and earlier challenge answers. Admission checks that both
+   computations are the same pure function of those data.
+2. **Binding.** The operand is part of the request and therefore of its
+   transcript query: the native construction absorbs it with the occurrence, and
+   a provider's serialization covers it.
+3. **Validity.** An index bound is at least one and a power of two where the
+   method requires it; a block size lies between zero and its static maximum;
+   window arithmetic stays in range and overflow is checked. An invalid operand
+   stops with `refused` before the transcript state is consumed, at both roles.
+4. **Limits.** Every dynamic operand has a static maximum, so executable
+   checking, allocation and weighted budgets do not depend on runtime values.
+5. **Provenance.** An operand that enters a certificate error, such as a gate
+   difficulty, an index bound, a block size, a query count, a blowup, a folding
+   arity or an extension degree, is also a bound statement input or
+   authenticated configuration, or the validator checks it, before the request,
+   against an authenticated bound on the side where the error grows: a minimum
+   for a difficulty, a query count or an extension degree, and the static
+   maximum for a size. A size the producer supplies stays expressible when the
+   verifier checks it against an authenticated minimum and maximum. A bound
+   read from the proof with no such check is refused; at zero difficulty or a
+   single query it lets a false statement be accepted with probability close to
+   one.
+6. **Security parameters.** A certificate's error is a function of the request,
+   operands included, and each oracle key is charged its worst case over the
+   adversary's paths. When the adversary can influence an operand, the effective
+   charge is the supremum of the error over the operand's admitted range. A
+   production claim needs the operand restricted to an authenticated admissible
+   range that supports the claimed bound; binding an attacker-selected parameter
+   does not by itself establish a security level. A batch admitted at zero items
+   inherits no production claim.
+
+The [construction obligations](../ir/construction-obligations.md) state the
+remaining conditions a challenge construction meets.
+
 ## Participant representation
 
 Projection keeps ordinary participant SSA arguments data-only and installs a

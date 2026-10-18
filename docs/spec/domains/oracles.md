@@ -170,7 +170,10 @@ depend on a random draw without being that draw or having its distribution.
 A sampled bound must have the intended relationship to the table height.
 
 A transcript construction must observe the required public context before its
-derived query. Observing a statistic, a different received copy or another
+derived query. A construction that leaves an opening out of its transcript meets
+the [certified-opening conditions](../ir/construction-obligations.md#certified-openings);
+the scheme identity and the table's dimensions come from bound or authenticated
+data, never from the root or the opening. Observing a statistic, a different received copy or another
 provider's history is not automatically observation of the checked root. Neither
 source ordering nor a matching dependency label proves an injective encoding or
 sampling law. Repeated coordinates remain repeated logical occurrences.

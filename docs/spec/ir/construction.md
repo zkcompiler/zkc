@@ -38,7 +38,10 @@ behavior. A host never performs an implicit second absorption. Observing an
 erased challenge delivery or a post-final-challenge message retains the selected
 ordered transition policy; no extra entropy or security benefit is claimed. A
 different observation policy is a distinct construction, not an optimization
-justified by an unused digest alone.
+justified by an unused digest alone. The
+[construction obligations](construction-obligations.md) define the admissible
+observation classes, the binding obligations and the obligations of other
+transcript providers.
 
 A source-selected service port is removed only when every reachable query on
 that selected authority is accounted for, including unused replies and nested
