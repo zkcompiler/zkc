@@ -416,6 +416,31 @@ theorem extract_append_changed (log : HashLog Query Y) (entry : (_ : Query) × Y
     · exact absurd (extractLabel_append model log entry depth root index labelSame) unchanged
   · rfl
 
+omit [DecidableEq Y] in
+/-- A climb makes one hash call per level. -/
+theorem climb_queryBound :
+    ∀ (index : ℕ) (path : List Y) (current : Y),
+      IsTotalQueryBound (model.climb index path current) path.length
+  | _, [], _ => trivial
+  | index, _ :: rest, _ => by
+      simp only [climb, List.length_cons]
+      rw [isTotalQueryBound_query_bind_iff]
+      exact ⟨by omega, fun up => by simpa using climb_queryBound (index / 2) rest up⟩
+
+/-- Authentication makes at most one leaf call and one call per level. -/
+theorem authenticate_queryBound (depth : ℕ) (root : Y) (index : ℕ) (opening : Opening Row Y) :
+    IsTotalQueryBound (model.authenticate depth root index opening) (depth + 1) := by
+  unfold authenticate
+  split
+  · rename_i valid
+    rw [isTotalQueryBound_query_bind_iff]
+    refine ⟨by omega, fun leafLabel => ?_⟩
+    have climbed := climb_queryBound model index opening.path leafLabel
+    rw [valid.2] at climbed
+    rw [show depth + 1 - 1 = depth + 0 by omega]
+    exact isTotalQueryBound_bind climbed fun _ => trivial
+  · trivial
+
 /-- Merkle trees with hashed leaves as an extractable table commitment; a commitment's shape is
 its depth. -/
 def scheme : Extractable ℕ Row Query Y where

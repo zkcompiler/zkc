@@ -2,6 +2,7 @@ import ZkcSecurity.Commitment.Soundness
 import ZkcSecurity.Commitment.Merkle
 import ZkcSecurity.Commitment.HashedLeaves
 import ZkcSecurity.Examples.CommittedOpeningBound
+import ZkcSecurity.Examples.CommittedOpeningBridge
 
 /-! Axiom closures of the commitment bridge.
 
@@ -14,6 +15,8 @@ import ZkcSecurity.Examples.CommittedOpeningBound
   commitment.
 * `ZkcSecurity.Examples.CommittedOpening.intendedBound`: the intended bound of the committed-opening
   experiment holds for the straight-line extractor.
+* `ZkcSecurity.Examples.CommittedOpeningBridge.soundness`: the general theorem applies to the
+  smallest committed-table verifier, with all of its premises discharged.
 -/
 
 #print axioms ZkcSecurity.Commitment.soundness_weighted
@@ -35,3 +38,6 @@ import ZkcSecurity.Examples.CommittedOpeningBound
 #print axioms ZkcSecurity.Commitment.LeafHashing.extractLabel_of_climbs
 #print axioms ZkcSecurity.Examples.CommittedOpening.intendedBound
 #print axioms ZkcSecurity.Examples.CommittedOpening.trace
+#print axioms ZkcSecurity.Examples.CommittedOpeningBridge.soundness
+#print axioms ZkcSecurity.Commitment.liftHash_costBound
+#print axioms ZkcSecurity.Commitment.LeafHashing.authenticate_queryBound

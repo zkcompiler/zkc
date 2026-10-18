@@ -17,11 +17,17 @@ and authenticates every read against its root with hash calls. Both runs are log
 the first query, by anyone, of a transcript key containing that root (`checkpointTables`): the
 extraction is fixed before that key's answer is sampled, and repeated queries of the key reuse it.
 A false statement is a statement whose committed tables, extracted at the checkpoint of a
-transcript query of the verifier, are false (`FalseAcceptance`).
+transcript query of the verifier, are false (`FalseAcceptance`). The event asks for some query of
+the verifier, so it contains the event for the verifier's first query; it is empty for a verifier
+that makes no transcript query. Different checkpoints of one root may extract different tables;
+they agree outside the drift event, which the bound charges, so the false statement is fixed up to
+that event.
 
 **Bad keys.** A transcript key is bad when replaying a statement's verifier along it, with every
 root read as its checkpoint extraction, reaches a doomed query whose answer at the key escapes; a
 hash call is bad when its answer hits a target of the record before its first query (`Bad`). The
+first `rootBound` roots of every transcript key in the record are targets, whoever queried the key:
+the adversary's keys are not bounded, and the verifier's keys carry at most `rootBound` roots. The
 charge of a transcript key is the error of its occurrence, and every hash call is charged one
 `hashError` (`jointError`). The record before a key's first query does not depend on that key's
 answer (`beforeFirstKey_update`), so neither do the checkpoint extraction and the targets

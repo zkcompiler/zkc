@@ -175,7 +175,7 @@ theorem hashLog_jointKeys (answers : (query : Query Context Scheme (List Coordin
           rw [hashLog_append, jointKey, hashLog_singleton_inr, tail]
           rfl
 
-/-- The stage's record before a transcript key's first query, as joint-record keys. -/
+/-- The record before a transcript key's first query, as joint-record keys. -/
 theorem jointKeys_beforeFirst (key : List (Event Context Scheme (List Coordinate) Digest)) :
     ∀ record : Record Context Scheme (List Coordinate) Digest,
       jointKeys (CommittedOpening.beforeFirst key record) =
