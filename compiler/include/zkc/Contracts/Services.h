@@ -66,7 +66,9 @@ inline llvm::StringRef nativeChallengeField(llvm::StringRef suite) {
   if (suite == "merlin3.bls12-381.fr64be/0" ||
       suite == "spongefish0.8.0.keccak.bls12-381.fr64be/0" ||
       suite == "merlin3.ristretto255.scalar64le/0" ||
-      suite == "merlin3.koala-bear.ext8-binomial3.rejection31le/0")
+      suite == "merlin3.koala-bear.ext8-binomial3.rejection31le/0" ||
+      suite == "hash-chain.keccak256.bls12-381.fr64be/0" ||
+      suite == "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0")
     return installedDomains().associatedIdentity(suite, "ChallengeField");
   return {};
 }

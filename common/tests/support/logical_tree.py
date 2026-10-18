@@ -18,3 +18,12 @@ def decode_tree(encoded):
     assert end == len(encoded)
     return tree
 
+
+
+def encode_tree(tree):
+    """Encode strings and nested lists in the same bounded logical encoding."""
+    if isinstance(tree, str):
+        data = tree.encode()
+        return b'\x00' + len(data).to_bytes(8, 'little') + data
+    return (b'\x01' + len(tree).to_bytes(8, 'little')
+            + b''.join(encode_tree(item) for item in tree))

@@ -336,6 +336,21 @@ fn selected_observations_keep_the_installed_suite_policy() {
             "plonky3",
             "proof:rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
         ),
+        (
+            "hash-chain.keccak256.bls12-381.fr64be/0",
+            "arkworks",
+            "group:bls12-381.g1",
+        ),
+        (
+            "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0",
+            "plonky3",
+            "vector:koala-bear",
+        ),
+        (
+            "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0",
+            "plonky3",
+            "commitment:rows.merkle-keccak256.koala-bear/0",
+        ),
     ] {
         let ty = LogicalType::parse(payload).unwrap();
         let contract = "transcript.native.indexed.observe.data";

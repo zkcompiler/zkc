@@ -37,6 +37,8 @@ pub enum Identity {
     Merlin3Ristretto64Le,
     Bls12381G2,
     Bls12381Gt,
+    HashChainKeccak256Fr64Be,
+    HashChainKeccak256KoalaBearExt8,
 }
 impl Identity {
     /// Characteristic of an installed field, including nominal extensions.
@@ -90,6 +92,7 @@ impl Identity {
             | Self::Bls12381Gt
             | Self::Spongefish080KeccakFr64Be
             | Self::Merlin3Fr64Be
+            | Self::HashChainKeccak256Fr64Be
             | Self::MultilinearKzgBls12381 => Some(Self::Bls12381Fr),
             Self::Ristretto255Scalar
             | Self::Ristretto255Group
@@ -98,9 +101,10 @@ impl Identity {
             Self::KoalaBear | Self::MerkleKoalaBear | Self::MerklePoseidon2KoalaBear => {
                 Some(Self::KoalaBear)
             }
-            Self::KoalaBearExt8 | Self::MerkleKoalaBearExt8 | Self::Merlin3KoalaBearExt8 => {
-                Some(Self::KoalaBearExt8)
-            }
+            Self::KoalaBearExt8
+            | Self::MerkleKoalaBearExt8
+            | Self::Merlin3KoalaBearExt8
+            | Self::HashChainKeccak256KoalaBearExt8 => Some(Self::KoalaBearExt8),
             Self::KoalaBearExt4 | Self::MerklePoseidon2KoalaBearExt4 => Some(Self::KoalaBearExt4),
             Self::None => None,
         }
@@ -154,9 +158,19 @@ impl Identity {
             Self::Merlin3Fr64Be
             | Self::Merlin3Ristretto64Le
             | Self::Spongefish080KeccakFr64Be
-            | Self::Merlin3KoalaBearExt8 => Some(self),
+            | Self::Merlin3KoalaBearExt8
+            | Self::HashChainKeccak256Fr64Be
+            | Self::HashChainKeccak256KoalaBearExt8 => Some(self),
             _ => None,
         }
+    }
+    /// The installed transcript suites with a UniformIndex byte sampler. Other
+    /// suites keep field challenges only.
+    pub fn has_index_transcript(self) -> bool {
+        matches!(
+            self,
+            Self::Merlin3KoalaBearExt8 | Self::HashChainKeccak256KoalaBearExt8
+        )
     }
     pub fn provider(self) -> Option<&'static str> {
         if self == Self::Spongefish080KeccakFr64Be {
@@ -198,6 +212,10 @@ impl Identity {
             Self::Merlin3KoalaBearExt8 => "merlin3.koala-bear.ext8-binomial3.rejection31le/0",
             Self::Merlin3Fr64Be => "merlin3.bls12-381.fr64be/0",
             Self::Spongefish080KeccakFr64Be => "spongefish0.8.0.keccak.bls12-381.fr64be/0",
+            Self::HashChainKeccak256Fr64Be => "hash-chain.keccak256.bls12-381.fr64be/0",
+            Self::HashChainKeccak256KoalaBearExt8 => {
+                "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"
+            }
         }
     }
     pub fn parse(name: &str) -> Result<Self> {
@@ -226,6 +244,8 @@ impl Identity {
             Self::Merlin3Ristretto64Le,
             Self::Bls12381G2,
             Self::Bls12381Gt,
+            Self::HashChainKeccak256Fr64Be,
+            Self::HashChainKeccak256KoalaBearExt8,
         ]
         .into_iter()
         .find(|i| i.name() == name)
@@ -344,6 +364,8 @@ impl LogicalType {
                     | Merlin3Ristretto64Le
                     | Spongefish080KeccakFr64Be
                     | Merlin3KoalaBearExt8
+                    | HashChainKeccak256Fr64Be
+                    | HashChainKeccak256KoalaBearExt8
             ),
             Type::Commitments | Type::OpeningStates => identity.is_row_commitment(),
             Type::Commitment | Type::Proof | Type::OpeningState => {

@@ -115,12 +115,13 @@ Shared backing is charged in full. Matrix kernels retain their local sparse
 nonzero limit; native transport also enforces the current aggregate data limit.
 
 Generated transcripts use only `transcript.native.indexed.observe.data`,
-`transcript.native.indexed.challenge` and, for the octic Merlin suite,
-`transcript.native.indexed.index`. Explicit templates and coordinates encode
+`transcript.native.indexed.challenge` and, for the octic Merlin and hash-chain
+suites, `transcript.native.indexed.index`. Explicit templates and coordinates encode
 `zkc.native-origin/0`; executor frame names do not enter these occurrences.
 Generic observations accept the current native message-data grammar, including
 supported cross-domain data. Merlin and Spongefish suites own their exact
-framing and reduction. Authored `external.*` primitives remain separate; see
+framing and reduction; the [hash-chain suites](../../docs/spec/ir/construction.md#native-hash-chain-suites)
+are zkc's own construction over Keccak-256 (`transcript.rs`). Authored `external.*` primitives remain separate; see
 [their source pins and construction details](src/external/README.md).
 
 ## Validation
