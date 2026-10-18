@@ -86,8 +86,11 @@ def Context.ofPolicy (policy : Policy) (roles : List String) (contract : String)
 the policy publishes exactly the validator's data inputs, which are the
 exported data inputs with the same sorts; the replaced service is a validator
 service input of the original, whose contract the challenges must carry. The
-typed request is the draw of the export's challenge field, which the
-construction check ties to that contract. -/
+typed request is the draw of the export's challenge field: it is read from the
+export under check, and the construction check ties every challenge's field to
+the original's contract, which determines the draw. A method with operands must
+take its request from the original or an authenticated policy instead, since a
+request read from the export under check would certify itself. -/
 def exportContext (original : Structured.Snapshot) (participant : Participant) : Option Context :=
   match entryInterface original with
   | some (inputs, interface) =>

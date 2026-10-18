@@ -279,7 +279,7 @@ or protocol equivalence.
 
 The [transcript-construction bridge](../lean/bridges/construction/README.md)
 exports the checked validators of the compiled proof Entries of the Schnorr,
-Sumcheck, composed Sumcheck, Sigma and GKR examples
+Sumcheck, composed Sumcheck, Sigma and GKR examples and of a guessing fixture
 ([format](spec/formats/constructed-participant.md)). Lean checks their transcript
 construction and their [participant projection](../lean/docs/spec/participant-projection.md)
 against the original exports and proves that each compiled verifier's ideal
@@ -375,7 +375,12 @@ binding event, from which the compiled and executable Sumcheck theorems derive
 their statement binding; the exported query key and the native occurrence
 template keep their draw spelling until the first method with operands. ArkLib's
 worst-case round-by-round soundness imports into the typed engine for verifiers
-with a pure verdict.
+with a guarded verdict, each challenge round charged its own error, and a
+process-form certificate transports to a participant validator that realizes the
+process form: an ArkLib proof bounds the compiled verifier of a guessing fixture
+Entry. The import of ArkLib's interaction-stack soundness is deferred, blocked
+upstream by its execution prefixes in `Type 1`, its challenge models that sample
+arbitrary distributions and its private Sumcheck instance.
 
 The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retained
 PIR programs, proves open-process contracts, and applies selected ArkLib/VCVio

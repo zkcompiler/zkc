@@ -13,10 +13,12 @@ a guess, the verifier draws a field challenge, delivers it and accepts when the
 guess plus the public offset is the challenge. Every offset is false: a prover
 cannot predict the challenge.
 
-The soundness argument is ArkLib's, not zkc's. `verifier` is an ArkLib verifier
-for the same protocol over the field `F`, pure, with the empty input language;
-`sound` is its worst-case round-by-round soundness with error `1 / |F|` at the
-challenge round, from a state function that is false before the challenge and,
+The round-by-round argument is stated and proved in ArkLib's framework rather
+than in the typed engine's certificate language. `verifier` is an ArkLib
+verifier for the same protocol over the field `F`, written here, pure, with the
+empty input language; `sound` is its worst-case round-by-round soundness
+(`rbrSoundnessWorstCase`) with error `1 / |F|` at the challenge round, from a
+state function (`Verifier.StateFunction`) that is false before the challenge and,
 at the full transcript, says whether the guess plus the offset is the challenge.
 Three proved links carry that certificate to the compiled verifier:
 

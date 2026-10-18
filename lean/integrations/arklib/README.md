@@ -117,6 +117,16 @@ and Schwartz–Zippel for the line restriction, and
 to the compiled GKR `example::Proof` verifier through the checked reading of its
 exported instructions.
 
+`FiatShamir/Upstream` imports ArkLib's
+[worst-case round-by-round soundness](../../docs/spec/fiat-shamir-security.md#imports-from-arklibs-round-by-round-soundness)
+of a verifier with a guarded verdict as a typed certificate of the verifier's
+process form, each challenge round charged its own error, with weighted and
+uniform bounds for fixed and adaptively chosen inputs. `FiatShamir/Realization`
+transports such a certificate to a participant validator that realizes the
+process form, and `Examples/CompiledGuessFiatShamir` uses it to bound the
+compiled verifier of the construction bridge's guessing fixture by an ArkLib
+proof.
+
 `ArkLib/Fri` models the verifier of the FRI library's low-degree test with
 ideal commitments and proves its completeness and
 [round-by-round soundness](../../docs/spec/fri-security.md). `Protocol`
