@@ -37,10 +37,14 @@ with probability at most `proverCost + validatorCost`. With all errors at most
 oracle computation.
 
 A per-key charge `charge : List E → E → ENNReal` generalizes the error per
-occurrence: a charged certificate (`ChargedCertificate`) bounds a doomed query's
-escape after the absorbed `preceding` history by `charge preceding event`, so
-the error may depend on the whole key, for example on a loop iteration the
-history determines or on operands carried in the occurrence. The charged
+occurrence. A charged certificate (`ChargedCertificate`) has a doomed set of
+pairs of an absorbed history and a residual, and bounds a doomed query's escape
+after the history `preceding` by `charge preceding event`, so the error may
+depend on the whole key, for example on a loop iteration the history determines
+or on operands carried in the occurrence: one residual shape reached at two
+rounds is doomed at each round's history with that round's error. The argument
+uses a doomed pair only where replay of a validator along the history reaches
+the residual (`BadKeyAt`). The charged
 theorems (`adaptive_soundness_charged`, `soundness_charged`,
 `randomized_soundness_charged`, `randomized_adaptive_soundness_charged`) charge
 every oracle key `keyCharge charge`; the
@@ -143,37 +147,46 @@ def Certificate.weaken {accepts : A → Prop} {error larger : E → ENNReal}
   doomed := certificate.doomed
   step process member := Step.mono_error absorb le process (certificate.step process member)
 
-/-- The local obligation of a doomed set at one residual with a per-key charge:
-as `Step`, except that a doomed query's decoded fresh answer after the absorbed
-`preceding` history leaves the doomed set with probability at most
-`charge preceding event`, the charge of the query's key. -/
-def ChargedStep (doomed : PIR.Proc I A → Prop) (accepts : A → Prop)
-    (charge : List E → E → ENNReal) : PIR.Proc I A → Prop
+/-- The local obligation, with a per-key charge, of a doomed set indexed by the
+absorbed history, at one residual reached after `history`: a doomed result does
+not accept; after a receive whose event recovers a reply, and after a send, the
+residual is doomed at the extended history; and a doomed query's decoded fresh
+answer leaves the doomed set at the extended history with probability at most
+`charge history event`, the charge of the query's key. Indexing the doomed set
+by the history lets one residual shape carry a different error at each place
+it is reached, for example at each round of a loop whose occurrence carries no
+iteration coordinate. -/
+def ChargedStep (doomed : List E → PIR.Proc I A → Prop) (accepts : A → Prop)
+    (charge : List E → E → ENNReal) (history : List E) : PIR.Proc I A → Prop
   | .done value => ¬ accepts value
   | .halt _ => True
   | .call operation next =>
       match absorb operation with
-      | .receive _ _ => ∀ value, doomed (next value)
-      | .send _ value => doomed (next value)
-      | .query event decode => ∀ preceding,
-          Pr{let raw ← $ᵗ (R (preceding ++ [event]))}[
-            ∃ value, decode preceding raw = some value ∧ ¬ doomed (next value)] ≤
-              charge preceding event
+      | .receive event recover => ∀ message value, recover (event message) = some value →
+          doomed (history ++ [event message]) (next value)
+      | .send event value => doomed (history ++ [event]) (next value)
+      | .query event decode =>
+          Pr{let raw ← $ᵗ (R (history ++ [event]))}[
+            ∃ value, decode history raw = some value ∧
+              ¬ doomed (history ++ [event]) (next value)] ≤ charge history event
       | .refuse => True
 
 /-- Round-by-round soundness over a transcript interface with a per-key charge: a
-doomed set of residual processes whose every member meets its local obligation
-`ChargedStep`. -/
+set of doomed pairs of an absorbed history and a residual process, whose every
+member meets its local obligation `ChargedStep`. The security theorems use a
+pair only where replaying a validator along the history reaches the residual. -/
 structure ChargedCertificate (accepts : A → Prop) (charge : List E → E → ENNReal) where
-  doomed : PIR.Proc I A → Prop
-  step : ∀ process, doomed process → ChargedStep absorb doomed accepts charge process
+  doomed : List E → PIR.Proc I A → Prop
+  step : ∀ history process, doomed history process →
+    ChargedStep absorb doomed accepts charge history process
 
 /-- Larger charges keep every local obligation. -/
-theorem ChargedStep.mono_charge {doomed : PIR.Proc I A → Prop} {accepts : A → Prop}
+theorem ChargedStep.mono_charge {doomed : List E → PIR.Proc I A → Prop} {accepts : A → Prop}
     {charge larger : List E → E → ENNReal}
-    (le : ∀ preceding event, charge preceding event ≤ larger preceding event) :
-    ∀ process, ChargedStep absorb doomed accepts charge process →
-      ChargedStep absorb doomed accepts larger process
+    (le : ∀ preceding event, charge preceding event ≤ larger preceding event)
+    (history : List E) :
+    ∀ process, ChargedStep absorb doomed accepts charge history process →
+      ChargedStep absorb doomed accepts larger history process
   | .done _, step => step
   | .halt _, step => step
   | .call operation next, step => by
@@ -184,7 +197,7 @@ theorem ChargedStep.mono_charge {doomed : PIR.Proc I A → Prop} {accepts : A �
       · simp only [ChargedStep, absorbed] at step ⊢
         exact step
       · simp only [ChargedStep, absorbed] at step ⊢
-        exact fun preceding => (step preceding).trans (le preceding event)
+        exact step.trans (le history event)
       · simp only [ChargedStep, absorbed]
 
 /-- A charged certificate with larger charges. -/
@@ -193,13 +206,17 @@ def ChargedCertificate.weaken {accepts : A → Prop} {charge larger : List E →
     (le : ∀ preceding event, charge preceding event ≤ larger preceding event) :
     ChargedCertificate absorb accepts larger where
   doomed := certificate.doomed
-  step process member := ChargedStep.mono_charge absorb le process (certificate.step process member)
+  step history process member :=
+    ChargedStep.mono_charge absorb le history process (certificate.step history process member)
 
-/-- A local obligation with an error per occurrence is the charged obligation
-for the charge that ignores the preceding history. -/
-theorem Step.charged {doomed : PIR.Proc I A → Prop} {accepts : A → Prop} {error : E → ENNReal} :
+/-- A local obligation with an error per occurrence is the charged obligation,
+at every history, of the same doomed set read at every history and the charge
+that ignores the history. -/
+theorem Step.charged {doomed : PIR.Proc I A → Prop} {accepts : A → Prop} {error : E → ENNReal}
+    (history : List E) :
     ∀ process, Step absorb doomed accepts error process →
-      ChargedStep absorb doomed accepts (fun _ event => error event) process
+      ChargedStep absorb (fun _ process => doomed process) accepts (fun _ event => error event)
+        history process
   | .done _, step => step
   | .halt _, step => step
   | .call operation next, step => by
@@ -207,44 +224,23 @@ theorem Step.charged {doomed : PIR.Proc I A → Prop} {accepts : A → Prop} {er
         ⟨event, decode⟩ | _
       · simp only [Step, absorbed] at step
         simp only [ChargedStep, absorbed]
-        exact step
+        exact fun _ value _ => step value
       · simp only [Step, absorbed] at step
         simp only [ChargedStep, absorbed]
         exact step
       · simp only [Step, absorbed] at step
         simp only [ChargedStep, absorbed]
-        exact step
+        exact step history
       · simp only [ChargedStep, absorbed]
 
-/-- A charged obligation for a charge that ignores the preceding history is the
-obligation with an error per occurrence. -/
-theorem ChargedStep.uncharged {doomed : PIR.Proc I A → Prop} {accepts : A → Prop}
-    {error : E → ENNReal} :
-    ∀ process, ChargedStep absorb doomed accepts (fun _ event => error event) process →
-      Step absorb doomed accepts error process
-  | .done _, step => step
-  | .halt _, step => step
-  | .call operation next, step => by
-      rcases absorbed : absorb operation with ⟨event, recover⟩ | ⟨event, value⟩ |
-        ⟨event, decode⟩ | _
-      · simp only [ChargedStep, absorbed] at step
-        simp only [Step, absorbed]
-        exact step
-      · simp only [ChargedStep, absorbed] at step
-        simp only [Step, absorbed]
-        exact step
-      · simp only [ChargedStep, absorbed] at step
-        simp only [Step, absorbed]
-        exact step
-      · simp only [Step, absorbed]
-
 /-- A certificate with an error per occurrence is a charged certificate for the
-charge that ignores the preceding history, with the same doomed set. -/
+charge that ignores the history, whose doomed set ignores the history too. -/
 def Certificate.charged {accepts : A → Prop} {error : E → ENNReal}
     (certificate : Certificate absorb accepts error) :
     ChargedCertificate absorb accepts (fun _ event => error event) where
-  doomed := certificate.doomed
-  step process member := Step.charged absorb process (certificate.step process member)
+  doomed _ process := certificate.doomed process
+  step history process member :=
+    Step.charged absorb history process (certificate.step process member)
 
 end Certificate
 
@@ -271,6 +267,44 @@ def BadKey (absorb : Interface I E P R) (doomed : PIR.Proc I A → Prop)
     replay absorb table (validator statement) (initial statement) events = some process ∧
     Escapes absorb doomed process observed (initial statement ++ events)
       (table (initial statement ++ events ++ [observed]))
+
+/-- `Escapes` for a doomed set indexed by the absorbed history: the residual is
+doomed at `preceding`, and the decoded answer leaves the doomed set at
+`preceding ++ [event]`. -/
+def EscapesAt (absorb : Interface I E P R) (doomed : List E → PIR.Proc I A → Prop) :
+    PIR.Proc I A → (event : E) → (preceding : List E) → R (preceding ++ [event]) → Prop
+  | .call operation next, event, preceding, raw =>
+      ∃ decode, absorb operation = .query event decode ∧ doomed preceding (.call operation next) ∧
+        ∃ value, decode preceding raw = some value ∧ ¬ doomed (preceding ++ [event]) (next value)
+  | _, _, _, _ => False
+
+/-- `BadKey` for a doomed set indexed by the absorbed history: replaying a
+statement's validator along the key's events reaches a residual, doomed at the
+replayed history, whose query escapes at the key. The pairing of residual and
+history comes from the replay, not from an honest execution. -/
+def BadKeyAt (absorb : Interface I E P R) (doomed : List E → PIR.Proc I A → Prop)
+    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E) (key : List E)
+    (table : (key : List E) → R key) : Prop :=
+  ∃ statement events observed process, key = initial statement ++ events ++ [observed] ∧
+    replay absorb table (validator statement) (initial statement) events = some process ∧
+    EscapesAt absorb doomed process observed (initial statement ++ events)
+      (table (initial statement ++ events ++ [observed]))
+
+omit [DecidableEq E] in
+/-- A doomed set that ignores the history escapes as `Escapes` does. -/
+theorem escapesAt_const (absorb : Interface I E P R) (doomed : PIR.Proc I A → Prop)
+    (process : PIR.Proc I A) (event : E) (preceding : List E) (raw : R (preceding ++ [event])) :
+    EscapesAt absorb (fun _ process => doomed process) process event preceding raw ↔
+      Escapes absorb doomed process event preceding raw := by
+  cases process <;> exact Iff.rfl
+
+/-- A doomed set that ignores the history makes the same keys bad as `BadKey`. -/
+theorem badKeyAt_const (absorb : Interface I E P R) (doomed : PIR.Proc I A → Prop)
+    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E) (key : List E)
+    (table : (key : List E) → R key) :
+    BadKeyAt absorb (fun _ process => doomed process) validator initial key table ↔
+      BadKey absorb doomed validator initial key table := by
+  simp only [BadKeyAt, BadKey, escapesAt_const]
 
 theorem update_agrees (table : (key : List E) → R key) (initial events : List E) (observed : E)
     (raw : R (initial ++ events ++ [observed])) :
@@ -304,19 +338,19 @@ theorem replay_update (absorb : Interface I E P R) (table : (key : List E) → R
 variable [∀ key, SampleableType (R key)]
 
 omit [DecidableEq E] in
-/-- A fixed residual escapes at a fresh raw answer with probability at most the
-charge of its key. -/
+/-- A fixed residual, doomed at a fixed history, escapes at a fresh raw answer
+with probability at most the charge of its key. -/
 theorem escapes_le_charged {absorb : Interface I E P R} {accepts : A → Prop}
     {charge : List E → E → ENNReal} (certificate : ChargedCertificate absorb accepts charge)
     (process : PIR.Proc I A) (observed : E) (preceding : List E) :
     Pr{let raw ← $ᵗ (R (preceding ++ [observed]))}[
-      Escapes absorb certificate.doomed process observed preceding raw] ≤
+      EscapesAt absorb certificate.doomed process observed preceding raw] ≤
         charge preceding observed := by
   classical
   have impossible :
-      (∀ raw, ¬ Escapes absorb certificate.doomed process observed preceding raw) →
+      (∀ raw, ¬ EscapesAt absorb certificate.doomed process observed preceding raw) →
         Pr{let raw ← $ᵗ (R (preceding ++ [observed]))}[
-          Escapes absorb certificate.doomed process observed preceding raw] ≤
+          EscapesAt absorb certificate.doomed process observed preceding raw] ≤
             charge preceding observed :=
     fun never => (prEvent_eq_zero_of_forall_not _ _ never).trans_le zero_le
   cases process with
@@ -324,14 +358,14 @@ theorem escapes_le_charged {absorb : Interface I E P R} {accepts : A → Prop}
   | halt stop => exact impossible fun _ escapes => escapes
   | call operation next =>
       by_cases relevant : ∃ decode, absorb operation = .query observed decode ∧
-          certificate.doomed (.call operation next)
+          certificate.doomed preceding (.call operation next)
       · obtain ⟨decode, absorbed, doomed⟩ := relevant
-        have step := certificate.step _ doomed
+        have step := certificate.step _ _ doomed
         simp only [ChargedStep, absorbed] at step
         refine (prEvent_mono _ _
           (fun raw => ∃ value, decode preceding raw = some value ∧
-            ¬ certificate.doomed (next value))
-          (fun raw escapes => ?_)).trans (step preceding)
+            ¬ certificate.doomed (preceding ++ [observed]) (next value))
+          (fun raw escapes => ?_)).trans step
         obtain ⟨decode', absorbed', _, escaping⟩ := escapes
         rw [absorbed] at absorbed'
         obtain ⟨-, same⟩ := Absorption.query.inj absorbed'
@@ -349,7 +383,9 @@ theorem escapes_le {absorb : Interface I E P R} {accepts : A → Prop} {error : 
     (preceding : List E) :
     Pr{let raw ← $ᵗ (R (preceding ++ [observed]))}[
       Escapes absorb certificate.doomed process observed preceding raw] ≤ error observed :=
-  escapes_le_charged certificate.charged process observed preceding
+  (le_of_eq (prEvent_congr _ _ _ fun raw =>
+    (escapesAt_const absorb certificate.doomed process observed preceding raw).symm)).trans
+    (escapes_le_charged certificate.charged process observed preceding)
 
 /-- Resampling the answer at any key, under every background table, makes the
 key bad with probability at most the charge of the key. -/
@@ -357,7 +393,7 @@ theorem badKey_resample_charged {absorb : Interface I E P R} {accepts : A → Pr
     {charge : List E → E → ENNReal} (certificate : ChargedCertificate absorb accepts charge)
     (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E) (determined : Determined initial)
     (key : List E) (table : (key : List E) → R key) :
-    Pr{let raw ← $ᵗ (R key)}[BadKey absorb certificate.doomed validator initial key
+    Pr{let raw ← $ᵗ (R key)}[BadKeyAt absorb certificate.doomed validator initial key
       (Function.update table key raw)] ≤ keyCharge charge key := by
   by_cases found : ∃ statement events observed process,
       key = initial statement ++ events ++ [observed] ∧
@@ -365,10 +401,10 @@ theorem badKey_resample_charged {absorb : Interface I E P R} {accepts : A → Pr
   · obtain ⟨statement, events, observed, process, shape, replayed⟩ := found
     subst shape
     have reduced : ∀ raw,
-        BadKey absorb certificate.doomed validator initial
+        BadKeyAt absorb certificate.doomed validator initial
             (initial statement ++ events ++ [observed])
             (Function.update table (initial statement ++ events ++ [observed]) raw) →
-          Escapes absorb certificate.doomed process observed (initial statement ++ events)
+          EscapesAt absorb certificate.doomed process observed (initial statement ++ events)
             raw := by
       rintro raw ⟨statement', events', observed', process', shape', replayed', escapes⟩
       have same : statement = statement' := determined _ _ (events ++ [observed])
@@ -379,18 +415,18 @@ theorem badKey_resample_charged {absorb : Interface I E P R} {accepts : A → Pr
       cases replayed'
       simpa only [Function.update_self] using escapes
     calc Pr{let raw ← $ᵗ (R (initial statement ++ events ++ [observed]))}[
-            BadKey absorb certificate.doomed validator initial
+            BadKeyAt absorb certificate.doomed validator initial
               (initial statement ++ events ++ [observed])
               (Function.update table (initial statement ++ events ++ [observed]) raw)]
         ≤ Pr{let raw ← $ᵗ (R (initial statement ++ events ++ [observed]))}[
-            Escapes absorb certificate.doomed process observed (initial statement ++ events)
+            EscapesAt absorb certificate.doomed process observed (initial statement ++ events)
               raw] :=
           prEvent_mono _ _ _ reduced
       _ ≤ charge (initial statement ++ events) observed :=
           escapes_le_charged certificate process observed _
       _ = keyCharge charge (initial statement ++ events ++ [observed]) :=
           (keyCharge_append_singleton charge _ observed).symm
-  · have never : ∀ raw, ¬ BadKey absorb certificate.doomed validator initial key
+  · have never : ∀ raw, ¬ BadKeyAt absorb certificate.doomed validator initial key
         (Function.update table key raw) := by
       rintro raw ⟨statement, events, observed, process, shape, replayed, _⟩
       subst shape
@@ -407,7 +443,9 @@ theorem badKey_resample {absorb : Interface I E P R} {accepts : A → Prop}
     Pr{let raw ← $ᵗ (R key)}[BadKey absorb certificate.doomed validator initial key
       (Function.update table key raw)] ≤ keyError error key := by
   have charged := badKey_resample_charged certificate.charged validator initial determined key table
-  rwa [keyCharge_const] at charged
+  rw [keyCharge_const] at charged
+  exact (le_of_eq (prEvent_congr _ _ _ fun raw =>
+    (badKeyAt_const absorb certificate.doomed validator initial key _).symm)).trans charged
 
 omit [∀ key, SampleableType (R key)] in
 /-- An accepting run of the transform, against a total table, from a doomed
@@ -420,21 +458,21 @@ theorem escape_logged_charged {absorb : Interface I E P R} {accepts : A → Prop
     ∀ (process : PIR.Proc I A) (events history : List E) (proof : List P),
       replay absorb table (validator statement) (initial statement) events = some process →
       history = initial statement ++ events →
-      certificate.doomed process →
+      certificate.doomed history process →
       Accepted accepts (transform (m := Id) absorb table process history proof).1 →
       ∃ query ∈ tableQueryLog (transform absorb answer process history proof) table,
-        BadKey absorb certificate.doomed validator initial query.1 table := by
+        BadKeyAt absorb certificate.doomed validator initial query.1 table := by
   intro process
   induction process with
   | done value =>
       intro events history proof _ _ doomed accepted
-      exact absurd accepted (certificate.step _ doomed)
+      exact absurd accepted (certificate.step _ _ doomed)
   | halt stop =>
       intro events history proof _ _ _ accepted
       exact accepted.elim
   | call operation next ih =>
       intro events history proof replayed shape doomed accepted
-      have step := certificate.step _ doomed
+      have step := certificate.step _ _ doomed
       rcases absorbed : absorb operation with ⟨event, recover⟩ | ⟨event, value⟩ |
         ⟨event, decode⟩ | _
       · simp only [ChargedStep, absorbed] at step
@@ -453,7 +491,7 @@ theorem escape_logged_charged {absorb : Interface I E P R} {accepts : A → Prop
                 rw [recovered] at accepted
                 dsimp only at accepted ⊢
                 apply ih value (events ++ [event message]) _ rest _
-                  (by rw [shape, List.append_assoc]) (step value) accepted
+                  (by rw [shape, List.append_assoc]) (step message value recovered) accepted
                 rw [replay_append, replayed, Option.bind_some, ← shape]
                 exact replay_receive absorb table absorbed history message recovered
       · simp only [ChargedStep, absorbed] at step
@@ -474,7 +512,7 @@ theorem escape_logged_charged {absorb : Interface I E P R} {accepts : A → Prop
             exact accepted.elim
         | some value =>
             rw [decoded] at accepted
-            by_cases stays : certificate.doomed (next value)
+            by_cases stays : certificate.doomed (history ++ [event]) (next value)
             · obtain ⟨query, logged, bad⟩ := ih value (events ++ [event]) _ proof
                 (by
                   rw [replay_append, replayed, Option.bind_some, ← shape]
@@ -502,8 +540,11 @@ theorem escape_logged {absorb : Interface I E P R} {accepts : A → Prop} {error
       certificate.doomed process →
       Accepted accepts (transform (m := Id) absorb table process history proof).1 →
       ∃ query ∈ tableQueryLog (transform absorb answer process history proof) table,
-        BadKey absorb certificate.doomed validator initial query.1 table :=
-  escape_logged_charged certificate.charged validator initial table statement
+        BadKey absorb certificate.doomed validator initial query.1 table := by
+  intro process events history proof replayed shape doomed accepted
+  obtain ⟨query, logged, bad⟩ := escape_logged_charged certificate.charged validator initial table
+    statement process events history proof replayed shape doomed accepted
+  exact ⟨query, logged, (badKeyAt_const absorb certificate.doomed validator initial _ _).mp bad⟩
 
 end Bad
 
@@ -541,7 +582,7 @@ theorem adaptive_soundness_charged {absorb : Interface I E P R} {accepts : A →
     (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E) (determined : Determined initial)
     (falseStatement : Stmt → Prop)
     (doomedValidator : ∀ statement, falseStatement statement →
-      certificate.doomed (validator statement))
+      certificate.doomed (initial statement) (validator statement))
     (validatorCost : ENNReal)
     (validatorBound : ∀ statement,
       ChargedCostBound absorb charge (validator statement) (initial statement) validatorCost)
@@ -555,7 +596,7 @@ theorem adaptive_soundness_charged {absorb : Interface I E P R} {accepts : A →
       (transform_chargedCostBound absorb charge (validator claimed.1) validatorCost
         (initial claimed.1) claimed.2 (validatorBound claimed.1)))
     (fun result => falseStatement result.1 ∧ Accepted accepts result.2.1)
-    (BadKey absorb certificate.doomed validator initial)
+    (BadKeyAt absorb certificate.doomed validator initial)
     (badKey_resample_charged certificate validator initial determined) (by
       intro table accepted
       simp only [experiment, evalWithAnswerFn_bind, evalWithAnswerFn_map,
@@ -632,8 +673,8 @@ prover's queries charge at most `proverCost` on every path and the validator's,
 from the history `initial`, at most `validatorCost`. -/
 theorem soundness_charged {absorb : Interface I E P R} {accepts : A → Prop}
     {charge : List E → E → ENNReal} (certificate : ChargedCertificate absorb accepts charge)
-    (validator : PIR.Proc I A) (doomedValidator : certificate.doomed validator)
-    (initial : List E) (validatorCost : ENNReal)
+    (validator : PIR.Proc I A) (initial : List E)
+    (doomedValidator : certificate.doomed initial validator) (validatorCost : ENNReal)
     (validatorBound : ChargedCostBound absorb charge validator initial validatorCost)
     (prover : OracleComp (OracleSpec.ofFn R) (List P)) (proverCost : ENNReal)
     (proverBound : WorstCaseCostBound prover ⟨keyCharge charge⟩ proverCost) :
@@ -645,7 +686,7 @@ theorem soundness_charged {absorb : Interface I E P R} {accepts : A → Prop}
     (WorstCaseCostBound.bind proverBound fun proof =>
       transform_chargedCostBound absorb charge validator validatorCost initial proof validatorBound)
     (fun result => Accepted accepts result.1)
-    (BadKey absorb certificate.doomed (fun _ : Unit => validator) (fun _ => initial))
+    (BadKeyAt absorb certificate.doomed (fun _ : Unit => validator) (fun _ => initial))
     (badKey_resample_charged certificate _ _ (fun _ _ _ _ _ => rfl)) (by
       intro table accepted
       simp only [fixedExperiment, evalWithAnswerFn_bind, evalWithAnswerFn_transform] at accepted
@@ -669,7 +710,7 @@ theorem soundness_weighted {absorb : Interface I E P R} {accepts : A → Prop}
     Pr{let result ← (simulateQ randomOracle (fixedExperiment absorb validator initial prover)).run'
         ∅}[Accepted accepts result.1] ≤ proverCost + validatorCost := by
   rw [← keyCharge_const] at proverBound
-  exact soundness_charged certificate.charged validator doomedValidator initial validatorCost
+  exact soundness_charged certificate.charged validator initial doomedValidator validatorCost
     (CostBound.charged absorb error validator validatorCost validatorBound initial) prover proverCost
     proverBound
 
@@ -703,8 +744,8 @@ charge: every prover in the support of `provers` is bounded by `proverCost`, so
 the mixture inherits the bound. -/
 theorem randomized_soundness_charged {absorb : Interface I E P R} {accepts : A → Prop}
     {charge : List E → E → ENNReal} (certificate : ChargedCertificate absorb accepts charge)
-    (validator : PIR.Proc I A) (doomedValidator : certificate.doomed validator)
-    (initial : List E) (validatorCost : ENNReal)
+    (validator : PIR.Proc I A) (initial : List E)
+    (doomedValidator : certificate.doomed initial validator) (validatorCost : ENNReal)
     (validatorBound : ChargedCostBound absorb charge validator initial validatorCost)
     (provers : ProbComp (OracleComp (OracleSpec.ofFn R) (List P))) (proverCost : ENNReal)
     (proverBound : ∀ prover ∈ support provers,
@@ -713,7 +754,7 @@ theorem randomized_soundness_charged {absorb : Interface I E P R} {accepts : A �
         (simulateQ randomOracle (fixedExperiment absorb validator initial prover)).run' ∅}[
       Accepted accepts result.1] ≤ proverCost + validatorCost :=
   prEvent_bind_le_of_forall_le_of_support _ _ _ fun prover drawn =>
-    soundness_charged certificate validator doomedValidator initial validatorCost validatorBound
+    soundness_charged certificate validator initial doomedValidator validatorCost validatorBound
       prover proverCost (proverBound prover drawn)
 
 /-- Private randomness sampled before the oracle computation: every prover in
@@ -731,7 +772,7 @@ theorem randomized_soundness_weighted {absorb : Interface I E P R} {accepts : A 
         (simulateQ randomOracle (fixedExperiment absorb validator initial prover)).run' ∅}[
       Accepted accepts result.1] ≤ proverCost + validatorCost := by
   simp only [← keyCharge_const] at proverBound
-  exact randomized_soundness_charged certificate.charged validator doomedValidator initial
+  exact randomized_soundness_charged certificate.charged validator initial doomedValidator
     validatorCost (CostBound.charged absorb error validator validatorCost validatorBound initial)
     provers proverCost proverBound
 
@@ -745,7 +786,7 @@ theorem randomized_adaptive_soundness_charged {absorb : Interface I E P R}
     (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E) (determined : Determined initial)
     (falseStatement : Stmt → Prop)
     (doomedValidator : ∀ statement, falseStatement statement →
-      certificate.doomed (validator statement))
+      certificate.doomed (initial statement) (validator statement))
     (validatorCost : ENNReal)
     (validatorBound : ∀ statement,
       ChargedCostBound absorb charge (validator statement) (initial statement) validatorCost)

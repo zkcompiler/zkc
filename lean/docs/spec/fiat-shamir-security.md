@@ -54,16 +54,27 @@ already includes its sampling correction (see [realized laws](#realized-sampling
 the whole key: the absorbed history before a query and its occurrence. It can
 count loop iterations that the history determines and read operands carried in
 the occurrence. A **charged certificate** `Typed.ChargedCertificate absorb
-accepts charge` has the local obligations `Typed.ChargedStep`, which are those
-of `Typed.Step` except that a doomed query with occurrence `e`, after the
-absorbed prefix `preceding`, escapes with probability at most
-`charge preceding e`. A certificate with an error per occurrence is the charged
-certificate of the charge that ignores the history (`Certificate.charged`,
-`Step.charged`, `ChargedStep.uncharged`). `Typed.ChargedCostBound absorb charge
-process history cost` bounds the charges on every path of a validator started
-from the absorbed `history`; a cost bound with an error per occurrence is one
-from every history (`CostBound.charged`), and a query count with every charge at
-most `bound` charges at most `budget * bound` (`QueryBound.chargedCostBound`).
+accepts charge` has a doomed set of pairs of an absorbed history and a residual
+process, so one residual shape can be doomed with a different error at each
+place it is reached. Its local obligations `Typed.ChargedStep` at a doomed pair
+`(history, process)` are: a doomed result does not accept; after a receive whose
+event recovers a reply, and after a send, the residual is doomed at the extended
+history; and a doomed query with occurrence `e` escapes, at
+`history ++ [e]`, with probability at most `charge history e`. A loop whose
+occurrence carries no iteration coordinate is thus charged each round's own
+error, read from the history (`TestsSecurity.LawRecords.loop_soundness`), where
+a certificate whose doomed set ignores the history must charge every round the
+largest error (`historyFree_error_ge`). The security argument uses a doomed pair
+only where replaying a validator along the history reaches the residual
+(`Typed.BadKeyAt`, `Typed.EscapesAt`), not an honest execution. A certificate
+with an error per occurrence is the charged certificate whose doomed set and
+charge ignore the history (`Certificate.charged`, `Step.charged`).
+`Typed.ChargedCostBound absorb charge process history cost` bounds the charges
+on every path of a validator started from the absorbed `history`, a receive
+constraining only the replies its absorbed event recovers; a cost bound with an
+error per occurrence is one from every history (`CostBound.charged`), and a
+query count with every charge at most `bound` charges at most `budget * bound`
+(`QueryBound.chargedCostBound`).
 
 ## The ideal experiment
 
@@ -166,8 +177,9 @@ history oracle, with no routing to library keys:
   replay reads the table only at histories no longer than the replayed prefix
   (`Typed.replay_congr`). Resampling the answer at a key therefore leaves the
   replayed residual unchanged, and the key is bad with probability at most the
-  charge of the key under every background table (`Typed.badKey_resample_charged`;
-  `Typed.badKey_resample` for an error per occurrence).
+  charge of the key under every background table (`Typed.badKey_resample_charged`
+  for a doomed set indexed by the replayed history; `Typed.badKey_resample` for an
+  error per occurrence).
 - **Trace.** An accepting deterministic run from a doomed validator must leave
   the doomed set at one of its own queries, whose key is in the query log and is
   bad (`Typed.escape_logged_charged`, `Typed.escape_logged`).
@@ -347,19 +359,20 @@ A **law interface** `Typed.LawInterface I E P Raw` presents a validator's
 operations to the transform with every query decoded by a law record from the
 raw answer of its occurrence into the operation's reply sort; its transcript
 interface is `LawInterface.absorb`. A **uniform-sort certificate**
-`Typed.UniformCertificate laws accepts error` is a round-by-round certificate in
-which a doomed query's uniform reply of its sort leaves the doomed set with
-probability at most `error operation` (`Typed.UniformStep`), the form a
-protocol's own analysis produces. It lifts to a charged certificate over
-`LawInterface.absorb`, with the same doomed set, whenever every query's charge
-covers its record's `factor · error + slack` (`UniformCertificate.charged`), and
-to a certificate with an error per occurrence under the same condition with
-errors by event (`UniformCertificate.certificate`). Law-record decoders read only
-the raw answer: the operands they depend on are carried in the occurrence. In
-`TestsSecurity.LawRecords` a validator with an exact challenge in `Fin 5` and a
-gated block of positions has uniform errors `1 / 5` and `1 / 4`; the lifted
-certificate charges `1 / 5` and `1 / 2 · 1 / 4`, and the typed engine bounds its
-acceptance by `(queries + 2) / 5`.
+`Typed.UniformCertificate laws accepts error` is a round-by-round certificate,
+with doomed pairs of an absorbed history and a residual, in which a doomed
+query's uniform reply of its sort leaves the doomed set with probability at most
+`error history operation` (`Typed.UniformStep`), the form a protocol's own
+analysis produces. It lifts to a charged certificate over `LawInterface.absorb`,
+with the same doomed pairs, whenever every query's charge at a history covers its
+record's `factor · error + slack` there (`UniformCertificate.charged`).
+Law-record decoders read only the raw answer: the operands they depend on are
+carried in the occurrence. In `TestsSecurity.LawRecords` a validator with an
+exact challenge in `Fin 5` and a gated block of positions has uniform errors
+`1 / 5` and `1 / 4`; the lifted certificate charges `1 / 5` and `1 / 2 · 1 / 4`,
+and the typed engine bounds its acceptance by `(queries + 2) / 5`. A loop that
+draws twice at one occurrence, with first-round error `1 / 4` and second-round
+error `1 / 2`, is charged `1 / 4 + 1 / 2`.
 
 ## Binding codecs
 
