@@ -284,6 +284,9 @@ import ZkcExamples.Construction.SumcheckProof
 import ZkcExamples.Construction.SumcheckProofParticipant
 import ZkcExamples.Executable.SchnorrProof
 import ZkcExamples.Executable.SchnorrProofProgramData
+import ZkcExamples.Executable.SumcheckHelpers
+import ZkcExamples.Executable.SumcheckProof
+import ZkcExamples.Executable.SumcheckProofProgramData
 import ZkcExamples.NativePrograms.ContractControls
 import ZkcExamples.NativePrograms.CustomProperty
 import ZkcExamples.NativePrograms.FactorControls
