@@ -114,13 +114,69 @@ on the data inputs. For a reading without loops and helper calls the charges are
 static, and `Lowered.total?` is the charge of a complete run.
 
 `checkLowering vocabulary participant validator` is the per-compile rule: the
-reading for the participant's called helpers must equal the constructed
-validator's instructions, returned references, input and output sorts, symbol,
-entry and validator role. A refusal names its reason: an unsupported
-instruction, an uninstalled binding, an operand, sort or custody failure, a
-helper whose body fails its conditions, a loop failing its conditions, a
-duplicated symbol, an unadmitted representation, a differing part or the first
-differing instruction. The kernel evaluates the rule on the actual pair.
+reading for the participant's called helpers must have the constructed
+validator's input and output sorts, symbol, entry and validator role, and its
+instructions and returned references must equal the constructed validator's or
+have the same normal form (below); equality is tried first. A refusal names its
+reason: an unsupported instruction, an uninstalled binding, an operand, sort or
+custody failure, a helper whose body fails its conditions, a loop failing its
+conditions, a duplicated symbol, an unadmitted representation, a differing part,
+or where the normal forms differ (an anchor, an anchor's operand, an ill-sorted
+calculation, a loop's yields or a returned reference). The kernel evaluates the
+rule on the actual pair.
+
+## Normalization
+
+The compiler schedules pure arithmetic differently from the constructed export:
+it computes a value in a calculation call placed before the first instruction
+that needs it, shares equal values and drops unused ones.
+`checkNormalized inputs exported exportedReturned reading readingReturned`
+compares two instruction lists up to such schedules.
+
+- An instruction is movable when it is a calculation that never stops on
+  operands of its declared sorts (every calculation except `boundedAt`) or
+  occurrence-coordinate construction (`Instruction.movable`; `movable_iff`
+  states the list). Every other instruction is an anchor: receives, sends,
+  transcript operations, guards, helper calls, loops, calculations that can stop
+  and anything unsupported.
+- A movable instruction denotes a pure term over leaves: the inputs (in a loop
+  body, the enclosing scope's values), the loop's index and carried values, and
+  the results of earlier anchors. Each scope keeps one table of terms, in which
+  equal terms of either program have one id, and every term carries its sort. A
+  calculation's operands must have the sorts of its signature.
+- The check walks both programs anchor by anchor. Before each anchor it records
+  the movable instructions of either program. The two anchors must have the same
+  operation and declared results, and their operands must denote the same terms.
+  The two bodies of a loop are checked as a scope of their own, which starts
+  from fresh leaves for the enclosing values, the index and the carried values;
+  their yields must denote the same terms at the carried sorts. At the end the
+  returned references must denote the same terms.
+
+Accepted are therefore operand renumbering, every schedule of pure calculations
+that respects their dependencies, sharing of equal terms, and dropping or adding
+terms that reach no anchor and no returned value. Refused are a changed anchor
+sequence (a moved, added or removed receive, transcript operation, guard, helper
+call, stopping calculation or loop), an operand that denotes another term (a
+wrong or retargeted operand, swapped operands, a changed constant or operation),
+an ill-sorted calculation and work moved into or out of a loop body. The refused
+moves are unsound, not only unrecognized: a calculation that stops, or a
+rejecting guard, moved after a challenge makes the program query the challenge
+function where the export does not.
+
+| Theorem | Statement |
+|---|---|
+| `movable_iff` | The movable instructions are exactly the total calculations and well-formed occurrence-coordinate construction |
+| `normalize_ideal` | The movable instructions at the head of a program extend its environment by the values of their terms: they never stop and query nothing |
+| `checkNormalized_sound` | Accepted programs have equal ideal meanings in every monad and for every challenge function, on inputs of the declared sorts, when every called helper returns values of its declared result sorts (`HelperSorted`). Their outcomes, stop reasons, unread proofs and challenge queries, with their histories, are therefore equal |
+| `checkNormalized_flow` | Every term that a value of either program depends on is held by that program at the value's position or earlier, so a value first computed after an anchor is none of the terms the anchor's operands depend on |
+
+A helper of a closed helper table returns values of its declared result sorts
+when the call declares the helper's outputs (`helperSorted_of_outputs`).
+Normalization relates ideal meanings only: charges, frames, stop sites and where
+a budget runs out differ between schedules. Soundness at every budget needs no
+more, since host validation prunes the ideal meaning of the reading, which is
+the constructed validator's. Completeness at a budget concerns the reading's own
+charges (below).
 
 ## Helper preparation
 
@@ -161,21 +217,42 @@ byte string:
 | `execute_ideal` / `execute_short` | For a reading with static charges, at a budget of at least the total charge the same holds for the ideal meaning itself, and below it every observation is a stop |
 | `validate_ideal` / `validate_rejects` | For a reading with static charges, with the expected header and a sufficient budget host validation is the ideal acceptance of the decoded proof; otherwise it rejects on every path |
 | `execute_cleaned` | Every run leaves every frame it entered, the participant's, the loop iterations' and the local calls' included, and each exit leaves the innermost frame still open, so a stop leaves the active frames innermost first |
-| `checkLowering_sound` | An accepted pair reads back exactly as the constructed validator, for its entry and validator role |
+| `checkLowering_sound` | An accepted pair has the constructed validator's interface for its entry and validator role, and the reading's ideal meaning is the constructed validator's on inputs of its sorts when the called helpers return values of their declared result sorts |
+| `validate_prunes_export` | For an accepted pair, host validation with any header prunes the ideal acceptance of the constructed validator itself on the decoded proof |
 
 `Prunes` turns into a probability bound in the security integration
 (`ZkcSecurity.VCVio.Pruning.Prunes.prEvent_le`): simulated by any stateful
 oracle implementation, a pruned computation satisfies an event disjoint from its
 rejections at most as often as the computation it prunes. Acceptance is
 therefore reflected at every budget, which is what a soundness consumer needs.
-Completeness additionally needs a budget of at least the run's charge, a decoder
-that recovers what the producer encoded, the host's binding in the header, and a
-producer that completes. The relation preserves outcome classes, the challenge
-interaction, the consumed proof on return and acceptance. It does not relate
-stop sites, frame events or the instructions charged at a stop, which belong to
-the executable meaning alone. Retiring the live transcript on a stop, and the
-returned one on a return, is part of the meaning's definition. The meaning has
-one resource, the instruction budget.
+Completeness additionally needs a budget sufficient for the run (below), a
+decoder that recovers what the producer encoded, the host's binding in the
+header, and a producer that completes. The relation preserves outcome classes,
+the challenge interaction, the consumed proof on return and acceptance. It does
+not relate stop sites, frame events or the instructions charged at a stop, which
+belong to the executable meaning alone. Retiring the live transcript on a stop,
+and the returned one on a return, is part of the meaning's definition. The
+meaning has one resource, the instruction budget.
+
+## Completeness
+
+When a reading has loops or helper calls, its charges depend on the run, and a
+sufficient budget is a bound on runs. `FitsK` follows the metered meaning: a
+charge, an instruction or a loop iteration must fit within the budget before it
+runs, a helper call must fit with what its body charges on its actual arguments,
+and the continuation must fit wherever the ideal meaning passes on. Where the
+ideal meaning passes on is `Continues`: the ideal step read in the
+predicate-transformer monad `Always`, in which a challenge holds of every answer
+and a stop holds trivially. A run that stops needs no further budget.
+`Sufficient` is the bound for a whole run, its return included.
+
+| Theorem | Statement |
+|---|---|
+| `metered_sufficient` | Under `Sufficient`, the metered meaning of a reading is its ideal meaning, in every monad and for every challenge function |
+| `execute_sufficient` / `validate_sufficient` | Under `Sufficient` on the decoded proof, the executable's observation and challenge interaction are those of the reading's ideal meaning; with the expected header, host validation is the ideal acceptance of the decoded proof |
+
+A program's completeness then needs a charge bound for the inputs it admits and
+the ideal meaning's acceptance of the honest proof.
 
 The rule refuses a program whose calculations come in another order than the
 constructed instructions. A normalization that reschedules pure, total
@@ -251,7 +328,24 @@ out-of-range lengths) gives the same result in every case.
 `executable_transform_prunes` state that host validation of proof bytes prunes,
 at every budget and with every framing header, the ideal acceptance of the
 decoded proof, which `SumcheckProof.compiled_transform` makes the acceptance of
-the Fiat–Shamir transform of the original Sumcheck validator.
+the Fiat–Shamir transform of the original Sumcheck validator. The three called
+helpers return values of their declared result sorts (`helpersSorted`), since
+each call declares its checked helper's outputs.
+
+`ZkcExamples.Executable.SumcheckCharges` bounds the charges of a complete run on
+a table of `2 ^ rounds` values: `charge rounds = 68 + 61 · rounds`, with the
+terminal check charging `62 + 22 · rounds` on its actual arguments
+(`check_cost`), is `Sufficient` for every proof (`sufficient`).
+`ZkcExamples.Executable.SumcheckCompleteness.honest_accepted` states
+honest-prover completeness of the executable: for every challenge function,
+codec whose decoder inverts its encoder on round messages of bounded length,
+budget of at least `charge rounds`, expected binding of 32 bytes, initial
+transcript and table of `2 ^ rounds` values with at most two rounds, host
+validation accepts the honest proof bytes of the table's sum. The honest
+producer absorbs what the verifier absorbs and draws what it draws, sending the
+sums of the low and high halves of its current table in each round and then
+restricting the table at the challenge. At two rounds the bound is 190
+instructions, the runtime's measured threshold.
 
 `ZkcSecurity.Examples.ExecutableSumcheckFiatShamir` transfers the compiled
 Sumcheck bounds to provers of proof bytes. `decoded` decodes a byte prover's
