@@ -32,6 +32,7 @@ impl Target {
                             | "--release-storage"
                             | "--fuse-vector-reductions"
                             | "--no-finite-bulk"
+                            | "--no-calculation-batching"
                     )
                 }))
         {

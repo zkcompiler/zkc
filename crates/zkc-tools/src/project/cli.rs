@@ -26,6 +26,7 @@ impl Source {
             release_storage: false,
             finite_bulk: true,
             fuse_vector_reductions: false,
+            calculation_batching: true,
         };
         for &(key, value) in &args.options {
             let value = value.unwrap_or("");
@@ -48,6 +49,10 @@ impl Source {
                 }
                 "--no-finite-bulk" => {
                     options.finite_bulk = false;
+                    false
+                }
+                "--no-calculation-batching" => {
+                    options.calculation_batching = false;
                     false
                 }
                 "--fuse-vector-reductions" => {
@@ -105,7 +110,7 @@ impl Source {
     pub fn describe(&self, report: &mut Json) {
         report["mode"] = json!("project");
         report["compiler"] = json!(self.compiler.path());
-        report["options"] = json!({"simplify":self.options.simplify,"release_storage":self.options.release_storage,"finite_bulk":self.options.finite_bulk,"fuse_vector_reductions":self.options.fuse_vector_reductions});
+        report["options"] = json!({"simplify":self.options.simplify,"release_storage":self.options.release_storage,"finite_bulk":self.options.finite_bulk,"fuse_vector_reductions":self.options.fuse_vector_reductions,"calculation_batching":self.options.calculation_batching});
         if let Some(path) = self.project.manifest() {
             report["project"] = json!(path);
         }

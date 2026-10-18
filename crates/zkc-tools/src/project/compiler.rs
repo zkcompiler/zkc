@@ -274,6 +274,9 @@ impl Compiler {
         if options.fuse_vector_reductions {
             flags.push("--fuse-vector-reductions");
         }
+        if !options.calculation_batching {
+            flags.push("--no-calculation-batching");
+        }
         let bytes = self.invoke(project, "language-package", selection, &flags)?;
         let pin = Sha256::digest(&bytes).into();
         let package =

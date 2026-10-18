@@ -32,7 +32,8 @@ from bench.io import (  # noqa: E402
 FORMAT = 'zkc.protocol-measurement/0'
 P = 2130706433
 POLICIES = {'default': [], 'no-finite-bulk': ['--no-finite-bulk'],
-            'release-storage': ['--release-storage']}
+            'release-storage': ['--release-storage'],
+            'no-calculation-batching': ['--no-calculation-batching']}
 COUNTERS = ('instructions', 'iterations', 'logical_bytes', 'total_value_bytes',
             'ring_work', 'external_work')
 EXIT_COUNTERS = ('live_values', 'live_value_bytes', 'live_resource_units',
@@ -296,7 +297,8 @@ def trial(case, variant, flags, inputs, directory, tools, timeout, interactive_s
         package = json.loads(package_path.read_text())
         require(package['format'] == 'zkc.entry/0', 'unexpected package format')
         require(package['options'] == {'simplify': True, 'finite_bulk': policy != 'no-finite-bulk',
-                'release_storage': policy == 'release-storage', 'fuse_vector_reductions': False},
+                'release_storage': policy == 'release-storage', 'fuse_vector_reductions': False,
+                'calculation_batching': policy != 'no-calculation-batching'},
                 'compiler did not apply requested policy')
         record['package'] = identity(package_path)
         record['original_inventory'] = logical_inventory(package['original'])
@@ -401,6 +403,8 @@ def parse_args(argv=None):
     parser.add_argument('--repetitions', type=positive_integer, default=3)
     parser.add_argument('--timeout', type=positive_timeout, default=300)
     parser.add_argument('--release-storage', action='store_true', help='add a separate current policy')
+    parser.add_argument('--no-calculation-batching', action='store_true',
+                        help='add a current policy computing calculations where the source defines them')
     parser.add_argument('--interactive-storage', action='store_true',
                         help='also observe per-role exit storage using a separate interactive Entry')
     args = parser.parse_args(argv)
@@ -408,7 +412,7 @@ def parse_args(argv=None):
         for part in ('source', 'compiler', 'runtime'):
             if getattr(args, f'{source}_{part}') is None:
                 parser.error(f'--{source}-{part} is required')
-    if args.baseline_only and (args.release_storage or any(
+    if args.baseline_only and (args.release_storage or args.no_calculation_batching or any(
             getattr(args, f'current_{part}') for part in ('source', 'compiler', 'runtime', 'opt'))):
         parser.error('--baseline-only accepts no current tools/source or current policy')
     return args
@@ -478,6 +482,8 @@ def run(args, argv=None):
             variants += [('current', 'default'), ('current', 'no-finite-bulk')]
             if args.release_storage:
                 variants.append(('current', 'release-storage'))
+            if args.no_calculation_batching:
+                variants.append(('current', 'no-calculation-batching'))
         write_json(output / 'manifest.json', result)
         for repetition in range(args.repetitions):
             order = variants[repetition % len(variants):] + variants[:repetition % len(variants)]

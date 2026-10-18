@@ -94,7 +94,7 @@ fn deployment() -> Json {
             ],
             ["V", "v", [["2", "bool"]], [["3", "bool"]], [], "0"]
         ],
-        ["true", "false", "false", "true"],
+        ["true", "false", "false", "true", "true"],
         [[first, "first"], [second, "second"]]
     ]);
     seal(&mut result);
@@ -764,10 +764,10 @@ fn deployment_compilation_choices_have_exact_boolean_shape() {
     let original = deployment();
     for choices in [
         json!(["true", "false"]),
-        json!(["true", "false", "false"]),
-        json!(["true", "false", "false", "true", "false"]),
-        json!(["true", "false", false, "true"]),
-        json!(["true", "false", "false", "invalid"]),
+        json!(["true", "false", "false", "true"]),
+        json!(["true", "false", "false", "true", "true", "false"]),
+        json!(["true", "false", false, "true", "true"]),
+        json!(["true", "false", "false", "true", "invalid"]),
     ] {
         let mut changed = original.clone();
         changed[7] = choices;
@@ -775,13 +775,16 @@ fn deployment_compilation_choices_have_exact_boolean_shape() {
     }
     for fuse in [false, true] {
         for finite in [false, true] {
-            let mut changed = original.clone();
-            changed[7][2] = json!(if fuse { "true" } else { "false" });
-            changed[7][3] = json!(if finite { "true" } else { "false" });
-            assert_eq!(
-                admit(&changed).unwrap().choices,
-                [true, false, fuse, finite]
-            );
+            for batching in [false, true] {
+                let mut changed = original.clone();
+                changed[7][2] = json!(if fuse { "true" } else { "false" });
+                changed[7][3] = json!(if finite { "true" } else { "false" });
+                changed[7][4] = json!(if batching { "true" } else { "false" });
+                assert_eq!(
+                    admit(&changed).unwrap().choices,
+                    [true, false, fuse, finite, batching]
+                );
+            }
         }
     }
 }

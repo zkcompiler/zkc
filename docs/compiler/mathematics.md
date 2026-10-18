@@ -246,17 +246,30 @@ defines exact eligibility and shared bounds.
 
 `EntryOptions`, `RunOptions` and `NativeProofOptions` carry one
 `mathematicalSelection` policy, with independent `finiteBulk` and
-`vectorReductionFusion` family controls. Preparation, total Math demand
-lowering, proof construction and polynomial correspondence reconstruction all
-receive the same policy. Public preparation, projection and lowering passes
-expose `optimize-finite` and `fuse-vector-reductions` options; the participant
-pipeline forwards both choices to its stages. Physical storage release remains
-a separate control.
+`vectorReductionFusion` family controls and the `calculationBatching` schedule.
+Preparation, total Math demand lowering, proof construction and polynomial
+correspondence reconstruction all receive the same policy. Public preparation,
+projection and lowering passes expose `optimize-finite` and
+`fuse-vector-reductions` options, and the lowering pass also
+`calculation-batching`; the participant pipeline forwards these choices to its
+stages. Physical storage release remains a separate control.
 
-Entry packages and compilation reports record `finite_bulk` and
-`fuse_vector_reductions` alongside their separate simplify and storage choices.
-Native-proof deployments record simplify, storage release, fusion and finite
-bulk in that order; readers require all four choices. Reconstruction uses the
+Total Math demand lowering outlines a participant's pure calculations into
+calculation calls placed before actions. With batching, the default, each
+needed operation is computed in the one call before the first action whose
+demand reaches it, so a value consumed only late is deferred past the
+transcript operations, receives and loops in between. `--no-calculation-batching`
+computes, before each action, every needed operation that precedes it in source
+order and was not computed yet, so values are computed where the source defines
+them. The compiler's lowering check expects the selected schedule; the
+[executable lowering rule](../../lean/docs/spec/executable.md#normalization)
+accepts both, since their normal forms are the export's.
+
+Entry packages record `finite_bulk`, `fuse_vector_reductions` and
+`calculation_batching` alongside their separate simplify and storage choices;
+compilation reports record the first two. Native-proof deployments record
+simplify, storage release, fusion, finite bulk and calculation batching in that
+order; readers require all five choices. Reconstruction uses the
 selected policy, including when generic simplification is disabled.
 
 The explicit `rewriteLocalAlgorithms` preparation service admits the immutable
