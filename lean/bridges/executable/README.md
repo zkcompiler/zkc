@@ -41,18 +41,22 @@ For each subject:
    accepted with axioms among `propext`, `Classical.choice` and `Quot.sound`:
    for Schnorr with a total charge of 25, for Sumcheck with the three helpers
    the constructed validator calls by name. It runs the rule on mutated
-   programs. For Schnorr nine are refused for their named reasons: operands of
-   the final addition swapped (instruction 12), the final comparison made
-   trivial (instruction 13), returned values swapped, the base observed instead
-   of the commitment (instruction 2), a consumed transcript state reused, an
-   uninstalled implementation, an unadmitted representation, a helper's formal
-   retyped (its call site) and a duplicated helper. For Sumcheck eight are
-   refused: the loop's maximum raised and the round check made trivial (the loop
-   instruction), the loop counted by the claim and the carried point and claim
-   swapped (the loop and the round check's call site), a consumed transcript
-   state reused in a round, the empty-point call retargeted to another function
-   (its call site), returned values swapped and an uninstalled observation
-   implementation. A changed constant in the terminal check's body is accepted:
+   programs. Pure calculations are compared by the terms they denote, so a
+   changed calculation is refused where its value first reaches an anchor or the
+   returned values. For Schnorr nine are refused for their named reasons:
+   operands of the final addition swapped and the final comparison made trivial
+   (the returned decision denotes another term), returned values swapped, the
+   base observed instead of the commitment (the second anchor's second operand),
+   a consumed transcript state reused, an uninstalled implementation, an
+   unadmitted representation, a helper's formal retyped (its call site) and a
+   duplicated helper. For Sumcheck eight are refused: the loop's maximum raised
+   (the second anchor, the loop), the round check made trivial (the operand of
+   the guard, the loop body's fifth anchor), the loop counted by the claim and
+   the carried point and claim swapped (the loop and the round check's call
+   site), a consumed transcript state reused in a round, the empty-point call
+   retargeted to another function (its call site), returned values swapped and
+   an uninstalled observation implementation. A changed constant in the terminal
+   check's body is accepted:
    the rule reads a helper body for its sorts and transcript freedom only, and
    what it computes is the obligation `SumcheckHelpers.check_prepared`
    discharges for the committed program, which step 2 ties to the fresh one.
@@ -90,8 +94,10 @@ For each subject:
    `propext`, `Classical.choice` and `Quot.sound`. A walk over the constants each
    byte-level theorem's proof uses must reach the general rules
    (`Zkc.Construction.compiled_transform`, `check_sound`, `project_sound`, and
-   the lowering rule's `validate_ideal` and `validate_rejects` for Schnorr or
-   `validate_prunes` for Sumcheck), the admitted original they are applied to
+   the lowering rule's `checkLowering_sound`, `validate_ideal` and
+   `validate_rejects` for Schnorr or `validate_prunes` and
+   `validate_prunes_export` for Sumcheck), the admitted original they are
+   applied to
    and the Entry's per-compile checks (`compiled`, the executable `accepted`),
    for Sumcheck also `SumcheckHelpers.check_prepared`, `Prunes.prEvent_le` and
    the binding's `initial_determined`; the Schnorr proof must not reach

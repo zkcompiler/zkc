@@ -2,7 +2,7 @@ module
 
 public import ZkcExamples.Executable.SchnorrProofProgramData
 public import ZkcExamples.Construction.SchnorrProof
-public import Zkc.Executable.Soundness
+public import Zkc.Executable.NormalizationSoundness
 public import Zkc.Executable.Installed
 
 @[expose] public section
@@ -47,6 +47,10 @@ theorem helpers : Instruction.helpers SchnorrProof.participant.instructions = []
   rw [← Instruction.helperList_eq]
   decide +kernel
 
+/-- The constructed validator has no helper call. -/
+theorem calls : Instruction.callList SchnorrProof.participant.instructions = [] := by
+  decide +kernel
+
 set_option maxRecDepth 20000 in
 /-- A complete run charges 25 instructions. -/
 theorem total : lowered.total? = some 25 := by decide +kernel
@@ -67,6 +71,11 @@ variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [D
 theorem prepared : ∀ name ∈ Instruction.helpers SchnorrProof.participant.instructions,
     Prepared installed validator (SchnorrProof.table (F := F) (G := G)) name := by
   simp [helpers]
+
+/-- No helper call needs its result sorts. -/
+theorem helpersSorted : ∀ call ∈ Instruction.callList SchnorrProof.participant.instructions,
+    HelperSorted (SchnorrProof.table (F := F) (G := G)) call.1 call.2 := by
+  simp [calls]
 
 /-- The data inputs of the executable: base then statement. -/
 abbrev data (base key : G) : List (Value F G) := (SchnorrProof.inputs (F := F) base key).map .data
@@ -97,10 +106,12 @@ theorem executable_transform {m : Type → Type} [Monad m] [LawfulMonad m]
           initial bytes =
       (fun result => observation result.1 result.2.isEmpty) <$> transform SchnorrProof.context challenge
         (SchnorrProof.verifier base key handle) initial (decodeProof decode receives bytes) := by
-  obtain ⟨read, code, returned, -⟩ := checkLowering_sound accepted
+  obtain ⟨read, same, inputs, -⟩ := checkLowering_sound (F := F) (G := G) accepted
   have ideal_eq := execute_ideal installed validator SchnorrProof.context challenge SchnorrProof.table decode
     budget _ prepared read total sufficient (data base key) initial bytes (admitted base key)
-  rw [code, returned, plan_types] at ideal_eq
+  have sorted := admits_sorted (admitted base key) initial
+  rw [inputs] at sorted
+  rw [same SchnorrProof.context challenge SchnorrProof.table helpersSorted _ sorted, plan_types] at ideal_eq
   have compiled := SchnorrProof.compiled_transform challenge base key handle initial
     (decodeProof decode receives bytes)
   have observed : (fun result => (mapOutcome SchnorrProof.acceptance result.observe.1, result.observe.2)) <$>
@@ -132,8 +143,11 @@ theorem executable_validate {m : Type → Type} [Monad m] [LawfulMonad m]
           SchnorrProof.participant.instructions
           ((SchnorrProof.inputs base key).map .data ++ [.transcript initial])
           (decodeProof decode receives (bytes.drop 40)) := by
-  obtain ⟨read, code, returned, -⟩ := checkLowering_sound accepted
-  rw [← code, ← returned, ← plan_types (data base key)]
+  obtain ⟨read, same, inputs, -⟩ := checkLowering_sound (F := F) (G := G) accepted
+  have sorted := admits_sorted (admitted base key) initial
+  rw [inputs] at sorted
+  rw [← same SchnorrProof.context challenge SchnorrProof.table helpersSorted _ sorted,
+    ← plan_types (data base key)]
   exact validate_ideal installed validator SchnorrProof.context challenge SchnorrProof.table decode budget _
     prepared read total sufficient binding SchnorrProof.acceptancePosition _ initial bytes (admitted base key)
     header
@@ -149,7 +163,7 @@ theorem executable_rejects {m : Type → Type} [Monad m] [LawfulMonad m]
       (fun _ => false) <$> validate installed validator SchnorrProof.context challenge decode budget binding
         SchnorrProof.acceptancePosition (data base key) initial bytes :=
   validate_rejects installed validator SchnorrProof.context challenge SchnorrProof.table decode budget _
-    prepared (checkLowering_sound accepted).1 total binding SchnorrProof.acceptancePosition _ initial bytes
+    prepared (checkLowering_spec accepted).1 total binding SchnorrProof.acceptancePosition _ initial bytes
     (admitted base key) short
 
 end ZkcExamples.Executable.SchnorrProof

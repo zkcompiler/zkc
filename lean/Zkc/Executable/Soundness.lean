@@ -1609,13 +1609,18 @@ theorem validate_rejects (helpers : List String)
 
 end Validation
 
-/-- What the per-compile rule establishes when it accepts. -/
-theorem checkLowering_sound {vocabulary : Vocabulary} {participant : Participant}
+/-- What the per-compile rule establishes syntactically when it accepts: the
+reading, the agreeing interface, and that the reading is the constructed
+validator itself or has its normal form. `checkLowering_sound` turns the
+latter into equal ideal meanings. -/
+theorem checkLowering_spec {vocabulary : Vocabulary} {participant : Participant}
     {validator : Validator} {L : Lowered}
     (accepted : checkLowering vocabulary participant validator = .ok L) :
     validator.read vocabulary (Instruction.helpers participant.instructions) = .ok L ∧
-      Code.instructions L.code = participant.instructions ∧
-      L.returned = participant.returned ∧ validator.inputs.map (·.2.sort) = participant.inputs ∧
+      ((Code.instructions L.code = participant.instructions ∧ L.returned = participant.returned) ∨
+        ∃ normalized, checkNormalized participant.inputs participant.instructions participant.returned
+          (Code.instructions L.code) L.returned = .ok normalized) ∧
+      validator.inputs.map (·.2.sort) = participant.inputs ∧
       validator.results.map (·.sort) = participant.outputs ∧ validator.symbol = participant.symbol ∧
       validator.entry = participant.policy.entry ∧ validator.role = participant.policy.validator := by
   unfold checkLowering at accepted
@@ -1629,10 +1634,11 @@ theorem checkLowering_sound {vocabulary : Vocabulary} {participant : Participant
       by_cases role : validator.role = participant.policy.validator <;>
       by_cases inputs : validator.inputs.map (·.2.sort) = participant.inputs <;>
       by_cases outputs : validator.results.map (·.sort) = participant.outputs <;>
-      by_cases code : Code.instructions lowered.code = participant.instructions <;>
-      by_cases returned : lowered.returned = participant.returned <;>
+      by_cases exact : Code.instructions lowered.code = participant.instructions ∧
+        lowered.returned = participant.returned <;>
+      cases normalized : checkNormalized participant.inputs participant.instructions participant.returned
+        (Code.instructions lowered.code) lowered.returned <;>
       simp_all [bind, Except.bind, pure, Except.pure]
-
 
 end Field
 

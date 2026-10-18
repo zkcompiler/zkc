@@ -169,6 +169,8 @@ class Schnorr:
         "Zkc.Executable.validate_ideal",
         "Zkc.Executable.validate_rejects",
         "Zkc.Executable.execute_cleaned",
+        "Zkc.Executable.checkLowering_sound",
+        "Zkc.Executable.checkNormalized_sound",
         "Zkc.Construction.compiled_transform",
         "Zkc.Construction.check_sound",
         "Zkc.Construction.project_sound",
@@ -183,6 +185,7 @@ class Schnorr:
         "ZkcExamples.Construction.SchnorrProof.compiled",
         "Zkc.Executable.validate_ideal",
         "Zkc.Executable.validate_rejects",
+        "Zkc.Executable.checkLowering_sound",
         "ZkcExamples.Executable.SchnorrProof.accepted",
     ]
     # Entry-specific equations about the compiled program's meaning, which the proof must not use.
@@ -265,10 +268,10 @@ class Schnorr:
             program[2].append(copy.deepcopy(program_function(program, "_calculation_2")))
 
         return {
-            "addition-swapped": (addition_swapped, "some (.instruction 12)"),
-            "comparison-trivial": (comparison_trivial, "some (.instruction 13)"),
-            "results-swapped": (results_swapped, "some (.different \"returned\")"),
-            "base-observed": (base_observed, "some (.instruction 2)"),
+            "addition-swapped": (addition_swapped, "some (.returned 0)"),
+            "comparison-trivial": (comparison_trivial, "some (.returned 0)"),
+            "results-swapped": (results_swapped, "some (.returned 0)"),
+            "base-observed": (base_observed, "some (.anchorOperand 1 1)"),
             "stale-transcript": (stale_transcript, "some (.operation \"transition\")"),
             "uninstalled-implementation": (uninstalled, "some (.binding \"_calculation_6\")"),
             "unchecked-representation": (unchecked_representation, "some .representation"),
@@ -323,7 +326,8 @@ class Schnorr:
              "accepts": ["constructed_export", "program"],
              "certificate": "ZkcExamples.Executable.SchnorrProof.accepted",
              "soundness": ["Zkc.Executable.execute_metered", "Zkc.Executable.validate_ideal",
-                           "Zkc.Executable.validate_rejects", "Zkc.Executable.execute_cleaned"]},
+                           "Zkc.Executable.validate_rejects", "Zkc.Executable.checkLowering_sound",
+                           "Zkc.Executable.checkNormalized_sound", "Zkc.Executable.execute_cleaned"]},
         ]
 
 
@@ -376,6 +380,10 @@ class Sumcheck:
         "Zkc.Executable.validate_metered",
         "Zkc.Executable.metered_prunes",
         "Zkc.Executable.validate_prunes",
+        "Zkc.Executable.validate_prunes_export",
+        "Zkc.Executable.checkLowering_sound",
+        "Zkc.Executable.checkNormalized_sound",
+        "ZkcExamples.Executable.SumcheckProof.helpersSorted",
         "Zkc.Executable.execute_cleaned",
         "Zkc.Construction.compiled_transform",
         "Zkc.Construction.check_sound",
@@ -388,6 +396,7 @@ class Sumcheck:
         "ZkcExamples.Structured.SumcheckSourceViews.imported",
         "ZkcExamples.Construction.SumcheckProof.compiled",
         "Zkc.Executable.validate_prunes",
+        "Zkc.Executable.validate_prunes_export",
         "ZkcExamples.Executable.SumcheckProof.accepted",
         "ZkcExamples.Executable.SumcheckHelpers.check_prepared",
         "ZkcSecurity.VCVio.Pruning.Prunes.prEvent_le",
@@ -482,13 +491,13 @@ class Sumcheck:
             constant[3] = ["2"]
 
         return {
-            "loop-maximum-raised": (maximum_raised, "some (.instruction 1)"),
+            "loop-maximum-raised": (maximum_raised, "some (.anchor 1)"),
             "loop-count-retargeted": (count_retargeted, "some (.loop \"apply_18_label_726564756365_s15\")"),
             "loop-carried-swapped": (carried_swapped, "some (.operation \"apply_18_label_726564756365_s24\")"),
-            "round-check-trivial": (round_check_trivial, "some (.instruction 1)"),
+            "round-check-trivial": (round_check_trivial, "some (.anchorOperand 4 0)"),
             "stale-transcript": (stale_transcript, "some (.operation \"transition\")"),
             "helper-retargeted": (helper_retargeted, "some (.operation \"apply_18_label_726564756365_s12\")"),
-            "results-swapped": (results_swapped, "some (.different \"returned\")"),
+            "results-swapped": (results_swapped, "some (.returned 0)"),
             "uninstalled-implementation": (uninstalled, "some (.binding \"_transcript_0\")"),
             # The rule reads a helper body only for its sorts and its freedom from transcript
             # operations; what the body computes is the obligation
@@ -556,7 +565,8 @@ class Sumcheck:
              "helper_preparation": "ZkcExamples.Executable.SumcheckHelpers.prepared",
              "soundness": ["Zkc.Executable.execute_metered", "Zkc.Executable.validate_metered",
                            "Zkc.Executable.metered_prunes", "Zkc.Executable.validate_prunes",
-                           "Zkc.Executable.execute_cleaned"],
+                           "Zkc.Executable.validate_prunes_export", "Zkc.Executable.checkLowering_sound",
+                           "Zkc.Executable.checkNormalized_sound", "Zkc.Executable.execute_cleaned"],
              "completeness": ["Zkc.Executable.metered_sufficient", "Zkc.Executable.validate_sufficient",
                               "ZkcExamples.Executable.SumcheckCharges.sufficient",
                               "ZkcExamples.Executable.SumcheckCompleteness.honest_accepted"]},

@@ -411,7 +411,7 @@ theorem honest_accepted (oracle : History F G → F) (decode : PhysicalType → 
       ZkcExamples.Construction.SumcheckProof.acceptancePosition
       (ZkcExamples.Construction.SumcheckProof.inputs values values.sum rounds) initial
       (honestBytes encode binding (honestRounds oracle initial values rounds)) = true := by
-  obtain ⟨reading, code, returned, -⟩ := checkLowering_sound SumcheckProof.accepted
+  obtain ⟨reading, same, inputs, -⟩ := checkLowering_sound (F := F) (G := G) SumcheckProof.accepted
   have magicLength : magic.length = 8 := rfl
   have header : (honestBytes encode binding (honestRounds oracle initial values rounds)).take 40 =
       magic ++ binding := by
@@ -438,7 +438,9 @@ theorem honest_accepted (oracle : History F G → F) (decode : PhysicalType → 
   rw [validate_sufficient (m := Id) installed SumcheckProof.validator context oracle table decode budget _
     SumcheckProof.prepared reading binding _ _ initial _ (SumcheckProof.admitted values values.sum rounds) header
     enough]
-  rw [dropped, decoded, code, returned]
+  have sorted := admits_sorted (SumcheckProof.admitted (G := G) values values.sum rounds) initial
+  rw [inputs] at sorted
+  rw [dropped, decoded, same (m := Id) context oracle table SumcheckProof.helpersSorted _ sorted]
   obtain ⟨history, run⟩ := honest_run oracle values rounds admitted shaped initial
   change Accepts _ (idealObservation (ideal (m := Id) context oracle table participant.returned
     participant.instructions _ _)) = true
