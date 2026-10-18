@@ -38,6 +38,14 @@ events and reads the table only at histories no longer than the replayed one
 charges each query the error of its absorbed occurrence; `transform_costBound`
 carries the charge to VCVio's pathwise cost model, in which an oracle key is
 charged the error of its last event (`keyError`).
+
+A per-key charge `charge : List E → E → ENNReal` charges a query the value at
+its whole key: the absorbed history before it and its occurrence. It can count
+loop iterations from the history and read operands carried in the occurrence.
+`ChargedCostBound` bounds the charges on every path of a validator from a given
+history, and `transform_chargedCostBound` carries it to the cost model, in which
+a key is charged `keyCharge charge`. A charge that ignores the history is the
+error of the occurrence (`keyCharge_const`, `CostBound.charged`).
 -/
 
 set_option autoImplicit false
@@ -379,6 +387,92 @@ def keyError (key : List E) : ENNReal :=
     keyError error (history ++ [event]) = error event := by
   simp [keyError]
 
+/-- The charge of an oracle key under a per-key charge: the charge of its last
+event after the history before it, zero for the empty history. -/
+def keyCharge (charge : List E → E → ENNReal) (key : List E) : ENNReal :=
+  match key.getLast? with
+  | some event => charge key.dropLast event
+  | none => 0
+
+@[simp] theorem keyCharge_append_singleton (charge : List E → E → ENNReal) (history : List E)
+    (event : E) : keyCharge charge (history ++ [event]) = charge history event := by
+  simp [keyCharge]
+
+/-- A charge that ignores the history before the occurrence charges every key the
+error of its last event. -/
+theorem keyCharge_const : keyCharge (fun _ event => error event) = keyError error := by
+  funext key
+  unfold keyCharge keyError
+  cases key.getLast? <;> rfl
+
+/-- The queries on every path from the absorbed `history` charge at most `cost`
+in total, each query the charge of its key: the history before it and its
+occurrence. -/
+def ChargedCostBound (charge : List E → E → ENNReal) :
+    PIR.Proc I A → List E → ENNReal → Prop
+  | .done _, _, _ => True
+  | .halt _, _, _ => True
+  | .call operation next, history, cost =>
+      match absorb operation with
+      | .receive event _ => ∀ message value,
+          ChargedCostBound charge (next value) (history ++ [event message]) cost
+      | .send event value => ChargedCostBound charge (next value) (history ++ [event]) cost
+      | .query event _ => ∃ remaining, charge history event + remaining ≤ cost ∧
+          ∀ value, ChargedCostBound charge (next value) (history ++ [event]) remaining
+      | .refuse => True
+
+/-- A cost bound with an error per occurrence is a charged cost bound, from any
+history, for the charge that ignores the history. -/
+theorem CostBound.charged :
+    ∀ (process : PIR.Proc I A) (cost : ENNReal), CostBound absorb error process cost →
+      ∀ history, ChargedCostBound absorb (fun _ event => error event) process history cost
+  | .done _, _, _, _ => trivial
+  | .halt _, _, _, _ => trivial
+  | .call operation next, cost, bounded, history => by
+      rcases absorbed : absorb operation with ⟨event, recover⟩ | ⟨event, value⟩ |
+        ⟨event, decode⟩ | _
+      · simp only [CostBound, absorbed] at bounded
+        simp only [ChargedCostBound, absorbed]
+        exact fun message value => CostBound.charged (next value) cost (bounded value) _
+      · simp only [CostBound, absorbed] at bounded
+        simp only [ChargedCostBound, absorbed]
+        exact CostBound.charged (next value) cost bounded _
+      · simp only [CostBound, absorbed] at bounded
+        simp only [ChargedCostBound, absorbed]
+        obtain ⟨remaining, charged, rest⟩ := bounded
+        exact ⟨remaining, charged, fun value => CostBound.charged (next value) remaining (rest value) _⟩
+      · simp only [ChargedCostBound, absorbed]
+
+/-- A query count with every charge at most `bound` charges at most
+`budget * bound` from every history. -/
+theorem QueryBound.chargedCostBound {charge : List E → E → ENNReal} {bound : ENNReal}
+    (bounded : ∀ history event, charge history event ≤ bound) :
+    ∀ (process : PIR.Proc I A) (budget : ℕ), QueryBound absorb process budget →
+      ∀ history, ChargedCostBound absorb charge process history (budget * bound)
+  | .done _, _, _, _ => trivial
+  | .halt _, _, _, _ => trivial
+  | .call operation next, budget, counted, history => by
+      rcases absorbed : absorb operation with ⟨event, recover⟩ | ⟨event, value⟩ |
+        ⟨event, decode⟩ | _
+      · simp only [QueryBound, absorbed] at counted
+        simp only [ChargedCostBound, absorbed]
+        exact fun message value =>
+          QueryBound.chargedCostBound bounded (next value) budget (counted value) _
+      · simp only [QueryBound, absorbed] at counted
+        simp only [ChargedCostBound, absorbed]
+        exact QueryBound.chargedCostBound bounded (next value) budget counted _
+      · simp only [QueryBound, absorbed] at counted
+        simp only [ChargedCostBound, absorbed]
+        obtain ⟨positive, rest⟩ := counted
+        refine ⟨((budget - 1 : ℕ) : ENNReal) * bound, ?_, fun value =>
+          QueryBound.chargedCostBound bounded (next value) (budget - 1) (rest value) _⟩
+        calc charge history event + ((budget - 1 : ℕ) : ENNReal) * bound
+            ≤ bound + ((budget - 1 : ℕ) : ENNReal) * bound :=
+              add_le_add_left (bounded history event) _
+          _ = (budget : ENNReal) * bound := by
+            rw [← one_add_mul, ← Nat.cast_one, ← Nat.cast_add, Nat.add_sub_cancel' positive]
+      · simp only [ChargedCostBound, absorbed]
+
 /-- A total query count with every key error at most `bound` charges at most
 `queries * bound` on every path. -/
 theorem worstCaseCostBound_of_isTotalQueryBound {α D : Type} {Raw : D → Type}
@@ -464,6 +558,61 @@ theorem transform_costBound :
         calc keyError error (history ++ [event]) + Multiplicative.toAdd total.2
             ≤ error event + remaining := by
               rw [keyError_append_singleton]
+              exact add_le_add le_rfl tail
+          _ ≤ cost := charged
+      · rw [transform_refuse absorb _ absorbed]
+        exact (worstCaseCostBound_pure _ _ _).mpr zero_le
+
+/-- The transform charges at most the validator's charged cost on every path,
+each query charged `keyCharge charge` at its key. -/
+theorem transform_chargedCostBound (charge : List E → E → ENNReal) :
+    ∀ (process : PIR.Proc I A) (cost : ENNReal) (history : List E) (proof : List P),
+      ChargedCostBound absorb charge process history cost →
+        WorstCaseCostBound (transform absorb answer process history proof)
+          ⟨keyCharge charge⟩ cost := by
+  intro process
+  induction process with
+  | done value =>
+      intro cost history proof _
+      exact (worstCaseCostBound_pure _ _ _).mpr zero_le
+  | halt stop =>
+      intro cost history proof _
+      exact (worstCaseCostBound_pure _ _ _).mpr zero_le
+  | call operation next ih =>
+      intro cost history proof bounded
+      rcases absorbed : absorb operation with ⟨event, recover⟩ | ⟨event, value⟩ |
+        ⟨event, decode⟩ | _
+      · simp only [ChargedCostBound, absorbed] at bounded
+        cases proof with
+        | nil =>
+            rw [transform_receive_nil absorb _ absorbed]
+            exact (worstCaseCostBound_pure _ _ _).mpr zero_le
+        | cons message rest =>
+            rw [transform_receive absorb _ absorbed]
+            cases recover (event message) with
+            | none => exact (worstCaseCostBound_pure _ _ _).mpr zero_le
+            | some value => exact ih value cost _ rest (bounded message value)
+      · simp only [ChargedCostBound, absorbed] at bounded
+        rw [transform_send absorb _ absorbed]
+        exact ih value cost _ proof bounded
+      · simp only [ChargedCostBound, absorbed] at bounded
+        obtain ⟨remaining, charged, rest⟩ := bounded
+        rw [transform_query absorb _ absorbed, answer, worstCaseCostBound_query_bind_iff]
+        intro raw total member
+        have tail : Multiplicative.toAdd total.2 ≤ remaining := by
+          revert member
+          cases decode history raw with
+          | none =>
+              intro member
+              exact (worstCaseCostBound_iff_support_bound _ _ _).mp
+                ((worstCaseCostBound_pure _ _ _).mpr zero_le) total member
+          | some value =>
+              intro member
+              exact (worstCaseCostBound_iff_support_bound _ _ _).mp
+                (ih value remaining (history ++ [event]) proof (rest value)) total member
+        calc keyCharge charge (history ++ [event]) + Multiplicative.toAdd total.2
+            ≤ charge history event + remaining := by
+              rw [keyCharge_append_singleton]
               exact add_le_add le_rfl tail
           _ ≤ cost := charged
       · rw [transform_refuse absorb _ absorbed]
