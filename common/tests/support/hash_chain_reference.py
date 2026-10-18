@@ -129,16 +129,17 @@ BLS12_381_R = 0x73EDA753299D7D483339D80809A1D80553BDA402FFFE5BFEFFFFFFFF00000001
 KOALA_BEAR_P = 2130706433
 
 
-def fr64be(chain):
-    """The wide big-endian reduction of one 64-byte request."""
-    return int.from_bytes(chain.request(b'challenge', 64), 'big') % BLS12_381_R
+def fr64be(raw):
+    """The wide big-endian reduction of one 64-byte answer."""
+    return int.from_bytes(raw, 'big') % BLS12_381_R
 
 
-def rejection31le(chain, degree=8, limit=16):
-    """Masked 31-bit little-endian words; words at or above p are rejected."""
+def rejection31le(request, degree=8, limit=16):
+    """Masked 31-bit little-endian words of successive 64-byte answers; words
+    at or above p are rejected, never reduced."""
     coordinates = []
     for _ in range(limit):
-        raw = chain.request(b'challenge', 64)
+        raw = request()
         for at in range(0, 64, 4):
             word = int.from_bytes(raw[at:at + 4], 'little') & 0x7FFFFFFF
             if word < KOALA_BEAR_P:
@@ -148,10 +149,10 @@ def rejection31le(chain, degree=8, limit=16):
     raise ValueError('challenge-rejection-limit')
 
 
-def uniform_index(chain, bound):
-    """UniformIndex(bound) for a power-of-two bound."""
+def uniform_index(raw, bound):
+    """UniformIndex(bound) of one 64-byte answer, for a power-of-two bound."""
     assert bound > 0 and bound & (bound - 1) == 0
-    return int.from_bytes(chain.request(b'index', 64)[:8], 'little') & (bound - 1)
+    return int.from_bytes(raw[:8], 'little') & (bound - 1)
 
 
 def native_origin(event):
@@ -198,19 +199,14 @@ def vectors():
             # Two requests with no event between them still differ: each
             # request advances the state.
             second = request(b'challenge')
-            entry['challenges'] = [str(int.from_bytes(raw, 'big') % BLS12_381_R)
-                                   for raw in (first, second)]
+            entry['challenges'] = [str(fr64be(raw)) for raw in (first, second)]
         else:
-            raw = request(b'challenge')
-            words = [int.from_bytes(raw[at:at + 4], 'little') & 0x7FFFFFFF for at in range(0, 64, 4)]
-            assert all(w < KOALA_BEAR_P for w in words[:8])
-            entry['challenge'] = words[:8]
+            entry['challenge'] = rejection31le(lambda: request(b'challenge'))
             index = native_origin(['query', 'Source', 'pick', 'input_0', contract, 'index', 'V'])
             entry['index_query'] = index.hex()
             absorb(b'origin', index)
             absorb(b'bound', (256).to_bytes(8, 'little'))
-            output = request(b'index')
-            entry['index'] = int.from_bytes(output[:8], 'little') & 255
+            entry['index'] = uniform_index(request(b'index'), 256)
             entry['bound'] = 256
         entry['steps'] = steps
         suites.append(entry)

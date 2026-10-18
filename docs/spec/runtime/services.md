@@ -42,7 +42,7 @@ merge or remove draws.
 
 ### UniformIndex realization
 
-The installed interactive sampler and native transcript suite admit only powers
+The installed interactive sampler and native transcript suites admit only powers
 of two from 1 through 2^63, rejecting other bounds before consuming their root.
 An explicit construction handler may implement another positive u64 range;
 admission checks its result range, not its claimed probability distribution.
