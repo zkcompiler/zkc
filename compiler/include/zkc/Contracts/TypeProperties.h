@@ -86,7 +86,8 @@ inline bool nativeMessageData(const BoundType &type) {
       }
     return true;
   }
-  return (type.kind == "group" && type.identity == "bn254.gt") ||
+  return (type.kind == "group" &&
+          (type.identity == "bn254.gt" || type.identity == "bls12-381.gt")) ||
          nativeFieldArrayWire(type) ||
          ((type.kind == "bool" || type.kind == "index" ||
            type.kind == "indices" || type.kind == "bytes") &&
@@ -105,7 +106,8 @@ inline bool nativeMessageData(const BoundType &type) {
            type.kind == "matrix") &&
           type.identity == "bls12-381.fr") ||
          ((type.kind == "group" || type.kind == "groups") &&
-          type.identity == "bls12-381.g1") ||
+          (type.identity == "bls12-381.g1" ||
+           type.identity == "bls12-381.g2")) ||
          ((type.kind == "commitment" || type.kind == "proof") &&
           (type.identity == "multilinear.kzg.bls12-381/0" ||
            type.identity == "rows.merkle-keccak256.koala-bear/0" ||

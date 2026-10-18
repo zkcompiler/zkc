@@ -107,8 +107,8 @@ pub(crate) fn read_field<P: FpConfig<N>, const N: usize>(bytes: &[u8]) -> Result
     Ok(value)
 }
 
-// Largest installed fixed object: the BN254 pairing target (twelve Fq coefficients).
-const MAX_FIXED_BYTES: usize = 384;
+// Largest installed fixed object: the BLS12-381 pairing target (twelve Fq coefficients).
+const MAX_FIXED_BYTES: usize = 576;
 /// Group objects require checked decoding and byte-for-byte canonicality.
 /// Only fixed-size objects reach either upstream decoder; no attacker-controlled
 /// Vec length is ever handed to canonical deserialization.

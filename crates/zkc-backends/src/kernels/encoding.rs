@@ -24,6 +24,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         | ("encoding.field_le", Identity::Ristretto255Scalar) => (&[Field], &[Bytes]),
         ("encoding.fields_be", Identity::Bls12381Fr)
         | ("encoding.fields_le", Identity::Ristretto255Scalar) => (&[Vector], &[Bytes]),
+        ("encoding.fields_from_be", Identity::Bls12381Fr) => (&[Bytes], &[Bool, Vector]),
         ("encoding.groups_compressed", Identity::Bls12381G1 | Identity::Edwards25519Prime) => {
             (&[Groups], &[Bytes])
         }
@@ -31,10 +32,14 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         | ("encoding.field_from_le", Identity::Ristretto255Scalar) => (&[Bytes], &[Bool, Field]),
         ("encoding.field_reduce_be", Identity::Bls12381Fr)
         | ("encoding.field_reduce_le", Identity::Ristretto255Scalar) => (&[Bytes], &[Field]),
-        ("encoding.group_compressed", Identity::Bls12381G1 | Identity::Edwards25519Prime) => {
-            (&[Group], &[Bytes])
-        }
-        ("encoding.group_from_compressed", Identity::Bls12381G1 | Identity::Edwards25519Prime)
+        (
+            "encoding.group_compressed",
+            Identity::Bls12381G1 | Identity::Bls12381G2 | Identity::Edwards25519Prime,
+        ) => (&[Group], &[Bytes]),
+        (
+            "encoding.group_from_compressed",
+            Identity::Bls12381G1 | Identity::Bls12381G2 | Identity::Edwards25519Prime,
+        )
         | ("encoding.group_decode_cofactor", Identity::Edwards25519Prime) => {
             (&[Bytes], &[Bool, Group])
         }
@@ -163,6 +168,33 @@ pub(crate) fn apply(
             let bytes = field_be(value)?;
             Ok(vec![Value::Bytes(bytes.as_slice().into())])
         }
+        ("encoding.fields_from_be", [Value::Bytes(bytes)]) => {
+            // All-or-nothing: a ragged length or any noncanonical element
+            // returns false with an empty vector, never a partial prefix.
+            let canonical = bytes.len() % 32 == 0;
+            let count = if canonical { bytes.len() / 32 } else { 0 };
+            // Like fields_be and field_from_be, canonical decoding debits no
+            // external work; element, output and operand charges still apply.
+            policy.vector(count)?;
+            policy.output(size(count, 32)?.saturating_add(1024), available)?;
+            let mut values = crate::kernels::arithmetic::reserve(count)?;
+            let mut valid = canonical;
+            for chunk in bytes.as_chunks::<32>().0.iter().take(count) {
+                let mut little = *chunk;
+                little.reverse();
+                match zkc_arkworks::decode_scalar(&little) {
+                    Ok(value) => values.push(value),
+                    Err(_) => {
+                        valid = false;
+                        break;
+                    }
+                }
+            }
+            if !valid {
+                values.clear();
+            }
+            Ok(vec![Value::Bool(valid), Value::Vector(values.into())])
+        }
         ("encoding.field_from_be", [Value::Bytes(bytes)]) => {
             policy.output(1024, available)?;
             let value = if let Ok(mut bytes) = <[u8; 32]>::try_from(bytes.as_ref()) {
@@ -250,6 +282,23 @@ pub(crate) fn apply(
             budget.charge_units(2048)?;
             Ok(vec![Value::EdwardsGroup(crate::edwards::map(input)?)])
         }
+        ("encoding.group_compressed", [Value::Bls12381G2(point)]) => {
+            policy.bytes(96)?;
+            policy.output(size(96, 1)?, available)?;
+            Ok(vec![Value::Bytes(
+                point.to_bytes().map_err(ark)?.as_slice().into(),
+            )])
+        }
+        ("encoding.group_from_compressed", [Value::Bytes(bytes)])
+            if identity == Identity::Bls12381G2 =>
+        {
+            policy.output(1024, available)?;
+            let point = crate::Bls12381G2::from_bytes(bytes).ok();
+            Ok(vec![
+                Value::Bool(point.is_some()),
+                Value::Bls12381G2(point.unwrap_or_else(crate::Bls12381G2::identity)),
+            ])
+        }
         ("encoding.group_compressed", [Value::Curve(point)]) => {
             policy.bytes(48)?;
             policy.output(size(48, 1)?, available)?;
@@ -274,6 +323,10 @@ pub(crate) fn apply(
 pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
     ("native/encoding.index_uleb128", "encoding.index_uleb128"),
     ("arkworks/encoding.fields_be", "encoding.fields_be"),
+    (
+        "arkworks/encoding.fields_from_be",
+        "encoding.fields_from_be",
+    ),
     ("dalek/encoding.fields_le", "encoding.fields_le"),
     (
         "arkworks/encoding.groups_compressed",
@@ -886,6 +939,128 @@ mod tests {
                 &mut Default::default()
             )
             .is_err()
+        );
+    }
+    fn g2(name: &str, args: &[Value]) -> Vec<Value> {
+        apply(
+            name,
+            Identity::Bls12381G2,
+            args,
+            &[],
+            &Policy::default(),
+            usize::MAX,
+            &mut Default::default(),
+        )
+        .unwrap()
+    }
+    #[test]
+    fn g2_codec_round_trips_and_rejects_malformed_encodings() {
+        let generator = crate::Bls12381G2::generator();
+        for value in [generator, crate::Bls12381G2::identity(), generator.neg()] {
+            let encoded = g2("encoding.group_compressed", &[Value::Bls12381G2(value)]);
+            assert!(matches!(&encoded[0], Value::Bytes(b) if b.len() == 96));
+            assert!(
+                matches!(g2("encoding.group_from_compressed", &encoded).as_slice(),
+                [Value::Bool(true), Value::Bls12381G2(p)] if *p == value)
+            );
+        }
+        let identity = crate::Bls12381G2::identity().to_bytes().unwrap();
+        let mut signed_infinity = identity;
+        signed_infinity[0] |= 0x20;
+        let mut uncompressed = generator.to_bytes().unwrap();
+        uncompressed[0] &= 0x7f;
+        for invalid in [
+            vec![],
+            vec![0; 95],
+            vec![0; 97],
+            vec![255; 96],
+            signed_infinity.to_vec(),
+            uncompressed.to_vec(),
+            GroupPoint::generator().to_bytes().unwrap().to_vec(),
+        ] {
+            assert!(
+                matches!(g2("encoding.group_from_compressed", &[bytes(&invalid)]).as_slice(),
+                [Value::Bool(false), Value::Bls12381G2(p)] if *p == crate::Bls12381G2::identity())
+            );
+        }
+    }
+    #[test]
+    fn whole_vector_big_endian_decoding_is_all_or_nothing() {
+        let values = [Scalar::from(0u64), Scalar::from(7u64), -Scalar::from(1u64)];
+        let encoded = run(
+            "encoding.fields_be",
+            &[Value::Vector(values.to_vec().into())],
+        );
+        assert!(
+            matches!(run("encoding.fields_from_be", &encoded).as_slice(),
+            [Value::Bool(true), Value::Vector(v)] if v.as_ref() == values)
+        );
+        assert!(
+            matches!(run("encoding.fields_from_be", &[bytes(&[])]).as_slice(),
+            [Value::Bool(true), Value::Vector(v)] if v.is_empty())
+        );
+        let Value::Bytes(valid) = &encoded[0] else {
+            panic!("bytes")
+        };
+        let modulus = Scalar::MODULUS.to_bytes_be();
+        let mut late = valid.to_vec();
+        late[64..96].copy_from_slice(&modulus);
+        for invalid in [
+            valid[..95].to_vec(),
+            [valid.as_ref(), &[0]].concat(),
+            late,
+            modulus.clone(),
+            vec![255; 32],
+        ] {
+            assert!(
+                matches!(run("encoding.fields_from_be", &[bytes(&invalid)]).as_slice(),
+                [Value::Bool(false), Value::Vector(v)] if v.is_empty())
+            );
+        }
+        let mut budget = crate::external_kernels::Budget { limit: 0, spent: 0 };
+        assert!(
+            apply(
+                "encoding.fields_from_be",
+                Identity::Bls12381Fr,
+                std::slice::from_ref(&encoded[0]),
+                &[],
+                &Policy::default(),
+                usize::MAX,
+                &mut budget,
+            )
+            .is_ok()
+        );
+        assert_eq!(budget.spent, 0);
+        assert_eq!(
+            apply(
+                "encoding.fields_from_be",
+                Identity::Bls12381Fr,
+                std::slice::from_ref(&encoded[0]),
+                &[],
+                &Policy::default(),
+                size(3, 32).unwrap(),
+                &mut Default::default(),
+            )
+            .unwrap_err()
+            .code,
+            "exhausted:output-bytes"
+        );
+        assert_eq!(
+            apply(
+                "encoding.fields_from_be",
+                Identity::Bls12381Fr,
+                &encoded,
+                &[],
+                &Policy {
+                    max_table_elements: 2,
+                    ..Default::default()
+                },
+                usize::MAX,
+                &mut Default::default(),
+            )
+            .unwrap_err()
+            .code,
+            "exhausted:element-limit"
         );
     }
 }

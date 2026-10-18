@@ -2,7 +2,9 @@
 #[path = "domains/support.rs"]
 mod support;
 use curve25519_dalek::traits::Identity as _;
-use zkc_backends::{Bn254G1, Bn254G2, Bn254Gt, GroupPoint, Policy, Value};
+use zkc_backends::{
+    Bls12381G2, Bls12381Gt, Bn254G1, Bn254G2, Bn254Gt, GroupPoint, Policy, Scalar, Value,
+};
 use zkc_runtime::interactive::{Backend, OperationBinding, Value as RuntimeValue};
 
 fn binding(group: &str, contract: &str) -> OperationBinding {
@@ -208,6 +210,42 @@ fn bn254_g2_identity() {
     );
 }
 #[test]
+fn bls12_381_g2_identity() {
+    check(
+        "bls12-381.g2",
+        Value::Bls12381G2(Bls12381G2::identity()),
+        Value::Field(Scalar::from(0u64)),
+        Value::Field(Scalar::from(7u64)),
+        Some((
+            Value::Vector(vec![].into()),
+            Value::Bls12381G2Vector(vec![].into()),
+        )),
+    );
+}
+#[test]
+fn bls12_381_target_identity_is_multiplicative_one() {
+    let identity = Value::Bls12381Gt(std::sync::Arc::new(Bls12381Gt::identity()));
+    check(
+        "bls12-381.gt",
+        identity.clone(),
+        Value::Field(Scalar::from(0u64)),
+        Value::Field(Scalar::from(7u64)),
+        None,
+    );
+    let backend = support::backend(Policy::default());
+    let mut bytes = backend.encode_native_value(&identity).unwrap();
+    // Canonical Fq12 one: the first base-field coefficient is one.
+    assert_eq!(bytes[6], 1);
+    assert!(bytes[7..].iter().all(|b| *b == 0));
+    bytes[6] = 0;
+    assert!(
+        backend
+            .decode_native_value(&identity.physical_type(), &bytes)
+            .is_err()
+    );
+    assert!(binding("bls12-381.gt", "curve.msm").signature().is_err());
+}
+#[test]
 fn bn254_target_identity_is_multiplicative_one() {
     let identity = Value::Bn254Gt(Bn254Gt::identity());
     check(
@@ -237,6 +275,8 @@ fn exact_provider_group_codec_and_nullary_signature() {
         "ristretto255.group",
         "edwards25519.prime",
         "bls12-381.g1",
+        "bls12-381.g2",
+        "bls12-381.gt",
         "bn254.g1",
         "bn254.g2",
         "bn254.gt",
@@ -256,6 +296,8 @@ fn exact_provider_group_codec_and_nullary_signature() {
             "ristretto255.group",
             "edwards25519.prime",
             "bls12-381.g1",
+            "bls12-381.g2",
+            "bls12-381.gt",
             "bn254.g1",
             "bn254.g2",
             "bn254.gt",
@@ -281,7 +323,7 @@ fn exact_provider_group_codec_and_nullary_signature() {
             assert!(zkc_runtime::interactive::admit_supplied(&wire, &backend).is_err());
         }
     }
-    for group in ["bn254.fr", "bls12-381.g2", "bls12-381.gt", "unknown"] {
+    for group in ["bn254.fr", "bls12-381.fr", "unknown"] {
         let wrong = binding(group, "curve.identity");
         assert!(wrong.signature().is_err());
         assert!(backend.binding_signature(&wrong).is_none());

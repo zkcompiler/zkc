@@ -93,10 +93,11 @@ not make native allocation infallible.
 
 The installed providers are `dalek/curve.identity` for `ristretto255.group` and
 `edwards25519.prime`, and
-`arkworks/curve.identity` for `bls12-381.g1`, `bn254.g1`, `bn254.g2`, and
-`bn254.gt`. Identity uses the same group representations and canonical codecs
-as other operations in each family. For GT it is multiplicative one; it is not
-extension-field zero. Dense GT vectors and BLS12-381 G2/GT are not installed.
+`arkworks/curve.identity` for `bls12-381.g1`, `bls12-381.g2`, `bls12-381.gt`,
+`bn254.g1`, `bn254.g2`, and `bn254.gt`. Identity uses the same group
+representations and canonical codecs as other operations in each family. For
+GT it is multiplicative one; it is not extension-field zero. Dense GT vectors
+are not installed.
 These are native profile contracts, without a native adequacy or security proof.
 
 ## Prime-order Edwards25519
@@ -128,14 +129,22 @@ Group scaling separately requires `ScalarAction` and the appropriate scalar-fiel
 association. No setup, relation satisfaction, or security theorem follows from
 this capability alone.
 
-The installed instance uses `bn254.fr`, `bn254.g1`, and `bn254.g2`; both groups'
-scalar field is `bn254.fr`. Its scalar modulus is
+Two instances are installed. The first uses `bn254.fr`, `bn254.g1`, and
+`bn254.g2`; both groups' scalar field is `bn254.fr`. Its scalar modulus is
 `21888242871839275222246405745257275088548364400416034343698204186575808495617`.
 The base field used to encode group coordinates is distinct. The scalar domain
-has the pinned generator-5 two-adic root convention and two-adicity 28. Native
-group and pairing operations use arkworks. The current scalar Lean interpretation
-uses abstract group/module equations and does not execute or prove adequacy of
-these production pairing primitives.
+has the pinned generator-5 two-adic root convention and two-adicity 28.
+The second uses `bls12-381.fr`, `bls12-381.g1`, and `bls12-381.g2`, with the
+BLS12-381 scalar modulus given above for `bls12-381.fr`. No two-adic root
+convention is installed for this field; a protocol that needs a root of unity
+states it as a constant. `bls12-381.g2` has the 96-byte compressed
+[mathematical encoding](../realization/external-constructions.md#mathematical-byte-encodings),
+canonical representation `arkworks.bls12-381-g2/0`, group vectors
+`arkworks.bls12-381-g2-vector/0`, and codecs `zkcv.group.bls12-381.g2/0`
+(tag 51) and `zkcv.groups.bls12-381.g2/0` (tag 52). Native group and pairing
+operations use arkworks. The current scalar Lean interpretation uses abstract
+group/module equations and does not execute or prove adequacy of these
+production pairing primitives.
 
 ### Pairing results
 
@@ -152,13 +161,16 @@ arbitrary element of an extension field. Abstract additive group notation is
 retained: target `group_add` multiplies target-field elements, `group_scale`
 exponentiates, zero denotes the multiplicative identity, and negation inverts.
 
-The installed target is `bn254.gt`, with scalar field `bn254.fr`, canonical
-representation `arkworks.bn254-gt/0`, and generator equal to the pairing of the
-installed G1/G2 generators. Its codec is `zkcv.group.bn254.gt/0`: ZKCV tag 50
-followed by exactly 384 canonical arkworks bytes. Decoding checks canonical
-encoding and target subgroup membership; extension-field zero is invalid.
-Only individual target-group values are installed, including recursive data
-containers; a dense `groups:bn254.gt` representation is not installed.
+The installed targets are `bn254.gt`, with scalar field `bn254.fr`, and
+`bls12-381.gt`, with scalar field `bls12-381.fr`. Each target's generator is the
+pairing of its installed G1/G2 generators. The canonical representations are
+`arkworks.bn254-gt/0` and `arkworks.bls12-381-gt/0`. The codec
+`zkcv.group.bn254.gt/0` is ZKCV tag 50 followed by exactly 384 canonical
+arkworks bytes; `zkcv.group.bls12-381.gt/0` is tag 53 followed by exactly 576
+bytes, the twelve base-field coefficients. Decoding checks canonical encoding
+and target subgroup membership; extension-field zero is invalid. Only
+individual target-group values are installed, including recursive data
+containers; dense target-group vectors are not installed.
 The current scalar Lean import profile does not admit pairing target operations
 or provide a native GT adequacy proof.
 

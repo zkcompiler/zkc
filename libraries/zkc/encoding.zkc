@@ -8,6 +8,9 @@ pub fn index_uleb128(value: index) -> Bytes = primitive("encoding.index_uleb128"
 
 // Ordered concatenation of each element's exact scalar encoding, without a length prefix.
 pub fn fields_be<F: Field>(values: Vector<F>) -> Bytes = primitive("encoding.fields_be");
+// Inverse of fields_be: every 32-byte element must be canonical, or the flag is
+// false and the vector is empty. A ragged length is malformed, not truncated.
+pub fn fields_from_be<F: Field>(value: Bytes) -> (bool, Vector<F>) = primitive("encoding.fields_from_be");
 pub fn fields_le<F: Field>(values: Vector<F>) -> Bytes = primitive("encoding.fields_le");
 pub fn groups_compressed<G: Group>(values: Groups<G>) -> Bytes = primitive("encoding.groups_compressed");
 

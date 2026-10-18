@@ -87,6 +87,7 @@ pub use kernels::arithmetic::parse_ristretto_decimal;
 pub const RISTRETTO_SCALAR_MODULUS_DECIMAL: &str =
     "7237005577332262213973186563042994240857116359379907606001950938285454250989";
 
+pub use zkc_arkworks::bls12_381::{G2 as Bls12381G2, Gt as Bls12381Gt};
 /// BN254 scalar field and checked subgroup points.
 pub use zkc_arkworks::bn254::Gt as Bn254Gt;
 pub use zkc_arkworks::bn254::{

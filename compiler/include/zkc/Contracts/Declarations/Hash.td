@@ -17,3 +17,7 @@ def OpShake128Squeeze : ZKC_Operation<"shake128.squeeze", [],
 // Raw Keccak-256; no domain separator, framing, or scalar reduction.
 def OpHashKeccak256 : ZKC_Operation<"hash.keccak256", [],
     [ZKC_Apply<TypeBytes, []>], [ZKC_Apply<TypeBytes, []>], []> { int ordinal = 184; }
+
+// Raw SHA-256 (FIPS 180-4); no domain separator, framing, or scalar reduction.
+def OpHashSha256 : ZKC_Operation<"hash.sha256", [],
+    [ZKC_Apply<TypeBytes, []>], [ZKC_Apply<TypeBytes, []>], []> { int ordinal = 191; }

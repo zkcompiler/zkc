@@ -61,6 +61,8 @@ fn frame(ty: &PhysicalType) -> Option<(u8, usize)> {
             (Group, Bn254G1) => Some((46, 38)),
             (Group, Bn254Gt) => Some((50, 390)),
             (Group, Bn254G2) => Some((48, 70)),
+            (Group, Bls12381G2) => Some((51, 102)),
+            (Group, Bls12381Gt) => Some((53, 582)),
             (Field, KoalaBear) => Some((19, 10)),
             (Field, KoalaBearExt8) => Some((26, 38)),
             (Field, Ristretto255Scalar) => Some((13, 38)),
@@ -181,6 +183,8 @@ fn encode_fixed(value: &Value, policy: &Policy) -> Result<Vec<u8>, NativeWireErr
         Value::Bn254G1(v) => bytes.extend_from_slice(&v.to_bytes().map_err(encoding)?),
         Value::Bn254Gt(v) => bytes.extend_from_slice(&v.to_bytes().map_err(encoding)?),
         Value::Bn254G2(v) => bytes.extend_from_slice(&v.to_bytes().map_err(encoding)?),
+        Value::Bls12381G2(v) => bytes.extend_from_slice(&v.to_bytes().map_err(encoding)?),
+        Value::Bls12381Gt(v) => bytes.extend_from_slice(&v.to_bytes().map_err(encoding)?),
         Value::KoalaBearField(v) => bytes.extend_from_slice(&crate::plonky3::encode_scalar(*v)),
         Value::KoalaBearExt8Field(v) => {
             bytes.extend_from_slice(&crate::plonky3::encode_extension(*v))
@@ -297,10 +301,14 @@ impl NativeBackend {
         }
         self.policy().wire(width).map_err(|_| Limit)?;
         if tag != 64 {
-            // Every installed fixed scalar/group wrapper retains 512 bytes.
-            // Reject insufficient capacity before canonical/subgroup decoding;
-            // fixed arrays reserve their shape-dependent backing below.
-            self.policy().output(512, usize::MAX).map_err(|_| Limit)?;
+            // Installed fixed scalar/group wrappers retain 512 bytes, except the
+            // 1024-byte BLS12-381 target. Reject insufficient capacity before
+            // canonical/subgroup decoding; fixed arrays reserve their
+            // shape-dependent backing below.
+            let retained = if tag == 53 { 1024 } else { 512 };
+            self.policy()
+                .output(retained, usize::MAX)
+                .map_err(|_| Limit)?;
         }
         let value = match tag {
             64 => {
@@ -357,6 +365,14 @@ impl NativeBackend {
                 crate::Bn254G2::from_bytes(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Group))?,
             ),
+            51 => Value::Bls12381G2(
+                crate::Bls12381G2::from_bytes(&bytes[6..])
+                    .map_err(|_| Invalid(DecodeReason::Group))?,
+            ),
+            53 => Value::Bls12381Gt(std::sync::Arc::new(
+                crate::Bls12381Gt::from_bytes(&bytes[6..])
+                    .map_err(|_| Invalid(DecodeReason::Group))?,
+            )),
             19 => Value::KoalaBearField(
                 crate::plonky3::decode_scalar(&bytes[6..])
                     .map_err(|_| Invalid(DecodeReason::Scalar))?,

@@ -198,9 +198,11 @@ encoding.field_reduce_le 0
 encoding.group_decode_cofactor 0
 encoding.cryptonote_map 0
 hash.keccak256 0
+hash.sha256 0
 bytes.repeat 0
 bytes.join 0
 encoding.fields_be 0
+encoding.fields_from_be 0
 encoding.fields_le 0
 encoding.groups_compressed 0
 encoding.index_uleb128 0

@@ -64,7 +64,7 @@ impl Policy {
             usize::MAX,
         )
     }
-    pub(crate) fn bn254_groups<T>(&self, n: usize) -> Result<()> {
+    pub(crate) fn typed_groups<T>(&self, n: usize) -> Result<()> {
         if n > self.max_groups.min(32_768) {
             return Err(exhausted("group-limit"));
         }
@@ -154,6 +154,10 @@ value_inventory! {
     Bn254G2(crate::Bn254G2),
     Bn254Gt(crate::Bn254Gt),
     Bn254G2Vector(Arc<[crate::Bn254G2]>),
+    Bls12381G2(crate::Bls12381G2),
+    Bls12381G2Vector(Arc<[crate::Bls12381G2]>),
+    /// Boxed: twelve base-field coefficients would exceed the inline value bound.
+    Bls12381Gt(Arc<crate::Bls12381Gt>),
 
     OracleRoot(crate::oracle::Domain, crate::plonky3::oracle::Digest),
     OraclePath(crate::oracle::Domain, Arc<[crate::plonky3::oracle::Digest]>),
@@ -282,6 +286,21 @@ impl Value {
                 Type::Groups,
                 Identity::Bn254G2,
                 Representation::Bn254G2Vector,
+            ),
+            Self::Bls12381G2(_) => (
+                Type::Group,
+                Identity::Bls12381G2,
+                Representation::Bls12381G2,
+            ),
+            Self::Bls12381G2Vector(_) => (
+                Type::Groups,
+                Identity::Bls12381G2,
+                Representation::Bls12381G2Vector,
+            ),
+            Self::Bls12381Gt(_) => (
+                Type::Group,
+                Identity::Bls12381Gt,
+                Representation::Bls12381Gt,
             ),
             Self::OracleRoot(d, _) => (Type::Commitment, d.identity(), Representation::MerkleRoot),
             Self::OraclePath(d, _) => (Type::Proof, d.identity(), Representation::MerklePath),
@@ -529,17 +548,23 @@ impl Value {
         if !ty.is_serializable() {
             return Err(refused("nonserializable"));
         }
+        if ty.kind() == Type::Group && ty.logical().identity() == Identity::Bls12381Gt {
+            // Twelve 48-byte coefficients exceed the 512-byte fixed leaf charge.
+            policy.wire(wire_len)?;
+            policy.output(1024, usize::MAX)?;
+            return Ok(1024);
+        }
         if ty.kind() == Type::Groups
             && matches!(
                 ty.logical().identity(),
-                Identity::Bn254G1 | Identity::Bn254G2
+                Identity::Bn254G1 | Identity::Bn254G2 | Identity::Bls12381G2
             )
         {
             policy.wire(wire_len)?;
-            let (wire, memory) = if ty.logical().identity() == Identity::Bn254G1 {
-                (32, std::mem::size_of::<crate::Bn254G1>())
-            } else {
-                (64, std::mem::size_of::<crate::Bn254G2>())
+            let (wire, memory) = match ty.logical().identity() {
+                Identity::Bn254G1 => (32, std::mem::size_of::<crate::Bn254G1>()),
+                Identity::Bn254G2 => (64, std::mem::size_of::<crate::Bn254G2>()),
+                _ => (96, std::mem::size_of::<crate::Bls12381G2>()),
             };
             let bytes = size(wire_len / wire, memory)?;
             policy.output(bytes, usize::MAX)?;
@@ -634,6 +659,8 @@ impl Value {
             Self::Bn254Vector(v) | Self::Bn254Polynomial(v) => Backing::of(v, bytes),
             Self::Bn254G1Vector(v) => Backing::of(v, bytes),
             Self::Bn254G2Vector(v) => Backing::of(v, bytes),
+            Self::Bls12381G2Vector(v) => Backing::of(v, bytes),
+            Self::Bls12381Gt(v) => Backing::of(v, bytes),
             Self::Indices(v) => Backing::of(v, bytes),
             Self::Bytes(v) => Backing::of(v, bytes),
             Self::Shake128State(v) => Backing::of(v, bytes),
@@ -666,6 +693,7 @@ impl Value {
             | Self::Bn254G1(_)
             | Self::Bn254Gt(_)
             | Self::Bn254G2(_)
+            | Self::Bls12381G2(_)
             | Self::OracleRoot(..)
             | Self::Index(_)
             | Self::KoalaBearExt8Field(_)
@@ -703,6 +731,9 @@ impl Value {
             | Self::Bn254Gt(..)
             | Self::Bn254G2(..)
             | Self::Bn254G2Vector(..)
+            | Self::Bls12381G2(..)
+            | Self::Bls12381G2Vector(..)
+            | Self::Bls12381Gt(..)
             | Self::OracleRoot(..)
             | Self::OraclePath(..)
             | Self::OracleState(..)
@@ -865,6 +896,9 @@ impl RuntimeValue for Value {
             | Self::Bn254G2(..)
             | Self::Bn254Gt(..)
             | Self::Bn254G2Vector(..)
+            | Self::Bls12381G2(..)
+            | Self::Bls12381G2Vector(..)
+            | Self::Bls12381Gt(..)
             | Self::OracleRoot(..)
             | Self::OraclePath(..)
             | Self::OracleState(..)
@@ -973,6 +1007,9 @@ impl RuntimeValue for Value {
             Self::Bn254Vector(v) | Self::Bn254Polynomial(v) => size(v.len(), 32),
             Self::Bn254G1Vector(v) => size(v.len(), std::mem::size_of::<crate::Bn254G1>()),
             Self::Bn254G2Vector(v) => size(v.len(), std::mem::size_of::<crate::Bn254G2>()),
+            Self::Bls12381G2Vector(v) => size(v.len(), std::mem::size_of::<crate::Bls12381G2>()),
+            // Twelve 48-byte base-field coefficients exceed the 512-byte leaf charge.
+            Self::Bls12381Gt(_) => Ok(1024),
             Self::Indices(v) => size(v.len(), 8),
             Self::Bytes(v) => size(v.len(), 1),
             Self::Shake128State(_) => Ok(crate::hash::Shake128State::RETAINED_BYTES),
@@ -1003,6 +1040,7 @@ impl RuntimeValue for Value {
             | Self::Bn254G1(_)
             | Self::Bn254Gt(_)
             | Self::Bn254G2(_)
+            | Self::Bls12381G2(_)
             | Self::KoalaBearExt8Round(_)
             | Self::KoalaBearExt8Field(_)
             | Self::KoalaBearField(_)

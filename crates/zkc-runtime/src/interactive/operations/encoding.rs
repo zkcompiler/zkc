@@ -13,6 +13,11 @@ pub(super) const CONTRACTS: &[Contract] = &[
     )
     .implemented_by(&["arkworks/encoding.fields_be"]),
     Contract::new(
+        "encoding.fields_from_be",
+        (&[Bytes], &[Bool, Vector], AttributeRule::None),
+    )
+    .implemented_by(&["arkworks/encoding.fields_from_be"]),
+    Contract::new(
         "encoding.fields_le",
         (&[Vector], &[Bytes], AttributeRule::None),
     )
@@ -130,11 +135,13 @@ fn select(
         "encoding.group_decode_cofactor" | "encoding.cryptonote_map" => {
             primary == Identity::Edwards25519Prime
         }
-        "encoding.group_compressed"
-        | "encoding.groups_compressed"
-        | "encoding.group_from_compressed" => {
+        "encoding.groups_compressed" => {
             matches!(primary, Identity::Bls12381G1 | Identity::Edwards25519Prime)
         }
+        "encoding.group_compressed" | "encoding.group_from_compressed" => matches!(
+            primary,
+            Identity::Bls12381G1 | Identity::Bls12381G2 | Identity::Edwards25519Prime
+        ),
         _ => primary == Identity::Bls12381Fr,
     };
     if !allowed {

@@ -60,6 +60,14 @@ def OpEncodingGroupsCompressed : ZKC_Operation<"encoding.groups_compressed", [En
     [ZKC_Apply<TypeGroups, [EncodingGroupsCompressedDomain]>],
     [ZKC_Apply<TypeBytes, []>], []> { int ordinal = 189; }
 
+// Whole-vector decoding of consecutive 32-byte big-endian scalars. Either the
+// length is a multiple of 32 and every element is canonical, or the flag is
+// false and the vector is empty; there is no modular reduction.
+def EncodingFieldsFromBeDomain : ZKC_Root<"T", FieldDomain>;
+def OpEncodingFieldsFromBe : ZKC_Operation<"encoding.fields_from_be", [EncodingFieldsFromBeDomain],
+    [ZKC_Apply<TypeBytes, []>],
+    [ZKC_Apply<TypeBool, []>, ZKC_Apply<TypeVector, [EncodingFieldsFromBeDomain]>], []> { int ordinal = 192; }
+
 // Shortest unsigned LEB128 of an entire u64 index; zero emits one byte.
 def OpEncodingIndexUleb128 : ZKC_Operation<"encoding.index_uleb128", [],
     [ZKC_Apply<TypeIndex, []>], [ZKC_Apply<TypeBytes, []>], []> { int ordinal = 190; }

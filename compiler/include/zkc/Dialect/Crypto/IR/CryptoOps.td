@@ -9,6 +9,7 @@ include "mlir/Interfaces/InferTypeOpInterface.td"
 include "zkc/Dialect/Kernels.td"
 
 def EncodingFieldsBeOp : KernelOp<CryptoDialect, "exec.encoding_fields_be", [OpEncodingFieldsBe]>;
+def EncodingFieldsFromBeOp : KernelOp<CryptoDialect, "exec.encoding_fields_from_be", [OpEncodingFieldsFromBe]>;
 def EncodingFieldsLeOp : KernelOp<CryptoDialect, "exec.encoding_fields_le", [OpEncodingFieldsLe]>;
 def EncodingGroupsCompressedOp : KernelOp<CryptoDialect, "exec.encoding_groups_compressed", [OpEncodingGroupsCompressed]>;
 def EncodingFieldBeOp : KernelOp<CryptoDialect, "exec.encoding_field_be", [OpEncodingFieldBe]>;
@@ -123,5 +124,6 @@ def EncodingFieldReduceLeOp : KernelOp<CryptoDialect, "exec.encoding_field_reduc
 def EncodingGroupDecodeCofactorOp : KernelOp<CryptoDialect, "exec.encoding_group_decode_cofactor", [OpEncodingGroupDecodeCofactor]>;
 def EncodingCryptonoteMapOp : KernelOp<CryptoDialect, "exec.encoding_cryptonote_map", [OpEncodingCryptonoteMap]>;
 def Keccak256Op : KernelOp<CryptoDialect, "exec.keccak256", [OpHashKeccak256]>;
+def Sha256Op : KernelOp<CryptoDialect, "exec.sha256", [OpHashSha256]>;
 
 #endif

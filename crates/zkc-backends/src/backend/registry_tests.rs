@@ -269,6 +269,9 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
             "Bn254G1Vector" => R::Bn254G1Vector,
             "Bn254G2" => R::Bn254G2,
             "Bn254G2Vector" => R::Bn254G2Vector,
+            "Bls12381G2" => R::Bls12381G2,
+            "Bls12381G2Vector" => R::Bls12381G2Vector,
+            "Bls12381Gt" => R::Bls12381Gt,
             "OracleRoot" => R::MerkleRoot,
             "OraclePath" => R::MerklePath,
             "OracleState" => R::MerkleState,
@@ -457,6 +460,13 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         std::mem::size_of::<crate::Bn254G2>()
     );
     group_family!(
+        crate::Bls12381G2::generator(),
+        Bls12381G2,
+        Bls12381G2,
+        Bls12381G2Vector,
+        std::mem::size_of::<crate::Bls12381G2>()
+    );
+    group_family!(
         curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT,
         Ristretto255Group,
         RistrettoGroup,
@@ -468,6 +478,12 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         Type::Group,
         I::Bn254Gt,
         512,
+    );
+    check(
+        Value::Bls12381Gt(std::sync::Arc::new(crate::Bls12381Gt::generator())),
+        Type::Group,
+        I::Bls12381Gt,
+        1024,
     );
     check(Value::Bool(true), Type::Bool, I::None, 512);
     check(Value::Index(3), Type::Index, I::None, 512);

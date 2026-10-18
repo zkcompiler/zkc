@@ -115,19 +115,25 @@ fn resolve(
 ) -> Result<KernelSignature<LogicalType>> {
     let fail = || AdmissionError::new(ErrorCode::Signature, "uninstalled operation binding");
     if matches!(binding.contract.as_str(), "pairing.check" | "pairing.apply") {
-        if binding.arguments != ["bn254.fr"] {
-            return Err(fail());
-        }
+        // Each installed pairing field fixes its ordered source and target groups.
+        let (g1, g2, gt) = match binding.arguments.as_slice() {
+            [field] if field == "bn254.fr" => {
+                (Identity::Bn254G1, Identity::Bn254G2, Identity::Bn254Gt)
+            }
+            [field] if field == "bls12-381.fr" => (
+                Identity::Bls12381G1,
+                Identity::Bls12381G2,
+                Identity::Bls12381Gt,
+            ),
+            _ => return Err(fail()),
+        };
         let apply = binding.contract == "pairing.apply";
         let kind = if apply { Type::Group } else { Type::Groups };
         let make = LogicalType::new;
         return Ok(KernelSignature {
-            inputs: vec![
-                make(kind, Identity::Bn254G1)?,
-                make(kind, Identity::Bn254G2)?,
-            ],
+            inputs: vec![make(kind, g1)?, make(kind, g2)?],
             outputs: vec![if apply {
-                make(Type::Group, Identity::Bn254Gt)?
+                make(Type::Group, gt)?
             } else {
                 make(Type::Bool, Identity::None)?
             }],

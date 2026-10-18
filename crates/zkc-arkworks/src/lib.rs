@@ -82,5 +82,7 @@ pub const PROFILE: &str = "zkc-arkworks/v0;arkworks=0.6.0;field=BLS12-381::Fr;pc
 mod group;
 pub use group::{GROUP_BYTES, GroupPoint, scalar_from_wide_be};
 
+/// Validated BLS12-381 G2, pairing target and pairings.
+pub mod bls12_381;
 /// Validated BN254 field and pairing groups.
 pub mod bn254;

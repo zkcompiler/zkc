@@ -3,6 +3,7 @@
   "operations": {
     "field": [
       "encoding.fields_be",
+      "encoding.fields_from_be",
       "encoding.fields_le",
       "encoding.field_be",
       "encoding.field_from_be",
@@ -156,6 +157,7 @@
       "bytes.equal",
       "shake128.init",
       "hash.keccak256",
+      "hash.sha256",
       "shake128.absorb",
       "shake128.squeeze",
       "external.monero.init",

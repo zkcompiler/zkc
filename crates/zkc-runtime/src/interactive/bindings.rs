@@ -32,6 +32,8 @@ pub enum Identity {
     Ristretto255Group,
     Edwards25519Prime,
     Merlin3Ristretto64Le,
+    Bls12381G2,
+    Bls12381Gt,
 }
 impl Identity {
     /// Characteristic of an installed field, including nominal extensions.
@@ -80,6 +82,8 @@ impl Identity {
             Self::Bn254Fr | Self::Bn254G1 | Self::Bn254G2 | Self::Bn254Gt => Some(Self::Bn254Fr),
             Self::Bls12381Fr
             | Self::Bls12381G1
+            | Self::Bls12381G2
+            | Self::Bls12381Gt
             | Self::Spongefish080KeccakFr64Be
             | Self::Merlin3Fr64Be
             | Self::MultilinearKzgBls12381 => Some(Self::Bls12381Fr),
@@ -108,7 +112,12 @@ impl Identity {
     pub fn group(self) -> Option<Self> {
         if matches!(
             self,
-            Self::Bn254G1 | Self::Bn254G2 | Self::Bn254Gt | Self::Edwards25519Prime
+            Self::Bn254G1
+                | Self::Bn254G2
+                | Self::Bn254Gt
+                | Self::Bls12381G2
+                | Self::Bls12381Gt
+                | Self::Edwards25519Prime
         ) {
             return Some(self);
         }
@@ -151,6 +160,8 @@ impl Identity {
             Self::KoalaBearExt8 => "koala-bear.ext8-binomial3",
             Self::Bls12381Fr => "bls12-381.fr",
             Self::Bls12381G1 => "bls12-381.g1",
+            Self::Bls12381G2 => "bls12-381.g2",
+            Self::Bls12381Gt => "bls12-381.gt",
             Self::MultilinearKzgBls12381 => "multilinear.kzg.bls12-381/0",
             Self::MerkleKoalaBear => "rows.merkle-keccak256.koala-bear/0",
             Self::MerkleKoalaBearExt8 => "rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
@@ -184,6 +195,8 @@ impl Identity {
             Self::Ristretto255Group,
             Self::Edwards25519Prime,
             Self::Merlin3Ristretto64Le,
+            Self::Bls12381G2,
+            Self::Bls12381Gt,
         ]
         .into_iter()
         .find(|i| i.name() == name)
@@ -274,11 +287,18 @@ impl LogicalType {
             Type::Table | Type::Point => identity == Bls12381Fr,
             Type::Group => matches!(
                 identity,
-                Bn254Gt | Bn254G1 | Bn254G2 | Bls12381G1 | Ristretto255Group | Edwards25519Prime
+                Bn254Gt
+                    | Bn254G1
+                    | Bn254G2
+                    | Bls12381G1
+                    | Bls12381G2
+                    | Bls12381Gt
+                    | Ristretto255Group
+                    | Edwards25519Prime
             ),
             Type::Groups => matches!(
                 identity,
-                Bn254G1 | Bn254G2 | Bls12381G1 | Ristretto255Group | Edwards25519Prime
+                Bn254G1 | Bn254G2 | Bls12381G1 | Bls12381G2 | Ristretto255Group | Edwards25519Prime
             ),
             Type::Transcript => matches!(
                 identity,
@@ -364,7 +384,8 @@ impl LogicalType {
         if let Some(descriptor) = self.variant_descriptor() {
             return descriptor.is_native_message_data();
         }
-        (self.kind() == Type::Group && self.identity() == Identity::Bn254Gt)
+        (self.kind() == Type::Group
+            && matches!(self.identity(), Identity::Bn254Gt | Identity::Bls12381Gt))
             || self
                 .field_array_parts()
                 .is_some_and(|(f, n)| f == Identity::Bls12381Fr && n <= 1_048_576)
@@ -388,13 +409,15 @@ impl LogicalType {
                 ) | (
                     Type::Field | Type::Vector | Type::Matrix,
                     Identity::Bls12381Fr
-                ) | (Type::Group | Type::Groups, Identity::Bls12381G1)
-                    | (
-                        Type::Commitment | Type::Proof,
-                        Identity::MultilinearKzgBls12381
-                            | Identity::MerkleKoalaBear
-                            | Identity::MerkleKoalaBearExt8
-                    )
+                ) | (
+                    Type::Group | Type::Groups,
+                    Identity::Bls12381G1 | Identity::Bls12381G2
+                ) | (
+                    Type::Commitment | Type::Proof,
+                    Identity::MultilinearKzgBls12381
+                        | Identity::MerkleKoalaBear
+                        | Identity::MerkleKoalaBearExt8
+                )
             )
     }
     /// Logical program-port permission, independent of codec and target support.
@@ -575,6 +598,9 @@ pub enum Representation {
     MerkleState,
     MerkleRoots,
     MerkleStates,
+    Bls12381G2,
+    Bls12381G2Vector,
+    Bls12381Gt,
 }
 impl Representation {
     pub fn name(self) -> &'static str {
@@ -638,6 +664,9 @@ impl Representation {
             Self::MerkleState => "plonky3.merkle-state/0",
             Self::MerkleRoots => "plonky3.merkle-roots/0",
             Self::MerkleStates => "plonky3.merkle-states/0",
+            Self::Bls12381G2 => "arkworks.bls12-381-g2/0",
+            Self::Bls12381G2Vector => "arkworks.bls12-381-g2-vector/0",
+            Self::Bls12381Gt => "arkworks.bls12-381-gt/0",
         }
     }
     pub(super) fn parse(name: &str) -> Result<Self> {
@@ -703,6 +732,9 @@ impl Representation {
             Self::MerkleState,
             Self::MerkleRoots,
             Self::MerkleStates,
+            Self::Bls12381G2,
+            Self::Bls12381G2Vector,
+            Self::Bls12381Gt,
         ]
         .into_iter()
         .find(|r| r.name() == name)
@@ -827,6 +859,9 @@ impl PhysicalType {
             (T::Round, I::Bls12381Fr) => R::Round,
             (T::Group, I::Bls12381G1) => R::G1,
             (T::Groups, I::Bls12381G1) => R::Groups,
+            (T::Group, I::Bls12381G2) => R::Bls12381G2,
+            (T::Groups, I::Bls12381G2) => R::Bls12381G2Vector,
+            (T::Group, I::Bls12381Gt) => R::Bls12381Gt,
             (T::Rng | T::Nonce | T::Transcript, _) => R::Resource,
             (_, I::MultilinearKzgBls12381) => R::Pcs,
             (kind, I::MerkleKoalaBear | I::MerkleKoalaBearExt8) => match kind {

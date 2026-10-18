@@ -10,8 +10,8 @@ may capture its own mathematical assets through its manifest.
 | Layer | Responsibility | Examples |
 |---|---|---|
 | [Common operations](zkc/README.md) | Collections, algebra, polynomial representations, encoding and local commitment operations | `zkc::vector`, `zkc::multilinear`, `zkc::coset`, `zkc::oracle` |
-| Protocol families | Reusable equations, interaction and returned obligations | [Sumcheck](sumcheck/README.md), [FRI](fri/lib.zkc), [AIR](air/README.md), [STARK](stark/README.md), [Bulletproofs+](bulletproofs/README.md) |
-| Concrete constructions | Selected transcript transitions and wire encodings | [Spongefish](spongefish/README.md), Monero Bulletproofs+ |
+| Protocol families | Reusable equations, interaction and returned obligations | [Sumcheck](sumcheck/README.md), [FRI](fri/lib.zkc), [AIR](air/README.md), [STARK](stark/README.md), [Bulletproofs+](bulletproofs/README.md), [KZG](kzg/README.md) |
+| Concrete constructions | Selected transcript transitions and wire encodings | [Spongefish](spongefish/README.md), Monero Bulletproofs+, Ethereum EIP-4844 KZG |
 | [Projects](../examples/projects/README.md) | Domains, captured relations, complete compositions and Entries | Schnorr, composed Sumcheck, AIR and machine clients |
 
 A reduction can return a point and claimed value for its parent to check.
