@@ -33,8 +33,9 @@ below the width, and an auxiliary table for every other input. A request at a
 reached state with a block below the width is answered by the history cell of
 the reached history followed by the request's occurrence; every other call,
 including requests at states no call has generated, gets an auxiliary cell.
-Reached states are computed from the auxiliary table, which holds every binding
-and absorbing answer.
+The simulator records the history of each state that a fresh binding or absorbing
+answer generates, keeping the first one, so a request's history key never
+changes once assigned.
 
 **The simulated experiment.** The adversary runs against the simulator; the
 statement's validator then runs as the typed transform of
@@ -46,8 +47,9 @@ call: it reads the history table only.
 requests at reached states hold the history cells of their histories, the
 history cells belong to reached histories, reached histories are unique, every
 reached state and every state read is recorded, and, for `Agrees`, every other
-cache entry is the auxiliary cell. The chain lemmas describe how one fresh
-answer changes the reached histories.
+cache entry is the auxiliary cell and the simulator's recorded histories are
+exactly the reached ones. The chain lemmas describe how one fresh answer changes
+the reached histories.
 -/
 
 set_option autoImplicit false
@@ -157,42 +159,88 @@ end Trace
 
 section Simulator
 
-/-- The simulator's tables: the auxiliary cells and the history cells. -/
+/-- The simulator's tables: the auxiliary cells, the history cells, and the
+history each generated state reaches, first come first kept. The fresh
+auxiliary answers in order and the history keys in order of their first cell
+are kept for comparison with a simulator that reads a private tape and whole
+history answers. -/
 structure Simulated (E S X : Type) (width : ℕ) where
   aux : Input E S X → Option S
   history : List E × Fin width → Option S
+  reached : S → Option (List E)
+  consumed : List S
+  touched : List (List E)
 
 /-- The empty tables. -/
-def Simulated.empty (width : ℕ) : Simulated E S X width := ⟨fun _ => none, fun _ => none⟩
+def Simulated.empty (width : ℕ) : Simulated E S X width :=
+  ⟨fun _ => none, fun _ => none, fun _ => none, [], []⟩
 
 variable [DecidableEq E] [DecidableEq S] [DecidableEq X] [SampleableType S] (width : ℕ)
+
+/-- The history a fresh answer of a generating call reaches: binding reaches the
+one-event history, absorbing at a state with a history reaches that history
+extended by the event. A state that already has a history keeps it. -/
+def noteReached (reached : S → Option (List E)) (input : Input E S X) (answer : S) :
+    S → Option (List E) :=
+  match reached answer with
+  | some _ => reached
+  | none =>
+      match input with
+      | .bind event => Function.update reached answer (some [event])
+      | .absorb state event =>
+          match reached state with
+          | some history => Function.update reached answer (some (history ++ [event]))
+          | none => reached
+      | _ => reached
+
+/-- Record a fresh auxiliary answer. -/
+def Simulated.recordAux (tables : Simulated E S X width) (input : Input E S X) (answer : S) :
+    Simulated E S X width :=
+  { tables with aux := Function.update tables.aux input (some answer)
+                reached := noteReached tables.reached input answer
+                consumed := tables.consumed ++ [answer] }
+
+/-- Record a fresh history cell. -/
+def Simulated.recordHistory (tables : Simulated E S X width) (key : List E) (block : Fin width)
+    (answer : S) : Simulated E S X width :=
+  { tables with history := Function.update tables.history (key, block) (some answer)
+                touched := if key ∈ tables.touched then tables.touched else tables.touched ++ [key] }
 
 /-- An auxiliary cell. -/
 def auxCell (input : Input E S X) : StateT (Simulated E S X width) ProbComp S :=
   StateT.mk fun tables =>
-    (fun result => (result.1, { tables with aux := result.2 })) <$> lazy tables.aux input
+    match tables.aux input with
+    | some answer => pure (answer, tables)
+    | none => do
+        let answer ← $ᵗ S
+        pure (answer, tables.recordAux width input answer)
 
 /-- A history cell. -/
 def historyBlock (key : List E) (block : Fin width) : StateT (Simulated E S X width) ProbComp S :=
   StateT.mk fun tables =>
-    (fun result => (result.1, { tables with history := result.2 })) <$>
-      lazy tables.history (key, block)
+    match tables.history (key, block) with
+    | some answer => pure (answer, tables)
+    | none => do
+        let answer ← $ᵗ S
+        pure (answer, tables.recordHistory width key block answer)
 
 /-- The history oracle's answer at a key: its cells in block order. -/
 def historyAnswer (key : List E) : StateT (Simulated E S X width) ProbComp (Fin width → S) :=
   collect width (historyBlock width key)
 
-open Classical in
-/-- The simulator: a request at a reached state with a block below the width is
-the history cell of the reached history followed by the request's occurrence;
-every other call is an auxiliary cell. -/
-noncomputable def simulator : QueryImpl (Primitive E S X) (StateT (Simulated E S X width) ProbComp) :=
+/-- The simulator: a request at a state with a recorded history and a block below
+the width is the history cell of that history followed by the request's
+occurrence; every other call is an auxiliary cell. -/
+def simulator : QueryImpl (Primitive E S X) (StateT (Simulated E S X width) ProbComp) :=
   fun input => StateT.mk fun tables =>
     match input with
     | .request state event block =>
-        if routed : Reached tables.aux state ∧ block < width then
-          (historyBlock width (Classical.choose routed.1 ++ [event]) ⟨block, routed.2⟩).run tables
-        else (auxCell width (.request state event block)).run tables
+        match tables.reached state with
+        | some history =>
+            if below : block < width then
+              (historyBlock width (history ++ [event]) ⟨block, below⟩).run tables
+            else (auxCell width (.request state event block)).run tables
+        | none => (auxCell width (.request state event block)).run tables
     | input => (auxCell width input).run tables
 
 variable {I : PIR.Signature} {P A Stmt : Type}
@@ -235,6 +283,8 @@ the auxiliary cell. -/
 structure Agrees (trace : Trace E S X) (tables : Simulated E S X width) : Prop
     extends Consistent width trace tables where
   aux : ∀ input, ¬ Routed width trace.cache input → trace.cache input = tables.aux input
+  reachedIff : ∀ state history,
+    tables.reached state = some history ↔ chainState trace.cache history = some state
 
 end Invariants
 

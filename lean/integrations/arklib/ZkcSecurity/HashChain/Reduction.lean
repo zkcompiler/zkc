@@ -127,19 +127,17 @@ theorem request_step {trace : Trace E S X} {tables : Simulated E S X width}
       ((historyBlock width (history ++ [event]) block).run tables)
       (fun one two => one.1 = two.1 ∧ Consistent width one.2 two.2 ∧
         chainState one.2.cache history = some state) := by
-  rw [traced_run, historyBlock_run]
+  rw [traced_run]
   have cell := consistent.requests history state event block.val block.isLt reached
   have idle : ¬ Generating trace.cache (.request state event block.val : Input E S X) := id
   cases cached : trace.cache (.request state event block.val) with
   | some answer =>
       rw [cached] at cell
-      rw [lazy_some cell.symm]
-      simp only [map_pure]
+      rw [historyBlock_run_some cell.symm]
       exact relTriple_pure_pure ⟨rfl, consistent, reached⟩
   | none =>
       rw [cached] at cell
-      rw [lazy_none cell.symm]
-      simp only [map_bind, map_pure]
+      rw [historyBlock_run_none cell.symm]
       refine relTriple_fresh fun answer => ⟨rfl, ?_, ?_⟩
       · exact consistent.record_routed reached event block answer
       · rw [Trace.record_cache, chainState_update_of_not_generating idle]
@@ -318,13 +316,15 @@ theorem agrees_empty : Agrees width (Trace.empty : Trace E S X) (Simulated.empty
     cases history with
     | nil => simp
     | cons event rest => simp [chainState, Trace.empty]
-  refine ⟨⟨rfl, ?_, ?_, ?_, ?_, ?_⟩, fun _ _ => rfl⟩
+  refine ⟨⟨rfl, ?_, ?_, ?_, ?_, ?_⟩, fun _ _ => rfl, ?_⟩
   · exact fun history state _ _ _ reached => absurd reached (unreached history state)
   · exact fun _ _ present => absurd rfl present
   · exact fun history _ state reached => absurd reached (unreached history state)
   · exact fun history state reached => absurd reached (unreached history state)
   · intro _ _ _ cached
     cases cached
+  · exact fun state history => ⟨fun recorded => (by cases recorded),
+      fun reached => absurd reached (unreached history state)⟩
 
 /-- The concrete experiment with its trace against the simulated experiment:
 equal results unless the trace raises the bad flag. -/

@@ -196,8 +196,7 @@ theorem Consistent.record_routed (consistent : Consistent width trace tables)
     {history : List E} {state : S} (reached : chainState trace.cache history = some state)
     (event : E) (block : Fin width) (answer : S) :
     Consistent width (trace.record (.request state event block.val) answer)
-      { tables with history :=
-          Function.update tables.history (history ++ [event], block) (some answer) } := by
+      (tables.recordHistory width (history ++ [event]) block answer) := by
   have idle : ¬ Generating trace.cache (.request state event block.val : Input E S X) := id
   have same := chainState_update_of_not_generating idle (some answer)
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
@@ -229,7 +228,7 @@ theorem Consistent.record_routed (consistent : Consistent width trace tables)
     by_cases equal : (key, block') = (history ++ [event], block)
     · obtain ⟨rfl, -⟩ := Prod.mk.inj equal
       exact ⟨history, event, state, rfl, by rw [Trace.record_cache, same]; exact reached⟩
-    · simp only [Function.update_of_ne equal] at present
+    · simp only [Simulated.recordHistory, Function.update_of_ne equal] at present
       obtain ⟨history', event', state', rfl, reached'⟩ := consistent.cells key block' present
       exact ⟨history', event', state', rfl, by rw [Trace.record_cache, same]; exact reached'⟩
   · intro history' other state' first second
@@ -282,10 +281,13 @@ theorem Consistent.record_unrouted (consistent : Consistent width trace tables)
 
 omit [DecidableEq E] [DecidableEq S] [DecidableEq X] in
 /-- Consistency reads only the history cells. -/
-theorem Consistent.with_aux (consistent : Consistent width trace tables)
-    (aux : Input E S X → Option S) : Consistent width trace { tables with aux := aux } :=
-  ⟨consistent.good, consistent.requests, consistent.cells, consistent.unique,
-    consistent.reachedSeen, consistent.readSeen⟩
+theorem Consistent.of_history {other : Simulated E S X width}
+    (consistent : Consistent width trace tables) (same : other.history = tables.history) :
+    Consistent width trace other :=
+  ⟨consistent.good, fun history state event block below reached => by
+      rw [same]; exact consistent.requests history state event block below reached,
+    fun key block present => consistent.cells key block (by rwa [same] at present),
+    consistent.unique, consistent.reachedSeen, consistent.readSeen⟩
 
 omit [DecidableEq E] [DecidableEq S] [DecidableEq X] in
 /-- Routed requests stay routed in a larger cache. -/
@@ -301,34 +303,98 @@ theorem routed_mono {cache larger : Input E S X → Option S}
   | other => exact routed.elim
 
 omit [DecidableEq E] [DecidableEq S] [DecidableEq X] in
-/-- Agreeing tables reach the same states as the trace. -/
-theorem Agrees.chainState_aux (agrees : Agrees width trace tables) :
-    ∀ history, chainState tables.aux history = chainState trace.cache history :=
-  chainState_congr tables.aux (fun event => (agrees.aux (.bind event) id).symm)
-    (fun state event => (agrees.aux (.absorb state event) id).symm)
+/-- A state has a recorded history exactly when it is reached. -/
+theorem Agrees.recorded_iff (agrees : Agrees width trace tables) (state : S) :
+    (∃ history, tables.reached state = some history) ↔ Reached trace.cache state := by
+  simp only [Reached, agrees.reachedIff]
 
-omit [DecidableEq E] [DecidableEq S] [DecidableEq X] in
-theorem Agrees.routed_iff (agrees : Agrees width trace tables) (input : Input E S X) :
-    Routed width tables.aux input ↔ Routed width trace.cache input := by
-  cases input with
-  | request state event block =>
-      simp only [Routed, Reached, agrees.chainState_aux]
-  | bind => exact Iff.rfl
-  | absorb => exact Iff.rfl
-  | other => exact Iff.rfl
+/-- The recorded histories after a fresh generating answer outside the record
+are the reached histories of the trace that records it. -/
+theorem Agrees.noteReached_generating (agrees : Agrees width trace tables) {input : Input E S X}
+    (fresh : trace.cache input = none) (generating : Generating trace.cache input) {answer : S}
+    (unseen : answer ∉ trace.seen) :
+    ∀ state history, noteReached tables.reached input answer state = some history ↔
+      chainState (trace.record input answer).cache history = some state := by
+  have notAt : ∀ event, input ≠ .absorb answer event := by
+    rintro event rfl
+    obtain ⟨history, reached⟩ := generating
+    exact unseen (agrees.reachedSeen history answer reached)
+  have stuck : ∀ event,
+      Function.update trace.cache input (some answer) (.absorb answer event) = none := by
+    intro event
+    rw [Function.update_of_ne (Ne.symm (notAt event))]
+    cases cached : trace.cache (.absorb answer event) with
+    | none => rfl
+    | some value => exact absurd (agrees.readSeen _ value answer cached rfl) unseen
+  have unrecorded : tables.reached answer = none := by
+    cases recorded : tables.reached answer with
+    | none => rfl
+    | some history =>
+        exact absurd (agrees.reachedSeen history answer ((agrees.reachedIff _ _).mp recorded))
+          unseen
+  -- the new history of the call, and the update it records
+  obtain ⟨newHistory, isNew, noted⟩ : ∃ newHistory, NewHistory trace.cache input newHistory ∧
+      noteReached tables.reached input answer =
+        Function.update tables.reached answer (some newHistory) := by
+    cases input with
+    | bind event =>
+        exact ⟨[event], rfl, by simp only [noteReached, unrecorded]⟩
+    | absorb state event =>
+        obtain ⟨before, reachedBefore⟩ := generating
+        refine ⟨before ++ [event], ⟨before, rfl, reachedBefore⟩, ?_⟩
+        have recordedBefore := (agrees.reachedIff state before).mpr reachedBefore
+        simp only [noteReached, unrecorded, recordedBefore]
+    | request => exact generating.elim
+    | other => exact generating.elim
+  intro state history
+  rw [noted, Trace.record_cache]
+  constructor
+  · intro recorded
+    by_cases same : state = answer
+    · subst same
+      rw [Function.update_self] at recorded
+      cases recorded
+      exact chainState_newHistory fresh _ isNew
+    · rw [Function.update_of_ne same] at recorded
+      exact chainState_mono (update_extends fresh) _ _ ((agrees.reachedIff _ _).mp recorded)
+  · intro reached
+    rcases chainState_update_generating stuck history state reached with old | ⟨rfl, isNew'⟩
+    · have different : state ≠ answer := by
+        rintro rfl
+        exact unseen (agrees.reachedSeen history _ old)
+      rw [Function.update_of_ne different]
+      exact (agrees.reachedIff _ _).mpr old
+    · rw [Function.update_self, newHistory_unique agrees.unique history newHistory isNew' isNew]
+
+omit [DecidableEq E] [DecidableEq X] in
+/-- An answer that generates no state records no history. -/
+theorem noteReached_idle {reached : S → Option (List E)} {input : Input E S X} {answer : S}
+    (idle : ∀ state event, input = .absorb state event → reached state = none)
+    (notBind : ∀ event, input ≠ .bind event) :
+    noteReached reached input answer = reached := by
+  unfold noteReached
+  cases reached answer with
+  | some _ => rfl
+  | none =>
+      cases input with
+      | bind event => exact absurd rfl (notBind event)
+      | absorb state event => simp only [idle state event rfl]
+      | request => rfl
+      | other => rfl
 
 /-- A fresh answer recorded in the auxiliary cell of an unrouted call keeps the
-agreement, given consistency. -/
+agreement, given consistency and the recorded histories. -/
 theorem Agrees.record_aux (agrees : Agrees width trace tables) {input : Input E S X}
     (fresh : trace.cache input = none) {answer : S}
-    (consistent : Consistent width (trace.record input answer) tables) :
-    Agrees width (trace.record input answer)
-      { tables with aux := Function.update tables.aux input (some answer) } := by
-  refine ⟨consistent.with_aux _, fun other unrouted => ?_⟩
+    (consistent : Consistent width (trace.record input answer) tables)
+    (recorded : ∀ state history, noteReached tables.reached input answer state = some history ↔
+      chainState (trace.record input answer).cache history = some state) :
+    Agrees width (trace.record input answer) (tables.recordAux width input answer) := by
+  refine ⟨consistent.of_history rfl, fun other unrouted => ?_, recorded⟩
   by_cases same : other = input
   · subst same
-    simp
-  · simp only [Trace.record_cache, Function.update_of_ne same]
+    simp [Simulated.recordAux]
+  · simp only [Trace.record_cache, Simulated.recordAux, Function.update_of_ne same]
     exact agrees.aux other fun routed => unrouted (routed_mono (update_extends fresh) routed)
 
 /-- A fresh answer recorded in the history cell of a routed request keeps the
@@ -337,59 +403,79 @@ theorem Agrees.record_routed (agrees : Agrees width trace tables) {history : Lis
     (reached : chainState trace.cache history = some state) (event : E) (block : Fin width)
     (fresh : trace.cache (.request state event block.val) = none) (answer : S) :
     Agrees width (trace.record (.request state event block.val) answer)
-      { tables with history :=
-          Function.update tables.history (history ++ [event], block) (some answer) } := by
-  refine ⟨agrees.toConsistent.record_routed reached event block answer, fun other unrouted => ?_⟩
-  by_cases same : other = .request state event block.val
-  · subst same
-    have idle : ¬ Generating trace.cache (.request state event block.val : Input E S X) := id
-    refine absurd ⟨⟨history, ?_⟩, block.isLt⟩ unrouted
-    rw [Trace.record_cache, chainState_update_of_not_generating idle]
-    exact reached
-  · simp only [Trace.record_cache, Function.update_of_ne same]
-    exact agrees.aux other fun routed => unrouted (routed_mono (update_extends fresh) routed)
+      (tables.recordHistory width (history ++ [event]) block answer) := by
+  have idle : ¬ Generating trace.cache (.request state event block.val : Input E S X) := id
+  refine ⟨agrees.toConsistent.record_routed reached event block answer,
+    fun other unrouted => ?_, fun state' history' => ?_⟩
+  · by_cases same : other = .request state event block.val
+    · subst same
+      refine absurd ⟨⟨history, ?_⟩, block.isLt⟩ unrouted
+      rw [Trace.record_cache, chainState_update_of_not_generating idle]
+      exact reached
+    · simp only [Trace.record_cache, Simulated.recordHistory, Function.update_of_ne same]
+      exact agrees.aux other fun routed => unrouted (routed_mono (update_extends fresh) routed)
+  · rw [Trace.record_cache, chainState_update_of_not_generating idle]
+    exact agrees.reachedIff state' history'
 
 end Consistency
 
 section Dispatch
 variable [SampleableType S]
 
-theorem auxCell_run (input : Input E S X) (tables : Simulated E S X width) :
+theorem auxCell_run_some {input : Input E S X} {tables : Simulated E S X width} {answer : S}
+    (cached : tables.aux input = some answer) :
+    (auxCell width input).run tables = pure (answer, tables) := by
+  simp only [auxCell, StateT.run_mk, cached]
+
+theorem auxCell_run_none {input : Input E S X} {tables : Simulated E S X width}
+    (fresh : tables.aux input = none) :
     (auxCell width input).run tables =
-      (fun result => (result.1, { tables with aux := result.2 })) <$> lazy tables.aux input := rfl
+      ($ᵗ S) >>= fun answer => pure (answer, tables.recordAux width input answer) := by
+  simp only [auxCell, StateT.run_mk, fresh]
 
 omit [DecidableEq S] [DecidableEq X] in
-theorem historyBlock_run (key : List E) (block : Fin width) (tables : Simulated E S X width) :
-    (historyBlock width key block).run tables =
-      (fun result => (result.1, { tables with history := result.2 })) <$>
-        lazy tables.history (key, block) := rfl
+theorem historyBlock_run_some {key : List E} {block : Fin width} {tables : Simulated E S X width}
+    {answer : S} (cached : tables.history (key, block) = some answer) :
+    (historyBlock width key block).run tables = pure (answer, tables) := by
+  simp only [historyBlock, StateT.run_mk, cached]
 
-/-- The simulator answers an unrouted call from its auxiliary cell. -/
+omit [DecidableEq S] [DecidableEq X] in
+theorem historyBlock_run_none {key : List E} {block : Fin width} {tables : Simulated E S X width}
+    (fresh : tables.history (key, block) = none) :
+    (historyBlock width key block).run tables =
+      ($ᵗ S) >>= fun answer => pure (answer, tables.recordHistory width key block answer) := by
+  simp only [historyBlock, StateT.run_mk, fresh]
+
+/-- The simulator answers a call that its recorded histories do not route from its
+auxiliary cell. -/
 theorem simulator_run_unrouted (tables : Simulated E S X width) {input : Input E S X}
-    (unrouted : ¬ Routed width tables.aux input) :
+    (unrouted : ∀ state event block history, input = .request state event block →
+      tables.reached state = some history → width ≤ block) :
     (simulator width input).run tables = (auxCell width input).run tables := by
   cases input with
   | request state event block =>
-      have unrouted' : ¬ (Reached tables.aux state ∧ block < width) := unrouted
       unfold simulator
       simp only [StateT.run_mk]
-      rw [dite_eq_right_of_eq_false (eq_false unrouted')]
+      cases recorded : tables.reached state with
+      | none => rfl
+      | some history =>
+          have notBelow : ¬ block < width := by
+            have := unrouted state event block history rfl recorded
+            omega
+          simp only [notBelow, ↓reduceDIte]
   | bind => rfl
   | absorb => rfl
   | other => rfl
 
-/-- The simulator answers a routed request from the history cell of the
-reached history. -/
+/-- The simulator answers a request at a state with a recorded history, with a
+block below the width, from that history's cell. -/
 theorem simulator_run_routed (tables : Simulated E S X width) {history : List E} {state : S}
-    (reached : chainState tables.aux history = some state)
-    (unique : ∀ other, chainState tables.aux other = some state → other = history)
-    (event : E) {block : ℕ} (below : block < width) :
+    (recorded : tables.reached state = some history) (event : E) {block : ℕ}
+    (below : block < width) :
     (simulator width (.request state event block)).run tables =
       (historyBlock width (history ++ [event]) ⟨block, below⟩).run tables := by
-  have routed : Reached tables.aux state ∧ block < width := ⟨⟨history, reached⟩, below⟩
   unfold simulator
-  simp only [StateT.run_mk]
-  rw [dite_eq_left_of_eq_true (eq_true routed), unique _ (Classical.choose_spec (of_eq_true (eq_true routed)).1)]
+  simp only [StateT.run_mk, recorded, below, ↓reduceDIte]
 
 end Dispatch
 
@@ -410,55 +496,65 @@ theorem adversary_step (input : Input E S X) (trace : Trace E S X)
     | other => exact routed.elim
     | request state event block =>
         obtain ⟨⟨history, reached⟩, below⟩ := routed
-        have reachedAux : chainState tables.aux history = some state := by
-          rw [agrees.chainState_aux]
-          exact reached
-        have unique : ∀ other, chainState tables.aux other = some state → other = history :=
-          fun other otherReached => agrees.unique other history state
-            (by rw [← agrees.chainState_aux]; exact otherReached) reached
-        rw [simulator_run_routed tables reachedAux unique event below, historyBlock_run]
+        rw [simulator_run_routed tables ((agrees.reachedIff state history).mpr reached) event below]
         have cell := agrees.requests history state event block below reached
         cases cached : trace.cache (.request state event block) with
         | some answer =>
             rw [cached] at cell
-            rw [lazy_some cell.symm]
-            simp only [map_pure]
+            rw [historyBlock_run_some cell.symm]
             exact relTriple_pure_pure (Or.inr ⟨rfl, agrees⟩)
         | none =>
             rw [cached] at cell
-            rw [lazy_none cell.symm]
-            simp only [map_bind, map_pure]
+            rw [historyBlock_run_none cell.symm]
             refine relTriple_fresh fun answer => Or.inr ⟨rfl, ?_⟩
             exact agrees.record_routed reached event ⟨block, below⟩ cached answer
-  · rw [simulator_run_unrouted tables ((agrees.routed_iff input).not.mpr routed), auxCell_run]
+  · have unrouted : ∀ state event block history, input = .request state event block →
+        tables.reached state = some history → width ≤ block := by
+      rintro state event block history rfl recorded
+      by_contra below
+      exact routed ⟨⟨history, (agrees.reachedIff state history).mp recorded⟩, by omega⟩
+    rw [simulator_run_unrouted tables unrouted]
     have cell := agrees.aux input routed
     cases cached : trace.cache input with
     | some answer =>
         rw [cached] at cell
-        rw [lazy_some cell.symm]
-        simp only [map_pure]
+        rw [auxCell_run_some cell.symm]
         exact relTriple_pure_pure (Or.inr ⟨rfl, agrees⟩)
     | none =>
         rw [cached] at cell
-        rw [lazy_none cell.symm]
-        simp only [map_bind, map_pure]
+        rw [auxCell_run_none cell.symm]
         refine relTriple_fresh fun answer => ?_
         by_cases loud : Generating trace.cache input ∧ answer ∈ trace.seen
         · exact Or.inl (Trace.record_bad_of _ _ loud)
-        · refine Or.inr ⟨rfl, agrees.record_aux cached ?_⟩
+        · refine Or.inr ⟨rfl, ?_⟩
           by_cases generating : Generating trace.cache input
-          · exact agrees.toConsistent.record_generating cached generating
-              fun seen => loud ⟨generating, seen⟩
-          · cases input with
-            | request state event block =>
-                exact agrees.toConsistent.record_unrouted routed answer
-            | bind => exact absurd trivial generating
-            | absorb =>
-                exact agrees.toConsistent.record_idle cached generating
-                  (by intro _ _ _ same; cases same) answer
-            | other =>
-                exact agrees.toConsistent.record_idle cached generating
-                  (by intro _ _ _ same; cases same) answer
+          · have unseen : answer ∉ trace.seen := fun seen => loud ⟨generating, seen⟩
+            exact agrees.record_aux cached (agrees.toConsistent.record_generating cached generating
+              unseen) (agrees.noteReached_generating cached generating unseen)
+          · have idleAbsorb : ∀ state event, input = .absorb state event →
+                tables.reached state = none := by
+              rintro state event rfl
+              cases recorded : tables.reached state with
+              | none => rfl
+              | some history =>
+                  exact absurd ⟨history, (agrees.reachedIff state history).mp recorded⟩ generating
+            have notBind : ∀ event, input ≠ .bind event := by
+              rintro event rfl
+              exact generating trivial
+            have same := chainState_update_of_not_generating generating (some answer)
+            refine agrees.record_aux cached ?_ fun state history => ?_
+            · cases input with
+              | request state event block =>
+                  exact agrees.toConsistent.record_unrouted routed answer
+              | bind event => exact absurd rfl (notBind event)
+              | absorb =>
+                  exact agrees.toConsistent.record_idle cached generating
+                    (by intro _ _ _ same; cases same) answer
+              | other =>
+                  exact agrees.toConsistent.record_idle cached generating
+                    (by intro _ _ _ same; cases same) answer
+            · rw [noteReached_idle idleAbsorb notBind, Trace.record_cache, same]
+              exact agrees.reachedIff state history
 
 end AdversaryStep
 
