@@ -104,7 +104,8 @@ always evaluates.
 ### Trusted setup
 
 [`eip4844/trusted_setup.txt`](eip4844/trusted_setup.txt) is the Ethereum KZG
-ceremony output as distributed by c-kzg-4844 v2.1.8 (`src/trusted_setup.txt`,
+ceremony output as distributed by c-kzg-4844 v2.1.8 under the Apache License
+2.0 (`src/trusted_setup.txt`,
 SHA-256 `d39b9f2d047cc9dca2de58f264b6a09448ccd34db967881a6713eacacf0f26b7`). It
 lists 4096 G1 Lagrange points, 65 G2 monomial points and 4096 G1 monomial
 points, as hexadecimal compressed encodings. The library uses two parts:

@@ -18,6 +18,10 @@ The [EIP-4844 corpora](../../fixtures/kzg-eip4844/) come from
   by this directory's executable, which links the published `c-kzg` 2.1.8 crate.
   The crate's C sources are identical to the tagged revision.
 
+c-kzg-4844 is distributed under the Apache License 2.0, the license of this
+repository; the retained vectors and the library's copy of its trusted setup
+are redistributed under it.
+
 The executable is a separate Cargo workspace with its own lockfile; nothing
 here enters the native workspace or its builds. It loads the trusted setup
 from the given file. To regenerate and compare the corpora:
