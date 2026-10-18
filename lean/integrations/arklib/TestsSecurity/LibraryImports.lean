@@ -26,6 +26,11 @@ import ZkcSecurity.ArkLib.Sumcheck.Multilinear
 import ZkcSecurity.ArkLib.Sumcheck.Soundness
 import ZkcSecurity.ArkLib.Sumcheck.Statement
 import ZkcSecurity.ArkLib.Sumcheck.Strategy
+import ZkcSecurity.Commitment.Extractable
+import ZkcSecurity.Commitment.Merkle
+import ZkcSecurity.Commitment.Record
+import ZkcSecurity.Commitment.TableLog
+import ZkcSecurity.Commitment.Verifier
 import ZkcSecurity.Examples.CausalSumcheck.CalculatedRound
 import ZkcSecurity.Examples.CausalSumcheck.DistributionalRound
 import ZkcSecurity.Examples.CausalSumcheck.ExactRound
