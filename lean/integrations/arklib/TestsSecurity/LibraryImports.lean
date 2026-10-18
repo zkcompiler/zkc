@@ -74,6 +74,8 @@ import ZkcSecurity.FiatShamir.Composition
 import ZkcSecurity.FiatShamir.Decoding
 import ZkcSecurity.FiatShamir.Grinding
 import ZkcSecurity.FiatShamir.Interface
+import ZkcSecurity.FiatShamir.Laws
+import ZkcSecurity.FiatShamir.Lifting
 import ZkcSecurity.FiatShamir.Obligations
 import ZkcSecurity.FiatShamir.ProviderSimulation
 import ZkcSecurity.FiatShamir.Roles
@@ -125,6 +127,7 @@ import TestsSecurity.Counterexamples.Support
 import TestsSecurity.ExecutableSchnorrFiatShamir
 import TestsSecurity.FiatShamirTyped
 import TestsSecurity.FriSecurity
+import TestsSecurity.LawRecords
 import TestsSecurity.LocalCoupling
 import TestsSecurity.LocalCouplingAudit
 import TestsSecurity.LocalCouplingClients

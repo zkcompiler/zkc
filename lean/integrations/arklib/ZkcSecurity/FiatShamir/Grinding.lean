@@ -27,9 +27,11 @@ proof-of-work combines both (`koalaBear_queryPhase_escape_le`).
 
 The one-key model assumes the gate bits and the challenge come from one
 absorbed prefix, as in a duplex sponge that squeezes both after absorbing the
-witness. An implementation that derives them from different hash calls keyed by
-the same witness reduces to it by role separation
-(`ZkcSecurity.FiatShamir.Roles`).
+witness. For an implementation that derives them from different hash calls keyed
+by the same witness, role separation (`ZkcSecurity.FiatShamir.Roles`) gives the
+same product law at one fixed key only. Turning such a provider into one oracle
+on transcript histories is its provider simulation, which these results assume
+and do not prove.
 -/
 
 set_option autoImplicit false
