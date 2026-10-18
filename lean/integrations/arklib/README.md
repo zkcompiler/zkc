@@ -155,7 +155,9 @@ deterministic run of an accepting verifier, `Experiment` the joint experiment an
 its bad keys, and `Soundness` the bound. `Examples/CommittedOpeningBound` proves
 the committed-opening experiment's intended bound, and
 `Examples/CommittedOpeningBridge` applies the general bound to the same
-verifier.
+verifier. `Cost` charges the concrete reading by the charges on the verifier's
+paths, and `Examples/CommittedFri` applies the bound to the FRI verifier with
+committed words ([committed words](../../docs/spec/fri-security.md#committed-words)).
 
 `VCVio/SigmaAnd` composes two VCVio Σ-protocols with one shared challenge.
 Completeness and special soundness compose directly; zero knowledge composes

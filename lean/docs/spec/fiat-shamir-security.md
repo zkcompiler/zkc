@@ -880,6 +880,14 @@ committed tables by the typed certificate of its ideal reading.
   extractor that returned no table when a row is missing would make the
   proposition false. `CommittedOpeningBridge.soundness` applies the general
   theorem to the same verifier with every premise discharged.
+- **Charges.** `Charged` bounds every path of a verifier with committed tables:
+  a transcript query is charged its occurrence's charge, a read a fixed charge,
+  and every committed shape is admissible. When every authentication at an
+  admissible shape makes at most `authCalls` hash calls, the concrete reading
+  inherits the bound as a worst-case cost (`run_costBound`) and as a query count
+  (`run_queryBound`).
+- **FRI.** [Committed words](fri-security.md#committed-words) applies the theorem
+  to the FRI verifier.
 
 ## Obligations
 
