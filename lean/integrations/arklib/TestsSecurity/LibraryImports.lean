@@ -70,6 +70,7 @@ import ZkcSecurity.Examples.StructuredSchnorrSigma
 import ZkcSecurity.Examples.Sumcheck
 import ZkcSecurity.Examples.SumcheckFiatShamir
 import ZkcSecurity.Examples.Variants
+import ZkcSecurity.FiatShamir.Binding
 import ZkcSecurity.FiatShamir.Composition
 import ZkcSecurity.FiatShamir.Decoding
 import ZkcSecurity.FiatShamir.Grinding
@@ -103,6 +104,7 @@ import ZkcSecurity.VCVio.SigmaAnd
 import ZkcSecurity.VCVio.SigmaAndSchnorr
 import ZkcSecurity.VCVio.StructuredUniform
 import ZkcSecurity.VCVio.UntilBad
+import TestsSecurity.BindingCodecs
 import TestsSecurity.CallComposition
 import TestsSecurity.CausalSumcheck.Contracts
 import TestsSecurity.CausalSumcheck.Execution
