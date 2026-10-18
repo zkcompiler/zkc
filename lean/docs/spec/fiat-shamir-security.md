@@ -380,10 +380,14 @@ error `1 / 2`, is charged `1 / 4 + 1 / 2`.
 malformed ones included, so a codec that discharges it is injective and
 prefix-free on the whole statement type (`ZkcSecurity.FiatShamir.Binding`). A
 typed public value (`PublicValue`) is a scalar, a vector whose length is part of
-the value, an index below a bound, or a count; a canonical row (`Row`) is a
-statement's public values in canonical order, each labelled by its input; and
-the **typed public-value binding event** (`PublicBinding`) is the application
-context with a canonical row. A **binding codec** `BindingCodec Stmt E` is an
+the value, an index with its bound, or a count; a row (`Row`) is a statement's
+public values, each labelled by its input; and the **typed public-value binding
+event** (`PublicBinding`) is the application context with a row. These are
+binding representations: an index need not lie below its bound and a row need
+not be in canonical order; validity and canonical order are established
+separately, by the statement's own checks and by the codec that builds the row,
+and keeping malformed values representable is what lets a codec bind every
+statement. A **binding codec** `BindingCodec Stmt E` is an
 injective, prefix-free encoding of statements as initial histories, and it
 discharges `Typed.Determined` (`BindingCodec.determined`). Binding a statement as
 one typed public-value binding event is such a codec when the event embeds
