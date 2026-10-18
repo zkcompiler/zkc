@@ -797,6 +797,8 @@ fn wrong_kind_capability_wrappers_refuse_without_panicking() {
         I::Merlin3KoalaBearExt8,
         I::Merlin3Ristretto64Le,
         I::Spongefish080KeccakFr64Be,
+        I::HashChainKeccak256Fr64Be,
+        I::HashChainKeccak256KoalaBearExt8,
     ] {
         values.push(
             native

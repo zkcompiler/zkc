@@ -31,7 +31,8 @@ def write(path, value):
     return path
 
 
-@pytest.mark.parametrize('entry,suite', [('Derived', None), ('Derived', 'spongefish0.8.0.keccak.bls12-381.fr64be/0'), ('Plain', None)])
+@pytest.mark.parametrize('entry,suite', [('Derived', None), ('Derived', 'spongefish0.8.0.keccak.bls12-381.fr64be/0'),
+                                         ('Derived', 'hash-chain.keccak256.bls12-381.fr64be/0'), ('Plain', None)])
 def test_independent_named_proof_calls(toolchain, journal, directory, entry, suite):
     source = directory / 'source.zkc'
     text = (FIXTURES / 'attempts.zkc').read_text()

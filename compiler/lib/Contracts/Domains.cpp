@@ -303,6 +303,12 @@ const DomainCatalog &installedDomains() {
     const std::string quartic = "koala-bear.ext4-binomial3";
     const std::string extensionTranscript =
         "merlin3.koala-bear.ext8-binomial3.rejection31le/0";
+    // Hash-chain suites: one instance per byte hash and challenge field, with
+    // the same challenge decoders as the Merlin suites over that field.
+    const std::string chainTranscript =
+        "hash-chain.keccak256.bls12-381.fr64be/0";
+    const std::string chainExtensionTranscript =
+        "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0";
     const std::string rowBase = "rows.merkle-keccak256.koala-bear/0";
     const std::string rowExtension =
         "rows.merkle-keccak256.koala-bear.ext8-binomial3/0";
@@ -316,6 +322,14 @@ const DomainCatalog &installedDomains() {
           "Transcript",
           {{"ChallengeField", extension}},
           {"FieldTranscript", "IndexTranscript", "Transcript"}},
+         {chainExtensionTranscript,
+          "Transcript",
+          {{"ChallengeField", extension}},
+          {"FieldTranscript", "IndexTranscript", "Transcript"}},
+         {chainTranscript,
+          "Transcript",
+          {{"ChallengeField", field}},
+          {"FieldTranscript", "Transcript"}},
          {rowBase, "Commitment", {{"ValueField", koala}}, {"VectorCommitment"}},
          {rowExtension,
           "Commitment",
@@ -458,6 +472,8 @@ const DomainCatalog &installedDomains() {
          {"transcript", spongefish},
          {"transcript", merlin},
          {"transcript", extensionTranscript},
+         {"transcript", chainTranscript},
+         {"transcript", chainExtensionTranscript},
          {"commitment", pcs},
          {"proof", pcs},
          {"prover_key", pcs},
@@ -657,6 +673,8 @@ const DomainCatalog &installedDomains() {
          {"host.resource/0", "nonce", field, true, ""},
          {"host.resource/0", "transcript", transcript, true, ""},
          {"host.resource/0", "transcript", spongefish, true, ""},
+         {"host.resource/0", "transcript", chainTranscript, true, ""},
+         {"host.resource/0", "transcript", chainExtensionTranscript, true, ""},
          {"arkworks.multilinear-pcs/0", "commitment", pcs, true, ""},
          {"arkworks.multilinear-pcs/0", "proof", pcs, true, ""},
          {"arkworks.multilinear-pcs/0", "prover_key", pcs, true, ""},
@@ -683,6 +701,8 @@ const DomainCatalog &installedDomains() {
          {extension, "plonky3"},
          {quartic, "plonky3"},
          {extensionTranscript, "plonky3"},
+         {chainTranscript, "arkworks"},
+         {chainExtensionTranscript, "plonky3"},
          {rowBase, "plonky3"},
          {rowExtension, "plonky3"},
          {poseidonRows, "plonky3"},

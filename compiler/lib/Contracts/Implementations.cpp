@@ -29,6 +29,7 @@ constexpr ProviderDomain providerDomains[] = {
     {"arkworks", "bn254.gt"},
     {"arkworks", "multilinear.kzg.bls12-381/0"},
     {"arkworks", "merlin3.bls12-381.fr64be/0"},
+    {"arkworks", "hash-chain.keccak256.bls12-381.fr64be/0"},
     {"dalek", "ristretto255.scalar"},
     {"dalek", "ristretto255.group"},
     {"dalek", "edwards25519.prime"},
@@ -37,6 +38,8 @@ constexpr ProviderDomain providerDomains[] = {
     {"plonky3", "koala-bear.ext8-binomial3"},
     {"plonky3", "koala-bear.ext4-binomial3"},
     {"plonky3", "merlin3.koala-bear.ext8-binomial3.rejection31le/0"},
+    {"plonky3",
+     "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"},
     {"plonky3", "rows.merkle-keccak256.koala-bear/0"},
     {"plonky3", "rows.merkle-keccak256.koala-bear.ext8-binomial3/0"},
     {"plonky3", "rows.merkle-poseidon2-16.koala-bear/0"},
@@ -297,7 +300,7 @@ constexpr ContractRow contractRows[] = {
      Arkworks | Dalek | Plonky3 | Spongefish, Compatibility::Transcript},
     {"transcript.native.indexed.observe.data",
      Arkworks | Dalek | Plonky3 | Spongefish, Compatibility::Transcript},
-    // Only the octic merlin suite grants IndexTranscript.
+    // Only the octic suites grant IndexTranscript.
     {"transcript.native.indexed.index", Plonky3, Compatibility::Transcript},
     {"field_array.from_vector", Arkworks, Compatibility::Nominal,
      "bls12-381.fr"},
@@ -498,9 +501,9 @@ Error checkImplementationArguments(const ImplementationDescriptor &entry,
         payloadField = associatedIdentity(identity, "Scalar");
       else if (sort == "Commitment")
         payloadField = associatedIdentity(identity, "ValueField");
-      if (payloadField != field &&
-          !(suite == "merlin3.koala-bear.ext8-binomial3.rejection31le/0" &&
-            payloadField == "koala-bear"))
+      // An extension-field suite also observes payloads over its base field.
+      StringRef base = associatedIdentity(field, "BaseField");
+      if (payloadField != field && (base.empty() || payloadField != base))
         return error("binding-implementation");
     }
     return Error::success();

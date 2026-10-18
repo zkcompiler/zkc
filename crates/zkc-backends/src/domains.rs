@@ -202,4 +202,14 @@ pub const TRANSCRIPTS: &[NativeTranscript] = &[
         domain: BLS,
         provider: "spongefish",
     },
+    NativeTranscript {
+        suite: Identity::HashChainKeccak256Fr64Be,
+        domain: BLS,
+        provider: "arkworks",
+    },
+    NativeTranscript {
+        suite: Identity::HashChainKeccak256KoalaBearExt8,
+        domain: KOALA_BEAR_EXT8,
+        provider: "plonky3",
+    },
 ];

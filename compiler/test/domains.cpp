@@ -335,6 +335,9 @@ void installedInventory() {
       {"spongefish0.8.0.keccak.bls12-381.fr64be/0", {"transcript"}},
       {"merlin3.ristretto255.scalar64le/0", {"transcript"}},
       {"merlin3.koala-bear.ext8-binomial3.rejection31le/0", {"transcript"}},
+      {"hash-chain.keccak256.bls12-381.fr64be/0", {"transcript"}},
+      {"hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0",
+       {"transcript"}},
       {"multilinear.kzg.bls12-381/0",
        {"commitment", "proof", "prover_key", "verifier_key", "opening_state"}},
       {"rows.merkle-keccak256.koala-bear/0",
@@ -357,7 +360,7 @@ void installedInventory() {
   for (const auto &type : catalog.allLogicalTypes())
     require(actual.emplace(type.kind, type.domain).second,
             "logical inventory contains no duplicate instances");
-  require(pairs.size() == 86 && actual == pairs,
+  require(pairs.size() == 88 && actual == pairs,
           "the complete installed logical inventory is unchanged");
 
   std::vector<std::string> identities{"", "missing"};
@@ -393,6 +396,7 @@ void installedInventory() {
       {"bn254.gt", "arkworks"},
       {"multilinear.kzg.bls12-381/0", "arkworks"},
       {"merlin3.bls12-381.fr64be/0", "arkworks"},
+      {"hash-chain.keccak256.bls12-381.fr64be/0", "arkworks"},
       {"ristretto255.scalar", "dalek"},
       {"ristretto255.group", "dalek"},
       {"edwards25519.prime", "dalek"},
@@ -402,6 +406,8 @@ void installedInventory() {
       {"koala-bear.ext8-binomial3", "plonky3"},
       {"koala-bear.ext4-binomial3", "plonky3"},
       {"merlin3.koala-bear.ext8-binomial3.rejection31le/0", "plonky3"},
+      {"hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0",
+       "plonky3"},
       {"rows.merkle-keccak256.koala-bear/0", "plonky3"},
       {"rows.merkle-keccak256.koala-bear.ext8-binomial3/0", "plonky3"},
       {"rows.merkle-poseidon2-16.koala-bear/0", "plonky3"},
@@ -526,6 +532,18 @@ void installedBindings() {
           catalog.hasFact("FieldTranscript", {"merlin3.bls12-381.fr64be/0"}) &&
           catalog.hasFact("Transcript", {"merlin3.bls12-381.fr64be/0"}),
       "installed group, PCS and transcript facts");
+  // Each hash-chain instance has the facts of the Merlin suite over its field.
+  for (StringRef suite :
+       {"hash-chain.keccak256.bls12-381.fr64be/0",
+        "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"}) {
+    const bool octic = suite.contains("koala-bear");
+    require(catalog.hasFact("FieldTranscript", {suite.str()}) &&
+                catalog.hasFact("Transcript", {suite.str()}) &&
+                catalog.hasFact("IndexTranscript", {suite.str()}) == octic &&
+                catalog.associatedIdentity(suite, "ChallengeField") ==
+                    (octic ? "koala-bear.ext8-binomial3" : "bls12-381.fr"),
+            "hash-chain suite facts follow their challenge field");
+  }
 
   codecs["commitments"] = "zkcv.commitments.rows-merkle-keccak256.koala-bear/0";
   std::map<std::string, std::string> roots{

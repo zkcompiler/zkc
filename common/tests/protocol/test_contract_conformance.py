@@ -124,9 +124,11 @@ def required_atomic_types():
         "merlin3.ristretto255.scalar64le/0": "transcript",
         "spongefish0.8.0.keccak.bls12-381.fr64be/0": "transcript",
         "merlin3.koala-bear.ext8-binomial3.rejection31le/0": "transcript",
+        "hash-chain.keccak256.bls12-381.fr64be/0": "transcript",
+        "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0": "transcript",
     }
     result = {(kind, domain) for domain, kinds in families.items() for kind in kinds.split()}
-    assert len(result) == 80
+    assert len(result) == 82
     return result
 
 
@@ -548,6 +550,13 @@ def test_explicit_semantic_witnesses(drivers, directory):
         ("transcript.native.indexed.challenge", ["merlin3.bls12-381.fr64be/0"],
          ["transcript:merlin3.bls12-381.fr64be/0", "indices"],
          ["field:bls12-381.fr", "transcript:merlin3.bls12-381.fr64be/0"]),
+        ("transcript.native.indexed.challenge", ["hash-chain.keccak256.bls12-381.fr64be/0"],
+         ["transcript:hash-chain.keccak256.bls12-381.fr64be/0", "indices"],
+         ["field:bls12-381.fr", "transcript:hash-chain.keccak256.bls12-381.fr64be/0"]),
+        ("transcript.native.indexed.index",
+         ["hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"],
+         ["transcript:hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0", "index", "indices"],
+         ["index", "transcript:hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"]),
     ]
     requests = [binding(name, args) for name, args, _, _ in witnesses]
     expected = [{"accepted": True, "physical": False, "inputs": inputs, "outputs": outputs}
@@ -585,6 +594,9 @@ def test_unknowns_and_malformed_arguments(drivers, directory):
             ("fixed_vector.dot", ["koala-bear", "1048577"]),
             ("transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/0"]),
             ("transcript.native.indexed.observe.data", ["unknown.suite", "field:bls12-381.fr"]),
+            # A field-only suite has no UniformIndex transition.
+            ("transcript.native.indexed.index", ["hash-chain.keccak256.bls12-381.fr64be/0"]),
+            ("transcript.index", ["hash-chain.keccak256.bls12-381.fr64be/0"]),
             ("transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/0",
                                                       "field_array<bls12-381.g1,4>"]),
             ("transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/0",
