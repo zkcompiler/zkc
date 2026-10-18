@@ -14,9 +14,7 @@ open SumcheckCallBoundary
 
 abbrev F := ZMod 5
 
-set_option backward.isDefEq.respectTransparency false
 set_option smartUnfolding false
-set_option maxRecDepth 20000
 
 /-- Deliberately arbitrary foreign slots; only the last two are V's outputs. -/
 def outputs (point : Option (List F)) (value : Option F) :

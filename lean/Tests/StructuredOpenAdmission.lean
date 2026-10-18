@@ -4,8 +4,6 @@ open Zkc.Source Zkc.Source.Structured
 
 namespace Tests.StructuredOpenAdmission
 set_option smartUnfolding false
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 
 private def math (name : String) (inputs outputs : List Ty) (body : Block) : Definition :=
   .function ⟨name, .math, .privateDef, inputs, outputs, none, [], none, body⟩

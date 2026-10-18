@@ -11,8 +11,6 @@ namespace ZkcExamples.Structured.PrimitiveContracts
 open Zkc.Source Zkc.Source.Structured PrimitiveLibrary PrimitiveLibraryConsumers
 -- Local transparency options below elaborate dependent source-view aliases;
 -- every resulting equation is still checked by the kernel.
-set_option maxRecDepth 20000
-set_option maxHeartbeats 1000000
 set_option smartUnfolding false
 
 private theorem environment_inputs {F G : Type}

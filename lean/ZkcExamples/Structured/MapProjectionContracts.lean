@@ -16,7 +16,6 @@ variable {definitions : List CheckedDefinition}
   (linked : DeclarationsLinked [] definitions)
 include linked
 
-set_option backward.isDefEq.respectTransparency false in
 theorem values_equation (body : BodyIn definitions valuesHelper valuesBody)
     (xs : List F) (dimension columns : Nat) :
     invoke (closedMeanings (F := F) (G := G) definitions) valuesHelper (inputs xs dimension columns) =
@@ -24,7 +23,6 @@ theorem values_equation (body : BodyIn definitions valuesHelper valuesBody)
   (body.invoke linked (inputs xs dimension columns)).trans
     (MapSourceExpansions.first_values _ xs dimension columns)
 
-set_option backward.isDefEq.respectTransparency false in
 theorem valuesRealization_equation (projection : BodyIn definitions valuesHelper valuesBody)
     (body : BodyIn definitions valuesRealizationHelper valuesRealizationBody)
     (xs : List F) (dimension columns : Nat) :
@@ -38,7 +36,6 @@ theorem valuesRealization_equation (projection : BodyIn definitions valuesHelper
   rw [values_equation linked projection]
   rfl
 
-set_option backward.isDefEq.respectTransparency false in
 theorem variables_equation (body : BodyIn definitions variablesHelper variablesBody)
     (xs : List F) (dimension columns : Nat) :
     invoke (closedMeanings (F := F) (G := G) definitions) variablesHelper (inputs xs dimension columns) =
@@ -46,7 +43,6 @@ theorem variables_equation (body : BodyIn definitions variablesHelper variablesB
   (body.invoke linked (inputs xs dimension columns)).trans
     (MapSourceExpansions.first_variables _ xs dimension columns)
 
-set_option backward.isDefEq.respectTransparency false in
 theorem variablesRealization_equation (projection : BodyIn definitions variablesHelper variablesBody)
     (body : BodyIn definitions variablesRealizationHelper variablesRealizationBody)
     (xs : List F) (dimension columns : Nat) :
@@ -60,7 +56,6 @@ theorem variablesRealization_equation (projection : BodyIn definitions variables
   rw [variables_equation linked projection]
   rfl
 
-set_option backward.isDefEq.respectTransparency false in
 theorem width_equation (body : BodyIn definitions widthHelper widthBody)
     (xs : List F) (dimension columns : Nat) :
     invoke (closedMeanings (F := F) (G := G) definitions) widthHelper (inputs xs dimension columns) =
@@ -68,7 +63,6 @@ theorem width_equation (body : BodyIn definitions widthHelper widthBody)
   (body.invoke linked (inputs xs dimension columns)).trans
     (MapSourceExpansions.first_width _ xs dimension columns)
 
-set_option backward.isDefEq.respectTransparency false in
 theorem widthRealization_equation (projection : BodyIn definitions widthHelper widthBody)
     (body : BodyIn definitions widthRealizationHelper widthRealizationBody)
     (xs : List F) (dimension columns : Nat) :

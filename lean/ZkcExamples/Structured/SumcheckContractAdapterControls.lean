@@ -15,9 +15,7 @@ open SumcheckContractBindings SumcheckContractRequests
 
 abbrev F := ZMod 5
 
-set_option backward.isDefEq.respectTransparency false
 set_option smartUnfolding false
-set_option maxRecDepth 20000
 
 private theorem decode_singleton (value : F) :
     ofList? 0 [value] = some (fun _ => value) := by

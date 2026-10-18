@@ -11,8 +11,6 @@ The opening loss concerns reached checks in this same experiment. No independenc
 between openings is assumed, and arbitrary checks do not imply PCS security.
 -/
 set_option autoImplicit false
-set_option maxRecDepth 4000
-set_option maxHeartbeats 800000
 namespace Zkc.Protocols.Sumcheck.FactorOpening
 open Zkc.Source Zkc.Source.Common Zkc.Source.Common.Native
 open Zkc.Protocols.Sumcheck.Common

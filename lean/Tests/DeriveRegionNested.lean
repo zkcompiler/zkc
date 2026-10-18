@@ -4,7 +4,6 @@ import Tests.DerivationCounter
 
 -- The counter is intentionally outside tactic backtracking; serialize these tests.
 set_option Elab.async false
-set_option maxHeartbeats 200000
 
 namespace Tests.DeriveRegionNested
 open Lean Elab Tactic Zkc.Source PIR Tests.RegionDerivation

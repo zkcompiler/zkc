@@ -70,6 +70,7 @@ import Zkc.Source.DeriveRegion
 import Zkc.Source.Finite
 import Zkc.Source.Format
 import Zkc.Source.Interpretation
+import Zkc.Source.KernelRfl
 import Zkc.Source.Mathematical.Projection
 import Zkc.Source.Mathematical
 import Zkc.Source.Participant
@@ -115,10 +116,12 @@ import Zkc.Source.Structured.Evaluation
 import Zkc.Source.Structured.Format
 import Zkc.Source.Structured.Formation
 import Zkc.Source.Structured.Frame
+import Zkc.Source.Structured.HelperSources
 import Zkc.Source.Structured.Import
 import Zkc.Source.Structured.Inlining
 import Zkc.Source.Structured.Interpretation
 import Zkc.Source.Structured.Laws
+import Zkc.Source.Structured.Limits
 import Zkc.Source.Structured.Linking
 import Zkc.Source.Structured.MapEvaluation
 import Zkc.Source.Structured.MapLaws
@@ -147,6 +150,7 @@ import Zkc.Source.Structured.Repeat
 import Zkc.Source.Structured.RepeatAdmission
 import Zkc.Source.Structured.RepeatLaws
 import Zkc.Source.Structured.Table
+import Zkc.Source.Structured.UnitViews
 import Zkc.Source.Structured.Vocabulary
 import Zkc.Specification
 import Tests.CommonRegion
@@ -195,6 +199,7 @@ import Tests.StructuredContractEntry
 import Tests.StructuredContractInvocation
 import Tests.StructuredContracts
 import Tests.StructuredFormation
+import Tests.StructuredHelperSources
 import Tests.StructuredInlining
 import Tests.StructuredLinking
 import Tests.StructuredMapClients
@@ -219,6 +224,7 @@ import Tests.StructuredSumcheckVerifierBodies
 import Tests.StructuredSumcheckVerifierExecution
 import Tests.StructuredSumcheckVerifierMutations
 import Tests.StructuredSumcheckVerifierSupport
+import Tests.StructuredUnitViews
 import Tests.StructuredWire
 import Tests.SumcheckHelperControls
 import Tests.SumcheckHelperMutants
@@ -288,6 +294,7 @@ import ZkcExamples.Structured.PrimitiveHalvesViews
 import ZkcExamples.Structured.PrimitiveLibrary
 import ZkcExamples.Structured.PrimitiveLibraryConsumers
 import ZkcExamples.Structured.PrimitivePureIndex
+import ZkcExamples.Structured.PrimitivePureIndexBodies
 import ZkcExamples.Structured.PrimitivePureIndexData
 import ZkcExamples.Structured.PrimitiveRows
 import ZkcExamples.Structured.PrimitiveSequence
@@ -326,6 +333,7 @@ import ZkcExamples.Structured.SchnorrHelpersData
 import ZkcExamples.Structured.SchnorrHonestProver
 import ZkcExamples.Structured.SchnorrHonestProverControls
 import ZkcExamples.Structured.SchnorrInteractive
+import ZkcExamples.Structured.SchnorrInteractiveBodies
 import ZkcExamples.Structured.SchnorrInteractiveData
 import ZkcExamples.Structured.SchnorrReorderedData
 import ZkcExamples.Structured.SchnorrResponse
@@ -334,6 +342,7 @@ import ZkcExamples.Structured.SchnorrResponseMutatedData
 import ZkcExamples.Structured.SchnorrResponseOriginalData
 import ZkcExamples.Structured.SchnorrSharedWitness
 import ZkcExamples.Structured.SchnorrVariants
+import ZkcExamples.Structured.SchnorrVariantsBodies
 import ZkcExamples.Structured.ServiceOrder
 import ZkcExamples.Structured.ServiceOrderBodies
 import ZkcExamples.Structured.ServiceOrderControls
@@ -372,6 +381,7 @@ import ZkcExamples.Structured.SumcheckSourceData
 import ZkcExamples.Structured.SumcheckSourceLaws
 import ZkcExamples.Structured.SumcheckSourceVerifier
 import ZkcExamples.Structured.SumcheckSourceViews
+import ZkcExamples.Structured.SumcheckUnitContracts
 import ZkcExamples.Structured.SumcheckVerifierBodies
 import ZkcExamples.Structured.SumcheckVerifierHelpers
 import ZkcExamples.Structured.SumcheckVerifierLaws

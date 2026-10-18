@@ -5,8 +5,6 @@ import Zkc.Source.Common.Format
 closed-profile checker. Runtime parsing and a native decision oracle are not used
 to construct these admission proofs. -/
 
-set_option maxRecDepth 10000
-set_option maxHeartbeats 4000000
 
 namespace Tests.DecimalAdmission
 open Zkc.Source Zkc.Source.Structured

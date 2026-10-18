@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import tarfile
@@ -34,6 +35,42 @@ def owned_sources(directory, suffixes):
                 if path.is_symlink():
                     raise ValueError(f"owned source is a symlink: {path}")
                 yield path
+
+
+def retain_tool(source, store, target):
+    """Retain one executable per content digest and link it into a run.
+
+    The store keeps a single read-only copy for each digest; every run's tool
+    directory receives a hard link to it, or a copy where links are unsupported.
+    Repeated suites therefore retain unchanged executables once. A stored copy is
+    published only after its digest matches the source, and an existing entry
+    whose bytes no longer match its name is replaced. The source and the linked
+    file are rechecked afterwards."""
+    def sha256(path):
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+
+    expected = sha256(source)
+    store.mkdir(parents=True, exist_ok=True)
+    stored = store / f"{expected}-{source.name}"
+    if not stored.exists() or sha256(stored) != expected:
+        descriptor, name = tempfile.mkstemp(dir=store, prefix=f".{source.name}-")
+        os.close(descriptor)
+        partial = Path(name)
+        try:
+            shutil.copy2(source, partial)
+            if sha256(partial) != expected:
+                raise ValueError(f"tool changed during capture: {source}")
+            partial.chmod(0o555)
+            os.replace(partial, stored)
+        finally:
+            partial.unlink(missing_ok=True)
+    try:
+        os.link(stored, target)
+    except OSError:
+        shutil.copy2(stored, target)
+    if sha256(target) != expected or sha256(source) != expected:
+        raise ValueError(f"tool changed during capture: {source}")
+    return expected
 
 
 def atomic_json(path, value):

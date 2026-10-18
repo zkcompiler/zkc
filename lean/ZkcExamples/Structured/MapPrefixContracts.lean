@@ -48,14 +48,12 @@ variable {definitions : List CheckedDefinition}
     (linked : DeclarationsLinked [] definitions) (bodies : Bodies definitions)
 include linked bodies
 
-set_option backward.isDefEq.respectTransparency false in
 theorem step_equation (xs : List F) (dimension columns : Nat) (r : F) :
     invoke (closedMeanings (F := F) (G := G) definitions) stepHelper (firstInputs xs dimension columns r) =
       invoke (closedMeanings (F := F) (G := G) definitions) firstHelper (firstInputs xs dimension columns r) :=
   (bodies.step.invoke linked (firstInputs xs dimension columns r)).trans
     (step_body _ xs dimension columns r)
 
-set_option backward.isDefEq.respectTransparency false in
 theorem foldStep_equation : FoldStepLaw (closedMeanings (F := F) (G := G) definitions) := by
   intro xs dimension columns r point
   exact (bodies.foldStep.invoke linked
@@ -63,7 +61,6 @@ theorem foldStep_equation : FoldStepLaw (closedMeanings (F := F) (G := G) defini
       ((foldStep_body _ xs dimension columns r point).trans
         (step_equation linked bodies xs dimension columns r))
 
-set_option backward.isDefEq.respectTransparency false in
 /-- All source wrappers reduce to the actual finite body in this same table. -/
 theorem prefix_finite_body (xs : List F) (dimension columns : Nat) (point : List F) :
     invoke (closedMeanings (F := F) (G := G) definitions) prefixHelper (prefixInputs xs dimension columns point) =
@@ -72,7 +69,6 @@ theorem prefix_finite_body (xs : List F) (dimension columns : Nat) (point : List
   rw [bodies.prefixBody.invoke linked, prefix_body, bodies.foldWrapper.invoke linked,
     foldWrapper_body, bodies.fold.invoke linked]
 
-set_option backward.isDefEq.respectTransparency false in
 theorem prefix_equation (first : FirstLaw (closedMeanings (F := F) (G := G) definitions))
     (xs : List F) (dimension columns : Nat) (point : List F)
     (shape : HasShape xs dimension columns) (vectorBound : xs.length < indexLimit) :
@@ -86,7 +82,6 @@ theorem prefix_equation (first : FirstLaw (closedMeanings (F := F) (G := G) defi
   exact finite_prefix_generic_body _ first (foldStep_equation linked bodies)
     xs dimension columns point shape vectorBound
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Domain admission stops before a callback, even without a valid table shape. -/
 theorem prefix_exhausted (xs : List F) (dimension columns : Nat) (point : List F)
     (invalid : ¬ point.length < indexLimit) :
@@ -98,13 +93,11 @@ theorem prefix_exhausted (xs : List F) (dimension columns : Nat) (point : List F
   rw [Evaluation.denoteFold_pack, Finite.execute, domain_admit, ite_eq_right invalid]
   rfl
 
-set_option backward.isDefEq.respectTransparency false in
 theorem values_equation (xs : List F) (dimension columns : Nat) :
     invoke (closedMeanings (F := F) (G := G) definitions) valuesHelper (inputs xs dimension columns) =
       .done (.cons xs .nil) :=
   MapProjectionContracts.values_equation linked bodies.values xs dimension columns
 
-set_option backward.isDefEq.respectTransparency false in
 theorem valuesRealization_equation (xs : List F) (dimension columns : Nat) :
     invoke (closedMeanings (F := F) (G := G) definitions) valuesRealizationHelper (inputs xs dimension columns) =
       .done (.cons xs .nil) :=

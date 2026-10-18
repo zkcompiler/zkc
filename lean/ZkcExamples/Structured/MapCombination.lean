@@ -34,8 +34,8 @@ theorem scale_body {I : PIR.Signature} (sites : SiteObservations I)
     scaleBody.denote (Evaluation.meaning sites table) (Values.cons s (.cons a .nil)).get =
       .done (.cons (s * a) .nil) := rfl
 
-set_option smartUnfolding true in
 set_option backward.isDefEq.respectTransparency false in
+set_option smartUnfolding true in
 theorem formula_expansion {I : PIR.Signature} (sites : SiteObservations I)
     (table : Evaluation.Meanings F G I) (s a t b unusedRow unusedScalar : F) :
     formulaBody.denote (Evaluation.meaning sites table)
@@ -47,14 +47,12 @@ theorem formula_expansion {I : PIR.Signature} (sites : SiteObservations I)
     Evaluation.operation, Op.results, Op.arguments, Operands.eval, Regions.denote, Values.get_cons, Values.get,
     prepend_one, Environment.prepend, Environment.push, PIR.Proc.bind, Nat.cast_ofNat]
 
-set_option backward.isDefEq.respectTransparency false in
 theorem scale_equation (s a : F) :
     invoke (program.payload.tables F G).closed scaleHelper (.cons s (.cons a .nil)) =
       .done (.cons (s * a) .nil) :=
   (program.payload.closed_body_view_as scaleDefinition scale_member scaleHelper scale_signature
     scaleBody scale_exact (.cons s (.cons a .nil))).trans (scale_body _ _ s a)
 
-set_option backward.isDefEq.respectTransparency false in
 theorem formula_equation (s a t b unusedRow unusedScalar : F) :
     invoke (program.payload.tables F G).closed formulaHelper
       (scalarInputs s a t b unusedRow unusedScalar) =
@@ -112,7 +110,6 @@ private theorem singleton_return {I : PIR.Signature}
   simp only [Values.singleton_get, PIR.Proc.bind_done]
 
 set_option smartUnfolding true in
-set_option backward.isDefEq.respectTransparency false in
 theorem map_body {I : PIR.Signature} (sites : SiteObservations I)
     (table : Evaluation.Meanings F G I) (s : F) (a : List F) (t : F) (b unusedRow : List F) (unusedScalar : F) :
     mapBody.denote (Evaluation.meaning sites table) (inputs s a t b unusedRow unusedScalar).get =
@@ -122,7 +119,6 @@ theorem map_body {I : PIR.Signature} (sites : SiteObservations I)
     Environment.prepend, Environment.push, PIR.Proc.bind]
   exact singleton_return _
 
-set_option backward.isDefEq.respectTransparency false in
 theorem map_invocation (s : F) (a : List F) (t : F) (b unusedRow : List F) (unusedScalar : F) :
     invoke (program.payload.tables F G).closed mapHelper (inputs s a t b unusedRow unusedScalar) =
       Evaluation.denoteMap (program.payload.tables F G).closed mapSpec (inputs s a t b unusedRow unusedScalar) :=
@@ -130,7 +126,6 @@ theorem map_invocation (s : F) (a : List F) (t : F) (b unusedRow : List F) (unus
     mapBody map_exact (inputs s a t b unusedRow unusedScalar)).trans (map_body _ _ s a t b unusedRow unusedScalar)
 
 set_option smartUnfolding true in
-set_option backward.isDefEq.respectTransparency false in
 theorem wrapper_body {I : PIR.Signature} (sites : SiteObservations I)
     (table : Evaluation.Meanings F G I) (s : F) (a : List F) (t : F) (b unusedRow : List F) (unusedScalar : F) :
     wrapperBody.denote (Evaluation.meaning sites table) (inputs s a t b unusedRow unusedScalar).get =
@@ -143,7 +138,6 @@ theorem wrapper_body {I : PIR.Signature} (sites : SiteObservations I)
   exact singleton_return _
 
 set_option smartUnfolding true in
-set_option backward.isDefEq.respectTransparency false in
 theorem owner_body {I : PIR.Signature} (sites : SiteObservations I)
     (table : Evaluation.Meanings F G I) (s : F) (a : List F) (t : F) (b unusedRow : List F) (unusedScalar : F) :
     ownerBody.denote (Evaluation.meaning sites table) (inputs s a t b unusedRow unusedScalar).get =
@@ -155,7 +149,6 @@ theorem owner_body {I : PIR.Signature} (sites : SiteObservations I)
   funext _
   exact singleton_return _
 
-set_option backward.isDefEq.respectTransparency false in
 theorem wrapper_invocation (s : F) (a : List F) (t : F) (b unusedRow : List F) (unusedScalar : F) :
     invoke (program.payload.tables F G).closed wrapperHelper (inputs s a t b unusedRow unusedScalar) =
       .call (.mark "s0") (fun _ =>

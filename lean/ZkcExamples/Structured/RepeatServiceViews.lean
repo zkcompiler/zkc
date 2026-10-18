@@ -1,5 +1,6 @@
 module
 
+public import Zkc.Source.Structured.UnitViews
 public import ZkcExamples.Structured.RepeatServiceData
 public import ZkcExamples.Structured.RepeatServiceBodies
 
@@ -11,111 +12,9 @@ open Zkc.Source Zkc.Source.Structured RepeatServiceBodies
 
 set_option smartUnfolding false
 
-def drawDefinition : CheckedProtocol where
-  toProtocolSignature := drawSignature
-  raw := drawBody.erase
-  body := drawBody
-  formed := drawBody.elaborate_erase
-
-theorem draw_signature : drawDefinition.signature = drawSignature := rfl
-theorem draw_raw : drawDefinition.raw = drawBody.erase := rfl
-theorem draw_body : drawDefinition.body = drawBody := rfl
-
-def runDefinition : CheckedProtocol where
-  toProtocolSignature := runSignature
-  raw := runBody.erase
-  body := runBody
-  formed := runBody.elaborate_erase
-
-theorem run_signature : runDefinition.signature = runSignature := rfl
-theorem run_raw : runDefinition.raw = runBody.erase := rfl
-theorem run_body : runDefinition.body = runBody := rfl
-
-def definitions : List CheckedDefinition :=
-  []
-
-def ordered : List OrderedDefinition :=
-  []
-
-def headers : List ProtocolSignature := [runSignature, drawSignature]
-
-def domains : List DomainSpec := []
-
-def summaries : IdentitySummaries := []
-
-def unit : UnitPayload where
-  definitions := definitions
-  protocols := [drawDefinition, runDefinition]
-  entryIndex := ⟨1, by decide⟩
-  linked := by decide +kernel
-  protocolsLinked := by decide +kernel
-  available := checkUnitAvailability_ok_of_isOk (by decide +kernel)
-  realizationClosed := by decide +kernel
-  mapClosed := by decide +kernel
-
-def program : Program := ⟨RepeatServiceData.snapshot, unit⟩
-
-theorem headers_checked : checkUnitHeaders RepeatServiceData.snapshot =
-    .ok (domains, headers, summaries) := rfl
-
-theorem helpers_checked : checkUnitHelpers RepeatServiceData.snapshot domains summaries = .ok ordered := rfl
-
-theorem protocols_checked :
-    checkUnitProtocols RepeatServiceData.snapshot domains summaries headers ordered = .ok unit.protocols := rfl
-
-theorem native_metadata_checked :
-    (checkNativeApplicationBudgets RepeatServiceData.snapshot).isOk = true := by decide +kernel
-
-theorem effective_sites_checked :
-    checkEffectiveProtocolSites RepeatServiceData.snapshot = .ok () := rfl
-
-theorem metadata_checked : checkApplicationMetadata RepeatServiceData.snapshot = .ok () :=
-  checkApplicationMetadata_of_checks native_metadata_checked effective_sites_checked
-
-theorem payload_linked : linkUnitPayload RepeatServiceData.snapshot ordered unit.protocols = .ok unit := rfl
-
-/-- All declarations, callback trees and metadata phases of the original unit. -/
-theorem kernel_admission : check RepeatServiceData.snapshot = .ok program :=
-  check_parts _ unit (check_payload_of_phases headers_checked helpers_checked
-    protocols_checked metadata_checked payload_linked)
-
-def imported : Imported RepeatServiceData.snapshot := ⟨program, kernel_admission⟩
-
-theorem exact_subject : program.snapshot = RepeatServiceData.snapshot := imported.exactSubject
-
-theorem draw_member : drawDefinition ∈ unit.protocols := List.mem_cons_self
-
-theorem run_member : runDefinition ∈ unit.protocols := List.mem_cons_of_mem _ (List.mem_cons_self)
-
-theorem entry_selection : unit.entry = runDefinition := rfl
-theorem entry_signature : program.payload.entry.signature = runSignature := rfl
-theorem entry_raw : program.payload.entry.raw = runBody.erase := rfl
-
-/-- Complete original-to-checked association includes every nested callback. -/
-theorem complete_protocol_source (definition : CheckedProtocol)
-    (member : definition ∈ unit.protocols) :
-    ∃ function domains signatures summaries,
-      .function function ∈ RepeatServiceData.snapshot.definitions ∧
-      function.kind = .protocol ∧
-      checkUnitHeaders RepeatServiceData.snapshot = .ok (domains, signatures, summaries) ∧
-      checkProtocol RepeatServiceData.snapshot domains summaries function signatures = .ok definition ∧
-      resolveProtocolSignature function = .ok definition.signature ∧
-      lowerProtocol RepeatServiceData.snapshot domains summaries signatures function
-        definition.signature = .ok definition.raw :=
-  imported.protocolSource member
-
-/-- Every original protocol is admitted to one exact checked tree. -/
-theorem complete_original_protocol (function : Zkc.Source.Structured.Function)
-    (member : .function function ∈ RepeatServiceData.snapshot.definitions)
-    (kind : function.kind = .protocol) :
-    ∃ domains headers summaries,
-      checkUnitHeaders RepeatServiceData.snapshot = .ok (domains, headers, summaries) ∧
-      ∃ definition, definition ∈ unit.protocols ∧
-        checkProtocol RepeatServiceData.snapshot domains summaries function headers = .ok definition ∧
-        ∀ other, other ∈ unit.protocols →
-          checkProtocol RepeatServiceData.snapshot domains summaries function headers = .ok other →
-            other = definition :=
-  imported.protocolChecked member kind
+structured_views RepeatServiceData.snapshot
+  helpers []
+  protocols [draw, run]
 
 /-- The complete checked Run tree contains this application inside its repeat callback. -/
 theorem callback_application_occurs :

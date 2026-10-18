@@ -9,8 +9,6 @@ public import Zkc.Specification
 contract, source certificate, or Python registry. The typed API is extensible;
 the bounded command-line generator deliberately has a reviewed registry. -/
 
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 namespace ZkcExamples.NativePrograms.CustomProperty
 open Zkc.Verification Zkc.Source Zkc.Source.Common Zkc.Source.Common.Native
 open Zkc.Protocols.Schnorr.Common

@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Structured.PrimitiveSequenceData
-public import Zkc.Source.Structured.Linking
+public import Zkc.Source.Structured.UnitViews
 public import Zkc.Source.Structured.ClosedProfile
 
 @[expose] public section
@@ -12,24 +12,13 @@ The original exporter and constructor renderer remain executable trust boundarie
 
 namespace ZkcExamples.Structured.PrimitiveSequenceViews
 open Zkc.Source Zkc.Source.Structured
-set_option maxRecDepth 20000
-set_option maxHeartbeats 8000000
 set_option smartUnfolding false
-
-def program : ClosedProgram :=
-  (checkClosed PrimitiveSequenceData.snapshot).toOption.get (by decide +kernel)
-def imported : ClosedImported PrimitiveSequenceData.snapshot := ⟨program, rfl⟩
 
 set_option smartUnfolding true in
 def entryBody : Region dialect [.vector "bls12-381.fr", .field "bls12-381.fr", .index] [.vector "bls12-381.fr", .index, .index, .index, .field "bls12-381.fr", .boolean, .boolean, .vector "bls12-381.fr"] :=
   .letOp (.mark "s0") .nil .nil <|
   .letOp (.invoke ⟨"s18h7072696d69746976655f6578616d706c657314h617070656e645f73756d6d617279", .local, [.vector "bls12-381.fr", .field "bls12-381.fr", .index], [.vector "bls12-381.fr", .index, .index, .index, .field "bls12-381.fr", .boolean, .boolean, .vector "bls12-381.fr"]⟩) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
   .ret (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) .nil))))))))
-
-theorem entry_exact : program.payload.entry.raw = entryBody.erase := rfl
-
-def appendSummaryDefinition : CheckedDefinition :=
-  (program.payload.definitions.find? (·.name == "s18h7072696d69746976655f6578616d706c657314h617070656e645f73756d6d617279")).get (by decide +kernel)
 
 abbrev appendSummaryHelper : Helper := ⟨"s18h7072696d69746976655f6578616d706c657314h617070656e645f73756d6d617279", .local, [.vector "bls12-381.fr", .field "bls12-381.fr", .index], [.vector "bls12-381.fr", .index, .index, .index, .field "bls12-381.fr", .boolean, .boolean, .vector "bls12-381.fr"]⟩
 
@@ -61,6 +50,23 @@ def appendSummaryBody : Region dialect [.vector "bls12-381.fr", .field "bls12-38
   .letOp (.exec (.vectorEmpty "bls12-381.fr")) .nil .nil <|
   .ret (.cons (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))) (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there .here))) (.cons (.there (.there .here)) (.cons (.there .here) (.cons .here .nil))))))))
 
-theorem appendSummary_exact : appendSummaryDefinition.raw = appendSummaryBody.erase := rfl
+def protocolSignature : ProtocolSignature where
+  name := "s18h7072696d69746976655f6578616d706c65738h53657175656e6365"
+  roles := ["role00000000"]
+  inputs := [.vector "bls12-381.fr", .field "bls12-381.fr", .index]
+  outputs := [.vector "bls12-381.fr", .index, .index, .index, .field "bls12-381.fr", .boolean, .boolean, .vector "bls12-381.fr"]
+  inputScopes := [[0], [0], [0]]
+  outputScopes := [[0], [0], [0], [0], [0], [0], [0], [0]]
+
+set_option smartUnfolding true in
+def protocolBody : Region protocolDialect [.vector "bls12-381.fr", .field "bls12-381.fr", .index] [.vector "bls12-381.fr", .index, .index, .index, .field "bls12-381.fr", .boolean, .boolean, .vector "bls12-381.fr"] :=
+  .letOp (.mark "s0") .nil .nil <|
+  .letOp (.localCall ⟨"s18h7072696d69746976655f6578616d706c657314h617070656e645f73756d6d617279", .local, [.vector "bls12-381.fr", .field "bls12-381.fr", .index], [.vector "bls12-381.fr", .index, .index, .index, .field "bls12-381.fr", .boolean, .boolean, .vector "bls12-381.fr"]⟩ rfl 0 "s0") (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
+  .ret (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) (.cons (.there (.there (.there .here))) (.cons (.there (.there (.there (.there .here)))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) .nil))))))))
+
+structured_closed_views PrimitiveSequenceData.snapshot
+  helpers [appendSummary]
+  protocols [protocol]
+  root entryBody
 
 end ZkcExamples.Structured.PrimitiveSequenceViews

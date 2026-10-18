@@ -15,8 +15,6 @@ open PrimitiveSequenceViews
 
 -- Local transparency options below elaborate dependent source-view aliases;
 -- every resulting equation is still checked by the kernel.
-set_option maxRecDepth 20000
-set_option maxHeartbeats 600000
 set_option smartUnfolding false
 set_option linter.unusedSimpArgs false
 
@@ -45,7 +43,6 @@ def reference (xs : List F) (x : F) (divisor : Nat) :
     else .halt .refused
   else .halt .exhausted
 
-set_option backward.isDefEq.respectTransparency false in
 set_option smartUnfolding true in
 theorem body_equation (table : Meanings F G) (xs : List F) (x : F) (divisor : Nat) :
     appendSummaryBody.denote (meaning F G table) (inputs xs x divisor).get =
@@ -82,13 +79,12 @@ theorem body_equation (table : Meanings F G) (xs : List F) (x : F) (divisor : Na
       Values.get_cons, Values.get, Environment.prepend, Environment.push, SiteObservations.closed,
       SiteObservations.silent, PIR.Proc.bind, Primitive.evaluate, primitiveOutcome, lengthBound]
 
-set_option backward.isDefEq.respectTransparency false in
 set_option smartUnfolding false in
 theorem helper_equation (xs : List F) (x : F) (divisor : Nat) :
     invoke (program.payload.meanings F G) appendSummaryHelper (inputs xs x divisor) =
       reference xs x divisor :=
   (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-    program.payload appendSummaryDefinition (List.get_find?_mem _)
+    program.payload appendSummaryDefinition appendSummary_member
     appendSummaryBody appendSummary_exact (inputs xs x divisor)).trans
       (body_equation _ xs x divisor)
 
@@ -119,7 +115,6 @@ theorem division_zero (xs : List F) (x : F) (bound : xs.length + 1 < indexLimit)
   simp [reference, bound, show xs.length < indexLimit by omega]
 
 
-set_option backward.isDefEq.respectTransparency false in
 set_option smartUnfolding true in
 /-- An actual original helper prefix retains every reached site and stops before
 remainder, subtraction, sum, equality and empty-vector construction. -/
@@ -159,7 +154,7 @@ theorem original_division_zero_sites {I : PIR.Signature} (sites : SiteObservatio
         (Evaluation.meaning sites (Evaluation.payloadMeanings sites program.payload))
         (inputs xs x 0).get :=
     Evaluation.payload_invoke_body_view (F := F) (G := G) sites
-      program.payload appendSummaryDefinition (List.get_find?_mem _)
+      program.payload appendSummaryDefinition appendSummary_member
       appendSummaryBody appendSummary_exact (inputs xs x 0)
   refine (Evaluation.payload_denote_body_view (F := F) (G := G) sites
     program.payload entryBody entry_exact (inputs xs x 0)).trans ?_

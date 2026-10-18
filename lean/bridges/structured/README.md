@@ -33,11 +33,14 @@ python3 lean/bridges/structured/check.py \
 
 The report records the source revision, deterministic seed, exact commands,
 exported source and snapshot hashes, and retained executable hashes. Each run
-allocates a fresh directory under `runs/` beside the selected report and copies
-its executables there before testing. The selected report is atomically marked
-`running` before setup, then `pass`, `failed` or `interrupted`; it identifies the
-run directory and its own retained report. Setup, source verification and
-finalization errors exit nonzero; handled interruptions report `interrupted`.
+allocates a fresh directory under `runs/` beside the selected report and links
+its executables there before testing from a store holding one read-only copy
+per content digest: `runs/tool-store`, or `ZKC_TOOL_STORE`, which `lean-native`
+sets to one store in its run directory. Where links are unsupported it copies
+them. The selected report is atomically marked `running` before setup, then
+`pass`, `failed` or `interrupted`; it identifies the run directory and its own
+retained report. Setup, source verification and finalization errors exit
+nonzero; handled interruptions report `interrupted`.
 Both report destinations are attempted even if one fails, and a publication
 error triggers another attempt with failure recorded. A permanently unwritable
 destination or an uncatchable process termination cannot be guaranteed a final
@@ -228,6 +231,28 @@ translator.
 
 [Formal support](../../docs/support.md#finite-fold-subjects) states the proved
 process equations for both subjects.
+
+### Typed bodies and generated views
+
+A proof subject is admitted from literal typed bodies: `structured_views`
+(or `structured_closed_views` for a single-role closed root) emits the checked
+payload and one kernel equation per admission phase from them. `bodies.py`
+prints those bodies for a retained snapshot:
+
+```sh
+python3 lean/bridges/structured/bodies.py \
+  --data ZkcExamples.Structured.SchnorrHelpersData \
+  --namespace ZkcExamples.Structured.SchnorrHelpersBodies \
+  --name s13h7363686e6f72725f666f726d738h726573706f6e7365=response \
+  --output build/experiments/bodies/SchnorrHelpersBodies.lean
+```
+
+It admits the snapshot with the checker in a scratch module, materializes each
+checked helper, protocol and (with `--closed`) projected root body, and prints
+them as `<|` chains. `--name DECLARATION=local` replaces the default
+`helperN`/`protocolN` name of that retained declaration.
+The printed module is ordinary source, not an admission certificate: a wrong
+or stale body fails the generated phase equations.
 
 ## Open participants
 

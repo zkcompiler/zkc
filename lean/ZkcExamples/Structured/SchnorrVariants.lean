@@ -1,6 +1,7 @@
 module
 
 public import ZkcExamples.Structured.SchnorrInteractive
+public import ZkcExamples.Structured.SchnorrVariantsBodies
 public import ZkcExamples.Structured.SchnorrHelpersData
 public import ZkcExamples.Structured.SchnorrReorderedData
 public import ZkcExamples.Structured.SchnorrEarlyChallengeData
@@ -13,20 +14,35 @@ different program, and its changed first action refutes that contract equation. 
 namespace ZkcExamples.Structured.SchnorrVariants
 open Zkc.Source Zkc.Source.Structured
 
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 set_option smartUnfolding false
 
 inductive Form where
   | original | helpers | reordered
 
-def helpersProgram : Program := (check SchnorrHelpersData.snapshot).toOption.get (by decide +kernel)
-def reorderedProgram : Program := (check SchnorrReorderedData.snapshot).toOption.get (by decide +kernel)
-def earlyProgram : Program := (check SchnorrEarlyChallengeData.snapshot).toOption.get (by decide +kernel)
+namespace Helpers
+structured_views SchnorrHelpersData.snapshot
+  helpers [response := SchnorrVariantsBodies.response, equation := SchnorrVariantsBodies.equation]
+  protocols [protocol := SchnorrVariantsBodies.helpers]
+end Helpers
 
-theorem helpers_admitted : check SchnorrHelpersData.snapshot = .ok helpersProgram := rfl
-theorem reordered_admitted : check SchnorrReorderedData.snapshot = .ok reorderedProgram := rfl
-theorem early_admitted : check SchnorrEarlyChallengeData.snapshot = .ok earlyProgram := rfl
+namespace Reordered
+structured_views SchnorrReorderedData.snapshot
+  helpers [] protocols [reordered := SchnorrVariantsBodies.reordered]
+end Reordered
+
+namespace Early
+structured_views SchnorrEarlyChallengeData.snapshot
+  helpers [] protocols [early := SchnorrVariantsBodies.early]
+end Early
+
+def helpersProgram : Program := Helpers.program
+def reorderedProgram : Program := Reordered.program
+def earlyProgram : Program := Early.program
+
+theorem helpers_admitted : check SchnorrHelpersData.snapshot = .ok helpersProgram := Helpers.kernel_admission
+theorem reordered_admitted : check SchnorrReorderedData.snapshot = .ok reorderedProgram :=
+  Reordered.kernel_admission
+theorem early_admitted : check SchnorrEarlyChallengeData.snapshot = .ok earlyProgram := Early.kernel_admission
 
 def helpersImported : Imported SchnorrHelpersData.snapshot := ⟨helpersProgram, helpers_admitted⟩
 def reorderedImported : Imported SchnorrReorderedData.snapshot := ⟨reorderedProgram, reordered_admitted⟩

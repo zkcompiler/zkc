@@ -86,15 +86,15 @@ def checkUnitHeaders (snapshot : Snapshot) :
     Except String (List DomainSpec × List ProtocolSignature × IdentitySummaries) := do
   if !Format.digestValid snapshot.source || !validString snapshot.entry then
     throw "structured-identity"
-  if snapshot.domains.length > 128 || snapshot.relations.length > 128 || snapshot.bindings.length > 128 ||
-      snapshot.definitions.length > 128 then throw "structured-table-limit"
+  if snapshot.domains.length > Limits.tableEntries || snapshot.relations.length > Limits.tableEntries ||
+      snapshot.bindings.length > Limits.tableEntries || snapshot.definitions.length > Limits.tableEntries then throw "structured-table-limit"
   let names := snapshot.domains.map (·.name) ++ snapshot.relations.map (·.name) ++
     snapshot.bindings.map (·.name) ++ snapshot.definitions.map (·.name)
   if names.eraseDups.length != names.length then throw "structured-duplicate-symbol"
   if !snapshot.definitions.all Definition.headerValid || !snapshot.relations.all Relation.valid then
     throw "structured-header"
   if !snapshot.bindings.all Binding.valid then throw "structured-binding"
-  if !snapshot.instructionsWithin 4096 then throw "structured-instruction-limit"
+  if !snapshot.instructionsWithin Limits.instructions then throw "structured-instruction-limit"
   if snapshot.domains.any (fun domain => domain.inputs.any Ty.isService) then
     throw "structured-service-use"
   let domains ← snapshot.domains.mapM Domain.resolve

@@ -50,4 +50,25 @@ theorem calculate_fieldAdd_reverse_law (observations : SiteObservations I)
       rw [Evaluation.fieldAdd_reverse]
       rfl
 
+/-- Local control selects its callback by the actual condition; both callbacks
+remain derived processes over the same captured operands. -/
+theorem branch_law (observations : SiteObservations I) (table : Evaluation.Meanings F G I)
+    {inputs outputs : List Ty} (condition : Bool) (captures : Values (assignment F G) inputs)
+    (yes no : RegionFunction (assignment F G) I (inputs, outputs)) :
+    (Evaluation.meaning observations table).OperationLaw (fun op => .call op .done)
+      (.branch inputs outputs) (.cons condition captures) (.cons yes (.cons no .nil))
+      (if condition then yes captures else no captures) := by
+  apply RegionMeaning.OperationLaw.identity
+  cases condition <;> rfl
+
+/-- The ordered fold computed by `vector.sum` is the list sum. -/
+theorem vectorSum_law (observations : SiteObservations I) (table : Evaluation.Meanings F G I)
+    (domain : String) (xs : List F) :
+    (Evaluation.meaning observations table).OperationLaw (fun op => .call op .done)
+      (.exec (.vectorSum domain)) (.cons xs .nil) .nil (.done (.cons xs.sum .nil)) := by
+  apply RegionMeaning.OperationLaw.identity
+  change @Eq (PIR.Proc _ (Values (assignment F G) [.field domain]))
+    (.done (.cons (xs.foldl (· + ·) 0) .nil)) (.done (.cons xs.sum .nil))
+  rw [List.sum_eq_foldl]
+
 end Zkc.Source.Structured

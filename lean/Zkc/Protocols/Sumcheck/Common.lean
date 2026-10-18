@@ -9,8 +9,6 @@ public import Zkc.Protocols.Sumcheck.Security
 Fresh uniform coins are supplied by the experiment, not inferred from service handles. -/
 
 set_option autoImplicit false
-set_option maxRecDepth 4000
-set_option maxHeartbeats 500000
 
 namespace Zkc.Protocols.Sumcheck.Common
 

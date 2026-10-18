@@ -20,8 +20,6 @@ noncomputable def nativeAcceptance (domain : List F) (A : PFunctor)
   return result.map (Native.outputRelation F 2 2) = some True
 
 set_option backward.isDefEq.respectTransparency false in
-set_option maxRecDepth 4000 in
-set_option maxHeartbeats 800000 in
 theorem native_game (domain : List F) (A : PFunctor)
     (original : VirtualOracle (ofPFunctor A) (MultivariateRound.polynomialFamily F 2 2))
     (impl : QueryImpl (ofPFunctor A) Id) (coefficients : Coefficients F)

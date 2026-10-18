@@ -5,8 +5,6 @@ public import ZkcSecurity.VCVio.Schnorr
 
 @[expose] public section
 
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 
 /-! VCVio simulation security of the admitted native-export constructor data.
 Source correspondence is the checked `ZkcExamples.NativePrograms.Schnorr.contract`.

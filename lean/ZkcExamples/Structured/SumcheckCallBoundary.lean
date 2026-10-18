@@ -13,9 +13,7 @@ open Zkc.Source Zkc.Source.Structured
 open Zkc.Polynomial Zkc.Polynomial.Multilinear
 open SumcheckContractBindings SumcheckContractInstantiation SumcheckContractRequests
 
-set_option backward.isDefEq.respectTransparency false
 set_option smartUnfolding false
-set_option maxRecDepth 20000
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
@@ -45,6 +43,7 @@ theorem source_linked (raw : List F) (claim : F) (count handle : Nat) :
   rw [child]
   rfl
 
+set_option backward.isDefEq.respectTransparency false in
 /-- Count refusal belongs to the child interface, including before its terminal. -/
 theorem child_excess (raw : List F) (claim : F) (count handle : Nat) (large : 2 < count) :
     childProcess (G := G) raw claim count handle = .halt .refused := by
@@ -87,6 +86,7 @@ theorem terminal_present (n : Nat) (raw : List F) (table : Table F n)
   · rw [ite_eq_right pointBound, SumcheckVerifierTerminal.terminal_decision, ite_eq_right pointBound]
 
 omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
+set_option backward.isDefEq.respectTransparency false in
 /-- All six slots are arbitrary. Only the actual selected V point/value outputs
 can discharge the inherited fixed-table request. -/
 theorem child_request_iff (raw : List F) (claim : F) (count handle : Nat)

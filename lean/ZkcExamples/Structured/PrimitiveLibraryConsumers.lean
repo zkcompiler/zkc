@@ -11,8 +11,6 @@ open Zkc.Source Zkc.Source.Structured PrimitiveLibrary
 
 -- Local transparency options below elaborate dependent source-view aliases;
 -- every resulting equation is still checked by the kernel.
-set_option maxRecDepth 20000
-set_option maxHeartbeats 1000000
 set_option smartUnfolding false
 set_option linter.unusedSimpArgs false
 
@@ -22,25 +20,22 @@ variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
 namespace Shape
 open PrimitiveShapeViews
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Actual membership plus raw-body equality discharges the comparison premise. -/
 theorem less_law : LessLaw (program.payload.meanings F G) := by
   intro a b aBound bBound
   exact (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-    program.payload lessDefinition (List.get_find?_mem _)
+    program.payload lessDefinition less_member
     PrimitiveShapeViews.lessBody (by rfl) (.cons a (.cons b .nil))).trans
       (less_body _ a b aBound bBound)
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The full table supplies the loop equation, including every checked step. -/
 theorem rows_law : RowsLaw (program.payload.meanings F G) := by
   intro dimension bound
   exact (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-    program.payload rowsDefinition (List.get_find?_mem _)
+    program.payload rowsDefinition rows_member
     PrimitiveShapeViews.rowsBody (by rfl) (indexResult dimension)).trans
       (rows_body _ less_law dimension bound)
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The actual retained has_shape helper has this universal conditional equation. -/
 theorem shape_equation (xs : List F) (dimension columns : Nat)
     (lengthBound : xs.length < indexLimit) (dimensionBound : dimension < indexLimit)
@@ -48,7 +43,7 @@ theorem shape_equation (xs : List F) (dimension columns : Nat)
     invoke (program.payload.meanings F G) shapeHelper (inputs xs dimension columns) =
       .done (boolResult (decide (HasShape xs dimension columns))) :=
   (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-    program.payload shapeDefinition (List.get_find?_mem _)
+    program.payload shapeDefinition shape_member
     PrimitiveShapeViews.shapeBody (by rfl) (inputs xs dimension columns)).trans
       (shape_body _ less_law rows_law xs dimension columns lengthBound dimensionBound columnsBound)
 
@@ -72,25 +67,22 @@ end Shape
 namespace Table
 open PrimitiveTableViews
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Actual membership plus raw-body equality discharges the comparison premise. -/
 theorem less_law : LessLaw (program.payload.meanings F G) := by
   intro a b aBound bBound
   exact (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-    program.payload lessDefinition (List.get_find?_mem _)
+    program.payload lessDefinition less_member
     PrimitiveShapeViews.lessBody (by rfl) (.cons a (.cons b .nil))).trans
       (less_body _ a b aBound bBound)
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The full table supplies the loop equation, including every checked step. -/
 theorem rows_law : RowsLaw (program.payload.meanings F G) := by
   intro dimension bound
   exact (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-    program.payload rowsDefinition (List.get_find?_mem _)
+    program.payload rowsDefinition rows_member
     PrimitiveShapeViews.rowsBody (by rfl) (indexResult dimension)).trans
       (rows_body _ less_law dimension bound)
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The actual retained has_shape helper has this universal conditional equation. -/
 theorem shape_equation (xs : List F) (dimension columns : Nat)
     (lengthBound : xs.length < indexLimit) (dimensionBound : dimension < indexLimit)
@@ -98,11 +90,10 @@ theorem shape_equation (xs : List F) (dimension columns : Nat)
     invoke (program.payload.meanings F G) shapeHelper (inputs xs dimension columns) =
       .done (boolResult (decide (HasShape xs dimension columns))) :=
   (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-    program.payload shapeDefinition (List.get_find?_mem _)
+    program.payload shapeDefinition shape_member
     PrimitiveShapeViews.shapeBody (by rfl) (inputs xs dimension columns)).trans
       (shape_body _ less_law rows_law xs dimension columns lengthBound dimensionBound columnsBound)
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The checked constructor preserves all three original outputs in order. -/
 theorem table_equation (xs : List F) (dimension columns : Nat)
     (lengthBound : xs.length < indexLimit) (dimensionBound : dimension < indexLimit)
@@ -110,7 +101,7 @@ theorem table_equation (xs : List F) (dimension columns : Nat)
     invoke (program.payload.meanings F G) tableHelper (inputs xs dimension columns) =
       if HasShape xs dimension columns then .done (inputs xs dimension columns) else .halt .reject := by
   have actual := Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-    program.payload tableDefinition (List.get_find?_mem _)
+    program.payload tableDefinition table_member
     PrimitiveTableViews.tableBody (by rfl) (inputs xs dimension columns)
   have equation := table_body (program.payload.meanings F G) xs dimension columns
     (decide (HasShape xs dimension columns))
@@ -137,25 +128,22 @@ end Table
 namespace Halves
 open PrimitiveHalvesViews
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Actual membership plus raw-body equality discharges the comparison premise. -/
 theorem less_law : LessLaw (program.payload.meanings F G) := by
   intro a b aBound bBound
   exact (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-    program.payload lessDefinition (List.get_find?_mem _)
+    program.payload lessDefinition less_member
     PrimitiveShapeViews.lessBody (by rfl) (.cons a (.cons b .nil))).trans
       (less_body _ a b aBound bBound)
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The full table supplies the loop equation, including every checked step. -/
 theorem rows_law : RowsLaw (program.payload.meanings F G) := by
   intro dimension bound
   exact (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-    program.payload rowsDefinition (List.get_find?_mem _)
+    program.payload rowsDefinition rows_member
     PrimitiveShapeViews.rowsBody (by rfl) (indexResult dimension)).trans
       (rows_body _ less_law dimension bound)
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The actual retained has_shape helper has this universal conditional equation. -/
 theorem shape_equation (xs : List F) (dimension columns : Nat)
     (lengthBound : xs.length < indexLimit) (dimensionBound : dimension < indexLimit)
@@ -163,11 +151,10 @@ theorem shape_equation (xs : List F) (dimension columns : Nat)
     invoke (program.payload.meanings F G) shapeHelper (inputs xs dimension columns) =
       .done (boolResult (decide (HasShape xs dimension columns))) :=
   (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-    program.payload shapeDefinition (List.get_find?_mem _)
+    program.payload shapeDefinition shape_member
     PrimitiveShapeViews.shapeBody (by rfl) (inputs xs dimension columns)).trans
       (shape_body _ less_law rows_law xs dimension columns lengthBound dimensionBound columnsBound)
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The checked constructor preserves all three original outputs in order. -/
 theorem table_equation (xs : List F) (dimension columns : Nat)
     (lengthBound : xs.length < indexLimit) (dimensionBound : dimension < indexLimit)
@@ -175,7 +162,7 @@ theorem table_equation (xs : List F) (dimension columns : Nat)
     invoke (program.payload.meanings F G) tableHelper (inputs xs dimension columns) =
       if HasShape xs dimension columns then .done (inputs xs dimension columns) else .halt .reject := by
   have actual := Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-    program.payload tableDefinition (List.get_find?_mem _)
+    program.payload tableDefinition table_member
     PrimitiveTableViews.tableBody (by rfl) (inputs xs dimension columns)
   have equation := table_body (program.payload.meanings F G) xs dimension columns
     (decide (HasShape xs dimension columns))
@@ -183,7 +170,6 @@ theorem table_equation (xs : List F) (dimension columns : Nat)
   simp only [decide_eq_true_eq] at equation
   exact actual.trans equation
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The source helper itself checks dimension and split shape, not columns. -/
 theorem halves_equation (xs : List F) (dimension columns : Nat)
     (dimensionBound : dimension < indexLimit) :
@@ -194,7 +180,7 @@ theorem halves_equation (xs : List F) (dimension columns : Nat)
         else .halt .refused
       else .halt .reject :=
   (Evaluation.payload_invoke_body_view (F := F) (G := G) SiteObservations.closed
-    program.payload halvesDefinition (List.get_find?_mem _)
+    program.payload halvesDefinition halves_member
     halvesBody halves_exact (inputs xs dimension columns)).trans
       (halves_body _ less_law xs dimension columns dimensionBound)
 

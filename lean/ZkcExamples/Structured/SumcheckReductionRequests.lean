@@ -11,9 +11,7 @@ open Zkc.Source Zkc.Source.Structured
 open SumcheckRelationContract SumcheckContractBindings SumcheckContractRequests
 open Zkc.Polynomial.Multilinear
 
-set_option backward.isDefEq.respectTransparency false
 set_option smartUnfolding false
-set_option maxRecDepth 20000
 
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
@@ -22,6 +20,7 @@ def childProcess (claim : F) (count handle : Nat) :=
   (reductionCall.componentInput {} 1 (reductionCallEnvironment (G := G) claim count handle)).process.interpret
     forgetSites
 
+set_option backward.isDefEq.respectTransparency false in
 theorem child_present (claim : F) (count handle : Nat) (admitted : count ≤ 4) :
     childProcess (G := G) claim count handle =
       (PIR.repeatN count (SumcheckVerifierLaws.roundPresent (ProtocolContext.enter {} "s3" [0, 1]) handle)
@@ -50,6 +49,7 @@ def request (raw : List F) (remaining count : Nat) (claim : F) (handle : Nat)
     (reductionBoundary claim count handle (.returned outputs)) (assignments raw (remaining + count))
 
 omit [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
+set_option backward.isDefEq.respectTransparency false in
 theorem request_iff (raw : List F) (remaining count : Nat) (claim : F) (handle : Nat)
     (table : Table F (remaining + count)) (decoded : ofList? (remaining + count) raw = some table)
     (outputs : Values (Component (assignment F G)) SumcheckVerifierBodies.reduceOutputs) :

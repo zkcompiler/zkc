@@ -16,8 +16,6 @@ open PrimitiveShapeViews (lessBody lessHelper rowsBody rowsHelper shapeBody shap
 
 -- Local transparency options below elaborate dependent source-view aliases;
 -- every resulting equation is still checked by the kernel.
-set_option maxRecDepth 20000
-set_option maxHeartbeats 600000
 -- Uniform source-reduction lists are reused across different checked bodies.
 set_option linter.unusedSimpArgs false
 
@@ -58,7 +56,6 @@ private theorem singleton_split {type : Ty} (values : Values (assignment F G) [t
     (values.split [type]).1 = values := by
   cases values with | cons value rest => cases rest; rfl
 
-set_option backward.isDefEq.respectTransparency false in
 /-- The source library guard's exact checked comparison. -/
 theorem less_body (table : Meanings F G) (a b : Nat)
     (aBound : a < indexLimit) (bBound : b < indexLimit) :
@@ -195,7 +192,6 @@ theorem HasShape.halves {A : Type} {xs : List A} {dimension columns : Nat}
     hasShape_of_length _ _ _ shape.1 (by have := shape.2.1; omega) high,
     List.take_append_drop _ _⟩
 
-set_option backward.isDefEq.respectTransparency false in
 /-- Checked integer inputs, unlike arbitrary mathematical Nat, are u64 values. -/
 theorem less_generic_body_all (table : Meanings F G) (a b : Nat) :
     lessBody.denote (meaning F G table) (Values.cons a (.cons b .nil)).get =
@@ -214,7 +210,6 @@ def LessAllLaw (table : Meanings F G) : Prop :=
     else .halt .refused
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
-set_option backward.isDefEq.respectTransparency false in
 theorem lessAll_bounded (table : Meanings F G) (law : LessAllLaw table) : LessLaw table := by
   intro a b ha hb
   rw [law, ite_eq_left ⟨ha,hb⟩]

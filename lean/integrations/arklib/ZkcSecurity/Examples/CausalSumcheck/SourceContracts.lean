@@ -18,10 +18,7 @@ open ZkcSecurity.Examples.CausalSumcheck.UniformService
 open SumcheckContractBindings SumcheckContractInterpretations SumcheckContractRequests
 open scoped ENNReal
 
-set_option backward.isDefEq.respectTransparency false
 set_option smartUnfolding false
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 
 variable {F G S E : Type} [Field F] [DecidableEq F]
   [AddCommGroup G] [Module F G] [DecidableEq G]

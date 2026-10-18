@@ -10,8 +10,6 @@ public import ZkcExamples.NativePrograms.Variants.SumcheckHornerData
 /-! Several native source forms share one semantic contract and its property theorems. -/
 
 set_option autoImplicit false
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 
 namespace ZkcExamples.NativePrograms.SumcheckVariants
 open Zkc.Source Zkc.Source.Common Zkc.Source.Common.Native
@@ -25,18 +23,23 @@ def hornerImport : Imported := Variants.SumcheckHornerData.snapshot.check.toOpti
 
 variable {F : Type} [Field F] [DecidableEq F]
 
+set_option maxRecDepth 20000 in
 def helpers (coefficients : Zkc.Protocols.Sumcheck.Common.Coefficients F) (claim : F) (service : Nat) : PIR.Proc (Zkc.Protocols.Sumcheck.Common.actions (F := F)) (Option Bool) :=
   helpersImport.denote (scalarMeaning F F) id 1 (Sumcheck.verifierInputs coefficients claim service)
 
+set_option maxRecDepth 20000 in
 def horner (coefficients : Zkc.Protocols.Sumcheck.Common.Coefficients F) (claim : F) (service : Nat) : PIR.Proc (Zkc.Protocols.Sumcheck.Common.actions (F := F)) (Option Bool) :=
   hornerImport.denote (scalarMeaning F F) id 1 (Sumcheck.verifierInputs coefficients claim service)
 
+set_option maxRecDepth 20000 in
 def verifier (form : Form) : Zkc.Protocols.Sumcheck.Common.Verifier F :=
   match form with
   | .original => Sumcheck.verifier
   | .helpers => helpers
   | .horner => horner
 
+set_option maxHeartbeats 4000000 in
+set_option maxRecDepth 20000 in
 theorem helpers_correspondence (coefficients : Zkc.Protocols.Sumcheck.Common.Coefficients F) (claim : F) (service : Nat) :
     helpers coefficients claim service = Sumcheck.experiment coefficients claim service := by
   change (helpersImport.program.denote (scalarMeaning F F) id 1
@@ -73,6 +76,8 @@ theorem horner_arithmetic : hornerArithmetic (F := F) = standardArithmetic := by
     dsimp [hornerArithmetic, hornerValue, evaluate, wireEvaluate]
     ring
 
+set_option maxHeartbeats 4000000 in
+set_option maxRecDepth 20000 in
 theorem horner_correspondence (coefficients : Coefficients F) (claim : F) (service : Nat) :
     horner coefficients claim service = Sumcheck.experiment coefficients claim service := by
   have source : horner coefficients claim service =

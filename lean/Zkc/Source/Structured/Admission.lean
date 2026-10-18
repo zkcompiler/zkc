@@ -30,7 +30,7 @@ def Ty.isService : Ty → Bool
 
 /-- Native preparation identifiers have a stricter bound than helper symbols. -/
 def validPreparationName (name : String) : Bool :=
-  name.utf8ByteSize ≤ 128 && match name.toList with
+  name.utf8ByteSize ≤ Limits.preparationNameBytes && match name.toList with
     | [] => false
     | first :: rest =>
       let initial := fun c => ('a' ≤ c && c ≤ 'z') || ('A' ≤ c && c ≤ 'Z') || c == '_'
@@ -44,8 +44,8 @@ def validProtocolIdentifier (name : String) : Bool :=
       let initial := fun c => ('a' ≤ c && c ≤ 'z') || ('A' ≤ c && c ≤ 'Z') || c == '_'
       initial first && rest.all (fun c => initial c || ('0' ≤ c && c ≤ '9'))
 
-def validTypes (types : List Ty) : Bool := types.length ≤ 512 && types.all validType
-def validRefs (refs : List Nat) : Bool := refs.length ≤ 512 && refs.all (· ≤ 4096)
+def validTypes (types : List Ty) : Bool := types.length ≤ Limits.listEntries && types.all validType
+def validRefs (refs : List Nat) : Bool := refs.length ≤ Limits.listEntries && refs.all (· ≤ Limits.instructions)
 
 /-- Remove empty instruction lists without charging an instruction. -/
 def nextInstruction : List (List Instruction) → Option (Instruction × List (List Instruction))
@@ -102,7 +102,7 @@ def Definition.headerValid (definition : Definition) : Bool :=
     (f.kind != .math || f.visibility == .privateDef) &&
     (f.kind == .math || f.preconditions.isEmpty) &&
     (match f.kind, f.origin with
-    | .local, some (name, bindings) => validString name && bindings.length ≤ 128 &&
+    | .local, some (name, bindings) => validString name && bindings.length ≤ Limits.originBindings &&
       (bindings.map Prod.fst).eraseDups.length == bindings.length &&
       bindings.all (fun (key, value) => validString key && validString value)
     | .local, none => false

@@ -11,7 +11,6 @@ Finite-domain capacity remains an explicit premise of Boolean adequacy. -/
 namespace ZkcExamples.Structured.SumcheckRelationContract
 open Zkc.Source Zkc.Source.Structured
 
-set_option backward.isDefEq.respectTransparency false
 
 abbrev scalar : Ty := .field "bls12-381.fr"
 abbrev vector : Ty := .vector "bls12-381.fr"
@@ -97,6 +96,7 @@ variable {definitions : List CheckedDefinition}
 
 include linked bodies
 
+set_option backward.isDefEq.respectTransparency false in
 theorem step_equation (xs : List F) (a x : F) :
     invoke (closedMeanings (F := F) (G := G) definitions) foldSpec.stepHelper (.cons a (.cons x (.cons xs .nil))) =
       .done (.cons (a + x) .nil) := by
@@ -115,6 +115,7 @@ private theorem sum_fold (xs : List F) (initial : F) :
   | nil => simp
   | cons x xs ih => simpa [List.foldl_cons, Values.get, List.sum_cons, add_assoc] using ih (initial + x)
 
+set_option backward.isDefEq.respectTransparency false in
 theorem total_equation (xs : List F) (bounded : xs.length < indexLimit) :
     invoke (closedMeanings (F := F) (G := G) definitions) totalHelper (.cons xs .nil) =
       .done (.cons xs.sum .nil) := by
@@ -140,6 +141,7 @@ theorem total_equation (xs : List F) (bounded : xs.length < indexLimit) :
   rw [folded]
   simp only [sum_fold (G := G) xs (0 : F), zero_add, PIR.Proc.bind, Environment.prepend, Environment.push]
 
+set_option backward.isDefEq.respectTransparency false in
 /-- The formula's helper call, comparison and return are composed by the shared
 structural derivation. The local call law is the independently proved fold law. -/
 theorem sum_equation (association : BodyIn definitions sumHelper sumBody) (xs : List F)

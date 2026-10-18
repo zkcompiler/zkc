@@ -13,8 +13,6 @@ public import Mathlib.Algebra.Field.ZMod
 Failure to implement this contract is distinct from proving a protocol insecure.
 -/
 set_option autoImplicit false
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 
 namespace ZkcExamples.NativePrograms.ContractControls
 open Zkc.Source Zkc.Source.Common Zkc.Source.Common.Native
@@ -29,6 +27,7 @@ def earlyVerifier : Zkc.Protocols.Schnorr.Common.Verifier F F :=
   fun base key service => earlyImport.denote (scalarMeaning F F) id 1
     (Schnorr.verifierInputs base key service)
 
+set_option maxRecDepth 20000 in
 def wrongResidual : Zkc.Protocols.Sumcheck.Common.Verifier F :=
   fun coefficients claim service => residualImport.denote (scalarMeaning F F) id 1
     (Sumcheck.verifierInputs coefficients claim service)
@@ -62,10 +61,12 @@ theorem correct_residual_accepts :
     ((Sumcheck.experiment coefficients 2 7).run (Sumcheck.transcriptHandler prover 1 0) 0).outcome =
       .returned (some true) := by rfl
 
+set_option maxRecDepth 20000 in
 theorem wrong_residual_rejects :
     ((wrongResidual coefficients 2 7).run (Sumcheck.transcriptHandler prover 1 0) 0).outcome =
       .stopped .reject := by rfl
 
+set_option maxRecDepth 20000 in
 /-- A changed residual cannot borrow the same Sumcheck security theorem. -/
 theorem residual_no_contract :
     ¬ Zkc.Protocols.Sumcheck.Common.VerifierContract Sumcheck.wiring wrongResidual := by
