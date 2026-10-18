@@ -14,7 +14,7 @@ private def original (target : String) : Function :=
 private def snapshot (target : String) : Snapshot :=
   ⟨digest, "main", [], [⟨"R", .publicDef, "opaque", "key", "rev", [.boolean], [.boolean],
     ["statement"], none⟩], [], [.function (original target)],
-    [⟨"main", [clause "left" "P", clause "right" "V"]⟩]⟩
+    [⟨"main", [clause "left" "P", clause "right" "V"]⟩], blsRows⟩
 private def body : Region protocolDialect [.boolean] [.boolean] :=
   .letOp (.mark "") .nil .nil
     (.letOp (.statement "R" [.boolean] ["P"] 0) (.cons .here .nil) .nil (.ret (.cons .here .nil)))
@@ -100,6 +100,7 @@ private def leftSnapshot : Snapshot where
   bindings := []
   definitions := [.function ⟨"s6h73616d706c653h52756e", .protocol, .publicDef, [.boolean], [.boolean], some ⟨["role00000000", "role00000001"], [["role00000000", "role00000001"]], [["role00000000", "role00000001"]]⟩, [], none, (.block [.instruction (.statement "s6h73616d706c651h52" ["role00000000"] 0 (some ("left"))) [0] [] [] ""] (.ret [0]))⟩, .function ⟨"zkf_a1f8c00beabfe1b0a1ecc4074476dfa38f42d4e883f20d3a29821f20ee2eace4", .math, .privateDef, [.boolean], [.boolean], none, [], none, (.block [] (.ret [0]))⟩]
   contracts := [⟨"s6h73616d706c653h52756e", [⟨.target, "left", ⟨"s6h73616d706c651h52", [⟨.input, 0, "role00000000"⟩]⟩, none, some (⟨.output, 0, "role00000000"⟩)⟩, ⟨.target, "right", ⟨"s6h73616d706c651h52", [⟨.input, 0, "role00000000"⟩]⟩, none, some (⟨.output, 0, "role00000001"⟩)⟩]⟩]
+  catalogue := { nominals := [], services := [] }
 
 private def rightSnapshot : Snapshot where
   source := "sha256:5d771ea94fb901c502ebe138ef4df5a2a35c25fd058b42fa59b32bc589867931"
@@ -109,6 +110,7 @@ private def rightSnapshot : Snapshot where
   bindings := []
   definitions := [.function ⟨"s6h73616d706c653h52756e", .protocol, .publicDef, [.boolean], [.boolean], some ⟨["role00000000", "role00000001"], [["role00000000", "role00000001"]], [["role00000000", "role00000001"]]⟩, [], none, (.block [.instruction (.statement "s6h73616d706c651h52" ["role00000000"] 0 (some ("right"))) [0] [] [] ""] (.ret [0]))⟩, .function ⟨"zkf_a1f8c00beabfe1b0a1ecc4074476dfa38f42d4e883f20d3a29821f20ee2eace4", .math, .privateDef, [.boolean], [.boolean], none, [], none, (.block [] (.ret [0]))⟩]
   contracts := [⟨"s6h73616d706c653h52756e", [⟨.target, "left", ⟨"s6h73616d706c651h52", [⟨.input, 0, "role00000000"⟩]⟩, none, some (⟨.output, 0, "role00000000"⟩)⟩, ⟨.target, "right", ⟨"s6h73616d706c651h52", [⟨.input, 0, "role00000000"⟩]⟩, none, some (⟨.output, 0, "role00000001"⟩)⟩]⟩]
+  catalogue := { nominals := [], services := [] }
 
 private def original (target : String) : Function :=
   ⟨"s6h73616d706c653h52756e", .protocol, .publicDef, [.boolean], [.boolean],

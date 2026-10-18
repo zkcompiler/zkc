@@ -17,7 +17,7 @@ private def unit (definitions : List Definition) (relations : List Relation := [
   (let contractDefinitions : List Definition := definitions
    ⟨"sha256:0000000000000000000000000000000000000000000000000000000000000000", "main", [], relations, [], contractDefinitions,
     contractDefinitions.filterMap (fun definition =>
-      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows⟩)
 private def accepted (snapshot : Snapshot) : Bool := (check snapshot).isOk
 private def first := math "first" [.boolean, .boolean] [.boolean] (.block [] (.ret [0]))
 private def relay := math "relay" [.boolean, .boolean] [.boolean]

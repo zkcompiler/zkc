@@ -35,12 +35,15 @@ def Primitive.results : Primitive → List Ty
   | .vectorSum d => [.field d]
   | .vectorSplit d => [.vector d, .vector d]
 
-/-- Exact closed allowlist. No prefix matching or default domain inference. -/
-def bindingArguments : String → Option (List String)
+/-- The primitive families: the capability their one field root needs, or no
+root. No prefix matching or default domain inference; the root is a catalogue
+identity resolved by admission. -/
+def bindingRoot : String → Option (Option String)
   | "index.constant" | "index.equal" | "index.less" | "index.add" |
-    "index.mul" | "index.sub" | "index.div" | "index.mod" => some []
+    "index.mul" | "index.sub" | "index.div" | "index.mod" => some none
   | "vector.empty" | "vector.length" | "vector.sum" | "vector.split" |
-    "vector.append" | "vector.equal" | "field.equal" => some [scalarDomain]
+    "vector.append" | "field.equal" => some (some "Field")
+  | "vector.equal" => some (some "CommRing")
   | _ => none
 
 def Binding.nameValid (name : String) : Bool :=
@@ -53,6 +56,18 @@ def Binding.nameValid (name : String) : Bool :=
 
 def Binding.valid (binding : Binding) : Bool :=
   nameValid binding.name && binding.implementation.isEmpty &&
-    bindingArguments binding.contract == some binding.arguments
+    match bindingRoot binding.contract with
+    | some none => binding.arguments.isEmpty
+    | some (some _) => binding.arguments.length == 1
+    | none => false
+
+/-- The binding's root: a field row with the family's capability. -/
+def Binding.resolveRoot (catalogue : Catalogue) (binding : Binding) : Except String String :=
+  match bindingRoot binding.contract, binding.arguments with
+  | some none, [] => .ok ""
+  | some (some capability), [root] => do
+    catalogue.require root .field capability
+    return root
+  | _, _ => .error "structured-binding"
 
 end Zkc.Source.Structured

@@ -34,7 +34,7 @@ def snapshot (definitions : List Definition) (domains : List Domain := []) : Sna
   (let contractDefinitions : List Definition := definitions
    ⟨digest, "main", domains, [], [], contractDefinitions,
     contractDefinitions.filterMap (fun definition =>
-      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows⟩)
 
 def totalStep (returned : List Nat := [2, 0]) (container : Nat := 3)
     (premises : List Bound := [⟨2, 3, 0⟩]) : Definition :=
@@ -455,7 +455,10 @@ def run : IO Unit := do
       ("json-negative-zero", "[-0]"), ("json-trailing", "[] []"),
       ("json-depth", String.ofList (List.replicate 65 '[' ++ List.replicate 65 ']'))] do
     test name (!(Structured.Format.parse text).isOk)
-  test "unsupported-affine" (!(Structured.Format.type (.arr #[.str "service", .str "rng"])).isOk)
+  -- Identities decode as strings; admission resolves them against catalogue rows.
+  test "unknown-service-decoded" ((Structured.Format.type (.arr #[.str "service", .str "rng"])).isOk)
+  test "unknown-service-refused" (refused (snapshot [function "main" .protocol [.service "rng"] []
+    (.block [] (.ret []))]) "structured-service-contract")
   test "unknown-opcode" (!(Structured.Format.descriptor (.arr #[.str "provider.call"])).isOk)
   test "extra-op-field" (!(Structured.Format.descriptor (.arr #[.str "bool.and", .str "extra"])).isOk)
   test "extra-domain-op" (!(Structured.Format.domain (.arr #[.str "domain", .str "items",
@@ -467,7 +470,9 @@ def run : IO Unit := do
     | _ => false)
   test "origin-string-path-refused" (!(Structured.Format.origin
     (.arr #[.str "template", .arr #[.str "legacy-path"]])).isOk)
-  test "unknown-domain-refused" (!(Structured.Format.type (.arr #[.str "field", .str "F97"])).isOk)
+  test "unknown-domain-decoded" ((Structured.Format.type (.arr #[.str "field", .str "F97"])).isOk)
+  test "unknown-domain-refused" (refused (snapshot [function "main" .protocol [.field "F97"] []
+    (.block [] (.ret []))]) "structured-domain-unknown")
   test "overlong-string" (!(Structured.Format.string (.str (String.ofList (List.replicate 513 'a')))).isOk)
   test "reference-limit" (!(Structured.Format.refs (.arr #[toJson (4097 : Nat)])).isOk)
   test "numeric-token-limit" (!(Structured.Format.parse

@@ -95,6 +95,7 @@ def checkUnitHeaders (snapshot : Snapshot) :
     throw "structured-header"
   if !snapshot.bindings.all Binding.valid then throw "structured-binding"
   if !snapshot.instructionsWithin Limits.instructions then throw "structured-instruction-limit"
+  snapshot.checkCatalogue admittedCatalogue
   if snapshot.domains.any (fun domain => domain.inputs.any Ty.isService) then
     throw "structured-service-use"
   let domains ← snapshot.domains.mapM Domain.resolve

@@ -94,6 +94,10 @@ elaboration. Well-formed result permutations
 and changed stop reasons are accepted as different programs. Malformed dormant
 bodies, cycles, unsupported vocabulary, extra fields, invalid references and
 wrong same-typed containers/captures are refused.
+Every other installed field, group and random service exports its native
+catalogue rows; Lean decodes them, finds them consistent and refuses them only
+because its environment does not list them (or, for BLS12-381 G2 and GT, does
+not admit that sort instance).
 Boundary cases also compare exactly 4096 instructions and a complete 1 MiB
 export, including its final newline. The reference counts stored instructions
 in the same units as the format; its dynamic execution budget is separate.

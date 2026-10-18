@@ -17,6 +17,16 @@ total = (fixtures / 'finite/total-state.mlir').read_text()
 unit = (fixtures / 'finite/unit-state.mlir').read_text()
 loops = (fixtures / 'structured-source/loops-and-captures.mlir').read_text()
 math = (fixtures / 'structured-source/math-operations.mlir').read_text()
+bls_rows = [
+    ['nominal', 'bls12-381.fr', 'Field',
+     [['PairingG1', 'bls12-381.g1'], ['PairingG2', 'bls12-381.g2'], ['PairingGT', 'bls12-381.gt']],
+     ['Field', 'CommRing', 'PrimeField', 'CharacteristicNotTwo', 'PairingField'],
+     '52435875175126190479447740508185965837690552500527637822603658699938581184513'],
+    ['nominal', 'bls12-381.g2', 'Group', [['Scalar', 'bls12-381.fr']], ['Group', 'ScalarAction'], None],
+    ['nominal', 'bls12-381.gt', 'Group', [['Scalar', 'bls12-381.fr']], ['Group', 'ScalarAction'], None],
+    ['nominal', 'bls12-381.g1', 'Group', [['Scalar', 'bls12-381.fr']], ['Group', 'ScalarAction'], None],
+]
+bls_service = ['service', 'random.bls12-381.fr/0', 'bls12-381.fr', ['draw']]
 
 
 def export(source, refusal=None, symbol='main'):
@@ -45,7 +55,10 @@ def simple(declarations='', body='', result='%flag'):
 
 with case('original-total-state-and-exact-ssa-order'):
     data = export(total)
-    assert len(data) == 9
+    assert len(data) == 10
+    # The catalogue slot carries the rows of every identity used, closed under
+    # associated members, in native catalogue order.
+    assert data[9] == [bls_rows, []]
     assert data[:2] == ['zkc.structured-source/0', 'original']
     assert data[2] == 'sha256:' + hashlib.sha256(total.encode()).hexdigest()
     assert data[3] == 'main' and data[5] == []
@@ -201,7 +214,7 @@ for name, source, code in [
     ('unused-math-attribute', simple('func.func private @dead(%x:i1) -> i1 attributes {unexpected=true} { return %x : i1 }'), 'structured-source-original'),
     ('math-operation-attribute', simple(body='%x = arith.xori %flag,%flag {unexpected=true} : i1'), 'structured-source-original'),
     ('extra-domain-constructor', total.replace('%d = "data.domain_indices"', '%extra = "data.domain_indices"(%xs) {axis=0:i64} : (!V)->!data.domain<ui64>\n%d = "data.domain_indices"'), 'structured-source-domain'),
-    ('unsupported-type', simple('func.func private @dead(%x:!algebra.group<"bn254.g1">) -> !algebra.group<"bn254.g1"> { return %x : !algebra.group<"bn254.g1"> }'), 'structured-source-type'),
+    ('unsupported-type', simple('func.func private @dead(%x:!data.bytes) -> !data.bytes { return %x : !data.bytes }'), 'structured-source-type'),
     ('unsupported-index-less', simple('func.func private @dead(%a:ui64,%b:ui64) -> i1 { %x = "data.index_less"(%a,%b) : (ui64,ui64)->i1\n return %x : i1 }'), 'structured-source-operation'),
     ('unsupported-comparison', simple(body='%x = arith.cmpi ult,%flag,%flag : i1'), 'structured-source-original'),
     ('role-count-limit', simple().replace('roles=["P"]', 'roles=[' + ','.join(json.dumps(x) for x in ['P'] + [f'R{i}' for i in range(16)]) + ']', 1), 'structured-source-role'),
@@ -252,11 +265,43 @@ with case('unsupported-affine-helper-signature'):
     helper = 'local.func @resource(%s:!local.capability<"rng:bls12-381.fr">) -> !local.capability<"rng:bls12-381.fr"> attributes {logical_origin=["resource",[]]} { local.return %s : !local.capability<"rng:bls12-381.fr"> }'
     export(simple(helper), 'structured-source-type')
 
-with case('unsupported-service-contract'):
+with case('other-installed-identities-export-their-rows'):
+    # Natively admitted identities export with their rows; Lean admits only the
+    # rows of its own catalogue.
+    group = simple('func.func private @dead(%x:!algebra.group<"bn254.g1">) -> !algebra.group<"bn254.g1"> { return %x : !algebra.group<"bn254.g1"> }')
+    nominals, services = export(group)[9]
+    assert [row[1] for row in nominals] == ['bn254.fr', 'bn254.g1', 'bn254.g2', 'bn254.gt'] and services == []
+    assert nominals[1] == ['nominal', 'bn254.g1', 'Group', [['Scalar', 'bn254.fr']], ['Group', 'ScalarAction'], None]
     source = simple().replace('^entry(%flag:i1)', '^entry(%flag:i1,%service:!protocol.service_ref<"random.bn254.fr/0">)').replace(
         'function_type=(i1)->i1', 'function_type=(i1,!protocol.service_ref<"random.bn254.fr/0">)->i1').replace(
         'input_roles=[["P"]]', 'input_roles=[["P"],["P"]]')
-    export(source, 'structured-source-type')
+    nominals, services = export(source)[9]
+    assert services == [['service', 'random.bn254.fr/0', 'bn254.fr', ['draw']]]
+    assert [row[1] for row in nominals] == ['bn254.fr', 'bn254.g1', 'bn254.g2', 'bn254.gt']
+
+with case('binary-and-extension-identities-export-their-rows'):
+    # Rows are native data whatever the characteristic: a binary field records
+    # its characteristic as its modulus, and an extension exports its base.
+    def dead(identity):
+        value = f'!algebra.field<"{identity}">'
+        return simple(f'func.func private @dead(%x:{value}) -> {value} {{ return %x : {value} }}')
+    binary = 'gf2-64.pentanomial-4-3-1'
+    nominals, services = export(dead(binary + '.ext3-trinomial1'))[9]
+    assert nominals == [
+        ['nominal', binary, 'Field', [], ['Field', 'CommRing'], '2'],
+        ['nominal', binary + '.ext3-trinomial1', 'Field', [['BaseField', binary]],
+         ['ExtensionField', 'Field', 'CommRing'], '2']] and services == []
+    nominals, _ = export(dead('koala-bear.ext4-binomial3'))[9]
+    assert [row[1] for row in nominals] == ['koala-bear.ext4-binomial3', 'koala-bear']
+    assert nominals[0][3:] == [[['BaseField', 'koala-bear']],
+                               ['ExtensionField', 'TwoAdicField', 'Field', 'CommRing', 'CharacteristicNotTwo'],
+                               '2130706433']
+
+with case('unsupported-service-contract'):
+    source = simple().replace('^entry(%flag:i1)', '^entry(%flag:i1,%service:!protocol.service_ref<"random.other/0">)').replace(
+        'function_type=(i1)->i1', 'function_type=(i1,!protocol.service_ref<"random.other/0">)->i1').replace(
+        'input_roles=[["P"]]', 'input_roles=[["P"],["P"]]')
+    export(source, 'structured-source-original')
 
 with case('communication-and-statement-retained'):
     data = export((fixtures / 'mathematical/schnorr-services.mlir').read_text())

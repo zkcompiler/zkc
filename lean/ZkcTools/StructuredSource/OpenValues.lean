@@ -5,8 +5,9 @@ public import Zkc.Source.Structured.OpenMeaning
 
 @[expose] public section
 
-/-! Wire values for the explicit additive scalar test model. The logical
-participant semantics remains parameterized independently by F and G. -/
+/-! Wire values for the explicit additive scalar test model. The open tool
+replays the uniform participant semantics at `Scalar`, which is the generic one
+at the uniform model (`Program.participant_eq_participantOn`). -/
 
 namespace ZkcTools.StructuredSource
 open Lean Zkc.Source Zkc.Source.Structured

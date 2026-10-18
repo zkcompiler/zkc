@@ -33,7 +33,7 @@ private def continuation : ContractClause :=
   ⟨.continuation, "carry", subject, some residual, some ⟨.output, 0, "V"⟩⟩
 private def snapshot : Snapshot :=
   ⟨digest, "main", [], [relation], [], [.function root, .function predicate, .function caller],
-    [⟨"main", [clause, continuation, copiedClause]⟩, ⟨"caller", []⟩]⟩
+    [⟨"main", [clause, continuation, copiedClause]⟩, ⟨"caller", []⟩], blsRows⟩
 private def admits (snapshot : Snapshot) := (check snapshot).isOk
 private def withClause (changed : ContractClause) : Snapshot :=
   { snapshot with contracts := [⟨"main", [changed]⟩, ⟨"caller", []⟩] }
@@ -112,7 +112,7 @@ private def runDiagnostics : IO Unit := do
 
 private def arr (values : List Lean.Json) := Lean.Json.arr values.toArray
 private def wire : List Lean.Json := [.str "zkc.structured-source/0", .str "original",
-  .str digest, .str "main", arr [], arr [], arr [], arr [], arr []]
+  .str digest, .str "main", arr [], arr [], arr [], arr [], arr [], arr [arr [], arr []]]
 private def selectorWire : Lean.Json := arr [.str "input", Lean.toJson (0 : Nat), .str "P"]
 private def applicationWire := arr [.str "Equal", arr [selectorWire]]
 private def clauseWire := arr [.str "target", .str "claim", applicationWire, .null,
@@ -123,9 +123,9 @@ private def relationWire : List Lean.Json := [.str "relation", .str "Equal", .st
 
 private def runWire : IO Unit := do
   let controls : List (String × Bool) := [
-    ("nine", (Format.snapshot (arr wire)).isOk),
-    ("eight-refused", refusal (Format.snapshot (arr (wire.take 8))) "structured-envelope"),
-    ("ten-refused", refusal (Format.snapshot (arr (wire ++ [Lean.Json.null]))) "structured-envelope"),
+    ("ten", (Format.snapshot (arr wire)).isOk),
+    ("nine-refused", refusal (Format.snapshot (arr (wire.take 9))) "structured-envelope"),
+    ("eleven-refused", refusal (Format.snapshot (arr (wire ++ [Lean.Json.null]))) "structured-envelope"),
     ("formula-field", (Format.relation (arr relationWire)).isOk),
     ("relation-missing", refusal (Format.relation (arr (relationWire.take 9))) "structured-relation"),
     ("relation-extra", refusal (Format.relation (arr (relationWire ++ [Lean.Json.null]))) "structured-relation"),

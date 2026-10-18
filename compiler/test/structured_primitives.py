@@ -106,7 +106,7 @@ with case('all-fifteen-exact-bindings-and-descriptors'):
     for contract, (inputs, outputs) in catalogue.items():
         parameters = [str(maximum)] if contract == 'index.constant' else []
         snapshot = export(primitive(contract, parameters))
-        assert len(snapshot) == 9 and snapshot[4:6] == [[], []]
+        assert len(snapshot) == 10 and snapshot[4:6] == [[], []]
         assert snapshot[6] == [['binding', 'operation', contract,
                                 [] if contract.startswith('index.') else ['bls12-381.fr'], '']]
         work = snapshot[7][0]
@@ -228,7 +228,8 @@ for literal in ['00', '+1', '-1', '1 ', str(maximum + 1), '9' * 100]:
 with case('nominal-domain-profile-on-unused-binding'):
     source = primitive('index.add').replace(binding('index.add'),
         binding('vector.sum', 'unused').replace('bls12-381.fr', 'bn254.fr') + '\n' + binding('index.add'))
-    export(source, refusal='structured-source-binding')
+    # Another installed field is exported with its rows; Lean refuses it.
+    assert [row[1] for row in export(source)[9][0]] == ['bn254.fr', 'bn254.g1', 'bn254.g2', 'bn254.gt']
     run(source, ['1', '2'], refusal='structured-reference-binding')
     reject_native(source.replace('bn254.fr', 'bls12-381.g1'), ['1', '2'])
 

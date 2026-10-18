@@ -27,7 +27,7 @@ def export(source, symbol='main', refusal=None, keep=None):
     if refusal:
         return None
     snapshot = json.loads(text)
-    assert len(snapshot) == 9
+    assert len(snapshot) == 10
     assert snapshot[2] == 'sha256:' + hashlib.sha256(source.encode()).hexdigest()
     assert all(len(row) == 10 for row in snapshot[7] if row[0] == 'function')
     return snapshot

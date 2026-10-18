@@ -755,6 +755,8 @@ def wire_controls(suite, identity, effect, masked, nested_service):
         definition(bad, "main")[4][1] = ["service", SERVICE]
         row[2] = [["service", SERVICE]]; row[3][0][0][1] = ["service", SERVICE]
         row[3][0][1] = [["service", SERVICE]]
+        # Export the service's catalogue rows too, so the repeat signature refuses.
+        bad[9] = copy.deepcopy(nested_service[2][9])
         refuse(f"wire-carried-service-max{maximum}", bad, "structured-protocol-signature")
         bad, row = fresh()
         dormant = copy.deepcopy(definition(bad, "main")); dormant[1] = "dormant"
