@@ -135,10 +135,11 @@ Security composes the same way. `CompiledSchnorrFiatShamir` and
 original verifier (VCVio's Schnorr extraction; round-by-round soundness of the
 imported Sumcheck verifier) and rewrite with the composed equation, so the
 compiled verifiers' ideal interpretations inherit the bounds without a proof
-about the compiled programs. `ExecutableSchnorrFiatShamir` continues one stage
-down through the lowering rule, and a walk over its proof's dependencies shows
-that the proof reaches the general rules and the Entry's admitted original, and
-not the Entry's `spec_equation`. The walk also lists the Entry-specific
+about the compiled programs. `ExecutableSchnorrFiatShamir` and
+`ExecutableSumcheckFiatShamir` continue one stage down through the lowering
+rule, the latter with the Sumcheck program's helper preparation, and a walk over
+their proofs' dependencies shows that they reach the general rules and the
+Entries' admitted originals, and for Schnorr not the Entry's `spec_equation`. The walk also lists the Entry-specific
 equations between processes that the proof reaches; all are about the original
 side, and the two the kernel checks by evaluation are the Proof Entry's
 validator process (`SchnorrProof.process_equation`) and its retained DLog

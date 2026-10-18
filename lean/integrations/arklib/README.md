@@ -100,6 +100,13 @@ premise for the compiled Sumcheck `example::Proof` verifier with the core
 composed rules and states its
 [fixed-statement and adaptive soundness](../../docs/spec/fiat-shamir-security.md#the-compiled-sumcheck-proof-entry);
 the adaptive form keeps the determining binding as a premise.
+`Examples/ExecutableSumcheckFiatShamir` transfers both bounds to provers of proof
+bytes for the validator program the runtime admits, through the core
+[lowering rule](../../docs/spec/executable.md#the-compiled-sumcheck-proof-verifier)
+and `VCVio/Pruning`: host validation prunes the compiled verifier's acceptance by
+rejections at every budget, so it accepts at most as often. Its adaptive form
+uses a binding of the table values, claim and round count whose events
+determine the statement, which discharges the premise.
 
 `VCVio/SigmaAnd` composes two VCVio Σ-protocols with one shared challenge.
 Completeness and special soundness compose directly; zero knowledge composes
