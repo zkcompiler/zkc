@@ -65,6 +65,12 @@ import ZkcSecurity.FiatShamir.Roles
 import ZkcSecurity.FiatShamir.Sampling
 import ZkcSecurity.FiatShamir.Soundness
 import ZkcSecurity.FiatShamir.Typed
+import ZkcSecurity.HashChain.Bound
+import ZkcSecurity.HashChain.Encoding
+import ZkcSecurity.HashChain.Model
+import ZkcSecurity.HashChain.Reduction
+import ZkcSecurity.HashChain.Simulator
+import ZkcSecurity.HashChain.Steps
 import ZkcSecurity.Oracle.Encoding
 import ZkcSecurity.VCVio.Composition
 import ZkcSecurity.VCVio.Coupling
@@ -74,6 +80,7 @@ import ZkcSecurity.VCVio.Schnorr
 import ZkcSecurity.VCVio.SigmaAnd
 import ZkcSecurity.VCVio.SigmaAndSchnorr
 import ZkcSecurity.VCVio.StructuredUniform
+import ZkcSecurity.VCVio.UntilBad
 import TestsSecurity.CallComposition
 import TestsSecurity.CausalSumcheck.Contracts
 import TestsSecurity.CausalSumcheck.Execution
