@@ -10,128 +10,96 @@ public import Zkc.Protocols.Schnorr
 
 /-! The authored `knowledge` target of `sigma::ChaumPedersen`: the retained
 `DLogEquality` formula with one witness port used at both bases. The single
-witness selector keys one logical slot, so both equations read the same value. -/
+witness selector keys one logical slot, so both equations read the same value.
+The binding, the formula's process and the observed decision are the generated
+ones of `ChaumPedersenNormalForms`; the extraction and honest acceptance below
+are this protocol's mathematics. -/
 namespace ZkcExamples.Structured.ChaumPedersenBinding
 open Zkc.Source Zkc.Source.Structured ChaumPedersenViews ChaumPedersen
 
 set_option smartUnfolding false
 
-def owner : ContractBinding imported := by bind_contract
+abbrev owner : ContractBinding imported := ChaumPedersenNormalForms.owner
 
-def clauseIndex : Fin owner.contract.clauses.length := owner.namedClause "knowledge"
+abbrev clauseIndex : Fin owner.contract.clauses.length := ChaumPedersenNormalForms.clauseIndex
 
-def clause : ContractClause := owner.clause clauseIndex
+abbrev clause : ContractClause := ChaumPedersenNormalForms.clause
 
 theorem owner_is_entry : owner.protocol = program.payload.entry := rfl
 
-def application : ApplicationBinding owner clause.subject := by bind_contract
+abbrev application : ApplicationBinding owner clause.subject := ChaumPedersenNormalForms.application
 
-def firstBaseSelector : BoundarySelector owner.protocol.signature (.group groupDomain) :=
-  application.selectors.get .here
+abbrev firstBaseSelector : BoundarySelector owner.protocol.signature (.group groupDomain) :=
+  ChaumPedersenNormalForms.firstBaseSelector
 
-def firstKeySelector : BoundarySelector owner.protocol.signature (.group groupDomain) :=
-  application.selectors.get (.there .here)
+abbrev firstKeySelector : BoundarySelector owner.protocol.signature (.group groupDomain) :=
+  ChaumPedersenNormalForms.firstKeySelector
 
-def secondBaseSelector : BoundarySelector owner.protocol.signature (.group groupDomain) :=
-  application.selectors.get (.there (.there .here))
+abbrev secondBaseSelector : BoundarySelector owner.protocol.signature (.group groupDomain) :=
+  ChaumPedersenNormalForms.secondBaseSelector
 
-def secondKeySelector : BoundarySelector owner.protocol.signature (.group groupDomain) :=
-  application.selectors.get (.there (.there (.there .here)))
+abbrev secondKeySelector : BoundarySelector owner.protocol.signature (.group groupDomain) :=
+  ChaumPedersenNormalForms.secondKeySelector
 
-def witnessSelector : BoundarySelector owner.protocol.signature (.field scalarDomain) :=
-  application.selectors.get (.there (.there (.there (.there .here))))
+abbrev witnessSelector : BoundarySelector owner.protocol.signature (.field scalarDomain) :=
+  ChaumPedersenNormalForms.witnessSelector
 
-def decisionSelector : BoundarySelector owner.protocol.signature .boolean :=
-  ⟨.output .here, ⟨1, by decide +kernel⟩, by decide +kernel⟩
+abbrev decisionSelector : BoundarySelector owner.protocol.signature .boolean :=
+  ChaumPedersenNormalForms.decisionSelector
 
 theorem exact_clause : clause.kind = .target ∧ clause.name = "knowledge" ∧
-    clause.residual = none ∧ clause.decision = some decisionSelector.erase := by
-  decide +kernel
+    clause.residual = none ∧ clause.decision = some decisionSelector.erase :=
+  ChaumPedersenNormalForms.exact_clause
 
 theorem all_clauses : owner.contract.clauses = [clause] := rfl
 
-def formulaBinding : FormulaBinding imported application.relation := by bind_contract
+abbrev formulaBinding : FormulaBinding imported application.relation :=
+  ChaumPedersenNormalForms.formulaBinding
 
 theorem no_formula_preconditions : formulaBinding.preconditions = [] := rfl
 
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
-def arguments (firstBase firstKey secondBase secondKey : G) (witness : F) :
+abbrev arguments (firstBase firstKey secondBase secondKey : G) (witness : F) :
     Values (assignment F G) formulaBinding.definition.inputs :=
-  .cons firstBase (.cons firstKey (.cons secondBase (.cons secondKey (.cons witness .nil))))
+  ChaumPedersenNormalForms.arguments firstBase firstKey secondBase secondKey witness
 
 /-- The target denotes the actual retained formula process. -/
-def Relation (firstBase firstKey secondBase secondKey : G) (witness : F) : Prop :=
-  formulaBinding.process (arguments firstBase firstKey secondBase secondKey witness) =
-    .done (.cons true .nil)
+abbrev Relation (firstBase firstKey secondBase secondKey : G) (witness : F) : Prop :=
+  ChaumPedersenNormalForms.Relation firstBase firstKey secondBase secondKey witness
 
 theorem formula_process (firstBase firstKey secondBase secondKey : G) (witness : F) :
     formulaBinding.process (arguments firstBase firstKey secondBase secondKey witness) =
       .done (.cons (decide (firstKey = witness • firstBase) &&
-        decide (secondKey = witness • secondBase)) .nil) := by
-  rfl
+        decide (secondKey = witness • secondBase)) .nil) :=
+  ChaumPedersenNormalForms.formula_process firstBase firstKey secondBase secondKey witness
 
 theorem relation_iff (firstBase firstKey secondBase secondKey : G) (witness : F) :
     Relation firstBase firstKey secondBase secondKey witness ↔
-      firstKey = witness • firstBase ∧ secondKey = witness • secondBase := by
-  unfold Relation
-  rw [formula_process]
-  change (PIR.Proc.done (I := closedInterface)
-    (.cons (decide (firstKey = witness • firstBase) &&
-      decide (secondKey = witness • secondBase)) .nil : Values (assignment F G) [.boolean]) =
-        .done (.cons true .nil)) ↔ _
-  simp
+      firstKey = witness • firstBase ∧ secondKey = witness • secondBase :=
+  ChaumPedersenNormalForms.relation_iff firstBase firstKey secondBase secondKey witness
 
 /-- The subject's only relation is this formula. -/
-def environment : RelationEnvironment imported F G where
-  meanings index args := by
-    have same : index = application.relation.index := by
-      apply Fin.ext
-      have bound : index.val < 1 := index.isLt
-      change index.val = 0
-      omega
-    subst index
-    exact Relation (args.get .here) (args.get (.there .here)) (args.get (.there (.there .here)))
-      (args.get (.there (.there (.there .here)))) (args.get (.there (.there (.there (.there .here)))))
+abbrev environment : RelationEnvironment imported F G := ChaumPedersenNormalForms.environment
 
-def target : InterpretedApplication owner clause.subject F G environment where
-  binding := application
-  interpretation := .formula formulaBinding rfl (fun _ => True)
-    (fun args => args.get (.there .here) =
-        args.get (.there (.there (.there (.there .here)))) • args.get .here ∧
-      args.get (.there (.there (.there .here))) =
-        args.get (.there (.there (.there (.there .here)))) • args.get (.there (.there .here)))
-    inferInstance
+abbrev target : InterpretedApplication owner clause.subject F G environment :=
+  ChaumPedersenNormalForms.target
 
-theorem target_formula_law : (target (F := F) (G := G)).interpretation.FormulaLaw := by
-  intro args _
-  cases args with | cons firstBase args =>
-  cases args with | cons firstKey args =>
-  cases args with | cons secondBase args =>
-  cases args with | cons secondKey args =>
-  cases args with | cons witness args =>
-  cases args
-  simp only [Bool.decide_and]
-  rfl
+theorem target_formula_law : (target (F := F) (G := G)).interpretation.FormulaLaw :=
+  ChaumPedersenNormalForms.target_formula_law
 
-def rootInvocation : InvocationCoordinate := ⟨0, []⟩
+abbrev rootInvocation : InvocationCoordinate := ChaumPedersenNormalForms.rootInvocation
 
 /-- Parameter values and the one witness, keyed by the actual typed selectors. -/
-def assignments (firstBase secondBase : G) (witness : F) :
-    LogicalAssignments (assignment F G) owner rootInvocation where
-  parameters type selector := match type with
-    | .group _ => if selector.erase = firstBaseSelector.erase then some firstBase
-        else if selector.erase = secondBaseSelector.erase then some secondBase else none
-    | _ => none
-  witnesses type selector := match type with
-    | .field _ => if selector.erase = witnessSelector.erase then some witness else none
-    | _ => none
+abbrev assignments (firstBase secondBase : G) (witness : F) :
+    LogicalAssignments (assignment F G) owner rootInvocation :=
+  ChaumPedersenNormalForms.assignments firstBase secondBase witness
 
 /-- Only the verifier's own inputs and its actual returned tuple are projected. -/
-def observedBoundary (firstBase firstKey secondBase secondKey : G) (service : Nat)
+abbrev observedBoundary (firstBase firstKey secondBase secondKey : G) (service : Nat)
     (commitments : G × G) (challenge response : F) : ContractBoundaryValues owner F G :=
-  BoundaryValuation.ofOutcome 1 (verifierInputs firstBase firstKey secondBase secondKey service)
-    (execute firstBase firstKey secondBase secondKey service commitments challenge response).outcome
+  ChaumPedersenNormalForms.observedBoundary firstBase firstKey secondBase secondKey service
+    commitments.1 commitments.2 challenge response
 
 /-- The selected decision is the actual verifier's: one response, both bases. -/
 theorem observed_accepts_iff (firstBase firstKey secondBase secondKey : G) (service : Nat)
@@ -139,32 +107,25 @@ theorem observed_accepts_iff (firstBase firstKey secondBase secondKey : G) (serv
     decisionSelector.read {} (observedBoundary firstBase firstKey secondBase secondKey service
         commitments challenge response) = some true ↔
       response • firstBase = commitments.1 + challenge • firstKey ∧
-        response • secondBase = commitments.2 + challenge • secondKey := by
-  change (some (decide (response • firstBase = commitments.1 + challenge • firstKey) &&
-      decide (response • secondBase = commitments.2 + challenge • secondKey)) = some true) ↔ _
-  simp
+        response • secondBase = commitments.2 + challenge • secondKey :=
+  ChaumPedersenNormalForms.observed_accepts_iff firstBase firstKey secondBase secondKey service
+    commitments.1 commitments.2 challenge response
 
 theorem observed_read (firstBase firstKey secondBase secondKey : G) (witness : F) (service : Nat)
     (commitments : G × G) (challenge response : F) :
     application.read {} (observedBoundary firstBase firstKey secondBase secondKey service
         commitments challenge response) (assignments firstBase secondBase witness) =
-      some (arguments firstBase firstKey secondBase secondKey witness) := by
-  rfl
+      some (arguments firstBase firstKey secondBase secondKey witness) :=
+  ChaumPedersenNormalForms.observed_read firstBase firstKey secondBase secondKey service witness
+    commitments.1 commitments.2 challenge response
 
 theorem observed_target_iff (firstBase firstKey secondBase secondKey : G) (witness : F) (service : Nat)
     (commitments : G × G) (challenge response : F) :
     (target (F := F) (G := G)).Holds {} (observedBoundary firstBase firstKey secondBase secondKey service
         commitments challenge response) (assignments firstBase secondBase witness) ↔
-      Relation firstBase firstKey secondBase secondKey witness := by
-  change (∃ args, application.read {} _ _ = some args ∧
-    formulaBinding.invokeRelation args = .done (.cons true .nil)) ↔ _
-  constructor
-  · rintro ⟨args, read, truth⟩
-    rw [observed_read] at read
-    cases Option.some.inj read
-    exact truth
-  · intro truth
-    exact ⟨_, observed_read .., truth⟩
+      Relation firstBase firstKey secondBase secondKey witness :=
+  ChaumPedersenNormalForms.observed_target_iff firstBase firstKey secondBase secondKey service witness
+    commitments.1 commitments.2 challenge response
 
 /-- Two transcripts with one pair of commitments and distinct challenges, both
 accepted by the actual verifier, give one witness for both bases. -/
