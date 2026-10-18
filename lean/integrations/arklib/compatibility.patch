@@ -1,3 +1,13 @@
+ArkLib pull request #992, "prove end-to-end soundness of the computable IOP"
+(https://github.com/Verified-zkEVM/ArkLib/pull/992): the Lean sources changed
+from its base 0b5b67c63d74b26e38715bb90fa5d7d5a07def25 to its head
+768b1dba0e4e028156d052488ba8e3f6d01b1a0a, applied to the pinned ArkLib revision
+db7005f84a9dbad7ff2abbbb4e8feeeac6f4dfd8 until the pull request merges upstream.
+Copyright (c) ArkLib Contributors, released under the Apache License 2.0
+(https://github.com/Verified-zkEVM/ArkLib/blob/main/LICENSE); every changed file
+keeps its ArkLib header. Preparation applies this file with `git apply`, which
+ignores this text.
+
 diff --git a/ArkLib.lean b/ArkLib.lean
 index e4ba2a83..090f61b4 100644
 --- a/ArkLib.lean

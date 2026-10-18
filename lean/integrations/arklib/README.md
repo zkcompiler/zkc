@@ -131,9 +131,11 @@ powers-generator bound up to the generalized Johnson radius of lines; and
 `Certificate` restates the certificate over the verifier's residual
 processes after the first commitment, with an error per query site. These modules
 use the per-round lemmas of ArkLib pull request #992, which this package applies
-to its pinned ArkLib revision as a declared patch
+to its pinned ArkLib revision as a declared, hashed patch
 ([`compatibility.json`](compatibility.json); see the
-[dependency baseline](../../docs/dependencies.md)). Preparation applies it.
+[dependency baseline](../../docs/dependencies.md)) until the pull request merges
+upstream. Preparation applies it; the patch names its upstream source and keeps
+ArkLib's Apache 2.0 file headers.
 
 `VCVio/SigmaAnd` composes two VCVio Σ-protocols with one shared challenge.
 Completeness and special soundness compose directly; zero knowledge composes

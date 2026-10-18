@@ -2,7 +2,7 @@
   "package": "Arklib",
   "revision": "db7005f84a9dbad7ff2abbbb4e8feeeac6f4dfd8",
   "patch": "compatibility.patch",
-  "patch_sha256": "4e76af0a399170a173a60966a1254fcde95e8bfcacee56f5653643d8b89b914d",
+  "patch_sha256": "1ec0ef853867520db264c906374c184ce796a0034198f1764a2dd515fa36a793",
   "files": {
     "ArkLib.lean": {
       "base_sha256": "06c227f3863027d0117745a5d9cc661f182bd23712f12539a2cd315e6297a3f3",
