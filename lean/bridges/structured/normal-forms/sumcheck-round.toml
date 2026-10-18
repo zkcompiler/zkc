@@ -1,0 +1,53 @@
+# Participant normal forms of one round of the retained Sumcheck `Reduce` repeat,
+# for every unit whose checked callback is the shared typed body.
+fixture = "lean/bridges/structured/fixtures/sumcheck-reduce.json"
+output = "lean/ZkcExamples/Structured/SumcheckRoundNormalForms.lean"
+namespace = "ZkcExamples.Structured.SumcheckRoundNormalForms"
+imports = ["ZkcExamples.Structured.SumcheckVerifierBodies", "ZkcExamples.Structured.SumcheckRoundLaws",
+           "ZkcExamples.Structured.NormalFormSteps", "Zkc.Source.DenotationLaws"]
+open = ["SumcheckVerifierHelpers", "PrimitiveLibrary"]
+helper_modules = ["lean/ZkcExamples/Structured/SumcheckHelperBodies.lean",
+                  "lean/ZkcExamples/Structured/MapFirstBodies.lean"]
+
+[[shared]]
+protocol = "zkl_145fec0475c3361a656f102bec3f8b514a2557e3ec22afda8a8f34050f1bff6d"
+repeat = "s15"
+body = "SumcheckVerifierBodies.roundBody"
+unfold = ["SumcheckVerifierBodies.roundBody", "SumcheckVerifierBodies.roundGuard", "SumcheckVerifierBodies.roundTail"]
+function = "roundFn"
+parameters = "(U : UnitPayload)"
+meaning = "participantMeaningWith (.silent _) (participantActions F G) (plainHelpers U) self (U.plainProtocolTable F G) ctx"
+closed = "(plainHelpers (F := F) (G := G) U).closed"
+components = "(plainHelpers (F := F) (G := G) U).components"
+
+[[shared.roles]]
+role = 1
+name = "verifier"
+binders = "(bodies : SumcheckVerifierHelpers.Bodies U.definitions)"
+slots = [{ slot = 4, name = "point", mode = "optional" }, { slot = 5, name = "claim", mode = "optional" }]
+captures = [{ name = "service", mode = "optional" }]
+laws.appendHelper = { term = "append_plain U bodies {0} {1}", results = ["{0} ++ [{1}]"] }
+
+[[shared.roles]]
+role = 0
+name = "prover"
+binders = "(bodies : SumcheckUnitContracts.Bodies U.definitions)"
+premises = "(shape : HasShape entries dimension width) (bound : entries.length < indexLimit) (positive : 0 < dimension)"
+slots = [{ slot = 0, name = "entries" }, { slot = 1, name = "dimension" }, { slot = 2, name = "width" },
+         { slot = 3, name = "point" }]
+captures = [{ name = "service", mode = "optional" }]
+laws.sumsHelper = { term = "SumcheckProverLaws.sums_present U bodies {0} {1} {2} shape positive", results = ["({0}.take ({0}.length / 2)).sum", "({0}.drop ({0}.length / 2)).sum"] }
+laws.firstHelper = { term = "SumcheckProverLaws.first_present U bodies {0} {1} {2} {3} shape bound positive", results = ["Zkc.Polynomial.Multilinear.restrictValues {0} {3}", "{1} - 1", "{2}"] }
+laws.appendHelper = { term = "append_plain U ⟨bodies.empty, bodies.append, bodies.width, bodies.«variables», bodies.values⟩ {0} {1}", results = ["{0} ++ [{1}]"] }
+
+[[shared.roles]]
+role = 0
+name = "proverEmpty"
+state = "proverState"
+reuse_state = true
+theorem = "prover_empty_process"
+binders = "(bodies : SumcheckUnitContracts.Bodies U.definitions)"
+slots = [{ slot = 0, name = "entries" }, { slot = 1, name = "dimension", value = "0" }, { slot = 2, name = "width" },
+         { slot = 3, name = "point" }]
+captures = [{ name = "service", mode = "optional" }]
+laws.sumsHelper = { term = "SumcheckProverLaws.sums_zero U bodies {0} {2}", stop = "reject" }

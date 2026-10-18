@@ -376,6 +376,7 @@ import ZkcExamples.Structured.MapPrefixTable
 import ZkcExamples.Structured.MapPrefixViews
 import ZkcExamples.Structured.MapProjectionContracts
 import ZkcExamples.Structured.MapSourceExpansions
+import ZkcExamples.Structured.NormalFormSteps
 import ZkcExamples.Structured.PrimitiveContracts
 import ZkcExamples.Structured.PrimitiveExpansions
 import ZkcExamples.Structured.PrimitiveHalvesData
@@ -483,6 +484,8 @@ import ZkcExamples.Structured.SumcheckRepackedBodies
 import ZkcExamples.Structured.SumcheckRepackedData
 import ZkcExamples.Structured.SumcheckRepackedVerifier
 import ZkcExamples.Structured.SumcheckRepackedViews
+import ZkcExamples.Structured.SumcheckRoundLaws
+import ZkcExamples.Structured.SumcheckRoundNormalForms
 import ZkcExamples.Structured.SumcheckSourceAssociations
 import ZkcExamples.Structured.SumcheckSourceBodies
 import ZkcExamples.Structured.SumcheckSourceContracts
