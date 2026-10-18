@@ -353,6 +353,90 @@ end
 
 end Continuations
 
+/-! ## Following the ideal meaning instruction by instruction
+
+Equations for the ideal meaning of a concrete instruction list on symbolic
+values, one per instruction form. -/
+
+section IdealSteps
+variable {m : Type → Type} [Monad m] (context : Context) (challenge : History F G → m F)
+  (table : Structured.Evaluation.Meanings F G Structured.closedInterface)
+variable {R : Type} {rest : List Instruction} {env : List (Value F G)} {proof : Proof F G}
+  {next : List (Value F G) → Proof F G → m (PIR.Outcome R × Proof F G)}
+  {results : List ValueSort} {body : List Instruction}
+
+theorem idealK_receive {site schema peer : String} {ty : Structured.Ty} {common : Common.Native.Ty}
+    {payload : Payload F G} (scalar : scalarType ty = some common) (typed : payload.ty = common) :
+    idealK context challenge table (⟨.receive site schema peer ty, [], results, body⟩ :: rest) env
+        (payload :: proof) next =
+      idealK context challenge table rest (env ++ [.data payload]) proof next := by
+  simp only [idealK, idealStep, scalar, typed, ite_true]
+
+theorem idealK_indicesEmpty :
+    idealK context challenge table (⟨.indicesEmpty, [], results, body⟩ :: rest) env proof next =
+      idealK context challenge table rest (env ++ [.indices []]) proof next := rfl
+
+theorem idealK_indicesAppend {coordinates index : Nat} {current : List Nat} {appended : Nat}
+    (coordinatesEq : indicesAt env coordinates = current) (indexEq : indexAt env index = some appended) :
+    idealK context challenge table (⟨.indicesAppend, [coordinates, index], results, body⟩ :: rest) env proof
+        next =
+      idealK context challenge table rest (env ++ [.indices (current ++ [appended])]) proof next := by
+  simp only [idealK, idealStep, coordinatesEq, indexEq, Option.toList_some]
+
+theorem idealK_observe {suite : String} {template : Template} {state value coordinates : Nat}
+    {history : History F G} {origin : Origin} {payload : Payload F G}
+    (stateEq : transcriptAt env state = some history) (originEq : template.origin context = some origin)
+    (valueEq : dataAt env value = some payload) :
+    idealK context challenge table (⟨.observe suite template, [state, value, coordinates], results, body⟩ :: rest)
+        env proof next =
+      idealK context challenge table rest (env ++ [.transcript (history ++ [.message origin payload])]) proof
+        next := by
+  simp only [idealK, idealStep, stateEq, originEq, valueEq]
+
+theorem idealK_challenge {suite field : String} {template : Template} {state coordinates : Nat}
+    {history : History F G} {origin : Origin}
+    (stateEq : transcriptAt env state = some history) (originEq : template.origin context = some origin) :
+    idealK context challenge table (⟨.challenge suite field template, [state, coordinates], results, body⟩ :: rest)
+        env proof next =
+      challenge (history ++ [.challenge origin]) >>= fun answer =>
+        idealK context challenge table rest
+          (env ++ [.data (.field field answer), .transcript (history ++ [.challenge origin])]) proof next := by
+  simp only [idealK, idealStep, stateEq, originEq]
+
+theorem idealK_calculate {calculation : Calculation} {operands : List Nat} {arguments values : List (Value F G)}
+    (found : read env operands = some arguments)
+    (computed : Zkc.Construction.calculate calculation arguments = .returned values) :
+    idealK context challenge table (⟨.calculate calculation, operands, results, body⟩ :: rest) env proof next =
+      idealK context challenge table rest (env ++ values) proof next := by
+  simp only [idealK, idealStep, found, computed]
+
+theorem idealK_call {name : String} {operands : List Nat} {arguments values : List (Value F G)}
+    (found : read env operands = some arguments) (called : callHelper table name arguments = .returned values)
+    (lengths : values.length = results.length) :
+    idealK context challenge table (⟨.call name, operands, results, body⟩ :: rest) env proof next =
+      idealK context challenge table rest (env ++ values) proof next := by
+  simp only [idealK, idealStep, found, called, lengths, ite_true]
+
+theorem idealK_guard {site : String} {condition : Nat}
+    (passes : env[condition]? = some (.data (.boolean true))) :
+    idealK context challenge table (⟨.guard site, [condition], results, body⟩ :: rest) env proof next =
+      idealK context challenge table rest env proof next := by
+  simp only [idealK, idealStep, passes]
+
+theorem idealK_loop {site : String} {maximum : Nat} {yielded : List Nat} {count : Nat} {initial : List Nat}
+    {bound : Nat} {carried : List (Value F G)} (countEq : indexAt env count = some bound)
+    (initialEq : read env initial = some carried) (bounded : bound ≤ maximum) :
+    idealK context challenge table (⟨.loop site maximum yielded, count :: initial, results, body⟩ :: rest) env proof
+        next =
+      iterateM (fun start unread continuation => idealK context challenge table body start unread continuation)
+        env yielded (List.range bound) carried proof fun final unread =>
+          idealK context challenge table rest (env ++ final) unread next := by
+  simp only [idealK, idealStep, countEq, initialEq, bounded, ite_true]
+
+theorem idealK_nil : idealK context challenge table [] env proof next = next env proof := rfl
+
+end IdealSteps
+
 /-! ## The charge bound -/
 
 section Fits
@@ -458,8 +542,9 @@ theorem FitsK.done {env : List (Value F G)} {proof : Proof F G} {used : Nat}
   finished
 
 /-- Every run of the reading, under every challenge answer, charges at most
-`budget` instructions, its return included. -/
-def Sufficient (lowered : Lowered) (env : List (Value F G)) (proof : Proof F G) : Prop :=
+`budget` instructions, its return included. It is irreducible: it unfolds to
+the charge bound of the reading's code, which elaboration must not compute. -/
+@[irreducible] def Sufficient (lowered : Lowered) (env : List (Value F G)) (proof : Proof F G) : Prop :=
   FitsK context table cost budget lowered.code env proof 0 fun _ _ used => used + 1 ≤ budget
 
 end Fits
@@ -576,6 +661,7 @@ theorem metered_sufficient {lowered : Lowered} {env : List (Value F G)} {proof :
     metered context challenge table cost budget lowered env proof =
       ideal context challenge table lowered.returned (Code.instructions lowered.code) env proof := by
   unfold metered ideal
+  unfold Sufficient at sufficient
   apply meteredK_fits context challenge table cost budget lowered.code env proof 0 _ _ _ sufficient
   intro final unread used fits
   simp [fits]
