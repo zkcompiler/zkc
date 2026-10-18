@@ -487,8 +487,26 @@ class Evaluator:
         for key in (term, name, term.split(".")[-1]):
             if key in self.frame.laws:
                 return self.frame.laws[key]
-        raise GeneratorError(f"no law for helper {term} at role {self.frame.role}; "
-                             f"name one in the request's laws table")
+        known = "" if name in self.frame.helpers else (
+            "; if a typed-body module declares it, list that module in helper_modules")
+        raise GeneratorError(f"no law for helper {name} ({term.split('.')[-1] if name in self.frame.helpers else 'unnamed'}) "
+                             f"at role {self.frame.role}; name one in the request's laws table{known}")
+
+    def inline(self, name, args, results):
+        """A Math helper evaluated through its own retained body. Root equations are
+        definitional, so the kernel checks the inlined values by unfolding the helper."""
+        helper = self.frame.unit.function(name)
+        if helper.kind != "math":
+            return None
+        frame = Frame(self.frame.unit, [], 0, "root", {}, self.frame.helpers, {}, {})
+
+        def finish(values, proof, pad):
+            return values
+
+        values = Evaluator(frame, self.names, finish).run(helper.body[1], helper.body[2], list(args), [], 0)
+        if not isinstance(values, list) or len(values) != len(results):
+            raise GeneratorError(f"Math helper {name} does not return its declared results")
+        return values
 
     def fill(self, template, args, components=False):
         if components:
@@ -621,6 +639,9 @@ class Evaluator:
         """Operand positions whose presence decides this operation's behaviour here."""
         head = descriptor[0]
         if head == "call":
+            if not self.shared and not any(key in self.frame.laws for key in
+                                           (descriptor[1], self.helper_term(descriptor[1]))):
+                return range(len(args))
             return [] if self.law(descriptor[1]).components else range(len(args))
         if head in BINARY:
             return range(len(args))
@@ -650,6 +671,12 @@ class Evaluator:
         return Match(variable, none_node, some_node)
 
     def math_call(self, descriptor, args, results, rest, terminator, env, proof, indent, step):
+        if not self.shared and not any(key in self.frame.laws for key in
+                                       (descriptor[1], self.helper_term(descriptor[1]))):
+            if all(arg.kind == "present" for arg in args):
+                values = self.inline(descriptor[1], args, results)
+                if values is not None:
+                    return self.run(rest, terminator, values + env, proof, indent)
         law = self.law(descriptor[1])
         op = f"(.calculate (.invoke {self.helper_term(descriptor[1])}) rfl)"
         helper = self.helper_term(descriptor[1])
