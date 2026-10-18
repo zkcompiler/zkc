@@ -19,6 +19,11 @@ unit's own helper equations (`ZkcExamples.Structured.GkrSourceLaws`), and the
 plain verifier's invariants (`Yields`) record what its steps return.
 `read_instructions` unfolds the reading of literal instructions on an
 environment of known prefix length.
+
+The instruction literals are copied from `GkrProofParticipant`, which the
+construction bridge regenerates: each loop body is the last component of its
+loop instruction, split into the segments below. When the export changes,
+`instructions_eq` fails until they are copied again.
 -/
 
 namespace ZkcExamples.Construction.GkrProof
