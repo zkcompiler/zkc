@@ -34,7 +34,7 @@ def test_coverage_has_matched_forms_and_independent_stark_dimensions(modules):
     names = {c.identifier for c in cases}
     assert len(names) == len(cases)
     assert set(modules['coverage'].SMOKE) <= names
-    assert {c.name for c in cases} >= {'finite', 'matrix', 'curve', 'pairing', 'control', 'transcript', 'air', 'fri', 'machine'}
+    assert {c.name for c in cases} >= {'finite', 'matrix', 'curve', 'pairing', 'control', 'transcript', 'air', 'stark', 'fri', 'machine'}
     for field in ('koala-bear', 'bls12-381.fr'):
         for n in (0, 17, 1024, 8192):
             forms = [c for c in cases if c.name == 'finite' and c.shape['field'] == field and c.shape['elements'] == n]
@@ -45,11 +45,13 @@ def test_coverage_has_matched_forms_and_independent_stark_dimensions(modules):
     assert len({s['height'] for s in air if s['width'] == 1}) >= 3
     assert len({s['width'] for s in air if s['height'] == 32 and s['evaluation_size'] == 128}) >= 3
     assert len({s['evaluation_size'] for s in air if s['height'] == 32 and s['width'] == 4}) >= 2
+    # The parameterized library is measured on exactly the air cases' shapes.
+    assert sorted(map(str, air)) == sorted(str(c.shape) for c in cases if c.name == 'stark')
 
 
 def test_distinct_stark_statements_keep_the_same_program(modules, tmp_path):
     root = Path(__file__).resolve().parents[3]
-    for family in ('fri', 'air', 'transcript', 'bulletproofs'):
+    for family in ('fri', 'air', 'stark', 'transcript', 'bulletproofs'):
         case = next(c for c in modules['coverage'].cases() if c.name == family)
         programs = [case.generate(root, tmp_path, i) for i in range(4)]
         left, right = programs[:2]
@@ -165,7 +167,7 @@ def test_warm_refusal_requires_a_successful_preceding_call(modules, tmp_path, co
 def test_every_run_has_a_generator_owned_incorrect_expectation(modules):
     root = Path(__file__).resolve().parents[3]
     for case in modules['coverage'].cases():
-        if case.name in ('fri', 'air', 'bulletproofs', 'machine', 'transcript'):
+        if case.name in ('fri', 'air', 'stark', 'bulletproofs', 'machine', 'transcript'):
             continue
         program = case.generate(root, root/'unused')
         assert program.incorrect is not None
@@ -184,6 +186,12 @@ def test_stark_claim_mutation_preserves_framing_and_canonical_coordinates(module
     assert mutated[-32:] == bytes(32)
     with pytest.raises(ValueError, match='missing extension'):
         stark.mutate_claim(proof[:40])
+    quartic = b'ZKCV\x00\x16' + (1).to_bytes(4, 'little') + (a.P-1).to_bytes(4, 'little') + bytes(12)
+    proof = b'ZKCPRF00' + bytes(32) + len(quartic).to_bytes(8, 'little') + quartic
+    mutated = stark.mutate_claim(proof, b'ZKCV\x00\x16', 26)
+    assert len(mutated) == len(proof) and mutated[-16:] == bytes(16)
+    with pytest.raises(ValueError, match='missing extension'):
+        stark.mutate_claim(proof)
 
 
 @pytest.mark.parametrize('observed', ['format', 'binding', 'verification', None])

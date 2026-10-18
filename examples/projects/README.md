@@ -11,6 +11,7 @@ Start with Schnorr, then Sumcheck and FRI before the STARK examples.
 | [GKR](gkr/README.md) | Layered arithmetic circuits with public wiring: degree-two Sumcheck per layer and the line reduction |
 | [FRI](fri/README.md) | Authenticated folding and a bounded terminal polynomial |
 | [Fibonacci](fibonacci/README.md) | One STARK protocol applied to Clean and Plonky3 AIRs |
+| [Parameterized STARK](stark/README.md) | The same AIRs through the configurable STARK library: quartic challenges, Poseidon2 Merkle trees, pruned multi-openings |
 | [FemtoCairo](femtocairo/README.md) | Clean VM execution with program and immutable-memory lookups |
 | [Bulletproofs+](bulletproofs-plus/README.md) | Monero range proofs with reusable weighted inner-product rounds, exact external bytes and managed randomness |
 | [EIP-4844](eip4844/README.md) | Ethereum blob commitments and opening proofs, reproducing c-kzg-4844's challenge hash inputs, with a digest-pinned trusted setup input |
