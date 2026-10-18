@@ -32,8 +32,9 @@ every validator's queries at most `validatorCost`, a false statement is accepted
 with probability at most `proverCost + validatorCost`. With all errors at most
 `bound`, `queries` prover queries and `budget` validator queries this is
 `(queries + budget) * bound` (`adaptive_soundness`). `soundness_weighted` and
-`soundness` are the fixed-statement forms; `randomized_soundness_weighted` adds
-private randomness drawn before the oracle computation.
+`soundness` are the fixed-statement forms; `randomized_soundness_weighted` and
+`randomized_adaptive_soundness_weighted` add private randomness drawn before the
+oracle computation.
 
 A per-key charge `charge : List E → E → ENNReal` generalizes the error per
 occurrence: a charged certificate (`ChargedCertificate`) bounds a doomed query's
@@ -41,7 +42,8 @@ escape after the absorbed `preceding` history by `charge preceding event`, so
 the error may depend on the whole key, for example on a loop iteration the
 history determines or on operands carried in the occurrence. The charged
 theorems (`adaptive_soundness_charged`, `soundness_charged`,
-`randomized_soundness_charged`) charge every oracle key `keyCharge charge`; the
+`randomized_soundness_charged`, `randomized_adaptive_soundness_charged`) charge
+every oracle key `keyCharge charge`; the
 theorems with an error per occurrence are their instances at the charge that
 ignores the history (`Certificate.charged`, `keyCharge_const`), and the uniform
 bounds follow from those. The richer charge discharges neither obligation of the
@@ -732,6 +734,49 @@ theorem randomized_soundness_weighted {absorb : Interface I E P R} {accepts : A 
   exact randomized_soundness_charged certificate.charged validator doomedValidator initial
     validatorCost (CostBound.charged absorb error validator validatorCost validatorBound initial)
     provers proverCost proverBound
+
+/-- Adaptive statements with private randomness and a per-key charge: a
+mixture of provers, each choosing its statement after its queries and charging
+at most `proverCost` on every path, inherits the adaptive bound. This is the
+ideal side a provider simulation's translated adversary meets. -/
+theorem randomized_adaptive_soundness_charged {absorb : Interface I E P R}
+    {accepts : A → Prop} {charge : List E → E → ENNReal}
+    (certificate : ChargedCertificate absorb accepts charge)
+    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E) (determined : Determined initial)
+    (falseStatement : Stmt → Prop)
+    (doomedValidator : ∀ statement, falseStatement statement →
+      certificate.doomed (validator statement))
+    (validatorCost : ENNReal)
+    (validatorBound : ∀ statement,
+      ChargedCostBound absorb charge (validator statement) (initial statement) validatorCost)
+    (provers : ProbComp (OracleComp (OracleSpec.ofFn R) (Stmt × List P))) (proverCost : ENNReal)
+    (proverBound : ∀ prover ∈ support provers,
+      WorstCaseCostBound prover ⟨keyCharge charge⟩ proverCost) :
+    Pr{let result ← provers >>= fun prover =>
+        (simulateQ randomOracle (experiment absorb validator initial prover)).run' ∅}[
+      falseStatement result.1 ∧ Accepted accepts result.2.1] ≤ proverCost + validatorCost :=
+  prEvent_bind_le_of_forall_le_of_support _ _ _ fun prover drawn =>
+    adaptive_soundness_charged certificate validator initial determined falseStatement
+      doomedValidator validatorCost validatorBound prover proverCost (proverBound prover drawn)
+
+/-- Adaptive statements with private randomness and an error per query site. -/
+theorem randomized_adaptive_soundness_weighted {absorb : Interface I E P R}
+    {accepts : A → Prop} {error : E → ENNReal} (certificate : Certificate absorb accepts error)
+    (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E) (determined : Determined initial)
+    (falseStatement : Stmt → Prop)
+    (doomedValidator : ∀ statement, falseStatement statement →
+      certificate.doomed (validator statement))
+    (validatorCost : ENNReal)
+    (validatorBound : ∀ statement, CostBound absorb error (validator statement) validatorCost)
+    (provers : ProbComp (OracleComp (OracleSpec.ofFn R) (Stmt × List P))) (proverCost : ENNReal)
+    (proverBound : ∀ prover ∈ support provers,
+      WorstCaseCostBound prover ⟨keyError error⟩ proverCost) :
+    Pr{let result ← provers >>= fun prover =>
+        (simulateQ randomOracle (experiment absorb validator initial prover)).run' ∅}[
+      falseStatement result.1 ∧ Accepted accepts result.2.1] ≤ proverCost + validatorCost :=
+  prEvent_bind_le_of_forall_le_of_support _ _ _ fun prover drawn =>
+    adaptive_soundness_weighted certificate validator initial determined falseStatement
+      doomedValidator validatorCost validatorBound prover proverCost (proverBound prover drawn)
 
 end Theorems
 

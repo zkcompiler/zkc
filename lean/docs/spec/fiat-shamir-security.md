@@ -133,13 +133,15 @@ Pr[falseStatement result.1 ∧ Accepted accepts result.2.1
 `Typed.adaptive_soundness` is the case of errors at most `bound`, `queries`
 prover queries and validators with at most `budget` queries:
 `(queries + budget) * bound`. `Typed.soundness_weighted` and `Typed.soundness`
-are the fixed-statement forms, and `Typed.randomized_soundness_weighted` adds
+are the fixed-statement forms, and `Typed.randomized_soundness_weighted` and,
+for adaptive statements, `Typed.randomized_adaptive_soundness_weighted` add
 private randomness drawn before the oracle computation. Charging each key its
 own error gives the sum over the asked keys; the uniform form is
 `(queries + budget) * max` over the sites.
 
 The per-key forms are `Typed.adaptive_soundness_charged`,
-`Typed.soundness_charged` and `Typed.randomized_soundness_charged`: a charged
+`Typed.soundness_charged`, `Typed.randomized_soundness_charged` and
+`Typed.randomized_adaptive_soundness_charged`: a charged
 certificate, validators whose queries from their initial histories charge at
 most `validatorCost` (`ChargedCostBound`) and a prover whose queries charge at
 most `proverCost` with every key charged `keyCharge charge` give the same bound
@@ -843,9 +845,13 @@ one property, one provider and one class of bounded executions.
   support makes at most `cost q` TranscriptQueries (`Simulation.transport`),
   hence the typed engine's weighted budget (`Simulation.weightedBudget`). An
   ideal bound for mixtures bounded on their support transfers with the loss
-  added (`Simulation.concrete_le`); for fixed statements the typed engine gives
-  such a bound, `(queries + budget) · bound`
-  (`randomized_soundness_of_queryBound`, from `Typed.randomized_soundness_weighted`).
+  added (`Simulation.concrete_le`); the typed engine gives such bounds,
+  `(queries + budget) · bound`, for fixed statements
+  (`randomized_soundness_of_queryBound`, from `Typed.randomized_soundness_weighted`)
+  and for statements each prover chooses after its queries
+  (`randomized_adaptive_soundness_of_queryBound`); with a weighted budget, the
+  mixture forms are `Typed.randomized_adaptive_soundness_weighted` and
+  `Typed.randomized_adaptive_soundness_charged`.
 
 **Hash-chain suites.** `ZkcSecurity.HashChain` instantiates this type for the
 [native hash-chain suites](../../../docs/spec/ir/construction.md#native-hash-chain-suites),
