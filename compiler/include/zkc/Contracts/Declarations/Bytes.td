@@ -1,7 +1,7 @@
 // Bounded byte data; no transcript or encoding policy is implicit.
 def OpBytesEmpty : ZKC_Operation<"bytes.empty", [],
     [], [ZKC_Apply<TypeBytes, []>], []> {
-  int ordinal = 161;
+  int ordinal = 203;
 }
 
 def OpBytesAppend : ZKC_Operation<"bytes.append", [],

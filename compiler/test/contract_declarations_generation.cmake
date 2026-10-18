@@ -26,6 +26,17 @@ function(declaration_case name definitions expected_error)
   set(failures "${failures}" PARENT_SCOPE)
 endfunction()
 declaration_case(valid "" "")
+declaration_case(duplicate-base-ordinal [=[
+def First : ZKC_Operation<"first.op", [], [], []> { int ordinal = 7; }
+def Second : ZKC_Operation<"second.op", [], [], []> { int ordinal = 7; }
+]=] "duplicate base ZKC_Operation ordinal 7: First, Second")
+# Ordinals are per category, and rows without one are not compared.
+declaration_case(ordinals-per-category [=[
+def OrderedType : ZKC_Type<"ordered"> { int ordinal = 7; }
+def OrderedOp : ZKC_Operation<"ordered.op", [], [], []> { int ordinal = 7; }
+def UnorderedA : ZKC_Operation<"unordered.a", [], [], []>;
+def UnorderedB : ZKC_Operation<"unordered.b", [], [], []>;
+]=] "")
 declaration_case(resource-participant-family [=[
 def Bad : ZKC_Type<"token", [], Affine, 0, 1> { let participants = 1; }
 ]=] "participant families require Copy data")
