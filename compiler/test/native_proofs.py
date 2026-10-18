@@ -11,7 +11,8 @@ from tools import compiler, records
 OUT = records()
 commands = Commands(OUT)
 FIXTURES = Path(__file__).parent / 'fixtures/mathematical'
-SUITES = ['merlin3.bls12-381.fr64be/0', 'spongefish0.8.0.keccak.bls12-381.fr64be/0']
+SUITES = ['merlin3.bls12-381.fr64be/0', 'spongefish0.8.0.keccak.bls12-381.fr64be/0',
+          'hash-chain.keccak256.bls12-381.fr64be/0']
 manifest = []
 schnorr = (FIXTURES / 'schnorr-services.mlir').read_text()
 field = '!algebra.field<"bls12-381.fr">'

@@ -254,7 +254,7 @@ fn main() {
             }
             runs += 1;
         }
-        if case["count"].is_null() && (name.ends_with("_0") || name.ends_with("_1")) {
+        if case["count"].is_null() && ["_0", "_1", "_2"].iter().any(|s| name.ends_with(s)) {
             let too_many = inputs(&envelope, family, 9, true);
             assert!(
                 execute(&deployment, &too_many, None, family)
