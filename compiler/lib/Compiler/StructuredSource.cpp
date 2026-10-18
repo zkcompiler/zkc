@@ -46,7 +46,8 @@ bool primitiveContract(StringRef contract) {
       contract);
 }
 
-Expected<OperationBinding> primitiveBinding(Operation *op, UsedIdentities &used) {
+Expected<OperationBinding> primitiveBinding(Operation *op,
+                                            UsedIdentities &used) {
   auto binding = readBinding(op);
   if (!binding)
     return binding.takeError();
@@ -156,8 +157,9 @@ Expected<json::Array> encodeSorts(TypeRange types, UsedIdentities &used,
 
 // Rows of the used identities, closed under associated members, in catalogue
 // order: ["nominal", identity, sort, [[member, identity]...], [capability...],
-// modulus or null]. Services: ["service", contract, sampled field, [method...]],
-// with "index" exactly where the sampled field has IndexRandomness.
+// modulus or null]. Services: ["service", contract, sampled field,
+// [method...]], with "index" exactly where the sampled field has
+// IndexRandomness.
 json::Value catalogueSlot(const UsedIdentities &used) {
   const auto &catalog = installedDomains();
   llvm::StringSet<> closure;
@@ -181,11 +183,11 @@ json::Value catalogueSlot(const UsedIdentities &used) {
       members.push_back(json::Array{member.member, member.identity});
     for (const auto &capability : domain.capabilities)
       capabilities.push_back(capability);
-    nominals.push_back(json::Array{
-        "nominal", domain.identity, domain.sort, std::move(members),
-        std::move(capabilities),
-        domain.modulus.empty() ? json::Value(nullptr)
-                               : json::Value(domain.modulus)});
+    nominals.push_back(json::Array{"nominal", domain.identity, domain.sort,
+                                   std::move(members), std::move(capabilities),
+                                   domain.modulus.empty()
+                                       ? json::Value(nullptr)
+                                       : json::Value(domain.modulus)});
   }
   for (const auto &service : randomServices) {
     if (!used.services.contains(service.contract))
@@ -390,8 +392,8 @@ class Exporter {
       if (auto e = attributes(op, {"binding", "parameters", "site"}))
         return std::move(e);
       auto ref = op.getAttrOfType<FlatSymbolRefAttr>("binding");
-      auto binding =
-          primitiveBinding(ref ? symbols.lookup(ref.getValue()) : nullptr, used);
+      auto binding = primitiveBinding(
+          ref ? symbols.lookup(ref.getValue()) : nullptr, used);
       if (!binding)
         return binding.takeError();
       std::string expected = "algebra.exec." + binding->application.contract;
