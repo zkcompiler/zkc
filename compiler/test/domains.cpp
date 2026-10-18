@@ -321,6 +321,8 @@ void installedInventory() {
       {"koala-bear", {"field", "vector", "polynomial", "round", "matrix"}},
       {"koala-bear.ext8-binomial3",
        {"field", "vector", "polynomial", "round", "matrix", "rng"}},
+      {"koala-bear.ext4-binomial3",
+       {"field", "vector", "polynomial", "round", "matrix"}},
       {"bls12-381.g1", {"group", "groups"}},
       {"bls12-381.g2", {"group", "groups"}},
       {"bls12-381.gt", {"group"}},
@@ -340,6 +342,12 @@ void installedInventory() {
         "opening_states"}},
       {"rows.merkle-keccak256.koala-bear.ext8-binomial3/0",
        {"commitment", "proof", "opening_state", "commitments",
+        "opening_states"}},
+      {"rows.merkle-poseidon2-16.koala-bear/0",
+       {"commitment", "proof", "opening_state", "commitments",
+        "opening_states"}},
+      {"rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0",
+       {"commitment", "proof", "opening_state", "commitments",
         "opening_states"}}};
   std::set<std::pair<std::string, std::string>> pairs, actual;
   for (const auto &[domain, kinds] : expected)
@@ -349,7 +357,7 @@ void installedInventory() {
   for (const auto &type : catalog.allLogicalTypes())
     require(actual.emplace(type.kind, type.domain).second,
             "logical inventory contains no duplicate instances");
-  require(pairs.size() == 71 && actual == pairs,
+  require(pairs.size() == 86 && actual == pairs,
           "the complete installed logical inventory is unchanged");
 
   std::vector<std::string> identities{"", "missing"};
@@ -392,9 +400,12 @@ void installedInventory() {
       {"spongefish0.8.0.keccak.bls12-381.fr64be/0", "spongefish"},
       {"koala-bear", "plonky3"},
       {"koala-bear.ext8-binomial3", "plonky3"},
+      {"koala-bear.ext4-binomial3", "plonky3"},
       {"merlin3.koala-bear.ext8-binomial3.rejection31le/0", "plonky3"},
       {"rows.merkle-keccak256.koala-bear/0", "plonky3"},
-      {"rows.merkle-keccak256.koala-bear.ext8-binomial3/0", "plonky3"}};
+      {"rows.merkle-keccak256.koala-bear.ext8-binomial3/0", "plonky3"},
+      {"rows.merkle-poseidon2-16.koala-bear/0", "plonky3"},
+      {"rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0", "plonky3"}};
   require(catalog.allDomains().size() == providers.size(),
           "the complete installed provider domain inventory is unchanged");
   for (const auto &identity : identities) {
@@ -527,6 +538,10 @@ void installedBindings() {
         any_of(operation.signature.requirements, [](const auto &predicate) {
           return predicate.relation == "VectorCommitment";
         });
+    const bool multiOpening =
+        any_of(operation.signature.requirements, [](const auto &predicate) {
+          return predicate.relation == "MultiOpening";
+        });
     const bool embedding =
         operation.name == "field.embed" || operation.name == "vector.embed";
     const bool twoAdic =
@@ -541,6 +556,8 @@ void installedBindings() {
         binding.application.arguments.push_back(
             sort == "Codec"
                 ? codecs.at(StringRef(operation.name).rsplit('.').second.str())
+            : sort == "Commitment" && multiOpening
+                ? "rows.merkle-poseidon2-16.koala-bear/0"
             : sort == "Commitment" && oracle
                 ? "rows.merkle-keccak256.koala-bear/0"
             : sort == "Field" && (embedding || operation.name == "random.index")
@@ -564,6 +581,15 @@ void installedBindings() {
             : sort == "Nat" ? "4"
             : sort == "Field" &&
                     (twoAdic ||
+                     is_contained(
+                         ArrayRef<StringRef>{
+                             "encoding.fields_from_le",
+                             "encoding.field_montgomery_le",
+                             "encoding.field_from_montgomery_le",
+                             "encoding.fields_montgomery_le",
+                             "encoding.fields_from_montgomery_le",
+                             "hash.poseidon2_16"},
+                         operation.name) ||
                      StringRef(operation.name).starts_with("relation.table_") ||
                      StringRef(operation.name).starts_with("ring.") ||
                      StringRef(operation.name).starts_with("fixed_vector."))

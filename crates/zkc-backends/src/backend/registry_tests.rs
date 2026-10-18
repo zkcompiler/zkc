@@ -228,7 +228,7 @@ fn identical_ports_preserve_exact_handler_selection() {
 
 #[test]
 fn every_payload_has_explicit_identity_and_retained_charge() {
-    use crate::{Bn254Scalar, KoalaBear, KoalaBearExt8, RistrettoScalar};
+    use crate::{Bn254Scalar, KoalaBear, KoalaBearExt4, KoalaBearExt8, RistrettoScalar};
     use std::{collections::HashSet, sync::Arc};
     use zkc_runtime::interactive::{
         Identity as I, LogicalType, PhysicalType, Representation as R, ResourceDomain, Type,
@@ -277,6 +277,11 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
             "OracleState" => R::MerkleState,
             "OracleRoots" => R::MerkleRoots,
             "OracleStates" => R::MerkleStates,
+            "MerkleDigest" => R::MerkleDigest,
+            "MerkleProof" => R::MerkleProof,
+            "MerkleTree" => R::MerkleTree,
+            "MerkleDigests" => R::MerkleDigests,
+            "MerkleTrees" => R::MerkleTrees,
             "Index" => R::Index,
             "Indices" => R::Indices,
             "Bytes" => R::Bytes,
@@ -289,6 +294,11 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
             "KoalaBearExt8Vector" => R::KoalaBearExt8Vector,
             "KoalaBearExt8Polynomial" => R::KoalaBearExt8Polynomial,
             "KoalaBearExt8Round" => R::KoalaBearExt8Round,
+            "KoalaBearExt4Matrix" => R::KoalaBearExt4SparseCoo,
+            "KoalaBearExt4Field" => R::KoalaBearExt4,
+            "KoalaBearExt4Vector" => R::KoalaBearExt4Vector,
+            "KoalaBearExt4Polynomial" => R::KoalaBearExt4Polynomial,
+            "KoalaBearExt4Round" => R::KoalaBearExt4Round,
             "KoalaBearField" => R::KoalaBear,
             "KoalaBearVector" => R::KoalaBearVector,
             "KoalaBearPolynomial" => R::KoalaBearPolynomial,
@@ -418,6 +428,16 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         KoalaBearExt8Round,
         KoalaBearExt8Matrix,
         32
+    );
+    scalar_family!(
+        KoalaBearExt4::from(KoalaBear::new(1)),
+        KoalaBearExt4,
+        KoalaBearExt4Field,
+        KoalaBearExt4Vector,
+        KoalaBearExt4Polynomial,
+        KoalaBearExt4Round,
+        KoalaBearExt4Matrix,
+        16
     );
     macro_rules! group_family {
         ($point:expr, $identity:ident, $point_variant:ident, $vector_variant:ident, $width:expr) => {{
@@ -603,6 +623,46 @@ fn every_payload_has_explicit_identity_and_retained_charge() {
         Type::OpeningStates,
         I::MerkleKoalaBear,
         616 + std::mem::size_of::<crate::oracle::State>(),
+    );
+    // Digest-generic carriers share one byte allocation per digest list.
+    let (root, tree) = crate::merkle::commit::<crate::merkle::poseidon2::Base>(
+        vec![KoalaBear::new(1); 2],
+        shape,
+        4096,
+    )
+    .unwrap();
+    let proof = crate::merkle::open(&tree, &[0]).unwrap().1;
+    let tree = crate::merkle::State::Poseidon2KoalaBear(Arc::new(tree));
+    let scheme = crate::merkle::Scheme::Poseidon2KoalaBear;
+    check(
+        Value::MerkleDigest(scheme, root.clone().into()),
+        Type::Commitment,
+        I::MerklePoseidon2KoalaBear,
+        288,
+    );
+    check(
+        Value::MerkleProof(scheme, proof.into()),
+        Type::Proof,
+        I::MerklePoseidon2KoalaBear,
+        288,
+    );
+    check(
+        Value::MerkleTree(tree.clone()),
+        Type::OpeningState,
+        I::MerklePoseidon2KoalaBear,
+        360,
+    );
+    check(
+        Value::MerkleDigests(scheme, [root.clone(), root].concat().into()),
+        Type::Commitments,
+        I::MerklePoseidon2KoalaBear,
+        320,
+    );
+    check(
+        Value::MerkleTrees(scheme, [tree].into()),
+        Type::OpeningStates,
+        I::MerklePoseidon2KoalaBear,
+        616 + std::mem::size_of::<crate::merkle::State>(),
     );
     let logical = LogicalType::parse("fixed_vector<field:koala-bear,2>").unwrap();
     let fixed = Value::FixedVector(
@@ -1152,6 +1212,8 @@ fn alternative_eligibility_matches_the_reviewed_native_set() {
         "vector.prefix_product",
         "vector.prefix_sum",
         "vector.rotate",
+        "vector.bit_reverse",
+        "vector.bit_reverse_rows",
         "vector.scale",
         "vector.scatter_sum",
         "vector.slice",
@@ -1334,6 +1396,7 @@ fn every_exact_installation_has_a_supported_binding_and_impossible_owners_are_ab
         &["multilinear.kzg.bls12-381/0"],
         &["rows.merkle-keccak256.koala-bear/0"],
         &["rows.merkle-keccak256.koala-bear.ext8-binomial3/0"],
+        &["rows.merkle-poseidon2-16.koala-bear/0"],
         &["merlin3.bls12-381.fr64be/0"],
         &["merlin3.ristretto255.scalar64le/0"],
         &["merlin3.koala-bear.ext8-binomial3.rejection31le/0"],

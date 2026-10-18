@@ -15,13 +15,14 @@ deployment authority or transport support in another Host.
 The complete logical message grammar is:
 
 - `bool`, `index`, `indices`, `bytes`;
-- scalar fields BLS12-381 Fr, BN254 Fr, Ristretto scalar, KoalaBear base and
-  KoalaBear ext8; groups BLS12-381 G1/G2/GT, BN254 G1/G2/GT, Ristretto and prime-order Edwards25519;
+- scalar fields BLS12-381 Fr, BN254 Fr, Ristretto scalar, KoalaBear base,
+  KoalaBear ext8 and KoalaBear ext4; groups BLS12-381 G1/G2/GT, BN254 G1/G2/GT, Ristretto and prime-order Edwards25519;
 - field `vector` and sparse `matrix` in each installed scalar domain;
 - `groups` in BLS12-381 G1/G2, BN254 G1/G2, Ristretto and prime-order Edwards25519;
 - `field_array<bls12-381.fr,N>`, including zero, with `N <= 1048576`;
 - commitments and opening proofs of `multilinear.kzg.bls12-381/0`;
-- root and path leaves for both installed KoalaBear Merkle row schemes;
+- root and path leaves for the installed KoalaBear Merkle row schemes, and root
+  and proof leaves of the digest-generic Merkle schemes;
 - nominal finite variants whose **every alternative** has payloads in this grammar;
 - `sequence<T>` with `T` recursively in this grammar. The
   [nested-data profile](../ir/data.md) defines its storage and framing.
@@ -78,6 +79,7 @@ Additional leaf frames reuse the installed ZKCV encodings exactly:
 | BLS12-381 GT | 53 | 582 |
 | KoalaBear base | 19 | 10 |
 | KoalaBear ext8 | 26 | 38 |
+| KoalaBear ext4 | 21 | 22 |
 | Ristretto scalar | 13 | 38 |
 | Ristretto group | 16 | 38 |
 | Prime-order Edwards25519 group | 68 | 38 |
@@ -92,11 +94,22 @@ rows and columns occupy offsets 6 and 10. Each coordinate/count is `u32`.
 
 | Leaf | Tags by domain | Complete frame bytes | Aggregate charge |
 |---|---|---|---|
-| Field vector | BLS 66, BN254 41, Ristretto 14, KoalaBear 20, ext8 27 | `10 + n*w`; scalar width `w=4` for KoalaBear, otherwise 32 | `n` elements |
+| Field vector | BLS 66, BN254 41, Ristretto 14, KoalaBear 20, ext8 27, ext4 22 | `10 + n*w`; scalar width `w=4` for KoalaBear, 16 for ext4, otherwise 32 | `n` elements |
 | Source-group vector | BLS 67, BLS G2 52, BN254 G1 47, G2 49, Ristretto 17, Edwards25519 69 | `10 + n*w`; point widths 48, 96, 32, 64, 32, 32 respectively | `n` groups |
-| Sparse matrix | BLS 23, BN254 45, Ristretto 24, KoalaBear 25, ext8 30 | `18 + n*(8+w)`; each entry is row, column, canonical scalar | `n` elements |
+| Sparse matrix | BLS 23, BN254 45, Ristretto 24, KoalaBear 25, ext8 30, ext4 28 | `18 + n*(8+w)`; each entry is row, column, canonical scalar | `n` elements |
 | Merkle root | KoalaBear 33, ext8 35 | 38 | one element |
 | Merkle path | KoalaBear 34, ext8 36 | `10 + 32*n`, at most 24 siblings | `n` elements |
+| Digest-generic Merkle root | 71 | `6 + w` | one element |
+| Digest-generic Merkle proof | 72 | `10 + w*n` | `n` elements |
+
+Digest-generic Merkle frames carry digests of the scheme's width `w` in its
+canonical encoding: `w = 32` and eight canonical four-byte little-endian words
+for both [Poseidon2 instances](../domains/oracles.md#poseidon2-instances); the
+frame does not name the scheme, which the declared type supplies. Decoding
+refuses a noncanonical word. A proof frame holds a single path or a pruned
+multi-opening proof in the
+[documented order](../domains/oracles.md#openings-and-the-pruned-proof); its
+count is bounded by the element ceiling, not by a path depth.
 
 Matrix entries must be in strictly increasing row/column order, in bounds and
 nonzero; decoding never normalizes or merges entries. Merkle framing checks

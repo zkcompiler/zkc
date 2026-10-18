@@ -164,6 +164,13 @@ value_inventory! {
     OracleState(crate::oracle::State),
     OracleRoots(crate::oracle::Domain, Arc<[crate::plonky3::oracle::Digest]>),
     OracleStates(crate::oracle::Domain, Arc<[crate::oracle::State]>),
+    /// Digest-generic Merkle carriers: each digest is its scheme's fixed-width
+    /// canonical byte encoding.
+    MerkleDigest(crate::merkle::Scheme, Arc<[u8]>),
+    MerkleProof(crate::merkle::Scheme, Arc<[u8]>),
+    MerkleTree(crate::merkle::State),
+    MerkleDigests(crate::merkle::Scheme, Arc<[u8]>),
+    MerkleTrees(crate::merkle::Scheme, Arc<[crate::merkle::State]>),
     Index(u64),
     Indices(Arc<[u64]>),
     Bytes(Arc<[u8]>),
@@ -176,6 +183,11 @@ value_inventory! {
     KoalaBearExt8Vector(Arc<[crate::KoalaBearExt8]>),
     KoalaBearExt8Polynomial(Arc<[crate::KoalaBearExt8]>),
     KoalaBearExt8Round([crate::KoalaBearExt8; 3]),
+    KoalaBearExt4Matrix(crate::matrix::SparseCoo<crate::KoalaBearExt4>),
+    KoalaBearExt4Field(crate::KoalaBearExt4),
+    KoalaBearExt4Vector(Arc<[crate::KoalaBearExt4]>),
+    KoalaBearExt4Polynomial(Arc<[crate::KoalaBearExt4]>),
+    KoalaBearExt4Round([crate::KoalaBearExt4; 3]),
     KoalaBearField(crate::KoalaBear),
     KoalaBearVector(Arc<[crate::KoalaBear]>),
     KoalaBearPolynomial(Arc<[crate::KoalaBear]>),
@@ -317,6 +329,25 @@ impl Value {
                 d.identity(),
                 Representation::MerkleStates,
             ),
+            Self::MerkleDigest(s, _) => {
+                (Type::Commitment, s.identity(), Representation::MerkleDigest)
+            }
+            Self::MerkleProof(s, _) => (Type::Proof, s.identity(), Representation::MerkleProof),
+            Self::MerkleTree(t) => (
+                Type::OpeningState,
+                t.scheme().identity(),
+                Representation::MerkleTree,
+            ),
+            Self::MerkleDigests(s, _) => (
+                Type::Commitments,
+                s.identity(),
+                Representation::MerkleDigests,
+            ),
+            Self::MerkleTrees(s, _) => (
+                Type::OpeningStates,
+                s.identity(),
+                Representation::MerkleTrees,
+            ),
             Self::KoalaBearExt8Matrix(_) => (
                 Type::Matrix,
                 Identity::KoalaBearExt8,
@@ -341,6 +372,31 @@ impl Value {
                 Type::Field,
                 Identity::KoalaBearExt8,
                 Representation::KoalaBearExt8,
+            ),
+            Self::KoalaBearExt4Matrix(_) => (
+                Type::Matrix,
+                Identity::KoalaBearExt4,
+                Representation::KoalaBearExt4SparseCoo,
+            ),
+            Self::KoalaBearExt4Round(_) => (
+                Type::Round,
+                Identity::KoalaBearExt4,
+                Representation::KoalaBearExt4Round,
+            ),
+            Self::KoalaBearExt4Polynomial(_) => (
+                Type::Polynomial,
+                Identity::KoalaBearExt4,
+                Representation::KoalaBearExt4Polynomial,
+            ),
+            Self::KoalaBearExt4Vector(_) => (
+                Type::Vector,
+                Identity::KoalaBearExt4,
+                Representation::KoalaBearExt4Vector,
+            ),
+            Self::KoalaBearExt4Field(_) => (
+                Type::Field,
+                Identity::KoalaBearExt4,
+                Representation::KoalaBearExt4,
             ),
             Self::Matrix(_) => (
                 Type::Matrix,
@@ -651,11 +707,16 @@ impl Value {
         Some(match self {
             Self::OraclePath(_, p) | Self::OracleRoots(_, p) => Backing::of(p, bytes),
             Self::OracleState(s) => s.backing().ok()?,
+            Self::MerkleDigest(_, d) | Self::MerkleProof(_, d) | Self::MerkleDigests(_, d) => {
+                Backing::of(d, bytes)
+            }
+            Self::MerkleTree(t) => t.backing().ok()?,
             Self::Bn254Matrix(m) => m.backing().ok()?,
             Self::Matrix(m) => m.backing().ok()?,
             Self::RistrettoMatrix(m) => m.backing().ok()?,
             Self::KoalaBearMatrix(m) => m.backing().ok()?,
             Self::KoalaBearExt8Matrix(m) => m.backing().ok()?,
+            Self::KoalaBearExt4Matrix(m) => m.backing().ok()?,
             Self::Bn254Vector(v) | Self::Bn254Polynomial(v) => Backing::of(v, bytes),
             Self::Bn254G1Vector(v) => Backing::of(v, bytes),
             Self::Bn254G2Vector(v) => Backing::of(v, bytes),
@@ -665,6 +726,9 @@ impl Value {
             Self::Bytes(v) => Backing::of(v, bytes),
             Self::Shake128State(v) => Backing::of(v, bytes),
             Self::KoalaBearExt8Vector(v) | Self::KoalaBearExt8Polynomial(v) => {
+                Backing::of(v, bytes)
+            }
+            Self::KoalaBearExt4Vector(v) | Self::KoalaBearExt4Polynomial(v) => {
                 Backing::of(v, bytes)
             }
             Self::KoalaBearVector(v) | Self::KoalaBearPolynomial(v) => Backing::of(v, bytes),
@@ -687,6 +751,7 @@ impl Value {
             | Self::FrDiagonal(_)
             | Self::RistrettoDiagonal(_)
             | Self::OracleStates(..)
+            | Self::MerkleTrees(..)
             | Self::ResourceUnit(_)
             | Self::Bn254Field(_)
             | Self::Bn254Round(_)
@@ -698,6 +763,8 @@ impl Value {
             | Self::Index(_)
             | Self::KoalaBearExt8Field(_)
             | Self::KoalaBearExt8Round(_)
+            | Self::KoalaBearExt4Field(_)
+            | Self::KoalaBearExt4Round(_)
             | Self::KoalaBearField(_)
             | Self::KoalaBearRound(_)
             | Self::RistrettoField(_)
@@ -739,6 +806,11 @@ impl Value {
             | Self::OracleState(..)
             | Self::OracleRoots(..)
             | Self::OracleStates(..)
+            | Self::MerkleDigest(..)
+            | Self::MerkleProof(..)
+            | Self::MerkleTree(..)
+            | Self::MerkleDigests(..)
+            | Self::MerkleTrees(..)
             | Self::Index(..)
             | Self::Indices(..)
             | Self::Bytes(..)
@@ -751,6 +823,11 @@ impl Value {
             | Self::KoalaBearExt8Vector(..)
             | Self::KoalaBearExt8Polynomial(..)
             | Self::KoalaBearExt8Round(..)
+            | Self::KoalaBearExt4Matrix(..)
+            | Self::KoalaBearExt4Field(..)
+            | Self::KoalaBearExt4Vector(..)
+            | Self::KoalaBearExt4Polynomial(..)
+            | Self::KoalaBearExt4Round(..)
             | Self::KoalaBearField(..)
             | Self::KoalaBearVector(..)
             | Self::KoalaBearPolynomial(..)
@@ -825,6 +902,9 @@ impl RuntimeValue for Value {
             Self::KoalaBearField(value) => Some(crate::plonky3::encode_scalar(*value).to_vec()),
             Self::KoalaBearExt8Field(value) => {
                 Some(crate::plonky3::encode_extension(*value).to_vec())
+            }
+            Self::KoalaBearExt4Field(value) => {
+                Some(crate::plonky3::encode_quartic(*value).to_vec())
             }
             _ => None,
         }
@@ -904,6 +984,11 @@ impl RuntimeValue for Value {
             | Self::OracleState(..)
             | Self::OracleRoots(..)
             | Self::OracleStates(..)
+            | Self::MerkleDigest(..)
+            | Self::MerkleProof(..)
+            | Self::MerkleTree(..)
+            | Self::MerkleDigests(..)
+            | Self::MerkleTrees(..)
             | Self::Index(..)
             | Self::Indices(..)
             | Self::Bytes(..)
@@ -916,6 +1001,11 @@ impl RuntimeValue for Value {
             | Self::KoalaBearExt8Vector(..)
             | Self::KoalaBearExt8Polynomial(..)
             | Self::KoalaBearExt8Round(..)
+            | Self::KoalaBearExt4Matrix(..)
+            | Self::KoalaBearExt4Field(..)
+            | Self::KoalaBearExt4Vector(..)
+            | Self::KoalaBearExt4Polynomial(..)
+            | Self::KoalaBearExt4Round(..)
             | Self::KoalaBearField(..)
             | Self::KoalaBearVector(..)
             | Self::KoalaBearPolynomial(..)
@@ -1003,6 +1093,11 @@ impl RuntimeValue for Value {
             Self::OraclePath(_, p) | Self::OracleRoots(_, p) => size(p.len(), 32),
             Self::OracleState(s) => s.retained_bytes(),
             Self::OracleStates(_, states) => crate::oracle::states_bytes(states),
+            Self::MerkleDigest(_, d) | Self::MerkleProof(_, d) | Self::MerkleDigests(_, d) => {
+                size(d.len(), 1)
+            }
+            Self::MerkleTree(t) => t.retained_bytes(),
+            Self::MerkleTrees(_, trees) => crate::merkle::states_bytes(trees),
             Self::Bn254Matrix(m) => m.retained_bytes(),
             Self::Bn254Vector(v) | Self::Bn254Polynomial(v) => size(v.len(), 32),
             Self::Bn254G1Vector(v) => size(v.len(), std::mem::size_of::<crate::Bn254G1>()),
@@ -1018,6 +1113,8 @@ impl RuntimeValue for Value {
             Self::KoalaBearMatrix(m) => m.retained_bytes(),
             Self::KoalaBearExt8Matrix(m) => m.retained_bytes(),
             Self::KoalaBearExt8Vector(v) | Self::KoalaBearExt8Polynomial(v) => size(v.len(), 32),
+            Self::KoalaBearExt4Matrix(m) => m.retained_bytes(),
+            Self::KoalaBearExt4Vector(v) | Self::KoalaBearExt4Polynomial(v) => size(v.len(), 16),
             Self::KoalaBearVector(v) | Self::KoalaBearPolynomial(v) => size(v.len(), 4),
             Self::Vector(v) | Self::Polynomial(v) => size(v.len(), 32),
             Self::RistrettoVector(v) | Self::RistrettoPolynomial(v) => size(v.len(), 32),
@@ -1043,6 +1140,8 @@ impl RuntimeValue for Value {
             | Self::Bls12381G2(_)
             | Self::KoalaBearExt8Round(_)
             | Self::KoalaBearExt8Field(_)
+            | Self::KoalaBearExt4Round(_)
+            | Self::KoalaBearExt4Field(_)
             | Self::KoalaBearField(_)
             | Self::KoalaBearRound(_)
             | Self::RistrettoField(_)
@@ -1078,6 +1177,7 @@ impl RuntimeValue for Value {
             Self::FrDiagonal(d) => crate::diagonal::Diagonal::retained_parts(d, shared),
             Self::RistrettoDiagonal(d) => crate::diagonal::Diagonal::retained_parts(d, shared),
             Self::OracleStates(_, states) => crate::oracle::states_parts(states, shared),
+            Self::MerkleTrees(_, trees) => crate::merkle::states_parts(trees, shared),
             leaf => Ok(match leaf.leaf_backing() {
                 Some(backing) => {
                     shared(backing);
@@ -1099,6 +1199,7 @@ impl RuntimeValue for Value {
             Self::FrDiagonal(d) => Some(crate::diagonal::Diagonal::view(d)),
             Self::RistrettoDiagonal(d) => Some(crate::diagonal::Diagonal::view(d)),
             Self::OracleStates(_, states) => crate::oracle::states_list(states).ok(),
+            Self::MerkleTrees(_, trees) => crate::merkle::states_list(trees).ok(),
             leaf => leaf.leaf_backing(),
         }
     }

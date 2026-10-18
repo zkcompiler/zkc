@@ -226,7 +226,7 @@ fn resolve(
             | "poly.opening_quotient"
     ) && !matches!(
         field,
-        Identity::Bn254Fr | Identity::KoalaBear | Identity::KoalaBearExt8
+        Identity::Bn254Fr | Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4
     ) {
         return Err(support::failure());
     }

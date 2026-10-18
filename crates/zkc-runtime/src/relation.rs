@@ -76,15 +76,18 @@ impl AnalysisBudget {
 }
 
 fn is_prime(field: Identity) -> bool {
-    field.field_characteristic().is_some() && field != Identity::KoalaBearExt8
+    field.field_characteristic().is_some() && field.base_field().is_none()
 }
 /// Coordinates per element: `koala-bear.ext8-binomial3` is F_p[X]/(X^8 - 3)
-/// in the ascending basis (docs/spec/domains/values.md).
+/// and `koala-bear.ext4-binomial3` is F_p[X]/(X^4 - 3), each in the ascending
+/// basis (docs/spec/domains/values.md).
 pub fn degree(field: Identity) -> Option<usize> {
     if is_prime(field) {
         Some(1)
     } else if field == Identity::KoalaBearExt8 {
         Some(8)
+    } else if field == Identity::KoalaBearExt4 {
+        Some(4)
     } else {
         None
     }

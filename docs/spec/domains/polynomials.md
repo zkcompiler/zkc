@@ -33,7 +33,7 @@ polynomial when its actual degree is below the node count, and differs when
 its actual degree reaches that count. A structural degree bound below the
 node count is sufficient for recovery. A
 [native comparison](../../../common/tests/kernels/test_pointwise_polynomials.py) checks
-this on KoalaBear and Ext8 cosets against integer arithmetic: the interpolant of
+this on KoalaBear, Ext8 and Ext4 cosets against integer arithmetic: the interpolant of
 pointwise products is the formal product reduced modulo `X^n - s^n`.
 
 The [structured native profile](../ir/mathematics.md)
@@ -66,7 +66,7 @@ Neither depends on a prover's intended construction of the coefficients.
 `TwoAdicField(F)` supplies a declared compatible family of two-power roots,
 in addition to `Field(F)`. A particular installation states its maximum order
 and root convention. This capability does not follow merely from being a field.
-The current KoalaBear and octic-extension installations admit power-of-two
+The current KoalaBear, octic-extension and quartic-extension installations admit power-of-two
 sizes through `2^24`, with smaller execution limits. Their size-`n` root is
 `1791270792^(2^24/n)` in the base field, embedded explicitly for the extension.
 Extension challenges and coset shifts may be outside the base field; domain

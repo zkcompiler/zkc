@@ -97,7 +97,8 @@ inline bool nativeMessageData(const BoundType &type) {
           (type.identity == "bn254.fr" ||
            type.identity == "ristretto255.scalar" ||
            type.identity == "koala-bear" ||
-           type.identity == "koala-bear.ext8-binomial3")) ||
+           type.identity == "koala-bear.ext8-binomial3" ||
+           type.identity == "koala-bear.ext4-binomial3")) ||
          ((type.kind == "group" || type.kind == "groups") &&
           (type.identity == "bn254.g1" || type.identity == "bn254.g2" ||
            type.identity == "ristretto255.group" ||
@@ -112,7 +113,10 @@ inline bool nativeMessageData(const BoundType &type) {
           (type.identity == "multilinear.kzg.bls12-381/0" ||
            type.identity == "rows.merkle-keccak256.koala-bear/0" ||
            type.identity ==
-               "rows.merkle-keccak256.koala-bear.ext8-binomial3/0"));
+               "rows.merkle-keccak256.koala-bear.ext8-binomial3/0" ||
+           type.identity == "rows.merkle-poseidon2-16.koala-bear/0" ||
+           type.identity ==
+               "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"));
 }
 // Frames introduced by the structured message profile, including standalone
 // numeric collections. Existing scalar and fixed-array frames keep their IDs.

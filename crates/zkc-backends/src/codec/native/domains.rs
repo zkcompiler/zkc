@@ -6,6 +6,7 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> 
     let (tag, width, count) = match value {
         Value::KoalaBearVector(v) => (20, 4usize, v.len()),
         Value::KoalaBearExt8Vector(v) => (27, 32, v.len()),
+        Value::KoalaBearExt4Vector(v) => (22, 16, v.len()),
         Value::Vector(v) => (66, 32, v.len()),
         Value::RistrettoVector(v) => (14, 32, v.len()),
         Value::RistrettoGroups(v) => (17, 32, v.len()),
@@ -44,6 +45,11 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> 
             Value::KoalaBearExt8Vector(values) => {
                 for x in values.iter() {
                     out.extend(crate::plonky3::encode_extension(*x));
+                }
+            }
+            Value::KoalaBearExt4Vector(values) => {
+                for x in values.iter() {
+                    out.extend(crate::plonky3::encode_quartic(*x));
                 }
             }
             Value::Vector(values) => {

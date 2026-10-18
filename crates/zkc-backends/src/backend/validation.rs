@@ -110,6 +110,21 @@ impl Core {
                 m.policy(&self.policy)?;
                 None
             }
+            Value::KoalaBearExt4Matrix(m) => {
+                m.policy(&self.policy)?;
+                None
+            }
+            Value::KoalaBearExt4Vector(a) => {
+                self.policy.vector_width(a.len(), 16)?;
+                None
+            }
+            Value::KoalaBearExt4Polynomial(a) => {
+                self.policy.vector_width(a.len(), 16)?;
+                if !crate::kernels::arithmetic::normalized(a) {
+                    return Err(refused("polynomial-normalization"));
+                }
+                None
+            }
             Value::KoalaBearExt8Vector(a) => {
                 self.policy.vector_width(a.len(), 32)?;
                 None
@@ -209,6 +224,15 @@ impl Core {
                     .vector_width(states.len(), std::mem::size_of::<crate::oracle::State>())?;
                 None
             }
+            Value::MerkleDigest(..) | Value::MerkleProof(..) | Value::MerkleDigests(..) => {
+                crate::merkle::validate(v, &self.policy)?;
+                None
+            }
+            Value::MerkleTrees(_, trees) => {
+                self.policy
+                    .vector_width(trees.len(), std::mem::size_of::<crate::merkle::State>())?;
+                None
+            }
             Value::Shake128State(..)
             | Value::ResourceUnit(..)
             | Value::Bn254Field(..)
@@ -220,9 +244,12 @@ impl Core {
             | Value::Bls12381Gt(..)
             | Value::OracleRoot(..)
             | Value::OracleState(..)
+            | Value::MerkleTree(..)
             | Value::Index(..)
             | Value::KoalaBearExt8Field(..)
             | Value::KoalaBearExt8Round(..)
+            | Value::KoalaBearExt4Field(..)
+            | Value::KoalaBearExt4Round(..)
             | Value::KoalaBearField(..)
             | Value::KoalaBearRound(..)
             | Value::RistrettoField(..)

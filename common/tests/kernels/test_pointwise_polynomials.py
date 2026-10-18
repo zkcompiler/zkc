@@ -3,7 +3,7 @@
 The same `x * y` is a `math fn` under `map`, the captured product arena under
 `ring.rows` and `ring.coefficients`, and a formal product whose coset
 evaluations the map reproduces. Every expectation is integer arithmetic in
-KoalaBear[X]/(X^8 - 3): coefficient convolution for the formal product, direct
+KoalaBear[X]/(X^d - 3), d = 8 or 4: coefficient convolution for the formal product, direct
 evaluation at coset points, and reduction modulo `X^n - s^n` for the interpolant
 of the pointwise products. No native result is an oracle for another.
 """
@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
+from binomial_reference import FIELDS, OCTIC, P
 from entry import Entry
-from octic_reference import P, ZERO, ONE, add, mul, power
 
 ROOT = Path(__file__).resolve().parents[3]
 ARENA = ROOT / 'examples/projects/sumcheck/product/product.ring.json'
@@ -65,61 +65,65 @@ def wire(kind, value, extension):
     return scalar(value) if kind == 'field' else [scalar(v) for v in value]
 
 
-def evaluate(coefficients, point):
-    result, exponent = ZERO, ONE
+def evaluate(ext, coefficients, point):
+    result, exponent = ext.ZERO, ext.ONE
     for coefficient in coefficients:
-        result = add(result, mul(coefficient, exponent))
-        exponent = mul(exponent, point)
+        result = ext.add(result, ext.mul(coefficient, exponent))
+        exponent = ext.mul(exponent, point)
     return result
 
 
-def convolve(left, right):
-    result = [ZERO] * (len(left) + len(right) - 1)
+def convolve(ext, left, right):
+    result = [ext.ZERO] * (len(left) + len(right) - 1)
     for i, x in enumerate(left):
         for j, y in enumerate(right):
-            result[i + j] = add(result[i + j], mul(x, y))
+            result[i + j] = ext.add(result[i + j], ext.mul(x, y))
     return result
 
 
-def reduce_on_coset(coefficients, shift, n):
+def reduce_on_coset(ext, coefficients, shift, n):
     """The unique polynomial of degree below n agreeing on the coset.
 
     Every coset point satisfies X^n = shift^n, so each coefficient of X^(i + k n)
     moves to X^i scaled by shift^(n k). This is independent of interpolation.
     """
-    reduced = [ZERO] * n
+    reduced = [ext.ZERO] * n
     for j, coefficient in enumerate(coefficients):
-        reduced[j % n] = add(reduced[j % n], mul(coefficient, power(shift, n * (j // n))))
-    while reduced and reduced[-1] == ZERO:
+        reduced[j % n] = ext.add(reduced[j % n],
+                                 ext.mul(coefficient, ext.power(shift, n * (j // n))))
+    while reduced and reduced[-1] == ext.ZERO:
         reduced.pop()
     return reduced
 
 
-def coset(shift, n):
+def coset(ext, shift, n):
     root = pow(ROOT_OF_UNITY, (1 << 24) // n, P)
     assert pow(root, n, P) == 1 and pow(root, n // 2, P) == P - 1
-    return [mul(shift, [pow(root, i, P)] + [0] * 7) for i in range(n)]
+    return [ext.mul(shift, ext.embed(pow(root, i, P))) for i in range(n)]
 
 
-@pytest.mark.parametrize('extension', [False, True])
-def test_map_ring_provider_and_formal_product_agree(toolchain, journal, directory, extension):
-    field = 'koala-bear' + ('.ext8-binomial3' if extension else '')
+@pytest.mark.parametrize('field', ['koala-bear', 'koala-bear.ext8-binomial3',
+                                   'koala-bear.ext4-binomial3'])
+def test_map_ring_provider_and_formal_product_agree(toolchain, journal, directory, field):
+    extension = field != 'koala-bear'
+    # Base-field values are embedded coordinate lists; any extension computes them.
+    ext = FIELDS[field] if extension else OCTIC
     entry = Entry(toolchain, journal, directory, SOURCE.format(field=field),
                   [f'--asset=product=ring-json={ARENA}'])
     rng = random.Random(2711)
 
     def scalar():
-        return [rng.randrange(P) for _ in range(8)] if extension else [rng.randrange(P)] + [0] * 7
+        return [rng.randrange(P) for _ in range(ext.degree)] if extension else ext.embed(rng.randrange(P))
 
     # (width, coset size): the product has degree 2 * (width - 1).
     for width, n in [(3, 4), (3, 8), (5, 8), (2, 2)]:
         p, q = [scalar() for _ in range(width)], [scalar() for _ in range(width)]
         shift, z = scalar(), scalar()
-        points = coset(shift, n)
-        formal = convolve(p, q)
-        pointwise = [mul(evaluate(p, x), evaluate(q, x)) for x in points]
-        assert pointwise == [evaluate(formal, x) for x in points]
-        reduced = reduce_on_coset(formal, shift, n)
+        points = coset(ext, shift, n)
+        formal = convolve(ext, p, q)
+        pointwise = [ext.mul(evaluate(ext, p, x), evaluate(ext, q, x)) for x in points]
+        assert pointwise == [evaluate(ext, formal, x) for x in points]
+        reduced = reduce_on_coset(ext, formal, shift, n)
         recovered = 2 * (width - 1) < n
         assert recovered == (reduced == formal)
         inputs = {'p': wire('vector', p, extension), 'q': wire('vector', q, extension),
@@ -131,8 +135,8 @@ def test_map_ring_provider_and_formal_product_agree(toolchain, journal, director
                     wire('vector', formal, extension),  # ring.coefficients: the formal product
                     wire('vector', reduced, extension),  # interpolant of the pointwise products
                     str(len(reduced)),
-                    wire('field', evaluate(reduced, z), extension),
-                    wire('field', evaluate(formal, z), extension),
+                    wire('field', evaluate(ext, reduced, z), extension),
+                    wire('field', evaluate(ext, formal, z), extension),
                     '2']  # Product::Degree, with every input weighted one
         assert result == expected, (width, n)
         assert len(formal) == 2 * width - 1 and len(reduced) <= n

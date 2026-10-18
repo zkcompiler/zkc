@@ -31,8 +31,13 @@ fn embed(
     row: &Contract,
     selection: Selection,
 ) -> Option<BoundSignature> {
+    // Installed KoalaBear extensions embed their declared base field.
+    let extension = match binding.arguments.as_slice() {
+        [name] if name == "koala-bear.ext8-binomial3" => crate::domains::KOALA_BEAR_EXT8,
+        [name] if name == "koala-bear.ext4-binomial3" => crate::domains::KOALA_BEAR_EXT4,
+        _ => return None,
+    };
     if !matches!(selection, Selection::Default)
-        || binding.arguments != ["koala-bear.ext8-binomial3"]
         || binding.implementation != format!("plonky3/{}", binding.contract)
     {
         return None;
@@ -46,7 +51,7 @@ fn embed(
         outputs: row
             .outputs
             .iter()
-            .map(|&kind| crate::domains::KOALA_BEAR_EXT8.physical(kind))
+            .map(|&kind| extension.physical(kind))
             .collect::<Option<_>>()?,
         attributes: row.attributes,
     })

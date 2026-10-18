@@ -4,6 +4,8 @@
 pub(crate) mod numerical;
 pub mod oracle;
 pub mod polynomial;
+pub mod poseidon2;
+pub mod words;
 
 use crate::{Result, refused};
 use p3_field::{Field, PackedValue, PrimeCharacteristicRing, PrimeField32};
@@ -38,6 +40,35 @@ pub fn decode_extension(bytes: &[u8]) -> Result<KoalaBearExt8> {
         *coordinate = decode_scalar(input)?;
     }
     Ok(KoalaBearExt8::from(coordinates))
+}
+
+/// Ascending power basis of F_p[X]/(X^4 - 3), pinned by Plonky3 0.8.0.
+pub type KoalaBearExt4 = p3_field::extension::BinomialExtensionField<KoalaBear, 4>;
+
+/// Natural constants embed into the base coordinate, never encode four coordinates.
+pub fn parse_quartic_decimal(s: &str) -> Result<KoalaBearExt4> {
+    Ok(parse_decimal(s)?.into())
+}
+
+pub fn encode_quartic(value: KoalaBearExt4) -> [u8; 16] {
+    let mut bytes = [0; 16];
+    for (coordinate, out) in value
+        .as_basis_coefficients_slice()
+        .iter()
+        .zip(bytes.as_chunks_mut::<4>().0)
+    {
+        *out = encode_scalar(*coordinate);
+    }
+    bytes
+}
+
+pub fn decode_quartic(bytes: &[u8]) -> Result<KoalaBearExt4> {
+    let bytes: &[u8; 16] = bytes.try_into().map_err(|_| refused("wire-length"))?;
+    let mut coordinates = [KoalaBear::ZERO; 4];
+    for (coordinate, input) in coordinates.iter_mut().zip(bytes.as_chunks::<4>().0) {
+        *coordinate = decode_scalar(input)?;
+    }
+    Ok(KoalaBearExt4::from(coordinates))
 }
 pub const MODULUS: u32 = 2_130_706_433;
 pub const MODULUS_DECIMAL: &str = "2130706433";

@@ -21,7 +21,7 @@ pub(super) const CONTRACTS: &[Contract] = &[
         "encoding.fields_le",
         (&[Vector], &[Bytes], AttributeRule::None),
     )
-    .implemented_by(&["dalek/encoding.fields_le"]),
+    .implemented_by(&["dalek/encoding.fields_le", "plonky3/encoding.fields_le"]),
     Contract::new(
         "encoding.groups_compressed",
         (&[Groups], &[Bytes], AttributeRule::None),
@@ -34,12 +34,40 @@ pub(super) const CONTRACTS: &[Contract] = &[
         "encoding.field_le",
         (&[Field], &[Bytes], AttributeRule::None),
     )
-    .implemented_by(&["dalek/encoding.field_le"]),
+    .implemented_by(&["dalek/encoding.field_le", "plonky3/encoding.field_le"]),
     Contract::new(
         "encoding.field_from_le",
         (&[Bytes], &[Bool, Field], AttributeRule::None),
     )
-    .implemented_by(&["dalek/encoding.field_from_le"]),
+    .implemented_by(&[
+        "dalek/encoding.field_from_le",
+        "plonky3/encoding.field_from_le",
+    ]),
+    Contract::new(
+        "encoding.fields_from_le",
+        (&[Bytes], &[Bool, Vector], AttributeRule::None),
+    )
+    .implemented_by(&["plonky3/encoding.fields_from_le"]),
+    Contract::new(
+        "encoding.field_montgomery_le",
+        (&[Field], &[Bytes], AttributeRule::None),
+    )
+    .implemented_by(&["plonky3/encoding.field_montgomery_le"]),
+    Contract::new(
+        "encoding.field_from_montgomery_le",
+        (&[Bytes], &[Bool, Field], AttributeRule::None),
+    )
+    .implemented_by(&["plonky3/encoding.field_from_montgomery_le"]),
+    Contract::new(
+        "encoding.fields_montgomery_le",
+        (&[Vector], &[Bytes], AttributeRule::None),
+    )
+    .implemented_by(&["plonky3/encoding.fields_montgomery_le"]),
+    Contract::new(
+        "encoding.fields_from_montgomery_le",
+        (&[Bytes], &[Bool, Vector], AttributeRule::None),
+    )
+    .implemented_by(&["plonky3/encoding.fields_from_montgomery_le"]),
     Contract::new(
         "encoding.field_reduce_le",
         (&[Bytes], &[Field], AttributeRule::None),
@@ -127,11 +155,21 @@ fn select(
         return default_ports(binding, logical, selection);
     }
     let primary = support::primary(binding)?;
+    // Four-byte coordinate words cover KoalaBear and its installed extensions.
+    let koala_bear = matches!(
+        primary,
+        Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4
+    );
     let allowed = match binding.contract.as_str() {
-        "encoding.field_le"
-        | "encoding.fields_le"
-        | "encoding.field_from_le"
-        | "encoding.field_reduce_le" => primary == Identity::Ristretto255Scalar,
+        "encoding.field_le" | "encoding.fields_le" | "encoding.field_from_le" => {
+            primary == Identity::Ristretto255Scalar || koala_bear
+        }
+        "encoding.field_reduce_le" => primary == Identity::Ristretto255Scalar,
+        "encoding.fields_from_le"
+        | "encoding.field_montgomery_le"
+        | "encoding.field_from_montgomery_le"
+        | "encoding.fields_montgomery_le"
+        | "encoding.fields_from_montgomery_le" => koala_bear,
         "encoding.group_decode_cofactor" | "encoding.cryptonote_map" => {
             primary == Identity::Edwards25519Prime
         }

@@ -55,9 +55,21 @@ arithmetic requires this operation; equal physical widths never insert it.
 
 The installed nominal domain `koala-bear.ext8-binomial3` denotes
 `F_p[X]/(X^8 - 3)`, where `p = 2130706433`, with base `koala-bear` and ascending
-basis `(1, X, …, X^7)`. Its identity fixes the base, degree, defining polynomial
-and basis. Arithmetic is polynomial quotient arithmetic, not integer arithmetic
-modulo `p^8`. Embedding sends `a` to `(a, 0, …, 0)`.
+basis `(1, X, …, X^7)`. The installed nominal domain `koala-bear.ext4-binomial3`
+denotes `F_p[X]/(X^4 - 3)` with the same base and ascending basis
+`(1, X, X^2, X^3)`; `X^4 - 3` is irreducible over `F_p` because 3 is not a
+square modulo `p` and `p ≡ 1 (mod 4)`. Each identity fixes the base, degree,
+defining polynomial and basis. Arithmetic is polynomial quotient arithmetic, not
+integer arithmetic modulo `p^d`. Embedding sends `a` to `(a, 0, …, 0)`. The two
+extensions are distinct domains: neither embeds in the other, and a value of one
+is never a value of the other.
+
+Both hold `ExtensionField`, `TwoAdicField`, `Field`, `CommRing` and
+`CharacteristicNotTwo`; their evaluation domains are the base field's
+power-of-two subgroups and cosets. The octic extension additionally holds
+`IndexRandomness` and is the challenge field of the installed octic Merlin suite
+and random service. A sampling service, transcript suite or row-commitment
+scheme for another field is a separate installation with its own identity.
 
 Natural casts land in the prime subfield. Generic source natural constants are
 specialized modulo the characteristic; closed `field.constant` and
@@ -67,9 +79,10 @@ specialized modulo the characteristic; closed `field.constant` and
 extension's cardinality. Public extension coordinates use the canonical
 [native structured codec](../formats/messages.md).
 
-The native installation uses pinned Plonky3 0.8.0; the executable independent
+The native installation uses pinned Plonky3 0.8.0's
+`BinomialExtensionField<KoalaBear, d>` for both degrees; the executable independent
 `Tools.Interactive.ExtensionReference` uses fixed coordinates, convolution and
-checked exponentiation for inverses. It asserts no unproved Lean field instance
+checked exponentiation for inverses of the octic extension. It asserts no unproved Lean field instance
 or native adequacy theorem. Generic formal PIR semantics remains parameterized
 by mathematical fields and the embedding laws required by each consumer.
 

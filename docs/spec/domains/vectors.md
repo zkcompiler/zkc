@@ -113,7 +113,8 @@ and [capacity accounting](../runtime/capacity.md) retain their own work.
 
 Bindings retain their explicit implementation choice and field identity:
 `arkworks` supports BLS12-381 Fr and BN254 Fr, `dalek` supports Ristretto255
-scalars, and `plonky3` supports KoalaBear and its installed octic extension.
+scalars, and `plonky3` supports KoalaBear and its installed octic and quartic
+extensions.
 Native scalar output preflight reserves the existing 512-byte retained charge
 before arithmetic or shape/index checks, including zero results. Insufficient
 per-value or invocation output allowance reports `exhausted:output-bytes`.
@@ -127,8 +128,8 @@ The encoding is compact UTF-8 JSON
 `["zkc.matrix/0", fieldName, [rows, columns, entries]]`, with naturals and
 coefficients as canonical decimal strings. Entries are ordered `[row,column,value]`
 triples; zero coefficients are omitted. Prime-field values use least nonnegative
-representatives. The installed octic extension encodes its ascending coordinates
-as the integer `sum(c_i * p^i)`. Thus shape, nominal field and coefficients all
+representatives. The installed octic and quartic extensions encode their
+ascending coordinates as the integer `sum(c_i * p^i)`. Thus shape, nominal field and coefficients all
 contribute. The result is Boolean; a consuming guard decides whether to reject.
 This is a content-binding contract under the stated hash assumption, not a
 proof of source-compiler adequacy or prepared-key derivation.
@@ -230,6 +231,20 @@ even when disabled, the selection and equation have already executed.
 `prefix_sum` and `prefix_product` return inclusive prefixes, with the same length
 as their input; their empty result is empty. `vector.inverse` requires every
 entry to be nonzero. Prefix products permit zeros and never divide.
+
+`vector.bit_reverse<F>(v)` requires a length `n = 2^k` with `k >= 0` and
+returns `result[i] = v[rev_k(i)]`, where `rev_k` reverses the `k` low bits of
+`i`. `vector.bit_reverse_rows<F>(v,w)` treats `v` as a flat row-major table of
+width `w`; it requires `w > 0`, `length(v)` divisible by `w`, and a height
+`h = length(v)/w = 2^k`, and returns row `i` of the result equal to row
+`rev_k(i)` of the input, with the order within each row unchanged. A width of
+one is the element permutation. Both are involutions and preserve field
+identity and values. They refuse an empty or non-power-of-two height with
+`vector-bit-reversal` and a zero or non-dividing width with `vector-shape`, and
+take no attributes. They are positional, defined for every field independently
+of its characteristic or two-adic structure; they supply no evaluation-domain
+or polynomial meaning by themselves. A consumer that reads a bit-reversed layout
+as evaluations on a subgroup coset states that correspondence separately.
 
 `vector.fill<F>(x,n)` produces `n` copies of `x`; `vector.geometric<F>(x,n)`
 produces `[1,x,...,x^(n-1)]`. Both admit zero length and take a dynamic `index`.

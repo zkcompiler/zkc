@@ -1,6 +1,6 @@
 //! Shared dense scalar/vector/coefficient arithmetic. Mathematical meanings do
 //! not depend on physical layout. Callers preflight sizes before allocating.
-use crate::{KoalaBear, KoalaBearExt8};
+use crate::{KoalaBear, KoalaBearExt4, KoalaBearExt8};
 use crate::{Policy, Result, RistrettoScalar, Scalar, Value, exhausted, refused, value::size};
 use ark_ff::Field;
 use std::{
@@ -82,6 +82,16 @@ pub(crate) fn boundary<S: Coefficient>(coefficients: &[S]) -> S {
 pub(crate) fn normalized<S: Coefficient>(coefficients: &[S]) -> bool {
     coefficients.last().is_none_or(|c| *c != S::zero())
 }
+/// The index of `position` with its `log2(count)` low bits reversed; `count`
+/// is a power of two.
+pub(crate) fn reverse_bits(position: usize, count: usize) -> usize {
+    let bits = count.trailing_zeros();
+    if bits == 0 {
+        0
+    } else {
+        position.reverse_bits() >> (usize::BITS - bits)
+    }
+}
 pub(crate) fn reserve<T>(n: usize) -> Result<Vec<T>> {
     let mut v = Vec::new();
     v.try_reserve_exact(n)
@@ -135,6 +145,17 @@ impl Coefficient for KoalaBear {
     }
 }
 impl Coefficient for KoalaBearExt8 {
+    fn zero() -> Self {
+        <Self as p3_field::PrimeCharacteristicRing>::ZERO
+    }
+    fn one() -> Self {
+        <Self as p3_field::PrimeCharacteristicRing>::ONE
+    }
+    fn inverse(self) -> Option<Self> {
+        p3_field::Field::try_inverse(&self)
+    }
+}
+impl Coefficient for KoalaBearExt4 {
     fn zero() -> Self {
         <Self as p3_field::PrimeCharacteristicRing>::ZERO
     }
@@ -264,6 +285,16 @@ family!(
     crate::plonky3::parse_extension_decimal
 );
 
+family!(
+    KoalaBearExt4,
+    KoalaBearExt4Field,
+    KoalaBearExt4Vector,
+    KoalaBearExt4Matrix,
+    KoalaBearExt4Polynomial,
+    KoalaBearExt4Round,
+    crate::plonky3::parse_quartic_decimal
+);
+
 pub(crate) fn apply(
     name: &str,
     field: Option<Identity>,
@@ -271,28 +302,43 @@ pub(crate) fn apply(
     i: &Invocation<'_>,
     p: &Policy,
 ) -> Result<Vec<Value>> {
+    // The binding's output port names the extension; the base is KoalaBear.
+    let target = i
+        .binding
+        .signature()
+        .outputs
+        .first()
+        .map(|t| t.logical().identity());
     if name == "vector.embed" {
         let [Value::KoalaBearVector(xs)] = args else {
             return Err(refused("kernel-operands"));
         };
-        p.vector_width(xs.len(), 32)?;
-        p.output(size(xs.len(), 32)?, i.max_output_bytes)?;
-        let mut out = reserve(xs.len())?;
-        out.extend(xs.iter().copied().map(KoalaBearExt8::from));
-        return Ok(vec![Value::KoalaBearExt8Vector(out.into())]);
+        return match target {
+            Some(Identity::KoalaBearExt8) => {
+                p.vector_width(xs.len(), 32)?;
+                p.output(size(xs.len(), 32)?, i.max_output_bytes)?;
+                let mut out = reserve(xs.len())?;
+                out.extend(xs.iter().copied().map(KoalaBearExt8::from));
+                Ok(vec![Value::KoalaBearExt8Vector(out.into())])
+            }
+            Some(Identity::KoalaBearExt4) => {
+                p.vector_width(xs.len(), 16)?;
+                p.output(size(xs.len(), 16)?, i.max_output_bytes)?;
+                let mut out = reserve(xs.len())?;
+                out.extend(xs.iter().copied().map(KoalaBearExt4::from));
+                Ok(vec![Value::KoalaBearExt4Vector(out.into())])
+            }
+            _ => Err(refused("kernel-operands")),
+        };
     }
     if name == "field.embed" {
         p.output(512, i.max_output_bytes)?;
-        return match (
-            i.binding
-                .signature()
-                .outputs
-                .first()
-                .map(|t| t.logical().identity()),
-            args,
-        ) {
+        return match (target, args) {
             (Some(Identity::KoalaBearExt8), [Value::KoalaBearField(x)]) => {
                 Ok(vec![Value::KoalaBearExt8Field((*x).into())])
+            }
+            (Some(Identity::KoalaBearExt4), [Value::KoalaBearField(x)]) => {
+                Ok(vec![Value::KoalaBearExt4Field((*x).into())])
             }
             _ => Err(refused("kernel-operands")),
         };
@@ -302,6 +348,7 @@ pub(crate) fn apply(
         Some(Identity::Bls12381Fr) => dense::<Scalar>(name, args, i, p),
         Some(Identity::Ristretto255Scalar) => dense::<RistrettoScalar>(name, args, i, p),
         Some(Identity::KoalaBearExt8) => dense::<KoalaBearExt8>(name, args, i, p),
+        Some(Identity::KoalaBearExt4) => dense::<KoalaBearExt4>(name, args, i, p),
         Some(Identity::KoalaBear) => dense::<KoalaBear>(name, args, i, p),
         _ => Err(refused("kernel-operands")),
     }
@@ -546,6 +593,27 @@ fn dense<S: Family>(
             out.extend_from_slice(&a[..k]);
             Ok(vec![S::vector_value(out.into())])
         }
+        "vector.bit_reverse" | "vector.bit_reverse_rows" => {
+            let a = v(0)?;
+            let width = if name == "vector.bit_reverse" {
+                1
+            } else {
+                index(1)?
+            };
+            if width == 0 || !a.len().is_multiple_of(width) {
+                return Err(refused("vector-shape"));
+            }
+            let height = a.len() / width;
+            if !height.is_power_of_two() {
+                return Err(refused("vector-bit-reversal"));
+            }
+            let mut out = allocation(a.len())?;
+            for row in 0..height {
+                let source = crate::kernels::arithmetic::reverse_bits(row, height);
+                out.extend_from_slice(&a[source * width..(source + 1) * width]);
+            }
+            Ok(vec![S::vector_value(out.into())])
+        }
         "vector.interleave" => {
             let (a, b) = (v(0)?, v(1)?);
             equal_len(a.len(), b.len())?;
@@ -776,6 +844,12 @@ impl Value {
         v.extend_from_slice(values);
         Ok(Self::KoalaBearExt8Vector(v.into()))
     }
+    pub fn koala_bear_ext4_vector(values: &[KoalaBearExt4], policy: &Policy) -> Result<Self> {
+        policy.vector_width(values.len(), std::mem::size_of::<KoalaBearExt4>())?;
+        let mut v = reserve(values.len())?;
+        v.extend_from_slice(values);
+        Ok(Self::KoalaBearExt4Vector(v.into()))
+    }
     pub fn koala_bear_vector(values: &[KoalaBear], policy: &Policy) -> Result<Self> {
         policy.vector_width(values.len(), std::mem::size_of::<KoalaBear>())?;
         let mut v = reserve(values.len())?;
@@ -891,6 +965,28 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
             "arkworks/vector.rotate",
             "dalek/vector.rotate",
             "plonky3/vector.rotate",
+        ]),
+        field::operation(
+            "vector.bit_reverse",
+            &[Vector],
+            &[Vector],
+            AttributeRule::None,
+        )
+        .implemented_by(&[
+            "arkworks/vector.bit_reverse",
+            "dalek/vector.bit_reverse",
+            "plonky3/vector.bit_reverse",
+        ]),
+        field::operation(
+            "vector.bit_reverse_rows",
+            &[Vector, Index],
+            &[Vector],
+            AttributeRule::None,
+        )
+        .implemented_by(&[
+            "arkworks/vector.bit_reverse_rows",
+            "dalek/vector.bit_reverse_rows",
+            "plonky3/vector.bit_reverse_rows",
         ]),
         field::operation(
             "vector.interleave",
@@ -1408,5 +1504,6 @@ mod batch_inversion_tests {
         check::<RistrettoScalar>();
         check::<KoalaBear>();
         check::<KoalaBearExt8>();
+        check::<KoalaBearExt4>();
     }
 }

@@ -15,12 +15,23 @@ pub(super) fn format(ty: &PhysicalType) -> Option<(u8, usize, usize)> {
     }
     use Identity::*;
     use Type::*;
+    // Digest-generic Merkle roots and proofs: one tag each for every scheme;
+    // the expected type supplies the digest width and encoding.
+    if let Some(scheme) = crate::merkle::Scheme::from_identity(ty.logical().identity()) {
+        let width = scheme.digest_bytes();
+        return match ty.kind() {
+            Commitment => Some((71, width, width)),
+            Proof => Some((72, width, width)),
+            _ => Option::None,
+        };
+    }
     Some(match (ty.kind(), ty.logical().identity()) {
         (Vector, Bls12381Fr) => (66, 32, 32),
         (Vector, Bn254Fr) => (41, 32, 32),
         (Vector, Ristretto255Scalar) => (14, 32, 32),
         (Vector, KoalaBear) => (20, 4, 4),
         (Vector, KoalaBearExt8) => (27, 32, 32),
+        (Vector, KoalaBearExt4) => (22, 16, 16),
         (Groups, Bls12381G1) => (67, 48, 128),
         (Groups, Bn254G1) => (47, 32, std::mem::size_of::<crate::Bn254G1>()),
         (Groups, Bn254G2) => (49, 64, std::mem::size_of::<crate::Bn254G2>()),
@@ -32,6 +43,7 @@ pub(super) fn format(ty: &PhysicalType) -> Option<(u8, usize, usize)> {
         (Matrix, Ristretto255Scalar) => (24, 40, 40),
         (Matrix, KoalaBear) => (25, 12, 12),
         (Matrix, KoalaBearExt8) => (30, 40, 40),
+        (Matrix, KoalaBearExt4) => (28, 24, 24),
         (Commitment, MerkleKoalaBear) => (33, 32, 32),
         (Proof, MerkleKoalaBear) => (34, 32, 32),
         (Commitment, MerkleKoalaBearExt8) => (35, 32, 32),
@@ -39,7 +51,12 @@ pub(super) fn format(ty: &PhysicalType) -> Option<(u8, usize, usize)> {
         _ => return Option::None,
     })
 }
-fn limit(kind: Type, count: usize, memory: usize, p: &Policy) -> Result<()> {
+/// Keccak row-oracle paths keep their historical sibling cap; pruned proofs of
+/// the digest-generic schemes are bounded by the element ceiling instead.
+fn capped(tag: u8) -> bool {
+    matches!(tag, 34 | 36)
+}
+fn limit(kind: Type, tag: u8, count: usize, memory: usize, p: &Policy) -> Result<()> {
     if kind == Type::Groups {
         if count > p.max_groups.min(32768) {
             return Err(Error::Limit);
@@ -49,7 +66,7 @@ fn limit(kind: Type, count: usize, memory: usize, p: &Policy) -> Result<()> {
     } else {
         p.vector_width(count, memory).map_err(|_| Error::Limit)?;
     }
-    if kind == Type::Proof && count > 24 {
+    if kind == Type::Proof && capped(tag) && count > 24 {
         return Err(invalid(DecodeReason::Length));
     }
     Ok(())
@@ -61,6 +78,7 @@ fn count(value: &Value) -> Result<usize> {
         Value::RistrettoVector(v) => v.len(),
         Value::KoalaBearVector(v) => v.len(),
         Value::KoalaBearExt8Vector(v) => v.len(),
+        Value::KoalaBearExt4Vector(v) => v.len(),
         Value::Groups(v) => v.len(),
         Value::Bn254G1Vector(v) => v.len(),
         Value::Bn254G2Vector(v) => v.len(),
@@ -72,8 +90,11 @@ fn count(value: &Value) -> Result<usize> {
         Value::RistrettoMatrix(v) => v.entries().len(),
         Value::KoalaBearMatrix(v) => v.entries().len(),
         Value::KoalaBearExt8Matrix(v) => v.entries().len(),
+        Value::KoalaBearExt4Matrix(v) => v.entries().len(),
         Value::OracleRoot(..) => 1,
         Value::OraclePath(_, v) => v.len(),
+        Value::MerkleDigest(..) => 1,
+        Value::MerkleProof(scheme, v) => v.len() / scheme.digest_bytes(),
         _ => return Err(unsupported()),
     })
 }
@@ -85,9 +106,9 @@ fn quantities(kind: Type, count: usize) -> (usize, usize) {
     }
 }
 pub(super) fn value_counts(value: &Value, policy: &Policy) -> Result<(usize, usize)> {
-    let (_, _, memory) = format(&value.physical_type()).ok_or_else(unsupported)?;
+    let (tag, _, memory) = format(&value.physical_type()).ok_or_else(unsupported)?;
     let count = count(value)?;
-    limit(value.ty(), count, memory, policy)?;
+    limit(value.ty(), tag, count, memory, policy)?;
     Ok(quantities(value.ty(), count))
 }
 fn prefix(kind: Type) -> usize {
@@ -99,9 +120,9 @@ fn prefix(kind: Type) -> usize {
 }
 pub(super) fn width(value: &Value, policy: &Policy) -> Result<usize> {
     let ty = value.physical_type();
-    let (_, wire, memory) = format(&ty).ok_or_else(unsupported)?;
+    let (tag, wire, memory) = format(&ty).ok_or_else(unsupported)?;
     let n = count(value)?;
-    limit(ty.kind(), n, memory, policy)?;
+    limit(ty.kind(), tag, n, memory, policy)?;
     add(prefix(ty.kind()), mul(n, wire)?)
 }
 pub(super) fn scan(
@@ -113,7 +134,7 @@ pub(super) fn scan(
     policy.wire(bytes.len()).map_err(|_| Error::Limit)?;
     let kind = ty.kind();
     let n = if kind == Type::Commitment {
-        if bytes.len() != 38 {
+        if bytes.len() != add(6, wire)? {
             return Err(invalid(DecodeReason::Length));
         }
         if &bytes[..5] != super::super::MAGIC || bytes[5] != tag {
@@ -143,7 +164,7 @@ pub(super) fn scan(
             count
         }
     };
-    limit(kind, n, memory, policy)?;
+    limit(kind, tag, n, memory, policy)?;
     if bytes.len() != add(prefix(kind), mul(n, wire)?)? {
         return Err(invalid(DecodeReason::Length));
     }
@@ -165,6 +186,7 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Result<Vec<u8>> {
     // Reuse the type-owned canonical payload encoders.
     let mut bytes = crate::matrix::encode(value, policy)
         .or_else(|| crate::oracle::encode(value, policy))
+        .or_else(|| crate::merkle::encode(value, policy))
         .or_else(|| super::bn254::encode(value, policy))
         .or_else(|| super::domains::encode(value, policy))
         .unwrap_or_else(|| {
@@ -238,8 +260,27 @@ fn decode_value(backend: &NativeBackend, ty: &PhysicalType, bytes: &[u8]) -> Res
             24 => matrix::<crate::RistrettoScalar>(bytes, backend.policy()),
             25 => matrix::<crate::KoalaBear>(bytes, backend.policy()),
             30 => matrix::<crate::KoalaBearExt8>(bytes, backend.policy()),
+            28 => matrix::<crate::KoalaBearExt4>(bytes, backend.policy()),
             _ => Err(unsupported()),
         };
+    }
+    if matches!(tag, 71 | 72) {
+        let scheme = crate::merkle::Scheme::from_identity(ty.logical().identity())
+            .ok_or_else(unsupported)?;
+        let digests = &bytes[if tag == 71 { 6 } else { 10 }..];
+        // Canonical digest encodings only; framing alone authenticates nothing.
+        if !scheme.valid_digests(digests) {
+            return Err(invalid(DecodeReason::Scalar));
+        }
+        let mut copy = Vec::new();
+        copy.try_reserve_exact(digests.len())
+            .map_err(|_| Error::Limit)?;
+        copy.extend_from_slice(digests);
+        return Ok(if tag == 71 {
+            Value::MerkleDigest(scheme, copy.into())
+        } else {
+            Value::MerkleProof(scheme, copy.into())
+        });
     }
     if matches!(tag, 33..=36) {
         let d = if matches!(tag, 33 | 34) {
@@ -277,6 +318,12 @@ fn decode_value(backend: &NativeBackend, ty: &PhysicalType, bytes: &[u8]) -> Res
             32,
             crate::plonky3::decode_extension,
             KoalaBearExt8Vector,
+            Scalar
+        ),
+        22 => values!(
+            16,
+            crate::plonky3::decode_quartic,
+            KoalaBearExt4Vector,
             Scalar
         ),
         14 => values!(

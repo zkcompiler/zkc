@@ -57,12 +57,18 @@ pub const KOALA_BEAR_EXT8: NativeDomain = NativeDomain {
     group: None,
     provider: "plonky3",
 };
+pub const KOALA_BEAR_EXT4: NativeDomain = NativeDomain {
+    field: Identity::KoalaBearExt4,
+    group: None,
+    provider: "plonky3",
+};
 pub const INSTALLED: &[NativeDomain] = &[
     BLS,
     RISTRETTO,
     EDWARDS,
     KOALA_BEAR,
     KOALA_BEAR_EXT8,
+    KOALA_BEAR_EXT4,
     BN254_G1,
     BN254_G2,
     BN254_GT,
@@ -117,6 +123,11 @@ impl NativeDomain {
             (Identity::KoalaBearExt8, Polynomial) => (self.field, R::KoalaBearExt8Polynomial),
             (Identity::KoalaBearExt8, Round) => (self.field, R::KoalaBearExt8Round),
             (Identity::KoalaBearExt8, Matrix) => (self.field, R::KoalaBearExt8SparseCoo),
+            (Identity::KoalaBearExt4, Field) => (self.field, R::KoalaBearExt4),
+            (Identity::KoalaBearExt4, Vector) => (self.field, R::KoalaBearExt4Vector),
+            (Identity::KoalaBearExt4, Polynomial) => (self.field, R::KoalaBearExt4Polynomial),
+            (Identity::KoalaBearExt4, Round) => (self.field, R::KoalaBearExt4Round),
+            (Identity::KoalaBearExt4, Matrix) => (self.field, R::KoalaBearExt4SparseCoo),
             (Identity::KoalaBear, Field) => (self.field, R::KoalaBear),
             (Identity::KoalaBear, Vector) => (self.field, R::KoalaBearVector),
             (Identity::KoalaBear, Polynomial) => (self.field, R::KoalaBearPolynomial),

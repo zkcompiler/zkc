@@ -269,6 +269,7 @@ fn alternative_eligibility_is_an_explicit_finite_policy() {
     let expected = "
         field.from_index field.sub field.neg field.inverse field.constant field.add field.mul field.equal
         vector.transpose vector.equal vector.get vector.slice vector.length vector.rotate vector.interleave vector.prefix_product
+        vector.bit_reverse vector.bit_reverse_rows
         vector.prefix_sum vector.inverse vector.fill vector.geometric vector.constant vector.scatter_sum
         vector.empty vector.append vector.splat vector.powers vector.add vector.sub vector.mul vector.concat
         vector.kronecker vector.scale vector.sum vector.product vector.dot vector.split vector.at vector.length_check
@@ -456,7 +457,11 @@ relation.table_policy 0
 relation.table_interactions 0
 relation.table_interaction 0
 relation.table_record_points 0
-vector.transpose 0";
+vector.transpose 0
+vector.bit_reverse 0
+vector.bit_reverse_rows 0
+oracle.open_many 0
+oracle.check_many 0";
     let sequences = "sequence.empty 0\nsequence.append 0\nsequence.length 0\nsequence.at 0";
     let bytes = "encoding.index_uleb128 0\nbytes.repeat 0\nbytes.join 0\nencoding.fields_be 0\nencoding.fields_le 0\nencoding.groups_compressed 0\nbytes.empty 0\nbytes.append 0\nbytes.concat 0\nbytes.slice 0\nbytes.at 0\nbytes.length 0\nbytes.equal 0
 shake128.init 0
@@ -473,8 +478,14 @@ encoding.field_reduce_le 0
 encoding.group_decode_cofactor 0
 encoding.cryptonote_map 0
 encoding.fields_from_be 0
+encoding.fields_from_le 0
+encoding.field_montgomery_le 0
+encoding.field_from_montgomery_le 0
+encoding.fields_montgomery_le 0
+encoding.fields_from_montgomery_le 0
 hash.keccak256 0
-hash.sha256 0";
+hash.sha256 0
+hash.poseidon2_16 0";
     for line in fixture
         .lines()
         .chain(native.lines())

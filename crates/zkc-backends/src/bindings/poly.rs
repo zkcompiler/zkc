@@ -25,7 +25,7 @@ fn resolve(
             | "poly.opening_quotient"
     ) && !matches!(
         domain.field,
-        Identity::Bn254Fr | Identity::KoalaBear | Identity::KoalaBearExt8
+        Identity::Bn254Fr | Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4
     ) {
         return None;
     }

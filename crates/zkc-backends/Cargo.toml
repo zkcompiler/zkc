@@ -39,4 +39,5 @@ workspace = true
 
 [dev-dependencies]
 p3-challenger-043.workspace = true
+p3-poseidon2.workspace = true
 zkc-test-support.workspace = true

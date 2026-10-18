@@ -44,12 +44,14 @@ pub(super) fn literal_rule(rule: AttributeRule, field: Identity) -> AttributeRul
         (AttributeRule::FieldDecimals, Identity::Ristretto255Scalar) => {
             AttributeRule::RistrettoDecimals
         }
-        (AttributeRule::FieldDecimal, Identity::KoalaBear | Identity::KoalaBearExt8) => {
-            AttributeRule::KoalaBearDecimal
-        }
-        (AttributeRule::FieldDecimals, Identity::KoalaBear | Identity::KoalaBearExt8) => {
-            AttributeRule::KoalaBearDecimals
-        }
+        (
+            AttributeRule::FieldDecimal,
+            Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4,
+        ) => AttributeRule::KoalaBearDecimal,
+        (
+            AttributeRule::FieldDecimals,
+            Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4,
+        ) => AttributeRule::KoalaBearDecimals,
         (AttributeRule::FieldDecimal, Identity::Bn254Fr) => AttributeRule::Bn254Decimal,
         (AttributeRule::FieldDecimals, Identity::Bn254Fr) => AttributeRule::Bn254Decimals,
         _ => rule,
