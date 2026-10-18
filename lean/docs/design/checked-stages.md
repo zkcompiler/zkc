@@ -152,19 +152,19 @@ formula's process (`SchnorrProofBinding.formula_process`).
 | Original protocol | Structured export, admitted to `Program` | `Program.participant` per role, over the participant actions |
 | Role-local interactive | Virtual: the constructed export read by `spec` | `spec`, over the same actions |
 | Constructed | `zkc.constructed-participant/0` | `ideal`, a monadic function of a challenge function and a typed proof |
-| Executable participant | The validator participant of the `zkc.program/0` candidate, straight-line validators with single-level local calls | `Zkc.Executable.execute`: framed proof bytes, any decoder, an instruction budget, frames and transcript custody, related to the metered `ideal` by the [lowering rule](../spec/executable.md) |
+| Executable participant | The validator participant of the `zkc.program/0` candidate: receives, counted loops, transparent local calls and calls of the constructed validator's named helpers | `Zkc.Executable.execute`: framed proof bytes, any decoder, an instruction budget, loop and call frames and transcript custody, related to the metered `ideal` by the [lowering rule](../spec/executable.md) |
 | Below the executable participant | Not modeled | Representation refinements of the executable meaning with resource stops |
 
 ## Toward lower stages
 
 The rule from the constructed participant to the executable participant is a
-representation refinement. `Zkc.Executable` realizes it for straight-line
-validators whose constructed programs have no helper `call` instructions and no
-loops (the executable's single-level local calls are frames the reading treats
-transparently): the reading of the program into
-constructed instructions is the certificate, and the relation is outcome class,
-whole-proof consumption and challenge interaction against a metered ideal
-meaning. The meanings above fix what such a rule must expose in general:
+representation refinement. `Zkc.Executable` realizes it for validators with
+counted loops, transparent local calls and calls of the constructed validator's
+named helpers, whose prepared bodies are proved per program (`Prepared`): the
+reading of the program into constructed instructions is the certificate, and the
+relation is outcome class, whole-proof consumption and challenge interaction
+against a metered ideal meaning, which prunes the ideal meaning by stops at
+every budget. The meanings above fix what such a rule must expose in general:
 
 - the same action interface for receives and replies, with codecs that relate
   proof bytes to typed messages, refusing on decoding failure where the ideal

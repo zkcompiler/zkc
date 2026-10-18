@@ -682,7 +682,15 @@ with a trailing byte or a wrong response. `Tests.ExecutableControls` refuses
 instruction, operand, binding, type, symbol-table and identity mutations of the
 retained executable Schnorr validator with named reasons, and fixes the stop
 budgets, charged instructions, transitions, read messages and stop sites the
-runtime reports. The axiom closures of the `knowledge_soundness` theorems of
+runtime reports. `Tests.ExecutableSumcheckControls` refuses mutations of the
+executable Sumcheck validator's round loop, a helper function and the
+participant's return, and a helper that observes the transcript, and accepts a
+changed constant in the terminal check's body, whose computation is the
+preparation proof's obligation; on values in `ZMod 5` it fixes the runtime's
+observations: the honest run returns from 190 instructions, a failing round
+check stops inside its local call after 21 instructions, and a stop inside an
+iteration leaves the call, iteration and participant frames innermost first.
+The axiom closures of the `knowledge_soundness` theorems of
 `CompiledSchnorrFiatShamir`, `ExecutableSchnorrFiatShamir`,
 `StructuredSchnorrFiatShamir`, `SchnorrAndSigma` and `ChaumPedersenSigma` are
 `propext`, `Classical.choice` and `Quot.sound`.
