@@ -31,7 +31,9 @@ that all native behavior already has a Lean model.
   the transform of any validator from round-by-round soundness, in a random
   oracle on all typed histories, its instances for the imported Sumcheck
   verifier and the plain GKR verifier, and its composition with the checked
-  rules for the compiled Sumcheck and GKR proof Entries.
+  rules for the compiled Sumcheck and GKR proof Entries; formal readings of the
+  construction obligations, the type of provider simulations and the joint
+  experiment of a committed opening.
 - [FRI security](spec/fri-security.md): the verifier of the FRI library's
   low-degree test at the ideal interpretation of its commitments, its
   line-by-line correspondence to the source and ArkLib's FRI analysis, its

@@ -177,6 +177,17 @@ the executable meaning alone. Retiring the live transcript on a stop, and the
 returned one on a return, is part of the meaning's definition. The meaning has
 one resource, the instruction budget.
 
+The rule refuses a program whose calculations come in another order than the
+constructed instructions. A normalization that reschedules pure, total
+calculations without crossing a transcript operation's inputs
+([normalization invariant](../../../docs/spec/verification/refinement.md#normalization-across-transcript-operations))
+preserves the ideal meaning's outcome and challenge interaction, but not where a
+bounded run stops: the metered meaning charges each instruction where it runs.
+A theorem about such a program's metered executions therefore needs its own
+pruning relation at every budget, as `metered_prunes` is for the lowering rule,
+or a budget of at least the total charge, under which `execute_ideal` and
+`validate_ideal` identify the metered meaning with the ideal one.
+
 ## The compiled Schnorr proof verifier
 
 `ZkcExamples.Executable.SchnorrProof` applies the rule to the validator of the

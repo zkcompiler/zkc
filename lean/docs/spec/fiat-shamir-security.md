@@ -282,7 +282,8 @@ interaction: the prover's direct calls of the hash function or permutation,
 states shared between calls, collisions between derived inputs, and the query
 cost of each grinding attempt. This is a separate obligation of each transcript
 construction, stated with the idealization above; role separation at one key
-does not discharge it.
+does not discharge it. Its type is fixed in
+[provider simulations](#provider-simulations).
 
 ## The participant transform
 
@@ -575,6 +576,139 @@ to that layer's wiring, and the width and the number of layers are at most the
 Entry's maxima, four each. Acceptance ignores unread proof messages; no
 adaptive statement choice and no executable meaning of this Entry is covered.
 
+## Construction obligations
+
+The [construction obligations](../../../docs/spec/ir/construction-obligations.md)
+are the shared contract: query identities, construction classes, realized laws,
+observation classes and certified openings, blocks and gates, cryptographic
+effects, binding, provider and explicit-input obligations, equivalence notions
+and the [model and scope of claims](../../../docs/spec/ir/construction-obligations.md#model-and-scope-of-claims).
+The theorems of this chapter are stated in that classical random-oracle model.
+This section gives the formal readings of the obligations, the type of provider
+simulations and the joint experiment of a committed opening.
+
+### Formal readings
+
+`ZkcSecurity.FiatShamir.Obligations` reads each obligation over abstract
+carriers: a context `C` of the data present at one point of an execution and a
+projection `scope : C → K` that keeps its admitted part.
+
+- `Determines scope value`: two contexts with the same admitted part have the
+  same value. Its instances are `Reconstructible` (an omitted value is a function
+  of the absorbed history and earlier answers), `FixedAtReceivePoint` (an
+  opening's root, positions, dimensions and interpretation are functions of the
+  admissible sources), `CoveredByInput` (an explicit-input challenge's input
+  determines each value its check reads) and `SharesEqualInputs` (equal declared
+  inputs issue one primitive query). `not_determines` refutes it from two
+  contexts with equal admitted parts and different values.
+- `Omission` records an omitted producer value: the absorbed history at its
+  point, the value, whether a selected request follows, and whether it is a
+  certified opening. `Omission.Classified` holds when it is reconstructible, a
+  certified opening, or terminal.
+- `CausalReencoding earlier reencode`: a re-encoding of keys that may read the
+  oracle table computes each key from answers at strictly earlier keys only.
+  `PreservesQueryEquality`: under every table it is injective. These are two of
+  the four causal replay conditions; freshness across the joint cache and the
+  query-cost relation are properties of the two experiments.
+- `DistinctPrimitiveInputs reachable input`: distinct reachable transcript
+  queries reach distinct primitive inputs. `PrefixFreeEncoding encode`: no
+  encoding followed by more data is another encoding; it implies injectivity.
+- `ExactWithRefusal decode`: every event of the successful decoded value has
+  the success probability times its ideal probability; such a decoding is
+  realized with factor one and no slack (`ExactWithRefusal.realized`).
+- `ConsistentHandler hashing handler`: every selected call returns a fixed
+  function of its operation, whatever the handler's state, and never stops.
+- `ConstructionCorrect`: a constructed meaning equals the transform of the
+  original for every challenge function.
+- `AuthenticatedOperand fixed operand checked admissible`: the statement inputs
+  and authenticated configuration determine the operand, or every context the
+  validator lets through has an admissible value. `ProductionRange` requires
+  every admitted value to support the claim. `AuthenticatedConfiguration`
+  requires the configuration to be the same in every context.
+- `GateSite` records a gate's primitive input, the state before it, the witness
+  and the input of the gated value. `Placement` (the gate's input determines the
+  gated value's input), `ReadsState` and `AbsorbsWitness` are the admission
+  conditions.
+
+Exact statement determination is `Typed.Determined`, a realized law is
+`Realized` and the per-prefix local obligation is `Typed.Step`. The
+[counterexamples](../support.md#construction-obligation-counterexamples) refute
+properties and violate these predicates.
+
+### Provider simulations
+
+`ZkcSecurity.FiatShamir.Provider` fixes the type of a provider simulation for
+one property, one provider and one class of bounded executions.
+
+- `Budget Family := Family → ℕ` is the adversary's primitive calls per family.
+  `FamilyQueryBound family computation budget` bounds the calls of each family
+  on every path (VCVio's `IsQueryBound` with one counter per family), and
+  implies the total bound of the summed budget
+  (`FamilyQueryBound.isTotalQueryBound`).
+- `Expansion` gives a provider's calls at initialization, per absorbed event
+  kind and per request kind, and `ExecutionCounts` the occurrence counts of one
+  run at an execution bound's maxima. `Expansion.total` is
+  `initialization + Σ_e n_e · v_e + Σ_r n_r · v_r`; initialization is always
+  included (`Expansion.initialization_le_total`).
+- `QueryCost Family ExecBound` has `cost : Budget Family → ℕ` with `monotone`,
+  `expansion : ExecBound → ℕ` and `loss : Budget Family → ℕ → ENNReal`.
+  `QueryCost.ofCounts` builds the expansion from an `Expansion` and the counts of
+  each execution bound.
+- On traces, an `Assignment Call D` charges each call, given the calls before
+  it, at most one key or none; `charged` collects the charged keys, at most one
+  per call (`charged_length_le`). `ChargesAttemptsOnce` states that the two calls
+  of a split-hash grinding attempt are charged once.
+- `Simulation primitive family R concreteFailure idealFailure` carries
+  `translate`, a `QueryCost`, the transport of a family bound to the translated
+  adversary's total bound, and the inequality
+  `concreteFailure A b ≤ idealFailure (translate A) b + loss q (expansion b)` for
+  every adversary `A` within `q`. The transported bound gives the typed engine's
+  weighted budget (`Simulation.weightedBudget`), and an ideal bound in the
+  adversary's query count transfers with the loss added
+  (`Simulation.concrete_le`).
+
+### The committed-opening experiment
+
+`ZkcSecurity.Examples.CommittedOpening` states the joint security experiment of
+a protocol with commitment metadata, transcript binding, one challenge and one
+authenticated opening; its bound is a proposition, not a theorem.
+
+- **Protocol.** The authenticated `Configuration` fixes the scheme identity, the
+  depth `k` of a binary Merkle tree and the row width. The binding event absorbs
+  the context and the configuration; the producer sends a root, which is
+  absorbed; the validator requests one index below `2 ^ k` at the key
+  `verifierKey` (the binding, the root and the request); the producer sends the
+  opening, absorbed or omitted; the validator authenticates it through hash
+  calls at the configured width and depth (`authenticate`) and accepts exactly
+  when the scheme accepts the row (`verifier`).
+- **Readings.** `interpret` reads the process under an oracle for the joint
+  namespace `Query` (transcript keys and hash calls) in any monad. The concrete
+  reading accepts the honest proof exactly when its row is accepted, for every
+  challenge and hash function (`concrete_honest`), and absorbing or omitting the
+  terminal opening does not change any outcome (`concrete_absorption`). The
+  random-oracle reading evaluated against a total table is the concrete reading
+  (`evalWithAnswerFn_interpret`), so the honest experiment for a table of
+  accepted rows accepts with probability one (`oracle_honest`). In the ideal
+  reading hashing builds the tree of rows (`Carrier`, `idealHash`): an
+  authenticated row is the committed row at its index (`ideal_authenticated`).
+- **Experiment.** `experiment` runs any prover with access to every family,
+  then the validator, in one oracle; `loggedRun` keeps the joint record of all
+  calls in order. `Budgets` bounds the transcript and Merkle calls separately.
+- **Checkpoints.** `beforeFirst key record` is the record before the first query
+  of `key`, and `frozen extract c key record` the extraction for the
+  configuration `c` and the key from it: `T*[c, K]`. Once the key is queried,
+  later calls do not move it (`frozen_append`); in every deterministic run it does
+  not change when the answer at the key is resampled (`frozen_update`); one root
+  under two configurations gives two keys (`verifierKey_configuration`).
+  `FrozenAt key extract` states that an extraction reads only the record before
+  the key's first query.
+- **Event and bound.** `Far` holds of no extracted table, or of a table with at
+  least `δ · 2 ^ k` rejected rows. `AcceptsFar` is acceptance with the frozen
+  extraction at the validator's key far. `IntendedBound` is the proposition
+  `Pr[AcceptsFar] ≤ (q_T + 1) · κ · (1 - δ) + ε_ext + ε_ns` for every prover within
+  the budgets: the history-oracle term, the extraction and drift term over at
+  most `q_T + 1` checkpoints, and the namespace term.
+
 ## Obligations
 
 The informal "random oracle" assumption separates into five obligations:
@@ -590,7 +724,8 @@ The informal "random oracle" assumption separates into five obligations:
   idealization of the [transcript construction](#role-separation-and-transcript-constructions).
 - **Provider simulation.** For a construction whose sites read several hash or
   permutation calls, the deployed interaction is simulated by one oracle on
-  histories with the product answers the sites decode.
+  histories with the product answers the sites decode, with the type of
+  [provider simulations](#provider-simulations).
 - **Challenge distribution.** Each site's decoder is the suite's derivation of
   the challenge from the squeezed bytes, with a [realized law](#realized-sampling-laws).
   For the native suite's field challenges, modelled as `reduce` of a uniform
