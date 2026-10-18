@@ -25,7 +25,9 @@ that all native behavior already has a Lean model.
 - [Participant projection](spec/participant-projection.md): the checked rule
   relating an exported validator to the original program at its role, and its
   composition with transcript construction.
-- [Multi-round Fiat–Shamir security](spec/fiat-shamir-security.md): soundness of
+- [Multi-round Fiat–Shamir security](spec/fiat-shamir-security.md): soundness
+  over typed query sites with per-site errors and realized decoding laws,
+  including proof-of-work-gated and compound sites; as its instance, soundness of
   the transform of any validator from round-by-round soundness, in a random
   oracle on all typed histories, its instance for the imported Sumcheck
   verifier, and its composition with the checked rules for the compiled

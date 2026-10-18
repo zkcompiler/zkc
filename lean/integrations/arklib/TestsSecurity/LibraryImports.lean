@@ -42,8 +42,12 @@ import ZkcSecurity.Examples.Sumcheck
 import ZkcSecurity.Examples.SumcheckFiatShamir
 import ZkcSecurity.Examples.Variants
 import ZkcSecurity.FiatShamir.Decoding
-import ZkcSecurity.FiatShamir.Replay
+import ZkcSecurity.FiatShamir.Grinding
+import ZkcSecurity.FiatShamir.Interface
+import ZkcSecurity.FiatShamir.Roles
+import ZkcSecurity.FiatShamir.Sampling
 import ZkcSecurity.FiatShamir.Soundness
+import ZkcSecurity.FiatShamir.Typed
 import ZkcSecurity.Oracle.Encoding
 import ZkcSecurity.VCVio.Composition
 import ZkcSecurity.VCVio.Coupling
@@ -64,6 +68,7 @@ import TestsSecurity.Compatibility
 import TestsSecurity.CompiledSchnorrFiatShamir
 import TestsSecurity.CompiledSumcheckFiatShamir
 import TestsSecurity.ExecutableSchnorrFiatShamir
+import TestsSecurity.FiatShamirTyped
 import TestsSecurity.LocalCoupling
 import TestsSecurity.LocalCouplingAudit
 import TestsSecurity.LocalCouplingClients

@@ -71,13 +71,22 @@ export. `Examples/ExecutableSchnorrFiatShamir` transfers that bound to provers
 of proof bytes for the validator program the runtime admits, through the core
 [lowering rule](../../docs/spec/executable.md).
 
-`FiatShamir/Replay` and `FiatShamir/Soundness` prove
-[multi-round Fiat–Shamir soundness](../../docs/spec/fiat-shamir-security.md) of
-the core transform for any validator with a round-by-round certificate, by
-VCVio's adaptive bad-query bound applied directly to the oracle on all typed
-histories, for fixed and for adaptively chosen statements; `randomized_soundness`
-adds private randomness drawn before the oracle computation, and
-`FiatShamir/Decoding` bounds challenges reduced from wide uniform samples.
+`FiatShamir/Interface` and `FiatShamir/Typed` prove
+[Fiat–Shamir soundness over typed query sites](../../docs/spec/fiat-shamir-security.md#typed-query-sites):
+for any validator signature with a transcript interface whose query sites
+decode key-dependent raw answers, possibly refusing, and a round-by-round
+certificate with an error per site, by VCVio's weighted adaptive bad-query bound
+applied directly to the oracle on all event histories, for fixed and for
+adaptively chosen statements. `FiatShamir/Sampling` states realized sampling
+laws (exact, exact with refusal, point ratio with the KoalaBear and BLS12-381
+factors, additive loss), `FiatShamir/Grinding` gated and compound sites with the
+KoalaBear query phase, and `FiatShamir/Roles` role separation at one key.
+`FiatShamir/Soundness` derives
+[multi-round Fiat–Shamir soundness](../../docs/spec/fiat-shamir-security.md#the-participant-transform)
+of the core transform as their instance at the participant interface;
+`randomized_soundness` adds private randomness drawn before the oracle
+computation, and `FiatShamir/Decoding` bounds challenges reduced from wide
+uniform samples, additively and multiplicatively.
 `acceptance_le_of_image` carries the fixed-statement bound over to a compiled
 verifier that is an outcome image of the transform, and `acceptance_bind_done`
 and `adaptive_acceptance_bind_done` move a final projection of the validator's

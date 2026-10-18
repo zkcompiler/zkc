@@ -120,4 +120,36 @@ theorem balanced_reduce [Fintype F] [Nonempty F] [DecidableEq F] [SampleableType
       exact Nat.add_le_add_right (Nat.div_mul_le_self N _) _)
   simpa only [Fintype.card_fin] using balanced
 
+/-- Reducing a uniform sample below `N` modulo the field size multiplies every
+event's probability by at most `1 + |F| / N`. -/
+theorem dominated_reduce [Fintype F] [Nonempty F] [DecidableEq F] [SampleableType F]
+    (numbering : F ≃ Fin (Fintype.card F)) (N : ℕ) [NeZero N] [SampleableType (Fin N)] :
+    Dominated (reduce numbering N) (1 + (Fintype.card F : ENNReal) / N) := by
+  have bounded := pointBound_of_fibers (reduce numbering N) _ (reduce_fiber numbering N)
+  rw [Fintype.card_fin] at bounded
+  refine bounded.dominated.mono ?_
+  have nonzero : (N : ENNReal) ≠ 0 := by exact_mod_cast (NeZero.pos N).ne'
+  calc ((N / Fintype.card F + 1 : ℕ) : ENNReal) / N * Fintype.card F
+      = (((N / Fintype.card F + 1) * Fintype.card F : ℕ) : ENNReal) / N := by
+        rw [div_eq_mul_inv, mul_right_comm, ← div_eq_mul_inv, Nat.cast_mul]
+    _ ≤ ((N + Fintype.card F : ℕ) : ENNReal) / N := by
+        gcongr
+        rw [Nat.add_mul, Nat.one_mul]
+        exact Nat.add_le_add_right (Nat.div_mul_le_self N _) _
+    _ = 1 + (Fintype.card F : ENNReal) / N := by
+        rw [Nat.cast_add, ENNReal.add_div, ENNReal.div_self nonzero (ENNReal.natCast_ne_top _)]
+
+/-- A balanced total decoding is realized with factor one and its loss as
+slack. -/
+theorem Balanced.realized [SampleableType F] [SampleableType B] {decode : B → F}
+    {loss : ENNReal} (balanced : Balanced decode loss) :
+    Realized (fun answer => some (decode answer)) 1 loss := by
+  intro event
+  rw [one_mul, prEvent_congr _ _ (fun answer => event (decode answer)) fun answer =>
+    ⟨fun ⟨_, decoded, holds⟩ => by
+        cases Option.some.inj decoded
+        exact holds,
+      fun holds => ⟨_, rfl, holds⟩⟩]
+  exact balanced event
+
 end ZkcSecurity.FiatShamir

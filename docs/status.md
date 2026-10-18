@@ -290,7 +290,15 @@ the [named assumptions](../lean/docs/spec/fiat-shamir.md#named-assumptions). Lea
 proves [Fiat–Shamir soundness](../lean/docs/spec/fiat-shamir-security.md) of the
 transform of any validator over the common participant actions with a
 round-by-round soundness certificate, and of the imported Sumcheck verifier's
-transform. Composed with the Sumcheck Entry's checked transform equation, this
+transform. These are instances of a theorem over typed query sites: any
+validator signature with a transcript interface whose sites decode
+key-dependent raw answers, possibly refusing, with an error per site. Realized
+sampling laws (exact decodings, masking with refusal, low-bit masking of
+KoalaBear elements, reduction modulo the BLS12-381 scalar order as in EIP-4844),
+grinding-gated sites, compound sites and role separation at one key are proved
+for it. No compiled verifier has typed, gated or compound query sites yet: the
+native construction and the participant model draw field challenges only, so
+these results apply to compiled verifiers only through the participant instance. Composed with the Sumcheck Entry's checked transform equation, this
 bounds the compiled Sumcheck verifier's ideal interpretation in the random-oracle
 model: a false claim is accepted with probability at most `(Q + n) / |F|` for a
 fixed well-formed statement with `n` rounds (the Entry admits at most two), and
