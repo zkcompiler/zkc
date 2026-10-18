@@ -130,7 +130,12 @@ results; `GeneralizedJohnson` discharges the folding obligations with ArkLib's
 generalized Johnson folding bound for lines up to the cube-root radius
 `1 - (ρ + η)^(1/3)`, inside the Johnson radius `1 - ρ^(1/2)`; and
 `Certificate` restates the certificate over the verifier's residual
-processes after the first commitment, with an error per query site. These modules
+processes after the first commitment, with an error per query site.
+`Examples/FriFiatShamir` presents that verifier through a typed transcript
+interface, with a block sampler for the query positions, and applies
+`FiatShamir/Typed` for a
+[Fiat–Shamir bound](../../docs/spec/fri-security.md#fiatshamir-transfer)
+with commitments read in the clear. These modules
 use the per-round lemmas of ArkLib pull request #992, which this package applies
 to its pinned ArkLib revision as a declared, hashed patch
 ([`compatibility.json`](compatibility.json); see the

@@ -2,10 +2,11 @@
 
 This page specifies the independent model of the verifier of
 [`fri::LowDegree`](../../../libraries/fri/lib.zkc), its completeness on the
-tested code and its round-by-round soundness theorem. The model reads every
-commitment as the vector it commits to; it makes no claim about Merkle
-commitments, Fiat–Shamir, the compiled proof Entry or native execution. The
-modules are `ZkcSecurity.ArkLib.Fri.*` in the
+tested code, its round-by-round soundness theorem and its Fiat–Shamir transfer
+with one query-block site. The model reads every commitment as the vector it
+commits to; it makes no claim about Merkle commitments, the compiled proof Entry
+or native execution. The modules are `ZkcSecurity.ArkLib.Fri.*` and
+`ZkcSecurity.Examples.FriFiatShamir` in the
 [security integration](../../integrations/arklib/README.md).
 
 ## Subject
@@ -192,6 +193,45 @@ are under the uniform law of each site's sort: the query block's error
 decoding whose law is dominated by the uniform law with a factor multiplies its
 site's error by that factor.
 
+## Fiat–Shamir transfer
+
+`ZkcSecurity.Examples.FriFiatShamir` presents the verifier after the first
+commitment through a [typed transcript interface](fiat-shamir-security.md#typed-query-sites)
+(`absorb`) and turns the certificate above into a typed certificate
+(`typedCertificate`):
+
+- Events: committed words and the final coefficients, read in the clear (ideal
+  commitments); the occurrence of each folding challenge, answered by one field
+  element and decoded exactly; and the occurrence of the query block, answered
+  by the raw answer of a block sampler (`Block`). A sampler decodes its raw
+  answer into the `s` positions, may refuse, and has a realized law against the
+  uniform law of `Fin s → Fin (2^n)` with a factor and an additive slack.
+  `Block.exact` reads the positions directly, with factor one and slack zero;
+  `Block.gatedKoalaBear` gates them by a proof-of-work test on one KoalaBear
+  element and masks them from the low bits of `s` KoalaBear elements. The
+  verifier queries only the block of its own shape; any other shape refuses.
+- Statement: the initial word. Its commitment event is the initial history and
+  determines it (`initial_determined`).
+- Errors: folding round `r` errs at most `foldError r` and the query block at
+  most `factor · (1 - min θ δ)^s + slack`. The verifier charges each folding
+  round once and the block once (`costBound_foldPhase`).
+
+`fiatShamir_soundness` applies `Typed.adaptive_soundness_weighted`. For initial
+words the prover chooses after its queries, the transform accepts with an
+initial word at relative distance at least `δ` from the code with probability
+at most `proverCost + ∑ r < R, foldError r + (factor · (1 - min θ δ)^s + slack)`,
+from the proximity premise. `proverCost` bounds the prover's charge with every
+oracle key charged the error of its last event, so a prover with `Q` queries is
+charged at most `Q` times the largest site error. This is a complete
+Fiat–Shamir bound for the model, not one round's error.
+`fiatShamir_soundness_uniqueDecoding` instantiates the folding errors in the
+unique-decoding regime, `2^(n - r - 1) / |F|` for `0 < θ ≤ (1 - ρ) / 2`, and
+`fiatShamir_soundness_koalaBear` also the gated KoalaBear block: with a `g`-bit
+gate and positions of `n` bits, `g, n ≤ 24`, its query term is
+`(1 + (2^g - 1) / p) / 2^g · (1 + (2^n - 1) / p)^s · (1 - min θ δ)^s`, with `p`
+the KoalaBear modulus. `koalaBear_queryPhase` states the same query error as a
+probability over the raw answer.
+
 ## Boundaries
 
 - Commitments are ideal. Security of the Merkle-based verifier needs a
@@ -200,9 +240,12 @@ site's error by that factor.
   The residual certificate has one query block site, while the source draws the
   `s` positions one at a time. In the transform, each draw's history ends with the
   verifier's send of the previous position, so no prover message separates the
-  draws, but the histories differ. Relating these draws to one block site, and
-  decoding indices from transcript outputs, are part of the transfer.
-- No grinding is modelled; the library has none.
+  draws, but the histories differ. The Fiat–Shamir transfer above has one
+  query-block key; relating the source's draws to it, and decoding indices from
+  the deployed transcript's outputs, remain open. Its events carry whole words;
+  a commitment step would replace them by roots with extraction.
+- The library has no grinding. The gated KoalaBear block is a sampler of the
+  Fiat–Shamir model, not of the library.
 - The returned first-layer values are tied to the initial word
   (`firstValue_eq`); binding them to a caller's opening equations is the caller's
   obligation.

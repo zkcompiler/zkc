@@ -43,6 +43,7 @@ import ZkcSecurity.Examples.CompiledSchnorrFiatShamir
 import ZkcSecurity.Examples.CompiledSumcheckFiatShamir
 import ZkcSecurity.Examples.ExecutableSchnorrFiatShamir
 import ZkcSecurity.Examples.ExecutableSumcheckFiatShamir
+import ZkcSecurity.Examples.FriFiatShamir
 import ZkcSecurity.Examples.GkrFiatShamir
 import ZkcSecurity.Examples.Schnorr
 import ZkcSecurity.Examples.SchnorrAndSigma
