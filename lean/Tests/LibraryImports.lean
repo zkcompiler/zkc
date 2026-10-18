@@ -7,6 +7,7 @@ import Zkc.Construction.FiatShamir
 import Zkc.Construction.Participant
 import Zkc.Construction.Projection
 import Zkc.Construction.ProjectionSoundness
+import Zkc.Construction.Reading
 import Zkc.Construction.Rule
 import Zkc.Construction.Semantics
 import Zkc.Construction.Soundness
@@ -331,6 +332,7 @@ import ZkcExamples.Structured.ChaumPedersenData
 import ZkcExamples.Structured.ChaumPedersenViews
 import ZkcExamples.Structured.GkrSourceBodies
 import ZkcExamples.Structured.GkrSourceData
+import ZkcExamples.Structured.GkrSourceLaws
 import ZkcExamples.Structured.GkrSourceViews
 import ZkcExamples.Structured.GkrVerifierProcess
 import ZkcExamples.Structured.LogicalContextControls
