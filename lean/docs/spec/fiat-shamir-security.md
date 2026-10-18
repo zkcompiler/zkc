@@ -718,6 +718,50 @@ one property, one provider and one class of bounded executions.
   such a bound, `(queries + budget) · bound`
   (`randomized_soundness_of_queryBound`, from `Typed.randomized_soundness_weighted`).
 
+**Hash-chain suites.** `ZkcSecurity.HashChain` instantiates this type for the
+[native hash-chain suites](../../../docs/spec/ir/construction.md#native-hash-chain-suites),
+with the byte hash read as a random oracle whose digests `S` are the states
+(`2^256` of them for the installed suites). `Model` classifies primitive inputs
+by role (binding the first event, absorbing an event at a state, counter block
+`k` of a request at a state, every other input) and runs the validator of any
+typed transcript interface with the chain: a query occurrence is answered by
+`width` counter blocks at the current state and is then absorbed. The bad event
+is read on the joint primitive-query trace of the adversary and the verifier, in
+call order: a fresh call that generates a state (a binding, or an absorption at
+a reached state) returns a digest that an earlier call generated or read as a
+state, which is a collision or a prediction. The probability of any event of
+the concrete experiment exceeds its probability in the experiment where a
+lazily sampling simulator over the history oracle answers the adversary by at
+most the probability of the bad event (`concrete_le`, through an
+identical-until-bad coupling of simulations with different states,
+`ZkcSecurity.VCVio.UntilBad`), and the bad event has probability at most
+`(q + V)² / |S|` for `q` adversary calls and `V` verifier calls, initialization
+included (`concrete_le_simulated`).
+
+`chainSimulator` assigns counter block `k < width` of a request with occurrence
+`e`, at a state reached by the recorded history `h`, to the attempt `h ++ [e]`,
+and answers every other call from its private tape of `q` digests. A history is
+recorded when its state is first reached and is never replaced, so assignments
+persist. A request answered privately joins an attempt when a later answer
+reaches its state, as the
+[shared contract](../../../docs/spec/ir/construction-obligations.md#provider-simulations-and-their-query-cost)
+allows; that divergence from the concrete hash is the prediction case of the bad
+event. Deferred sampling (`ZkcSecurity.VCVio.Deferral`) shows that the lazily
+sampling simulation has the law of the translation through `chainSimulator`
+(`simulatedExperiment_eq_translated`), and `simulation` is the `Simulation`
+instance with one family, cost `q`, the verifier's calls as expansion and loss
+`(q + V)² / |S|`. Because initial histories determine the statements, it
+composes with `Typed.adaptive_soundness` rather than the fixed-statement bound
+above: with a certificate whose errors are at most `bound`, the concrete
+experiment accepts a false statement with probability at most
+`(q + queries) · bound + (q + V)² / |S|` (`concrete_soundness`; with pathwise
+charges, `concrete_soundness_weighted`). `Encoding` proves the byte framing
+injective and prefix-free and the three role tags pairwise non-prefix, and
+`byte_soundness` transfers the bound to a hash on bytes, given injective state
+encodings of one length, injective event encodings and `width ≤ 2^64`. The
+theorems assume `0 < width` and nonempty initial histories; every request has
+the same number of blocks.
+
 ### The committed-opening experiment
 
 `ZkcSecurity.Examples.CommittedOpening` states the joint security experiment of
