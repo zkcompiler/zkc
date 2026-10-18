@@ -151,6 +151,8 @@ class Schnorr:
     # The executable takes the data inputs base then statement; values are mapped to zero.
     prediction_data = '[.data (.group "bls12-381.g1" 0), .data (.group "bls12-381.g1" 0)]'
     threshold = 25
+    # The static total charge; the rule theorem `actual_total` checks it.
+    charge = None
     theorem = "ZkcSecurity.Examples.ExecutableSchnorrFiatShamir.knowledge_soundness"
     security_module = "ZkcSecurity.Examples.ExecutableSchnorrFiatShamir"
     chain = [
@@ -341,6 +343,10 @@ class Sumcheck:
     # maps every value to zero, so that every honest check holds.
     prediction_data = '[.vector "bls12-381.fr" [0, 0, 0, 0], .data (.field "bls12-381.fr" 0), .index 2]'
     threshold = 190
+    # The Lean charge bound of a complete run for the public round count; the honest
+    # run must be accepted from exactly this budget (`SumcheckCompleteness.honest_accepted`).
+    charge = "ZkcExamples.Executable.SumcheckCharges.charge"
+    completeness_module = "ZkcExamples.Executable.SumcheckCompleteness"
     theorem = "ZkcSecurity.Examples.ExecutableSumcheckFiatShamir.adaptive_soundness"
     security_module = "ZkcSecurity.Examples.ExecutableSumcheckFiatShamir"
     chain = [
@@ -359,6 +365,11 @@ class Sumcheck:
         "ZkcExamples.Executable.SumcheckProof.executable_transform_prunes",
         "ZkcExamples.Executable.SumcheckHelpers.prepared",
         "ZkcExamples.Executable.SumcheckHelpers.check_prepared",
+        "ZkcExamples.Executable.SumcheckCompleteness.honest_accepted",
+        "ZkcExamples.Executable.SumcheckCharges.sufficient",
+        "ZkcExamples.Executable.SumcheckCharges.check_cost",
+        "Zkc.Executable.metered_sufficient",
+        "Zkc.Executable.validate_sufficient",
         "ZkcExamples.Construction.SumcheckProof.compiled",
         "ZkcExamples.Construction.SumcheckProof.compiled_transform",
         "Zkc.Executable.execute_metered",
@@ -545,7 +556,10 @@ class Sumcheck:
              "helper_preparation": "ZkcExamples.Executable.SumcheckHelpers.prepared",
              "soundness": ["Zkc.Executable.execute_metered", "Zkc.Executable.validate_metered",
                            "Zkc.Executable.metered_prunes", "Zkc.Executable.validate_prunes",
-                           "Zkc.Executable.execute_cleaned"]},
+                           "Zkc.Executable.execute_cleaned"],
+             "completeness": ["Zkc.Executable.metered_sufficient", "Zkc.Executable.validate_sufficient",
+                              "ZkcExamples.Executable.SumcheckCharges.sufficient",
+                              "ZkcExamples.Executable.SumcheckCompleteness.honest_accepted"]},
         ]
 
 
@@ -642,6 +656,8 @@ class Driver:
         prefixes = ", ".join(f"`{name}" for name in ENTRY_PREFIXES)
         meanings = ", ".join(f"`{name}" for name in COMPILED_MEANINGS)
         imports = sorted({subject.security_module for subject in subjects}
+                         | {subject.completeness_module for subject in subjects
+                            if getattr(subject, "completeness_module", None)}
                          | {"ZkcSecurity.Examples.ExecutableSchnorrFiatShamir"})
         chain = []
         for subject in subjects:
@@ -924,13 +940,21 @@ class Driver:
             lines.append(f"#eval IO.println (predict {budget} {lean_bytes(binding)} {lean_bytes(bytes_)} "
                          f"[{', '.join(lean_bytes(item) for item in invalid)}] "
                          f"[{', '.join(lean_bytes(item) for item in ones)}])")
+        if subject.charge:
+            # The charge bound of the completeness theorem at the public round count.
+            rounds = int(json.loads(subject.public.read_text())["rounds"])
+            lines.insert(2, f"import {subject.completeness_module}")
+            lines.append(f"#eval IO.println (\"charge \" ++ toString ({subject.charge} {rounds}))")
         path = self.directory(subject) / "Predictions.lean"
         path.write_text("\n\n".join(lines) + "\n", encoding="utf-8")
         result = self.run([self.args.lake, "env", "lean", path], cwd=LEAN,
                           name=f"{subject.name}:lean-predictions")
         values = [json.loads(line) for line in result.stdout.splitlines() if line.startswith("{")]
         self.check(f"{subject.name}:lean-predictions", len(values) == len(cases), result.stdout[-400:])
-        return values
+        charges = re.findall(r"^charge (\d+)$", result.stdout, re.M)
+        if subject.charge:
+            self.check(f"{subject.name}:lean-charge", len(charges) == 1, result.stdout[-400:])
+        return values, (int(charges[0]) if charges else None)
 
     def runtime(self, subject, artifacts):
         output = self.directory(subject)
@@ -956,7 +980,12 @@ class Driver:
             observed.append((name, self.observed(exit_code, report)))
             codes[name] = (exit_code, report.get("code"))
         subject.runtime_only(self, codes)
-        predicted = self.predictions(subject, artifacts, cases, binding)
+        predicted, charge = self.predictions(subject, artifacts, cases, binding)
+        if subject.charge:
+            # Completeness: the runtime accepts the honest proof from exactly the budget the Lean
+            # charge bound gives for the public round count.
+            self.check(f"{subject.name}:runtime-threshold-is-lean-charge", charge == subject.threshold,
+                       json.dumps(dict(charge=charge, threshold=subject.threshold)))
         comparisons = []
         for (name, actual), expected in zip(observed, predicted):
             if expected["outcome"] == "returned" and actual["outcome"] == "accepted":
@@ -972,7 +1001,8 @@ class Driver:
         accepted = [c["case"] for c in comparisons if c["runtime"]["outcome"] == "accepted"]
         expected = [f"budget-{subject.threshold}", f"budget-{subject.threshold + 1}", "honest"]
         self.check(f"{subject.name}:runtime-accepted-cases", accepted == expected, json.dumps(accepted))
-        return dict(pin=pin, proof_sha256=digest(proof), binding=binding.hex(), comparisons=comparisons)
+        return dict(pin=pin, proof_sha256=digest(proof), binding=binding.hex(), lean_charge=charge,
+                    comparisons=comparisons)
 
     # The receipt and its binding to the runtime.
 

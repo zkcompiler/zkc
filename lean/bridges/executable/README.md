@@ -78,7 +78,11 @@ For each subject:
    its local call, in the round where they occur. The runtime must accept
    exactly the honest proof at the threshold budget (25 and 190), one past it,
    and without a budget. It must reject the wrong Schnorr response as
-   `artifact-rejected`, which the value-free prediction cannot distinguish.
+   `artifact-rejected`, which the value-free prediction cannot distinguish. For
+   Sumcheck, the charge bound of the completeness theorem
+   (`SumcheckCharges.charge`, which `SumcheckCompleteness.honest_accepted`
+   proves sufficient for the honest proof) must equal the runtime's threshold at
+   the public round count.
 5. In the ArkLib integration, every theorem of each receipt's chain, from the
    lowering rule and the helper preparation to the byte-level theorems
    (`ExecutableSchnorrFiatShamir.knowledge_soundness`,
