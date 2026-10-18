@@ -114,8 +114,9 @@ explicit returned decision handled by the [attempt Host](../runtime/attempts.md)
 Construction checking covers observation/state wiring; neither supplies a
 Fiat–Shamir reduction, an entropy law or arbitrary authored-transcript security.
 `protocol-constructed-participant` exports a checked candidate's validator for
-the formal [transcript-construction rule](../../lean/docs/spec/fiat-shamir.md),
-which currently covers the flat native construction of the Schnorr proof Entry.
+the formal [transcript-construction](../../lean/docs/spec/fiat-shamir.md) and
+[participant projection](../../lean/docs/spec/participant-projection.md) rules;
+[status](../status.md#checking-and-evidence) lists the proof Entries they check.
 The [native validation map](../../common/tests/native.md) identifies flat, iterated,
 structured, setup-backed and authored clients and their references.
 

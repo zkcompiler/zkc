@@ -217,6 +217,7 @@ no runtime predicate evaluation or proof transport through those transforms.
 | FRI source library | [Binary FRI](../examples/projects/fri/README.md) over natural-order two-adic cosets, with commitment/fold/query/terminal checks and independent-reference tests. The library retains a checked coset word across folds; the AIR library consumes the authenticated positions and values. Security theorems remain separate obligations. |
 | Pairing groups | BN254 and BLS12-381 each install G1, G2 and a prime-order target with group arithmetic, `pairing.check`, `pairing.apply`, canonical compressed codecs and native frames; [contract](spec/domains/values.md#pairing-field-capabilities). BLS12-381 G2 uses the 96-byte compressed encoding of the Ethereum consensus specifications. Independent arkworks comparisons and Ethereum ceremony points check arithmetic and encodings; no native adequacy proof. |
 | General numerical composition | Installed field/group/vector/matrix, polynomial, pairing and oracle kernels with [composed clients](compiler/mathematics.md) and [changing numeric state](compiler/mathematics.md). The [linear-expression library](../libraries/zkc/README.md#linear-group-expressions) composes ordered scalar/point terms and evaluates one equation through an ordinary MSM; authors combine shared-basis coefficients explicitly. Complete Groth16 applications remain separate work. The source [Bulletproofs+ library](../libraries/bulletproofs/README.md) implements weighted inner-product rounds and Monero 64-bit aggregated range proofs for 1..16 commitments; pinned upstream controls compare exact bytes at every count. Full transaction integration, batch verification and security proofs remain outside this library. The source [KZG library](../libraries/kzg/README.md) implements the EIP-4844 commitment, proof, challenge, batch-verification and precompile functions. Its constructions reproduce c-kzg-4844's explicit challenge hash inputs, tagged `FSBLOBVERIFY_V1_` and `RCKZGBATCH___V1_`, and all 262 c-kzg-4844 v2.1.8 vectors and 57 derived reference cases agree; no Fiat–Shamir security theorem covers these constructions. Under default execution capacity a batch verifies up to 63 blobs, where the proof Host's public-input binding stops, and proves up to 19, where the allocation budget stops; bit-reversing each 4096-element blob in source dominates the prover's allocation. Asset formats carry relation data only, so the prover receives the setup's G1 Lagrange points as an ordinary input that the library admits only with their pinned SHA-256, and the verifier key is a library constant. The batch transcript construction recomputes each blob's evaluation point and value from the statement, because a construction observes only messages and start inputs. No KZG security proof is claimed. |
+| Sigma source library | The [Sigma library](../libraries/sigma/README.md) composes the Schnorr pattern into an AND of two discrete-logarithm statements with one shared challenge and a Chaum–Pedersen proof of one discrete logarithm at two bases; the [example project](../examples/projects/sigma/README.md) selects BLS12-381 G1 and the Merlin suite. Maintained checks cover declaration checking, native SSA/Lean replay of the Interactive Entries and construction checking of the compiled proof Entries; no maintained test runs, proves or verifies its Entries through the Host or refuses a wrong witness or proof. Formal results are in [support](../lean/docs/support.md#sigma-compositions). |
 | Checked element access | `matrix.get` preserves BLS12-381 Fr, BN254 Fr, Ristretto255 scalar, KoalaBear, KoalaBear Ext8 and KoalaBear Ext4; missing in-range sparse cells yield zero. `field_array.get` accepts a dynamic index over native BLS12-381 Fr arrays; static `field_array.at` remains available. Both check bounds, including empty shapes and huge indices. The libraries also expose total `at` access under checked input conditions; finite domain indices and matrix views can discharge these bounds. |
 | Relations | Bounded R1CS/AIR data import and Assets, exact [relation bindings](compiler/relations.md), a [native R1CS reduction adapter](compiler/relations.md), and an isolated [Plonky3 AIR adapter](../compiler/adapters/plonky3/README.md) checked differentially against its pinned upstream. Import does not prove upstream source adequacy. |
 | Multi-table relations | [Relation bundles](spec/domains/relation-bundles.md) have independent C++ and Rust admission and evaluation of deterministic data and challenge-dependent staged predicates. Captured Bundles retain an explicit source relation ABI, table/public/channel counts, polynomial facts, interaction descriptors and simultaneous record substitution. The external [accumulator-machine adapter](../compiler/adapters/accumulator-machine/README.md) supplies a CPU/program/memory relation and independent staged LogUp/grand-product references. The [source machine proof](../common/tests/fixtures/projects/accumulator-machine/README.md) commits base, auxiliary and quotient columns, checks OOD identities and composes one FRI instance. Its selected profile has three tables with independent two-adic heights, optional presence, global all-row Boolean multisets, and signed field balance through LogUp. Native immutable table-width metadata is independent of height and presence; polynomial references admit table/carrier structure, and reached height-taking operations retain actual domain and window checks. Source admission uses these widths for absent configuration and reserves polynomial shape checks for present tables. Complete proof controls cover absent fixed/configured heights 1, 3 and beyond the active profile, exact configuration lengths, and present-table refusal. Arbitrary table counts and other interaction profiles remain library work; relation adequacy and cryptographic soundness are not established by these executions. |
@@ -273,12 +274,45 @@ receives. Neither establishes a Fiat–Shamir reduction or arbitrary polynomial
 or protocol equivalence.
 
 The [transcript-construction bridge](../lean/bridges/construction/README.md)
-exports the compiled Schnorr proof Entry's checked validator
-([format](spec/formats/constructed-participant.md)). Lean checks its transcript
-construction against the original export and proves fixed-statement
-Fiat–Shamir knowledge soundness for it in the random-oracle model, under the
-[named assumptions](../lean/docs/spec/fiat-shamir.md#named-assumptions). Other
-Entries, suites and programmable constructions have no such check.
+exports the checked validators of the compiled proof Entries of the Schnorr,
+Sumcheck, composed Sumcheck and Sigma examples
+([format](spec/formats/constructed-participant.md)). Lean checks their transcript
+construction and their [participant projection](../lean/docs/spec/participant-projection.md)
+against the original exports and proves that each compiled verifier's ideal
+meaning, with helper calls read by the original's helpers, is the Fiat–Shamir
+transform of its original verifier; other Entries, suites and programmable
+constructions have no such check. The composed Sumcheck and the Sigma proof
+Entries have this transform equation only; no security theorem covers them. The
+exporter repeats the native proof check before printing the validator; it is
+reviewed native code, not a proved component. For Schnorr it proves
+fixed-statement Fiat–Shamir knowledge soundness in the random-oracle model, under
+the [named assumptions](../lean/docs/spec/fiat-shamir.md#named-assumptions). Lean also
+proves [Fiat–Shamir soundness](../lean/docs/spec/fiat-shamir-security.md) of the
+transform of any validator over the common participant actions with a
+round-by-round soundness certificate, and of the imported Sumcheck verifier's
+transform. Composed with the Sumcheck Entry's checked transform equation, this
+bounds the compiled Sumcheck verifier's ideal interpretation in the random-oracle
+model: a false claim is accepted with probability at most `(Q + n) / |F|` for a
+fixed well-formed statement with `n` rounds (the Entry admits at most two), and
+at most `(Q + 2) (1 / |F| + loss)` for adaptively chosen well-formed statements,
+`loss` being the challenge decoding's excess, when the initial
+transcript determines the statement. The host's binding of the Entry's vector
+and count public inputs is not modelled, so that adaptive premise is not
+discharged for the deployed Entry.
+The [executable bridge](../lean/bridges/executable/README.md) reads the validator
+of the Schnorr Entry's `zkc.program/0` candidate, which the runtime admits. Lean
+checks it against the constructed validator with a [lowering rule](../lean/docs/spec/executable.md)
+whose meaning covers proof framing, decoding failures, instruction budgets,
+frames and transcript custody, and transfers the knowledge-soundness bound to
+provers of proof bytes through the general construction, projection and lowering
+rules, with no equation specific to the Entry about the compiled program. The
+bridge compares the runtime's
+stops and observations with that meaning and checks that the runtime executes the
+program a verification receipt names, with the acceptance output and public
+inputs of the Lean statement. The runtime's execution, kernels and codec, the
+program renderer and the structured exporter remain trusted; the runtime refuses
+some inputs the meaning classifies differently, listed in
+[support](../lean/docs/support.md).
 
 The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retained
 PIR programs, proves open-process contracts, and applies selected ArkLib/VCVio
@@ -300,9 +334,13 @@ linking, role scopes, service provenance and computational availability, and
 proves its process equations on the shared Region carrier.
 [Formal support](../lean/docs/support.md) states exact experiments and premises,
 including: the Interactive Schnorr verifier contracts, an honest prover derived
-from the checked source's sends and the Sigma properties; two inlining pairs
-checked against actual prepared exports; and `n / |F|` Sumcheck bounds on the
-actual admitted roots under a uniform query service. No general
+from the checked source's sends and the Sigma properties; the Schnorr AND and
+Chaum–Pedersen compositions with their Sigma properties and fixed-statement
+random-oracle knowledge soundness of the Fiat–Shamir transforms of their
+imported interactive verifiers (not of the compiled proof Entries); two inlining pairs checked
+against actual prepared exports; `n / |F|` Sumcheck bounds on the actual
+admitted roots under a uniform query service; and honest-prover completeness of
+both imported Sumcheck pairs with the prover's per-round fold invariant. No general
 availability-soundness or native execution-correspondence theorem is claimed.
 Full DSL/compiler/runtime correspondence, production arithmetic/sampling,
 backend correctness and complete protocol security remain open.

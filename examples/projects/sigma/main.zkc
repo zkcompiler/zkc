@@ -1,0 +1,23 @@
+module example;
+use sigma::{ChaumPedersen, SchnorrAnd};
+domain G = group("bls12-381.g1");
+
+proof AndProof = SchnorrAnd<G> {
+  prover P;
+  verifier V;
+  public { first_base, first_point, second_base, second_point };
+  accept accepted;
+  target knowledge;
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
+}
+run AndInteractive = SchnorrAnd<G>;
+
+proof EqualityProof = ChaumPedersen<G> {
+  prover P;
+  verifier V;
+  public { first_base, first_point, second_base, second_point };
+  accept accepted;
+  target knowledge;
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
+}
+run EqualityInteractive = ChaumPedersen<G>;

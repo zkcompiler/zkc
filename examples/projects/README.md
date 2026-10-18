@@ -6,6 +6,7 @@ Start with Schnorr, then Sumcheck and FRI before the STARK examples.
 | Project | What it shows |
 |---|---|
 | [Schnorr](schnorr/README.md) | A generic group protocol, interactive execution and independent proofs; a [Spongefish variant](schnorr/spongefish/README.md) selects an external transcript and byte format |
+| [Sigma compositions](sigma/README.md) | Schnorr AND with a shared challenge and Chaum–Pedersen with a shared witness, interactive and noninteractive |
 | [Sumcheck](sumcheck/README.md) | Public-table multilinear Sumcheck, [composition](sumcheck/composed/README.md), and a [product expression](sumcheck/product/README.md) with extension-field challenges |
 | [FRI](fri/README.md) | Authenticated folding and a bounded terminal polynomial |
 | [Fibonacci](fibonacci/README.md) | One STARK protocol applied to Clean and Plonky3 AIRs |

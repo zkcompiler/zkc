@@ -48,6 +48,18 @@ admission modules own lowering, declaration ordering, preparation selection and
 profile checks. Dependency tests enforce this separation for participant
 semantics and the optional VCVio uniform-service adapter.
 
+`Zkc.Construction` owns the compiled-stage carrier: exported constructed
+participants, their ideal and interactive meanings, and the checked stage rules
+between them and the structured original (transcript construction, participant
+projection), with soundness theorems that compose
+([checked compiler stages](design/checked-stages.md)). It depends on structured
+participant semantics; the structured import does not depend on it.
+`Zkc.Executable` owns the next stage down: the validator participant of a
+`zkc.program/0` candidate, its meaning under a native proof host and the
+checked lowering rule from the constructed validator
+([executable stage](spec/executable.md)). It depends on `Zkc.Construction`; no
+construction module depends on it.
+
 `Zkc.Protocols` owns mathematical experiments and reusable verifier contracts.
 It may use generic source semantics; source semantics may not import protocols.
 `ZkcExamples.NativePrograms` owns particular native exports and correspondence
@@ -71,6 +83,9 @@ Logical assignments are scoped by owner and explicit invocation labels; those
 labels do not prove dynamic reachability. A shared interpretation
 environment fixes opaque relation meanings. `ContractExecution` projects
 boundaries from actual outcomes, preserving absent participants and stops.
+`ReplyScript` fixes the replies of one role-local run by type and site, so a
+transcript's actual returned outputs and ordered sends can be observed; it is an
+experiment choice, not a provider law.
 
 `Structured.UnitViews` emits a unit's literal checked payload from its typed
 bodies: `structured_views` writes the checked declarations, the payload and one

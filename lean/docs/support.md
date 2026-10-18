@@ -9,7 +9,7 @@ They do not certify arbitrary DSL programs or the full native lowering pipeline.
 | Structured source | Multi-result closed callbacks and lexical binding; strict formation in both directions; scalar/mathematical/participant/import bridges; contextual equality, totality and compatible effect translation | Shared structural carrier; native transformation correctness requires separate correspondence |
 | [Structured native import](spec/structured-source.md) | Whole-unit original schema, separate protocol roots and kinded named helpers, each checked root and helper traced to its retained source declaration; explicit scalar/group interpretation, owner-only Local calls, shared participant effects, computational availability and service admission; retained formula links, declaration contracts and exact named Entry selections; process equations for the actual [finite fold fixtures](#finite-fold-subjects) | No general availability soundness, eager/demand correspondence, affine resources or native correctness theorem |
 | [Structured contract binding](spec/verification.md#structured-contracts) | Actual formula invocation, typed port/role selection, owner/invocation-scoped logical assignments, shared opaque interpretations and formula-domain translation; actual-outcome boundary projection | Purpose labels do not choose quantifiers or authority. Opaque meanings and logical instantiations are explicit; no security theorem follows from metadata or an inventory |
-| [Logical contexts](design/logical-contexts.md) | Port-independent binders, transport along port maps, translation of the contract layer, exported-metadata checking; the Sumcheck residual request on the retained and a repacked Reduction export with the unchanged `count / \|F\|` bound | Lean modules over manually authored contexts; static sort arities; no native export or source syntax |
+| [Logical contexts](design/logical-contexts.md) | Port-independent binders, transport along port maps, translation of the contract layer, exported-metadata checking; the Sumcheck residual request on the retained and a repacked Reduction export with the unchanged `count / \|F\|` bound; loop frames observing a repeat's carried state, with a step-obligation rule and exported-frame checking | Lean modules over manually authored contexts; static sort arities; frames observe carried state, not actions inside an iteration; no native export or source syntax; the residual bound is the optional security package's, under the uniform query service (`ZkcSecurity.Examples.CausalSumcheck.LogicalResidual`) |
 | Structural proof construction | Source-indexed derivation soundness with local operation/callback laws; exhaustive lexical call inventory and generic checked-callee substitution preserving masks, stops, state and continuations | Local mathematical laws and loop/callback proofs remain required; selected requests do not discover undeclared intentions or prove the exporter correct |
 | Structural authoring automation | `structured_views` emits checked unit payloads and their kernel-checked admission phases from typed bodies; `bind_contract` recovers retained owners, formula helpers and typed selectors; `derive_region` composes local laws over the actual checked body, including callbacks and lexical binds | Kernel-checked proof construction; unsupported mathematics remains a goal. Direct body projection is the default; materializing large views or proofs can be expensive |
 | Optional component semantics | Same typed Region with closed callbacks; generic lookup, optional named Math calls, all-present adequacy, exact resolution and full-table framing; shared scalar/group evaluator | Static availability is a separate computational check; adequacy alone proves neither admission nor native correspondence |
@@ -25,15 +25,22 @@ They do not certify arbitrary DSL programs or the full native lowering pipeline.
 | [Structured Schnorr](#interactive-schnorr) | Actual Interactive, Helpers and Reordered verifier contracts over arbitrary scalar/group values; Interactive prover observations supply a causal Strategy, exact stopped prefixes and completeness under equal bases, the verifier-key witness relation and honest delivery; EarlyChallenge contract refutation | Unconstrained unused prover key; successful fixed nonce/challenge replies and send acknowledgements; partial ordered extraction; shared extraction constructor alone asserts no causality; no native execution, joint scheduler or availability soundness theorem |
 | VCVio Schnorr | Equality for every public-view event under fixed challenge and uniform nonce/response sampling; Interactive source-derived messages and actual verifier outcome transfer to the VCVio simulator | Generic and verifier-only consumers use a handwritten strategy; the Interactive consumer derives it from checked source sends. No native prover/RNG correspondence, malicious-verifier, concurrent or Fiat–Shamir theorem |
 | Structured Schnorr Sigma | Actual source commit prefix, response and selected verifier decision implement the pinned VCVio Sigma interface; upstream completeness, special soundness and fresh-challenge HVZK transfer to the retained relation and public view | Field/module interpretation and explicit SampleableType laws; finite field for HVZK; component target at a run root, without an efficient extractor, malicious-verifier, native-provider or scheduler theorem. Its Fiat–Shamir transform is covered by the next row |
-| [Compiled Schnorr Fiat–Shamir](spec/fiat-shamir.md) | The checked construction rule accepts the compiled `example::Proof` validator and proves its ideal meaning equals the Fiat–Shamir transform of the original Proof Entry's validator for every challenge function; with a random oracle on all transcript histories, injective routing makes the experiment VCVio's Fiat–Shamir Schnorr run, and replay extraction yields the relation retained by the Proof Entry's export with `acc * (acc / (Q + 1) - 1 / \|F\|)`. The imported interactive Sigma instance has the same bound | Named random-oracle (on all typed histories, with exactly uniform field challenges), host binding of the checked public values, canonical transport and native correctness assumptions; fixed statement; flat native construction with one replaced service and no calculation between a challenge and its delivery; the source digest, entry, public and data inputs, replaced service, framing and acceptance output are checked against the original export, while the query and delivery sites are tied to it by a per-compile kernel equation for this Entry, not a general projection rule; exporter and bridge rendering are tested boundaries; no running-time, adaptive-statement, zero-knowledge or concrete Merlin/BLS claim |
+| [Compiled Schnorr Fiat–Shamir](spec/fiat-shamir.md) | The checked transcript-construction and [participant projection](spec/participant-projection.md) rules accept the compiled `example::Proof` validator, and their composed soundness, applied to the admitted original, proves its ideal meaning equals the Fiat–Shamir transform of the original Proof Entry's validator for every challenge function, with no Entry-specific equation about the compiled program; with a random oracle on all transcript histories, injective routing makes the experiment VCVio's Fiat–Shamir Schnorr run, and replay extraction yields the relation retained by the Proof Entry's export with `acc * (acc / (Q + 1) - 1 / \|F\|)`. VCVio's transform of the imported interactive Sigma instance, with its random oracle on the context message and commitment, has the same bound for a fixed statement and context (`StructuredSchnorrFiatShamir.knowledge_soundness`) | Named random-oracle (on all typed histories, with exactly uniform field challenges), host binding of the checked public values, canonical transport and native correctness assumptions; fixed statement; native construction with one replaced service; the projection rule matches calculations by operation, not algebra, and reads helper calls with the original's checked helpers, whose prepared candidate bodies are the native check's obligation; exporter and bridge rendering are tested boundaries; no running-time, adaptive-statement, zero-knowledge or concrete Merlin/BLS claim |
+| [Executable Schnorr verifier](spec/executable.md) | The checked lowering rule accepts the validator of the `zkc.program/0` candidate the runtime admits for `example::Proof` against the constructed validator above (25 instructions), for the same entry and validator role. For every validator it reads, the executable meaning (length-framed proof, any decoder, instruction budget, frames with cleanup, affine transcript) has the metered ideal meaning's outcome class, whole-proof consumption and challenge interaction at every budget, and the ideal meaning's at budgets of at least the total charge; every run leaves its frames in nesting order. Composed with the composed construction and projection rules (`Zkc.Construction.compiled_transform` applied to the admitted original, with no Entry-specific equation about the compiled program), the executable at budgets of at least 25, under the Entry's checked occurrence context, is the Fiat–Shamir transform of the original verifier on the decoded proof, and the extraction bound holds for provers of proof bytes for every decoder, budget and expected binding; the executable bridge checks that this theorem's proof reaches the general rules and the admitted original and not `SchnorrProof.spec_equation`, and that no Entry-specific equation between processes it reaches names a compiled meaning; the Entry-specific equations about a program's meaning are on the original side: kernel-evaluated `SchnorrProof.process_equation` (the admitted original's validator is the common Schnorr experiment) and `SchnorrProofBinding.formula_process` (the retained DLog formula's process), and `original_verifier` and `verifier_correspondence` derived from them; the other Entry-specific facts are wiring (context, input relation, acceptance position) | Assumes the runtime accepts only proof bytes that the executable meaning accepts under the Entry's checked occurrence context `SchnorrProof.context`, installed kernels implement the vocabulary's meanings, the codec is a function of bytes and type, and the program renderer is exact; keeps the compiled theorem's random-oracle, binding and fixed-statement assumptions. Known runtime differences are refusals the meaning classifies otherwise or omits: a decoded value of another type and codec resource or backend errors cancel the runner without a charge (the meaning stops on the contract for the first and charges a decoding stop for the second), a message over the proof limit is reported as a limit (truncation in the meaning), a proof over the limit is refused before execution, and the iteration, logical-byte, value-byte, live-value, frame, transcript and external-work ledgers are not modelled. Straight-line validators with single-level local calls; no loops, branches, services or sends. The runtime comparison covers control and observations for budgets 0–26 and eight proof mutations, none of which reaches these differences, and not values |
+| [Compiled Sumcheck Fiat–Shamir transform](spec/participant-projection.md#the-compiled-sumcheck-proof-entry) | The composed transcript-construction and projection check accepts the compiled Sumcheck `example::Proof` validator, whose original has a protocol application with a repeat, guards and helper calls; its ideal meaning equals the Fiat–Shamir transform of the original Sumcheck validator for every challenge function and, for an admitted round count (at most two), a decoded table and a value vector below the index limit, of the source rounds followed by the multilinear terminal check. The composed example's validator, with two applications sharing one service and an inlined Math helper, is accepted with a kernel-evaluated admission and the generic composition theorem | Security is the next row's, for the `example::Proof` Entry only; the composed example has no security theorem; the original is the admitted Sumcheck source; helper calls are read with its checked helpers, a Math helper invoked on absent operands only when its body preserves absence; the same random-oracle, transport and native correctness boundaries as Schnorr, plus the coordinate determinacy stated there; the binding model does not cover the vector and index public inputs |
+| [Compiled Sumcheck Fiat–Shamir soundness](spec/fiat-shamir-security.md#the-compiled-sumcheck-proof-entry) | The compiled Sumcheck `example::Proof` verifier's ideal interpretation (`compiledVerifier`: the exported validator's ideal meaning under its checked occurrence context, helper calls read by the original's checked helpers, read through the selected acceptance output) is, for every challenge function, the transform of the imported verifier (`construction`, from the composed check and the definitional `verifier_imported`); with a random oracle on all typed histories it accepts a false claim on the raw table values with probability at most `(Q + count) / \|F\|` for a fixed well-formed statement (the raw values decode to a table at the count) and initial transcript (`soundness`), and at most `(Q + 2) * (1 / \|F\| + loss)`, two being the Entry's round maximum, for adaptively chosen well-formed statements under a binding whose initial transcripts determine them (`adaptive_soundness`; `reduced_soundness` with `loss = \|F\| / N`). On a `ZMod 5` instance the bound is attained on the compiled program (exactly `1 / 5`), the compiled program evaluated in the kernel accepts the cheating proof exactly at one challenge and the honest proof for a true claim at every challenge, and without a determining binding a one-query prover is accepted with probability `4 / 5`, above the adaptive bound | Ideal interpretation of the constructed validator: the random-oracle idealization, encoding and transcript-state correspondence, exporter and rendering boundaries and native correctness of the compiled Schnorr row, and the helper and coordinate boundaries of the previous row; the deployed Entry's binding of its vector and count public inputs is not modelled, so the adaptive premise is not discharged for it; well-formed statements only, fixed or adaptive; soundness, not knowledge soundness; the executable program the runtime admits is not covered (the executable subset has no loops); no running-time claim |
+| [Multi-round Fiat–Shamir soundness](spec/fiat-shamir-security.md) | For any validator over the common participant actions with a round-by-round certificate (a doomed set closed under messages, with no accepting result, left by a fresh uniform challenge with probability at most `error`) and at most `budget` challenges per path, the transform's acceptance probability against every prover with at most `Q` queries is at most `(Q + budget) * error`, in a random oracle on all typed transcript histories shared with the transform; for a fixed statement also for provers drawn from a prior distribution. With adaptively chosen statements whose initial histories determine them, and challenges decoded from oracle answers with per-event excess `loss`, the bound is `(Q + budget) * (error + loss)`; reduction modulo the field size of a uniform sample below `N` has `loss = \|F\| / N`. For a fixed statement, a compiled verifier that is an outcome image of the transform, accepting only where the transform accepts, inherits the bound; for fixed and adaptive statements, a final projection of the validator's result moves into the acceptance predicate | Ideal experiment: a lazily sampled oracle with an empty initial cache; no oracle other than the transcript oracle and no private randomness interleaved with oracle queries; every query counted, including cache hits. Of the four obligations, the ideal-experiment reduction and the challenge-distribution loss of the modelled reduction are proved; encoding and transcript-state correspondence (including the host binding that determines adaptive statements), the transcript primitive's idealization and the identification of the suite's byte order and reduction with the modelled one are named. Soundness, not knowledge soundness; no running-time claim |
+| [Imported Sumcheck Fiat–Shamir](spec/fiat-shamir-security.md#the-imported-sumcheck-verifier) | The actual imported `example::Interactive` verifier, projected to the common participant actions, is the plain round process on every admitted count (at most two, the exported maximum) and refuses above it; its transform accepts a false claim on the raw public vector with probability at most `(Q + count) / \|F\|`, and for adaptively chosen well-formed statements at most `(Q + 2) * (1 / \|F\| + loss)`, `loss = \|F\| / N` for challenges reduced from samples below `N`. The per-round bound is ArkLib's `uniform_successor_soundness` at degree one through the multilinear bridge. The composed `example::Reduction` root's transform, for a fixed external table of dimension `remaining + count`, returns a true residual evaluation claim from a false initial claim with probability at most `(Q + count) / \|F\|`; the root admits at most four rounds and refuses above, and only this fixed-statement form is stated. Composition theorems transfer the fixed-statement and adaptive bounds to a compiled verifier, with its construction equality as the only premise about it: equality with the transform of the imported verifier, the original validator of the compiled `example::Proof` Entry, or with the transform of the imported participant process followed by a final reading of its outputs (with an accepted reading implying the Boolean output `some true`) | Finite field; the experiments and named obligations of the previous row; verifier role 1 and the root context. Adaptive statements are well-formed (the raw vector decodes to a table at the chosen count); a prover choosing a malformed vector is not covered. For the compiled `example::Proof` Entry the construction equality is discharged by the Compiled Sumcheck Fiat–Shamir soundness row |
+| [Sigma compositions](#sigma-compositions) | Actual Schnorr AND and Chaum–Pedersen Interactive units; their retained targets at actual verifier boundaries, proved equivalent there to shared and independent logical contexts over the retained Schnorr `DLog` relation; a generic shared-challenge composition of VCVio Σ-protocols with composed completeness, special soundness and special HVZK; the imported verifiers implement the composition of two VCVio Schnorr instances and VCVio Schnorr over `G × G`, with fixed-statement random-oracle Fiat–Shamir knowledge soundness of their transforms, `acc * (acc / (Q + 1) - 1 / \|F\|)`, extracting the retained `DLogPair` and `DLogEquality` formulas; the composed construction and projection check accepts both compiled proof Entries (`AndProof`, `EqualityProof`), and the generic theorem, instantiated at each Entry's public inputs and acceptance output, equates their ideal meanings with the transforms of their original verifiers | Field/module interpretation and explicit SampleableType laws; VCVio's prover algorithms, of which the admitted provers' sent values are shown to be possible outputs; finite challenge space for HVZK; the Fiat–Shamir theorems are about the transforms of the imported interactive verifiers; the compiled proof Entries' transform equations are not composed with them, so no security theorem covers the compiled Entries; no native, provider or scheduler correspondence |
 | Local VCVio coupling | Per-action RelTriple premises lift through the same finite reply-adaptive process, preserving exact paired replies/outcomes and related provider state/event views | Same-process theorem; local laws hold at all required related states; demonstrated on typed-region controls, not a generic security theorem for differently transformed programs |
 | Probabilistic call composition | A child's residual-event bound transfers to caller acceptance through an all-state continuation implication; the actual Sumcheck caller reuses this rule for arbitrary returned tuples and a replacement child | Returned-value events; explicit terminal implication and child bound; both prefix and continuation stops are nonaccepting; no losslessness premise or automatic invariant discovery |
-| [Source-only Sumcheck verifier](#source-only-sumcheck-verifier) | Plain verifier equations for both complete original units, exact maxima 2/4, optional inputs and ordered stops; Source composes its actual terminal with multilinear table equality | Ring/module interpretation; no frontend/exporter or native correctness, sampling, honest P completeness, or cryptographic security claim |
+| [Source-only Sumcheck verifier](#source-only-sumcheck-verifier) | Plain verifier equations for both complete original units, exact maxima 2/4, optional inputs and ordered stops; Source composes its actual terminal with multilinear table equality | Ring/module interpretation; no frontend/exporter or native correctness, sampling, or cryptographic security claim; honest P completeness is the next row |
+| [Honest Sumcheck prover](#honest-sumcheck-prover) | Plain prover equations for both complete original units; the per-round fold invariant on the Reduce callback tied to each checked body (the frame is the honest state of exactly the received challenges, representing the partial evaluation of the original table, with correct round messages); honest-prover completeness of the actual Source and Reduction pairs under honest delivery for every challenge tape that supplies the rounds, and the residual request on the honest Reduction run | Present prover inputs with the true claim and agreeing tables; retained maxima 2/4; two-endpoint deterministic delivery; frame metadata written in Lean, not exported; no sampling, scheduler, native or provider correspondence |
 | [Uniform structured queries](spec/uniform-query-service.md) | Concrete service constructor, exact all-state query execution, receive/send delegation and wrong-route refusal | Optional VCVio.StructuredUniform at the structured participant boundary; arbitrary network and callback effects; pinned SampleableType measure law; generic F, without native RNG/provider/exporter or Fiat–Shamir correspondence |
 | [Uniform Sumcheck composition](spec/uniform-query-service.md#actual-imported-roots) | Concrete-service `n / \|F\|` bounds on the actual admitted `Sumcheck` returned-true result and `Reduce` residual observation, nontrivial up to the exported maxima 2 and 4; excess counts refuse with zero mass. One arbitrary-count execution-distribution transport; finite-field controls on the actual roots and a generic client | Verifier role 1, peer 0, root context; arbitrary network, callbacks and initial states. `Sumcheck`: V's raw vector decodes to the table and the claim is false. `Reduce`: an external table of dimension `remaining + n` and a false initial claim; P inputs are arbitrary; the event is the residual observation, since `Reduce` has no acceptance check. Model-level only, without frontend, native or provider correspondence |
 | Source-bound Sumcheck requests | Refutation of the retained source formula transfers through its checked local law to the actual Reduce input; the child residual bound composes with the public wrapper's terminal check, and the Reduction wrapper transports actual returned point/value selectors. `public_target_bound`, `reduction_request_bound` and `source_composed_bound` reach the same two bounds as the direct theorems through the retained source relation or call-boundary composition | Fixed original table, decoding and capacity premises; concrete retained maxima 2/4, explicit fresh uniform queries and arbitrary optional P inputs. The typed residual request is external Lean intent, not a source-authored generic continuation or a native security theorem |
 | ArkLib Sumcheck | Actual imported two-round degree-two verifier acceptance on a false public sum claim is at most `4 / |F|` | Finite field; reached fresh uniform queries; causal coefficient-message strategies, including arbitrary private probabilistic mixtures chosen before verifier draws |
-| [Multilinear Sumcheck mathematics](spec/multilinear-sumcheck.md) | Arbitrary-length ordered prefix restriction and suffix marginalization, endpoint-message laws, explicit delivery agreements, residual truth and complete public-table discharge, including zero rounds | Independent scalar-table model over rings; core has no optional security dependencies |
+| [Multilinear Sumcheck mathematics](spec/multilinear-sumcheck.md) | Arbitrary-length ordered prefix restriction and suffix marginalization, endpoint-message laws, explicit delivery agreements, residual truth and complete public-table discharge, including zero rounds; prover fold laws (`PartialEvaluation`, `roundEndpoint`: prefix restriction, one-challenge fold, round endpoints and complete sum) | Independent scalar-table model over rings; core has no optional security dependencies |
 | [Multilinear interactive security](spec/multilinear-sumcheck-security.md) | Complete `n / |F|` and partial residual `k / |F|` bounds, degree-one endpoint/table transport, checked public-table observation, and honest completeness | Fixed verifier table/false initial sum; finite field and fresh uniform challenges; arbitrary causal effectful ArkLib strategies; exact original or derived marginal oracle; imported-root connection is supplied by the uniform-service consumer; native correspondence remains separate; no Fiat–Shamir, transcript encoding, PCS binding, extraction or knowledge soundness |
 | Stop-aware causal Sumcheck | General n-round acceptance domination, full/raw/residual bounds and zero-round terminal stops; reusable full Execution distribution replacement on reached states; canonical structured one-round bound with actual calculated values | Explicit fresh uniform phases, false fixed claim, complete local state/event query laws and terminal mathematics; canonical fragments are examples, not the imported Sumcheck body; no native/provider correspondence |
 | Public factor openings | Imported composed verifier bound `4 / |F|`; generic conditional bound `4 / |F| + epsilon` | Public polynomial factor checks prove zero opening error; PCS binding/extractability needs a separate opening theorem |
@@ -384,6 +391,83 @@ table retains every protocol's clauses. `ZkcExamples.Structured.SchnorrBinding`
 uses this metadata to select the actual target's ports, roles, decision and
 formula body; no association is inferred from names.
 
+## Sigma compositions
+
+`ZkcExamples.Structured.SchnorrAnd` and `ZkcExamples.Structured.ChaumPedersen`
+kernel-admit the retained Interactive units of `sigma::SchnorrAnd` and
+`sigma::ChaumPedersen` from generated typed bodies. Both participant processes
+reduce definitionally for arbitrary `F, G`: the AND prover draws two nonces and
+answers one received challenge in both components; the Chaum–Pedersen prover
+commits one nonce at both bases and sends one response. A
+`Zkc.Source.Structured.ReplyScript` fixes the replies of one run by type and
+site, which observes the verifier's actual returned decision for one
+transcript and the prover's actual ordered sends.
+
+`SchnorrAndBinding` and `ChaumPedersenBinding` bind the retained `knowledge`
+targets with `bind_contract`. The `DLogPair` target has two witness selectors on
+different prover ports; the `DLogEquality` target has one. Each module proves
+that its formula process is the conjunction of the two Schnorr equations, that
+the selected decision at the actual verifier boundary is the conjunction of the
+two verification equations, and that two accepting transcripts with common
+commitments and distinct challenges make the target hold at the first run's
+boundary for a new extracted assignment: two witnesses for AND, one for
+Chaum–Pedersen.
+
+`SigmaLogicalContexts` states witness sharing with atoms of the `DLog` relation
+retained by the Interactive Schnorr subject, selected by its position in that
+subject's relation table, whose base and key arguments observe the composed
+verifier's actual input ports. The Chaum–Pedersen context has one witness binder
+used by both atoms, the AND context two. At the observed boundary of every
+actual verifier run, `shared_iff` and `independent_iff` prove that each context
+holds exactly when the composed protocol's own retained formula holds at the
+verifier's bases and keys, and `shared_iff_target` and `independent_iff_target`
+exactly when the retained target holds for parameter assignments equal to those
+bases; the extraction theorems conclude the contexts directly. These are proved
+equivalences: the composed formulas have their own identities, and the atoms
+observe the bases that the contract layer reads as `parameter` keys. `SigmaCompositionControls` shows the extraction premises
+satisfiable by honest transcripts at challenges zero and one, with extraction
+returning the honest witnesses, an AND statement over the rationals
+whose two accepting transcripts share commitments while no single binder value
+satisfies the shared context at the AND ports, and that the Chaum–Pedersen
+verifier accepts no such pair for that statement.
+
+The optional `ZkcSecurity.VCVio.SigmaAnd` composes two VCVio Σ-protocols with
+one shared challenge and pair statements and witnesses. Perfect completeness
+and special soundness compose without further premises. Zero knowledge composes
+from special HVZK, a simulator given the challenge;
+`SpecialHVZK.perfectHVZK` converts it to VCVio's perfect HVZK with a
+challenge-first simulator, and `SpecialHVZK.of_perfectHVZK` recovers it from
+such a simulator over a finite challenge space. These definitions use VCVio's
+`SPMF` semantics, which VCVio states its own HVZK with and is retiring.
+`SigmaAndSchnorr` derives VCVio Schnorr's special HVZK from the upstream
+simulator and composes two instances. Controls show an unshared-challenge
+composition that is not specially sound and that no extractor makes the
+shared-challenge composition specially sound for one shared witness.
+
+`ZkcSecurity.Examples.SchnorrAndSigma` and `ChaumPedersenSigma` take the
+verifier of each Σ-protocol from the actual selected decision and prove the
+instances equal to the composition of two VCVio Schnorr instances and to VCVio
+Schnorr over the module `G × G`. Completeness, special soundness and HVZK
+follow; Chaum–Pedersen needs no new protocol mathematics. Their prover
+algorithms are VCVio's; `prover_sends` shows that, for every nonce choice and
+challenge, the values the admitted prover sends are possible outputs of those
+algorithms. It is not a distributional statement about the admitted prover's
+own randomness. VCVio's replay
+extractor gives fixed-statement random-oracle knowledge soundness of the
+Fiat–Shamir transforms for the retained formulas. Controls instantiate both
+over `ZMod 5` with satisfiable query bounds and strictly positive extraction
+bounds. The compiled `AndProof` and `EqualityProof` validators end with a
+Boolean conjunction, which the construction bridge's renderer reads as a Boolean
+calculation. The composed construction and projection check accepts both
+(`ZkcExamples.Construction.SchnorrAndProof.compiled`,
+`ChaumPedersenProof.compiled`), with their originals admitted from printed
+typed bodies, and `compiled_transform` instantiates the generic theorem at each
+Entry's public inputs and acceptance output: their ideal meanings are the
+transforms of their original verifiers. The bridge refuses an omitted second
+commitment, a comparison of a base with itself and a conjunction reading one
+check twice. These equations are not composed with the Fiat–Shamir theorems
+above.
+
 ## Source-only Sumcheck verifier
 
 The complete retained `SumcheckSourceViews.program` and
@@ -463,6 +547,68 @@ Re-admitted mutants use the standard checker and participant interpreter. These
 finite executions are controls; the general source equations supply the
 quantified claims.
 
+## Honest Sumcheck prover
+
+`SumcheckProverLaws` derives the prover's plain process from the same literal
+Reduce callback as the verifier's, at the prover's participant: the verifier's
+guard, draw, append and interpolation are skipped, and the prover's actual sums
+helper, two sends, delivery receive, fold helper and append are performed. A
+zero-dimensional table stops at the sums helper before any send.
+`step_honest` and `loop_honest` express every iteration on the prover's own
+received point, for every delivered challenge; `reduce_prover` adds the width
+and dimension guards, the empty point and the six-slot return.
+`SumcheckProverRoots` gives the root equations of both complete units at the
+prover (`source_prover`, `reduction_prover`), including the checked table
+constructor, the masked verifier inputs and, for Reduction, the residual
+projection. Only present prover inputs are covered.
+
+`SumcheckFoldInvariant.prover_frames` is the per-round invariant. Its
+interaction phase records the challenges the prover receives at the delivery
+site (`receivedChallenges`). After any number of iterations, the frame the loop
+reaches is the honest state of exactly those challenges (`HonestFrame`), and its
+entries represent the partial evaluation of the original table at that point
+(`Fold.partialEvaluation_restrict`). `prover_messages` shows that, from an
+honest frame with a round remaining, the prover's two actual sends are
+`roundEndpoint` at zero and one, the endpoints of the correct round polynomial.
+Like the verifier's laws, both are stated on `bodyFn`: the typed Reduce callback
+whose erasure is each unit's checked body (`reduce_raw`, `reduce_raw_shared`),
+interpreted with that unit's own tables. `prelude_prover` places the same loop
+in the admitted Reduce body; the root and completeness equations below are over
+`program.participant` itself. The original table is a logical binder; its
+agreement with the prover's input is the premise `ofList? count raw = some table`.
+`frame_export_checks` and `source_frame_export_checks` check the invariant's
+proposed export form, written in Lean, to exactly the proved atoms; its site
+resolves through `repeatAt` to the repeat occurrence of each unit's checked
+Reduce body.
+
+`SumcheckHonestExecution` runs both actual participants of one root invocation
+with the same inputs. `peerHandler` routes the verifier's receives and sends to
+the prover's actual residual process; `challengeTape` answers the verifier's
+queries in order from a tape, whatever their site, which suffices because the
+Sumcheck verifier's only queries are its challenges. `coupled_round` and
+`coupled_rounds` show that each verifier guard holds and each claim update
+equals the sum of the prover's folded table. `source_complete` proves that the
+verifier returns `true`, the prover returns and exactly the used challenges are
+consumed, for every tape with enough values, given the true claim, a shaped
+representable table and the retained maximum. `reduction_complete` returns the
+tape prefix and the true residual sum at the verifier and the same point and
+folded table at the prover. `reduction_complete_residual` composes this run with
+`honest_residual`: for a table of `remaining + rounds` variables, the verifier's
+outputs satisfy the residual request of the security consumer, and the prover's
+returned residual decodes to the partial evaluation at the same point.
+
+`SumcheckFoldControls` instantiates the premises of the completeness, residual,
+frame and message theorems over `ZMod 5`. It applies `source_frames` to the
+frame that a concrete run of the actual loop reaches, with the delivered
+challenges recorded in the phase, reaches the stop past the table's dimension,
+and refutes a least-significant-first meaning of the same atoms at that frame.
+Exported frames that read a slot outside the observed role's scope or of the
+wrong type, name an unknown site or a role outside the repeat, or misplace the
+index are refused, each with its own reason. `Tests.SumcheckFoldMutations`
+admits a mutant whose callback discards the fold: it still accepts one round,
+because the first message is correct regardless, and is rejected by the
+verifier's guard from the second round, while the original accepts both.
+
 ## Multilinear Sumcheck controls
 
 `Tests.MultilinearSumcheck` is included in the full core declaration audit and
@@ -517,3 +663,95 @@ Enforcement controls check rejected type/body dependencies and permitted owners.
 The standalone client consumes complete, residual and stop-aware phase bounds,
 plus the local distribution composition API. Core imports are independent of
 ArkLib and VCVio.
+
+## Fiat–Shamir security validation
+
+`TestsSecurity.StructuredSchnorrFiatShamir` and `CompiledSchnorrFiatShamir`
+instantiate the Schnorr knowledge-soundness theorems over `ZMod 5`, as scalar
+field and additive group, with no hardness claim: the query-bound premise holds,
+the honest prover is accepted with probability one and the extraction bound is
+strictly positive. Run directly, the compiled program accepts the honest proof,
+rejects a wrong response and a trailing message, and asks for its challenge at a
+history containing the statement and application context of its initial
+history. `TestsSecurity.ExecutableSchnorrFiatShamir` runs the executable
+validator with a one-byte toy codec: it accepts the honest proof bytes at the
+25-instruction budget and rejects them below that budget, under another binding,
+with a trailing byte or a wrong response. `Tests.ExecutableControls` refuses
+instruction, operand, binding, type, symbol-table and identity mutations of the
+retained executable Schnorr validator with named reasons, and fixes the stop
+budgets, charged instructions, transitions, read messages and stop sites the
+runtime reports. The axiom closures of the `knowledge_soundness` theorems of
+`CompiledSchnorrFiatShamir`, `ExecutableSchnorrFiatShamir`,
+`StructuredSchnorrFiatShamir`, `SchnorrAndSigma` and `ChaumPedersenSigma` are
+`propext`, `Classical.choice` and `Quot.sound`.
+
+`TestsSecurity.SumcheckFiatShamir` instantiates the imported Sumcheck theorems
+over `ZMod 5` with one round, the raw vector `[2, 1]` and the false claim `0`:
+the raw-vector decoding, false-claim and query-bound premises hold together and
+the fixed-statement bound is `1 / 5`. Kernel evaluations of the transform under
+fixed challenge tables show that the cheating proof `(0, 0)` is accepted at the
+challenge `2` and rejected at every other challenge, and that for the true claim
+`3` the honest proof `(2, 1)` is accepted at every challenge. The query-free
+cheating prover's acceptance probability in the oracle experiment is computed to
+be exactly `1 / 5`, so the bound is attained. A three-event binding of the raw
+vector, claim and count is proved to determine the statement, and the adaptive
+premises then hold together with the bound `2 / 5`. With one initial history for
+every statement, a one-query prover that chooses the vector after the challenge
+is accepted on a false claim with probability `4 / 5`, which violates the
+adaptive bound `3 / 5`, so the binding premise is necessary. Reduction modulo `5`
+of a uniform sample below `8` satisfies the decoding premise with loss `5 / 8`
+and is proved not to satisfy it with loss zero; with samples below `64` all
+premises of the reduced theorem hold and its bound `2 * (1 / 5 + 5 / 64)` is
+below one. The premises of the remaining theorems are met on the same instance:
+a fair coin over two provers, compiled verifiers defined by their construction
+equations (fixed-statement, imported, adaptive, and fixed and adaptive
+participant forms read through a Boolean selection of the outputs), a compiled
+verifier that reports a rejection as the stop `reject`, and the Reduction root
+over an external table of dimension `1 + 1`, one coordinate remaining. A report
+that accepts every outcome violates the outcome-image premise and accepts the
+cheating proof with probability one.
+
+Of the four obligations of the
+[chapter](spec/fiat-shamir-security.md#obligations), the ideal-experiment
+reduction and the challenge-distribution loss of the modelled reduction are
+proved. Encoding and transcript-state correspondence, the transcript primitive's
+idealization and the identification of the suite's byte order and reduction with
+`reduce` are named assumptions. `zkc-compile language-emit` on the project
+`examples/projects/sumcheck/zkc.toml` with `--entry=example::Proof` and with
+`--entry=example::Interactive` gives byte-identical original-stage exports
+(`sha256:2b935a82be29b83007c44c878ae03535b2da6dd707c7d8a9899e1a2a16c36c6c`, entry
+`zkl_ba110e6c…`), the export of `SumcheckSourceData.snapshot` and the structured
+bridge fixture. The construction bridge pins this for `example::Proof`: its
+`sumcheck` subject requires the Entry's fresh original export to render to the
+committed `SumcheckSourceData` (check
+`regenerated:lean/ZkcExamples/Structured/SumcheckSourceData.lean`).
+
+`TestsSecurity.CompiledSumcheckFiatShamir` instantiates the compiled Entry's
+theorems on the same instance. The premises of `soundness` hold together with
+bound `1 / 5`. The compiled program, evaluated in the kernel through its ideal
+meaning without the construction equation, accepts the cheating proof exactly at
+the challenge `2` and the honest proof for the true claim at every challenge.
+Through the construction equation the compiled verifier asks the cheating
+proof's one challenge at the history its own context names, and the query-free
+cheating prover's acceptance probability is exactly `1 / 5`: the bound is
+attained on the compiled Entry. The adaptive premises hold together with the
+determining three-event binding, and without it a one-query prover is accepted
+by the compiled verifier on a false claim with probability `4 / 5`, above the
+adaptive bound `3 / 5`; the premises of `reduced_soundness` hold with samples
+below `64`.
+
+The declaration audit covers the general modules
+`ZkcSecurity.FiatShamir.{Replay,Soundness,Decoding}`, the Sumcheck instance and
+its controls. The axiom closures of `ZkcSecurity.FiatShamir.soundness`,
+`adaptive_soundness`, `randomized_soundness`, `acceptance_le_of_image`,
+`acceptance_bind_done`, `adaptive_acceptance_bind_done` and `balanced_reduce`,
+and of the Sumcheck instance's `soundness`, `imported_soundness`,
+`adaptive_imported_soundness`, `reduced_imported_soundness`,
+`reduction_soundness`, `compiled_soundness`, `compiled_imported_soundness`,
+`compiled_adaptive_soundness`, `compiled_participant_soundness` and
+`compiled_adaptive_participant_soundness`, and of the compiled Entry's
+`CompiledSumcheckFiatShamir.soundness`, `adaptive_soundness`,
+`reduced_soundness` and `construction`, are `propext`,
+`Classical.choice` and `Quot.sound`, including the consumed VCVio
+`prEvent_randomOracle_le_of_bad_queries` and ArkLib
+`MultivariateRound.uniform_successor_soundness`.

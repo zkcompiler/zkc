@@ -67,7 +67,8 @@ theorem compiled_rejects_wrong_response : evalWithAnswerFn (fixed 4)
 theorem compiled_rejects_trailing_message : evalWithAnswerFn (fixed 4)
     ((fun result => accepted (mapOutcome ZkcExamples.Construction.SchnorrProof.acceptance result.1,
       result.2)) <$>
-      ideal historyChallenge ZkcExamples.Construction.SchnorrProof.participant.returned
+      ideal ZkcExamples.Construction.SchnorrProof.context historyChallenge
+        ZkcExamples.Construction.SchnorrProof.table ZkcExamples.Construction.SchnorrProof.participant.returned
         ZkcExamples.Construction.SchnorrProof.participant.instructions
         ((ZkcExamples.Construction.SchnorrProof.inputs base key).map .data ++
           [.transcript (initial application base key)])

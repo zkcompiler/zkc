@@ -273,7 +273,11 @@ guards, every supported stop class, wrong/missing replies, group operations,
 alternate participant rosters and malformed whole-unit metadata. Actual Schnorr
 Entries exercise both roles, altered replies, helper factoring, declaration
 permutation and an early-challenge mutation. The latter can accept the same
-sample while exposing a different first action.
+sample while exposing a different first action. The Schnorr AND and
+Chaum–Pedersen Entries of the [Sigma project](../../../examples/projects/sigma/README.md)
+retain their MLIR, JSON and constructor data; their cases exercise both roles,
+an altered response in each AND component, an abort at each verifier action and
+a Chaum–Pedersen statement whose keys use different witnesses.
 
 [Formal support](../../docs/support.md#interactive-schnorr) states the proved
 equations for these Schnorr subjects.

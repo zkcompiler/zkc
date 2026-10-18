@@ -42,6 +42,10 @@ both `n / |F|`. The bounds are nontrivial up to the exported maxima of two and
 four rounds; excess counts refuse and contribute zero mass. The concrete
 service discharges query and route premises for arbitrary network/callbacks and
 all initial states. Reduction has no Boolean acceptance checker.
+`Examples/CausalSumcheck/LogicalResidual` states the Reduction residual request
+through a port-independent [logical context](../../docs/design/logical-contexts.md)
+and applies the same bound through the retained root and through a separately
+exported repacked root.
 [Support](../../docs/support.md) records scope and validation.
 
 `VCVio/Schnorr` proves perfect honest-verifier simulation of the public transcript
@@ -58,10 +62,46 @@ sends; [support](../../docs/support.md#interactive-schnorr) states its premises.
 Fiat–Shamir extraction to the imported verifier's Sigma instance.
 `Examples/CompiledSchnorrFiatShamir` runs the compiled `example::Proof`
 verifier with a random oracle on all transcript histories, through the core
-[transcript-construction rule](../../docs/spec/fiat-shamir.md). Injective
-routing of histories (`Oracle/Encoding`) makes the experiment exactly VCVio's
-Fiat–Shamir verification run, which gives its knowledge-soundness bound under
-named assumptions, for the relation retained by the Proof Entry's own export.
+[transcript-construction](../../docs/spec/fiat-shamir.md) and
+[participant projection](../../docs/spec/participant-projection.md) rules.
+Injective routing of histories (`Oracle/Encoding`) makes the experiment exactly
+VCVio's Fiat–Shamir verification run, which gives its knowledge-soundness bound
+under named assumptions, for the relation retained by the Proof Entry's own
+export. `Examples/ExecutableSchnorrFiatShamir` transfers that bound to provers
+of proof bytes for the validator program the runtime admits, through the core
+[lowering rule](../../docs/spec/executable.md).
+
+`FiatShamir/Replay` and `FiatShamir/Soundness` prove
+[multi-round Fiat–Shamir soundness](../../docs/spec/fiat-shamir-security.md) of
+the core transform for any validator with a round-by-round certificate, by
+VCVio's adaptive bad-query bound applied directly to the oracle on all typed
+histories, for fixed and for adaptively chosen statements; `randomized_soundness`
+adds private randomness drawn before the oracle computation, and
+`FiatShamir/Decoding` bounds challenges reduced from wide uniform samples.
+`acceptance_le_of_image` carries the fixed-statement bound over to a compiled
+verifier that is an outcome image of the transform, and `acceptance_bind_done`
+and `adaptive_acceptance_bind_done` move a final projection of the validator's
+result into the acceptance predicate. `Examples/SumcheckFiatShamir` instantiates
+the theorems for the actual imported Sumcheck verifier, with ArkLib's
+single-round successor bound as the per-round soundness, bounds the composed
+Reduction root as a reduction to a residual evaluation claim, and states
+composition theorems whose only premise about a compiled verifier is its
+construction equality. `Examples/CompiledSumcheckFiatShamir` discharges that
+premise for the compiled Sumcheck `example::Proof` verifier with the core
+composed rules and states its
+[fixed-statement and adaptive soundness](../../docs/spec/fiat-shamir-security.md#the-compiled-sumcheck-proof-entry);
+the adaptive form keeps the determining binding as a premise.
+
+`VCVio/SigmaAnd` composes two VCVio Σ-protocols with one shared challenge.
+Completeness and special soundness compose directly; zero knowledge composes
+from special HVZK, a simulator given the challenge. It gives VCVio's perfect
+HVZK with a challenge-first simulator, and over a finite challenge space it
+follows from such a simulator. `VCVio/SigmaAndSchnorr` derives Schnorr's special HVZK from the upstream
+simulator. `Examples/SchnorrAndSigma` and `Examples/ChaumPedersenSigma` connect
+the imported Schnorr AND and Chaum–Pedersen verifiers to the composition of two
+Schnorr instances and to Schnorr over `G × G`, and apply VCVio's fixed-statement
+Fiat–Shamir extraction to both; [support](../../docs/support.md#sigma-compositions)
+states the scope.
 
 `TestsSecurity.Audit` checks every owned declaration's transitive axiom closure.
 Only `propext`, `Classical.choice` and `Quot.sound` are allowed. Unrelated upstream
