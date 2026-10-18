@@ -288,8 +288,12 @@ trusted claim. The maintained requests are in [`normal-forms/`](normal-forms):
 A request is TOML. `fixture` is the retained JSON snapshot, `output` the Lean
 module to write, `namespace` its namespace, `imports` and `open` its imports
 and opened namespaces, `options` extra `set_option` lines, and `carrier` the
-field structure (`CommRing` by default, or `Field`). `sites` renames sites that
-have no source label, for example `s0 = "nonceSite"`. `helper_modules` lists
+field structure (`CommRing` by default, or `Field`). Site constants are named
+from source labels: `#[site(first_commitment)]` gives `firstCommitmentSite`, and
+the position suffix an exchange's label carries is dropped unless the label has
+several positions (`round0Site`, `round1Site`). `sites` names only the sites
+without a source label, which export positionally (`s0 = "nonceSite"`); labelling
+every action in the source makes it unnecessary. `helper_modules` lists
 typed-body modules whose `abbrev NAME : Helper := ⟨"RAW", ...⟩` declarations
 name retained helpers; `helpers` maps further retained names to Lean terms.
 Each of the following sections is optional:
@@ -363,7 +367,8 @@ compiler built (`just build`) and Lean set up
 
 3. Build the data module (`lake build ZkcExamples.Structured.ChaumPedersenData`
    in `lean/`) and print its typed bodies with `bodies.py`, naming each retained
-   declaration (`--name RETAINED=local`).
+   declaration (`--name RETAINED=local`). `bodies.py` elaborates a scratch module
+   with Lake itself, so run it in the Lean development shell like a build.
 4. Admit the unit from the printed bodies with `structured_views`, as in
    [`ChaumPedersenViews`](../../ZkcExamples/Structured/ChaumPedersenViews.lean):
    `helpers [formula := ChaumPedersenBodies.formula]` and
@@ -375,7 +380,9 @@ compiler built (`just build`) and Lean set up
    [`ChaumPedersenBinding`](../../ZkcExamples/Structured/ChaumPedersenBinding.lean)
    (extraction from two accepting transcripts) and
    [`ChaumPedersenSigma`](../../integrations/arklib/ZkcSecurity/Examples/ChaumPedersenSigma.lean)
-   (VCVio's Schnorr Σ-protocol at the base pair) do.
+   (VCVio's Schnorr Σ-protocol at the base pair) do. The package treats warnings
+   as errors: a lemma that does not use every section instance needs
+   `omit [...] in`, written before its docstring.
 7. List the new modules with `python3 lean/checks/audit_imports.py --write`, build
    (`python3 scripts/develop.py lean --deps main`, and `--deps arklib` for a
    library connection) and run `python3 common/tests/run.py lean`.
