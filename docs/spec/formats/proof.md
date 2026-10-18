@@ -373,9 +373,9 @@ independently authenticated exact-file digest authorizes the deployment.
 selection, proof construction and source/candidate checking. Its `finiteBulk`
 choice defaults to true and `vectorReductionFusion` defaults to false.
 `selectNativeProofDraws`, `constructNativeProof` and `checkNativeProof` receive
-this shared policy. The `protocol-proof`, `protocol-construct-proof` and
-`protocol-check-proof` commands forward `--no-finite-bulk` and
-`--fuse-vector-reductions`; source proof Entries forward the same choices.
+this shared policy. The `protocol-proof`, `protocol-construct-proof`,
+`protocol-check-proof` and `protocol-constructed-participant` commands forward
+`--no-finite-bulk` and `--fuse-vector-reductions`; source proof Entries forward the same choices.
 They change local preparation while preserving protocol event origins, and
 add no cryptographic construction or security claim.
 

@@ -73,8 +73,8 @@ Limits: 512 inputs and results, 64 nested blocks, 4096 inspected operations,
 
 ## Boundary
 
-The exporter is reviewed native code. It reads the checked candidate; it does
-not prove that the printed record denotes that candidate. Its refusals are
+The export reads the checked candidate; it does not establish that the printed
+record denotes that candidate. Its refusals are
 defensive: a candidate that passes the native check uses only exported forms. A
 consumer interprets operation names, bindings and attributes explicitly, and
 refuses what it does not recognize. A retained call is interpreted by the
