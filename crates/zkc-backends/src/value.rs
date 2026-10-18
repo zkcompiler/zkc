@@ -188,6 +188,16 @@ value_inventory! {
     KoalaBearExt4Vector(Arc<[crate::KoalaBearExt4]>),
     KoalaBearExt4Polynomial(Arc<[crate::KoalaBearExt4]>),
     KoalaBearExt4Round([crate::KoalaBearExt4; 3]),
+    Binary64Matrix(crate::matrix::SparseCoo<crate::Binary64>),
+    Binary64Field(crate::Binary64),
+    Binary64Vector(Arc<[crate::Binary64]>),
+    Binary64Polynomial(Arc<[crate::Binary64]>),
+    Binary64Round([crate::Binary64; 3]),
+    Binary64Ext3Matrix(crate::matrix::SparseCoo<crate::Binary64Ext3>),
+    Binary64Ext3Field(crate::Binary64Ext3),
+    Binary64Ext3Vector(Arc<[crate::Binary64Ext3]>),
+    Binary64Ext3Polynomial(Arc<[crate::Binary64Ext3]>),
+    Binary64Ext3Round([crate::Binary64Ext3; 3]),
     KoalaBearField(crate::KoalaBear),
     KoalaBearVector(Arc<[crate::KoalaBear]>),
     KoalaBearPolynomial(Arc<[crate::KoalaBear]>),
@@ -397,6 +407,52 @@ impl Value {
                 Type::Field,
                 Identity::KoalaBearExt4,
                 Representation::KoalaBearExt4,
+            ),
+            Self::Binary64Matrix(_) => (
+                Type::Matrix,
+                Identity::Binary64,
+                Representation::Binary64SparseCoo,
+            ),
+            Self::Binary64Round(_) => (
+                Type::Round,
+                Identity::Binary64,
+                Representation::Binary64Round,
+            ),
+            Self::Binary64Polynomial(_) => (
+                Type::Polynomial,
+                Identity::Binary64,
+                Representation::Binary64Polynomial,
+            ),
+            Self::Binary64Vector(_) => (
+                Type::Vector,
+                Identity::Binary64,
+                Representation::Binary64Vector,
+            ),
+            Self::Binary64Field(_) => (Type::Field, Identity::Binary64, Representation::Binary64),
+            Self::Binary64Ext3Matrix(_) => (
+                Type::Matrix,
+                Identity::Binary64Ext3,
+                Representation::Binary64Ext3SparseCoo,
+            ),
+            Self::Binary64Ext3Round(_) => (
+                Type::Round,
+                Identity::Binary64Ext3,
+                Representation::Binary64Ext3Round,
+            ),
+            Self::Binary64Ext3Polynomial(_) => (
+                Type::Polynomial,
+                Identity::Binary64Ext3,
+                Representation::Binary64Ext3Polynomial,
+            ),
+            Self::Binary64Ext3Vector(_) => (
+                Type::Vector,
+                Identity::Binary64Ext3,
+                Representation::Binary64Ext3Vector,
+            ),
+            Self::Binary64Ext3Field(_) => (
+                Type::Field,
+                Identity::Binary64Ext3,
+                Representation::Binary64Ext3,
             ),
             Self::Matrix(_) => (
                 Type::Matrix,
@@ -717,6 +773,8 @@ impl Value {
             Self::KoalaBearMatrix(m) => m.backing().ok()?,
             Self::KoalaBearExt8Matrix(m) => m.backing().ok()?,
             Self::KoalaBearExt4Matrix(m) => m.backing().ok()?,
+            Self::Binary64Matrix(m) => m.backing().ok()?,
+            Self::Binary64Ext3Matrix(m) => m.backing().ok()?,
             Self::Bn254Vector(v) | Self::Bn254Polynomial(v) => Backing::of(v, bytes),
             Self::Bn254G1Vector(v) => Backing::of(v, bytes),
             Self::Bn254G2Vector(v) => Backing::of(v, bytes),
@@ -731,6 +789,8 @@ impl Value {
             Self::KoalaBearExt4Vector(v) | Self::KoalaBearExt4Polynomial(v) => {
                 Backing::of(v, bytes)
             }
+            Self::Binary64Vector(v) | Self::Binary64Polynomial(v) => Backing::of(v, bytes),
+            Self::Binary64Ext3Vector(v) | Self::Binary64Ext3Polynomial(v) => Backing::of(v, bytes),
             Self::KoalaBearVector(v) | Self::KoalaBearPolynomial(v) => Backing::of(v, bytes),
             Self::Vector(v) | Self::Polynomial(v) | Self::Point(v) => Backing::of(v, bytes),
             Self::RistrettoVector(v) | Self::RistrettoPolynomial(v) => Backing::of(v, bytes),
@@ -765,6 +825,10 @@ impl Value {
             | Self::KoalaBearExt8Round(_)
             | Self::KoalaBearExt4Field(_)
             | Self::KoalaBearExt4Round(_)
+            | Self::Binary64Field(_)
+            | Self::Binary64Round(_)
+            | Self::Binary64Ext3Field(_)
+            | Self::Binary64Ext3Round(_)
             | Self::KoalaBearField(_)
             | Self::KoalaBearRound(_)
             | Self::RistrettoField(_)
@@ -828,6 +892,16 @@ impl Value {
             | Self::KoalaBearExt4Vector(..)
             | Self::KoalaBearExt4Polynomial(..)
             | Self::KoalaBearExt4Round(..)
+            | Self::Binary64Matrix(..)
+            | Self::Binary64Field(..)
+            | Self::Binary64Vector(..)
+            | Self::Binary64Polynomial(..)
+            | Self::Binary64Round(..)
+            | Self::Binary64Ext3Matrix(..)
+            | Self::Binary64Ext3Field(..)
+            | Self::Binary64Ext3Vector(..)
+            | Self::Binary64Ext3Polynomial(..)
+            | Self::Binary64Ext3Round(..)
             | Self::KoalaBearField(..)
             | Self::KoalaBearVector(..)
             | Self::KoalaBearPolynomial(..)
@@ -905,6 +979,10 @@ impl RuntimeValue for Value {
             }
             Self::KoalaBearExt4Field(value) => {
                 Some(crate::plonky3::encode_quartic(*value).to_vec())
+            }
+            Self::Binary64Field(value) => Some(crate::plonky3::binary::encode(*value).to_vec()),
+            Self::Binary64Ext3Field(value) => {
+                Some(crate::plonky3::binary::encode_ext3(*value).to_vec())
             }
             _ => None,
         }
@@ -1006,6 +1084,16 @@ impl RuntimeValue for Value {
             | Self::KoalaBearExt4Vector(..)
             | Self::KoalaBearExt4Polynomial(..)
             | Self::KoalaBearExt4Round(..)
+            | Self::Binary64Matrix(..)
+            | Self::Binary64Field(..)
+            | Self::Binary64Vector(..)
+            | Self::Binary64Polynomial(..)
+            | Self::Binary64Round(..)
+            | Self::Binary64Ext3Matrix(..)
+            | Self::Binary64Ext3Field(..)
+            | Self::Binary64Ext3Vector(..)
+            | Self::Binary64Ext3Polynomial(..)
+            | Self::Binary64Ext3Round(..)
             | Self::KoalaBearField(..)
             | Self::KoalaBearVector(..)
             | Self::KoalaBearPolynomial(..)
@@ -1115,6 +1203,10 @@ impl RuntimeValue for Value {
             Self::KoalaBearExt8Vector(v) | Self::KoalaBearExt8Polynomial(v) => size(v.len(), 32),
             Self::KoalaBearExt4Matrix(m) => m.retained_bytes(),
             Self::KoalaBearExt4Vector(v) | Self::KoalaBearExt4Polynomial(v) => size(v.len(), 16),
+            Self::Binary64Matrix(m) => m.retained_bytes(),
+            Self::Binary64Vector(v) | Self::Binary64Polynomial(v) => size(v.len(), 8),
+            Self::Binary64Ext3Matrix(m) => m.retained_bytes(),
+            Self::Binary64Ext3Vector(v) | Self::Binary64Ext3Polynomial(v) => size(v.len(), 24),
             Self::KoalaBearVector(v) | Self::KoalaBearPolynomial(v) => size(v.len(), 4),
             Self::Vector(v) | Self::Polynomial(v) => size(v.len(), 32),
             Self::RistrettoVector(v) | Self::RistrettoPolynomial(v) => size(v.len(), 32),
@@ -1142,6 +1234,10 @@ impl RuntimeValue for Value {
             | Self::KoalaBearExt8Field(_)
             | Self::KoalaBearExt4Round(_)
             | Self::KoalaBearExt4Field(_)
+            | Self::Binary64Round(_)
+            | Self::Binary64Field(_)
+            | Self::Binary64Ext3Round(_)
+            | Self::Binary64Ext3Field(_)
             | Self::KoalaBearField(_)
             | Self::KoalaBearRound(_)
             | Self::RistrettoField(_)

@@ -160,13 +160,16 @@ fn select(
         primary,
         Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4
     );
+    // Binary fields have little-endian bit patterns; Montgomery residues are
+    // defined only for prime fields and their extensions.
+    let binary = primary.bit_pattern_width().is_some();
     let allowed = match binding.contract.as_str() {
         "encoding.field_le" | "encoding.fields_le" | "encoding.field_from_le" => {
-            primary == Identity::Ristretto255Scalar || koala_bear
+            primary == Identity::Ristretto255Scalar || koala_bear || binary
         }
         "encoding.field_reduce_le" => primary == Identity::Ristretto255Scalar,
-        "encoding.fields_from_le"
-        | "encoding.field_montgomery_le"
+        "encoding.fields_from_le" => koala_bear || binary,
+        "encoding.field_montgomery_le"
         | "encoding.field_from_montgomery_le"
         | "encoding.fields_montgomery_le"
         | "encoding.fields_from_montgomery_le" => koala_bear,

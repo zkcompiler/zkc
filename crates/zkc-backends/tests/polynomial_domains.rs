@@ -99,7 +99,11 @@ fn fold_bindings_require_installed_two_adic_odd_fields() {
             backend.binding_signature(&b).is_some(),
             b.signature().is_ok()
         );
-        assert!(domain.field.has_characteristic_not_two());
+        // Only the installed binary fields have characteristic two.
+        assert_eq!(
+            domain.field.has_characteristic_not_two(),
+            domain.field.bit_pattern_width().is_none()
+        );
     }
     for identity in [
         Identity::None,
@@ -108,7 +112,17 @@ fn fold_bindings_require_installed_two_adic_odd_fields() {
     ] {
         assert!(!identity.has_characteristic_not_two());
     }
-    // No characteristic-two installation is introduced to test a refusal.
+    // Folding halves, so the installed characteristic-two fields refuse it,
+    // as does an uninstalled identity.
+    for field in [Identity::Binary64, Identity::Binary64Ext3] {
+        let binary = OperationBinding {
+            contract: "poly.even_odd_fold".into(),
+            arguments: vec![field.name().into()],
+            implementation: "plonky3/poly.even_odd_fold".into(),
+        };
+        assert!(binary.signature().is_err());
+        assert!(backend.binding_signature(&binary).is_none());
+    }
     let unsupported = OperationBinding {
         contract: "poly.even_odd_fold".into(),
         arguments: vec!["uninstalled.binary".into()],

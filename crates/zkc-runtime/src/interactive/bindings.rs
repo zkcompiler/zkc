@@ -39,6 +39,8 @@ pub enum Identity {
     Bls12381Gt,
     HashChainKeccak256Fr64Be,
     HashChainKeccak256KoalaBearExt8,
+    Binary64,
+    Binary64Ext3,
 }
 impl Identity {
     /// Characteristic of an installed field, including nominal extensions.
@@ -46,6 +48,7 @@ impl Identity {
     pub(crate) fn field_characteristic(self) -> Option<&'static str> {
         match self {
             Self::KoalaBear | Self::KoalaBearExt8 | Self::KoalaBearExt4 => Some("2130706433"),
+            Self::Binary64 | Self::Binary64Ext3 => Some("2"),
             Self::Bls12381Fr => Some(
                 "52435875175126190479447740508185965837690552500527637822603658699938581184513",
             ),
@@ -57,6 +60,37 @@ impl Identity {
             }
             _ => None,
         }
+    }
+    /// A prime field with an integer residue representation. A binary field has
+    /// characteristic two but is not a prime field.
+    pub fn is_prime_field(self) -> bool {
+        matches!(
+            self,
+            Self::Bn254Fr | Self::Bls12381Fr | Self::Ristretto255Scalar | Self::KoalaBear
+        )
+    }
+    /// A prime field or a nominal extension of one: every coordinate is an
+    /// integer residue below the characteristic. Relation bundles and ring
+    /// arenas use this presentation; binary fields do not have it.
+    pub fn has_residue_coordinates(self) -> bool {
+        self.is_prime_field() || self.base_field().is_some_and(Self::is_prime_field)
+    }
+    /// Width in bits of a binary field's bit-pattern presentation: the number
+    /// of its coordinates over GF(2) (docs/spec/domains/values.md).
+    pub fn bit_pattern_width(self) -> Option<u32> {
+        match self {
+            Self::Binary64 => Some(64),
+            Self::Binary64Ext3 => Some(192),
+            _ => None,
+        }
+    }
+    /// Canonical constant attribute: a natural literal below the characteristic
+    /// or, for a binary field, a canonical bit-pattern literal of at least two.
+    pub(crate) fn canonical_constant_literal(self, text: &str) -> bool {
+        self.canonical_field_literal(text)
+            || self
+                .bit_pattern_width()
+                .is_some_and(|width| bit_pattern_literal(text, width).is_some())
     }
     /// Canonical prime-subfield natural literal; never reduces modulo the field.
     pub(crate) fn canonical_field_literal(self, text: &str) -> bool {
@@ -106,6 +140,8 @@ impl Identity {
             | Self::Merlin3KoalaBearExt8
             | Self::HashChainKeccak256KoalaBearExt8 => Some(Self::KoalaBearExt8),
             Self::KoalaBearExt4 | Self::MerklePoseidon2KoalaBearExt4 => Some(Self::KoalaBearExt4),
+            Self::Binary64 => Some(Self::Binary64),
+            Self::Binary64Ext3 => Some(Self::Binary64Ext3),
             Self::None => None,
         }
     }
@@ -131,6 +167,7 @@ impl Identity {
     pub fn base_field(self) -> Option<Self> {
         match self {
             Self::KoalaBearExt8 | Self::KoalaBearExt4 => Some(Self::KoalaBear),
+            Self::Binary64Ext3 => Some(Self::Binary64),
             _ => None,
         }
     }
@@ -180,6 +217,7 @@ impl Identity {
             Self::Bls12381Fr | Self::Bn254Fr => Some("arkworks"),
             Self::Ristretto255Scalar => Some("dalek"),
             Self::KoalaBear | Self::KoalaBearExt8 | Self::KoalaBearExt4 => Some("plonky3"),
+            Self::Binary64 | Self::Binary64Ext3 => Some("plonky3"),
             _ => None,
         }
     }
@@ -194,6 +232,8 @@ impl Identity {
             Self::KoalaBear => "koala-bear",
             Self::KoalaBearExt8 => "koala-bear.ext8-binomial3",
             Self::KoalaBearExt4 => "koala-bear.ext4-binomial3",
+            Self::Binary64 => "gf2-64.pentanomial-4-3-1",
+            Self::Binary64Ext3 => "gf2-64.pentanomial-4-3-1.ext3-trinomial1",
             Self::Bls12381Fr => "bls12-381.fr",
             Self::Bls12381G1 => "bls12-381.g1",
             Self::Bls12381G2 => "bls12-381.g2",
@@ -246,11 +286,43 @@ impl Identity {
             Self::Bls12381Gt,
             Self::HashChainKeccak256Fr64Be,
             Self::HashChainKeccak256KoalaBearExt8,
+            Self::Binary64,
+            Self::Binary64Ext3,
         ]
         .into_iter()
         .find(|i| i.name() == name)
         .ok_or_else(|| error("uninstalled nominal identity"))
     }
+}
+
+/// Canonical bit-pattern literal of a binary field with `width` coordinates
+/// over GF(2): `0x` followed by lowercase hexadecimal digits without leading
+/// zeros, read as an unsigned integer whose bit `i` is coordinate `i`. Zero and
+/// one keep their natural spellings `0` and `1`, so the value is at least two
+/// and below `2^width`. Returns the value as little-endian 64-bit words.
+pub fn bit_pattern_literal(text: &str, width: u32) -> Option<[u64; 3]> {
+    let digits = text.strip_prefix("0x")?;
+    let width = usize::try_from(width)
+        .ok()
+        .filter(|w| *w <= 192 && w % 4 == 0)?;
+    if digits.is_empty()
+        || digits.len() > width / 4
+        || digits.starts_with('0')
+        || !digits
+            .bytes()
+            .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+    {
+        return None;
+    }
+    let mut words = [0u64; 3];
+    for (position, digit) in digits.bytes().rev().enumerate() {
+        let nibble = u64::from(match digit {
+            b'0'..=b'9' => digit - b'0',
+            _ => digit - b'a' + 10,
+        });
+        words[position / 16] |= nibble << (4 * (position % 16));
+    }
+    (words != [0, 0, 0] && words != [1, 0, 0]).then_some(words)
 }
 
 /// Ground origin arguments retain canonical Domain, Type, Nat, and existing
@@ -335,6 +407,8 @@ impl LogicalType {
                         | KoalaBear
                         | KoalaBearExt8
                         | KoalaBearExt4
+                        | Binary64
+                        | Binary64Ext3
                 )
             }
             Type::Rng => matches!(
@@ -465,6 +539,8 @@ impl LogicalType {
                         | Identity::KoalaBear
                         | Identity::KoalaBearExt8
                         | Identity::KoalaBearExt4
+                        | Identity::Binary64
+                        | Identity::Binary64Ext3
                 ) | (
                     Type::Group | Type::Groups,
                     Identity::Bn254G1
@@ -632,6 +708,16 @@ pub enum Representation {
     KoalaBearExt4Polynomial,
     KoalaBearExt4Round,
     KoalaBearExt4,
+    Binary64,
+    Binary64Vector,
+    Binary64Polynomial,
+    Binary64Round,
+    Binary64SparseCoo,
+    Binary64Ext3,
+    Binary64Ext3Vector,
+    Binary64Ext3Polynomial,
+    Binary64Ext3Round,
+    Binary64Ext3SparseCoo,
     KoalaBearSparseCoo,
     KoalaBear,
     KoalaBearExt8,
@@ -709,6 +795,22 @@ impl Representation {
             Self::KoalaBearExt4Polynomial => "plonky3.koala-bear.ext4-binomial3-polynomial/0",
             Self::KoalaBearExt4Round => "plonky3.koala-bear.ext4-binomial3-quadratic/0",
             Self::KoalaBearExt4SparseCoo => "plonky3.koala-bear.ext4-binomial3-sparse-coo/0",
+            Self::Binary64 => "plonky3.gf2-64.pentanomial-4-3-1/0",
+            Self::Binary64Vector => "plonky3.gf2-64.pentanomial-4-3-1-vector/0",
+            Self::Binary64Polynomial => "plonky3.gf2-64.pentanomial-4-3-1-polynomial/0",
+            Self::Binary64Round => "plonky3.gf2-64.pentanomial-4-3-1-quadratic/0",
+            Self::Binary64SparseCoo => "plonky3.gf2-64.pentanomial-4-3-1-sparse-coo/0",
+            Self::Binary64Ext3 => "plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1/0",
+            Self::Binary64Ext3Vector => "plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1-vector/0",
+            Self::Binary64Ext3Polynomial => {
+                "plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1-polynomial/0"
+            }
+            Self::Binary64Ext3Round => {
+                "plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1-quadratic/0"
+            }
+            Self::Binary64Ext3SparseCoo => {
+                "plonky3.gf2-64.pentanomial-4-3-1.ext3-trinomial1-sparse-coo/0"
+            }
             Self::KoalaBear => "plonky3.koala-bear/0",
             Self::KoalaBearVector => "plonky3.koala-bear-vector/0",
             Self::KoalaBearPolynomial => "plonky3.koala-bear-polynomial/0",
@@ -786,6 +888,16 @@ impl Representation {
             Self::KoalaBearExt4Polynomial,
             Self::KoalaBearExt4Round,
             Self::KoalaBearExt4,
+            Self::Binary64,
+            Self::Binary64Vector,
+            Self::Binary64Polynomial,
+            Self::Binary64Round,
+            Self::Binary64SparseCoo,
+            Self::Binary64Ext3,
+            Self::Binary64Ext3Vector,
+            Self::Binary64Ext3Polynomial,
+            Self::Binary64Ext3Round,
+            Self::Binary64Ext3SparseCoo,
             Self::KoalaBearSparseCoo,
             Self::KoalaBear,
             Self::KoalaBearExt8,
@@ -936,6 +1048,16 @@ impl PhysicalType {
             (T::Polynomial, I::KoalaBearExt4) => R::KoalaBearExt4Polynomial,
             (T::Round, I::KoalaBearExt4) => R::KoalaBearExt4Round,
             (T::Matrix, I::KoalaBearExt4) => R::KoalaBearExt4SparseCoo,
+            (T::Field, I::Binary64) => R::Binary64,
+            (T::Vector, I::Binary64) => R::Binary64Vector,
+            (T::Polynomial, I::Binary64) => R::Binary64Polynomial,
+            (T::Round, I::Binary64) => R::Binary64Round,
+            (T::Matrix, I::Binary64) => R::Binary64SparseCoo,
+            (T::Field, I::Binary64Ext3) => R::Binary64Ext3,
+            (T::Vector, I::Binary64Ext3) => R::Binary64Ext3Vector,
+            (T::Polynomial, I::Binary64Ext3) => R::Binary64Ext3Polynomial,
+            (T::Round, I::Binary64Ext3) => R::Binary64Ext3Round,
+            (T::Matrix, I::Binary64Ext3) => R::Binary64Ext3SparseCoo,
             (T::Field, I::KoalaBear) => R::KoalaBear,
             (T::Vector, I::KoalaBear) => R::KoalaBearVector,
             (T::Polynomial, I::KoalaBear) => R::KoalaBearPolynomial,
