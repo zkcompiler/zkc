@@ -32,13 +32,16 @@ projection `scope : C → K` keeps the admitted part.
   history provider; `PrefixFreeEncoding`: injective, prefix-free serialization.
 - `ExactWithRefusal`: the law of a decoder whose realized subdistribution is its
   success probability times the ideal law.
-- `ConsistentHandler`: the hash-consistency and failure laws of a handler.
+- `HashLaws`: the hash-consistency and failure laws of a handler, with
+  `TotalConsistentHandler` as a stronger specialization that never stops.
 - `ConstructionCorrect`: a constructed meaning is the transform of the original
   for every challenge function.
 - `AuthenticatedOperand`, `ProductionRange` and `AuthenticatedConfiguration`:
   provenance of security operands and of configuration.
-- `GateSite.Placement`, `GateSite.ReadsState` and `GateSite.AbsorbsWitness`: the
-  admission conditions of a proof-of-work gate.
+- `GateSite.Placement` (no event absorbed between the gate step and the
+  request), `GateSite.ReadsState` and `GateSite.AbsorbsWitness`: the admission
+  conditions of a proof-of-work gate; `GateSite.GateDetermines` is a weaker,
+  necessary dependency condition of placement.
 
 Exact statement determination is `ZkcSecurity.FiatShamir.Typed.Determined`, a
 realized law with a factor and slack is `ZkcSecurity.FiatShamir.Realized`, and
@@ -185,15 +188,29 @@ theorem ExactWithRefusal.realized {decode : B → Option R} (exact : ExactWithRe
 end Laws
 
 section Handlers
+variable {I : PIR.Signature} {S E : Type}
 
-/-- The laws of law-conditioned outcome preservation, for the operations
-`hashing` selects: every such call returns a fixed function of the operation
-and its arguments, whatever the handler's state (hash consistency), and never
-stops (no stop depends on the number or order of calls). -/
-def ConsistentHandler {I : PIR.Signature} {S E : Type} (hashing : I.Op → Prop)
-    (handler : PIR.Handler I S E) : Prop :=
+/-- The laws of law-conditioned outcome preservation for the operations
+`hashing` selects, read as: the outcome of every such call, a reply or a stop,
+is a function of the operation and its arguments alone, whatever state the
+handler is in. Equal inputs then receive equal answers (hash consistency), and
+no stop depends on the number or order of earlier calls (the failure law); a
+stop that the input alone determines is allowed. -/
+def HashLaws (hashing : I.Op → Prop) (handler : PIR.Handler I S E) : Prop :=
+  ∃ outcome : (operation : I.Op) → PIR.Outcome (I.Reply operation), ∀ operation,
+    hashing operation → ∀ state, (handler operation state).outcome = outcome operation
+
+/-- A stronger specialization of the hash laws: every selected call returns a
+fixed function of the operation, whatever the handler's state, and never
+stops. -/
+def TotalConsistentHandler (hashing : I.Op → Prop) (handler : PIR.Handler I S E) : Prop :=
   ∃ answer : (operation : I.Op) → I.Reply operation, ∀ operation, hashing operation →
     ∀ state, (handler operation state).outcome = .returned (answer operation)
+
+theorem TotalConsistentHandler.hashLaws {hashing : I.Op → Prop} {handler : PIR.Handler I S E}
+    (total : TotalConsistentHandler hashing handler) : HashLaws hashing handler := by
+  obtain ⟨answer, answers⟩ := total
+  exact ⟨fun operation => .returned (answer operation), answers⟩
 
 end Handlers
 
@@ -233,28 +250,36 @@ end Provenance
 section Gates
 
 /-- One proof-of-work gate attached to a request: the primitive input of the gate
-step, the transcript state before the gate, the producer's witness, and the
-input from which the gated value is derived. -/
-structure GateSite (C G S W Q : Type) where
+step, the transcript state before the gate, the producer's witness, the events
+absorbed between the gate step and the request, and the input from which the
+gated value is derived. -/
+structure GateSite (C G S W Ev Q : Type) where
   gateInput : C → G
   state : C → S
   witness : C → W
+  between : C → List Ev
   requestInput : C → Q
 
-variable {C G S W Q : Type}
+variable {C G S W Ev Q : Type}
 
-/-- Placement: nothing is absorbed between the gate step and the request, so the
-gate's input determines the input of the gated value. -/
-def GateSite.Placement (site : GateSite C G S W Q) : Prop :=
+/-- Placement: nothing is absorbed between the gate step and the request. -/
+def GateSite.Placement (site : GateSite C G S W Ev Q) : Prop :=
+  ∀ context, site.between context = []
+
+/-- A necessary dependency condition of placement, weaker than it: the gate's
+input determines the input of the gated value. It also holds when a fixed
+constant is absorbed in between, so it does not replace `Placement`. -/
+def GateSite.GateDetermines (site : GateSite C G S W Ev Q) : Prop :=
   Determines site.gateInput site.requestInput
 
 /-- The gate step's primitive input includes the full transcript state before
-the gate. -/
-def GateSite.ReadsState (site : GateSite C G S W Q) : Prop :=
+the gate, read as: it determines that state. -/
+def GateSite.ReadsState (site : GateSite C G S W Ev Q) : Prop :=
   Determines site.gateInput site.state
 
-/-- The state from which the gated value is derived has absorbed the witness. -/
-def GateSite.AbsorbsWitness (site : GateSite C G S W Q) : Prop :=
+/-- The state from which the gated value is derived has absorbed the witness,
+read as: its input determines the witness. -/
+def GateSite.AbsorbsWitness (site : GateSite C G S W Ev Q) : Prop :=
   Determines site.requestInput site.witness
 
 end Gates

@@ -7,11 +7,13 @@ import Mathlib.Data.ZMod.Basic
 
 - **Pruned and unpruned verification under a stateful handler.** A verifier that
   hashes the same leaf twice and its pruned form that hashes it once return the
-  same outcome under every handler with the hash-consistency and failure laws
-  (`consistent_preserves`). A handler that answers a repeated input differently
-  (`repeating`), or one that stops after one call (`limited`), makes the two
-  outcomes differ (`repeating_differs`, `limited_differs`); neither has the laws
-  (`repeating_inconsistent`, `limited_inconsistent`).
+  same outcome under every handler with the hash laws (`lawful_preserves`),
+  including one whose stop depends on the input alone (`inputStopping_lawful`,
+  which is not a total handler, `inputStopping_not_total`). A handler that
+  answers a repeated input differently (`repeating`), or one that stops after
+  one call (`limited`), makes the two outcomes differ (`repeating_differs`,
+  `limited_differs`); neither has the laws (`repeating_inconsistent`,
+  `limited_inconsistent`).
 - **Extraction from the terminal record.** An adversary queries a transcript
   cell, then a leaf hash whose row depends on the answer. Extraction from the
   terminal record changes when that cell is resampled (`terminal_moves`), so it
@@ -25,13 +27,18 @@ import Mathlib.Data.ZMod.Basic
   (`internal_not_committed`); the configured depth refuses the path
   (`internal_wrong_depth`). The depth is not fixed at the receive point
   (`depth_not_fixed`).
-- **Unbound commitment metadata (security attack).** The committed-opening
-  protocol with the scheme identity unbound: one root of rows read under the base
-  interpretation (all rows rejected, so the extracted table is far,
-  `base_far`) and under the quartic interpretation (accepted for every
-  challenge and hash function, `quartic_accepted`). A binding of the depth and
-  width alone does not fix the scheme (`scheme_not_fixed`), and gives both
-  configurations one key (`unbound_key`).
+- **Unbound commitment metadata (security attack).** The deployment
+  authenticates the base interpretation of the committed rows. A flawed
+  construction binds only the depth and the width (`flawedBinding`) and reads
+  the scheme from a runtime parameter the producer supplies. The producer
+  commits rows that the base interpretation rejects, so the claim is false
+  (`committed_far`), takes the challenge at the flawed key and opens under the
+  quartic interpretation: accepted for every challenge and hash function
+  (`flawed_accepted`), and with probability one in the random-oracle experiment
+  (`flawed_acceptance`). The flawed binding does not fix the scheme
+  (`flawedBinding_not_fixed`); the committed-opening protocol's binding does
+  (`binding_fixes_scheme`), and under it the same rows are rejected
+  (`bound_rejects`).
 -/
 
 namespace TestsSecurity.Counterexamples.Openings
@@ -59,14 +66,18 @@ def unpruned (expected : Fin 2) : PIR.Proc hashSignature Bool :=
 def pruned (expected : Fin 2) : PIR.Proc hashSignature Bool :=
   .call (.hash 0) fun first => .done (decide (first = expected ∧ first = expected))
 
-theorem consistent_preserves {S E : Type} (handler : PIR.Handler hashSignature S E)
-    (consistent : ConsistentHandler (fun _ => True) handler) (expected : Fin 2) (state : S) :
+/-- Under every handler with the hash laws, possibly stopping on an input, the
+pruned and unpruned verifiers have the same outcome. -/
+theorem lawful_preserves {S E : Type} (handler : PIR.Handler hashSignature S E)
+    (lawful : HashLaws (fun _ => True) handler) (expected : Fin 2) (state : S) :
     ((unpruned expected).run handler state).outcome = ((pruned expected).run handler state).outcome := by
-  obtain ⟨answer, answers⟩ := consistent
-  have first := answers (.hash 0) trivial state
+  obtain ⟨result, results⟩ := lawful
+  have first := results (.hash 0) trivial state
+  have second := results (.hash 0) trivial (handler (.hash 0) state).state
   simp only [unpruned, pruned, PIR.Proc.run, PIR.Execution.follow, first]
-  have second := answers (.hash 0) trivial (handler (.hash 0) state).state
-  simp only [second]
+  rcases outcome : result (.hash 0) with answer | stop
+  · simp only [second, outcome]
+  · rfl
 
 /-- A handler that answers the first call `0` and every later call `1`. -/
 def repeating : PIR.Handler hashSignature ℕ Unit
@@ -76,6 +87,12 @@ def repeating : PIR.Handler hashSignature ℕ Unit
 def limited : PIR.Handler hashSignature ℕ Unit
   | .hash _, calls => if calls = 0 then ⟨.returned 0, 1, []⟩ else ⟨.stopped .exhausted, calls, []⟩
 
+/-- A handler that refuses the input `1` and answers `0` otherwise, whatever its
+state: its stop depends on the input alone. -/
+def inputStopping : PIR.Handler hashSignature ℕ Unit
+  | .hash input, calls =>
+      if input = 1 then ⟨.stopped .exhausted, calls + 1, []⟩ else ⟨.returned 0, calls + 1, []⟩
+
 theorem repeating_differs :
     ((unpruned 0).run repeating 0).outcome ≠ ((pruned 0).run repeating 0).outcome := by
   decide
@@ -84,11 +101,24 @@ theorem limited_differs :
     ((unpruned 0).run limited 0).outcome ≠ ((pruned 0).run limited 0).outcome := by
   decide
 
-theorem repeating_inconsistent : ¬ ConsistentHandler (fun _ => True) repeating := fun consistent =>
-  repeating_differs (consistent_preserves repeating consistent 0 0)
+theorem repeating_inconsistent : ¬ HashLaws (fun _ => True) repeating := fun lawful =>
+  repeating_differs (lawful_preserves repeating lawful 0 0)
 
-theorem limited_inconsistent : ¬ ConsistentHandler (fun _ => True) limited := fun consistent =>
-  limited_differs (consistent_preserves limited consistent 0 0)
+theorem limited_inconsistent : ¬ HashLaws (fun _ => True) limited := fun lawful =>
+  limited_differs (lawful_preserves limited lawful 0 0)
+
+/-- An input-determined stop keeps the hash laws. -/
+theorem inputStopping_lawful : HashLaws (fun _ => True) inputStopping :=
+  ⟨fun | .hash input => if input = 1 then .stopped .exhausted else .returned 0,
+    fun | .hash input, _, calls => by
+          by_cases refused : input = 1 <;> simp [inputStopping, refused]⟩
+
+/-- It is not a total handler: the total specialization is stronger than the
+laws. -/
+theorem inputStopping_not_total : ¬ TotalConsistentHandler (fun _ => True) inputStopping := by
+  rintro ⟨answer, answers⟩
+  have refused := answers (.hash 1) trivial 0
+  simp [inputStopping] at refused
 
 /-! ### Extraction from the terminal record -/
 
@@ -203,6 +233,8 @@ theorem depth_not_fixed :
 
 abbrev Coordinate := ZMod 5
 
+abbrev Digest := Fin 4
+
 /-- The scheme reads a row of four coordinates as four base elements (`false`)
 or as one quartic element (`true`). The base reading accepts a row whose first
 coordinate is zero; the quartic reading accepts a nonzero element. -/
@@ -210,11 +242,10 @@ def accepts : Bool → List Coordinate → Bool
   | false, row => decide (row.headD 1 = 0)
   | true, row => decide (row ≠ [0, 0, 0, 0])
 
-def base : Configuration Bool := ⟨false, 1, 4⟩
+/-- The authenticated intended configuration: the base interpretation. -/
+def intended : Configuration Bool := ⟨false, 1, 4⟩
 
-def quartic : Configuration Bool := ⟨true, 1, 4⟩
-
-/-- Both rows are the coordinates `1, 0, 0, 0`. -/
+/-- Both committed rows are the coordinates `1, 0, 0, 0`. -/
 def rows : PTree (List Coordinate) 1 := .node (.leaf [1, 0, 0, 0]) (.leaf [1, 0, 0, 0])
 
 theorem rows_get (index : ℕ) : rows.get index = [1, 0, 0, 0] := by
@@ -225,21 +256,9 @@ theorem rows_width (index : ℕ) : (rows.get index).length = 4 := by
   rw [rows_get]
   rfl
 
-/-- Under the quartic configuration the honest proof of the rows is accepted,
-for every challenge and hash function. -/
-theorem quartic_accepted {Digest : Type} [DecidableEq Digest]
-    (challenge : (key : List (Event Unit Bool (List Coordinate) Digest)) → Answer key)
-    (hash : HashCall (List Coordinate) Digest → Digest) (absorbOpening : Bool) :
-    interpret (m := Id) (concreteOracle challenge hash) absorbOpening (verifier accepts quartic)
-        (initial () quartic) (honestProof challenge hash () quartic rows) =
-      (.returned true, []) := by
-  rw [concrete_honest accepts challenge hash absorbOpening () quartic rows rows_width]
-  exact congrArg (fun row => (PIR.Outcome.returned (accepts true row),
-    ([] : List (Message (List Coordinate) Digest)))) (rows_get _)
-
-/-- Under the base configuration every row is rejected, so the table is far at
-fraction one. -/
-theorem base_far : Far accepts base 1 (some fun index => rows.get index.val) := by
+/-- Under the intended interpretation every committed row is rejected: the claim
+that the committed table is acceptable is false, at fraction one. -/
+theorem committed_far : Far accepts intended 1 (some fun index => rows.get index.val) := by
   show (1 : ENNReal) * 2 ^ 1 ≤ ((Finset.univ.filter fun index : Fin (2 ^ 1) =>
     accepts false (rows.get index.val) = false).card : ENNReal)
   have count : (Finset.univ.filter fun index : Fin (2 ^ 1) =>
@@ -248,13 +267,101 @@ theorem base_far : Far accepts base 1 (some fun index => rows.get index.val) := 
   rw [count]
   norm_num
 
-/-- A binding of the depth and width alone. -/
-def shape (configuration : Configuration Bool) : ℕ × ℕ := (configuration.depth, configuration.width)
+/-- The flawed binding records the depth and the width; the scheme is not part
+of the transcript. -/
+def flawedBinding (configuration : Configuration Bool) : Configuration Unit :=
+  ⟨(), configuration.depth, configuration.width⟩
 
-theorem unbound_key : shape base = shape quartic := rfl
+/-- The flawed construction's initial history. -/
+def flawedInitial (configuration : Configuration Bool) : List (Event Unit Unit (List Coordinate) Digest) :=
+  [.binding () (flawedBinding configuration)]
 
-/-- The scheme is not fixed by a binding of the depth and width. -/
-theorem scheme_not_fixed : ¬ FixedAtReceivePoint shape Configuration.scheme :=
-  not_determines unbound_key (by decide)
+/-- The flawed verifier: the intended depth and width, and the scheme the
+producer supplies as a runtime parameter. -/
+def flawedVerifier (scheme : Bool) : PIR.Proc (signature (List Coordinate) Digest) Bool :=
+  verifier accepts ⟨scheme, intended.depth, intended.width⟩
+
+/-- The flawed construction's key for a root. -/
+def flawedKey (rootValue : Digest) : List (Event Unit Unit (List Coordinate) Digest) :=
+  flawedInitial intended ++ [.root rootValue] ++ [.position intended.depth]
+
+/-- The producer's proof in the concrete reading: the root of the rows, the
+opening at the challenge of the flawed key, and the quartic interpretation. -/
+def flawedProof (challenge : (key : List (Event Unit Unit (List Coordinate) Digest)) → Answer key)
+    (hash : HashCall (List Coordinate) Digest → Digest) : Bool × List (Message (List Coordinate) Digest) :=
+  let index := decodeIndex intended.depth (challenge (flawedKey (root hash rows)))
+  (true, [.root (root hash rows), .opening (rows.get index.val) (path hash rows index.val)])
+
+/-- For every challenge and hash function, the flawed construction accepts the
+false claim. -/
+theorem flawed_accepted (challenge : (key : List (Event Unit Unit (List Coordinate) Digest)) → Answer key)
+    (hash : HashCall (List Coordinate) Digest → Digest) (absorbOpening : Bool) :
+    (interpret (m := Id) (concreteOracle challenge hash) absorbOpening
+        (flawedVerifier (flawedProof challenge hash).1) (flawedInitial intended)
+        (flawedProof challenge hash).2).1 = .returned true := by
+  refine (congrArg Prod.fst (interpret_verifier_from (concreteOracle challenge hash) absorbOpening
+    accepts ⟨true, intended.depth, intended.width⟩ (flawedInitial intended) _ _ _ [])).trans ?_
+  rw [ite_eq_left_of_eq_true _ _ (eq_true (by
+    exact ⟨rows_width _, path_length _ _ _, climb_path _ _ _ (Fin.isLt _)⟩)), rows_get]
+  rfl
+
+/-- The producer with oracle access: commit, take the challenge at the flawed
+key, open, and claim the quartic interpretation. -/
+def flawedProver :
+    OracleComp (spec Unit Unit (List Coordinate) Digest) (Bool × List (Message (List Coordinate) Digest)) := do
+  let rootValue ← rootQueries rows
+  let raw ← liftM ((spec Unit Unit (List Coordinate) Digest).query (.transcript (flawedKey rootValue)))
+  let index := decodeIndex intended.depth raw
+  let siblings ← pathQueries rows index.val
+  pure (true, [.root rootValue, .opening (rows.get index.val) siblings])
+
+/-- The flawed experiment: the producer, then the flawed verifier with the
+scheme it supplied, in one oracle. -/
+def flawedExperiment (absorbOpening : Bool) :
+    OracleComp (spec Unit Unit (List Coordinate) Digest)
+      (Bool × (PIR.Outcome Bool × List (Message (List Coordinate) Digest))) :=
+  flawedProver >>= fun claimed => (claimed.1, ·) <$>
+    oracleReading absorbOpening (flawedVerifier claimed.1) (flawedInitial intended) claimed.2
+
+/-- The false claim is accepted with probability one. -/
+theorem flawed_acceptance (absorbOpening : Bool) :
+    Pr{let result ← (simulateQ randomOracle (flawedExperiment absorbOpening)).run' ∅}[
+      result.2.1 = PIR.Outcome.returned true] = 1 := by
+  refine prEvent_randomOracle_eq_one _ _ fun answers => ?_
+  simp only [flawedExperiment, flawedProver, evalWithAnswerFn_bind, evalWithAnswerFn_map,
+    evalWithAnswerFn_liftM_query, evalWithAnswerFn_pathQueries, evalWithAnswerFn_pure,
+    evalWithAnswerFn_interpret]
+  rw [evalWithAnswerFn_rootQueries]
+  refine (congrArg Prod.fst (interpret_verifier_from (fun query => answers query) absorbOpening
+    accepts ⟨true, intended.depth, intended.width⟩ (flawedInitial intended) _ _ _ [])).trans ?_
+  rw [ite_eq_left_of_eq_true _ _ (eq_true (by
+    exact ⟨rows_width _, path_length _ _ _, climb_path _ _ _ (Fin.isLt _)⟩)), rows_get]
+  rfl
+
+/-- The base and quartic configurations have one flawed binding but different
+schemes: the flawed binding does not fix the scheme. -/
+theorem flawedBinding_not_fixed : ¬ FixedAtReceivePoint flawedBinding Configuration.scheme :=
+  not_determines (first := intended) (second := ⟨true, 1, 4⟩) rfl (by decide)
+
+/-- The committed-opening protocol's binding determines the scheme. -/
+theorem binding_fixes_scheme :
+    FixedAtReceivePoint (fun configuration : Configuration Bool =>
+      (initial () configuration : List (Event Unit Bool (List Coordinate) Digest)))
+      Configuration.scheme := by
+  intro first second same
+  simp only [initial, List.cons.injEq, Event.binding.injEq, true_and, and_true] at same
+  rw [same]
+
+/-- With the scheme bound and authenticated, the honest proof of the same rows
+is rejected under the intended interpretation, for every challenge and hash
+function. -/
+theorem bound_rejects (challenge : (key : List (Event Unit Bool (List Coordinate) Digest)) → Answer key)
+    (hash : HashCall (List Coordinate) Digest → Digest) (absorbOpening : Bool) :
+    interpret (m := Id) (concreteOracle challenge hash) absorbOpening (verifier accepts intended)
+        (initial () intended) (honestProof challenge hash () intended rows) =
+      (.returned false, []) := by
+  rw [concrete_honest accepts challenge hash absorbOpening () intended rows rows_width]
+  exact congrArg (fun row => (PIR.Outcome.returned (accepts false row),
+    ([] : List (Message (List Coordinate) Digest)))) (rows_get _)
 
 end TestsSecurity.Counterexamples.Openings

@@ -426,12 +426,12 @@ theorem interpret_climb {A : Type} (oracle : (query : Query Context Scheme Row D
 
 /-- Authentication followed by a continuation is the continuation at the
 authentication's decision, in a deterministic reading. -/
-theorem interpret_authenticate [DecidableEq Digest] {A : Type}
-    (oracle : (query : Query Context Scheme (List Coordinate) Digest) → Range query)
+theorem interpret_authenticate [DecidableEq Digest] {A Bound : Type}
+    (oracle : (query : Query Context Bound (List Coordinate) Digest) → Range query)
     (absorbOpening : Bool) (configuration : Configuration Scheme) (rootValue : Digest) (index : ℕ)
     (row : List Coordinate) (siblings : List Digest)
     (next : Bool → PIR.Proc (signature (List Coordinate) Digest) A)
-    (history : List (Event Context Scheme (List Coordinate) Digest))
+    (history : List (Event Context Bound (List Coordinate) Digest))
     (proof : List (Message (List Coordinate) Digest)) :
     interpret (m := Id) oracle absorbOpening
         ((authenticate configuration rootValue index row siblings).bind next) history proof =
@@ -454,6 +454,35 @@ theorem interpret_authenticate [DecidableEq Digest] {A : Type}
       fun held => shape ⟨held.1, held.2.1⟩
     simp only [PIR.Proc.bind, refused, decide_false]
 
+/-- The validator's outcome in a deterministic reading from any absorbed history,
+whose binding events may record any metadata `Bound`, on a proof that starts
+with a root and an opening: the decision of authentication at the index the
+transcript answers after the history, the root and the request, then the
+scheme's acceptance of the row. -/
+theorem interpret_verifier_from [DecidableEq Digest] {Bound : Type}
+    (oracle : (query : Query Context Bound (List Coordinate) Digest) → Range query)
+    (absorbOpening : Bool) (accepts : Scheme → List Coordinate → Bool)
+    (configuration : Configuration Scheme) (history : List (Event Context Bound (List Coordinate) Digest))
+    (rootValue : Digest) (row : List Coordinate) (siblings : List Digest)
+    (rest : List (Message (List Coordinate) Digest)) :
+    interpret (m := Id) oracle absorbOpening (verifier accepts configuration) history
+        (.root rootValue :: .opening row siblings :: rest) =
+      ((if row.length = configuration.width ∧ siblings.length = configuration.depth ∧
+          climb (hashOf oracle)
+              (decodeIndex configuration.depth (oracle (.transcript
+                (history ++ [.root rootValue] ++ [.position configuration.depth])))).val
+              siblings (hashOf oracle (.leaf row)) = rootValue
+        then .returned (accepts configuration.scheme row) else .stopped .reject), rest) := by
+  simp only [verifier, interpret, id_bind_eq]
+  rw [interpret_authenticate]
+  split
+  · rename_i held
+    rw [ite_eq_left_of_eq_true _ _ (eq_true (of_decide_eq_true held))]
+    rfl
+  · rename_i refused
+    rw [ite_eq_right_of_eq_false _ _ (eq_false fun held => refused (decide_eq_true held))]
+    rfl
+
 /-- The validator's outcome in a deterministic reading, on a proof that starts
 with a root and an opening: the decision of authentication at the index the
 transcript answers at the validator's key, then the scheme's acceptance of the
@@ -470,16 +499,9 @@ theorem interpret_verifier [DecidableEq Digest]
               (decodeIndex configuration.depth (oracle (.transcript
                 [.binding context configuration, .root rootValue, .position configuration.depth]))).val
               siblings (hashOf oracle (.leaf row)) = rootValue
-        then .returned (accepts configuration.scheme row) else .stopped .reject), rest) := by
-  simp only [verifier, interpret, id_bind_eq, List.cons_append, List.nil_append]
-  rw [interpret_authenticate]
-  split
-  · rename_i held
-    rw [ite_eq_left_of_eq_true _ _ (eq_true (of_decide_eq_true held))]
-    rfl
-  · rename_i refused
-    rw [ite_eq_right_of_eq_false _ _ (eq_false fun held => refused (decide_eq_true held))]
-    rfl
+        then .returned (accepts configuration.scheme row) else .stopped .reject), rest) :=
+  interpret_verifier_from oracle absorbOpening accepts configuration [.binding context configuration]
+    rootValue row siblings rest
 
 /-! ### The three readings -/
 

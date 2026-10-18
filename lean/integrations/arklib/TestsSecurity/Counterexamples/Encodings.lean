@@ -5,12 +5,13 @@ import Mathlib.Data.ZMod.Basic
 
 /-! Counterexamples for serialization, binding and explicit-input sharing.
 
-- **Padding aliasing (security attack).** Absorbing a variable-length
+- **Padding aliasing (serialization failure).** Absorbing a variable-length
   observation into a block of two coordinates padded with zeros, with no length,
   sends the distinct histories `[1]` and `[1, 0]` to one primitive input
   (`padded_alias`): the encoding is not injective and prefix-free
   (`padded_not_prefixFree`), and the two histories receive equal answers with
-  probability one (`aliased_equal`). Encoding the length first separates them
+  probability one (`aliased_equal`). This refutes serialization, not soundness
+  of a particular protocol. Encoding the length first separates them
   (`lengthPrefixed_separates`).
 - **A truncated digest claimed as exact binding.** Absorbing an eight-valued
   digest as its low two bits is not injective (`truncated_not_injective`), so it

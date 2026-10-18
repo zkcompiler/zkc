@@ -87,6 +87,7 @@ import TestsSecurity.CompiledSchnorrFiatShamir
 import TestsSecurity.CompiledSumcheckFiatShamir
 import TestsSecurity.Counterexamples.Couplings
 import TestsSecurity.Counterexamples.Encodings
+import TestsSecurity.Counterexamples.Gates
 import TestsSecurity.Counterexamples.Imports
 import TestsSecurity.Counterexamples.Laws
 import TestsSecurity.Counterexamples.Observations
