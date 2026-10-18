@@ -53,6 +53,15 @@ theorem first_present (xs : List F) (dimension width : Nat) (r : F)
   simp only [positive, ↓reduceIte]
   rfl
 
+/-- The actual index comparison on representable operands. -/
+theorem less_present (count rounds : Nat) (countBound : count < indexLimit)
+    (roundsBound : rounds < indexLimit) :
+    invoke (plainHelpers (F := F) (G := G) U).closed MapFirstBodies.lessHelper
+      (.cons count (.cons rounds .nil)) = .done (.cons (decide (count < rounds)) .nil) := by
+  rw [closed_invoke_plain, (SumcheckUnitContracts.first_laws U.linked bodies).less count rounds]
+  simp only [countBound, roundsBound, and_self, ↓reduceIte]
+  rfl
+
 end Helpers
 
 end ZkcExamples.Structured.SumcheckProverLaws

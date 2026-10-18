@@ -347,4 +347,167 @@ theorem prover_empty_process (U : UnitPayload) (bodies : SumcheckUnitContracts.B
   change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) U).closed SumcheckHelperBodies.sumsHelper) (.cons entries (.cons 0 (.cons width .nil)) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index]).present = _
   exact NormalFormSteps.owned_halt _ _ (SumcheckProverLaws.sums_zero U bodies entries width)
 
+/-- The typed body's process at one participant, with this unit's tables. -/
+def reduceFn (U : UnitPayload) (maximum : Nat) (ctx : ProtocolContext) (self : Nat) :
+    RegionFunction (Component (assignment F G)) (participantInterface F G)
+      ([.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"], [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr"]) :=
+  fun args => (SumcheckVerifierBodies.reduceBody maximum).denote
+    (participantMeaningWith (.silent _) (participantActions F G) (plainHelpers U) self (U.plainProtocolTable F G) ctx) args.get
+
+/-- The verifierReduce's normal form of the whole body. -/
+def verifierReduceProcess (U : UnitPayload) (maximum : Nat) (ctx : ProtocolContext) (claim : Option F) (count service : Option Nat) :
+    PIR.Proc (participantInterface F G)
+      (Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr"]) :=
+  (denoteRepeat (SumcheckVerifierBodies.repeatSpec maximum) ctx (ctx.roles 1) count (.cons none (.cons none (.cons none (.cons none (.cons (some []) (.cons claim .nil))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"])
+    (.cons service .nil : Values (Component (assignment F G)) [.service "random.bls12-381.fr/0"]) (roundFn U ctx (ctx.roles 1))).bind fun (state : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) =>
+  .done (.cons (state.get (.there (.there (.there .here)))) (.cons (state.get .here) (.cons (state.get (.there .here)) (.cons (state.get (.there (.there .here))) (.cons (state.get (.there (.there (.there (.there .here))))) (.cons (state.get (.there (.there (.there (.there (.there .here)))))) .nil))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr"])
+
+set_option linter.unusedSimpArgs false in
+/-- The process equation of `verifierReduceProcess` over the typed body. -/
+theorem verifierReduce_process (U : UnitPayload) (maximum : Nat) (bodies : SumcheckVerifierHelpers.Bodies U.definitions)
+    (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 1)
+    (separate : ctx.roles 0 ≠ self)
+    (claim : Option F) (count service : Option Nat) :
+    reduceFn (F := F) (G := G) U maximum ctx self
+      (.cons none (.cons none (.cons none (.cons claim (.cons count (.cons service .nil)))))) =
+      verifierReduceProcess U maximum ctx claim count service := by
+  subst self
+  let m := participantMeaningWith (.silent _) (participantActions F G) (plainHelpers U) (ctx.roles 1) (U.plainProtocolTable F G) ctx
+  unfold reduceFn SumcheckVerifierBodies.reduceBody SumcheckVerifierBodies.reduceReturn
+  simp only [verifierReduceProcess, PIR.Proc.bind]
+  refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_done m (.calculate (.invoke MapFirstBodies.widthHelper) rfl) _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.index]) ?_).trans ?_
+  · change invoke (plainHelpers (F := F) (G := G) U).components MapFirstBodies.widthHelper (.cons none (.cons none (.cons none .nil))) = _
+    rw [width_optional U bodies none none none]
+    rfl
+  refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_done m (.calculate (.indexConstant 1) rfl) _ _ _ _ (.cons (some 1) .nil : Values (Component (assignment F G)) [.index]) rfl).trans ?_
+  refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_done m (.calculate .indexEqual rfl) _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.boolean]) rfl).trans ?_
+  refine (Region.denote_letOp_done m (.mark "s3") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_done m (.guard 0 "s3") _ _ _ _ .nil ?_).trans ?_
+  · change ((Participant.guard (services := services) (Value := assignment F G) (ctx.roles 1) (ctx.roles 0) none).interpret (participantActions F G)).bind (fun _ => .done (Values.nil : Values (Component (assignment F G)) [])) = _
+    simp only [Participant.guard, separate, ↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]
+    rfl
+  refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_done m (.calculate (.invoke MapFirstBodies.variablesHelper) rfl) _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.index]) ?_).trans ?_
+  · change invoke (plainHelpers (F := F) (G := G) U).components MapFirstBodies.variablesHelper (.cons none (.cons none (.cons none .nil))) = _
+    rw [variables_optional U bodies none none none]
+    rfl
+  refine (Region.denote_letOp_done m (.mark "s5") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_done m (.localCall MapFirstBodies.lessHelper rfl 0 "s5") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.boolean]) ?_).trans ?_
+  · change Participant.owned (ctx.roles 1) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) U).closed MapFirstBodies.lessHelper) (.cons none (.cons count .nil)) = _
+    rw [Participant.owned_other _ _ separate]
+    rfl
+  refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_done m (.calculate (.booleanConstant false) rfl) _ _ _ _ (.cons (some false) .nil : Values (Component (assignment F G)) [.boolean]) rfl).trans ?_
+  refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_done m (.calculate .booleanEqual rfl) _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.boolean]) rfl).trans ?_
+  refine (Region.denote_letOp_done m (.mark "s8") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_done m (.guard 0 "s8") _ _ _ _ .nil ?_).trans ?_
+  · change ((Participant.guard (services := services) (Value := assignment F G) (ctx.roles 1) (ctx.roles 0) none).interpret (participantActions F G)).bind (fun _ => .done (Values.nil : Values (Component (assignment F G)) [])) = _
+    simp only [Participant.guard, separate, ↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]
+    rfl
+  refine (Region.denote_letOp_done m (.mark "s10") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_done m (.localCall SumcheckHelperBodies.emptyHelper rfl 0 "s10") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.vector "bls12-381.fr"]) ?_).trans ?_
+  · change Participant.owned (ctx.roles 1) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) U).closed SumcheckHelperBodies.emptyHelper) .nil = _
+    rw [Participant.owned_other _ _ separate]
+    rfl
+  refine (Region.denote_letOp_done m (.mark "s12") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_done m (.localCall SumcheckHelperBodies.emptyHelper rfl 1 "s12") _ _ _ _ (.cons (some []) .nil : Values (Component (assignment F G)) [.vector "bls12-381.fr"]) ?_).trans ?_
+  · change Participant.owned (ctx.roles 1) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) U).closed SumcheckHelperBodies.emptyHelper) (.nil : Values (assignment F G) []).present = _
+    exact NormalFormSteps.owned_done _ _ (empty_plain U bodies)
+  refine (Region.denote_letOp_done m (.mark "s15") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_values m (.repeat (SumcheckVerifierBodies.repeatSpec maximum) "s15") _ _ _ _).trans ?_
+  change (denoteRepeat (SumcheckVerifierBodies.repeatSpec maximum) ctx (ctx.roles 1) count (.cons none (.cons none (.cons none (.cons none (.cons (some []) (.cons claim .nil))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"])
+    (.cons service .nil : Values (Component (assignment F G)) [.service "random.bls12-381.fr/0"]) (roundFn U ctx (ctx.roles 1))).bind _ = _
+  congr 1
+  funext state
+  cases state with | cons slot0 state =>
+    cases state with | cons slot1 state =>
+      cases state with | cons slot2 state =>
+        cases state with | cons slot3 state =>
+          cases state with | cons slot4 state =>
+            cases state with | cons slot5 state =>
+              cases state
+              rfl
+
+/-- The proverReduce's normal form of the whole body. -/
+def proverReduceProcess (U : UnitPayload) (maximum : Nat) (ctx : ProtocolContext) (entries : List F) (count rounds : Nat) :
+    PIR.Proc (participantInterface F G)
+      (Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr"]) :=
+  (denoteRepeat (SumcheckVerifierBodies.repeatSpec maximum) ctx (ctx.roles 0) (some rounds) (.cons (some entries) (.cons (some count) (.cons (some 1) (.cons (some []) (.cons none (.cons none .nil))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"])
+    (.cons none .nil : Values (Component (assignment F G)) [.service "random.bls12-381.fr/0"]) (roundFn U ctx (ctx.roles 0))).bind fun (state : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) =>
+  .done (.cons (state.get (.there (.there (.there .here)))) (.cons (state.get .here) (.cons (state.get (.there .here)) (.cons (state.get (.there (.there .here))) (.cons (state.get (.there (.there (.there (.there .here))))) (.cons (state.get (.there (.there (.there (.there (.there .here)))))) .nil))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr"])
+
+set_option linter.unusedSimpArgs false in
+/-- The process equation of `proverReduceProcess` over the typed body. -/
+theorem proverReduce_process (U : UnitPayload) (maximum : Nat) (bodies : SumcheckUnitContracts.Bodies U.definitions)
+    (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles 0)
+    (separate : ctx.roles 1 ≠ self)
+    (entries : List F) (count rounds : Nat) (countBound : count < indexLimit) (roundsBound : rounds < indexLimit) (enough : rounds ≤ count) :
+    reduceFn (F := F) (G := G) U maximum ctx self
+      (.cons (some entries) (.cons (some count) (.cons (some 1) (.cons none (.cons (some rounds) (.cons none .nil)))))) =
+      proverReduceProcess U maximum ctx entries count rounds := by
+  subst self
+  let m := participantMeaningWith (.silent _) (participantActions F G) (plainHelpers U) (ctx.roles 0) (U.plainProtocolTable F G) ctx
+  unfold reduceFn SumcheckVerifierBodies.reduceBody SumcheckVerifierBodies.reduceReturn
+  simp only [proverReduceProcess, PIR.Proc.bind]
+  refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_done m (.calculate (.invoke MapFirstBodies.widthHelper) rfl) _ _ _ _ (.cons (some 1) .nil : Values (Component (assignment F G)) [.index]) ?_).trans ?_
+  · change invoke (plainHelpers (F := F) (G := G) U).components MapFirstBodies.widthHelper (.cons (some entries) (.cons (some count) (.cons (some 1) .nil))) = _
+    rw [width_optional U ⟨bodies.empty, bodies.append, bodies.width, bodies.«variables», bodies.values⟩ (some entries) (some count) (some 1)]
+    rfl
+  refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_done m (.calculate (.indexConstant 1) rfl) _ _ _ _ (.cons (some 1) .nil : Values (Component (assignment F G)) [.index]) rfl).trans ?_
+  refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_done m (.calculate .indexEqual rfl) _ _ _ _ (.cons (some true) .nil : Values (Component (assignment F G)) [.boolean]) rfl).trans ?_
+  refine (Region.denote_letOp_done m (.mark "s3") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_done m (.guard 0 "s3") _ _ _ _ .nil ?_).trans ?_
+  · change ((Participant.guard (services := services) (Value := assignment F G) (ctx.roles 0) (ctx.roles 0) (some true)).interpret (participantActions F G)).bind (fun _ => .done (Values.nil : Values (Component (assignment F G)) [])) = _
+    simp only [Participant.guard, ↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]
+    rfl
+  refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_done m (.calculate (.invoke MapFirstBodies.variablesHelper) rfl) _ _ _ _ (.cons (some count) .nil : Values (Component (assignment F G)) [.index]) ?_).trans ?_
+  · change invoke (plainHelpers (F := F) (G := G) U).components MapFirstBodies.variablesHelper (.cons (some entries) (.cons (some count) (.cons (some 1) .nil))) = _
+    rw [variables_optional U ⟨bodies.empty, bodies.append, bodies.width, bodies.«variables», bodies.values⟩ (some entries) (some count) (some 1)]
+    rfl
+  refine (Region.denote_letOp_done m (.mark "s5") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_done m (.localCall MapFirstBodies.lessHelper rfl 0 "s5") _ _ _ _ (.cons (some (decide (count < rounds))) .nil : Values (Component (assignment F G)) [.boolean]) ?_).trans ?_
+  · change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) U).closed MapFirstBodies.lessHelper) (.cons count (.cons rounds .nil) : Values (assignment F G) [.index, .index]).present = _
+    exact NormalFormSteps.owned_done _ _ (SumcheckProverLaws.less_present U bodies count rounds countBound roundsBound)
+  simp only [show decide (count < rounds) = false from decide_eq_false (Nat.not_lt.mpr enough)]
+  refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_done m (.calculate (.booleanConstant false) rfl) _ _ _ _ (.cons (some false) .nil : Values (Component (assignment F G)) [.boolean]) rfl).trans ?_
+  refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_done m (.calculate .booleanEqual rfl) _ _ _ _ (.cons (some true) .nil : Values (Component (assignment F G)) [.boolean]) rfl).trans ?_
+  refine (Region.denote_letOp_done m (.mark "s8") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_done m (.guard 0 "s8") _ _ _ _ .nil ?_).trans ?_
+  · change ((Participant.guard (services := services) (Value := assignment F G) (ctx.roles 0) (ctx.roles 0) (some true)).interpret (participantActions F G)).bind (fun _ => .done (Values.nil : Values (Component (assignment F G)) [])) = _
+    simp only [Participant.guard, ↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]
+    rfl
+  refine (Region.denote_letOp_done m (.mark "s10") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_done m (.localCall SumcheckHelperBodies.emptyHelper rfl 0 "s10") _ _ _ _ (.cons (some []) .nil : Values (Component (assignment F G)) [.vector "bls12-381.fr"]) ?_).trans ?_
+  · change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) U).closed SumcheckHelperBodies.emptyHelper) (.nil : Values (assignment F G) []).present = _
+    exact NormalFormSteps.owned_done _ _ (empty_plain U ⟨bodies.empty, bodies.append, bodies.width, bodies.«variables», bodies.values⟩)
+  refine (Region.denote_letOp_done m (.mark "s12") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_done m (.localCall SumcheckHelperBodies.emptyHelper rfl 1 "s12") _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.vector "bls12-381.fr"]) ?_).trans ?_
+  · change Participant.owned (ctx.roles 0) (ctx.roles 1) (invoke (plainHelpers (F := F) (G := G) U).closed SumcheckHelperBodies.emptyHelper) .nil = _
+    rw [Participant.owned_other _ _ separate]
+    rfl
+  refine (Region.denote_letOp_done m (.mark "s15") _ _ _ _ .nil rfl).trans ?_
+  refine (Region.denote_letOp_values m (.repeat (SumcheckVerifierBodies.repeatSpec maximum) "s15") _ _ _ _).trans ?_
+  change (denoteRepeat (SumcheckVerifierBodies.repeatSpec maximum) ctx (ctx.roles 0) (some rounds) (.cons (some entries) (.cons (some count) (.cons (some 1) (.cons (some []) (.cons none (.cons none .nil))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"])
+    (.cons none .nil : Values (Component (assignment F G)) [.service "random.bls12-381.fr/0"]) (roundFn U ctx (ctx.roles 0))).bind _ = _
+  congr 1
+  funext state
+  cases state with | cons slot0 state =>
+    cases state with | cons slot1 state =>
+      cases state with | cons slot2 state =>
+        cases state with | cons slot3 state =>
+          cases state with | cons slot4 state =>
+            cases state with | cons slot5 state =>
+              cases state
+              rfl
+
 end ZkcExamples.Structured.SumcheckRoundNormalForms

@@ -76,7 +76,8 @@ def roundBody : Region protocolDialect
   .ret (.cons (.there (.there (.there (.there (.there (.there (.there .here))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there .here)))))))) (.cons (.there (.there (.there (.there (.there (.there (.there (.there (.there .here))))))))) (.cons (.there (.there (.there (.there (.there (.there .here)))))) (.cons (.there (.there (.there (.there (.there .here))))) (.cons .here .nil))))))
 
 /-- The whole body, with the repeat maximum as a parameter. -/
-def reduceBody (maximum : Nat) : Region protocolDialect reduceInputs reduceOutputs :=
+def reduceBody (maximum : Nat) : Region protocolDialect [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]
+    [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr"] :=
   .letOp (.mark "") .nil .nil <|
   .letOp (.calculate (.invoke MapFirstBodies.widthHelper) rfl) (.cons .here (.cons (.there .here) (.cons (.there (.there .here)) .nil))) .nil <|
   .letOp (.mark "") .nil .nil <|

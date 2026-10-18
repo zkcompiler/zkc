@@ -200,7 +200,7 @@ class Sym:
             return f"some {paren(self.expr)}"
         if self.kind == "absent":
             return "none"
-        return self.expr
+        return self.expr          # "optional" or "component": an `Option` term
 
 
 def present(wire, expr):
@@ -299,6 +299,14 @@ class Match:
 
 
 @dataclass
+class Bind:
+    process: str
+    binder: str
+    binder_type: str
+    next: object
+
+
+@dataclass
 class If:
     prop: str
     then: object
@@ -317,6 +325,9 @@ def render_process(node, indent):
     if isinstance(node, Match):
         return (f"{pad}match {node.variable} with\n{pad}| none =>\n" + render_process(node.none, indent + 2)
                 + f"\n{pad}| some {node.variable} =>\n" + render_process(node.some, indent + 2))
+    if isinstance(node, Bind):
+        return (f"{pad}({node.process}).bind fun ({node.binder} : {node.binder_type}) =>\n"
+                + render_process(node.next, indent))
     if isinstance(node, If):
         return (f"{pad}if {node.prop} then\n" + render_process(node.then, indent + 2)
                 + f"\n{pad}else\n" + render_process(node.otherwise, indent + 2))
@@ -385,7 +396,25 @@ def evaluate_calculation(descriptor, args, wire):
         return present(wire, "true" if descriptor[1] else "false")
     if head == "group.identity":
         return present(wire, "(0 : G)")
+    folded = fold_literals(head, [arg.expr for arg in args])
+    if folded is not None:
+        return present(wire, folded)
     return present(wire, BINARY[head][1](*[arg.expr for arg in args]))
+
+
+def fold_literals(head, exprs):
+    """Comparisons and connectives of literals, which reduce by definitional unfolding."""
+    def literal(text):
+        if text in ("true", "false"):
+            return text == "true"
+        return int(text) if re.fullmatch(r"\d+", text) else None
+    values = [literal(text) for text in exprs]
+    if any(value is None for value in values):
+        return None
+    a, b = values
+    result = {"index.equal": a == b, "bool.equal": a == b, "bool.not_equal": a != b,
+              "bool.and": a and b, "bool.or": a or b, "bool.xor": a != b}.get(head)
+    return None if result is None else ("true" if result else "false")
 
 
 # ---------------------------------------------------------------------------
@@ -399,6 +428,7 @@ class Law:
     term: str
     results: list = field(default_factory=list)
     stop: str | None = None
+    components: bool = False      # templates read and yield optional components
 
 
 @dataclass
@@ -414,6 +444,9 @@ class Frame:
     separate: str = "separate"
     closed: str = ""
     components: str = ""
+    rewrites: list = field(default_factory=list)
+    callback: str = ""
+    repeat_spec: str = ""
 
 
 class Evaluator:
@@ -457,8 +490,32 @@ class Evaluator:
         raise GeneratorError(f"no law for helper {term} at role {self.frame.role}; "
                              f"name one in the request's laws table")
 
-    def fill(self, template, args):
+    def fill(self, template, args, components=False):
+        if components:
+            return template.format(*[paren(arg.component()) for arg in args])
         return template.format(*[paren(arg.expr) for arg in args])
+
+    def from_component(self, wire, text):
+        text = text.strip()
+        while outer_parenthesized(text):
+            text = text[1:-1].strip()
+        if text == "none":
+            return absent(wire)
+        if text.startswith("some "):
+            return present(wire, text[5:].strip())
+        return Sym("component", tuple(wire), text)
+
+    def rewrite(self, values, proof, pad):
+        """Apply the request's value facts to new values; the proof rewrites the goal alike."""
+        result = []
+        for value in values:
+            for fact in self.frame.rewrites:
+                if value.kind == "present" and fact["expr"] in value.expr:
+                    if self.shared:
+                        proof.append(f"{pad}simp only [show {fact['expr']} = {fact['value']} from {fact['proof']}]")
+                    value = present(value.wire, value.expr.replace(fact["expr"], fact["value"]))
+            result.append(value)
+        return result
 
     def received_name(self, site, fallback):
         label = decode_label(site) if site else None
@@ -518,12 +575,54 @@ class Evaluator:
             return self.draw(descriptor, args, results, site, rest, terminator, env, proof, indent, step)
         if head == "guard":
             return self.guard(descriptor, args, site, rest, terminator, env, proof, indent, step)
+        if head == "protocol_repeat":
+            return self.repeat(descriptor, args, results, site, rest, terminator, proof, indent, step)
         raise GeneratorError(f"unsupported instruction {head} at site {site!r}")
+
+    def repeat(self, descriptor, args, results, site, rest, terminator, proof, indent, step):
+        """A repeat at a role in its roster: the actual repeat of the body's own callback, then
+        the retained return of its state."""
+        _, state_count, _, roles, _ = descriptor
+        if self.frame.roles[self.frame.role] not in roles:
+            raise GeneratorError("normal forms of a role outside a repeat's roster are not supported")
+        if rest:
+            raise GeneratorError("only the return may follow a repeat")
+        if not self.frame.callback or not self.frame.repeat_spec:
+            raise GeneratorError("a body with a repeat needs `callback` and `repeat_spec` in the request")
+        count, state, captures = args[0], args[1:1 + state_count], args[1 + state_count:]
+        me = self.role_term(self.frame.role)
+        typed_state = (f"({values_literal([value.component() for value in state])} : "
+                       f"Values (Component (assignment F G)) {ty_list(results, True)})")
+        typed_captures = (f"({values_literal([value.component() for value in captures])} : "
+                          f"Values (Component (assignment F G)) {ty_list([value.wire for value in captures], True)})")
+        process = (f"denoteRepeat ({self.frame.repeat_spec}) ctx {me} {paren(count.component())} {typed_state}\n"
+                   f"    {typed_captures} ({self.frame.callback} ctx {me})")
+        pad = " " * indent
+        if self.shared:
+            proof.append(f"{pad}refine (Region.denote_letOp_values m (.repeat ({self.frame.repeat_spec}) "
+                         f"{json.dumps(site)}) _ _ _ _).trans ?_")
+            proof.append(f"{pad}change ({process}).bind _ = _")
+            proof.append(f"{pad}congr 1")
+            proof.append(f"{pad}funext state")
+            for position in range(state_count):
+                proof.append(f"{pad}{'  ' * position}cases state with | cons slot{position} state =>")
+            proof.append(f"{pad}{'  ' * state_count}cases state")
+        inner = [Sym("component", tuple(wire), f"state.get {variable(position)}")
+                 for position, wire in enumerate(results)]
+        kind, indices = terminator
+        if kind != "return":
+            raise GeneratorError("a repeat must be followed by the body's return")
+        node = self.finish([inner[index] if index < state_count else None for index in indices], None, pad)
+        if self.shared:
+            proof.append(f"{pad}{'  ' * state_count}rfl")
+        return Bind(process, "state", f"Values (Component (assignment F G)) {ty_list(results, True)}", node)
 
     def demands(self, descriptor, args):
         """Operand positions whose presence decides this operation's behaviour here."""
         head = descriptor[0]
-        if head in BINARY or head == "call":
+        if head == "call":
+            return [] if self.law(descriptor[1]).components else range(len(args))
+        if head in BINARY:
             return range(len(args))
         if head == "local_call":
             return range(len(args)) if self.frame.roles.index(descriptor[2]) == self.frame.role else []
@@ -557,8 +656,13 @@ class Evaluator:
         if law.stop:
             step.halt(op, law.stop, ("math", law, helper, args))
             return Halt(law.stop)
-        values = [present(wire, self.fill(text, args)) for wire, text in zip(results, law.results)]
+        if law.components:
+            values = [self.from_component(wire, self.fill(text, args, True))
+                      for wire, text in zip(results, law.results)]
+        else:
+            values = [present(wire, self.fill(text, args)) for wire, text in zip(results, law.results)]
         step.done(op, values, ("math", law, helper, args))
+        values = self.rewrite(values, proof, step.pad)
         return self.run(rest, terminator, values + env, proof, indent)
 
     def local_call(self, descriptor, args, results, site, rest, terminator, env, proof, indent, step):
@@ -578,6 +682,7 @@ class Evaluator:
             return Halt(law.stop)
         values = [present(wire, self.fill(text, args)) for wire, text in zip(results, law.results)]
         step.done(op, values, ("owned", law, helper, args))
+        values = self.rewrite(values, proof, step.pad)
         return self.run(rest, terminator, values + env, proof, indent)
 
     def exchange(self, descriptor, args, results, site, rest, terminator, env, proof, indent, step):
@@ -763,7 +868,7 @@ class Step:
             _, law, helper, args = how
             arguments = paren(values_literal([arg.component() for arg in args]))
             return [f"change invoke {frame.components} {helper} {arguments} = _",
-                    f"rw [{evaluator.fill(law.term, args)}]",
+                    f"rw [{evaluator.fill(law.term, args, law.components)}]",
                     "rfl"]
         if kind == "exchange":
             _, sender, receiver, site, wire, value = how
@@ -896,7 +1001,8 @@ def merge_binders(*groups):
 def load_laws(table):
     laws = {}
     for key, entry in (table or {}).items():
-        laws[key] = Law(entry["term"], list(entry.get("results", [])), entry.get("stop"))
+        laws[key] = Law(entry["term"], list(entry.get("results", [])), entry.get("stop"),
+                        bool(entry.get("components", False)))
     return laws
 
 
@@ -936,6 +1042,7 @@ class Module:
         self.roles_info = {}
         self.declared = False
         self.helper_names = None
+        self.emitted_sites = set()
 
     # -- shared pieces ---------------------------------------------------
     def variables(self):
@@ -1114,7 +1221,8 @@ class Module:
                 f"  .letOp {repeat_op} {paren(operands(repeat[1]))} (.cons {callback_name}Body .nil) <|\n"
                 f"  {name}Return _")
         out.append(f"/-- The whole body, with the repeat maximum as a parameter. -/")
-        out.append(f"def {name}Body ({maximum} : Nat) : Region protocolDialect {name}Inputs {name}Outputs :=\n"
+        out.append(f"def {name}Body ({maximum} : Nat) : Region protocolDialect {ty_list(protocol.inputs, True)}\n"
+                   f"    {ty_list(protocol.outputs, True)} :=\n"
                    f"{self.chain(prelude, roles, '  ', last)}\n")
         self.parts.append("\n".join(out))
 
@@ -1302,15 +1410,20 @@ class Module:
             inputs, outputs, block = protocol.inputs, protocol.outputs, protocol.body
             state_scopes, state_count = None, None
         sites = site_names(action_sites(block), self.request.get("sites", {}))
-        out = ["/-! Action sites of the body, qualified by the application prefix. -/"]
-        for site, name in sites.items():
-            out.append(f"abbrev {name} (ctx : ProtocolContext) : String :=\n"
-                       f"  qualifyProtocolSite ctx.applicationPrefix {json.dumps(site)}")
-        out.append("")
-        out.append(self.variables())
-        out.append("")
-        out.append("private abbrev one {ty : Ty} (value : Option (assignment F G ty)) :\n"
-                   "    Values (Component (assignment F G)) [ty] := .cons value .nil\n")
+        fresh = {site: name for site, name in sites.items() if site not in self.emitted_sites}
+        out = []
+        if fresh:
+            out.append("/-! Action sites of the body, qualified by the application prefix. -/")
+            for site, name in fresh.items():
+                out.append(f"abbrev {name} (ctx : ProtocolContext) : String :=\n"
+                           f"  qualifyProtocolSite ctx.applicationPrefix {json.dumps(site)}")
+                self.emitted_sites.add(site)
+            out.append("")
+        if not self.declared:
+            out.append(self.variables())
+            out.append("")
+            out.append("private abbrev one {ty : Ty} (value : Option (assignment F G ty)) :\n"
+                       "    Values (Component (assignment F G)) [ty] := .cons value .nil\n")
         function = spec["function"]
         parameters = spec.get("parameters", "")
         parameter_names = " ".join(re.findall(r"\((\w+)\s*:", parameters))
@@ -1319,11 +1432,15 @@ class Module:
         out.append(f"def {function} {parameters} (ctx : ProtocolContext) (self : Nat) :\n"
                    f"    RegionFunction (Component (assignment F G)) (participantInterface F G)\n"
                    f"      ({ty_list(inputs, True)}, {ty_list(outputs, True)}) :=\n"
-                   f"  fun args => {spec['body']}.denote\n    ({meaning}) args.get\n")
+                   f"  fun args => {paren(spec['body'])}.denote\n    ({meaning}) args.get\n")
         captures = inputs[1 + state_count:] if state_count is not None else []
         for role_spec in spec["roles"]:
-            self.shared_role(out, spec, role_spec, protocol, inputs, outputs, block, state_scopes, captures,
-                             sites, function, parameter_names)
+            if state_scopes is None:
+                self.shared_protocol_role(out, spec, role_spec, protocol, block, sites, function,
+                                          parameter_names)
+            else:
+                self.shared_role(out, spec, role_spec, protocol, inputs, outputs, block, state_scopes,
+                                 captures, sites, function, parameter_names)
         self.parts.append("\n".join(out))
 
     def shared_role(self, out, spec, role_spec, protocol, inputs, outputs, block, state_scopes, captures,
@@ -1455,6 +1572,78 @@ class Module:
                    f"    {function} (F := F) (G := G) {parameter_names} ctx self (.cons (some index)\n"
                    f"      (({embed} {' '.join(state_args)}).append {paren(values_literal(capture_components))})) =\n"
                    f"      ({application}).bind {ends} := by\n"
+                   f"  subst self\n"
+                   f"  let m := {spec['meaning'].replace(' self ', ' (ctx.roles ' + str(role) + ') ')}\n"
+                   f"  unfold {unfolds}\n"
+                   f"  simp only [{process}, PIR.Proc.bind]\n"
+                   + script + "\n")
+
+    def shared_protocol_role(self, out, spec, role_spec, protocol, block, sites, function, parameter_names):
+        """A whole protocol body at one role: input presence as declared, outputs as components."""
+        role = role_spec["role"]
+        name = role_spec["name"]
+        specs = role_spec["inputs"]
+        if len(specs) != len(protocol.inputs):
+            raise GeneratorError(f"{name}: the protocol has {len(protocol.inputs)} inputs; "
+                                 f"the request lists {len(specs)}")
+        env, components, binders = [], [], []
+        for wire, item in zip(protocol.inputs, specs):
+            mode = item.get("mode", "present")
+            if mode == "absent":
+                env.append(absent(wire))
+                components.append("none")
+            elif "value" in item:
+                env.append(present(wire, item["value"]))
+                components.append(f"some {paren(item['value'])}")
+            elif mode == "optional":
+                env.append(optional(wire, item["name"]))
+                components.append(item["name"])
+                binders.append((item["name"], f"Option {paren(value_type(wire))}"))
+            else:
+                env.append(present(wire, item["name"]))
+                components.append(f"some {item['name']}")
+                binders.append((item["name"], value_type(wire)))
+        frame = Frame(self.unit, protocol.roles, role, "shared", sites, self.helpers(),
+                      load_laws(role_spec.get("laws")), dict(role_spec.get("guards", {})),
+                      separate="separate", closed=spec["closed"], components=spec.get("components", ""),
+                      rewrites=list(role_spec.get("rewrites", [])), callback=spec.get("callback", ""),
+                      repeat_spec=spec.get("repeat_spec", ""))
+        names = Names([binder for binder, _ in binders] + list(sites.values()))
+
+        def finish(values, proof, pad):
+            if proof is not None:
+                proof.append(f"{pad}rfl")
+            return Done(f"({values_literal([value.component() for value in values])} : "
+                        f"Values (Component (assignment F G)) {ty_list(protocol.outputs, True)})")
+
+        proof = []
+        node = Evaluator(frame, names, finish).run(block[1], block[2], env, proof, 2)
+        process = role_spec.get("process", f"{name}Process")
+        text = render_process(node, 2)
+        parameters = [(variable, kind) for variable, kind in
+                      re.findall(r"\((\w+)\s*:\s*([^()]*(?:\([^()]*\))?[^()]*)\)", spec.get("parameters", ""))]
+        used = [(variable, kind) for variable, kind in parameters + [("ctx", "ProtocolContext")] + binders
+                if re.search(rf"(?<![\w.]){re.escape(variable)}(?![\w'])", text)]
+        process_binders = self.binders(used)
+        process_arguments = " ".join(variable for variable, _ in used)
+        script = "\n".join(proof)
+        uses_separate = re.search(r"(?<![\w.])separate(?![\w'])", script) is not None
+        others = [other for other in range(len(protocol.roles)) if other != role]
+        separate_binder = f"\n    (separate : ctx.roles {others[0]} ≠ self)" if uses_separate else ""
+        out.append(f"/-- The {name}'s normal form of the whole body. -/")
+        out.append(f"def {process} {process_binders}:\n    PIR.Proc (participantInterface F G)\n"
+                   f"      (Values (Component (assignment F G)) {ty_list(protocol.outputs, True)}) :=\n{text}\n")
+        theorem = role_spec.get("theorem", f"{name}_process")
+        unfolds = " ".join([function, *spec.get("unfold", [])])
+        out.append("set_option linter.unusedSimpArgs false in")
+        out.append(f"/-- The process equation of `{process}` over the typed body. -/")
+        out.append(f"theorem {theorem} {spec.get('parameters', '')} {role_spec.get('binders', '')}\n"
+                   f"    (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles {role}){separate_binder}\n"
+                   f"    {self.binders(binders)}{role_spec.get('premises', '')}"
+                   f"{' ' if role_spec.get('premises') else ''}:\n"
+                   f"    {function} (F := F) (G := G) {parameter_names} ctx self\n"
+                   f"      {paren(values_literal(components))} =\n"
+                   f"      {process} {process_arguments} := by\n"
                    f"  subst self\n"
                    f"  let m := {spec['meaning'].replace(' self ', ' (ctx.roles ' + str(role) + ') ')}\n"
                    f"  unfold {unfolds}\n"

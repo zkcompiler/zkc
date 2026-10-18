@@ -4,6 +4,7 @@ public import ZkcExamples.Structured.SumcheckVerifierBodies
 public import ZkcExamples.Structured.SumcheckVerifierHelpers
 public import ZkcExamples.Structured.SumcheckVerifierLaws
 public import Zkc.Source.Structured.RepeatLaws
+public import ZkcExamples.Structured.SumcheckRoundNormalForms
 
 @[expose] public section
 
@@ -98,7 +99,8 @@ theorem mask_reduceArguments (ctx : ProtocolContext) (self : Nat)
   simp [reduceInputScopes, ProtocolContext.mapScopes, Participant.restrict, Ne.symm separate]
 
 /-- The whole prelude skips P work and obtains emptyV from its exact helper body.
-The remaining process is the existing repeat with the actual return permutation. -/
+The remaining process is the existing repeat with the actual return permutation:
+the generated normal form of the body at the verifier. -/
 theorem prelude_expansion (U : UnitPayload) (bodies : Bodies U.definitions)
     (ctx : ProtocolContext) (self : Nat) (verifier : self = ctx.roles 1)
     (separate : ctx.roles 0 ≠ self) (maximum : Nat)
@@ -115,47 +117,8 @@ theorem prelude_expansion (U : UnitPayload) (bodies : Bodies U.definitions)
             (plainHelpers U) self (U.plainProtocolTable F G) ctx) args.get)).bind
         (fun state => .done (returnValues state)) := by
   subst self
-  change (invoke (plainHelpers U).components MapFirstBodies.widthHelper
-    (.cons none (.cons none (.cons none .nil)))).bind _ = _
-  rw [width_optional U bodies]
-  change (((Participant.guard (services := services) (Value := assignment F G)
-    (ctx.roles 1) (ctx.roles 0) none).interpret (participantActions F G)).bind
-      (fun _ => .done (Values.nil : Values (Component (assignment F G)) []))).bind _ = _
-  simp only [Participant.guard, separate, ↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]
-  change (invoke (plainHelpers U).components MapFirstBodies.variablesHelper
-    (.cons none (.cons none (.cons none .nil)))).bind _ = _
-  rw [variables_optional U bodies]
-  change (Participant.owned (ctx.roles 1) (ctx.roles 0)
-    (invoke (plainHelpers U).closed MapFirstBodies.lessHelper)
-    (.cons none (.cons count .nil))).bind _ = _
-  rw [Participant.owned_other _ _ separate]
-  change (((Participant.guard (services := services) (Value := assignment F G)
-    (ctx.roles 1) (ctx.roles 0) none).interpret (participantActions F G)).bind
-      (fun _ => .done (Values.nil : Values (Component (assignment F G)) []))).bind _ = _
-  simp only [Participant.guard, separate, ↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]
-  change (Participant.owned (ctx.roles 1) (ctx.roles 0)
-    (invoke (plainHelpers U).closed SumcheckHelperBodies.emptyHelper) .nil).bind _ = _
-  rw [Participant.owned_other _ _ separate]
-  change (Participant.owned (ctx.roles 1) (ctx.roles 1)
-    (invoke (plainHelpers U).closed SumcheckHelperBodies.emptyHelper)
-    (Values.nil : Values (assignment F G) []).present).bind _ = _
-  rw [Participant.owned_present, empty_plain U bodies]
-  change (denoteRepeat (repeatSpec maximum) ctx (ctx.roles 1) count
-    (.cons none (.cons none (.cons none (.cons none
-      (.cons (some []) (.cons claim .nil)))))) (.cons service .nil)
-    (fun args => roundBody.denote
-      (participantMeaningWith (.silent _) (participantActions F G)
-        (plainHelpers U) (ctx.roles 1) (U.plainProtocolTable F G) ctx) args.get)).bind _ = _
-  congr 1
-  funext state
-  cases state with | cons a rest =>
-    cases rest with | cons b rest =>
-      cases rest with | cons c rest =>
-        cases rest with | cons d rest =>
-          cases rest with | cons e rest =>
-            cases rest with | cons f rest =>
-              cases rest
-              rfl
+  exact SumcheckRoundNormalForms.verifierReduce_process U maximum bodies ctx _ rfl separate
+    claim count service
 
 
 open SumcheckVerifierLaws
