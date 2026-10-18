@@ -55,6 +55,7 @@ import ZkcSecurity.Examples.CommittedOpening
 import ZkcSecurity.Examples.CommittedOpeningBound
 import ZkcSecurity.Examples.CommittedOpeningBridge
 import ZkcSecurity.Examples.CompiledGkrFiatShamir
+import ZkcSecurity.Examples.CompiledGuessFiatShamir
 import ZkcSecurity.Examples.CompiledSchnorrFiatShamir
 import ZkcSecurity.Examples.CompiledSumcheckFiatShamir
 import ZkcSecurity.Examples.ExecutableSchnorrFiatShamir
@@ -79,6 +80,7 @@ import ZkcSecurity.FiatShamir.Laws
 import ZkcSecurity.FiatShamir.Lifting
 import ZkcSecurity.FiatShamir.Obligations
 import ZkcSecurity.FiatShamir.ProviderSimulation
+import ZkcSecurity.FiatShamir.Realization
 import ZkcSecurity.FiatShamir.Roles
 import ZkcSecurity.FiatShamir.Sampling
 import ZkcSecurity.FiatShamir.Soundness
