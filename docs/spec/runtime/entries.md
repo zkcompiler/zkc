@@ -411,12 +411,16 @@ records use exact field-name objects. Variants contain exactly `case` and `field
 with numeric names for positional fields. Associated representations are
 transparent. Fields and indices use canonical unsigned decimal strings: zero is
 `"0"`, other values have no leading zeros. Signs, fractions, exponents, numeric
-JSON and out-of-range values refuse; there is no modular reduction.
+JSON and out-of-range values refuse; there is no modular reduction. A
+[binary-field](../domains/values.md#binary-fields) element is never a decimal:
+it is `0x` and its bit pattern in lowercase hexadecimal without leading zeros,
+so zero is `"0x0"`.
 
 The native codec supplies readable forms for installed mathematical leaves:
-field/group vectors and index collections use arrays; KoalaBear Ext8 uses eight
-ascending base-field coordinates, with a base-field string accepted as an
-embedding. A sparse matrix has exactly `rows`, `columns` and `entries`; each
+field/group vectors and index collections use arrays; KoalaBear Ext8 and Ext4
+use eight or four ascending base-field coordinates, and the binary cubic
+extension three base-field elements in the basis `(1, y, y^2)`, each with a
+base-field string accepted as an embedding. A sparse matrix has exactly `rows`, `columns` and `entries`; each
 entry is `[row,column,coefficient]`, in the native canonical sparse order.
 Group elements use `{"bytes":"lowercase-canonical-element-hex"}`. The explicit
 fallback `{"wire":"lowercase-complete-native-frame-hex"}` remains type checked.

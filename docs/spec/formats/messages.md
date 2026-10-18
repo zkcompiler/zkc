@@ -16,7 +16,8 @@ The complete logical message grammar is:
 
 - `bool`, `index`, `indices`, `bytes`;
 - scalar fields BLS12-381 Fr, BN254 Fr, Ristretto scalar, KoalaBear base,
-  KoalaBear ext8 and KoalaBear ext4; groups BLS12-381 G1/G2/GT, BN254 G1/G2/GT, Ristretto and prime-order Edwards25519;
+  KoalaBear ext8, KoalaBear ext4, and the [binary fields](../domains/values.md#binary-fields)
+  GF(2^64) and its cubic extension; groups BLS12-381 G1/G2/GT, BN254 G1/G2/GT, Ristretto and prime-order Edwards25519;
 - field `vector` and sparse `matrix` in each installed scalar domain;
 - `groups` in BLS12-381 G1/G2, BN254 G1/G2, Ristretto and prime-order Edwards25519;
 - `field_array<bls12-381.fr,N>`, including zero, with `N <= 1048576`;
@@ -80,9 +81,15 @@ Additional leaf frames reuse the installed ZKCV encodings exactly:
 | KoalaBear base | 19 | 10 |
 | KoalaBear ext8 | 26 | 38 |
 | KoalaBear ext4 | 21 | 22 |
+| Binary GF(2^64) | 73 | 14 |
+| Binary cubic extension GF(2^192) | 76 | 30 |
 | Ristretto scalar | 13 | 38 |
 | Ristretto group | 16 | 38 |
 | Prime-order Edwards25519 group | 68 | 38 |
+
+A binary-field element is its little-endian bit pattern: eight bytes for
+GF(2^64) and, for the cubic extension, the three base coordinates in basis
+order. Every pattern of the exact width is canonical.
 
 Wrong width/header, noncanonical scalar and invalid group encoding retain the
 `Length`, `Header`, `Scalar` and `Group` decode classes. Each scalar leaf counts
@@ -94,9 +101,9 @@ rows and columns occupy offsets 6 and 10. Each coordinate/count is `u32`.
 
 | Leaf | Tags by domain | Complete frame bytes | Aggregate charge |
 |---|---|---|---|
-| Field vector | BLS 66, BN254 41, Ristretto 14, KoalaBear 20, ext8 27, ext4 22 | `10 + n*w`; scalar width `w=4` for KoalaBear, 16 for ext4, otherwise 32 | `n` elements |
+| Field vector | BLS 66, BN254 41, Ristretto 14, KoalaBear 20, ext8 27, ext4 22, GF(2^64) 74, GF(2^192) 77 | `10 + n*w`; scalar width `w=4` for KoalaBear, 16 for ext4, 8 for GF(2^64), 24 for GF(2^192), otherwise 32 | `n` elements |
 | Source-group vector | BLS 67, BLS G2 52, BN254 G1 47, G2 49, Ristretto 17, Edwards25519 69 | `10 + n*w`; point widths 48, 96, 32, 64, 32, 32 respectively | `n` groups |
-| Sparse matrix | BLS 23, BN254 45, Ristretto 24, KoalaBear 25, ext8 30, ext4 28 | `18 + n*(8+w)`; each entry is row, column, canonical scalar | `n` elements |
+| Sparse matrix | BLS 23, BN254 45, Ristretto 24, KoalaBear 25, ext8 30, ext4 28, GF(2^64) 75, GF(2^192) 78 | `18 + n*(8+w)`; each entry is row, column, canonical scalar | `n` elements |
 | Merkle root | KoalaBear 33, ext8 35 | 38 | one element |
 | Merkle path | KoalaBear 34, ext8 36 | `10 + 32*n`, at most 24 siblings | `n` elements |
 | Digest-generic Merkle root | 71 | `6 + w` | one element |
