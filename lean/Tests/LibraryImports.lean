@@ -277,7 +277,9 @@ import ZkcExamples.Construction.ComposedSumcheckProof
 import ZkcExamples.Construction.ComposedSumcheckProofData
 import ZkcExamples.Construction.ComposedSumcheckProofParticipant
 import ZkcExamples.Construction.GkrProof
+import ZkcExamples.Construction.GkrProofInstructions
 import ZkcExamples.Construction.GkrProofParticipant
+import ZkcExamples.Construction.GkrProofReading
 import ZkcExamples.Construction.SchnorrAndProof
 import ZkcExamples.Construction.SchnorrAndProofBodies
 import ZkcExamples.Construction.SchnorrAndProofData
