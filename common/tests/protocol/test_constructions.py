@@ -315,7 +315,8 @@ def test_source_construction_cryptographic_histories(toolchain, journal, directo
         assert not rejected['execution']['cleanup_errors']
 
 
-@pytest.mark.parametrize('suite', ['merlin3.bls12-381.fr64be/0', 'spongefish0.8.0.keccak.bls12-381.fr64be/0'])
+@pytest.mark.parametrize('suite', ['merlin3.bls12-381.fr64be/0', 'spongefish0.8.0.keccak.bls12-381.fr64be/0',
+                                   'hash-chain.keccak256.bls12-381.fr64be/0'])
 @pytest.mark.parametrize('flags', [[], ['--release-storage']])
 def test_managed_provider_methods_are_ordinary_checked_functions(toolchain, journal, directory, suite, flags):
     from pathlib import Path
@@ -342,8 +343,10 @@ def test_managed_provider_methods_are_ordinary_checked_functions(toolchain, jour
     assert not accepted['execution']['cleanup_errors']
 
 
+@pytest.mark.parametrize('suite', ['merlin3.koala-bear.ext8-binomial3.rejection31le/0',
+                                   'hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0'])
 @pytest.mark.parametrize('bound', [0, 3, 8, 9223372036854775809])
-def test_managed_index_methods_reject_invalid_bounds_and_clean_up(toolchain, journal, directory, bound):
+def test_managed_index_methods_reject_invalid_bounds_and_clean_up(toolchain, journal, directory, suite, bound):
     from pathlib import Path
     root = Path(__file__).resolve().parents[3]
     source = directory / 'main.zkc'
@@ -351,7 +354,7 @@ def test_managed_index_methods_reject_invalid_bounds_and_clean_up(toolchain, jou
     use zkc::transcript as history;
     use zkc::bytes as bytes;
     domain F=field("koala-bear.ext8-binomial3");
-    domain T=transcript("merlin3.koala-bear.ext8-binomial3.rejection31le/0");
+    domain T=transcript("SUITE");
     protocol Choose roles(P,V)(challenges:Random<F>@V)->(ok:bool@V){
       #[site(pick)] let choice=challenges.index<8>();
       #[site(delivery)] let actual=send V->P(choice);
@@ -364,7 +367,7 @@ def test_managed_index_methods_reject_invalid_bounds_and_clean_up(toolchain, jou
       on message delivery(t,value){return t;}
     }
     proof Demo=Choose{prover P;verifier V;public{};accept ok;construction Custom;}
-    '''.replace('BOUND', str(bound)))
+    '''.replace('BOUND', str(bound)).replace('SUITE', suite))
     package = directory / 'proof.zkpkg'
     modules = {'sample': source, 'zkc::transcript': root / 'libraries/zkc/transcript.zkc',
                'zkc::bytes': root / 'libraries/zkc/bytes.zkc'}
