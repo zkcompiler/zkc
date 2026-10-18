@@ -1766,10 +1766,10 @@ class ParticipantExporter {
     auto arguments = operands(op);
     if (!arguments)
       return arguments.takeError();
-    out.push_back(json::Array{
-        op.getName().getStringRef().str(), attributes(op),
-        std::move(*declaration), std::move(*arguments),
-        printedTypes(op.getResultTypes()), std::move(regions)});
+    out.push_back(json::Array{op.getName().getStringRef().str(), attributes(op),
+                              std::move(*declaration), std::move(*arguments),
+                              printedTypes(op.getResultTypes()),
+                              std::move(regions)});
     return Error::success();
   }
 
@@ -1857,8 +1857,8 @@ public:
       if (!(name.starts_with("algebra.") || name.starts_with("arith.") ||
             name.starts_with("crypto.") || name.starts_with("data.") ||
             name == "protocol.receive" || name == "protocol.send" ||
-            name == "protocol.service_query" ||
-            name == "local.bool_constant" || name == "local.guard"))
+            name == "protocol.service_query" || name == "local.bool_constant" ||
+            name == "local.guard"))
         return error("constructed-participant-operation", name);
       if (auto e = emit(op, out, json::Array{}))
         return std::move(e);
