@@ -852,9 +852,10 @@ committed tables by the typed certificate of its ideal reading.
   word operation carries every extracted entry, and a false statement's ideal
   reading is doomed.
 - **Proof.** One application of VCVio's weighted bad-query bound to the joint
-  oracle. A transcript key is bad when the replay of a statement's verifier along
-  it, with every root read as its checkpoint extraction, reaches a doomed query
-  whose answer escapes; a hash call is bad when its answer hits a target of the
+  oracle. A transcript key is bad when, for a statement whose initial history
+  begins the key's history, the replay of the statement's verifier along the rest
+  of that history, with every root read as its checkpoint extraction, reaches a
+  doomed query whose answer at the key escapes; a hash call is bad when its answer hits a target of the
   record before its first query: an earlier answer, an earlier input label, or one
   of the first `rootBound` roots of an earlier transcript key, whoever queried
   it. Without a bad hash call the record is good: distinct calls have distinct
