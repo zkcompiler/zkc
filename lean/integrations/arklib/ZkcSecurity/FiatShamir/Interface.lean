@@ -398,6 +398,15 @@ def keyCharge (charge : List E → E → ENNReal) (key : List E) : ENNReal :=
     (event : E) : keyCharge charge (history ++ [event]) = charge history event := by
   simp [keyCharge]
 
+/-- A charge bounded everywhere bounds every key's charge. -/
+theorem keyCharge_le {charge : List E → E → ENNReal} {bound : ENNReal}
+    (bounded : ∀ history event, charge history event ≤ bound) (key : List E) :
+    keyCharge charge key ≤ bound := by
+  unfold keyCharge
+  split
+  · exact bounded _ _
+  · exact zero_le
+
 /-- A charge that ignores the history before the occurrence charges every key the
 error of its last event. -/
 theorem keyCharge_const : keyCharge (fun _ event => error event) = keyError error := by
@@ -407,14 +416,15 @@ theorem keyCharge_const : keyCharge (fun _ event => error event) = keyError erro
 
 /-- The queries on every path from the absorbed `history` charge at most `cost`
 in total, each query the charge of its key: the history before it and its
-occurrence. -/
+occurrence. A receive continues only with the reply its absorbed event
+recovers, so only those replies are constrained. -/
 def ChargedCostBound (charge : List E → E → ENNReal) :
     PIR.Proc I A → List E → ENNReal → Prop
   | .done _, _, _ => True
   | .halt _, _, _ => True
   | .call operation next, history, cost =>
       match absorb operation with
-      | .receive event _ => ∀ message value,
+      | .receive event recover => ∀ message value, recover (event message) = some value →
           ChargedCostBound charge (next value) (history ++ [event message]) cost
       | .send event value => ChargedCostBound charge (next value) (history ++ [event]) cost
       | .query event _ => ∃ remaining, charge history event + remaining ≤ cost ∧
@@ -433,7 +443,7 @@ theorem CostBound.charged :
         ⟨event, decode⟩ | _
       · simp only [CostBound, absorbed] at bounded
         simp only [ChargedCostBound, absorbed]
-        exact fun message value => CostBound.charged (next value) cost (bounded value) _
+        exact fun message value _ => CostBound.charged (next value) cost (bounded value) _
       · simp only [CostBound, absorbed] at bounded
         simp only [ChargedCostBound, absorbed]
         exact CostBound.charged (next value) cost bounded _
@@ -456,7 +466,7 @@ theorem QueryBound.chargedCostBound {charge : List E → E → ENNReal} {bound :
         ⟨event, decode⟩ | _
       · simp only [QueryBound, absorbed] at counted
         simp only [ChargedCostBound, absorbed]
-        exact fun message value =>
+        exact fun message value _ =>
           QueryBound.chargedCostBound bounded (next value) budget (counted value) _
       · simp only [QueryBound, absorbed] at counted
         simp only [ChargedCostBound, absorbed]
@@ -589,9 +599,9 @@ theorem transform_chargedCostBound (charge : List E → E → ENNReal) :
             exact (worstCaseCostBound_pure _ _ _).mpr zero_le
         | cons message rest =>
             rw [transform_receive absorb _ absorbed]
-            cases recover (event message) with
+            cases recovered : recover (event message) with
             | none => exact (worstCaseCostBound_pure _ _ _).mpr zero_le
-            | some value => exact ih value cost _ rest (bounded message value)
+            | some value => exact ih value cost _ rest (bounded message value recovered)
       · simp only [ChargedCostBound, absorbed] at bounded
         rw [transform_send absorb _ absorbed]
         exact ih value cost _ proof bounded
