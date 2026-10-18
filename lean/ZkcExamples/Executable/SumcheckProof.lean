@@ -1,7 +1,7 @@
 module
 
 public import ZkcExamples.Executable.SumcheckHelpers
-public import Zkc.Executable.Pruning
+public import Zkc.Executable.NormalizationSoundness
 
 @[expose] public section
 
@@ -54,6 +54,15 @@ theorem helpers : Instruction.helpers SumcheckProof.participant.instructions =
   rw [← Instruction.helperList_eq]
   decide +kernel
 
+/-- The helper calls of the constructed validator, at the result sorts of the
+called helpers. -/
+theorem calls : Instruction.callList SumcheckProof.participant.instructions =
+    [ZkcExamples.Structured.SumcheckHelperBodies.emptyHelper,
+      ZkcExamples.Structured.SumcheckHelperBodies.appendHelper,
+      ZkcExamples.Structured.SumcheckHelperBodies.checkHelper].map
+      fun helper => (helper.name, helper.outputs.map .data) := by
+  decide +kernel
+
 /-- A round message coordinate: a scalar field element. -/
 abbrev coordinate : PhysicalType := ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩
 
@@ -92,6 +101,28 @@ theorem prepared : ∀ name ∈ Instruction.helpers SumcheckProof.participant.in
   rw [helpers]
   exact SumcheckHelpers.prepared
 
+/-- Every helper the reading calls returns values of its declared result sorts. -/
+theorem helpersSorted : ∀ call ∈ Instruction.callList SumcheckProof.participant.instructions,
+    HelperSorted (helperTable SumcheckProof.program F G) call.1 call.2 := by
+  have sorted : ∀ (helper : Zkc.Source.Structured.Helper) {body},
+      Zkc.Source.Structured.BodyIn ZkcExamples.Structured.SumcheckSourceViews.unit.definitions helper body →
+      HelperSorted (helperTable SumcheckProof.program F G) helper.name (helper.outputs.map .data) := by
+    intro helper body association
+    apply helperSorted_of_outputs
+    intro entry found
+    obtain ⟨entry', found', same⟩ :=
+      helperTable_lookup (F := F) (G := G) SumcheckProof.program helper (SumcheckHelpers.present association)
+    rw [found] at found'
+    cases found'
+    rw [same]
+  rw [calls]
+  intro call member
+  simp only [List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false] at member
+  rcases member with rfl | rfl | rfl
+  · exact sorted _ ZkcExamples.Structured.SumcheckSourceContracts.bodies.empty
+  · exact sorted _ ZkcExamples.Structured.SumcheckSourceContracts.bodies.append
+  · exact sorted _ ZkcExamples.Structured.SumcheckSourceAssociations.check_association
+
 /-- For every challenge function in every lawful monad, decoder and budget, the
 executable's observation is the metered meaning of the reading on the proof its
 message bytes decode to. -/
@@ -107,7 +138,7 @@ theorem executable_metered {m : Type → Type} [Monad m] [LawfulMonad m]
         (decodeProof decode (receives rounds) bytes) := by
   rw [← plan_types (G := G) values claim rounds]
   exact execute_metered installed validator SumcheckProof.context challenge _ decode budget _ prepared
-    (checkLowering_sound accepted).1 _ initial bytes (admitted values claim rounds)
+    (checkLowering_spec accepted).1 _ initial bytes (admitted values claim rounds)
 
 /-- Host validation of proof bytes prunes the ideal acceptance of the decoded
 proof by rejections, at every budget and with every framing header. -/
@@ -123,10 +154,9 @@ theorem executable_prunes {m : Type → Type} [Monad m] [LawfulMonad m]
           SumcheckProof.participant.returned SumcheckProof.participant.instructions
           (SumcheckProof.inputs values claim rounds ++ [.transcript initial])
           (decodeProof decode (receives rounds) (bytes.drop 40))) := by
-  obtain ⟨reading, code, returned, -⟩ := checkLowering_sound accepted
-  rw [← code, ← returned, ← plan_types (G := G) values claim rounds]
-  exact validate_prunes installed validator SumcheckProof.context challenge _ decode budget _ prepared reading
-    binding SumcheckProof.acceptancePosition _ initial bytes (admitted values claim rounds)
+  rw [← plan_types (G := G) values claim rounds]
+  exact validate_prunes_export installed validator SumcheckProof.context challenge _ decode budget accepted
+    prepared helpersSorted binding SumcheckProof.acceptancePosition _ initial bytes (admitted values claim rounds)
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 /-- Acceptance of a verifier's result: it returned the decision true and read

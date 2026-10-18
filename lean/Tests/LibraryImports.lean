@@ -14,12 +14,16 @@ import Zkc.Construction.Semantics
 import Zkc.Construction.Soundness
 import Zkc.Construction.Structured
 import Zkc.Executable.Cleanup
+import Zkc.Executable.Completeness
 import Zkc.Executable.Evaluation
 import Zkc.Executable.Execution
 import Zkc.Executable.Installed
 import Zkc.Executable.Lowering
+import Zkc.Executable.Normalization
+import Zkc.Executable.NormalizationSoundness
 import Zkc.Executable.Program
 import Zkc.Executable.Pruning
+import Zkc.Executable.Refusal
 import Zkc.Executable.Relation
 import Zkc.Executable.Soundness
 import Zkc.Polynomial.BooleanCube
@@ -217,6 +221,7 @@ import Tests.DeriveRegionSchnorr
 import Tests.DeriveRegionSources
 import Tests.DeriveRegionSumcheck
 import Tests.ExecutableControls
+import Tests.ExecutableNormalization
 import Tests.ExecutableSumcheckControls
 import Tests.Finite
 import Tests.Machine
@@ -288,6 +293,9 @@ import ZkcExamples.Construction.ChaumPedersenProofParticipant
 import ZkcExamples.Construction.ComposedSumcheckProof
 import ZkcExamples.Construction.ComposedSumcheckProofData
 import ZkcExamples.Construction.ComposedSumcheckProofParticipant
+import ZkcExamples.Construction.DeferredRounds
+import ZkcExamples.Construction.DeferredRoundsData
+import ZkcExamples.Construction.DeferredRoundsParticipant
 import ZkcExamples.Construction.GkrProof
 import ZkcExamples.Construction.GkrProofInstructions
 import ZkcExamples.Construction.GkrProofParticipant
@@ -303,8 +311,12 @@ import ZkcExamples.Construction.SchnorrProofData
 import ZkcExamples.Construction.SchnorrProofParticipant
 import ZkcExamples.Construction.SumcheckProof
 import ZkcExamples.Construction.SumcheckProofParticipant
+import ZkcExamples.Executable.DeferredRounds
+import ZkcExamples.Executable.DeferredRoundsProgramData
 import ZkcExamples.Executable.SchnorrProof
 import ZkcExamples.Executable.SchnorrProofProgramData
+import ZkcExamples.Executable.SumcheckCharges
+import ZkcExamples.Executable.SumcheckCompleteness
 import ZkcExamples.Executable.SumcheckHelpers
 import ZkcExamples.Executable.SumcheckProof
 import ZkcExamples.Executable.SumcheckProofProgramData

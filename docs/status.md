@@ -321,8 +321,19 @@ of the Schnorr and Sumcheck Entries' `zkc.program/0` candidates, which the runti
 admits. Lean checks each against its constructed validator with a
 [lowering rule](../lean/docs/spec/executable.md) whose meaning covers proof
 framing, decoding failures, instruction budgets, loops, local calls with frames,
-helper calls and transcript custody. For Sumcheck the program's helper functions
-are proved to implement the source's checked helpers. The security bounds
+helper calls and transcript custody. The rule compares instructions up to checked
+normalization of pure total calculations, so a schedule that computes values
+before their first consumer, as the compiler's calculation batching does, is
+accepted when its anchors and their operand terms agree with the export's. The
+compiled Schnorr and Sumcheck programs equal their exports; a two-round fixture
+whose program defers the first round's product past the second draw is accepted
+through normalization, and compiled with `--no-calculation-batching`, which
+computes values where the source defines them, by equality. That fixture's
+theorems stop at the constructed validator, since the participant projection
+rule is not applied to it. For Sumcheck the program's helper functions are proved to
+implement the source's checked helpers, and honest-prover completeness of the
+executable holds at every budget of at least `68 + 61 · rounds` instructions,
+which at two rounds is the runtime's acceptance threshold. The security bounds
 transfer to provers of proof bytes through the general construction, projection
 and lowering rules, with no equation specific to an Entry about the compiled
 program: Schnorr knowledge soundness for a fixed statement, and Sumcheck soundness

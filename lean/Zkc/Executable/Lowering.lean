@@ -1,6 +1,7 @@
 module
 
 public import Zkc.Executable.Execution
+public import Zkc.Executable.Normalization
 
 @[expose] public section
 
@@ -38,10 +39,12 @@ separately the charges of transparent calls and their returns, which execute no
 constructed instruction. A helper call charges its call and then whatever its
 body charges on the actual arguments.
 
-`checkLowering` is the per-compile rule: the executable must read back as
-exactly the constructed validator's instructions, returned references, input
-and output sorts, symbol, entry and validator role. Its refusals name the first
-difference.
+`checkLowering` is the per-compile rule: the executable must read back with the
+constructed validator's input and output sorts, symbol, entry and validator
+role, and with its instructions and returned references, either exactly or with
+the same normal form (`Zkc.Executable.Normalization`): the same anchors in the
+same order, whose operands denote the same pure terms. Its refusals name the
+part that differs.
 
 `metered` is the ideal meaning of constructed instructions under an instruction
 budget, in the continuation style of `Zkc.Construction.idealK`: an instruction
@@ -53,22 +56,6 @@ set_option autoImplicit false
 
 namespace Zkc.Executable
 open Zkc.Construction Zkc.Source
-
-/-- Why the rule refuses. -/
-inductive Refusal where
-  | unsupported (name : String)
-  | binding (symbol : String)
-  | operand (name : String)
-  | operation (site : String)
-  | representation
-  | frames
-  | entry
-  | duplicate (kind : String)
-  | different (part : String)
-  | instruction (index : Nat)
-  | helper (symbol : String)
-  | loop (site : String)
-  deriving DecidableEq, Repr
 
 /-- The reading state: the sorts of all references and the live transcript
 reference. -/
@@ -90,6 +77,43 @@ inductive Code where
   | loop (site : String) (maximum : Nat) (yielded operands : List Nat) (results : List ValueSort)
       (body : List Code)
   deriving Repr
+
+mutual
+/-- Decide equality of code items, so that the kernel can compare readings. -/
+def Code.decide : (left right : Code) → Decidable (left = right)
+  | .charge count, .charge count' =>
+      if same : count = count' then isTrue (by rw [same]) else isFalse (by intro equal; cases equal; exact same rfl)
+  | .step instruction charged, .step instruction' charged' =>
+      if same : instruction = instruction' ∧ charged = charged' then isTrue (by obtain ⟨rfl, rfl⟩ := same; rfl)
+      else isFalse (by intro equal; cases equal; exact same ⟨rfl, rfl⟩)
+  | .helper instruction, .helper instruction' =>
+      if same : instruction = instruction' then isTrue (by rw [same])
+      else isFalse (by intro equal; cases equal; exact same rfl)
+  | .loop site maximum yielded operands results body, .loop site' maximum' yielded' operands' results' body' =>
+      if same : site = site' ∧ maximum = maximum' ∧ yielded = yielded' ∧ operands = operands' ∧
+          results = results' then
+        match Code.decideList body body' with
+        | isTrue bodies => isTrue (by obtain ⟨rfl, rfl, rfl, rfl, rfl⟩ := same; rw [bodies])
+        | isFalse bodies => isFalse (by intro equal; cases equal; exact bodies rfl)
+      else isFalse (by intro equal; cases equal; exact same ⟨rfl, rfl, rfl, rfl, rfl⟩)
+  | .charge _, .step _ _ | .charge _, .helper _ | .charge _, .loop _ _ _ _ _ _
+  | .step _ _, .charge _ | .step _ _, .helper _ | .step _ _, .loop _ _ _ _ _ _
+  | .helper _, .charge _ | .helper _, .step _ _ | .helper _, .loop _ _ _ _ _ _
+  | .loop _ _ _ _ _ _, .charge _ | .loop _ _ _ _ _ _, .step _ _ | .loop _ _ _ _ _ _, .helper _ =>
+      isFalse (by intro equal; cases equal)
+
+def Code.decideList : (left right : List Code) → Decidable (left = right)
+  | [], [] => isTrue rfl
+  | [], _ :: _ => isFalse (by simp)
+  | _ :: _, [] => isFalse (by simp)
+  | head :: tail, head' :: tail' =>
+      match Code.decide head head', Code.decideList tail tail' with
+      | isTrue heads, isTrue tails => isTrue (by rw [heads, tails])
+      | isFalse heads, _ => isFalse (by intro equal; cases equal; exact heads rfl)
+      | _, isFalse tails => isFalse (by intro equal; cases equal; exact tails rfl)
+end
+
+instance : DecidableEq Code := Code.decide
 
 /-- The constructed instructions of a reading. -/
 def Code.instructions : List Code → List Instruction
@@ -676,11 +700,6 @@ theorem Instruction.helperList_eq :
         simp [Instruction.helperList, Instruction.helpersOf, Instruction.helpers, Instruction.helperList_eq rest,
           Instruction.helperList_eq body]
 
-/-- The first position at which two instruction lists differ. -/
-def firstDifference : List Instruction → List Instruction → Nat
-  | first :: rest, other :: others => if first = other then firstDifference rest others + 1 else 0
-  | _, _ => 0
-
 /-- A computed result that is present is that result. -/
 theorem ok_of_isSome {ε α : Type} :
     ∀ (result : Except ε α) (present : result.toOption.isSome = true),
@@ -698,9 +717,13 @@ def checkLowering (vocabulary : Vocabulary) (participant : Participant) (validat
   unless validator.role = participant.policy.validator do throw (Refusal.different "role")
   unless validator.inputs.map (·.2.sort) = participant.inputs do throw (Refusal.different "inputs")
   unless validator.results.map (·.sort) = participant.outputs do throw (Refusal.different "outputs")
-  unless Code.instructionList lowered.code = participant.instructions do
-    throw (Refusal.instruction (firstDifference (Code.instructionList lowered.code) participant.instructions))
-  unless lowered.returned = participant.returned do throw (Refusal.different "returned")
+  -- The reading is the constructed validator itself, or they have the same
+  -- normal form (`Zkc.Executable.Normalization`).
+  unless Code.instructionList lowered.code = participant.instructions ∧ lowered.returned = participant.returned do
+    match checkNormalized participant.inputs participant.instructions participant.returned
+        (Code.instructionList lowered.code) lowered.returned with
+    | .ok _ => pure ()
+    | .error refusal => throw refusal
   pure lowered
 
 section Metered

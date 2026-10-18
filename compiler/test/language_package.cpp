@@ -31,7 +31,9 @@ int main() {
         for (bool release : {false, true})
           for (bool fuse : {false, true})
             for (bool finite : {false, true}) {
-              auto entry = compile(job, {simplify, release, {finite, fuse}});
+              bool batching = !(fuse && finite);
+              auto entry =
+                  compile(job, {simplify, release, {finite, fuse, batching}});
               auto package = take(packageEntry(entry));
               auto value = take(json::parse(package.bytes()));
               auto *root = value.getAsObject();
@@ -44,12 +46,14 @@ int main() {
                           root->getString("artifact") == entry.bytes(),
                       "package changed or omitted checked bytes");
               auto *options = root->getObject("options");
-              require(options && options->size() == 4 &&
-                          options->getBoolean("finite_bulk") == finite &&
-                          options->getBoolean("simplify") == simplify &&
-                          options->getBoolean("release_storage") == release &&
-                          options->getBoolean("fuse_vector_reductions") == fuse,
-                      "package changed compilation choices");
+              require(
+                  options && options->size() == 5 &&
+                      options->getBoolean("finite_bulk") == finite &&
+                      options->getBoolean("simplify") == simplify &&
+                      options->getBoolean("release_storage") == release &&
+                      options->getBoolean("fuse_vector_reductions") == fuse &&
+                      options->getBoolean("calculation_batching") == batching,
+                  "package changed compilation choices");
               require(package.identity() ==
                           toHex(SHA256::hash(
                                     arrayRefFromStringRef(package.bytes())),

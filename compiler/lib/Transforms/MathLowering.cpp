@@ -621,6 +621,7 @@ public:
 class Outliner {
   protocol_ir::ProtocolModuleOp unit;
   BindingSymbols &symbols;
+  bool batching;
   OpBuilder builder;
   SmallVector<Attribute> calculations;
 
@@ -648,15 +649,15 @@ class Outliner {
       for (auto &operand : cut->getOpOperands())
         operand.set(computed.lookupOrDefault(operand.get()));
     };
-    for (auto *cut : cuts) {
-      if (auto loop = dyn_cast<protocol_ir::ProtocolLoopOp>(cut))
-        if (failed(block(participant, loop.getBody().front(), sites, nextSite)))
-          return failure();
-      // Collect only work demanded at this cut. Already computed values are
-      // ordinary participant SSA call results and stop this backwards walk.
-      llvm::DenseSet<Operation *> needed;
-      SmallVector<Operation *> operations;
-      SmallVector<Value> pending(cut->operand_begin(), cut->operand_end());
+    // The total work some cut demands, collected backwards from the operands
+    // of the given cuts. Already computed values are ordinary participant SSA
+    // call results and stop the walk.
+    auto demand = [&](ArrayRef<Operation *> consumers,
+                      llvm::DenseSet<Operation *> &needed,
+                      SmallVector<Operation *> &operations) -> LogicalResult {
+      SmallVector<Value> pending;
+      for (auto *consumer : consumers)
+        pending.append(consumer->operand_begin(), consumer->operand_end());
       while (!pending.empty()) {
         auto value = pending.pop_back_val();
         if (computed.contains(value))
@@ -672,6 +673,37 @@ class Outliner {
           return failure();
         for (auto index : *dependencies)
           pending.push_back(definition->getOperand(index));
+      }
+      return success();
+    };
+    // Without batching, each cut computes every demanded operation that
+    // precedes it in source order and was not computed at an earlier cut.
+    llvm::DenseSet<Operation *> demanded, emitted;
+    if (!batching) {
+      SmallVector<Operation *> unordered;
+      if (failed(demand(cuts, demanded, unordered)))
+        return failure();
+    }
+    for (auto *cut : cuts) {
+      if (auto loop = dyn_cast<protocol_ir::ProtocolLoopOp>(cut))
+        if (failed(block(participant, loop.getBody().front(), sites, nextSite)))
+          return failure();
+      llvm::DenseSet<Operation *> needed;
+      SmallVector<Operation *> operations;
+      if (batching) {
+        // Collect only work demanded at this cut.
+        if (failed(demand(cut, needed, operations)))
+          return failure();
+      } else {
+        for (auto &op : body) {
+          if (&op == cut)
+            break;
+          if (demanded.contains(&op) && !emitted.contains(&op)) {
+            needed.insert(&op);
+            operations.push_back(&op);
+          }
+        }
+        emitted.insert(operations.begin(), operations.end());
       }
       auto guard = dyn_cast<local::GuardOp>(cut);
       if (needed.empty() && !guard) {
@@ -767,8 +799,10 @@ class Outliner {
   }
 
 public:
-  Outliner(protocol_ir::ProtocolModuleOp unit, BindingSymbols &symbols)
-      : unit(unit), symbols(symbols), builder(unit.getContext()) {}
+  Outliner(protocol_ir::ProtocolModuleOp unit, BindingSymbols &symbols,
+           bool batching)
+      : unit(unit), symbols(symbols), batching(batching),
+        builder(unit.getContext()) {}
   LogicalResult run() {
     SmallVector<protocol_ir::ParticipantOp> participants;
     for (auto value :
@@ -893,6 +927,7 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
       : observer(trace) {
     optimizeFinite = policy.finiteBulk;
     fuseVectorReductions = policy.vectorReductionFusion;
+    calculationBatching = policy.calculationBatching;
   }
   LowerMathPass(const LowerMathPass &other)
       : PassWrapper(other), observer(other.observer) {}
@@ -904,6 +939,11 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
       *this, "fuse-vector-reductions",
       llvm::cl::desc("Select admitted vector reduction fusion"),
       llvm::cl::init(false)};
+  Option<bool> calculationBatching{
+      *this, "calculation-batching",
+      llvm::cl::desc("Compute each calculation at its first demand; otherwise "
+                     "before the first action that follows it"),
+      llvm::cl::init(true)};
   Option<bool> traceMathematics{
       *this, "trace-mathematics",
       llvm::cl::desc("Report mathematical decisions and stages"),
@@ -929,8 +969,9 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
                       ? observer
                       : (traceMathematics || dumpMathematics ? &diagnosticTrace
                                                              : nullptr);
-    RealizationScope scope(trace, "lower-math", source,
-                           {optimizeFinite, fuseVectorReductions});
+    MathematicalSelectionPolicy policy{optimizeFinite, fuseVectorReductions,
+                                       calculationBatching};
+    RealizationScope scope(trace, "lower-math", source, policy);
     if (trace && trace->ir) {
       *trace->ir << "// Before mathematical demand lowering\n";
       source.print(*trace->ir);
@@ -946,12 +987,12 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
                         "expected the 'participant' profile");
       return signalPassFailure();
     }
-    scope.propose({optimizeFinite, fuseVectorReductions});
+    scope.propose(policy);
     OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(source->clone()));
     auto unit =
         cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
     BindingSymbols symbols(unit);
-    if (failed(Outliner(unit, symbols).run()))
+    if (failed(Outliner(unit, symbols, calculationBatching).run()))
       return signalPassFailure();
     llvm::DenseSet<Operation *> generated;
     {
@@ -968,16 +1009,14 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
     for (auto &definition : unit.getBody().front())
       if (generated.contains(&definition))
         calculations.push_back(cast<local::FuncOp>(definition));
-    if (failed(lowerCalculations(unit, calculations,
-                                 {optimizeFinite, fuseVectorReductions},
-                                 nullptr, trace)))
+    if (failed(lowerCalculations(unit, calculations, policy, nullptr, trace)))
       return signalPassFailure();
     for (auto &declaration : make_early_inc_range(unit.getBody().front()))
       if (isa<data::DomainOp, func::FuncOp>(declaration))
         declaration.erase();
     unit.setProfile(protocol_ir::Profile::Exec);
     if (failed(verify(*candidate)) ||
-        failed(verifyProjectionPreserved(source, *candidate)))
+        failed(verifyProjectionPreserved(source, *candidate, policy)))
       return signalPassFailure();
     source->setAttrs(candidate->getOperation()->getAttrs());
     source.getBodyRegion().takeBody(candidate->getBodyRegion());

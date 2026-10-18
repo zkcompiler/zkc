@@ -334,7 +334,9 @@ compileNativeProof(StringRef text, StringRef filename,
                   options.releaseStorage ? "true" : "false",
                   options.mathematicalSelection.vectorReductionFusion ? "true"
                                                                       : "false",
-                  options.mathematicalSelection.finiteBulk ? "true" : "false"},
+                  options.mathematicalSelection.finiteBulk ? "true" : "false",
+                  options.mathematicalSelection.calculationBatching ? "true"
+                                                                    : "false"},
       json::Array(constructed->wireSites)});
   auto encoded = printJson(deployment);
   if (encoded.size() > 16 * 1024 * 1024)

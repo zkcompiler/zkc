@@ -45,6 +45,8 @@ Expected<EntryPackage> packageEntry(const CompiledEntry &entry,
       out.attribute(
           "fuse_vector_reductions",
           entry.options().mathematicalSelection.vectorReductionFusion);
+      out.attribute("calculation_batching",
+                    entry.options().mathematicalSelection.calculationBatching);
     });
   });
   if (stream.overflow())

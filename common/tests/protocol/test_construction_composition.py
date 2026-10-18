@@ -105,7 +105,8 @@ def test_child_state_arguments_and_root_codec(toolchain, journal, directory, emp
     choices = {'simplify': '--no-simplify' not in flags,
                'release_storage': '--release-storage' in flags,
                'fuse_vector_reductions': '--fuse-vector-reductions' in flags,
-               'finite_bulk': '--no-finite-bulk' not in flags}
+               'finite_bulk': '--no-finite-bulk' not in flags,
+               'calculation_batching': '--no-calculation-batching' not in flags}
     assert stored['options'] == choices
     assert deployment[7] == [str(value).lower() for value in choices.values()]
     bindings = json.loads(deployment[4])[1]

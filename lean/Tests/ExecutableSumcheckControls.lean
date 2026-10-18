@@ -45,7 +45,7 @@ theorem accepted : refusal (checkLowering installed constructed actual) = none :
 
 /-! ## Rule mutations -/
 
-/-- The loop may run three rounds. -/
+/-- The loop may run three rounds: the second anchor, the loop, differs. -/
 def maximumRaised : Validator :=
   withLoop actual fun
     | .loop site count _ induction carried captures body outputs =>
@@ -53,7 +53,19 @@ def maximumRaised : Validator :=
     | action => action
 
 theorem maximumRaised_refused :
-    refusal (checkLowering installed constructed maximumRaised) = some (.instruction 1) := by
+    refusal (checkLowering installed constructed maximumRaised) = some (.anchor 1) := by
+  decide +kernel
+
+/-- The round check compares the round's sum with itself instead of with the
+running claim. Inside the loop body, the guard's operand denotes another term;
+the body's fifth anchor is the guard. -/
+def roundCheckTrivial : Validator :=
+  withFunction actual "_calculation_3" fun function =>
+    { function with
+      body := function.body.set 1 (.operation "value_1" "_calculation_11" [] ["v415", "v415"] ["v416"]) }
+
+theorem roundCheckTrivial_refused :
+    refusal (checkLowering installed constructed roundCheckTrivial) = some (.anchorOperand 4 0) := by
   decide +kernel
 
 /-- The loop counts with the claim instead of the round count. -/
