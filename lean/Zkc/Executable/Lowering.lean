@@ -91,6 +91,43 @@ inductive Code where
       (body : List Code)
   deriving Repr
 
+mutual
+/-- Decide equality of code items, so that the kernel can compare readings. -/
+def Code.decide : (left right : Code) → Decidable (left = right)
+  | .charge count, .charge count' =>
+      if same : count = count' then isTrue (by rw [same]) else isFalse (by intro equal; cases equal; exact same rfl)
+  | .step instruction charged, .step instruction' charged' =>
+      if same : instruction = instruction' ∧ charged = charged' then isTrue (by obtain ⟨rfl, rfl⟩ := same; rfl)
+      else isFalse (by intro equal; cases equal; exact same ⟨rfl, rfl⟩)
+  | .helper instruction, .helper instruction' =>
+      if same : instruction = instruction' then isTrue (by rw [same])
+      else isFalse (by intro equal; cases equal; exact same rfl)
+  | .loop site maximum yielded operands results body, .loop site' maximum' yielded' operands' results' body' =>
+      if same : site = site' ∧ maximum = maximum' ∧ yielded = yielded' ∧ operands = operands' ∧
+          results = results' then
+        match Code.decideList body body' with
+        | isTrue bodies => isTrue (by obtain ⟨rfl, rfl, rfl, rfl, rfl⟩ := same; rw [bodies])
+        | isFalse bodies => isFalse (by intro equal; cases equal; exact bodies rfl)
+      else isFalse (by intro equal; cases equal; exact same ⟨rfl, rfl, rfl, rfl, rfl⟩)
+  | .charge _, .step _ _ | .charge _, .helper _ | .charge _, .loop _ _ _ _ _ _
+  | .step _ _, .charge _ | .step _ _, .helper _ | .step _ _, .loop _ _ _ _ _ _
+  | .helper _, .charge _ | .helper _, .step _ _ | .helper _, .loop _ _ _ _ _ _
+  | .loop _ _ _ _ _ _, .charge _ | .loop _ _ _ _ _ _, .step _ _ | .loop _ _ _ _ _ _, .helper _ =>
+      isFalse (by intro equal; cases equal)
+
+def Code.decideList : (left right : List Code) → Decidable (left = right)
+  | [], [] => isTrue rfl
+  | [], _ :: _ => isFalse (by simp)
+  | _ :: _, [] => isFalse (by simp)
+  | head :: tail, head' :: tail' =>
+      match Code.decide head head', Code.decideList tail tail' with
+      | isTrue heads, isTrue tails => isTrue (by rw [heads, tails])
+      | isFalse heads, _ => isFalse (by intro equal; cases equal; exact heads rfl)
+      | _, isFalse tails => isFalse (by intro equal; cases equal; exact tails rfl)
+end
+
+instance : DecidableEq Code := Code.decide
+
 /-- The constructed instructions of a reading. -/
 def Code.instructions : List Code → List Instruction
   | [] => []

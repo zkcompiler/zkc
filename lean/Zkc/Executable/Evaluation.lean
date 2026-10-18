@@ -629,6 +629,109 @@ theorem Evaluated.Returns.for_cons {run : Env F G → Evaluated F G} {induction 
   rw [evalFor_cons stepEq length]
   exact continues.after cost
 
+/-! ### Evaluation with its charge
+
+The same equations with the exact charge, for bodies whose charge a bound
+depends on. -/
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+/-- An evaluation hands back `results` after charging exactly `cost`
+instructions. -/
+def Evaluated.ReturnsAfter (result : Evaluated F G) (results : List (Value F G)) (cost : Nat) : Prop :=
+  result = .values results cost
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+theorem Evaluated.ReturnsAfter.of_eq {result : Evaluated F G} {results : List (Value F G)} {cost cost' : Nat}
+    (returns : result.ReturnsAfter results cost) (same : cost = cost') : result.ReturnsAfter results cost' := by
+  rw [← same]
+  exact returns
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+theorem Evaluated.ReturnsAfter.returns {result : Evaluated F G} {results : List (Value F G)} {cost : Nat}
+    (returns : result.ReturnsAfter results cost) : result.Returns results :=
+  ⟨cost, returns⟩
+
+theorem Evaluated.ReturnsAfter.operation {site binding : String} {parameters : List Parameter}
+    {inputs outputs : List String} {rest : List Step} {env : Env F G} {resolved : Resolved}
+    {arguments results final : List (Value F G)} {cost : Nat}
+    (resolves : validator.binding? binding >>= (vocabulary.resolve · parameters) = some resolved)
+    (looked : lookupAll env inputs = some arguments)
+    (evaluates : resolved.evaluate arguments = .returned results)
+    (length : outputs.length = results.length)
+    (continues : (evalSteps vocabulary validator rest (outputs.zip results ++ env)).ReturnsAfter final cost) :
+    (evalSteps vocabulary validator (.operation site binding parameters inputs outputs :: rest) env).ReturnsAfter
+      final (1 + cost) := by
+  rw [evalSteps_operation vocabulary validator resolves looked evaluates length, continues]
+  rfl
+
+theorem Evaluated.ReturnsAfter.constant {site output : String} {value : Bool} {rest : List Step}
+    {env : Env F G} {final : List (Value F G)} {cost : Nat}
+    (continues : (evalSteps vocabulary validator rest ((output, .data (.boolean value)) :: env)).ReturnsAfter
+      final cost) :
+    (evalSteps vocabulary validator (.constant site output value :: rest) env).ReturnsAfter final (1 + cost) := by
+  rw [evalSteps_constant, continues]
+  rfl
+
+theorem Evaluated.ReturnsAfter.cond {site condition : String} {captures : List String}
+    {yes no : List Step} {outputs : List String} {rest : List Step} {env : Env F G} {decision : Bool}
+    {captured results final : List (Value F G)} {branchCost cost : Nat}
+    (conditionEq : List.lookup condition env = some (.data (.boolean decision)))
+    (looked : lookupAll env captures = some captured)
+    (branch : (evalSteps vocabulary validator (if decision then yes else no) (captures.zip captured)).ReturnsAfter
+      results branchCost)
+    (length : outputs.length = results.length)
+    (continues : (evalSteps vocabulary validator rest (outputs.zip results ++ env)).ReturnsAfter final cost) :
+    (evalSteps vocabulary validator (.cond site condition captures yes no outputs :: rest) env).ReturnsAfter final
+      (1 + branchCost + cost) := by
+  rw [evalSteps_cond vocabulary validator conditionEq looked branch length, continues]
+  rfl
+
+theorem Evaluated.ReturnsAfter.iterate {site induction lower upper : String} {carried : List (String × String)}
+    {captures : List String} {body : List Step} {outputs : List String} {rest : List Step}
+    {env : Env F G} {first last : Nat} {initial captured results final : List (Value F G)}
+    {loopCost cost : Nat}
+    (lowerEq : List.lookup lower env = some (.index first))
+    (upperEq : List.lookup upper env = some (.index last))
+    (initialEq : lookupAll env (carried.map (·.2)) = some initial)
+    (capturedEq : lookupAll env captures = some captured)
+    (bounded : first ≤ 1048576 ∧ last ≤ 1048576 ∧ last - first ≤ 1048576)
+    (loop : (evalFor (fun env' => evalSteps vocabulary validator body env') induction (carried.map (·.1))
+      (captures.zip captured) (List.range' first (last - first)) initial).ReturnsAfter results loopCost)
+    (length : outputs.length = results.length)
+    (continues : (evalSteps vocabulary validator rest (outputs.zip results ++ env)).ReturnsAfter final cost) :
+    (evalSteps vocabulary validator
+        (.iterate site induction lower upper carried captures body outputs :: rest) env).ReturnsAfter final
+      (1 + loopCost + cost) := by
+  rw [evalSteps_iterate vocabulary validator lowerEq upperEq initialEq capturedEq bounded loop length, continues]
+  rfl
+
+theorem Evaluated.ReturnsAfter.yield {values : List String} {rest : List Step} {env : Env F G}
+    {results : List (Value F G)} (looked : lookupAll env values = some results) :
+    (evalSteps vocabulary validator (.yield values :: rest) env).ReturnsAfter results 1 :=
+  evalSteps_yield vocabulary validator looked
+
+theorem Evaluated.ReturnsAfter.ret {values : List String} {rest : List Step} {env : Env F G}
+    {results : List (Value F G)} (looked : lookupAll env values = some results) :
+    (evalSteps vocabulary validator (.ret values :: rest) env).ReturnsAfter results 1 :=
+  evalSteps_ret vocabulary validator looked
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+theorem Evaluated.ReturnsAfter.for_nil {run : Env F G → Evaluated F G} {induction : String}
+    {carried : List String} {captured : Env F G} {values : List (Value F G)} :
+    (evalFor run induction carried captured [] values).ReturnsAfter values 0 :=
+  rfl
+
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+theorem Evaluated.ReturnsAfter.for_cons {run : Env F G → Evaluated F G} {induction : String}
+    {carried : List String} {captured : Env F G} {index : Nat} {rest : List Nat}
+    {values yielded final : List (Value F G)} {stepCost cost : Nat}
+    (step : (run ((induction, .index index) :: carried.zip values ++ captured)).ReturnsAfter yielded stepCost)
+    (length : yielded.length = carried.length)
+    (continues : (evalFor run induction carried captured rest yielded).ReturnsAfter final cost) :
+    (evalFor run induction carried captured (index :: rest) values).ReturnsAfter final (stepCost + cost) := by
+  rw [evalFor_cons step length, continues]
+  rfl
+
 end Equations
 
 end Field
