@@ -27,6 +27,7 @@ import ZkcSecurity.ArkLib.Sumcheck.Soundness
 import ZkcSecurity.ArkLib.Sumcheck.Statement
 import ZkcSecurity.ArkLib.Sumcheck.Strategy
 import ZkcSecurity.Commitment.Charges
+import ZkcSecurity.Commitment.Cost
 import ZkcSecurity.Commitment.Escape
 import ZkcSecurity.Commitment.Experiment
 import ZkcSecurity.Commitment.Extractable
@@ -49,6 +50,7 @@ import ZkcSecurity.Examples.CausalSumcheck.SourceVerifier
 import ZkcSecurity.Examples.CausalSumcheck.Terminal
 import ZkcSecurity.Examples.CausalSumcheck.UniformService
 import ZkcSecurity.Examples.ChaumPedersenSigma
+import ZkcSecurity.Examples.CommittedFri
 import ZkcSecurity.Examples.CommittedOpening
 import ZkcSecurity.Examples.CommittedOpeningBound
 import ZkcSecurity.Examples.CommittedOpeningBridge
