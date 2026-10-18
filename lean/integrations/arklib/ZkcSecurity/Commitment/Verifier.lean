@@ -54,7 +54,7 @@ inductive CommittedOp (Op Shape : Type) where
 
 /-- The signature of a verifier over base operations `J` with committed tables of shapes `Shape`
 and entries `Value`. A commitment replies nothing; a read replies the entry. -/
-def committed (J : PIR.Signature) (Shape Value : Type) : PIR.Signature where
+abbrev committed (J : PIR.Signature) (Shape Value : Type) : PIR.Signature where
   Op := CommittedOp J.Op Shape
   Reply
     | .base operation => J.Reply operation
@@ -209,8 +209,7 @@ def run : PIR.Proc (committed J Shape Value) A → List (Absorbed E Shape Y) →
       | .send event value =>
           run (next value) (history ++ [.event event]) roots messages openings
       | .query event decode => do
-          let raw ← (liftM ((joint R Shape Y Query).query (.inl (history, event))) :
-            OracleComp (joint R Shape Y Query) (R [event]))
+          let raw ← liftM ((joint R Shape Y Query).query (.inl (history, event)))
           match decode [] raw with
           | some value => run (next value) (history ++ [.event event]) roots messages openings
           | none => pure (.stopped .exhausted)
