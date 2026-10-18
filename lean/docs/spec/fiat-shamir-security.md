@@ -695,7 +695,8 @@ authenticated opening; its bound is a proposition, not a theorem.
   then the validator, in one oracle; `loggedRun` keeps the joint record of all
   calls in order. `Budgets` bounds the transcript and Merkle calls separately.
 - **Checkpoints.** `beforeFirst key record` is the record before the first query
-  of `key`, and `frozen extract c key record` the extraction for the
+  of `key`, which is its first fresh query because the experiment starts from an
+  empty cache, and `frozen extract c key record` the extraction for the
   configuration `c` and the key from it: `T*[c, K]`. Once the key is queried,
   later calls do not move it (`frozen_append`); in every deterministic run it does
   not change when the answer at the key is resampled (`frozen_update`); one root

@@ -302,9 +302,10 @@ security by themselves; the relations below do.
 ### Extraction checkpoints
 
 The extractor follows one convention. For each transcript key `K` that contains
-a root, extraction runs once, immediately before the first query of `K` in the
-joint record, from the record so far, whichever party issues that query. Every
-later query of `K` is a cache hit and reuses the frozen extraction, so the
+a root, extraction runs once, immediately before the first fresh query of `K`
+in the joint record, from the record so far, whichever party issues that query;
+in an experiment that starts from an empty cache this is the first query of `K`.
+Every later query of `K` is a cache hit and reuses the frozen extraction, so the
 extraction is fixed before the answer at `K` is sampled, and resampling that
 answer cannot change it; any later disagreement between the frozen table and an
 accepted opening is the drift event. The extracted object `T*[c, K]` is indexed

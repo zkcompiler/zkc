@@ -815,10 +815,12 @@ axiom closures of its `typedCertificate`, `fiatShamir_soundness`,
 `TestsSecurity.Counterexamples` refutes, for each example, the property it
 breaks and the formal reading of the obligation it violates
 ([construction obligations](../../docs/spec/ir/construction-obligations.md)).
-Only security attacks quantify the adversary's success, as the probability that
-a false statement is accepted in the lazily sampled oracle (or, where stated,
-for every hash function); the other examples refute a law, a coupling, a
-construction identity, a proof route, an import format or the scope of a claim.
+Only security attacks quantify the adversary's success: as the probability that
+a false statement is accepted in the lazily sampled oracle, for every hash
+function where stated, or, for the gate examples, as a closed form over the
+independent uniform answers that the adversary's distinct keys receive. The
+other examples refute a law, a coupling, a construction identity, a proof route,
+an import format or the scope of a claim.
 
 | Example | Property refuted | Lemmas | Violated obligation |
 |---|---|---|---|

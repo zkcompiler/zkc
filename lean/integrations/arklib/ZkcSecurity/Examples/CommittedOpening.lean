@@ -50,9 +50,9 @@ calls and its transcript call run in the same oracle and appear in the same
 record (`loggedRun`).
 
 **The extraction checkpoint convention.** Extraction for a transcript key `K`
-runs once, immediately before the first query of `K` in the joint record, from
-the record so far, whichever party issues that query, and is reused whenever
-`K` is queried again. The extracted table `T*[c, K]` is indexed by the
+runs once, immediately before the first fresh query of `K` in the joint record
+(its first query, from the empty cache), from the record so far, whichever party
+issues that query, and is reused whenever `K` is queried again. The extracted table `T*[c, K]` is indexed by the
 configuration and the key, not by the root (`frozen`):
 
 - the record before the first query of `K` does not change when the record is
@@ -780,7 +780,8 @@ def loggedRun [SampleableType Digest] [DecidableEq Context] [DecidableEq Scheme]
 section Checkpoints
 variable [DecidableEq Context] [DecidableEq Scheme] [DecidableEq Row] [DecidableEq Digest]
 
-/-- The record before the first query of the transcript key `key`. -/
+/-- The record before the first query of the transcript key `key`: before its
+first fresh query, since the joint experiment starts from an empty cache. -/
 def beforeFirst (key : List (Event Context Scheme Row Digest))
     (record : Record Context Scheme Row Digest) : Record Context Scheme Row Digest :=
   record.takeWhile fun entry => decide (entry.1 ≠ .transcript key)
