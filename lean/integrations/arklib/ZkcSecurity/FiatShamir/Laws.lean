@@ -20,7 +20,7 @@ statement of the realized law that a certificate's error is corrected by:
 - a coefficient `factor` and a slack `slack`, both in `[0, ∞]`, with
   `realized : Realized decode factor slack`: every event of a successfully
   decoded value has probability at most `factor` times its ideal probability
-  plus `slack`. A gated accepted-value decoder has a coefficient below one;
+  plus `slack`. A gated accepted-value decoder may have a coefficient below one;
 - a refusal bound `refusal` with `refuses_le`, a completeness-side quantity
   that soundness never uses, since a refusal stops the verifier.
 
@@ -45,7 +45,7 @@ realized subdistribution `μ` against the ideal law `ν`:
 
 `LawRecord.gated` is the accepted-value decoder of a gated site: it refuses
 unless the gate passes and otherwise decodes the challenge, with coefficient
-and slack the gate's passing probability times the challenge's (from
+and slack a bound on the gate's passing probability times the challenge's (from
 `gated_realized`, which uses the independence of the coordinates of a uniform
 pair).
 
@@ -261,7 +261,8 @@ def additive (decode : Raw → Value) (loss : ENNReal) (balanced : Balanced deco
 /-- The accepted-value decoder of a gated site: the raw answer is a pair of gate
 bits and a challenge answer, and the decoder refuses unless the gate passes and
 otherwise decodes the challenge. The coefficient and slack are the gate's
-passing probability times the challenge's. -/
+passing-probability bound `pass` times the challenge's, and its refusal bound is
+the gate's failure-probability bound plus the challenge's. -/
 noncomputable def gated {Bits Gate Challenge : Type} [SampleableType Bits] [SampleableType Challenge]
     [Fintype Bits] [Fintype Challenge] [DecidableEq Gate] (gate : Bits → Gate) (passing : Gate)
     {pass : ENNReal} (passes : Pr{let bits ← $ᵗ Bits}[gate bits = passing] ≤ pass)

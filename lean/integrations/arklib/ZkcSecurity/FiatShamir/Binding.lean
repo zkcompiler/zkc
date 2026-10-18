@@ -19,7 +19,12 @@ not only on well-formed statements.
   labelled by its input; `PublicBinding Scalar` is the typed public-value
   binding event, the application context with a canonical row. Equal events
   have equal rows by constructor injectivity, so a count is never confused
-  with a vector's length, nor a vector with another's prefix.
+  with a vector's length, nor a vector with another's prefix. These are binding
+  representations: an index is not required to lie below its bound, and a row
+  is not required to be in canonical order. Validity and canonical order are
+  established separately, by the statement's own checks and by the codec that
+  builds the row; keeping malformed values representable is what lets a codec
+  bind every statement the prover can output.
 - `BindingCodec Stmt E` is an injective, prefix-free encoding of statements
   as initial histories of events `E`; it discharges `Typed.Determined`
   (`BindingCodec.determined`).
@@ -40,14 +45,16 @@ inductive PublicValue (Scalar : Type) where
   | scalar (value : Scalar)
   /-- A vector of scalars; its length is part of the value. -/
   | vector (values : List Scalar)
-  /-- An index below `bound`. -/
+  /-- An index with its bound. The representation does not require `value < bound`;
+  validity is established separately. -/
   | index (bound value : ℕ)
   /-- A count, such as a number of rounds. -/
   | count (value : ℕ)
   deriving DecidableEq
 
 /-- A canonical row: the statement's public values in canonical order, each
-labelled by its input. -/
+labelled by its input. The type does not enforce the order; the codec that
+builds a row from a statement establishes it. -/
 abbrev Row (Scalar : Type) := List (String × PublicValue Scalar)
 
 /-- The typed public-value binding event: the application context and a

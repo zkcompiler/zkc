@@ -268,7 +268,7 @@ of the sort, and a refusal bound `refusal` with
 `Pr[decode raw = none] ≤ refusal`, a completeness quantity. The ideal law of the
 sort is its uniform law: uniform field elements, `UniformIndex(N)` for an index
 below `N`, and the product law of a block, which is the uniform law of the
-function type. A gated accepted-value decoder has a coefficient below one. A
+function type. A gated accepted-value decoder may have a coefficient below one. A
 site with ideal-law error `ε` escapes with probability at most
 `factor · ε + slack` (`LawRecord.escape_le`).
 
@@ -295,8 +295,8 @@ subdistribution `μ` against the ideal law `ν`:
 
 `LawRecord.gated` is the accepted-value decoder of a gated site: from gate bits
 and a challenge answer it refuses unless the gate passes, with coefficient and
-slack the gate's passing probability times the challenge record's
-(`gated_realized`) and refusal at most the gate's failure probability plus the
+slack a bound on the gate's passing probability times the challenge record's
+(`gated_realized`) and refusal at most a bound on the gate's failure probability plus the
 challenge's refusal. The sampling lemmas above instantiate the constructors:
 `LawRecord.identity` and `LawRecord.modulo` (exact), `LawRecord.lowBitsRejecting`
 (exact with refusal), `LawRecord.koalaBearLowBits` (point ratio
