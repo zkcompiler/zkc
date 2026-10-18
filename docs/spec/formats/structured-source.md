@@ -263,7 +263,7 @@ including nested regions. Stop reasons are `reject`, `abort`, `exhausted`,
 | `["index.constant", decimal-string]` | pure canonical u64 constant |
 | `["index.equal"]` | pure two-index equality to Boolean |
 | `["exec", native-operation, binding-name, parameters]` | checked Local primitive occurrence from the catalogue below |
-| `["field.constant", domain, decimal-string]` | canonical scalar constant |
+| `["field.constant", domain, literal-string]` | canonical scalar constant: a decimal residue, or for a binary field a [bit-pattern literal](../domains/values.md#bit-pattern-literals) |
 | `["field.add" / "field.subtract" / "field.multiply", domain]` | two fields to one field |
 | `["field.equal", domain]` | two fields to Boolean |
 | `["group.identity", group]` | group identity |

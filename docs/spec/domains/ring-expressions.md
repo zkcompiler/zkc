@@ -186,7 +186,11 @@ originally declared over KoalaBear may hold an extension value after polynomial
 substitution. An explicit embedding from KoalaBear into that extension becomes
 the compatible map into the selected algebra. The converse interpretation, an
 extension in KoalaBear, refuses, as does one extension in the other. Arbitrary field identities and
-uninstalled embeddings refuse even if their characteristics agree.
+uninstalled embeddings refuse even if their characteristics agree. The bulk
+`ring.*` kernels substitute integer residue coordinates, so they are installed
+for KoalaBear carriers only; arenas over other fields, including the
+[binary fields](values.md#binary-fields), still form and serve other
+consumers such as pointwise maps.
 
 The row provider gathers SIMD lanes from the same row-major assignments as the
 scalar reference and preserves output order. Both charge the same logical work:
