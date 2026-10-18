@@ -1,8 +1,8 @@
 //! Exact mathematical encodings, separate from native transport and observation.
 use crate::plonky3::words::{self, Form};
 use crate::{
-    GroupPoint, KoalaBear, KoalaBearExt4, KoalaBearExt8, Policy, Result, Scalar, Value, ark,
-    refused, value::size,
+    Binary64, Binary64Ext3, GroupPoint, KoalaBear, KoalaBearExt4, KoalaBearExt8, Policy, Result,
+    Scalar, Value, ark, refused, value::size,
 };
 use p3_field::BasedVectorSpace;
 use std::sync::Arc;
@@ -66,6 +66,17 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
             "encoding.fields_from_le" | "encoding.fields_from_montgomery_le",
             Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4,
         ) => (&[Bytes], &[Bool, Vector]),
+        // Binary fields have little-endian bit patterns and no Montgomery form.
+        ("encoding.field_le", Identity::Binary64 | Identity::Binary64Ext3) => (&[Field], &[Bytes]),
+        ("encoding.fields_le", Identity::Binary64 | Identity::Binary64Ext3) => {
+            (&[Vector], &[Bytes])
+        }
+        ("encoding.field_from_le", Identity::Binary64 | Identity::Binary64Ext3) => {
+            (&[Bytes], &[Bool, Field])
+        }
+        ("encoding.fields_from_le", Identity::Binary64 | Identity::Binary64Ext3) => {
+            (&[Bytes], &[Bool, Vector])
+        }
         _ => return None,
     };
     let port = |kind| {
@@ -268,6 +279,138 @@ fn koala_bear_words<E: WordElement>(
     }
 }
 
+/// Binary-field elements as little-endian bit patterns: 8 bytes for the base
+/// field and 24 for the cubic extension (docs/spec/realization/external-constructions.md).
+trait BitPattern: Copy + Default {
+    const WIDTH: usize;
+    fn encode_into(self, out: &mut Vec<u8>);
+    /// Exact width; every bit pattern is an element.
+    fn decode(bytes: &[u8]) -> Option<Self>;
+    fn field(value: &Value) -> Option<Self>;
+    fn vector(value: &Value) -> Option<&[Self]>;
+    fn field_value(self) -> Value;
+    fn vector_value(values: Arc<[Self]>) -> Value;
+}
+impl BitPattern for Binary64 {
+    const WIDTH: usize = crate::plonky3::binary::WIDTH;
+    fn encode_into(self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&crate::plonky3::binary::encode(self));
+    }
+    fn decode(bytes: &[u8]) -> Option<Self> {
+        crate::plonky3::binary::decode(bytes).ok()
+    }
+    fn field(value: &Value) -> Option<Self> {
+        match value {
+            Value::Binary64Field(x) => Some(*x),
+            _ => None,
+        }
+    }
+    fn vector(value: &Value) -> Option<&[Self]> {
+        match value {
+            Value::Binary64Vector(x) => Some(x),
+            _ => None,
+        }
+    }
+    fn field_value(self) -> Value {
+        Value::Binary64Field(self)
+    }
+    fn vector_value(values: Arc<[Self]>) -> Value {
+        Value::Binary64Vector(values)
+    }
+}
+impl BitPattern for Binary64Ext3 {
+    const WIDTH: usize = crate::plonky3::binary::EXT3_WIDTH;
+    fn encode_into(self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&crate::plonky3::binary::encode_ext3(self));
+    }
+    fn decode(bytes: &[u8]) -> Option<Self> {
+        crate::plonky3::binary::decode_ext3(bytes).ok()
+    }
+    fn field(value: &Value) -> Option<Self> {
+        match value {
+            Value::Binary64Ext3Field(x) => Some(*x),
+            _ => None,
+        }
+    }
+    fn vector(value: &Value) -> Option<&[Self]> {
+        match value {
+            Value::Binary64Ext3Vector(x) => Some(x),
+            _ => None,
+        }
+    }
+    fn field_value(self) -> Value {
+        Value::Binary64Ext3Field(self)
+    }
+    fn vector_value(values: Arc<[Self]>) -> Value {
+        Value::Binary64Ext3Vector(values)
+    }
+}
+/// Same preflight and failure rules as the coordinate-word codecs, except that
+/// no bit pattern of the exact width is invalid: only a wrong length decodes
+/// to false with zero or an empty vector.
+fn bit_patterns<E: BitPattern>(
+    name: &str,
+    args: &[Value],
+    policy: &Policy,
+    available: usize,
+) -> Result<Vec<Value>> {
+    let width = E::WIDTH;
+    let element = std::mem::size_of::<E>();
+    match (name, args) {
+        ("encoding.field_le", [value]) => {
+            let value = E::field(value).ok_or_else(|| refused("encoding-operands"))?;
+            policy.bytes(width)?;
+            policy.output(size(width, 1)?, available)?;
+            let mut bytes = crate::kernels::arithmetic::reserve(width)?;
+            value.encode_into(&mut bytes);
+            Ok(vec![Value::Bytes(bytes.into())])
+        }
+        ("encoding.fields_le", [values]) => {
+            let values = E::vector(values).ok_or_else(|| refused("encoding-operands"))?;
+            policy.vector_width(values.len(), element)?;
+            let length = values
+                .len()
+                .checked_mul(width)
+                .ok_or_else(|| crate::exhausted("size-overflow"))?;
+            policy.bytes(length)?;
+            policy.output(size(length, 2)?, available)?;
+            let mut bytes = crate::kernels::arithmetic::reserve(length)?;
+            for value in values {
+                value.encode_into(&mut bytes);
+            }
+            Ok(vec![Value::Bytes(bytes.into())])
+        }
+        ("encoding.field_from_le", [Value::Bytes(bytes)]) => {
+            policy.output(1024, available)?;
+            let value = E::decode(bytes);
+            Ok(vec![
+                Value::Bool(value.is_some()),
+                value.unwrap_or_default().field_value(),
+            ])
+        }
+        ("encoding.fields_from_le", [Value::Bytes(bytes)]) => {
+            if !bytes.len().is_multiple_of(width) {
+                policy.output(512usize.saturating_add(size(0, element)?), available)?;
+                return Ok(vec![Value::Bool(false), E::vector_value(Arc::from([]))]);
+            }
+            let count = bytes.len() / width;
+            policy.vector_width(count, element)?;
+            policy.output(
+                size(count, element)?
+                    .checked_add(512)
+                    .ok_or_else(|| crate::exhausted("size-overflow"))?,
+                available,
+            )?;
+            let mut values = crate::kernels::arithmetic::reserve(count)?;
+            for chunk in bytes.chunks_exact(width) {
+                values.push(E::decode(chunk).ok_or_else(|| refused("encoding-word"))?);
+            }
+            Ok(vec![Value::Bool(true), E::vector_value(values.into())])
+        }
+        _ => Err(refused("encoding-operands")),
+    }
+}
+
 pub(crate) fn apply(
     name: &str,
     identity: Identity,
@@ -295,6 +438,15 @@ pub(crate) fn apply(
             }
             Identity::KoalaBearExt4 => {
                 return koala_bear_words::<KoalaBearExt4>(name, form, args, policy, available);
+            }
+            Identity::Binary64 if form == Form::Canonical => {
+                return bit_patterns::<Binary64>(name, args, policy, available);
+            }
+            Identity::Binary64Ext3 if form == Form::Canonical => {
+                return bit_patterns::<Binary64Ext3>(name, args, policy, available);
+            }
+            Identity::Binary64 | Identity::Binary64Ext3 => {
+                return Err(refused("encoding-operands"));
             }
             // The Ristretto little-endian codecs below keep their own rows.
             _ => {}

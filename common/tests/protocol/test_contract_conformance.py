@@ -109,6 +109,8 @@ def required_atomic_types():
         "koala-bear": "field vector polynomial round matrix",
         "koala-bear.ext8-binomial3": "field vector polynomial round matrix rng",
         "koala-bear.ext4-binomial3": "field vector polynomial round matrix",
+        "gf2-64.pentanomial-4-3-1": "field vector polynomial round matrix",
+        "gf2-64.pentanomial-4-3-1.ext3-trinomial1": "field vector polynomial round matrix",
         "bls12-381.g1": "group groups",
         "ristretto255.group": "group groups",
         "edwards25519.prime": "group groups",
@@ -128,7 +130,7 @@ def required_atomic_types():
         "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0": "transcript",
     }
     result = {(kind, domain) for domain, kinds in families.items() for kind in kinds.split()}
-    assert len(result) == 82
+    assert len(result) == 92
     return result
 
 
@@ -270,6 +272,9 @@ def candidates(inventory):
                         "field:koala-bear", "field:koala-bear.ext8-binomial3",
                         "field:koala-bear.ext4-binomial3", "vector:koala-bear.ext4-binomial3",
                         "matrix:koala-bear.ext4-binomial3",
+                        # No installed transcript observes a binary field.
+                        "field:gf2-64.pentanomial-4-3-1",
+                        "vector:gf2-64.pentanomial-4-3-1.ext3-trinomial1",
                         "field:ristretto255.scalar", "group:ristretto255.group",
                         "sequence<group:bn254.g2>", "group:bn254.gt", "sequence<group:bn254.gt>",
                         "vector:koala-bear", "vector:koala-bear.ext8-binomial3",
@@ -293,7 +298,7 @@ def candidates(inventory):
         for arguments, provider in choices:
             assert provider, (name, arguments, "no explicit catalog provider")
             rows.append((operation, arguments, f"{provider}/{name}"))
-    assert len(rows) < 1500, "review enumeration growth; avoid combinatorial testing"
+    assert len(rows) < 1700, "review enumeration growth; avoid combinatorial testing"
     return rows
 
 
@@ -1102,7 +1107,7 @@ def admission_failures(cases, replies):
 def test_actual_parameter_and_program_admission(drivers, directory):
     cases = json.loads((FIXTURES / "attribute-admission.json").read_text())
     assert len({case["name"] for case in cases}) == len(cases)
-    assert 60 <= len(cases) <= 106, "review the bounded attribute witness set"
+    assert 60 <= len(cases) <= 120, "review the bounded attribute witness set"
     replies = query(drivers, [attribute_request(case) for case in cases], directory)
     finish(directory, admission_failures(cases, replies))
 

@@ -252,6 +252,23 @@ external work. Montgomery words exchange values with representations that store
 them; they add no arithmetic meaning, and two encodings of one element under
 the two forms are different byte strings.
 
+### Binary bit patterns
+
+A [binary field](../domains/values.md#binary-fields) has no integer residue,
+so it has no Montgomery encoding and no reduction. Its canonical encoding is
+the element's bit pattern, little-endian: eight bytes for
+`gf2-64.pentanomial-4-3-1` and, for
+`gf2-64.pentanomial-4-3-1.ext3-trinomial1`, the eight-byte patterns of its
+three coordinates in the basis `(1, y, y^2)`, 24 bytes in all. These are the
+raw bytes of Plonky3 0.8.0's `Poly64` and `Poly192`. `field_le`,
+`field_from_le`, `fields_le` and
+`fields_from_le` are installed for both fields; the four Montgomery operations
+and `field_reduce_le` are not. Every byte string of the exact width is an
+element, so `field_from_le` fails only on a wrong length and `fields_from_le`
+only on a length that is not a whole number of elements, with the same
+`(false, 0)` and `(false, empty)` results, preflight and charges as the
+coordinate-word codecs.
+
 ## Construction, resources and trust boundaries
 
 The installed `SourceHistory` facet permits ordinary source calls to the

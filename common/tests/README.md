@@ -66,7 +66,7 @@ representative controls and states their evidence limits.
   signatures, including independently authored witnesses and deliberate drift.
   Relation-bundle and machine relation tests send the same carriers to the C++
   and Rust evaluators and require identical reports.
-- `kernels/` compares extension-field arithmetic, sparse matrices, vector
+- `kernels/` compares extension-field and binary-field arithmetic, sparse matrices, vector
   scatter, coset evaluation/interpolation/folding and pointwise maps beside the
   Ring provider and formal products against independent integer calculations
   through `.zkc` Entries, including disabled simplification, storage release

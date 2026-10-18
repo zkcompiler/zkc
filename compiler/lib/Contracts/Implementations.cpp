@@ -44,7 +44,19 @@ constexpr ProviderDomain providerDomains[] = {
     {"plonky3", "rows.merkle-keccak256.koala-bear.ext8-binomial3/0"},
     {"plonky3", "rows.merkle-poseidon2-16.koala-bear/0"},
     {"plonky3", "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"},
+    {"plonky3", "gf2-64.pentanomial-4-3-1"},
+    {"plonky3", "gf2-64.pentanomial-4-3-1.ext3-trinomial1"},
     {"spongefish", "spongefish0.8.0.keccak.bls12-381.fr64be/0"}};
+
+// One provider can serve fields with different presentations. Rows whose
+// kernels read integer residue coordinates name the KoalaBear family, so the
+// binary fields under the same provider do not inherit them
+// (docs/spec/realization/external-constructions.md).
+constexpr StringRef koalaFamily[] = {"koala-bear", "koala-bear.ext8-binomial3",
+                                     "koala-bear.ext4-binomial3"};
+constexpr StringRef littleEndianFields[] = {
+    "koala-bear", "koala-bear.ext8-binomial3", "koala-bear.ext4-binomial3",
+    "gf2-64.pentanomial-4-3-1", "gf2-64.pentanomial-4-3-1.ext3-trinomial1"};
 
 // These finite rows are the implementation inventory, not a walk over logical
 // declarations. Adding a declaration grants no implementation. Provider sets
@@ -62,23 +74,26 @@ struct ContractRow {
   unsigned providers;
   Compatibility compatibility = Compatibility::Nominal;
   StringRef domain = {};
+  // Several domain restrictions of one row, as if listed one per row.
+  ArrayRef<StringRef> domains = {};
 };
+constexpr auto Nominal = Compatibility::Nominal;
 constexpr ContractRow contractRows[] = {
-    {"ring.point", Plonky3},
-    {"ring.rows", Plonky3},
-    {"ring.coefficients", Plonky3},
-    {"ring.affine_sum", Plonky3},
-    {"relation.table_rows", Plonky3},
-    {"relation.table_shape", Plonky3},
-    {"relation.table_input", Plonky3},
-    {"relation.table_scope", Plonky3},
-    {"relation.table_point", Plonky3},
-    {"relation.table_points", Plonky3},
-    {"relation.table_widths", Plonky3},
-    {"relation.table_policy", Plonky3},
-    {"relation.table_interactions", Plonky3},
-    {"relation.table_interaction", Plonky3},
-    {"relation.table_record_points", Plonky3},
+    {"ring.point", Plonky3, Nominal, {}, koalaFamily},
+    {"ring.rows", Plonky3, Nominal, {}, koalaFamily},
+    {"ring.coefficients", Plonky3, Nominal, {}, koalaFamily},
+    {"ring.affine_sum", Plonky3, Nominal, {}, koalaFamily},
+    {"relation.table_rows", Plonky3, Nominal, {}, koalaFamily},
+    {"relation.table_shape", Plonky3, Nominal, {}, koalaFamily},
+    {"relation.table_input", Plonky3, Nominal, {}, koalaFamily},
+    {"relation.table_scope", Plonky3, Nominal, {}, koalaFamily},
+    {"relation.table_point", Plonky3, Nominal, {}, koalaFamily},
+    {"relation.table_points", Plonky3, Nominal, {}, koalaFamily},
+    {"relation.table_widths", Plonky3, Nominal, {}, koalaFamily},
+    {"relation.table_policy", Plonky3, Nominal, {}, koalaFamily},
+    {"relation.table_interactions", Plonky3, Nominal, {}, koalaFamily},
+    {"relation.table_interaction", Plonky3, Nominal, {}, koalaFamily},
+    {"relation.table_record_points", Plonky3, Nominal, {}, koalaFamily},
     {"sequence.empty", Native, Compatibility::Independent},
     {"sequence.append", Native, Compatibility::Independent},
     {"sequence.length", Native, Compatibility::Independent},
@@ -132,14 +147,15 @@ constexpr ContractRow contractRows[] = {
     {"encoding.cryptonote_map", Dalek, Compatibility::Nominal,
      "edwards25519.prime"},
     // KoalaBear and its installed extensions: four-byte words per coordinate.
-    {"encoding.field_le", Plonky3},
-    {"encoding.field_from_le", Plonky3},
-    {"encoding.fields_le", Plonky3},
-    {"encoding.fields_from_le", Plonky3},
-    {"encoding.field_montgomery_le", Plonky3},
-    {"encoding.field_from_montgomery_le", Plonky3},
-    {"encoding.fields_montgomery_le", Plonky3},
-    {"encoding.fields_from_montgomery_le", Plonky3},
+    // Binary fields: little-endian bit patterns, with no Montgomery form.
+    {"encoding.field_le", Plonky3, Nominal, {}, littleEndianFields},
+    {"encoding.field_from_le", Plonky3, Nominal, {}, littleEndianFields},
+    {"encoding.fields_le", Plonky3, Nominal, {}, littleEndianFields},
+    {"encoding.fields_from_le", Plonky3, Nominal, {}, littleEndianFields},
+    {"encoding.field_montgomery_le", Plonky3, Nominal, {}, koalaFamily},
+    {"encoding.field_from_montgomery_le", Plonky3, Nominal, {}, koalaFamily},
+    {"encoding.fields_montgomery_le", Plonky3, Nominal, {}, koalaFamily},
+    {"encoding.fields_from_montgomery_le", Plonky3, Nominal, {}, koalaFamily},
     {"hash.keccak256", Native, Compatibility::Independent},
     {"hash.sha256", Native, Compatibility::Independent},
     {"hash.poseidon2_16", Plonky3, Compatibility::Nominal, "koala-bear"},
@@ -565,7 +581,7 @@ const ImplementationCatalog &installedImplementations() {
         {Native, "native"}};
     // Rows naming one contract, provider and policy with different domain
     // restrictions describe a single implementation admitting each domain.
-    for (const auto &row : contractRows)
+    auto install = [&](const ContractRow &row, StringRef domain) {
       for (const auto &[flag, provider] : providers)
         if (row.providers & flag) {
           std::string identity = (provider + "/" + row.contract).str();
@@ -574,20 +590,29 @@ const ImplementationCatalog &installedImplementations() {
           });
           if (existing != entries.end()) {
             if (existing->compatibility != row.compatibility ||
-                existing->domains.empty() || row.domain.empty() ||
-                is_contained(existing->domains, row.domain))
+                existing->domains.empty() || domain.empty() ||
+                is_contained(existing->domains, domain))
               report_fatal_error("ambiguous installed implementation row",
                                  false);
-            existing->domains.push_back(row.domain.str());
+            existing->domains.push_back(domain.str());
             continue;
           }
           std::vector<std::string> domains;
-          if (!row.domain.empty())
-            domains.push_back(row.domain.str());
+          if (!domain.empty())
+            domains.push_back(domain.str());
           entries.push_back({row.contract.str(), identity, provider.str(),
                              row.compatibility, std::move(domains)});
           preferences.push_back({row.contract.str(), provider.str(), identity});
         }
+    };
+    for (const auto &row : contractRows) {
+      if (!row.domain.empty() && !row.domains.empty())
+        report_fatal_error("ambiguous installed implementation row", false);
+      if (row.domains.empty())
+        install(row, row.domain);
+      for (StringRef domain : row.domains)
+        install(row, domain);
+    }
     // Algorithm and layout alternatives do not add a default preference.
     entries.push_back({"vector.dot",
                        "arkworks-pairwise/vector.dot",

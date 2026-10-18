@@ -45,6 +45,12 @@ fn literal_rule(rule: AttributeRule, field: Identity) -> AttributeRule {
             Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4,
             AttributeRule::FieldDecimals,
         ) => AttributeRule::KoalaBearDecimals,
+        (Identity::Binary64, AttributeRule::FieldDecimal) => AttributeRule::Binary64Literal,
+        (Identity::Binary64, AttributeRule::FieldDecimals) => AttributeRule::Binary64Literals,
+        (Identity::Binary64Ext3, AttributeRule::FieldDecimal) => AttributeRule::Binary64Ext3Literal,
+        (Identity::Binary64Ext3, AttributeRule::FieldDecimals) => {
+            AttributeRule::Binary64Ext3Literals
+        }
         (Identity::Bn254Fr, AttributeRule::FieldDecimal) => AttributeRule::Bn254Decimal,
         (Identity::Bn254Fr, AttributeRule::FieldDecimals) => AttributeRule::Bn254Decimals,
         _ => rule,

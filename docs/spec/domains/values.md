@@ -78,7 +78,9 @@ specialized modulo the characteristic; closed `field.constant` and
 `p`. They do not encode arbitrary extension coordinates. The catalog's existing
 `modulus` member records this characteristic bound for natural casts, not the
 extension's cardinality. Public extension coordinates use the canonical
-[native structured codec](../formats/messages.md).
+[native structured codec](../formats/messages.md). A
+[binary field](#binary-fields) writes its constants other than `0` and `1` as
+[bit-pattern literals](#bit-pattern-literals).
 
 The native installation uses pinned Plonky3 0.8.0's
 `BinomialExtensionField<KoalaBear, d>` for both degrees; the executable independent
@@ -86,6 +88,63 @@ The native installation uses pinned Plonky3 0.8.0's
 checked exponentiation for inverses of the octic extension. It asserts no unproved Lean field instance
 or native adequacy theorem. Generic formal PIR semantics remains parameterized
 by mathematical fields and the embedding laws required by each consumer.
+
+## Binary fields
+
+The installed nominal domain `gf2-64.pentanomial-4-3-1` denotes
+`K = F_2[x]/(x^64 + x^4 + x^3 + x + 1)` with the polynomial basis
+`(1, x, …, x^63)`. The installed nominal domain
+`gf2-64.pentanomial-4-3-1.ext3-trinomial1` denotes `E = K[y]/(y^3 + y + 1)`
+with base `K` and basis `(1, y, y^2)`. The pentanomial is irreducible over
+`F_2`: `x^(2^64) ≡ x` modulo it and `gcd(x^(2^32) - x, x^64 + x^4 + x^3 + x + 1) = 1`.
+The trinomial is irreducible over `K`, because a root would lie in
+`F_8 ∩ K = F_2`, where `y^3 + y + 1` has none. So `|K| = 2^64` and
+`|E| = 2^192`. Each identity fixes its base, degree, defining polynomial and
+basis. Arithmetic is polynomial quotient arithmetic over `F_2`; it is not
+integer arithmetic modulo `2^64`. `field.embed<E>` and `vector.embed<E>` send
+`a` to `(a, 0, 0)`. `K` has no declared base: `F_2` is not an installed domain.
+
+Both fields have characteristic two and hold `Field` and `CommRing`; `E` also
+holds `ExtensionField` with `E.BaseField = K`. Neither holds `PrimeField`,
+`TwoAdicField` or `CharacteristicNotTwo`. Addition is the exclusive or of bit
+patterns, negation is the identity and subtraction equals addition. Operations
+that need an integer residue, a two-adic multiplicative subgroup or division by
+two are not defined on these fields: coset domains, interpolation and folding
+on two-adic subgroups, compile-time prime interpolation, Montgomery residues,
+the [Ring](ring-expressions.md) row provider's bulk kernels and
+[relation bundles](relation-bundles.md). Ring formulas over them still form,
+with the natural literals `0` and `1`, and pointwise maps realize through them.
+Inverting zero refuses, as in every installed field.
+
+An element's **bit pattern** lists its coordinates over `F_2`: bit `i` of an
+element of `K` is the coefficient of `x^i`, and bit `64 j + i` of an element of
+`E` is the coefficient of `x^i y^j`. The pattern of an element of `E` is the
+patterns of its three coordinates in basis order. Every pattern of 64 or 192
+bits is exactly one element. Natural casts land in the prime subfield `F_2`, as
+in every field: `field.from_index(n)` is `n mod 2`, and the catalog's `modulus`
+member is `2`.
+
+### Bit-pattern literals
+
+A closed constant of a binary field is written `0`, `1` or a bit-pattern
+literal: `0x` followed by lowercase hexadecimal digits without a leading zero,
+read as an unsigned integer whose binary digits are the element's bit pattern.
+Its value is at least two and below `2^d`, where `d` is 64 for `K` and 192 for
+`E`. Every element therefore has exactly one constant spelling: in `K`,
+`x^4 + x^3 + x + 1` is `0x1b`; in `E`, `y` is `0x10000000000000000`. Uppercase
+digits, leading zeros, `0x0`, `0x1`, decimals above one and values of `2^d` or
+more refuse; nothing is reduced. The form applies wherever a concrete binary
+field's constant is an attribute: `field.constant`, each element of
+`vector.constant` and `algebra.constant`. A symbolic field still admits only
+`0` and `1`, and prime fields and their extensions keep canonical decimal
+residues. In source, `kernel<K>("field.constant"; "0x1b")` writes such a
+constant; numeric source literals remain decimal.
+
+The native installation uses pinned Plonky3 0.8.0's `p3-binary-field` types
+`Poly64` and `Poly192`, which store exactly these bit patterns. Their integer
+constructors cast through `F_2`, like natural casts. Readable and wire forms
+are in the [Entry guide](../runtime/entries.md) and the
+[message grammar](../formats/messages.md).
 
 ## Group identity
 

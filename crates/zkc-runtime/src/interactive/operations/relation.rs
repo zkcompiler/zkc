@@ -99,11 +99,23 @@ pub(super) const CONTRIBUTION: Contribution = Contribution {
         .implemented_by(&["plonky3/relation.table_record_points"]),
     ],
     resolve,
-    select: support::select_nominal,
+    select,
     alternatives: &[],
     physical_error: "uninstalled operation binding",
     physical_only: false,
 };
+/// Relation views evaluate integer residue coordinates, so no binary field is
+/// implemented, although the logical contract needs only a field.
+fn select(
+    binding: &OperationBinding,
+    logical: &KernelSignature<LogicalType>,
+    selection: Selection,
+) -> Result<BoundSignature> {
+    if !support::primary(binding)?.has_residue_coordinates() {
+        return Err(support::failure());
+    }
+    support::select_nominal(binding, logical, selection)
+}
 fn resolve(
     binding: &OperationBinding,
     contract: &Contract,

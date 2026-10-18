@@ -52,6 +52,12 @@ pub(super) fn literal_rule(rule: AttributeRule, field: Identity) -> AttributeRul
             AttributeRule::FieldDecimals,
             Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4,
         ) => AttributeRule::KoalaBearDecimals,
+        (AttributeRule::FieldDecimal, Identity::Binary64) => AttributeRule::Binary64Literal,
+        (AttributeRule::FieldDecimals, Identity::Binary64) => AttributeRule::Binary64Literals,
+        (AttributeRule::FieldDecimal, Identity::Binary64Ext3) => AttributeRule::Binary64Ext3Literal,
+        (AttributeRule::FieldDecimals, Identity::Binary64Ext3) => {
+            AttributeRule::Binary64Ext3Literals
+        }
         (AttributeRule::FieldDecimal, Identity::Bn254Fr) => AttributeRule::Bn254Decimal,
         (AttributeRule::FieldDecimals, Identity::Bn254Fr) => AttributeRule::Bn254Decimals,
         _ => rule,

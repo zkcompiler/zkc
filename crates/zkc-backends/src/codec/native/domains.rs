@@ -7,6 +7,8 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> 
         Value::KoalaBearVector(v) => (20, 4usize, v.len()),
         Value::KoalaBearExt8Vector(v) => (27, 32, v.len()),
         Value::KoalaBearExt4Vector(v) => (22, 16, v.len()),
+        Value::Binary64Vector(v) => (74, 8, v.len()),
+        Value::Binary64Ext3Vector(v) => (77, 24, v.len()),
         Value::Vector(v) => (66, 32, v.len()),
         Value::RistrettoVector(v) => (14, 32, v.len()),
         Value::RistrettoGroups(v) => (17, 32, v.len()),
@@ -50,6 +52,16 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> 
             Value::KoalaBearExt4Vector(values) => {
                 for x in values.iter() {
                     out.extend(crate::plonky3::encode_quartic(*x));
+                }
+            }
+            Value::Binary64Vector(values) => {
+                for x in values.iter() {
+                    out.extend(crate::plonky3::binary::encode(*x));
+                }
+            }
+            Value::Binary64Ext3Vector(values) => {
+                for x in values.iter() {
+                    out.extend(crate::plonky3::binary::encode_ext3(*x));
                 }
             }
             Value::Vector(values) => {

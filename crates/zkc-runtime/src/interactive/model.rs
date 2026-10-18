@@ -267,6 +267,11 @@ pub enum AttributeRule {
     FieldDecimals,
     RistrettoDecimals,
     KoalaBearDecimals,
+    /// Constants of a binary field: `0`, `1` or a canonical bit-pattern literal.
+    Binary64Literal,
+    Binary64Literals,
+    Binary64Ext3Literal,
+    Binary64Ext3Literals,
     ScatterShape,
     Unsigned64,
     NaturalIndex,

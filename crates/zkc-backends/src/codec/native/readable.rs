@@ -90,8 +90,40 @@ fn natural(value: &Json) -> Result<u64> {
         .parse()
         .map_err(|_| "entry-input-decimal")
 }
+/// A binary-field element is its bit pattern in hexadecimal, never a decimal
+/// residue below the characteristic: `0x` and lowercase digits without leading
+/// zeros for the base field; for the cubic extension, three base elements in
+/// the basis `1, y, y^2`, or one base element, which embeds.
+fn binary(identity: Identity, value: &Json, out: &mut Buffer) -> Result<()> {
+    use crate::plonky3::binary;
+    let base = |value: &Json| {
+        value
+            .as_str()
+            .ok_or("entry-input-shape")
+            .and_then(|s| binary::parse_readable(s).ok_or("entry-input-encoding"))
+    };
+    if identity == Identity::Binary64 || value.is_string() {
+        let word = binary::encode(base(value)?);
+        out.put(&word)?;
+        if identity == Identity::Binary64Ext3 {
+            out.put(&[0; 2 * binary::WIDTH])?;
+        }
+        return Ok(());
+    }
+    let values = array(value)?;
+    if values.len() != 3 {
+        return Err("entry-input-shape");
+    }
+    for v in values {
+        out.put(&binary::encode(base(v)?))?;
+    }
+    Ok(())
+}
 fn scalar(identity: Identity, value: &Json, out: &mut Buffer) -> Result<()> {
     use Identity::*;
+    if matches!(identity, Binary64 | Binary64Ext3) {
+        return binary(identity, value, out);
+    }
     // A KoalaBear extension element: a base decimal embeds, or one decimal per
     // coordinate in the ascending basis.
     let degree = match identity {
@@ -334,8 +366,15 @@ impl serde::Serialize for Scalar<'_> {
         &self,
         serializer: S,
     ) -> std::result::Result<S::Ok, S::Error> {
+        use crate::plonky3::binary;
+        let word = |b: &[u8; binary::WIDTH]| binary::readable(binary::Binary64::from_le_bytes(*b));
         if matches!(self.0, Identity::KoalaBearExt8 | Identity::KoalaBearExt4) {
             serializer.collect_seq(self.1.as_chunks::<4>().0.iter().map(|b| decimal_text(b)))
+        } else if self.0 == Identity::Binary64Ext3 {
+            serializer.collect_seq(self.1.as_chunks::<{ binary::WIDTH }>().0.iter().map(word))
+        } else if self.0 == Identity::Binary64 {
+            let bytes = self.1.try_into().map_err(serde::ser::Error::custom)?;
+            serializer.serialize_str(&word(bytes))
         } else {
             serializer.serialize_str(&decimal_text(self.1))
         }
