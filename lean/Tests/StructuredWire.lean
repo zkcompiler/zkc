@@ -75,9 +75,32 @@ private def finiteFields : List Json := [
   .str "finite", .str "folded", .str "private", empty, empty,
   .str "items", .str "work", .str ""]
 
+private def modulusText : String := toString scalarModulus
+
+private def groupRow (identity : String) : Json :=
+  arr [.str "nominal", .str identity, .str "Group", arr [strings ["Scalar", scalarDomain]],
+    strings ["Group", "ScalarAction"], .null]
+
+private def fieldRow : List Json := [
+  .str "nominal", .str scalarDomain, .str "Field",
+  arr [strings ["PairingG1", groupDomain], strings ["PairingG2", "bls12-381.g2"],
+    strings ["PairingGT", "bls12-381.gt"]],
+  strings ["Field", "CommRing", "PrimeField", "CharacteristicNotTwo", "PairingField"],
+  .str modulusText]
+
+private def serviceRow : List Json :=
+  [.str "service", .str scalarServiceContract, .str scalarDomain, strings ["draw"]]
+
+/-- The native rows of the BLS12-381 identities and service, in native order. -/
+private def rows : Json :=
+  arr [arr [arr fieldRow, groupRow "bls12-381.g2", groupRow "bls12-381.gt", groupRow groupDomain],
+    arr [arr serviceRow]]
+
+private def noRows : Json := arr [empty, empty]
+
 private def envelope (domains relations definitions : List Json) : Json :=
   arr [.str "zkc.structured-source/0", .str "original", .str digest, .str "main",
-    arr domains, arr relations, empty, arr definitions, empty]
+    arr domains, arr relations, empty, arr definitions, empty, rows]
 
 private def subject : Json := envelope [arr domainFields]
   [arr relationFields, arr (relationFields.set 1 (.str "Unused"))]
@@ -119,6 +142,13 @@ private def run : IO Unit := do
   | .error error => check s!"whole-unit: {error}" false
   | .ok snapshot =>
     check "source-and-entry" (snapshot.source == digest && snapshot.entry == "main")
+    check "catalogue-rows-retained" (snapshot.catalogue.nominals.map (·.identity) ==
+      [scalarDomain, "bls12-381.g2", "bls12-381.gt", groupDomain] &&
+      snapshot.catalogue.services == [⟨scalarServiceContract, scalarDomain, ["draw"]⟩] &&
+      snapshot.catalogue.nominals.head? == some ⟨scalarDomain, .field,
+        [("PairingG1", groupDomain), ("PairingG2", "bls12-381.g2"), ("PairingGT", "bls12-381.gt")],
+        ["Field", "CommRing", "PrimeField", "CharacteristicNotTwo", "PairingField"],
+        some scalarModulus⟩)
     check "all-definitions-retained"
       (snapshot.definitions.map Definition.name == ["main", "other", "work", "formula", "folded"])
     check "all-relations-retained" (snapshot.relations.map Relation.name == ["Proof", "Unused"])
@@ -204,19 +234,17 @@ private def run : IO Unit := do
 
   for (label, value, code) in [
       ("unknown-type", strings ["tuple"], "structured-type-unsupported"),
-      ("group-domain", strings ["group", scalarDomain], "structured-group-domain"),
-      ("field-domain", strings ["field", groupDomain], "structured-field-domain"),
-      ("service-version", strings ["service", "random.bls12-381.fr/1"], "structured-service-contract"),
-      ("service-other-field", strings ["service", "random.other/0"], "structured-service-contract"),
       ("service-empty", strings ["service", ""], "structured-string"),
+      ("field-empty", strings ["field", ""], "structured-string"),
       ("type-not-array", .str "bool", "structured-array")] do
     check label (hasError (Format.type value) code)
+  -- Identities are strings; admission resolves them against catalogue rows.
+  for value in [strings ["group", scalarDomain], strings ["field", groupDomain],
+      strings ["service", "random.bls12-381.fr/1"], strings ["service", "random.other/0"]] do
+    check s!"type-identity-decoded: {value.compress}" (succeeds (Format.type value))
 
   for (label, value, code) in [
       ("unknown-operation", strings ["group.subtract", groupDomain], "structured-operation-unsupported"),
-      ("scale-swapped-domains", strings ["group.scale", scalarDomain, groupDomain], "structured-group-domain"),
-      ("scale-wrong-field", strings ["group.scale", groupDomain, groupDomain], "structured-field-domain"),
-      ("draw-wrong-field", strings ["draw", "V", groupDomain], "structured-field-domain"),
       ("exchange-empty-owner", strings ["exchange", "", "V"], "structured-string"),
       ("draw-empty-owner", strings ["draw", "", scalarDomain], "structured-string"),
       ("restrict-not-array", strings ["restrict", "P"], "structured-array"),
@@ -230,6 +258,31 @@ private def run : IO Unit := do
       ("bool-not-boolean", arr [.str "bool.constant", toJson (1 : Nat)], "structured-operation-unsupported")
     ] do
     check label (hasError (Format.descriptor value) code)
+  for value in [strings ["group.scale", scalarDomain, groupDomain],
+      strings ["group.scale", groupDomain, groupDomain], strings ["draw", "V", groupDomain]] do
+    check s!"descriptor-identity-decoded: {value.compress}" (succeeds (Format.descriptor value))
+
+  -- Catalogue rows: exact arity, sort spellings and canonical moduli.
+  check "catalogue-valid" (succeeds (Format.catalogue rows))
+  check "catalogue-empty" (succeeds (Format.catalogue noRows))
+  for (label, value, code) in [
+      ("catalogue-arity", arr [empty], "structured-catalogue"),
+      ("nominal-extra", arr (fieldRow ++ [.null]), "structured-catalogue"),
+      ("nominal-missing", arr (fieldRow.take 5), "structured-catalogue"),
+      ("nominal-tag", arr (fieldRow.set 0 (.str "service")), "structured-catalogue"),
+      ("nominal-sort", arr (fieldRow.set 2 (.str "Ring")), "structured-catalogue-sort"),
+      ("nominal-member-shape", arr (fieldRow.set 3 (arr [strings ["PairingG1"]])), "structured-catalogue-member"),
+      ("modulus-leading-zero", arr (fieldRow.set 5 (.str ("0" ++ modulusText))), "structured-catalogue-modulus"),
+      ("modulus-number", arr (fieldRow.set 5 (toJson (5 : Nat))), "structured-catalogue-modulus"),
+      ("modulus-length", arr (fieldRow.set 5 (.str (String.ofList (List.replicate 1025 '9')))),
+        "structured-catalogue-modulus")] do
+    check label (hasError (Format.nominal value) code)
+  check "modulus-1024-digits" (succeeds
+    (Format.nominal (arr (fieldRow.set 5 (.str (String.ofList (List.replicate 1024 '9')))))))
+  for (label, value) in [
+      ("service-extra", arr (serviceRow ++ [.null])), ("service-missing", arr (serviceRow.take 3)),
+      ("service-tag", arr (serviceRow.set 0 (.str "nominal")))] do
+    check label (hasError (Format.serviceRow value) "structured-catalogue")
 
   for (label, value, code) in [
       ("interface-tag", arr [.str "math", empty, empty, empty], "structured-interface"),
@@ -266,13 +319,16 @@ private def run : IO Unit := do
       [.str "zkc.structured-source/1", .str "original", .str digest, .str "main", empty, empty, empty],
       [.str "zkc.structured-source/0", .str "projected", .str digest, .str "main", empty, empty, empty],
       [.str "zkc.structured-source/0", .str "original", .str digest, .str "main", empty, empty],
-      [.str "zkc.structured-source/0", .str "original", .str digest, .str "main", empty, empty, empty, empty, empty, empty]] do
+      [.str "zkc.structured-source/0", .str "original", .str digest, .str "main", empty, empty, empty, empty, empty],
+      [.str "zkc.structured-source/0", .str "original", .str digest, .str "main", empty, empty, empty, empty, empty,
+        noRows, empty]] do
     check "envelope-tag-or-arity" (hasError (decode (arr envelopeFields)) "structured-envelope")
   for badDigest in ["sha256:" ++ String.ofList (List.replicate 64 'A'),
       "sha256:" ++ String.ofList (List.replicate 64 'g'), "sha256:0", "SHA256:" ++
         String.ofList (List.replicate 64 '0')] do
     check "digest-canonical" (hasError (decode (arr [.str "zkc.structured-source/0",
-      .str "original", .str badDigest, .str "main", empty, empty, empty, empty, empty])) "structured-source-digest")
+      .str "original", .str badDigest, .str "main", empty, empty, empty, empty, empty, noRows]))
+        "structured-source-digest")
 
   -- Bounded shapes apply to all declarations, even unused metadata and bodies.
   for (label, value) in [
@@ -324,9 +380,8 @@ private def run : IO Unit := do
   for text in ["00", "01", "-1", "+1", " 1", "1 ", "1.0", "1e0", "١", "１２"] do
     check s!"constant-canonical: {text}" (hasError
       (Format.descriptor (strings ["field.constant", scalarDomain, text])) "structured-decimal")
-  check "constant-modulus" (hasError
-    (Format.descriptor (strings ["field.constant", scalarDomain, toString scalarModulus])) "structured-field-canonical")
-  for value in [0, scalarModulus - 1] do
+  -- The modulus bound belongs to the field's catalogue row and is checked by admission.
+  for value in [0, scalarModulus - 1, scalarModulus] do
     check "constant-boundary" (succeeds (Format.descriptor (strings ["field.constant", scalarDomain, toString value])))
   let utf8Boundary := String.ofList (List.replicate 256 'é')
   check "string-512-bytes" (succeeds (Format.string (.str utf8Boundary)))

@@ -23,7 +23,7 @@ private def unit (definitions : List Definition) : Snapshot :=
    ⟨"sha256:0000000000000000000000000000000000000000000000000000000000000000",
     "main", [], [], [], contractDefinitions,
     contractDefinitions.filterMap (fun definition =>
-      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows⟩)
 
 private def repeatInstruction (maximum : Nat := 2) (roles : List String := ["P"])
     (stateScopes : List (List String) := [["P"]])

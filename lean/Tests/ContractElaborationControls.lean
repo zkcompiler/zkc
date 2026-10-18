@@ -34,7 +34,7 @@ private def snapshot (changed reordered : Bool) : Snapshot :=
     if reordered then [.function other, .function spare, .function (predicate changed), .function root]
     else [.function root, .function (predicate changed), .function spare, .function other],
     if reordered then [⟨"other", []⟩, ⟨"main", [secondClause, clause]⟩]
-    else [⟨"main", [clause, secondClause]⟩, ⟨"other", []⟩]⟩
+    else [⟨"main", [clause, secondClause]⟩, ⟨"other", []⟩], blsRows⟩
 
 private noncomputable def formulaBody (changed : Bool) : Region dialect [.boolean, .boolean] [.boolean] :=
   if changed then

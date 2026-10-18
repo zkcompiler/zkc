@@ -15,7 +15,7 @@ private def snapshot : Snapshot :=
   ⟨"sha256:" ++ String.ofList (List.replicate 64 '0'), "main", [],
     [⟨"Initial", .publicDef, "opaque", "sum", "0", [.vector scalarDomain, .field scalarDomain],
       [.boolean], ["parameter", "statement"], none⟩], [], [.function root],
-    [⟨"main", [⟨.input, "initial_sum", subject, none, none⟩]⟩]⟩
+    [⟨"main", [⟨.input, "initial_sum", subject, none, none⟩]⟩], blsRows⟩
 private def body : Region protocolDialect [.vector scalarDomain, .field scalarDomain] [.boolean] :=
   .letOp (.mark "") .nil .nil
     (.letOp (.calculate (.booleanConstant true) rfl) .nil .nil (.ret (.cons .here .nil)))

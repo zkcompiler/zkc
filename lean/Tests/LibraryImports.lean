@@ -116,6 +116,8 @@ import Zkc.Source.Structured.Algebra
 import Zkc.Source.Structured.ApplicationMetadata
 import Zkc.Source.Structured.Association
 import Zkc.Source.Structured.Availability
+import Zkc.Source.Structured.Catalogue
+import Zkc.Source.Structured.CatalogueJustification
 import Zkc.Source.Structured.Checked
 import Zkc.Source.Structured.CheckedData
 import Zkc.Source.Structured.ClosedProfile
@@ -236,6 +238,7 @@ import Tests.StructuredApplications
 import Tests.StructuredAssociations
 import Tests.StructuredAvailability
 import Tests.StructuredBounds
+import Tests.StructuredCatalogue
 import Tests.StructuredComponents
 import Tests.StructuredContractAuthority
 import Tests.StructuredContractEntry

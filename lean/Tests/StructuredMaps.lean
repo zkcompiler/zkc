@@ -18,7 +18,7 @@ private def snapshot (definitions : List Definition) : Snapshot :=
   (let contractDefinitions : List Definition := root :: definitions
    ⟨digest, "main", [], [], [], contractDefinitions,
     contractDefinitions.filterMap (fun definition =>
-      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none)⟩)
+      if definition.kind == .protocol then some ⟨definition.name, []⟩ else none), blsRows⟩)
 private def admits (definitions : List Definition) : Bool := (check (snapshot definitions)).isOk
 
 -- Isolate the availability boundary: complete admission now also checks the
