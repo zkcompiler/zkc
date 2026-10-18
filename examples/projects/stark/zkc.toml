@@ -1,0 +1,15 @@
+format = "zkc.project/0"
+
+[modules]
+example = "main.zkc"
+
+[dependencies]
+stark = "../../../libraries/stark"
+
+[assets.clean]
+format = "relation-bundle-json"
+path = "../../../compiler/adapters/clean/fixtures/fibonacci/bundle.json"
+
+[assets.plonky3]
+format = "relation-bundle-json"
+path = "../../../compiler/adapters/plonky3/fixtures/fibonacci/bundle.json"
