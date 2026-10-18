@@ -203,6 +203,7 @@ import Tests.DeriveRegionSchnorr
 import Tests.DeriveRegionSources
 import Tests.DeriveRegionSumcheck
 import Tests.ExecutableControls
+import Tests.ExecutableSumcheckControls
 import Tests.Finite
 import Tests.Machine
 import Tests.MultilinearListRestriction
