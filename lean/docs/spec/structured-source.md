@@ -185,7 +185,8 @@ and a service row is `["service", contract, sampled-field, methods]`.
 
 `Catalogue.check` applies the rules of the native catalogue constructor to the
 exported rows: identities are valid and unique; a modulus appears only on a
-field row, is canonical and at least two, and has at most 1024 digits; members
+field row and is at least two, and the decoder reads it as a canonical decimal
+string of at most 1024 digits; members
 are unique, each declared for the row's sort and naming a row of the member's
 sort; capability facts are unique and declared for the row's sort; a
 `PairingField` row names distinct source groups, and a target group when
