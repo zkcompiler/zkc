@@ -33,19 +33,17 @@ every decoder, budget and expected binding: for a fixed well-formed statement
 
 The adaptive theorem uses the host's binding of the public inputs, the table
 values, the claimed sum and the round count, as the initial transcript
-(`initial`). The ideal binding event carries scalar payloads only, so this file
-writes each public input as one binding event of its port: the table as its
-field entries, the claim as one field element, and the round count in unary.
-These rows determine the statement (`initial_determined`), which discharges the
-determining premise of `CompiledSumcheckFiatShamir.adaptive_soundness`. A
-typed public-value binding in the shared transcript model would replace this
-encoding.
+(`initial`): one typed public-value binding event whose row holds the table as a
+vector, the claim as a scalar and the round count as a count
+(`CompiledSumcheckFiatShamir.publicInitial`). The row determines the statement
+(`initial_determined`), which discharges the determining premise of
+`CompiledSumcheckFiatShamir.adaptive_soundness`.
 
 Named assumptions beyond those of `CompiledSumcheckFiatShamir`: the runtime
 executes the admitted program as `validate` describes, its installed operations
 implement the meanings of `Zkc.Executable.installed`, its codec is a function
 of a message's bytes and type, and its managed transcript absorbs the public
-inputs injectively, as `initial` does.
+inputs injectively, as the typed public-value binding event `initial` does.
 -/
 
 set_option autoImplicit false
@@ -183,37 +181,19 @@ theorem public_inputs : SumcheckProof.participant.policy.publicInputs = [0, 1, 2
 
 omit [Field F] [Fintype F] [DecidableEq F] [SampleableType F] [AddCommGroup G] [Module F G]
   [DecidableEq G] in
-/-- The host's initial transcript for a statement: the application context,
-then one binding event per public input of the checked policy, in order: the
-table values as their field entries, the claimed sum, and the round count in
-unary. -/
+/-- The host's initial transcript for a statement: one typed public-value binding
+event of the application context and the statement's public inputs in policy
+order, the table values as a vector, the claimed sum as a scalar and the round
+count as a count (`CompiledSumcheckFiatShamir.publicInitial`). -/
 def initial (application : String) (statement : PublicStatement F) : History F G :=
-  [.binding application [],
-    .binding "table" (statement.raw.map (.field "bls12-381.fr")),
-    .binding "claim" [.field "bls12-381.fr" statement.claim],
-    .binding "rounds" (List.replicate statement.count (.boolean true))]
+  CompiledSumcheckFiatShamir.publicInitial application statement
 
 omit [Field F] [Fintype F] [DecidableEq F] [SampleableType F] [AddCommGroup G] [Module F G]
   [DecidableEq G] in
-/-- The initial transcripts determine the statement: the binding events give
-back the table values, the claim and the round count, and the decoded table
-is a function of the values and the count. -/
+/-- The initial transcripts determine the statement, from the typed rows. -/
 theorem initial_determined (application : String) :
-    Determined (initial (F := F) (G := G) application) := by
-  intro statement other rest otherRest same
-  obtain ⟨heads, -⟩ := List.append_inj same (by simp [initial])
-  simp only [initial, List.cons.injEq, Event.binding.injEq, true_and, and_true] at heads
-  obtain ⟨tableEq, claimEq, roundsEq⟩ := heads
-  rcases statement with ⟨raw, claim, count, table, decoded⟩
-  rcases other with ⟨raw', claim', count', table', decoded'⟩
-  have rawEq : raw = raw' :=
-    List.map_injective_iff.mpr (fun _ _ same => by cases same; rfl) tableEq
-  have countEq : count = count' := by simpa using congrArg List.length roundsEq
-  simp only [Payload.field.injEq, true_and] at claimEq
-  subst rawEq countEq claimEq
-  rw [decoded] at decoded'
-  cases decoded'
-  rfl
+    Determined (initial (F := F) (G := G) application) :=
+  CompiledSumcheckFiatShamir.publicInitial_determined application
 
 /-- A byte prover's statements with their proofs decoded at the receive types
 of the statement's round count. -/

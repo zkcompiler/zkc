@@ -261,6 +261,21 @@ equal to the plain GKR verifier, which
 `ZkcSecurity.Examples.CompiledGkrFiatShamir` bounds
 ([multi-round security](fiat-shamir-security.md#the-compiled-gkr-proof-entry)).
 
+## The compiled guessing proof Entry
+
+`ZkcExamples.Construction.GuessProof` checks the compiled `example::Proof` of
+the construction bridge's fixture `lean/bridges/construction/fixtures/guess.zkc`:
+the validator receives a guess, takes a field challenge, delivers it and returns
+whether the guess plus the public offset is the challenge. Its original is
+admitted from typed bodies by `structured_views` in the kernel, the composed
+check accepts the export (`compiled`), and `compiled_transform` is the generic
+equation at the Entry's public offset and acceptance output, as for Schnorr. The
+original validator is the four-operation participant process `experiment`, by
+computation (`verifier_correspondence`).
+`ZkcSecurity.Examples.CompiledGuessFiatShamir` bounds the compiled verifier by a
+certificate imported from an ArkLib verifier
+([imported certificates](fiat-shamir-security.md#imported-certificates-for-compiled-verifiers)).
+
 ## Controls
 
 `Tests.ProjectionControls` runs the composed check on mutations of the actual

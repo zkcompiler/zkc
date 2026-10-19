@@ -378,7 +378,10 @@ error `1 / 2`, is charged `1 / 4 + 1 / 2`.
 
 `Typed.Determined` quantifies over every statement the prover can output,
 malformed ones included, so a codec that discharges it is injective and
-prefix-free on the whole statement type (`ZkcSecurity.FiatShamir.Binding`). A
+prefix-free on the whole statement type (`ZkcSecurity.FiatShamir.Binding`). The
+typed public values and binding events are part of the construction model
+(`Zkc.Construction.Binding`), whose transcript events include a typed
+public-value binding event (`Zkc.Construction.Event.publicBinding`). A
 typed public value (`PublicValue`) is a scalar, a vector whose length is part of
 the value, an index with its bound, or a count; a row (`Row`) is a statement's
 public values, each labelled by its input; and the **typed public-value binding
@@ -396,6 +399,111 @@ injectively into the transcript events and the row determines the statement
 the raw Sumcheck statement (table values, claim and round count, with no length
 check) is bound by one event and determined, while binding the table entries one
 event each with no count or length is not prefix-free and is not determined.
+
+## Imports from ArkLib's round-by-round soundness
+
+`ZkcSecurity.FiatShamir.Upstream` imports ArkLib's worst-case-per-prefix
+round-by-round soundness (`Verifier.rbrSoundnessWorstCase`) into the typed
+engine. An ArkLib verifier for a protocol specification of `n` rounds has a
+**process form** (`validator`): one operation per round (`signature`), receiving
+a prover message at a message round and querying the challenge at a challenge
+round, in round order, then returning the verdict on the full transcript. The
+verdict is read from the verifier's `Verifier.GuardedForm`: the verifier outputs
+a deterministic statement where a Boolean guard passes and fails elsewhere,
+which covers verifiers that reject by `guard` or any other `OptionT` failure. The
+process returns the output where the guard passes and no output where it fails
+(`guardedVerdict`), and only an output in the output language accepts
+(`Accepts`). A pure verifier (`Verifier.PureForm`) is the guard that always
+passes (`Verifier.PureForm.toGuardedForm`). A verifier that queries oracles of
+its own or samples has no guarded form and is not covered. The process form's
+transcript interface (`absorb`) binds the statement as one event (`initial`,
+which determines it), absorbs a message with its round, and reads a challenge
+from the raw answer of its occurrence, uniform on the round's challenge type.
+
+`ofWorstCase` turns a worst-case proof into a `Typed.Certificate` of the process
+form: the doomed residuals are those at false states of false inputs, prover
+messages keep them doomed by the state function's `toFun_next`, a doomed full
+transcript is rejected by `toFun_full` read through the guarded verdict
+(`verdict_rejected`: the guard fails or the output is outside the output
+language; `prEvent_verdict_eq_zero` is the converse a guarded verifier's state
+function uses), and a challenge round's escape is the worst-case bound for the
+fixed prefix. Each challenge occurrence is charged its round's error
+(`eventError`); the events carry the round, so the error is per occurrence and
+`Certificate.charged` gives the charged form.
+
+The process form queries once per challenge round and nowhere else: its query
+count is the number of challenge indices (`validator_queryBound`), and its
+queries charge the sum of the challenge rounds' errors (`validator_costBound`).
+`worstCase_soundness_weighted` and `worstCase_adaptive_soundness_weighted` bound
+the transform's acceptance of a false input by the prover's charge, each prover
+query charged the error of the challenge round its key ends with, plus that sum,
+for fixed inputs and for inputs the prover chooses after its queries.
+`worstCase_soundness` and `worstCase_adaptive_soundness` are the uniform forms,
+`(queries + challenges) · bound` for `challenges` challenge rounds when every
+round's error is at most `bound`.
+
+`TestsSecurity.UpstreamImports` checks the import on two protocols:
+
+- A two-round guessing protocol with a pure verifier and error `1 / 4`: the
+  transform accepts with probability at most `(queries + 1) / 4`, and a prover
+  that sends a guess without querying is accepted with probability exactly
+  `1 / 4`, so the experiment accepts and the bound at zero queries is attained.
+- A four-round protocol with two challenge rounds of unequal error, `1 / 2` and
+  `1 / 4`, whose verifier rejects by guard failure: the weighted bound is the
+  prover's charge plus `3 / 4`, so `3 / 4` without queries, where the bound with
+  the largest error at every query, `(queries + 2) / 2`, is vacuous; a prover
+  that sends two guesses without querying is accepted with probability at least
+  `1 / 2`.
+
+The averaged form `Verifier.rbrSoundness` is not imported: its bound is over a
+mixture of prefixes the prover samples, not a per-prefix step.
+
+The import of ArkLib's interaction-stack soundness (`OrdinaryState` and
+`LocalSoundness`) is deferred. It has three blockers, all upstream of zkc:
+
+- its protocols are trees whose residuals and execution prefixes
+  (`ExecutionPrefix`) live in `Type 1`, while a validator's operation signature
+  is in `Type`, so the import needs a process form over those trees;
+- its challenge models (`ChallengeModel.sample`) sample an arbitrary
+  distribution rather than a uniform raw answer, so the import needs a
+  law-record premise relating each challenge model to a uniform raw answer;
+- the one interaction-stack instance, Sumcheck's local soundness model, is
+  private to its module.
+
+### Imported certificates for compiled verifiers
+
+`ZkcSecurity.FiatShamir.Realization` carries a process-form certificate to the
+participant interface compiled Entries use. `Upstream.Realizes` relates a
+participant process to a process-form residual operation by operation, a
+morphism of the two transcript interfaces along a pair of processes: a
+participant receive realizes a message round, reading the round's message from
+the received value; a participant query realizes a challenge round through a
+bijection from the field challenge to the round's challenge, and its occurrence
+is charged at least the round's error; a participant send realizes no round,
+since it delivers a value the process form does not read; and a returned value
+realizes a related returned verdict. `Realizes.certificate` makes the
+participant residuals that realize a doomed process-form residual a
+`Typed.Certificate` over the participant interface with field challenges.
+
+`ZkcSecurity.Examples.CompiledGuessFiatShamir` uses it to reach compiled code.
+The guessing fixture's `example::Proof` Entry
+(`lean/bridges/construction/fixtures/guess.zkc`) receives a guess, draws a field
+challenge, delivers it and accepts when the guess plus the public offset is the
+challenge. An ArkLib verifier for the same protocol over the field `F`, written
+in the example, has a worst-case round-by-round soundness proof with error
+`1 / |F|` (`sound`), stated and proved in ArkLib's round-by-round framework
+(`Verifier.StateFunction`, `rbrSoundnessWorstCase`) rather than in the typed
+engine's certificate language. The
+compiled Entry's original validator realizes that verifier's process form
+(`realizes`), the construction bridge checks the compiled verifier against it
+(`ZkcExamples.Construction.GuessProof.compiled`), and `soundness` bounds the
+compiled verifier's acceptance against a prover with `queries` queries by
+`(queries + 1) / |F|` through `acceptance_le_of_image`. The bound is attained at
+zero queries: a prover that sends a guess without querying is accepted with
+probability exactly `1 / |F|` (`guess_accepted`). No protocol of ArkLib's
+own library reaches a compiled Entry this way yet: the worst-case forms ArkLib
+proves for its protocols are knowledge-soundness forms, which this import does
+not read.
 
 ## Role separation and transcript constructions
 
@@ -645,11 +753,13 @@ the initial transcript, read through the acceptance output the policy selects.
   below `N`, `loss = |F| / N`.
 
 The adaptive theorems take the binding as a premise. The host binds the
-policy's public inputs, here the table values, the claim and the round count.
-The [executable statement](executable.md#the-compiled-sumcheck-proof-verifier)
-discharges the premise for a binding with one event per public input, the
-table as its field entries and the round count in unary, whose events
-determine the statement.
+policy's public inputs, here the table values, the claim and the round count,
+as one typed public-value binding event (`publicInitial`): the table as a
+vector, the claim as a scalar and the round count as a count. Its row determines
+the statement (`publicInitial_determined`, from `determined_single`), and
+`adaptive_soundness_public` is the adaptive bound with no determination premise
+left; the [executable statement](executable.md#the-compiled-sumcheck-proof-verifier)
+uses the same binding.
 
 The controls (`TestsSecurity.CompiledSumcheckFiatShamir`) use the one-round
 `ZMod 5` instance of the imported verifier's controls. The premises hold

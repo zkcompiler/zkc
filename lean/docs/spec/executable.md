@@ -358,11 +358,12 @@ statements the prover chooses after its queries, for every decoder, budget,
 expected binding and application context; `reduced_soundness` instantiates the
 challenge decoding. The adaptive theorems start host validation from `initial`,
 the host's binding of the policy's public inputs (`public_inputs`: the table
-values, the claimed sum and the round count): the application context and one
-binding event per public input, in order, with the table as its field entries,
-the claim as one field element and the round count in unary. These events
-determine the statement (`initial_determined`), which discharges the determining
-premise of the compiled adaptive theorem.
+values, the claimed sum and the round count): one typed public-value binding
+event of the application context and the row of those inputs, in order, the
+table as a vector, the claim as a scalar and the round count as a count
+(`CompiledSumcheckFiatShamir.publicInitial`). The row determines the statement
+(`initial_determined`, from `ZkcSecurity.FiatShamir.determined_single`), which
+discharges the determining premise of the compiled adaptive theorem.
 
 ## A rescheduled program
 

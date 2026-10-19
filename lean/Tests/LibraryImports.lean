@@ -1,6 +1,7 @@
 -- Maintained by audit_imports.py; library, test, example and selected executable consumers are audited.
 import Zkc
 import Zkc.Algebra.RingExpression
+import Zkc.Construction.Binding
 import Zkc.Construction.Compiled
 import Zkc.Construction.Encoding
 import Zkc.Construction.FiatShamir
@@ -300,6 +301,10 @@ import ZkcExamples.Construction.GkrProof
 import ZkcExamples.Construction.GkrProofInstructions
 import ZkcExamples.Construction.GkrProofParticipant
 import ZkcExamples.Construction.GkrProofReading
+import ZkcExamples.Construction.GuessProof
+import ZkcExamples.Construction.GuessProofBodies
+import ZkcExamples.Construction.GuessProofData
+import ZkcExamples.Construction.GuessProofParticipant
 import ZkcExamples.Construction.SchnorrAndProof
 import ZkcExamples.Construction.SchnorrAndProofBodies
 import ZkcExamples.Construction.SchnorrAndProofData
