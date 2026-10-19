@@ -358,10 +358,13 @@ the claim as a scalar and the round count as a count. The typed public-value
 binding establishes statement determination only; that the native transcript
 absorbs the encoded rows, in order, remains assumed.
 For the GKR Entry, Lean proves that the
-interactive reading of the exported instructions is the plain GKR verifier on
-well-formed statements within the Entry's maxima, and bounds the compiled
-verifier's acceptance of claimed outputs other than the circuit's by
-`(Q + width + layers (2 width + 1)) max 2 width / |F|` for a fixed statement.
+admitted original validator, through its generated normal form, is the plain
+GKR verifier on well-formed statements within the Entry's maxima, and bounds the
+compiled verifier's acceptance of claimed outputs other than the circuit's for a
+fixed statement through the composed check's transform of that original, with a
+charge per phase: against a weighted adversary budget whose oracle keys are
+charged their challenge site's error, and by
+`(Q + width + layers (2 width + 1)) max 2 width / |F|` against `Q` queries.
 The [executable bridge](../lean/bridges/executable/README.md) reads the validators
 of the `zkc.program/0` candidates of the Schnorr and Sumcheck Entries and of a
 deferred-rounds fixture, which the runtime admits. Lean checks each against its constructed validator with a

@@ -190,22 +190,6 @@ states the equation for every list of published values of the selected types,
 read through the acceptance output on both sides, with no positional fact about
 the Entry.
 
-## Reading exported programs
-
-`Zkc.Construction.Reading` gives general laws of the interactive reading `spec`
-itself. Observations and challenges extend transcript values as inert
-histories, and no action, stop or data value reads one, so environments that
-agree except for transcript histories (`Similar`) give the same reading for
-continuations that also ignore histories (`specK_similar`). A loop whose body
-reads, on the encoding of every valid state at its induction index, as one step
-of a plain process followed by the encoding of the step's result reads as that
-many repeated steps (`iterate_repeatN`, `iterate_range_repeatN`), whatever
-histories its yielded transcript values carry; `Yields` states what every
-result of a plain step satisfies, which the loop laws may assume of earlier
-steps. `specK_append` reads concatenated instruction lists in sequence. With
-`spec_transform`-style uses of the construction rule these laws relate an
-export's reading to a plain verifier directly, without the projection rule.
-
 ## The compiled Sumcheck proof Entry
 
 `ZkcExamples.Construction.SumcheckProof` checks the compiled `example::Proof`
@@ -269,13 +253,14 @@ output-point loop and a layer loop whose body holds three inner loops, the two
 wiring checks and helper calls for the extensions, blocks, line point and power
 sum. `compiled` runs the composed check in the kernel, and `compiled_transform`
 is the generic equation at the Entry's public inputs and acceptance output, as
-for Sumcheck. `spec_transform` uses the transcript-construction rule alone: the
-compiled meaning is the Fiat–Shamir transform of the interactive reading of the
-exported instructions, read through the acceptance output. `GkrProof.reading`
-(module `GkrProofReading`) proves that reading, on a well-formed statement,
-equal to the plain GKR verifier, which
-`ZkcSecurity.Examples.CompiledGkrFiatShamir` bounds
+for Sumcheck: the compiled verifier's ideal meaning is the Fiat–Shamir
+transform of the original GKR validator, read through its acceptance output.
+On a well-formed statement that original validator is the plain GKR verifier
+(`ZkcExamples.Structured.GkrSourceVerifier.verifier_reads`, over the generated
+normal form of the admitted root, `GkrSourceNormalForms.verifier_participant`),
+which `ZkcSecurity.Examples.CompiledGkrFiatShamir` bounds
 ([multi-round security](fiat-shamir-security.md#the-compiled-gkr-proof-entry)).
+No equation about the compiled program's meaning is specific to the Entry.
 
 ## The compiled guessing proof Entry
 

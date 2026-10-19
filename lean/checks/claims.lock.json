@@ -199,6 +199,12 @@
       "structural": "de5defde9df07152",
       "explicit": "827f93271d62b5ac"
     },
+    "ZkcExamples.Structured.GkrSourceVerifier.verifier_reads": {
+      "package": "main",
+      "module": "ZkcExamples.Structured.GkrSourceVerifier",
+      "structural": "8b55c0260f799411",
+      "explicit": "3981d3c32178a2e4"
+    },
     "ZkcExamples.Structured.NormalFormSteps.apply_step": {
       "package": "main",
       "module": "ZkcExamples.Structured.NormalFormSteps",
@@ -367,6 +373,12 @@
       "structural": "b195e9e03c75bba8",
       "explicit": "d477f272033f2bc8"
     },
+    "ZkcSecurity.Examples.CompiledGkrFiatShamir.soundness_charged": {
+      "package": "arklib",
+      "module": "ZkcSecurity.Examples.CompiledGkrFiatShamir",
+      "structural": "3bb333dd4f6f6701",
+      "explicit": "eabf8c146af26cd0"
+    },
     "ZkcSecurity.Examples.CompiledGuessFiatShamir.soundness": {
       "package": "arklib",
       "module": "ZkcSecurity.Examples.CompiledGuessFiatShamir",
@@ -414,6 +426,12 @@
       "module": "ZkcSecurity.Examples.GkrFiatShamir",
       "structural": "a358bbef1fea7063",
       "explicit": "4c19e4bf36de8d2a"
+    },
+    "ZkcSecurity.Examples.GkrFiatShamir.soundness_charged": {
+      "package": "arklib",
+      "module": "ZkcSecurity.Examples.GkrFiatShamir",
+      "structural": "5acff77ba1a13987",
+      "explicit": "bc9f3b04df31b0be"
     },
     "ZkcSecurity.Examples.SchnorrAndSigma.knowledge_soundness": {
       "package": "arklib",
