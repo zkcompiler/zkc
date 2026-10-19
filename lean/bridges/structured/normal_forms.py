@@ -49,7 +49,9 @@ fails when they differ, without writing it.
 
 import argparse
 import json
+import os
 import re
+import subprocess
 import sys
 import tomllib
 from dataclasses import dataclass, field
@@ -554,6 +556,7 @@ class Frame:
     opaque: tuple = ()           # helpers whose owned calls stay as they are
     strict: tuple = ()           # helpers whose owned calls stay as invocations on present arguments
     role_name: str = ""
+    law_uses: list = field(default_factory=list)   # (retained helper, call arguments) of each law use
 
 
 @dataclass
@@ -920,6 +923,7 @@ class Evaluator:
         if self.strict(descriptor[1]):
             return self.strict_call(descriptor, args, results, site, rest, terminator, env, proof, indent)
         law = self.law(descriptor[1])
+        self.frame.law_uses.append((descriptor[1], list(args)))
         if law.stop:
             step.halt(op, law.stop, ("owned", law, helper, args))
             return Halt(law.stop)
@@ -1489,6 +1493,149 @@ def site_names(unit_function_blocks, renames):
     return sites
 
 
+# ---------------------------------------------------------------------------
+# Forms of the Lean normalizer
+#
+# With `proof = "normal-form"`, a role's equation is an instance of the
+# normalizer's soundness theorem: the compiled normalizer (the `normal-form`
+# mode of `structured-source`) prints the role's form as JSON, this module
+# prints it as a Lean literal, and the kernel checks that the normalizer
+# returns exactly that literal and that its denotation is the readable process.
+# The compiled run is not trusted.
+
+STRUCTURED_SOURCE = Path(os.environ.get("ZKC_STRUCTURED_SOURCE", ROOT / "lean/.lake/build/bin/structured-source"))
+
+
+def run_normalizer(fixture, request):
+    """The form the compiled normalizer computes for a request."""
+    if not STRUCTURED_SOURCE.is_file():
+        raise GeneratorError(f"{STRUCTURED_SOURCE} is missing; build it with `lake build structured-source`")
+    path = ROOT / "build/normal-forms" / (re.sub(r"[^0-9A-Za-z]+", "-", json.dumps(request))[:120] + ".json")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(request), encoding="utf-8")
+    try:
+        completed = subprocess.run([str(STRUCTURED_SOURCE), "normal-form", str(ROOT / fixture), str(path)],
+                                   capture_output=True, text=True, check=False)
+    finally:
+        path.unlink()
+    try:
+        result = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        raise GeneratorError(f"the normalizer printed no form: {completed.stdout}{completed.stderr}")
+    if result.get("status") != "normalized":
+        raise GeneratorError(f"the normalizer refused the request: {result.get('code')}")
+    return result
+
+
+def lean_wire(wire):
+    return lean_ty(wire, literal=True)
+
+
+def lean_op(op):
+    head, args = op[0], op[1:]
+    if head == "unsupported":
+        raise GeneratorError("the form contains an operation the printer does not support")
+    if not args:
+        return f".{head}"
+    rendered = []
+    for arg in args:
+        if isinstance(arg, bool):
+            rendered.append("true" if arg else "false")
+        elif isinstance(arg, int):
+            rendered.append(str(arg))
+        elif isinstance(arg, list):
+            rendered.append(lean_wire(arg))
+        else:
+            rendered.append(json.dumps(arg))
+    return f"(.{head} {' '.join(rendered)})"
+
+
+def lean_term(term):
+    head = term[0]
+    if head == "var":
+        return f"(.var {variable(term[1])})"
+    if head == "result":
+        return f"(.result {variable(term[1])} {variable(term[2])})"
+    if head == "index":
+        return f"(.index {term[1]})"
+    if head == "bool":
+        return f"(.bool {'true' if term[1] else 'false'})"
+    if head == "field":
+        return f"(.field {json.dumps(term[1])} {term[2]})"
+    if head == "groupZero":
+        return f"(.groupZero {json.dumps(term[1])})"
+    if head == "calc":
+        return f"(.calc {lean_op(term[1])} rfl {lean_terms(term[2])} {variable(term[3])})"
+    if head == "law":
+        return f"(.law ⟨{term[1]}, by decide⟩ {lean_terms(term[2])} {variable(term[3])})"
+    raise GeneratorError(f"unknown term {head}")
+
+
+def lean_terms(terms):
+    text = ".nil"
+    for term in reversed(terms):
+        text = f"(.cons {lean_term(term)} {text})"
+    return text
+
+
+def lean_comp(comp):
+    head = comp[0]
+    if head == "absent":
+        return ".absent"
+    if head == "present":
+        return f"(.present {lean_term(comp[1])})"
+    if head == "input":
+        return f"(.input {variable(comp[1])})"
+    if head == "read":
+        return f"(.read {variable(comp[1])} {variable(comp[2])})"
+    raise GeneratorError(f"unknown component {head}")
+
+
+def lean_equality(equality):
+    return f"(.{equality[0]} {json.dumps(equality[1])})" if len(equality) > 1 else f".{equality[0]}"
+
+
+def lean_form(form, indent, helpers):
+    """A form literal; each node's continuation follows on the next line."""
+    pad = " " * indent
+    head = form[0]
+    if head == "done":
+        return f"{pad}.done {paren(values_literal([lean_comp(comp) for comp in form[1]])) if form[1] else '.nil'}"
+    if head == "halt":
+        return f"{pad}.halt .{form[1]}"
+    if head == "send":
+        _, ty, site, peer, value, rest = form
+        return (f"{pad}.send {lean_wire(ty)} {json.dumps(site)} {peer} {lean_term(value)} <|\n"
+                + lean_form(rest, indent, helpers))
+    if head == "receive":
+        _, ty, site, peer, rest = form
+        return f"{pad}.receive {lean_wire(ty)} {json.dumps(site)} {peer} <|\n" + lean_form(rest, indent, helpers)
+    if head == "query":
+        _, site, request, args, rest = form
+        return (f"{pad}.query {json.dumps(site)} {json.dumps(request)} {lean_terms(args)} <|\n"
+                + lean_form(rest, indent, helpers))
+    if head == "split":
+        _, subject, absent_form, present_form = form
+        return (f"{pad}.split {lean_comp(subject)}\n{pad}  (\n" + lean_form(absent_form, indent + 4, helpers)
+                + f")\n{pad}  (\n" + lean_form(present_form, indent + 4, helpers) + ")")
+    if head == "guard":
+        _, equality, left, right, rest = form
+        return (f"{pad}.guard {lean_equality(equality)} {lean_term(left)} {lean_term(right)} <|\n"
+                + lean_form(rest, indent, helpers))
+    if head == "strict":
+        _, helper, args, rest = form
+        return (f"{pad}.strict {helpers(helper)} {lean_terms(args)} <|\n" + lean_form(rest, indent, helpers))
+    raise GeneratorError(f"unsupported form node {head}")
+
+
+def binders_literal(names):
+    """A tuple of binder values, first binder first."""
+    text = ".nil"
+    for name in reversed(names):
+        text = f"(.cons {name} {text})"
+    return text[1:-1] if text != ".nil" else text
+
+
 class Module:
     def __init__(self, request, path):
         self.request = request
@@ -1571,15 +1718,56 @@ class Module:
             out.append(f"def {process} {used_binders}:\n    PIR.Proc (participantInterface F G)\n"
                        f"      (Values (Component (assignment F G)) {program}.payload.entry.outputs) :=\n"
                        f"{text}\n")
-            tactic = "kernel_rfl" if spec.get("proof") == "kernel" else "rfl"
-            out.append(f"theorem {role_name}_process {binders}:\n    {program}.participant F G {role} "
-                       f"({inputs_name} {arguments}) =\n      {application} := by\n  {tactic}\n")
+            proof = spec.get("proof", "rfl")
+            if proof == "normal-form":
+                self.root_form(out, spec, entry, program, role, role_name, held, names, binders, arguments,
+                               inputs_name, application, used)
+            else:
+                tactic = "kernel_rfl" if proof == "kernel" else "rfl"
+                out.append(f"theorem {role_name}_process {binders}:\n    {program}.participant F G {role} "
+                           f"({inputs_name} {arguments}) =\n      {application} := by\n  {tactic}\n")
             replies = self.run_equation(out, program, role, role_name, inputs_name, arguments, binders, node)
             self.roles_info[role] = {"name": role_name, "inputs": inputs_name, "held": held,
                                      "arguments": arguments, "binders": binders, "replies": replies,
                                      "node": node}
         self.parts.append("\n".join(out))
         self.root_spec = (entry, sites, names, role_names, program)
+
+    def root_form(self, out, spec, entry, program, role, role_name, held, names, binders, arguments,
+                  inputs_name, application, used):
+        """A root equation as an instance of the normalizer's soundness theorem."""
+        body = spec["body"]
+        pattern = ["present" if index in held else "absent" for index in range(len(names))]
+        roster = len(entry.roles)
+        result = run_normalizer(self.request["fixture"], [entry.name, None, str(role), str(roster), pattern, [],
+                                                          False])
+        pattern_name, form_name = f"{role_name}Pattern", f"{role_name}Form"
+        pattern_literal = values_literal([f".{mode}" for mode in pattern])
+        tuple_literal_ = binders_literal([names[index] for index in held])
+        used_names = " ".join(names[index] for index in used)
+        out.append(f"/-- The {role_name}'s inputs as the normalizer reads them: held inputs are present. -/")
+        out.append(f"def {pattern_name} : NormalForm.InputPattern {program}.payload.entry.inputs :=\n"
+                   f"  {pattern_literal}\n")
+        out.append(f"/-- The {role_name}'s form, printed from the compiled normalizer; the kernel checks it. -/")
+        out.append(f"noncomputable def {form_name} : NormalForm.Form [] {pattern_name}.scope {program}.payload.entry.outputs :=\n"
+                   + lean_form(result["form"], 2, self.helper_term_of) + "\n")
+        out.append(f"theorem {role_name}_normalized :\n    NormalForm.normalize {{}} {body} {role} {roster} "
+                   f"{pattern_name} = .ok {form_name} := by\n  kernel_rfl\n")
+        out.append(f"/-- The form's process between the output masks is the readable process. -/")
+        out.append(f"theorem {role_name}_presentation (tables : NormalForm.Tables (ringModel F G)) {binders}:\n"
+                   f"    ({form_name}.denote (ringModel F G) tables ⟨fun entry => entry.elim0⟩ {{}}\n"
+                   f"        ({tuple_literal_})).bind\n"
+                   f"        (fun out => .done (maskValues {role} {program}.payload.entry.outputScopes out)) =\n"
+                   f"      {application} := by\n  kernel_rfl\n")
+        out.append(f"theorem {role_name}_process {binders}:\n    {program}.participant F G {role} "
+                   f"({inputs_name} {arguments}) =\n      {application} :=\n"
+                   f"  (NormalForm.participant_sound_uniform {program} {body} entry_raw {{}} {role} {roster}\n"
+                   f"    {pattern_name} {form_name} {role_name}_normalized ⟨fun entry => entry.elim0⟩\n"
+                   f"    ({tuple_literal_}) _ (by kernel_rfl) (fun entry => entry.elim0)).trans\n"
+                   f"    ({role_name}_presentation _ {arguments})\n")
+
+    def helper_term_of(self, name):
+        return Evaluator(Frame(self.unit, [], 0, "root", {}, self.helpers(), {}, {}), Names(), None).helper_term(name)
 
     def callback_sites(self):
         """Repeat site -> callback name for the callbacks `[bodies]` names; each is given by
@@ -2250,14 +2438,23 @@ class Module:
                        f"{ty_list(state, True)} :=\n  {values_literal(components)}\n")
             scopes = "[" + ", ".join("[" + ", ".join(map(str, scope)) + "]" for scope in state_scopes) + "]"
             arguments = " ".join(slot["name"] for slot in slots)
+            if role_spec.get("proof") == "normal-form":
+                finish_name = f"{name}Finish"
+                out.append(f"/-- The positions of the carried state the {name} presents. -/")
+                out.append(f"def {finish_name} : Values (fun (_ : Ty) => NormalForm.Carried) {ty_list(state, True)} :=\n"
+                           f"  {values_literal(self.finish_modes(slots, len(state)))}\n")
             out.append(f"omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in\n"
                        f"/-- Masking the carried state to its declared scopes keeps the {name}'s components. -/")
+            if role_spec.get("proof") == "normal-form":
+                masked_proof = (f"  subst self\n  exact NormalForm.maskValues_embed (Value := assignment F G) ctx {role} "
+                                f"{finish_name} _ rfl\n    {paren(binders_literal([slot['name'] for slot in slots]))}\n")
+            else:
+                masked_proof = (f"  subst self\n  unfold {embed}\n  iterate {len(state) + 1} unfold maskValues\n"
+                                f"  simp [ProtocolContext.mapScopes, Participant.restrict]\n")
             out.append(f"theorem {embed}_masked (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles {role})\n"
                        f"    {self.binders(pairs)}:\n"
                        f"    maskValues self (ctx.mapScopes {scopes}) ({f'{embed} (F := F) (G := G) {arguments}'.strip()}) =\n"
-                       f"      {embed} {arguments} := by\n"
-                       f"  subst self\n  unfold {embed}\n  iterate {len(state) + 1} unfold maskValues\n"
-                       f"  simp [ProtocolContext.mapScopes, Participant.restrict]\n")
+                       f"      {embed} {arguments} := by\n" + masked_proof)
             # Stable names for the role's carried slots: statements about the state use
             # these instead of positions, so a reordered layout changes only this module.
             out.append(f"/-! Positions of the {name}'s carried slots in the repeat state, named by the request. -/")
@@ -2350,6 +2547,13 @@ class Module:
         theorem = role_spec.get("theorem", f"{name}_process")
         premises = role_spec.get("premises", "")
         binders = role_spec.get("binders", "")
+        if role_spec.get("proof") == "normal-form":
+            application = f"{process} {process_arguments}".strip()
+            self.shared_form(out, spec, role_spec, protocol, inputs, outputs, state, slots, captures,
+                             capture_specs, frame, process, role, uses_separate, others[0], theorem, function,
+                             parameter_names, embed, state_args, capture_components, theorem_binders, premises,
+                             binders, application, result_type, projections)
+            return
         out.append("set_option linter.unusedSimpArgs false in")
         out.append(f"/-- The process equation of `{process}` over the typed body. -/")
         separate_binder = f"\n    (separate : ctx.roles {others[0]} ≠ self)" if uses_separate else ""
@@ -2370,6 +2574,211 @@ class Module:
             self.fold(out, spec, role_spec, role, others[0], name, embed, process, theorem, function,
                       parameter_names, state, slots, capture_binders, capture_components, used_pairs,
                       uses_separate, result_type)
+
+    @staticmethod
+    def finish_modes(slots, count):
+        modes = []
+        for index in range(count):
+            slot = next((slot for slot in slots if slot["slot"] == index), None)
+            if slot is None:
+                modes.append(".absent")
+            elif slot.get("mode", "present") == "optional":
+                modes.append(".optional")
+            else:
+                modes.append(".present")
+        return modes
+
+    def law_table(self, role_spec, frame, inputs, fixed_inputs):
+        """The role's laws as the normalizer reads them: retained helper, shape and pins.
+        A pin ties an argument to a present or fixed input; it holds at every use of the law."""
+        names = {term.split(".")[-1]: raw for raw, term in self.helpers().items()}
+        laws = []
+        for key, law in load_laws(role_spec.get("laws")).items():
+            raw = names.get(key, key)
+            helper = self.unit.function(raw)
+            uses = [args for used, args in frame.law_uses if used == raw]
+            pins = None
+            for args in uses:
+                current = [fixed_inputs.get(arg.expr) if arg.kind == "present" else None for arg in args]
+                pins = current if pins is None else [a if a == b else None for a, b in zip(pins, current)]
+            laws.append({"key": key, "raw": raw, "law": law, "helper": helper, "pins": pins or [],
+                         "term": self.helper_term_of(raw)})
+        return laws
+
+    def shared_form(self, out, spec, role_spec, protocol, inputs, outputs, state, slots, captures, capture_specs,
+                    frame, process, role, uses_separate, other, theorem, function, parameter_names, embed,
+                    state_args, capture_components, theorem_binders, premises, binders, application, result_type,
+                    projections):
+        """A callback role's equation as an instance of the normalizer's soundness theorem."""
+        name = role_spec["name"]
+        # The callback's inputs: the index, the carried state and the captures.
+        pattern, scope_names, fixed_inputs = ["present"], ["index"], {}
+        for index, wire in enumerate(state):
+            slot = next((slot for slot in slots if slot["slot"] == index), None)
+            position = 1 + index
+            if slot is None:
+                pattern.append("absent")
+            elif "value" in slot:
+                kind = wire[0]
+                if kind not in ("index", "field", "bool"):
+                    raise GeneratorError(f"{name}: fixed slots of sort {kind} are not supported")
+                pattern.append([kind, slot["value"]])
+                fixed_inputs[slot["value"]] = position
+            elif slot.get("mode", "present") == "optional":
+                pattern.append("optional")
+                scope_names.append(slot["name"])
+            else:
+                pattern.append("present")
+                scope_names.append(slot["name"])
+                fixed_inputs[slot["name"]] = position
+        for index, wire in enumerate(captures):
+            capture = capture_specs[index] if index < len(capture_specs) else {"name": f"capture{index}"}
+            position = 1 + len(state) + index
+            if capture.get("mode", "optional") == "optional":
+                pattern.append("optional")
+            else:
+                pattern.append("present")
+                fixed_inputs[capture["name"]] = position
+            scope_names.append(capture["name"])
+        laws = self.law_table(role_spec, frame, inputs, fixed_inputs)
+        roster = len(protocol.roles) if uses_separate else 1
+        if not uses_separate and role != 0:
+            raise GeneratorError(f"{name}: a role other than the first needs the separate roster premise")
+        request = [protocol.name, self.repeat_site(spec), str(role), str(roster), pattern,
+                   [[law["raw"], ["stops", law["law"].stop] if law["law"].stop else "returns",
+                     [None if pin is None else str(pin) for pin in law["pins"]]] for law in laws], False]
+        result = run_normalizer(self.request["fixture"], request)
+        types = ty_list(inputs, True)
+        signature, pattern_name, finish_name = f"{name}Signature", f"{name}Pattern", f"{name}Finish"
+        results_name, form_name = f"{name}Results", f"{name}Form"
+        if role_spec.get("reuse_state"):
+            finish_name = f"{role_spec.get('finish', name + 'Finish')}"
+            out.append(f"/-- The positions of the carried state the {name} presents. -/")
+            out.append(f"def {finish_name} : Values (fun (_ : Ty) => NormalForm.Carried) {ty_list(state, True)} :=\n"
+                       f"  {values_literal(self.finish_modes(slots, len(state)))}\n")
+        keys = ", ".join(f"⟨{law['term']}, {'.stops .' + law['law'].stop if law['law'].stop else '.returns'}, "
+                         f"{list_literal(['none' if pin is None else f'some {pin}' for pin in law['pins']])}⟩"
+                         for law in laws)
+        out.append(f"/-- The {name}'s laws as the normalizer reads them, keyed by helper. -/")
+        out.append(f"def {signature} : NormalForm.Signature :=\n  ⟨[{keys}], false⟩\n")
+        defaults = {"field": "0", "index": "0", "bool": "false", "vector": "[]", "group": "0", "service": "0"}
+        cases = []
+        for entry, law in enumerate(laws):
+            helper = law["helper"]
+            arguments = [f"(args.get {variable(index)})" for index in range(len(helper.inputs))]
+            if law["law"].stop:
+                values = [defaults[wire[0]] for wire in helper.outputs]
+            else:
+                values = [paren(template.format(*arguments)) for template in law["law"].results]
+            cases.append(f"    | ⟨{entry}, _⟩ => fun (args : Values (assignment F G) {ty_list(helper.inputs, True)}) =>\n"
+                         f"      ({values_literal(values)} : Values (assignment F G) {ty_list(helper.outputs, True)})")
+        if laws:
+            cases.append(f"    | ⟨_ + {len(laws)}, bound⟩ => absurd bound (by simp [{signature}])")
+            result_body = "⟨fun entry => match entry with\n" + "\n".join(cases) + "⟩"
+        else:
+            result_body = "⟨fun entry => entry.elim0⟩"
+        out.append(f"/-- The results the {name}'s laws present, from the request's templates. -/")
+        out.append(f"def {results_name} : NormalForm.LawResults (ringModel F G) {signature}.laws :=\n  {result_body}\n")
+        out.append(f"/-- The {name}'s inputs as the normalizer reads them. -/")
+        pattern_literal = values_literal([self.pattern_entry(item) for item in pattern])
+        out.append(f"def {pattern_name} : NormalForm.InputPattern {types} :=\n  {pattern_literal}\n")
+        out.append(f"/-- The {name}'s form, printed from the compiled normalizer; the kernel checks it. -/")
+        out.append(f"noncomputable def {form_name} : NormalForm.Form {signature}.laws {pattern_name}.scope {ty_list(outputs, True)} :=\n"
+                   + lean_form(result["form"], 2, self.helper_term_of) + "\n")
+        out.append(f"theorem {name}_normalized :\n    NormalForm.normalize {signature} {spec['body']} {role} {roster} "
+                   f"{pattern_name} = .ok {form_name} := by\n  kernel_rfl\n")
+        out.append(f"theorem {name}_finishes : {form_name}.finishes {finish_name} = true := by\n  kernel_rfl\n")
+        binders_value = binders_literal(scope_names)
+        scope_binders = self.scope_binders(scope_names, state, slots, captures, capture_specs)
+        environment = (f".cons (some index)\n      (({f'{embed} ' + ' '.join(state_args) if state_args else embed}).append "
+                       f"{paren(values_literal(capture_components))})")
+        out.append(f"theorem {name}_environment {scope_binders}:\n"
+                   f"    {pattern_name}.environment (ringModel F G) ({binders_value}) =\n"
+                   f"      ({environment} : Values (Component (assignment F G)) {types}) := by\n  kernel_rfl\n")
+        out.append(f"/-- The form's presented process is the readable process. -/")
+        out.append(f"theorem {name}_presentation (tables : NormalForm.Tables (ringModel F G)) (ctx : ProtocolContext)\n"
+                   f"    {scope_binders}:\n"
+                   f"    {form_name}.denoteWith (ringModel F G) tables {results_name} ctx\n"
+                   f"        (NormalForm.finishLeaf (ringModel F G) {results_name} {finish_name}) ({binders_value}) =\n"
+                   f"      {application} := by\n  kernel_rfl\n")
+        tuple_type = paren(result_type) if " " in result_type else result_type
+        embedded = f"{embed} {' '.join(projections)}".strip()
+        out.append(f"theorem {name}_embedding (result : {tuple_type}) :\n"
+                   f"    NormalForm.embed (assignment F G) {finish_name} (NormalForm.Tuple.toValues result) =\n"
+                   f"      {embedded} := by\n  kernel_rfl\n")
+        laws_binders = f"{spec.get('parameters', '')} {binders} (index : Nat) {theorem_binders}{premises}"
+        laws_arguments = " ".join(binder_names(laws_binders))
+        self.law_proofs(out, name, laws, results_name, spec, laws_binders, environment, types, fixed_inputs)
+        separate_binder = f"\n    (separate : ctx.roles {other} ≠ self)" if uses_separate else ""
+        distinct = "(.ofSeparate separate (by decide))" if uses_separate else "(NormalForm.RosterDistinct.only ctx)"
+        names_in_order = " ".join(scope_names)
+        laws_call = f"{name}_laws {laws_arguments}"
+        out.append(f"/-- The process equation of `{process}`, an instance of the normalizer's soundness. -/")
+        out.append(f"theorem {theorem} {spec.get('parameters', '')} {binders}\n"
+                   f"    (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles {role}){separate_binder}\n"
+                   f"    (index : Nat) {theorem_binders}{premises}{' ' if premises else ''}:\n"
+                   f"    {function} (F := F) (G := G) {parameter_names} ctx self (.cons (some index)\n"
+                   f"      (({f'{embed} ' + ' '.join(state_args) if state_args else embed}).append {paren(values_literal(capture_components))})) =\n"
+                   f"      ({application}).bind (fun {'result' if slots else '_'} => .done ({embedded})) := by\n"
+                   f"  subst self\n"
+                   f"  exact (NormalForm.callback_sound_uniform {signature} {spec['body']} {role} {roster} {pattern_name}\n"
+                   f"    {finish_name} {form_name} {name}_normalized {name}_finishes ctx {distinct}\n"
+                   f"    ({spec['tables']}) ({spec['protocols']}) {results_name} ({binders_value}) _\n"
+                   f"    ({name}_environment {names_in_order}) ({laws_call})).trans\n"
+                   f"    (congrArg₂ PIR.Proc.bind ({name}_presentation _ ctx {names_in_order})\n"
+                   f"      (funext fun result => congrArg PIR.Proc.done ({name}_embedding result)))\n")
+
+    @staticmethod
+    def pattern_entry(item):
+        if isinstance(item, str):
+            return f".{item}"
+        kind, value = item
+        if kind == "bool":
+            return f"(.bool {value})"
+        if kind == "field":
+            return f"(.field _ {value})"
+        return f"(.index {value})"
+
+    def scope_binders(self, scope_names, state, slots, captures, capture_specs):
+        kinds = {"index": "Nat"}
+        for slot in slots:
+            base = value_type(state[slot["slot"]])
+            kinds[slot["name"]] = f"Option {paren(base)}" if slot.get("mode", "present") == "optional" else base
+        for index, wire in enumerate(captures):
+            capture = capture_specs[index] if index < len(capture_specs) else {"name": f"capture{index}"}
+            base = value_type(wire)
+            kinds[capture["name"]] = f"Option {paren(base)}" if capture.get("mode", "optional") == "optional" else base
+        return self.binders([(name, kinds[name]) for name in scope_names])
+
+    def law_proofs(self, out, name, laws, results_name, spec, laws_binders, environment, types, fixed_inputs):
+        """One premise per law, each discharged by the admitted helper's own law from the request."""
+        position_names = {position: input_name for input_name, position in fixed_inputs.items()}
+        cases = []
+        for entry, law in enumerate(laws):
+            helper = law["helper"]
+            pins = law["pins"] + [None] * (len(helper.inputs) - len(law["pins"]))
+            args = [f"a{index}" for index in range(len(helper.inputs))]
+            pinned = [f"p{index}" if pin is not None else "_" for index, pin in enumerate(law["pins"])]
+            filled = [position_names[pin] if pin is not None else args[index] for index, pin in enumerate(pins)]
+            term = law["law"].term.format(*filled)
+            rewrites = [f"← (Option.some.inj p{index} : {position_names[pin]} = a{index})"
+                        for index, pin in enumerate(pins) if pin is not None]
+            substitutions = f"      rw [{', '.join(rewrites)}]\n" if rewrites else ""
+            arguments_pattern = values_literal(args) if args else ".nil"
+            pinned_pattern = "⟨" + ", ".join(pinned + ["_"]) + "⟩" if law["pins"] else "_"
+            cases.append(f"  | ⟨{entry}, _⟩ => fun args pinned => match args, pinned with\n"
+                         f"    | {arguments_pattern}, {pinned_pattern} => by\n{substitutions}"
+                         f"      exact {term}")
+        if laws:
+            cases.append(f"  | ⟨_ + {len(laws)}, bound⟩ => absurd bound (by simp [{name}Signature])")
+            body = "fun entry => match entry with\n" + "\n".join(cases)
+        else:
+            body = "fun entry => entry.elim0"
+        tables = spec["tables"]
+        out.append(f"/-- The {name}'s laws hold at its inputs, by the admitted helpers' laws. -/")
+        out.append(f"theorem {name}_laws {laws_binders}:\n"
+                   f"    NormalForm.LawsHold ({tables}).toOn {results_name}\n"
+                   f"      ({environment} : Values (Component (assignment F G)) {types}) :=\n  {body}\n")
 
     def fold(self, out, spec, role_spec, role, other, name, embed, process, theorem, function,
              parameter_names, state, slots, capture_binders, capture_components, used_pairs, uses_separate,

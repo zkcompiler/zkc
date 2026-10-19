@@ -564,5 +564,6 @@ import ZkcTools.JsonSupport
 import ZkcTools.StructuredSource
 import ZkcTools.StructuredSource.Bounds
 import ZkcTools.StructuredSource.Evaluation
+import ZkcTools.StructuredSource.NormalForm
 import ZkcTools.StructuredSource.OpenEvaluation
 import ZkcTools.StructuredSource.OpenValues

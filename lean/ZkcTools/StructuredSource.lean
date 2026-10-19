@@ -1,6 +1,7 @@
 module
 
 public import ZkcTools.StructuredSource.OpenEvaluation
+public import ZkcTools.StructuredSource.NormalForm
 public import ZkcTools.JsonSupport
 
 @[expose] public section
@@ -23,7 +24,7 @@ def read (path : System.FilePath) (byteLimit : Nat := 16 * 1024 * 1024) :
 def run (args : List String) : IO UInt32 := do
   let mode := args.headD ""
   if (mode != "check" || args.length != 2) &&
-      ((mode != "run" && mode != "open") || args.length != 3) then
+      ((mode != "run" && mode != "open" && mode != "normal-form") || args.length != 3) then
     return ← Zkc.Tools.refused "structured-source-arguments"
   let json ← read args[1]!
   let decoded := do
@@ -38,7 +39,9 @@ def run (args : List String) : IO UInt32 := do
     match ← read args[2]! (1024 * 1024) with
     | .error code => Zkc.Tools.refused code
     | .ok inputs =>
-      match (if mode == "open" then evaluateOpen program inputs else evaluate program inputs) with
+      let result := if mode == "normal-form" then NormalForms.run program inputs
+        else if mode == "open" then evaluateOpen program inputs else evaluate program inputs
+      match result with
       | .error code => Zkc.Tools.refused code
       | .ok result => Zkc.Tools.emit result; return 0
 
