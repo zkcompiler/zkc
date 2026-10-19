@@ -457,6 +457,27 @@ theorem randomOracle_combine (cache : (OracleSpec.ofFn (Answer (Absorbed E Shape
       rw [combine_cacheQuery width cache hashes key answer]
       rfl
 
+omit [Inhabited S] in
+/-- The hash cell of a hash call in a combined cache is the hash answers' lazy cell. -/
+theorem randomOracle_combine_hash
+    (cache : (OracleSpec.ofFn (Answer (Absorbed E Shape S) S width)).QueryCache)
+    (hashes : Query → Option S) (call : Query) :
+    (randomOracle (spec := OracleSpec.ofFn (Cells E Shape S Query width)) (.inr call)).run
+        (combine width cache hashes) =
+      (fun step => (step.1, combine width cache step.2)) <$> lazy hashes call := by
+  rw [randomOracle.run_eq, combine_inr]
+  cases recorded : hashes call with
+  | some answer =>
+      rw [lazy_some recorded]
+      simp only [map_pure]
+      rfl
+  | none =>
+      rw [lazy_none recorded]
+      simp only [map_bind, map_pure]
+      refine bind_congr fun answer => ?_
+      rw [combine_cacheQuery_hash width cache hashes call answer]
+      rfl
+
 /-- On a chain input, the joint simulator's flat step is the chain simulator's, with the transcript
 cells read at their chain histories and the hash answers kept aside. -/
 theorem flatJoint_run_chain {bytes : Bytes} {input : Input (Absorbed E Shape S) S Bytes}
