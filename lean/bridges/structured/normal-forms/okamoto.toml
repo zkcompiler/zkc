@@ -2,7 +2,7 @@
 fixture = "lean/bridges/structured/fixtures/okamoto.json"
 output = "lean/ZkcExamples/Structured/OkamotoNormalForms.lean"
 namespace = "ZkcExamples.Structured.OkamotoNormalForms"
-imports = ["ZkcExamples.Structured.OkamotoViews", "Zkc.Source.Structured.ReplyScript",
+imports = ["ZkcExamples.Structured.OkamotoViews", "Zkc.Source.Structured.NormalForm.Presentation", "Zkc.Source.Structured.ReplyScript",
            "Zkc.Source.Structured.ContractExecution", "Zkc.Source.Structured.ContractElaboration",
            "Zkc.Source.Structured.ContractObligations",
            "Mathlib.Algebra.Field.Basic", "Mathlib.Algebra.Module.Defs"]
@@ -14,7 +14,8 @@ carrier = "Field"
 inputs = ["firstBase", "secondBase", "point", "firstScalar", "secondScalar", "nonces",
           "challenges"]
 roles = ["prover", "verifier"]
-proof = "kernel"
+proof = "normal-form"
+body = "OkamotoBodies.interactiveBody"
 
 [contract]
 clause = "knowledge"
