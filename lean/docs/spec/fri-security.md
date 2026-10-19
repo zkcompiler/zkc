@@ -2,11 +2,14 @@
 
 This page specifies the independent model of the verifier of
 [`fri::LowDegree`](../../../libraries/fri/lib.zkc), its completeness on the
-tested code, its round-by-round soundness theorem and its Fiat–Shamir transfer
-with one query-block site. The model reads every commitment as the vector it
-commits to; it makes no claim about Merkle commitments, the compiled proof Entry
-or native execution. The modules are `ZkcSecurity.ArkLib.Fri.*` and
-`ZkcSecurity.Examples.FriFiatShamir` in the
+tested code, its round-by-round soundness theorem, its Fiat–Shamir transfer
+with one query-block site and the same verifier with words committed by Merkle
+trees. The model is a transcription of the library verifier, related line by
+line to the source; it makes no claim about the compiled library, its proof
+Entry or native execution. Before [committed words](#committed-words) it reads
+every commitment as the vector it commits to. The modules are
+`ZkcSecurity.ArkLib.Fri.*`, `ZkcSecurity.Examples.FriFiatShamir` and
+`ZkcSecurity.Examples.CommittedFri` in the
 [security integration](../../integrations/arklib/README.md).
 
 ## Subject
@@ -269,7 +272,15 @@ commitments, as a [verifier with committed tables](fiat-shamir-security.md#verif
   which adds the commitment step for Merkle trees with hashed leaves of one field
   element. The installed schemes' leaf encoding (tag, codec, width and height)
   and its relation to that leaf hash are not modeled.
-- The theorems concern this interactive model, not the compiled `Proof` Entry.
+- The committed-words bound covers acceptance together with the initial word
+  being far from the code for the extraction at the checkpoint of a verifier
+  transcript query, completed with zero at the entries the extraction misses. It
+  does not directly bound the acceptance of an externally specified false
+  statement: that an application's bad event implies this checkpoint event is a
+  separate obligation. Zero completion belongs to the analysis; the ideal reading
+  rejects an unavailable read.
+- The theorems concern this model, a transcription of the library verifier, not
+  the compiled library or its `Proof` Entry.
   The residual certificate has one query block site, while the source draws the
   `s` positions one at a time. In the transform, each draw's history ends with the
   verifier's send of the previous position, so no prover message separates the

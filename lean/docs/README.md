@@ -20,8 +20,9 @@ that all native behavior already has a Lean model.
 - [Multilinear interactive security](spec/multilinear-sumcheck-security.md): optional
   ArkLib adapters with complete and residual bounds and honest completeness.
 - [Fiat–Shamir construction](spec/fiat-shamir.md): the transform of a validator,
-  the checked transcript-construction rule and the compiled Schnorr proof
-  Entry's random-oracle knowledge soundness.
+  the checked transcript-construction rule, typed requests on challenge
+  occurrences, the data shape of interaction patterns and the compiled Schnorr
+  proof Entry's random-oracle knowledge soundness.
 - [Participant projection](spec/participant-projection.md): the checked rule
   relating an exported validator to the original program at its role, and its
   composition with transcript construction.
@@ -33,20 +34,29 @@ that all native behavior already has a Lean model.
   the transform of any validator from round-by-round soundness, in a random
   oracle on all typed histories, its instances for the imported Sumcheck
   verifier and the plain GKR verifier, and its composition with the checked
-  rules for the compiled Sumcheck and GKR proof Entries; formal readings of the
-  construction obligations, the type of provider simulations and the joint
-  experiment of a committed opening.
+  rules for the compiled Sumcheck and GKR proof Entries; the import of ArkLib's
+  worst-case round-by-round soundness and its transport to the compiled verifier
+  of a guessing fixture; formal readings of the construction obligations, the
+  type of provider simulations and its hash-chain instance for the
+  construction's byte-level chain model, and the joint experiment of a
+  committed opening with its bound for a total straight-line extractor; and the
+  bound for verifiers with committed tables, read with roots and openings in
+  one random oracle with their hash calls.
 - [FRI security](spec/fri-security.md): the verifier of the FRI library's
   low-degree test at the ideal interpretation of its commitments, its
   line-by-line correspondence to the source and ArkLib's FRI analysis, its
   completeness on codewords, its round-by-round soundness certificate with
-  explicit errors, also over the verifier's residual processes, and its
-  Fiat–Shamir transfer with one query-block site.
+  explicit errors, also over the verifier's residual processes, its
+  Fiat–Shamir transfer with one query-block site, and the same verifier with
+  words committed by Merkle trees, bounded for acceptance together with a far
+  extraction at a verifier checkpoint.
 - [Executable stage](spec/executable.md): the meaning of the validator program
   the runtime admits, with loops and helper calls, the checked lowering rule from
-  the constructed validator and helper preparation, the executable Schnorr
-  verifier's knowledge soundness and the executable Sumcheck verifier's
-  soundness for byte provers.
+  the constructed validator with checked normalization of pure total
+  calculations and helper preparation, completeness at a sufficient budget, the
+  executable Schnorr verifier's knowledge soundness, the executable Sumcheck
+  verifier's soundness for byte provers and honest-prover completeness, and a
+  rescheduled deferred-rounds program.
 - [Uniform query service](spec/uniform-query-service.md): a concrete structured
   handler with exact all-state query, pass-through and refusal laws, plus
   general-count Sumcheck process transport and actual imported-root bounds.
@@ -61,7 +71,8 @@ that all native behavior already has a Lean model.
   binders, transport along port maps and the contract layer as an instance.
 - [Checked compiler stages](design/checked-stages.md): the common shape of
   checked stage rules, property-specific relations and their composition, with
-  transcript construction and participant projection as instances.
+  transcript construction, participant projection and executable lowering as
+  instances.
 - [Research design](design/protocol-verification.md): questions, choices and
   evaluation criteria for extending the implemented architecture.
 - [Native bridge](../bridges/common/README.md): differential and proof-request tests.

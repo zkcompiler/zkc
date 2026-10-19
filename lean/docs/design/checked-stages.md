@@ -4,8 +4,9 @@ A security theorem about an original protocol transfers to the program a
 runtime executes only if every compiler stage between them is linked by a
 checked rule whose soundness theorem relates the stages' meanings, and the
 rules compose. This note describes the common shape of such rules, the semantic
-relations different properties need, and the two rules this package implements:
-transcript construction and participant projection.
+relations different properties need, and the three rules this package
+implements: transcript construction, participant projection and executable
+lowering.
 
 ## The shell
 
@@ -48,12 +49,18 @@ from it.
 | Representation refinement | A simulation between `⟦t⟧` and `⟦s⟧` up to a representation relation on values, actions and stops (limbs for field elements, bytes for typed messages, memory for environments); the target may also stop for resource or codec reasons | Acceptance reflection: when the target accepts, the source accepts on related values, which suffices for soundness. Completeness also needs the converse, which holds only under resource and progress assumptions: sufficient bounds, codecs that accept honest encodings, loops that finish within budget | Representation relations compose; the stop conditions of both stages accumulate |
 | Probabilistic reduction with loss | A bound relating experiments: the target's advantage or extraction probability against the source's, with an explicit loss in the query count and field size | Only the stated security property, with its loss | Losses add or compose; adversary classes and query bounds must match |
 
-The two implemented rules use exact equality. Probabilistic loss enters only
-in the security consumer, VCVio's Fiat–Shamir theorem for Sigma protocols,
-applied to the transform of the original verifier. Lower stages, from the
-participant program to the executed `zkc.program`, are representation
-refinements, and their completeness statements need the resource and progress
-assumptions above.
+Transcript construction and participant projection use exact equality.
+Probabilistic loss enters only in the security consumers applied to the
+transform of the original verifier: VCVio's Fiat–Shamir theorem for Sigma
+protocols and the multi-round theorems over round-by-round certificates. Lower
+stages, from the participant program to the executed `zkc.program`, are
+representation refinements, and their completeness statements need the resource
+and progress assumptions above. The executable lowering rule implements one
+such stage: its reading of the program must equal the constructed instructions
+or have the same normal form (`checkNormalized`), it relates the executable to a metered
+ideal meaning that prunes the constructed validator's ideal meaning by stops at
+every budget, and its completeness statements take a budget sufficient for every
+run (`validate_sufficient`).
 
 ## Transcript construction
 
@@ -135,7 +142,13 @@ Security composes the same way. `CompiledSchnorrFiatShamir` and
 original verifier (VCVio's Schnorr extraction; round-by-round soundness of the
 imported Sumcheck verifier) and rewrite with the composed equation, so the
 compiled verifiers' ideal interpretations inherit the bounds without a proof
-about the compiled programs. `ExecutableSchnorrFiatShamir` and
+about the compiled programs. `CompiledGuessFiatShamir` does the same with a
+certificate imported from a worst-case round-by-round proof stated in ArkLib's
+framework and carried to the original validator by `Realizes.certificate`.
+`CompiledGkrFiatShamir` takes another route: it composes the construction rule's
+equation (`GkrProof.spec_transform`) with a reading of the exported instructions
+as the plain GKR verifier on well-formed statements (`GkrProof.reading`), proved
+for that Entry, rather than with the transform of the original. `ExecutableSchnorrFiatShamir` and
 `ExecutableSumcheckFiatShamir` continue one stage down through the lowering
 rule, the latter with the Sumcheck program's helper preparation, and a walk over
 their proofs' dependencies shows that they reach the general rules and the
@@ -187,6 +200,10 @@ annotate or reinterpret operations, as projection and transcript construction
 do. A pass that reorders, merges or rewrites operations needs a certificate:
 a map from target operations to source operations with a dependency check, or
 a rewriting trace whose algebraic side conditions are checked or proved. The
+executable lowering rule's normalization (`checkNormalized`) is such a
+dependency check for the schedule of pure total calculations, with no emitted
+certificate: it walks both programs anchor by anchor and recomputes which term
+of one shared table each operand denotes. The
 projection rule compares operations, not their algebra; an equal comparison
 with swapped operands is refused. A total calculation the export omits is
 admitted only while no later use needs its result. Inlining is absorbed into the
