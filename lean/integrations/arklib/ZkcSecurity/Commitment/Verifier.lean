@@ -35,6 +35,8 @@ forms by a transport of oracle cells, answers and costs.
 table of answers and every committed root from an extraction (`extracted`), and returns the
 residual process with its tables. `Escapes` is the escape of a doomed residual at a transcript
 query, read through `withTables`; `escapes_le` bounds it by the certificate's error.
+`EscapesAt` is the same for a doomed set indexed by the ideal reading's absorbed history, and
+`escapesAt_le` bounds it by a charged certificate's charge at that history.
 -/
 
 set_option autoImplicit false
@@ -334,6 +336,73 @@ theorem escapes_le {accepts : A → Prop} {error : E → ENNReal}
         refine (prEvent_mono _ _
           (fun raw => ∃ value, decode raw = some value ∧
             ¬ certificate.doomed (withTables words tables (next value)))
+          (fun raw escapes => ?_)).trans step
+        obtain ⟨decode', absorbed', _, escaping⟩ := escapes
+        rw [absorbed] at absorbed'
+        obtain ⟨-, same⟩ := Zkc.Transcript.Absorption.query.inj absorbed'
+        subst same
+        exact escaping
+      · exact impossible fun _ escapes => by
+          obtain ⟨decode, absorbed, doomed, _⟩ := escapes
+          exact relevant ⟨decode, absorbed, doomed⟩
+
+omit [∀ key, SampleableType (Raw key)] in
+/-- `Escapes` for a doomed set indexed by the ideal reading's absorbed history: the ideal reading
+is doomed at `ideal`, and the decoded answer leaves the doomed set at `ideal ++ [event]`. -/
+def EscapesAt (doomed : List E → PIR.Proc J A → Prop) :
+    PIR.Proc (committed J Shape Value) A → List (Table Value) → List E → (event : E) → Raw event →
+      Prop
+  | .call (.base operation) next, tables, ideal, event, raw =>
+      ∃ decode, absorb operation = .query event decode ∧
+        doomed ideal (withTables words tables (.call (.base operation) next)) ∧
+        ∃ value, decode raw = some value ∧
+          ¬ doomed (ideal ++ [event]) (withTables words tables (next value))
+  | _, _, _, _, _ => False
+
+omit [∀ key, SampleableType (Raw key)] in
+/-- A doomed set that ignores the history escapes as `Escapes` does. -/
+theorem escapesAt_const (doomed : PIR.Proc J A → Prop)
+    (process : PIR.Proc (committed J Shape Value) A) (tables : List (Table Value)) (ideal : List E)
+    (event : E) (raw : Raw event) :
+    EscapesAt absorb words (fun _ process => doomed process) process tables ideal event raw ↔
+      Escapes absorb words doomed process tables event raw := by
+  match process with
+  | .done _ => exact Iff.rfl
+  | .halt _ => exact Iff.rfl
+  | .call (.commit _) _ => exact Iff.rfl
+  | .call (.read _ _) _ => exact Iff.rfl
+  | .call (.base _) _ => exact Iff.rfl
+
+/-- A fixed residual, its ideal reading doomed at a fixed ideal history, escapes at a fresh raw
+answer with probability at most the charge at that history. -/
+theorem escapesAt_le {accepts : A → Prop} {charge : List E → E → ENNReal}
+    (certificate : Typed.ChargedCertificate absorb accepts charge)
+    (process : PIR.Proc (committed J Shape Value) A) (tables : List (Table Value)) (ideal : List E)
+    (event : E) :
+    Pr{let raw ← $ᵗ (Raw event)}[
+      EscapesAt absorb words certificate.doomed process tables ideal event raw] ≤
+        charge ideal event := by
+  classical
+  have impossible :
+      (∀ raw, ¬ EscapesAt absorb words certificate.doomed process tables ideal event raw) →
+      Pr{let raw ← $ᵗ (Raw event)}[
+        EscapesAt absorb words certificate.doomed process tables ideal event raw] ≤
+          charge ideal event :=
+    fun never => (prEvent_eq_zero_of_forall_not _ _ never).trans_le zero_le
+  match process with
+  | .done _ => exact impossible fun _ escapes => escapes
+  | .halt _ => exact impossible fun _ escapes => escapes
+  | .call (.commit _) _ => exact impossible fun _ escapes => escapes
+  | .call (.read _ _) _ => exact impossible fun _ escapes => escapes
+  | .call (.base operation) next =>
+      by_cases relevant : ∃ decode, absorb operation = .query event decode ∧
+          certificate.doomed ideal (withTables words tables (.call (.base operation) next))
+      · obtain ⟨decode, absorbed, doomed⟩ := relevant
+        have step := certificate.step _ _ doomed
+        simp only [withTables, Typed.ChargedStep, absorbed] at step
+        refine (prEvent_mono _ _
+          (fun raw => ∃ value, decode raw = some value ∧
+            ¬ certificate.doomed (ideal ++ [event]) (withTables words tables (next value)))
           (fun raw escapes => ?_)).trans step
         obtain ⟨decode', absorbed', _, escaping⟩ := escapes
         rw [absorbed] at absorbed'

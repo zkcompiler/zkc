@@ -32,6 +32,17 @@ charge of a transcript key is the error of its occurrence, and every hash call i
 `hashError` (`jointError`). The record before a key's first query does not depend on that key's
 answer (`beforeFirstKey_update`), so neither do the checkpoint extraction and the targets
 (`hashLog_update_inl`, `targets_update_inr`).
+
+**Charged certificates and the ideal history.** The ideal reading's certificate may index its
+doomed set and charge by the ideal reading's absorbed history, which contains tables where the
+concrete history contains roots. An `IdealHistory` reads a concrete history, every root read
+through an extraction, as an ideal history: absorbed events read as themselves, and the reading
+depends only on the extraction of the roots the history contains. `WordMessages.ideal` reads each
+root as the event of a message carrying its extracted table through the word operation, which
+`CommitDoomed` and `WordMessages.commitDoomed` connect to the certificate's receive step;
+`IdealHistory.events` drops the roots, for doomed sets that ignore the history. A transcript key
+is bad at the ideal history read through its checkpoint extraction (`BadAt`), and is charged a
+concrete-key charge (`jointCharge`) that dominates the ideal charge at every extraction.
 -/
 
 set_option autoImplicit false
@@ -287,6 +298,156 @@ def jointError (error : E → ENNReal) (hashError : ENNReal) : JointKey E Shape 
   | .inl key => error key.2
   | .inr _ => hashError
 
+/-- The charge of a joint key with a concrete-key charge: a transcript key is charged at its
+concrete history and occurrence, a hash call `hashError`. -/
+def jointCharge (charge : List (Absorbed E Shape Y) → E → ENNReal) (hashError : ENNReal) :
+    JointKey E Shape Y Query → ENNReal
+  | .inl key => charge key.1 key.2
+  | .inr _ => hashError
+
+omit [DecidableEq E] [DecidableEq Shape] [DecidableEq Y] [DecidableEq Query] in
+theorem jointError_eq (error : E → ENNReal) (hashError : ENNReal) :
+    jointError (Shape := Shape) (Y := Y) (Query := Query) error hashError =
+      jointCharge (fun _ event => error event) hashError := by
+  funext key
+  cases key <;> rfl
+
 end Bad
+
+section Ideal
+
+/-- How a concrete history, every committed root read through an extraction, reads as a history
+of the ideal reading: absorbed events read as themselves, and the reading depends only on the
+extraction of the roots the history contains. -/
+structure IdealHistory (E Shape Y Value : Type) where
+  read : (Shape → Y → Table Value) → List (Absorbed E Shape Y) → List E
+  read_event : ∀ extracted history event,
+    read extracted (history ++ [.event event]) = read extracted history ++ [event]
+  read_congr : ∀ extracted other history, (∀ shape root, Absorbed.root shape root ∈ history →
+    extracted shape root = other shape root) → read extracted history = read other history
+
+/-- The reading that keeps the absorbed events and drops the roots, for doomed sets that ignore
+the history. -/
+def IdealHistory.events : IdealHistory E Shape Y Value where
+  read _ history := history.filterMap fun absorbed =>
+    match absorbed with
+    | .event event => some event
+    | .root _ _ => none
+  read_event _ history event := by simp [List.filterMap_append]
+  read_congr _ _ _ _ := rfl
+
+/-- The messages through which the ideal reading receives committed tables: the word operation's
+receive, and a message carrying each reply of it. -/
+structure WordMessages (absorb : Typed.Interface J E P Raw) (words : Words J Shape Value) where
+  event : Shape → P → E
+  recover : (shape : Shape) → E → Option (J.Reply (words.word shape))
+  absorbed : ∀ shape, absorb (words.word shape) = .receive (event shape) (recover shape)
+  message : (shape : Shape) → J.Reply (words.word shape) → P
+  recovers : ∀ shape reply, recover shape (event shape (message shape reply)) = some reply
+
+variable {absorb : Typed.Interface J E P Raw} {words : Words J Shape Value}
+
+/-- The ideal history that reads each root as the event of the message carrying its extracted
+table. -/
+def WordMessages.ideal (messages : WordMessages absorb words) : IdealHistory E Shape Y Value where
+  read extracted history := history.map fun absorbed =>
+    match absorbed with
+    | .event event => event
+    | .root shape root =>
+        messages.event shape (messages.message shape (words.ofTable shape (extracted shape root)))
+  read_event _ history event := by simp
+  read_congr extracted other history agree := by
+    refine List.map_congr_left fun absorbed member => ?_
+    cases absorbed with
+    | event event => rfl
+    | root shape root => simp only [agree shape root member]
+
+/-- A doomed set indexed by the ideal history stays doomed across a commitment: the ideal reading
+receives the extracted table after the history read through the extraction. -/
+def CommitDoomed (words : Words J Shape Value) (ideal : IdealHistory E Shape Y Value)
+    (doomed : List E → PIR.Proc J A → Prop) : Prop :=
+  ∀ (extracted : Shape → Y → Table Value) (history : List (Absorbed E Shape Y)) (shape : Shape)
+    (root : Y) (tables : List (Table Value)) (next : Unit → PIR.Proc (committed J Shape Value) A),
+    doomed (ideal.read extracted history) (withTables words tables (.call (.commit shape) next)) →
+      doomed (ideal.read extracted (history ++ [.root shape root]))
+        (withTables words (tables ++ [normalized words extracted shape root]) (next ()))
+
+/-- A charged certificate's receive step keeps the doomed set across a commitment, read through
+the word messages. -/
+theorem WordMessages.commitDoomed [∀ event, SampleableType (Raw event)] {accepts : A → Prop}
+    {charge : List E → E → ENNReal} (messages : WordMessages absorb words)
+    (certificate : Typed.ChargedCertificate absorb accepts charge) :
+    CommitDoomed (Y := Y) words messages.ideal certificate.doomed := by
+  intro extracted history shape root tables next doomed
+  have step := certificate.step _ _ doomed
+  simp only [withTables, Typed.ChargedStep, messages.absorbed shape] at step
+  have reached := step (messages.message shape (words.ofTable shape (extracted shape root)))
+    (words.ofTable shape (extracted shape root)) (messages.recovers shape _)
+  simpa [WordMessages.ideal, normalized] using reached
+
+/-- A per-event certificate's receive step keeps its doomed set across a commitment, at any
+ideal history. -/
+theorem commitDoomed_events [∀ event, SampleableType (Raw event)] {accepts : A → Prop}
+    {error : E → ENNReal} (certificate : Typed.Certificate absorb accepts error)
+    (commitReceives : ∀ shape, ∃ event recover, absorb (words.word shape) = .receive event recover) :
+    CommitDoomed (Y := Y) words (IdealHistory.events (E := E))
+      fun (_ : List E) process => certificate.doomed process := by
+  intro extracted history shape root tables next doomed
+  have step := certificate.step _ doomed
+  obtain ⟨event, recover, receives⟩ := commitReceives shape
+  simp only [withTables, Typed.Step, receives] at step
+  exact step (words.ofTable shape (extracted shape root))
+
+end Ideal
+
+section BadAt
+variable [DecidableEq E] [DecidableEq Shape] [DecidableEq Y] [DecidableEq Query]
+variable (absorb : Typed.Interface J E P Raw) (words : Words J Shape Value)
+  (scheme : Extractable Shape Value Query Y)
+
+/-- Bad keys for a doomed set indexed by the ideal history: a transcript key is bad when replaying
+a statement's verifier along it, with every root read as its checkpoint extraction, reaches a
+residual whose ideal reading, doomed at the key's history read through that extraction, escapes at
+the key. Hash calls are bad as in `Bad`. -/
+def BadAt {α : Type} (game : OracleComp (joint Raw Shape Y Query) α)
+    (doomed : List E → PIR.Proc J A → Prop) (ideal : IdealHistory E Shape Y Value)
+    (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
+    (initial : Stmt → List (Absorbed E Shape Y)) (statementRoots : Stmt → List (Shape × Y))
+    (bound : ℕ) : (key : JointKey E Shape Y Query) → JointTable Raw Shape Y Query → Prop
+  | .inl key, table =>
+      ∃ statement events residual tables, key.1 = initial statement ++ events ∧
+        replay absorb words (checkpointExtract scheme game table key)
+            (fun other => table (.inl other)) (verifier statement)
+            ((statementRoots statement).map fun pair =>
+              normalized words (checkpointExtract scheme game table key) pair.1 pair.2)
+            (initial statement) events = some (residual, tables) ∧
+          EscapesAt absorb words doomed residual tables
+            (ideal.read (checkpointExtract scheme game table key) key.1) key.2 (table (.inl key))
+  | .inr query, table =>
+      table (.inr query) ∈ targets scheme bound table
+        (beforeFirstKey (.inr query) ((tableQueryLog game table).map Sigma.fst))
+
+omit [DecidableEq Query] in
+/-- A doomed set that ignores the history makes the same keys bad as `Bad`. -/
+theorem badAt_const {α : Type} [DecidableEq Query] (game : OracleComp (joint Raw Shape Y Query) α)
+    (doomed : PIR.Proc J A → Prop) (ideal : IdealHistory E Shape Y Value)
+    (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
+    (initial : Stmt → List (Absorbed E Shape Y)) (statementRoots : Stmt → List (Shape × Y))
+    (bound : ℕ) (key : JointKey E Shape Y Query) (table : JointTable Raw Shape Y Query) :
+    BadAt absorb words scheme game (fun _ process => doomed process) ideal verifier initial
+        statementRoots bound key table ↔
+      Bad absorb words scheme game doomed verifier initial statementRoots bound key table := by
+  cases key with
+  | inl key =>
+      constructor
+      · rintro ⟨statement, events, residual, tables, shape, replayed, escapes⟩
+        exact ⟨statement, events, residual, tables, shape, replayed,
+          (escapesAt_const absorb words doomed residual tables _ _ _).mp escapes⟩
+      · rintro ⟨statement, events, residual, tables, shape, replayed, escapes⟩
+        exact ⟨statement, events, residual, tables, shape, replayed,
+          (escapesAt_const absorb words doomed residual tables _ _ _).mpr escapes⟩
+  | inr query => exact Iff.rfl
+
+end BadAt
 
 end ZkcSecurity.Commitment
