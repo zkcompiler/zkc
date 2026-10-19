@@ -28,7 +28,11 @@ pipeline, with no step specific to a subject:
    executable meaning predicts; check the axiom closures and proof dependencies
    the manifest's receipt names and that the runtime executes exactly the
    program the receipt names;
-7. write a per-subject evidence record: artifact and module digests, kernel
+7. for a manifest with a claims namespace, regenerate the subject's artifacts
+   and claims modules in the security integration and build the claims: the
+   registered endpoint applied to the subject's evidence at the type the
+   manifest claims;
+8. write a per-subject evidence record: artifact and module digests, kernel
    results, mutation outcomes, runtime summary and requested assumptions.
 
 This is bounded agreement evidence for the stated trusted links: the
@@ -52,7 +56,7 @@ from bridges.common.lean_render import (  # noqa: E402
     regenerate, strip_header)
 from bridges.construction import render as constructed  # noqa: E402
 from bridges.executable import render as executable  # noqa: E402
-from bridges.pipeline import compile as pipeline_compile, glue, manifest, mutations, runtime  # noqa: E402
+from bridges.pipeline import compile as pipeline_compile, evidence, glue, manifest, mutations, runtime  # noqa: E402
 from bridges.structured import bodies as printer, snapshot as structured  # noqa: E402
 
 BODIES = ROOT / "lean/bridges/structured/bodies.py"
@@ -769,6 +773,30 @@ class Driver(Runner):
         record["binding"] = results
         record_accepted(record, "record-binding")
 
+    # The claim's generated modules in the security integration.
+
+    def claims(self, subject, entry, record):
+        """Regenerate the subject's artifacts and claims modules and build the claims,
+        whose kernel check is that the evidence has the type the manifest claims."""
+        namespace = subject.get("claims", "namespace")
+        if not namespace:
+            return
+        executable_namespace = subject.get("executable", "namespace") if subject.profile("executable") else None
+        sources = {
+            "artifacts": evidence.artifacts_module(subject, entry, subject.module_name("glue"), executable_namespace),
+            "claims": evidence.claims_module(subject),
+        }
+        for key, text in sources.items():
+            path = subject.generated(key)
+            expected = ROOT / evidence.module_path(namespace, key.capitalize())
+            self.check(f"{subject.name}:claims-path:{key}", path == expected,
+                       f"[generated] {key} must be {expected.relative_to(ROOT)}")
+            self.generated(subject, key, text, record)
+        claims_module = evidence.module_name(namespace, "Claims")
+        self.lake("build", claims_module, cwd=LEAN / "integrations/arklib", name=f"{subject.name}:claims-build")
+        record_accepted(record, "claim-application", module=claims_module,
+                        application=evidence.names(subject.data)["application"])
+
     # Normal forms and the record.
 
     def normal_forms(self, subject, record):
@@ -804,6 +832,7 @@ class Driver(Runner):
                 facts = self.executable(subject, artifacts, entry, record)
                 if self.args.runtime:
                     run = (artifacts, self.runtime(subject, artifacts, entry, facts, record))
+            self.claims(subject, entry, record)
         if subject.profile("scalar"):
             record["scalar"] = dict(contract=subject.get("scalar", "contract"),
                                     properties=sorted(subject.get("scalar", "properties", {})))

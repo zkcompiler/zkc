@@ -5,12 +5,12 @@ public import ZkcExamples.Construction.GuessProof
 
 @[expose] public section
 
-/-! Generated artifacts of the subject `guess` and their checked facts.
-Regenerate with `lean/bridges/subject.py --write`.
+/-! Generated artifacts of the subject `guess` and their checked facts. Regenerate
+with `lean/bridges/subject.py --write`.
 
 The artifacts are the original export and the constructed validator of the
-compiled `example::Proof` Entry and the types of the inputs its policy
-publishes. Every fact below is a generated per-Entry fact the kernel checked. -/
+compiled `example::Proof` Entry, the types of the inputs its policy publishes.
+Every fact below is a generated per-Entry fact the kernel checked. -/
 
 namespace ZkcSecurity.Examples.Subjects.Guess
 open Zkc.Source Zkc.Source.Structured ZkcSecurity.Endpoint

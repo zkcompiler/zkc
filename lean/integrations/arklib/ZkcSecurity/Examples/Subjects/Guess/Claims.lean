@@ -11,8 +11,8 @@ public import ZkcSecurity.Examples.Subjects.Guess.Evidence
 The manifest claims ordinary soundness of the ideal meaning for adaptive
 statements. The claim is the registered endpoint applied to the subject's
 evidence in every bound application context, stated at the subject's artifacts,
-its application claim (`Contract.falseStatement`) and exactly uniform challenges:
-the kernel checks that the evidence has that type. -/
+its contract (`Contract.falseStatement`) and its regime: the kernel checks that
+the evidence has that type. -/
 
 namespace ZkcSecurity.Examples.Subjects.Guess
 open ZkcSecurity.Endpoint
@@ -24,10 +24,10 @@ variable {F G : Type} [Field F] [Fintype F] [DecidableEq F] [Inhabited F] [Sampl
 
 /-- The evidence of the claim in an application context. -/
 noncomputable def evidence (application : String) :=
-  soundness (F := F) (G := G) .adaptive ⟨application⟩
+  soundness (F := F) (G := G) .idealMeaning .adaptive ⟨application⟩ PUnit.unit
 
-/-- Ordinary soundness of the ideal meaning for adaptive statements, at the
-subject's artifacts, its application claim and exactly uniform challenges. -/
+/-- The claim: ordinary soundness of the ideal meaning for adaptive statements,
+at the subject's artifacts and contract. -/
 theorem adaptive_soundness (application : String) :
     AdaptiveSoundness (art := artifacts) (claim := Contract.falseStatement) (regime := Regime.exact F)
       (evidence (F := F) (G := G) application) :=

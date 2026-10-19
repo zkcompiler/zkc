@@ -85,9 +85,10 @@ def main():
     samples = [] if subject_manifests or args.manifests else manifests(FIXTURES)
     details = []
     for path in subject_manifests + samples:
-        instance = (reports.load_manifest(path).get("family") or {}).get("instance")
-        if instance:
-            details.append(instance)
+        names = reports.claim_names(reports.load_manifest(path))
+        for name in (names["instance"], names["application"]):
+            if name:
+                details.append(name)
     failures, notes = [], []
 
     paths = {}

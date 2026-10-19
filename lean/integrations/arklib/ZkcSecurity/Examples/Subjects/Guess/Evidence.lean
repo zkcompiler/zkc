@@ -58,9 +58,11 @@ theorem costBound (statement : artifacts.Statement F G) (initial : History F G) 
         initial
       rwa [Nat.cast_one, one_mul] at bounded
 
-/-- Ordinary soundness evidence of the guessing Entry's ideal meaning. -/
-noncomputable def soundness (form : Form) (binding : BindingRequirement form) :
-    SoundnessEvidence (F := F) (G := G) artifacts .idealMeaning form Contract.falseStatement (Regime.exact F) where
+/-- Ordinary soundness evidence of the guessing Entry at a covered endpoint and a
+statement form. -/
+noncomputable def soundness (endpoint : Semantics) (form : Form) (binding : BindingRequirement form)
+    (lowering : LoweringRequirement artifacts compiled F G endpoint) :
+    SoundnessEvidence (F := F) (G := G) artifacts endpoint form Contract.falseStatement (Regime.exact F) where
   compiled := compiled
   handle := 0
   relation := relation
@@ -73,7 +75,7 @@ noncomputable def soundness (form : Form) (binding : BindingRequirement form) :
   cost _ := error
   costBound := costBound
   binding := binding
-  lowering := PUnit.unit
+  lowering := lowering
   hypotheses := []
 
 end ZkcSecurity.Examples.Subjects.Guess

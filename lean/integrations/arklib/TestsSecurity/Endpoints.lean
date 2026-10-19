@@ -55,7 +55,7 @@ open ZkcSecurity.Examples.Subjects.Guess
 omit [Fintype F] [SampleableType F] in
 /-- The subject's evidence runs the compiled verifier of `CompiledGuessFiatShamir`. -/
 theorem guess_verify_eq [Fintype F] [SampleableType F] (offset : F) (initial : History F G) (proof : Proof F G) :
-    (soundness (F := F) (G := G) .fixed PUnit.unit).verify (.cons offset .nil) initial proof =
+    (soundness (F := F) (G := G) .idealMeaning .fixed PUnit.unit PUnit.unit).verify (.cons offset .nil) initial proof =
       ZkcSecurity.Examples.CompiledGuessFiatShamir.compiledVerifier historyQuery offset initial proof := by
   show compiled.verifier (decodedQuery (id : F → F)) (.cons offset .nil) initial proof = _
   rw [decodedQuery_id]
@@ -70,12 +70,12 @@ theorem guess_fixed_soundness (offset : F) (initial : History F G)
         (prover >>= ZkcSecurity.Examples.CompiledGuessFiatShamir.compiledVerifier historyQuery offset initial)).run'
           ∅}[Zkc.Transcript.Accepted (· = some true) result.1] ≤
       (queries + 1) * (Fintype.card F : ℝ≥0∞)⁻¹ := by
-  have bound := fixed_soundness (soundness (F := F) (G := G) .fixed PUnit.unit) (.cons offset .nil)
+  have bound := fixed_soundness (soundness (F := F) (G := G) .idealMeaning .fixed PUnit.unit PUnit.unit) (.cons offset .nil)
     (Contract.falseStatement_all _) initial prover (queries * error)
     (Typed.worstCaseCostBound_of_isTotalQueryBound _ (Typed.keyCharge_le fun _ _ => le_rfl) prover queries
       proverBound)
   have same : (prover >>= ZkcSecurity.Examples.CompiledGuessFiatShamir.compiledVerifier historyQuery offset initial) =
-      prover >>= (soundness (F := F) (G := G) .fixed PUnit.unit).verify (.cons offset .nil) initial :=
+      prover >>= (soundness (F := F) (G := G) .idealMeaning .fixed PUnit.unit PUnit.unit).verify (.cons offset .nil) initial :=
     congrArg (prover >>= ·) (funext fun proof => (guess_verify_eq offset initial proof).symm)
   refine (le_of_eq (congrArg (fun computation => Pr{let result ← (simulateQ randomOracle computation).run' ∅}[
     Zkc.Transcript.Accepted (· = some true) result.1]) same)).trans (bound.trans (le_of_eq ?_))

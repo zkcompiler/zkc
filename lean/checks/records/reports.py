@@ -222,6 +222,208 @@ def declaration(records, name, role):
     return facts, reasons
 
 
+# The evidence structure of each property, and the regimes a manifest may name.
+EVIDENCE = {"soundness": "ZkcSecurity.Endpoint.SoundnessEvidence",
+            "knowledge-soundness": "ZkcSecurity.Endpoint.KnowledgeEvidence"}
+REGIMES = {"exact-uniform challenges": "ZkcSecurity.Endpoint.Regime.exact"}
+# The binders a claim's application or evidence may take besides registered
+# premises: universes and types, instances of these classes, and the bound
+# application context, a string.
+INSTANCES = {"Field", "CommRing", "Fintype", "DecidableEq", "Inhabited", "Nonempty", "SampleableType",
+             "AddCommGroup", "Module"}
+
+
+# The short names of the registered endpoint theorems, by claim, and the
+# contract declaration of each property: the names a claims namespace holds.
+ENDPOINT_NAMES = {
+    ("ideal-meaning", "soundness", "fixed"): "fixed_soundness",
+    ("ideal-meaning", "soundness", "adaptive"): "adaptive_soundness",
+    ("executable-bytes", "soundness", "fixed"): "fixed_soundness_bytes",
+    ("executable-bytes", "soundness", "adaptive"): "adaptive_soundness_bytes",
+    ("ideal-meaning", "knowledge-soundness", "fixed"): "knowledge_soundness",
+    ("executable-bytes", "knowledge-soundness", "fixed"): "knowledge_soundness_bytes",
+}
+CONTRACTS = {"soundness": "falseStatement", "knowledge-soundness": "holds"}
+
+
+def claim_names(manifest):
+    """The declarations of a subject's claim: by convention from its claims
+    namespace, explicit manifest fields first."""
+    section, family = manifest.get("claims") or {}, manifest.get("family") or {}
+    namespace = section.get("namespace")
+    properties = section.get("properties") or []
+    prop = properties[0] if len(properties) == 1 else None
+    short = ENDPOINT_NAMES.get((section.get("endpoint"), prop, section.get("statement")))
+    derived = {} if namespace is None else {
+        "artifacts": f"{namespace}.artifacts",
+        "contract": f"{namespace}.Contract.{CONTRACTS.get(prop, 'falseStatement')}",
+        "instance": f"{namespace}.evidence",
+        "application": f"{namespace}.{short}" if short else None}
+    return {"artifacts": section.get("artifacts", derived.get("artifacts")),
+            "contract": section.get("contract", derived.get("contract")),
+            "instance": family.get("instance", derived.get("instance")),
+            "application": section.get("application", derived.get("application"))}
+
+
+def heads(arguments):
+    return {argument.get("head") for argument in arguments or [] if argument.get("head")}
+
+
+def binder_reasons(record, origin):
+    """Every binder must be a type, an allowed instance, the application context
+    or a premise; a premise is classified separately. Any other binder is a
+    parameter the claim does not account for, such as a structure of
+    assumptions."""
+    reasons = []
+    for position, binder in enumerate(((record.get("detail") or {}).get("binders")) or []):
+        if binder.get("premise"):
+            continue
+        head = binder.get("type_head")
+        if head == "sort" or (binder.get("binder") == "instance" and head in INSTANCES) or \
+                (binder.get("binder") == "explicit" and head == "String"):
+            continue
+        reasons.append(f"hidden parameter: binder {position} of {origin} {record['name']} has type {head}, "
+                       "which is neither a type, an allowed instance, the application context nor a registered "
+                       "premise")
+    return reasons
+
+
+def premises_of(telescope_binders, texts, registry, origin):
+    found, reasons = [], []
+    for position, binder in enumerate(telescope_binders):
+        if not binder.get("premise"):
+            continue
+        text = texts[position] if position < len(texts) else None
+        entry = registry.classify(binder.get("head"))
+        if entry is None:
+            reasons.append(f"omitted premise: {binder['binder']} premise {text or binder.get('head')} of "
+                           f"{origin} is not a registered assumption")
+        else:
+            found.append(assumption(entry, f"premise of {origin}", text))
+    return found, reasons
+
+
+def hypotheses(record, registry):
+    """The evidence's named hypotheses, each a checked instance of the schema of
+    the registry entry it cites, reconciled with the evidence's premises."""
+    detail = record.get("detail") or {}
+    found, discharged, reasons = [], [], []
+    listed = detail.get("hypotheses")
+    if listed is None:
+        return found, discharged, [f"the named hypotheses of {record['name']} were not recorded"]
+    named_premises = set()
+    for item in listed:
+        identifier = item.get("identifier")
+        entry = registry.by_identifier.get(identifier)
+        if entry is None:
+            reasons.append(f"hypothesis {identifier} of {record['name']} is not a registry identifier")
+            continue
+        schema = entry.get("schema")
+        if schema is None or schema not in (item.get("claim_head"), item.get("claim_head_reducible")):
+            reasons.append(f"wrong schema: hypothesis {identifier} of {record['name']} states "
+                           f"{item.get('claim_head')}, which is not an instance of its schema {schema}")
+            continue
+        status = item.get("status") or {}
+        kind = status.get("kind")
+        arguments = [argument.get("text") for argument in item.get("claim_arguments") or []]
+        row = assumption(entry, f"named hypothesis of {record['name']}", item.get("claim"),
+                         discharge="proved" if kind == "proof" else "assumed")
+        row["arguments"] = arguments
+        if kind == "proof":
+            discharged.append(row)
+        elif kind == "premise":
+            named_premises.add(schema)
+            found.append(row)
+        elif kind == "assumed" and status.get("cites") == identifier:
+            found.append(row)
+        else:
+            reasons.append(f"hypothesis {identifier} of {record['name']} has an unrecognized status")
+    for binder in detail.get("premise_telescope") or []:
+        if binder.get("premise") and binder.get("head") not in named_premises:
+            reasons.append(f"omitted assumption: premise {binder.get('head')} of {record['name']} is not a "
+                           "named hypothesis")
+    return found, discharged, reasons
+
+
+def application_check(section, prop, family, theorem, records, registry):
+    names = claim_names({"claims": section, "family": family})
+    """The claim's application declaration: the registered endpoint applied to the
+    manifest's evidence, stated at the subject's artifacts, contract and regime.
+    Returns the facts, the assumptions its property's premises carry, and the
+    reasons it cannot establish the claim."""
+    name = names["application"]
+    if name is None:
+        return None, [], ["the manifest names no application declaration"]
+    facts, reasons = declaration(records, name, "application")
+    record = records.get(name)
+    if record is None:
+        return facts, [], reasons
+    detail = record.get("detail") or {}
+    if not detail:
+        return facts, [], reasons + [f"application {name} was not recorded in detail"]
+    endpoint_record = records.get(theorem) if theorem else None
+    expected = ((endpoint_record or {}).get("detail") or {}).get("type_head")
+    if expected is None or detail.get("type_head") != expected:
+        reasons.append(f"application {name} states {detail.get('type_head')}, not the registered property "
+                       f"{expected}")
+    if detail.get("value_head") != theorem:
+        reasons.append(f"application {name} is not the registered endpoint {theorem} applied to evidence")
+    instance = names["instance"]
+    stated = heads(detail.get("type_arguments"))
+    if instance is None or instance not in stated or instance not in heads(detail.get("value_arguments")):
+        reasons.append(f"wrong evidence: application {name} does not apply the endpoint to the manifest's "
+                       f"evidence {instance}")
+    artifacts = names["artifacts"]
+    if artifacts is None or artifacts not in stated:
+        reasons.append(f"mismatched artifact: application {name} is not stated at the subject's artifacts "
+                       f"{artifacts}")
+    contract = names["contract"]
+    if contract is None or contract not in stated:
+        reasons.append(f"substituted relation: application {name} is not stated at the subject's contract "
+                       f"{contract}")
+    if prop == "soundness":
+        regime = REGIMES.get(section.get("regime"))
+        if regime is None or regime not in stated:
+            reasons.append(f"application {name} is not stated at the manifest's regime {section.get('regime')!r}")
+    reasons += binder_reasons(record, "application")
+    property_detail = detail.get("property") or {}
+    found, omitted = premises_of(property_detail.get("premise_telescope") or [], [], registry,
+                                 f"the property of {name}")
+    reasons += omitted
+    if facts is not None:
+        facts["bound"] = property_detail.get("statement")
+    return facts, found, reasons
+
+
+def evidence_check(section, prop, family, records, registry):
+    """The manifest's evidence instance: the property's evidence structure at the
+    subject's artifacts and contract, with no unaccounted parameter and checked
+    named hypotheses."""
+    names = claim_names({"claims": section, "family": family})
+    instance = names["instance"]
+    if instance is None:
+        return None, [], [], ["the manifest names no evidence instance"]
+    facts, reasons = declaration(records, instance, "evidence instance")
+    record = records.get(instance)
+    if record is None:
+        return facts, [], [], reasons
+    detail = record.get("detail") or {}
+    if not detail:
+        return facts, [], [], reasons + [f"evidence instance {instance} was not recorded in detail"]
+    if detail.get("type_head") != EVIDENCE.get(prop):
+        reasons.append(f"evidence instance {instance} is a {detail.get('type_head')}, not {EVIDENCE.get(prop)}")
+    stated = heads(detail.get("type_arguments"))
+    for key, label in (("artifacts", "mismatched artifact"), ("contract", "substituted relation")):
+        if names[key] not in stated:
+            reasons.append(f"{label}: evidence instance {instance} is not indexed by {names[key]}")
+    reasons += binder_reasons(record, "evidence instance")
+    found, telescope_reasons = telescope(record, registry, "evidence instance")
+    reasons += telescope_reasons
+    named, discharged, hypothesis_reasons = hypotheses(record, registry)
+    reasons += hypothesis_reasons
+    return facts, found + named, discharged, reasons
+
+
 def claim(manifest, prop, records, registry, evidence_validation, connected_reasons):
     section = manifest.get("claims") or {}
     endpoint, statement = section.get("endpoint"), section.get("statement")
@@ -237,17 +439,14 @@ def claim(manifest, prop, records, registry, evidence_validation, connected_reas
         reasons.append(f"unsupported endpoint claim: no registered endpoint states {prop} for "
                        f"{endpoint} with a {statement} statement")
     endpoint_facts, endpoint_reasons = declaration(records, theorem, "registered endpoint")
-    instance_facts, instance_reasons = declaration(records, family.get("instance"), "evidence instance")
-    if family.get("instance") is None:
-        instance_reasons = ["the manifest names no evidence instance"]
-    reasons += endpoint_reasons + instance_reasons
-    assumptions = []
-    for name, origin in ((theorem, "endpoint"), (family.get("instance"), "evidence instance")):
-        record = records.get(name) if name else None
-        if record is not None:
-            found, omitted = telescope(record, registry, origin)
-            assumptions += found
-            reasons += omitted
+    reasons += endpoint_reasons
+    application_facts, application_assumptions, application_reasons = application_check(
+        section, prop, family, theorem, records, registry) if theorem else (None, [], [])
+    reasons += application_reasons
+    instance_facts, instance_assumptions, discharged, instance_reasons = evidence_check(
+        section, prop, family, records, registry)
+    reasons += instance_reasons
+    assumptions = application_assumptions + instance_assumptions
     carried = {row["id"] for row in assumptions}
     for identifier in REQUIRED_LINKS.get(endpoint, []):
         entry = registry.by_identifier.get(identifier)
@@ -259,8 +458,9 @@ def claim(manifest, prop, records, registry, evidence_validation, connected_reas
     for identifier in requested:
         if identifier not in registry.by_identifier:
             reasons.append(f"requested assumption {identifier} is not a registry identifier")
+    names = claim_names(manifest)
     models = []
-    for name in (theorem, family.get("instance")):
+    for name in (theorem, names["application"], names["instance"]):
         record = records.get(name) if name else None
         for schema in ((record or {}).get("detail") or {}).get("registered", []):
             entry = registry.classify(schema)
@@ -278,13 +478,16 @@ def claim(manifest, prop, records, registry, evidence_validation, connected_reas
         verdict = "unresolved" if reasons else "established"
     regime = {"expected": section.get("regime"),
               "evidence": (instance_facts or {}).get("statement") if instance_facts else None}
-    bound = {"theorem": theorem, "statement": (endpoint_facts or {}).get("statement")} \
-        if endpoint_facts and endpoint_facts.get("status") != "missing" else {"status": "unresolved"}
+    bound = {"theorem": names["application"], "statement": (application_facts or {}).get("statement"),
+             "property": (application_facts or {}).get("bound")} \
+        if application_facts and application_facts.get("status") != "missing" else {"status": "unresolved"}
     return {"property": prop, "covered_endpoint": endpoint, "statement": statement,
             "validation": evidence_validation["outcome"], "endpoint": endpoint_facts or {"status": "unresolved"},
+            "application": application_facts or {"status": "unresolved"},
             "evidence": instance_facts or {"status": "unresolved"}, "assumptions": assumptions,
-            "requested_assumptions": requested, "models": models, "regime": regime, "bound": bound,
-            "outcome": verdict, "reasons": reasons}
+            "discharged": discharged, "requested_assumptions": requested, "models": models, "regime": regime,
+            "contract": names["contract"], "artifacts_declaration": names["artifacts"],
+            "bound": bound, "outcome": verdict, "reasons": reasons}
 
 
 def context(manifest, ledger, records, registry):

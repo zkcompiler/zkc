@@ -6,8 +6,8 @@ public import ZkcExamples.Executable.SchnorrProof
 
 @[expose] public section
 
-/-! Generated artifacts of the subject `schnorr` and their checked facts.
-Regenerate with `lean/bridges/subject.py --write`.
+/-! Generated artifacts of the subject `schnorr` and their checked facts. Regenerate
+with `lean/bridges/subject.py --write`.
 
 The artifacts are the original export and the constructed validator of the
 compiled `example::Proof` Entry, the types of the inputs its policy publishes
