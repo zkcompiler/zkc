@@ -507,10 +507,12 @@ import ZkcExamples.Structured.SumcheckReduceData
 import ZkcExamples.Structured.SumcheckReduceLaws
 import ZkcExamples.Structured.SumcheckReduceVerifier
 import ZkcExamples.Structured.SumcheckReduceViews
+import ZkcExamples.Structured.SumcheckReductionNormalForms
 import ZkcExamples.Structured.SumcheckReductionRequests
 import ZkcExamples.Structured.SumcheckRelationContract
 import ZkcExamples.Structured.SumcheckRepackedBodies
 import ZkcExamples.Structured.SumcheckRepackedData
+import ZkcExamples.Structured.SumcheckRepackedNormalForms
 import ZkcExamples.Structured.SumcheckRepackedVerifier
 import ZkcExamples.Structured.SumcheckRepackedViews
 import ZkcExamples.Structured.SumcheckRoundLaws
@@ -520,6 +522,7 @@ import ZkcExamples.Structured.SumcheckSourceBodies
 import ZkcExamples.Structured.SumcheckSourceContracts
 import ZkcExamples.Structured.SumcheckSourceData
 import ZkcExamples.Structured.SumcheckSourceLaws
+import ZkcExamples.Structured.SumcheckSourceNormalForms
 import ZkcExamples.Structured.SumcheckSourceVerifier
 import ZkcExamples.Structured.SumcheckSourceViews
 import ZkcExamples.Structured.SumcheckUnitContracts
