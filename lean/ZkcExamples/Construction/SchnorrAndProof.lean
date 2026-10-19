@@ -6,6 +6,7 @@ public import Zkc.Source.Structured.CommonAdapter
 public import ZkcExamples.Construction.SchnorrAndProofData
 public import ZkcExamples.Construction.SchnorrAndProofParticipant
 public import ZkcExamples.Construction.SchnorrAndProofBodies
+public import ZkcExamples.Construction.SchnorrAndProofModel
 
 @[expose] public section
 
@@ -221,5 +222,51 @@ theorem spec_transform {m : Type → Type} [Monad m] [LawfulMonad m]
         initial proof := by
   rw [check_sound context challenge handle table participant checked data initial proof
     (by rw [arity]; rfl), transform_bind_done]
+
+/-! ## The model the original validator is, by computation -/
+
+/-- The admitted root's validator process is the model, by computation. -/
+theorem process_equation (firstBase firstPoint secondBase secondPoint : G) (handle : Nat) :
+    process (F := F) (G := G) firstBase firstPoint secondBase secondPoint handle = (Zkc.Protocols.Schnorr.Variants.conjunction wiring firstBase firstPoint secondBase secondPoint handle).interpret CommonAdapter.embed := by
+  rfl
+
+theorem verifier_correspondence (firstBase firstPoint secondBase secondPoint : G) (handle : Nat) :
+    verifier (F := F) (G := G) firstBase firstPoint secondBase secondPoint handle = Zkc.Protocols.Schnorr.Variants.conjunction wiring firstBase firstPoint secondBase secondPoint handle := by
+  rw [verifier, process_equation, CommonAdapter.project_embed]
+
+/-- The constructed program's interactive reading is the model, with every
+reply, stop and acceptance decision. Derived from the projection rule; no
+computation specific to this Entry is involved. -/
+theorem spec_equation (firstBase firstPoint secondBase secondPoint : G) (handle : Nat) (initial : History F G) :
+    (spec context handle table participant.returned participant.instructions
+        (inputs firstBase firstPoint secondBase secondPoint ++ [.transcript initial])).bind
+      (fun values => .done (acceptance values)) =
+      Zkc.Protocols.Schnorr.Variants.conjunction wiring firstBase firstPoint secondBase secondPoint handle := by
+  rw [spec_bind_congr context handle table participant.returned participant.instructions _ acceptance
+    (fun values => decision (values.dropLast.map some)) acceptance_decision]
+  have projected' := project_sound program context participant projected handle
+    (inputs firstBase firstPoint secondBase secondPoint) initial (verifierInputs firstBase firstPoint secondBase secondPoint handle)
+    (inputs_related firstBase firstPoint secondBase secondPoint handle initial) rfl
+  calc (spec context handle table participant.returned participant.instructions
+          (inputs firstBase firstPoint secondBase secondPoint ++ [.transcript initial])).bind
+          (fun values => .done (decision (values.dropLast.map some)))
+      = ((spec context handle table participant.returned participant.instructions
+          (inputs firstBase firstPoint secondBase secondPoint ++ [.transcript initial])).bind
+          (fun values => .done (values.dropLast.map some))).bind
+          (fun options => .done (decision options)) := by
+        rw [PIR.Proc.bind_assoc]
+        rfl
+    _ = (((program.participant F G context.validator (verifierInputs firstBase firstPoint secondBase secondPoint handle)).bind
+          fun outputs => .done (validatorOutputs context.validator program.payload.entry.outputScopes
+            outputs)).interpret CommonAdapter.project).bind
+          (fun options => .done (decision options)) := by
+        rw [projected']
+    _ = ((program.participant F G context.validator (verifierInputs firstBase firstPoint secondBase secondPoint handle)).bind
+          fun outputs => .done (decision (validatorOutputs context.validator
+            program.payload.entry.outputScopes outputs))).interpret CommonAdapter.project := by
+        rw [PIR.Proc.interpret_bind, PIR.Proc.interpret_bind, PIR.Proc.bind_assoc]
+        rfl
+    _ = Zkc.Protocols.Schnorr.Variants.conjunction wiring firstBase firstPoint secondBase secondPoint handle := by
+        rw [original_verifier, verifier_correspondence]
 
 end ZkcExamples.Construction.SchnorrAndProof
