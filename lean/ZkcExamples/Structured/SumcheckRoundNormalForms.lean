@@ -54,6 +54,14 @@ theorem verifierState_masked (ctx : ProtocolContext) (self : Nat) (role : self =
   iterate 7 unfold maskValues
   simp [ProtocolContext.mapScopes, Participant.restrict]
 
+/-! Positions of the verifier's carried slots in the repeat state, named by the request. -/
+abbrev verifierPointPosition : Nat := 4
+abbrev verifierPointSlot : Var ([.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] : List Ty) (.vector "bls12-381.fr") :=
+  (.there (.there (.there (.there .here))))
+abbrev verifierClaimPosition : Nat := 5
+abbrev verifierClaimSlot : Var ([.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] : List Ty) (.field "bls12-381.fr") :=
+  (.there (.there (.there (.there (.there .here)))))
+
 /-- The verifier's normal form of one body run: its ordered actions, the values it
 computes, guards as conditionals and missing inputs as stops. -/
 def verifierProcess (ctx : ProtocolContext) (service : Option Nat) (point : Option (List F)) (claim : Option F) :
@@ -223,6 +231,20 @@ theorem proverState_masked (ctx : ProtocolContext) (self : Nat) (role : self = c
   unfold proverState
   iterate 7 unfold maskValues
   simp [ProtocolContext.mapScopes, Participant.restrict]
+
+/-! Positions of the prover's carried slots in the repeat state, named by the request. -/
+abbrev proverEntriesPosition : Nat := 0
+abbrev proverEntriesSlot : Var ([.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] : List Ty) (.vector "bls12-381.fr") :=
+  .here
+abbrev proverDimensionPosition : Nat := 1
+abbrev proverDimensionSlot : Var ([.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] : List Ty) .index :=
+  (.there .here)
+abbrev proverWidthPosition : Nat := 2
+abbrev proverWidthSlot : Var ([.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] : List Ty) .index :=
+  (.there (.there .here))
+abbrev proverPointPosition : Nat := 3
+abbrev proverPointSlot : Var ([.vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] : List Ty) (.vector "bls12-381.fr") :=
+  (.there (.there (.there .here)))
 
 /-- The prover's normal form of one body run: its ordered actions, the values it
 computes, guards as conditionals and missing inputs as stops. -/

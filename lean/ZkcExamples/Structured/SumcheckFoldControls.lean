@@ -187,10 +187,13 @@ Each refusal is checked against the actual Source body's repeat occurrences. -/
 
 abbrev sourceRepeats := repeatAt SumcheckSourceViews.reduceDefinition.raw.operations
 
+open SumcheckRoundNormalForms (proverEntriesPosition proverDimensionPosition proverPointPosition
+  verifierPointPosition)
+
 /-- The verifier's local role cannot observe the prover's point slot (scope). -/
 theorem verifier_role_refused :
     checkFrame (Value := assignment F F) resolution sourceRepeats (tableContext 2)
-      { frameExport 2 with role := 1 } = .error (.slotScope 3 1) := by
+      { frameExport 2 with role := 1 } = .error (.slotScope proverPointPosition 1) := by
   simp [checkFrame, checkFrameAtoms, checkFrameAtom, checkFrameTerms, checkFrameTerm, resolution,
     Resolution.ofCandidates, sortCandidate, predicateCandidate, frameExport, partialIdentity,
     vocabulary, bind, Except.bind, pure, Except.pure]
@@ -199,8 +202,9 @@ theorem verifier_role_refused :
 /-- The verifier's own point slot is hidden from the prover (scope). -/
 theorem hidden_slot_refused :
     checkFrame (Value := assignment F F) resolution sourceRepeats (tableContext 2)
-      ⟨"s15", 0, [⟨partialIdentity 2, [.binder 0, .carried 4, .carried 0]⟩]⟩ =
-      .error (.slotScope 4 0) := by
+      ⟨"s15", 0, [⟨partialIdentity 2,
+        [.binder 0, .carried verifierPointPosition, .carried proverEntriesPosition]⟩]⟩ =
+      .error (.slotScope verifierPointPosition 0) := by
   simp [checkFrame, checkFrameAtoms, checkFrameAtom, checkFrameTerms, checkFrameTerm, resolution,
     Resolution.ofCandidates, sortCandidate, predicateCandidate, partialIdentity,
     vocabulary, bind, Except.bind, pure, Except.pure]
@@ -209,8 +213,9 @@ theorem hidden_slot_refused :
 /-- The prover's own dimension slot is an index, not a point vector (type). -/
 theorem wrong_type_refused :
     checkFrame (Value := assignment F F) resolution sourceRepeats (tableContext 2)
-      ⟨"s15", 0, [⟨partialIdentity 2, [.binder 0, .carried 1, .carried 0]⟩]⟩ =
-      .error (.slotType 1) := by
+      ⟨"s15", 0, [⟨partialIdentity 2,
+        [.binder 0, .carried proverDimensionPosition, .carried proverEntriesPosition]⟩]⟩ =
+      .error (.slotType proverDimensionPosition) := by
   simp [checkFrame, checkFrameAtoms, checkFrameAtom, checkFrameTerms, checkFrameTerm, resolution,
     Resolution.ofCandidates, sortCandidate, predicateCandidate, partialIdentity,
     vocabulary, bind, Except.bind, pure, Except.pure]
@@ -233,7 +238,7 @@ theorem unknown_role_refused :
 /-- The iteration index is not a vector. -/
 theorem iteration_refused :
     checkFrame (Value := assignment F F) resolution sourceRepeats (tableContext 2)
-      ⟨"s15", 0, [⟨partialIdentity 2, [.binder 0, .iteration, .carried 0]⟩]⟩ =
+      ⟨"s15", 0, [⟨partialIdentity 2, [.binder 0, .iteration, .carried proverEntriesPosition]⟩]⟩ =
       .error .iterationMismatch := by
   simp [checkFrame, checkFrameAtoms, checkFrameAtom, checkFrameTerms, checkFrameTerm, resolution,
     Resolution.ofCandidates, sortCandidate, predicateCandidate, partialIdentity,

@@ -1475,6 +1475,8 @@ class Module:
         out.append(f"abbrev repeatSpec ({maximum} : Nat) : RepeatSpec :=\n"
                    f"  ⟨repeatState, {ty_list(captures, True)}, {role_indices},\n    {scope_indices}, {maximum}⟩\n")
         returned = values_literal([f"state.get {variable(index)}" for index in terminator[1]])
+        out.append("/-- The state positions the retained return reads, in output order. -/")
+        out.append(f"abbrev {name}ReturnIndices : List Nat := {list_literal(terminator[1])}\n")
         out.append("/-- The retained return permutation of the repeat's state, for any value family. -/")
         out.append(f"def {name}ReturnValues {{Value : Ty → Type}} (state : Values Value repeatState) :\n"
                    f"    Values Value {name}Outputs :=\n  {returned}\n")
@@ -1912,6 +1914,16 @@ class Module:
                        f"      {embed} {arguments} := by\n"
                        f"  subst self\n  unfold {embed}\n  iterate {len(state) + 1} unfold maskValues\n"
                        f"  simp [ProtocolContext.mapScopes, Participant.restrict]\n")
+            # Stable names for the role's carried slots: statements about the state use
+            # these instead of positions, so a reordered layout changes only this module.
+            out.append(f"/-! Positions of the {name}'s carried slots in the repeat state, named by the request. -/")
+            for slot in slots:
+                stem = slot["name"][0].upper() + slot["name"][1:]
+                index = slot["slot"]
+                out.append(f"abbrev {name}{stem}Position : Nat := {index}")
+                out.append(f"abbrev {name}{stem}Slot : Var ({ty_list(state, True)} : List Ty) {lean_ty(state[index], True)} :=\n"
+                           f"  {variable(index)}")
+            out.append("")
         # Input values: the induction index, the state slots and the captures.
         values_by_slot = {}
         state_args = []

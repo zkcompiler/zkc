@@ -91,10 +91,10 @@ abbrev tableContext (dimension : Nat) : List (LogicalType vocabulary.Sorts) :=
 abbrev original (dimension : Nat) : Var (tableContext dimension) (.sort (.table dimension)) := .here
 
 /-- The prover's carried slots of the Reduce repeat. -/
-abbrev entriesSlot : Var repeatState (.vector "bls12-381.fr") := .here
-abbrev dimensionSlot : Var repeatState .index := .there .here
-abbrev widthSlot : Var repeatState .index := .there (.there .here)
-abbrev pointSlot : Var repeatState (.vector "bls12-381.fr") := .there (.there (.there .here))
+abbrev entriesSlot : Var repeatState (.vector "bls12-381.fr") := SumcheckRoundNormalForms.proverEntriesSlot
+abbrev dimensionSlot : Var repeatState .index := SumcheckRoundNormalForms.proverDimensionSlot
+abbrev widthSlot : Var repeatState .index := SumcheckRoundNormalForms.proverWidthSlot
+abbrev pointSlot : Var repeatState (.vector "bls12-381.fr") := SumcheckRoundNormalForms.proverPointSlot
 
 /-- The fold invariant: four atoms over the original table and carried slots. -/
 def proverInvariant (count : Nat) :
@@ -304,16 +304,19 @@ def predicateCandidate (identity : Identity) : Option FoldPredicate :=
 def resolution : Resolution vocabulary :=
   .ofCandidates vocabulary sortCandidate predicateCandidate
 
+open SumcheckRoundNormalForms (proverEntriesPosition proverDimensionPosition proverWidthPosition
+  proverPointPosition) in
 /-- The fold invariant in the proposed export form, written in Lean: the Reduce
-repeat at site `s15`, observed at local role 0 (the prover), with carried slots
-named by position. No compiler exporter produces it yet. -/
+repeat at site `s15`, observed at local role 0 (the prover). The export format
+addresses carried slots by position; the positions are the generated ones of the
+prover's named slots. No compiler exporter produces it yet. -/
 def frameExport (count : Nat) : RawFrame where
   site := "s15"
   role := 0
-  atoms := [⟨partialIdentity count, [.binder 0, .carried 3, .carried 0]⟩,
-    ⟨remainingIdentity count, [.carried 3, .carried 1]⟩,
-    ⟨widthIdentity, [.carried 2]⟩,
-    ⟨roundIdentity count, [.binder 0, .carried 3, .carried 0]⟩]
+  atoms := [⟨partialIdentity count, [.binder 0, .carried proverPointPosition, .carried proverEntriesPosition]⟩,
+    ⟨remainingIdentity count, [.carried proverPointPosition, .carried proverDimensionPosition]⟩,
+    ⟨widthIdentity, [.carried proverWidthPosition]⟩,
+    ⟨roundIdentity count, [.binder 0, .carried proverPointPosition, .carried proverEntriesPosition]⟩]
 
 /-- The Reduction unit's actual Reduce body has its repeat at site `s15`, with
 maximum four; the Source unit's has maximum two. -/
