@@ -21,8 +21,9 @@ entry selects, and that the exported outputs are the validator's outputs; derive
 the occurrence context from the roster, the policy and the replaced service's
 contract; and runs the construction rule. Public coverage is a deployment
 requirement: the host's initial binding absorbs exactly these inputs, in this
-order (`publicValues`, which models scalar inputs only; vector and index inputs
-have no binding model).
+order (`publicValues`, which reads scalar inputs only; vector, index and count
+inputs are bound by typed public-value binding events,
+`Zkc.Construction.PublicBinding`, which this rule does not derive).
 -/
 
 set_option autoImplicit false

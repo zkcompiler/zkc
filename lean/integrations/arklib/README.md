@@ -99,14 +99,16 @@ construction equality. `Examples/CompiledSumcheckFiatShamir` discharges that
 premise for the compiled Sumcheck `example::Proof` verifier with the core
 composed rules and states its
 [fixed-statement and adaptive soundness](../../docs/spec/fiat-shamir-security.md#the-compiled-sumcheck-proof-entry);
-the adaptive form keeps the determining binding as a premise.
+`adaptive_soundness_public` discharges the adaptive form's determining premise
+with one typed public-value binding event of the table values, claim and round
+count (`FiatShamir/Binding`). That binding establishes statement determination
+only; that the native transcript absorbs the encoded rows remains assumed.
 `Examples/ExecutableSumcheckFiatShamir` transfers both bounds to provers of proof
 bytes for the validator program the runtime admits, through the core
 [lowering rule](../../docs/spec/executable.md#the-compiled-sumcheck-proof-verifier)
 and `VCVio/Pruning`: host validation prunes the compiled verifier's acceptance by
 rejections at every budget, so it accepts at most as often. Its adaptive form
-uses a binding of the table values, claim and round count whose events
-determine the statement, which discharges the premise.
+uses the same typed public-value binding.
 
 `Examples/GkrFiatShamir` gives the plain GKR verifier a round-by-round
 certificate composed per phase (`FiatShamir/Composition`), with ArkLib's

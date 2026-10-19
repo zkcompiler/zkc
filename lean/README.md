@@ -26,8 +26,10 @@ GKR verifier and the ideal interpretation of the compiled GKR proof Entry, and t
 the FRI verifier model with commitments read in the clear, under named
 assumptions. The Schnorr-family and GKR claims fix the statement; the other
 multi-round ones also cover statements chosen after the oracle queries when the initial
-transcript determines them, which the executable Sumcheck statement discharges
-with a binding of its table values, claim and round count. The [common](bridges/common/README.md)
+transcript determines them, which the compiled and executable Sumcheck statements
+discharge with a typed public-value binding of the table values, claim and round
+count. That binding establishes statement determination only; that the native
+transcript absorbs the encoded rows remains assumed. The [common](bridges/common/README.md)
 and [structured](bridges/structured/README.md) bridges test the native boundary
 with independent execution and negative controls.
 

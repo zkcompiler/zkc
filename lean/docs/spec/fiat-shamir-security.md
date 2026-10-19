@@ -399,6 +399,9 @@ injectively into the transcript events and the row determines the statement
 the raw Sumcheck statement (table values, claim and round count, with no length
 check) is bound by one event and determined, while binding the table entries one
 event each with no count or length is not prefix-free and is not determined.
+A binding codec establishes statement determination only; that the native
+transcript absorbs the encoded rows, in order, belongs to the encoding and
+transcript-state [obligation](#obligations).
 
 ## Imports from ArkLib's round-by-round soundness
 
@@ -759,7 +762,9 @@ vector, the claim as a scalar and the round count as a count. Its row determines
 the statement (`publicInitial_determined`, from `determined_single`), and
 `adaptive_soundness_public` is the adaptive bound with no determination premise
 left; the [executable statement](executable.md#the-compiled-sumcheck-proof-verifier)
-uses the same binding.
+uses the same binding. The binding establishes statement determination only;
+native absorption of the encoded rows remains a named assumption of the
+[executable stage](executable.md#named-assumptions-and-trusted-links).
 
 The controls (`TestsSecurity.CompiledSumcheckFiatShamir`) use the one-round
 `ZMod 5` instance of the imported verifier's controls. The premises hold

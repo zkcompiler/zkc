@@ -13,8 +13,9 @@ supplies the checked candidate's validator; the
 process over the common participant actions whose every query is a selected
 challenge, for a challenge function
 `challenge : History F G → m F` in any monad. A history is the ordered list of
-absorbed events: the host's `binding` of the public context and values, a
-`message` with its occurrence origin and typed payload, or a `challenge`
+absorbed events: the host's `binding` of the public context and scalar values,
+a typed public-value binding event (`publicBinding`, [binding codecs](fiat-shamir-security.md#binding-codecs)),
+a `message` with its occurrence origin and typed payload, or a `challenge`
 occurrence.
 
 - A receive reads the next proof message, decodes it at the expected type and
@@ -110,9 +111,11 @@ Each refusal names its obligation (`construction-receive`,
 original. The export must name the original's source digest and entry, with
 native framing. The policy must publish exactly the validator's data inputs, in
 original order, and these must be the exported validator's data inputs with the
-same sorts; for scalar inputs, `publicValues` reads the values the host binds at
-those positions. Vector and index inputs, which the Sumcheck Entries publish,
-have no binding model.
+same sorts; `publicValues` reads the scalar values the host binds at those
+positions. Vector, index and count inputs, which the Sumcheck Entries publish,
+are bound by typed public-value binding events
+([binding codecs](fiat-shamir-security.md#binding-codecs)), which this rule does
+not derive from the policy.
 The replaced service must be a validator service input, and every challenge must
 produce that service's field. The selected acceptance output must be a Boolean
 validator output selected by every statement retained in the entry's body, and

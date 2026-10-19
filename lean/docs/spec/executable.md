@@ -358,7 +358,9 @@ event of the application context and the row of those inputs, in order, the
 table as a vector, the claim as a scalar and the round count as a count
 (`CompiledSumcheckFiatShamir.publicInitial`). The row determines the statement
 (`initial_determined`, from `ZkcSecurity.FiatShamir.determined_single`), which
-discharges the determining premise of the compiled adaptive theorem.
+discharges the determining premise of the compiled adaptive theorem. This is
+statement determination only; that the runtime's transcript absorbs these rows
+is the host-binding assumption below.
 
 ## A rescheduled program
 

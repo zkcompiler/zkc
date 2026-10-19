@@ -338,9 +338,11 @@ model: a false claim is accepted with probability at most `(Q + n) / |F|` for a
 fixed well-formed statement with `n` rounds (the Entry admits at most two), and
 at most `(Q + 2) (1 / |F| + loss)` for adaptively chosen well-formed statements,
 `loss` being the challenge decoding's excess, when the initial
-transcript determines the statement. The host's binding of the Entry's vector
-and count public inputs is not modelled; the adaptive premise is discharged
-only for a model binding that stands for those public rows.
+transcript determines the statement. The adaptive premise is discharged by one
+typed public-value binding event whose row holds the table values as a vector,
+the claim as a scalar and the round count as a count. The typed public-value
+binding establishes statement determination only; that the native transcript
+absorbs the encoded rows, in order, remains assumed.
 For the GKR Entry, Lean proves that the
 interactive reading of the exported instructions is the plain GKR verifier on
 well-formed statements within the Entry's maxima, and bounds the compiled
@@ -368,10 +370,12 @@ is the runtime's acceptance threshold. The security bounds
 transfer to provers of proof bytes through the general construction, projection
 and lowering rules, with no equation specific to an Entry about the compiled
 program: Schnorr knowledge soundness for a fixed statement, and Sumcheck soundness
-for fixed and adaptively chosen statements, the latter with a binding of the
-table values, claim and round count whose rows determine the statement; the
-shared transcript model's binding event carries scalar values only, so that
-binding encodes the vector and the count in its rows. The bridge compares the
+for fixed and adaptively chosen statements, the latter from the typed
+public-value binding of the transcript model, one event whose row holds the
+table values as a vector, the claim as a scalar and the round count as a count,
+and determines the statement. The typed public-value binding establishes
+statement determination only; that the native transcript absorbs the encoded
+rows of the invocation root, in order, remains assumed. The bridge compares the
 runtime's stops and observations with that meaning, at every budget up to the
 acceptance threshold and on mutated proofs, and checks that the runtime executes
 the program a verification receipt names, with the acceptance output and public
