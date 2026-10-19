@@ -126,6 +126,7 @@ import TestsSecurity.CausalSumcheck.Iteration
 import TestsSecurity.CausalSumcheck.Phases
 import TestsSecurity.CausalSumcheck.SourceVerifier
 import TestsSecurity.CausalSumcheck.UniformService
+import TestsSecurity.ChargedCommitment
 import TestsSecurity.CommitmentBridge
 import TestsSecurity.Compatibility
 import TestsSecurity.CompiledSchnorrFiatShamir
