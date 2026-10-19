@@ -313,6 +313,38 @@ def checkCurrent (marker : String) : CommandElabM Unit := do
     throwError "{marker}: the current module declares no theorem"
   logInfo m!"{marker} declarations={added.size} theorems={theorems}"
 
+/-- Audit the upstream boundary of the selected module families: every
+declaration of a module below one of the `upstream` roots that the type or body
+of a declaration owned by `families` names directly, and every declaration in
+`named`, exists and has an axiom closure within `propext`, `Classical.choice`
+and `Quot.sound`. The boundary is computed, not listed: it is the set of library
+declarations the package consumes directly. `named` selects upstream
+declarations whose status is reported although no owned declaration uses them.
+An empty boundary is an error rather than a pass over nothing. -/
+def checkBoundary (families upstream : List Name) (named : List Name := [])
+    (marker : String := "BOUNDARY-AUDIT-PASS") : CommandElabM Unit := do
+  let env ← getEnv
+  let mut boundary : Std.HashSet Name := {}
+  for index in [:env.header.moduleData.size] do
+    let owner := env.header.modules[index]!.module
+    unless families.any (below · owner) do continue
+    for info in env.header.moduleData[index]!.constants do
+      let values := (info.value? true).map Expr.getUsedConstants |>.getD #[]
+      for dependency in info.type.getUsedConstants ++ values do
+        let some module := moduleOf env dependency | continue
+        if upstream.any (below · module) then boundary := boundary.insert dependency
+  for name in named do
+    unless env.contains name do throwError "named upstream declaration is missing: {name}"
+    boundary := boundary.insert name
+  if boundary.isEmpty then
+    throwError "{marker}: the selected families name no declaration below {upstream}"
+  let selected := boundary.toArray.qsort Name.lt
+  for name in selected do
+    for axiomName in ← Lean.collectAxioms name do
+      unless allowedAxioms.contains axiomName do
+        throwError "unexpected axiom: upstream {name} depends on {axiomName}"
+  logInfo m!"{marker} boundary={selected.size} named={named.length}"
+
 /-- One registry entry as the audit sees it: its identifier, the constant of
 its proposition schema if it has one, and whether that schema must be a
 proposition-valued declaration. -/

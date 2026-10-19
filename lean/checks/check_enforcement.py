@@ -93,6 +93,43 @@ def main():
                 assert result.returncode > 0 and diagnostic in result.stdout, (name, result)
                 assert 'CURRENT-MODULE-PASS declarations=' not in result.stdout
             rows.append(name)
+        # The upstream boundary of a package: the library declarations its
+        # declarations name directly, and explicitly named ones, exist and have
+        # clean closures.
+        (directory / 'Upstream').mkdir()
+        (directory / 'Upstream/Library.lean').write_text(
+            'namespace Library\n'
+            'theorem clean : True := True.intro\n'
+            'theorem holed : True := by sorry\n'
+            'theorem unused : True := True.intro\n'
+            'end Library\n')
+        result = compile_module('Upstream.Library')
+        assert result.returncode == 0, (result.stdout, result.stderr)
+        boundary_cases = [
+            ('boundary-accepted', 'theorem Owner.uses : True := Library.clean\n', '[`Library.unused]', None),
+            ('boundary-sorry', 'theorem Owner.uses : True := Library.holed\n', '[]',
+             'upstream Library.holed depends on sorryAx'),
+            ('boundary-missing-named', 'theorem Owner.uses : True := Library.clean\n', '[`Library.absent]',
+             'named upstream declaration is missing'),
+            ('boundary-empty', 'theorem Owner.uses : True := True.intro\n', '[]',
+             'name no declaration below'),
+        ]
+        for name, source, named, diagnostic in boundary_cases:
+            (directory / 'Owner').mkdir(exist_ok=True)
+            (directory / 'Owner/Subject.lean').write_text('import Upstream.Library\n' + source)
+            result = compile_module('Owner.Subject')
+            assert result.returncode == 0, (name, result.stdout, result.stderr)
+            (directory / 'Audit.lean').write_text('import Owner.Subject\n'
+                'import ZkcTools.DeclarationAudit\n'
+                f'run_cmd ZkcTools.DeclarationAudit.checkBoundary [`Owner] [`Upstream] {named} '
+                '"BOUNDARY-CONTROL-PASS"\n')
+            result = compile_module('Audit')
+            if diagnostic is None:
+                assert result.returncode == 0 and 'BOUNDARY-CONTROL-PASS boundary=2' in result.stdout, (name, result)
+            else:
+                assert result.returncode > 0 and diagnostic in result.stdout, (name, result)
+                assert 'BOUNDARY-CONTROL-PASS boundary=' not in result.stdout
+            rows.append(name)
         # The registry audit: every schema constant exists, a proposition schema
         # is proposition-valued, and every proposition-valued declaration of the
         # audited modules that heads a premise of one of their theorems, at any
