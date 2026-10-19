@@ -519,8 +519,9 @@ applied to a subject's evidence: knowledge soundness of the compiled Schnorr
 proof Entries, and ordinary soundness of the guessing Entry (ideal meaning) and
 of the Sumcheck proof Entry (ideal meaning and program bytes, fixed and adaptive
 statements, every round count up to the static maximum, malformed vectors
-included). Assurance reports are established for Schnorr, Chaum–Pedersen, AND,
-Okamoto and the guessing Entry. The Sumcheck report stays unresolved because the
+included). A records run given the subject pipeline's evidence establishes the
+assurance reports of Schnorr, Chaum–Pedersen, AND, Okamoto and the guessing
+Entry. The Sumcheck report stays unresolved because the
 committed Sumcheck program data is not what the current compiler emits for it,
 so the subject pipeline does not validate; the composed Sumcheck and GKR Entries
 retain no target clause to state a claim at, and composed Sumcheck has no
