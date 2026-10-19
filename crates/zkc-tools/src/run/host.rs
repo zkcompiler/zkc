@@ -12,14 +12,14 @@ use zkc_backends::{
     Capability, Domain, EntryPolicy, NativeBackend, PortConstraint, SetupRegistry, Value,
     services::{ServiceReference, ServiceRegistry},
 };
-use zkc_runtime::interactive::{EntryRole, Type, Value as RuntimeValue};
+use zkc_runtime::vm::{EntryRole, Type, Value as RuntimeValue};
 mod inputs;
 mod report;
 use crate::execution::InputValue;
 pub use inputs::{RoleInputs, RunInputs, SetupAuthority};
 pub use report::HostReport;
 
-/// Bundle structure, native value/kernel capacity and joint dispatch are separate
+/// Bundle structure, native value/operation capacity and joint dispatch are separate
 /// budgets. The latter counts dispatch occurrences, including repeated loop steps.
 #[derive(Clone, Copy, Debug)]
 pub struct HostLimits {

@@ -6,7 +6,7 @@
 use crate::{Result, refused};
 use sha3::{Digest, Keccak256};
 use spongefish::{DuplexSpongeInterface, instantiations::Keccak};
-use zkc_runtime::interactive::Identity;
+use zkc_runtime::vm::Identity;
 
 pub(crate) enum Transcript {
     Merlin(merlin::Transcript),

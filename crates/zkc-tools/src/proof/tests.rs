@@ -1,4 +1,5 @@
 use super::*;
+use zkc_runtime::interpreter::Runner;
 mod admission;
 #[test]
 fn nested_wire_permission_is_exact() {
@@ -26,7 +27,7 @@ fn nested_wire_permission_is_exact() {
 fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
     for handling in ["consume", "discard", "return"] {
         let returned = handling == "return";
-        let binding = zkc_runtime::interactive::OperationBinding {
+        let binding = zkc_runtime::vm::OperationBinding {
             contract: "resource_unit.create".into(),
             arguments: vec!["Slot.A".into()],
             implementation: "logical/resource_unit.create".into(),
@@ -141,7 +142,7 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                 ["P", "prover", [], output_map, [], ""],
                 ["V", "verifier", [], [["0", "bool"]], [], "0"]
             ],
-            ["true", "false", "false", "true", "true"],
+            ["true", "false", "false", "true", "false", "true"],
             []
         ])
         .to_string();
@@ -192,14 +193,19 @@ fn proof_host_admits_internal_units_but_refuses_unexportable_custody() {
                 Default::default(),
             )
             .unwrap();
-            let program = admit_supplied(candidate.as_bytes(), &backend).unwrap();
+            let program = zkc_runtime::vm::Program::decode(candidate.as_bytes())
+                .and_then(|program| {
+                    program.check_installation(&backend)?;
+                    Ok(program)
+                })
+                .unwrap();
             let mut runner = Runner::new(&program, "main", "P", "s", backend, vec![])
                 .unwrap_or_else(|e| panic!("{}", e.error));
-            let zkc_runtime::interactive::Action::Local(action) = runner.poll() else {
+            let zkc_runtime::vm::Action::Local(action) = runner.poll() else {
                 panic!("expected local unit creation");
             };
             runner.execute_local(&action.cut).unwrap();
-            let zkc_runtime::interactive::Action::Returned(values) = runner.poll() else {
+            let zkc_runtime::vm::Action::Returned(values) = runner.poll() else {
                 panic!("expected returned unit");
             };
             assert!(matches!(values[0], Value::ResourceUnit(_)));
@@ -466,7 +472,7 @@ fn setup_authority_parser_rejects_ambiguous_records() {
 
 #[test]
 fn native_stop_record_retains_the_local_instruction_namespace() {
-    use zkc_runtime::interactive::{LocalContext, Origin, Stop, StopKind};
+    use zkc_runtime::vm::{LocalContext, Origin, Stop, StopKind};
     let stop = Stop {
         origin: Origin {
             session: "s".into(),

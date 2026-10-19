@@ -2,7 +2,7 @@
 use super::{capacity::Capacity, inputs::Result};
 use std::sync::Arc;
 use zkc_backends::{Domain, EntryPolicy, NativeBackend, SetupRegistry, Value};
-use zkc_runtime::interactive::{PhysicalType, Value as RuntimeValue};
+use zkc_runtime::vm::{PhysicalType, Value as RuntimeValue};
 
 /// Decoded immutable data and its canonical bytes, owned by the application.
 /// Every invocation checks its own type, policy, setup and loading budgets.
@@ -162,7 +162,7 @@ mod tests {
         );
         let capability = backend
             .issue_rng_for(
-                zkc_runtime::interactive::Identity::Bls12381Fr,
+                zkc_runtime::vm::Identity::Bls12381Fr,
                 Domain::new("input", "preparation", "data", None),
                 1,
             )

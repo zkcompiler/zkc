@@ -64,7 +64,7 @@ nonnegative integer or null. Unknown or duplicate fields, floats, negative
 indices, missing fields and trailing JSON are refused. The candidate remains an
 exact embedded string, with no file resolution or sidecar. Runtime owns its
 positional decoding, static typing, installed-kernel admission and immutable
-custody. `Admitted::program_entry` supplies the action layout and resolved send
+custody. `Program::program_entry` supplies the action layout and resolved send
 operand types; Tools does not decode participant instructions separately.
 
 Installed ceilings and defaults are 16 MiB outer bytes, 4 MiB decoded candidate bytes, 1024 roles,

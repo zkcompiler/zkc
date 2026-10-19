@@ -1,6 +1,6 @@
 # Native backend adapters
 
-`zkc-backends` implements `zkc-runtime::interactive::Backend` with independently
+`zkc-backends` implements `zkc_runtime::vm::Backend` with independently
 installed operation signatures and native mathematical kernels. The runtime
 owns program admission and execution; this crate owns values, cryptographic
 operations, capability state and backend capacity checks.
@@ -69,9 +69,12 @@ Each contract row lists its actual default implementation names. Custom families
 list exact implementation/contract pairs. The inventory contains no inferred
 provider-by-contract combinations; nominal arguments still need the owner's
 signature checks. Runtime and backend rows remain independently authored.
-`prepare_binding` returns a `NativeKernel` with its exact binding, independently
-resolved signature, handler and static work classification. The Runner prepares
-each distinct binding once per backend instance. Calls retain input, attribute,
+`Backend::Operation` is `NativeOperation`, which implements
+`vm::InstalledOperation`. `prepare_binding` returns this immutable handle with
+its exact binding, independently resolved signature, handler and static work
+classification. The VM instance prepares each distinct binding once when
+loading its owned backend. Operations include effectful resource and transcript
+calls as well as numerical kernels. Calls retain input, attribute,
 resource, policy and output validation; a handle for another binding is refused.
 Operation attributes and transcript occurrences stay invocation-specific.
 
@@ -95,7 +98,7 @@ allocations they retain. Field arrays and fixed vectors share their element
 allocation and charge their descriptor per binding. Inline scalars and
 capabilities belong to their binding. Validation reuse is offered only for
 capability-free values. Row openings, element and handle accessors and length
-queries declare their operand read extents; other kernels are charged their
+queries declare their operand read extents; other operations are charged their
 full operands.
 
 ## Native inputs and wire

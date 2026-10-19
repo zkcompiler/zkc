@@ -3,6 +3,7 @@
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
 #include "zkc/Compiler/Language.h"
+#include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Language/Builtins.h"
 #include "zkc/Language/Layout.h"
@@ -281,20 +282,17 @@ int main(int argc, char **argv) {
   for (StringRef entry :
        {"sample::Demo", "sample::LocalDemo", "sample::NestedDemo"})
     for (bool used : {false, true})
-      for (bool simplify : {false, true})
-        cases.run(
-            "degree checked before simplification in each body mode", [&] {
-              auto changed = replaceText(
-                  (*bytes)->getBuffer(),
-                  "let coeff = coefficients<Fr,3>(square);",
-                  used ? "let coeff = coefficients<Fr,2>(square);"
-                       : "let unused = coefficients<Fr,2>(square);let "
-                         "coeff = coefficients<Fr,3>(square);");
-              if (used)
-                changed = replaceText(changed,
-                                      "intrinsic<Fr,3,2>(\"array.at\",coeff)",
-                                      "intrinsic<Fr,2,1>(\"array.at\",coeff)");
-              changed += R"(
+      cases.run("degree checked at admission in each body mode", [&] {
+        auto changed = replaceText(
+            (*bytes)->getBuffer(), "let coeff = coefficients<Fr,3>(square);",
+            used ? "let coeff = coefficients<Fr,2>(square);"
+                 : "let unused = coefficients<Fr,2>(square);let "
+                   "coeff = coefficients<Fr,3>(square);");
+        if (used)
+          changed =
+              replaceText(changed, "intrinsic<Fr,3,2>(\"array.at\",coeff)",
+                          "intrinsic<Fr,2,1>(\"array.at\",coeff)");
+        changed += R"(
             protocol Nested roles(P)(n:index@P,a:Fr@P,b:Fr@P,x:Fr@P)
                 ->(r:(Fr,Fr,Fr,Fr,Fr,Fr)@P){
               let mut r@P=(a,a,a,a,a,a);
@@ -304,15 +302,12 @@ int main(int argc, char **argv) {
               return(r=r);
             }run NestedDemo=Nested;
           )";
-              auto project = take(check(changed));
-              auto original =
-                  take(prepareOriginal(take(closeEntry(project, entry))));
-              auto result = compileEntry(original, {simplify, false});
-              require(!result, "under-width observation accepted");
-              auto message = toString(result.takeError());
-              require(StringRef(message).contains("fitting degree bound"),
-                      message);
-            });
+        auto project = take(check(changed));
+        auto result = prepareOriginal(take(closeEntry(project, entry)));
+        require(!result, "under-width observation accepted");
+        auto message = toString(result.takeError());
+        require(StringRef(message).contains("fitting degree bound"), message);
+      });
   mlir::DialectRegistry registry;
   zkc::registerDialects(registry);
   mlir::MLIRContext context(registry);
@@ -334,9 +329,6 @@ int main(int argc, char **argv) {
           // from the admitted original. The helper remains available only for
           // analysis.
           text = replaceText(text, "return(r=x);", "return(r=observe(x));");
-          if (!valid)
-            text = replaceText(text, "intrinsic<F,2>(\"poly.coefficients\"",
-                               "intrinsic<F,1>(\"poly.coefficients\"");
           auto original = take(prepareOriginal(
               take(closeEntry(take(check(text)), "sample::Demo"))));
           auto module = mlir::parseSourceString<mlir::ModuleOp>(
@@ -356,9 +348,18 @@ int main(int argc, char **argv) {
             module->print(stream, mlir::OpPrintingFlags().printGenericOpForm());
             return result;
           };
+          if (!valid) {
+            auto value = first(*module, "poly.coefficients")->getResult(0);
+            auto array =
+                mlir::cast<zkc::algebra::FieldArrayType>(value.getType());
+            value.setType(zkc::algebra::FieldArrayType::get(
+                &context, array.getDomain(), 1));
+          }
           auto before = print();
           mlir::ScopedDiagnosticHandler quiet(
               &context, [](mlir::Diagnostic &) { return mlir::success(); });
+          require(succeeded(mlir::verify(*module)) == valid,
+                  "uncalled helper admission verdict differs");
           require(succeeded(zkc::mathematical::verifyHelperObservations(
                       *module, {target})) == valid,
                   "uncalled helper observation validity differs");

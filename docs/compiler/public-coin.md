@@ -60,7 +60,8 @@ The independent requirement pins entry ports and ordered query/delivery sites.
 The implementation discovers the actual edges. It refuses hidden V-local calls,
 unmatched or changed coins and omitted verifier dependencies. Report checking
 recomputes everything, including preparation under an independently supplied
-policy. The view records `finite_bulk` and `fuse_vector_reductions`; its prepared
+policy. The view records `finite_bulk`, `fuse_vector_reductions` and
+`fuse_collect_fold`; its prepared
 hash names that exact unsimplified subject. Checked compilation forwards its
 policy to analysis and binds the result to the source text and exact emitted
 bundle, while preserving the narrower structural claim.

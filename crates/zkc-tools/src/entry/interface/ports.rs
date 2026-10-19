@@ -2,7 +2,7 @@
 //! This view contains no native artifact facts and confers no setup authority.
 use super::{Interface, InterfaceError as E, Result, raw, validate};
 use std::collections::{BTreeMap, BTreeSet};
-use zkc_runtime::interactive::{LogicalType, Type};
+use zkc_runtime::vm::{LogicalType, Type};
 
 #[derive(Debug)]
 pub(in crate::entry) struct RolePorts {

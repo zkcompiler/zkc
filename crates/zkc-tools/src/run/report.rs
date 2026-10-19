@@ -1,7 +1,8 @@
 use super::Step;
-use zkc_runtime::interactive::{
-    Backend, CutKind, DecodeReason, Origin, ProgramState, ReceiveCompletion, Runner, RuntimeError,
-    Stop, StopKind, Usage,
+use zkc_runtime::interpreter::Runner;
+use zkc_runtime::vm::{
+    Backend, CutKind, DecodeReason, Origin, ProgramState, ReceiveCompletion, RuntimeError, Stop,
+    StopKind, Usage,
 };
 
 /// UTF-8 prefix plus the number of omitted original bytes.
@@ -35,7 +36,7 @@ pub struct StopSummary {
     pub origin: Origin,
     pub site: Option<String>,
     pub cause: StopCause,
-    pub local: Option<Box<zkc_runtime::interactive::LocalContext>>,
+    pub local: Option<Box<zkc_runtime::vm::LocalContext>>,
     pub cleanup_errors: Vec<Text>,
     pub omitted_errors: usize,
 }
@@ -211,7 +212,7 @@ pub struct RoleReport<V> {
     pub role: String,
     pub before: State,
     pub usage: Option<Usage>,
-    pub execution_counts: zkc_runtime::interactive::ExecutionCounts,
+    pub execution_counts: zkc_runtime::vm::ExecutionCounts,
     pub observation: Observation,
     pub cancelled: bool,
     pub after: State,
@@ -236,7 +237,7 @@ pub struct Report<B: Backend> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zkc_runtime::interactive::BackendError;
+    use zkc_runtime::vm::BackendError;
     #[test]
     fn diagnostic_copies_are_bounded_at_utf8_boundaries() {
         let huge = "한".repeat(3000);
@@ -250,7 +251,7 @@ mod tests {
             role: "Alice".into(),
             site: Some("site".into()),
             kind: StopKind::Backend(BackendError::new(huge.clone())),
-            local: Some(Box::new(zkc_runtime::interactive::LocalContext {
+            local: Some(Box::new(zkc_runtime::vm::LocalContext {
                 site: "call".into(),
                 function: "fn".into(),
                 instruction: Some("site".into()),

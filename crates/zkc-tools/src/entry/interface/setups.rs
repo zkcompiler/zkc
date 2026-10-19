@@ -1,7 +1,7 @@
 //! Independent setup-selector admission over checked logical schemas.
 use super::{InterfaceError as E, Result, identifier, raw, require, schemas::Schemas, validate};
 use std::collections::BTreeSet;
-use zkc_runtime::interactive::Type;
+use zkc_runtime::vm::Type;
 
 #[derive(Debug)]
 pub(in crate::entry) struct Setup {

@@ -29,7 +29,7 @@ pub use plonky3::{
 };
 
 pub use backend::{
-    ComputationCheckpoint, EntryPolicy, NativeBackend, NativeCall, NativeKernel, PortConstraint,
+    ComputationCheckpoint, EntryPolicy, NativeBackend, NativeCall, NativeOperation, PortConstraint,
 };
 pub use codec::{
     NativeInputSize, NativeWireError, has_native_wire, native_wire_size, readable_wire,
@@ -39,7 +39,7 @@ pub use resource::{Capability, CapabilityObservation, Domain, LogicalUnit};
 pub use setups::SetupRegistry;
 pub use value::{Policy, Value};
 pub use zkc_arkworks::{GroupPoint, Keys, Scalar, parse_decimal};
-use zkc_runtime::interactive::BackendError;
+use zkc_runtime::vm::BackendError;
 
 /// Exact size of the BLS12-381 base/challenge field; no reduction or floating-point loss.
 /// For an independently uniform challenge and a fixed nonzero degree-d

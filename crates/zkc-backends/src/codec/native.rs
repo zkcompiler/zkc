@@ -10,9 +10,7 @@ mod readable;
 mod structured;
 use crate::{NativeBackend, Policy, Value};
 pub use readable::readable_wire;
-use zkc_runtime::interactive::{
-    BackendError, DecodeReason, PhysicalType, Type, Value as RuntimeValue,
-};
+use zkc_runtime::vm::{BackendError, DecodeReason, PhysicalType, Type, Value as RuntimeValue};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NativeWireError {
@@ -44,7 +42,7 @@ fn frame(ty: &PhysicalType) -> Option<(u8, usize)> {
         Some((31, 14))
     } else if ty.has_native_array_frame() {
         let (field, length) = ty.logical().field_array_parts()?;
-        if field != zkc_runtime::interactive::Identity::Bls12381Fr {
+        if field != zkc_runtime::vm::Identity::Bls12381Fr {
             return None;
         }
         Some((
@@ -55,7 +53,7 @@ fn frame(ty: &PhysicalType) -> Option<(u8, usize)> {
                 .checked_add(6)?,
         ))
     } else if PhysicalType::default_for(ty.logical()).ok().as_ref() == Some(ty) {
-        use zkc_runtime::interactive::{Identity::*, Type::*};
+        use zkc_runtime::vm::{Identity::*, Type::*};
         match (ty.kind(), ty.logical().identity()) {
             (Field, Bn254Fr) => Some((40, 38)),
             (Group, Bn254G1) => Some((46, 38)),
@@ -93,7 +91,7 @@ pub fn has_native_wire(ty: &PhysicalType) -> bool {
         || structured::tag(ty).is_some()
 }
 fn table_type(ty: &PhysicalType) -> bool {
-    ty.representation() == zkc_runtime::interactive::Representation::TableLsb
+    ty.representation() == zkc_runtime::vm::Representation::TableLsb
         && ty.logical().spelling() == "table:bls12-381.fr"
 }
 
@@ -230,8 +228,7 @@ impl NativeBackend {
         } else if bulk::format(&ty).is_some() {
             bulk::value_counts(value, self.policy())?;
         }
-        zkc_runtime::interactive::Backend::validate_value(self, value)
-            .map_err(NativeWireError::Backend)
+        zkc_runtime::vm::Backend::validate_value(self, value).map_err(NativeWireError::Backend)
     }
     /// Bound native input retention before expensive payload decoding. This
     /// uses byte lengths and, for recursive/bulk encodings, shape scans;
@@ -474,7 +471,7 @@ fn decode_table(policy: &Policy, bytes: &[u8]) -> Result<Value, NativeWireError>
 #[cfg(test)]
 mod tag_tests {
     use super::*;
-    use zkc_runtime::interactive::{Identity, LogicalType};
+    use zkc_runtime::vm::{Identity, LogicalType};
 
     /// The frame tag of every default physical type over the listed identities.
     fn tag(ty: &PhysicalType) -> Option<u8> {

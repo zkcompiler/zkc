@@ -210,7 +210,7 @@ pub fn check(
 pub fn check_g2_ingress() {
     use ark_bn254::{Fq, Fq2, G2Affine};
     use ark_serialize::CanonicalSerialize;
-    use zkc_runtime::interactive::Value as RuntimeValue;
+    use zkc_runtime::vm::Value as RuntimeValue;
     let wrong = (0u64..100)
         .find_map(|n| {
             G2Affine::get_point_from_x_unchecked(Fq2::new(Fq::from(n), Fq::from(1)), false)
@@ -223,6 +223,6 @@ pub fn check_g2_ingress() {
     let ty = Value::Bn254G2(Bn254G2::generator()).physical_type();
     assert_eq!(
         codec().decode_native_value(&ty, &wire).unwrap_err(),
-        zkc_backends::NativeWireError::Invalid(zkc_runtime::interactive::DecodeReason::Group)
+        zkc_backends::NativeWireError::Invalid(zkc_runtime::vm::DecodeReason::Group)
     );
 }

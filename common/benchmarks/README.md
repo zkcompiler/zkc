@@ -12,8 +12,7 @@ Use explicit, already-built executables. The harness does not build dependencies
 tune the host, raise execution limits or retry failed samples.
 
 ```sh
-flock -n -E 75 /tmp/zkc-benchmark-execution.lock \
-  cargo build --release --locked -p zkc-benchmarks
+cargo build --release --locked -p zkc-benchmarks
 python3 common/benchmarks/run.py list
 python3 common/benchmarks/run.py run --preset smoke \
   --compiler build/compiler/zkc-compile --runtime target/release/zkc \
@@ -21,14 +20,23 @@ python3 common/benchmarks/run.py run --preset smoke \
   --output build/experiments/benchmarks
 ```
 
-The output directory must be new. Both benchmark entry points acquire
-`/tmp/zkc-benchmark-execution.lock` before preparation and retain it through
-validation. Exit 75 means another cooperating session owns the slot; retry later.
-Do not wrap the harness in another acquisition of that lock, or delete the lock
-file. Use the same lock for external builds, profilers and timing experiments.
-This is advisory coordination, not isolation from unrelated host activity.
-Acquisition and command start/end times are retained in the evidence. Workers
-inherit the owned descriptor so the slot remains held if the supervisor is killed.
+The output directory must be new. Runs are exploratory by default: they do not
+acquire a host-wide lock and can overlap with development work. Use repeated
+baseline/current comparisons under similar load to identify broad trends;
+concurrent timings do not establish small speedups.
+
+Pass `--exclusive` to either benchmark entry point to acquire
+`/tmp/zkc-benchmark-execution.lock` across preparation, timing and validation.
+Exit 75 means another cooperating session owns the slot. Do not wrap the harness
+in another acquisition or delete the lock file. Workers inherit the owned
+descriptor so the slot remains held if the supervisor is killed.
+
+`coordination.json` records whether the run was `uncoordinated` or `exclusive`,
+its start/end times and, for exclusive runs, lock acquisition time. An exclusive
+lock coordinates cooperating suites; it does not stop ordinary builds or isolate
+unrelated host activity. Schedule a quiet interval explicitly for precise results.
+Ordinary builds and tests should use separate output directories and bounded
+parallelism, without a host-wide benchmark lock.
 
 Selection options intersect:
 
@@ -45,6 +53,12 @@ two warmup samples and five measured samples per process, one call per sample.
 A correctness trial can use `--processes 1 --warmups 0 --samples 1`; it is not a
 stable performance estimate. `--source` selects project/library sources; the
 executing harness remains this checkout. Both are identified and captured.
+
+Use `--compiler-option=--fuse-collect-fold` to measure an explicit compilation
+choice; repeat `--compiler-option` to combine supported switches. The manifest
+records the choices and captures the resulting packages. Compare separate runs
+with identical sources, inputs and worker settings. A smaller intermediate or
+instruction count does not by itself establish a timing improvement.
 
 `--threads` sets `RAYON_NUM_THREADS` (default one), not a universal thread limit.
 `--cpu` pins the suite and children to one allowed CPU. Workers check the requested
@@ -72,7 +86,7 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 | `schnorr` | BLS12-381 G1/Fr, Spongefish 0.7.4 SHAKE128 | Cross-verification with independent arkworks/Spongefish client |
 | `monero` | BP+ proving/verification, 64-bit amounts, 1–16 commitments | Upstream C++ comparison; fixture amounts and small masks, not a sampled wallet workload |
 | `sumcheck` | Public tables of 16–65,536 elements | Independent Rust algorithm; verifier includes linear public-table evaluation, no PCS |
-| `finite` | Identical pointwise polynomial + sum as reduction, collect + sum, and bulk operations; KoalaBear and BLS12-381 Fr; 0/17/1,024/8,192 elements | Independent Python expectations; exposes source-form recognition differences |
+| `finite` | Identical pointwise polynomial + sum as reduction, collect + sum, bulk operations, total collect–fold and total fold; KoalaBear and BLS12-381 Fr; 0/17/1,024/8,192 elements | Independent Python expectations; exposes source-form recognition and materialization differences |
 | `scan` | Scalar ordered scan and bulk prefix sum; 17/1,024/4,096 elements | Full output check; source-form comparison, no presumed storage-release benefit |
 | `control` | Rectangular nested loops, branches, indexing and carried state | Independent of machine libraries; not an unseen statistical holdout |
 | `matrix` | Rectangular matrix-vector multiplication, dense and sparse occupancy | Python expectations; R1CS-like arithmetic, not a full proof system |
@@ -90,6 +104,9 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 The [source catalog](bench/coverage.py) records exact dimensions, operation mix,
 category and limitations. Each run also records its oracle, input identities and
 generated source/asset digests.
+The two total finite forms use one explicit `math fn`, so collect and fold share
+a numerical unit. Ordinary function calls can introduce separate ordered units;
+collect–fold composition does not cross those boundaries.
 Python oracles execute outside the SDK timer. They use dense deterministic field
 values, including nonzero higher extension coordinates; the curve and pairing
 controls explicitly use weaker algebraic consistency checks.
@@ -166,8 +183,7 @@ floor is recorded and never subtracted.
 For runtime attribution, build a separate worker with execution observations:
 
 ```sh
-flock -n -E 75 /tmp/zkc-benchmark-execution.lock \
-  cargo build --release --locked -p zkc-benchmarks --features execution-counts \
+cargo build --release --locked -p zkc-benchmarks --features execution-counts \
   --target-dir target/counts
 python3 common/benchmarks/run.py run --preset execution --execution-counts \
   --compiler build/compiler/zkc-compile --runtime target/release/zkc \
@@ -268,7 +284,7 @@ own source cases. Both use [`runner.py`](bench/runner.py), [`io.py`](bench/io.py
 workload and oracle, not a production protocol-specific executor.
 
 [`protocol_math.py`](protocol-math.md) retains its distinct compiler-policy/CLI
-comparison contract and shares the journal and execution lock. Research drivers
+comparison contract and shares the journal and optional execution lock. Research drivers
 remain supporting evidence. This design follows worker/warmup separation in
 [pyperf](https://pyperf.readthedocs.io/en/stable/run_benchmark.html) and explicit
 boundaries/interleaving in [Google Benchmark](https://google.github.io/benchmark/user_guide.html).

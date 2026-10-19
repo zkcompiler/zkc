@@ -1,16 +1,17 @@
+use zkc_runtime::interpreter::Runner;
 mod common;
 use common::*;
 use serde_json::{Value as Json, json};
 use zkc_backends::*;
-use zkc_runtime::interactive::Identity;
-use zkc_runtime::interactive::{
-    Action, Backend, BackendError, ErrorCode, Frame, FrameExit, InstalledKernel, Invocation,
-    Limits, OperationBinding, PathElement, Runner, StopKind, Usage, ValueBudget, admit_supplied,
+use zkc_runtime::vm::Identity;
+use zkc_runtime::vm::{
+    Action, Backend, BackendError, ErrorCode, Frame, FrameExit, InstalledOperation, Invocation,
+    Limits, OperationBinding, PathElement, StopKind, Usage, ValueBudget,
 };
 
 fn candidate(ports: Json, outputs: Json, body: Json) -> Vec<u8> {
     fn physical(s: &str) -> String {
-        use zkc_runtime::interactive::{LogicalType, PhysicalType};
+        use zkc_runtime::vm::{LogicalType, PhysicalType};
         PhysicalType::default_for(LogicalType::parse(s).unwrap())
             .unwrap()
             .spelling()
@@ -104,12 +105,12 @@ impl Traced {
         }
     }
 }
-struct TracedKernel {
-    inner: NativeKernel,
+struct TracedOperation {
+    inner: NativeOperation,
     deterministic: bool,
 }
-impl InstalledKernel for TracedKernel {
-    fn signature(&self) -> &zkc_runtime::interactive::BoundSignature {
+impl InstalledOperation for TracedOperation {
+    fn signature(&self) -> &zkc_runtime::vm::BoundSignature {
         self.inner.signature()
     }
     fn deterministic(&self) -> bool {
@@ -129,13 +130,13 @@ impl Backend for Traced {
         self.inner.replay_computation(before, after)
     }
     type Value = Value;
-    type Kernel = TracedKernel;
-    fn prepare_binding(&self, b: &OperationBinding) -> Option<Self::Kernel> {
+    type Operation = TracedOperation;
+    fn prepare_binding(&self, b: &OperationBinding) -> Option<Self::Operation> {
         self.prepared.borrow_mut().push(b.clone());
         if self.blocked.as_deref() == Some(&b.contract) {
             None
         } else {
-            self.inner.prepare_binding(b).map(|inner| TracedKernel {
+            self.inner.prepare_binding(b).map(|inner| TracedOperation {
                 deterministic: inner.deterministic()
                     && self.nondeterministic != Some(b.contract.as_str()),
                 inner,
@@ -161,7 +162,7 @@ impl Backend for Traced {
     }
     fn apply(
         &mut self,
-        kernel: &Self::Kernel,
+        operation: &Self::Operation,
         i: &Invocation<'_>,
         args: &[Value],
     ) -> Result<Vec<Value>, BackendError> {
@@ -171,17 +172,18 @@ impl Backend for Traced {
             let other = self.inner.prepare_binding(binding).unwrap();
             return self.inner.apply(&other, i, args);
         }
-        self.inner.apply(&kernel.inner, i, args)
+        self.inner.apply(&operation.inner, i, args)
     }
 }
 fn execute<B: Backend<Value = Value>>(
     mut r: Runner<B>,
-) -> (Result<Vec<Value>, zkc_runtime::interactive::Stop>, Usage, B) {
+) -> (Result<Vec<Value>, zkc_runtime::vm::Stop>, Usage, B) {
     loop {
         match r.poll() {
             Action::Local(a) => r.execute_local(&a.cut).unwrap(),
             Action::Returned(v) => {
                 let u = r.usage();
+                common::assert_terminal_usage(u, v.len());
                 if let Some(counts) = r.execution_counts().json() {
                     let e = &counts["events"];
                     assert_eq!(
@@ -209,7 +211,9 @@ fn execute<B: Backend<Value = Value>>(
                 return (Ok(v), u, r.into_backend());
             }
             Action::Stopped(s) => {
+                common::assert_vm_frames(&s);
                 let u = r.usage();
+                common::assert_terminal_usage(u, 0);
                 if let Some(counts) = r.execution_counts().json() {
                     let e = &counts["events"];
                     assert_eq!(
@@ -475,14 +479,26 @@ fn malformed_dead_regions_and_affine_copy_are_rejected() {
     cases.push(v);
     for (i, v) in cases.iter().enumerate() {
         assert!(
-            admit_supplied(&serde_json::to_vec(v).unwrap(), &backend).is_err(),
+            zkc_runtime::vm::Program::decode(&serde_json::to_vec(v).unwrap())
+                .and_then(|program| {
+                    program.check_installation(&backend)?;
+                    Ok(program)
+                })
+                .is_err(),
             "mutation {i}"
         );
     }
     // An unsupported implementation hidden in the else branch is still checked.
     let mut v = good;
     v[1][0][3] = json!("missing/random.draw");
-    assert!(admit_supplied(&serde_json::to_vec(&v).unwrap(), &backend).is_err());
+    assert!(
+        zkc_runtime::vm::Program::decode(&serde_json::to_vec(&v).unwrap())
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .is_err()
+    );
 }
 #[test]
 fn dynamic_bound_and_iteration_exhaustion_are_finite() {
@@ -535,7 +551,12 @@ fn dynamic_bound_and_iteration_exhaustion_are_finite() {
 fn finite_value_budget_refuses_region_entry_without_open_frame_leak() {
     let bytes = choose();
     let b = Traced::new(ark_backend(None));
-    let admitted = admit_supplied(&bytes, &b).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        .and_then(|program| {
+            program.check_installation(&b)?;
+            Ok(program)
+        })
+        .unwrap();
     let runner = Runner::new_with_value_budget(
         &admitted,
         "main",
@@ -559,7 +580,11 @@ fn local_control_is_not_admitted_in_protocol_body() {
     let mut value: Json = serde_json::from_slice(&choose()).unwrap();
     value[3][0][6][0] = value[2][0][4][0].clone();
     assert_eq!(
-        admit_supplied(&serde_json::to_vec(&value).unwrap(), &ark_backend(None))
+        zkc_runtime::vm::Program::decode(&serde_json::to_vec(&value).unwrap())
+            .and_then(|program| {
+                program.check_installation(&ark_backend(None))?;
+                Ok(program)
+            })
             .unwrap_err()
             .code,
         ErrorCode::Record
@@ -609,7 +634,12 @@ fn region_storage_release_keeps_ghost_charge_and_final_return_charge() {
         .insert(2, json!(["op", "not2", "bool.not", [], ["b"], ["m"]]));
     let bytes = serde_json::to_vec(&value).unwrap();
     let b = Traced::new(ark_backend(None));
-    let admitted = admit_supplied(&bytes, &b).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        .and_then(|program| {
+            program.check_installation(&b)?;
+            Ok(program)
+        })
+        .unwrap();
     let r = Runner::new_with_value_budget(
         &admitted,
         "main",
@@ -651,7 +681,12 @@ fn local_region_depth_counts_every_active_native_frame() {
         body.as_array_mut().unwrap().last_mut().unwrap()[0] = json!("return");
         let bytes = candidate(json!([["ok", "bool"]]), json!(["bool"]), body);
         if !succeeds {
-            let error = admit_supplied(&bytes, &ark_backend(None)).unwrap_err();
+            let error = zkc_runtime::vm::Program::decode(&bytes)
+                .and_then(|program| {
+                    program.check_installation(&ark_backend(None))?;
+                    Ok(program)
+                })
+                .unwrap_err();
             assert_eq!(error.code, ErrorCode::Limit);
             continue;
         }
@@ -714,11 +749,22 @@ fn instruction_exhaustion_does_not_execute_suffix_or_next_iteration() {
 #[test]
 fn recursive_installation_inventory_and_reinstallation_cover_nested_operations() {
     let bytes = random_loop();
-    let admitted = admit_supplied(&bytes, &ark_backend(None)).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap();
     let mut backend = Traced::new(ark_backend(None));
     backend.blocked = Some("random.draw".into());
     assert_eq!(
-        admit_supplied(&bytes, &backend).unwrap_err().code,
+        zkc_runtime::vm::Program::decode(&bytes)
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap_err()
+            .code,
         ErrorCode::Backend
     );
     match Runner::new(&admitted, "main", "P", "session", backend, vec![]) {
@@ -726,7 +772,7 @@ fn recursive_installation_inventory_and_reinstallation_cover_nested_operations()
         Err(e) => {
             assert!(matches!(
                 e.error,
-                zkc_runtime::interactive::RuntimeError::Admission(_)
+                zkc_runtime::vm::RuntimeError::Admission(_)
             ));
             assert_eq!(e.backend.inner.active_frames(), 0);
         }
@@ -763,7 +809,12 @@ fn nested_cleanup_failure_is_recorded_without_hiding_consumed_rng_exhaustion() {
 fn bindings_are_prepared_once_per_owned_backend_not_per_iteration() {
     let bytes = sum_loop();
     let admitting = Traced::new(ark_backend(None));
-    let admitted = admit_supplied(&bytes, &admitting).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        .and_then(|program| {
+            program.check_installation(&admitting)?;
+            Ok(program)
+        })
+        .unwrap();
     assert_eq!(admitting.prepared.borrow().len(), 3);
     for count in [0, 1, 64] {
         let runner = Runner::new(
@@ -791,7 +842,7 @@ fn bindings_are_prepared_once_per_owned_backend_not_per_iteration() {
         .err()
         .expect("uninstalled binding");
     assert!(
-        matches!(failure.error, zkc_runtime::interactive::RuntimeError::Admission(ref e)
+        matches!(failure.error, zkc_runtime::vm::RuntimeError::Admission(ref e)
         if e.code == ErrorCode::Backend)
     );
     assert!(failure.backend.frames.is_empty());
@@ -800,7 +851,7 @@ fn bindings_are_prepared_once_per_owned_backend_not_per_iteration() {
 
 #[test]
 fn preparation_identity_includes_static_arguments_and_coalesces_declaration_aliases() {
-    use zkc_runtime::interactive::{LogicalType, PhysicalType, Value as RuntimeValue};
+    use zkc_runtime::vm::{LogicalType, PhysicalType, Value as RuntimeValue};
     let types: Vec<_> = ["sequence<index>", "sequence<bool>"]
         .into_iter()
         .map(|s| PhysicalType::default_for(LogicalType::parse(s).unwrap()).unwrap())
@@ -852,7 +903,12 @@ fn preparation_identity_includes_static_arguments_and_coalesces_declaration_alia
     ]))
     .unwrap();
     let admitting = Traced::new(ark_backend(None));
-    let admitted = admit_supplied(&bytes, &admitting).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        .and_then(|program| {
+            program.check_installation(&admitting)?;
+            Ok(program)
+        })
+        .unwrap();
     assert_eq!(admitting.prepared.borrow().len(), 2);
     let runner = Runner::new(
         &admitted,
@@ -922,7 +978,11 @@ fn preparation_handles_terminal_branches_and_rejects_fabricated_results() {
     let mut bad: Json = serde_json::from_slice(&bytes).unwrap();
     bad[2][0][4][0][6] = json!(["fabricated"]);
     assert_eq!(
-        admit_supplied(&serde_json::to_vec(&bad).unwrap(), &ark_backend(None))
+        zkc_runtime::vm::Program::decode(&serde_json::to_vec(&bad).unwrap())
+            .and_then(|program| {
+                program.check_installation(&ark_backend(None))?;
+                Ok(program)
+            })
             .unwrap_err()
             .code,
         ErrorCode::Signature
@@ -933,7 +993,11 @@ fn preparation_handles_terminal_branches_and_rejects_fabricated_results() {
         .unwrap()
         .push(json!(["c", "bool@native.bool/0"]));
     assert_eq!(
-        admit_supplied(&serde_json::to_vec(&duplicate).unwrap(), &ark_backend(None))
+        zkc_runtime::vm::Program::decode(&serde_json::to_vec(&duplicate).unwrap())
+            .and_then(|program| {
+                program.check_installation(&ark_backend(None))?;
+                Ok(program)
+            })
             .unwrap_err()
             .code,
         ErrorCode::Ssa
@@ -952,7 +1016,12 @@ fn prepared_code_keeps_attributes_at_each_call_site() {
         ]),
     );
     let backend = Traced::new(ark_backend(None));
-    let admitted = admit_supplied(&bytes, &backend).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
     assert_eq!(backend.prepared.borrow().len(), 1);
     let runner = Runner::new(&admitted, "main", "P", "session", backend, vec![])
         .unwrap_or_else(|_| panic!("entry"));
@@ -1025,7 +1094,12 @@ fn prepared_calls_match_checked_calls_at_repeated_sites_and_budget_failures() {
             ["return", []]
         ]),
     );
-    let admitted = admit_supplied(&program, &ark_backend(None)).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&program)
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap();
     for (length, instructions, cumulative) in [
         (8, 1000, usize::MAX),
         (2, 1000, usize::MAX),
@@ -1042,7 +1116,7 @@ fn prepared_calls_match_checked_calls_at_repeated_sites_and_budget_failures() {
             total_bytes: cumulative,
             ..Default::default()
         };
-        let work = zkc_runtime::interactive::WorkBudget {
+        let work = zkc_runtime::vm::WorkBudget {
             instructions,
             ..Default::default()
         };
@@ -1079,3 +1153,34 @@ fn prepared_calls_match_checked_calls_at_repeated_sites_and_budget_failures() {
 
 #[path = "local_control/preparation.rs"]
 mod preparation;
+
+#[test]
+fn native_direct_call_refuses_a_different_handle_with_identical_ports() {
+    let declared = OperationBinding {
+        contract: "vector.dot".into(),
+        arguments: vec!["bls12-381.fr".into()],
+        implementation: "arkworks/vector.dot".into(),
+    };
+    let substitute = OperationBinding {
+        implementation: "arkworks-pairwise/vector.dot".into(),
+        ..declared.clone()
+    };
+    assert_eq!(
+        declared.signature().unwrap(),
+        substitute.signature().unwrap()
+    );
+    let bytes = candidate(
+        json!([["a", "vector:bls12-381.fr"], ["b", "vector:bls12-381.fr"]]),
+        json!(["field:bls12-381.fr"]),
+        json!([
+            ["op", "dot", "vector.dot", [], ["a", "b"], ["out"]],
+            ["return", ["out"]]
+        ]),
+    );
+    let vector = Value::Vector(vec![Scalar::from(7u64)].into());
+    let mut backend = Traced::new(ark_backend(None));
+    backend.substitute = Some(substitute);
+    let (out, _, backend) = execute(load(&bytes, backend, vec![vector.clone(), vector]));
+    assert_eq!(code(&out.unwrap_err()), "refused:kernel-binding");
+    assert_eq!(backend.inner.active_frames(), 0);
+}

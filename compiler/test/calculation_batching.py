@@ -70,7 +70,7 @@ with case("the named pipeline and the explicit passes agree without batching"):
     named = commands.verified(source, None, "--pass-pipeline=builtin.module(zkc-participant-pipeline"
                               "{calculation-batching=false})")
     explicit = commands.verified(source, None, "--pass-pipeline=builtin.module(zkc-project-protocol,"
-                                 "zkc-eliminate-polynomials,zkc-lower-math{calculation-batching=false},"
+                                 "zkc-lower-math{calculation-batching=false},"
                                  "zkc-select-physical)")
     assert named == explicit
 

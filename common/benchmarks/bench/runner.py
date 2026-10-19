@@ -129,12 +129,12 @@ def execute_job(job, directory, plan, timeout):
 
 
 def run(args, prepare):
-    # Acquisition is fail-fast and precedes compilation or worker launch.
-    with measurement_slot(args.output.resolve() / 'coordination.json'):
-        return run_locked(args, prepare)
+    # Optional acquisition is fail-fast and precedes compilation or worker launch.
+    with measurement_slot(args.output.resolve() / 'coordination.json', exclusive=args.exclusive):
+        return run_suite(args, prepare)
 
 
-def run_locked(args, prepare):
+def run_suite(args, prepare):
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     original_affinity = None
@@ -143,6 +143,7 @@ def run_locked(args, prepare):
     manifest = {'format': FORMAT, 'status': 'running', 'phase': 'preparation', 'results': [], 'contracts': {},
                 'plan': {'samples': args.samples, 'warmups': args.warmups, 'iterations': args.iterations},
                 'processes': args.processes, 'seed': args.seed, 'label': args.label,
+                'compiler_options': args.compiler_option,
                 'observation': 'execution_counts' if args.execution_counts else 'timing',
                 'argv': sys.argv, 'host': {}, 'files': capture.files, 'checks': []}
     try:

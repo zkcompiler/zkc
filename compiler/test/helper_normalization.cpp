@@ -5,6 +5,7 @@
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -142,20 +143,20 @@ int main() {
     std::string before, after;
     llvm::raw_string_ostream(before) << *source;
     mathematical::CheckedHelperNormalizations proposals(unit(*source));
-    require(!proposals.lookup(helper) && !proposals.lookup(helper, true),
+    require(!proposals.lookup(helper),
             "lookup manufactured an unchecked proposal");
-    require(succeeded(proposals.prepareRealization(helper)),
+    require(succeeded(proposals.prepare(helper)),
             "normalization proposal failed");
-    auto normalized = proposals.lookup(helper, true);
+    auto normalized = proposals.lookup(helper);
     require(normalized && normalized.front().getOps<func::CallOp>().empty(),
             "checked proposal retained an unexpanded call");
-    require(succeeded(proposals.prepareRealization(helper)) &&
-                proposals.lookup(helper, true) == normalized,
+    require(succeeded(proposals.prepare(helper)) &&
+                proposals.lookup(helper) == normalized,
             "an already checked helper was regenerated");
     llvm::raw_string_ostream(after) << *source;
     require(before == after, "proposal preparation changed its original");
   });
-  cases.run("packed projections are checked before recipe lowering", [&] {
+  cases.run("explicit packed projection folding is independently checked", [&] {
     auto source = parseSourceString<ModuleOp>(insert(base, R"(
  func.func private @projection(%a:!F,%b:!F)->!F {
    %pack = "algebra.array_from_elements"(%a,%b) : (!F,!F)->!A
@@ -167,10 +168,17 @@ int main() {
     require(bool(source), "packed helper refused");
     auto helper = SymbolTable(unit(*source)).lookup<func::FuncOp>("projection");
     mathematical::CheckedHelperNormalizations proposals(unit(*source));
-    require(succeeded(proposals.prepareRealization(helper)),
+    require(succeeded(proposals.prepare(helper)),
             "packed helper realization could not be checked");
-    auto normalized = proposals.lookup(helper, true);
-    require(normalized && normalized.front().getOperations().size() == 1 &&
+    auto prepared = proposals.lookup(helper);
+    require(bool(prepared), "missing checked helper");
+    OwningOpRef<func::FuncOp> folded(cast<func::FuncOp>(prepared->clone()));
+    uint64_t work = 100000;
+    require(
+        succeeded(mathematical::foldArrayProjections(folded->front(), work)),
+        "projection folding failed");
+    auto normalized = *folded;
+    require(normalized.front().getOperations().size() == 1 &&
                 normalized.front().back().getOperand(0) ==
                     normalized.getArgument(1),
             "packed projection was not folded to its selected value");
@@ -224,6 +232,38 @@ int main() {
     require(failed(mathematical::verifyMathRealizationsPreserved(*source,
                                                                  *candidate)),
             "outer correspondence ignored the second result");
+  });
+  cases.run("raw closure bodies are frozen with their Local wrapper", [&] {
+    auto source = parseSourceString<ModuleOp>(insert(base, nested), &context);
+    require(bool(source), "raw closure source refused");
+    auto candidate = copy(*source);
+    require(succeeded(mathematical::expandMathRealizations(*candidate)),
+            "raw closure formation failed");
+    auto wrapper = SymbolTable(unit(*candidate)).lookup<local::FuncOp>("tuple");
+    auto call = cast<kernel::CallOp>(wrapper.getBody().front().front());
+    SymbolTableCollection symbols;
+    auto entry = kernel::resolve(call, symbols);
+    require(bool(entry), "wrapper lost its numerical entry");
+    auto closure = cast<kernel::ModuleOp>(entry->getParentOp());
+    auto helper = SymbolTable(unit(*source)).lookup<func::FuncOp>("nested");
+    require(
+        succeeded(kernel::verifyKernelClosure(unit(*source), helper, closure)),
+        "formation changed the original helper closure");
+    auto frozen = copy(*candidate);
+    auto dependency = SymbolTable(closure).lookup<func::FuncOp>("difference");
+    require(bool(dependency), "formation normalized away the raw dependency");
+    auto &subtract = dependency.front().front();
+    subtract.setOperand(1, subtract.getOperand(0));
+    require(succeeded(verify(*candidate)),
+            "same-typed dependency mutation lost formation");
+    ScopedDiagnosticHandler expected(&context,
+                                     [](Diagnostic &) { return success(); });
+    require(failed(mathematical::verifyMathRealizationsPreserved(*source,
+                                                                 *candidate)),
+            "formation correspondence ignored a changed Kernel helper");
+    require(failed(mathematical::verifyAuthoredLocalsPreserved(
+                unit(*frozen), unit(*candidate))),
+            "Local preservation failed to freeze its numerical closure");
   });
   cases.run("bounded indices retain their argument assignment", [&] {
     auto source = parseSourceString<ModuleOp>(insert(base, R"(
@@ -353,6 +393,23 @@ int main() {
         require(succeeded(mathematical::verifyMathRealizationsPreserved(
                     *source, *candidate)),
                 "polynomial family correspondence failed");
+        unsigned rawPolynomialOperations = 0;
+        candidate->walk([&](Operation *operation) {
+          rawPolynomialOperations +=
+              bool(operation->getParentOfType<kernel::ModuleOp>()) &&
+              operation->getName().getStringRef().starts_with("poly.");
+        });
+        require(rawPolynomialOperations,
+                "formation normalized away raw polynomial mathematics");
+        PassManager formation(&context);
+        formation.addPass(protocol::createProjectProtocolPass(false));
+        formation.addPass(protocol::createLowerMathPass());
+        require(succeeded(formation.run(*candidate)), "logical Exec failed");
+        auto logical = copy(*candidate);
+        require(
+            succeeded(kernel::lowerKernels(*candidate)) &&
+                succeeded(kernel::verifyKernelLowering(*logical, *candidate)),
+            "polynomial recipes failed");
         SymbolTable symbols(unit(*candidate));
         auto function = symbols.lookup<local::FuncOp>("sum_exec");
         bool changed = false;
@@ -368,8 +425,7 @@ int main() {
                 "dimension mutation is not executable");
         ScopedDiagnosticHandler handler(&context,
                                         [](Diagnostic &) { return success(); });
-        require(failed(mathematical::verifyMathRealizationsPreserved(
-                    *source, *candidate)),
+        require(failed(kernel::verifyKernelLowering(*logical, *candidate)),
                 "changed static dimension escaped correspondence");
       });
   cases.run("ordered finite helper checks original polynomial meaning", [&] {
@@ -388,7 +444,6 @@ int main() {
     policy.finiteBulk = false;
     PassManager preparation(&context);
     preparation.addPass(protocol::createProjectProtocolPass(false, policy));
-    preparation.addPass(protocol::createEliminatePolynomialsPass());
     require(succeeded(preparation.run(*source)), "finite preparation failed");
     auto candidate = copy(*source);
     PassManager lowering(&context);
@@ -398,6 +453,10 @@ int main() {
     require(succeeded(mathematical::verifyMathLowering(unit(*source),
                                                        unit(*candidate))),
             "original finite polynomial recipe refused");
+    auto logical = copy(*candidate);
+    require(succeeded(kernel::lowerKernels(*candidate, policy)) &&
+                succeeded(kernel::verifyKernelLowering(*logical, *candidate)),
+            "finite polynomial recipes failed");
     bool changed = false;
     candidate->walk([&](Operation *op) {
       if (!changed && isa<algebra::FieldProductOp>(op)) {
@@ -409,8 +468,7 @@ int main() {
             "finite mutation is not executable");
     ScopedDiagnosticHandler handler(&context,
                                     [](Diagnostic &) { return success(); });
-    require(failed(mathematical::verifyMathLowering(unit(*source),
-                                                    unit(*candidate))),
+    require(failed(kernel::verifyKernelLowering(*logical, *candidate)),
             "changed finite polynomial computation escaped correspondence");
   });
   cases.run(
@@ -431,7 +489,13 @@ int main() {
             parseSourceString<ModuleOp>(insert(base, declarations), &context);
         require(bool(source), "ordinary shared helper program refused");
         require(succeeded(mathematical::expandMathRealizations(*source)),
-                "shared helper normalization narrowed existing capacity");
+                "shared helper formation narrowed existing capacity");
+        PassManager pipeline(&context);
+        pipeline.addPass(protocol::createProjectProtocolPass(false));
+        pipeline.addPass(protocol::createLowerMathPass());
+        pipeline.addPass(kernel::createLowerKernelsPass());
+        require(succeeded(pipeline.run(*source)),
+                "later shared helper normalization narrowed existing capacity");
       });
   cases.run("helper comparisons share one cumulative work budget", [&] {
     std::string declarations = "func.func private @budgeted(%x:!F)->!F {\n";
@@ -475,8 +539,8 @@ int main() {
                   policy.finiteBulk = bulk;
                   pipeline.addPass(
                       protocol::createProjectProtocolPass(false, policy));
-                  pipeline.addPass(protocol::createEliminatePolynomialsPass());
                   pipeline.addPass(protocol::createLowerMathPass(policy));
+                  pipeline.addPass(kernel::createLowerKernelsPass());
                   require(succeeded(pipeline.run(*source)),
                           "finite helper realization failed");
                 });

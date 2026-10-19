@@ -45,7 +45,7 @@ theorem accepted : refusal (checkLowering installed constructed actual) = none :
 /-- The mutation helpers alone preserve acceptance. -/
 theorem unchanged_accepted :
     refusal (checkLowering installed constructed
-      (withStep actual "_calculation_2" 2 (.operation "value_2" "_calculation_6" [] ["v24", "v26"] ["v27"])))
+      (withStep actual "_calculation_2" 2 (.operation "lc_6_kernel_6_kernel_1_2" "_kernel_binding_4" [] ["v24", "v26"] ["v27"])))
       = none := by
   decide +kernel
 
@@ -54,7 +54,7 @@ theorem unchanged_accepted :
 /-- The final addition takes its operands in the other order. The sum is a pure
 term, so the rule finds the difference where the decision it feeds is returned. -/
 def additionSwapped : Validator :=
-  withStep actual "_calculation_2" 2 (.operation "value_2" "_calculation_6" [] ["v26", "v24"] ["v27"])
+  withStep actual "_calculation_2" 2 (.operation "lc_6_kernel_6_kernel_1_2" "_kernel_binding_4" [] ["v26", "v24"] ["v27"])
 
 theorem additionSwapped_refused :
     refusal (checkLowering installed constructed additionSwapped) = some (.returned 0) := by
@@ -63,7 +63,7 @@ theorem additionSwapped_refused :
 /-- The final comparison compares one side with itself: the returned decision
 denotes another term. -/
 def comparisonTrivial : Validator :=
-  withStep actual "_calculation_2" 3 (.operation "value_3" "_calculation_7" [] ["v25", "v25"] ["v28"])
+  withStep actual "_calculation_2" 3 (.operation "lc_6_kernel_6_kernel_1_3" "_kernel_binding_3" [] ["v25", "v25"] ["v28"])
 
 theorem comparisonTrivial_refused :
     refusal (checkLowering installed constructed comparisonTrivial) = some (.returned 0) := by
@@ -99,10 +99,10 @@ theorem staleTranscript_refused :
 /-! ## Installation mutations -/
 
 /-- An implementation outside the installed vocabulary. -/
-def uninstalled : Validator := withImplementation actual "_calculation_6" "fast/curve.add"
+def uninstalled : Validator := withImplementation actual "_kernel_binding_4" "fast/curve.add"
 
 theorem uninstalled_refused :
-    refusal (checkLowering installed constructed uninstalled) = some (.binding "_calculation_6") := by
+    refusal (checkLowering installed constructed uninstalled) = some (.binding "_kernel_binding_4") := by
   decide +kernel
 
 /-- The commitment is received at a representation the vocabulary does not admit. -/
@@ -153,7 +153,7 @@ theorem functionDuplicated_refused :
 /-- A second binding under the addition's symbol. -/
 def bindingDuplicated : Validator :=
   { actual with bindings := actual.bindings ++
-      [⟨"_calculation_6", "curve.add", ["bls12-381.g1"], "fast/curve.add"⟩] }
+      [⟨"_kernel_binding_4", "curve.add", ["bls12-381.g1"], "fast/curve.add"⟩] }
 
 theorem bindingDuplicated_refused :
     refusal (checkLowering installed constructed bindingDuplicated) = some (.duplicate "binding") := by

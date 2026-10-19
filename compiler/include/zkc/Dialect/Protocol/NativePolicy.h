@@ -1,30 +1,12 @@
 #ifndef ZKC_DIALECT_PROTOCOL_NATIVEPOLICY_H
 #define ZKC_DIALECT_PROTOCOL_NATIVEPOLICY_H
-#include "mlir/IR/Types.h"
-#include "zkc/Contracts/NativePolicy.h"
-#include "llvm/ADT/DenseMap.h"
-#include <optional>
-namespace mlir {
-class Operation;
-}
+#include "zkc/Analysis/NativeTypes.h"
 namespace zkc::mathematical {
-using NativeTypePolicy = protocol::NativeTypePolicy;
-// Closed native-local/0 vocabulary. Nominal formation is checked before any
-// use permission is returned; containers recursively check their leaves.
-std::optional<NativeTypePolicy> nativeTypePolicy(mlir::Type type);
-class NativeTypePolicies {
-  mlir::Operation *owner;
-  llvm::DenseMap<mlir::Type, std::optional<NativeTypePolicy>> cache;
-  unsigned remaining = 200000;
-  // Bytes of distinct top-level spellings, not a character-instruction budget.
-  // Nested variant decoding can revisit a spelling at each formed type depth.
-  size_t remainingBytes = 1024 * 1024;
-  bool limited = false;
-
-public:
-  explicit NativeTypePolicies(mlir::Operation *owner) : owner(owner) {}
-  std::optional<NativeTypePolicy> get(mlir::Type type);
-};
+/// Admit a closed logical Local fragment containing only functions and
+/// bindings in an exec-profile Protocol owner. Checks MLIR child invariants,
+/// native types and the existing local-definition grammar/resources. No
+/// participant Entry is required; whole-program admission remains separate.
+mlir::LogicalResult verifyLocalFragment(mlir::Operation *unit);
 mlir::LogicalResult verifyNativeLocals(mlir::Operation *unit, bool allowApply,
                                        NativeTypePolicies &types);
 mlir::LogicalResult verifyNativeLocals(mlir::Operation *unit, bool allowApply);

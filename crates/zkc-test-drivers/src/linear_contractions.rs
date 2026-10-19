@@ -2,7 +2,8 @@
 //! Usage: linear_contractions PROGRAM.json field|group [direct|if|for]
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, RistrettoScalar, Scalar, Value};
-use zkc_runtime::interactive::{Action, Runner, StopKind, admit_supplied};
+use zkc_runtime::interpreter::Runner;
+use zkc_runtime::vm::{Action, StopKind};
 
 const LEFT: [u64; 4] = [3, 11, 13, 17];
 const RIGHT: [u64; 4] = [19, 23, 0, 29];
@@ -37,7 +38,12 @@ fn runner(bytes: &[u8], group: bool, allowed: bool, short_right: bool) -> Runner
         Default::default(),
     )
     .unwrap();
-    let admitted = admit_supplied(bytes, &native).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(bytes)
+        .and_then(|program| {
+            program.check_installation(&native)?;
+            Ok(program)
+        })
+        .unwrap();
     let values = if group {
         Value::RistrettoGroups(
             VALUES
@@ -107,7 +113,7 @@ fn main() {
             _ => panic!("unexpected contraction result: {actual:?}"),
         }
     }
-    // One local call, four kernels and the local/participant returns.
+    // One local call, four operations and the local/participant returns.
     if control == "direct" {
         assert_eq!(successful.usage().instructions, 7);
     } else {

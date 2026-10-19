@@ -1,8 +1,11 @@
 #include "FiniteVerification.h"
+#include "CollectFold.h"
 #include "CollectionInterpretation.h"
+#include "Kernel/Schedule.h"
 #include "MathematicalComparison.h"
 #include "RealizationSubject.h"
 #include "mlir/IR/OperationSupport.h"
+#include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/ComputationMeaning.h"
 #include "zkc/Analysis/Finite.h"
@@ -27,7 +30,11 @@ class Reader {
   Type index, boolean;
   llvm::DenseMap<Value, Value> actual, cardinalities, offsets;
   bool valid = true, inlineMode = false;
+  bool allowBulk;
   HelperReader helperReader;
+  const CollectFold *composition = nullptr;
+  ComposedHelperReader composedHelper;
+  SmallVector<Value> consumerInputs, consumerEnvironment;
   SmallVector<Value> expressionResults;
   uint64_t remaining;
   VerificationLimits limits;
@@ -108,6 +115,40 @@ class Reader {
   }
   Operation *control(StringRef name, ValueRange operands, TypeRange results,
                      unsigned regions) {
+    if (name == "local.for") {
+      auto *at = cursor;
+      auto parsed = zkc::kernel::readScheduledLoop(at, remaining);
+      if (failed(parsed)) {
+        result = {VerificationStatus::RequiredCapacity, "finite reader work",
+                  CapacityCause{WorkOwner::RequiredFiniteReader, {}, remaining},
+                  mathematical::realizationSubject(c.operation)};
+        fail();
+        return nullptr;
+      }
+      auto &scheduled = *parsed;
+      if (scheduled) {
+        if (!remaining) {
+          result = {
+              VerificationStatus::RequiredCapacity, "finite reader work",
+              CapacityCause{WorkOwner::RequiredFiniteReader, 1, remaining},
+              mathematical::realizationSubject(c.operation)};
+          fail();
+          return nullptr;
+        }
+        if (ValueRange(scheduled->inputs) != operands ||
+            scheduled->states != results.size() ||
+            !llvm::equal(scheduled->loop.getResults()
+                             .take_front(results.size())
+                             .getTypes(),
+                         results)) {
+          fail();
+          return nullptr;
+        }
+        --remaining;
+        cursor = at;
+        return scheduled->loop;
+      }
+    }
     auto *op = consume(name);
     if (!op)
       return nullptr;
@@ -125,14 +166,22 @@ class Reader {
       return nullptr;
     }
     auto &block = op->getRegion(region).front();
-    if (block.getArgumentTypes() != types || block.empty()) {
+    auto arguments = zkc::kernel::traversalArguments(&block);
+    if (!llvm::equal(ValueRange(arguments).getTypes(), types) ||
+        block.empty()) {
       fail();
       return nullptr;
     }
     cursor = &block.front();
+    if (isa<scf::ForOp>(op))
+      cursor =
+          cursor->getNextNode(); // Exact induction bridge checked by schema.
     return &block;
   }
   void end(StringRef name, ValueRange inputs) {
+    if (cursor && isa<scf::ForOp>(cursor->getParentOp()) &&
+        name == "local.yield")
+      name = "scf.yield";
     auto *op = consume(name);
     if (!op || op->getOperands() != inputs || op->getNumResults() ||
         op->getNumRegions() || !op->getAttrs().empty() || cursor)
@@ -313,7 +362,48 @@ class Reader {
     return SmallVector<Value>(op->getResults());
   }
   SmallVector<Value> transition(ValueRange state, ValueRange items,
-                                ValueRange env) {
+                                ValueRange env, Value position = {}) {
+    if (composition) {
+      auto producerEnv = env.take_front(c.arguments + c.captures);
+      auto element =
+          invoke(CallbackRole::Body, {{},
+                                      items,
+                                      producerEnv.take_front(c.arguments),
+                                      producerEnv.drop_front(c.arguments)});
+      if (!valid || element.size() != 1) {
+        fail();
+        return {};
+      }
+      auto rest = env.drop_front(c.arguments + c.captures);
+      SmallVector<Value> consumerEnv;
+      unsigned next = 0;
+      for (Value value : consumerEnvironment)
+        consumerEnv.push_back(value == composition->collected ? value
+                                                              : rest[next++]);
+      auto &consumer = composition->consumer;
+      auto callback = readCallback(consumer, CallbackRole::Step);
+      if (failed(callback)) {
+        fail();
+        return {};
+      }
+      SmallVector<Value> item{composition->indexed ? position : element[0]};
+      auto environment = bindCallback(
+          *callback,
+          {state, item, ValueRange(consumerEnv).take_front(consumer.arguments),
+           ValueRange(consumerEnv).drop_front(consumer.arguments)});
+      if (failed(environment)) {
+        fail();
+        return {};
+      }
+      auto results =
+          composedHelper(callback->symbol, environment->actuals, cursor,
+                         composition->collected, position, element[0]);
+      if (failed(results)) {
+        fail();
+        return {};
+      }
+      return *results;
+    }
     auto next =
         invoke(c.collect ? CallbackRole::Body : CallbackRole::Step,
                {c.collect ? ValueRange{} : state, items,
@@ -327,12 +417,20 @@ class Reader {
 
 public:
   Reader(Computation computation, SymbolTable &symbols,
-         llvm::DenseSet<Operation *> &bindings, VerificationLimits limits = {})
+         llvm::DenseSet<Operation *> &bindings, VerificationLimits limits = {},
+         bool allowBulk = true)
       : c(computation), symbols(symbols), bindings(bindings),
         index(IntegerType::get(c.operation->getContext(), 64,
                                IntegerType::Unsigned)),
         boolean(IntegerType::get(c.operation->getContext(), 1)),
-        remaining(limits.reader), limits(limits) {}
+        allowBulk(allowBulk), remaining(limits.reader), limits(limits) {}
+  void compose(const CollectFold &pair, ValueRange inputs,
+               ComposedHelperReader helper) {
+    composition = &pair;
+    consumerInputs.assign(inputs.begin(), inputs.end());
+    composedHelper = helper;
+    allowBulk = false;
+  }
   VerificationResult outcome() const { return result; }
   bool check(local::FuncOp target) {
     if (!target || target.getFunctionType() != c.signature ||
@@ -373,13 +471,14 @@ public:
     if (!valid)
       return false;
     Value rootDomain = c.domain.getBody().front().back().getOperand(0);
-    if (mathematical::hasFinitePayloadContract(cursor, symbols) ||
-        // An identity collect can return an existing vector without emitting
-        // payload. Its ordered alternative starts with an empty container.
-        (c.collect && cursor &&
-         isa<algebra::FieldVectorType>(c.signature.getResult(0)) &&
-         cursor->getName().getStringRef() !=
-             protocol::boundOperationName("vector.empty"))) {
+    if (allowBulk &&
+        (mathematical::hasFinitePayloadContract(cursor, symbols) ||
+         // An identity collect can return an existing vector without emitting
+         // payload. Its ordered alternative starts with an empty container.
+         (c.collect && cursor &&
+          isa<algebra::FieldVectorType>(c.signature.getResult(0)) &&
+          cursor->getName().getStringRef() !=
+              protocol::boundOperationName("vector.empty")))) {
       // Semantic comparison is optional. Its bounded interpretation and
       // normalization cannot spend the ordered reader's admission budget.
       uint64_t comparisonWork = std::min(remaining, limits.comparison);
@@ -406,7 +505,17 @@ public:
     SmallVector<Value> state, env;
     append_range(env, partitions->domain);
     append_range(env, partitions->captures);
-    if (c.collect) {
+    if (composition) {
+      auto consumer = partitionEntry(composition->consumer, consumerInputs);
+      if (failed(consumer))
+        return false;
+      append_range(state, consumer->initialState);
+      append_range(consumerEnvironment, consumer->domain);
+      append_range(consumerEnvironment, consumer->captures);
+      for (Value value : consumerEnvironment)
+        if (value != composition->collected)
+          env.push_back(value);
+    } else if (c.collect) {
       auto result = c.signature.getResult(0);
       auto col = mathematical::interpretCollection(result);
       if (col.staticExtent.has_value()) {
@@ -448,12 +557,13 @@ public:
     auto *body = enter(loop, 0, bt);
     if (!body)
       return false;
-    auto current = body->getArguments().slice(1, state.size()),
-         captured = body->getArguments().drop_front(1 + state.size());
+    auto bodyArguments = zkc::kernel::traversalArguments(body);
+    auto current = ValueRange(bodyArguments).slice(1, state.size()),
+         captured = ValueRange(bodyArguments).drop_front(1 + state.size());
     llvm::DenseMap<Value, Value> mapping;
     for (auto [a, b] : zip(captures, captured))
       mapping[a] = b;
-    auto item = enumerate(root, body->getArgument(0), mapping);
+    auto item = enumerate(root, bodyArguments[0], mapping);
     SmallVector<Value> environment;
     for (Value v : env)
       environment.push_back(mapping.lookup(v));
@@ -502,14 +612,15 @@ public:
         return false;
       append_range(next, branch->getResults());
     } else
-      next = transition(current, item, environment);
+      next = transition(current, item, environment, bodyArguments[0]);
     append_range(next, captured);
     end("local.yield", next);
     cursor = after;
     if (!valid)
       return false;
-    SmallVector<Value> results(loop->getResults());
-    if (c.collect && results[0].getType() != c.signature.getResult(0)) {
+    SmallVector<Value> results(loop->getResults().take_front(state.size()));
+    if (!composition && c.collect &&
+        results[0].getType() != c.signature.getResult(0)) {
       auto col = mathematical::interpretCollection(c.signature.getResult(0));
       results[0] = kernel("field_array.from_vector", results,
                           c.signature.getResult(0), col.arguments);
@@ -535,13 +646,14 @@ verifyExpression(Operation *source, ValueRange inputs, Operation *&cursor,
 FailureOr<SmallVector<Value>>
 verifyExpression(Operation *source, ValueRange inputs, Operation *&cursor,
                  HelperReader helper, Operation *symbolRoot,
-                 VerificationLimits limits, VerificationResult &outcome) {
+                 VerificationLimits limits, VerificationResult &outcome,
+                 MathematicalSelectionPolicy policy) {
   outcome = {VerificationStatus::Mismatch,
              "finite expression differs from its domain/helper"};
   if (!cursor)
     return failure();
-  auto unit = cursor->getParentOfType<protocol_ir::ProtocolModuleOp>();
-  if (!unit)
+  auto *unit = SymbolTable::getNearestSymbolTable(cursor);
+  if (!unit || unit->getNumRegions() != 1 || !unit->getRegion(0).hasOneBlock())
     return failure();
   SymbolTable symbols(unit);
   llvm::DenseSet<Operation *> bindings;
@@ -549,8 +661,31 @@ verifyExpression(Operation *source, ValueRange inputs, Operation *&cursor,
   SymbolTableCollection sourceSymbols;
   if (failed(describe(source, c, symbolRoot, &sourceSymbols)))
     return failure();
-  Reader reader(c, symbols, bindings, limits);
+  Reader reader(c, symbols, bindings, limits, policy.finiteBulk);
   auto result = reader.checkInline(inputs, cursor, helper);
+  outcome = succeeded(result)
+                ? VerificationResult{VerificationStatus::Verified, {}}
+                : reader.outcome();
+  return result;
+}
+
+FailureOr<SmallVector<Value>>
+verifyCollectFold(const CollectFold &pair, ValueRange producerInputs,
+                  ValueRange consumerInputs, Operation *&cursor,
+                  HelperReader helper, ComposedHelperReader composed,
+                  VerificationLimits limits, VerificationResult &outcome) {
+  outcome = {VerificationStatus::Mismatch,
+             "collect-fold recipe differs from its domain/helpers"};
+  if (!cursor)
+    return failure();
+  auto *unit = SymbolTable::getNearestSymbolTable(cursor);
+  if (!unit || unit->getNumRegions() != 1 || !unit->getRegion(0).hasOneBlock())
+    return failure();
+  SymbolTable symbols(unit);
+  llvm::DenseSet<Operation *> bindings;
+  Reader reader(pair.producer, symbols, bindings, limits, false);
+  reader.compose(pair, consumerInputs, composed);
+  auto result = reader.checkInline(producerInputs, cursor, helper);
   outcome = succeeded(result)
                 ? VerificationResult{VerificationStatus::Verified, {}}
                 : reader.outcome();

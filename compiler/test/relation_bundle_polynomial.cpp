@@ -8,7 +8,7 @@
 // zero-chunk encoding. Nothing here is a soundness claim about batching,
 // commitments or a proof protocol.
 #include "support/NativeCases.h"
-#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Relation/BundlePolynomial.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/STLFunctionalExtras.h"

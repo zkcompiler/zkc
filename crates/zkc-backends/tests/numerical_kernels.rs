@@ -3,7 +3,7 @@ mod support;
 use p3_field::{BasedVectorSpace, PrimeCharacteristicRing};
 use support::{assert_value, backend, one};
 use zkc_backends::{KoalaBear, KoalaBearExt8, Policy, Value, domains};
-use zkc_runtime::interactive::{Backend, OperationBinding, Type};
+use zkc_runtime::vm::{Backend, OperationBinding, Type};
 
 fn binding(name: &str, domain: domains::NativeDomain) -> OperationBinding {
     OperationBinding {
@@ -136,10 +136,10 @@ fn capabilities_are_nominal_and_embedding_preserves_all_coordinates() {
             signature.signature().is_ok(),
             matches!(
                 d.field,
-                zkc_runtime::interactive::Identity::Bn254Fr
-                    | zkc_runtime::interactive::Identity::KoalaBear
-                    | zkc_runtime::interactive::Identity::KoalaBearExt8
-                    | zkc_runtime::interactive::Identity::KoalaBearExt4
+                zkc_runtime::vm::Identity::Bn254Fr
+                    | zkc_runtime::vm::Identity::KoalaBear
+                    | zkc_runtime::vm::Identity::KoalaBearExt8
+                    | zkc_runtime::vm::Identity::KoalaBearExt4
             )
         );
         assert_eq!(

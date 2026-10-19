@@ -102,7 +102,7 @@ def validate_manifest(manifest):
     require(isinstance(manifest, dict) and manifest.get('format') == FORMAT, 'unknown benchmark format')
     require(not (set(manifest) - {'format', 'status', 'phase', 'results', 'contracts', 'plan', 'processes',
                 'seed', 'label', 'argv', 'host', 'files', 'checks', 'matrix', 'schedule', 'compilation',
-                'cli', 'source', 'harness', 'comparisons', 'threads', 'references', 'error', 'observation'}), 'unknown manifest fields')
+                'cli', 'source', 'harness', 'comparisons', 'threads', 'references', 'error', 'observation', 'compiler_options'}), 'unknown manifest fields')
     require(manifest.get('status') in ('passed', 'failed', 'interrupted', 'running'), 'unknown benchmark status')
     require(isinstance(manifest.get('error', ''), str), 'invalid failure description')
     matrix, results = manifest.get('matrix', []), manifest.get('results')
@@ -115,6 +115,11 @@ def validate_manifest(manifest):
         require(type(result.get('repetition')) is int and result['repetition'] >= 0
                 and result.get('status') in ('failed', 'measured', 'passed'), 'invalid measurement state')
     require(manifest.get('observation') in ('timing', 'execution_counts'), 'invalid observation mode')
+    options = manifest.get('compiler_options')
+    require(isinstance(options, list) and all(isinstance(value, str) and value in (
+        '--no-simplify', '--no-finite-bulk', '--release-storage',
+        '--fuse-vector-reductions', '--fuse-collect-fold') for value in options),
+        'invalid compiler options')
     if manifest['status'] != 'passed':
         return
     processes, plan = manifest.get('processes'), manifest.get('plan')
@@ -377,4 +382,6 @@ def compare(baseline, current):
         ratios.append({'case': key[0], 'implementation': key[1], 'operation': key[2],
                        'current_over_baseline': ratio})
     return {'format': FORMAT, 'ratios': ratios,
+            'compiler_options': {'baseline': baseline['compiler_options'],
+                                 'current': current['compiler_options']},
             'meaning': 'ratio of medians of process medians; descriptive, no significance test'}

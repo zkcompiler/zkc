@@ -5,7 +5,7 @@ use crate::{
 };
 use ark_ff::{FftField, Field, One, Zero};
 use ark_poly::{EvaluationDomain, Radix2EvaluationDomain};
-use zkc_runtime::interactive::{Identity, Invocation};
+use zkc_runtime::vm::{Identity, Invocation};
 fn domain(n: usize, shift: F, p: &Policy) -> Result<Radix2EvaluationDomain<F>> {
     if !n.is_power_of_two() || n.trailing_zeros() > F::TWO_ADICITY {
         return Err(refused("coset-size"));

@@ -44,7 +44,7 @@ def test_statistics_use_processes_not_pooled_calls(bench):
     workers = [report(plan), report(plan)]
     for worker, times in zip(workers, ([999999, 10, 20, 1000], [999999, 30, 40, 50])):
         for sample, time in zip(worker['samples'], times): sample.update(elapsed_ns=time, first_call_ns=min(time, 50))
-    manifest = {'format': 'zkc.benchmark/0', 'observation': 'timing', 'status': 'passed', 'processes': 2, 'plan': plan,
+    manifest = {'format': 'zkc.benchmark/0', 'compiler_options': [], 'observation': 'timing', 'status': 'passed', 'processes': 2, 'plan': plan,
                 'matrix': [{'case': 'case', 'implementation': 'impl', 'operation': 'verify', 'boundary': 'test_call'}], 'results': [
         {'case': 'case', 'implementation': 'impl', 'operation': 'verify', 'status': 'passed', 'worker': w, 'repetition': i}
         for i, w in enumerate(workers)]}
@@ -79,8 +79,9 @@ def worker(tmp_path, plan, suffix='', response=None):
 
 
 def arguments(tmp_path):
-    return SimpleNamespace(output=tmp_path / 'output', samples=2, warmups=1, iterations=1,
-                           execution_counts=False, processes=2, seed=17, cpu=None, threads=1, label='test', timeout=1)
+    return SimpleNamespace(output=tmp_path / 'output', exclusive=False, samples=2, warmups=1, iterations=1,
+                           execution_counts=False, compiler_option=[], processes=2, seed=17,
+                           cpu=None, threads=1, label='test', timeout=1)
 
 
 def prepared(bench, tmp_path, executable, check=lambda *args: None):
@@ -144,7 +145,7 @@ def completed_manifest():
     plan = {'warmups': 0, 'samples': 1, 'iterations': 1}
     matrix = [{'case': 'case', 'implementation': impl, 'operation': 'verify', 'boundary': 'test_call'}
               for impl in ('left', 'right')]
-    return {'format': 'zkc.benchmark/0', 'observation': 'timing', 'status': 'passed', 'processes': 2, 'plan': plan,
+    return {'format': 'zkc.benchmark/0', 'compiler_options': [], 'observation': 'timing', 'status': 'passed', 'processes': 2, 'plan': plan,
             'matrix': matrix, 'host': {'cpu': 'one'},
             'contracts': {'case': {'boundaries': {'left': 'test_call', 'right': 'test_call'}}},
             'comparisons': [{'case': 'case', 'operation': 'verify', 'numerator': 'left', 'denominator': 'right'}],
@@ -330,3 +331,18 @@ print(json.dumps(report))
     else:
         with pytest.raises(bench.io.MeasurementError, match='proof'):
             bench.runner.execute_job(job, tmp_path/'run', plan, 5)
+
+
+@pytest.mark.parametrize('options', [None, {}, [True], ['--unknown']])
+def test_manifest_requires_recorded_compiler_policy(bench, options):
+    manifest = completed_manifest()
+    manifest['compiler_options'] = options
+    with pytest.raises(bench.io.MeasurementError, match='compiler options'):
+        bench.results.validate_manifest(manifest)
+
+
+def test_comparison_reports_differing_compiler_policy(bench):
+    baseline, current = completed_manifest(), completed_manifest()
+    current['compiler_options'] = ['--fuse-collect-fold']
+    result = bench.results.compare(baseline, current)
+    assert result['compiler_options'] == {'baseline': [], 'current': ['--fuse-collect-fold']}

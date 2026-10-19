@@ -13,7 +13,7 @@ use zkc_backends::{
     domains::{BINARY64, BINARY64_EXT3},
     plonky3::binary,
 };
-use zkc_runtime::interactive::{
+use zkc_runtime::vm::{
     Backend, Identity, LogicalType, OperationBinding, PhysicalType, Type, Value as RuntimeValue,
 };
 
@@ -509,8 +509,9 @@ fn bit_pattern_literals_name_every_element() {
             &signature.outputs,
             &["o0".to_string()],
         );
-        let admitted =
-            zkc_runtime::interactive::admit_supplied(&program, &backend(Policy::default())).is_ok();
+        let admitted = zkc_runtime::vm::Program::decode(&program)
+            .and_then(|program| program.check_installation(&backend(Policy::default())))
+            .is_ok();
         // The backend checks the attributes it is handed, independently of
         // admission: run an admitted constant with the literal substituted.
         let mut controlled = support::Controlled::new(backend(Policy::default()));
@@ -856,7 +857,7 @@ fn ring_formulas_form_but_ring_kernels_refuse() {
 /// result or a refusal, and none reaches a halving step.
 #[test]
 fn every_installed_binary_kernel_returns_without_panicking() {
-    use zkc_runtime::interactive::AttributeRule as A;
+    use zkc_runtime::vm::AttributeRule as A;
     const DIGEST: &str = "00000000000000000000000000000000000000000000000000000000000000ab";
     let b = backend(Policy::default());
     let mut exercised = Vec::new();

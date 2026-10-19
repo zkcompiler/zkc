@@ -4,9 +4,9 @@ mod support;
 use serde_json::json;
 use support::{backend, binding, one, program, vector};
 use zkc_backends::{Policy, Value};
-use zkc_runtime::interactive::{
+use zkc_runtime::vm::{
     Backend, BackendError, BoundSignature, ErrorCode, Frame, FrameExit, Invocation,
-    OperationBinding, PhysicalType, admit_supplied,
+    OperationBinding, PhysicalType,
 };
 
 #[test]
@@ -92,11 +92,11 @@ impl Backend for Divergent {
     type Call = ();
     type Checkpoint = ();
     type Value = Value;
-    type Kernel = zkc_runtime::interactive::BoundSignature;
+    type Operation = zkc_runtime::vm::BoundSignature;
     fn validate_value(&self, _: &Value) -> Result<(), BackendError> {
         unreachable!()
     }
-    fn prepare_binding(&self, _: &OperationBinding) -> Option<Self::Kernel> {
+    fn prepare_binding(&self, _: &OperationBinding) -> Option<Self::Operation> {
         Some(BoundSignature {
             inputs: if self.input {
                 vec![PhysicalType::parse("vector:bls12-381.fr@arkworks.fr-vector/0").unwrap()]
@@ -111,7 +111,7 @@ impl Backend for Divergent {
                 })
                 .unwrap(),
             ],
-            attributes: zkc_runtime::interactive::AttributeRule::None,
+            attributes: zkc_runtime::vm::AttributeRule::None,
         })
     }
     fn enter_frame(&mut self, _: &Frame, _: &[Value]) -> Result<(), BackendError> {
@@ -122,7 +122,7 @@ impl Backend for Divergent {
     }
     fn apply(
         &mut self,
-        _kernel: &Self::Kernel,
+        _operation: &Self::Operation,
         _: &Invocation<'_>,
         _: &[Value],
     ) -> Result<Vec<Value>, BackendError> {
@@ -141,7 +141,12 @@ fn runtime_backend_signature_divergence_is_refused_at_admission() {
         &["out".into()],
     );
     for input in [false, true] {
-        let error = admit_supplied(&bytes, &Divergent { input }).unwrap_err();
+        let error = zkc_runtime::vm::Program::decode(&bytes)
+            .and_then(|program| {
+                program.check_installation(&Divergent { input })?;
+                Ok(program)
+            })
+            .unwrap_err();
         assert_eq!(error.code, ErrorCode::Backend);
         assert_eq!(
             error.detail,
@@ -154,27 +159,35 @@ fn unused_retained_bindings_still_require_independent_physical_admission() {
     let b = binding(false, "vector.dot");
     let bytes = program(&[b], &[], vec![], &[], &[]);
     let mut carrier: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    // A retained valid declaration needs no reachable kernel advertisement.
-    admit_supplied(&bytes, &Divergent { input: true }).unwrap();
+    // A retained valid declaration needs no reachable operation advertisement.
+    zkc_runtime::vm::Program::decode(&bytes)
+        .and_then(|program| {
+            program.check_installation(&Divergent { input: true })?;
+            Ok(program)
+        })
+        .unwrap();
     carrier[1][0][3] = json!("artifact-authorized/vector.dot");
-    let error = admit_supplied(
-        &serde_json::to_vec(&carrier).unwrap(),
-        &Divergent { input: true },
-    )
-    .unwrap_err();
+    let error = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&carrier).unwrap())
+        .and_then(|program| {
+            program.check_installation(&Divergent { input: true })?;
+            Ok(program)
+        })
+        .unwrap_err();
     assert_eq!(error.code, ErrorCode::Signature);
     carrier[1][0][3] = json!("arkworks-pairwise/vector.dot");
-    admit_supplied(
-        &serde_json::to_vec(&carrier).unwrap(),
-        &backend(Policy::default()),
-    )
-    .unwrap();
+    zkc_runtime::vm::Program::decode(&serde_json::to_vec(&carrier).unwrap())
+        .and_then(|program| {
+            program.check_installation(&backend(Policy::default()))?;
+            Ok(program)
+        })
+        .unwrap();
     carrier[1][0][2] = json!(["koala-bear"]);
-    let error = admit_supplied(
-        &serde_json::to_vec(&carrier).unwrap(),
-        &Divergent { input: true },
-    )
-    .unwrap_err();
+    let error = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&carrier).unwrap())
+        .and_then(|program| {
+            program.check_installation(&Divergent { input: true })?;
+            Ok(program)
+        })
+        .unwrap_err();
     assert_eq!(error.code, ErrorCode::Signature);
 }
 #[test]
@@ -195,11 +208,12 @@ fn unknown_implementations_and_extra_authority_facets_are_refused() {
         serde_json::from_slice(&program(&[b], &sig.inputs, vec![], &[], &[])).unwrap();
     bytes[1][0].as_array_mut().unwrap().push(json!([]));
     // An extra producer facet is a malformed record, not a security override.
-    let error = admit_supplied(
-        &serde_json::to_vec(&bytes).unwrap(),
-        &backend(Policy::default()),
-    )
-    .unwrap_err();
+    let error = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&bytes).unwrap())
+        .and_then(|program| {
+            program.check_installation(&backend(Policy::default()))?;
+            Ok(program)
+        })
+        .unwrap_err();
     assert_eq!(error.code, ErrorCode::Record);
     assert_eq!(error.detail, "operation binding arity");
 }
@@ -208,7 +222,7 @@ fn unknown_implementations_and_extra_authority_facets_are_refused() {
 #[test]
 fn random_vector_crosses_into_group_kernel_with_one_resource_authority() {
     use zkc_backends::{Domain, RistrettoScalar};
-    use zkc_runtime::interactive::Value as RuntimeValue;
+    use zkc_runtime::vm::Value as RuntimeValue;
     for wrong_length in [false, true] {
         let mut native = backend(Policy::default());
         let rng = native

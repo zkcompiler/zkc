@@ -2,7 +2,7 @@
 #define EXAMPLE_ENVELOPE_SPECIALIZATION
 
 // Include from Native.td after EnvelopeDialect. This is deliberately an
-// ordinary MLIR operation with no KernelOp contract or program encoding.
+// ordinary MLIR operation with no BoundOp contract or program encoding.
 def FieldSumChainOp : Op<EnvelopeDialect, "field_sum_chain"> {
   let summary = "ordered two-add field composite with lossless decomposition";
   let description = [{

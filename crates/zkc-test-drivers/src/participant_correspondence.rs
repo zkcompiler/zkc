@@ -7,10 +7,11 @@ use zkc_backends::services::{ServiceReference, ServiceRegistry};
 use zkc_backends::{
     Domain, EntryPolicy, GroupPoint, NativeBackend, NativeWireError, Policy, Value,
 };
-use zkc_runtime::interactive::{
-    Action, Backend, BackendError, BoundSignature, Cut, Frame, FrameExit, Invocation,
-    OperationBinding, PhysicalType, ReceiveCompletion, Runner, RuntimeError, ServiceContract,
-    ServiceInvocation, ServiceSupport, StopKind, Value as RuntimeValue, admit_supplied,
+use zkc_runtime::interpreter::Runner;
+use zkc_runtime::vm::{
+    Action, Backend, BackendError, BoundSignature, CallContext, Cut, Frame, FrameExit, Invocation,
+    OperationBinding, PhysicalType, Program, ReceiveCompletion, RuntimeError, ServiceContract,
+    ServiceInvocation, ServiceSupport, StopKind, Value as RuntimeValue,
 };
 
 type Result<T> = std::result::Result<T, Failure>;
@@ -77,7 +78,7 @@ struct Request {
     session: String,
 }
 
-/// Delegation preserves all native kernels and service custody. The single
+/// Delegation preserves all native operations and service custody. The single
 /// injection point deliberately damages a reply AFTER the real provider call.
 struct ObservedBackend {
     native: NativeBackend,
@@ -87,7 +88,7 @@ struct ObservedBackend {
 }
 impl Backend for ObservedBackend {
     type Value = Value;
-    type Kernel = zkc_backends::NativeKernel;
+    type Operation = zkc_backends::NativeOperation;
     type Call = zkc_backends::NativeCall;
     type Checkpoint = zkc_backends::ComputationCheckpoint;
 
@@ -98,7 +99,7 @@ impl Backend for ObservedBackend {
         self.native.replay_computation(before, after)
     }
 
-    fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {
+    fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Operation> {
         self.native.prepare_binding(binding)
     }
     fn supports_boolean_literals(&self) -> bool {
@@ -144,7 +145,7 @@ impl Backend for ObservedBackend {
     fn validate_value_retained(
         &self,
         v: &Value,
-        retained: zkc_runtime::interactive::Retained<'_>,
+        retained: zkc_runtime::vm::Retained<'_>,
     ) -> std::result::Result<(), BackendError> {
         self.native.validate_value_retained(v, retained)
     }
@@ -152,7 +153,7 @@ impl Backend for ObservedBackend {
         &mut self,
         f: &Frame,
         v: &[Value],
-        retained: zkc_runtime::interactive::Retained<'_>,
+        retained: zkc_runtime::vm::Retained<'_>,
     ) -> std::result::Result<(), BackendError> {
         self.native.enter_frame_retained(f, v, retained)
     }
@@ -161,29 +162,34 @@ impl Backend for ObservedBackend {
         f: &Frame,
         e: FrameExit,
         v: &[Value],
-        retained: zkc_runtime::interactive::Retained<'_>,
+        retained: zkc_runtime::vm::Retained<'_>,
     ) -> std::result::Result<(), BackendError> {
         self.native.leave_frame_retained(f, e, v, retained)
     }
-    fn operand_work(&self, kernel: &Self::Kernel, i: &Invocation<'_>, v: &[Value]) -> Option<u64> {
-        self.native.operand_work(kernel, i, v)
+    fn operand_work(
+        &self,
+        operation: &Self::Operation,
+        i: &CallContext<'_>,
+        v: &[Value],
+    ) -> Option<u64> {
+        self.native.operand_work(operation, i, v)
     }
     fn apply_prepared(
         &mut self,
-        kernel: &Self::Kernel,
+        operation: &Self::Operation,
         call: &mut Option<Self::Call>,
         i: &Invocation<'_>,
         v: &[Value],
     ) -> std::result::Result<Vec<Value>, BackendError> {
-        self.native.apply_prepared(kernel, call, i, v)
+        self.native.apply_prepared(operation, call, i, v)
     }
     fn apply(
         &mut self,
-        kernel: &Self::Kernel,
+        operation: &Self::Operation,
         i: &Invocation<'_>,
         v: &[Value],
     ) -> std::result::Result<Vec<Value>, BackendError> {
-        self.native.apply(kernel, i, v)
+        self.native.apply(operation, i, v)
     }
 }
 fn value(ty: &Json, v: &Json) -> Result<Value> {
@@ -321,7 +327,7 @@ fn refuse(
         _ => Err(RuntimeError::WrongAction),
     }
 }
-fn stop_json(s: &zkc_runtime::interactive::Stop) -> Json {
+fn stop_json(s: &zkc_runtime::vm::Stop) -> Json {
     let cause = match &s.kind {
         StopKind::Decode(r) => json!(["decode", r.as_str()]),
         StopKind::Explicit(r) => json!(["explicit", r]),
@@ -334,7 +340,7 @@ fn stop_json(s: &zkc_runtime::interactive::Stop) -> Json {
 }
 
 fn check_stop(
-    stop: Option<&zkc_runtime::interactive::Stop>,
+    stop: Option<&zkc_runtime::vm::Stop>,
     kind: &StopKind,
     site: Option<&str>,
     cut: &Cut,
@@ -526,7 +532,8 @@ fn run(bytes: &[u8], req: Request, progress: &mut Json) -> Result<Json> {
         Default::default(),
     )
     .map_err(harness)?;
-    let admitted = admit_supplied(bytes, &native).map_err(harness)?;
+    let admitted = Program::decode(bytes).map_err(harness)?;
+    admitted.check_installation(&native).map_err(harness)?;
     require(admitted.bytes() == bytes, "admitted byte custody")?;
     let endpoint = admitted
         .entry(&b.entry)
@@ -1042,7 +1049,7 @@ fn run(bytes: &[u8], req: Request, progress: &mut Json) -> Result<Json> {
         "checkpoints":checkpoints,"wires":wires,"wire_probes":probes,"bindings":bindings,"aliases":aliases,
         "initial":initial,"before_cleanup":before_cleanup,"after_cleanup":after_cleanup,"native_stop":native_stop,"cleanup_stop":cleanup_stop,"reacquired":reacquired,"reacquisition_error":reacquisition_error,"faults_applied":faults_applied,
         "provider_values":runner.backend().draws.iter().map(scalar).collect::<Result<Vec<_>>>()?,
-        "native_defaults":{"policy":format!("{:?}",Policy::default()),"work_budget":format!("{:?}",zkc_runtime::interactive::WorkBudget::default()),"value_budget":format!("{:?}",zkc_runtime::interactive::ValueBudget::default())}}),
+        "native_defaults":{"policy":format!("{:?}",Policy::default()),"work_budget":format!("{:?}",zkc_runtime::vm::WorkBudget::default()),"value_budget":format!("{:?}",zkc_runtime::vm::ValueBudget::default())}}),
     )
 }
 fn main() {
@@ -1071,7 +1078,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zkc_runtime::interactive::{CutKind, DecodeReason, Origin, Stop};
+    use zkc_runtime::vm::{CutKind, DecodeReason, Origin, Stop};
 
     fn request_with_draw() -> Json {
         let draw = json!([

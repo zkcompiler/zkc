@@ -3,7 +3,7 @@ mod support;
 use ark_ff::{Field, One, Zero};
 use ark_poly::{EvaluationDomain, Radix2EvaluationDomain};
 use zkc_backends::{Bn254G1 as G1, Bn254G2 as G2, Bn254Scalar as F, Policy, Value};
-use zkc_runtime::interactive::{Backend, Identity, OperationBinding, Value as RuntimeValue};
+use zkc_runtime::vm::{Backend, Identity, OperationBinding, Value as RuntimeValue};
 fn binding(name: &str, domain: &str) -> OperationBinding {
     OperationBinding {
         contract: name.into(),
@@ -361,7 +361,7 @@ fn explicit_tape_and_os_rng_resources() {
 #[test]
 fn literal_admission_uses_bn254_modulus_and_wire_is_fixed() {
     use serde_json::json;
-    use zkc_runtime::interactive::admit_supplied;
+
     let backend = support::backend(Policy::default());
     for name in ["field.constant", "vector.constant"] {
         let b = binding(name, "bn254.fr");
@@ -374,7 +374,14 @@ fn literal_admission_uses_bn254_modulus_and_wire_is_fixed() {
                 &sig.outputs,
                 &["v".into()],
             );
-            assert!(admit_supplied(&program, &backend).is_err());
+            assert!(
+                zkc_runtime::vm::Program::decode(&program)
+                    .and_then(|program| {
+                        program.check_installation(&backend)?;
+                        Ok(program)
+                    })
+                    .is_err()
+            );
         }
         let out = support::one(support::backend(Policy::default()), b, &["17"], vec![])
             .0

@@ -1,8 +1,8 @@
 #include "zkc/Analysis/Finite.h"
+#include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
-#include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "llvm/ADT/DenseSet.h"
 using namespace mlir;
 namespace zkc::data {

@@ -1,15 +1,17 @@
 #include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "../Verification.h"
 #include "mlir/IR/OperationSupport.h"
+#include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Kernel/IR/KernelOps.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
+#include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Plan/IR/PlanOps.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
-#include "zkc/Dialect/Protocol/Semantics.h"
 using namespace mlir;
 using namespace llvm;
 namespace zkc::mathematical {
@@ -18,43 +20,22 @@ LogicalResult refuse(Operation *op, StringRef detail) {
   return diagnostics::emit(op->emitOpError(), "native-local-policy", detail);
 }
 } // namespace
-std::optional<NativeTypePolicy> nativeTypePolicy(Type type) {
-  if (isa<poly::PolynomialType>(type))
-    return NativeTypePolicy{true, false, false, false, false, false};
-  auto logical = protocol::encodeBoundType(type, false);
-  if (!logical) {
-    consumeError(logical.takeError());
-    return std::nullopt;
-  }
-  return protocol::nativeTypePolicy(*logical);
-}
-std::optional<NativeTypePolicy> NativeTypePolicies::get(Type type) {
-  if (isa<poly::PolynomialType>(type))
-    return NativeTypePolicy{true, false, false, false, false, false};
-  if (auto found = cache.find(type); found != cache.end())
-    return found->second;
-  if (limited)
-    return std::nullopt;
-  auto logical = protocol::encodeBoundType(type, false);
-  if (!logical) {
-    consumeError(logical.takeError());
-    cache[type] = std::nullopt;
-    return std::nullopt;
-  }
-  size_t bytes = logical->spelling().size();
-  std::optional<NativeTypePolicy> result;
-  if (bytes > remainingBytes)
-    limited = true;
-  else {
-    remainingBytes -= bytes;
-    result = protocol::nativeTypePolicy(*logical, remaining, limited);
-  }
-  if (limited)
-    (void)diagnostics::emit(owner->emitOpError(), "native-type-policy-limit",
-                            "closed type analysis exceeds its node, depth or "
-                            "distinct spelling budget");
-  cache[type] = result;
-  return result;
+LogicalResult verifyLocalFragment(Operation *unit) {
+  auto owner = dyn_cast_or_null<protocol_ir::ProtocolModuleOp>(unit);
+  if (!owner || !owner.getProfileAttr() ||
+      owner.getProfile() != protocol_ir::Profile::Exec ||
+      owner->getAttrs().size() != 1 || owner->getNumRegions() != 1 ||
+      !owner.getBody().hasOneBlock() ||
+      owner.getBody().front().getNumArguments() ||
+      failed(owner->getName().verifyInvariants(owner)))
+    return failure();
+  for (auto &definition : owner.getBody().front())
+    if (!isa<local::OperationBindingOp, local::FuncOp>(definition) ||
+        failed(verify(&definition)))
+      return failure();
+  if (failed(verifyNativeLocals(owner, false)))
+    return failure();
+  return protocol::verifyLocalDefinitions(owner);
 }
 LogicalResult verifyNativeLocals(Operation *unit, bool allowApply) {
   NativeTypePolicies types(unit);
@@ -64,6 +45,21 @@ LogicalResult verifyNativeLocals(Operation *unit, bool allowApply,
                                  NativeTypePolicies &types) {
   auto root = cast<protocol_ir::ProtocolModuleOp>(unit);
   const bool physical = root.getProfile() == protocol_ir::Profile::Physical;
+  // Phase legality belongs to the enclosing profile, including dormant units.
+  if (physical) {
+    auto residual = unit->walk([](Operation *op) -> WalkResult {
+      if (isa<kernel::ModuleOp, kernel::CallOp>(op)) {
+        (void)diagnostics::emit(
+            op->emitOpError(), "kernel-profile",
+            "physical profile requires realized Kernel units and calls");
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (residual.wasInterrupted())
+      return failure();
+  }
+
   auto admitted = [&](Type type) {
     if (physical) {
       auto selected = dyn_cast<plan::DataType>(type);

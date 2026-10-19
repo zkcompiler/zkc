@@ -25,7 +25,7 @@ macro_rules! entry_options {
     };
     ($($extra:expr),* $(,)?) => {
         entry_options!(@inspection Opt::new("--no-simplify"),
-            Opt::new("--release-storage"), Opt::new("--fuse-vector-reductions"), Opt::new("--no-finite-bulk"),
+            Opt::new("--release-storage"), Opt::new("--fuse-vector-reductions"), Opt::new("--fuse-collect-fold"), Opt::new("--no-finite-bulk"),
             Opt::new("--no-calculation-batching"), $($extra),*)
     };
 }
@@ -70,7 +70,7 @@ not capture-preserving rewrites.\nChecking does not execute the protocol or esta
             Opt::new("--asset=NAME=FORMAT=FILE").repeated(),
             Opt::new("--no-simplify"),
             Opt::new("--release-storage"),
-            Opt::new("--fuse-vector-reductions"), Opt::new("--no-finite-bulk"),
+            Opt::new("--fuse-vector-reductions"), Opt::new("--fuse-collect-fold"), Opt::new("--no-finite-bulk"),
             Opt::new("--no-calculation-batching"),
         ],
         description: "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.\nENTRY is a unique short or qualified name; omit it only when there is one Entry.\nProject output defaults to build/zkc/<qualified.name>.zkpkg beside the manifest.\nExplicit modules require --output. Compilation trusts the selected compiler and source. The report supplies the\nexact package SHA-256 for deployment configuration. Modules and assets may repeat.",
@@ -476,6 +476,57 @@ mod tests {
             let report = run(name, &args(&values));
             assert_eq!(report["code"], "cli-option", "{name}");
             assert_eq!(report["phase"], "arguments");
+        }
+    }
+    #[test]
+    fn collect_fold_flag_is_unique_valueless_and_requires_source_compilation() {
+        for name in [
+            "compile",
+            "run",
+            "prove",
+            "verify",
+            "inputs check",
+            "bindings",
+        ] {
+            let spec = command(name).unwrap();
+            assert!(spec.help().contains("--fuse-collect-fold"), "{name}");
+            let values = args(&["--fuse-collect-fold"]);
+            assert!(spec.parse(&values).unwrap().has("--fuse-collect-fold"));
+            for values in [
+                args(&["--fuse-collect-fold=true"]),
+                args(&["--fuse-collect-fold=false"]),
+                args(&["--fuse-collect-fold="]),
+                args(&["--fuse-collect-fold", "--fuse-collect-fold"]),
+            ] {
+                assert_eq!(
+                    spec.parse(&values).err().unwrap().code,
+                    "cli-option",
+                    "{name}"
+                );
+            }
+            if name != "compile" {
+                let report = run(
+                    name,
+                    &[
+                        "--fuse-collect-fold".into(),
+                        "--package=/missing/package.zkpkg".into(),
+                        format!("--sha256={}", "0".repeat(64)),
+                    ],
+                );
+                assert_eq!(report["code"], "cli-usage", "{name}");
+                assert_eq!(report["phase"], "arguments", "{name}");
+            }
+        }
+        for name in ["check", "inspect", "inputs init"] {
+            let spec = command(name).unwrap();
+            assert!(!spec.help().contains("--fuse-collect-fold"));
+            assert_eq!(
+                spec.parse(&args(&["--fuse-collect-fold"]))
+                    .err()
+                    .unwrap()
+                    .code,
+                "cli-option"
+            );
         }
     }
     #[test]

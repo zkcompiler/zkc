@@ -1,8 +1,8 @@
 mod common;
 use common::*;
 use zkc_backends::*;
-use zkc_runtime::interactive::Backend;
-use zkc_runtime::interactive::Identity;
+use zkc_runtime::vm::Backend;
+use zkc_runtime::vm::Identity;
 
 fn prover_program() -> Vec<u8> {
     program(
@@ -106,8 +106,8 @@ fn bls_nonce_stages_and_public_verifier_valid_and_invalid() {
     let mut public = vec![
         verifier
             .decode_native_value(
-                &zkc_runtime::interactive::PhysicalType::default_for(
-                    zkc_runtime::interactive::LogicalType::parse("group:bls12-381.g1").unwrap(),
+                &zkc_runtime::vm::PhysicalType::default_for(
+                    zkc_runtime::vm::LogicalType::parse("group:bls12-381.g1").unwrap(),
                 )
                 .unwrap(),
                 &p.encode_native_value(&out[0]).unwrap(),
@@ -115,8 +115,8 @@ fn bls_nonce_stages_and_public_verifier_valid_and_invalid() {
             .unwrap(),
         verifier
             .decode_native_value(
-                &zkc_runtime::interactive::PhysicalType::default_for(
-                    zkc_runtime::interactive::LogicalType::parse("group:bls12-381.g1").unwrap(),
+                &zkc_runtime::vm::PhysicalType::default_for(
+                    zkc_runtime::vm::LogicalType::parse("group:bls12-381.g1").unwrap(),
                 )
                 .unwrap(),
                 &p.encode_native_value(&out[1]).unwrap(),
@@ -125,8 +125,8 @@ fn bls_nonce_stages_and_public_verifier_valid_and_invalid() {
         f(11),
         verifier
             .decode_native_value(
-                &zkc_runtime::interactive::PhysicalType::default_for(
-                    zkc_runtime::interactive::LogicalType::parse("field:bls12-381.fr").unwrap(),
+                &zkc_runtime::vm::PhysicalType::default_for(
+                    zkc_runtime::vm::LogicalType::parse("field:bls12-381.fr").unwrap(),
                 )
                 .unwrap(),
                 &p.encode_native_value(&out[2]).unwrap(),
@@ -145,7 +145,7 @@ fn bls_nonce_stages_and_public_verifier_valid_and_invalid() {
         ("group.check", "arkworks/group.check"),
     ] {
         assert!(
-            v.binding_signature(&zkc_runtime::interactive::OperationBinding {
+            v.binding_signature(&zkc_runtime::vm::OperationBinding {
                 contract: contract.into(),
                 arguments: vec!["bls12-381.fr".into()],
                 implementation: implementation.into(),

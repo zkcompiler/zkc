@@ -10,8 +10,8 @@ use crate::{Policy, Result, Value, refused, value::size};
 use p3_koala_bear::{Poseidon2KoalaBear, default_koalabear_poseidon2_16};
 use p3_symmetric::Permutation;
 use std::sync::OnceLock;
-use zkc_runtime::interactive::{
-    AttributeRule, BoundSignature, Identity, KernelSignature, LogicalType, OperationBinding,
+use zkc_runtime::vm::{
+    AttributeRule, BoundSignature, Identity, LogicalType, OperationBinding, OperationSignature,
     PhysicalType, Type,
 };
 
@@ -58,7 +58,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
     let vector =
         PhysicalType::default_for(LogicalType::new(Type::Vector, Identity::KoalaBear).ok()?)
             .ok()?;
-    Some(KernelSignature {
+    Some(OperationSignature {
         inputs: vec![vector.clone()],
         outputs: vec![vector],
         attributes: AttributeRule::None,

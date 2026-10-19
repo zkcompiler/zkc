@@ -8,7 +8,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Dialect/Protocol/Semantics.h"
+#include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Transforms/Finite.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
@@ -97,8 +97,8 @@ void refusesIR(StringRef text, MLIRContext &context, StringRef code) {
 void pipeline(ModuleOp module, bool optimize = true) {
   PassManager pm(module.getContext());
   pm.addPass(protocol::createProjectProtocolPass(optimize, {optimize, false}));
-  pm.addPass(protocol::createEliminatePolynomialsPass());
   pm.addPass(protocol::createLowerMathPass({optimize, false}));
+  pm.addPass(kernel::createLowerKernelsPass());
   pm.addPass(protocol::createSelectPhysicalPass());
   require(succeeded(pm.run(module)), "finite pipeline failed");
 }
@@ -276,8 +276,8 @@ int main(int argc, char **argv) {
       PassManager pm(&context);
       pm.addPass(
           protocol::createProjectProtocolPass(optimize, {optimize, false}));
-      pm.addPass(protocol::createEliminatePolynomialsPass());
       pm.addPass(protocol::createLowerMathPass({optimize, false}));
+      pm.addPass(kernel::createLowerKernelsPass());
       pm.addPass(protocol::createSelectPhysicalPass());
       require(succeeded(pm.run(*candidate)), "finite pipeline failed");
     });
@@ -322,6 +322,7 @@ int main(int argc, char **argv) {
               demand.addPass(
                   protocol::createProjectProtocolPass(simplify, policy));
               demand.addPass(protocol::createLowerMathPass(policy));
+              demand.addPass(kernel::createLowerKernelsPass());
               require(succeeded(demand.run(*total)),
                       "total demand policy failed");
               bool totalLoop = false;
@@ -423,8 +424,8 @@ int main(int argc, char **argv) {
           PassManager lower(&context);
           lower.addPass(
               protocol::createProjectProtocolPass(optimize, {optimize, false}));
-          lower.addPass(protocol::createEliminatePolynomialsPass());
           lower.addPass(protocol::createLowerMathPass({optimize, false}));
+          lower.addPass(kernel::createLowerKernelsPass());
           require(succeeded(lower.run(*module)),
                   "ignored capture lowering failed");
           unsigned additions = 0;

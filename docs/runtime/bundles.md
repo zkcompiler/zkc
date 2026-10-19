@@ -76,7 +76,7 @@ outputs. Created units returned by a completed role remain valid even if another
 role later stops. Issued RNG/nonce roots and managed services are retired by this
 host. Private outputs are diagnostic kinds in JSON, never portable capabilities.
 
-`HostLimits` separates structural admission, native value/kernel capacity,
+`HostLimits` separates structural admission, native value/operation capacity,
 per-role external work and joint dispatch/wire limits. The CLI accepts
 `--capacity=FILE` and `--limits=FILE`; see their exact formats in the specification.
 Reports preserve the effective limits, reached prefix, failed-load usage, cleanup

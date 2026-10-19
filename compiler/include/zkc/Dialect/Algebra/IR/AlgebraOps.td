@@ -6,7 +6,7 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
-include "zkc/Dialect/Kernels.td"
+include "zkc/Dialect/BoundOperations.td"
 include "zkc/Interfaces/Mathematical.td"
 include "zkc/Interfaces/PreparationCallable.td"
 
@@ -19,63 +19,63 @@ class TotalMathOp<Dialect dialect, string mnemonic, Type lhs, Type rhs,
   let assemblyFormat = "$lhs `,` $rhs attr-dict `:` functional-type(operands, results)";
 }
 
-def FieldCompareOp : KernelOp<AlgebraDialect, "exec.field_equal", [OpFieldEqual]>;
+def FieldCompareOp : BoundOp<AlgebraDialect, "exec.field_equal", [OpFieldEqual]>;
 
-def FieldConstantOp : KernelOp<AlgebraDialect, "exec.field_constant", [OpFieldConstant]>;
+def FieldConstantOp : BoundOp<AlgebraDialect, "exec.field_constant", [OpFieldConstant]>;
 
-def CurveAddOp : KernelOp<AlgebraDialect, "exec.group_add", [OpCurveAdd]>;
+def CurveAddOp : BoundOp<AlgebraDialect, "exec.group_add", [OpCurveAdd]>;
 
-def CurveAppendOp : KernelOp<AlgebraDialect, "exec.group_append", [OpCurveAppend]>;
+def CurveAppendOp : BoundOp<AlgebraDialect, "exec.group_append", [OpCurveAppend]>;
 
-def CurveAtOp : KernelOp<AlgebraDialect, "exec.group_at", [OpCurveAt]>;
+def CurveAtOp : BoundOp<AlgebraDialect, "exec.group_at", [OpCurveAt]>;
 
-def CurveConcatOp : KernelOp<AlgebraDialect, "exec.group_concat", [OpCurveConcat]>;
+def CurveConcatOp : BoundOp<AlgebraDialect, "exec.group_concat", [OpCurveConcat]>;
 
-def CurveEmptyOp : KernelOp<AlgebraDialect, "exec.group_empty", [OpCurveEmpty]>;
+def CurveEmptyOp : BoundOp<AlgebraDialect, "exec.group_empty", [OpCurveEmpty]>;
 
-def CurveEqualOp : KernelOp<AlgebraDialect, "exec.group_equal", [OpCurveEqual]>;
+def CurveEqualOp : BoundOp<AlgebraDialect, "exec.group_equal", [OpCurveEqual]>;
 
-def CurveGeneratorOp : KernelOp<AlgebraDialect, "exec.group_generator", [OpCurveGenerator]>;
+def CurveGeneratorOp : BoundOp<AlgebraDialect, "exec.group_generator", [OpCurveGenerator]>;
 
-def CurveIdentityOp : KernelOp<AlgebraDialect, "exec.group_identity", [OpCurveIdentity]>;
+def CurveIdentityOp : BoundOp<AlgebraDialect, "exec.group_identity", [OpCurveIdentity]>;
 
-def CurveGetOp : KernelOp<AlgebraDialect, "exec.group_get", [OpCurveGet]>;
+def CurveGetOp : BoundOp<AlgebraDialect, "exec.group_get", [OpCurveGet]>;
 
-def CurveLengthOp : KernelOp<AlgebraDialect, "exec.group_length", [OpCurveLength]>;
+def CurveLengthOp : BoundOp<AlgebraDialect, "exec.group_length", [OpCurveLength]>;
 
-def CurveMSMOp : KernelOp<AlgebraDialect, "exec.group_msm", [OpCurveMsm], [DeclareOpInterfaceMethods<DiagonalContractionInterface>]>;
+def CurveMSMOp : BoundOp<AlgebraDialect, "exec.group_msm", [OpCurveMsm], [DeclareOpInterfaceMethods<DiagonalContractionInterface>]>;
 
-def CurveNegateOp : KernelOp<AlgebraDialect, "exec.group_negate", [OpCurveNeg]>;
+def CurveNegateOp : BoundOp<AlgebraDialect, "exec.group_negate", [OpCurveNeg]>;
 
-def CurveNonidentityOp : KernelOp<AlgebraDialect, "exec.group_nonidentity", [OpCurveNonidentity]>;
+def CurveNonidentityOp : BoundOp<AlgebraDialect, "exec.group_nonidentity", [OpCurveNonidentity]>;
 
-def CurveScaleOp : KernelOp<AlgebraDialect, "exec.group_scale", [OpCurveScale]>;
+def CurveScaleOp : BoundOp<AlgebraDialect, "exec.group_scale", [OpCurveScale]>;
 
-def CurveScaleEachOp : KernelOp<AlgebraDialect, "exec.group_scale_each", [OpCurveScaleEach], [DeclareOpInterfaceMethods<DiagonalProducerInterface>]>;
+def CurveScaleEachOp : BoundOp<AlgebraDialect, "exec.group_scale_each", [OpCurveScaleEach], [DeclareOpInterfaceMethods<DiagonalProducerInterface>]>;
 
-def CurveSplitOp : KernelOp<AlgebraDialect, "exec.group_split", [OpCurveSplit]>;
+def CurveSplitOp : BoundOp<AlgebraDialect, "exec.group_split", [OpCurveSplit]>;
 
-def CurveVectorAddOp : KernelOp<AlgebraDialect, "exec.group_vector_add", [OpCurveVectorAdd]>;
+def CurveVectorAddOp : BoundOp<AlgebraDialect, "exec.group_vector_add", [OpCurveVectorAdd]>;
 
-def CurveVectorScaleOp : KernelOp<AlgebraDialect, "exec.group_vector_scale", [OpCurveVectorScale]>;
+def CurveVectorScaleOp : BoundOp<AlgebraDialect, "exec.group_vector_scale", [OpCurveVectorScale]>;
 
-def FieldEmbedOp : KernelOp<AlgebraDialect, "exec.field_embed", [OpFieldEmbed]>;
+def FieldEmbedOp : BoundOp<AlgebraDialect, "exec.field_embed", [OpFieldEmbed]>;
 
 def FieldAddOp : TotalMathOp<AlgebraDialect, "field_add", Field, Field, Field, [DeclareOpInterfaceMethods<MathematicalOpInterface>]>;
 
 def FieldEqualOp : TotalMathOp<AlgebraDialect, "field_equal", Field, Field, I1, [DeclareOpInterfaceMethods<MathematicalOpInterface>]>;
 
-def FieldFromIndexOp : KernelOp<AlgebraDialect, "exec.field_from_index", [OpFieldFromIndex]>;
+def FieldFromIndexOp : BoundOp<AlgebraDialect, "exec.field_from_index", [OpFieldFromIndex]>;
 
 def FieldMultiplyOp : TotalMathOp<AlgebraDialect, "field_multiply", Field, Field, Field, [DeclareOpInterfaceMethods<MathematicalOpInterface>]>;
 
-def FixedVectorDotOp : KernelOp<AlgebraDialect, "exec.fixed_vector_dot",
+def FixedVectorDotOp : BoundOp<AlgebraDialect, "exec.fixed_vector_dot",
                               [OpFixedVectorDot]>;
 
-def FixedVectorFromVectorOp : KernelOp<AlgebraDialect, "exec.fixed_vector_from_vector",
+def FixedVectorFromVectorOp : BoundOp<AlgebraDialect, "exec.fixed_vector_from_vector",
                                      [OpFixedVectorFromVector]>;
 
-def FixedVectorToVectorOp : KernelOp<AlgebraDialect, "exec.fixed_vector_to_vector",
+def FixedVectorToVectorOp : BoundOp<AlgebraDialect, "exec.fixed_vector_to_vector",
                                    [OpFixedVectorToVector]>;
 
 def GroupAddOp : TotalMathOp<AlgebraDialect, "group_add", Group, Group, Group, [DeclareOpInterfaceMethods<MathematicalOpInterface>]>;
@@ -92,132 +92,132 @@ def GroupEqualOp : TotalMathOp<AlgebraDialect, "group_equal", Group, Group, I1, 
 
 def GroupScaleOp : TotalMathOp<AlgebraDialect, "group_scale", Group, Field, Group, [DeclareOpInterfaceMethods<MathematicalOpInterface>]>;
 
-def IndexAddOp : KernelOp<AlgebraDialect, "exec.index_add", [OpIndexAdd]>;
+def IndexAddOp : BoundOp<AlgebraDialect, "exec.index_add", [OpIndexAdd]>;
 
-def IndexConstantOp : KernelOp<AlgebraDialect, "exec.index_constant", [OpIndexConstant]>;
+def IndexConstantOp : BoundOp<AlgebraDialect, "exec.index_constant", [OpIndexConstant]>;
 
-def IndexDivOp : KernelOp<AlgebraDialect, "exec.index_div", [OpIndexDiv]>;
+def IndexDivOp : BoundOp<AlgebraDialect, "exec.index_div", [OpIndexDiv]>;
 
-def IndexEqualOp : KernelOp<AlgebraDialect, "exec.index_equal", [OpIndexEqual]>;
+def IndexEqualOp : BoundOp<AlgebraDialect, "exec.index_equal", [OpIndexEqual]>;
 
-def IndexLessOp : KernelOp<AlgebraDialect, "exec.index_less", [OpIndexLess]>;
+def IndexLessOp : BoundOp<AlgebraDialect, "exec.index_less", [OpIndexLess]>;
 
-def IndexModOp : KernelOp<AlgebraDialect, "exec.index_mod", [OpIndexMod]>;
+def IndexModOp : BoundOp<AlgebraDialect, "exec.index_mod", [OpIndexMod]>;
 
-def IndexMulOp : KernelOp<AlgebraDialect, "exec.index_mul", [OpIndexMul]>;
+def IndexMulOp : BoundOp<AlgebraDialect, "exec.index_mul", [OpIndexMul]>;
 
-def IndexSubOp : KernelOp<AlgebraDialect, "exec.index_sub", [OpIndexSub]>;
+def IndexSubOp : BoundOp<AlgebraDialect, "exec.index_sub", [OpIndexSub]>;
 
-def IndicesAppendOp : KernelOp<AlgebraDialect, "exec.indices_append", [OpIndicesAppend]>;
+def IndicesAppendOp : BoundOp<AlgebraDialect, "exec.indices_append", [OpIndicesAppend]>;
 
-def IndicesAtOp : KernelOp<AlgebraDialect, "exec.indices_at", [OpIndicesAt]>;
+def IndicesAtOp : BoundOp<AlgebraDialect, "exec.indices_at", [OpIndicesAt]>;
 
-def IndicesEmptyOp : KernelOp<AlgebraDialect, "exec.indices_empty", [OpIndicesEmpty]>;
+def IndicesEmptyOp : BoundOp<AlgebraDialect, "exec.indices_empty", [OpIndicesEmpty]>;
 
-def IndicesLengthOp : KernelOp<AlgebraDialect, "exec.indices_length", [OpIndicesLength]>;
+def IndicesLengthOp : BoundOp<AlgebraDialect, "exec.indices_length", [OpIndicesLength]>;
 
-def FieldInverseOp : KernelOp<AlgebraDialect, "exec.field_inverse", [OpFieldInverse]>;
+def FieldInverseOp : BoundOp<AlgebraDialect, "exec.field_inverse", [OpFieldInverse]>;
 
-def MatrixBilinearOp : KernelOp<AlgebraDialect, "exec.matrix_bilinear", [OpMatrixBilinear]>;
+def MatrixBilinearOp : BoundOp<AlgebraDialect, "exec.matrix_bilinear", [OpMatrixBilinear]>;
 
-def MatrixIdentityCheckOp : KernelOp<AlgebraDialect, "exec.matrix_identity_check", [OpMatrixIdentityCheck]>;
+def MatrixIdentityCheckOp : BoundOp<AlgebraDialect, "exec.matrix_identity_check", [OpMatrixIdentityCheck]>;
 
-def RingPointOp : KernelOp<AlgebraDialect, "exec.ring_point", [OpRingPoint]>;
-def RingRowsOp : KernelOp<AlgebraDialect, "exec.ring_rows", [OpRingRows]>;
-def RingCoefficientsOp : KernelOp<AlgebraDialect, "exec.ring_coefficients", [OpRingCoefficients]>;
-def RingAffineSumOp : KernelOp<AlgebraDialect, "exec.ring_affine_sum", [OpRingAffineSum]>;
+def RingPointOp : BoundOp<AlgebraDialect, "exec.ring_point", [OpRingPoint]>;
+def RingRowsOp : BoundOp<AlgebraDialect, "exec.ring_rows", [OpRingRows]>;
+def RingCoefficientsOp : BoundOp<AlgebraDialect, "exec.ring_coefficients", [OpRingCoefficients]>;
+def RingAffineSumOp : BoundOp<AlgebraDialect, "exec.ring_affine_sum", [OpRingAffineSum]>;
 
-def MatrixMulVectorOp : KernelOp<AlgebraDialect, "exec.matrix_mul_vector", [OpMatrixMulVector]>;
+def MatrixMulVectorOp : BoundOp<AlgebraDialect, "exec.matrix_mul_vector", [OpMatrixMulVector]>;
 
-def MatrixDimensionOp : KernelOp<AlgebraDialect, "exec.matrix_dimension", [OpMatrixDimension]>;
-def MatrixGetOp : KernelOp<AlgebraDialect, "exec.matrix_get", [OpMatrixGet]>;
-def MatrixRowDotOp : KernelOp<AlgebraDialect, "exec.matrix_row_dot", [OpMatrixRowDot]>;
-def MatrixColumnDotOp : KernelOp<AlgebraDialect, "exec.matrix_column_dot", [OpMatrixColumnDot]>;
+def MatrixDimensionOp : BoundOp<AlgebraDialect, "exec.matrix_dimension", [OpMatrixDimension]>;
+def MatrixGetOp : BoundOp<AlgebraDialect, "exec.matrix_get", [OpMatrixGet]>;
+def MatrixRowDotOp : BoundOp<AlgebraDialect, "exec.matrix_row_dot", [OpMatrixRowDot]>;
+def MatrixColumnDotOp : BoundOp<AlgebraDialect, "exec.matrix_column_dot", [OpMatrixColumnDot]>;
 
-def MatrixShapeCheckOp : KernelOp<AlgebraDialect, "exec.matrix_shape_check", [OpMatrixShapeCheck]>;
+def MatrixShapeCheckOp : BoundOp<AlgebraDialect, "exec.matrix_shape_check", [OpMatrixShapeCheck]>;
 
-def MatrixTransposeMulVectorOp : KernelOp<AlgebraDialect, "exec.matrix_transpose_mul_vector", [OpMatrixTransposeMulVector]>;
+def MatrixTransposeMulVectorOp : BoundOp<AlgebraDialect, "exec.matrix_transpose_mul_vector", [OpMatrixTransposeMulVector]>;
 
-def FieldNegateOp : KernelOp<AlgebraDialect, "exec.field_negate", [OpFieldNeg]>;
+def FieldNegateOp : BoundOp<AlgebraDialect, "exec.field_negate", [OpFieldNeg]>;
 
-def PairingCheckOp : KernelOp<AlgebraDialect, "exec.pairing_check", [OpPairingCheck]>;
+def PairingCheckOp : BoundOp<AlgebraDialect, "exec.pairing_check", [OpPairingCheck]>;
 
-def FieldProductOp : KernelOp<AlgebraDialect, "exec.field_multiply", [OpFieldMul]>;
+def FieldProductOp : BoundOp<AlgebraDialect, "exec.field_multiply", [OpFieldMul]>;
 
-def FieldSubtractOp : KernelOp<AlgebraDialect, "exec.field_subtract", [OpFieldSub]>;
+def FieldSubtractOp : BoundOp<AlgebraDialect, "exec.field_subtract", [OpFieldSub]>;
 
-def FieldSumOp : KernelOp<AlgebraDialect, "exec.field_add", [OpFieldAdd]>;
+def FieldSumOp : BoundOp<AlgebraDialect, "exec.field_add", [OpFieldAdd]>;
 
-def VectorAddOp : KernelOp<AlgebraDialect, "exec.vector_add", [OpVectorAdd]>;
+def VectorAddOp : BoundOp<AlgebraDialect, "exec.vector_add", [OpVectorAdd]>;
 
-def VectorAppendOp : KernelOp<AlgebraDialect, "exec.vector_append", [OpVectorAppend]>;
+def VectorAppendOp : BoundOp<AlgebraDialect, "exec.vector_append", [OpVectorAppend]>;
 
-def VectorAtOp : KernelOp<AlgebraDialect, "exec.vector_at", [OpVectorAt]>;
+def VectorAtOp : BoundOp<AlgebraDialect, "exec.vector_at", [OpVectorAt]>;
 
-def VectorConcatOp : KernelOp<AlgebraDialect, "exec.vector_concat", [OpVectorConcat]>;
+def VectorConcatOp : BoundOp<AlgebraDialect, "exec.vector_concat", [OpVectorConcat]>;
 
-def VectorConstantOp : KernelOp<AlgebraDialect, "exec.vector_constant", [OpVectorConstant]>;
+def VectorConstantOp : BoundOp<AlgebraDialect, "exec.vector_constant", [OpVectorConstant]>;
 
-def VectorDotOp : KernelOp<AlgebraDialect, "exec.vector_dot", [OpVectorDot], [DeclareOpInterfaceMethods<DiagonalContractionInterface>]>;
+def VectorDotOp : BoundOp<AlgebraDialect, "exec.vector_dot", [OpVectorDot], [DeclareOpInterfaceMethods<DiagonalContractionInterface>]>;
 
-def VectorEmbedOp : KernelOp<AlgebraDialect, "exec.vector_embed", [OpVectorEmbed]>;
+def VectorEmbedOp : BoundOp<AlgebraDialect, "exec.vector_embed", [OpVectorEmbed]>;
 
-def VectorEmptyOp : KernelOp<AlgebraDialect, "exec.vector_empty", [OpVectorEmpty]>;
+def VectorEmptyOp : BoundOp<AlgebraDialect, "exec.vector_empty", [OpVectorEmpty]>;
 
-def VectorFillOp : KernelOp<AlgebraDialect, "exec.vector_fill", [OpVectorFill]>;
+def VectorFillOp : BoundOp<AlgebraDialect, "exec.vector_fill", [OpVectorFill]>;
 
-def VectorGatherOp : KernelOp<AlgebraDialect, "exec.vector_gather", [OpVectorGather]>;
+def VectorGatherOp : BoundOp<AlgebraDialect, "exec.vector_gather", [OpVectorGather]>;
 
-def VectorGeometricOp : KernelOp<AlgebraDialect, "exec.vector_geometric", [OpVectorGeometric]>;
+def VectorGeometricOp : BoundOp<AlgebraDialect, "exec.vector_geometric", [OpVectorGeometric]>;
 
-def VectorGetOp : KernelOp<AlgebraDialect, "exec.vector_get", [OpVectorGet]>;
+def VectorGetOp : BoundOp<AlgebraDialect, "exec.vector_get", [OpVectorGet]>;
 
-def VectorInterleaveOp : KernelOp<AlgebraDialect, "exec.vector_interleave", [OpVectorInterleave]>;
+def VectorInterleaveOp : BoundOp<AlgebraDialect, "exec.vector_interleave", [OpVectorInterleave]>;
 
-def VectorInverseOp : KernelOp<AlgebraDialect, "exec.vector_inverse", [OpVectorInverse]>;
+def VectorInverseOp : BoundOp<AlgebraDialect, "exec.vector_inverse", [OpVectorInverse]>;
 
-def VectorKroneckerOp : KernelOp<AlgebraDialect, "exec.vector_kronecker", [OpVectorKronecker]>;
+def VectorKroneckerOp : BoundOp<AlgebraDialect, "exec.vector_kronecker", [OpVectorKronecker]>;
 
-def VectorLengthOp : KernelOp<AlgebraDialect, "exec.vector_length", [OpVectorLength]>;
+def VectorLengthOp : BoundOp<AlgebraDialect, "exec.vector_length", [OpVectorLength]>;
 
-def VectorLengthCheckOp : KernelOp<AlgebraDialect, "exec.vector_length_check", [OpVectorLengthCheck]>;
+def VectorLengthCheckOp : BoundOp<AlgebraDialect, "exec.vector_length_check", [OpVectorLengthCheck]>;
 
-def VectorMatvecOp : KernelOp<AlgebraDialect, "exec.vector_matvec", [OpVectorMatvec]>;
+def VectorMatvecOp : BoundOp<AlgebraDialect, "exec.vector_matvec", [OpVectorMatvec]>;
 
-def VectorMulOp : KernelOp<AlgebraDialect, "exec.vector_mul", [OpVectorMul], [DeclareOpInterfaceMethods<DiagonalProducerInterface>]>;
+def VectorMulOp : BoundOp<AlgebraDialect, "exec.vector_mul", [OpVectorMul], [DeclareOpInterfaceMethods<DiagonalProducerInterface>]>;
 
-def VectorPowersOp : KernelOp<AlgebraDialect, "exec.vector_powers", [OpVectorPowers]>;
+def VectorPowersOp : BoundOp<AlgebraDialect, "exec.vector_powers", [OpVectorPowers]>;
 
-def VectorPrefixProductOp : KernelOp<AlgebraDialect, "exec.vector_prefix_product", [OpVectorPrefixProduct]>;
+def VectorPrefixProductOp : BoundOp<AlgebraDialect, "exec.vector_prefix_product", [OpVectorPrefixProduct]>;
 
-def VectorPrefixSumOp : KernelOp<AlgebraDialect, "exec.vector_prefix_sum", [OpVectorPrefixSum]>;
+def VectorPrefixSumOp : BoundOp<AlgebraDialect, "exec.vector_prefix_sum", [OpVectorPrefixSum]>;
 
-def VectorRotateOp : KernelOp<AlgebraDialect, "exec.vector_rotate", [OpVectorRotate]>;
-def VectorBitReverseOp : KernelOp<AlgebraDialect, "exec.vector_bit_reverse", [OpVectorBitReverse]>;
-def VectorBitReverseRowsOp : KernelOp<AlgebraDialect, "exec.vector_bit_reverse_rows", [OpVectorBitReverseRows]>;
+def VectorRotateOp : BoundOp<AlgebraDialect, "exec.vector_rotate", [OpVectorRotate]>;
+def VectorBitReverseOp : BoundOp<AlgebraDialect, "exec.vector_bit_reverse", [OpVectorBitReverse]>;
+def VectorBitReverseRowsOp : BoundOp<AlgebraDialect, "exec.vector_bit_reverse_rows", [OpVectorBitReverseRows]>;
 
-def VectorScaleOp : KernelOp<AlgebraDialect, "exec.vector_scale", [OpVectorScale]>;
+def VectorScaleOp : BoundOp<AlgebraDialect, "exec.vector_scale", [OpVectorScale]>;
 
-def VectorScatterSumOp : KernelOp<AlgebraDialect, "exec.vector_scatter_sum", [OpVectorScatterSum]>;
+def VectorScatterSumOp : BoundOp<AlgebraDialect, "exec.vector_scatter_sum", [OpVectorScatterSum]>;
 
-def VectorTransposeOp : KernelOp<AlgebraDialect, "exec.vector_transpose", [OpVectorTranspose]>;
+def VectorTransposeOp : BoundOp<AlgebraDialect, "exec.vector_transpose", [OpVectorTranspose]>;
 
-def VectorSliceOp : KernelOp<AlgebraDialect, "exec.vector_slice", [OpVectorSlice]>;
+def VectorSliceOp : BoundOp<AlgebraDialect, "exec.vector_slice", [OpVectorSlice]>;
 
-def VectorSplatOp : KernelOp<AlgebraDialect, "exec.vector_splat", [OpVectorSplat]>;
+def VectorSplatOp : BoundOp<AlgebraDialect, "exec.vector_splat", [OpVectorSplat]>;
 
-def VectorSplitOp : KernelOp<AlgebraDialect, "exec.vector_split", [OpVectorSplit]>;
+def VectorSplitOp : BoundOp<AlgebraDialect, "exec.vector_split", [OpVectorSplit]>;
 
-def VectorSubOp : KernelOp<AlgebraDialect, "exec.vector_sub", [OpVectorSub]>;
+def VectorSubOp : BoundOp<AlgebraDialect, "exec.vector_sub", [OpVectorSub]>;
 
-def VectorSumOp : KernelOp<AlgebraDialect, "exec.vector_sum", [OpVectorSum]>;
-def VectorProductOp : KernelOp<AlgebraDialect, "exec.vector_product", [OpVectorProduct]>;
+def VectorSumOp : BoundOp<AlgebraDialect, "exec.vector_sum", [OpVectorSum]>;
+def VectorProductOp : BoundOp<AlgebraDialect, "exec.vector_product", [OpVectorProduct]>;
 
-def BooleanAndOp : KernelOp<AlgebraDialect, "exec.bool_and", [OpBoolAnd]>;
+def BooleanAndOp : BoundOp<AlgebraDialect, "exec.bool_and", [OpBoolAnd]>;
 
-def BooleanNotOp : KernelOp<AlgebraDialect, "exec.bool_not", [OpBoolNot]>;
+def BooleanNotOp : BoundOp<AlgebraDialect, "exec.bool_not", [OpBoolNot]>;
 
-def BooleanOrOp : KernelOp<AlgebraDialect, "exec.bool_or", [OpBoolOr]>;
+def BooleanOrOp : BoundOp<AlgebraDialect, "exec.bool_or", [OpBoolOr]>;
 
 def ConstantFieldOp : Op<AlgebraDialect, "constant",
                         [Pure, DeclareOpInterfaceMethods<MathematicalOpInterface>]> {
@@ -242,15 +242,15 @@ def ArrayAtOp : Op<AlgebraDialect, "array_at",
 def SubtractFieldOp : TotalMathOp<AlgebraDialect, "field_subtract", Field,
     Field, Field, [DeclareOpInterfaceMethods<MathematicalOpInterface>]>;
 
-def FieldArrayFromVectorOp : KernelOp<AlgebraDialect, "exec.field_array_from_vector",
+def FieldArrayFromVectorOp : BoundOp<AlgebraDialect, "exec.field_array_from_vector",
                                     [OpFieldArrayFromVector]>;
-def FieldArrayAtOp : KernelOp<AlgebraDialect, "exec.field_array_at", [OpFieldArrayAt]>;
-def FieldArrayGetOp : KernelOp<AlgebraDialect, "exec.field_array_get", [OpFieldArrayGet]>;
+def FieldArrayAtOp : BoundOp<AlgebraDialect, "exec.field_array_at", [OpFieldArrayAt]>;
+def FieldArrayGetOp : BoundOp<AlgebraDialect, "exec.field_array_get", [OpFieldArrayGet]>;
 
 
 def PairingOp : TotalMathOp<AlgebraDialect, "pairing", Group, Group, Group, [DeclareOpInterfaceMethods<MathematicalOpInterface>]>;
-def PairingApplyOp : KernelOp<AlgebraDialect, "exec.pairing", [OpPairingApply]>;
-def VectorEqualOp : KernelOp<AlgebraDialect, "exec.vector_equal", [OpVectorEqual]>;
+def PairingApplyOp : BoundOp<AlgebraDialect, "exec.pairing", [OpPairingApply]>;
+def VectorEqualOp : BoundOp<AlgebraDialect, "exec.vector_equal", [OpVectorEqual]>;
 
 class AlgebraFiniteOp<string name> : Op<AlgebraDialect, name,
     [Pure, DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {

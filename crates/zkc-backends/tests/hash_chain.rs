@@ -9,7 +9,8 @@ use p3_field::{BasedVectorSpace, PrimeField32};
 use serde_json::{Value as Json, json};
 use support::*;
 use zkc_backends::{Capability, KoalaBear, KoalaBearExt8, Policy, Value};
-use zkc_runtime::interactive::{Backend, Identity, OperationBinding, Runner, admit_supplied};
+use zkc_runtime::interpreter::Runner;
+use zkc_runtime::vm::{Backend, Identity, OperationBinding, Program};
 
 const BLS: Identity = Identity::HashChainKeccak256Fr64Be;
 const OCTIC: Identity = Identity::HashChainKeccak256KoalaBearExt8;
@@ -371,14 +372,16 @@ fn refusals_leave_no_successor() {
     let old = t.clone();
     let (out, b) = run_program(b, &p, vec![t, seven(BLS)]);
     assert!(out.is_ok());
-    let admitted = admit_supplied(&p, &b).unwrap();
+    let admitted = Program::decode(&p).unwrap();
+    admitted.check_installation(&b).unwrap();
     assert!(Runner::new(&admitted, "main", "P", "session", b, vec![old]).is_err());
     // A state of another suite is not this program's transcript.
     let mut b = backend(Policy::default());
     let wrong = b
         .issue_transcript_for(Identity::Merlin3Fr64Be, domain(), 2, &root())
         .unwrap();
-    let admitted = admit_supplied(&p, &b).unwrap();
+    let admitted = Program::decode(&p).unwrap();
+    admitted.check_installation(&b).unwrap();
     assert!(
         Runner::new(
             &admitted,

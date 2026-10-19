@@ -1,9 +1,10 @@
 use super::support::*;
 use serde_json::{Value as Json, json};
 use zkc_backends::{Capability, Policy, RistrettoScalar, Value};
+use zkc_runtime::interpreter::Runner;
 #[cfg(feature = "test-utils")]
-use zkc_runtime::interactive::Backend;
-use zkc_runtime::interactive::{Identity, Runner, Value as RuntimeValue, admit_supplied};
+use zkc_runtime::vm::Backend;
+use zkc_runtime::vm::{Identity, Value as RuntimeValue};
 fn token(v: &Value) -> &Capability {
     match v {
         Value::Rng(t) | Value::Nonce(t) | Value::Transcript(t) => t,
@@ -197,7 +198,12 @@ fn capacities_and_unpassed_resources_fail_closed_in_both_domains() {
             &sig.outputs,
             &["x".into(), "t".into()],
         );
-        let admitted = admit_supplied(&bytes, &b).unwrap();
+        let admitted = zkc_runtime::vm::Program::decode(&bytes)
+            .and_then(|program| {
+                program.check_installation(&b)?;
+                Ok(program)
+            })
+            .unwrap();
         assert!(Runner::new(&admitted, "main", "P", "session", b, vec![rng]).is_ok());
         // Every field of the domain, and the refusal named rather than only
         // counted: the same four the arkworks side checks in tests/resources.rs.

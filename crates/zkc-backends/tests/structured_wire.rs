@@ -1,10 +1,11 @@
 //! Canonical framing and aggregate limits, independent of compiler producers.
+use zkc_runtime::interpreter::Runner;
 mod common;
 use serde_json::json;
 use zkc_backends::{
     GroupPoint, NativeBackend, NativeWireError as Error, Policy, Scalar, Value, Variant,
 };
-use zkc_runtime::interactive::{DecodeReason, LogicalType, Value as RuntimeValue};
+use zkc_runtime::vm::{DecodeReason, LogicalType, Value as RuntimeValue};
 use zkc_test_support::variants::logical;
 fn variant(ty: &str, tag: usize, values: Vec<Value>) -> Value {
     let ty = LogicalType::parse(ty).unwrap();
@@ -476,10 +477,7 @@ fn nested_fixed_arrays_keep_empty_shape_and_full_retained_charge() {
 #[test]
 fn pcs_observation_uses_the_same_setup_check_before_advancing_history() {
     use std::sync::Arc;
-    use zkc_runtime::{
-        interactive::{Identity, Runner, admit_supplied},
-        logical as encoding,
-    };
+    use zkc_runtime::{logical as encoding, vm::Identity};
     let keys =
         zkc_arkworks::Keys::setup_for_development(1, &Policy::default().ark_bounds()).unwrap();
     let table = zkc_arkworks::Table::from_logical_vec(
@@ -570,7 +568,12 @@ fn pcs_observation_uses_the_same_setup_check_before_advancing_history() {
             ]],
             [["entry", "main", [["P", "participant"]]]]
         ]);
-        let admitted = admit_supplied(&serde_json::to_vec(&program).unwrap(), &backend).unwrap();
+        let admitted = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&program).unwrap())
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap();
         let runner = Runner::new(
             &admitted,
             "main",
@@ -681,7 +684,7 @@ fn native_and_wire_collection_admission_agree_across_nested_shapes() {
 fn host_assembly_measures_complete_type_counts_and_construction_peak() {
     let backend = common::ark_backend(None);
     let ty = LogicalType::parse(&logical("HostPair", json!([["pair", ["bool", "bool"]]]))).unwrap();
-    let physical = zkc_runtime::interactive::PhysicalType::default_for(ty.clone()).unwrap();
+    let physical = zkc_runtime::vm::PhysicalType::default_for(ty.clone()).unwrap();
     let a = Value::Bool(false);
     let b = Value::Bool(true);
     let sizes = [
@@ -734,7 +737,7 @@ fn mixed_host_payloads_charge_wire_peak_with_retained_siblings() {
         json!([["pair", ["vector:bls12-381.fr", "vector:bls12-381.fr"]]]),
     ))
     .unwrap();
-    let ty = zkc_runtime::interactive::PhysicalType::default_for(logical).unwrap();
+    let ty = zkc_runtime::vm::PhysicalType::default_for(logical).unwrap();
     let vector = Value::Vector(vec![Scalar::from(1); 512].into());
     let wire = backend.encode_native_value(&vector).unwrap();
     let sizes = [

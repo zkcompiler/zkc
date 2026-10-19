@@ -2,8 +2,8 @@
 #include "EncodingLimits.h"
 #include "Structure.h"
 #include "zkc/Contracts/Bindings.h"
-#include "zkc/Contracts/Kernels.h"
 #include "zkc/Contracts/NativePolicy.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Contracts/TypeProperties.h"
@@ -43,6 +43,7 @@ class Admission {
   std::string problem;
   std::map<std::string, protocol::OperationBinding> bindings;
   bool target = false, physical = false;
+  bool logicalRealizations = false;
   size_t instructions = 0;
   std::map<std::string, Definition> functions, participants;
   std::map<std::string, std::set<std::string>> edges;
@@ -392,7 +393,7 @@ class Admission {
             diagonalUses.insert(op->inputs[k]);
           }
       } else if (const auto *call = instruction.get<program::LocalApply>()) {
-        if (!local || target)
+        if (!local || (target && (!logicalRealizations || physical)))
           return fail("algorithm-call-context");
         std::set<std::string> checked;
         if (inMatch && callsMatchUnsafe(call->callee, checked))
@@ -400,6 +401,8 @@ class Admission {
         auto f = functions.find(call->callee);
         if (f == functions.end())
           return fail("algorithm-call-symbol");
+        if (target && !f->second.realization)
+          return fail("algorithm-call-context");
         std::vector<Port> inputs;
         if (!operands(call->inputs, env, inputs, consumed) ||
             inputs != f->second.inputs ||
@@ -425,7 +428,7 @@ class Admission {
         if (local)
           return fail("interactive-instruction");
         auto f = functions.find(call->callee);
-        if (f == functions.end())
+        if (f == functions.end() || f->second.realization)
           return fail("interactive-local-symbol");
         auto expected = f->second.inputs, outputs = f->second.outputs;
         std::vector<Port> inputs;
@@ -768,15 +771,13 @@ class Admission {
     return problem.empty();
   }
 
-public:
-  Error nativeLocals(const program::LocalDefinitions &module,
-                     ArrayRef<LocalRealization> realizations) {
-    if (realizations.size() > 4096 ||
-        module.functions.size() + realizations.size() > 4096)
-      return error("interactive-definition-limit");
+  Error seedRealizations(ArrayRef<LocalRealization> realizations,
+                         bool totalOnly = false) {
     unsigned typeWork = 200000;
     bool limited = false;
     for (const auto &realization : realizations) {
+      if (totalOnly && realization.kind != LocalRealization::Kind::Total)
+        return error("local-realization-signature");
       if (!name(realization.name) || !symbols.insert(realization.name).second)
         return error("local-realization-symbol");
       if (realization.domainArguments > realization.inputs.size())
@@ -822,16 +823,46 @@ public:
       }
       functions.emplace(realization.name, std::move(d));
     }
-    return run(module);
+    return Error::success();
   }
-  template <typename Root> Error run(const Root &root) {
-    if (auto e = program::detail::checkNativeIRStructure(root))
-      return e;
+  template <typename Root> Error checkRoot(const Root &root) {
     if (detail::excessiveDepth(root))
       return error("interactive-json-depth");
     if (!check(root) && problem.empty())
       fail("interactive-admission");
     return problem.empty() ? Error::success() : error(problem);
+  }
+
+public:
+  Error nativeLocals(const program::LocalDefinitions &module,
+                     ArrayRef<LocalRealization> realizations) {
+    if (realizations.size() > 4096 ||
+        module.functions.size() + realizations.size() > 4096)
+      return error("interactive-definition-limit");
+    if (auto e = seedRealizations(realizations))
+      return e;
+    return run(module);
+  }
+  Error logicalParticipants(const program::Participants &module,
+                            ArrayRef<LocalRealization> realizations) {
+    if (module.stage != program::Participants::Stage::Logical)
+      return error("local-realization-context");
+    const size_t definitionCount = module.functions.size() +
+                                   module.participants.size() +
+                                   realizations.size();
+    if (realizations.size() > 4096 || definitionCount > 4096)
+      return error("interactive-definition-limit");
+    if (auto e = seedRealizations(realizations, true))
+      return e;
+    logicalRealizations = true;
+    if (auto e = program::detail::checkNativeIRStructure(module, true))
+      return e;
+    return checkRoot(module);
+  }
+  template <typename Root> Error run(const Root &root) {
+    if (auto e = program::detail::checkNativeIRStructure(root))
+      return e;
+    return checkRoot(root);
   }
 };
 } // namespace
@@ -842,5 +873,9 @@ Error admitNativeLocalDefinitions(const program::LocalDefinitions &value,
 }
 Error admit(const program::Participants &value) {
   return Admission().run(value);
+}
+Error admit(const program::Participants &value,
+            ArrayRef<LocalRealization> realizations) {
+  return Admission().logicalParticipants(value, realizations);
 }
 } // namespace zkc::protocol

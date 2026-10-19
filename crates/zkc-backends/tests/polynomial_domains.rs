@@ -7,7 +7,7 @@ use zkc_backends::{
     KoalaBearExt8, Policy, domains,
     plonky3::polynomial::{Domain, Error},
 };
-use zkc_runtime::interactive::{Backend, Identity, OperationBinding};
+use zkc_runtime::vm::{Backend, Identity, OperationBinding};
 
 #[test]
 fn installed_root_order_and_fold_domain() {

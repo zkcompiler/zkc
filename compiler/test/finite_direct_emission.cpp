@@ -1,3 +1,4 @@
+#include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/PatternMatch.h"
@@ -8,6 +9,7 @@
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Transforms/Finite.h"
+#include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include <chrono>
@@ -57,7 +59,6 @@ protocol_ir::ProtocolModuleOp unit(ModuleOp module) {
 void prepare(ModuleOp module) {
   PassManager passes(module.getContext());
   passes.addPass(protocol::createProjectProtocolPass(false, {false, false}));
-  passes.addPass(protocol::createEliminatePolynomialsPass());
   require(succeeded(passes.run(module)), "preparation failed");
 }
 void lower(ModuleOp module) {
@@ -201,6 +202,77 @@ int main(int argc, char **argv) {
                                                 reader, unit(*source))),
                 "same-typed state permutation escaped actual inline reading");
       });
+  cases.run(
+      "source helpers and emitted bindings have independent symbol roots", [&] {
+        auto source = parseSourceString<ModuleOp>(aliasSource, &context);
+        require(bool(source), "separate source admission failed");
+        prepare(*source);
+        auto *original = expression(*source);
+        original->setAttr("site", StringAttr::get(&context, "separate"));
+        std::string before;
+        llvm::raw_string_ostream(before) << *source;
+
+        SmallVector<Value> unique;
+        for (Value value : original->getOperands())
+          if (!llvm::is_contained(unique, value))
+            unique.push_back(value);
+        OwningOpRef<ModuleOp> candidate(ModuleOp::create(original->getLoc()));
+        OpBuilder builder(candidate->getBody(), candidate->getBody()->end());
+        auto output = protocol_ir::ProtocolModuleOp::create(
+            builder, original->getLoc(), protocol_ir::Profile::Exec);
+        output.getBody().emplaceBlock();
+        builder.setInsertionPointToEnd(&output.getBody().front());
+        auto function = local::FuncOp::create(
+            builder, original->getLoc(), "separate",
+            builder.getFunctionType(ValueRange(unique).getTypes(),
+                                    original->getResultTypes()));
+        function->setAttr(
+            "logical_origin",
+            builder.getArrayAttr(
+                {builder.getStringAttr("separate"), builder.getArrayAttr({})}));
+        auto *block = function.addEntryBlock();
+        builder.setInsertionPointToEnd(block);
+        IRMapping arguments;
+        arguments.map(unique, block->getArguments());
+        SmallVector<Value> inputs;
+        for (Value value : original->getOperands())
+          inputs.push_back(arguments.lookup(value));
+        mathematical::RealizationWork work;
+        auto emitted = finite::realizeExpression(original, inputs, builder,
+                                                 {false, false}, &work);
+        require(succeeded(emitted), "separate-root finite emission failed");
+        auto after =
+            local::ReturnOp::create(builder, original->getLoc(), *emitted);
+        require(succeeded(kernel::verifyRecipeOutput(*candidate)),
+                "separate-root output is malformed");
+        require(!SymbolTable::lookupSymbolIn(output, "step") &&
+                    !SymbolTable::lookupSymbolIn(output, "items"),
+                "emission copied source helper declarations into the target");
+        auto reader = [&](Operation *helper, ValueRange args,
+                          Operation *&) -> FailureOr<SmallVector<Value>> {
+          auto &body = helper->getRegion(0).front();
+          if (body.getOperations().size() != 1 ||
+              !isa<func::ReturnOp>(body.back()))
+            return failure();
+          SmallVector<Value> results;
+          for (Value value : body.back().getOperands()) {
+            auto formal = dyn_cast<BlockArgument>(value);
+            if (!formal || formal.getOwner() != &body ||
+                formal.getArgNumber() >= args.size())
+              return failure();
+            results.push_back(args[formal.getArgNumber()]);
+          }
+          return results;
+        };
+        Operation *cursor = &block->front();
+        auto checked = finite::verifyExpression(original, inputs, cursor,
+                                                reader, unit(*source));
+        require(succeeded(checked) && *checked == *emitted && cursor == after,
+                "independent reader conflated source and target symbol roots");
+        std::string unchanged;
+        llvm::raw_string_ostream(unchanged) << *source;
+        require(before == unchanged, "direct emission mutated its source");
+      });
   cases.run("aliased range bounds canonicalize admission branch captures", [&] {
     auto source = parseSourceString<ModuleOp>(rangeAliasSource, &context);
     require(bool(source), "aliased range source refused");
@@ -210,6 +282,10 @@ int main(int argc, char **argv) {
     require(succeeded(mathematical::verifyMathLowering(unit(*source),
                                                        unit(*candidate))),
             "aliased range direct body did not correspond");
+    auto logical = OwningOpRef<ModuleOp>(cast<ModuleOp>(candidate->clone()));
+    require(succeeded(kernel::lowerKernels(*candidate)) &&
+                succeeded(kernel::verifyKernelLowering(*logical, *candidate)),
+            "aliased range recipes did not correspond");
     unsigned branches = 0;
     candidate->walk([&](local::LocalIfOp branch) {
       ++branches;
@@ -264,6 +340,10 @@ int main(int argc, char **argv) {
       require(succeeded(mathematical::verifyMathLowering(unit(*source),
                                                          unit(*candidate))),
               "independent complete reader refused direct lowering");
+      auto logical = OwningOpRef<ModuleOp>(cast<ModuleOp>(candidate->clone()));
+      require(succeeded(kernel::lowerKernels(*candidate)) &&
+                  succeeded(kernel::verifyKernelLowering(*logical, *candidate)),
+              "complete Kernel recipe reader refused direct lowering");
       if (measure) {
         auto time = [](auto action) {
           auto start = std::chrono::steady_clock::now();
@@ -276,8 +356,7 @@ int main(int argc, char **argv) {
         for (unsigned i = 0; i < 34; ++i) {
           double f = time([&] { return verify(*candidate); });
           double c = time([&] {
-            return mathematical::verifyMathLowering(unit(*source),
-                                                    unit(*candidate));
+            return kernel::verifyKernelLowering(*logical, *candidate);
           });
           if (i >= 3) {
             formation.push_back(f);

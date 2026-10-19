@@ -1,6 +1,6 @@
 //! Canonical field and Ristretto group vectors in the native wire grammar.
 use crate::{Policy, Result, Value, ark, exhausted, kernels::arithmetic::reserve};
-use zkc_runtime::interactive::Value as _;
+use zkc_runtime::vm::Value as _;
 
 pub(super) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> {
     let (tag, width, count) = match value {

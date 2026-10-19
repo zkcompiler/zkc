@@ -9,7 +9,7 @@
 #include "mlir/Interfaces/ControlFlowInterfaces.h"
 #include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
-#include "zkc/Dialect/KernelSupport.h"
+#include "zkc/Dialect/BoundOperations.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolAttrs.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolTypes.h"
 #include "zkc/Interfaces/LinearContraction.h"

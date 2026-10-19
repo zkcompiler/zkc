@@ -12,15 +12,15 @@ use super::{Interface, Package};
 use std::sync::Arc;
 use zkc_backends::{relation::Registry as RelationRegistry, ring::Registry};
 use zkc_runtime::{
-    interactive::{Admitted, AssetReference, Identity, Type},
     relation::Bundle,
     ring::Expression,
+    vm::{AssetReference, Identity, Program, Type},
 };
 mod bundle;
 
 type Result<T> = std::result::Result<T, String>;
 
-/// Admitted packaged assets and the static program references they satisfy.
+/// Program packaged assets and the static program references they satisfy.
 pub struct EntryAssets {
     registry: Registry,
     relations: RelationRegistry,
@@ -31,7 +31,7 @@ impl EntryAssets {
     pub(super) fn admit(
         package: &Package,
         interface: &Interface,
-        admitted: &Admitted,
+        admitted: &Program,
         entry: &str,
     ) -> Result<Self> {
         let mut registry = Registry::default();
@@ -119,7 +119,7 @@ impl EntryAssets {
             references,
         })
     }
-    /// Admitted content identities in ascending order, including assets that
+    /// Program content identities in ascending order, including assets that
     /// no reachable operation references.
     pub fn identities(&self) -> impl ExactSizeIterator<Item = &str> {
         self.identities.iter().map(String::as_str)

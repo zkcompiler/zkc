@@ -3,7 +3,7 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::path::Path;
 use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Sequence, Value, Variant};
-use zkc_runtime::interactive::LogicalType;
+use zkc_runtime::vm::LogicalType;
 use zkc_test_support::hex;
 use zkc_tools::proof::NativeDeployment;
 

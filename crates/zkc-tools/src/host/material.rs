@@ -3,7 +3,7 @@ use super::inputs::Result;
 use std::sync::Arc;
 use zkc_arkworks::{ProverKey, VerifierKey};
 use zkc_backends::Value;
-use zkc_runtime::interactive::Value as RuntimeValue;
+use zkc_runtime::vm::Value as RuntimeValue;
 
 /// Validated immutable prover material, reusable across independent invocations.
 /// This authenticates material identity, not the honesty of a trusted setup.
@@ -31,9 +31,8 @@ impl ProverMaterial {
     ) -> Result<Self> {
         capacity.validate()?;
         capacity.check_wire(bytes.len())?;
-        let estimate =
-            Value::key_retained_bytes(zkc_runtime::interactive::Type::ProverKey, verifier)
-                .map_err(|e| e.to_string())?;
+        let estimate = Value::key_retained_bytes(zkc_runtime::vm::Type::ProverKey, verifier)
+            .map_err(|e| e.to_string())?;
         if estimate > capacity.value_bytes {
             return Err("native-material-value-limit".into());
         }
@@ -74,7 +73,7 @@ impl ProverMaterial {
     /// them while planning; Ready then reserves the ordinary per-call charges.
     pub(crate) fn operand(
         &self,
-        ty: &zkc_runtime::interactive::PhysicalType,
+        ty: &zkc_runtime::vm::PhysicalType,
         selected: &VerifierKey,
         backend: &zkc_backends::NativeBackend,
     ) -> Result<Value> {
@@ -83,8 +82,7 @@ impl ProverMaterial {
             return Err("native-input-type".into());
         }
         super::setups::check_input(&value, selected)?;
-        zkc_runtime::interactive::Backend::validate_value(backend, &value)
-            .map_err(|e| e.to_string())?;
+        zkc_runtime::vm::Backend::validate_value(backend, &value).map_err(|e| e.to_string())?;
         Ok(value)
     }
 }

@@ -1,5 +1,5 @@
 #include "BodyCheck.h"
-#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Services.h"
 #include "llvm/Support/SaveAndRestore.h"
 #include <algorithm>

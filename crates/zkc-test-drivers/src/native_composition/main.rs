@@ -8,7 +8,7 @@ use zkc_backends::{
     Bn254G1, Bn254G2, Bn254Scalar as F, Domain, EntryPolicy, KoalaBear as B, KoalaBearExt8 as E,
     NativeBackend, Policy, Sequence, Value,
 };
-use zkc_runtime::interactive::LogicalType;
+use zkc_runtime::vm::LogicalType;
 use zkc_test_support::hex;
 use zkc_tools::execution::Capacity;
 use zkc_tools::proof::NativeDeployment;
@@ -433,7 +433,7 @@ fn main() {
                 )
                 .unwrap()
                 .with_capacity(Capacity {
-                    work: zkc_runtime::interactive::WorkBudget {
+                    work: zkc_runtime::vm::WorkBudget {
                         iterations: 0,
                         ..Default::default()
                     },

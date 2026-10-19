@@ -1,7 +1,7 @@
 use super::support::*;
 use serde_json::json;
 use zkc_backends::{Policy, Value};
-use zkc_runtime::interactive::{Backend, Value as RuntimeValue, admit_supplied};
+use zkc_runtime::vm::{Backend, Value as RuntimeValue};
 
 #[test]
 fn boolean_truth_tables_and_exact_bindings() {
@@ -93,7 +93,14 @@ fn dynamic_group_access_preserves_order_domains_bounds_and_output_charges() {
                 &sig.outputs,
                 &outputs,
             );
-            assert!(admit_supplied(&bytes, &backend(Policy::default())).is_err());
+            assert!(
+                zkc_runtime::vm::Program::decode(&bytes)
+                    .and_then(|program| {
+                        program.check_installation(&backend(Policy::default()))?;
+                        Ok(program)
+                    })
+                    .is_err()
+            );
         }
     }
 }
@@ -152,7 +159,7 @@ fn eager_composition_does_not_mask_group_failure_or_skip_the_second_predicate() 
 
 #[test]
 fn eager_failure_preserves_already_consumed_randomness() {
-    use zkc_runtime::interactive::Identity;
+    use zkc_runtime::vm::Identity;
     for d in [false, true] {
         let mut inner = backend(Policy::default());
         let rng = inner

@@ -212,11 +212,31 @@ with case("fusion preparation choice is explicit in independent and compiled rep
         candidate_path, "--fuse-vector-reductions",
     ]))
     assert checked_report["fuse_vector_reductions"] is True
+    assert checked_report["fuse_collect_fold"] is False
     compiled = json.loads(commands.source(
         "protocol-checked-bundle", source, "--entry=reduction",
         f"--requirements={requirement_path}", "--fuse-vector-reductions",
     ))
     assert compiled["correspondence"]["fuse_vector_reductions"] is True
+    assert compiled["correspondence"]["fuse_collect_fold"] is False
+
+with case("collect-fold preparation choice is explicit even without an eligible pair"):
+    requirement_path.write_text(canonical)
+    selected = commands.verified(
+        source, None, "--zkc-project-protocol=simplify=false fuse-collect-fold=true")
+    candidate_path.write_text(selected)
+    report = json.loads(commands.run([
+        compiler, "protocol-check-reductions", source_path, requirement_path,
+        candidate_path, "--fuse-collect-fold",
+    ]))
+    assert report["fuse_collect_fold"] is True
+    assert report["finite_bulk"] is True
+    assert report["fuse_vector_reductions"] is False
+    compiled = json.loads(commands.source(
+        "protocol-checked-bundle", source, "--entry=reduction",
+        f"--requirements={requirement_path}", "--fuse-collect-fold",
+    ))
+    assert compiled["correspondence"]["fuse_collect_fold"] is True
 
 
 field = '!algebra.field<"bls12-381.fr">'
@@ -273,6 +293,7 @@ with case("finite policy matches independent reconstruction with and without sim
             compiler, 'protocol-check-reductions', source_path,
             requirement_path, candidate_path, *flags]))
         assert report['finite_bulk'] is bulk
+        assert report['fuse_collect_fold'] is False
         opposite = ['--no-finite-bulk'] if bulk else []
         commands.run([compiler, 'protocol-check-reductions', source_path,
                       requirement_path, candidate_path, *opposite],
@@ -283,6 +304,10 @@ with case("finite policy matches independent reconstruction with and without sim
                 f'--requirements={requirement_path}', *flags,
                 *([] if simplify else ['--no-simplify'])))
             assert compiled['correspondence']['finite_bulk'] is bulk
+            assert compiled['correspondence']['fuse_collect_fold'] is False
             assert compiled['correspondence']['simplify'] is simplify
+            assert compiled['correspondence']['post_check_passes'] == (
+                (['zkc-simplify-participant'] if simplify else [])
+                + ['zkc-lower-math', 'zkc-select-physical'])
 
 print(f"polynomial requirements: {counted()} cases")

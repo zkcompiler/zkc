@@ -1,4 +1,5 @@
 #include "HelperNormalization.h"
+#include "Kernel/Support.h"
 #include "MathematicalSupport.h"
 #include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -34,7 +35,21 @@ LogicalResult foldArrayProjections(Block &body, uint64_t &work,
 }
 
 CheckedHelperNormalizations::CheckedHelperNormalizations(Operation *root)
-    : root(root), checker(root) {}
+    : root(root), checker(root), provenance(root) {}
+
+LogicalResult CheckedHelperNormalizations::readback(uint64_t *remaining) {
+  auto &budget = remaining ? *remaining : work;
+  for (auto function : root->getRegion(0).front().getOps<func::FuncOp>()) {
+    auto snapshot = kernel::exactReadback(function, root, budget);
+    if (!snapshot ||
+        failed(provenance.checkExpansion(function, snapshot->front())))
+      return diagnostics::emit(
+          function.emitError(), "kernel-recipe-subset",
+          "exact helper readback failed or exceeded its bound");
+    bodies.try_emplace(function, std::move(snapshot));
+  }
+  return success();
+}
 
 LogicalResult CheckedHelperNormalizations::prepare(Operation *source) {
   SmallVector<Operation *> pending{source};
@@ -56,9 +71,57 @@ LogicalResult CheckedHelperNormalizations::prepare(Operation *source) {
       OwningOpRef<func::FuncOp> proposal(cast<func::FuncOp>(helper->clone()));
       if (failed(inlineHelpers(*proposal, operations, indices, symbols, root,
                                &work)) ||
-          failed(poly::eliminatePolynomials(proposal->front(), polynomial)) ||
-          failed(checker.check(helper, proposal->front())))
+          failed(provenance.checkExpansion(helper, proposal->front())) ||
+          failed(chargeHelperOperations(*proposal, snapshotOperations,
+                                        snapshotIndices, &work)))
         return failure();
+      OwningOpRef<func::FuncOp> expanded(
+          cast<func::FuncOp>((*proposal)->clone()));
+      SmallVector<Operation *> generated;
+      if (failed(poly::eliminatePolynomials(proposal->front(), polynomial)) ||
+          failed(provenance.checkNormalization(*expanded, proposal->front(),
+                                               &generated)))
+        return failure();
+      if (!kernel::chargeCopy(*proposal, work))
+        return failure();
+      OwningOpRef<func::FuncOp> unsimplified(
+          cast<func::FuncOp>((*proposal)->clone()));
+      // Simplify only inside the admitted total mathematical closure, before
+      // ordered concrete ports or executable recipes are selected. The
+      // independent meaning reader checks the final result coordinates too.
+      auto &body = proposal->front();
+      OpBuilder builder(helper.getContext());
+      for (auto dim : llvm::make_early_inc_range(body.getOps<data::DimOp>())) {
+        if (!work)
+          return failure();
+        --work;
+        auto type = cast<CollectionTypeInterface>(dim.getInput().getType());
+        auto extent = type.getStaticExtent(dim.getAxisAttr().getInt());
+        if (!extent)
+          continue;
+        builder.setInsertionPoint(dim);
+        auto index = data::IndexOp::create(
+            builder, dim.getLoc(), dim.getOutput().getType(),
+            builder.getStringAttr(std::to_string(*extent)));
+        dim.getOutput().replaceAllUsesWith(index.getOutput());
+        dim.erase();
+      }
+      if (failed(foldArrayProjections(body, work)))
+        return failure();
+      for (auto &op : llvm::make_early_inc_range(llvm::reverse(body))) {
+        if (!work)
+          return failure();
+        --work;
+        if (isTotal(&op) && !finite::isComputation(&op) && op.use_empty())
+          op.erase();
+      }
+      if (failed(provenance.checkSimplification(*unsimplified, body)) ||
+          failed(checker.check(helper, body)))
+        return failure();
+      llvm::DenseSet<Operation *> origins(generated.begin(), generated.end());
+      for (auto &op : body)
+        if (origins.contains(&op))
+          polynomialGenerated.insert(&op);
       current = proposal->getOperation();
       bodies.try_emplace(helper, std::move(proposal));
     }
@@ -88,48 +151,8 @@ LogicalResult CheckedHelperNormalizations::prepare(Operation *source) {
   }
   return success();
 }
-LogicalResult
-CheckedHelperNormalizations::prepareRealization(func::FuncOp helper) {
-  if (realizations.contains(helper))
-    return success();
-  if (failed(prepare(helper)))
-    return failure();
-  auto normalized = lookup(helper);
-  if (!normalized ||
-      failed(chargeHelperOperations(normalized, snapshotOperations,
-                                    snapshotIndices, &work)))
-    return failure();
-  OwningOpRef<func::FuncOp> proposal(cast<func::FuncOp>(normalized->clone()));
-  auto &body = proposal->front();
-  if (failed(foldArrayProjections(body, work)))
-    return diagnostics::emit(helper->emitOpError(), "mathematical-helper-limit",
-                             "projection folding work bound");
-  OpBuilder builder(helper.getContext());
-  for (auto dim : llvm::make_early_inc_range(body.getOps<data::DimOp>())) {
-    auto type = cast<CollectionTypeInterface>(dim.getInput().getType());
-    auto axis = dim.getAxisAttr().getInt();
-    auto extent = type.getStaticExtent(axis);
-    if (!extent)
-      continue;
-    builder.setInsertionPoint(dim);
-    auto index =
-        data::IndexOp::create(builder, dim.getLoc(), dim.getOutput().getType(),
-                              builder.getStringAttr(std::to_string(*extent)));
-    dim.getOutput().replaceAllUsesWith(index.getOutput());
-    dim.erase();
-  }
-  for (auto &op : llvm::make_early_inc_range(llvm::reverse(body)))
-    if (isTotal(&op) && !finite::isComputation(&op) && op.use_empty())
-      op.erase();
-  if (failed(checker.check(helper, body)))
-    return failure();
-  realizations.try_emplace(helper, std::move(proposal));
-  return success();
-}
-func::FuncOp CheckedHelperNormalizations::lookup(Operation *helper,
-                                                 bool realization) const {
-  const auto &cache = realization ? realizations : bodies;
-  auto found = cache.find(helper);
-  return found == cache.end() ? func::FuncOp() : *found->second;
+func::FuncOp CheckedHelperNormalizations::lookup(Operation *helper) const {
+  auto found = bodies.find(helper);
+  return found == bodies.end() ? func::FuncOp() : *found->second;
 }
 } // namespace zkc::mathematical

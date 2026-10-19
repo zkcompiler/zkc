@@ -69,7 +69,7 @@ fn literal(s: &str, width: u32) -> Result<[u64; 3]> {
     match s {
         "0" => Ok([0; 3]),
         "1" => Ok([1, 0, 0]),
-        _ => zkc_runtime::interactive::bit_pattern_literal(s, width)
+        _ => zkc_runtime::vm::bit_pattern_literal(s, width)
             .ok_or_else(|| refused("noncanonical-scalar")),
     }
 }

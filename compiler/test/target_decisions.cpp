@@ -281,12 +281,10 @@ int main() {
         require(succeeded(verify(*module)), "physical verification");
         std::vector<std::string> implementations;
         unsigned conversions = 0;
-        for (auto op : function(*module)
-                           .getBody()
-                           .front()
-                           .getOps<zkc::plan::ExecuteKernelOp>()) {
-          implementations.push_back(op.getKernel().str());
-          if (op.getKernel() == "arkworks/table.relayout") {
+        for (auto op :
+             function(*module).getBody().front().getOps<zkc::plan::ApplyOp>()) {
+          implementations.push_back(op.getImplementation().str());
+          if (op.getImplementation() == "arkworks/table.relayout") {
             ++conversions;
             require(op.getResult(0).hasOneUse(),
                     "conversion result is per-use");
@@ -490,8 +488,8 @@ int main() {
               : "field contraction complete producer and consumers",
         [&] {
           auto module = take(executableFixture(contractions(group), context));
-          auto plan =
-              take(proposePhysical(*module, installedCandidates(), {}, true));
+          auto plan = take(proposePhysical(*module, installedCandidates(), {},
+                                           PhysicalPlanOptions{true}));
           require(plan.contractions.size() == 1 &&
                       plan.contractions.front().consumers.size() == 2 &&
                       plan.bindings.size() == 5,
@@ -511,11 +509,9 @@ int main() {
                                              "arkworks-diagonal/vector.dot",
                                              "arkworks-diagonal/vector.dot"};
           std::vector<std::string> actual;
-          for (auto op : function(*module)
-                             .getBody()
-                             .front()
-                             .getOps<zkc::plan::ExecuteKernelOp>())
-            actual.push_back(op.getKernel().str());
+          for (auto op :
+               function(*module).getBody().front().getOps<zkc::plan::ApplyOp>())
+            actual.push_back(op.getImplementation().str());
           require(actual == expected,
                   "independent contraction implementation expectations");
         });
@@ -559,7 +555,7 @@ int main() {
     // Discovery in an independent catalog cannot install code into this build.
     auto module = take(executableFixture(contractions(), context));
     refuses(proposePhysical(*module, installedCandidates(),
-                            {{"map", a.identity}}, true),
+                            {{"map", a.identity}}, PhysicalPlanOptions{true}),
             "binding-implementation");
   });
   cases.run("nested block contractions are checked before publication", [&] {
@@ -583,8 +579,8 @@ local.return %result : !R)";
                      end + std::string("local.return %b : !R").size() - start,
                      nested);
       auto module = take(executableFixture(source, context));
-      auto plan =
-          take(proposePhysical(*module, installedCandidates(), {}, true));
+      auto plan = take(proposePhysical(*module, installedCandidates(), {},
+                                       PhysicalPlanOptions{true}));
       require(plan.contractions.size() == 1, "nested opportunity is selected");
       auto corrupted = plan;
       corrupted.contractions.front().consumers.pop_back();
@@ -604,8 +600,8 @@ local.return %result : !R)";
                 1,
             "logical scalar action remains eligible without a diagonal "
             "backend");
-        auto plan =
-            take(proposePhysical(*module, installedCandidates(), {}, true));
+        auto plan = take(proposePhysical(*module, installedCandidates(), {},
+                                         PhysicalPlanOptions{true}));
         require(plan.contractions.empty() && plan.bindings.size() == 2,
                 "unavailable target keeps ordinary installed choices");
         auto checked = take(validatePhysical(*module, plan));
@@ -623,7 +619,8 @@ local.return %result : !R)";
           auto module = take(executableFixture(contractions(group), context));
           TestCandidates policy;
           policy.invalidDiagonalFirst = true;
-          auto plan = take(proposePhysical(*module, policy, {}, true));
+          auto plan = take(
+              proposePhysical(*module, policy, {}, PhysicalPlanOptions{true}));
           require(plan.contractions.size() == 1,
                   "installed diagonal candidate chosen");
           auto checked = take(validatePhysical(*module, plan, policy));
@@ -636,12 +633,13 @@ local.return %result : !R)";
       auto module = take(executableFixture(contractions(), context));
       TestCandidates policy;
       policy.withheldDiagonalContract = contract;
-      auto plan = take(proposePhysical(*module, policy, {}, true));
+      auto plan =
+          take(proposePhysical(*module, policy, {}, PhysicalPlanOptions{true}));
       require(plan.contractions.empty() && plan.bindings.size() == 2,
               "withheld member prevents the whole group");
       take(validatePhysical(*module, plan, policy));
-      auto selected =
-          take(proposePhysical(*module, installedCandidates(), {}, true));
+      auto selected = take(proposePhysical(*module, installedCandidates(), {},
+                                           PhysicalPlanOptions{true}));
       refuses(validatePhysical(*module, selected, policy),
               "binding-implementation");
     });
@@ -652,7 +650,8 @@ local.return %result : !R)";
         TestCandidates policy;
         policy.invalidDiagonalFirst =
             true; // Dense candidates are available but illegal here.
-        auto plan = take(proposePhysical(*module, policy, {}, true));
+        auto plan = take(
+            proposePhysical(*module, policy, {}, PhysicalPlanOptions{true}));
         for (auto &decision : plan.operations) {
           if (!decision.binding)
             continue;
@@ -676,7 +675,8 @@ local.return %result : !R)";
       });
   cases.run("diagonal output does not waive complete factor port checks", [&] {
     auto module = take(executableFixture(contractions(), context));
-    auto plan = take(proposePhysical(*module, installedCandidates(), {}, true));
+    auto plan = take(proposePhysical(*module, installedCandidates(), {},
+                                     PhysicalPlanOptions{true}));
     auto &producer = site(plan, *module, "map");
     producer.inputs[0] = producer.outputs[0];
     refusedMutation(*module, plan, "binding-operation-signature");
@@ -686,7 +686,8 @@ local.return %result : !R)";
         auto module = take(executableFixture(contractions(), context));
         TestCandidates policy;
         policy.invalidDiagonalFirst = true;
-        auto plan = take(proposePhysical(*module, policy, {}, true));
+        auto plan = take(
+            proposePhysical(*module, policy, {}, PhysicalPlanOptions{true}));
         auto &producer = site(plan, *module, "map");
         plan.bindings[*producer.binding].binding.application.implementation =
             "test/vector.mul";
@@ -702,7 +703,7 @@ local.return %result : !R)";
             take(proposePhysical(*module, policy,
                                  {{"map", "arkworks-diagonal/vector.mul"},
                                   {"reduce", "arkworks-diagonal/vector.dot"}},
-                                 false));
+                                 PhysicalPlanOptions{false}));
         require(plan.contractions.empty(),
                 "no automatic group for explicit choices");
         auto checked = take(validatePhysical(*module, plan, policy));
@@ -712,34 +713,38 @@ local.return %result : !R)";
       });
   cases.run("contraction missing use", [&] {
     auto module = take(executableFixture(contractions(), context));
-    auto plan = take(proposePhysical(*module, installedCandidates(), {}, true));
+    auto plan = take(proposePhysical(*module, installedCandidates(), {},
+                                     PhysicalPlanOptions{true}));
     plan.contractions.front().consumers.pop_back();
     refusedMutation(*module, plan, "binding-contraction");
   });
   cases.run("contraction missing producer group", [&] {
     auto module = take(executableFixture(contractions(), context));
-    auto plan = take(proposePhysical(*module, installedCandidates(), {}, true));
+    auto plan = take(proposePhysical(*module, installedCandidates(), {},
+                                     PhysicalPlanOptions{true}));
     plan.contractions.clear();
     refusedMutation(*module, plan, "binding-contraction");
   });
   cases.run("contraction duplicate consumer", [&] {
     auto module = take(executableFixture(contractions(), context));
-    auto plan = take(proposePhysical(*module, installedCandidates(), {}, true));
+    auto plan = take(proposePhysical(*module, installedCandidates(), {},
+                                     PhysicalPlanOptions{true}));
     plan.contractions.front().consumers[1] =
         plan.contractions.front().consumers[0];
     refusedMutation(*module, plan, "binding-contraction");
   });
   cases.run("contraction mismatched producer", [&] {
     auto module = take(executableFixture(contractions(), context));
-    auto plan = take(proposePhysical(*module, installedCandidates(), {}, true));
+    auto plan = take(proposePhysical(*module, installedCandidates(), {},
+                                     PhysicalPlanOptions{true}));
     plan.contractions.front().producer = plan.contractions.front().consumers[0];
     refusedMutation(*module, plan, "binding-contraction");
   });
   cases.run("fixed consumer preflights the entire group", [&] {
     auto module = take(executableFixture(contractions(), context));
-    auto plan =
-        take(proposePhysical(*module, installedCandidates(),
-                             {{"reduce", "arkworks/vector.dot"}}, true));
+    auto plan = take(proposePhysical(*module, installedCandidates(),
+                                     {{"reduce", "arkworks/vector.dot"}},
+                                     PhysicalPlanOptions{true}));
     require(plan.contractions.empty() && plan.bindings.size() == 2,
             "fixed consumer keeps producer and all uses dense");
     take(validatePhysical(*module, plan));
@@ -765,7 +770,8 @@ local.return %result : !R)";
                     "sym_name=\"reduce\",contract=\"vector.dot\",arguments=["
                     "\"bls12-381.fr\"],implementation=\"\"");
     auto module = take(executableFixture(source, context));
-    auto plan = take(proposePhysical(*module, installedCandidates(), {}, true));
+    auto plan = take(proposePhysical(*module, installedCandidates(), {},
+                                     PhysicalPlanOptions{true}));
     require(plan.contractions.empty() && plan.bindings.size() == 2,
             "source-fixed producer keeps all uses dense");
     take(validatePhysical(*module, plan));
@@ -778,7 +784,8 @@ local.return %result : !R)";
     source = replaceText(source, "(!V,!V,!A)->!R", "(!V,!V,!A)->!A");
     source = replaceText(source, "(%out) : (!R)", "(%out) : (!A)");
     auto module = take(executableFixture(source, context));
-    auto plan = take(proposePhysical(*module, installedCandidates(), {}, true));
+    auto plan = take(proposePhysical(*module, installedCandidates(), {},
+                                     PhysicalPlanOptions{true}));
     require(plan.contractions.empty(), "escaping producer is dense");
     take(validatePhysical(*module, plan));
   });
@@ -803,7 +810,8 @@ local.return %result : !R)";
     auto source = contractions();
     source = replaceText(source, "(%w,%mapped)", "(%mapped,%mapped)");
     auto module = take(executableFixture(source, context));
-    auto plan = take(proposePhysical(*module, installedCandidates(), {}, true));
+    auto plan = take(proposePhysical(*module, installedCandidates(), {},
+                                     PhysicalPlanOptions{true}));
     require(plan.contractions.empty(),
             "values cannot occupy coefficients slot");
     take(validatePhysical(*module, plan));
@@ -839,7 +847,8 @@ local.return %result : !R)";
       root.getBody().front().push_back(clone);
     }
     require(succeeded(verify(*module)), "native budget fixture formation");
-    auto plan = take(proposePhysical(*module, installedCandidates(), {}, true));
+    auto plan = take(proposePhysical(*module, installedCandidates(), {},
+                                     PhysicalPlanOptions{true}));
     require(plan.contractions.empty() && plan.bindings.size() == 4094,
             "conversion-aware atomic dense fallback");
     auto checked = take(validatePhysical(*module, plan));
@@ -884,11 +893,9 @@ local.return %result : !R)";
         accept(materializePhysical(*module, checked));
         require(succeeded(verify(*module)), "ordered crossing verification");
         std::vector<std::string> actual;
-        for (auto op : function(*module)
-                           .getBody()
-                           .front()
-                           .getOps<zkc::plan::ExecuteKernelOp>())
-          actual.push_back(op.getKernel().str());
+        for (auto op :
+             function(*module).getBody().front().getOps<zkc::plan::ApplyOp>())
+          actual.push_back(op.getImplementation().str());
         require(actual ==
                     std::vector<std::string>{"arkworks/control.require",
                                              "arkworks/table.relayout",
@@ -931,7 +938,7 @@ local.return %result : !R)";
             take(proposePhysical(*module, installedCandidates(),
                                  {{"map", "arkworks-diagonal/vector.mul"},
                                   {"reduce", "arkworks-diagonal/vector.dot"}},
-                                 true));
+                                 PhysicalPlanOptions{true}));
         require(plan.contractions.empty(),
                 "fixed choices do not receive automatic clones");
         auto checked = take(validatePhysical(*module, plan));
@@ -1038,7 +1045,7 @@ local.return %result : !R)";
     TestCandidates policy;
     policy.available = false;
     Location failureLocation = module->getLoc();
-    refuses(proposePhysical(*module, policy, {}, false, &failureLocation),
+    refuses(proposePhysical(*module, policy, {}, {}, &failureLocation),
             "binding-no-conversion");
     require(failureLocation == location,
             "conversion refusal retains consumer location");
@@ -1060,32 +1067,31 @@ local.return %result : !R)";
             "validation refusal retains operation location");
   });
   for (bool changeReturn : {false, true}) {
-    cases.run(changeReturn ? "materialized local return changed"
-                           : "materialized kernel operand changed",
-              [&] {
-                auto before = take(executableFixture(arithmetic(), context));
-                auto checked = take(
-                    validatePhysical(*before, take(proposePhysical(*before))));
-                OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
-                auto own = take(
-                    validatePhysical(*after, take(proposePhysical(*after))));
-                accept(materializePhysical(*after, own));
-                accept(verifyPhysicalMaterialization(*before, *after, checked));
-                auto fn = function(*after);
-                if (changeReturn)
-                  fn.getBody().front().back().setOperand(0, fn.getArgument(0));
-                else {
-                  auto kernel = *fn.getBody()
-                                     .front()
-                                     .getOps<zkc::plan::ExecuteKernelOp>()
-                                     .begin();
-                  kernel->setOperand(1, kernel->getOperand(0));
-                }
-                require(succeeded(verify(*after)),
-                        "physical mutation must remain formed");
-                reject(verifyPhysicalMaterialization(*before, *after, checked),
-                       "binding-materialization-correspondence");
-              });
+    cases.run(
+        changeReturn ? "materialized local return changed"
+                     : "materialized kernel operand changed",
+        [&] {
+          auto before = take(executableFixture(arithmetic(), context));
+          auto checked =
+              take(validatePhysical(*before, take(proposePhysical(*before))));
+          OwningOpRef<ModuleOp> after(cast<ModuleOp>((*before)->clone()));
+          auto own =
+              take(validatePhysical(*after, take(proposePhysical(*after))));
+          accept(materializePhysical(*after, own));
+          accept(verifyPhysicalMaterialization(*before, *after, checked));
+          auto fn = function(*after);
+          if (changeReturn)
+            fn.getBody().front().back().setOperand(0, fn.getArgument(0));
+          else {
+            auto kernel =
+                *fn.getBody().front().getOps<zkc::plan::ApplyOp>().begin();
+            kernel->setOperand(1, kernel->getOperand(0));
+          }
+          require(succeeded(verify(*after)),
+                  "physical mutation must remain formed");
+          reject(verifyPhysicalMaterialization(*before, *after, checked),
+                 "binding-materialization-correspondence");
+        });
   }
   cases.run("conversion feeds the wrong same-typed table", [&] {
     auto before = take(executableFixture(layouts(), context));
@@ -1096,11 +1102,12 @@ local.return %result : !R)";
     accept(materializePhysical(*after, own));
     auto fn = function(*after);
     Value other;
-    zkc::plan::ExecuteKernelOp crossing;
-    fn.walk([&](zkc::plan::ExecuteKernelOp op) {
+    zkc::plan::ApplyOp crossing;
+    fn.walk([&](zkc::plan::ApplyOp op) {
       if (op.getSite() == "same")
         other = op.getResult(0);
-      if (other && op.getKernel() == "arkworks/table.relayout" && !crossing)
+      if (other && op.getImplementation() == "arkworks/table.relayout" &&
+          !crossing)
         crossing = op;
     });
     require(other && crossing, "missing per-use conversion");

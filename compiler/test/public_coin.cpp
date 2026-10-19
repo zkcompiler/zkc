@@ -149,16 +149,22 @@ json::Value analyze(StringRef source = fixture,
           "public-coin fingerprint differs from selected preparation");
   for (auto different :
        {MathematicalSelectionPolicy{!policy.finiteBulk,
-                                    policy.vectorReductionFusion},
+                                    policy.vectorReductionFusion,
+                                    policy.collectFoldFusion},
         MathematicalSelectionPolicy{policy.finiteBulk,
-                                    !policy.vectorReductionFusion}}) {
+                                    !policy.vectorReductionFusion,
+                                    policy.collectFoldFusion},
+        MathematicalSelectionPolicy{policy.finiteBulk,
+                                    policy.vectorReductionFusion,
+                                    !policy.collectFoldFusion}}) {
     auto mismatch = checkPublicCoin(*module, independent, text, different);
     require(bool(mismatch), "report accepted under a different policy");
     require(
         namesIdentifier(toString(std::move(mismatch)), "public-coin-report"),
         "policy mismatch has wrong refusal identifier");
   }
-  for (StringRef key : {"finite_bulk", "fuse_vector_reductions"}) {
+  for (StringRef key :
+       {"finite_bulk", "fuse_vector_reductions", "fuse_collect_fold"}) {
     auto mutated = json::parse(text);
     require(bool(mutated), "report mutation parse");
     (*mutated->getAsObject())[key] = !*mutated->getAsObject()->getBoolean(key);
@@ -351,35 +357,63 @@ int main() {
   mlir::DialectRegistry registry;
   RunOptions options;
   options.publicCoinRequirement = requirement.str();
-  std::set<std::string> preparedHashes;
+  std::set<std::string> preparedHashes[2];
   for (bool fuse : {false, true})
-    for (bool finite : {false, true}) {
-      options.mathematicalSelection = {finite, fuse};
-      auto selected = analyze(policyFixture, options.mathematicalSelection);
+    for (bool finite : {false, true})
+      for (bool collect : {false, true}) {
+        options.mathematicalSelection = {finite, fuse, collect};
+        auto selected = analyze(policyFixture, options.mathematicalSelection);
+        auto result =
+            compileRun(policyFixture, "public-coin.mlir", options, registry);
+        require(bool(result) && result->publicCoin && !result->correspondence,
+                "checked invocation");
+        auto compiled = json::parse(*result->publicCoin);
+        require(bool(compiled) &&
+                    *compiled->getAsObject()->get("view") == selected,
+                "same unsimplified view");
+        auto &view = *selected.getAsObject();
+        require(view.getBoolean("finite_bulk") == finite &&
+                    view.getBoolean("fuse_vector_reductions") == fuse &&
+                    view.getBoolean("fuse_collect_fold") == collect,
+                "public-coin view lost preparation choice");
+        preparedHashes[collect].insert(
+            view.getString("prepared_ir_sha256")->str());
+        require(compiled->getAsObject()->getBoolean("fuse_vector_reductions") ==
+                        fuse &&
+                    compiled->getAsObject()->getBoolean("finite_bulk") ==
+                        finite &&
+                    compiled->getAsObject()->getBoolean("fuse_collect_fold") ==
+                        collect,
+                "compiled public-coin record lost preparation choice");
+        auto *passes =
+            compiled->getAsObject()->getArray("post_analysis_passes");
+        require(passes && !passes->empty() &&
+                    passes->front().getAsString() == "zkc-prepare-protocol",
+                "compiled view omitted preparation before projection");
+      }
+  require(preparedHashes[0].size() == 4 && preparedHashes[1].size() == 4,
+          "fixture must distinguish finite/vector preparation policies under "
+          "each collect-fold choice");
+  for (bool simplify : {false, true})
+    for (bool fix : {false, true}) {
+      options.simplify = simplify;
+      options.fixPolynomialFactors = fix;
       auto result =
-          compileRun(policyFixture, "public-coin.mlir", options, registry);
-      require(bool(result) && result->publicCoin && !result->correspondence,
-              "checked invocation");
+          compileRun(fixture, "reported-stages.mlir", options, registry);
+      require(bool(result) && result->publicCoin, "reported pipeline refused");
       auto compiled = json::parse(*result->publicCoin);
-      require(bool(compiled) &&
-                  *compiled->getAsObject()->get("view") == selected,
-              "same unsimplified view");
-      auto &view = *selected.getAsObject();
-      require(view.getBoolean("finite_bulk") == finite &&
-                  view.getBoolean("fuse_vector_reductions") == fuse,
-              "public-coin view lost preparation choice");
-      preparedHashes.insert(view.getString("prepared_ir_sha256")->str());
-      require(compiled->getAsObject()->getBoolean("fuse_vector_reductions") ==
-                      fuse &&
-                  compiled->getAsObject()->getBoolean("finite_bulk") == finite,
-              "compiled public-coin record lost preparation choice");
+      require(bool(compiled), "compiled pipeline report is not JSON");
+      json::Array expected{"zkc-prepare-protocol", "zkc-project-protocol"};
+      if (simplify)
+        expected.push_back("zkc-simplify-participant");
+      if (fix)
+        expected.push_back("zkc-fix-polynomial-factors");
+      expected.push_back("zkc-lower-math");
+      expected.push_back("zkc-select-physical");
       auto *passes = compiled->getAsObject()->getArray("post_analysis_passes");
-      require(passes && !passes->empty() &&
-                  passes->front().getAsString() == "zkc-prepare-protocol",
-              "compiled view omitted preparation before projection");
+      require(passes && *passes == expected,
+              "compiled report differs from selected pipeline stages");
     }
-  require(preparedHashes.size() == 4,
-          "fixture must distinguish every finite/fusion preparation policy");
   options.entry = "absent";
   auto refused = compileRun(fixture, "public-coin.mlir", options, registry);
   require(!refused, "entry mismatch accepted");

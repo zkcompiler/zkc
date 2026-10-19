@@ -21,9 +21,9 @@ use crate::{Policy, Result, Value, exhausted, refused, value::size};
 use p3_commit::Mmcs;
 use p3_matrix::{Dimensions, dense::RowMajorMatrix};
 use std::sync::Arc;
-use zkc_runtime::interactive::{
-    AttributeRule, Backing, BoundSignature, Identity, Invocation, KernelSignature, LogicalType,
-    OperationBinding, PhysicalType, Type,
+use zkc_runtime::vm::{
+    AttributeRule, Backing, BoundSignature, Identity, Invocation, LogicalType, OperationBinding,
+    OperationSignature, PhysicalType, Type,
 };
 
 /// One word of a digest, with its canonical byte encoding.
@@ -328,7 +328,7 @@ impl State {
     }
 }
 
-fn failure(error: Error) -> zkc_runtime::interactive::BackendError {
+fn failure(error: Error) -> zkc_runtime::vm::BackendError {
     match error {
         Error::ByteLimit => exhausted("oracle-byte-limit"),
         Error::Positions => refused("oracle-positions"),
@@ -361,7 +361,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         "opening_states.length" => (&[OpeningStates], &[Index]),
         _ => return None,
     };
-    Some(KernelSignature {
+    Some(OperationSignature {
         inputs: inputs
             .iter()
             .map(|t| scheme.physical(*t))

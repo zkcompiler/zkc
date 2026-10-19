@@ -725,14 +725,16 @@ int main() {
                       observed.str() + R"();
             return x==x;
           })";
-                  auto run = take(prepareOriginal(close(helper + R"(
+                  auto run = prepareOriginal(close(helper + R"(
           protocol Run roles(P)(x:F@P)->(ok:bool@P){return(ok=probe(x));}
-          run Demo=Run;)")));
-                  auto executed = compileEntry(run);
-                  require(bool(executed) == fits,
-                          "execution observation verdict differs");
-                  if (!executed) {
-                    auto message = toString(executed.takeError());
+          run Demo=Run;)"));
+                  require(bool(run) == fits,
+                          "executed helper admission verdict differs");
+                  if (run) {
+                    for (bool simplify : {false, true})
+                      take(compileEntry(*run, {simplify, false}));
+                  } else {
+                    auto message = toString(run.takeError());
                     require(StringRef(message).contains("fitting degree bound"),
                             message);
                   }

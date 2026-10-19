@@ -1,7 +1,7 @@
 #include "zkc/Relation/BundlePolynomial.h"
 #include "BundleInternal.h"
 #include "zkc/Contracts/Domains.h"
-#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/Support/MathExtras.h"

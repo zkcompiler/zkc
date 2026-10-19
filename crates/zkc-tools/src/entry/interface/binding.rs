@@ -1,7 +1,7 @@
 //! Bind authenticated source metadata to the native owner's admitted ABI.
 use super::{BoundInterface, InterfaceError as E, Result, raw::*, require};
 use crate::{proof::NativeDeployment, run::RunHost};
-use zkc_runtime::interactive::LogicalType;
+use zkc_runtime::vm::LogicalType;
 
 impl BoundInterface {
     /// Check the exact package artifact and its participant ABI. The authenticated
@@ -75,6 +75,7 @@ impl BoundInterface {
                         self.options.release_storage,
                         self.options.fuse_vector_reductions,
                         self.options.finite_bulk,
+                        self.options.fuse_collect_fold,
                         self.options.calculation_batching,
                     ]
                 && entry.entry() == p.symbol

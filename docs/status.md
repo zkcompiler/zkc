@@ -1,8 +1,8 @@
 # What the implementation supports
 
 The supported implementation is `.zkc` frontend → Protocol IR (PIR)
-(`protocol`, `participant`, `exec`, `physical`) → `zkc.program/0` → a shared Rust
-Runner with Entry/proof/joint Hosts. Direct MLIR enters the same compiler.
+(`protocol`, `participant`, `exec`, `physical`) → `zkc.program/0` → the Rust VM and
+interpreter with Entry/proof/joint Hosts. Direct MLIR enters the same compiler.
 [Specification](spec/README.md) defines contracts; this page records support.
 Links identify maintained checks, not a claim that they ran for this revision.
 
@@ -30,6 +30,35 @@ See the [SDK reference](../compiler/README.md#components-and-ownership).
 Rust package, run and deployment admission take trusted 32-byte SHA-256 pins;
 CLI adapters own hexadecimal spelling. Backend service installation uses
 `service_support` returning a named `ServiceSupport` signature and reply bound.
+
+## Execution foundation
+
+`zkc_runtime::vm::Program` owns structurally admitted code independently of a
+backend. Loading links one owned backend before entering frames. The internal
+VM instance owns complete invocation admission, frame identity and nesting,
+installed calls, retained values and budgets. Participant loop frames reuse
+typed input layouts retained during admission. Return handoffs carry owned
+values and their backing obligation; VM recording snapshots retain preparation
+accounting. Primitive value checks also reside in the VM;
+`zkc_runtime::interpreter::Runner` owns control evaluation and pending actions.
+Hosts use that interpreter for Entry, proof and joint execution. The
+[VM contract](spec/runtime/vm.md) defines authority, failure and accounting.
+
+Logical [Kernel IR](spec/ir/kernel.md) owns total numerical closures and their
+ordered Local invocations. Preparation and participant demand lowering form
+units; the physical plan retains those units alongside the selected Local
+candidate until independent numerical and physical checks permit publication.
+Export receives the resulting physical program without Kernel operations.
+Normalization and numerical recipe checking consume Kernel-owned standard
+functions directly, with separate structural facts and call-specific selection
+restrictions.
+Existing installed backends execute the resulting operations. The checked physical
+schedule records optional binding releases, including conversion temporaries;
+materialization performs no lifetime selection. Private numerical schedules use
+standard SCF loops and are independently checked before Local lowering.
+Writable-buffer layouts, target-specific vectorization and JIT/AOT engines remain
+unimplemented. This separation establishes
+ownership without claiming a speedup or a formal native correspondence proof.
 
 ## Source and application boundary
 
@@ -203,6 +232,7 @@ no runtime predicate evaluation or proof transport through those transforms.
 
 | Capability | Support and boundary |
 |---|---|
+| Numerical scheduling | [Kernel](spec/ir/kernel.md) retains the mathematical subject and checks a private standard SCF loop schedule before Local execution. Explicit collect–fold fusion supports total field-vector/field-sequence producers and element or same-position indexed consumers; unsupported observations retain materialization. Nominal values, domain admission and ordered state are checked independently. No vectorized schedule, writable-buffer ABI or new VM instruction is implied. |
 | Scalar, collection and polynomial mathematics | Nominal Algebra field/group vectors, indices, field matrices and field arrays, with ordered `algebra.array_from_elements` packing. A shared collection interface reports structure without granting finite, mathematical, Copy/Drop or wire admission; shape evidence retains the logical family. Source syntax, logical binding spellings and native codecs retain their meanings; builtin tensors have no compatibility alias. Total expressions and checked realization recipes; [structured mathematics](compiler/mathematics.md). Kernel installation alone does not supply a mathematical recipe. |
 | Group identity | Total `intrinsic<G>("curve.identity")`, Algebra identity and independently checked native recipe. Dalek Ristretto255 and prime-order Edwards25519; arkworks BLS12-381 G1/G2/GT and BN254 G1/G2/GT, including multiplicative-one GT. Empty MSM identity is checked for the six installed dense group families; [contract](spec/domains/values.md#group-identity). No native proof claim. |
 | Shared expression evaluation | Captured [Ring and Bundle terms](spec/language/definitions.md#asset-domains-and-projections), derived static dimensions, retained Entry assets and independent Host preflight. [Checked structural sharing](spec/domains/ring-expressions.md#structural-sharing) preserves ordered substitution and read obligations. The [generic Sumcheck library](../libraries/sumcheck/README.md) derives its width and degree from its Ring parameter; it remains a public-table client without a PCS or native security theorem. |

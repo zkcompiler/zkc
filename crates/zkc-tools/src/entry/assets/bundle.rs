@@ -55,9 +55,9 @@ mod tests {
     use super::*;
     use serde_json::{Value, json};
     use zkc_runtime::{
-        interactive::Identity,
         relation::{Group, Height, ReadModel, Slot, Table},
         ring::Expression,
+        vm::Identity,
     };
 
     fn fixture() -> Bundle {

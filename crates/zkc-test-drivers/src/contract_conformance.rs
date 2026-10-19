@@ -3,19 +3,19 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::io;
 use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy};
-use zkc_runtime::interactive::{
-    AdmissionError, KernelSignature, LogicalType, OperationBinding, PhysicalType, admit_supplied,
+use zkc_runtime::vm::{
+    AdmissionError, LogicalType, OperationBinding, OperationSignature, PhysicalType,
 };
 use zkc_tools::entry::Package;
 
 type LogicalResolver =
-    fn(&OperationBinding) -> Result<KernelSignature<LogicalType>, AdmissionError>;
+    fn(&OperationBinding) -> Result<OperationSignature<LogicalType>, AdmissionError>;
 
 // Test-only resolver drift; no declaration, admission rule or serialized result
 // is replaced. Physical resolution continues through the installed runtime.
 fn divergent_logical_resolver(
     binding: &OperationBinding,
-) -> Result<KernelSignature<LogicalType>, AdmissionError> {
+) -> Result<OperationSignature<LogicalType>, AdmissionError> {
     let mut signature = binding.logical_signature()?;
     if binding.contract == "field.add" {
         signature.outputs = vec![LogicalType::parse("bool")?];
@@ -94,7 +94,7 @@ fn entry_interface(text: &str) -> Value {
     let bytes = serde_json::to_vec(&json!({
         "format": "zkc.entry/0", "original": "conformance original",
         "interface": text, "artifact": "conformance metadata only",
-        "options": {"simplify": true, "release_storage": false, "finite_bulk": true, "fuse_vector_reductions": false, "calculation_batching": true}, "assets": []
+        "options": {"simplify": true, "release_storage": false, "finite_bulk": true, "fuse_vector_reductions": false, "fuse_collect_fold": false, "calculation_batching": true}, "assets": []
     }))
     .expect("inert package serialization");
     let package = Package::capture(&bytes, &Sha256::digest(&bytes).into(), Package::MAX_BYTES)
@@ -172,7 +172,11 @@ fn respond(native: &NativeBackend, line: &[u8], resolve: LogicalResolver) -> Opt
         }
         let bytes = operation_program(&binding, attributes)?;
         return Some(observed(
-            admit_supplied(&bytes, native)
+            zkc_runtime::vm::Program::decode(&bytes)
+                .and_then(|program| {
+                    program.check_installation(native)?;
+                    Ok(program)
+                })
                 .map(|_| ())
                 .map_err(|e| e.code),
         ));

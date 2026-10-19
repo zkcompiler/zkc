@@ -8,18 +8,23 @@ namespace zkc::target {
 class CheckedPhysicalPlan;
 }
 namespace zkc::protocol {
-// Compare the actual physical candidate with the fresh checked logical input.
-// Includes all local operands, selected kernels and per-use conversions.
+// Freshness-check the original input, then compare actual physical output with
+// the checked plan's selected Local subject. Numerical correspondence from
+// original Kernel source to that privately retained subject was independently
+// established by validation. Includes participant/source preservation, all
+// local operands, selected implementations and per-use conversions.
 llvm::Error verifyPhysicalMaterialization(mlir::ModuleOp before,
                                           mlir::ModuleOp after,
                                           const target::CheckedPhysicalPlan &);
 // Transactional application; publish only after independent correspondence.
 llvm::Error materializePhysical(mlir::ModuleOp,
                                 const target::CheckedPhysicalPlan &);
-// Called after lowerPhysical admits a logical module with explicit bindings.
+// Called after lowerPhysical admits the original logical module. Kernel
+// realization remains private plan state until checked physical publication.
 mlir::LogicalResult lowerBoundPhysical(
     mlir::ModuleOp,
     llvm::ArrayRef<std::pair<std::string, std::string>> selections,
-    bool linearContractions, LinearContractionStats *stats);
+    bool linearContractions, LinearContractionStats *stats,
+    bool releaseStorage = false);
 } // namespace zkc::protocol
 #endif

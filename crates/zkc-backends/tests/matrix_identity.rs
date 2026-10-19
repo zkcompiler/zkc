@@ -6,7 +6,7 @@ use serde_json::json;
 use sha2::{Digest, Sha256};
 use support::{Controlled, backend, one, program};
 use zkc_backends::{Bn254Scalar, KoalaBear, KoalaBearExt8, Policy, RistrettoScalar, Scalar, Value};
-use zkc_runtime::interactive::{ErrorCode, OperationBinding, Value as _, admit_supplied};
+use zkc_runtime::vm::{ErrorCode, OperationBinding, Value as _};
 
 const FIELDS: [(&str, &str, &str); 5] = [
     (
@@ -236,7 +236,10 @@ fn malformed_digest_refused_by_admission_and_backend() {
                 &["ok".into()],
             );
             let b = backend(Policy::default());
-            let err = match admit_supplied(&bytes, &b) {
+            let err = match zkc_runtime::vm::Program::decode(&bytes).and_then(|program| {
+                program.check_installation(&b)?;
+                Ok(program)
+            }) {
                 Ok(_) => panic!("admitted bad digest"),
                 Err(e) => e,
             };

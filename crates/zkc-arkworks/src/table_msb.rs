@@ -46,7 +46,7 @@ impl MsbTable {
     pub fn len(&self) -> usize {
         self.values.len()
     }
-    /// Admitted tables always contain at least one evaluation.
+    /// Program tables always contain at least one evaluation.
     pub fn is_empty(&self) -> bool {
         false
     }

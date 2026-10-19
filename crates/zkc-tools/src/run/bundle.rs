@@ -1,7 +1,7 @@
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use zkc_backends::has_native_wire;
-use zkc_runtime::interactive::{Admitted, Backend, ProgramAction, ProgramRole, admit_supplied};
+use zkc_runtime::vm::{Backend, Program, ProgramAction, ProgramRole};
 
 /// Structural admission ceilings. Every count is independent; bytes measure UTF-8
 /// or carrier bytes, depth counts containers, and nodes include object keys.
@@ -24,7 +24,7 @@ impl Default for BundleLimits {
 impl BundleLimits {
     pub const HARD_MAX: Self = Self {
         bytes: 16 * 1024 * 1024,
-        candidate_bytes: zkc_runtime::interactive::Limits::ARTIFACT_BYTES,
+        candidate_bytes: zkc_runtime::vm::Limits::ARTIFACT_BYTES,
         roles: 1024,
         steps: 32768,
         depth: 256,
@@ -84,7 +84,7 @@ pub enum Segment {
 }
 #[derive(Clone, Debug)]
 pub struct Bundle {
-    pub(super) admitted: Admitted,
+    pub(super) admitted: Program,
     pub(super) entry: String,
     pub(super) roles: Vec<ProgramRole>,
     pub(super) steps: Vec<Step>,
@@ -122,7 +122,10 @@ impl Bundle {
         if raw.format != "zkc.run/0" {
             return Err(BundleError::Format);
         }
-        let admitted = admit_supplied(raw.candidate.as_bytes(), backend)
+        let admitted = zkc_runtime::vm::Program::decode(raw.candidate.as_bytes())
+            .map_err(|e| BundleError::Candidate(e.to_string()))?;
+        admitted
+            .check_installation(backend)
             .map_err(|e| BundleError::Candidate(e.to_string()))?;
         let layout = admitted
             .program_entry(&raw.entry)
@@ -151,7 +154,7 @@ impl Bundle {
         bundle.validate()?;
         Ok(bundle)
     }
-    pub fn admitted(&self) -> &Admitted {
+    pub fn admitted(&self) -> &Program {
         &self.admitted
     }
     pub fn entry(&self) -> &str {
@@ -272,7 +275,7 @@ fn validate_preorder(segments: &[Segment], count: usize) -> Result<(), BundleErr
         count: usize,
         depth: usize,
     ) -> Result<(), BundleError> {
-        if depth >= zkc_runtime::interactive::Limits::STACK_DEPTH {
+        if depth >= zkc_runtime::vm::Limits::STACK_DEPTH {
             return Err(BundleError::Limit);
         }
         for node in nodes {

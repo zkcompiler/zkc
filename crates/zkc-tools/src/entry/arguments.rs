@@ -41,7 +41,7 @@ pub(super) fn values<'a>(
     let mut inputs = Vec::new();
     for port in ports {
         match port.key {
-            Some(zkc_runtime::interactive::Type::VerifierKey) => {
+            Some(zkc_runtime::vm::Type::VerifierKey) => {
                 inputs.push(if let Some(keys) = public_keys {
                     InputValue::Wire(
                         keys.get(&port.native[0])
@@ -52,7 +52,7 @@ pub(super) fn values<'a>(
                     InputValue::VerifierKey
                 });
             }
-            Some(zkc_runtime::interactive::Type::ProverKey) => {
+            Some(zkc_runtime::vm::Type::ProverKey) => {
                 let value = values.remove(&port.name).ok_or("entry-input-names")?;
                 let Value::Leaf(
                     value @ (InputValue::ProverKey(_)
@@ -103,13 +103,13 @@ pub(super) fn proof_inputs(
     private: NamedValues,
     capacity: crate::host::capacity::Capacity,
 ) -> Result<Vec<InputValue>, String> {
-    use zkc_runtime::interactive::PhysicalType;
+    use zkc_runtime::vm::PhysicalType;
     let private = values(interface.named_inputs(role), private, None)?;
     let mut private = private.into_iter();
     let mut inputs = Vec::new();
     let mut copied = 0usize;
     for port in interface.input_ports(role) {
-        if port.key == Some(zkc_runtime::interactive::Type::VerifierKey) {
+        if port.key == Some(zkc_runtime::vm::Type::VerifierKey) {
             inputs.push(InputValue::VerifierKey);
         } else if let Some((start, len)) = port.public {
             for (input, spelling) in public[start..start + len].iter().zip(&port.schema.leaves) {

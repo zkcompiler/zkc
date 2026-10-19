@@ -1,12 +1,14 @@
 #include "zkc/Analysis/Finite.h"
+#include "zkc/Analysis/TotalClosure.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Kernel/IR/KernelOps.h"
 #include "zkc/Dialect/Mathematical.h"
+#include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Protocol/NativePolicy.h"
-#include "zkc/Dialect/Protocol/Semantics.h"
 #include "zkc/Dialect/Relation/IR/Declarations.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringMap.h"
@@ -115,7 +117,7 @@ struct MetadataVerifier {
       if (transition || !declaration)
         return refuse(record, "invalid inserted transcript helper");
       auto contract = declaration.getContract();
-      if (!isa<plan::ExecuteKernelOp>(op) &&
+      if (!isa<plan::ApplyOp>(op) &&
           op.getName().getStringRef() != protocol::boundOperationName(contract))
         return refuse(record, "invalid inserted transcript helper");
       // A UniformIndex helper first materializes its static domain.
@@ -999,7 +1001,7 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
     return refuse(unit, "expected one participant symbol-table block");
   if (unit->getAttrs().size() != 1)
     return refuse(unit, "unexpected attribute in the 'participant' profile");
-  if (failed(finite::verifyClosure(unit)) || failed(verifyHelpers(unit)))
+  if (failed(verifyTotalClosure(unit)))
     return failure();
   unsigned operations = 0;
   NativeTypePolicies types(unit);
@@ -1018,7 +1020,7 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
           return refuse(entry, "unsupported participant entry attribute");
       continue;
     }
-    if (isa<data::DomainOp, func::FuncOp, local::FuncOp,
+    if (isa<data::DomainOp, func::FuncOp, local::FuncOp, kernel::ModuleOp,
             local::OperationBindingOp>(declaration))
       continue;
     if (isa<protocol_ir::ProjectionOp>(declaration))

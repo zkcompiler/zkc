@@ -1,6 +1,6 @@
 //! Group/scalar association and fixed pairing admission.
 use super::*;
-use zkc_runtime::interactive::{KernelSignature, LogicalType, PhysicalType};
+use zkc_runtime::vm::{LogicalType, OperationSignature, PhysicalType};
 pub(crate) const fn operation(
     name: &'static str,
     inputs: &'static [Type],
@@ -61,7 +61,7 @@ fn check_pairing(
     let [left, right] = row.inputs else {
         return None;
     };
-    Some(KernelSignature {
+    Some(OperationSignature {
         inputs: vec![make(*left, g1)?, make(*right, g2)?],
         outputs: row
             .outputs

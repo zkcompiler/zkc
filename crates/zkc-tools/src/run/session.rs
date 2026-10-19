@@ -1,8 +1,9 @@
 use super::{Bundle, Step, bundle::Segment, report::*};
 use zkc_backends::{NativeBackend, NativeWireError, native_wire_size};
-use zkc_runtime::interactive::{
-    Action, Backend, Cut, Limits, PathElement, PhysicalType, ProgramAction, ProgramState, Runner,
-    Value, ValueBudget, WorkBudget,
+use zkc_runtime::interpreter::Runner;
+use zkc_runtime::vm::{
+    Action, Backend, Cut, Limits, PathElement, PhysicalType, ProgramAction, ProgramState, Value,
+    ValueBudget, WorkBudget,
 };
 
 /// The closed native wire profile selected by `zkc.run/0` bundle admission.
@@ -458,7 +459,7 @@ impl<B: WireBackend> Execution<B> {
     ) -> Option<Outcome> {
         let step = &bundle.steps[coordinate];
         if self.returned(step.role) {
-            // A returned role has no reached suffix actions. Admitted groups
+            // A returned role has no reached suffix actions. Program groups
             // pair each send immediately with its receive; the live peer check
             // below refuses communication before a packet can become pending.
             return None;

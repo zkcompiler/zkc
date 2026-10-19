@@ -79,12 +79,34 @@ operational limits.
 
 ## Analysis and realization boundaries
 
+[Logical Kernel units](../spec/ir/kernel.md) own numerical bodies and their
+helper/domain dependencies. Preparation forms units for executable helper
+requests; demand lowering forms them for participant calculations. Both retain
+an ordered Local wrapper. Physical planning retains those units alongside the
+selected Local realization, using the existing normalization and recipe readers.
+The checked plan connects numerical correspondence and physical choices before
+publication removes the units.
+The shared mathematical vocabulary is owned outside the Protocol dialect, so
+Protocol and Kernel admission apply the same laws under explicit symbol owners.
+
 The [shared fact contracts](../spec/domains/mathematical-facts.md) keep extent
 equality and index bounds separate from exact value identity. Contracts owns the
 MLIR-free derivation kernel; Language and Analysis independently extract premises
 from source origins and SSA. A query reports proven evidence, missing evidence
 or exhausted work. Learning a count preserves the nominal container family and
 every ordered admission obligation.
+
+`TotalClosure` admits acyclic total functions and finite-domain definitions under
+an explicit symbol-table owner. It checks retained unused definitions, formal
+operand dependencies, bounded access premises and polynomial observations with
+shared work limits. Known non-fitting polynomial observations refuse even when
+unused; unknown bounds on formal polynomial inputs remain obligations when a
+caller supplies their constructors. An owner may designate one public entry;
+other functions are private. Protocol separately checks participant availability
+and ordered actions.
+Moving a mathematical definition to another owner does not grant new operations,
+resource ports or bounds. The enclosing dialect still owns its declaration
+vocabulary and entry rules.
 
 Each analysis describes an immutable subject and its inspected helper closure.
 Source checking retains its occurrence-specific origins and symbolic natural
@@ -225,7 +247,7 @@ states its precise admission and zero-trip obligations.
 Source binders reach general finite IR through ordinary scoped consumers. Its
 checked lowering recognizes admitted native contractions and retains an ordered
 loop fallback. `MathematicalSelectionPolicy` enables the finite bulk family by
-default and leaves vector reduction fusion disabled. `--no-finite-bulk` selects
+default and leaves both fusion families disabled. `--no-finite-bulk` selects
 the ordered finite fallback while retaining the same domain admission.
 `--no-simplify` controls generic total-expression folding independently; it does
 not disable mathematical selection. Explicit authored `map` plus reducer calls keep the separate
@@ -246,11 +268,11 @@ defines exact eligibility and shared bounds.
 
 `EntryOptions`, `RunOptions` and `NativeProofOptions` carry one
 `mathematicalSelection` policy, with independent `finiteBulk` and
-`vectorReductionFusion` family controls and the `calculationBatching` schedule.
+`vectorReductionFusion` and `collectFoldFusion` family controls and the `calculationBatching` schedule.
 Preparation, total Math demand lowering, proof construction and polynomial
 correspondence reconstruction all receive the same policy. Public preparation,
 projection and lowering passes expose `optimize-finite` and
-`fuse-vector-reductions` options, and the lowering pass also
+`fuse-vector-reductions` and `fuse-collect-fold` options, and the lowering pass also
 `calculation-batching`; the participant pipeline forwards these choices to its
 stages. Physical storage release remains a separate control.
 
@@ -259,17 +281,18 @@ calculation calls placed before actions. With batching, the default, each
 needed operation is computed in the one call before the first action whose
 demand reaches it, so a value consumed only late is deferred past the
 transcript operations, receives and loops in between. `--no-calculation-batching`
-computes, before each action, every needed operation that precedes it in source
-order and was not computed yet, so values are computed where the source defines
-them. The compiler's lowering check expects the selected schedule; the
+computes, before each action, the needed concrete results of operations that
+precede it in source order and were not computed yet. Formal polynomial
+descriptors are reconstructed beside their consumers; they do not become
+participant ports. The compiler's lowering check expects the selected schedule; the
 [executable lowering rule](../../lean/docs/spec/executable.md#normalization)
 accepts both, since their normal forms are the export's.
 
 Entry packages record `finite_bulk`, `fuse_vector_reductions` and
-`calculation_batching` alongside their separate simplify and storage choices;
-compilation reports record the first two. Native-proof deployments record
-simplify, storage release, fusion, finite bulk and calculation batching in that
-order; readers require all five choices. Reconstruction uses the
+`fuse_collect_fold` and `calculation_batching` alongside their separate simplify and storage choices;
+compilation reports record the three family choices and the schedule. Native-proof deployments record
+simplify, storage release, vector reduction fusion, finite bulk, collect–fold fusion and calculation batching in that
+order; readers require all six choices. Reconstruction uses the
 selected policy, including when generic simplification is disabled.
 
 The explicit `rewriteLocalAlgorithms` preparation service admits the immutable

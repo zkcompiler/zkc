@@ -7,9 +7,9 @@ use zkc_backends::services::{ServiceReference, ServiceRegistry};
 use zkc_backends::{
     Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Sequence, Value,
 };
-use zkc_runtime::interactive::{
-    Action, LogicalType, Packet, PathElement, ProgramState, Runner, StopKind,
-    Value as RuntimeValue, admit_supplied,
+use zkc_runtime::interpreter::Runner;
+use zkc_runtime::vm::{
+    Action, LogicalType, Packet, PathElement, ProgramState, StopKind, Value as RuntimeValue,
 };
 use zkc_tools::execution::InputValue;
 use zkc_tools::run::{
@@ -67,7 +67,12 @@ fn start(
 ) -> Participant {
     let entry = bundle["entry"].as_str().unwrap();
     let admitted =
-        admit_supplied(bundle["candidate"].as_str().unwrap().as_bytes(), &backend).unwrap();
+        zkc_runtime::vm::Program::decode(bundle["candidate"].as_str().unwrap().as_bytes())
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap();
     Participant {
         runner: Runner::new(&admitted, entry, role, "language_test", backend, inputs)
             .map_err(|failure| failure.error)

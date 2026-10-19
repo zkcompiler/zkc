@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use zkc_backends::services::{ServiceObservation, ServiceReference, ServiceRegistry};
 use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
 
-use zkc_runtime::interactive::Value as RuntimeValue;
+use zkc_runtime::vm::Value as RuntimeValue;
 use zkc_tools::run::*;
 
 fn backend(role: &str, session: &str, entry: &str) -> NativeBackend {
@@ -349,8 +349,8 @@ fn sumcheck(directory: &Fixtures) {
                     } else {
                         coefficients[0] = 999;
                     }
-                    let ty = zkc_runtime::interactive::LogicalType::field_array(
-                        zkc_runtime::interactive::Identity::Bls12381Fr,
+                    let ty = zkc_runtime::vm::LogicalType::field_array(
+                        zkc_runtime::vm::Identity::Bls12381Fr,
                         power as u64 + 2,
                     )
                     .unwrap();

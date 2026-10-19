@@ -6,10 +6,13 @@
 using namespace mlir;
 using namespace llvm;
 namespace zkc::mathematical {
-RealizationEmitter::RealizationEmitter(protocol_ir::ProtocolModuleOp candidate,
+RealizationEmitter::RealizationEmitter(Operation *candidate,
                                        StringRef bindingPrefix)
     : unit(candidate), prefix(bindingPrefix.str()) {
-  for (auto &op : unit.getBody().front())
+  assert(unit && unit->hasTrait<OpTrait::SymbolTable>() &&
+         unit->getNumRegions() == 1 && unit->getRegion(0).hasOneBlock() &&
+         "realization requires a single-block symbol table");
+  for (auto &op : unit->getRegion(0).front())
     if (auto name = SymbolTable::getSymbolName(&op))
       names.insert(name.getValue());
 }
@@ -27,7 +30,7 @@ RealizationEmitter::binding(OpBuilder &builder, Location location,
     } while (!names.insert(name).second ||
              SymbolTable::lookupSymbolIn(unit, name));
     OpBuilder::InsertionGuard guard(builder);
-    builder.setInsertionPointToStart(&unit.getBody().front());
+    builder.setInsertionPointToStart(&unit->getRegion(0).front());
     SmallVector<Attribute> arguments;
     for (const auto &argument : application.arguments)
       arguments.push_back(builder.getStringAttr(argument));

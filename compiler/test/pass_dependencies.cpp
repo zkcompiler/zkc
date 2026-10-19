@@ -4,6 +4,7 @@
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
+#include "zkc/Dialect/Kernel/IR/KernelOps.h"
 #include "zkc/Dialect/Operations.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
@@ -204,11 +205,44 @@ int main() {
       require(!context.getLoadedDialect<local::LocalDialect>() &&
                   !context.getLoadedDialect<algebra::AlgebraDialect>(),
               "participant fixture unexpectedly loaded execution dialects");
-      runChecked(module, protocol::createLowerMathPass(), {"local", "algebra"});
-      require(count(module, "local.func") &&
-                  count(module, "algebra.exec.bool_and") &&
-                  !count(module, "arith.andi"),
-              "boolean recipe did not execute");
+      runChecked(module, protocol::createLowerMathPass(),
+                 {"local", "kernel", "func"});
+      require(count(module, "kernel.module") && count(module, "kernel.call") &&
+                  count(module, "arith.andi") &&
+                  !count(module, "algebra.exec.bool_and"),
+              "logical formation executed Boolean recipes early");
+      std::string logical;
+      llvm::raw_string_ostream(logical) << module;
+      withSource<arith::ArithDialect, local::LocalDialect,
+                 kernel::KernelDialect, func::FuncDialect>(
+          logical, [&](ModuleOp candidate, MLIRContext &fresh) {
+            require(!fresh.getLoadedDialect<algebra::AlgebraDialect>(),
+                    "Kernel fixture unexpectedly loaded recipe dialect");
+            runChecked(candidate, kernel::createLowerKernelsPass(),
+                       {"algebra"});
+            require(count(candidate, "algebra.exec.bool_and") &&
+                        !count(candidate, "kernel.module") &&
+                        !count(candidate, "kernel.call") &&
+                        !count(candidate, "arith.andi"),
+                    "standalone Kernel pass did not execute Boolean recipes");
+          });
+      withSource<arith::ArithDialect, local::LocalDialect,
+                 kernel::KernelDialect, func::FuncDialect>(
+          logical, [&](ModuleOp candidate, MLIRContext &fresh) {
+            require(!fresh.getLoadedDialect<algebra::AlgebraDialect>() &&
+                        !fresh.getLoadedDialect<plan::PlanDialect>(),
+                    "Kernel fixture unexpectedly loaded physical dialects");
+            runChecked(candidate, protocol::createSelectPhysicalPass(),
+                       {"algebra", "plan"});
+            require(count(candidate, "plan.apply") == 1 &&
+                        !count(candidate, "algebra.exec.bool_and") &&
+                        !count(candidate, "kernel.module") &&
+                        !count(candidate, "kernel.call"),
+                    "physical pass did not realize its logical Kernel input");
+          });
+      require(count(module, "local.func") && count(module, "kernel.call") &&
+                  count(module, "arith.andi"),
+              "Boolean logical closure was not retained");
     });
   });
   cases.run("sequence recipes retain their input data dialect", [&] {
@@ -219,6 +253,12 @@ int main() {
                       !context.getLoadedDialect<local::LocalDialect>(),
                   "sequence fixture does not isolate data from local");
           runChecked(module, protocol::createLowerMathPass(),
+                     {"local", "kernel", "func", "data"});
+          require(count(module, "kernel.call") &&
+                      count(module, "data.sequence_append") &&
+                      !count(module, "data.exec.sequence_append"),
+                  "sequence recipes ran during formation");
+          runChecked(module, kernel::createLowerKernelsPass(),
                      {"local", "algebra", "data"});
           require(count(module, "data.exec.sequence_empty") &&
                       count(module, "data.exec.sequence_append") &&
@@ -249,6 +289,13 @@ int main() {
                       count(module, "func.func"),
                   "finite fixture lost its source helper or loaded local");
           runChecked(module, protocol::createLowerMathPass(),
+                     {"local", "kernel", "data", "func"});
+          require(count(module, "kernel.call") &&
+                      count(module, "algebra.finite_collect") &&
+                      count(module, "data.domain") &&
+                      !count(module, "local.for"),
+                  "finite raw closure was not retained");
+          runChecked(module, kernel::createLowerKernelsPass(),
                      {"local", "algebra", "data", "func"});
           require(count(module, "local.for") &&
                       count(module, "algebra.exec.field_array_from_vector") &&

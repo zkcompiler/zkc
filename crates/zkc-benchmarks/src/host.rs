@@ -11,7 +11,7 @@ use std::{
     path::{Path, PathBuf},
     time::Instant,
 };
-use zkc_runtime::interactive::StopKind;
+use zkc_runtime::vm::StopKind;
 use zkc_tools::entry::{
     BindingPolicy, Package, ProofEntry, ProofOptions, ProofRequest, inputs::Decoder,
 };
@@ -93,7 +93,7 @@ pub fn run(
     let mut entry =
         ProofEntry::admit(package, options, Default::default()).map_err(|e| e.to_string())?;
     let admit_ns = start.elapsed().as_nanos();
-    let defaults = zkc_runtime::interactive::PreparationLimits::default();
+    let defaults = zkc_runtime::vm::PreparationLimits::default();
     let mut limits = defaults;
     if let Some(entries) = preparation_entries {
         if entries > defaults.entries {
@@ -270,7 +270,7 @@ mod tests {
     use super::*;
     #[test]
     fn refusals_preserve_the_layer_that_rejected() {
-        use zkc_runtime::interactive::BackendError;
+        use zkc_runtime::vm::BackendError;
         assert_eq!(
             rejection(Some("artifact-rejected"), None),
             Some("verification")

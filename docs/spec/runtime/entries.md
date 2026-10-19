@@ -336,12 +336,16 @@ can obtain the logical view directly from `language-interface`, before executabl
 lowering. Package inspection validates the captured package view. Neither path
 performs native admission, key import, resource issuance or execution.
 
-Source compilation accepts `--no-simplify`, `--release-storage` and
-`--fuse-vector-reductions` for `compile`, `run`, `prove`, `verify`, `bindings`
-and `inputs check`. The resulting package records all three options. These
+Source compilation accepts `--no-simplify`, `--release-storage`,
+`--no-finite-bulk`, `--fuse-vector-reductions`, `--fuse-collect-fold` and
+`--no-calculation-batching` for
+`compile`, `run`, `prove`, `verify`, `bindings` and `inputs check`.
+The resulting package records all six choices. These
 options are refused by `check`, `inspect`, `inputs init` and pinned-package
 invocations. Vector reduction fusion defaults to false and follows the
 [preparation contract](../ir/protocols.md#optional-vector-reduction-fusion).
+Collect–fold fusion defaults to false and follows the
+[numerical realization contract](../ir/kernel.md#collectfold-composition).
 
 `zkc.entry-inspection/0` reports Entry/protocol/toolchain, role ports, services,
 setup names, proof selections and input group schemas. Input schemas are derived

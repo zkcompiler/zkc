@@ -145,9 +145,10 @@ consumption as described below.
 Bounded participant loops may contain queries. Participant calls, static
 parameters and family selectors remain outside this contract.
 
-Native carriers enter through `admit_supplied`. Admission checks the closed
-contract, method signature, port namespace, indices, query result types and the
-installed backend's signature. Supplied admission grants no source correspondence.
+Native carriers enter through `Program::decode`. Structural admission checks the
+closed contract, method signature, port namespace, indices and query result
+types. Installation separately checks the backend's signature and reply bound.
+Supplied admission grants no source correspondence.
 Native proof execution additionally requires an admitted deployment and selected
 construction policy. Independent Lean models do not provide Program execution correspondence.
 

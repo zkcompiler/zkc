@@ -29,6 +29,14 @@ def compile_case(name, source, policy, family='schnorr', rounds=1, *options):
     assert envelope[0] == 'zkc.native-proof/0'
     assert envelope[1] == hashlib.sha256(source.encode()).hexdigest()
     assert envelope[2][1] == policy
+    assert envelope[7] == [
+        'false' if '--no-simplify' in options else 'true',
+        'true' if '--release-storage' in options else 'false',
+        'true' if '--fuse-vector-reductions' in options else 'false',
+        'false' if '--no-finite-bulk' in options else 'true',
+        'true' if '--fuse-collect-fold' in options else 'false',
+        'false' if '--no-calculation-batching' in options else 'true',
+    ]
     assert envelope[5] == hashlib.sha256(envelope[4].encode()).hexdigest()
     assert json.loads(envelope[4])[0] == 'zkc.program/0'
     manifest.append(dict(name=name, family=family, rounds=rounds))
@@ -68,6 +76,12 @@ for i, suite in enumerate(SUITES):
                              policy(suite, public), name, 1, *options)
     with case(f'pure mathematical helper expansion suite {i}'):
         compile_case(f'helpers_{i}', with_pure_helpers(schnorr), policy(suite))
+    with case(f'independent collect-fold deployment choice suite {i}'):
+        compile_case(f'collect_fold_{i}', schnorr, policy(suite), 'schnorr', 1,
+                     '--fuse-collect-fold')
+    with case(f'combined mathematical deployment choices suite {i}'):
+        compile_case(f'collect_fold_ordered_{i}', schnorr, policy(suite), 'schnorr', 1,
+                     '--no-finite-bulk', '--fuse-vector-reductions', '--fuse-collect-fold')
     with case(f'reordered data services and selected result suite {i}'):
         arguments = re.search(r'\^entry\((.*)\):', schnorr)[1].split(', ')
         types = [a.split(': ', 1)[1] for a in arguments]

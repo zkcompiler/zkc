@@ -3,9 +3,9 @@ mod common;
 use common::*;
 use serde_json::{Value as Json, json};
 use zkc_backends::{Policy, Value};
-use zkc_runtime::interactive::Identity;
-use zkc_runtime::interactive::{
-    Backend, ErrorCode, LogicalType, PhysicalType, StopKind, Value as RuntimeValue, admit_supplied,
+use zkc_runtime::vm::Identity;
+use zkc_runtime::vm::{
+    Backend, ErrorCode, LogicalType, PhysicalType, StopKind, Value as RuntimeValue,
 };
 
 use zkc_test_support::variants::logical;
@@ -13,7 +13,7 @@ use zkc_test_support::variants::logical;
 fn physical(nominal: &str, arms: Json) -> String {
     format!("{}@logical.variant/0", logical(nominal, arms))
 }
-fn descriptor(ty: &str) -> std::sync::Arc<zkc_runtime::interactive::VariantDescriptor> {
+fn descriptor(ty: &str) -> std::sync::Arc<zkc_runtime::vm::VariantDescriptor> {
     LogicalType::parse(ty)
         .unwrap()
         .variant_descriptor()
@@ -569,7 +569,12 @@ fn resource_unit_in_active_payload_survives_join_and_is_consumed_once() {
         .as_array_mut()
         .unwrap()
         .insert(4, json!(["op", "again", "consume", [], ["next"], []]));
-    let error = admit_supplied(&bytes(&duplicate), &ark_backend(None)).unwrap_err();
+    let error = zkc_runtime::vm::Program::decode(&bytes(&duplicate))
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap_err();
     assert_eq!(
         (error.code, error.detail.as_str()),
         (
@@ -602,7 +607,12 @@ fn malformed_matches_and_boundary_escapes_refuse_independently() {
         ]),
     );
     let backend = ark_backend(None);
-    admit_supplied(&bytes(&base), &backend).unwrap();
+    zkc_runtime::vm::Program::decode(&bytes(&base))
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
     for mutation in 0..10 {
         let mut j = base.clone();
         match mutation {
@@ -625,7 +635,12 @@ fn malformed_matches_and_boundary_escapes_refuse_independently() {
                     json!([["send", "leak", "tag", "V", "p"], ["yield", ["p"]]])
             }
         }
-        let error = admit_supplied(&bytes(&j), &backend).unwrap_err();
+        let error = zkc_runtime::vm::Program::decode(&bytes(&j))
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap_err();
         let expected = [
             (ErrorCode::Signature, "match-exhaustive"),
             (ErrorCode::Signature, "match-alternative"),
@@ -646,7 +661,12 @@ fn malformed_matches_and_boundary_escapes_refuse_independently() {
     }
     let mut entry = base.clone();
     entry[3][0][4][0][1] = json!(ty);
-    let error = admit_supplied(&bytes(&entry), &backend).unwrap_err();
+    let error = zkc_runtime::vm::Program::decode(&bytes(&entry))
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap_err();
     assert_eq!(
         (error.code, error.detail.as_str()),
         (ErrorCode::Signature, "operand type x")
@@ -661,7 +681,14 @@ fn malformed_matches_and_boundary_escapes_refuse_independently() {
     ]);
     send[3][0][5] = json!([]);
     // An immutable sum of native public data is a valid native message.
-    assert!(admit_supplied(&bytes(&send), &backend).is_ok());
+    assert!(
+        zkc_runtime::vm::Program::decode(&bytes(&send))
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .is_ok()
+    );
 }
 
 #[test]
@@ -689,7 +716,12 @@ fn inactive_resource_arm_still_controls_copy_and_drop() {
         json!([]),
         json!([make, match_v("first"), match_v("second"), ["return", []]]),
     );
-    let error = admit_supplied(&bytes(&duplicate), &ark_backend(None)).unwrap_err();
+    let error = zkc_runtime::vm::Program::decode(&bytes(&duplicate))
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap_err();
     assert_eq!(
         (error.code, error.detail.as_str()),
         (
@@ -702,7 +734,12 @@ fn inactive_resource_arm_still_controls_copy_and_drop() {
         json!([]),
         json!([make, ["release", ["v"]], ["return", []]]),
     );
-    let error = admit_supplied(&bytes(&drop), &ark_backend(None)).unwrap_err();
+    let error = zkc_runtime::vm::Program::decode(&bytes(&drop))
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap_err();
     assert_eq!(
         (error.code, error.detail.as_str()),
         (ErrorCode::Type, "release-resource")
@@ -901,7 +938,12 @@ fn zero_trip_variant_carry_preserves_incoming_resource() {
     capture[2][0][4][1][5] = json!([]);
     capture[2][0][4][1][6] = json!(["v"]);
     capture[2][0][4][1][8] = json!([]);
-    let error = admit_supplied(&bytes(&capture), &ark_backend(None)).unwrap_err();
+    let error = zkc_runtime::vm::Program::decode(&bytes(&capture))
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap_err();
     assert_eq!(
         (error.code, error.detail.as_str()),
         (ErrorCode::Capture, "affine local loop capture")
@@ -922,10 +964,20 @@ fn wrong_nominal_same_layout_refuses() {
     // Retain the variant only as a local intermediate, with matching call
     // arity. The participant must not expose a variant at its output boundary.
     j[3][0][6][0][4] = json!(["discarded"]);
-    admit_supplied(&bytes(&j), &ark_backend(None)).unwrap();
+    zkc_runtime::vm::Program::decode(&bytes(&j))
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap();
 
     j[2][0][3] = json!([b]);
-    let error = admit_supplied(&bytes(&j), &ark_backend(None)).unwrap_err();
+    let error = zkc_runtime::vm::Program::decode(&bytes(&j))
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap_err();
     assert_eq!(error.code, ErrorCode::Signature);
     assert_eq!(error.detail, "function-return-types: operand type v");
 }
@@ -949,9 +1001,19 @@ fn duplicate_affine_captures_refuse() {
             ["return", []]
         ]),
     );
-    admit_supplied(&bytes(&j), &ark_backend(None)).unwrap();
+    zkc_runtime::vm::Program::decode(&bytes(&j))
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap();
     j[2][0][4][1][3] = json!(["r", "r"]);
-    let error = admit_supplied(&bytes(&j), &ark_backend(None)).unwrap_err();
+    let error = zkc_runtime::vm::Program::decode(&bytes(&j))
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap_err();
     assert_eq!(error.code, ErrorCode::Ssa);
     assert_eq!(
         error.detail,
@@ -1007,8 +1069,18 @@ fn private_match_cannot_schedule_transcript_challenges() {
     ]));
     let mut outside_match = j.clone();
     outside_match[2][0][4] = json!([j[2][0][4][1][4][0][2][0], ["return", []]]);
-    admit_supplied(&bytes(&outside_match), &ark_backend(None)).unwrap();
-    let error = admit_supplied(&bytes(&j), &ark_backend(None)).unwrap_err();
+    zkc_runtime::vm::Program::decode(&bytes(&outside_match))
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap();
+    let error = zkc_runtime::vm::Program::decode(&bytes(&j))
+        .and_then(|program| {
+            program.check_installation(&ark_backend(None))?;
+            Ok(program)
+        })
+        .unwrap_err();
     assert_eq!(error.detail, "match-protocol-effect");
 }
 

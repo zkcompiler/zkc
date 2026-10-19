@@ -7,7 +7,7 @@ use std::{
     ops::{Add, Mul, Neg, Sub},
     sync::Arc,
 };
-use zkc_runtime::interactive::{Identity, Invocation};
+use zkc_runtime::vm::{Identity, Invocation};
 
 pub(crate) trait Coefficient:
     Copy + PartialEq + Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self> + Neg<Output = Self>
@@ -433,7 +433,7 @@ fn dense<S: Family>(
     if i.binding.signature().outputs.iter().all(|t| {
         matches!(
             t.kind(),
-            zkc_runtime::interactive::Type::Field | zkc_runtime::interactive::Type::Bool
+            zkc_runtime::vm::Type::Field | zkc_runtime::vm::Type::Bool
         )
     }) {
         p.output(512, i.max_output_bytes)?;
@@ -946,7 +946,7 @@ impl Value {
 /// Independent native port facts, also used for exact implementation assembly.
 pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
     use crate::bindings::{field, poly};
-    use zkc_runtime::interactive::{AttributeRule, Type::*};
+    use zkc_runtime::vm::{AttributeRule, Type::*};
     &[
         field::operation("field.constant", &[], &[Field], AttributeRule::FieldDecimal)
             .implemented_by(&[
@@ -1528,9 +1528,9 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
 };
 pub(crate) const EMBEDDINGS: &[crate::bindings::Contract] = &[crate::bindings::field::embedding(
     "field.embed",
-    &[zkc_runtime::interactive::Type::Field],
-    &[zkc_runtime::interactive::Type::Field],
-    zkc_runtime::interactive::AttributeRule::None,
+    &[zkc_runtime::vm::Type::Field],
+    &[zkc_runtime::vm::Type::Field],
+    zkc_runtime::vm::AttributeRule::None,
 )
 .implemented_by(&["plonky3/field.embed"])];
 

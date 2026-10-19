@@ -1,11 +1,13 @@
 #include "../lib/Transforms/FinitePreparation.h"
 #include "../lib/Transforms/HelperNormalization.h"
+#include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/MathematicalSupport.h"
 #include "../lib/Transforms/RealizationTrace.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
+#include "support/KernelRecipes.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Transforms/Mathematical.h"
@@ -18,9 +20,10 @@ using namespace zkc;
 using namespace zkc::test;
 using namespace zkc::mathematical;
 namespace {
-// Isolated outlined-calculation fixture: both fold results remain live when
-// emit() outlines two occurrences. The retained pure helpers are the reader's
-// source, independent of the producer's private selection view.
+// Isolated Kernel recipe fixture: both fold results remain live when
+// emit() copies two occurrences into its public standard-function entry. The
+// retained pure helpers are the reader's source, independent of the producer's
+// private selection view.
 std::string fixtureText(unsigned width = 0, bool callFree = false,
                         unsigned depth = 0) {
   std::string text;
@@ -110,7 +113,10 @@ bool sameWork(const RealizationWork &a, const RealizationWork &b) {
          a.matching.evidence == b.matching.evidence && a.lanes == b.lanes &&
          a.helperOperations == b.helperOperations &&
          a.helperSlots == b.helperSlots && a.polynomial == b.polynomial &&
-         a.finiteExpressions == b.finiteExpressions;
+         a.finiteExpressions == b.finiteExpressions &&
+         a.collectFoldDiscovery == b.collectFoldDiscovery &&
+         a.discardedRecipeCopy == b.discardedRecipeCopy &&
+         a.discardedRecipeSiteBytes == b.discardedRecipeSiteBytes;
 }
 finite::Computation computation(ModuleOp source) {
   finite::Computation result;
@@ -120,7 +126,10 @@ finite::Computation computation(ModuleOp source) {
   return result;
 }
 local::FuncOp selected(ModuleOp module) {
-  return SymbolTable(unit(module)).lookup<local::FuncOp>("selected");
+  auto function =
+      SymbolTable(kernelRecipeOutput(module)).lookup<local::FuncOp>("selected");
+  require(bool(function), "missing selected recipe entry");
+  return function;
 }
 bool hasLoop(ModuleOp module) {
   bool found = false;
@@ -130,46 +139,50 @@ bool hasLoop(ModuleOp module) {
 OwningOpRef<ModuleOp> emit(ModuleOp source, RealizationWork &work,
                            RealizationTrace *trace = nullptr,
                            ArrayRef<StringRef> totals = {"total"},
-                           bool optimize = true) {
-  OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(source->clone()));
-  auto prototype = helper(*candidate, "total");
+                           bool optimize = true,
+                           finite::VerificationLimits limits = {}) {
+  auto numerical = kernelRecipeUnit(unit(source));
+  auto prototype = helper(source, "total");
   SmallVector<Type> results(totals.size(), prototype.getResultTypes().front());
   OpBuilder builder(source.getContext());
-  builder.setInsertionPointToEnd(&unit(*candidate).getBody().front());
-  auto function = local::FuncOp::create(
+  builder.setInsertionPointToEnd(&numerical->getBody().front());
+  auto function = func::FuncOp::create(
       builder, source.getLoc(), "selected",
       builder.getFunctionType(prototype.getArgumentTypes(), results));
-  function->setAttr("logical_origin",
-                    builder.getArrayAttr({builder.getStringAttr("selected"),
-                                          builder.getArrayAttr({})}));
+  function.setPublic();
   builder.setInsertionPointToEnd(function.addEntryBlock());
   SmallVector<Value> values;
   for (auto name : totals) {
-    auto total = helper(*candidate, name);
+    auto total = helper(source, name);
     IRMapping mapping;
     mapping.map(total.getArguments(), function.getArguments());
     auto *occurrence = builder.clone(total.front().front(), mapping);
-    occurrence->setAttr("site", builder.getStringAttr(name));
     values.push_back(occurrence->getResult(0));
   }
-  local::ReturnOp::create(builder, source.getLoc(), values);
-  require(succeeded(lowerCalculations(unit(*candidate), {function},
-                                      {optimize, false}, &work, trace)),
-          "checked callback lowering failed");
-  require(succeeded(verify(*candidate)), "candidate refused");
+  func::ReturnOp::create(builder, source.getLoc(), values);
+  OwningOpRef<kernel::ModuleOp> original(
+      cast<kernel::ModuleOp>(numerical->clone()));
+  auto candidate = realizeKernelEntry(*numerical, "selection",
+                                      {optimize, false}, work, limits, trace);
+  require(bool(candidate), "checked callback lowering failed");
+  kernelRecipeOutput(*candidate);
+  require(succeeded(kernel::verifyRecipeOutput(*candidate)),
+          "candidate refused");
+  require(same(*numerical, *original), "Kernel recipe source changed");
   for (auto original : unit(source).getBody().front().getOps<func::FuncOp>())
-    require(same(original, helper(*candidate, original.getSymName())),
-            "source helper changed");
+    require(
+        same(original, SymbolTable(*numerical).lookup(original.getSymName())),
+        "source helper changed");
   return candidate;
 }
 const SelectionDecision &decision(const RealizationTrace &trace,
-                                  StringRef site) {
+                                  unsigned ordinal) {
   for (const auto &event : trace.events)
     if (auto *selection = std::get_if<SelectionDecision>(&event.payload);
         selection && selection->family == DecisionFamily::Finite &&
-        selection->querySubject.site == site)
+        selection->querySubject.site == kernelRecipeSite("selection", ordinal))
       return *selection;
-  throw std::runtime_error("missing selection for " + site.str());
+  throw std::runtime_error("missing selection at " + std::to_string(ordinal));
 }
 } // namespace
 
@@ -295,9 +308,8 @@ int main() {
     work.matching.equations = spent;
     RealizationTrace trace;
     auto candidate = emit(*source, work, &trace, {"total", "small_total"});
-    require(decision(trace, "total").choice == RealizationChoice::Reduction &&
-                decision(trace, "small_total").choice ==
-                    RealizationChoice::Ordered &&
+    require(decision(trace, 0).choice == RealizationChoice::Reduction &&
+                decision(trace, 1).choice == RealizationChoice::Ordered &&
                 !work.matching.equations,
             "callback envelope refilled shared equation work");
   });
@@ -366,8 +378,8 @@ int main() {
                 reverse ? SmallVector<StringRef>{"small_total", "total"}
                         : SmallVector<StringRef>{"total", "small_total"};
             auto candidate = emit(*source, work, &trace, order);
-            const auto &large = decision(trace, "total");
-            const auto &small = decision(trace, "small_total");
+            const auto &large = decision(trace, reverse ? 1 : 0);
+            const auto &small = decision(trace, reverse ? 0 : 1);
             require(large.choice == RealizationChoice::Ordered &&
                         large.outcome.status == OptimizationStatus::Capacity &&
                         large.outcome.capacity &&
@@ -391,14 +403,13 @@ int main() {
         RealizationWork work;
         RealizationTrace trace;
         auto candidate = emit(*source, work, &trace, {"total", "small_total"});
-        const auto &decline = decision(trace, "total");
+        const auto &decline = decision(trace, 0);
         require(
             decline.outcome.reason == OptimizationReason::ExpansionSize &&
                 decline.outcome.capacity &&
                 !decline.outcome.capacity->requested &&
                 decline.outcome.capacity->available == sizing &&
-                decision(trace, "small_total").choice ==
-                    RealizationChoice::Reduction,
+                decision(trace, 1).choice == RealizationChoice::Reduction,
             "early decline misreported its estimate or starved a small fold");
         RealizationWork smallWork;
         auto small = emit(*source, smallWork, nullptr, {"small_total"});
@@ -414,7 +425,7 @@ int main() {
     work.matching.structural = 42; // Discovery 1, sizing 20, preparation 22.
     RealizationTrace trace;
     auto candidate = emit(*source, work, &trace);
-    const auto &decline = decision(trace, "total");
+    const auto &decline = decision(trace, 0);
     require(hasLoop(*candidate) && work.matching.structural == 21 &&
                 decline.outcome.reason == OptimizationReason::ExpansionSize &&
                 decline.outcome.capacity &&
@@ -438,7 +449,7 @@ int main() {
                   work.matching.structural == (capacity > cost ? 1 : 0),
               "selection changed at an exact shared boundary");
       if (capacity < cost) {
-        const auto &decline = decision(trace, "total");
+        const auto &decline = decision(trace, 0);
         require(decline.outcome.reason == OptimizationReason::Work &&
                     decline.outcome.capacity &&
                     decline.outcome.capacity->owner == WorkOwner::Structural,
@@ -463,14 +474,12 @@ int main() {
               });
   cases.run(
       "comparison retry retains optional work and required reserves", [&] {
-        auto source = fixture(context);
-        OwningOpRef<ModuleOp> ordered(cast<ModuleOp>((*source)->clone()));
+        auto original = fixture(context);
         RealizationWork work, orderedWork;
-        require(succeeded(
-                    expandMathRealizations(*source, {}, &work, {100000, 1})) &&
-                    succeeded(expandMathRealizations(*ordered, {false, false},
-                                                     &orderedWork)) &&
-                    same(*source, *ordered),
+        auto source =
+            emit(*original, work, nullptr, {"total"}, true, {100000, 1});
+        auto ordered = emit(*original, orderedWork, nullptr, {"total"}, false);
+        require(same(*source, *ordered),
                 "comparison exhaustion did not retry ordered");
         require(work.matching.structural < orderedWork.matching.structural &&
                     work.helperOperations == orderedWork.helperOperations &&
@@ -502,9 +511,9 @@ int main() {
           builder.clone(total.front().front(), mapping);
           require(succeeded(verify(*source)), "nested source refused");
           CheckedHelperNormalizations helpers(unit(*source));
-          require(succeeded(helpers.prepareRealization(step)),
+          require(succeeded(helpers.prepare(step)),
                   "nested realization normalization refused");
-          auto prepared = helpers.lookup(step, true);
+          auto prepared = helpers.lookup(step);
           require(llvm::any_of(
                       prepared.front(),
                       [](Operation &op) { return finite::isComputation(&op); }),
@@ -521,7 +530,7 @@ int main() {
           RealizationWork work;
           RealizationTrace trace;
           auto candidate = emit(*source, work, &trace);
-          require(decision(trace, "total").outcome.reason ==
+          require(decision(trace, 0).outcome.reason ==
                       OptimizationReason::ImplementationRestriction,
                   "nested restriction lost its reason");
           bool retained = false;

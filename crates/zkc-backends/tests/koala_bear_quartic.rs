@@ -4,7 +4,7 @@ mod support;
 use p3_field::{BasedVectorSpace, PrimeCharacteristicRing};
 use support::{Controlled, assert_value, backend, one};
 use zkc_backends::{KoalaBear, KoalaBearExt4, Policy, Value, domains::KOALA_BEAR_EXT4, plonky3};
-use zkc_runtime::interactive::{
+use zkc_runtime::vm::{
     Backend, Identity, LogicalType, OperationBinding, PhysicalType, Type, Value as RuntimeValue,
 };
 

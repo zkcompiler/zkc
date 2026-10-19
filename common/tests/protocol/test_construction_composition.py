@@ -84,6 +84,8 @@ def composed_source(empty, nested=False):
 @pytest.mark.parametrize('nested', [False, True])
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage'],
                                    ['--no-finite-bulk'],
+                                   ['--fuse-collect-fold'],
+                                   ['--fuse-collect-fold', '--no-finite-bulk'],
                                    ['--fuse-vector-reductions', '--no-simplify', '--release-storage']])
 def test_child_state_arguments_and_root_codec(toolchain, journal, directory, empty, nested, flags):
     source = directory / 'main.zkc'
@@ -106,6 +108,7 @@ def test_child_state_arguments_and_root_codec(toolchain, journal, directory, emp
                'release_storage': '--release-storage' in flags,
                'fuse_vector_reductions': '--fuse-vector-reductions' in flags,
                'finite_bulk': '--no-finite-bulk' not in flags,
+               'fuse_collect_fold': '--fuse-collect-fold' in flags,
                'calculation_batching': '--no-calculation-batching' not in flags}
     assert stored['options'] == choices
     assert deployment[7] == [str(value).lower() for value in choices.values()]

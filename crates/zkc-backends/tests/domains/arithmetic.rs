@@ -463,7 +463,7 @@ fn vector_output_limits_reject_growth_before_work() {
 
 #[test]
 fn msb_and_lsb_table_conversions_preserve_the_same_logical_vector() {
-    use zkc_runtime::interactive::{Representation, Value as RuntimeValue};
+    use zkc_runtime::vm::{Representation, Value as RuntimeValue};
     let original = vector(false, &[1, 2, 4, 8]);
     let mut to = binding(false, "vector.to_table");
     to.implementation = "arkworks-msb/vector.to_table".into();

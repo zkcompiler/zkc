@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, path::Path};
 use zkc_backends::{
     Domain, EntryPolicy, FieldArray, GroupPoint, NativeBackend, Policy, Scalar, Value,
 };
-use zkc_runtime::interactive::{Identity, LogicalType};
+use zkc_runtime::vm::{Identity, LogicalType};
 use zkc_test_support::hex;
 use zkc_tools::proof::{NativeDeployment, NativeProofReport};
 fn backend() -> NativeBackend {

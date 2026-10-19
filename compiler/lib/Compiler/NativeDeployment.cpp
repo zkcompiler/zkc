@@ -151,6 +151,8 @@ Error verifyNativeDeployment(ModuleOp source, ModuleOp physical,
               options.mathematicalSelection.vectorReductionFusion ? "true"
                                                                   : "false",
               options.mathematicalSelection.finiteBulk ? "true" : "false",
+              options.mathematicalSelection.collectFoldFusion ? "true"
+                                                              : "false",
               options.mathematicalSelection.calculationBatching ? "true"
                                                                 : "false"}) ||
       !out[8].getAsArray() || *out[8].getAsArray() != wireSites)

@@ -5,8 +5,8 @@ use crate::host::inputs::{Result, array, list, text};
 use serde_json::Value as Json;
 use std::collections::BTreeMap;
 use zkc_runtime::{
-    interactive::{Admitted, LogicalType, NativeTranscriptEvent, ProgramAction},
     logical,
+    vm::{LogicalType, NativeTranscriptEvent, Program, ProgramAction},
 };
 
 pub(super) struct MessageLayout<'a> {
@@ -108,7 +108,7 @@ impl<'a> MessageLayout<'a> {
                 queries += 1;
                 let field = record[4][4]
                     .as_str()
-                    .and_then(|c| zkc_runtime::interactive::ServiceContract::parse(c).ok())
+                    .and_then(|c| zkc_runtime::vm::ServiceContract::parse(c).ok())
                     .map(|c| c.field());
                 if field.is_none()
                     || policy.construction.is_empty()
@@ -170,7 +170,7 @@ impl<'a> MessageLayout<'a> {
                 || wire_origins.len() != 1
                 || messages
                     .values()
-                    .any(|t| t.kind() != zkc_runtime::interactive::Type::Bytes))
+                    .any(|t| t.kind() != zkc_runtime::vm::Type::Bytes))
         {
             return Err("native-proof-format".into());
         }
@@ -186,7 +186,7 @@ impl<'a> MessageLayout<'a> {
 
     /// Wire sites are excluded from the root but must match each participant's
     /// actual ordered sends/receives, including schema and nominal payload type.
-    pub(super) fn check_wire(&self, value: &Json, admitted: &Admitted, entry: &str) -> Result<()> {
+    pub(super) fn check_wire(&self, value: &Json, admitted: &Program, entry: &str) -> Result<()> {
         let wire_rows = list(value)?;
         let origins = if self.record_codec {
             &[]

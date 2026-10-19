@@ -1,11 +1,11 @@
-use zkc_runtime::interactive::Identity;
-use zkc_runtime::interactive::Value as RuntimeValue;
+use zkc_runtime::interpreter::Runner;
+use zkc_runtime::vm::Identity;
+use zkc_runtime::vm::Value as RuntimeValue;
 mod common;
 use common::*;
 use serde_json::json;
 use std::sync::Arc;
 use zkc_backends::*;
-use zkc_runtime::interactive::{Runner, admit_supplied};
 
 #[test]
 fn every_field_polynomial_kernel_matches_hand_calculation() {
@@ -133,11 +133,9 @@ fn original_custody_real_pcs_and_verifier_only_public_bytes() {
     .unwrap();
     let c = verifier
         .decode_native_value(
-            &zkc_runtime::interactive::PhysicalType::default_for(
-                zkc_runtime::interactive::LogicalType::parse(
-                    "commitment:multilinear.kzg.bls12-381/0",
-                )
-                .unwrap(),
+            &zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::parse("commitment:multilinear.kzg.bls12-381/0")
+                    .unwrap(),
             )
             .unwrap(),
             &prover.encode_native_value(&out[0]).unwrap(),
@@ -145,8 +143,8 @@ fn original_custody_real_pcs_and_verifier_only_public_bytes() {
         .unwrap();
     let y = verifier
         .decode_native_value(
-            &zkc_runtime::interactive::PhysicalType::default_for(
-                zkc_runtime::interactive::LogicalType::parse("field:bls12-381.fr").unwrap(),
+            &zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::parse("field:bls12-381.fr").unwrap(),
             )
             .unwrap(),
             &prover.encode_native_value(&out[1]).unwrap(),
@@ -154,9 +152,8 @@ fn original_custody_real_pcs_and_verifier_only_public_bytes() {
         .unwrap();
     let proof = verifier
         .decode_native_value(
-            &zkc_runtime::interactive::PhysicalType::default_for(
-                zkc_runtime::interactive::LogicalType::parse("proof:multilinear.kzg.bls12-381/0")
-                    .unwrap(),
+            &zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::parse("proof:multilinear.kzg.bls12-381/0").unwrap(),
             )
             .unwrap(),
             &prover.encode_native_value(&out[2]).unwrap(),
@@ -243,10 +240,14 @@ fn opening_refuses_table_and_folded_scratch_at_admission() {
             &["y", "proof"],
         );
         assert_eq!(
-            admit_supplied(&bytes, &ark_backend(Some(2)))
+            zkc_runtime::vm::Program::decode(&bytes)
+                .and_then(|program| {
+                    program.check_installation(&ark_backend(Some(2)))?;
+                    Ok(program)
+                })
                 .unwrap_err()
                 .code,
-            zkc_runtime::interactive::ErrorCode::Signature
+            zkc_runtime::vm::ErrorCode::Signature
         );
     }
 }
@@ -325,15 +326,15 @@ fn hostile_key_aware_codec_and_exact_length() {
     noncanonical[6..].fill(0xff);
     assert!(
         recv.decode_native_value(
-            &zkc_runtime::interactive::PhysicalType::default_for(
-                zkc_runtime::interactive::LogicalType::parse("field:bls12-381.fr").unwrap()
+            &zkc_runtime::vm::PhysicalType::default_for(
+                zkc_runtime::vm::LogicalType::parse("field:bls12-381.fr").unwrap()
             )
             .unwrap(),
             &noncanonical
         )
         .is_err()
     );
-    assert!(zkc_runtime::interactive::LogicalType::parse("scalar:bls12-381.fr").is_err());
+    assert!(zkc_runtime::vm::LogicalType::parse("scalar:bls12-381.fr").is_err());
     // An unknown wire kind cannot be decoded as a nominal field.
     let mut unknown_kind = recv.encode_native_value(&f(1)).unwrap();
     unknown_kind[5] = 255;
@@ -358,8 +359,8 @@ fn hostile_key_aware_codec_and_exact_length() {
     assert_eq!(
         small
             .decode_native_value(
-                &zkc_runtime::interactive::PhysicalType::default_for(
-                    zkc_runtime::interactive::LogicalType::parse("field:bls12-381.fr").unwrap()
+                &zkc_runtime::vm::PhysicalType::default_for(
+                    zkc_runtime::vm::LogicalType::parse("field:bls12-381.fr").unwrap()
                 )
                 .unwrap(),
                 &recv.encode_native_value(&f(1)).unwrap()
@@ -392,7 +393,12 @@ fn entry_shape_setup_and_public_correspondence_policy() {
             .arity(2)
             .verifier(keys.verifier_key().clone())
             .build();
-        let admitted = admit_supplied(&bytes, &b).unwrap();
+        let admitted = zkc_runtime::vm::Program::decode(&bytes)
+            .and_then(|program| {
+                program.check_installation(&b)?;
+                Ok(program)
+            })
+            .unwrap();
         assert!(
             Runner::new(
                 &admitted,
@@ -511,8 +517,8 @@ fn all_public_codecs_roundtrip_and_type_length_and_count_fail_closed() {
     assert!(
         backend
             .decode_native_value(
-                &zkc_runtime::interactive::PhysicalType::default_for(
-                    zkc_runtime::interactive::LogicalType::parse("bool").unwrap()
+                &zkc_runtime::vm::PhysicalType::default_for(
+                    zkc_runtime::vm::LogicalType::parse("bool").unwrap()
                 )
                 .unwrap(),
                 &boolean
@@ -530,7 +536,12 @@ fn keys_must_match_entry_arity_and_opening_must_match_point() {
             .arity(2)
             .verifier(keys.verifier_key().clone())
             .build();
-        let admitted = admit_supplied(&bytes, &b).unwrap();
+        let admitted = zkc_runtime::vm::Program::decode(&bytes)
+            .and_then(|program| {
+                program.check_installation(&b)?;
+                Ok(program)
+            })
+            .unwrap();
         let key = if ty == "prover_key" {
             Value::ProverKey(Arc::new(keys.prover_key().clone()))
         } else {

@@ -4,12 +4,16 @@
 #include "zkc/Analysis/ComputationMeaning.h"
 #include "zkc/Analysis/ComputationWork.h"
 #include "zkc/Analysis/Finite.h"
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
+#include <memory>
 #include <optional>
 
 namespace zkc::finite {
-/// All references below borrow the current, admitted IR. Recompute after IR
-/// changes or cloning. These views describe existing values, never expressions.
+struct ComputationBody;
+/// Views borrow admitted source IR and may own exact temporary SSA copies.
+/// Recompute after source changes or cloning. No symbolic expressions are
+/// added.
 enum class AccessKind { Element, Indexed, MatrixRow, MatrixColumn, MatrixCell };
 struct Access {
   AccessKind kind = AccessKind::Element;
@@ -104,6 +108,9 @@ struct ResultReference {
   /// A collect without a predicate has the returned domain's cardinality.
   /// Filtering provides no exact cardinality fact.
   std::optional<unsigned> cardinality;
+  /// Actual original callback return coordinate, before exact call
+  /// substitution.
+  mlir::Value sourceYielded;
 };
 /// Diagnostic references have the same borrowed lifetime as a view.
 struct ComputationDiagnostic {
@@ -114,6 +121,25 @@ struct ComputationDiagnostic {
 };
 struct ComputationView {
   Computation computation;
+  /// Exact temporary call and pack-coordinate substitution in a standard
+  /// func.func inside a builtin module, when needed. Original executable
+  /// primitives may remain as observations, including their bindings and pins;
+  /// this storage does not establish purity or change the source callback ABI.
+  /// No arithmetic or polynomial normalization is performed. Copies share the
+  /// owning lifetime; the original callback and its symbol closure stay
+  /// immutable.
+  std::shared_ptr<ComputationBody> numericalBody;
+  /// Original callback block or the owned standard-function body above.
+  mlir::Block *callbackBody = nullptr;
+  /// Recover the actual source instruction from a temporary payload occurrence.
+  mlir::Operation *sourceOperation(mlir::Operation *operation) const;
+  /// Original kernel calls read through by exact substitution, in expansion
+  /// order. Repeated visits to a shared call site remain separate entries.
+  /// Borrows source IR under the view's lifetime contract; selection must query
+  /// these calls rather than infer permission from substituted mathematics.
+  llvm::ArrayRef<mlir::Operation *> numericalCalls() const;
+  /// Exact substituted SSA for an original callback argument or result.
+  mlir::Value callbackValue(mlir::Value source) const;
   /// The actual nested call, or the total operation/declaration at the root.
   mlir::Operation *occurrence = nullptr;
   llvm::SmallVector<mlir::Operation *> occurrencePath;

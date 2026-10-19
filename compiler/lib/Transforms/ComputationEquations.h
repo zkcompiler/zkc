@@ -82,6 +82,10 @@ struct NestedContraction {
   EquationWitness witness;
   finite::Computation outer, inner;
   mlir::Operation *call = nullptr;
+  /// Exact inner domain argument substitutions after numerical read-through:
+  /// zero is the outer item; i+1 is outer signature input i. The original call
+  /// remains the provenance source and need not have block-argument operands.
+  llvm::SmallVector<unsigned> domainInputs;
   unsigned matrix = 0, vector = 0, axis = 0;
   ContractionSeed seed;
 };

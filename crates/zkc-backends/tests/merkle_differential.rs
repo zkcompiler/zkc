@@ -19,7 +19,7 @@ use p3_symmetric::{PaddingFreeSponge, Permutation, TruncatedPermutation};
 use std::collections::BTreeSet;
 use support::{backend, one};
 use zkc_backends::{KoalaBearExt4, Policy, Value};
-use zkc_runtime::interactive::{OperationBinding, Value as RuntimeValue};
+use zkc_runtime::vm::{OperationBinding, Value as RuntimeValue};
 
 type Perm = Poseidon2KoalaBear<16>;
 type Upstream = MerkleTreeMmcs<

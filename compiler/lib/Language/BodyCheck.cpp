@@ -2,7 +2,7 @@
 #include "Effects.h"
 #include "FiniteContracts.h"
 #include "HelperResults.h"
-#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "llvm/Support/SaveAndRestore.h"
 #include <algorithm>
 #include <numeric>

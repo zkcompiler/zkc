@@ -6,11 +6,11 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
-include "zkc/Dialect/Kernels.td"
+include "zkc/Dialect/BoundOperations.td"
 
-def ExecuteKernelOp : Op<PlanDialect, "kernel"> {
+def Plan_ApplyOp : Op<PlanDialect, "apply"> {
   let arguments = (ins Variadic<PhysicalData>:$inputs, StrAttr:$site,
-    StrAttr:$kernel, ArrayAttr:$parameters,
+    StrAttr:$implementation, ArrayAttr:$parameters,
     OptionalAttr<FlatSymbolRefAttr>:$binding);
   let results = (outs Variadic<PhysicalData>:$outputs);
   let hasVerifier = 1;

@@ -12,9 +12,9 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use zkc_backends::{KoalaBear, KoalaBearExt8, Value as Native};
 use zkc_runtime::{
-    interactive::{Identity, LogicalType, PhysicalType},
     logical,
     ring::{Expression, Node},
+    vm::{Identity, LogicalType, PhysicalType},
 };
 
 const BASE: &str = "koala-bear";
@@ -212,7 +212,7 @@ fn package(interface: &Json, artifact: &str, assets: &[(String, String)]) -> Pac
     assets.sort();
     let frame =
         json!({"format":"zkc.entry/0","original":ORIGINAL,"interface":interface.to_string(),
-        "artifact":artifact,"options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"calculation_batching":true},"assets":assets})
+        "artifact":artifact,"options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true},"assets":assets})
         .to_string();
     Package::capture(
         frame.as_bytes(),
@@ -537,7 +537,7 @@ fn deployment(field: &str, arenas: &Arenas) -> String {
                 "0"
             ]
         ],
-        ["true", "false", "false", "true", "true"],
+        ["true", "false", "false", "true", "false", "true"],
         []
     ])
     .to_string()

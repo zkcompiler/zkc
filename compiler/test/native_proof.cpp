@@ -66,8 +66,10 @@ int main(int argc, char **argv) {
     require(bool(built), "reconstruct");
     PassManager passes(&context);
     passes.addPass(protocol::createSimplifyParticipantPass());
-    passes.addPass(protocol::createEliminatePolynomialsPass());
+
     passes.addPass(protocol::createLowerMathPass());
+
+    passes.addPass(kernel::createLowerKernelsPass());
     passes.addPass(protocol::createSelectPhysicalPass());
     require(succeeded(passes.run(*built->module)), "shared physical lowering");
     auto exported = protocol::exportModule(*built->module);

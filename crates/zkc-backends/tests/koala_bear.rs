@@ -5,9 +5,9 @@ use p3_field::{Field, PrimeCharacteristicRing, PrimeField32};
 use serde_json::json;
 use support::{Controlled, assert_value, backend, one, program, run_program};
 use zkc_backends::{KoalaBear, Policy, Value, domains::KOALA_BEAR, plonky3};
-use zkc_runtime::interactive::{
+use zkc_runtime::vm::{
     Backend, ErrorCode, Identity, LogicalType, OperationBinding, PhysicalType, Representation,
-    Type, Value as RuntimeValue, admit_supplied,
+    Type, Value as RuntimeValue,
 };
 
 fn binding(name: &str) -> OperationBinding {
@@ -254,7 +254,11 @@ fn scalar_arithmetic_matches_integer_modular_reference_and_zero_inverse_refuses(
             &["x".into()],
         );
         assert_eq!(
-            admit_supplied(&bytes, &backend(Policy::default()))
+            zkc_runtime::vm::Program::decode(&bytes)
+                .and_then(|program| {
+                    program.check_installation(&backend(Policy::default()))?;
+                    Ok(program)
+                })
                 .unwrap_err()
                 .code,
             ErrorCode::Attributes
@@ -720,7 +724,7 @@ fn wrong_domains_and_implementations_fail_before_arithmetic() {
         );
     }
     let mut controlled = Controlled::new(backend(Policy::default()));
-    controlled.implementation = Some("arkworks/field.add".into());
+    controlled.binding = Some(binding("field.neg"));
     assert_eq!(
         one(
             controlled,
@@ -730,7 +734,7 @@ fn wrong_domains_and_implementations_fail_before_arithmetic() {
         )
         .0
         .unwrap_err(),
-        "refused:kernel-operands"
+        "refused:kernel-binding"
     );
     assert_ne!(
         field(1).physical_type(),
@@ -768,7 +772,7 @@ fn native_wire_inputs_use_exact_nominal_type() {
     assert!(matches!(
         b.decode_native_value(&v, &wrong),
         Err(zkc_backends::NativeWireError::Invalid(
-            zkc_runtime::interactive::DecodeReason::Header
+            zkc_runtime::vm::DecodeReason::Header
         ))
     ));
     let mut invalid = wire;
@@ -776,7 +780,7 @@ fn native_wire_inputs_use_exact_nominal_type() {
     assert!(matches!(
         b.decode_native_value(&v, &invalid),
         Err(zkc_backends::NativeWireError::Invalid(
-            zkc_runtime::interactive::DecodeReason::Scalar
+            zkc_runtime::vm::DecodeReason::Scalar
         ))
     ));
 }

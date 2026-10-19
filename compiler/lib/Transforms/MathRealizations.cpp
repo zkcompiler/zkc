@@ -1,14 +1,15 @@
 #include "CheckedCandidate.h"
 #include "HelperNormalization.h"
+#include "Kernel/Support.h"
 #include "MathematicalSupport.h"
 #include "RealizationTrace.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Mathematical.h"
-#include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"
 
@@ -16,8 +17,7 @@ using namespace mlir;
 using namespace llvm;
 namespace zkc::mathematical {
 namespace {
-LogicalResult checkRealizations(ModuleOp original, ModuleOp candidate,
-                                const CheckedHelperNormalizations *helpers) {
+LogicalResult checkRealizations(ModuleOp original, ModuleOp candidate) {
   if (failed(verify(original)) || failed(verify(candidate)))
     return failure();
   auto refuse = [&](StringRef reason) {
@@ -36,96 +36,62 @@ LogicalResult checkRealizations(ModuleOp original, ModuleOp candidate,
       before.getProfile() != protocol_ir::Profile::Protocol ||
       before->getAttrDictionary() != after->getAttrDictionary())
     return refuse("profile");
-  SymbolTable symbols(after);
-  llvm::DenseSet<Operation *> retained, bindings;
-  SmallVector<local::FuncOp> functions;
-  uint64_t remaining = 1000000;
-  NativeTypePolicies types(after);
-  for (auto &op : before.getBody().front()) {
-    auto name = SymbolTable::getSymbolName(&op);
-    auto *replacement = name ? symbols.lookup(name.getValue()) : nullptr;
+  SymbolTable source(before), target(after);
+  SymbolTableCollection symbols;
+  llvm::DenseSet<Operation *> retained, units;
+  for (auto &declaration : before.getBody().front()) {
+    auto name = SymbolTable::getSymbolName(&declaration);
+    auto *replacement = name ? target.lookup(name.getValue()) : nullptr;
     if (!replacement)
       return refuse("missing declaration");
     retained.insert(replacement);
-    auto realization = dyn_cast<local::RealizeOp>(op);
+    auto realization = dyn_cast<local::RealizeOp>(declaration);
     if (!realization) {
       if (!OperationEquivalence::isEquivalentTo(
-              &op, replacement, OperationEquivalence::IgnoreLocations))
+              &declaration, replacement, OperationEquivalence::IgnoreLocations))
         return refuse("changed retained declaration");
       continue;
     }
-    auto function = dyn_cast<local::FuncOp>(replacement);
-    if (!function ||
-        function.getFunctionType() != realization.getFunctionType() ||
-        function->getAttrs().size() != 3)
-      return refuse("realization interface");
-    functions.push_back(function);
-    auto origin = function->getAttrOfType<ArrayAttr>("logical_origin");
-    if (!origin || origin.size() != 2 ||
-        origin[0] !=
-            StringAttr::get(original.getContext(), realization.getHelper()) ||
-        origin[1] != ArrayAttr::get(original.getContext(), {}))
+    auto wrapper = dyn_cast<local::FuncOp>(replacement);
+    auto helper = source.lookup<func::FuncOp>(realization.getHelper());
+    if (!wrapper || !helper ||
+        wrapper.getFunctionType() != realization.getFunctionType() ||
+        wrapper->getAttrs().size() != 3 || !wrapper.getBody().hasOneBlock() ||
+        wrapper.getBody().front().getOperations().size() != 2)
+      return refuse("realization wrapper interface");
+    Builder builder(original.getContext());
+    auto origin =
+        builder.getArrayAttr({builder.getStringAttr(realization.getHelper()),
+                              builder.getArrayAttr({})});
+    if (wrapper->getAttr("logical_origin") != origin)
       return refuse("realization origin");
-    auto result = function.walk([&](Operation *nested) -> WalkResult {
-      if (!remaining)
-        return WalkResult::interrupt();
-      --remaining;
-      auto data = [&](Type type) {
-        auto policy = types.get(type);
-        return policy && policy->total && !policy->affine &&
-               !isa<poly::PolynomialType>(type);
-      };
-      if (!all_of(nested->getOperandTypes(), data) ||
-          !all_of(nested->getResultTypes(), data))
-        return WalkResult::interrupt();
-      for (auto &region : nested->getRegions())
-        for (auto &block : region)
-          if (!all_of(block.getArgumentTypes(), data))
-            return WalkResult::interrupt();
-      if (isa<local::FuncOp, local::ReturnOp, local::LocalForOp,
-              local::LocalIfOp, local::LocalMatchOp, local::VariantInjectOp,
-              local::LocalYieldOp, local::BoolConstantOp>(nested))
-        return WalkResult::advance();
-      auto ref = nested->getAttrOfType<FlatSymbolRefAttr>("binding");
-      auto binding =
-          ref ? symbols.lookup<local::OperationBindingOp>(ref.getValue())
-              : local::OperationBindingOp();
-      if (!binding || !binding.getImplementation().empty() ||
-          !isCalculationContract(binding.getContract()))
-        return WalkResult::interrupt();
-      bindings.insert(binding);
-      return WalkResult::advance();
-    });
-    if (result.wasInterrupted())
-      return refuse("unexpected realization action or work limit");
+    auto call = dyn_cast<kernel::CallOp>(wrapper.getBody().front().front());
+    auto returned = dyn_cast<local::ReturnOp>(wrapper.getBody().front().back());
+    auto entry = call ? kernel::resolve(call, symbols) : func::FuncOp();
+    auto unit = entry ? cast<kernel::ModuleOp>(entry->getParentOp())
+                      : kernel::ModuleOp();
+    if (!entry || !returned || call.getSite() != "kernel" ||
+        call.getInputs() != wrapper.getArguments() ||
+        returned.getInputs() != call.getResults() ||
+        !units.insert(unit).second ||
+        failed(kernel::verifyKernelClosure(before, helper, unit)))
+      return refuse("original helper/domain closure and actual unit differ");
   }
-  for (auto &op : after.getBody().front())
-    if (!retained.contains(&op) && !bindings.contains(&op))
+  for (auto &declaration : after.getBody().front())
+    if (!retained.contains(&declaration) && !units.contains(&declaration))
       return refuse("unexpected declaration");
-  auto checked =
-      helpers ? verifyRealizedHelperRecipes(before, after, functions, *helpers)
-              : verifyRealizedHelperRecipes(before, after, functions);
-  if (failed(checked))
-    return refuse("original helper and realized computation differ");
   return success();
 }
 
 } // namespace
 LogicalResult verifyMathRealizationsPreserved(ModuleOp original,
                                               ModuleOp candidate) {
-  return checkRealizations(original, candidate, nullptr);
+  return checkRealizations(original, candidate);
 }
 
 LogicalResult expandMathRealizations(ModuleOp module,
                                      MathematicalSelectionPolicy policy,
                                      RealizationWork *work,
-                                     RealizationTrace *trace) {
-  return expandMathRealizations(module, policy, work, {}, trace);
-}
-LogicalResult expandMathRealizations(ModuleOp module,
-                                     MathematicalSelectionPolicy policy,
-                                     RealizationWork *work,
-                                     finite::VerificationLimits limits,
                                      RealizationTrace *trace) {
   RealizationWork standalone;
   auto &stageWork = work ? *work : standalone;
@@ -147,16 +113,15 @@ LogicalResult expandMathRealizations(ModuleOp module,
       cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
   SmallVector<local::FuncOp> functions;
   SymbolTable sourceSymbols(original);
-  CheckedHelperNormalizations helpers(original);
   auto &cloneOperations = stageWork.helperOperations;
   auto &cloneSlots = stageWork.helperSlots;
   for (auto realization : make_early_inc_range(
            unit.getBody().front().getOps<local::RealizeOp>())) {
     auto helper = sourceSymbols.lookup<func::FuncOp>(realization.getHelper());
-    if (!helper || failed(helpers.prepareRealization(helper)))
+    if (!helper)
       return failure();
-    auto normalized = helpers.lookup(helper, true);
-    // Preparing a helper is cached, but every emitted copy still costs work.
+    auto normalized = helper;
+    // Formation copies original mathematics; each retained copy costs work.
     OptimizationOutcome outcome;
     if (!normalized ||
         failed(chargeHelperOperations(normalized, cloneOperations, cloneSlots,
@@ -180,11 +145,8 @@ LogicalResult expandMathRealizations(ModuleOp module,
     builder.setInsertionPointToEnd(block);
     IRMapping mapping;
     mapping.map(normalized.getArguments(), block->getArguments());
-    unsigned occurrence = 0;
     for (auto &op : normalized.front().without_terminator()) {
-      auto *copy = builder.clone(op, mapping);
-      copy->setAttr("site", builder.getStringAttr(
-                                "value_" + std::to_string(occurrence++)));
+      builder.clone(op, mapping);
     }
     SmallVector<Value> results;
     for (auto value : normalized.front().back().getOperands())
@@ -192,20 +154,24 @@ LogicalResult expandMathRealizations(ModuleOp module,
     local::ReturnOp::create(builder, location, results);
     functions.push_back(function);
   }
-  auto lower =
-      lowerCalculations(unit, functions, policy, &stageWork, limits, trace);
-  if (succeeded(lower))
-    scope.failure(VerificationDecision{VerificationObservation::Unclassified,
-                                       "realized helper correspondence",
-                                       {},
-                                       {}});
-  if (failed(lower) ||
-      failed(candidate.publish([&](ModuleOp before, ModuleOp after) {
-        return checkRealizations(before, after, &helpers);
-      })))
-    return diagnostics::emit(
-        module.emitError(), "local-realization-lowering",
-        "realized body failed recipe or executable admission");
+  for (auto function : functions) {
+    if (failed(kernel::formCalculation(function, original, policy)))
+      return failure();
+    auto call = cast<kernel::CallOp>(function.getBody().front().front());
+    SymbolTableCollection symbols;
+    auto entry = kernel::resolve(call, symbols);
+    auto origin = function->getAttrOfType<ArrayAttr>("logical_origin");
+    auto helper = sourceSymbols.lookup<func::FuncOp>(
+        cast<StringAttr>(origin[0]).getValue());
+    for (auto attribute : helper->getAttrs())
+      if (attribute.getName() != "sym_name" &&
+          attribute.getName() != "sym_visibility")
+        entry->setAttr(attribute.getName(), attribute.getValue());
+  }
+  if (failed(candidate.publish(checkRealizations)))
+    return diagnostics::emit(module.emitError(), "local-realization-lowering",
+                             "realized numerical closure failed correspondence "
+                             "or logical admission");
   scope.publish();
   return success();
 }

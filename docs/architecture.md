@@ -3,7 +3,8 @@
 zkc uses one compilation and execution model. The `.zkc` frontend emits Protocol
 IR (PIR), built on MLIR. PIR passes through `protocol`, `participant`, `exec` and `physical`
 profiles and is exported as `zkc.program/0`. Entry packages, proof deployments
-and joint bundles execute through the same Rust Runner and installed kernels.
+and joint bundles execute through the same VM contracts, Rust interpreter and
+installed kernels.
 
 ## System map
 
@@ -18,9 +19,11 @@ explicit .zkc modules + Assets                    Protocol IR
                                                          │
                           authenticated Entry / proof / joint Host
                                                          │
-                                              shared Rust Runner
+                                          interpreter (control flow)
                                                          │
-                                            installed backend kernels
+                                        VM instance (frames, custody, limits)
+                                                         │
+                                            installed backend operations
 
 Lean: independently formalized semantic models and proofs
       (native source/compiler/runtime correspondence remains open)
@@ -38,8 +41,8 @@ relation declarations, library-level multi-table bundles and external adapters.
 | `.zkc` modules and Entry closure | Names, static parameters, types, permissions, capabilities, role availability and explicit application selection |
 | `protocol` | Mathematical values, joint actions, services, relation declarations and participant dependencies |
 | `participant` | Role-specific values, actual sends/receives, ordered actions and optional transcript construction |
-| `exec` | Demand-driven mathematical realization and explicit executable local calls |
-| `physical` | Admitted representations, installed kernels, conversions and storage handling |
+| `exec` | Demand-driven Kernel units and ordered Local calls; checked numerical realization |
+| `physical` | Admitted representations, installed operations, conversions and storage handling |
 | `zkc.program/0` | Closed executable participant description admitted by C++ export and Rust loading |
 | Host package | Application-authorized identity, input/result layout, setup authority, execution limits and publication |
 
@@ -65,7 +68,8 @@ judgment.
 | Transforms and Target | `compiler/include/zkc/Transforms` and `Target`: preparation, projection, realization and physical selection |
 | Compiler | `compiler/include/zkc/Compiler`: composed compilation, Entry packages, bundles and proof deployments |
 | Driver | `compiler/include/zkc/Driver`: command parsing and file I/O; links the Compiler API |
-| Rust runtime | [zkc-runtime](../crates/zkc-runtime/README.md): Runner, bounded work and resource custody |
+| Rust VM | [zkc-runtime::vm](../crates/zkc-runtime/src/vm/README.md): admitted code, installed-call contracts, frames and capacity |
+| Rust interpreter | `zkc-runtime::interpreter`: instruction walking, continuations and pending participant actions |
 | Rust Hosts | [zkc-tools](../crates/zkc-tools/README.md): Entry, proof and joint invocation, authentication, preparation and reports |
 | Backend integration | [zkc-backends](../crates/zkc-backends/README.md): installed types, codecs, services and kernel dispatch |
 | Lean | [formal](../lean/README.md): independently built semantic models, proofs and model-specific tools |
@@ -84,11 +88,27 @@ selected project and compiler and capture the returned package bytes. Deployed
 applications supply an independently authorized expected package digest.
 The Rust Host binds named inputs to the independently
 admitted program; it trusts the compiler publication for source correspondence.
-It does not interpret the retained MLIR. Admission prepares immutable local code
-with positional operands and shared frame layouts. Each Runner resolves installed
-backend handles independently, then interprets that code with fresh values,
-resource custody and budgets. The [interpreter contract](../crates/zkc-runtime/src/interactive/README.md)
-describes this execution layout; it is internal to the existing program boundary.
+It does not interpret the retained MLIR. Structural admission produces an immutable
+VM program without a backend. Each execution links its owned backend and uses a
+VM instance for frames, calls, resource custody and budgets. The interpreter
+walks structured instructions and manages value environments and continuations.
+The [VM contract](spec/runtime/vm.md) defines their boundary. This separation
+introduces no artifact format or alternative execution path.
+
+[Kernel IR](spec/ir/kernel.md) owns closed logical numerical units, using existing
+mathematical operations and standard functions. Ordered Local calls invoke them;
+physical planning retains their source and selected Local realization together.
+Independent numerical and physical readers check the result before publication.
+This boundary keeps
+the complete numerical body available independently of participant control.
+Normalization, analysis and recipe verification read standard-function bodies;
+Local functions are the executable output. Source symbol context and output
+binding allocation remain separate.
+Numerical realization uses a private standard SCF schedule before Local lowering.
+Writable-buffer layouts and target-specific vectorization remain future work.
+Participant scheduling, transport and resource authority stay with their existing owners.
+Installed numerical and effectful operations share the binding mechanism;
+installation alone does not authorize extraction into a numerical unit.
 
 The native proof policy covers flat, iterated, PCS and structured
 programs on the shared executable and Runner. [Proof compilation](compiler/construction.md)
@@ -113,10 +133,11 @@ including unchecked returned PCS values.
 ## Formal models and extension boundaries
 
 Lean models define complete execution, observations, conditional refinement and
-selected protocol experiments. Their direct plans, finite tables and source
-representations remain independent research subjects. They are not stages of
-the native compiler, and their executable correspondence results do not validate
-`zkc.program/0`. [Assurance](assurance.md) owns that distinction.
+selected protocol experiments. Maintained native bridges check selected exported
+subjects against these models. They are not stages of the native compiler and
+do not establish general correctness of `zkc.program/0` execution or its backends.
+[Formal support](../lean/docs/support.md) records their exact scope;
+[assurance](assurance.md) owns the remaining trust boundaries.
 
 Extensions add ordinary mathematical operations, transparent local algorithms,
 protocol libraries or backend kernels at the appropriate owner. A whole-protocol

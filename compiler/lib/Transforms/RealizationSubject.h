@@ -4,9 +4,28 @@
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/SymbolTable.h"
 #include "zkc/Transforms/MathematicalTrace.h"
+#include "llvm/ADT/ArrayRef.h"
 #include <array>
 
 namespace zkc::mathematical {
+/// Resolve temporary declaration names without changing sites or positions.
+inline RealizationSubject sourceSubject(
+    RealizationSubject subject,
+    llvm::ArrayRef<std::pair<std::string, std::string>> declarationOrigins) {
+  auto resolve = [&](std::string &declaration) {
+    for (auto it = declarationOrigins.rbegin(); it != declarationOrigins.rend();
+         ++it)
+      if (declaration == it->first) {
+        declaration = it->second;
+        break;
+      }
+  };
+  resolve(subject.declaration);
+  for (auto &occurrence : subject.occurrence)
+    resolve(occurrence.second);
+  return subject;
+}
+
 /// Copy identity before mutation. Position is relative to the nearest named
 /// declaration (or root), including region and block indices at every level.
 inline RealizationSubject realizationSubject(mlir::Operation *op) {

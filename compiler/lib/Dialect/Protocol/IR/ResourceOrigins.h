@@ -1,8 +1,8 @@
 #ifndef ZKC_PROTOCOL_RESOURCEORIGINS_H
 #define ZKC_PROTOCOL_RESOURCEORIGINS_H
 
+#include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Operations.h"
-#include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 

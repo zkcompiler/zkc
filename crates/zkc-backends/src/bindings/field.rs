@@ -1,6 +1,6 @@
 //! Scalar, vector and matrix arithmetic over an independently installed field.
 use super::*;
-use zkc_runtime::interactive::KernelSignature;
+use zkc_runtime::vm::OperationSignature;
 
 pub(crate) const fn operation(
     name: &'static str,
@@ -44,7 +44,7 @@ fn embed(
     {
         return None;
     }
-    Some(KernelSignature {
+    Some(OperationSignature {
         inputs: row
             .inputs
             .iter()

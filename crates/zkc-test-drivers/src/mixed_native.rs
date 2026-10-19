@@ -1,8 +1,9 @@
 //! Executes compiler-generated mixed math/local participants with real custody.
 use std::path::Path;
 use zkc_backends::{Capability, Domain, EntryPolicy, NativeBackend, Policy, Scalar, Value};
-use zkc_runtime::interactive::Identity;
-use zkc_runtime::interactive::{Action, Runner, StopKind, admit_supplied};
+use zkc_runtime::interpreter::Runner;
+use zkc_runtime::vm::Identity;
+use zkc_runtime::vm::{Action, StopKind};
 fn domain(role: &str) -> Domain {
     Domain::new(role, "mixed_test", "main", None)
 }
@@ -47,7 +48,12 @@ fn main() {
                 .issue_test_tape(domain("P"), 7, vec![Scalar::from(5u64)])
                 .unwrap();
             let before = native.observe(token(&rng)).unwrap();
-            let admitted = admit_supplied(&bytes, &native).unwrap();
+            let admitted = zkc_runtime::vm::Program::decode(&bytes)
+                .and_then(|program| {
+                    program.check_installation(&native)?;
+                    Ok(program)
+                })
+                .unwrap();
             let mut runner = Runner::new(
                 &admitted,
                 "main",
@@ -107,7 +113,12 @@ fn main() {
         let rng = native
             .issue_test_tape(domain("P"), 7, vec![Scalar::from(5u64)])
             .unwrap();
-        let admitted = admit_supplied(&bytes, &native).unwrap();
+        let admitted = zkc_runtime::vm::Program::decode(&bytes)
+            .and_then(|program| {
+                program.check_installation(&native)?;
+                Ok(program)
+            })
+            .unwrap();
         let mut runner = Runner::new(
             &admitted,
             "main",
@@ -134,7 +145,12 @@ fn main() {
         let wrong = native
             .issue_rng_for(Identity::Bls12381Fr, domain("V"), 7)
             .unwrap();
-        let admitted = admit_supplied(&bytes, &native).unwrap();
+        let admitted = zkc_runtime::vm::Program::decode(&bytes)
+            .and_then(|program| {
+                program.check_installation(&native)?;
+                Ok(program)
+            })
+            .unwrap();
         assert!(
             Runner::new(
                 &admitted,
@@ -166,7 +182,7 @@ fn finish_local(runner: &mut Runner<NativeBackend>) -> Vec<Value> {
 }
 fn custody_boundaries(directory: &str) {
     use zkc_backends::GroupPoint;
-    use zkc_runtime::interactive::{Packet, Value as RuntimeValue};
+    use zkc_runtime::vm::{Packet, Value as RuntimeValue};
     // The host deliberately supplies a reply different from the earlier send.
     // This also ensures the calculation uses the actual received component.
     for name in [
@@ -215,7 +231,12 @@ fn custody_boundaries(directory: &str) {
                 }
                 _ => vec![field(9), Value::Bool(go)],
             };
-            let admitted = admit_supplied(&bytes, &native).unwrap();
+            let admitted = zkc_runtime::vm::Program::decode(&bytes)
+                .and_then(|program| {
+                    program.check_installation(&native)?;
+                    Ok(program)
+                })
+                .unwrap();
             let mut runner = Runner::new(&admitted, "main", "P", "mixed_test", native, inputs)
                 .unwrap_or_else(|failure| panic!("entry: {:?}", failure.error));
             let Action::Send(send) = next(&mut runner) else {
@@ -342,7 +363,12 @@ fn mixed_service(directory: &str) {
         let rng = native
             .issue_test_tape(domain("P"), 7, vec![Scalar::from(5u64)])
             .unwrap();
-        let admitted = admit_supplied(&bytes, &native).unwrap();
+        let admitted = zkc_runtime::vm::Program::decode(&bytes)
+            .and_then(|program| {
+                program.check_installation(&native)?;
+                Ok(program)
+            })
+            .unwrap();
         let entry = admitted
             .entry("main")
             .unwrap()

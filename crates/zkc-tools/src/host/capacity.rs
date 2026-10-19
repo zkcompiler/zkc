@@ -2,7 +2,7 @@
 use super::{admission::LoadLimits, inputs::*};
 use serde_json::{Value as Json, json};
 use zkc_backends::Policy;
-use zkc_runtime::interactive::{Limits, ValueBudget, WorkBudget};
+use zkc_runtime::vm::{Limits, ValueBudget, WorkBudget};
 
 /// A host may raise the default collection count within installed hard limits,
 /// or lower byte/work ceilings. Neither proof nor deployment data grants this

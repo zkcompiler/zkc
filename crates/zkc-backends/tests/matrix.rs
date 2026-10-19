@@ -5,9 +5,7 @@ use rand::{RngExt, SeedableRng, rngs::StdRng};
 use serde_json::json;
 use support::{Controlled, assert_value, backend, one, program};
 use zkc_backends::{KoalaBear, Policy, RistrettoScalar, Scalar, Value};
-use zkc_runtime::interactive::{
-    Backend, ErrorCode, OperationBinding, Value as RuntimeValue, admit_supplied,
-};
+use zkc_runtime::vm::{Backend, ErrorCode, OperationBinding, Value as RuntimeValue};
 
 fn binding(d: usize, name: &str) -> OperationBinding {
     let (field, provider) = [
@@ -348,7 +346,11 @@ fn nominal_signatures_shapes_attributes_and_resource_failures_are_closed() {
                 &["out".into()],
             );
             assert_eq!(
-                admit_supplied(&plan, &backend(Policy::default()))
+                zkc_runtime::vm::Program::decode(&plan)
+                    .and_then(|program| {
+                        program.check_installation(&backend(Policy::default()))?;
+                        Ok(program)
+                    })
                     .unwrap_err()
                     .code,
                 ErrorCode::Attributes
@@ -526,7 +528,7 @@ fn exact_nonzero_cap_and_dimension_cap_are_independent_of_dense_vector_policy() 
 
 #[test]
 fn matrix_transcript_codec_binds_canonical_bytes_and_refuses_cross_suite_payloads() {
-    use zkc_runtime::interactive::Identity;
+    use zkc_runtime::vm::Identity;
     for d in 0..2 {
         let field = if d == 0 {
             Identity::Bls12381Fr

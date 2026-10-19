@@ -274,6 +274,9 @@ impl Compiler {
         if options.fuse_vector_reductions {
             flags.push("--fuse-vector-reductions");
         }
+        if options.fuse_collect_fold {
+            flags.push("--fuse-collect-fold");
+        }
         if !options.calculation_batching {
             flags.push("--no-calculation-batching");
         }

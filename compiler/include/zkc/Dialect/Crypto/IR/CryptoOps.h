@@ -9,9 +9,9 @@
 #include "mlir/Interfaces/ControlFlowInterfaces.h"
 #include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
+#include "zkc/Dialect/BoundOperations.h"
 #include "zkc/Dialect/Crypto/IR/CryptoDialect.h"
 #include "zkc/Dialect/Crypto/IR/CryptoTypes.h"
-#include "zkc/Dialect/KernelSupport.h"
 #include "zkc/Interfaces/LinearContraction.h"
 #define GET_OP_CLASSES
 #include "zkc/Dialect/Crypto/IR/cryptoOps.h.inc"

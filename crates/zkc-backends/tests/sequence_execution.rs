@@ -1,12 +1,12 @@
 //! Persistent sequences through ordinary admitted Local loops and budgets.
+use zkc_runtime::interpreter::Runner;
 #[path = "domains/support.rs"]
 mod support;
 
 use serde_json::json;
 use zkc_backends::{NativeBackend, Policy, Sequence, Value};
-use zkc_runtime::interactive::{
-    Action, LogicalType, OperationBinding, PhysicalType, Runner, StopKind, Usage, ValueBudget,
-    WorkBudget, admit_supplied,
+use zkc_runtime::vm::{
+    Action, LogicalType, OperationBinding, PhysicalType, StopKind, Usage, ValueBudget, WorkBudget,
 };
 
 fn physical(logical: &str) -> PhysicalType {
@@ -74,7 +74,12 @@ fn drive(
     values: ValueBudget,
     work: WorkBudget,
 ) -> (Result<Vec<Value>, String>, Usage, NativeBackend) {
-    let admitted = admit_supplied(program, &backend).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(program)
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
     let mut runner = Runner::new_with_budgets(
         &admitted, "main", "P", "session", backend, inputs, values, work,
     )

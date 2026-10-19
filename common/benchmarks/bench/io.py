@@ -1,6 +1,6 @@
 """Shared measurement I/O; callers own workload semantics and timing policy."""
 import argparse
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timezone
 import fcntl
@@ -29,23 +29,29 @@ _measurement_fd = ContextVar('measurement_fd', default=None)
 
 
 @contextmanager
-def measurement_slot(evidence):
-    """Hold one advisory lock across preparation, workers and validation.
+def measurement_slot(evidence, *, exclusive=False):
+    """Record exploratory runs, optionally owning an exclusive measurement slot.
 
-    Children are managed by the owning scheduler and must not reacquire this
-    lock. The stable lock file is never removed, including on failure.
+    Exclusive workers inherit the descriptor. The stable lock file is never
+    removed, including on failure. Ordinary runs neither open nor acquire it.
     """
     if evidence.parent.exists():
         raise FileExistsError(evidence.parent)
-    record = {'path': str(MEASUREMENT_LOCK), 'pid': os.getpid(),
-              'attempted_utc': datetime.now(timezone.utc).isoformat()}
-    with MEASUREMENT_LOCK.open('a') as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as error:
-            raise MeasurementBusy(f'measurement slot busy: {MEASUREMENT_LOCK}') from error
-        record['acquired_utc'] = datetime.now(timezone.utc).isoformat()
-        token = _measurement_fd.set(lock.fileno())
+    record = {'mode': 'exclusive' if exclusive else 'uncoordinated',
+              'path': str(MEASUREMENT_LOCK) if exclusive else None,
+              'pid': os.getpid(), 'attempted_utc': datetime.now(timezone.utc).isoformat(),
+              'acquired_utc': None}
+    with ExitStack() as stack:
+        lock = None
+        if exclusive:
+            lock = stack.enter_context(MEASUREMENT_LOCK.open('a'))
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as error:
+                raise MeasurementBusy(f'measurement slot busy: {MEASUREMENT_LOCK}') from error
+            record['acquired_utc'] = datetime.now(timezone.utc).isoformat()
+        record['started_utc'] = datetime.now(timezone.utc).isoformat()
+        token = _measurement_fd.set(lock.fileno() if lock is not None else None)
         try:
             with termination_handler():
                 yield record

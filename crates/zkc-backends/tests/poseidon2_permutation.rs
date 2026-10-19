@@ -18,7 +18,7 @@ use p3_poseidon2::{
 };
 use support::{backend, one};
 use zkc_backends::{Policy, Value};
-use zkc_runtime::interactive::OperationBinding;
+use zkc_runtime::vm::OperationBinding;
 
 const P: u64 = 2_130_706_433;
 

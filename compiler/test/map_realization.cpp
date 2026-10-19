@@ -655,8 +655,8 @@ module { "protocol.module"() ({
           require(bool(module), "two-map fixture refused");
           PassManager manager(&context);
           manager.addPass(protocol::createProjectProtocolPass(simplify));
-          manager.addPass(protocol::createEliminatePolynomialsPass());
           manager.addPass(protocol::createLowerMathPass());
+          manager.addPass(kernel::createLowerKernelsPass());
           manager.addPass(protocol::createSelectPhysicalPass());
           require(succeeded(manager.run(*module)),
                   "realized maps did not compile");

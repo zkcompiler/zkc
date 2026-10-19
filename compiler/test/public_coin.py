@@ -55,7 +55,7 @@ def checked(name, text, req, *flags):
         record["bundle_sha256"] == hashlib.sha256(result["bundle"].encode()).hexdigest()
     )
     policy = tuple(
-        flag for flag in flags if flag in {"--fuse-vector-reductions", "--no-finite-bulk"}
+        flag for flag in flags if flag in {"--fuse-vector-reductions", "--no-finite-bulk", "--fuse-collect-fold"}
     )
     view = analyze(text, req, policy=policy)
     assert view == record["view"]
@@ -309,6 +309,9 @@ for change in [
     lambda v: v.update(prepared_ir_sha256="0" * 64),
     lambda v: v.update(finite_bulk=False),
     lambda v: v.update(fuse_vector_reductions=True),
+    lambda v: v.update(fuse_collect_fold=True),
+    lambda v: v.pop("fuse_collect_fold"),
+    lambda v: v.update(fuse_collect_fold="false"),
     lambda v: v.pop("finite_bulk"),
     lambda v: v.update(finite_bulk="true"),
     lambda v: v["draws"][0].update(path=["unrelated"]),
@@ -330,6 +333,10 @@ for change in [
 # eligible finite or fusion payload and its prepared IR remains identical.
 for policy_index, policy in enumerate(
     [
+        ("--fuse-collect-fold",),
+        ("--no-finite-bulk", "--fuse-collect-fold"),
+        ("--fuse-vector-reductions", "--fuse-collect-fold"),
+        ("--no-finite-bulk", "--fuse-vector-reductions", "--fuse-collect-fold"),
         ("--no-finite-bulk",),
         ("--fuse-vector-reductions",),
         ("--no-finite-bulk", "--fuse-vector-reductions"),
@@ -338,6 +345,7 @@ for policy_index, policy in enumerate(
     selected = checked(f"shadow_policy_{policy_index}", shadow, shadow_req, *policy)
     assert selected["finite_bulk"] == ("--no-finite-bulk" not in policy)
     assert selected["fuse_vector_reductions"] == ("--fuse-vector-reductions" in policy)
+    assert selected["fuse_collect_fold"] == ("--fuse-collect-fold" in policy)
     assert selected["prepared_ir_sha256"] == view["prepared_ir_sha256"]
     report_path.write_text(json.dumps(selected))
     command = [

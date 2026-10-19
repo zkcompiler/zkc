@@ -1,11 +1,9 @@
-//! Shared entry, operand and result checks for every native kernel.
+//! Shared entry, operand and result checks for every native operation.
 use super::EntryPolicy;
 use crate::{Policy, Result, Value, exhausted, refused};
 use crate::{SetupRegistry, resource::Resources};
 use std::collections::HashSet;
-use zkc_runtime::interactive::{
-    Frame, FrameKind, Invocation, Retained, Type, Value as RuntimeValue,
-};
+use zkc_runtime::vm::{Frame, FrameKind, Invocation, Retained, Type, Value as RuntimeValue};
 
 pub(super) struct Core {
     pub(super) policy: Policy,
@@ -249,18 +247,24 @@ impl Core {
                 crate::oracle::validate_hash_count(Type::Proof, path.len(), &self.policy)?;
                 None
             }
-            Value::OracleStates(_, states) => {
+            Value::OracleStates(domain, states) => {
                 self.policy
                     .vector_width(states.len(), std::mem::size_of::<crate::oracle::State>())?;
+                if states.iter().any(|state| state.domain() != *domain) {
+                    return Err(refused("oracle-domain"));
+                }
                 None
             }
             Value::MerkleDigest(..) | Value::MerkleProof(..) | Value::MerkleDigests(..) => {
                 crate::merkle::validate(v, &self.policy)?;
                 None
             }
-            Value::MerkleTrees(_, trees) => {
+            Value::MerkleTrees(scheme, trees) => {
                 self.policy
                     .vector_width(trees.len(), std::mem::size_of::<crate::merkle::State>())?;
+                if trees.iter().any(|tree| tree.scheme() != *scheme) {
+                    return Err(refused("oracle-domain"));
+                }
                 None
             }
             Value::Shake128State(..)
@@ -307,7 +311,7 @@ impl Core {
     /// Pure entry constraints; missing values are only pending resource roots.
     pub(super) fn check_entry_values<'a>(
         &self,
-        inputs: impl Iterator<Item = &'a (String, zkc_runtime::interactive::PhysicalType)> + Clone,
+        inputs: impl Iterator<Item = &'a (String, zkc_runtime::vm::PhysicalType)> + Clone,
         values: &[Option<&Value>],
     ) -> Result<()> {
         if inputs.clone().count() != values.len() {
@@ -379,11 +383,10 @@ impl Core {
         &self,
         i: &Invocation<'_>,
         args: &[Value],
-        signature: &zkc_runtime::interactive::BoundSignature,
+        signature: &zkc_runtime::vm::BoundSignature,
         call: Option<&mut Option<super::NativeCall>>,
     ) -> Result<()> {
         if i.binding.signature() != signature
-            || i.binding.implementation() != i.kernel
             || args.len() != signature.inputs.len()
             || args
                 .iter()

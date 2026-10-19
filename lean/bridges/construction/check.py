@@ -131,7 +131,8 @@ class Driver:
                                   stdout_sha256=digest(result.stdout.encode()),
                                   stderr=result.stderr[-4000:]))
         if expect is not None and result.returncode != expect:
-            raise RuntimeError(f"{name or arguments[0]} exited {result.returncode}: {result.stderr[-2000:]}")
+            raise RuntimeError(f"{name or arguments[0]} exited {result.returncode}:\n"
+                               f"{result.stdout[-2000:]}{result.stderr[-2000:]}")
         return result
 
     def compile(self, *arguments, name):

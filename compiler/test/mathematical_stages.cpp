@@ -49,8 +49,10 @@ int main() {
                   readActualCandidate && same(*source, *original),
               "rejected candidate changed original or bypassed actual reader");
     }
-    mathematical::CheckedCandidate accepted(*source);
-    require(succeeded(finite::realizeLocals(*accepted)) &&
+    OwningOpRef<ModuleOp> prepared(cast<ModuleOp>((*source)->clone()));
+    require(succeeded(finite::realizeLocals(*prepared)), "realization failed");
+    mathematical::CheckedCandidate accepted(*source, std::move(prepared));
+    require(same(*source, *original) &&
                 succeeded(accepted.publish(finite::verifyRealizations)) &&
                 !same(*source, *original) &&
                 succeeded(finite::verifyRealizations(*original, *source)),

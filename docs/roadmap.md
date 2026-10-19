@@ -1,7 +1,7 @@
 # Roadmap
 
 Development extends one supported model: `.zkc` Language → Protocol IR →
-`zkc.program/0` → the shared Rust Runner and Entry/proof/joint Hosts.
+`zkc.program/0` → VM programs, the Rust interpreter and Entry/proof/joint Hosts.
 [Status](status.md) records existing support; this page orders further work.
 
 ## Strengthen the maintained path
@@ -15,6 +15,21 @@ Preserve general algebra, relation Assets, native kernels, structured messages,
 resource custody, iteration, completion and attempts. Broader source syntax and
 new protocol libraries are additions to this model. Lean research develops
 independently.
+
+## Make numerical realization explicit
+
+Build on the checked physical plan, which retains original Kernel bodies and
+selected Local realizations together, with checked binding lifetimes in the
+physical schedule. Extend the checked SCF loop schedule with target-specific
+numerical kernels, preserving domains, indexing, reductions and failure obligations.
+Compare numerical variants through the same checked transaction and installed
+operation contracts. Establish field representations,
+layouts, aliasing and work bounds before adding generated arithmetic. VM control
+retains participant order and authority.
+
+Validate realization refinements across representative operations and protocol
+families. Keep alternate interpreters, JIT and AOT dependent on evidence and the
+same execution contract; the VM separation itself makes no performance claim.
 
 ## Establish native correspondence
 

@@ -1,19 +1,19 @@
-//! Admitted deterministic Bundle assets, actual-column assertion evaluation,
+//! Program deterministic Bundle assets, actual-column assertion evaluation,
 //! the polynomial view's descriptors and point substitutions, and the
 //! interaction view's widths, policy, descriptors and record substitutions.
 use crate::{KoalaBear, Policy, Result, Value, exhausted, refused};
 use p3_field::{BasedVectorSpace, PrimeCharacteristicRing, PrimeField32};
 use std::{collections::BTreeMap, marker::PhantomData, sync::Arc};
 use zkc_runtime::{
-    interactive::{
-        AttributeRule, BoundSignature, Identity, Invocation, KernelSignature, OperationBinding,
-        Type,
-    },
     relation::{
         Algebra, Bundle, ChannelKind, Error, HeightAuthority, InteractionView, PolynomialArena,
         PolynomialView, Side, TableView,
     },
     ring::Expression,
+    vm::{
+        AttributeRule, BoundSignature, Identity, Invocation, OperationBinding, OperationSignature,
+        Type,
+    },
 };
 
 #[derive(Clone, Debug, Default)]
@@ -195,7 +195,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         "relation.table_interaction" => (vec![index.clone(); 2], vec![index; 12]),
         _ => (vec![vector.clone()], vec![vector]),
     };
-    Some(KernelSignature {
+    Some(OperationSignature {
         inputs,
         outputs,
         attributes: AttributeRule::AssetIdentity,

@@ -11,15 +11,9 @@ using namespace llvm;
 
 namespace zkc {
 namespace {
-LogicalResult localControlContext(Operation *op) {
-  auto *owner = op->getParentOp();
-  while (owner && isa<zkc::local::LocalIfOp, zkc::local::LocalForOp,
-                      zkc::local::LocalMatchOp>(owner))
-    owner = owner->getParentOp();
-  if (!isa_and_nonnull<zkc::local::FuncOp>(owner))
-    return diagnostics::emit(op->emitOpError(), "local-control-context");
-  return success();
-}
+// These operations describe self-contained frames. Their enclosing program
+// profile owns vocabulary placement; their local invariants do not depend on
+// a particular callable or on the control operations surrounding the frame.
 Type localLogical(Type type) {
   if (auto physical = dyn_cast<zkc::plan::DataType>(type))
     return physical.getLogical();
@@ -81,8 +75,6 @@ Expected<SmallVector<Type>> variantPayloadTypes(ArrayRef<std::string> payload,
 }
 } // namespace
 LogicalResult zkc::local::VariantInjectOp::verify() {
-  if (failed(localControlContext(*this)))
-    return failure();
   auto bound = protocol::encodeBoundType(
       getOutput().getType(), isa<zkc::plan::DataType>(getOutput().getType()));
   if (!bound) {
@@ -106,8 +98,6 @@ LogicalResult zkc::local::VariantInjectOp::verify() {
   return success();
 }
 LogicalResult zkc::local::LocalMatchOp::verifyRegions() {
-  if (failed(localControlContext(*this)))
-    return failure();
   if (getNumOperands() < 1)
     return diagnostics::emit(emitOpError(), "variant-type");
   bool physical = isa<zkc::plan::DataType>(getOperand(0).getType());
@@ -163,8 +153,6 @@ void zkc::local::LocalMatchOp::getSuccessorRegions(
   }
 }
 LogicalResult zkc::local::LocalIfOp::verifyRegions() {
-  if (failed(localControlContext(*this)))
-    return failure();
   if (getNumOperands() < 1 ||
       !localLogical(getOperand(0).getType()).isSignlessInteger(1))
     return diagnostics::emit(emitOpError(), "local-if-condition");
@@ -175,8 +163,6 @@ LogicalResult zkc::local::LocalIfOp::verifyRegions() {
   return success();
 }
 LogicalResult zkc::local::LocalForOp::verifyRegions() {
-  if (failed(localControlContext(*this)))
-    return failure();
   unsigned n = getNumResults();
   if (getNumOperands() < n + 2 ||
       !localLogical(getOperand(0).getType()).isUnsignedInteger(64) ||

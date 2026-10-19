@@ -4,7 +4,7 @@
 use super::structured::{add, header, invalid, mul, peak};
 use super::{NativeWireError as Error, unsupported};
 use crate::{NativeBackend, Policy, Value};
-use zkc_runtime::interactive::{DecodeReason, Identity, PhysicalType, Type, Value as RuntimeValue};
+use zkc_runtime::vm::{DecodeReason, Identity, PhysicalType, Type, Value as RuntimeValue};
 type Result<T> = std::result::Result<T, Error>;
 
 // Tag, scalar/point wire width, retained element width. Matrix entries add two

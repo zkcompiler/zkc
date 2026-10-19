@@ -3,7 +3,7 @@ mod support;
 use p3_field::{BasedVectorSpace, PrimeCharacteristicRing};
 use support::{backend, one};
 use zkc_backends::{KoalaBear, KoalaBearExt8, Policy, Value, oracle::Domain};
-use zkc_runtime::interactive::{
+use zkc_runtime::vm::{
     Backend, Identity, LogicalType, OperationBinding, PhysicalType, Type, Value as RuntimeValue,
 };
 

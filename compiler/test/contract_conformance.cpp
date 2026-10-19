@@ -1,8 +1,8 @@
 // Bounded observation of the actual Contracts APIs. No signature replicas.
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/Implementations.h"
-#include "zkc/Contracts/Kernels.h"
 #include "zkc/Contracts/NativePolicy.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "llvm/Support/JSON.h"

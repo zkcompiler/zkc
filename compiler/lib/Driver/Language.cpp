@@ -133,7 +133,7 @@ int runLanguageCompiler(int argc, char **argv) {
     } else if (command == "language-check" &&
                (arg == "--no-simplify" || arg == "--release-storage" ||
                 arg == "--fuse-vector-reductions" ||
-                arg == "--no-finite-bulk" ||
+                arg == "--fuse-collect-fold" || arg == "--no-finite-bulk" ||
                 arg == "--no-calculation-batching"))
       return refuse(
           error("source.options",
@@ -148,6 +148,8 @@ int runLanguageCompiler(int argc, char **argv) {
       options.mathematicalSelection.calculationBatching = false;
     else if (arg == "--fuse-vector-reductions")
       options.mathematicalSelection.vectorReductionFusion = true;
+    else if (arg == "--fuse-collect-fold")
+      options.mathematicalSelection.collectFoldFusion = true;
     else
       return refuse(error("source.options", "unknown language option: " + arg));
   }

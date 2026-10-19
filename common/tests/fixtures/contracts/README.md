@@ -16,7 +16,7 @@ against agreement caused only by a shared inventory mistake.
 witnesses. It is not generated from TableGen, either registry, or a production
 validator. The C++ driver calls the binding overload of `checkParameters`; the
 Rust tools example constructs one retained local operation in `zkc.program/0` and
-calls `admit_supplied` with the installed native backend. Positive controls
+calls `Program::decode` and checks installation against the native backend. Positive controls
 ensure an unrelated carrier or backend refusal cannot satisfy a negative case.
 Operation attributes are positional strings; keyed objects, duplicate request
 keys and extra request keys are separate transport refusals. Cases cover empty

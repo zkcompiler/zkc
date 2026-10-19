@@ -13,17 +13,17 @@ namespace ZkcExamples.Executable.DeferredRoundsProgramData
 open Zkc.Construction Zkc.Executable
 
 /-- SHA-256 of the exact `zkc.program/0` bytes this data was read from. -/
-def program : String := "sha256:a0e9640b0367f47603565c8abfc4136c35a00d85fa99816feca3b82daf033802"
+def program : String := "sha256:64563af6306230e9bba7c76d3ae612a34574b991a0146148ddcfd197f3d417e4"
 
 /-- The local function `_calculation_1`. -/
 def function0 : Function :=
   ⟨"_calculation_1", [("v15", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩), ("v16", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩), ("v17", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩), ("v18", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩), ("v19", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩)], [⟨.data .boolean, "native.bool/0"⟩], [
-    .operation "value_0" "_calculation_2" [] ["v15", "v16"] ["v20"],
-    .operation "value_1" "_calculation_2" [] ["v20", "v17"] ["v21"],
-    .operation "value_2" "_calculation_3" [] ["v21", "v18"] ["v22"],
-    .operation "value_3" "_calculation_2" [] ["v19", "v17"] ["v23"],
-    .operation "value_4" "_calculation_3" [] ["v23", "v18"] ["v24"],
-    .operation "value_5" "_calculation_4" [] ["v22", "v24"] ["v25"],
+    .operation "lc_6_kernel_6_kernel_1_0" "_kernel_binding_0" [] ["v15", "v16"] ["v20"],
+    .operation "lc_6_kernel_6_kernel_1_1" "_kernel_binding_0" [] ["v20", "v17"] ["v21"],
+    .operation "lc_6_kernel_6_kernel_1_2" "_kernel_binding_2" [] ["v21", "v18"] ["v22"],
+    .operation "lc_6_kernel_6_kernel_1_3" "_kernel_binding_0" [] ["v19", "v17"] ["v23"],
+    .operation "lc_6_kernel_6_kernel_1_4" "_kernel_binding_2" [] ["v23", "v18"] ["v24"],
+    .operation "lc_6_kernel_6_kernel_1_5" "_kernel_binding_1" [] ["v22", "v24"] ["v25"],
     .ret ["v25"]]⟩
 
 /-- The local function `_transcript_1`. -/
@@ -87,9 +87,9 @@ def validator : Validator where
     .ret ["v38", "v37"]]
   functions := [function0, function1, function2, function3, function4, function5, function6]
   bindings := [
-    ⟨"_calculation_4", "field.equal", ["bls12-381.fr"], "arkworks/field.equal"⟩,
-    ⟨"_calculation_3", "field.add", ["bls12-381.fr"], "arkworks/field.add"⟩,
-    ⟨"_calculation_2", "field.mul", ["bls12-381.fr"], "arkworks/field.mul"⟩,
+    ⟨"_kernel_binding_1", "field.equal", ["bls12-381.fr"], "arkworks/field.equal"⟩,
+    ⟨"_kernel_binding_2", "field.add", ["bls12-381.fr"], "arkworks/field.add"⟩,
+    ⟨"_kernel_binding_0", "field.mul", ["bls12-381.fr"], "arkworks/field.mul"⟩,
     ⟨"_transcript_3", "transcript.native.indexed.challenge", ["merlin3.bls12-381.fr64be/0"], "arkworks/transcript.native.indexed.challenge"⟩,
     ⟨"_transcript_2", "indices.empty", [], "native/indices.empty"⟩,
     ⟨"_transcript_0", "transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/0", "field:bls12-381.fr"], "arkworks/transcript.native.indexed.observe.data"⟩]

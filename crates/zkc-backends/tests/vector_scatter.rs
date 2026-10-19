@@ -5,7 +5,7 @@ mod support;
 use serde_json::json;
 use support::{Controlled, assert_value, backend, one, program};
 use zkc_backends::{KoalaBear, Policy, Value};
-use zkc_runtime::interactive::{Backend, ErrorCode, OperationBinding, admit_supplied};
+use zkc_runtime::vm::{Backend, ErrorCode, OperationBinding};
 
 fn binding(domain: usize, contract: &str) -> OperationBinding {
     let (field, provider) = [
@@ -130,12 +130,13 @@ fn admission_rejects_noncanonical_attributes_without_modular_reduction() {
     for (d, modulus) in moduli.iter().enumerate() {
         for bad in ["", "01", "+1", "-1", "1.0", "١", modulus] {
             assert_eq!(
-                admit_supplied(
-                    &plan(d, "vector.constant", &["1", bad]),
-                    &backend(Policy::default())
-                )
-                .unwrap_err()
-                .code,
+                zkc_runtime::vm::Program::decode(&plan(d, "vector.constant", &["1", bad]))
+                    .and_then(|program| {
+                        program.check_installation(&backend(Policy::default()))?;
+                        Ok(program)
+                    })
+                    .unwrap_err()
+                    .code,
                 ErrorCode::Attributes
             );
         }
@@ -147,12 +148,13 @@ fn admission_rejects_noncanonical_attributes_without_modular_reduction() {
             vec!["1", "-1"],
         ] {
             assert_eq!(
-                admit_supplied(
-                    &plan(d, "vector.scatter_sum", &attrs),
-                    &backend(Policy::default())
-                )
-                .unwrap_err()
-                .code,
+                zkc_runtime::vm::Program::decode(&plan(d, "vector.scatter_sum", &attrs))
+                    .and_then(|program| {
+                        program.check_installation(&backend(Policy::default()))?;
+                        Ok(program)
+                    })
+                    .unwrap_err()
+                    .code,
                 ErrorCode::Attributes
             );
         }
@@ -166,11 +168,12 @@ fn admission_rejects_noncanonical_attributes_without_modular_reduction() {
                 .spelling()
         );
         assert!(
-            admit_supplied(
-                &serde_json::to_vec(&bad).unwrap(),
-                &backend(Policy::default())
-            )
-            .is_err()
+            zkc_runtime::vm::Program::decode(&serde_json::to_vec(&bad).unwrap())
+                .and_then(|program| {
+                    program.check_installation(&backend(Policy::default()))?;
+                    Ok(program)
+                })
+                .is_err()
         );
     }
 }

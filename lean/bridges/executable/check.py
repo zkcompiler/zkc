@@ -133,8 +133,19 @@ def program_validator(program, deployment):
     return next(item for item in program[3] if item[3] == deployment[2][1][3])
 
 
-def function_step(program, symbol, site):
-    return next(item for item in program_function(program, symbol)[4] if item[:2] == ["op", site])
+def function_operation(program, symbol, contract, inputs=None):
+    """Select one top-level operation by its declared contract, retaining its names.
+
+    Generated sites and binding symbols can change during Kernel lowering. A
+    missing or ambiguous target is an error, never a skipped mutation.
+    """
+    bindings = {binding[0]: binding[1] for binding in program[1]}
+    matches = [item for item in program_function(program, symbol)[4]
+               if item[0] == "op" and bindings[item[2]] == contract
+               and (inputs is None or item[4] == inputs)]
+    if len(matches) != 1:
+        raise ValueError(f"expected one {contract!r} operation in {symbol!r}, found {len(matches)}")
+    return matches[0]
 
 
 class Schnorr:
@@ -230,12 +241,14 @@ class Schnorr:
                 "Fresh.Actual.validator).toOption.map (·.total?) = some (some 25) := by decide +kernel"]
 
     def mutations(self, deployment):
+        addition_binding = function_operation(json.loads(deployment[4]), "_calculation_2", "curve.add")[2]
+
         def addition_swapped(program):
-            operation = function_step(program, "_calculation_2", "value_2")
+            operation = function_operation(program, "_calculation_2", "curve.add")
             operation[4] = list(reversed(operation[4]))
 
         def comparison_trivial(program):
-            operation = function_step(program, "_calculation_2", "value_3")
+            operation = function_operation(program, "_calculation_2", "curve.equal")
             operation[4] = [operation[4][0], operation[4][0]]
 
         def results_swapped(program):
@@ -254,7 +267,7 @@ class Schnorr:
             third[3] = [first[4][0], third[3][1]]
 
         def uninstalled(program):
-            binding = next(item for item in program[1] if item[0] == "_calculation_6")
+            binding = next(item for item in program[1] if item[0] == addition_binding)
             binding[3] = "fast/curve.add"
 
         def unchecked_representation(program):
@@ -273,7 +286,7 @@ class Schnorr:
             "results-swapped": (results_swapped, "some (.returned 0)"),
             "base-observed": (base_observed, "some (.anchorOperand 1 1)"),
             "stale-transcript": (stale_transcript, "some (.operation \"transition\")"),
-            "uninstalled-implementation": (uninstalled, "some (.binding \"_calculation_6\")"),
+            "uninstalled-implementation": (uninstalled, f"some (.binding {json.dumps(addition_binding)})"),
             "unchecked-representation": (unchecked_representation, "some .representation"),
             "formal-retyped": (formal_retyped, "some (.operation \"calculation_0\")"),
             "function-duplicated": (function_duplicated, "some (.duplicate \"function\")"),
@@ -307,7 +320,7 @@ class Schnorr:
 
     @staticmethod
     def receipt_mutation(program):
-        operation = function_step(program, "_calculation_2", "value_3")
+        operation = function_operation(program, "_calculation_2", "curve.equal")
         operation[4] = [operation[4][0], operation[4][0]]
 
     def rules_entry(self):
@@ -464,7 +477,7 @@ class Sumcheck:
             carried[0][1], carried[1][1] = carried[1][1], carried[0][1]
 
         def round_check_trivial(program):
-            operation = function_step(program, "_calculation_3", "value_1")
+            operation = function_operation(program, "_calculation_3", "field.equal")
             operation[4] = [operation[4][1], operation[4][1]]
 
         def stale_transcript(program):
@@ -540,7 +553,7 @@ class Sumcheck:
     def receipt_mutation(program):
         # The round check and the terminal comparison compare a value with itself, so a
         # wrong round message is accepted.
-        round_check = function_step(program, "_calculation_3", "value_1")
+        round_check = function_operation(program, "_calculation_3", "field.equal")
         round_check[4] = [round_check[4][1], round_check[4][1]]
         terminal = program_function(program, CHECK_HELPER)
         branch = next(item for item in terminal[4] if item[:3] == ["if", "lc_2_s6", "v149"])
@@ -658,11 +671,13 @@ class DeferredRounds:
         # The batched calculation's formals are the first message, the first challenge, the
         # second challenge, the public value and the second message.
         def first_product_retargeted(program):
-            operation = function_step(program, "_calculation_1", "value_0")
-            operation[4] = [operation[4][0], "v17"]
+            arguments = program_function(program, "_calculation_1")[2]
+            inputs = [argument[0] for argument in arguments[:2]]
+            operation = function_operation(program, "_calculation_1", "field.mul", inputs)
+            operation[4] = [operation[4][0], arguments[2][0]]
 
         def comparison_trivial(program):
-            operation = function_step(program, "_calculation_1", "value_5")
+            operation = function_operation(program, "_calculation_1", "field.equal")
             operation[4] = [operation[4][0], operation[4][0]]
 
         def second_observation_retargeted(program):
@@ -707,7 +722,7 @@ class DeferredRounds:
 
     @staticmethod
     def receipt_mutation(program):
-        operation = function_step(program, "_calculation_1", "value_5")
+        operation = function_operation(program, "_calculation_1", "field.equal")
         operation[4] = [operation[4][0], operation[4][0]]
 
     def rules_entry(self):
@@ -746,7 +761,8 @@ class Driver:
                                   exit=result.returncode, started=started, finished=now(),
                                   stdout_sha256=digest(result.stdout.encode()), stderr=result.stderr[-4000:]))
         if expect is not None and result.returncode != expect:
-            raise RuntimeError(f"{name or arguments[0]} exited {result.returncode}: {result.stderr[-2000:]}")
+            raise RuntimeError(f"{name or arguments[0]} exited {result.returncode}:\n"
+                               f"{result.stdout[-2000:]}{result.stderr[-2000:]}")
         return result
 
     def check(self, name, passed, detail=""):

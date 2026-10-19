@@ -1,7 +1,6 @@
 use super::{FormatError, ProofFormat, ProofReader, ProofWriter};
-use zkc_runtime::interactive::{
-    Action, Backend, BackendError, Runner, RuntimeError, Stop, StopKind,
-};
+use zkc_runtime::interpreter::Runner;
+use zkc_runtime::vm::{Action, Backend, BackendError, RuntimeError, Stop, StopKind};
 
 #[derive(Debug)]
 pub enum ArtifactFailure {
@@ -232,11 +231,7 @@ fn validate_admitted<B: Backend>(
     transport: Transport,
     acceptance_index: usize,
     boolean: impl Fn(&B::Value) -> Option<bool>,
-    receive: impl Fn(
-        &mut Runner<B>,
-        zkc_runtime::interactive::Receive,
-        &[u8],
-    ) -> Result<(), ArtifactFailure>,
+    receive: impl Fn(&mut Runner<B>, zkc_runtime::vm::Receive, &[u8]) -> Result<(), ArtifactFailure>,
 ) -> ArtifactReport<Vec<B::Value>> {
     if let Some(report) = entry_report(runner) {
         return report;

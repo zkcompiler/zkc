@@ -6,7 +6,9 @@ use std::sync::Arc;
 use zkc_backends::{
     Bls12381G2 as G2, Bls12381Gt as Gt, GroupPoint as G1, Policy, Scalar as F, Value,
 };
-use zkc_runtime::interactive::{Backend, OperationBinding, Value as RuntimeValue};
+use zkc_runtime::vm::{
+    Backend, Identity, LogicalType, OperationBinding, PhysicalType, Type, Value as RuntimeValue,
+};
 
 fn binding(name: &str, domain: &str) -> OperationBinding {
     OperationBinding {
@@ -30,6 +32,47 @@ fn f(n: u64) -> Value {
 }
 fn vecf(n: &[u64]) -> Value {
     Value::Vector(n.iter().copied().map(F::from).collect::<Vec<_>>().into())
+}
+
+#[test]
+fn pairing_signatures_preserve_each_fields_ordered_groups() {
+    let backend = support::backend(Policy::default());
+    for (field, left, right, target) in [
+        (
+            "bn254.fr",
+            Identity::Bn254G1,
+            Identity::Bn254G2,
+            Identity::Bn254Gt,
+        ),
+        (
+            "bls12-381.fr",
+            Identity::Bls12381G1,
+            Identity::Bls12381G2,
+            Identity::Bls12381Gt,
+        ),
+    ] {
+        for (name, kind, output, identity) in [
+            ("pairing.apply", Type::Group, Type::Group, target),
+            ("pairing.check", Type::Groups, Type::Bool, Identity::None),
+        ] {
+            let operation = binding(name, field);
+            let physical = |kind, identity| {
+                PhysicalType::default_for(LogicalType::new(kind, identity).unwrap()).unwrap()
+            };
+            let signature = operation.signature().unwrap();
+            assert_eq!(
+                signature.inputs,
+                [physical(kind, left), physical(kind, right)],
+                "{name} {field}"
+            );
+            assert_eq!(
+                signature.outputs,
+                [physical(output, identity)],
+                "{name} {field}"
+            );
+            assert_eq!(backend.binding_signature(&operation), Some(signature));
+        }
+    }
 }
 
 #[test]

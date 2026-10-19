@@ -62,8 +62,11 @@ select(Operation *declaration, finite::ComputationWork &work,
     return {};
   finite::ComputationDiagnostic diagnostic;
   auto view = finite::analyzeComputation(computation, work, &diagnostic);
-  if (view)
-    return mathematical::selectNestedContraction(*view, work, recipes);
+  if (view) {
+    auto result = mathematical::selectNestedContraction(*view, work, recipes);
+    result.view = std::move(view);
+    return result;
+  }
   mathematical::NestedContractionSelection result;
   result.diagnostic = diagnostic;
   return result;
@@ -178,11 +181,9 @@ public:
       auto &domain = selection.inner.domain->getRegion(0).front();
       Value selected = block->getArgument(c.signature.getNumInputs() + 1);
       auto mapped = [&](Value formal) {
-        unsigned input = cast<BlockArgument>(formal).getArgNumber();
-        auto actual = cast<BlockArgument>(selection.call->getOperand(input));
-        return actual.getArgNumber() == 0
-                   ? selected
-                   : block->getArgument(actual.getArgNumber() - 1);
+        unsigned argument = cast<BlockArgument>(formal).getArgNumber();
+        unsigned input = selection.domainInputs[argument];
+        return input ? block->getArgument(input - 1) : selected;
       };
       // Read every constructor in source order. All index checks are for the
       // first entered row/column; identical later checks are guaranteed by the

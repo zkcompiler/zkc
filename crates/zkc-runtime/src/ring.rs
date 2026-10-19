@@ -1,6 +1,6 @@
 //! Independent admission of the shared, typed ring-expression contract.
 //! This module provides no field arithmetic or claim about a consuming protocol.
-use crate::interactive::Identity;
+use crate::vm::Identity;
 use serde_json::{Value, json};
 
 pub const BYTE_LIMIT: usize = 8 * 1024 * 1024;

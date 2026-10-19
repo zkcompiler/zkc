@@ -1,6 +1,6 @@
 //! Static attribute validation at the reached invocation's original check point.
 use crate::{Result, ark, refused};
-use zkc_runtime::interactive::AttributeRule;
+use zkc_runtime::vm::AttributeRule;
 
 /// Backend-owned static call facts. Values, custody, setup and budgets are never
 /// cached here. A direct caller can reuse this only for equal rules/attributes;
