@@ -131,8 +131,7 @@ int main() {
             "observation changed the candidate or original");
     const std::vector<std::string> expected{
         "polynomial-recipes",  "math-realizations",   "retain-computations",
-        "nested-contractions", "finite-realizations", "map-realizations",
-        "finish-expansion"};
+        "nested-contractions", "finite-realizations", "finish-expansion"};
     require(trace.stages.size() == expected.size(), "missing stage records");
     for (size_t i = 0; i < expected.size(); ++i) {
       const auto &stage = trace.stages[i];
@@ -143,6 +142,7 @@ int main() {
         require(trace.stages[i - 1].operationsAfter == stage.operationsBefore,
                 "stage accounting lost an intermediate subject");
     }
+    stream.flush();
     require(dumps.find("Before mathematical stage: finite-realizations") !=
                     std::string::npos &&
                 dumps.find(
@@ -155,7 +155,7 @@ int main() {
         mathematical::rewriteLocalAlgorithms(*source, {false, true}, &trace);
     require(bool(ordered) && !trace.policy.finiteBulk &&
                 trace.policy.vectorReductionFusion &&
-                trace.stages.size() == expected.size() + 1,
+                trace.stages.size() == expected.size(),
             "trace retained old state or reported the wrong effective policy");
   });
   return cases.result();

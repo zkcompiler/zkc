@@ -1020,8 +1020,8 @@ LogicalResult verifyParticipantModule(protocol_ir::ProtocolModuleOp unit) {
           return refuse(entry, "unsupported participant entry attribute");
       continue;
     }
-    if (isa<data::DomainOp, func::FuncOp, local::FuncOp, kernel::ModuleOp,
-            local::OperationBindingOp>(declaration))
+    if (isa<algebra::MapRealizeOp, data::DomainOp, func::FuncOp, local::FuncOp,
+            kernel::ModuleOp, local::OperationBindingOp>(declaration))
       continue;
     if (isa<protocol_ir::ProjectionOp>(declaration))
       continue;

@@ -50,9 +50,10 @@ class AlgorithmCorrespondence {
           if (isa_and_nonnull<local::FuncOp>(callee)) {
             dependencies[name].push_back(call.getCallee().str());
             direct[name] |= phase == AlgorithmExpansionPhase::Finish;
-          } else if (phase == AlgorithmExpansionPhase::RetainMaps &&
-                     isa_and_nonnull<algebra::MapRealizeOp, local::FiniteFoldOp,
-                                     local::FiniteCollectOp>(callee)) {
+          } else if (isa_and_nonnull<algebra::MapRealizeOp>(callee) ||
+                     (phase == AlgorithmExpansionPhase::RetainMaps &&
+                      isa_and_nonnull<local::FiniteFoldOp,
+                                      local::FiniteCollectOp>(callee))) {
             direct[name] = true;
           } else {
             (void)refuse(op, "unsupported local callee");
@@ -197,11 +198,13 @@ class AlgorithmCorrespondence {
       if (failed(charge(&op)))
         return failure();
       auto call = dyn_cast<local::ApplyOp>(op);
-      bool expand =
-          call && !(phase == AlgorithmExpansionPhase::RetainMaps &&
-                    isa_and_nonnull<algebra::MapRealizeOp, local::FiniteFoldOp,
-                                    local::FiniteCollectOp>(
-                        symbols.lookup(call.getCallee())));
+      auto *callee = call ? symbols.lookup(call.getCallee()) : nullptr;
+      bool retainedPreparationRequest =
+          isa_and_nonnull<algebra::MapRealizeOp>(callee) ||
+          (phase == AlgorithmExpansionPhase::RetainMaps &&
+           isa_and_nonnull<local::FiniteFoldOp, local::FiniteCollectOp>(
+               callee));
+      bool expand = call && !retainedPreparationRequest;
       bool substitution = !invocation.empty() || expand;
       if (substitution && !expected.work)
         return diagnostics::emit(op.emitOpError(), "algorithm-expansion-limit");
@@ -485,15 +488,15 @@ LogicalResult detail::checkAlgorithmExpansion(
     return refuse();
   if (a.getProfile() != protocol_ir::Profile::Protocol)
     return refuse();
-  if (phase == AlgorithmExpansionPhase::RetainMaps) {
-    uint64_t remaining = 1000000;
-    if (auto error = mathematical::checkMapFormulas(before, remaining)) {
-      consumeError(std::move(error));
-      return refuse();
-    }
-  } else {
+  uint64_t remaining = 1000000;
+  if (auto error = mathematical::checkMapFormulas(before, remaining)) {
+    consumeError(std::move(error));
+    return refuse();
+  }
+  if (phase == AlgorithmExpansionPhase::Finish) {
     for (Operation &op : a.getBody().front())
-      if (isa<PreparationCallableOpInterface>(op))
+      if (isa<PreparationCallableOpInterface>(op) &&
+          !isa<algebra::MapRealizeOp>(op))
         return refuse();
   }
   AlgorithmCorrespondence check(a, phase, input);

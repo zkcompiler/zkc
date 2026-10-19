@@ -226,7 +226,8 @@ FailureOr<SmallVector<Value>> mapped(ValueRange operands, IRMapping &values) {
 // Executable conversion consumes the actual SCF packet. Domain reasoning and
 // source callbacks are deliberately absent from this consumer.
 LogicalResult lowerBlock(Block &source, Block &target, IRMapping values,
-                         uint64_t &remaining, bool scheduledBody = false) {
+                         uint64_t &remaining, bool scheduledBody = false,
+                         std::optional<CapacityCause> *capacity = nullptr) {
   OpBuilder builder(target.getParentOp()->getContext());
   auto *cursor = source.empty() ? nullptr : &source.front();
   if (scheduledBody)
@@ -235,8 +236,11 @@ LogicalResult lowerBlock(Block &source, Block &target, IRMapping values,
     builder.setInsertionPointToEnd(&target);
     auto *after = cursor;
     auto parsed = readScheduledLoop(after, remaining);
-    if (failed(parsed))
+    if (failed(parsed)) {
+      if (capacity)
+        *capacity = CapacityCause{WorkOwner::AlgorithmExpansion};
       return failure();
+    }
     auto &packet = *parsed;
     if (packet) {
       auto inputs = mapped(packet->inputs, values);
@@ -255,7 +259,7 @@ LogicalResult lowerBlock(Block &source, Block &target, IRMapping values,
       auto nested = values;
       nested.map(packet->arguments, body->getArguments());
       if (failed(lowerBlock(*packet->loop.getBody(), *body, nested, remaining,
-                            true)))
+                            true, capacity)))
         return failure();
       values.map(packet->loop.getResults().take_front(packet->states),
                  loop.getResults());
@@ -288,7 +292,7 @@ LogicalResult lowerBlock(Block &source, Block &target, IRMapping values,
           SmallVector<Location>(block.getNumArguments(), op->getLoc()));
       auto nested = values;
       nested.map(block.getArguments(), out->getArguments());
-      if (failed(lowerBlock(block, *out, nested, remaining)))
+      if (failed(lowerBlock(block, *out, nested, remaining, false, capacity)))
         return failure();
     }
   }
@@ -398,18 +402,24 @@ SmallVector<Value> traversalArguments(Block *block) {
     result[0] = block->front().getResult(0);
   return result;
 }
-OwningOpRef<mlir::ModuleOp> scheduleEntry(mlir::ModuleOp source,
-                                          uint64_t &remaining) {
+OwningOpRef<mlir::ModuleOp>
+scheduleEntry(mlir::ModuleOp source, uint64_t &remaining,
+              std::optional<CapacityCause> *capacity) {
   if (!source)
     return {};
   source.getContext()->getOrLoadDialect<scf::SCFDialect>();
   source.getContext()->getOrLoadDialect<arith::ArithDialect>();
-  if (failed(verifyRecipeOutput(source)) || !chargeCopy(source, remaining))
+  if (failed(verifyRecipeOutput(source)) ||
+      !chargeCopy(source, remaining, capacity))
     return {};
   auto walk = source.walk([&](local::LocalForOp loop) {
     uint64_t cost = 40 + 8 * uint64_t(loop.getNumOperands());
-    if (cost > remaining)
+    if (cost > remaining) {
+      if (capacity)
+        *capacity =
+            CapacityCause{WorkOwner::AlgorithmExpansion, cost, remaining};
       return WalkResult::interrupt();
+    }
     remaining -= cost;
     return WalkResult::advance();
   });
@@ -444,10 +454,11 @@ OwningOpRef<mlir::ModuleOp> scheduleEntry(mlir::ModuleOp source,
     return {};
   return result;
 }
-OwningOpRef<mlir::ModuleOp> consumeSchedule(mlir::ModuleOp source,
-                                            uint64_t &remaining) {
+OwningOpRef<mlir::ModuleOp>
+consumeSchedule(mlir::ModuleOp source, uint64_t &remaining,
+                std::optional<CapacityCause> *capacity) {
   auto function = scheduledFunction(source);
-  if (!function || !chargeCopy(source, remaining))
+  if (!function || !chargeCopy(source, remaining, capacity))
     return {};
   OwningOpRef<mlir::ModuleOp> result(mlir::ModuleOp::create(source.getLoc()));
   OpBuilder builder(result->getBody(), result->getBody()->end());
@@ -466,7 +477,8 @@ OwningOpRef<mlir::ModuleOp> consumeSchedule(mlir::ModuleOp source,
       SmallVector<Location>(function.getNumArguments(), function.getLoc()));
   IRMapping values;
   values.map(function.getArguments(), body->getArguments());
-  if (failed(lowerBlock(function.front(), *body, values, remaining)) ||
+  if (failed(lowerBlock(function.front(), *body, values, remaining, false,
+                        capacity)) ||
       failed(verifyRecipeOutput(*result)))
     return {};
   return result;
@@ -474,9 +486,12 @@ OwningOpRef<mlir::ModuleOp> consumeSchedule(mlir::ModuleOp source,
 // Independent structural reader: never invokes lowerBlock or scheduleLoop.
 namespace {
 class ScheduleReader {
-  uint64_t remaining = 1000000;
+  uint64_t &remaining;
+  bool capacity = false;
 
 public:
+  explicit ScheduleReader(uint64_t &remaining) : remaining(remaining) {}
+  bool exhausted() const { return capacity; }
   bool block(Block &source, Block &target, IRMapping values,
              bool body = false) {
     auto *at = source.empty() ? nullptr : &source.front();
@@ -484,13 +499,19 @@ public:
     if (body)
       at = at->getNextNode();
     while (at) {
-      if (!actual || !remaining)
+      if (!remaining) {
+        capacity = true;
+        return false;
+      }
+      if (!actual)
         return false;
       --remaining;
       auto *next = at;
       auto parsed = readScheduledLoop(next, remaining);
-      if (failed(parsed))
+      if (failed(parsed)) {
+        capacity = true;
         return false;
+      }
       auto &packet = *parsed;
       if (packet) {
         auto loop = dyn_cast<local::LocalForOp>(actual);
@@ -549,7 +570,11 @@ public:
 };
 } // namespace
 LogicalResult verifyScheduleLowering(mlir::ModuleOp schedule,
-                                     mlir::ModuleOp candidate) {
+                                     mlir::ModuleOp candidate, uint64_t *shared,
+                                     finite::VerificationResult *reported) {
+  if (reported)
+    *reported = {finite::VerificationStatus::Mismatch,
+                 "schedule lowering differs"};
   auto function = scheduledFunction(schedule);
   if (!function || failed(verifyRecipeOutput(candidate)))
     return failure();
@@ -576,9 +601,19 @@ LogicalResult verifyScheduleLowering(mlir::ModuleOp schedule,
       return failure();
   IRMapping values;
   values.map(function.getArguments(), target.getArguments());
-  return success(functions == 1 &&
-                 ScheduleReader().block(function.front(),
-                                        target.getBody().front(), values));
+  uint64_t standalone = 1000000;
+  ScheduleReader reader(shared ? *shared : standalone);
+  bool valid = functions == 1 &&
+               reader.block(function.front(), target.getBody().front(), values);
+  if (reported) {
+    if (valid)
+      *reported = {finite::VerificationStatus::Verified, {}};
+    else if (reader.exhausted())
+      *reported = {finite::VerificationStatus::RequiredCapacity,
+                   "schedule checking capacity",
+                   CapacityCause{WorkOwner::AlgorithmChecking}};
+  }
+  return success(valid);
 }
 LogicalResult verifyEntrySchedule(ModuleOp source, mlir::ModuleOp schedule,
                                   StringRef callSite,
@@ -612,9 +647,16 @@ LogicalResult verifyEntrySchedule(ModuleOp source, mlir::ModuleOp schedule,
     if (&op != function.getOperation() &&
         (!isa<local::OperationBindingOp>(op) || !used.contains(&op)))
       return finish(false);
-  uint64_t remaining = 1000000, bytes = 16 * 1024 * 1024;
-  if (!chargeCopy(schedule, remaining))
+  uint64_t standalone = 1000000, standaloneBytes = 16 * 1024 * 1024;
+  auto &remaining = limits.sharedContext ? *limits.sharedContext : standalone;
+  auto &bytes =
+      limits.sharedSiteBytes ? *limits.sharedSiteBytes : standaloneBytes;
+  if (!chargeCopy(schedule, remaining)) {
+    outcome = {finite::VerificationStatus::RequiredCapacity,
+               "schedule context checking capacity",
+               CapacityCause{WorkOwner::AlgorithmChecking}};
     return finish(false);
+  }
   auto *cursor = &function.front().front();
   auto results =
       verifyKernelRecipes(entry, schedule, callSite, function.getArguments(),

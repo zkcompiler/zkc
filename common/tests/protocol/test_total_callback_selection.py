@@ -41,7 +41,10 @@ def compile_entry(toolchain, journal, directory, source, flags, modules=()):
         '--entry=sample::Demo', f'--module=sample={directory}/kernels.zkc',
         *options,
     ])
-    program = json.loads(bundle['candidate'])
+    return entry, operation_sites(json.loads(bundle['candidate']))
+
+
+def operation_sites(program):
     bindings = {binding[0]: binding[1] for binding in program[1]}
     sites = Counter()
 
@@ -55,7 +58,7 @@ def compile_entry(toolchain, journal, directory, source, flags, modules=()):
     # Count actual executable sites, not declarations or raw text mentions.
     visit(program[2])
     visit(program[3])
-    return entry, sites
+    return sites
 
 
 @pytest.mark.parametrize('flags', FLAGS, ids=MODES)
@@ -113,7 +116,7 @@ run Demo = Inspect;
         source = source.replace('affine(x,factor,offset)', 'affine(x,factor,factor)')
     entry, sites = compile_entry(toolchain, journal, directory,
                                  source.replace('FIELD', 'koala-bear'), flags)
-    assert bool(sites['vector.scale']) == ('--no-finite-bulk' not in flags)
+    assert bool(sites['numerical.map']) == ('--no-finite-bulk' not in flags)
     for label, values, factor, offset in [
         ('empty', [], 7, 11), ('different', [2, 3, 5], 7, 11),
         ('equal-values', [2, 3, 5], 7, 7), ('zero-factor', [2, 3, 5], 0, 11),

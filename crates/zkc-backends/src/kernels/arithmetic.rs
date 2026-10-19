@@ -1,54 +1,13 @@
 //! Shared dense scalar/vector/coefficient arithmetic. Mathematical meanings do
 //! not depend on physical layout. Callers preflight sizes before allocating.
+pub(crate) use super::field::Coefficient;
+pub use super::field::parse_ristretto_decimal;
+use super::field::{Family, with_field};
 use crate::{Binary64, Binary64Ext3, KoalaBear, KoalaBearExt4, KoalaBearExt8};
 use crate::{Policy, Result, RistrettoScalar, Scalar, Value, exhausted, refused, value::size};
-use ark_ff::Field;
-use std::{
-    ops::{Add, Mul, Neg, Sub},
-    sync::Arc,
-};
+use std::sync::Arc;
 use zkc_runtime::vm::{Identity, Invocation};
 
-pub(crate) trait Coefficient:
-    Copy + PartialEq + Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self> + Neg<Output = Self>
-{
-    fn zero() -> Self;
-    fn one() -> Self;
-    fn inverse(self) -> Option<Self>;
-}
-impl Coefficient for crate::Bn254Scalar {
-    fn zero() -> Self {
-        Self::from(0)
-    }
-    fn one() -> Self {
-        Self::from(1)
-    }
-    fn inverse(self) -> Option<Self> {
-        Field::inverse(&self)
-    }
-}
-impl Coefficient for Scalar {
-    fn zero() -> Self {
-        Self::from(0)
-    }
-    fn one() -> Self {
-        Self::from(1)
-    }
-    fn inverse(self) -> Option<Self> {
-        Field::inverse(&self)
-    }
-}
-impl Coefficient for RistrettoScalar {
-    fn zero() -> Self {
-        Self::ZERO
-    }
-    fn one() -> Self {
-        Self::ONE
-    }
-    fn inverse(self) -> Option<Self> {
-        (self != Self::ZERO).then(|| self.invert())
-    }
-}
 /// Montgomery batch inversion. The caller supplies the checked allocation;
 /// zero inputs are refused before any output is materialized. Scalar inversion
 /// remains delegated to the selected field library.
@@ -119,226 +78,6 @@ pub(crate) fn natural(attrs: &[String], i: usize) -> Result<usize> {
         .and_then(|n| usize::try_from(n).ok())
         .ok_or_else(|| refused("kernel-attributes"))
 }
-pub fn parse_ristretto_decimal(s: &str) -> Result<RistrettoScalar> {
-    const MODULUS: &str = crate::RISTRETTO_SCALAR_MODULUS_DECIMAL;
-    if s.is_empty()
-        || !s.bytes().all(|b| b.is_ascii_digit())
-        || (s.len() > 1 && s.starts_with('0'))
-        || s.len() > MODULUS.len()
-        || (s.len() == MODULUS.len() && s >= MODULUS)
-    {
-        return Err(refused("noncanonical-scalar"));
-    }
-    Ok(s.bytes().fold(RistrettoScalar::ZERO, |a, b| {
-        a * RistrettoScalar::from(10u64) + RistrettoScalar::from(u64::from(b - b'0'))
-    }))
-}
-impl Coefficient for KoalaBear {
-    fn zero() -> Self {
-        <Self as p3_field::PrimeCharacteristicRing>::ZERO
-    }
-    fn one() -> Self {
-        <Self as p3_field::PrimeCharacteristicRing>::ONE
-    }
-    fn inverse(self) -> Option<Self> {
-        p3_field::Field::try_inverse(&self)
-    }
-}
-impl Coefficient for KoalaBearExt8 {
-    fn zero() -> Self {
-        <Self as p3_field::PrimeCharacteristicRing>::ZERO
-    }
-    fn one() -> Self {
-        <Self as p3_field::PrimeCharacteristicRing>::ONE
-    }
-    fn inverse(self) -> Option<Self> {
-        p3_field::Field::try_inverse(&self)
-    }
-}
-impl Coefficient for KoalaBearExt4 {
-    fn zero() -> Self {
-        <Self as p3_field::PrimeCharacteristicRing>::ZERO
-    }
-    fn one() -> Self {
-        <Self as p3_field::PrimeCharacteristicRing>::ONE
-    }
-    fn inverse(self) -> Option<Self> {
-        p3_field::Field::try_inverse(&self)
-    }
-}
-// Binary fields: addition is exclusive or and every element is its own
-// negation. Inversion of zero is refused, as for every installed field.
-impl Coefficient for Binary64 {
-    fn zero() -> Self {
-        <Self as p3_field::PrimeCharacteristicRing>::ZERO
-    }
-    fn one() -> Self {
-        <Self as p3_field::PrimeCharacteristicRing>::ONE
-    }
-    fn inverse(self) -> Option<Self> {
-        p3_field::Field::try_inverse(&self)
-    }
-}
-impl Coefficient for Binary64Ext3 {
-    fn zero() -> Self {
-        <Self as p3_field::PrimeCharacteristicRing>::ZERO
-    }
-    fn one() -> Self {
-        <Self as p3_field::PrimeCharacteristicRing>::ONE
-    }
-    fn inverse(self) -> Option<Self> {
-        p3_field::Field::try_inverse(&self)
-    }
-}
-trait Family: crate::matrix::IdentityCoefficient {
-    fn dot(a: &[Self], b: &[Self]) -> Result<Self> {
-        equal_len(a.len(), b.len())?;
-        Ok(a.iter().zip(b).fold(Self::zero(), |s, (a, b)| s + *a * *b))
-    }
-    fn product(a: &[Self], b: &[Self], out: &mut Vec<Self>) -> Result<()> {
-        equal_len(a.len(), b.len())?;
-        out.extend(a.iter().zip(b).map(|(a, b)| *a * *b));
-        Ok(())
-    }
-    fn field(v: &Value) -> Result<Self>;
-    fn matrix(v: &Value) -> Result<&crate::matrix::SparseCoo<Self>>;
-    fn vector(v: &Value) -> Result<&Arc<[Self]>>;
-    fn polynomial(v: &Value) -> Result<&[Self]>;
-    fn round(v: &Value) -> Result<&[Self]>;
-    fn field_value(v: Self) -> Value;
-    fn vector_value(v: Arc<[Self]>) -> Value;
-    fn polynomial_value(v: Arc<[Self]>) -> Value;
-    fn decimal(s: &str) -> Result<Self>;
-}
-macro_rules! family {
-    ($s:ty, $field:ident, $vector:ident, $matrix:ident, $poly:ident, $round:ident, $parse:expr $(, $extra:item)*) => {
-        impl Family for $s {
-            $($extra)*
-            fn matrix(v: &Value) -> Result<&crate::matrix::SparseCoo<Self>> {
-                if let Value::$matrix(v) = v {Ok(v)} else {Err(refused("kernel-operands"))}
-            }
-            fn field(v: &Value) -> Result<Self> {
-                if let Value::$field(v) = v {
-                    Ok(*v)
-                } else {
-                    Err(refused("kernel-operands"))
-                }
-            }
-            fn vector(v: &Value) -> Result<&Arc<[Self]>> {
-                if let Value::$vector(v) = v {
-                    Ok(v)
-                } else {
-                    Err(refused("kernel-operands"))
-                }
-            }
-            fn polynomial(v: &Value) -> Result<&[Self]> {
-                if let Value::$poly(v) = v {
-                    Ok(v)
-                } else {
-                    Err(refused("kernel-operands"))
-                }
-            }
-            fn round(v: &Value) -> Result<&[Self]> {
-                if let Value::$round(v) = v {
-                    Ok(v)
-                } else {
-                    Err(refused("kernel-operands"))
-                }
-            }
-            fn field_value(v: Self) -> Value {
-                Value::$field(v)
-            }
-            fn vector_value(v: Arc<[Self]>) -> Value {
-                Value::$vector(v)
-            }
-            fn polynomial_value(v: Arc<[Self]>) -> Value {
-                Value::$poly(v)
-            }
-            fn decimal(s: &str) -> Result<Self> {
-                ($parse)(s)
-            }
-        }
-    };
-}
-family!(
-    crate::Bn254Scalar,
-    Bn254Field,
-    Bn254Vector,
-    Bn254Matrix,
-    Bn254Polynomial,
-    Bn254Round,
-    |s| crate::parse_bn254_decimal(s).map_err(crate::ark)
-);
-family!(Scalar, Field, Vector, Matrix, Polynomial, Round, |s| {
-    zkc_arkworks::parse_decimal(s).map_err(crate::ark)
-});
-family!(
-    RistrettoScalar,
-    RistrettoField,
-    RistrettoVector,
-    RistrettoMatrix,
-    RistrettoPolynomial,
-    RistrettoRound,
-    parse_ristretto_decimal
-);
-
-family!(
-    KoalaBear,
-    KoalaBearField,
-    KoalaBearVector,
-    KoalaBearMatrix,
-    KoalaBearPolynomial,
-    KoalaBearRound,
-    crate::plonky3::parse_decimal,
-    fn dot(a: &[Self], b: &[Self]) -> Result<Self> {
-        crate::plonky3::dot(a, b)
-    },
-    fn product(a: &[Self], b: &[Self], out: &mut Vec<Self>) -> Result<()> {
-        out.resize(a.len(), <Self as Coefficient>::zero());
-        crate::plonky3::mul_into(a, b, out)
-    }
-);
-
-family!(
-    KoalaBearExt8,
-    KoalaBearExt8Field,
-    KoalaBearExt8Vector,
-    KoalaBearExt8Matrix,
-    KoalaBearExt8Polynomial,
-    KoalaBearExt8Round,
-    crate::plonky3::parse_extension_decimal
-);
-
-family!(
-    KoalaBearExt4,
-    KoalaBearExt4Field,
-    KoalaBearExt4Vector,
-    KoalaBearExt4Matrix,
-    KoalaBearExt4Polynomial,
-    KoalaBearExt4Round,
-    crate::plonky3::parse_quartic_decimal
-);
-
-family!(
-    Binary64,
-    Binary64Field,
-    Binary64Vector,
-    Binary64Matrix,
-    Binary64Polynomial,
-    Binary64Round,
-    crate::plonky3::binary::parse_literal
-);
-
-family!(
-    Binary64Ext3,
-    Binary64Ext3Field,
-    Binary64Ext3Vector,
-    Binary64Ext3Matrix,
-    Binary64Ext3Polynomial,
-    Binary64Ext3Round,
-    crate::plonky3::binary::parse_ext3_literal
-);
-
 pub(crate) fn apply(
     name: &str,
     field: Option<Identity>,
@@ -396,17 +135,9 @@ pub(crate) fn apply(
             _ => Err(refused("kernel-operands")),
         };
     }
-    match field {
-        Some(Identity::Bn254Fr) => dense::<crate::Bn254Scalar>(name, args, i, p),
-        Some(Identity::Bls12381Fr) => dense::<Scalar>(name, args, i, p),
-        Some(Identity::Ristretto255Scalar) => dense::<RistrettoScalar>(name, args, i, p),
-        Some(Identity::KoalaBearExt8) => dense::<KoalaBearExt8>(name, args, i, p),
-        Some(Identity::KoalaBearExt4) => dense::<KoalaBearExt4>(name, args, i, p),
-        Some(Identity::KoalaBear) => dense::<KoalaBear>(name, args, i, p),
-        Some(Identity::Binary64) => dense::<Binary64>(name, args, i, p),
-        Some(Identity::Binary64Ext3) => dense::<Binary64Ext3>(name, args, i, p),
-        _ => Err(refused("kernel-operands")),
-    }
+    with_field!(field.ok_or_else(|| refused("kernel-operands"))?, |S| {
+        dense::<S>(name, args, i, p)
+    })
 }
 fn dense<S: Family>(
     name: &str,
@@ -428,6 +159,15 @@ fn dense<S: Family>(
         p.vector_width(n, width)?;
         p.output(size(n, width)?, i.max_output_bytes)?;
         reserve::<S>(n)
+    };
+    let call = crate::numerical::Call::new(p, i.max_output_bytes);
+    let destination = |n, initial, per_element| {
+        // Preserve element/output preflights before numerical work and storage.
+        p.vector_width(n, width)?;
+        let bytes = size(n, width)?;
+        p.output(bytes, i.max_output_bytes)?;
+        call.work_items(n, per_element, 1)?;
+        call.output(n, initial, bytes)
     };
     // Scalar results (including Boolean checks) reserve before arithmetic.
     if i.binding.signature().outputs.iter().all(|t| {
@@ -546,12 +286,27 @@ fn dense<S: Family>(
             p.output(size(0, width)?, i.max_output_bytes)?;
             Ok(vec![S::vector_value(Arc::from([]))])
         }
-        "vector.sum" => scalar(v(0)?.iter().fold(S::zero(), |s, x| s + *x)),
-        "vector.product" => scalar(v(0)?.iter().fold(S::one(), |product, x| product * *x)),
+        "vector.sum" | "vector.product" => {
+            let a = v(0)?;
+            // One load and one accumulator operation per element, plus setup.
+            call.work_items(a.len(), 2, 1)?;
+            let result = call.scalar(512)?;
+            Ok(vec![result.finish(|| {
+                let value = if name == "vector.sum" {
+                    a.iter().fold(S::zero(), |sum, x| sum + *x)
+                } else {
+                    a.iter().fold(S::one(), |product, x| product * *x)
+                };
+                Ok(S::field_value(value))
+            })?])
+        }
         "vector.dot" => {
             let (a, b) = (v(0)?, v(1)?);
             equal_len(a.len(), b.len())?;
-            scalar(S::dot(a, b)?)
+            // Two loads, multiply/add, and any provider accumulator-lane reduction.
+            call.work_items(a.len(), 4, S::DOT_SETUP_WORK)?;
+            let result = call.scalar(512)?;
+            Ok(vec![result.finish(|| Ok(S::field_value(S::dot(a, b)?)))?])
         }
         "field.from_index" => {
             let Value::Index(mut n) = *arg(0)? else {
@@ -707,16 +462,32 @@ fn dense<S: Family>(
             }
             Ok(vec![S::vector_value(out.into())])
         }
-        "vector.fill" | "vector.geometric" => {
-            let x = f(0)?;
-            let n = index(1)?;
-            let mut out = allocation(n)?;
-            let mut power = S::one();
-            for _ in 0..n {
-                out.push(if name == "vector.fill" { x } else { power });
-                power = power * x;
+        "vector.fill" | "vector.geometric" | "vector.splat" | "vector.powers" => {
+            // Attribute-sized forms historically read the length before the scalar.
+            let (x, n) = if matches!(name, "vector.splat" | "vector.powers") {
+                let n = natural(i.attributes, 0)?;
+                (f(0)?, n)
+            } else {
+                (f(0)?, index(1)?)
+            };
+            let constant = matches!(name, "vector.fill" | "vector.splat");
+            // Constant initialization and freezing need no field multiplication.
+            // Geometric construction also counts each power update and write.
+            let mut out = destination(
+                n,
+                if constant { x } else { S::zero() },
+                if constant { 2 } else { 4 },
+            )?;
+            if !constant {
+                let mut power = S::one();
+                for value in out.as_mut_slice() {
+                    *value = power;
+                    power = power * x;
+                }
             }
-            Ok(vec![S::vector_value(out.into())])
+            Ok(vec![
+                out.finish(|values| Ok(S::vector_value(values.into())))?,
+            ])
         }
         "vector.at" => scalar(
             *v(0)?
@@ -751,33 +522,28 @@ fn dense<S: Family>(
                 right.finish(|values| Ok(S::vector_value(values.into())))?,
             ])
         }
-        "vector.splat" | "vector.powers" => {
-            let n = natural(i.attributes, 0)?;
-            let x = f(0)?;
-            let mut out = allocation(n)?;
-            let mut power = S::one();
-            for _ in 0..n {
-                out.push(if name == "vector.splat" { x } else { power });
-                if name == "vector.powers" {
-                    power = power * x;
-                }
+        "vector.scale" => {
+            let a = v(0)?;
+            let x = f(1)?;
+            // Load, multiply, initialize/write the destination, then freeze it.
+            let mut out = destination(a.len(), S::zero(), 5)?;
+            for (value, destination) in a.iter().zip(out.as_mut_slice()) {
+                *destination = *value * x;
             }
-            Ok(vec![S::vector_value(out.into())])
+            Ok(vec![
+                out.finish(|values| Ok(S::vector_value(values.into())))?,
+            ])
         }
-        "vector.append" | "vector.scale" => {
+        "vector.append" => {
             let a = v(0)?;
             let x = f(1)?;
             let n = a
                 .len()
-                .checked_add(usize::from(name == "vector.append"))
+                .checked_add(1)
                 .ok_or_else(|| exhausted("size-overflow"))?;
             let mut out = allocation(n)?;
-            if name == "vector.append" {
-                out.extend_from_slice(a);
-                out.push(x);
-            } else {
-                out.extend(a.iter().map(|a| *a * x));
-            }
+            out.extend_from_slice(a);
+            out.push(x);
             Ok(vec![S::vector_value(out.into())])
         }
         "vector.gather" => {
@@ -794,41 +560,47 @@ fn dense<S: Family>(
             }
             Ok(vec![S::vector_value(out.into())])
         }
-        "vector.add" | "vector.sub" | "vector.mul" | "vector.concat" | "vector.kronecker" => {
+        "vector.add" | "vector.sub" | "vector.mul" => {
             let (a, b) = (v(0)?, v(1)?);
-            let n = match name {
-                "vector.concat" => a
-                    .len()
-                    .checked_add(b.len())
-                    .ok_or_else(|| exhausted("size-overflow"))?,
-                "vector.kronecker" => a
-                    .len()
-                    .checked_mul(b.len())
-                    .ok_or_else(|| exhausted("size-overflow"))?,
-                _ => {
-                    equal_len(a.len(), b.len())?;
-                    a.len()
+            equal_len(a.len(), b.len())?;
+            // Two loads, arithmetic, initialized write, and freezing copy.
+            let mut out = destination(a.len(), S::zero(), 6)?;
+            if name == "vector.mul" {
+                S::product(a, b, out.as_mut_slice())?;
+            } else {
+                for ((a, b), destination) in a.iter().zip(b.iter()).zip(out.as_mut_slice()) {
+                    *destination = if name == "vector.add" {
+                        *a + *b
+                    } else {
+                        *a - *b
+                    };
                 }
+            }
+            Ok(vec![
+                out.finish(|values| Ok(S::vector_value(values.into())))?,
+            ])
+        }
+        "vector.concat" | "vector.kronecker" => {
+            let (a, b) = (v(0)?, v(1)?);
+            let n = if name == "vector.concat" {
+                a.len()
+                    .checked_add(b.len())
+                    .ok_or_else(|| exhausted("size-overflow"))?
+            } else {
+                a.len()
+                    .checked_mul(b.len())
+                    .ok_or_else(|| exhausted("size-overflow"))?
             };
             let mut out = allocation(n)?;
-            match name {
-                "vector.mul" => S::product(a, b, &mut out)?,
-                "vector.concat" => {
-                    out.extend_from_slice(a);
-                    out.extend_from_slice(b);
-                }
-                "vector.kronecker" => {
-                    for x in a.iter() {
-                        for y in b.iter() {
-                            out.push(*x * *y);
-                        }
+            if name == "vector.concat" {
+                out.extend_from_slice(a);
+                out.extend_from_slice(b);
+            } else {
+                for x in a.iter() {
+                    for y in b.iter() {
+                        out.push(*x * *y);
                     }
                 }
-                _ => out.extend(a.iter().zip(b.iter()).map(|(a, b)| match name {
-                    "vector.add" => *a + *b,
-                    "vector.sub" => *a - *b,
-                    _ => *a * *b,
-                })),
             }
             Ok(vec![S::vector_value(out.into())])
         }

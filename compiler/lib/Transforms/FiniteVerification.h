@@ -9,6 +9,13 @@ namespace zkc::finite {
 struct VerificationLimits {
   uint64_t reader = 100000;
   uint64_t comparison = 100000;
+  // Optional containing-transaction balances. Required readers debit actual
+  // consumption alongside their local caps, leaving unspent work for children.
+  uint64_t *sharedReader = nullptr;
+  // Comparisons reserve a bounded allowance and return only its unused part.
+  uint64_t *sharedComparison = nullptr;
+  uint64_t *sharedContext = nullptr;
+  uint64_t *sharedSiteBytes = nullptr;
 };
 enum class VerificationStatus {
   Verified,

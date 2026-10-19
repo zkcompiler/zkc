@@ -10,6 +10,8 @@ selectImplementation(protocol::BindingApplication application,
     if (!application.implementation.empty() &&
         application.implementation != *requested)
       return error("binding-selection-conflict");
+    if (requested->empty())
+      return error("binding-implementation");
     application.implementation = requested->str();
   } else if (application.implementation.empty()) {
     auto selected = protocol::defaultImplementation(application);

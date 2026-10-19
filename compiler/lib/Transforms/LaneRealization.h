@@ -3,11 +3,17 @@
 
 #include "mlir/IR/ValueRange.h"
 #include "mlir/Support/LogicalResult.h"
+#include "zkc/Contracts/Mathematical.h"
+#include "zkc/Contracts/Numerical.h"
 #include "zkc/Support/OptimizationOutcome.h"
+#include "zkc/Transforms/MathematicalSelection.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/STLFunctionalExtras.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Error.h"
 #include <cstdint>
+#include <optional>
 #include <string>
 
 namespace zkc::mathematical {
@@ -30,6 +36,47 @@ struct LaneRealizationResult {
   std::string reason;
   OptimizationOutcome outcome = OptimizationOutcome::success();
 };
+
+/// An admitted source formula, independent of any executable choice. The
+/// borrowed block and values must outlive emission. The input inventory retains
+/// unused slots in deterministic source order; expression sharing is checked.
+struct LaneFormula {
+  ring::Expression expression;
+  mlir::Block *source;
+  llvm::DenseMap<mlir::Value, LaneInput> bindings;
+  llvm::DenseMap<mlir::Value, uint32_t> meanings;
+  llvm::DenseSet<mlir::Value> live;
+  llvm::SmallVector<mlir::Value> terms;
+  llvm::SmallVector<LaneInput> slots;
+  MathematicalIdentity combine;
+};
+struct LaneFormulaResult {
+  LaneRealizationStatus status;
+  std::optional<LaneFormula> formula;
+  std::string reason;
+  OptimizationOutcome outcome = OptimizationOutcome::success();
+};
+/// Construct a single-output Ring formula after admitting the entire source.
+/// Multiple selected terms are combined by admitted field addition or
+/// multiplication, as supplied by associative accumulator extraction.
+llvm::Expected<LaneFormulaResult>
+admitLaneFormula(mlir::Block &, const llvm::DenseMap<mlir::Value, LaneInput> &,
+                 mlir::Type vector, uint64_t *remaining,
+                 const MathematicalRecipes &, mlir::Value output = {},
+                 mlir::ValueRange additionalTerms = {},
+                 MathematicalIdentity combine = MathematicalIdentity::FieldAdd);
+llvm::Expected<LaneRealizationResult>
+emitVectorLanes(const LaneFormula &, mlir::Type vector, mlir::Value rows,
+                const MathematicalRecipes &, LaneEmitter);
+using NumericalEmitter = llvm::function_ref<mlir::Value(
+    const protocol::BindingApplication &, mlir::ValueRange, mlir::Type,
+    llvm::ArrayRef<std::string>)>;
+enum class LaneResultMode { Map, Sum, Product };
+/// Capacity declines emit nothing. The caller can use the same admitted
+/// formula for a vector alternative, without repeating optional analysis.
+llvm::Expected<LaneRealizationResult>
+emitNumericalLanes(const LaneFormula &, mlir::Type vector, mlir::Value rows,
+                   LaneResultMode, NumericalEmitter);
 
 /// Realize a field-ring payload using the same scalar/broadcast/packed rules
 /// for maps and finite collections. Structural sharing is checked through

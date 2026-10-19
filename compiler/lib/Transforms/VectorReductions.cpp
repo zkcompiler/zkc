@@ -2,16 +2,20 @@
 #include "AlgorithmSupport.h"
 #include "CheckedCandidate.h"
 #include "ComputationSelection.h"
+#include "MapOccurrence.h"
 #include "MathematicalSupport.h"
 #include "RealizationTrace.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/detail/Builders.h"
+#include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringSet.h"
 
 using namespace mlir;
@@ -23,12 +27,18 @@ using Occurrence = protocol::detail::AlgorithmOccurrence;
 using StateAccess = protocol::detail::AlgorithmStateAccess;
 using Reductions = std::map<std::string, SelectedReduction>;
 
+LogicalResult fuseVectorReductionsImpl(ModuleOp,
+                                       protocol::AlgorithmExpansionState &,
+                                       ArrayRef<ReductionRecipe>,
+                                       RealizationTrace *,
+                                       llvm::function_ref<bool(Operation *)>);
+
 protocol_ir::ProtocolModuleOp unit(ModuleOp module) {
   if (!hasSingleElement(*module.getBody()))
     return {};
   auto root =
       dyn_cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
-  return root && root.getProfile() == protocol_ir::Profile::Protocol
+  return root && root.getProfile() != protocol_ir::Profile::Physical
              ? root
              : protocol_ir::ProtocolModuleOp();
 }
@@ -86,6 +96,13 @@ algebra::MapRealizeOp reductionMap(local::ApplyOp call, SymbolTable &symbols,
   if (!map || !sum || sum->getNumOperands() != 1 ||
       sum->getOperand(0) != call->getResult(0))
     return {};
+  if (auto policy = map->getAttrOfType<ArrayAttr>("policy");
+      policy && !cast<BoolAttr>(policy[1]).getValue()) {
+    if (outcome)
+      *outcome = {OptimizationStatus::PolicyDisabled,
+                  OptimizationReason::Policy};
+    return {};
+  }
   auto reference = sum->getAttrOfType<FlatSymbolRefAttr>("binding");
   auto binding =
       reference
@@ -123,9 +140,9 @@ public:
            RealizationScope &scope, bool &changed)
       : root(root), symbols(root), names(root), builder(root.getContext()),
         record(record), scope(scope), changed(changed) {}
-  LogicalResult
-  run(const Reductions &reductions,
-      const std::map<std::string, OptimizationOutcome> &decisions) {
+  LogicalResult run(const Reductions &reductions,
+                    const std::map<std::string, OptimizationOutcome> &decisions,
+                    llvm::function_ref<bool(Operation *)> select) {
     SmallVector<local::ApplyOp> calls;
     root.walk([&](local::ApplyOp call) { calls.push_back(call); });
     for (auto call : calls) {
@@ -145,6 +162,8 @@ public:
                         RealizationChoice::Ordered, outcome);
         continue;
       }
+      if (select && !select(call))
+        continue;
       scope.selection(call, record, DecisionFamily::VectorReduction,
                       RealizationChoice::MapSum,
                       OptimizationOutcome::success());
@@ -222,32 +241,21 @@ public:
         state.addAttribute("parameters", builder.getArrayAttr({}));
         return builder.create(state);
       };
-      Value rows;
-      auto index =
-          IntegerType::get(root.getContext(), 64, IntegerType::Unsigned);
-      for (auto [i, row] : enumerate(map.getRowwise())) {
-        if (!row)
-          continue;
-        auto length = emit("vector.length", call->getOperand(i), index, true);
-        if (!length)
-          return failure();
-        if (!rows)
-          rows = length->getResult(0);
-        else {
-          auto equal = emit("index.equal", {rows, length->getResult(0)},
-                            builder.getI1Type(), true);
-          if (!equal || !emit("control.require", equal->getResult(0), {}, true))
-            return failure();
-        }
-      }
-      const auto &reduction = reductions.at(map.getSymName().str());
-      SmallVector<Value> inputs;
-      for (unsigned input : reduction.inputs)
-        inputs.push_back(call->getOperand(input));
-      auto reduced = emit(reduction.recipe->target, inputs, field, false);
-      if (!reduced)
+      auto realized = emitMapPayload(
+          map, symbols.lookup<func::FuncOp>(map.getHelper()).getBody().front(),
+          call.getInputs(), MapPayloadForm::Dot,
+          [&](const protocol::BindingApplication &application,
+              ValueRange inputs, TypeRange outputs, ArrayRef<std::string>) {
+            return emit(application.contract, inputs,
+                        outputs.empty() ? Type() : outputs.front(),
+                        application.contract != "vector.dot");
+          },
+          &reductions.at(map.getSymName().str()));
+      if (!realized)
+        return diagnostics::emit(call.emitOpError(), realized.takeError());
+      if (realized->status != LaneRealizationStatus::Realized)
         return failure();
-      sum->getResult(0).replaceAllUsesWith(reduced->getResult(0));
+      sum->getResult(0).replaceAllUsesWith(realized->value);
       sum->erase();
       call.erase();
     }
@@ -350,46 +358,53 @@ class Correspondence {
       addedBindings.insert(binding);
       return actual;
     };
-    Value rows;
-    Type index = IntegerType::get(call.getContext(), 64, IntegerType::Unsigned);
-    for (auto [i, row] : enumerate(map.getRowwise())) {
-      if (!row)
-        continue;
-      auto operand = values.lookup(call->getOperand(i));
-      if (!operand)
-        return refuse(call, "unbound collection");
-      auto length = primitive("vector.length", operand, index, true);
-      if (!length)
-        return refuse(call, "ordered row length");
-      if (!rows)
-        rows = length->getResult(0);
-      else {
-        auto equal = primitive("index.equal", {rows, length->getResult(0)},
-                               IntegerType::get(call.getContext(), 1), true);
-        if (!equal ||
-            !primitive("control.require", equal->getResult(0), {}, true))
-          return refuse(call, "ordered shape guard");
-      }
-    }
     SmallVector<Value> inputs;
     for (Value operand : call->getOperands()) {
-      Value mapped = values.lookup(operand);
+      auto mapped = values.lookup(operand);
       if (!mapped)
         return refuse(call, "unbound map input");
       inputs.push_back(mapped);
     }
-    if (cursor == target.end())
-      return refuse(call, "missing reduction payload");
-    Operation *payload = &*cursor;
-    Operation *after = payload;
-    auto result = compareMapSum(map, inputs, rows, after, candidateSymbols,
-                                addedBindings, expected.checkWork);
-    if (failed(result) || after != payload->getNextNode() ||
-        payload->getNumResults() != 1 || *result != payload->getResult(0))
+    unsigned guards = 0;
+    for (bool row : map.getRowwise())
+      if (row)
+        guards += guards ? 3 : 1;
+    Operation *begin = cursor == target.end() ? nullptr : &*cursor;
+    Operation *end = begin;
+    for (unsigned i = 0; i != guards + 1; ++i) {
+      if (!end)
+        return refuse(call, "missing guarded reduction");
+      end = end->getNextNode();
+    }
+    auto *payload = begin;
+    for (unsigned i = 0; i != guards; ++i)
+      payload = payload->getNextNode();
+    if (payload->getNumResults() != 1)
+      return refuse(call, "reduction result");
+    auto *read = begin;
+    VerificationDecision outcome;
+    auto result = readMapPayload(
+        map, inputs, true, read, end, payload->getResult(0), candidateSymbols,
+        addedBindings, expected.checkWork, expected.checkWork, outcome);
+    if (failed(result) || read != end)
       return refuse(call, "reduction formula correspondence");
-    auto dot = primitive("vector.dot", payload->getOperands(), field, false);
-    if (!dot || failed(bind(sum->getResults(), dot->getResults(), values)))
-      return refuse(call, "dot operation or result");
+    // The semantic worker checked all operands and nominal contracts. The
+    // standalone edge additionally preserves its exact naming/record contract.
+    for (unsigned i = 0; i != guards + 1; ++i) {
+      auto *actual = &*cursor;
+      auto ref = actual->getAttrOfType<FlatSymbolRefAttr>("binding");
+      auto binding = ref ? candidateSymbols.lookup<local::OperationBindingOp>(
+                               ref.getValue())
+                         : local::OperationBindingOp();
+      if (!binding || (i == guards && binding.getContract() != "vector.dot") ||
+          !primitive(binding.getContract(), actual->getOperands(),
+                     actual->getNumResults() ? actual->getResult(0).getType()
+                                             : Type(),
+                     i != guards))
+        return refuse(call, "guarded reduction naming or binding");
+    }
+    if (failed(bind(sum->getResults(), ValueRange{*result}, values)))
+      return refuse(call, "reduction result substitution");
     return success();
   }
   LogicalResult block(Block &source, Block &target, unsigned depth) {
@@ -439,16 +454,33 @@ public:
       : originalSymbols(original), candidateSymbols(candidate), names(original),
         input(input), expected(input) {}
   LogicalResult run(protocol_ir::ProtocolModuleOp original,
-                    protocol_ir::ProtocolModuleOp candidate, Record &output) {
+                    protocol_ir::ProtocolModuleOp candidate, Record &output,
+                    bool compareRecords = true) {
+    auto debit = llvm::scope_exit([&] {
+      output.checkWork = expected.checkWork;
+      output.checkOriginBytes = expected.checkOriginBytes;
+    });
     llvm::DenseSet<Operation *> retained;
+    SmallVector<Operation *> retainedOrder;
+    auto anonymous = candidate.getBody().front().begin();
     for (Operation &op : original.getBody().front()) {
       if (!charge())
         return refuse(&op, "declaration work limit");
       auto name = SymbolTable::getSymbolName(&op);
-      auto actual = name ? candidateSymbols.lookup(name.getValue()) : nullptr;
+      Operation *actual = nullptr;
+      if (name) {
+        actual = candidateSymbols.lookup(name.getValue());
+      } else {
+        while (anonymous != candidate.getBody().front().end() &&
+               SymbolTable::getSymbolName(&*anonymous))
+          ++anonymous;
+        if (anonymous != candidate.getBody().front().end())
+          actual = &*anonymous++;
+      }
       if (!actual)
         return refuse(&op, "missing declaration");
       retained.insert(actual);
+      retainedOrder.push_back(actual);
       if (auto local = dyn_cast<local::FuncOp>(op)) {
         auto replacement = dyn_cast<local::FuncOp>(actual);
         if (!replacement ||
@@ -464,18 +496,18 @@ public:
                      &op, actual, OperationEquivalence::IgnoreLocations))
         return refuse(actual, "changed declaration");
     }
-    auto originalOrder = original.getBody().front().begin();
+    auto originalOrder = retainedOrder.begin();
     for (Operation &op : candidate.getBody().front()) {
       if (retained.contains(&op)) {
-        if (originalOrder == original.getBody().front().end() ||
-            SymbolTable::getSymbolName(&*originalOrder++) !=
-                SymbolTable::getSymbolName(&op))
+        if (originalOrder == retainedOrder.end() || *originalOrder++ != &op)
           return refuse(&op, "retained declaration order");
       } else if (!addedBindings.contains(&op))
         return refuse(&op, "unexpected declaration");
     }
-    if (!expected.sameExpansion(output))
+    if (compareRecords && !expected.sameExpansion(output))
       return refuse(candidate, "occurrence records or cumulative limits");
+    if (!compareRecords)
+      output = expected;
     output.checkWork = expected.checkWork;
     output.checkOriginBytes = expected.checkOriginBytes;
     return success();
@@ -492,7 +524,192 @@ LogicalResult check(ModuleOp original, ModuleOp candidate, const Record &input,
     return refuse(candidate, "retained preparation context");
   return Correspondence(before, after, input).run(before, after, output);
 }
+
+// Finish has already expanded ordinary calls. Reconstruct only the coordinates
+// of this immutable late subject, retaining the caller's cumulative allowances.
+// These coordinates identify occurrences; the correspondence reader still
+// interprets every actual guard, payload and surrounding declaration.
+LogicalResult retainedRecord(ModuleOp source, Record &record) {
+  auto root = unit(source);
+  if (!root)
+    return refuse(source, "expected a logical map subject");
+  llvm::DenseSet<Operation *> helpers;
+  uint64_t expandedOperations;
+  if (failed(algebra::collectMapHelpers(root, helpers, expandedOperations)))
+    return failure();
+  // Formula extraction has its own per-body limits. Debit its complete
+  // expanded helper work here as well so repeated late attempts cannot renew
+  // that allowance merely by rebuilding their occurrence coordinates.
+  if (expandedOperations > record.inspectionWork)
+    return diagnostics::emit(source.emitError(), "algorithm-expansion-limit");
+  record.inspectionWork -= expandedOperations;
+  record.occurrences.clear();
+  record.retained = true;
+  record.finished = false;
+  SymbolTable symbols(root);
+  for (auto function : root.getBody().front().getOps<local::FuncOp>()) {
+    auto result = function.walk([&](Operation *op) -> WalkResult {
+      if (!record.inspectionWork) {
+        (void)diagnostics::emit(op->emitOpError(), "algorithm-expansion-limit");
+        return WalkResult::interrupt();
+      }
+      --record.inspectionWork;
+      if (auto call = dyn_cast<local::ApplyOp>(op))
+        if (!symbols.lookup<algebra::MapRealizeOp>(call.getCallee())) {
+          (void)refuse(call,
+                       "ordinary algorithms must finish before late fusion");
+          return WalkResult::interrupt();
+        }
+      auto site = op->getAttrOfType<StringAttr>("site");
+      if (!site)
+        return WalkResult::advance();
+      unsigned depth = 0;
+      for (auto *parent = op->getParentOp(); parent != function;
+           parent = parent->getParentOp())
+        if (!parent || ++depth > 64) {
+          (void)diagnostics::emit(op->emitOpError(), "interactive-call-depth");
+          return WalkResult::interrupt();
+        }
+      auto origin = function->getAttrOfType<ArrayAttr>("logical_origin");
+      auto definition = origin ? cast<StringAttr>(origin[0]).getValue()
+                               : function.getSymName();
+      if (!record.occurrences
+               .emplace(
+                   protocol::detail::OccurrenceKey{function.getSymName().str(),
+                                                   site.getValue().str()},
+                   Occurrence{definition.str(),
+                              function.getSymName().str(),
+                              site.getValue().str(),
+                              {},
+                              depth})
+               .second) {
+        (void)refuse(op, "duplicate late occurrence");
+        return WalkResult::interrupt();
+      }
+      return WalkResult::advance();
+    });
+    if (result.wasInterrupted())
+      return failure();
+  }
+  return success();
+}
+
+FailureOr<std::map<std::string, std::pair<unsigned, unsigned>>>
+describeRetainedProducts(ModuleOp source, Record &record,
+                         RealizationTrace *trace) {
+  auto root = unit(source);
+  if (root.getProfile() == protocol_ir::Profile::Protocol)
+    return describeMapProducts(source, trace);
+  llvm::DenseSet<Operation *> helpers;
+  if (failed(algebra::collectMapHelpers(root, helpers)))
+    return failure();
+  // Reuse the existing common-profile formula reader on an analysis-only
+  // symbol table. The complete logical source was verified before reaching
+  // here; this view copies exact declarations, grants no new admission and is
+  // never published as a Protocol program.
+  for (Operation &op : root.getBody().front()) {
+    if (!helpers.contains(&op) && !isa<algebra::MapRealizeOp>(op))
+      continue;
+    auto charged = op.walk([&](Operation *nested) -> WalkResult {
+      uint64_t cost = 1 + nested->getNumOperands() + nested->getNumResults();
+      if (cost > record.inspectionWork) {
+        (void)diagnostics::emit(nested->emitOpError(),
+                                "algorithm-expansion-limit");
+        return WalkResult::interrupt();
+      }
+      record.inspectionWork -= cost;
+      return WalkResult::advance();
+    });
+    if (charged.wasInterrupted())
+      return failure();
+  }
+  OwningOpRef<ModuleOp> view(ModuleOp::create(source.getLoc()));
+  OpBuilder builder(source.getContext());
+  builder.setInsertionPointToEnd(view->getBody());
+  auto scope = protocol_ir::ProtocolModuleOp::create(
+      builder, source.getLoc(),
+      protocol_ir::ProfileAttr::get(source.getContext(),
+                                    protocol_ir::Profile::Protocol));
+  scope.getBody().push_back(new Block());
+  builder.setInsertionPointToEnd(&scope.getBody().front());
+  for (Operation &op : root.getBody().front())
+    if (helpers.contains(&op) || isa<algebra::MapRealizeOp>(op))
+      builder.clone(op);
+  return describeMapProducts(*view, trace);
+}
 } // namespace
+
+algebra::MapRealizeOp
+eligibleMapSum(local::ApplyOp call, SymbolTable &symbols,
+               MathematicalSelectionPolicy policy,
+               ArrayRef<std::pair<std::string, std::string>> selections) {
+  if (!policy.vectorReductionFusion)
+    return {};
+  auto map = reductionMap(call, symbols);
+  if (!map)
+    return {};
+  auto reference =
+      call->getNextNode()->getAttrOfType<FlatSymbolRefAttr>("binding");
+  for (const auto &[name, implementation] : selections)
+    if (reference && reference.getValue() == name)
+      return {};
+  return map;
+}
+
+LogicalResult
+verifyRetainedMapReductionsPreserved(ModuleOp original, ModuleOp candidate,
+                                     MathematicalSelectionPolicy policy) {
+  if (failed(verify(original)) || failed(verify(candidate)))
+    return failure();
+  auto before = unit(original), after = unit(candidate);
+  if (!before || !after ||
+      original->getAttrDictionary() != candidate->getAttrDictionary() ||
+      before->getAttrDictionary() != after->getAttrDictionary())
+    return refuse(candidate, "late module shape or profile");
+  if (!policy.vectorReductionFusion)
+    return OperationEquivalence::isEquivalentTo(
+               original, candidate, OperationEquivalence::IgnoreLocations)
+               ? success()
+               : refuse(candidate, "fusion is disabled by the caller policy");
+  Record input, output;
+  if (failed(retainedRecord(original, input)))
+    return failure();
+  return Correspondence(before, after, input).run(before, after, output, false);
+}
+
+// Call on an immutable Participant/Exec subject before expandMapRealizations.
+// The returned candidate is owned; no source pointer or producer match escapes.
+// Share state across selection attempts to retain the expansion/site
+// allowances.
+OwningOpRef<ModuleOp>
+fuseRetainedMapReductions(ModuleOp source, MathematicalSelectionPolicy policy,
+                          protocol::AlgorithmExpansionState &state,
+                          RealizationTrace *trace,
+                          llvm::function_ref<bool(Operation *)> select) {
+  if (failed(verify(source)) || !unit(source))
+    return {};
+  OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(source->clone()));
+  if (!policy.vectorReductionFusion)
+    return candidate;
+  Record input = StateAccess::get(state);
+  if (failed(retainedRecord(source, input))) {
+    StateAccess::set(state, std::move(input));
+    return {};
+  }
+  protocol::AlgorithmExpansionState proposalState;
+  StateAccess::set(proposalState, input);
+  if (failed(fuseVectorReductionsImpl(*candidate, proposalState,
+                                      mathematicalRecipes().reductions, trace,
+                                      select))) {
+    StateAccess::set(state, StateAccess::get(proposalState));
+    return {};
+  }
+  StateAccess::set(state, StateAccess::get(proposalState));
+  // The transactional producer already ran Correspondence with the shared
+  // checking balances. Do not repeat that check with replenished allowances.
+  return candidate;
+}
+
 LogicalResult verifyVectorReductionsPreserved(
     ModuleOp original, ModuleOp candidate,
     const protocol::AlgorithmExpansionState &originalState,
@@ -510,16 +727,33 @@ LogicalResult fuseVectorReductions(ModuleOp module,
                                    protocol::AlgorithmExpansionState &state,
                                    ArrayRef<ReductionRecipe> reductionRecipes,
                                    RealizationTrace *trace) {
+  return fuseVectorReductionsImpl(module, state, reductionRecipes, trace, {});
+}
+namespace {
+LogicalResult fuseVectorReductionsImpl(
+    ModuleOp module, protocol::AlgorithmExpansionState &state,
+    ArrayRef<ReductionRecipe> reductionRecipes, RealizationTrace *trace,
+    llvm::function_ref<bool(Operation *)> select) {
   RealizationScope scope(trace, "vector-reductions", module, {true, true});
-  const auto &input = StateAccess::get(state);
+  Record input = StateAccess::get(state);
   if (!input.retained || input.finished || !unit(module))
     return refuse(module, "expected retained preparation");
   if (failed(verify(module)))
     return failure();
+  Record discovery = input;
+  auto retainDiscovery = llvm::scope_exit([&] {
+    Record balances = StateAccess::get(state);
+    balances.inspectionWork = discovery.inspectionWork;
+    StateAccess::set(state, std::move(balances));
+  });
   // Read every original formula, not just live or eligible applications.
-  auto products = describeMapProducts(module, trace);
+  auto products = describeRetainedProducts(module, discovery, trace);
   if (failed(products))
     return failure();
+  // The correspondence reader charges semantic comparison independently;
+  // analysis-view copying belongs to the producer's inspection balance.
+  input.inspectionWork = discovery.inspectionWork;
+  retainDiscovery.release();
   const MathematicalRecipes recipes{mathematicalRecipes().lanes,
                                     reductionRecipes};
   Reductions reductions;
@@ -542,9 +776,21 @@ LogicalResult fuseVectorReductions(ModuleOp module,
   }
   mathematical::CheckedCandidate candidate(module);
   Record output = input;
+  bool published = false;
+  auto debit = llvm::scope_exit([&] {
+    if (published)
+      return;
+    Record balances = input;
+    balances.work = output.work;
+    balances.originBytes = output.originBytes;
+    balances.inspectionWork = output.inspectionWork;
+    balances.checkWork = output.checkWork;
+    balances.checkOriginBytes = output.checkOriginBytes;
+    StateAccess::set(state, std::move(balances));
+  });
   bool changed = false;
   if (failed(Rewriter(unit(*candidate), output, scope, changed)
-                 .run(reductions, decisions)))
+                 .run(reductions, decisions, select)))
     return failure();
   scope.failure(VerificationDecision{VerificationObservation::Unclassified,
                                      "vector reduction correspondence",
@@ -555,10 +801,12 @@ LogicalResult fuseVectorReductions(ModuleOp module,
       })))
     return failure();
   StateAccess::set(state, std::move(output));
+  published = true;
   if (changed)
     scope.publish();
   else
     scope.complete(CompletionKind::Unchanged);
   return success();
 }
+} // namespace
 } // namespace zkc::mathematical

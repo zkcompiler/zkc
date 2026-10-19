@@ -4,6 +4,7 @@
 
 #![forbid(unsafe_code)]
 
+pub(crate) mod expression;
 mod memory;
 mod views;
 
@@ -26,7 +27,9 @@ impl Call {
     pub(crate) fn new(policy: &Policy, available: usize) -> Self {
         Self {
             policy: *policy,
-            available,
+            // Native output validation bounds the complete returned tuple by
+            // max_value_bytes, as well as fresh storage by the invocation.
+            available: available.min(policy.max_value_bytes),
             work: Cell::new(0),
             memory: Cell::new(0),
             outputs: Cell::new(0),
@@ -45,6 +48,32 @@ impl Call {
         Ok(())
     }
 
+    /// Checked setup plus a conservative per-element bound, including empty calls.
+    pub(crate) fn work_items(&self, len: usize, per_item: u64, setup: u64) -> Result<()> {
+        let units = u64::try_from(len)
+            .ok()
+            .and_then(|len| len.checked_mul(per_item))
+            .and_then(|units| units.checked_add(setup))
+            .ok_or_else(|| exhausted("numerical-work"))?;
+        self.work(units)
+    }
+
+    /// Reserve an inline scalar result without allocating a one-element buffer.
+    pub(crate) fn scalar(&self, retained_bytes: usize) -> Result<ScalarOutput<'_>> {
+        self.policy.output(retained_bytes, self.available)?;
+        let allowance = Reservation::new(
+            &self.outputs,
+            retained_bytes,
+            self.available,
+            "output-bytes",
+        )?;
+        let retained = self.reserve_memory(retained_bytes)?;
+        Ok(ScalarOutput {
+            retained,
+            allowance,
+        })
+    }
+
     /// Reserve aggregate results and the staging/final overlap before allocation.
     /// Existing consumer preflights still determine shape and per-value semantics.
     pub(crate) fn output<T: Clone>(
@@ -53,20 +82,12 @@ impl Call {
         initial: T,
         retained_bytes: usize,
     ) -> Result<Output<'_, T>> {
-        self.policy.output(retained_bytes, self.available)?;
-        let allowance = Reservation::new(
-            &self.outputs,
-            retained_bytes,
-            self.available,
-            "output-bytes",
-        )?;
+        let result = self.scalar(retained_bytes)?;
         let staging_bytes = payload_bytes::<T>(len)?;
-        let retained = self.reserve_memory(retained_bytes)?;
         let staging = self.reserve_memory(staging_bytes)?;
         Ok(Output {
             buffer: Buffer::new(len, initial, staging)?,
-            retained,
-            allowance,
+            result,
         })
     }
 
@@ -87,11 +108,26 @@ impl Call {
     }
 }
 
+/// Private inline result; successful construction keeps both charges until call end.
+pub(crate) struct ScalarOutput<'a> {
+    retained: Reservation<'a>,
+    allowance: Reservation<'a>,
+}
+
+impl ScalarOutput<'_> {
+    /// Construct only after reservation, releasing charges on error or unwind.
+    pub(crate) fn finish(self, construct: impl FnOnce() -> Result<Value>) -> Result<Value> {
+        let value = construct()?;
+        self.retained.keep();
+        self.allowance.keep();
+        Ok(value)
+    }
+}
+
 /// Initialized, fixed-length private result. Only finish can transfer its Vec.
 pub(crate) struct Output<'a, T> {
     buffer: Buffer<'a, T>,
-    retained: Reservation<'a>,
-    allowance: Reservation<'a>,
+    result: ScalarOutput<'a>,
 }
 
 impl<T> Output<'_, T> {
@@ -102,17 +138,11 @@ impl<T> Output<'_, T> {
     /// The trusted adapter consumes the Vec without growth, within its final bound.
     /// Extra allocations inside freeze are outside this managed-storage facade.
     pub(crate) fn finish(self, freeze: impl FnOnce(Vec<T>) -> Result<Value>) -> Result<Value> {
-        let Self {
-            buffer,
-            retained,
-            allowance,
-        } = self;
+        let Self { buffer, result } = self;
         let Buffer { data, reservation } = buffer;
         // Both reservations remain live while Vec and final storage can overlap.
-        let value = freeze(data)?;
+        let value = result.finish(|| freeze(data))?;
         drop(reservation);
-        retained.keep();
-        allowance.keep();
         Ok(value)
     }
 }

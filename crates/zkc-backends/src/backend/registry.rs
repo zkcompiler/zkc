@@ -14,11 +14,14 @@ enum Signature {
     Custom(fn(&OperationBinding) -> Option<BoundSignature>),
 }
 pub(crate) type Handler = fn(&mut NativeBackend, &Invocation<'_>, &[Value]) -> Result<Vec<Value>>;
+pub(super) type PreparedHandler =
+    fn(&mut NativeBackend, &Invocation<'_>, &[Value], &super::NativeCall) -> Result<Vec<Value>>;
 #[derive(Clone, Copy)]
 pub(super) struct Implementation {
     contract: &'static str,
     signature: Signature,
     pub(super) handler: Handler,
+    pub(super) prepared_handler: Option<PreparedHandler>,
     pub(super) deterministic: bool,
 }
 impl Implementation {
@@ -69,6 +72,7 @@ impl Registry {
                     contract,
                     signature,
                     handler,
+                    prepared_handler: None,
                     deterministic,
                 },
             )?;
@@ -91,6 +95,24 @@ impl Registry {
     ) -> Result<()> {
         self.install_family(rows, signature, handler, true)
     }
+    /// The ordinary handler remains a complete invocation-local implementation;
+    /// installed callers can additionally retain immutable reached-call facts.
+    fn prepared_family(
+        &mut self,
+        rows: &'static [(&'static str, &'static str)],
+        signature: Signature,
+        handler: Handler,
+        prepared: PreparedHandler,
+    ) -> Result<()> {
+        self.pure_family(rows, signature, handler)?;
+        for &(identity, _) in rows {
+            self.entries
+                .get_mut(identity)
+                .expect("installed family")
+                .prepared_handler = Some(prepared);
+        }
+        Ok(())
+    }
     fn install_shaped(
         &mut self,
         contracts: &'static [crate::bindings::Contract],
@@ -105,6 +127,7 @@ impl Registry {
                         contract: row.name,
                         signature: Signature::Shaped(row, crate::bindings::Selection::Default),
                         handler,
+                        prepared_handler: None,
                         deterministic,
                     },
                 )?;
@@ -143,7 +166,10 @@ impl Registry {
                 ports: row.ports,
             },
         );
-        entry.handler = row.handler.unwrap_or(entry.handler);
+        if let Some(handler) = row.handler {
+            entry.handler = handler;
+            entry.prepared_handler = None;
+        }
         entry.deterministic &= row.deterministic;
         self.insert(row.identity.into(), entry)
     }
@@ -193,6 +219,12 @@ pub(super) fn installed() -> Result<&'static Registry> {
             r.pure_shaped(super::execute::CONTRACTS, basic)?;
             r.shaped(super::execute::PCS_CONTRACTS, basic)?;
             r.pure_shaped(crate::kernels::arithmetic::CONTRACTS, arithmetic)?;
+            r.prepared_family(
+                crate::numerical::expression::IMPLEMENTATIONS,
+                Signature::Custom(crate::numerical::expression::signature),
+                expression,
+                prepared_expression,
+            )?;
             r.pure_shaped(crate::kernels::conversions::CONTRACTS, conversions)?;
             r.pure_shaped(crate::kernels::curve::CONTRACTS, curve)?;
             r.shaped(crate::kernels::resources::CONTRACTS, resources)?;
@@ -317,6 +349,22 @@ fn arithmetic(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Resu
         i,
         &b.core.policy,
     )
+}
+fn expression(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
+    crate::numerical::expression::prepare(
+        i.binding.declaration(),
+        i.binding.signature(),
+        i.attributes,
+    )?
+    .apply(args, i, &b.core.policy)
+}
+fn prepared_expression(
+    b: &mut NativeBackend,
+    i: &Invocation<'_>,
+    args: &[Value],
+    call: &super::NativeCall,
+) -> Result<Vec<Value>> {
+    call.expression()?.apply(args, i, &b.core.policy)
 }
 pub(crate) fn conversions(
     b: &mut NativeBackend,

@@ -80,7 +80,8 @@ llvm::Error checkBindingDeclaration(llvm::StringRef name,
 /// checked before any nominal domain or implementation is selected.
 llvm::ArrayRef<generic::TypeConstructor> boundTypeConstructors();
 llvm::ArrayRef<generic::Operation> boundOperationContracts();
-/// Construction-only complete-type bindings are not common generic operations.
+/// Construction bindings and compiler consumers with owned signatures are not
+/// common generic operations. Their owning resolver checks closed applications.
 llvm::ArrayRef<generic::Operation> nonGenericOperationContracts();
 llvm::ArrayRef<generic::Operation> executableOperationContracts();
 llvm::ArrayRef<requirements::Implication> boundCapabilityRules();

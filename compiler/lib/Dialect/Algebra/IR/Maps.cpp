@@ -1,8 +1,11 @@
+#include "zkc/Analysis/TotalClosure.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Algebra/RingExpression.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Mathematical.h"
+#include "llvm/ADT/DenseSet.h"
 
 using namespace mlir;
 
@@ -25,12 +28,28 @@ Type mapField(FunctionType type, ArrayRef<bool> rowwise) {
 }
 
 LogicalResult MapRealizeOp::verify() {
-  if ((*this)->getAttrs().size() != 4 ||
-      !mapField(getFunctionType(), getRowwise()))
+  for (auto attribute : (*this)->getAttrs())
+    if (!llvm::is_contained(ArrayRef<StringRef>{"sym_name", "helper",
+                                                "function_type", "rowwise",
+                                                "policy"},
+                            attribute.getName().getValue()))
+      return diagnostics::emit(emitOpError(), "algebra-map-signature",
+                               "unsupported map request attribute");
+  if (!mapField(getFunctionType(), getRowwise()))
     return diagnostics::emit(
         emitOpError(), "algebra-map-signature",
         "expected one scalar field, a vector result and at least one rowwise "
         "vector input");
+  if (auto raw = (*this)->getAttr("policy")) {
+    auto policy = dyn_cast<ArrayAttr>(raw);
+    if (!policy || policy.size() != 3 ||
+        !llvm::all_of(policy,
+                      [](Attribute value) { return isa<BoolAttr>(value); }))
+      return diagnostics::emit(
+          emitOpError(), "algebra-map-policy",
+          "expected [BoolAttr finiteBulk, BoolAttr vectorReductionFusion, "
+          "BoolAttr collectFoldFusion]");
+  }
   return success();
 }
 
@@ -110,5 +129,64 @@ LogicalResult MapFormulas::verify(MapRealizeOp map) {
     }
   }
   return success();
+}
+
+// Internal requests carry the exact original scalar closure. This reader is
+// shared by preparation, projection and logical execution admission; it never
+// substitutes a runtime length guard for a total-mathematics premise.
+LogicalResult collectMapHelpers(Operation *owner,
+                                llvm::DenseSet<Operation *> &helpers,
+                                uint64_t &expandedOperations) {
+  helpers.clear();
+  expandedOperations = 0;
+  if (!owner || owner->getNumRegions() != 1 ||
+      !owner->getRegion(0).hasOneBlock())
+    return failure();
+  auto maps = owner->getRegion(0).front().getOps<MapRealizeOp>();
+  if (maps.empty())
+    return success();
+  SymbolTableCollection symbols;
+  mathematical::TotalClosure closure(owner, symbols);
+  if (failed(closure.verify()))
+    return failure();
+  MapFormulas formulas(symbols);
+  unsigned remaining = mathematical::realizedHelperOperationLimit;
+  SmallVector<func::FuncOp> pending;
+  for (auto map : maps) {
+    if (failed(map->getName().verifyInvariants(map)) ||
+        failed(map.verifySymbolUses(symbols)) || failed(formulas.verify(map)))
+      return failure();
+    auto helper =
+        symbols.lookupNearestSymbolFrom<func::FuncOp>(map, map.getHelperAttr());
+    const mathematical::TotalSummary *summary;
+    if (failed(closure.get(helper, summary)))
+      return failure();
+    if (summary->expandedOperations > remaining)
+      return diagnostics::emit(
+          map.emitOpError(), "mathematical-analysis-limit",
+          "map helpers exceed the shared expansion budget");
+    remaining -= summary->expandedOperations;
+    expandedOperations += summary->expandedOperations;
+    if (helpers.insert(helper).second)
+      pending.push_back(helper);
+  }
+  // TotalClosure checked the entire source, including private sibling scope,
+  // domains, unused work, signatures and cycles before this bounded traversal.
+  while (!pending.empty()) {
+    auto helper = pending.pop_back_val();
+    for (auto call : helper.getBody().front().getOps<func::CallOp>()) {
+      auto callee = symbols.lookupNearestSymbolFrom<func::FuncOp>(
+          call, call.getCalleeAttr());
+      if (helpers.insert(callee).second)
+        pending.push_back(callee);
+    }
+  }
+  return success();
+}
+
+LogicalResult collectMapHelpers(Operation *owner,
+                                llvm::DenseSet<Operation *> &helpers) {
+  uint64_t expandedOperations;
+  return collectMapHelpers(owner, helpers, expandedOperations);
 }
 } // namespace zkc::algebra

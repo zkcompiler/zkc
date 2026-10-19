@@ -49,6 +49,133 @@ fn work_is_accumulated_checked_and_not_refunded() {
 }
 
 #[test]
+fn checked_work_formula_charges_setup_and_refuses_overflow_without_spending() {
+    let call = Call::new(
+        &Policy {
+            max_numerical_work: u64::MAX,
+            ..policy(0)
+        },
+        0,
+    );
+    call.work_items(0, u64::MAX, 1).unwrap();
+    assert_eq!(call.work.get(), 1);
+    for (len, rate, setup) in [(2, u64::MAX, 0), (1, u64::MAX, 1)] {
+        assert_eq!(
+            code(call.work_items(len, rate, setup)),
+            "exhausted:numerical-work"
+        );
+        assert_eq!(call.work.get(), 1);
+    }
+    call.work_items(3, 2, 1).unwrap();
+    assert_eq!(call.work.get(), 8);
+}
+
+#[test]
+fn inline_scalar_reserves_exact_storage_without_a_staging_buffer() {
+    for (memory, available, tuple_limit, error) in [
+        (512, 512, 512, None),
+        (511, 512, 512, Some("exhausted:numerical-bytes")),
+        (0, 511, 512, Some("exhausted:output-bytes")),
+        (0, 512, 511, Some("exhausted:output-bytes")),
+    ] {
+        let p = Policy {
+            max_value_bytes: tuple_limit,
+            ..policy(memory)
+        };
+        let call = Call::new(&p, available);
+        let result = call.scalar(512);
+        if let Some(error) = error {
+            assert_eq!(code(result), error);
+            assert_eq!(call.memory.get(), 0);
+            assert_eq!(call.outputs.get(), 0);
+        } else {
+            let value = result
+                .unwrap()
+                .finish(|| {
+                    assert_eq!(call.memory.get(), 512);
+                    assert_eq!(call.outputs.get(), 512);
+                    assert_eq!(code(call.scratch(1, 0u8)), "exhausted:numerical-bytes");
+                    Ok(Value::Index(7))
+                })
+                .unwrap();
+            drop(value);
+            assert_eq!(call.memory.get(), 512);
+            assert_eq!(call.outputs.get(), 512);
+        }
+    }
+}
+
+#[test]
+fn scalar_and_vector_results_share_both_tuple_ceilings_and_live_storage() {
+    for (available, tuple_limit) in [(770, 770), (769, 770), (770, 769)] {
+        let p = Policy {
+            max_value_bytes: tuple_limit,
+            ..policy(772)
+        };
+        let call = Call::new(&p, available);
+        call.scalar(512)
+            .unwrap()
+            .finish(|| Ok(Value::Index(1)))
+            .unwrap();
+        let result = call.output(2, 3u8, 258);
+        if available == 770 && tuple_limit == 770 {
+            let result = result.unwrap();
+            assert_eq!(call.memory.get(), 772);
+            result.finish(bytes).unwrap();
+            assert_eq!(call.memory.get(), 770);
+            assert_eq!(call.outputs.get(), 770);
+            assert_eq!(code(call.scalar(1)), "exhausted:output-bytes");
+        } else {
+            assert_eq!(code(result), "exhausted:output-bytes");
+            assert_eq!(call.memory.get(), 512);
+            assert_eq!(call.outputs.get(), 512);
+        }
+    }
+    // The result allowance fits, but live scalar + staging + final does not.
+    let call = Call::new(&policy(771), 770);
+    call.scalar(512)
+        .unwrap()
+        .finish(|| Ok(Value::Index(1)))
+        .unwrap();
+    assert_eq!(code(call.output(2, 0u8, 258)), "exhausted:numerical-bytes");
+    assert_eq!(call.memory.get(), 512);
+    assert_eq!(call.outputs.get(), 512);
+}
+
+#[test]
+fn abandoned_failed_and_unwinding_scalar_results_release_storage_but_not_work() {
+    let call = Call::new(&policy(512), 512);
+    call.work(3).unwrap();
+    let result = call.scalar(512).unwrap();
+    drop(result);
+    assert_eq!(call.memory.get(), 0);
+    assert_eq!(call.outputs.get(), 0);
+    let error = call
+        .scalar(512)
+        .unwrap()
+        .finish(|| Err(refused("scalar-test")));
+    assert_eq!(code(error), "refused:scalar-test");
+    assert_eq!(call.memory.get(), 0);
+    assert_eq!(call.outputs.get(), 0);
+    assert!(
+        std::panic::catch_unwind(AssertUnwindSafe(|| {
+            let _ = call
+                .scalar(512)
+                .unwrap()
+                .finish(|| panic!("scalar failure"));
+        }))
+        .is_err()
+    );
+    assert_eq!(call.memory.get(), 0);
+    assert_eq!(call.outputs.get(), 0);
+    assert_eq!(call.work.get(), 3);
+    call.scalar(512)
+        .unwrap()
+        .finish(|| Ok(Value::Index(2)))
+        .unwrap();
+}
+
+#[test]
 fn policy_is_copied_and_new_limits_participate_in_equality() {
     let original = Policy::default();
     assert_eq!(original.max_numerical_work, 1 << 26);
@@ -67,9 +194,13 @@ fn policy_is_copied_and_new_limits_participate_in_equality() {
 #[test]
 fn aggregate_outputs_accept_exact_and_refuse_one_short() {
     let retained = 258;
-    for available in [2 * retained, 2 * retained - 1] {
+    for (available, tuple_limit) in [
+        (2 * retained, 2 * retained),
+        (2 * retained - 1, 2 * retained),
+        (2 * retained, 2 * retained - 1),
+    ] {
         let p = Policy {
-            max_value_bytes: retained,
+            max_value_bytes: tuple_limit,
             ..policy(4096)
         };
         let call = Call::new(&p, available);
@@ -79,9 +210,9 @@ fn aggregate_outputs_accept_exact_and_refuse_one_short() {
         assert_eq!(call.outputs.get(), retained);
         assert_eq!(call.memory.get(), retained);
         let second = call.output(2, 0u8, retained);
-        if available == 2 * retained {
+        if available == 2 * retained && tuple_limit == 2 * retained {
             second.unwrap().finish(bytes).unwrap();
-            // Each result fits max_value_bytes; their sum need not fit it.
+            // The complete tuple must fit both independent output ceilings.
             assert_eq!(call.outputs.get(), 2 * retained);
             assert_eq!(call.memory.get(), 2 * retained);
         } else {

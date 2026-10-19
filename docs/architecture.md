@@ -99,13 +99,17 @@ introduces no artifact format or alternative execution path.
 mathematical operations and standard functions. Ordered Local calls invoke them;
 physical planning retains their source and selected Local realization together.
 Independent numerical and physical readers check the result before publication.
-This boundary keeps
-the complete numerical body available independently of participant control.
+This boundary keeps the complete numerical body available independently of
+participant control.
 Normalization, analysis and recipe verification read standard-function bodies;
 Local functions are the executable output. Source symbol context and output
 binding allocation remain separate.
-Numerical realization uses a private standard SCF schedule before Local lowering.
-Writable-buffer layouts and target-specific vectorization remain future work.
+Numerical realization chooses native contractions, compact pointwise expressions,
+bulk vector operations or a private standard SCF schedule before Local lowering.
+The native expression handlers borrow typed columns and scalar captures and
+construct private results through the existing numerical scope. They introduce
+no VM instruction or independent executable format. Writable-buffer layouts and
+target-specific vectorization remain future work.
 Participant scheduling, transport and resource authority stay with their existing owners.
 Installed numerical and effectful operations share the binding mechanism;
 installation alone does not authorize extraction into a numerical unit.

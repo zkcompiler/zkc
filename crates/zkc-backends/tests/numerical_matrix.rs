@@ -225,6 +225,22 @@ fn split_preflights_the_result_tuple_and_overlapping_construction() {
         (exact, 639, Some("exhausted:output-bytes")),
         (
             Policy {
+                max_value_bytes: 640,
+                ..exact
+            },
+            4096,
+            None,
+        ),
+        (
+            Policy {
+                max_value_bytes: 639,
+                ..exact
+            },
+            4096,
+            Some("exhausted:output-bytes"),
+        ),
+        (
+            Policy {
                 max_numerical_bytes: 767,
                 ..exact
             },

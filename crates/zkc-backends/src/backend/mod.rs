@@ -22,6 +22,7 @@ pub struct NativeOperation {
     declaration: zkc_runtime::vm::OperationBinding,
     signature: zkc_runtime::vm::BoundSignature,
     handler: registry::Handler,
+    prepared_handler: Option<registry::PreparedHandler>,
     read_extent: work::ReadExtent,
     sequence: bool,
     deterministic: bool,
@@ -63,8 +64,26 @@ impl NativeBackend {
         if operation.sequence {
             self.sequence_work.charge(args, i.retained)?;
         }
-        self.core.invoke(i, args, &operation.signature, call)?;
-        let outputs = (operation.handler)(self, i, args)?;
+        // Direct invocations get an invocation-local preparation slot. Installed
+        // callers can retain the same immutable facts across reached invocations.
+        let mut temporary = None;
+        let mut call = call;
+        if operation.prepared_handler.is_some() && call.is_none() {
+            call = Some(&mut temporary);
+        }
+        self.core
+            .invoke(i, args, &operation.signature, call.as_deref_mut())?;
+        let outputs = match operation.prepared_handler {
+            None => (operation.handler)(self, i, args)?,
+            Some(handler) => handler(
+                self,
+                i,
+                args,
+                call.as_deref()
+                    .and_then(Option::as_ref)
+                    .ok_or_else(|| crate::refused("kernel-preparation"))?,
+            )?,
+        };
         self.core.outputs(i, args, outputs)
     }
 
@@ -378,6 +397,7 @@ impl Backend for NativeBackend {
             declaration: binding.clone(),
             signature,
             handler: implementation.handler,
+            prepared_handler: implementation.prepared_handler,
             read_extent: work::ReadExtent::for_contract(&binding.contract),
             sequence,
             deterministic: implementation.deterministic,

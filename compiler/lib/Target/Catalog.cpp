@@ -78,8 +78,20 @@ public:
   Expected<std::vector<std::string>>
   implementations(const BindingApplication &application) const override {
     auto fallback = defaultImplementation(application);
-    if (!fallback)
-      return fallback.takeError();
+    if (!fallback) {
+      // Absence is an empty preference menu, so the checked numerical caller
+      // can advance its owning occurrence. Malformed applications and unknown
+      // errors remain failures of the catalog query.
+      auto terminal = handleErrors(
+          fallback.takeError(), [](const Refusal &refusal) -> Error {
+            if (refusal.code == "binding-implementation")
+              return Error::success();
+            return error(refusal.code, refusal.detail);
+          });
+      if (terminal)
+        return terminal;
+      return std::vector<std::string>{};
+    }
     return std::vector<std::string>{std::move(*fallback)};
   }
   std::vector<BindingApplication>
@@ -93,10 +105,8 @@ public:
         "table.relayout",
         {from.identity, from.representation, to.representation},
         "arkworks/table.relayout"};
-    if (auto e = checkDirectConversion(candidate, from, to)) {
-      consumeError(std::move(e));
-      return {};
-    }
+    // The proposer admits the exact candidate and preserves typed failures.
+    // Filtering here would erase malformed/generic errors into an empty menu.
     return {std::move(candidate)};
   }
 };

@@ -97,6 +97,7 @@ class ZKC_Parameters<string value, int min, int max> : ZKC_Declaration {
   string assetFormat = "";
 }
 def NoParameters : ZKC_Parameters<"None", 0, 0>;
+def NumericalExpression : ZKC_Parameters<"NumericalExpression", 1, 1>;
 def NaturalParameter : ZKC_Parameters<"Natural", 1, 1>;
 def ExtentParameter : ZKC_Parameters<"Extent", 1, 1>;
 def FieldLiteral : ZKC_Parameters<"FieldLiteral", 1, 1>;

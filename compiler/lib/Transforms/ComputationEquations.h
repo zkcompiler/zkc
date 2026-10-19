@@ -43,6 +43,10 @@ struct PointwiseReduction {
   MathematicalIdentity combine;
   Elementwise formula;
   mlir::Value term;
+  /// Remaining state-independent operands extracted along one associative
+  /// accumulator spine. No tree unfolding or source mutation is required.
+  /// Repeated SSA values retain distinct arithmetic occurrences.
+  llvm::SmallVector<mlir::Value> additionalTerms;
 };
 struct Bilinear {
   EquationWitness witness;

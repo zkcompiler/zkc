@@ -92,7 +92,8 @@ void retain(ModuleOp module, State &state) {
       "RetainMaps refused");
 }
 void finish(ModuleOp module, State &state) {
-  require(succeeded(mathematical::expandMapRealizations(module)),
+  require(succeeded(mathematical::expandMapRealizations(
+              module, nullptr, nullptr, NumericalExpressionMode::VectorOnly)),
           "map realization refused");
   require(succeeded(protocol::expandAlgorithms(module, Phase::Finish, state)),
           "Finish refused");
@@ -208,9 +209,11 @@ int main() {
       }
 
       auto maps = copy(*candidate);
-      require(succeeded(expandMapRealizations(*maps)) &&
-                  succeeded(verifyMapRealizationsPreserved(*candidate, *maps)),
-              "ordinary map realization failed independent correspondence");
+      require(
+          succeeded(expandMapRealizations(
+              *maps, nullptr, nullptr, NumericalExpressionMode::VectorOnly)) &&
+              succeeded(verifyMapRealizationsPreserved(*candidate, *maps)),
+          "ordinary map realization failed independent correspondence");
       auto completed = copy(*maps);
       State completedState = state;
       require(succeeded(protocol::expandAlgorithms(*completed, Phase::Finish,
@@ -360,15 +363,17 @@ int main() {
                   }),
             "retained mutation escaped");
   });
-  cases.run("Finish requires all preparation declarations realized", [&] {
+  cases.run("Finish preserves admitted maps for physical selection", [&] {
     auto candidate = copy(*retained);
     State state = retainedState;
-    require(named("algorithm-call-symbol",
-                  [&] {
-                    return failed(protocol::expandAlgorithms(
-                        *candidate, Phase::Finish, state));
-                  }),
-            "Finish retained a preparation declaration");
+    require(
+        succeeded(
+            protocol::expandAlgorithms(*candidate, Phase::Finish, state)) &&
+            succeeded(protocol::verifyStagedAlgorithmExpansionPreserved(
+                *retained, *candidate, Phase::Finish, retainedState, state)),
+        "Finish refused the retained map closure");
+    require(count(*candidate, "local.apply") == 1,
+            "Finish consumed the pending map choice");
   });
   cases.run("fusion requires retained state", [&] {
     auto candidate = copy(*source);
@@ -434,20 +439,25 @@ int main() {
                 "checker accepted a transition from terminal state");
           }
         });
-  cases.run("Finish checker refuses unrealized unused map", [&] {
-    auto completed = parse(noMaps);
+  cases.run("Finish independently preserves unused map formulas", [&] {
+    auto before = parse(noCalls), after = copy(*before);
     State state;
     require(
-        succeeded(protocol::expandAlgorithms(*completed, Phase::Finish, state)),
-        "reference Finish refused");
-    auto before = parse(noCalls), after = copy(*before);
+        succeeded(protocol::expandAlgorithms(*after, Phase::Finish, state)) &&
+            succeeded(protocol::verifyStagedAlgorithmExpansionPreserved(
+                *before, *after, Phase::Finish, initial, state)),
+        "Finish refused the admitted unused map");
+    auto helper = cast<func::FuncOp>(
+        SymbolTable::lookupSymbolIn(&after->getBody()->front(), "formula"));
+    helper.front().back().setOperand(0, helper.getArgument(0));
+    require(succeeded(verify(*after)), "changed formula is not admitted");
     require(named("algorithm-correspondence",
                   [&] {
                     return failed(
                         protocol::verifyStagedAlgorithmExpansionPreserved(
                             *before, *after, Phase::Finish, initial, state));
                   }),
-            "unused preparation declaration bypassed checker admission");
+            "Finish checker lost the unused scalar formula");
   });
   cases.run(
       "RetainMaps checker independently admits scalar formula depth", [&] {
@@ -480,21 +490,32 @@ int main() {
                 "checker accepted unsupported expanded scalar formula");
       });
   auto baseline = [&](StringRef text) {
-    auto legacy = parse(text), staged = copy(*legacy);
-    require(succeeded(mathematical::expandMapRealizations(*legacy)) &&
-                succeeded(protocol::expandAlgorithms(*legacy)),
-            "legacy sequence refused");
+    auto direct = parse(text), staged = copy(*direct);
+    require(
+        succeeded(mathematical::expandMapRealizations(
+            *direct, nullptr, nullptr, NumericalExpressionMode::VectorOnly)) &&
+            succeeded(protocol::expandAlgorithms(*direct)),
+        "direct vector expansion refused");
     State state;
     retain(*staged, state);
     finish(*staged, state);
     require(OperationEquivalence::isEquivalentTo(
-                *legacy, *staged, OperationEquivalence::IgnoreLocations),
+                *direct, *staged, OperationEquivalence::IgnoreLocations),
             "staged operations or sites differ from baseline");
     auto prepared = parse(text);
     run(*prepared, protocol::createPrepareProtocolPass(false));
-    require(OperationEquivalence::isEquivalentTo(
-                *legacy, *prepared, OperationEquivalence::IgnoreLocations),
-            "default preparation path differs from baseline");
+    auto retainedMap = dyn_cast_or_null<algebra::MapRealizeOp>(
+        SymbolTable::lookupSymbolIn(&prepared->getBody()->front(), "mapped"));
+    auto original = parse(text);
+    auto originalHelper =
+        SymbolTable::lookupSymbolIn(&original->getBody()->front(), "formula");
+    auto retainedHelper =
+        SymbolTable::lookupSymbolIn(&prepared->getBody()->front(), "formula");
+    require(retainedMap && retainedHelper &&
+                OperationEquivalence::isEquivalentTo(
+                    originalHelper, retainedHelper,
+                    OperationEquivalence::IgnoreLocations),
+            "preparation changed the retained scalar formula");
   };
   cases.run("baseline canonical identity", [&] { baseline(fixture); });
   std::string longText =
@@ -515,8 +536,10 @@ int main() {
     retain(*candidate, state);
     require(succeeded(mathematical::fuseVectorReductions(*candidate, state)),
             "long fusion refused");
-    require(succeeded(mathematical::expandMapRealizations(*candidate)),
-            "long maps refused");
+    require(
+        succeeded(mathematical::expandMapRealizations(
+            *candidate, nullptr, nullptr, NumericalExpressionMode::VectorOnly)),
+        "long maps refused");
     std::vector<protocol::AlgorithmOrigin> origins;
     require(succeeded(protocol::expandAlgorithms(*candidate, Phase::Finish,
                                                  state, &origins)),
@@ -691,7 +714,8 @@ int main() {
   });
   cases.run("Finish checker rejects changed guard origin", [&] {
     auto maps = copy(*retained);
-    require(succeeded(mathematical::expandMapRealizations(*maps)),
+    require(succeeded(mathematical::expandMapRealizations(
+                *maps, nullptr, nullptr, NumericalExpressionMode::VectorOnly)),
             "map realization refused");
     auto final = copy(*maps);
     State state = retainedState;
@@ -718,12 +742,14 @@ int main() {
     wrapper += " local.return %r1999 : !F\n }\n";
     auto source = parse(
         edit(fixture, " \"protocol.func\"", wrapper + " \"protocol.func\""));
-    auto legacy = copy(*source);
+    auto direct = copy(*source);
     State legacyState;
-    require(succeeded(mathematical::expandMapRealizations(*legacy)) &&
-                succeeded(protocol::expandAlgorithms(*legacy, Phase::Finish,
-                                                     legacyState)),
-            "baseline budget unexpectedly refused");
+    require(
+        succeeded(mathematical::expandMapRealizations(
+            *direct, nullptr, nullptr, NumericalExpressionMode::VectorOnly)) &&
+            succeeded(protocol::expandAlgorithms(*direct, Phase::Finish,
+                                                 legacyState)),
+        "baseline budget unexpectedly refused");
     State state;
     auto allowance = protocol::detail::AlgorithmExpansionRecord{};
     // Give both phases together exactly the substitution work needed by the
@@ -733,8 +759,10 @@ int main() {
         protocol::detail::AlgorithmStateAccess::get(legacyState).work;
     protocol::detail::AlgorithmStateAccess::set(state, allowance);
     retain(*source, state);
-    require(succeeded(mathematical::expandMapRealizations(*source)),
-            "budget map realization refused");
+    require(
+        succeeded(mathematical::expandMapRealizations(
+            *source, nullptr, nullptr, NumericalExpressionMode::VectorOnly)),
+        "budget map realization refused");
     auto before = copy(*source);
     require(named("algorithm-expansion-limit",
                   [&] {
@@ -801,8 +829,10 @@ int main() {
     auto candidate = parse(text);
     State state;
     retain(*candidate, state);
-    require(succeeded(mathematical::expandMapRealizations(*candidate)),
-            "origin fixture map refused");
+    require(
+        succeeded(mathematical::expandMapRealizations(
+            *candidate, nullptr, nullptr, NumericalExpressionMode::VectorOnly)),
+        "origin fixture map refused");
     require(named("algorithm-origin-limit",
                   [&] {
                     return failed(protocol::expandAlgorithms(
@@ -869,9 +899,11 @@ int main() {
                                     simplify, {true, true}));
                 run(*candidate, protocol::createLowerMathPass());
                 run(*candidate, kernel::createLowerKernelsPass());
-                require(count(*candidate, "algebra.exec.vector_dot") == 1,
-                        "fusion not forwarded");
+                require(count(*candidate, "local.apply") == 1,
+                        "map was consumed before physical feasibility");
                 run(*candidate, protocol::createSelectPhysicalPass());
+                require(isa<plan::ApplyOp>(nth(*candidate, "vector.dot")),
+                        "fusion not selected at the physical boundary");
                 bool preparation = false;
                 candidate->walk([&](Operation *op) {
                   preparation |= isa<local::ApplyOp, algebra::MapRealizeOp>(op);
@@ -891,6 +923,7 @@ int main() {
         run(module, protocol::createProjectProtocolPass(false));
         run(module, protocol::createLowerMathPass());
         run(module, kernel::createLowerKernelsPass());
+        run(module, protocol::createSelectPhysicalPass());
       }
       require(OperationEquivalence::isEquivalentTo(
                   *original, *enabled, OperationEquivalence::IgnoreLocations),

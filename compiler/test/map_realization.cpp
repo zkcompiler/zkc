@@ -69,8 +69,10 @@ int main(int argc, char **argv) {
   auto source = parseSourceString<ModuleOp>(fixture, &context);
   require(bool(source), "map fixture refused");
   auto expanded = copy(*source);
-  require(succeeded(mathematical::expandMapRealizations(*expanded)),
-          "map realization failed");
+  require(
+      succeeded(mathematical::expandMapRealizations(
+          *expanded, nullptr, nullptr, NumericalExpressionMode::VectorOnly)),
+      "map realization failed");
   auto named = [&](StringRef code, function_ref<bool()> body) {
     bool seen = false;
     ScopedDiagnosticHandler handler(&context, [&](Diagnostic &diagnostic) {
@@ -107,7 +109,9 @@ module { "protocol.module"() ({
     llvm::raw_string_ostream(before) << *module;
     require(named("algebra-map-formula",
                   [&] {
-                    return failed(mathematical::expandMapRealizations(*module));
+                    return failed(mathematical::expandMapRealizations(
+                        *module, nullptr, nullptr,
+                        NumericalExpressionMode::VectorOnly));
                   }),
             "required map capacity had no diagnostic");
     llvm::raw_string_ostream(after) << *module;
@@ -150,7 +154,8 @@ module { "protocol.module"() ({
 
   cases.run("realization is deterministic", [&] {
     auto again = copy(*source);
-    require(succeeded(mathematical::expandMapRealizations(*again)),
+    require(succeeded(mathematical::expandMapRealizations(
+                *again, nullptr, nullptr, NumericalExpressionMode::VectorOnly)),
             "second realization failed");
     std::string first, second;
     llvm::raw_string_ostream(first) << *expanded;
@@ -177,7 +182,8 @@ module { "protocol.module"() ({
     auto before = parseSourceString<ModuleOp>(text, &context);
     require(bool(before), "composed helper fixture refused");
     auto after = copy(*before);
-    require(succeeded(mathematical::expandMapRealizations(*after)),
+    require(succeeded(mathematical::expandMapRealizations(
+                *after, nullptr, nullptr, NumericalExpressionMode::VectorOnly)),
             "composed helper realization failed");
     require(succeeded(
                 mathematical::verifyMapRealizationsPreserved(*before, *after)),
@@ -451,7 +457,9 @@ module { "protocol.module"() ({
       if (admitted) {
         require(!error, "formula admission refused: " +
                             llvm::toString(std::move(error)));
-        require(succeeded(mathematical::expandMapRealizations(*module)),
+        require(succeeded(mathematical::expandMapRealizations(
+                    *module, nullptr, nullptr,
+                    NumericalExpressionMode::VectorOnly)),
                 "realization refused an admitted depth");
         return;
       }
@@ -460,8 +468,10 @@ module { "protocol.module"() ({
       require(namesIdentifier(message, "algebra-map-formula") &&
                   namesIdentifier(message, "ring-depth"),
               "depth refusal identifier: " + message);
-      require(failed(mathematical::expandMapRealizations(*module)),
-              "realization accepted excess depth");
+      require(
+          failed(mathematical::expandMapRealizations(
+              *module, nullptr, nullptr, NumericalExpressionMode::VectorOnly)),
+          "realization accepted excess depth");
     });
   };
   depth("addition chain at the Ring depth limit",
@@ -494,8 +504,87 @@ module { "protocol.module"() ({
                       declarations + " local.func @work");
           auto module = parseSourceString<ModuleOp>(text, &context);
           require(bool(module), "many-map fixture refused");
-          require(succeeded(mathematical::expandMapRealizations(*module)),
+          require(succeeded(mathematical::expandMapRealizations(
+                      *module, nullptr, nullptr,
+                      NumericalExpressionMode::VectorOnly)),
                   "correspondence budget refused a large admitted map family");
+        });
+  for (auto mode : {NumericalExpressionMode::PreferNative,
+                    NumericalExpressionMode::VectorOnly})
+    cases.run(
+        mode == NumericalExpressionMode::PreferNative
+            ? "optional numerical comparison preserves required maps"
+            : "wide maps retain the vector alternative",
+        [&] {
+          std::string text = R"mlir(
+!F = !algebra.field<"koala-bear">
+!V = !algebra.field_vector<"koala-bear">
+module { "protocol.module"() ({
+ func.func private @identity(%x:!F
+)mlir";
+          std::string mask = "true", ports = "!V";
+          for (unsigned i = 1; i < 128; ++i) {
+            text += ",%unused" + std::to_string(i) + ":!F";
+            mask += ",false";
+            ports += ",!F";
+          }
+          text += ")->!F { %r = algebra.field_multiply %x,%x : (!F,!F)->!F "
+                  "func.return %r : !F }\n";
+          for (unsigned i = 0; i < 200; ++i)
+            text += " algebra.map_realize @mapped" + std::to_string(i) +
+                    " = @identity [" + mask + "] : (" + ports + ")->!V\n";
+          text += R"mlir(
+ "protocol.func"() ({ "protocol.return"() : ()->() })
+ {sym_name="main",function_type=()->(),roles=["P"],input_roles=[],output_roles=[]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir";
+          auto before = parseSourceString<ModuleOp>(text, &context);
+          require(bool(before), "wide map family refused");
+          auto after = copy(*before);
+          require(succeeded(mathematical::expandMapRealizations(
+                      *after, nullptr, nullptr, mode)) &&
+                      succeeded(mathematical::verifyMapRealizationsPreserved(
+                          *before, *after)),
+                  "optional readback exhausted required map checking");
+          unsigned native = 0, vectors = 0;
+          for (unsigned i = 0; i < 200; ++i) {
+            auto body = actions(*after, "mapped" + std::to_string(i));
+            bool numerical = llvm::any_of(body, [](const auto &action) {
+              return action.first == "numerical.map";
+            });
+            if (numerical)
+              ++native;
+            else {
+              ++vectors;
+              require(llvm::any_of(body,
+                                   [](const auto &action) {
+                                     return action.first == "vector.mul";
+                                   }),
+                      "vector fallback lost the squared input");
+            }
+          }
+          require(
+              native + vectors == 200 && vectors &&
+                  (mode == NumericalExpressionMode::PreferNative ? native > 0
+                                                                 : native == 0),
+              "comparison work was reset per map or native selection was lost");
+          if (native) {
+            auto *call = nth(*after, "mapped0", "numerical.map");
+            auto parameters = call->getAttrOfType<ArrayAttr>("parameters");
+            auto body = edit(cast<StringAttr>(parameters[0]).getValue(),
+                             "[\"input\",0]", "[\"input\",1]");
+            OpBuilder builder(call);
+            call->setAttr("parameters", builder.getStrArrayAttr({body}));
+            require(succeeded(verify(*after)),
+                    "wide native body mutation failed ordinary admission");
+            require(named("algebra-map-correspondence",
+                          [&] {
+                            return failed(
+                                mathematical::verifyMapRealizationsPreserved(
+                                    *before, *after));
+                          }),
+                    "comparison capacity concealed an actual map mismatch");
+          }
         });
   // Admission charges the root helper before cloning it, operations no
   // result reaches included, and then charges only the callees it expands.
@@ -559,7 +648,9 @@ module { "protocol.module"() ({
     require(bool(module), "context fixture refused");
     require(named("algebra-map-context",
                   [&] {
-                    return failed(mathematical::expandMapRealizations(*module));
+                    return failed(mathematical::expandMapRealizations(
+                        *module, nullptr, nullptr,
+                        NumericalExpressionMode::VectorOnly));
                   }),
             "missing algebra-map-context refusal");
   });
@@ -617,7 +708,9 @@ module { "protocol.module"() ({
     auto module = parseSourceString<ModuleOp>(text, &context);
     require(bool(module), "shared helper fixture refused");
     require(succeeded(mathematical::expandMathRealizations(*module)) &&
-                succeeded(mathematical::expandMapRealizations(*module)),
+                succeeded(mathematical::expandMapRealizations(
+                    *module, nullptr, nullptr,
+                    NumericalExpressionMode::VectorOnly)),
             "shared helper realizations failed");
     auto origin =
         ArrayAttr::get(&context, {StringAttr::get(&context, "formula"),

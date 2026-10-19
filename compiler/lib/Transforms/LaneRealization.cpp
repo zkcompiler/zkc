@@ -1,21 +1,24 @@
 #include "LaneRealization.h"
 #include "MathematicalRecipes.h"
 #include "zkc/Analysis/Computation.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/RingSharing.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/StringExtras.h"
 
 using namespace mlir;
 using namespace llvm;
 namespace zkc::mathematical {
-Expected<LaneRealizationResult>
-realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
-             Type vector, Value length, uint64_t *remaining,
-             const MathematicalRecipes &recipes, LaneEmitter emit,
-             Value output) {
+Expected<LaneFormulaResult>
+admitLaneFormula(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
+                 Type vector, uint64_t *remaining,
+                 const MathematicalRecipes &recipes, Value output,
+                 ValueRange additionalTerms, MathematicalIdentity combine) {
   auto unsupported = [] {
-    return LaneRealizationResult{
+    return LaneFormulaResult{
         LaneRealizationStatus::Unsupported,
         {},
         "mathematical-lane-unsupported",
@@ -23,11 +26,8 @@ realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
   };
   auto decline = OptimizationOutcome::exhausted(WorkOwner::Lanes);
   auto capacity = [&](StringRef reason) {
-    return LaneRealizationResult{
+    return LaneFormulaResult{
         LaneRealizationStatus::Capacity, {}, reason.str(), decline};
-  };
-  auto invalid = [](StringRef reason) {
-    return zkc::error("mathematical-lane-realization", reason);
   };
   // Bound all scans before allocating a Ring arena or emitting instructions.
   // Every charged step covers an operation and its operand/result slots; the
@@ -59,7 +59,17 @@ realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
     return unsupported();
   // Compute a borrowed SSA slice, but admit every instruction below before
   // dropping dead work. A reduction's combiner may lie outside this slice.
-  llvm::DenseSet<Value> live{returned};
+  SmallVector<Value> terms{returned};
+  append_range(terms, additionalTerms);
+  if (!additionalTerms.empty() && combine != MathematicalIdentity::FieldAdd &&
+      combine != MathematicalIdentity::FieldMultiply)
+    return unsupported();
+  for (Value term : terms)
+    if (term.getType() != field)
+      return unsupported();
+  if (!charge(additionalTerms.size()))
+    return capacity("mathematical-lane-work");
+  llvm::DenseSet<Value> live(terms.begin(), terms.end());
   for (Operation &op : llvm::reverse(formula.without_terminator())) {
     if (op.getNumResults() != 1)
       return unsupported();
@@ -68,14 +78,25 @@ realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
   }
   std::vector<ring::Input> slots;
   std::vector<ring::Node> nodes;
+  SmallVector<LaneInput> slotBindings;
   llvm::DenseMap<Value, uint32_t> meanings;
+  auto validBinding = [&](const LaneInput &input) {
+    return input.value &&
+           input.value.getType() == (input.lanes ? vector : Type(field));
+  };
   auto input = [&](Value value) {
     if (value.getType() != field || !inputs.contains(value))
       return;
     meanings[value] = nodes.size();
     nodes.push_back(ring::Node::slot(slots.size()));
     slots.push_back({field.getDomain().str()});
+    slotBindings.push_back(inputs.lookup(value));
   };
+  for (Value argument : formula.getArguments())
+    if (auto found = inputs.find(argument); found != inputs.end() &&
+                                            argument.getType() == field &&
+                                            !validBinding(found->second))
+      return unsupported();
   for (Value argument : formula.getArguments())
     input(argument);
   for (Operation &op : formula.without_terminator()) {
@@ -83,12 +104,22 @@ realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
       return unsupported();
     Value result = op.getResult(0);
     if (inputs.contains(result)) {
+      if (result.getType() != field || !finite::replaceable(&op) ||
+          !validBinding(inputs.lookup(result)))
+        return unsupported();
       input(result);
       continue;
     }
-    if (!finite::replaceable(&op))
+    if (result.getType() != field || !finite::replaceable(&op))
       return unsupported();
     if (auto constant = finite::fieldConstant(&op)) {
+      if (auto e = protocol::checkParameters("field.constant", {*constant},
+                                             field.getDomain()))
+        return std::move(e);
+      // Ring literals are prime-subfield naturals. Other exact field values
+      // enter through typed operands, never by reinterpreting bit patterns.
+      if (!all_of(*constant, [](char c) { return isDigit(c); }))
+        return unsupported();
       meanings[result] = nodes.size();
       nodes.push_back(ring::Node::literal(field.getDomain().str(), *constant));
       continue;
@@ -102,6 +133,9 @@ realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
                                            MathematicalIdentity::FieldSubtract,
                                            MathematicalIdentity::FieldMultiply},
             contract->identity))
+      return unsupported();
+    if (op.getOperand(0).getType() != field ||
+        op.getOperand(1).getType() != field)
       return unsupported();
     if (!live.contains(result))
       continue;
@@ -121,12 +155,20 @@ realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
                         ? ring::Node::mul(left, right)
                         : ring::Node::add(left, right));
   }
-  if (!meanings.contains(returned))
-    return unsupported();
+  for (Value term : terms)
+    if (!meanings.contains(term))
+      return unsupported();
+  uint32_t outputNode = meanings.lookup(returned);
+  for (Value term : additionalTerms) {
+    nodes.push_back(combine == MathematicalIdentity::FieldMultiply
+                        ? ring::Node::mul(outputNode, meanings.lookup(term))
+                        : ring::Node::add(outputNode, meanings.lookup(term)));
+    outputNode = nodes.size() - 1;
+  }
   // Ring arenas contain exactly reachable nodes while their input inventory
   // retains unused slots. Admission above still inspected every instruction.
   std::vector<bool> needed(nodes.size(), false);
-  needed[meanings.lookup(returned)] = true;
+  needed[outputNode] = true;
   for (size_t i = nodes.size(); i-- > 0;)
     if (needed[i]) {
       const auto &node = nodes[i];
@@ -153,7 +195,7 @@ realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
   for (auto &entry : meanings)
     entry.second = liveMap[entry.second];
   auto expression = ring::Expression::create(
-      std::move(slots), std::move(liveNodes), {meanings.lookup(returned)});
+      std::move(slots), std::move(liveNodes), {liveMap[outputNode]});
   if (!expression) {
     std::string reason;
     auto error =
@@ -177,6 +219,28 @@ realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
     return std::move(error);
   }
 
+  for (auto &entry : meanings)
+    if (entry.second != UINT32_MAX)
+      entry.second = shared->nodeMap[entry.second];
+  return LaneFormulaResult{LaneRealizationStatus::Realized,
+                           LaneFormula{std::move(shared->expression), &formula,
+                                       inputs, std::move(meanings),
+                                       std::move(live), std::move(terms),
+                                       std::move(slotBindings), combine},
+                           {}};
+}
+
+Expected<LaneRealizationResult>
+emitVectorLanes(const LaneFormula &admitted, Type vector, Value length,
+                const MathematicalRecipes &recipes, LaneEmitter emit) {
+  auto invalid = [](StringRef reason) {
+    return zkc::error("mathematical-lane-realization", reason);
+  };
+  Block &formula = *admitted.source;
+  const auto &inputs = admitted.bindings;
+  const auto &live = admitted.live;
+  const auto &meanings = admitted.meanings;
+  auto field = cast<algebra::FieldType>(finite::elementType(vector));
   // Only admitted pure ring instructions enter this window. Keep source SSA
   // order, sharing equal labeled nodes without algebraic code motion.
   llvm::DenseMap<Value, LaneInput> values(inputs);
@@ -184,7 +248,7 @@ realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
   for (auto [value, meaning] : meanings)
     if (auto found = inputs.find(value);
         meaning != UINT32_MAX && found != inputs.end())
-      representatives[shared->nodeMap[meaning]] = found->second;
+      representatives[meaning] = found->second;
   llvm::DenseMap<Value, Value> broadcasts;
   auto broadcast = [&](LaneInput value) {
     if (value.lanes)
@@ -198,7 +262,7 @@ realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
     Value result = op.getResult(0);
     if (!live.contains(result) || inputs.contains(result))
       continue;
-    uint32_t meaning = shared->nodeMap[meanings.lookup(result)];
+    uint32_t meaning = meanings.lookup(result);
     if (auto found = representatives.find(meaning);
         found != representatives.end()) {
       values[result] = found->second;
@@ -240,12 +304,101 @@ realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
     values[result] = realized;
     representatives[meaning] = realized;
   }
-  LaneInput result = values.lookup(returned);
+  LaneInput result = values.lookup(admitted.terms.front());
+  for (Value term : ArrayRef<Value>(admitted.terms).drop_front()) {
+    auto right = values.lookup(term);
+    auto *recipe = recipes.lane(admitted.combine);
+    if (!result.value || !right.value || !recipe)
+      return invalid("missing associative term or recipe");
+    bool lanes = result.lanes || right.lanes;
+    Value joined =
+        lanes ? emit(recipe->rows, {broadcast(result), broadcast(right)},
+                     vector, {})
+              : emit(recipe->scalar, {result.value, right.value}, field, {});
+    if (!joined)
+      return invalid("emitter returned no associative value");
+    result = {joined, lanes};
+  }
   if (!result.value)
     return invalid("missing realized result");
   Value value = broadcast(result);
   if (!value)
     return invalid("broadcast returned no value");
   return LaneRealizationResult{LaneRealizationStatus::Realized, value, {}};
+}
+Expected<LaneRealizationResult> emitNumericalLanes(const LaneFormula &formula,
+                                                   Type vector, Value rows,
+                                                   LaneResultMode mode,
+                                                   NumericalEmitter emit) {
+  auto unsupported = [] {
+    return LaneRealizationResult{
+        LaneRealizationStatus::Unsupported,
+        {},
+        "mathematical-lane-unsupported",
+        {OptimizationStatus::Unsupported, OptimizationReason::LaneFormula}};
+  };
+  auto capacity = [](StringRef reason) {
+    return LaneRealizationResult{
+        LaneRealizationStatus::Capacity,
+        {},
+        reason.str(),
+        OptimizationOutcome::exhausted(WorkOwner::Lanes)};
+  };
+  if (formula.slots.size() > protocol::NumericalLimits::slots)
+    return capacity("numerical-mask-limit");
+  auto field = dyn_cast<algebra::FieldType>(finite::elementType(vector));
+  if (!field || !rows || !rows.getType().isUnsignedInteger(64))
+    return unsupported();
+  std::string mask;
+  SmallVector<Value> operands{rows};
+  for (const auto &slot : formula.slots) {
+    if (!slot.value ||
+        slot.value.getType() != (slot.lanes ? vector : Type(field)))
+      return unsupported();
+    mask += slot.lanes ? '1' : '0';
+    operands.push_back(slot.value);
+  }
+  // An admitted identity map borrows its existing column. Domain guards and
+  // eager arguments belong to the caller and have already been retained.
+  const auto &root =
+      formula.expression.nodes()[formula.expression.outputs()[0]];
+  if (mode == LaneResultMode::Map && root.kind == ring::Kind::Input &&
+      formula.slots[root.input].lanes)
+    return LaneRealizationResult{
+        LaneRealizationStatus::Realized, formula.slots[root.input].value, {}};
+  std::string body = zkc::printJson(formula.expression.encode());
+  if (body.size() > protocol::NumericalLimits::bodyBytes)
+    return capacity("numerical-body-limit");
+  StringRef contract = mode == LaneResultMode::Map   ? "numerical.map"
+                       : mode == LaneResultMode::Sum ? "numerical.sum"
+                                                     : "numerical.product";
+  protocol::BindingApplication binding{
+      contract.str(), {field.getDomain().str(), mask}, ""};
+  // Feasibility is checked before invoking the emitter, including exact
+  // field/body/slot agreement. An invalid producer is an error, not fallback.
+  if (auto e = protocol::checkNumericalParameters(binding, {body}))
+    return std::move(e);
+  Value value =
+      emit(binding, operands,
+           mode == LaneResultMode::Map ? vector : Type(field), {body});
+  if (!value)
+    return zkc::error("mathematical-lane-realization",
+                      "emitter returned no value");
+  return LaneRealizationResult{LaneRealizationStatus::Realized, value, {}};
+}
+
+Expected<LaneRealizationResult>
+realizeLanes(Block &formula, const llvm::DenseMap<Value, LaneInput> &inputs,
+             Type vector, Value length, uint64_t *remaining,
+             const MathematicalRecipes &recipes, LaneEmitter emit,
+             Value output) {
+  auto admitted =
+      admitLaneFormula(formula, inputs, vector, remaining, recipes, output);
+  if (!admitted)
+    return admitted.takeError();
+  if (!admitted->formula)
+    return LaneRealizationResult{
+        admitted->status, {}, admitted->reason, admitted->outcome};
+  return emitVectorLanes(*admitted->formula, vector, length, recipes, emit);
 }
 } // namespace zkc::mathematical

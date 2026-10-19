@@ -86,6 +86,9 @@ matrix.mul_vector 0
 matrix.row_dot 0
 matrix.shape_check 0
 matrix.transpose_mul_vector 0
+numerical.map 0
+numerical.sum 0
+numerical.product 0
 opening_states.append 0
 opening_states.at 0
 opening_states.empty 0

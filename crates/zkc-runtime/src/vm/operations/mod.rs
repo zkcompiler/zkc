@@ -9,6 +9,7 @@ mod field;
 mod hash;
 mod index;
 mod matrix;
+pub(super) mod numerical;
 mod oracle;
 mod pcs;
 mod poly;
@@ -206,6 +207,7 @@ fn installed() -> Result<&'static Registry> {
                 &field::CONTRIBUTION,
                 &index::CONTRIBUTION,
                 &matrix::CONTRIBUTION,
+                &numerical::CONTRIBUTION,
                 &oracle::CONTRIBUTION,
                 &pcs::CONTRIBUTION,
                 &poly::CONTRIBUTION,

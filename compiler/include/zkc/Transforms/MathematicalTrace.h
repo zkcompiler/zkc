@@ -67,6 +67,9 @@ struct VerificationDecision {
   std::string detail;
   std::optional<CapacityCause> capacity = {};
   RealizationSubject subject = {};
+  /// Original static Kernel invocation, when a containing reader exposes it.
+  /// This coordinate is independently reconstructed, never producer evidence.
+  std::optional<size_t> invocation = {};
 };
 struct RequiredFailure {
   std::string detail;
@@ -89,6 +92,8 @@ struct DiscardDecision {
 struct RetryDecision {
   uint64_t discardedScope;
   MathematicalSelectionPolicy effectivePolicy;
+  /// A targeted retry preserves the family policy for other occurrences.
+  std::optional<RealizationSubject> occurrence = {};
 };
 struct PublicationDecision {
   PublicationBoundary boundary;

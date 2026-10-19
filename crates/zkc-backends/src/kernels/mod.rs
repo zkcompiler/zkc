@@ -4,6 +4,7 @@ pub(crate) mod bn254;
 pub(crate) mod bytes;
 pub(crate) mod conversions;
 pub(crate) mod curve;
+pub(crate) mod field;
 pub(crate) mod indices;
 pub(crate) mod pairwise;
 pub(crate) mod resources;

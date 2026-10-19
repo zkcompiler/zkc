@@ -2,6 +2,7 @@
 #define ZKC_TRANSFORMS_KERNEL_SCHEDULE_H
 #include "../FiniteVerification.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
+#include "zkc/Support/OptimizationOutcome.h"
 #include "zkc/Transforms/Kernel.h"
 #include <optional>
 namespace zkc::kernel {
@@ -27,14 +28,18 @@ readScheduledLoop(mlir::Operation *&cursor, uint64_t &remaining);
 llvm::SmallVector<mlir::Value> traversalArguments(mlir::Block *);
 // Producer consumes an admitted Local recipe fragment, returning standard
 // func.func plus scheduled control. Required copying is charged before work.
-mlir::OwningOpRef<mlir::ModuleOp> scheduleEntry(mlir::ModuleOp local,
-                                                uint64_t &remaining);
+mlir::OwningOpRef<mlir::ModuleOp>
+scheduleEntry(mlir::ModuleOp local, uint64_t &remaining,
+              std::optional<CapacityCause> *capacity = nullptr);
 // Real executable consumer: publishes a fresh Local fragment from the actual
 // schedule. It does not retain or regenerate the earlier recipe fragment.
-mlir::OwningOpRef<mlir::ModuleOp> consumeSchedule(mlir::ModuleOp schedule,
-                                                  uint64_t &remaining);
-mlir::LogicalResult verifyScheduleLowering(mlir::ModuleOp schedule,
-                                           mlir::ModuleOp local);
+mlir::OwningOpRef<mlir::ModuleOp>
+consumeSchedule(mlir::ModuleOp schedule, uint64_t &remaining,
+                std::optional<CapacityCause> *capacity = nullptr);
+mlir::LogicalResult
+verifyScheduleLowering(mlir::ModuleOp schedule, mlir::ModuleOp local,
+                       uint64_t *shared = nullptr,
+                       finite::VerificationResult *outcome = nullptr);
 // Reads the original normalized Kernel directly against actual SCF operations
 // through the finite reader's candidate-control adapter. No schedule producer
 // or scheduled-to-Local conversion is invoked by this checker.

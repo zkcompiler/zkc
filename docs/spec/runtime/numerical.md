@@ -52,16 +52,17 @@ refund spent work. All internal work must finish before returning.
 `zkc-backends`' internal numerical scope reserves:
 
 - The aggregate conservative charge of fresh results against the invocation's
-  output allowance, in addition to each result's existing policy ceiling.
+  output allowance and the backend's complete-tuple `max_value_bytes` ceiling.
 - Simultaneously live scratch and destination staging storage, plus reserved
   final representation storage, against `Policy::max_numerical_bytes`.
-- A conservative operation/loop bound against `Policy::max_numerical_work`.
+- A conservative evaluation-admission score against `Policy::max_numerical_work`.
 
-Reservations precede allocation and use checked arithmetic. Staging and final
-storage are both counted while freezing can overlap them. Finished results
-remain charged until the scope ends. Scratch and abandoned destinations release
-their reservations when dropped. Scratch exposes only borrowed slices and cannot
-be frozen through the result API. Accepted work charges are not refunded.
+Scope reservations precede managed allocation and use checked arithmetic.
+Staging and final storage are both counted while freezing can overlap them.
+Finished results remain charged until the scope ends. Scratch and abandoned
+destinations release their reservations when dropped. Scratch exposes only
+borrowed slices and cannot be frozen through the result API. Accepted work
+charges are not refunded.
 
 The defaults are 256 MiB of managed memory and 2^26 numerical work units per
 call. These native policy fields are included in preparation compatibility;
@@ -79,16 +80,79 @@ bit-operation complexity or a constant-time guarantee.
 
 ## Implemented consumers
 
-The scoped path currently covers dense `vector.matvec` and `vector.split` over
-all eight installed field families, `poly.fold` for BLS LSB/MSB tables, and
+The scoped path covers dense vector addition, subtraction, multiplication,
+scaling, filling, geometric sequences, sums, products, dot products, matrix-vector
+products and splitting over all eight installed field families. It also covers
+`poly.fold` for BLS LSB/MSB tables and
 `poly.opening_quotient` for KoalaBear and its degree-four/eight extensions.
 The quotient uses scoped denominator scratch and its unpublished output for
 batch-inversion prefixes. Other operations keep their existing provider checks;
 DFT preparation and hidden provider scratch are not certified by this scope.
 
-Kernel schedules still lower to Local control and installed operations. This
-contract does not establish a native implementation of arbitrary scheduled
-functions or native/source mathematical correspondence. Future native lowering
-must connect the actual schedule, representation access, work bounds and
-completion behavior. MLIR memory and bufferization interfaces apply when that
-lowering provides concrete storage and alias semantics.
+## Pointwise expressions
+
+The compiler-generated `numerical.map`, `numerical.sum` and
+`numerical.product` contracts execute a pure field expression over a row domain.
+They use ordinary installed bindings and operation parameters:
+
+| Part | Contract |
+|---|---|
+| Binding arguments | `[F, M]`: an exact installed field and an ASCII `0`/`1` operand mask |
+| Inputs | Row count (`index`), followed by one `field<F>` for each `0` and one `vector<F>` for each `1` |
+| Parameters | One canonical `zkc.ring/0` expression, at most 4096 decoded UTF-8 bytes |
+| Expression | Exactly `M.length` inputs, one output, every node in `F`; constants, input, addition, multiplication and negation |
+| Result | `vector<F>` for map; `field<F>` for sum or product |
+| Installation | `arkworks/numerical.*`, `dalek/numerical.*` or `plonky3/numerical.*`, according to the owning field provider |
+
+The mask has at most 1023 positions. Leading zeros are significant; the empty
+mask permits a constant expression. The row count is at most 1,048,576. Every
+vector operand must have exactly that length, including operands unused by the
+expression. Scalars are broadcast mathematically without allocating vectors.
+Empty maps return an empty vector; empty sums and products return zero and one.
+An authored reduction seed is combined outside the operation.
+
+All eight installed field families have native consumers. Cross-field embedding
+is outside this expression contract. Natural constants denote prime-subfield
+elements; general extension elements arrive through typed operands. Binary-field
+constants retain the Ring carrier's restrictions: only the prime-subfield
+naturals `0` and `1` are accepted; `2` and hexadecimal bit patterns are refused.
+
+Program admission checks the static expression and binding independently of
+native installation. Direct native calls repeat the checks when reached. The
+backend retains immutable typed preparation only for equal declarations, exact
+physical signatures and attributes. Shapes, live values and policy remain
+invocation checks. Bounded parsing, canonicalization and immutable preparation,
+including typed constants and the retained preparation key, happen before
+per-evaluation scope admission. A cold call may therefore populate its preparation
+slot before a work refusal, including with zero work allowance. The numerical
+work policy does not provide a pre-execution admission guarantee for this
+preceding preparation.
+
+Preparation has separate bounds: a 4096-byte decoded UTF-8 body, 1023 operand
+slots and 1 MiB of conservatively charged immutable metadata per prepared call.
+The metadata charge includes copied keys, Ring inputs/nodes/facts/roots, typed
+constants, the positional mask and invariant/varying node schedules. Parsing
+scratch is bounded by the carrier size. These bounds are separate from managed
+row scratch and result construction;
+they do not bound allocator overhead or process RSS. No Host relation asset or
+process-wide expression cache is used.
+
+For each evaluation, the work admission score is
+`W = 8B + 2I + 2N + 1 + R(3N + 3)`, where `B` is the body byte length, `I` is the
+operand slot count, `N` is the Ring node count and `R` is the row count. The fixed
+setup surcharge `8B + 2I + 2N + 1` is identical for cold and cached calls, including
+empty domains. This is a conservative evaluation-admission score, not a meter of
+preparation already performed. After live shape and output checks, the scope
+admits this score before allocating managed scratch or results and evaluating
+rows. Cache warmth does not reduce the required allowance.
+
+The prepared plan classifies row dependence from the positional mask. Scalar-only
+subexpressions are evaluated from the current invocation's captures once, when
+the first row is reached; an empty domain evaluates no arithmetic. Only varying
+nodes run for each later row. Captured values never enter immutable preparation.
+The conservative work score remains unchanged by this optimization.
+
+Kernel schedules continue to lower to Local control and installed operations.
+These consumers do not implement arbitrary scheduled control or establish a
+native/source correspondence theorem. MLIR memory and bufferization interfaces
+apply to lowerings that provide concrete storage and alias semantics.

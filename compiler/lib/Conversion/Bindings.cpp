@@ -3,6 +3,9 @@
 #include "Storage.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Protocol/Execution.h"
+#include "zkc/Program/Codec.h"
+#include "zkc/Support/Refusal.h"
 
 using namespace llvm;
 using namespace mlir;
@@ -104,6 +107,45 @@ static Error applyPhysical(ModuleOp module, const target::PhysicalPlan &plan) {
   return Error::success();
 }
 
+// Check the complete compact carrier after applying the actual bindings and
+// conversions. Body-string bounds alone miss escaping and repeated calls.
+static Expected<SmallVector<target::OperationIndex>>
+checkProgramCapacity(ModuleOp candidate, const target::PhysicalPlan &plan) {
+  // The planner owns and charges this private clone before invoking us.
+  if (auto e = applyPhysical(candidate, plan))
+    return e;
+  auto model = readExecutionModel(candidate);
+  Error refusal = model ? program::checkStructure(*model) : model.takeError();
+  if (!refusal)
+    return SmallVector<target::OperationIndex>{};
+  bool capacity = false;
+  refusal =
+      handleErrors(std::move(refusal), [&](const Refusal &error) -> Error {
+        if (error.code == "source-limit") {
+          capacity = true;
+          return Error::success();
+        }
+        return zkc::error(error.code, error.detail);
+      });
+  if (refusal)
+    return std::move(refusal);
+  if (!capacity)
+    return error("source-limit");
+  SmallVector<target::OperationIndex> expressions;
+  for (auto [index, operation] : enumerate(plan.operations)) {
+    if (!operation.binding)
+      continue;
+    const auto &contract =
+        plan.bindings[*operation.binding].binding.application.contract;
+    if (contract == "numerical.map" || contract == "numerical.sum" ||
+        contract == "numerical.product")
+      expressions.push_back(index);
+  }
+  if (expressions.empty())
+    return error("source-limit");
+  return expressions;
+}
+
 Error materializePhysical(ModuleOp module,
                           const target::CheckedPhysicalPlan &checked) {
   auto candidate = checked.cloneSelectedSubject(module);
@@ -127,7 +169,8 @@ lowerBoundPhysical(ModuleOp original,
   Location failureLocation = original->getLoc();
   auto proposal = target::proposePhysical(
       original, target::installedCandidates(), selections,
-      {linearContractions, releaseStorage}, &failureLocation);
+      {linearContractions, releaseStorage, checkProgramCapacity},
+      &failureLocation);
   if (!proposal) {
     diagnostics::emit(emitError(failureLocation), proposal.takeError());
     return failure();

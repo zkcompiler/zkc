@@ -1,5 +1,7 @@
 #include "PhysicalPlan.h"
 #include "../Transforms/Kernel/Support.h"
+#include "../Transforms/NumericalLowering.h"
+#include "../Transforms/NumericalSelection.h"
 #include "mlir/IR/RegionKindInterface.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/Operations.h"
@@ -7,7 +9,9 @@
 #include "zkc/Dialect/IR.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Target/Selection.h"
+#include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringExtras.h"
 #include <map>
 #include <set>
@@ -45,6 +49,7 @@ struct InputSnapshot {
   SmallVector<const void *> addresses;
   protocol::Assignments selections;
   bool linearContractions;
+  MathematicalSelectionPolicy numericalPolicy;
   // This owned payload is the numerical decision, including actual recipes,
   // generated bindings, sites and SSA. Policy flags are not a replay format.
   // Accessible only inside Target; callers can obtain independent clones.
@@ -168,37 +173,173 @@ std::string fresh(std::set<std::string> &used, StringRef prefix,
   } while (!used.insert(result).second);
   return result;
 }
-Expected<ImplementationChoice> choose(const BindingApplication &application,
-                                      std::optional<StringRef> request,
-                                      const CandidateCatalog &catalog) {
-  if (request || !application.implementation.empty())
-    return selectImplementation(application, request);
-  auto candidates = catalog.implementations(application);
-  if (!candidates)
-    return candidates.takeError();
-  for (const auto &implementation : *candidates) {
-    auto selected = application;
-    selected.implementation = implementation;
-    auto installed = resolveBinding(selected, true);
-    if (!installed) {
-      consumeError(installed.takeError());
-      continue;
-    }
-    return ImplementationChoice{std::move(selected), false};
-  }
-  return error("binding-implementation");
+// Match only an explicitly classified refusal. Unknown errors retain their
+// original type and payload; diagnostic prose is never a retry protocol.
+Error decline(Error e, ArrayRef<StringRef> allowed, bool &declined) {
+  declined = false;
+  return handleErrors(std::move(e), [&](const Refusal &refusal) -> Error {
+    if (!is_contained(allowed, StringRef(refusal.code)))
+      return error(refusal.code, refusal.detail);
+    declined = true;
+    return Error::success();
+  });
 }
-Expected<BindingApplication> chooseConversion(Type from, Type to,
-                                              const CandidateCatalog &catalog) {
+struct ImplementationCursor {
+  BindingApplication logical;
+  SmallVector<mathematical::NumericalOccurrence> owners;
+  // Empty for generated bindings: their identity is the owned occurrence set
+  // and logical application, not a generated symbol spelling.
+  std::string authored;
+  std::vector<std::string> candidates;
+  size_t next = 0;
+  std::optional<size_t> parent;
+};
+class PhysicalSelection {
+public:
+  mathematical::NumericalSelection numerical;
+  SmallVector<ImplementationCursor> implementations;
+  using ImplementationKey =
+      std::tuple<std::string, std::vector<std::string>,
+                 std::vector<mathematical::NumericalOccurrence>, std::string>;
+  std::map<ImplementationKey, size_t> implementationCoordinates;
+  SmallVector<std::optional<size_t>> bindingCursors;
+  PhysicalFailure failure;
+
+  size_t representative(size_t id) {
+    auto root = id;
+    while (implementations[root].parent)
+      root = *implementations[root].parent;
+    while (id != root) {
+      auto next = *implementations[id].parent;
+      implementations[id].parent = root;
+      id = next;
+    }
+    return root;
+  }
+
+  Expected<ImplementationChoice>
+  choose(const BindingApplication &application,
+         std::optional<StringRef> request, const CandidateCatalog &catalog,
+         ArrayRef<mathematical::NumericalOccurrence> owners, StringRef authored,
+         std::optional<size_t> &cursor) {
+    if (request || !application.implementation.empty())
+      return selectImplementation(application, request);
+    auto logical = resolveBinding(application, false);
+    if (!logical)
+      return logical.takeError();
+    if (!numerical.chargeCatalog())
+      return error("finite-analysis-limit");
+    // A generated declaration may stop being shared when one occurrence
+    // changes recipe. Keep each source owner's alias to the same monotone
+    // cursor, rather than keying a new cursor by the smaller current use set.
+    SmallVector<ImplementationKey> keys;
+    if (authored.empty() && !owners.empty()) {
+      for (auto owner : owners)
+        keys.emplace_back(application.contract, application.arguments,
+                          std::vector{owner}, std::string{});
+    } else
+      keys.emplace_back(application.contract, application.arguments,
+                        std::vector<mathematical::NumericalOccurrence>{},
+                        authored.str());
+    size_t id = implementations.size();
+    SmallVector<size_t> merge;
+    for (const auto &key : keys) {
+      if (!numerical.chargeCatalog())
+        return error("finite-analysis-limit");
+      auto found = implementationCoordinates.find(key);
+      if (found == implementationCoordinates.end())
+        continue;
+      auto previous = representative(found->second);
+      if (id == implementations.size())
+        id = previous;
+      else if (previous != id && !is_contained(merge, previous))
+        merge.push_back(previous);
+    }
+    if (id == implementations.size()) {
+      auto candidates = catalog.implementations(application);
+      if (!candidates)
+        return candidates.takeError();
+      if (!numerical.chargeCatalog(candidates->size()))
+        return error("finite-analysis-limit");
+      implementations.push_back({application,
+                                 {owners.begin(), owners.end()},
+                                 authored.str(),
+                                 std::move(*candidates),
+                                 0,
+                                 {}});
+    }
+    for (auto previous : merge) {
+      auto &source = implementations[previous];
+      auto &target = implementations[id];
+      if (source.candidates != target.candidates)
+        return error("binding-operation");
+      target.next = std::max(target.next, source.next);
+      source.parent = id;
+    }
+    for (auto &key : keys)
+      implementationCoordinates.insert_or_assign(std::move(key), id);
+    cursor = id;
+    auto &entry = implementations[id];
+    for (; entry.next < entry.candidates.size(); ++entry.next) {
+      if (!numerical.chargeCatalog())
+        return error("finite-analysis-limit");
+      auto selected = application;
+      selected.implementation = entry.candidates[entry.next];
+      auto installed = resolveBinding(selected, true);
+      if (installed)
+        return ImplementationChoice{std::move(selected), false};
+      bool unavailable;
+      if (auto e = decline(installed.takeError(), {"binding-implementation"},
+                           unavailable))
+        return e;
+    }
+    failure.kind = PhysicalFailureKind::ImplementationUnavailable;
+    return error("binding-implementation");
+  }
+  Expected<bool> advance() {
+    // An exhausted implementation at one endpoint can still leave a usable
+    // automatic choice at the other. Never reset either endpoint's cursor.
+    auto bindings = failure.bindings;
+    llvm::sort(bindings);
+    for (auto binding : bindings) {
+      if (binding >= bindingCursors.size() || !bindingCursors[binding])
+        continue;
+      auto &entry = implementations[representative(*bindingCursors[binding])];
+      if (entry.next + 1 < entry.candidates.size()) {
+        if (!numerical.chargeCatalog())
+          return error("finite-analysis-limit");
+        ++entry.next;
+        return true;
+      }
+    }
+    return false;
+  }
+};
+Expected<BindingApplication>
+chooseConversion(Type from, Type to, const CandidateCatalog &catalog,
+                 mathematical::NumericalSelection &selection) {
   auto source = encodeBoundType(from, true);
   if (!source)
     return source.takeError();
   auto target = encodeBoundType(to, true);
   if (!target)
     return target.takeError();
-  for (auto candidate : catalog.conversions(*source, *target)) {
+  if (!selection.chargeCatalog())
+    return error("finite-analysis-limit");
+  auto candidates = catalog.conversions(*source, *target);
+  if (!selection.chargeCatalog(candidates.size()))
+    return error("finite-analysis-limit");
+  for (auto candidate : candidates) {
+    // A catalog suggestion can name an uninstalled adapter. Decline that
+    // suggestion; authored bindings and explicit pins were admitted separately.
     if (auto e = checkDirectConversion(candidate, *source, *target)) {
-      consumeError(std::move(e));
+      bool unavailable;
+      if (auto terminal =
+              decline(std::move(e),
+                      {"binding-no-conversion", "binding-implementation",
+                       "binding-conversion"},
+                      unavailable))
+        return terminal;
       continue;
     }
     return candidate;
@@ -213,8 +354,10 @@ class Proposer {
   SmallVector<Operation *> operations;
   Indices indices;
   Location *failureLocation;
+  PhysicalSelection &selection;
   SmallVector<BindingDecision> originals;
   std::map<std::string, BindingIndex> names;
+  std::map<std::string, SmallVector<OperationIndex>> bindingUses;
   SmallVector<LinearContractionGroup> eligible;
   std::set<std::string> symbols;
 
@@ -312,15 +455,21 @@ class Proposer {
 
 public:
   Proposer(ModuleOp module, const CandidateCatalog &catalog,
-           Location *failureLocation)
+           Location *failureLocation, PhysicalSelection &selection)
       : module(module), root(cast<zkc::protocol_ir::ProtocolModuleOp>(
                             &module.getBody()->front())),
         catalog(catalog), operations(physicalPlanOperations(module)),
-        indices(indexOperations(operations)), failureLocation(failureLocation) {
-  }
+        indices(indexOperations(operations)), failureLocation(failureLocation),
+        selection(selection) {}
 
   Error initialize(ArrayRef<std::pair<std::string, std::string>> requests,
                    bool contractions) {
+    for (auto [index, op] : enumerate(operations)) {
+      if (!selection.numerical.chargeCatalog())
+        return error("finite-analysis-limit");
+      if (auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding"))
+        bindingUses[ref.getValue().str()].push_back(index);
+    }
     std::map<std::string, std::string> choices;
     for (const auto &[key, implementation] : requests)
       if (!choices.emplace(key, implementation).second)
@@ -335,13 +484,36 @@ public:
       if (!binding)
         return binding.takeError();
       auto request = choices.find(binding->name);
-      auto selected = choose(binding->application,
-                             request == choices.end()
-                                 ? std::nullopt
-                                 : std::optional<StringRef>(request->second),
-                             catalog);
-      if (!selected)
+      SmallVector<mathematical::NumericalOccurrence> owners;
+      bool authoredUse = false;
+      for (auto index : bindingUses[binding->name]) {
+        if (!selection.numerical.chargeCatalog())
+          return error("finite-analysis-limit");
+        auto occurrenceOwners = selection.numerical.owners(operations[index]);
+        authoredUse |= occurrenceOwners.empty();
+        append_range(owners, occurrenceOwners);
+        selection.failure.operations.push_back(index);
+      }
+      llvm::sort(owners);
+      owners.erase(std::unique(owners.begin(), owners.end()), owners.end());
+      // A shared declaration with any authored use cannot be erased by
+      // numerical fallback, even if another use came from a recipe.
+      std::optional<size_t> cursor;
+      auto selected = selection.choose(
+          binding->application,
+          request == choices.end() ? std::nullopt
+                                   : std::optional<StringRef>(request->second),
+          catalog, owners, owners.empty() || authoredUse ? binding->name : "",
+          cursor);
+      selection.bindingCursors.push_back(cursor);
+      if (!selected) {
+        selection.failure.bindings.push_back(originals.size());
+        if (authoredUse || owners.empty() || request != choices.end() ||
+            !binding->application.implementation.empty())
+          selection.failure.kind = PhysicalFailureKind::Terminal;
         return selected.takeError();
+      }
+      selection.failure = {};
       binding->application = std::move(selected->application);
       names.emplace(binding->name, originals.size());
       originals.push_back({std::move(*binding), BindingPurpose::Original,
@@ -385,6 +557,7 @@ public:
       if (plan.contractions.size() >= groupLimit)
         break;
       SmallVector<std::pair<OperationIndex, BindingDecision>> pending;
+      Error contractionError = Error::success();
       auto prepare = [&](Operation *op) {
         auto index = indices.lookup(op);
         auto binding = plan.operations[index].binding;
@@ -394,11 +567,22 @@ public:
         bool available = false;
         for (const auto &implementation :
              catalog.diagonalImplementations(clone.binding.application)) {
+          if (!selection.numerical.chargeCatalog()) {
+            contractionError = error("finite-analysis-limit");
+            return false;
+          }
           auto candidate = clone.binding.application;
           candidate.implementation = implementation;
           auto installed = resolveDiagonalImplementation(candidate);
           if (!installed) {
-            consumeError(installed.takeError());
+            bool unavailable;
+            auto terminal = decline(
+                installed.takeError(),
+                {"binding-implementation", "binding-contraction"}, unavailable);
+            if (terminal) {
+              contractionError = std::move(terminal);
+              return false;
+            }
             continue;
           }
           clone.binding.application = std::move(candidate);
@@ -414,14 +598,19 @@ public:
         return true;
       };
       if (plan.bindings.size() + 1 + group.uses.size() > 4096 ||
-          !prepare(group.producer))
+          !prepare(group.producer)) {
+        if (contractionError)
+          return contractionError;
         continue;
+      }
       bool available = true;
       for (const auto &use : group.uses)
         if (!prepare(use.consumer)) {
           available = false;
           break;
         }
+      if (contractionError)
+        return contractionError;
       if (!available)
         continue;
       ContractionDecision selected{indices.lookup(group.producer), {}};
@@ -449,9 +638,30 @@ public:
         Type to = decision.inputs[operand];
         if (from == to)
           continue;
-        auto application = chooseConversion(from, to, catalog);
-        if (!application)
-          return application.takeError();
+        auto application =
+            chooseConversion(from, to, catalog, selection.numerical);
+        if (!application) {
+          bool unavailable;
+          if (auto e = decline(application.takeError(),
+                               {"binding-no-conversion"}, unavailable))
+            return e;
+          auto &failure = selection.failure;
+          failure.kind = PhysicalFailureKind::ConversionUnavailable;
+          failure.operations.push_back(index);
+          failure.operand = unsigned(operand);
+          failure.from = from;
+          failure.to = to;
+          if (decision.binding)
+            failure.bindings.push_back(*decision.binding);
+          Operation *producer = value.getDefiningOp();
+          if (!producer)
+            producer = cast<BlockArgument>(value).getOwner()->getParentOp();
+          auto producerIndex = indices.lookup(producer);
+          failure.operations.push_back(producerIndex);
+          if (plan.operations[producerIndex].binding)
+            failure.bindings.push_back(*plan.operations[producerIndex].binding);
+          return error("binding-no-conversion");
+        }
         BindingIndex binding = plan.bindings.size();
         // Reuse declarations, never conversion instructions or their results.
         for (auto [i, candidate] : enumerate(plan.bindings))
@@ -492,63 +702,297 @@ proposePhysical(ModuleOp module, const CandidateCatalog &catalog,
       cast<zkc::protocol_ir::ProtocolModuleOp>(&module.getBody()->front());
   if (root.getProfile() != zkc::protocol_ir::Profile::Exec)
     return error("interactive-physical-stage");
-  PhysicalPlan plan;
+  // Validate every explicit request before replacement discovery. Pins bypass
+  // catalog preferences and survive even when the chosen operation is unused.
+  std::map<std::string, std::string> requests;
+  for (const auto &[name, implementation] : selections)
+    if (!requests.emplace(name, implementation).second)
+      return error("binding-duplicate-selection");
+  std::map<std::string, std::string> originalPins;
+  for (auto declaration :
+       root.getBody().front().getOps<zkc::local::OperationBindingOp>()) {
+    locate(failureLocation, declaration);
+    auto binding = readBinding(declaration);
+    if (!binding)
+      return binding.takeError();
+    originalPins.emplace(binding->name, binding->application.implementation);
+    auto found = requests.find(binding->name);
+    if (found == requests.end())
+      continue;
+    auto fixed = selectImplementation(binding->application, found->second);
+    if (!fixed)
+      return fixed.takeError();
+    requests.erase(found);
+  }
+  if (!requests.empty())
+    return error("binding-unknown-selection");
   auto input = std::make_shared<InputSnapshot>(
       InputSnapshot{module,
                     structure(module),
                     identities(module),
                     protocol::Assignments(selections.begin(), selections.end()),
                     options.linearContractions,
+                    options.numericalPolicy,
                     {}});
-  bool hasKernels = false;
+  bool hasKernels = false, hasMaps = false;
   root.walk([&](Operation *op) {
     hasKernels |= isa<kernel::ModuleOp, kernel::CallOp>(op);
+    hasMaps |= isa<zkc::algebra::MapRealizeOp>(op);
   });
-  ModuleOp selected = module;
-  if (hasKernels) {
-    input->numerical = kernel::proposeKernelLowering(module);
-    if (!input->numerical)
-      return error("kernel-lowering");
-    selected = *input->numerical;
-    // Admit the actual payload before physical indexing. Its numerical
-    // correspondence is independently checked by validatePhysical, never
-    // inferred from the producer returning a well-formed candidate.
-    if (failed(verify(selected)) || !hasSingleElement(*selected.getBody()) ||
-        !isa<zkc::protocol_ir::ProtocolModuleOp>(selected.getBody()->front()))
-      return error("binding-operation");
-    root =
-        cast<zkc::protocol_ir::ProtocolModuleOp>(selected.getBody()->front());
-    if (root.getProfile() != zkc::protocol_ir::Profile::Exec)
-      return error("interactive-physical-stage");
+  bool hasNumerical = hasKernels || hasMaps;
+  PhysicalSelection selection;
+  if (options.numericalWork)
+    selection.numerical.work = *options.numericalWork;
+  if (options.numericalCopy)
+    selection.numerical.remainingCopy = *options.numericalCopy;
+  if (options.numericalSiteBytes)
+    selection.numerical.remainingSiteBytes = *options.numericalSiteBytes;
+  auto settleWork = llvm::scope_exit([&] {
+    if (options.numericalCopy)
+      *options.numericalCopy = selection.numerical.remainingCopy;
+    if (options.numericalSiteBytes)
+      *options.numericalSiteBytes = selection.numerical.remainingSiteBytes;
+    if (options.numericalWork) {
+      *options.numericalWork = selection.numerical.work;
+      options.numericalWork->numericalSelection = nullptr;
+      options.numericalWork->numericalOccurrence.reset();
+    }
+  });
+  OwningOpRef<ModuleOp> prepared;
+  mathematical::PreparedMaps maps;
+  if (hasNumerical) {
+    if (hasKernels)
+      prepared = kernel::prepareKernelLowering(
+          module, &selection.numerical.remainingCopy);
+    else {
+      if (!kernel::chargeCopy(module, selection.numerical.remainingCopy))
+        return error("kernel-lowering", "numerical source copy capacity");
+      prepared = cast<ModuleOp>(module->clone());
+    }
+    if (!prepared)
+      return error("kernel-lowering", "numerical source preparation");
+    // Checked mathematical normalization does not consult executable binding
+    // choices. Apply requests to its owned result before any replacement
+    // discovery, rather than cloning the complete source just to pin it.
+    auto preparedRoot =
+        cast<zkc::protocol_ir::ProtocolModuleOp>(prepared->getBody()->front());
+    for (auto declaration : preparedRoot.getBody()
+                                .front()
+                                .getOps<zkc::local::OperationBindingOp>())
+      for (const auto &[name, implementation] : selections)
+        if (declaration.getSymName() == name)
+          declaration.setImplementation(implementation);
+    // Preparation and source discovery run once. All candidate attempts clone
+    // this immutable closure; no view into a failed clone becomes source IR.
+    if (hasKernels &&
+        failed(kernel::discoverKernelCalls(*prepared, options.numericalPolicy,
+                                           selection.numerical)))
+      return error("kernel-lowering", "numerical occurrence discovery");
+    if (hasMaps &&
+        failed(mathematical::prepareRetainedMaps(
+            *prepared, maps, selection.numerical, options.numericalPolicy)))
+      return error("algebra-map-formula");
   }
-  if (auto e = input->check(module))
-    return e;
-  plan.input = std::move(input);
-  Proposer proposer(selected, catalog, failureLocation);
-  if (auto e = proposer.initialize(selections, options.linearContractions))
-    return e;
-  size_t groupLimit = 4096;
   for (;;) {
-    if (auto e = proposer.populate(plan, groupLimit))
-      return e;
-    if (plan.bindings.size() <= 4096) {
-      if (options.releaseStorage) {
-        auto releases =
-            proposeStorage(selected, plan.operations, failureLocation);
-        if (!releases)
-          return releases.takeError();
-        plan.releases = std::move(*releases);
+    auto incomingCopy = selection.numerical.remainingCopy;
+    auto incomingBytes = selection.numerical.remainingSiteBytes;
+    selection.numerical.allowSpeculation(true);
+    mathematical::RecipeConstructionWork construction(selection.numerical.work);
+    bool speculative = hasNumerical && selection.numerical.canSpeculate() &&
+                       selection.numerical.hasAlternatives() &&
+                       construction.canDiscard(selection.numerical.work);
+    selection.numerical.allowSpeculation(speculative);
+    auto copyCeiling =
+        speculative ? std::min(incomingCopy,
+                               selection.numerical.work.discardedRecipeCopy)
+                    : incomingCopy;
+    auto byteCeiling =
+        speculative
+            ? std::min(incomingBytes,
+                       selection.numerical.work.discardedRecipeSiteBytes)
+            : incomingBytes;
+    selection.numerical.remainingCopy = copyCeiling;
+    selection.numerical.remainingSiteBytes = byteCeiling;
+    // A speculative ceiling temporarily hides the ordered reserve. Settle
+    // only actual performed copying/site work on every success or refusal.
+    auto settleCeilings = llvm::scope_exit([&] {
+      selection.numerical.remainingCopy += incomingCopy - copyCeiling;
+      selection.numerical.remainingSiteBytes += incomingBytes - byteCeiling;
+    });
+    selection.numerical.origins.clear();
+    OwningOpRef<ModuleOp> candidate;
+    auto clearOrigins =
+        llvm::scope_exit([&] { selection.numerical.origins.clear(); });
+    ModuleOp selected = module;
+    Error refusal = Error::success();
+    std::optional<mathematical::RealizationSubject> capacitySubject;
+    mathematical::VerificationDecision numericalOutcome;
+    bool constructionCapacity = false;
+    if (hasNumerical) {
+      if (!kernel::chargeCopy(*prepared, selection.numerical.remainingCopy)) {
+        if (!speculative)
+          return error("kernel-lowering", "numerical candidate copy capacity");
+        constructionCapacity = true;
+        refusal = error("finite-analysis-limit");
+      } else {
+        candidate = cast<ModuleOp>(prepared->getOperation()->clone());
+        selected = *candidate;
+        if (hasKernels &&
+            failed(kernel::materializeKernelCalls(
+                selected, options.numericalPolicy, nullptr, selection.numerical,
+                &numericalOutcome, speculative))) {
+          if (numericalOutcome.outcome ==
+              mathematical::VerificationObservation::OptionalCapacity) {
+            capacitySubject = numericalOutcome.subject;
+            constructionCapacity = speculative && numericalOutcome.capacity &&
+                                   (numericalOutcome.capacity->owner ==
+                                        WorkOwner::AlgorithmExpansion ||
+                                    numericalOutcome.capacity->owner ==
+                                        WorkOwner::AlgorithmOriginBytes);
+          } else
+            return error("kernel-lowering", numericalOutcome.detail);
+          refusal = error("finite-analysis-limit");
+        }
+        if (!refusal && hasMaps &&
+            failed(mathematical::materializeRetainedMaps(
+                selected, maps, selection.numerical, options.numericalPolicy,
+                numericalOutcome, speculative))) {
+          if (numericalOutcome.outcome ==
+              mathematical::VerificationObservation::OptionalCapacity) {
+            capacitySubject = numericalOutcome.subject;
+            constructionCapacity = speculative && numericalOutcome.capacity &&
+                                   (numericalOutcome.capacity->owner ==
+                                        WorkOwner::AlgorithmExpansion ||
+                                    numericalOutcome.capacity->owner ==
+                                        WorkOwner::AlgorithmOriginBytes);
+          } else
+            return error("algebra-map-lowering", numericalOutcome.detail);
+          refusal = error("mathematical-analysis-limit");
+        }
+        auto candidateRoot = cast<zkc::protocol_ir::ProtocolModuleOp>(
+            selected.getBody()->front());
+        // Replacement saw fixed requests. Retained declarations keep their
+        // original attributes; physical choices carry the requested pins.
+        for (auto declaration : candidateRoot.getBody()
+                                    .front()
+                                    .getOps<zkc::local::OperationBindingOp>()) {
+          auto original = originalPins.find(declaration.getSymName().str());
+          if (original != originalPins.end())
+            declaration.setImplementation(original->second);
+        }
+        if (!refusal && failed(verify(selected)))
+          return error("binding-operation");
       }
-      if (auto e = plan.input->check(module))
+    }
+    if (auto e = input->check(module))
+      return e;
+    selection.failure = {};
+    selection.bindingCursors.clear();
+    PhysicalPlan plan;
+    Proposer proposer(selected, catalog, failureLocation, selection);
+    if (!refusal)
+      refusal = proposer.initialize(selections, options.linearContractions);
+    size_t groupLimit = 4096;
+    while (!refusal) {
+      refusal = proposer.populate(plan, groupLimit);
+      if (refusal || plan.bindings.size() <= 4096)
+        break;
+      if (plan.contractions.empty()) {
+        refusal = error("binding-declaration-limit");
+        break;
+      }
+      groupLimit = plan.contractions.size() - 1;
+    }
+    if (!refusal && options.releaseStorage) {
+      auto releases =
+          proposeStorage(selected, plan.operations, failureLocation);
+      if (!releases)
+        refusal = releases.takeError();
+      else
+        plan.releases = std::move(*releases);
+    }
+    if (!refusal && options.programCapacity) {
+      if (!kernel::chargeCopy(selected, selection.numerical.remainingCopy)) {
+        constructionCapacity = speculative;
+        refusal = error("kernel-lowering");
+      } else {
+        OwningOpRef<ModuleOp> preflight(cast<ModuleOp>(selected->clone()));
+        auto capacity = options.programCapacity(*preflight, plan);
+        if (!capacity)
+          refusal = capacity.takeError();
+        else if (!capacity->empty()) {
+          selection.failure.kind = PhysicalFailureKind::OptionalProgramCapacity;
+          selection.failure.operations = std::move(*capacity);
+          refusal = error("source-limit");
+        }
+      }
+    }
+    if (!refusal && hasNumerical &&
+        failed(mathematical::verifyNumericalLowering(
+            module, selected, options.numericalPolicy, selections,
+            &selection.numerical.work, &numericalOutcome))) {
+      if (numericalOutcome.outcome !=
+          mathematical::VerificationObservation::OptionalCapacity)
+        return error("numerical-lowering-correspondence",
+                     numericalOutcome.detail);
+      capacitySubject = numericalOutcome.subject;
+      refusal = error("mathematical-analysis-limit");
+    }
+    if (!refusal) {
+      if (auto e = input->check(module))
         return e;
+      selection.numerical.origins.clear();
+      input->numerical = std::move(candidate);
+      plan.input = input;
       return plan;
     }
-    // Reserve space for real conversions as well as clones. Drop the last
-    // selected atomic group deterministically, retaining dense execution.
-    locate(failureLocation, root);
-    if (plan.contractions.empty())
-      return error("binding-declaration-limit");
-    groupLimit = plan.contractions.size() - 1;
+    const auto &failure = selection.failure;
+    if (!capacitySubject && !constructionCapacity &&
+        failure.kind == PhysicalFailureKind::Terminal)
+      return refusal;
+    SmallVector<mathematical::NumericalOccurrence> implicated;
+    auto operations = physicalPlanOperations(selected);
+    for (auto index : failure.operations) {
+      if (index >= operations.size())
+        return refusal;
+      // A fixed conversion endpoint remains exact. An independently automatic
+      // peer may still change its implementation or numerical representation.
+      if (index < plan.operations.size())
+        if (auto binding = plan.operations[index].binding;
+            binding && plan.bindings[*binding].fixed)
+          continue;
+      append_range(implicated, selection.numerical.owners(operations[index]));
+    }
+    auto advanced = capacitySubject
+                        ? selection.numerical.advanceSubject(
+                              *capacitySubject, numericalOutcome.invocation)
+                    : constructionCapacity ? selection.numerical.advanceAll()
+                                           : selection.advance();
+    if (advanced && !*advanced && constructionCapacity && capacitySubject)
+      advanced = selection.numerical.advanceAll();
+    if (advanced && !*advanced && !capacitySubject && !constructionCapacity)
+      advanced = selection.numerical.advance(implicated);
+    if (!advanced) {
+      consumeError(std::move(refusal));
+      return advanced.takeError();
+    }
+    if (!*advanced)
+      return refusal;
+    // No failure is swallowed until both classification and attributable
+    // monotone advancement have succeeded. Required construction quotas are
+    // restored only after charging actual discarded work to their reserve.
+    auto copied = copyCeiling - selection.numerical.remainingCopy;
+    auto bytes = byteCeiling - selection.numerical.remainingSiteBytes;
+    auto &work = selection.numerical.work;
+    if (copied > work.discardedRecipeCopy ||
+        bytes > work.discardedRecipeSiteBytes || !construction.discard(work))
+      return refusal;
+    work.discardedRecipeCopy -= copied;
+    work.discardedRecipeSiteBytes -= bytes;
+    selection.numerical.remainingCopy = copyCeiling;
+    selection.numerical.remainingSiteBytes = byteCeiling;
+    selection.numerical.origins.clear();
+    consumeError(std::move(refusal));
   }
 }
 
@@ -696,8 +1140,10 @@ Expected<CheckedPhysicalPlan> validatePhysical(ModuleOp module,
   ModuleOp selected = module;
   if (plan.input->numerical) {
     selected = *plan.input->numerical;
-    if (failed(kernel::verifyKernelLowering(module, selected)))
-      return error("kernel-lowering-correspondence");
+    if (failed(mathematical::verifyNumericalLowering(
+            module, selected, plan.input->numericalPolicy,
+            plan.input->selections)))
+      return error("numerical-lowering-correspondence");
   }
   auto root =
       cast<zkc::protocol_ir::ProtocolModuleOp>(&selected.getBody()->front());

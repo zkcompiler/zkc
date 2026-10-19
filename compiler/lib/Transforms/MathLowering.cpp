@@ -5,6 +5,7 @@
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Analysis/Computation.h"
+#include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
@@ -410,8 +411,12 @@ struct LowerMathPass : PassWrapper<LowerMathPass, OperationPass<ModuleOp>> {
     for (auto function : calculations)
       if (failed(kernel::formCalculation(function, unit, policy)))
         return signalPassFailure();
+    llvm::DenseSet<Operation *> mapHelpers;
+    if (failed(algebra::collectMapHelpers(unit, mapHelpers)))
+      return signalPassFailure();
     for (auto &declaration : make_early_inc_range(unit.getBody().front()))
-      if (isa<data::DomainOp, func::FuncOp>(declaration))
+      if (isa<data::DomainOp, func::FuncOp>(declaration) &&
+          !mapHelpers.contains(&declaration))
         declaration.erase();
     unit.setProfile(protocol_ir::Profile::Exec);
     if (failed(verify(*candidate)) ||
