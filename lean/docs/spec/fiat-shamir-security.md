@@ -1523,10 +1523,16 @@ obligations of a joint provider theorem.
 - A hash call's reply is its cell's answer read through a fixed range
   equivalence (`hashRange`, `hashAnswer`).
 - The simulator's state has a provider-state projection (`chainState`) that
-  recording a hash answer leaves unchanged (`recordHash`), and every call that
-  is not a hash call is assigned and privately answered as a function of that
-  projection (`attemptChain`, `respondChain`): no hash answer becomes provider
-  state.
+  recording a hash answer leaves unchanged (`recordHash`). Every call that is
+  not a hash call reads the state only through that projection: its attempt
+  (`attemptChain`), the recorded answer of a transcript cell (`recordedChain`)
+  and its private reply (`respondChain`). It also moves the projection as a
+  function of the projection and its own inputs: after recording a transcript
+  answer (`recordTranscript`) and after a private reply (`respondState`). So
+  every handler step of such a call, answer and successor projection, is a
+  function of the projection (`Frame.handle_chain`), and a hash call's step
+  leaves the projection unchanged (`Frame.handle_hash`): no hash answer becomes
+  provider state, at that call or a later one.
 - The loss is charged over the joint trace and the joint budget, every call to
   the shared primitive by the adversary in any family or by the verifier's
   expansion counting towards one total (`joint`).
@@ -1568,7 +1574,13 @@ holds, and composing through the contract bounds the committed verifier's
 concrete false acceptance by the commitment stage's loss at the total budget
 (`tagged_soundness`). Its tags are the joint key's own summands, so it has no
 chain state that could collide; a provider that encodes tags in bytes composes
-with it through `Relation.ofRenaming`.
+with it through `Relation.ofRenaming`. The same module checks the state
+obligations with delayed transfers: a simulator that copies a recorded hash
+answer into provider state, at a private reply or at recording a transcript
+answer, meets every read obligation at its projection, yet a later private
+reply exposes the hash answer; no frame has its simulation, whatever the
+projection (`transfer_no_frame`), while the same simulator without the copy has
+one (`keptFrame`).
 
 ## Obligations
 

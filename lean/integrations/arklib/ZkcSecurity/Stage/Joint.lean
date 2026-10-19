@@ -49,9 +49,11 @@ realizes the transcript cells by the provider. `Frame` records such a simulation
 obligations it must meet: the simulator uses the namespaces' own encodings (`passThrough`,
 `separated`, `chainOnly`); a hash call's reply is its cell's answer through a fixed range
 equivalence (`hashRange`, `hashAnswer`); recording a hash answer leaves the provider-state
-projection unchanged, and the attempts and private replies of every other call depend on the state
-only through that projection (`recordHash`, `attemptChain`, `respondChain`); and the loss is
-charged over the joint trace and the joint budget (`joint`). A frame's contract
+projection unchanged (`recordHash`), and every other call reads the state only through that
+projection and moves the projection as a function of it and the call's inputs (`attemptChain`,
+`recordedChain`, `respondChain`, `recordTranscript`, `respondState`), so every handler step of
+such a call is a function of the projection (`Frame.handle_chain`, `Frame.handle_hash`); and the
+loss is charged over the joint trace and the joint budget (`joint`). A frame's contract
 (`Frame.contract`) takes its namespaces from the frame, so the namespaces the contract records are
 the ones the simulator uses. When the ideal failure of a mixture of provers is that of a
 random-oracle experiment after drawing the prover (`oracleMixture`), the frame's simulation is a
@@ -338,10 +340,16 @@ obligations of the frame.
   (`chainOnly`).
 * **Hash answers.** A hash call's reply is its ideal cell's answer read through a fixed range
   equivalence (`hashRange`, `hashAnswer`).
-* **State separation.** The simulator's state has a provider-state projection (`chainState`)
-  that recording a hash answer leaves unchanged (`recordHash`), and the attempts and private
-  replies of every call that is not a hash call depend on the state only through that projection
-  (`attemptChain`, `respondChain`): no hash answer becomes provider state.
+* **State separation.** The simulator's state has a provider-state projection (`chainState`).
+  Recording a hash answer leaves it unchanged (`recordHash`). Every call that is not a hash call
+  reads the state only through it: the attempt it belongs to (`attemptChain`), the recorded
+  answer of a transcript cell (`recordedChain`) and a private reply (`respondChain`). Every such
+  call also moves it as a function of it and the call's own inputs: the projection after recording
+  a transcript answer (`recordTranscript`) and after a private reply (`respondState`). Together
+  these make each handler step of a call that is not a hash call, answer and successor
+  projection, a function of the projection (`handle_chain`), and each hash call's step leave the
+  projection unchanged (`handle_hash`): no hash answer becomes provider state, now or at a later
+  call.
 * **Joint loss.** The loss is charged over the joint trace and the joint budget: every call to the
   shared primitive, the adversary's in every family and the verifier's expansion, counts towards
   one total (`joint`). -/
@@ -372,14 +380,82 @@ structure Frame (primitive : OracleSpec ι) (family : ι → Family) (R : Transc
     (∀ call, query ≠ namespaces.hash call) →
       (simulation.simulator budget).attempt state query =
         (simulation.simulator budget).attempt other query
+  recordedChain : ∀ budget state other key, chainState budget state = chainState budget other →
+    (simulation.simulator budget).recorded state (.inl key) =
+      (simulation.simulator budget).recorded other (.inl key)
+  recordTranscript : ∀ budget state other key ideal,
+    chainState budget state = chainState budget other →
+      chainState budget ((simulation.simulator budget).record state (.inl key) ideal) =
+        chainState budget ((simulation.simulator budget).record other (.inl key) ideal)
   respondChain : ∀ budget state other query, chainState budget state = chainState budget other →
     ((simulation.simulator budget).respond state query).1 =
       ((simulation.simulator budget).respond other query).1
+  respondState : ∀ budget state other query, chainState budget state = chainState budget other →
+    chainState budget ((simulation.simulator budget).respond state query).2 =
+      chainState budget ((simulation.simulator budget).respond other query).2
   jointLoss : ℕ → ENNReal
   joint : ∀ budget expansion,
     simulation.queryCost.loss budget expansion ≤ jointLoss ((∑ each, budget each) + expansion)
 
 variable {idealFailure : ProbComp (OracleComp (OracleSpec.ofFn R) α) → ExecBound → ENNReal}
+
+/-- A hash call's handler step leaves the provider-state projection unchanged in every outcome,
+whether the call's answer was recorded or is asked now. -/
+theorem Frame.handle_hash (frame : Frame primitive family R ChainCall concreteFailure idealFailure)
+    (budget : Provider.Budget Family) (call : HashCall) (state : (frame.simulation.simulator budget).State) :
+    ∀ result ∈ support (((frame.simulation.simulator budget).handle
+        (frame.namespaces.hash call)).run state),
+      frame.chainState budget result.2 = frame.chainState budget state := by
+  have assigned := frame.passThrough budget state call
+  cases recorded : (frame.simulation.simulator budget).recorded state (.inr call) with
+  | some ideal =>
+      rw [(frame.simulation.simulator budget).handle_recorded assigned recorded]
+      intro result member
+      rw [support_pure, Set.mem_singleton_iff] at member
+      rw [member]
+  | none =>
+      rw [(frame.simulation.simulator budget).handle_fresh assigned recorded]
+      intro result member
+      rw [support_map] at member
+      obtain ⟨ideal, -, rfl⟩ := member
+      exact frame.recordHash budget state call ideal
+
+/-- The handler step of a call that is not a hash call is a function of the provider-state
+projection: from two states with the same projection the call's answer and successor projection
+have the same distribution. With `Frame.handle_hash`, no hash answer reaches provider state at
+this call or any later one. -/
+theorem Frame.handle_chain (frame : Frame primitive family R ChainCall concreteFailure idealFailure)
+    (budget : Provider.Budget Family) {state other : (frame.simulation.simulator budget).State}
+    {query : ι} (same : frame.chainState budget state = frame.chainState budget other)
+    (notHash : ∀ call, query ≠ frame.namespaces.hash call) :
+    (fun result => (result.1, frame.chainState budget result.2)) <$>
+        ((frame.simulation.simulator budget).handle query).run state =
+      (fun result => (result.1, frame.chainState budget result.2)) <$>
+        ((frame.simulation.simulator budget).handle query).run other := by
+  have attempt := frame.attemptChain budget state other query same notHash
+  cases assigned : (frame.simulation.simulator budget).attempt other query with
+  | none =>
+      rw [(frame.simulation.simulator budget).handle_private (attempt.trans assigned),
+        (frame.simulation.simulator budget).handle_private assigned, map_pure, map_pure,
+        frame.respondChain budget state other query same,
+        frame.respondState budget state other query same]
+  | some key =>
+      cases key with
+      | inr call => exact absurd (frame.separated budget other query call assigned) (notHash call)
+      | inl key =>
+          have recorded := frame.recordedChain budget state other key same
+          cases fresh : (frame.simulation.simulator budget).recorded other (.inl key) with
+          | some ideal =>
+              rw [(frame.simulation.simulator budget).handle_recorded (attempt.trans assigned)
+                  (recorded.trans fresh),
+                (frame.simulation.simulator budget).handle_recorded assigned fresh, map_pure,
+                map_pure, same]
+          | none =>
+              rw [(frame.simulation.simulator budget).handle_fresh (attempt.trans assigned)
+                  (recorded.trans fresh),
+                (frame.simulation.simulator budget).handle_fresh assigned fresh]
+              simp only [Functor.map_map,
+                fun ideal => frame.recordTranscript budget state other key ideal same]
 
 /-- The frame's simulation as a provider stage at one execution bound. -/
 noncomputable def Frame.toRelation
