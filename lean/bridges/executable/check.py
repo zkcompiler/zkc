@@ -36,38 +36,29 @@ admitted program, its codecs and kernels, and the renderer.
 
 import argparse
 import copy
-import datetime
-import hashlib
-import importlib.util
 import json
 from pathlib import Path
 import re
-import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[3]
 LEAN = ROOT / "lean"
 HEADER = 40
 
+import render as executable  # noqa: E402
+from bridges.common.lean_render import (  # noqa: E402
+    ALLOWED_AXIOMS, CheckFailed, Runner, axioms_allowed, digest, now, printed_axioms, regenerate,
+    strip_header as body)
 
-def load(name, path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-executable = load("executable_render", Path(__file__).resolve().parent / "render.py")
-constructed = load("construction_render", ROOT / "lean/bridges/construction/render.py")
-# The structured renderer imports its siblings; it is appended after this directory, so no
-# module of this bridge is shadowed by a structured-bridge module of the same name.
 sys.path.append(str(ROOT / "lean/bridges/structured"))
+# The structured bridge is appended after this directory, so no module of this bridge is
+# shadowed; the construction renderer is imported under its bridge-qualified name.
+from bridges.construction import render as constructed  # noqa: E402
 import snapshot as structured  # noqa: E402
 
 sys.path.append(str(ROOT / "common/tests/support"))
 from project import project_inputs  # noqa: E402
 
-ALLOWED_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
 # Example-namespace theorems are Entry-specific. Among those a proof reaches, the
 # walk lists every equation between processes (`PIR.Proc`), whether the kernel
 # checks it by evaluation (`rfl`), and whether its statement names a meaning of a
@@ -97,14 +88,6 @@ def project_modules(manifest):
     return [f"{name}={Path(source).resolve().relative_to(ROOT)}" for name, source in sorted(modules.items())]
 
 
-def digest(data):
-    return hashlib.sha256(data).hexdigest()
-
-
-def now():
-    return datetime.datetime.now(datetime.timezone.utc).isoformat()
-
-
 def capacity(instructions):
     return ["zkc.native-capacity/0", "65536", "4096", "16777216", "67108864",
             [str(instructions), "100000", "4294967296"], ["67108864", "268435456"]]
@@ -112,13 +95,6 @@ def capacity(instructions):
 
 def lean_bytes(data):
     return "[" + ", ".join(str(byte) for byte in data) + "]"
-
-
-def body(text):
-    """Drop the module header so several renderings share one Lean file."""
-    return "\n".join(line for line in text.splitlines()
-                     if line not in ("module", "@[expose] public section")
-                     and not line.startswith("public import "))
 
 
 def replace(data, offset, value):
@@ -744,31 +720,13 @@ class DeferredRounds:
 SUBJECTS = {subject.name: subject for subject in (Schnorr(), Sumcheck(), DeferredRounds())}
 
 
-class Driver:
+class Driver(Runner):
     def __init__(self, args):
+        super().__init__()
         self.args = args
         self.output = args.output
-        self.commands = []
-        self.checks = []
         self.dependencies = {}
         self.selected = {}
-
-    def run(self, arguments, *, cwd=ROOT, expect=0, name=None):
-        started = now()
-        result = subprocess.run([str(a) for a in arguments], cwd=cwd, capture_output=True, text=True,
-                                check=False)
-        self.commands.append(dict(name=name, arguments=[str(a) for a in arguments], cwd=str(cwd),
-                                  exit=result.returncode, started=started, finished=now(),
-                                  stdout_sha256=digest(result.stdout.encode()), stderr=result.stderr[-4000:]))
-        if expect is not None and result.returncode != expect:
-            raise RuntimeError(f"{name or arguments[0]} exited {result.returncode}:\n"
-                               f"{result.stdout[-2000:]}{result.stderr[-2000:]}")
-        return result
-
-    def check(self, name, passed, detail=""):
-        self.checks.append(dict(name=name, passed=bool(passed), detail="" if passed else detail))
-        if not passed:
-            raise RuntimeError(f"check failed: {name} {detail}")
 
     def directory(self, subject):
         path = self.output / subject.name
@@ -830,11 +788,7 @@ class Driver:
         for path, namespace, render, owned in subject.construction_data(artifacts):
             files[path] = (render(namespace), owned)
         for path, (text, owned) in files.items():
-            if self.args.write and owned:
-                path.write_text(text, encoding="utf-8")
-            current = path.read_text(encoding="utf-8") if path.exists() else None
-            self.check(f"regenerated:{path.relative_to(ROOT)}", current == text,
-                       "committed data differs from the fresh export")
+            regenerate(self, path, text, self.args.write, owned)
 
     def axioms(self, subjects):
         """The axiom closure of every theorem in the receipts' chains, and the declarations
@@ -915,11 +869,7 @@ class Driver:
             encoding="utf-8")
         result = self.run([self.args.lake, "env", "lean", path], cwd=LEAN / "integrations/arklib",
                           name="receipt-axioms")
-        found = {}
-        for name, axioms in re.findall(r"'([^']+)' depends on axioms: \[([^\]]*)\]", result.stdout):
-            found[name] = sorted(a.strip() for a in axioms.split(",") if a.strip())
-        for name in re.findall(r"'([^']+)' does not depend on any axioms", result.stdout):
-            found[name] = []
+        found = printed_axioms(result.stdout)
         for name in chain:
             self.check(f"axioms:{name}", name in found and set(found[name]) <= ALLOWED_AXIOMS,
                        json.dumps(found.get(name)))
@@ -992,10 +942,7 @@ class Driver:
         path = self.directory(subject) / "FreshLowering.lean"
         path.write_text(source, encoding="utf-8")
         result = self.run([self.args.lake, "env", "lean", path], cwd=LEAN, name=f"{subject.name}:lean-rule")
-        marker = "'actual_accepted' depends on axioms: ["
-        axioms = result.stdout.split(marker, 1)[1].split("]", 1)[0] if marker in result.stdout else None
-        self.check(f"{subject.name}:lean-rule", axioms is not None
-                   and {name.strip() for name in axioms.split(",") if name.strip()} <= ALLOWED_AXIOMS,
+        self.check(f"{subject.name}:lean-rule", axioms_allowed(result.stdout, "actual_accepted"),
                    result.stdout[-400:])
         return {name: reason for name, (_, reason) in mutations.items()}
 
@@ -1323,7 +1270,7 @@ def main():
             entry["binding"] = driver.binding(subject, artifacts, receipt)
             entry["receipt"] = receipt
         report["status"] = "pass"
-    except (RuntimeError, ValueError, KeyError, IndexError, StopIteration) as error:
+    except (CheckFailed, RuntimeError, ValueError, KeyError, IndexError, StopIteration) as error:
         report["error"] = str(error)
     report.update(finished=now(), commands=driver.commands, checks=driver.checks)
     (args.output / "report.json").write_text(json.dumps(report, indent=2) + "\n")

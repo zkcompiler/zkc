@@ -16,69 +16,22 @@ only the count and the carried values. No proof is generated here and no
 meaning is assigned to any operation.
 """
 
-import argparse
-import json
 from pathlib import Path
 import re
+import sys
 
+sys.path.append(str(Path(__file__).resolve().parents[2]))
+from bridges.common import lean_render  # noqa: E402
+from bridges.common.lean_render import (  # noqa: E402
+    CALCULATIONS, FIELD_MODULUS, Refused, decimal, origin, record, require, seq, text)
 
 FORMAT = "zkc.constructed-participant/0"
-TEMPLATE = "zkc.native-origin-template/0"
 SCALAR_DOMAINS = {"field": r'!algebra\.field<"([^"\\]+)">', "group": r'!algebra\.group<"([^"\\]+)">'}
 VECTOR_DOMAIN = r'!algebra\.field_vector<"([^"\\]+)">'
-# The BLS12-381 scalar modulus bounds canonical field constants.
-FIELD_MODULUS = 52435875175126190479447740508185965837690552500527637822603658699938581184513
-CALCULATIONS = {
-    "algebra.field_add": ("fieldAdd", "field"),
-    "algebra.field_subtract": ("fieldSubtract", "field"),
-    "algebra.field_multiply": ("fieldMultiply", "field"),
-    "algebra.field_equal": ("fieldEqual", "field"),
-    "algebra.group_add": ("groupAdd", "group"),
-    "algebra.group_equal": ("groupEqual", "group"),
-}
-
-
-class Refused(ValueError):
-    pass
-
-
-def require(condition, message):
-    if not condition:
-        raise Refused(message)
-
-
-def record(value, size):
-    require(isinstance(value, list) and len(value) == size, f"expected array of size {size}")
-    return value
-
-
-def text(value):
-    require(isinstance(value, str) and len(value.encode("utf-8")) <= 4096, "expected a bounded string")
-    escapes = {'"': r'\"', '\\': r'\\', '\n': r'\n', '\r': r'\r', '\t': r'\t'}
-
-    def character(char):
-        if char in escapes:
-            return escapes[char]
-        if ord(char) < 32 or ord(char) == 127:
-            return f"\\u{ord(char):04x}"
-        return char
-    return '"' + ''.join(character(char) for char in value) + '"'
 
 
 def nat(value, limit=1 << 20):
-    require(type(value) is int and 0 <= value <= limit, "invalid bounded natural")
-    return str(value)
-
-
-def decimal(value, limit=1024):
-    require(isinstance(value, str) and re.fullmatch(r"0|[1-9][0-9]*", value) is not None
-            and int(value) < limit, "invalid canonical decimal")
-    return str(int(value))
-
-
-def seq(values, render):
-    require(isinstance(values, list) and len(values) <= 4096, "invalid bounded array")
-    return "[" + ", ".join(render(value) for value in values) + "]"
+    return lean_render.nat(value, limit)
 
 
 def sort(value):
@@ -107,49 +60,6 @@ def scalar_ty(kind):
     tag, domain = kind
     require(tag in ("boolean", "field", "group"), "expected a scalar data type")
     return ".boolean" if tag == "boolean" else f"(.{tag} {text(domain)})"
-
-
-def decode_tree(data, offset=0, depth=0):
-    require(depth <= 16 and offset + 9 <= len(data), "truncated origin")
-    tag, count = data[offset], int.from_bytes(data[offset + 1:offset + 9], "little")
-    offset += 9
-    if tag == 0:
-        require(offset + count <= len(data), "truncated origin text")
-        return data[offset:offset + count].decode("utf-8"), offset + count
-    require(tag == 1 and count <= 64, "invalid origin tag")
-    items = []
-    for _ in range(count):
-        item, offset = decode_tree(data, offset, depth + 1)
-        items.append(item)
-    return items, offset
-
-
-def encode_tree(tree):
-    if isinstance(tree, str):
-        raw = tree.encode("utf-8")
-        return b"\0" + len(raw).to_bytes(8, "little") + raw
-    return b"\1" + len(tree).to_bytes(8, "little") + b"".join(encode_tree(item) for item in tree)
-
-
-def step(value):
-    require(isinstance(value, list) and len(value) == 3 and value[0] in ("apply", "repeat")
-            and all(isinstance(item, str) for item in value), "invalid origin step")
-    return f"⟨{text(value[0])}, {text(value[1])}, {text(value[2])}⟩"
-
-
-def origin(hex_text):
-    require(isinstance(hex_text, str) and re.fullmatch(r"(?:[0-9a-f]{2})+", hex_text) is not None
-            and len(hex_text) <= 4096, "origin must be lowercase even-length hex")
-    data = bytes.fromhex(hex_text)
-    tree, end = decode_tree(data)
-    require(end == len(data), "trailing origin bytes")
-    require(encode_tree(tree).hex() == hex_text, "noncanonical origin encoding")
-    require(isinstance(tree, list) and len(tree) == 5 and tree[0] == TEMPLATE, "not an origin template")
-    _, entry, steps, coordinates, event = tree
-    require(isinstance(entry, str) and isinstance(steps, list) and len(steps) <= 64 and coordinates == [],
-            "invalid origin path")
-    require(isinstance(event, list) and event and all(isinstance(item, str) for item in event), "invalid origin event")
-    return f"⟨{text(entry)}, {seq(steps, step)}, {seq(event, text)}⟩"
 
 
 def attributes(value):
@@ -306,8 +216,7 @@ def block(instructions, kinds, places, indent, depth=0):
 def render(data, namespace):
     version, source, candidate, selected, symbol, inputs, outputs, instructions, returned = record(data, 9)
     require(version == FORMAT, "wrong participant export version")
-    require(re.fullmatch(r"(?:[A-Za-z][A-Za-z0-9_]*\.)*[A-Za-z][A-Za-z0-9_]*", namespace) is not None,
-            "invalid Lean namespace")
+    lean_render.namespace(namespace)
     kinds = [sort(value)[1] for value in inputs]
     rendered, kinds, places = block(instructions, kinds, list(range(len(kinds))), "    ")
     returned = references(returned, places, "returned")
@@ -340,15 +249,5 @@ end {namespace}
 '''
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("input", type=Path)
-    parser.add_argument("output", type=Path)
-    parser.add_argument("--namespace", required=True)
-    args = parser.parse_args()
-    data = json.loads(args.input.read_text(encoding="utf-8"))
-    args.output.write_text(render(data, args.namespace), encoding="utf-8")
-
-
 if __name__ == "__main__":
-    main()
+    lean_render.render_main(render, __doc__)

@@ -18,15 +18,14 @@ exporter correctness and the primitive meanings remain stated boundaries.
 
 import argparse
 import copy
-import datetime
-import hashlib
 import json
 from pathlib import Path
-import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[3]
 import render as constructed  # noqa: E402
+from bridges.common.lean_render import (  # noqa: E402
+    CheckFailed, Runner, axioms_allowed, decode_tree, digest, encode_tree, now, regenerate)
 
 # The structured renderer is appended after this directory, so no module of this
 # bridge can be shadowed by a structured-bridge module of the same name.
@@ -107,41 +106,14 @@ SIGMA = {"schnorr-and", "chaum-pedersen"}
 DOMAIN_SEPARATED = SIGMA | {"guess"}
 
 
-def digest(data):
-    return hashlib.sha256(data).hexdigest()
-
-
-def now():
-    return datetime.datetime.now(datetime.timezone.utc).isoformat()
-
-
-class Driver:
+class Driver(Runner):
     def __init__(self, args):
+        super().__init__()
         self.args = args
         self.output = args.output
-        self.commands = []
-        self.checks = []
-
-    def run(self, arguments, *, cwd=ROOT, expect=0, name=None):
-        started = now()
-        result = subprocess.run([str(a) for a in arguments], cwd=cwd, capture_output=True,
-                                text=True, check=False)
-        self.commands.append(dict(name=name, arguments=[str(a) for a in arguments], cwd=str(cwd),
-                                  exit=result.returncode, started=started, finished=now(),
-                                  stdout_sha256=digest(result.stdout.encode()),
-                                  stderr=result.stderr[-4000:]))
-        if expect is not None and result.returncode != expect:
-            raise RuntimeError(f"{name or arguments[0]} exited {result.returncode}:\n"
-                               f"{result.stdout[-2000:]}{result.stderr[-2000:]}")
-        return result
 
     def compile(self, *arguments, name):
         return self.run([self.args.compiler, *arguments], name=name).stdout
-
-    def check(self, name, passed, detail=""):
-        self.checks.append(dict(name=name, passed=bool(passed), detail="" if passed else detail))
-        if not passed:
-            raise RuntimeError(f"check failed: {name} {detail}")
 
     def export(self, subject):
         directory = self.output / subject.name
@@ -176,11 +148,7 @@ class Driver:
             subject.participant[0]: (constructed.render(exported, subject.participant[1]), True),
         }
         for path, (text, owned) in files.items():
-            if self.args.write and owned:
-                path.write_text(text, encoding="utf-8")
-            current = path.read_text(encoding="utf-8") if path.exists() else None
-            self.check(f"regenerated:{path.relative_to(ROOT)}", current == text,
-                       "committed data differs from the fresh export")
+            regenerate(self, path, text, self.args.write, owned)
 
     def lean_rule(self, subject, original, exported):
         """Run the composed Lean check on the fresh export and on mutated exports."""
@@ -209,7 +177,7 @@ class Driver:
             observed[3][0] = len(exported[5]) - 1
 
         def template_tree(item):
-            return constructed.decode_tree(bytes.fromhex(dict(item[1])["parameters"][1][0]))[0]
+            return decode_tree(bytes.fromhex(dict(item[1])["parameters"][1][0]))[0]
 
         def challenge_names_delivery(instructions):
             # The delivery's local site, in the challenge's own protocol: its
@@ -219,9 +187,9 @@ class Driver:
                             and template_tree(item)[4][4] == exported[3][3])
             challenge = instruction(instructions, "crypto.exec.indexed_transcript_challenge")
             parameters = dict(challenge[1])["parameters"][1]
-            tree, _ = constructed.decode_tree(bytes.fromhex(parameters[0]))
+            tree, _ = decode_tree(bytes.fromhex(parameters[0]))
             tree[4][2] = template_tree(delivery)[4][2]
-            parameters[0] = constructed.encode_tree(tree).hex()
+            parameters[0] = encode_tree(tree).hex()
 
         def decision_compares_base_with_itself(instructions):
             instruction(instructions, "algebra.group_equal")[3][:] = [0, 0]
@@ -402,11 +370,7 @@ class Driver:
         path.write_text(source, encoding="utf-8")
         result = self.run([self.args.lake, "env", "lean", path], cwd=ROOT / "lean",
                           name=f"{subject.name}:lean-rule")
-        marker = "'actual_accepted' depends on axioms: ["
-        axioms = result.stdout.split(marker, 1)[1].split("]", 1)[0] if marker in result.stdout else None
-        allowed = {"propext", "Classical.choice", "Quot.sound"}
-        self.check(f"{subject.name}:lean-rule", axioms is not None
-                   and {name.strip() for name in axioms.split(",") if name.strip()} <= allowed,
+        self.check(f"{subject.name}:lean-rule", axioms_allowed(result.stdout, "actual_accepted"),
                    result.stdout[-400:])
         return list(mutations)
 
@@ -416,11 +380,11 @@ class Driver:
         challenge = next(item for item in exported[7]
                          if item[0] == "crypto.exec.indexed_transcript_challenge")
         hex_text = dict(challenge[1])["parameters"][1][0]
-        tree, _ = constructed.decode_tree(bytes.fromhex(hex_text))
+        tree, _ = decode_tree(bytes.fromhex(hex_text))
         tree[4][2] = exported[3][8][0][1]
         self.check(f"{prefix}native-origin-present", candidate.count(hex_text) == 1)
         return {"wrong-domain-separator": (candidate.replace(
-            hex_text, constructed.encode_tree(tree).hex()), "native-proof-correspondence", "")}
+            hex_text, encode_tree(tree).hex()), "native-proof-correspondence", "")}
 
     def native_refusals(self, subject, refusals, prefix=""):
         """Run the native checker on each mutated candidate; each must be refused
@@ -513,7 +477,7 @@ def main():
             else:
                 result["native_refusals"] = driver.native_helper_refusal(subject, candidate, exported)
         report["status"] = "pass"
-    except (RuntimeError, ValueError, KeyError, IndexError) as error:
+    except (CheckFailed, RuntimeError, ValueError, KeyError, IndexError) as error:
         report["error"] = str(error)
     report.update(finished=now(), commands=driver.commands, checks=driver.checks)
     (args.output / "report.json").write_text(json.dumps(report, indent=2) + "\n")

@@ -14,20 +14,23 @@ the data module:
   python3 lean/bridges/structured/bodies.py \\
     --data ZkcExamples.Structured.SchnorrHelpersData \\
     --namespace ZkcExamples.Structured.SchnorrHelpersBodies \\
-    [--closed] [--name DECLARATION=localName ...] --output PATH
+    [--closed] [--name DECLARATION=localName ...] --output PATH [--check]
 
 DECLARATION is a retained declaration name as the snapshot spells it; local
-names default to helperN and protocolN.
+names default to helperN and protocolN. `--check` compares the printed module
+with the existing output file and fails when they differ, without writing it.
 """
 
 import argparse
 import json
-import re
-import subprocess
-import tempfile
 from pathlib import Path
+import re
+import sys
+import tempfile
 
-ROOT = Path(__file__).resolve().parents[3]
+sys.path.append(str(Path(__file__).resolve().parents[2]))
+from bridges.common.lean_render import ROOT, CheckFailed, Runner  # noqa: E402
+
 LEAN = ROOT / "lean"
 
 PRINTER = r'''
@@ -164,30 +167,25 @@ def printed(output, name):
     return chain(items)
 
 
-def elaborate(path):
+def elaborate(runner, path, lake="lake"):
     """Elaborate a scratch module; on failure, show Lean's diagnostics."""
-    result = subprocess.run(["lake", "env", "lean", str(path)], cwd=LEAN, capture_output=True, text=True)
+    result = runner.run([lake, "env", "lean", path], cwd=LEAN, expect=None, name=f"bodies:{path.name}")
     if result.returncode != 0:
-        raise SystemExit(f"elaborating {path.name} failed:\n{result.stdout}{result.stderr}")
+        raise CheckFailed(f"elaborating {path.name} failed:\n{result.stdout}{result.stderr}")
     return result.stdout
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--data", required=True)
-    parser.add_argument("--namespace", required=True)
-    parser.add_argument("--closed", action="store_true")
-    parser.add_argument("--name", action="append", default=[], help="DECLARATION=localName")
-    parser.add_argument("--output", type=Path, required=True)
-    args = parser.parse_args()
-    names = dict(item.split("=", 1) for item in args.name)
+def generate(data, namespace, closed=False, names=None, runner=None, lake="lake"):
+    """The printed bodies module of the admitted snapshot `data.snapshot`."""
+    runner = runner or Runner()
+    names = names or {}
     # First pass: inventory only, to know how many bodies to materialize.
-    inventory = PRINTER.format(data=args.data, views="")
+    inventory = PRINTER.format(data=data, views="")
     (ROOT / "build").mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(dir=ROOT / "build") as scratch:
         path = Path(scratch) / "Inventory.lean"
         path.write_text(inventory, encoding="utf-8")
-        output = elaborate(path)
+        output = elaborate(runner, path, lake)
         helpers = [line.split("\t")[1:] for line in output.splitlines() if line.startswith("HELPER\t")]
         protocols = [line.split("\t")[1:] for line in output.splitlines() if line.startswith("PROTOCOL\t")]
         views = []
@@ -197,16 +195,16 @@ def main():
         for index in range(len(protocols)):
             views.append(f"def protocol{index} := region_view% "
                          f"(program.payload.protocols[{index}]'(by decide)).body")
-        if args.closed:
+        if closed:
             views.append(f"def root := region_view% "
-                         f"((checkClosed {args.data}.snapshot).toOption.get (by decide +kernel)).payload.entry.body")
+                         f"((checkClosed {data}.snapshot).toOption.get (by decide +kernel)).payload.entry.body")
         views += [f"#print Printed.{view.split()[1]}" for view in list(views)]
         path = Path(scratch) / "Bodies.lean"
-        path.write_text(PRINTER.format(data=args.data, views="\n".join(views)), encoding="utf-8")
-        output = elaborate(path)
+        path.write_text(PRINTER.format(data=data, views="\n".join(views)), encoding="utf-8")
+        output = elaborate(runner, path, lake)
     parts = [f"module\n\npublic import Zkc.Source.Structured.ProtocolOperations\n\n@[expose] public section\n\n"
-             f"/-! Literal typed bodies printed from the admitted snapshot of\n`{args.data}`. -/\n"
-             f"namespace {args.namespace}\nopen Zkc.Source Zkc.Source.Structured\n"]
+             f"/-! Literal typed bodies printed from the admitted snapshot of\n`{data}`. -/\n"
+             f"namespace {namespace}\nopen Zkc.Source Zkc.Source.Structured\n"]
     for index, (name, kind, inputs, outputs) in enumerate(helpers):
         local = names.get(name, f"helper{index}")
         parts.append(f"abbrev {local}Helper : Helper :=\n  ⟨{json.dumps(name)}, {kind}, {inputs}, {outputs}⟩\n\n"
@@ -219,13 +217,35 @@ def main():
                      f"  inputScopes := {input_scopes}\n  outputScopes := {output_scopes}\n\n"
                      f"def {local}Body : Region protocolDialect {local}Signature.inputs {local}Signature.outputs :=\n"
                      f"{printed(output, f'protocol{index}')}\n")
-    if args.closed:
+    if closed:
         entry_name = next(line.split("\t")[1] for line in output.splitlines() if line.startswith("ENTRY\t"))
         entry = next(protocol for protocol in protocols if protocol[0] == entry_name)
         parts.append(f"def entryBody : Region dialect {entry[2]} {entry[3]} :=\n{printed(output, 'root')}\n")
-    parts.append(f"end {args.namespace}\n")
+    parts.append(f"end {namespace}\n")
+    return "\n".join(parts)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--data", required=True)
+    parser.add_argument("--namespace", required=True)
+    parser.add_argument("--closed", action="store_true")
+    parser.add_argument("--name", action="append", default=[], help="DECLARATION=localName")
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--check", action="store_true",
+                        help="fail if the output file differs from the printed module")
+    args = parser.parse_args()
+    names = dict(item.split("=", 1) for item in args.name)
+    try:
+        text = generate(args.data, args.namespace, args.closed, names)
+    except CheckFailed as error:
+        raise SystemExit(str(error))
+    if args.check:
+        if not args.output.is_file() or args.output.read_text(encoding="utf-8") != text:
+            raise SystemExit(f"bodies: {args.output} is not the printed module; regenerate it")
+        return
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text("\n".join(parts), encoding="utf-8")
+    args.output.write_text(text, encoding="utf-8")
 
 
 if __name__ == "__main__":
