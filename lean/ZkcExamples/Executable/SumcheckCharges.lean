@@ -12,9 +12,9 @@ and the challenge answers (`sufficient`). The charge is derived from the
 reading (`ZkcExamples.Executable.SumcheckFamily.Artifact.charge`): the empty
 point's call and body, the loop's entry, then per round the round's charge,
 which evaluating the reading's code gives, and its yield, then the terminal
-check's call and body and the return. For this Entry it is `68 + 61 · rounds`
+check's call and body and the return. For this Entry it is `68 + 59 · rounds`
 (`charge_eq`): 39 per round, the point extension's body included, and the
-terminal check charging `62 + 22 · n` on a well-shaped table and a point of `n`
+terminal check charging `62 + 20 · n` on a well-shaped table and a point of `n`
 coordinates (`check_cost`). The bound holds for every round count; it uses the
 Entry's static maximum only as the loop's own bound.
 -/
@@ -42,7 +42,7 @@ function. -/
 theorem roundCharge_eq : SumcheckProof.artifact.roundCharge = 38 := by decide +kernel
 
 /-- The derived charge for this Entry. -/
-theorem charge_eq (rounds : Nat) : charge rounds = 68 + 61 * rounds := by
+theorem charge_eq (rounds : Nat) : charge rounds = 68 + 59 * rounds := by
   simp only [charge, SumcheckFamily.Artifact.charge, SumcheckFamily.Artifact.checkCharge, chargeSum_const,
     roundCharge_eq]
   ring
@@ -57,7 +57,7 @@ theorem check_cost {xs point : List F} {claim : F} (small : point.length < 64)
     (shaped : xs.length = 2 ^ point.length) :
     helperCost installed validator checkHelper.name
       [(.vector "bls12-381.fr" xs : Value F G), .vector "bls12-381.fr" point,
-        .data (.field "bls12-381.fr" claim)] = 62 + 22 * point.length :=
+        .data (.field "bls12-381.fr" claim)] = 62 + 20 * point.length :=
   SumcheckHelpers.check_cost small shaped
 
 /-- On a table of `2 ^ rounds` values, every run of the reading charges at most

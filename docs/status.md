@@ -391,7 +391,7 @@ implement the source's checked helpers: the empty point and the point extension
 by the general helper rule, whose soundness is proved once, and the terminal
 check, whose body iterates and is outside the rule's recipes, by a proof of its
 own. Honest-prover completeness of the executable holds for every round count up
-to the Entry's static maximum, at every budget of at least `68 + 61 · rounds`
+to the Entry's static maximum, at every budget of at least `68 + 59 · rounds`
 instructions, a charge derived from the program's reading, which at two rounds
 is the runtime's acceptance threshold; the proofs are the Sumcheck family's and
 do not depend on the value of the maximum. A current limitation: the compiler

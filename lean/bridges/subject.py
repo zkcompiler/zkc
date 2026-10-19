@@ -22,7 +22,8 @@ pipeline, with no step specific to a subject:
    helper body's copy is refused by the helper rule and accepted by the
    lowering rule;
 6. with `--runtime`, run the runtime verifier on an honest proof at every
-   instruction budget up to one past the threshold the Lean charge derives and
+   instruction budget up to one past the threshold the Lean charge derives
+   (evaluated after every generated module is regenerated and built) and
    on generic proof edits, and require its observations to equal those the Lean
    executable meaning predicts; check the axiom closures and proof dependencies
    the manifest's receipt names and that the runtime executes exactly the
@@ -62,6 +63,7 @@ NORMAL_FORMS = ROOT / "lean/bridges/structured/normal_forms.py"
 # compiled program; the record keeps the original-side ones, and none may name
 # a compiled meaning.
 ENTRY_PREFIXES = ["ZkcExamples", "ZkcSecurity.Examples"]
+IMPORT = re.compile(r"^import\s+(\S+)\s*$", re.M)
 COMPILED_MEANINGS = [
     "Zkc.Construction.spec", "Zkc.Construction.specK", "Zkc.Construction.ideal", "Zkc.Construction.idealK",
     "Zkc.Executable.execute", "Zkc.Executable.validate", "Zkc.Executable.metered",
@@ -97,12 +99,12 @@ class Driver(Runner):
         """The assumption registry of the security integration: identifier to
         category and statement, read from `ZkcSecurity.Registry.table`."""
         if self.registry_entries is None:
-            path = self.output / "Registry.lean"
-            path.write_text("import ZkcSecurity.Registry\n\n"
-                            "#eval for (identifier, category, _, statement) in ZkcSecurity.Registry.table do\n"
-                            "  IO.println s!\"ENTRY\\t{identifier}\\t{category}\\t{statement}\"\n",
-                            encoding="utf-8")
-            result = self.lake("env", "lean", path, cwd=LEAN / "integrations/arklib", name="registry")
+            result = self.evaluate(
+                self.output / "Registry.lean",
+                "import ZkcSecurity.Registry\n\n"
+                "#eval for (identifier, category, _, statement) in ZkcSecurity.Registry.table do\n"
+                "  IO.println s!\"ENTRY\\t{identifier}\\t{category}\\t{statement}\"\n",
+                cwd=LEAN / "integrations/arklib", name="registry")
             entries = {}
             for line in result.stdout.splitlines():
                 if line.startswith("ENTRY\t"):
@@ -112,21 +114,31 @@ class Driver(Runner):
             self.registry_entries = entries
         return self.registry_entries
 
-    def build(self, *modules):
-        """Build Lean modules: their kernel checks."""
-        wanted = [module for module in modules if module and module not in self.built]
+    def build(self, *modules, cwd=LEAN):
+        """Build Lean modules of the package at `cwd`: their kernel checks."""
+        wanted = [module for module in modules if module and (str(cwd), module) not in self.built]
         if wanted:
-            self.lake("build", *wanted, name="lake-build:" + ",".join(wanted))
-            self.built.update(wanted)
+            self.lake("build", *wanted, cwd=cwd, name="lake-build:" + ",".join(wanted))
+            self.built.update((str(cwd), module) for module in wanted)
+
+    def evaluate(self, path, source, *, cwd, name, expect=0):
+        """Evaluate a generated Lean file after building every module it imports, so
+        that no result it reads, a charge or a hand proof, comes from a stale build."""
+        path.write_text(source, encoding="utf-8")
+        self.build(*IMPORT.findall(source), cwd=cwd)
+        return self.lake("env", "lean", path, cwd=cwd, name=name, expect=expect)
 
     def lean(self, subject, name, source, cwd=LEAN, expect=0):
-        path = self.directory(subject) / name
-        path.write_text(source, encoding="utf-8")
-        return self.lake("env", "lean", path, cwd=cwd, name=f"{subject.name}:{name}", expect=expect)
+        return self.evaluate(self.directory(subject) / name, source, cwd=cwd, name=f"{subject.name}:{name}",
+                             expect=expect)
 
     def generated(self, subject, key, text, record):
         path = subject.generated(key)
+        before = path.read_text(encoding="utf-8") if path.exists() else None
         regenerate(self, path, text, self.args.write)
+        if before != text:
+            # A rewritten module invalidates every build that may have read it.
+            self.built.clear()
         record["generated"][str(path.relative_to(ROOT))] = dict(sha256=digest(text.encode()), role=key)
 
     # 1-3. Interactive Entry.
@@ -338,16 +350,41 @@ class Driver(Runner):
             self.generated(subject, "facts", glue.facts_module(namespace, construction, program, facts, form),
                            modules)
             self.build(subject.module_name("facts"))
+        self.threshold(subject, facts, record)
         return facts
+
+    def threshold(self, subject, facts, record):
+        """The acceptance threshold the Lean charge derives: the static total charge,
+        or the manifest's charge function at the public inputs it names. The charge is
+        evaluated only now, once every generated module of the subject is regenerated,
+        and every module the evaluation imports, the hand proofs included, is built
+        first."""
+        charge = subject.get("executable", "charge")
+        threshold = facts["total"]
+        if charge:
+            public = json.loads(subject.inputs(subject.get("entries", "proof"), "public").read_text())
+            arguments = " ".join(str(int(public[name])) for name in subject.get("executable", "charge_arguments", []))
+            module = subject.get("executable", "completeness_module") or charge.rsplit(".", 1)[0]
+            result = self.lean(subject, "FreshCharge.lean",
+                               f"import {module}\n\n#eval IO.println (\"charge \" ++ toString ({charge} {arguments}))\n")
+            found = [line.removeprefix("charge ") for line in result.stdout.splitlines() if line.startswith("charge ")]
+            self.check(f"{subject.name}:lean-evaluated:charge", len(found) == 1, result.stdout[-400:])
+            threshold = int(found[0])
+        self.check(f"{subject.name}:threshold-derived", threshold is not None,
+                   "the Lean charge of a complete run is not static and the manifest names no charge function")
+        if subject.get("executable", "threshold", "derived") != "derived":
+            self.check(f"{subject.name}:threshold-declared", int(subject.get("executable", "threshold")) == threshold)
+        record["kernel"]["lowering"]["threshold"] = threshold
+        facts["threshold"] = threshold
+        return threshold
 
     def lowering_rule(self, subject, artifacts, entry, record):
         deployment, exported = artifacts["deployment"], artifacts["exported"]
         glue_module = subject.module_name("glue")
+        # Only the generated glue and the rules: the charge, whose module reads the
+        # generated facts and the hand proofs, is evaluated after they are rebuilt.
         parts = ["import Zkc.Executable.Installed", "import Zkc.Executable.Lowering",
                  "import Zkc.Executable.Helpers", "import Zkc.Construction.Participant", f"import {glue_module}"]
-        completeness = subject.get("executable", "completeness_module")
-        if completeness:
-            parts.append(f"import {completeness}")
         parts += ["set_option maxRecDepth 20000",
                   strip_header(constructed.render(exported, "Fresh.Constructed")),
                   strip_header(executable.render(deployment, "Fresh.Actual")),
@@ -375,7 +412,7 @@ class Driver(Runner):
         for name in artifacts["variants"]:
             proofs.append(f"theorem variant_{name}_accepted : refusal (checkLowering installed "
                           f"Fresh.Constructed.participant Fresh.{name}.validator) = none := by decide +kernel")
-        # Facts Lean evaluates for the generated facts module and the threshold.
+        # Facts Lean evaluates for the generated facts module.
         lowered = "(checkLowering installed Fresh.Constructed.participant Fresh.Actual.validator)"
         evaluations = [
             f'#eval IO.println ("total " ++ toString ({lowered}.toOption.bind (·.total?)))',
@@ -386,11 +423,6 @@ class Driver(Runner):
             f'#eval IO.println ("exact actual " ++ toString (exact {lowered}))',
             *[f'#eval IO.println ("exact {name} " ++ toString (exact (checkLowering installed '
               f'Fresh.Constructed.participant Fresh.{name}.validator)))' for name in artifacts["variants"]]]
-        charge = subject.get("executable", "charge")
-        if charge:
-            public = json.loads(subject.inputs(subject.get("entries", "proof"), "public").read_text())
-            arguments = " ".join(str(int(public[name])) for name in subject.get("executable", "charge_arguments", []))
-            evaluations.append(f'#eval IO.println ("charge " ++ toString ({charge} {arguments}))')
         outcomes = {}
         index = 0
         kinds = mutations.kinds_for(subject.get("mutations", "kinds", []))
@@ -480,20 +512,14 @@ class Driver(Runner):
         for name, expected in subject.get("executable", "exact", {}).items():
             self.check(f"{subject.name}:lowering-exact:{name}", exact.get(name) == f"(some {str(expected).lower()})",
                        json.dumps(exact))
-        threshold = int(value("charge")) if charge else facts["total"]
-        self.check(f"{subject.name}:threshold-derived", threshold is not None,
-                   "the Lean charge of a complete run is not static and the manifest names no charge function")
-        if subject.get("executable", "threshold", "derived") != "derived":
-            self.check(f"{subject.name}:threshold-declared", int(subject.get("executable", "threshold")) == threshold)
         axioms = printed_axioms(result.stdout).get("actual_accepted")
         record["kernel"]["lowering"] = dict(file="FreshLowering.lean", accepted=True, exact=exact, facts=facts,
-                                            threshold=threshold, axioms=axioms)
+                                            threshold=None, axioms=axioms)
         record_accepted(record, "lowering", axioms=axioms)
         for name in artifacts["variants"]:
             record_accepted(record, f"lowering-variant:{name}")
         record["runtime_selection"] = selected
         record.setdefault("mutations", {}).update(outcomes)
-        facts["threshold"] = threshold
         return facts
 
     @staticmethod
@@ -656,9 +682,8 @@ class Driver(Runner):
                   + (f"  for (name, evaluated, compiled) in ← processEquations `{control} do\n"
                      "    IO.println s!\"control-equation {name} evaluated={evaluated} compiled={compiled}\"\n"
                      if control else "  pure ()\n"))
-        path = self.output / "ReceiptAxioms.lean"
-        path.write_text(source, encoding="utf-8")
-        result = self.lake("env", "lean", path, cwd=LEAN / "integrations/arklib", name="receipt-axioms")
+        result = self.evaluate(self.output / "ReceiptAxioms.lean", source, cwd=LEAN / "integrations/arklib",
+                               name="receipt-axioms")
         found = printed_axioms(result.stdout)
         for name in chain:
             self.check(f"axioms:{name}", name in found and set(found[name]) <= ALLOWED_AXIOMS,

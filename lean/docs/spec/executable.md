@@ -6,9 +6,9 @@ deployment's constructed validator to the original verifier. This page owns the
 next stage: the validator participant of the deployment's `zkc.program/0`
 candidate, which the runtime admits and executes. A per-compile lowering rule
 relates the two, so that a theorem about the constructed validator transfers to
-the executable program. The modules are `Zkc.Executable.{Program, Execution,
-Installed, Refusal, Normalization, Lowering, Relation, Evaluation, Soundness,
-Pruning, Completeness, NormalizationSoundness, Cleanup, Helpers,
+the executable program. The modules are `Zkc.Executable.{Program, Numerical,
+Execution, Installed, Refusal, Normalization, Lowering, Relation, Evaluation,
+Soundness, Pruning, Completeness, NormalizationSoundness, Cleanup, Helpers,
 HelperSoundness, Loops, Framing}`.
 
 ## Carrier
@@ -53,9 +53,30 @@ instruction budget.
   those of `Zkc.Construction`: structured calculations
   (`Zkc.Construction.calculate`), the structured index and vector primitives
   (`Zkc.Source.Structured.Primitive.evaluate`), pointwise vector arithmetic, the
-  requirement that a Boolean is true, occurrence coordinates, and observation
-  and challenge on the ideal transcript model. A constant takes its value from
-  the operation's single canonical decimal parameter. A transcript operation's
+  requirement that a Boolean is true, numerical expression calls, occurrence
+  coordinates, and observation and challenge on the ideal transcript model. A
+  constant takes its value from the operation's single canonical decimal
+  parameter.
+- Numerical calls. A `numerical.map`, `numerical.sum` or `numerical.product`
+  binding names its field and an operand mask, and its operation carries one
+  `zkc.ring/0` expression as text. `Numerical.decode` reads that text into a
+  `Zkc.Algebra.RingExpression.Expr` with natural literals and slot inputs,
+  refusing with a named reason exactly the payloads the runtime's program
+  admission refuses: a body over 4096 bytes, text other than the canonical
+  encoding of an arena, an input or constant outside the call's field, a literal
+  that is not a canonical decimal below the characteristic, an input node outside
+  the declared inputs, an operand that does not point backward, an embedding,
+  declared inputs other than the mask's positions, other than one output, and a
+  node the output does not reach. A mask has at most 1023 positions. A refused
+  payload or mask does not resolve. One vocabulary row serves every mask: the
+  mask is the binding's last static argument. The call reads the row count and
+  then one scalar for each `0` and one vector of exactly that many values for
+  each `1`; another operand count, kind, field or length is a refusal of the
+  kernel. Scalars are broadcast, and the call returns the vector of the
+  expression's values at the rows, their sum from zero or their product from
+  one. The runtime's bound of 1 048 576 rows is a capacity limit of the native
+  call, like the element limit of every vector a kernel produces; the meaning
+  does not stop on it. A transcript operation's
   occurrence template is named by its model occurrence under the context; a
   template without one is a contract failure, as it is a refusal of the ideal
   meaning.
@@ -75,8 +96,9 @@ instruction budget.
 must be the framing magic and the expected invocation binding, the run must
 return normally with the selected Boolean true, and every proof byte must be
 read. `installed` is the vocabulary of the native BLS12-381 deployments: the
-arkworks scalar-field, G1 and scalar-vector kernels, the native index kernels
-and the Merlin transcript kernels of `merlin3.bls12-381.fr64be/0`.
+arkworks scalar-field, G1, scalar-vector and numerical expression kernels, the
+native index kernels and the Merlin transcript kernels of
+`merlin3.bls12-381.fr64be/0`.
 
 `evalSteps` is the unbounded meaning of a local body that applies no transcript
 operation: the values it hands back, or the cause it stops for, after the
@@ -392,11 +414,12 @@ empty point and the point extension (`rule_accepted`). The terminal check
 iterates and is outside the rule's table (`check_outside`); its preparation
 (`check_prepared`) evaluates its body, which checks the authored table shape
 with a doubling loop and then folds the table over the point one coordinate at
-a time, interpolating its low and high halves. The fold is
+a time, interpolating its low and high halves with one numerical map call
+(`map_returns`), whose decoded expression is `low + (high - low) r`. The fold is
 `Zkc.Polynomial.Multilinear.restrictPrefixValues`, and the source contract of
 the check (`SumcheckSourceContracts.check_equation` and the stop contracts for
 out-of-range lengths) gives the same result in every case. The same evaluation
-gives the check's charge, `62 + 22 · n` on a well-shaped table and a point of
+gives the check's charge, `62 + 20 · n` on a well-shaped table and a point of
 `n` coordinates (`check_cost`).
 
 `ZkcExamples.Executable.SumcheckFamily` proves the executable theorems once for
@@ -431,9 +454,10 @@ a table of `2 ^ rounds` values. The charge is derived from the reading
 of the rounds' charges and yields, the terminal check's call with what its body
 charges, and the return. The loop is bounded by `FitsK.loop_invariant` with the
 invariant that the carried point has one coordinate per completed round. For
-this Entry `charge rounds = 68 + 61 · rounds` (`charge_eq`): per round, 38
+this Entry `charge rounds = 68 + 59 · rounds` (`charge_eq`): per round, 38
 instructions in the loop body, the point extension's body included, its yield,
-and 22 in the terminal check's fold. It is `Sufficient` for every proof and
+and 20 in the terminal check: 14 in its fold and 3 in each of its two shape
+checks' doubling loops. It is `Sufficient` for every proof and
 every round count (`sufficient`).
 `ZkcExamples.Executable.SumcheckCompleteness.honest_accepted` states
 honest-prover completeness of the executable: for every challenge function,
@@ -446,7 +470,7 @@ draws, sending the sums of the low and high halves of its current table in each
 round and then restricting the table at the challenge. Each honest round passes
 by the round statement with the challenge function's answers and no stop, and
 the rounds compose by the fold invariant: the claim is the sum of the table
-restricted at the point. At two rounds the bound is 190 instructions, the
+restricted at the point. At two rounds the bound is 186 instructions, the
 runtime's measured threshold.
 
 `ZkcSecurity.Examples.ExecutableSumcheckFiatShamir` transfers the compiled
@@ -501,7 +525,9 @@ native-correctness assumptions are replaced by the following.
   direction; completeness also needs the converse at a sufficient budget and
   within the runtime's other resource limits.
 - Installed kernels implement the meanings of `installed`, at the admitted
-  representations.
+  representations and within the runtime's capacity limits. For a numerical
+  call this includes that the kernel evaluates the expression as
+  `Numerical.decode` reads its payload.
 - The native codec is a function of a message's bytes and type. Soundness needs
   no other property of it.
 - The managed transcript absorbs the invocation's public values injectively.

@@ -16,7 +16,7 @@ For every challenge function, every round count up to the Entry's static
 maximum (`SumcheckProof.maximum`), every table of `2 ^ rounds` values with its
 true sum as the claim, every initial transcript and expected binding, host
 validation of the honest proof bytes accepts at every budget of at least
-`charge rounds` (`honest_accepted`): 68, 129 and 190 instructions for zero, one
+`charge rounds` (`honest_accepted`): 68, 127 and 186 instructions for zero, one
 and two rounds. The proof is the family's
 (`ZkcExamples.Executable.SumcheckFamily.honest_accepted`): it composes the charge
 bound with `Zkc.Executable.validate_sufficient` and the lowering rule, and runs

@@ -95,7 +95,7 @@ structure Artifact where
     (xs point : List F) (claim : F), point.length < 64 → xs.length = 2 ^ point.length →
     helperCost installed validator names.checkHelper
         [(.vector names.scalar xs : Value F G), .vector names.scalar point, .data (.field names.scalar claim)] =
-      62 + 22 * point.length
+      62 + 20 * point.length
   prepared : ∀ {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G],
     ∀ name ∈ Instruction.helpers participant.instructions, Prepared installed validator (helperTable program F G) name
   helpersSorted : ∀ {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G],
@@ -137,7 +137,7 @@ theorem plan_types {F G : Type} (data : List (Value F G)) (rounds : Nat) (count 
 def roundCharge : Nat := (Code.charges (helperBound a.validator) (roundCode a.names)).getD 0
 
 /-- What the terminal check's body charges on a point of `count` coordinates. -/
-def checkCharge (count : Nat) : Nat := 62 + 22 * count
+def checkCharge (count : Nat) : Nat := 62 + 20 * count
 
 /-- What a complete run of `rounds` rounds charges: the empty point's call and
 its body, the loop's entry, the rounds' charges and yields, the terminal check's
