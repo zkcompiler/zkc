@@ -82,6 +82,7 @@ import ZkcSecurity.FiatShamir.Lifting
 import ZkcSecurity.FiatShamir.Obligations
 import ZkcSecurity.FiatShamir.ProviderSimulation
 import ZkcSecurity.FiatShamir.Realization
+import ZkcSecurity.FiatShamir.Reduction
 import ZkcSecurity.FiatShamir.Roles
 import ZkcSecurity.FiatShamir.Sampling
 import ZkcSecurity.FiatShamir.Soundness
