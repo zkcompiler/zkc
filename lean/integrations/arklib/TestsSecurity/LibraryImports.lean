@@ -40,6 +40,12 @@ import ZkcSecurity.Commitment.Replay
 import ZkcSecurity.Commitment.Soundness
 import ZkcSecurity.Commitment.TableLog
 import ZkcSecurity.Commitment.Verifier
+import ZkcSecurity.Endpoint.Binding
+import ZkcSecurity.Endpoint.Compiled
+import ZkcSecurity.Endpoint.Evidence
+import ZkcSecurity.Endpoint.Knowledge
+import ZkcSecurity.Endpoint.Sigma
+import ZkcSecurity.Endpoint.Soundness
 import ZkcSecurity.Examples.CausalSumcheck.CalculatedRound
 import ZkcSecurity.Examples.CausalSumcheck.DistributionalRound
 import ZkcSecurity.Examples.CausalSumcheck.ExactRound
@@ -73,6 +79,7 @@ import ZkcSecurity.Examples.StructuredSchnorrSigma
 import ZkcSecurity.Examples.Sumcheck
 import ZkcSecurity.Examples.SumcheckFiatShamir
 import ZkcSecurity.Examples.Variants
+import ZkcSecurity.Families.Schnorr
 import ZkcSecurity.FiatShamir.Binding
 import ZkcSecurity.FiatShamir.Budget
 import ZkcSecurity.FiatShamir.Composition
@@ -150,6 +157,7 @@ import TestsSecurity.Counterexamples.Observations
 import TestsSecurity.Counterexamples.Openings
 import TestsSecurity.Counterexamples.Operands
 import TestsSecurity.Counterexamples.Support
+import TestsSecurity.Endpoints
 import TestsSecurity.ExecutableSchnorrFiatShamir
 import TestsSecurity.FiatShamirTyped
 import TestsSecurity.FriSecurity
