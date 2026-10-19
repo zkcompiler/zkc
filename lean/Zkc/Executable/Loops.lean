@@ -1131,6 +1131,23 @@ def FunctionAgrees (validator validator' : Validator) (name : String) : Prop :=
     ∀ function, validator.function? name = some function →
       ∀ binding ∈ Steps.bindings function.body, validator.binding? binding = validator'.binding? binding
 
+/-- Whether two validators resolve the bindings of the local function `name`
+alike, decided by evaluation. -/
+def bindingsAgree (validator validator' : Validator) (name : String) : Bool :=
+  match validator.function? name with
+  | some function => (Steps.bindings function.body).all fun binding =>
+      decide (validator.binding? binding = validator'.binding? binding)
+  | none => true
+
+/-- The same local function, with its bindings resolved alike, agrees. -/
+theorem functionAgrees_of {validator validator' : Validator} {name : String}
+    (same : validator.function? name = validator'.function? name)
+    (bindings : bindingsAgree validator validator' name = true) : FunctionAgrees validator validator' name := by
+  refine ⟨same, fun function found binding member => ?_⟩
+  unfold bindingsAgree at bindings
+  rw [found] at bindings
+  simpa using (List.all_eq_true.mp bindings) binding member
+
 theorem evaluateCall_agrees {validator validator' : Validator} {name : String}
     (agrees : FunctionAgrees validator validator' name) (arguments : List (Value F G)) :
     validator.evaluateCall vocabulary name arguments = validator'.evaluateCall vocabulary name arguments := by
