@@ -118,13 +118,24 @@ the bridge checks the structured result before classifying it.
 ## Lean reference executable
 
 The `structured-source` executable in `ZkcTools.StructuredSource` checks and
-runs admitted snapshots:
+runs admitted snapshots, and prints participant normal forms:
 
 ```text
 structured-source check SNAPSHOT.json
 structured-source run SNAPSHOT.json INPUTS.json
 structured-source open SNAPSHOT.json REQUEST.json
+structured-source normal-form SNAPSHOT.json REQUEST.json
 ```
+
+A `normal-form` request is an array `[protocol, repeat, role, roster, pattern,
+laws, strict]`: the protocol's retained name, the site of the repeat whose
+callback is normalized (or `null` for the body), the role and roster size as
+decimal strings, one input pattern entry per input (`"absent"`, `"present"`,
+`"optional"`, or a fixed `["index", "0"]`, `["field", "1"]` or `["bool", true]`),
+the laws (`[helper, "returns" | ["stops", reason], pins]`, a pin being `null` or
+an input position) and whether owned calls without a law are kept. It prints
+the compiled normalizer's form as JSON for `normal_forms.py`; the run is not
+trusted, since the kernel checks every printed form.
 
 Closed runs take and return typed input/output arrays. Open requests and
 results follow the native schema: optional ordered inputs, selected role,
