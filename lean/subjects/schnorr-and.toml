@@ -17,6 +17,8 @@ data = "lean/ZkcExamples/Construction/SchnorrAndProofData.lean"
 bodies = "lean/ZkcExamples/Construction/SchnorrAndProofBodies.lean"
 participant = "lean/ZkcExamples/Construction/SchnorrAndProofParticipant.lean"
 glue = "lean/ZkcExamples/Construction/SchnorrAndProof.lean"
+artifacts = "lean/integrations/arklib/ZkcSecurity/Examples/Subjects/SchnorrAnd/Artifacts.lean"
+claims = "lean/integrations/arklib/ZkcSecurity/Examples/Subjects/SchnorrAnd/Claims.lean"
 interactive_data = "lean/ZkcExamples/Structured/SchnorrAndData.lean"
 interactive_bodies = "lean/ZkcExamples/Structured/SchnorrAndBodies.lean"
 interactive_views = "lean/ZkcExamples/Structured/SchnorrAndViews.lean"
@@ -24,14 +26,16 @@ interactive_export = "lean/bridges/structured/fixtures/schnorr-and.json"
 interactive_source = "lean/bridges/structured/fixtures/schnorr-and.mlir"
 
 [family]
-module = "ZkcSecurity.VCVio.SigmaAnd"
-instance = "ZkcSecurity.Examples.SchnorrAndSigma"
+module = "ZkcSecurity.Families.SchnorrVariants"
+construction = "knowledge"
 kind = "sigma"
 
 [claims]
+namespace = "ZkcSecurity.Examples.Subjects.SchnorrAnd"
 endpoint = "ideal-meaning"
 properties = ["knowledge-soundness"]
 statement = "fixed"
+regime = "exact-uniform challenges"
 
 [assumptions]
 requested = ["exporter.structured-denotation", "exporter.checked-candidate",
@@ -45,6 +49,8 @@ kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
 [construction]
 admission = "views"
 inputs = "values"
+model = "Zkc.Protocols.Schnorr.Variants.conjunction wiring"
+model_imports = ["ZkcExamples.Construction.SchnorrAndProofModel"]
 
 [bodies]
 entry = "proof"
