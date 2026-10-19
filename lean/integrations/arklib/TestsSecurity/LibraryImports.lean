@@ -151,6 +151,7 @@ import TestsSecurity.MultilinearSumcheck
 import TestsSecurity.ProviderSimulation
 import TestsSecurity.SigmaComposition
 import TestsSecurity.SigmaCompositionFiatShamir
+import TestsSecurity.StageComposition
 import TestsSecurity.StructuredSchnorrFiatShamir
 import TestsSecurity.StructuredSchnorrSigma
 import TestsSecurity.StructuredSemanticDependencies
