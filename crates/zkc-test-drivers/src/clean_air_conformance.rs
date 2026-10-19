@@ -16,7 +16,7 @@ use zkc_backends::{
     plonky3::{MODULUS_DECIMAL, PACKING_WIDTH},
     ring::{self, Budget, Carrier},
 };
-use zkc_runtime::{interactive::Identity, ring::Expression};
+use zkc_runtime::{ring::Expression, vm::Identity};
 
 // The report is linear in the control; both are bounded before parsing.
 const CONTROL_LIMIT: u64 = 1 << 20;

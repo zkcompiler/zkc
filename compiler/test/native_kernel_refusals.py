@@ -40,7 +40,10 @@ for wrong in ('!algebra.field_array<"bls12-381.fr", 4>', '!algebra.field_matrix<
     reject(gather.replace(vector, wrong), 'binding-operation-signature')
 for tensor in ('tensor<?xi64>', f'tensor<?x{field}>', f'tensor<4x{field}>', f'tensor<?x?x{field}>'):
     reject(gather.replace(vector, tensor), 'logical protocol data or capability')
-reject(physical.replace('kernel = "arkworks/vector.gather"', 'kernel = "arkworks/unknown"'), 'binding-implementation')
+selected_call = 'binding = @kernel, implementation = "arkworks/vector.gather"'
+assert physical.count(selected_call) == 1
+reject(physical.replace(selected_call, 'binding = @kernel, implementation = "arkworks/unknown"'),
+       'binding-implementation')
 
 addition = fixture('field.add', 'bls12-381.fr', 'algebra.exec.field_add', [field, field], field, [])
 commands.verified(addition)
@@ -53,6 +56,6 @@ extra_result = addition.replace('%r = "algebra.exec.field_add"', '%r:2 = "algebr
 extra_result = extra_result.replace(f' : ({field},{field})->{field}', f' : ({field},{field})->({field},{field})', 1)
 extra_result = extra_result.replace('local.return %r :', 'local.return %r#0 :')
 reject(extra_result, 'binding-operation-signature')
-# A well-typed kernel outside any admitted native owner must not export.
-reject(f'module {{ %r = "algebra.exec.field_constant"() {{site="value",parameters=["1"]}} : ()->{field} }}', 'interactive-kernel-context')
+# A logical primitive without a lexical binding must not verify or export.
+reject(f'module {{ %r = "algebra.exec.field_constant"() {{site="value",parameters=["1"]}} : ()->{field} }}', 'binding-reference')
 print(f'native kernel boundary: {commands.save()} checks')

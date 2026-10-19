@@ -1,6 +1,6 @@
 # Public-table Sumcheck
 
-The [library](../../../libraries/sumcheck/lib.zkc) implements repeated multilinear
+The [library](../../../libraries/protocols/polynomial/sumcheck/lib.zkc) implements repeated multilinear
 Sumcheck using ordinary vector kernels, messages and bounded protocol repetition.
 The [Entry](main.zkc) selects BLS12-381 Fr, at most two rounds, and the installed
 Merlin construction. `Interactive` retains the original exchange.
@@ -37,3 +37,25 @@ bounded implementation controls, not an executable-path soundness theorem.
 The [composed variant](composed/README.md) combines two reductions before
 discharging their terminal evaluations. The [product variant](product/README.md)
 imports a ring expression and evaluates it with base or extension challenges.
+
+## Executable quick start
+
+Run these literal commands from this project directory with `zkc` and
+`zkc-compile` on `PATH` (Python 3 for generated inputs). The test suite runs
+this block in a separate consumer tree using only declared package dependencies.
+
+```sh zkc-example
+zkc check
+zkc run Interactive
+zkc prove Proof
+zkc verify Proof
+```
+
+Inputs: inputs/ contains the public factor table and both participant maps.
+
+Profile: Public multilinear table; the client evaluates the terminal obligation directly.
+
+Expected negative control: A false sum claim or changed received coefficient refuses the verifier check.
+
+Generated packages, proofs and result documents are written under `build/`
+inside this project. Existing input maps remain source inputs.

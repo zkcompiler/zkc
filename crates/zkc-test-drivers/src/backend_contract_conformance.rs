@@ -1,9 +1,9 @@
 //! Observe the executing backend's own registry and physical signatures.
 use serde_json::{Value, json};
 use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy};
-use zkc_runtime::interactive::{
+use zkc_runtime::vm::{
     AttributeRule, Backend, BackendError, Frame, FrameExit, Invocation, OperationBinding,
-    PhysicalType, admit_supplied,
+    PhysicalType,
 };
 
 // Admission-only adapter: preserve the native backend's ports and deliberately
@@ -13,8 +13,8 @@ impl Backend for AttributeDrift<'_> {
     type Call = ();
     type Checkpoint = ();
     type Value = <NativeBackend as Backend>::Value;
-    type Kernel = zkc_runtime::interactive::BoundSignature;
-    fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Kernel> {
+    type Operation = zkc_runtime::vm::BoundSignature;
+    fn prepare_binding(&self, binding: &OperationBinding) -> Option<Self::Operation> {
         let mut signature = self.0.binding_signature(binding)?;
         if binding.contract == "field.add" {
             signature.attributes = AttributeRule::Unsigned64;
@@ -37,7 +37,7 @@ impl Backend for AttributeDrift<'_> {
     }
     fn apply(
         &mut self,
-        _kernel: &Self::Kernel,
+        _operation: &Self::Operation,
         _: &Invocation<'_>,
         _: &[Self::Value],
     ) -> Result<Vec<Self::Value>, BackendError> {
@@ -88,9 +88,15 @@ fn installation(native: &NativeBackend, drift: bool) -> Option<Value> {
     let original = native.binding_signature(&binding)?;
     let mutated = AttributeDrift(native).binding_signature(&binding)?;
     let result = if drift {
-        admit_supplied(&bytes, &AttributeDrift(native))
+        zkc_runtime::vm::Program::decode(&bytes).and_then(|program| {
+            program.check_installation(&AttributeDrift(native))?;
+            Ok(program)
+        })
     } else {
-        admit_supplied(&bytes, native)
+        zkc_runtime::vm::Program::decode(&bytes).and_then(|program| {
+            program.check_installation(native)?;
+            Ok(program)
+        })
     };
     Some(json!({"accepted": true, "admitted": result.is_ok(),
         "error": result.err().map(|error| error.code.as_str()),

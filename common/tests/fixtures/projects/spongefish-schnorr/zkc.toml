@@ -1,8 +1,7 @@
-format = "zkc.project/0"
+"format" = "zkc.project/0"
 
-[modules]
+["modules"]
 "example" = "main.zkc"
 
-[dependencies]
-spongefish = "../../../../../libraries/spongefish"
-zkc = "../../../../../libraries/zkc"
+["dependencies"]
+"spongefish" = "../../../../../libraries/constructions/spongefish"

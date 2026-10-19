@@ -9,6 +9,7 @@
 #include "zkc/Compiler/PolynomialReduction.h"
 #include "zkc/Compiler/PublicCoin.h"
 #include "zkc/Compiler/Run.h"
+#include "zkc/Compiler/StructuredSource.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
@@ -41,13 +42,16 @@ int zkc::runCompiler(int argc, char **argv,
            "--module=MODULE=FILE.zkc\n"
            "    [--module=MODULE=FILE.zkc ...] [--asset=NAME=FORMAT=FILE ...]\n"
            "    [--no-simplify] [--release-storage] "
-           "[--fuse-vector-reductions] [--no-finite-bulk]\n"
+           "[--fuse-vector-reductions] [--fuse-collect-fold] "
+           "[--no-finite-bulk]\n"
+           "    [--no-calculation-batching]\n"
            "    language-check may omit --entry to check definitions alone.\n"
            "    Output commands accept [--entry-kind=run|proof] and select the "
            "sole eligible Entry when --entry is omitted.\n"
            "    A short name must be unique; qualified names select exactly.\n"
            "    Its --declarations option reports completed public "
            "contracts.\n"
+           "    --api reports public exports, types and source references.\n"
            "    --notations reports diagnostic syntax metadata, with optional\n"
            "    --notation-private and --notation-installation (check only).\n"
            "    Syntax metadata is not a native interface; named-call views\n"
@@ -57,24 +61,38 @@ int zkc::runCompiler(int argc, char **argv,
            "Protocol IR and native participant programs:\n"
            "  protocol-export FILE.mlir\n"
            "  protocol-lean FILE.mlir --symbol=NAME\n"
+           "  protocol-structured FILE.mlir --symbol=NAME\n"
            "  protocol-bundle FILE.mlir [--entry=NAME] [--no-simplify] "
-           "[--release-storage] [--fuse-vector-reductions] [--no-finite-bulk]\n"
-           "    [--fix-polynomial-factors]\n"
+           "[--release-storage] [--fuse-vector-reductions] "
+           "[--fuse-collect-fold] [--no-finite-bulk]\n"
+           "    [--no-calculation-batching] [--fix-polynomial-factors]\n"
            "  protocol-checked-bundle FILE.mlir [--requirements=FILE] "
            "[--public-coin=FILE] [--entry=NAME] [--no-simplify] "
-           "[--release-storage] [--fuse-vector-reductions] [--no-finite-bulk]\n"
+           "[--release-storage] [--fuse-vector-reductions] "
+           "[--fuse-collect-fold] [--no-finite-bulk]\n"
+           "    [--no-calculation-batching]\n"
            "  protocol-check-reductions SOURCE.mlir REQUIREMENTS.json "
-           "CANDIDATE.mlir [--fuse-vector-reductions] [--no-finite-bulk]\n"
+           "CANDIDATE.mlir [--fuse-vector-reductions] [--fuse-collect-fold] "
+           "[--no-finite-bulk]\n"
            "  protocol-public-coin SOURCE.mlir REQUIREMENT.json "
-           "[--fuse-vector-reductions] [--no-finite-bulk]\n"
+           "[--fuse-vector-reductions] [--fuse-collect-fold] "
+           "[--no-finite-bulk]\n"
            "  protocol-check-public-coin SOURCE.mlir REQUIREMENT.json "
-           "REPORT.json [--fuse-vector-reductions] [--no-finite-bulk]\n"
+           "REPORT.json [--fuse-vector-reductions] [--fuse-collect-fold] "
+           "[--no-finite-bulk]\n"
            "  protocol-proof FILE.mlir POLICY [--no-simplify] "
-           "[--release-storage] [--fuse-vector-reductions] [--no-finite-bulk]\n"
+           "[--release-storage] [--fuse-vector-reductions] "
+           "[--fuse-collect-fold] [--no-finite-bulk]\n"
+           "    [--no-calculation-batching]\n"
            "  protocol-construct-proof FILE.mlir POLICY "
-           "[--fuse-vector-reductions] [--no-finite-bulk]\n"
+           "[--fuse-vector-reductions] [--fuse-collect-fold] "
+           "[--no-finite-bulk]\n"
            "  protocol-check-proof FILE.mlir POLICY CANDIDATE.mlir "
-           "[--fuse-vector-reductions] [--no-finite-bulk]\n\n"
+           "[--fuse-vector-reductions] [--fuse-collect-fold] "
+           "[--no-finite-bulk]\n"
+           "  protocol-constructed-participant FILE.mlir POLICY CANDIDATE.mlir "
+           "[--fuse-vector-reductions] [--fuse-collect-fold] "
+           "[--no-finite-bulk]\n\n"
            "Relation data (binary R1CS or canonical JSON):\n"
            "  relation-read | relation-inspect | relation-matrices FILE\n"
            "  relation-import FILE [SYMBOL] | relation-export FILE.mlir\n"
@@ -100,7 +118,8 @@ int zkc::runCompiler(int argc, char **argv,
   };
   StringRef mode(argv[1]);
   if (mode == "protocol-proof" || mode == "protocol-construct-proof" ||
-      mode == "protocol-check-proof") {
+      mode == "protocol-check-proof" ||
+      mode == "protocol-constructed-participant") {
     if (argc < 4)
       return fail(error("native-proof-options"));
     auto source = readInput(argv[2], 16 * 1024 * 1024);
@@ -123,8 +142,12 @@ int zkc::runCompiler(int argc, char **argv,
           options.releaseStorage = true;
         else if (option == "--no-finite-bulk")
           options.mathematicalSelection.finiteBulk = false;
+        else if (option == "--no-calculation-batching")
+          options.mathematicalSelection.calculationBatching = false;
         else if (option == "--fuse-vector-reductions")
           options.mathematicalSelection.vectorReductionFusion = true;
+        else if (option == "--fuse-collect-fold")
+          options.mathematicalSelection.collectFoldFusion = true;
         else
           return fail(error("native-proof-options"));
       }
@@ -134,7 +157,8 @@ int zkc::runCompiler(int argc, char **argv,
       outs() << compiled->deployment << '\n';
       return 0;
     }
-    bool check = mode == "protocol-check-proof";
+    bool exportParticipant = mode == "protocol-constructed-participant";
+    bool check = mode == "protocol-check-proof" || exportParticipant;
     const int required = check ? 5 : 4;
     MathematicalSelectionPolicy mathematicalSelection;
     std::set<std::string> seen;
@@ -144,6 +168,8 @@ int zkc::runCompiler(int argc, char **argv,
         return fail(error("native-proof-options"));
       if (option == "--fuse-vector-reductions")
         mathematicalSelection.vectorReductionFusion = true;
+      else if (option == "--fuse-collect-fold")
+        mathematicalSelection.collectFoldFusion = true;
       else if (option == "--no-finite-bulk")
         mathematicalSelection.finiteBulk = false;
       else
@@ -169,6 +195,14 @@ int zkc::runCompiler(int argc, char **argv,
           mlir::parseSourceString<mlir::ModuleOp>(*bytes, &context);
       if (!candidate)
         return fail(error("native-proof-candidate"));
+      if (exportParticipant) {
+        auto exported = exportConstructedParticipant(
+            *original, *candidate, *source, *policy, mathematicalSelection);
+        if (!exported)
+          return fail(exported.takeError());
+        outs() << printJson(*exported) << '\n';
+        return 0;
+      }
       if (auto e = checkNativeProof(*original, *candidate, *policy,
                                     mathematicalSelection))
         return fail(std::move(e));
@@ -196,6 +230,8 @@ int zkc::runCompiler(int argc, char **argv,
         return fail(error("public-coin-options"));
       if (option == "--fuse-vector-reductions")
         mathematicalSelection.vectorReductionFusion = true;
+      else if (option == "--fuse-collect-fold")
+        mathematicalSelection.collectFoldFusion = true;
       else if (option == "--no-finite-bulk")
         mathematicalSelection.finiteBulk = false;
       else
@@ -242,6 +278,8 @@ int zkc::runCompiler(int argc, char **argv,
         return fail(error("polynomial-requirement-options"));
       if (option == "--fuse-vector-reductions")
         mathematicalSelection.vectorReductionFusion = true;
+      else if (option == "--fuse-collect-fold")
+        mathematicalSelection.collectFoldFusion = true;
       else if (option == "--no-finite-bulk")
         mathematicalSelection.finiteBulk = false;
       else
@@ -288,8 +326,12 @@ int zkc::runCompiler(int argc, char **argv,
         options.releaseStorage = true;
       else if (argument == "--no-finite-bulk")
         options.mathematicalSelection.finiteBulk = false;
+      else if (argument == "--no-calculation-batching")
+        options.mathematicalSelection.calculationBatching = false;
       else if (argument == "--fuse-vector-reductions")
         options.mathematicalSelection.vectorReductionFusion = true;
+      else if (argument == "--fuse-collect-fold")
+        options.mathematicalSelection.collectFoldFusion = true;
       else if (argument == "--fix-polynomial-factors")
         options.fixPolynomialFactors = true;
       else if (mode == "protocol-checked-bundle" &&
@@ -333,13 +375,15 @@ int zkc::runCompiler(int argc, char **argv,
       outs() << result->bundle;
     return 0;
   }
-  if (mode == "protocol-export" || mode == "protocol-lean") {
+  if (mode == "protocol-export" || mode == "protocol-lean" ||
+      mode == "protocol-structured") {
     StringRef symbol;
-    if (mode == "protocol-lean" && argc == 4) {
+    bool sourceExport = mode != "protocol-export";
+    if (sourceExport && argc == 4) {
       symbol = argv[3];
       if (!symbol.consume_front("--symbol=") || symbol.empty())
         return fail(error("unsupported-option"));
-    } else if (mode == "protocol-lean" || argc != 3)
+    } else if (sourceExport || argc != 3)
       return fail(error("unsupported-option"));
     auto text = readInput(argv[2], 16 * 1024 * 1024);
     if (!text)
@@ -347,7 +391,14 @@ int zkc::runCompiler(int argc, char **argv,
     if (!mlirNestingWithinLimit(*text))
       return fail(error("mlir-depth-limit"));
     mlir::MLIRContext context(registry);
-    if (mode == "protocol-lean") {
+    if (mode == "protocol-structured") {
+      auto result = protocol::exportStructuredSource(*text, symbol, context);
+      if (!result)
+        return fail(result.takeError());
+      outs() << *result;
+      return 0;
+    }
+    if (sourceExport) {
       auto result = protocol::exportCommonSource(*text, symbol, context);
       if (!result)
         return fail(result.takeError());

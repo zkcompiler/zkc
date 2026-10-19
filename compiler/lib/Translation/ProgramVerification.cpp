@@ -131,17 +131,17 @@ class ArtifactCorrespondence {
         return environment.outputs(op.getResults(), names);
       };
       if (auto r = record.get<program::Operation>()) {
-        auto kernel = dyn_cast<plan::ExecuteKernelOp>(op);
-        if (!kernel || symbol(&op, "binding") != r->callee ||
+        auto application = dyn_cast<plan::ApplyOp>(op);
+        if (!application || symbol(&op, "binding") != r->callee ||
             !strings(op.getAttrOfType<ArrayAttr>("parameters"),
                      r->attributes) ||
             !inputs(r->inputs) || !outputs(r->outputs))
           return false;
         auto declaration =
             SymbolTable::lookupNearestSymbolFrom<local::OperationBindingOp>(
-                &op, kernel.getBindingAttr());
+                &op, application.getBindingAttr());
         if (!declaration ||
-            kernel.getKernel() != declaration.getImplementation())
+            application.getImplementation() != declaration.getImplementation())
           return false;
       } else if (auto r = record.get<program::LocalCall>()) {
         if (!isa<local::CallOp>(op) || symbol(&op, "callee") != r->callee ||

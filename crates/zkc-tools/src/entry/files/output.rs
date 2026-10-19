@@ -10,7 +10,7 @@ use serde::{
 };
 use std::io::Write;
 use zkc_backends::NativeBackend;
-use zkc_runtime::interactive::Value as _;
+use zkc_runtime::vm::Value as _;
 
 struct Buffer {
     bytes: Vec<u8>,
@@ -251,7 +251,7 @@ mod tests {
     use super::*;
     use crate::host::inputs::hex;
     use zkc_backends::Value as Native;
-    use zkc_runtime::interactive::Identity;
+    use zkc_runtime::vm::Identity;
     #[test]
     fn pcs_outputs_require_explicit_authenticated_setup_material() {
         let capacity = Capacity::default();

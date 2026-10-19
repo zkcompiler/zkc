@@ -4,7 +4,9 @@
 #include "zkc/Compiler/Diagnostics.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Compiler/LanguageInspection.h"
+#include "zkc/Compiler/NativeProof.h"
 #include "zkc/Contracts/Variant.h"
+#include "zkc/Dialect/Protocol/Contracts.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Support/Json.h"
@@ -184,6 +186,64 @@ proof 公開=実行{setup 設定{鍵,秘密};prover 証明;verifier 検証;
         refuses(readInterface(checked.bytes(), printJson(changed)),
                 "source.interface");
       });
+  cases.run(
+      "different selected target roles retain different original PIR", [&] {
+        constexpr StringLiteral text = R"zkc(module sample;
+relation R(statement x:bool){return x;}
+protocol Run roles(P,V)(x:bool@(P,V))->(ok:bool@(P,V))
+ spec {
+   target left=R(in.x@P) accept out.ok@P;
+   target right=R(in.x@P) accept out.ok@V;
+ }
+ {return(ok=x);}
+proof Left=Run{
+  prover V;verifier P;public{x};accept ok;target left;construction authored;
+}
+proof Right=Run{
+  prover P;verifier V;public{x};accept ok;target right;construction authored;
+})zkc";
+        auto left = original(text, "sample::Left");
+        auto right = original(text, "sample::Right");
+        require(
+            left.bytes() != right.bytes(),
+            "different selected decisions collapsed to identical original PIR");
+        auto candidate = parse(left.bytes());
+        protocol_ir::StatementOp statement;
+        candidate->walk([&](protocol_ir::StatementOp op) { statement = op; });
+        require(statement && statement.getTargetAttr() &&
+                    statement.getTargetAttr().getValue() == "left",
+                "exact selected target was omitted");
+        auto target = protocol_ir::getStatementTarget(statement);
+        require(mlir::cast<mlir::ArrayAttr>(target[4])[2] ==
+                    mlir::StringAttr::get(&context, "role00000000"),
+                "selected target lost its decision role");
+        refuses(compareOriginal(right.entry(), *candidate),
+                "source.correspondence");
+        auto swapped = take(json::parse(right.interfaceJson()));
+        (*swapped.getAsObject())["original"] = left.identity();
+        refuses(readInterface(left.bytes(), printJson(swapped)),
+                "source.interface");
+        auto compiled = take(compileEntry(left));
+        take(compileEntry(right));
+        auto policy = std::get<CompiledNativeProof>(compiled.artifact()).policy;
+        // Both named targets have the same statement projection. Changing only
+        // the selected name remains formed PIR, but changes the selected
+        // decision.
+        statement.setTargetAttr(mlir::StringAttr::get(&context, "right"));
+        require(succeeded(mlir::verify(*candidate)),
+                "second owned target invalid");
+        auto selection = policy;
+        selection.draws.clear();
+        refuses(selectNativeProofDraws(*candidate, selection),
+                "native-proof-statement-acceptance");
+        refuses(compareOriginal(left.entry(), *candidate),
+                "source.correspondence");
+        statement.removeTargetAttr();
+        require(succeeded(mlir::verify(*candidate)),
+                "standalone statement invalid");
+        refuses(compareOriginal(left.entry(), *candidate),
+                "source.correspondence");
+      });
   cases.run("source proof compilation retains exact Entry selections", [&] {
     auto checked = original(source);
     const auto &view = checked.interface();
@@ -202,9 +262,13 @@ proof 公開=実行{setup 設定{鍵,秘密};prover 証明;verifier 検証;
                              mlir::StringAttr::get(&context, "role00000001"),
                              mlir::StringAttr::get(&context, "role00000000")}),
           "statement participants differ");
-      require(statement.getAcceptance() == 0 &&
-                  statement.getInputs().size() == 3,
-              "statement layout differs");
+      require(
+          statement.getTargetAttr() &&
+              statement.getTargetAttr().getValue() ==
+                  view.selectedProtocol().clauses[*view.proof->target].name &&
+              statement.getAcceptance() == 0 &&
+              statement.getInputs().size() == 3,
+          "statement layout differs");
     });
     require(statements == 1, "target did not emit one entry-only statement");
     take(admitOriginal(checked.entry(), checked.bytes(),
@@ -431,29 +495,34 @@ proof 公開=実行{setup 設定{鍵,秘密};prover 証明;verifier 検証;
         take(compileEntry(original(text, entry)));
     }
   });
-  cases.run(
-      "independent comparison rejects omitted and changed statements", [&] {
-        auto checked = original(source);
-        for (unsigned change = 0; change < 3; ++change) {
-          auto module = parse(checked.bytes());
-          protocol_ir::StatementOp statement;
-          module->walk([&](protocol_ir::StatementOp op) { statement = op; });
-          require(bool(statement), "statement missing");
-          if (change == 0)
-            statement.erase();
-          else if (change == 1)
-            statement.setOperand(0, statement.getInputs()[1]);
-          else
-            statement.setSelectorsAttr(mlir::ArrayAttr::get(
-                &context, {mlir::StringAttr::get(&context, "role00000000"),
-                           mlir::StringAttr::get(&context, "role00000001"),
-                           mlir::StringAttr::get(&context, "role00000000")}));
-          require(succeeded(mlir::verify(*module)),
-                  "statement mutation is ill-formed");
-          refuses(compareOriginal(checked.entry(), *module),
-                  "source.correspondence");
-        }
-      });
+  cases.run("omitted statements and mismatched retained targets refuse", [&] {
+    auto checked = original(source);
+    for (unsigned change = 0; change < 3; ++change) {
+      auto module = parse(checked.bytes());
+      protocol_ir::StatementOp statement;
+      module->walk([&](protocol_ir::StatementOp op) { statement = op; });
+      require(bool(statement), "statement missing");
+      if (change == 0)
+        statement.erase();
+      else if (change == 1)
+        statement.setOperand(0, statement.getInputs()[1]);
+      else
+        statement.setSelectorsAttr(mlir::ArrayAttr::get(
+            &context, {mlir::StringAttr::get(&context, "role00000000"),
+                       mlir::StringAttr::get(&context, "role00000001"),
+                       mlir::StringAttr::get(&context, "role00000000")}));
+      if (change == 0) {
+        require(succeeded(mlir::verify(*module)),
+                "statement omission is ill-formed");
+        refuses(compareOriginal(checked.entry(), *module),
+                "source.correspondence");
+      } else {
+        require(failed(mlir::verify(*module)),
+                "statement disagrees with a retained target");
+        refuses(compareOriginal(checked.entry(), *module), "target.admission");
+      }
+    }
+  });
   cases.run("every source location budget boundary retains a limit refusal",
             [&] {
               auto checked = original(source);

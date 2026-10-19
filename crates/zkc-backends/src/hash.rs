@@ -1,4 +1,4 @@
-//! Raw Keccak-256 and SHAKE128 snapshots. Library code owns framing.
+//! Raw Keccak-256, SHA-256 and SHAKE128 snapshots. Library code owns framing.
 //! SHAKE128 has an explicit read cursor and no wire representation.
 //!
 //! The abstract state is (M, k): absorb(x) gives (M || x, 0), while
@@ -10,8 +10,8 @@ use shake::{
     digest::{ExtendableOutput, Update, XofReader},
 };
 use std::{fmt, sync::Arc};
-use zkc_runtime::interactive::{
-    AttributeRule, BoundSignature, Identity, KernelSignature, LogicalType, OperationBinding,
+use zkc_runtime::vm::{
+    AttributeRule, BoundSignature, Identity, LogicalType, OperationBinding, OperationSignature,
     PhysicalType, Type,
 };
 
@@ -53,14 +53,14 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         return None;
     }
     let (inputs, outputs): (&[Type], &[Type]) = match binding.contract.as_str() {
-        "hash.keccak256" => (&[Bytes], &[Bytes]),
+        "hash.keccak256" | "hash.sha256" => (&[Bytes], &[Bytes]),
         "shake128.init" => (&[], &[Shake128State]),
         "shake128.absorb" => (&[Shake128State, Bytes], &[Shake128State]),
         "shake128.squeeze" => (&[Shake128State, Index], &[Shake128State, Bytes]),
         _ => return None,
     };
     let port = |kind| PhysicalType::default_for(LogicalType::new(kind, Identity::None).ok()?).ok();
-    Some(KernelSignature {
+    Some(OperationSignature {
         inputs: inputs.iter().copied().map(port).collect::<Option<_>>()?,
         outputs: outputs.iter().copied().map(port).collect::<Option<_>>()?,
         attributes: AttributeRule::None,
@@ -100,6 +100,18 @@ pub(crate) fn apply(
             })?;
             Ok(vec![Value::Bytes(Keccak256::digest(bytes).to_vec().into())])
         }
+        ("hash.sha256", [Value::Bytes(bytes)]) => {
+            use sha2::{Digest, Sha256};
+            policy.bytes(bytes.len())?;
+            policy.bytes(32)?;
+            policy.output(size(32, 1)?, available)?;
+            budget.charge(crate::external::Work {
+                hash_calls: 1,
+                hash_bytes: bytes.len() as u64,
+                ..Default::default()
+            })?;
+            Ok(vec![Value::Bytes(Sha256::digest(bytes).to_vec().into())])
+        }
         ("shake128.init", []) => {
             policy.output(Shake128State::RETAINED_BYTES, available)?;
             charge(0, budget)?;
@@ -131,6 +143,7 @@ pub(crate) fn apply(
 
 pub(crate) const IMPLEMENTATIONS: &[(&str, &str)] = &[
     ("native/hash.keccak256", "hash.keccak256"),
+    ("native/hash.sha256", "hash.sha256"),
     ("native/shake128.init", "shake128.init"),
     ("native/shake128.absorb", "shake128.absorb"),
     ("native/shake128.squeeze", "shake128.squeeze"),
@@ -206,6 +219,76 @@ mod tests {
                 .is_err()
             );
         }
+    }
+    #[test]
+    fn sha256_known_answers_and_work_charge() {
+        // FIPS 180-4 examples, plus a two-block message crossing the padding boundary.
+        for (input, expected) in [
+            (
+                b"".as_slice(),
+                "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            ),
+            (
+                b"abc".as_slice(),
+                "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            ),
+            (
+                b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq".as_slice(),
+                "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1",
+            ),
+        ] {
+            let values = [Value::Bytes(input.to_vec().into())];
+            let mut budget = crate::external_kernels::Budget::default();
+            let output = apply(
+                "hash.sha256",
+                &values,
+                &[],
+                &Policy::default(),
+                usize::MAX,
+                &mut budget,
+            )
+            .unwrap();
+            assert!(
+                matches!(&output[0], Value::Bytes(b) if b.as_ref() == zkc_test_support::unhex(expected))
+            );
+            assert!(budget.spent > 0);
+            let mut limited = crate::external_kernels::Budget { limit: 0, spent: 0 };
+            assert_eq!(
+                apply(
+                    "hash.sha256",
+                    &values,
+                    &[],
+                    &Policy::default(),
+                    usize::MAX,
+                    &mut limited
+                )
+                .unwrap_err()
+                .code,
+                "exhausted:external-work-limit"
+            );
+            assert!(
+                apply(
+                    "hash.sha256",
+                    &values,
+                    &[],
+                    &Policy::default(),
+                    0,
+                    &mut budget
+                )
+                .is_err()
+            );
+        }
+        assert!(
+            apply(
+                "hash.sha256",
+                &[Value::Index(0)],
+                &[],
+                &Policy::default(),
+                usize::MAX,
+                &mut Default::default()
+            )
+            .is_err()
+        );
     }
     #[test]
     fn known_answer_and_snapshot_state_machine() {

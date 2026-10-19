@@ -1,37 +1,15 @@
 #include "mlir/Parser/Parser.h"
 #include "support/NativeCases.h"
+#include "support/SourceProject.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Translation/Language.h"
-#include <fstream>
 using namespace llvm;
 using namespace zkc::language;
 using namespace zkc::test;
 namespace {
-std::string read(const std::string &path) {
-  std::ifstream input(path);
-  require(bool(input), "cannot read fixture " + path);
-  return std::string(std::istreambuf_iterator<char>(input), {});
-}
 ClosedEntry example() {
-  std::string root = ZKC_SCOPED_ROOT;
-  auto captured = take(capture(
-      {{"example",
-        read(root +
-             "/common/tests/fixtures/projects/scoped-computations/main.zkc"),
-        "main.zkc"},
-       {"callbacks",
-        read(root + "/common/tests/fixtures/projects/scoped-computations/"
-                    "callbacks.zkc"),
-        "scoped.zkc"},
-       {"zkc::accumulation", read(root + "/libraries/zkc/accumulation.zkc"),
-        "accumulation.zkc"},
-       {"zkc::curve", read(root + "/libraries/zkc/curve.zkc"), "curve.zkc"},
-       {"zkc::finite", read(root + "/libraries/zkc/finite.zkc"), "finite.zkc"},
-       {"zkc::sequence", read(root + "/libraries/zkc/sequence.zkc"),
-        "sequence.zkc"},
-       {"zkc::vector", read(root + "/libraries/zkc/vector.zkc"),
-        "vector.zkc"}}));
+  auto captured = take(capture(sourceProject(ZKC_SOURCE_PROJECT)));
   return take(
       closeEntry(take(analyze(captured).checkedProject()), "example::Demo"));
 }

@@ -1,0 +1,11 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"zkc::scalar" = "scalar.zkc"
+"zkc::curve" = "curve.zkc"
+"zkc::boolean" = "boolean.zkc"
+"zkc::linear" = "linear.zkc"
+
+["dependencies"]
+"collections" = "../collections"
+"primitive-algebra" = "../primitives/algebra"

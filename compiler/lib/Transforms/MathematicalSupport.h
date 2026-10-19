@@ -53,54 +53,6 @@ mlir::LogicalResult
 chargeHelperOperations(mlir::Operation *helper, unsigned &remaining,
                        uint64_t &indices, uint64_t *work = nullptr,
                        OptimizationOutcome *outcome = nullptr);
-// Closed execution vocabulary of the mathematical recipes. Admission of a
-// data signature alone does not establish that an operation is total.
-bool isCalculationContract(llvm::StringRef contract);
-mlir::LogicalResult
-verifyCalculationRecipes(protocol_ir::ProtocolModuleOp original,
-                         protocol_ir::ProtocolModuleOp candidate,
-                         llvm::ArrayRef<local::FuncOp> functions);
-// The typed outcome allows the private producer to retry only optional finite
-// comparison exhaustion; it does not weaken the actual recipe reader.
-mlir::LogicalResult
-verifyCalculationRecipes(protocol_ir::ProtocolModuleOp original,
-                         protocol_ir::ProtocolModuleOp candidate,
-                         llvm::ArrayRef<local::FuncOp> functions,
-                         finite::VerificationLimits limits,
-                         finite::VerificationResult &outcome);
-class CheckedHelperNormalizations;
-// Compare original local.realize helpers to complete actual executable bodies,
-// composing independently checked normalization proposals and recipe reading.
-mlir::LogicalResult
-verifyRealizedHelperRecipes(protocol_ir::ProtocolModuleOp original,
-                            protocol_ir::ProtocolModuleOp candidate,
-                            llvm::ArrayRef<local::FuncOp> functions);
-// Reuse a proposal scope already checked against this exact original unit.
-mlir::LogicalResult
-verifyRealizedHelperRecipes(protocol_ir::ProtocolModuleOp original,
-                            protocol_ir::ProtocolModuleOp candidate,
-                            llvm::ArrayRef<local::FuncOp> functions,
-                            const CheckedHelperNormalizations &helpers);
-// Success preserves function handles and replaces their checked bodies, adding
-// only generated bindings. Failure leaves the unit unchanged; outer services
-// own complete module admission.
-mlir::LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
-                                      llvm::ArrayRef<local::FuncOp> functions,
-                                      MathematicalSelectionPolicy policy = {},
-                                      RealizationWork *work = nullptr,
-                                      RealizationTrace *trace = nullptr);
-mlir::LogicalResult expandMathRealizations(mlir::ModuleOp module,
-                                           MathematicalSelectionPolicy policy,
-                                           RealizationWork *work,
-                                           finite::VerificationLimits limits,
-                                           RealizationTrace *trace = nullptr);
-// Capacity-configured private entry; uses the same checked candidate path.
-mlir::LogicalResult lowerCalculations(protocol_ir::ProtocolModuleOp unit,
-                                      llvm::ArrayRef<local::FuncOp> functions,
-                                      MathematicalSelectionPolicy policy,
-                                      RealizationWork *work,
-                                      finite::VerificationLimits limits,
-                                      RealizationTrace *trace = nullptr);
 // Internal rewrite entry used by preparation and participant simplification.
 // The caller has already admitted the complete unit.
 mlir::LogicalResult simplifyCalculations(mlir::Operation *body);
@@ -109,8 +61,10 @@ mlir::ArrayAttr statementBindings(protocol_ir::MathematicalOp program,
                                   mlir::SymbolTableCollection &symbols);
 // Both complete modules have passed ordinary verification, including the
 // module-owned calculation-attribution check.
+// `batching` selects the calculation schedule the candidate must have.
 mlir::LogicalResult verifyMathLowering(protocol_ir::ProtocolModuleOp original,
-                                       protocol_ir::ProtocolModuleOp candidate);
+                                       protocol_ir::ProtocolModuleOp candidate,
+                                       bool batching = true);
 } // namespace zkc::mathematical
 namespace zkc::poly {
 mlir::LogicalResult

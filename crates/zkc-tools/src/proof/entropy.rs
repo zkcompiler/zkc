@@ -4,7 +4,7 @@ use zkc_backends::{
     Domain, NativeBackend, Value,
     services::{ServiceReference, ServiceRegistry},
 };
-use zkc_runtime::interactive::{Identity, Type};
+use zkc_runtime::vm::{Identity, Type};
 
 #[derive(Default)]
 pub(super) enum Entropy {
@@ -62,7 +62,7 @@ impl Entropy {
         &self,
         registry: &ServiceRegistry,
         owner: &str,
-        contract: zkc_runtime::interactive::ServiceContract,
+        contract: zkc_runtime::vm::ServiceContract,
         port: usize,
         budget: u64,
     ) -> Result<ServiceReference> {

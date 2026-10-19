@@ -8,11 +8,13 @@
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
+#include "zkc/Dialect/Kernel/IR/KernelOps.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Transforms/NestedContractions.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/ScopeExit.h"
 #include <map>
 
 #include "NestedContractionVerification.h"
@@ -78,52 +80,184 @@ struct Source {
 // inspected, including unused work and implementation pins. This reader owns
 // its traversal and consumes no producer equations or structural witnesses.
 class ScalarSource {
-  llvm::DenseMap<Operation *, const protocol::ComputationContract *> meanings;
+public:
+  // The same helper SSA at two calls is two distinct occurrences. These pairs
+  // only address actual source SSA; they do not contain an expression model.
+  using Scalar = std::pair<Value, unsigned>;
+
+private:
+  struct Invocation {
+    Block *body;
+    llvm::DenseMap<Value, Scalar> values;
+  };
+  SmallVector<Invocation> invocations;
+  SmallVector<Scalar> instructions;
+  llvm::DenseSet<Operation *> active;
+  SymbolTableCollection symbols;
+  Operation *nestedCall;
   uint64_t remaining = 100000;
+  bool charge(Operation *op) {
+    uint64_t cost = 1 + op->getNumOperands() + op->getNumResults();
+    if (cost > remaining) {
+      valid = false;
+      return false;
+    }
+    remaining -= cost;
+    return true;
+  }
+  Scalar actual(Value value, unsigned invocation) {
+    if (!remaining || invocation >= invocations.size()) {
+      valid = false;
+      return {};
+    }
+    --remaining;
+    auto found = invocations[invocation].values.find(value);
+    if (found == invocations[invocation].values.end()) {
+      valid = false;
+      return {};
+    }
+    return found->second;
+  }
+  SmallVector<Scalar> read(Block &body, ArrayRef<Scalar> arguments,
+                           bool numerical) {
+    auto *owner = body.getParentOp();
+    if (active.size() >= 64 || !active.insert(owner).second || body.empty() ||
+        body.getNumArguments() != arguments.size() || !charge(owner)) {
+      valid = false;
+      return {};
+    }
+    auto leave = llvm::scope_exit([&] { active.erase(owner); });
+    unsigned invocation = invocations.size();
+    invocations.emplace_back();
+    invocations.back().body = &body;
+    for (auto [formal, input] : zip(body.getArguments(), arguments)) {
+      if (!input.first || formal.getType() != input.first.getType()) {
+        valid = false;
+        return {};
+      }
+      invocations[invocation].values[formal] = input;
+    }
+    for (auto &op : body.without_terminator()) {
+      if (!charge(&op) || op.getNumRegions()) {
+        valid = false;
+        return {};
+      }
+      SmallVector<Scalar> inputs;
+      for (Value operand : op.getOperands())
+        inputs.push_back(actual(operand, invocation));
+      if (!valid)
+        return {};
+      func::FuncOp helper;
+      if (auto call = dyn_cast<kernel::CallOp>(op)) {
+        if (auto policy = call->getAttrOfType<ArrayAttr>("policy"))
+          if (policy.size() != 3 || !isa<BoolAttr>(policy[0]) ||
+              !isa<BoolAttr>(policy[1]) || !isa<BoolAttr>(policy[2]) ||
+              !cast<BoolAttr>(policy[0]).getValue()) {
+            valid = false;
+            return {};
+          }
+        helper = kernel::resolve(call, symbols);
+      } else if (auto call = dyn_cast<func::CallOp>(op)) {
+        helper = symbols.lookupNearestSymbolFrom<func::FuncOp>(
+            call, call.getCalleeAttr());
+      }
+      if (isa<kernel::CallOp, func::CallOp>(op)) {
+        if (!helper || !helper.getBody().hasOneBlock()) {
+          valid = false;
+          return {};
+        }
+        auto outputs = read(helper.front(), inputs, true);
+        if (!valid || outputs.size() != op.getNumResults()) {
+          valid = false;
+          return {};
+        }
+        for (auto [result, output] : zip(op.getResults(), outputs)) {
+          if (result.getType() != output.first.getType()) {
+            valid = false;
+            return {};
+          }
+          invocations[invocation].values[result] = output;
+        }
+        continue;
+      }
+      auto *meaning = finite::semantics(&op);
+      if (op.getNumResults() != 1 ||
+          (&op != nestedCall &&
+           (!meaning || !meaning->law.total || meaning->access ||
+            !finite::replaceable(&op)))) {
+        valid = false;
+        return {};
+      }
+      Scalar value{op.getResult(0), invocation};
+      instructions.push_back(value);
+      invocations[invocation].values[op.getResult(0)] = value;
+    }
+    auto &end = body.back();
+    if (!charge(&end) ||
+        (numerical ? !isa<func::ReturnOp>(end) : !isa<local::ReturnOp>(end))) {
+      valid = false;
+      return {};
+    }
+    SmallVector<Scalar> outputs;
+    for (Value operand : end.getOperands())
+      outputs.push_back(actual(operand, invocation));
+    return outputs;
+  }
 
 public:
   bool valid = true;
-  ScalarSource(Block &body, Operation *nestedCall = nullptr) {
-    llvm::DenseSet<Value> live;
-    live.insert(body.back().getOperands().begin(),
-                body.back().getOperands().end());
-    for (Operation &op : llvm::reverse(body.without_terminator())) {
-      if (!remaining) {
+  ScalarSource(Block &body, Operation *nestedCall = nullptr)
+      : nestedCall(nestedCall) {
+    SmallVector<Scalar> arguments;
+    for (Value value : body.getArguments())
+      arguments.emplace_back(value, 0);
+    auto outputs = read(body, arguments, false);
+    if (!valid)
+      return;
+    llvm::DenseSet<Scalar> live(outputs.begin(), outputs.end());
+    for (auto value : llvm::reverse(instructions)) {
+      auto *op = value.first.getDefiningOp();
+      if (!charge(op) || !live.contains(value)) {
         valid = false;
         return;
       }
-      --remaining;
-      if (op.getNumResults() != 1 || !live.contains(op.getResult(0))) {
-        valid = false;
-        return;
-      }
-      if (&op != nestedCall) {
-        auto *meaning = finite::semantics(&op);
-        if (!meaning || !meaning->law.total || meaning->access ||
-            !finite::replaceable(&op)) {
-          valid = false;
-          return;
-        }
-        meanings[&op] = meaning;
-      }
-      live.insert(op.getOperands().begin(), op.getOperands().end());
+      for (Value input : op->getOperands())
+        live.insert(actual(input, value.second));
     }
   }
-  Value scalar(Value value) {
-    for (unsigned depth = 0; valid && value && depth < 64; ++depth) {
+  Scalar scalar(Value value) { return scalar(actual(value, 0)); }
+  Scalar operand(Scalar value, unsigned index) {
+    if (!value.first || !value.first.getDefiningOp() ||
+        index >= value.first.getDefiningOp()->getNumOperands()) {
+      valid = false;
+      return {};
+    }
+    return scalar(
+        actual(value.first.getDefiningOp()->getOperand(index), value.second));
+  }
+  std::optional<unsigned> input(Scalar value) {
+    return valid && !invocations.empty() && value.second == 0
+               ? argument(value.first, *invocations[0].body)
+               : std::nullopt;
+  }
+  Scalar scalar(Scalar value) {
+    for (unsigned depth = 0; valid && value.first && depth < 64; ++depth) {
       if (!remaining) {
         valid = false;
         return {};
       }
       --remaining;
-      auto *op = value.getDefiningOp();
-      const auto *meaning = meanings.lookup(op);
+      auto *op = value.first.getDefiningOp();
+      const auto *meaning = finite::semantics(op);
       if (!meaning || op->getNumOperands() != 2 ||
           meaning->law.algebra != protocol::ComputationAlgebra::FieldRing)
         break;
       auto neutral = [&](Value operand, protocol::ScalarIdentity identity) {
-        auto *constant = operand.getDefiningOp();
-        const auto *constantMeaning = meanings.lookup(constant);
+        auto resolved = actual(operand, value.second);
+        if (!resolved.first)
+          return false;
+        auto *constant = resolved.first.getDefiningOp();
+        const auto *constantMeaning = finite::semantics(constant);
         if (!constantMeaning ||
             constantMeaning->identity != MathematicalIdentity::FieldConstant)
           return false;
@@ -132,13 +266,13 @@ public:
                (identity == protocol::ScalarIdentity::One && text == "1");
       };
       if (neutral(op->getOperand(1), meaning->law.rightIdentity))
-        value = op->getOperand(0);
+        value = actual(op->getOperand(0), value.second);
       else if (neutral(op->getOperand(0), meaning->law.leftIdentity))
-        value = op->getOperand(1);
+        value = actual(op->getOperand(1), value.second);
       else
         break;
     }
-    return valid ? value : Value();
+    return valid ? value : Scalar();
   }
 };
 std::optional<Source> readSource(Operation *declaration) {
@@ -169,7 +303,8 @@ std::optional<Source> readSource(Operation *declaration) {
     }
   ScalarSource outerScalar(body, source.call);
   if (!source.call || !outerScalar.valid ||
-      outerScalar.scalar(body.back().getOperand(0)) != source.call.getResult(0))
+      outerScalar.scalar(body.back().getOperand(0)) !=
+          outerScalar.scalar(source.call.getResult(0)))
     return std::nullopt;
   auto ref = source.call->getAttrOfType<FlatSymbolRefAttr>("callee");
   Operation *fold =
@@ -183,15 +318,18 @@ std::optional<Source> readSource(Operation *declaration) {
       !nativeVector(source.outer.signature.getResult(0), field) ||
       !nativeMatrix(source.outer.signature.getInput(source.matrix), field))
     return std::nullopt;
-  Value seed = source.call->getOperand(source.inner.arguments);
-  if (auto formal = argument(seed, body)) {
-    if (!*formal || seed.getType() != field)
+  auto seed =
+      outerScalar.scalar(source.call->getOperand(source.inner.arguments));
+  if (!outerScalar.valid || !seed.first)
+    return std::nullopt;
+  if (auto formal = outerScalar.input(seed)) {
+    if (!*formal || seed.first.getType() != field)
       return std::nullopt;
     source.seed.input = *formal - 1;
   } else {
-    auto constant = finite::fieldConstant(seed.getDefiningOp());
-    if (!constant || !finite::replaceable(seed.getDefiningOp()) ||
-        seed.getType() != field)
+    auto constant = finite::fieldConstant(seed.first.getDefiningOp());
+    if (!constant || !finite::replaceable(seed.first.getDefiningOp()) ||
+        seed.first.getType() != field)
       return std::nullopt;
     source.seed.constant = *constant;
   }
@@ -199,7 +337,7 @@ std::optional<Source> readSource(Operation *declaration) {
   // helper environment. Zero denotes the enumerated index, i+1 input i.
   for (Value operand :
        source.call->getOperands().take_front(source.inner.arguments)) {
-    auto input = argument(operand, body);
+    auto input = outerScalar.input(outerScalar.scalar(operand));
     if (!input)
       return std::nullopt;
     source.inputMap.push_back(*input);
@@ -249,39 +387,38 @@ std::optional<Source> readSource(Operation *declaration) {
   if (!isa<local::ReturnOp>(step.back()) || step.back().getNumOperands() != 1)
     return std::nullopt;
   ScalarSource innerScalar(step);
-  Value sum = innerScalar.scalar(step.back().getOperand(0));
-  if (!innerScalar.valid || !sum)
+  auto sum = innerScalar.scalar(step.back().getOperand(0));
+  if (!innerScalar.valid || !sum.first)
     return std::nullopt;
-  Operation *add = sum.getDefiningOp();
+  Operation *add = sum.first.getDefiningOp();
   auto *sumLaw = finite::replaceable(add) ? finite::semantics(add) : nullptr;
   if (!sumLaw || sumLaw->identity != MathematicalIdentity::FieldAdd ||
       !sumLaw->law.total || !sumLaw->law.associative ||
-      !sumLaw->law.commutative || add->getBlock() != &step)
+      !sumLaw->law.commutative)
     return std::nullopt;
-  Value state = step.getArgument(0), term;
-  Value left = innerScalar.scalar(add->getOperand(0));
-  Value right = innerScalar.scalar(add->getOperand(1));
+  ScalarSource::Scalar state{step.getArgument(0), 0}, term;
+  auto left = innerScalar.operand(sum, 0);
+  auto right = innerScalar.operand(sum, 1);
   if (left == state)
     term = right;
   else if (right == state)
     term = left;
   else
     return std::nullopt;
-  if (!innerScalar.valid || !term)
+  if (!innerScalar.valid || !term.first)
     return std::nullopt;
-  Operation *mul = term.getDefiningOp();
+  Operation *mul = term.first.getDefiningOp();
   auto *productLaw =
       finite::replaceable(mul) ? finite::semantics(mul) : nullptr;
   if (!productLaw ||
       productLaw->identity != MathematicalIdentity::FieldMultiply ||
-      !productLaw->law.total || !productLaw->law.commutative ||
-      mul->getBlock() != &step || mul == add ||
+      !productLaw->law.total || !productLaw->law.commutative || mul == add ||
       add->getResult(0).getType() != field ||
       mul->getResult(0).getType() != field)
     return std::nullopt;
   bool matrixLane = false, vectorLane = false;
-  for (Value operand : mul->getOperands()) {
-    auto item = argument(innerScalar.scalar(operand), step);
+  for (unsigned index = 0; index < mul->getNumOperands(); ++index) {
+    auto item = innerScalar.input(innerScalar.operand(term, index));
     if (!item || !*item || *item > root->second.size())
       return std::nullopt;
     auto *access = root->second[*item - 1];

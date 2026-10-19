@@ -341,18 +341,18 @@ The owned `compileNativeProof` API and `protocol-proof` command return:
    [[original_result, logical_type], ...],
    [[original_service, service_name, service_contract, ingress_index], ...],
    acceptance_index_or_empty], ...],
- [simplify, release_storage, fuse_vector_reductions, finite_bulk],
+ [simplify, release_storage, fuse_vector_reductions, finite_bulk, fuse_collect_fold, calculation_batching],
  [[message_origin_hex, wire_site], ...]]
 ```
 
 The source digest hashes the original UTF-8 bytes once captured by compilation.
 The descriptor digest hashes its canonical logical tree; the candidate digest
 hashes the exact carried JSON string. Booleans in this record are strings
-`"true"` or `"false"`. The compiler-choice array has exactly these four entries
-in this order; both mathematical family choices are recorded even at their
-defaults (fusion false, finite bulk true). Version `0`
+`"true"` or `"false"`. The compiler-choice array has exactly these six entries
+in this order; the mathematical choices are recorded even at their defaults
+(both fusion choices false, finite bulk true, calculation batching true). Version `0`
 admits one current shape with no shorter compatibility form. A proof Entry's
-package options must agree with all four choices during native artifact binding.
+package options must agree with all six choices during native artifact binding.
 All indices use canonical decimal strings below 1024.
 Role data/result maps are in original port order. A shared original data port
 must have the same nominal logical type at both roles; deployment admission
@@ -371,11 +371,14 @@ independently authenticated exact-file digest authorizes the deployment.
 
 `NativeProofOptions.mathematicalSelection` carries the same policy as draw
 selection, proof construction and source/candidate checking. Its `finiteBulk`
-choice defaults to true and `vectorReductionFusion` defaults to false.
+choice defaults to true, `vectorReductionFusion` and `collectFoldFusion` to false and
+`calculationBatching` to true.
 `selectNativeProofDraws`, `constructNativeProof` and `checkNativeProof` receive
-this shared policy. The `protocol-proof`, `protocol-construct-proof` and
-`protocol-check-proof` commands forward `--no-finite-bulk` and
-`--fuse-vector-reductions`; source proof Entries forward the same choices.
+this shared policy. The `protocol-proof`, `protocol-construct-proof`,
+`protocol-check-proof` and `protocol-constructed-participant` commands forward
+`--no-finite-bulk`, `--fuse-vector-reductions` and `--fuse-collect-fold`; `protocol-proof` also forwards
+`--no-calculation-batching`, which schedules the program's calculations and does
+not change construction. Source proof Entries forward the same choices.
 They change local preparation while preserving protocol event origins, and
 add no cryptographic construction or security claim.
 

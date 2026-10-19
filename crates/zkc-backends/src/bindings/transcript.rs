@@ -1,6 +1,6 @@
 //! Concrete transcript suites, codecs and supported observation payloads.
 use super::*;
-use zkc_runtime::interactive::{LogicalType, PhysicalType};
+use zkc_runtime::vm::{LogicalType, PhysicalType};
 
 pub(crate) const fn challenge(
     name: &'static str,
@@ -42,11 +42,11 @@ fn derive(
         return None;
     }
     let t = suite(binding)?;
-    // Only the octic suite installs the UniformIndex byte sampler.
+    // Only the octic suites install the UniformIndex byte sampler.
     if matches!(
         binding.contract.as_str(),
         "transcript.native.indexed.index" | "transcript.index"
-    ) && t.suite != Identity::Merlin3KoalaBearExt8
+    ) && !t.suite.has_index_transcript()
     {
         return None;
     }
@@ -79,7 +79,7 @@ fn observe(
         }
         support::ports(binding, selection, t.provider)?;
         let state = state(t.suite)?;
-        return Some(zkc_runtime::interactive::KernelSignature {
+        return Some(zkc_runtime::vm::OperationSignature {
             inputs: vec![state.clone(), payload, t.domain.physical(Type::Indices)?],
             outputs: vec![state],
             attributes: AttributeRule::NativeMessageTemplate,

@@ -1,4 +1,5 @@
 #include "support/NativeCases.h"
+#include "support/SourceProject.h"
 #include "zkc/Contracts/RingExpression.h"
 #include "zkc/Language/Project.h"
 #include "zkc/Relation/Bundle.h"
@@ -447,32 +448,9 @@ run Demo = Count<Recurrence>;
         refuses(close(source(), {constant()}), "source.bound");
       });
   cases.run("the Sumcheck library rejects arenas outside its premise", [] {
-    auto library = file(ZKC_SUMCHECK_LIBRARY);
-    auto client = file(ZKC_EXPRESSION_SUMCHECK_PROJECT "/main.zkc");
     auto compile = [&](AssetBuffer asset) -> Expected<ClosedEntry> {
-      auto captured = capture(
-          {{"example", client, "main.zkc"},
-           {"sumcheck::expression", library, "library.zkc"},
-           {"sumcheck", file(ZKC_MATH_LIBRARIES "/../sumcheck/lib.zkc"),
-            "sumcheck.zkc"},
-           {"zkc::boolean", file(ZKC_MATH_LIBRARIES "/boolean.zkc"),
-            "boolean.zkc"},
-           {"zkc::accumulation", file(ZKC_MATH_LIBRARIES "/accumulation.zkc"),
-            "accumulation.zkc"},
-           {"zkc::curve", file(ZKC_MATH_LIBRARIES "/curve.zkc"), "curve.zkc"},
-           {"zkc::finite", file(ZKC_MATH_LIBRARIES "/finite.zkc"),
-            "finite.zkc"},
-           {"zkc::sequence", file(ZKC_MATH_LIBRARIES "/sequence.zkc"),
-            "sequence.zkc"},
-           {"zkc::multilinear", file(ZKC_MATH_LIBRARIES "/multilinear.zkc"),
-            "multilinear.zkc"},
-           {"zkc::indices", file(ZKC_MATH_LIBRARIES "/indices.zkc"),
-            "indices.zkc"},
-           {"zkc::vector", file(ZKC_MATH_LIBRARIES "/vector.zkc"),
-            "vector.zkc"},
-           {"zkc::polynomial", file(ZKC_MATH_LIBRARIES "/polynomial.zkc"),
-            "polynomial.zkc"}},
-          {std::move(asset)}, {});
+      auto captured = capture(zkc::test::sourceProject(ZKC_SOURCE_PROJECT),
+                              {std::move(asset)}, {});
       if (!captured)
         return captured.takeError();
       auto checked = analyze(*captured).checkedProject();

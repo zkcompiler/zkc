@@ -1,0 +1,70 @@
+module map_examples;
+use zkc::vector::{Vector};
+use zkc::multilinear::{Table, table, values, variables, width, fix_first, fix_prefix};
+domain Fr = field("bls12-381.fr");
+
+fn first(entries: Vector<Fr>, dimensions: index, columns: index, r: Fr)
+    -> (Vector<Fr>, index, index) {
+  let result = fix_first(table(entries, dimensions, columns), r);
+  return (values(result), variables(result), width(result));
+}
+
+fn prefix(entries: Vector<Fr>, dimensions: index, columns: index, point: Vector<Fr>)
+    -> (Vector<Fr>, index, index) {
+  let result = fix_prefix(table(entries, dimensions, columns), point);
+  return (values(result), variables(result), width(result));
+}
+
+protocol First roles(P)
+    (entries: Vector<Fr> @P, dimensions: index @P, columns: index @P, r: Fr @P)
+    -> (result: Vector<Fr> @P, dimensions: index @P, columns: index @P) {
+  let result @P = first(entries, dimensions, columns, r);
+  return (result = result.0, dimensions = result.1, columns = result.2);
+}
+
+protocol Prefix roles(P)
+    (entries: Vector<Fr> @P, dimensions: index @P, columns: index @P, point: Vector<Fr> @P)
+    -> (result: Vector<Fr> @P, dimensions: index @P, columns: index @P) {
+  let result @P = prefix(entries, dimensions, columns, point);
+  return (result = result.0, dimensions = result.1, columns = result.2);
+}
+
+math fn scale(s: Fr, x: Fr) -> Fr { return s * x; }
+math fn linear(s: Fr, a: Fr, t: Fr, b: Fr, unused_row: Fr, unused_scalar: Fr) -> Fr {
+  return scale(s, a) - scale(t, b) + 3;
+}
+fn combination(s: Fr, a: Vector<Fr>, t: Fr, b: Vector<Fr>, unused_row: Vector<Fr>, unused_scalar: Fr)
+    -> Vector<Fr> {
+  return map linear(s, each a, t, each b, each unused_row, unused_scalar);
+}
+protocol LinearCombination roles(P, V)
+    (s: Fr @P, a: Vector<Fr> @P, t: Fr @P, b: Vector<Fr> @P,
+     unused_row: Vector<Fr> @P, unused_scalar: Fr @P) -> (result: Vector<Fr> @P) {
+  let result @P = combination(s, a, t, b, unused_row, unused_scalar);
+  return (result = result);
+}
+
+math fn constant(a: Fr, b: Fr, unused_scalar: Fr) -> Fr { return 7; }
+fn constant_rows(a: Vector<Fr>, b: Vector<Fr>, unused_scalar: Fr) -> Vector<Fr> {
+  return map constant(each a, each b, unused_scalar);
+}
+protocol ConstantRows roles(P, V)
+    (a: Vector<Fr> @P, b: Vector<Fr> @P, unused_scalar: Fr @P) -> (result: Vector<Fr> @P) {
+  let result @P = constant_rows(a, b, unused_scalar);
+  return (result = result);
+}
+
+fn realize_values(input: Table<Fr>) -> Vector<Fr> { return values(input); }
+protocol RealizeValues roles(P)
+    (entries: Vector<Fr> @P, dimensions: index @P, columns: index @P)
+    -> (result: Vector<Fr> @P) {
+  let input @P = table(entries, dimensions, columns);
+  let result @P = realize_values(input);
+  return (result = result);
+}
+
+run FirstEntry = First;
+run PrefixEntry = Prefix;
+run LinearCombinationEntry = LinearCombination;
+run ConstantRowsEntry = ConstantRows;
+run RealizeValuesEntry = RealizeValues;

@@ -1,5 +1,4 @@
 use super::*;
-use zkc_runtime::interactive::admit_supplied;
 fn repin(envelope: &Json, candidate: &Json) -> Vec<u8> {
     let mut envelope = envelope.clone();
     let encoded = serde_json::to_string(candidate).unwrap();
@@ -8,7 +7,11 @@ fn repin(envelope: &Json, candidate: &Json) -> Vec<u8> {
     serde_json::to_vec(&envelope).unwrap()
 }
 fn refused(envelope: &Json, candidate: &Json, reason: &str) {
-    admit_supplied(&serde_json::to_vec(candidate).unwrap(), &backend())
+    zkc_runtime::vm::Program::decode(&serde_json::to_vec(candidate).unwrap())
+        .and_then(|program| {
+            program.check_installation(&backend())?;
+            Ok(program)
+        })
         .expect("mutation passes ordinary SSA/type/affine admission");
     let bytes = repin(envelope, candidate);
     assert_eq!(

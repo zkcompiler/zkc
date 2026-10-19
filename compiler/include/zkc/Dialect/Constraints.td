@@ -2,9 +2,9 @@
 #define ZKC_DIALECT_CONSTRAINTS
 include "mlir/IR/OpBase.td"
 // Shared constraint for consumer dialects; does not redeclare core definitions.
-// Logical interactive values; domains and exact kernel ports are verified on SSA.
+// Logical interactive values; domains and exact operation ports are verified on SSA.
 // Role membership is explicit and independent of adapter coverage. Collection
 // families have exact nominal heads; domain admission belongs to the verifier.
-def Zkc_ProtocolData : Type<CPred<"::zkc::detail::isLogicalKernelData($_self)">,
+def Zkc_ProtocolData : Type<CPred<"::zkc::detail::isLogicalOperationData($_self)">,
   "logical protocol data or capability">;
 #endif

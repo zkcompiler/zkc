@@ -1,0 +1,61 @@
+module zkc::evaluation_domain;
+use zkc::vector as vector;
+use zkc::vector::{Vector};
+use zkc::scalar as scalar;
+use zkc::indices as indices;
+
+// The points enumerate the complete group of n-th roots in their stored order.
+// Admission fixes that order; consumers cannot replace the private points.
+pub struct EvaluationDomain<F: Field> { points: Vector<F> }
+pub struct Evaluations<F: Field> {
+  unity: EvaluationDomain<F>,
+  values: Vector<F>
+}
+
+// General admission is quadratic in the number of roots. Prefer two_adic for
+// large power-of-two domains with a known primitive generator.
+pub fn checked_roots<F: Field>(root_set: Vector<F>) -> EvaluationDomain<F>
+    effects(stop) where () {
+  let count = vector::length(root_set);
+  require !(count == 0);
+  require !(scalar::from_index<F>(count) == 0);
+  for i in 0..count {
+    require scalar::power(vector::get(root_set, i), count) == 1;
+    for j in 0..i { require !(vector::get(root_set, i) == vector::get(root_set, j)); }
+  }
+  return EvaluationDomain<F> { points: root_set };
+}
+
+// A power-of-two size and exact generator order suffice; no pairwise scan.
+pub fn two_adic<F: Field>(count: index, generator: F) -> EvaluationDomain<F>
+    effects(stop) where () {
+  require if count == 1 { generator == 1 } else { indices::two_adic<63>(count) };
+  require !(scalar::from_index<F>(count) == 0);
+  require scalar::power(generator, count) == 1;
+  if !(count == 1) {
+    require !(scalar::power(generator, indices::divide(count, 2)) == 1);
+  }
+  return EvaluationDomain<F> { points: vector::geometric(generator, count) };
+}
+pub fn two_adic_bit_reversed<F: Field>(count: index, generator: F) -> EvaluationDomain<F>
+    effects(stop) where () {
+  let natural = two_adic(count, generator);
+  return EvaluationDomain<F> { points: vector::bit_reverse(natural.points) };
+}
+pub math fn points<F: Field>(input: EvaluationDomain<F>) -> Vector<F> where () {
+  return input.points;
+}
+pub fn size<F: Field>(input: EvaluationDomain<F>) -> index effects(stop) where () {
+  return vector::length(input.points);
+}
+pub fn evaluations<F: Field>(unity: EvaluationDomain<F>, data: Vector<F>)
+    -> Evaluations<F> effects(stop) where () {
+  require vector::length(data) == size(unity);
+  return Evaluations<F> { unity: unity, values: data };
+}
+pub math fn evaluation_domain<F: Field>(input: Evaluations<F>) -> EvaluationDomain<F> where () {
+  return input.unity;
+}
+pub math fn values<F: Field>(input: Evaluations<F>) -> Vector<F> where () {
+  return input.values;
+}

@@ -92,9 +92,9 @@ class R1CSSumcheckBuilder {
                                ArrayRef<ArrayAttr> inRoles,
                                ArrayRef<ArrayAttr> outRoles) {
     b.setInsertionPointToEnd(&unit.getBody().front());
-    auto f = pir::MathematicalOp::create(b, loc, name,
-                                         b.getFunctionType(inputs, outputs),
-                                         roles, sets(inRoles), sets(outRoles));
+    auto f = pir::MathematicalOp::create(
+        b, loc, name, b.getFunctionType(inputs, outputs), roles, sets(inRoles),
+        sets(outRoles), b.getArrayAttr({}));
     auto *block = new Block();
     f.getBody().push_back(block);
     for (auto type : inputs)

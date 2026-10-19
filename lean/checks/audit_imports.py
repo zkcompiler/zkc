@@ -19,7 +19,8 @@ def modules(root, directory, excluded=()):
     return result
 
 
-def expected(root, library, tests, examples=(), tools=(), marker="WHOLE-LIBRARY-AUDIT-PASS"):
+def expected(root, library, tests, examples=(), tools=(), marker="WHOLE-LIBRARY-AUDIT-PASS",
+             extra=()):
     excluded = {Path(tests) / "Audit.lean", Path(tests) / "LibraryImports.lean"}
     names = modules(root, library, excluded) + modules(root, tests, excluded)
     for directory in examples:
@@ -41,6 +42,7 @@ def expected(root, library, tests, examples=(), tools=(), marker="WHOLE-LIBRARY-
     audit += ("run_cmd ZkcTools.DeclarationAudit.check ["
               + ", ".join("`" + x.replace("/", ".") for x in families)
               + f"] \"{marker}\"\n")
+    audit += "".join(extra)
     return {root / tests / "LibraryImports.lean": imports,
             root / tests / "Audit.lean": audit}
 
@@ -49,6 +51,13 @@ def expected(root, library, tests, examples=(), tools=(), marker="WHOLE-LIBRARY-
 INTEGRATIONS = {
     "arklib": ("ZkcSecurity", "TestsSecurity", "SECURITY-AUDIT-PASS"),
     "clean": ("ZkcClean", "TestsClean", "CLEAN-INTEGRATION-AUDIT-PASS"),
+}
+# Further audits of a package's whole library: the security library's registry
+# of named hypotheses, models and trusted links covers every proposition-valued
+# declaration that heads a premise of one of its theorems.
+EXTRA = {
+    "arklib": ["run_cmd ZkcTools.DeclarationAudit.checkRegistry ZkcSecurity.Registry.audited "
+               "[`ZkcSecurity] \"REGISTRY-AUDIT-PASS\"\n"],
 }
 
 
@@ -61,11 +70,13 @@ def main():
                            help="check only the named optional packages (default: all)")
     args = parser.parse_args()
     outputs = expected(ROOT, "Zkc", "Tests", ["ZkcExamples"],
-                       ["ZkcTools/CommonSource/Reference", "ZkcTools/JsonSupport"], marker="CORE-AUDIT-PASS")
+                       ["ZkcTools/CommonSource/Reference", "ZkcTools/JsonSupport",
+                        "ZkcTools/StructuredSource"], marker="CORE-AUDIT-PASS")
     selected = [] if args.main_only else args.integration or sorted(INTEGRATIONS)
     for name in selected:
         library, tests, marker = INTEGRATIONS[name]
-        outputs.update(expected(ROOT / "integrations" / name, library, tests, marker=marker))
+        outputs.update(expected(ROOT / "integrations" / name, library, tests, marker=marker,
+                                extra=EXTRA.get(name, ())))
     for path, text in outputs.items():
         if args.write:
             path.write_text(text)

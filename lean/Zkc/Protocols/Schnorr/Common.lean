@@ -28,7 +28,7 @@ structure Wiring where
 variable {F G : Type} [Field F]
     [AddCommGroup G] [Module F G] [DecidableEq G]
 
-abbrev actions := interface Nat language services (ScalarValue F G)
+abbrev actions := Participant.interface Nat Ty services (ScalarValue F G)
 abbrev Verifier (F G : Type) [Field F] [AddCommGroup G] [Module F G] :=
   G → G → Nat → PIR.Proc (actions (F := F) (G := G)) (Option Bool)
 
@@ -51,7 +51,7 @@ structure Strategy (F G : Type) where
 
 def transcriptHandler (prover : Strategy F G) (challenge : F) :
     PIR.Handler (actions (F := F) (G := G)) Unit
-      (Action Nat language services (ScalarValue F G))
+      (Participant.Action Nat Ty services (ScalarValue F G))
   | action@(.send ..), state => ⟨.returned (), state, [action]⟩
   | action@(.query ..), state => ⟨.returned challenge, state, [action]⟩
   | action@(.receive ty ..), state =>

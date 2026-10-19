@@ -1,7 +1,10 @@
-format = "zkc.project/0"
+"format" = "zkc.project/0"
 
-[modules]
+["modules"]
 "example" = "main.zkc"
 
-[dependencies]
-schnorr = "../../../libraries/schnorr"
+["dependencies"]
+"schnorr" = { workspace = "protocols.sigma.schnorr" }
+
+[workspace]
+path = "../../../zkc.workspace.toml"

@@ -5,7 +5,7 @@ use std::path::Path;
 use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Value};
 use zkc_runtime::{
     attempt::Limits,
-    interactive::{ValueBudget, WorkBudget},
+    vm::{ValueBudget, WorkBudget},
 };
 use zkc_test_support::hex;
 use zkc_tools::proof::{AttemptPolicy, NativeDeployment, NativeProofReport};

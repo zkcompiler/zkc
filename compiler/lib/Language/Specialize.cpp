@@ -6,7 +6,7 @@
 #include "Effects.h"
 #include "FiniteContracts.h"
 #include "Semantics.h"
-#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Language/Builtins.h"
 #include <algorithm>

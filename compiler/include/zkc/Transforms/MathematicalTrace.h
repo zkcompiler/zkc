@@ -6,6 +6,7 @@
 #include "zkc/Transforms/MathematicalWork.h"
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -130,6 +131,9 @@ struct RealizationTrace {
   /// entry with no active scope clears a reused trace. Events own no IR refs.
   std::vector<uint64_t> activeScopes;
   uint64_t nextScope = 1;
+  /// Scoped observer-only declaration names. The innermost mapping wins;
+  /// targets name immutable declarations. No IR references are retained.
+  std::vector<std::pair<std::string, std::string>> declarationOrigins;
 };
 } // namespace zkc::mathematical
 #endif

@@ -1,0 +1,14 @@
+# The Reduction root of examples/projects/sumcheck/composed with its ports
+# reordered. Its export is retained beside this directory and imported by
+# lean/ZkcExamples/Structured/SumcheckRepacked*.lean.
+"format" = "zkc.project/0"
+
+["modules"]
+"example" = "main.zkc"
+"sums" = "protocol.zkc"
+
+["dependencies"]
+"algebra" = "../../../../../libraries/core/algebra"
+"collections" = "../../../../../libraries/core/collections"
+"polynomial" = "../../../../../libraries/core/polynomial"
+"sumcheck" = "../../../../../libraries/protocols/polynomial/sumcheck"

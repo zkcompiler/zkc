@@ -1,12 +1,15 @@
 """STARK dimensions: trace shape, evaluation size and polynomial degree are distinct."""
+from functools import partial
 import importlib.util
 
 from . import algebra as a
 from .programs import Program
 
 
-def mutate_claim(proof):
-    """Alter a canonical Ext8 claim while preserving the invocation and framing.
+def mutate_claim(proof, tag=b'ZKCV\x00\x1b', minimum=42):
+    """Alter a canonical extension-field claim while preserving the invocation
+    and framing: an Ext8 vector by default, or another vector tag and minimum
+    frame size.
 
     Uses docs/spec/formats/proof.md and messages.md, as do the maintained STARK
     conformance controls. Provers reject invalid traces before producing proofs.
@@ -20,7 +23,7 @@ def mutate_claim(proof):
         if end > len(proof):
             raise ValueError('truncated proof frame')
         payload = proof[start:end]
-        if payload[:6] == b'ZKCV\x00\x1b' and size >= 42:
+        if payload[:6] == tag and size >= minimum:
             coordinate = int.from_bytes(payload[10:14], 'little')
             changed = ((coordinate+1) % a.P).to_bytes(4, 'little')
             return proof[:start+10] + changed + proof[start+14:]
@@ -49,13 +52,15 @@ proof Proof=Fri {prover P;verifier V;public {shift,round_count,query_count};acce
 '''.replace('SIZE', str(size.bit_length()-1)).replace('ROUNDS', str(rounds)).replace('QUERIES', str(queries))
     witness = {'word': list(map(a.encode, a.coset(coefficients, shift, size)))}
     return Program(source, [{'public': public, 'witness': witness}], invalid_witness={'word': list(map(a.encode, a.coset([*coefficients, (1, 0, 0, 0, 0, 0, 0, 0)], shift, size)))},
-                   entry='example::Proof', dependencies=('fri',), proof=True,
+                   entry='example::Proof', dependencies=('protocols.polynomial.fri',), proof=True,
                    changed=public | {'shift': a.encode((2, 1, 0, 0, 0, 0, 0, 0))},
                    oracle='independent Python polynomial evaluation; same-stack FRI verification and refusal controls')
 
 
-def air(root, shape):
-    height, width, size = shape['height'], shape['width'], shape['evaluation_size']
+def recurrence(root, shape):
+    """The quadratic recurrence AIR shared by both STARK profiles: its Bundle,
+    boundary values and row-major trace."""
+    height, width = shape['height'], shape['width']
     spec = importlib.util.spec_from_file_location('benchmark_ring_arena', root/'compiler/adapters/ring_arena.py')
     arena_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(arena_module)
@@ -80,11 +85,17 @@ def air(root, shape):
         trace.extend(current)
         final = current
         current = [(x*x+i+1) % a.P for i, x in enumerate(current)]
+    return bundle, initial, final, trace
+
+
+def air(root, shape):
+    height, size = shape['height'], shape['evaluation_size']
+    bundle, initial, final, trace = recurrence(root, shape)
     public = {'public_data': list(map(str, initial+final)), 'shift': '3',
               'round_count': str(height.bit_length()-1), 'query_count': str(shape['queries']), 'attempt_count': '8'}
     source = '''module example;
-use stark::koala_bear::{Base,Extension};
-use stark::koala_bear::table::{Statement,TableArgument};
+use stark::configurations::koala_bear_octic::{Base,Extension};
+use stark::octic_table::{Statement,TableArgument};
 use zkc::vector::{Vector}; use zkc::vector as v;
 domain Trace=bundle(asset trace);
 fn statement(public_data:Vector<Base>,shift:Base)->Statement {
@@ -102,5 +113,37 @@ proof Proof=Air {prover P;verifier V;public {public_data,shift,round_count,query
     changed = public | {'public_data': [str((initial[0]+1) % a.P), *public['public_data'][1:]]}
     witness = {'trace': list(map(str, trace))}
     return Program(source, [{'public': public, 'witness': witness}], mutate_proof=mutate_claim,
-                   entry='example::Proof', dependencies=('stark',), assets={'trace': bundle}, proof=True,
+                   entry='example::Proof', dependencies=('arguments.stark.single_table.koala_bear_octic',), assets={'trace': bundle}, proof=True,
+                   changed=changed, support=(root/'compiler/adapters/ring_arena.py',), oracle='Python quadratic trace recurrence; generated relation with first/last/transition constraints; same-stack proof verification')
+
+
+def library(root, shape):
+    """The same AIR through the parameterized library at its KoalaBear quartic
+    Poseidon2 configuration, with the final polynomial a constant."""
+    height, size = shape['height'], shape['evaluation_size']
+    bundle, initial, final, trace = recurrence(root, shape)
+    public = {'public_data': list(map(str, initial+final))}
+    source = '''module example;
+use stark::configurations::koala_bear_octic::{Base,Extension};
+use stark::configurations::koala_bear_quartic::{Poseidon2};
+use stark::single_table::{Statement,TableArgument};
+use zkc::vector::{Vector}; use zkc::vector as v;
+domain Trace=bundle(asset trace);
+fn statement(public_data:Vector<Base>)->Statement<Base> {
+ return Statement<Base> {configuration:v::empty<Base>(),public_columns:v::empty<Base>(),public_data};
+}
+protocol Air roles(P,V)(trace:Vector<Base>@P,public_data:Vector<Base>@(P,V),coins:Random<Extension>@V)->(accepted:bool@V){
+ let prover@P=statement(public_data);let verifier@V=statement(public_data);
+ let accepted=TableArgument<Poseidon2,0,Trace,0,ROUNDS,BLOWUP,QUERIES>(trace,prover,verifier,coins);
+ return accepted;
+}
+proof Proof=Air {prover P;verifier V;public {public_data};accept accepted;
+ construction fiat_shamir("merlin3.koala-bear.ext8-binomial3.rejection31le/0",coins);}
+'''.replace('ROUNDS', str(height.bit_length()-1)).replace('BLOWUP', str((size//height).bit_length()-1)).replace('QUERIES', str(shape['queries']))
+    changed = public | {'public_data': [str((initial[0]+1) % a.P), *public['public_data'][1:]]}
+    witness = {'trace': list(map(str, trace))}
+    return Program(source, [{'public': public, 'witness': witness}],
+                   mutate_proof=partial(mutate_claim, tag=b'ZKCV\x00\x16', minimum=26),
+                   entry='example::Proof', dependencies=('arguments.stark.single_table', 'arguments.stark.configurations.koala_bear_octic',
+                                                        'arguments.stark.configurations.koala_bear_quartic'), assets={'trace': bundle}, proof=True,
                    changed=changed, support=(root/'compiler/adapters/ring_arena.py',), oracle='Python quadratic trace recurrence; generated relation with first/last/transition constraints; same-stack proof verification')

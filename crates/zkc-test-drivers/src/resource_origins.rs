@@ -2,8 +2,8 @@
 //! Resource counts are derived from the authored loops, not the exported plan.
 use std::path::Path;
 use zkc_backends::{Capability, Domain, EntryPolicy, NativeBackend, Policy, Value};
-use zkc_runtime::interactive::Identity;
-use zkc_runtime::interactive::PathElement;
+use zkc_runtime::vm::Identity;
+use zkc_runtime::vm::PathElement;
 use zkc_tools::run::*;
 
 fn domain() -> Domain {

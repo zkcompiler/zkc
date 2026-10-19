@@ -11,8 +11,6 @@ The contract preserves the open process; its security interpretation is separate
 -/
 
 set_option autoImplicit false
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 
 namespace Zkc.Protocols.Sumcheck.Common
 
@@ -37,7 +35,7 @@ structure Coefficients (F : Type) where
 
 variable {F : Type} [Field F] [DecidableEq F]
 
-abbrev actions := interface Nat language services (ScalarValue F F)
+abbrev actions := Participant.interface Nat Ty services (ScalarValue F F)
 
 def rowPolynomial (row : Message F) : Quadratic F 1 :=
   .node (.constant row.constant) (.constant row.linear) (.constant row.quadratic)

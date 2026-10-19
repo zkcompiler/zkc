@@ -1,16 +1,17 @@
 """Sparse native matrices checked against dense integer arithmetic via Entry."""
 
+from source_modules import core_packages, library_modules
+
 import random
 from pathlib import Path
 
 import pytest
 
+from binomial_reference import FIELDS as EXTENSIONS
 from entry import Entry
-from octic_reference import ZERO, add, mul
 
 ROOT = Path(__file__).resolve().parents[3]
-MODULES = [f'--module=zkc::{name}={ROOT}/libraries/zkc/{name}.zkc'
-           for name in ('vector', 'matrix', 'finite', 'sequence', 'accumulation', 'curve')]
+MODULES = library_modules(*core_packages())
 
 FIELDS = [
     ('bls12-381.fr', 23, 66, 1, 32,
@@ -33,7 +34,8 @@ def vector_wire(tag, width, values):
 
 
 @pytest.mark.parametrize('field', ['bls12-381.fr', 'bn254.fr', 'ristretto255.scalar',
-                                  'koala-bear', 'koala-bear.ext8-binomial3'])
+                                  'koala-bear', 'koala-bear.ext8-binomial3',
+                                  'koala-bear.ext4-binomial3'])
 @pytest.mark.parametrize('contract', ['row_dot', 'column_dot'])
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
 def test_matrix_contraction_library(toolchain, journal, directory, field, contract, flags):
@@ -51,10 +53,13 @@ run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source, [*MODULES, *flags])
     row = contract == 'row_dot'
-    extension = field == 'koala-bear.ext8-binomial3'
+    reference = EXTENSIONS.get(field)
+    extension = reference is not None and reference.degree > 1
+    if extension:
+        ZERO, add, mul = reference.ZERO, reference.add, reference.mul
 
     def coefficient(n):
-        return [n, 1, 0, 0, 0, 0, 0, 1] if extension else n
+        return [n, 1] + [0] * (reference.degree - 3) + [1] if extension else n
 
     def encode(value):
         return [str(n) for n in value] if extension else str(value)

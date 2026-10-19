@@ -1,4 +1,5 @@
 //! Independent proof execution with an application-pinned deployment.
+use zkc_runtime::interpreter::Runner;
 mod attempts;
 mod inputs;
 mod interface;
@@ -25,11 +26,11 @@ use zkc_backends::{
     services::{ServiceReference, ServiceRegistry},
 };
 use zkc_runtime::{
-    interactive::{
-        EntryRole, Identity, LogicalType, NativeProofEntry, PhysicalType, PreparationLimits,
-        PreparationStats, PreparedComputations, Runner, Type, admit_supplied,
-    },
     logical,
+    vm::{
+        EntryRole, Identity, LogicalType, NativeProofEntry, PhysicalType, PreparationLimits,
+        PreparationStats, PreparedComputations, Type,
+    },
 };
 
 #[derive(Clone, Debug)]
@@ -53,7 +54,7 @@ pub struct NativeDeployment {
     relation_assets: zkc_backends::relation::Registry,
     ring_work_limit: u64,
     publication: String,
-    choices: [bool; 4],
+    choices: [bool; 6],
     external_work_limit: u64,
     capacity: Capacity,
     setups: SetupAuthority,
@@ -68,7 +69,7 @@ pub struct NativeDeployment {
 pub(crate) struct SourceInterface<'a> {
     pub publication: &'a str,
     pub source: &'a str,
-    pub choices: [bool; 4],
+    pub choices: [bool; 6],
     pub acceptance: usize,
     pub suite: Option<&'a str>,
     pub construction: &'a str,
@@ -165,9 +166,7 @@ fn input_kind(ty: &PhysicalType) -> Result<&'static str> {
             (Type::Nonce, Identity::Bls12381Fr | Identity::Ristretto255Scalar) => {
                 return Ok("nonce");
             }
-            (Type::Rng, field)
-                if zkc_runtime::interactive::ServiceContract::for_field(field).is_some() =>
-            {
+            (Type::Rng, field) if zkc_runtime::vm::ServiceContract::for_field(field).is_some() => {
                 return Ok("rng");
             }
             (Type::VerifierKey, Identity::MultilinearKzgBls12381) => {
@@ -261,7 +260,7 @@ impl NativeDeployment {
         if text(&envelope[5])? != hash(candidate.as_bytes()) {
             return Err("native-proof-candidate-binding".into());
         }
-        let choices = array(&envelope[7], 4)?;
+        let choices = array(&envelope[7], 6)?;
         if choices
             .iter()
             .any(|v| !matches!(v.as_str(), Some("true" | "false")))
@@ -271,8 +270,8 @@ impl NativeDeployment {
         let policy = interface::DeploymentPolicy::read(&descriptor[1])?;
         let (entry, producer, validator) = (policy.entry, policy.producer, policy.validator);
         let suite = policy.suite;
-        let construction = zkc_runtime::interactive::ConstructionPlan::read(&descriptor[6])
-            .map_err(|e| e.to_string())?;
+        let construction =
+            zkc_runtime::vm::ConstructionPlan::read(&descriptor[6]).map_err(|e| e.to_string())?;
         if construction.as_ref().map_or("", |p| p.symbol()) != policy.construction {
             return Err("native-proof-construction".into());
         }
@@ -289,7 +288,12 @@ impl NativeDeployment {
                 Default::default(),
             )
             .map_err(|e| e.to_string())?;
-            admit_supplied(candidate.as_bytes(), &dummy).map_err(|e| e.to_string())?
+            let program = zkc_runtime::vm::Program::decode(candidate.as_bytes())
+                .map_err(|e| e.to_string())?;
+            program
+                .check_installation(&dummy)
+                .map_err(|e| e.to_string())?;
+            program
         };
         let messages = messages::MessageLayout::read(descriptor, &policy)?;
         messages.check_wire(&envelope[8], &admitted, entry)?;
@@ -309,7 +313,7 @@ impl NativeDeployment {
             .filter(|p| p.logical.kind() == Type::VerifierKey)
             .count();
         let needs_key = maps.values().flat_map(|m| &m.data).any(|p| {
-            p.logical.identity() == zkc_runtime::interactive::Identity::MultilinearKzgBls12381
+            p.logical.identity() == zkc_runtime::vm::Identity::MultilinearKzgBls12381
                 || zkc_backends::requires_setup(p.logical.clone())
         }) || messages
             .payload_types
@@ -338,7 +342,7 @@ impl NativeDeployment {
             producer,
             validator,
             acceptance.ok_or("native-proof-acceptance-map")?,
-            zkc_runtime::interactive::ProofConstruction {
+            zkc_runtime::vm::ProofConstruction {
                 suite,
                 events: &messages.events,
                 plan: construction.as_ref(),
@@ -356,6 +360,8 @@ impl NativeDeployment {
                 choices[1] == "true",
                 choices[2] == "true",
                 choices[3] == "true",
+                choices[4] == "true",
+                choices[5] == "true",
             ],
             external_work_limit: NativeBackend::DEFAULT_EXTERNAL_WORK_LIMIT,
             capacity: Capacity::default(),
@@ -818,7 +824,7 @@ fn budget(value: &Json) -> Result<u64> {
     Ok(n)
 }
 pub struct NativeProofReport {
-    pub execution_counts: zkc_runtime::interactive::ExecutionCounts,
+    pub execution_counts: zkc_runtime::vm::ExecutionCounts,
     pub outcome: Result<Vec<u8>>,
     /// Successful copyable results indexed by their original protocol output
     /// port. Absent on rejection, stop, refusal or cleanup failure. Private
@@ -833,10 +839,10 @@ pub struct NativeProofReport {
     pub attempts: Vec<AttemptRecord>,
     pub attempt_policy: Option<String>,
     /// One-shot owner-local completion. Attempts keep their own coordinates.
-    pub return_at: Option<(zkc_runtime::interactive::Origin, String)>,
+    pub return_at: Option<(zkc_runtime::vm::Origin, String)>,
     /// One-shot execution or host-cancellation stop; attempts retain their own.
-    pub stop: Option<zkc_runtime::interactive::Stop>,
-    pub usage: zkc_runtime::interactive::Usage,
+    pub stop: Option<zkc_runtime::vm::Stop>,
+    pub usage: zkc_runtime::vm::Usage,
     pub external_work: u64,
     pub ring_work: u64,
     pub ring_work_limit: u64,
@@ -844,7 +850,7 @@ pub struct NativeProofReport {
     /// Cleanup failures remain separate from the primary body failure.
     pub cleanup_errors: Vec<String>,
 }
-fn stop_json(s: &zkc_runtime::interactive::Stop) -> Json {
+fn stop_json(s: &zkc_runtime::vm::Stop) -> Json {
     json!({"origin":s.origin.json(),"role":s.role,"site":s.site,
         "local":s.local.as_ref().map(|l|json!({"site":l.site,"function":l.function,"instruction":l.instruction})),
         "kind":format!("{:?}",s.kind),

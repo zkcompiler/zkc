@@ -56,7 +56,7 @@ abbrev language : Language where
 
 /-- A draw is an open service call, not a built-in uniform sampler. The handle
 is an actual input operand, so distinct service bindings remain distinguishable. -/
-abbrev services : Services Ty where
+abbrev services : Participant.Services Ty where
   Op := String
   arguments field := [.service ("random." ++ field ++ "/0")]
   result field := .field field

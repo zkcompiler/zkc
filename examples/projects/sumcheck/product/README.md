@@ -3,7 +3,7 @@
 This client computes the sum of `x * y` over a public table of factor values.
 It declares `domain Product = ring(asset product)` over the captured
 [product arena](product.ring.json) and applies the generic
-[Sumcheck library](../../../../libraries/sumcheck/expression.zkc) as
+[Sumcheck library](../../../../libraries/protocols/polynomial/sumcheck/expression.zkc) as
 `Sumcheck<Extension, 16, Product>`. The library derives the table width and
 the round-polynomial degree from the arena; the compiler retains the admitted
 contents in the Entry package. A different arena, such as a three-factor
@@ -31,7 +31,7 @@ From this project directory, create `public.json`:
 {"values":["1","2","3","4","5","6","7","8"],"claim":"100","rounds":"2"}
 ```
 
-Then run either proof Entry explicitly:
+Then run the base-field proof Entry explicitly:
 
 ```sh
 zkc prove BaseProof --public=public.json --output=proof.bin
@@ -45,3 +45,26 @@ false claims, changed public inputs, asset substitution and a three-input cubic
 expression using the same source client.
 See the [ring contract](../../../../docs/spec/domains/ring-expressions.md) for
 layouts, exact coefficient semantics, asset admission and work limits.
+
+## Executable quick start
+
+Run these literal commands from this project directory with `zkc` and
+`zkc-compile` on `PATH` (Python 3 for generated inputs). The test suite runs
+this block in a separate consumer tree using only declared package dependencies.
+
+```sh zkc-example
+mkdir -p build
+printf '%s\n' '{"values":["1","2","3","4","5","6","7","8"],"claim":"100","rounds":"2"}' > build/public.json
+zkc check
+zkc prove BaseProof --public=build/public.json --output=build/product.proof
+zkc verify BaseProof --public=build/public.json --proof=build/product.proof
+```
+
+Inputs: The recipe writes its public base-field factor table; product.ring.json is a captured expression.
+
+Profile: BaseProof embeds KoalaBear into the octic extension; degree and width come from the captured expression.
+
+Expected negative control: Changing the claim from 100 to 101 refuses acceptance.
+
+Generated packages, proofs and result documents are written under `build/`
+inside this project. Existing input maps remain source inputs.

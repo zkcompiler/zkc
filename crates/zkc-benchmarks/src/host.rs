@@ -11,7 +11,7 @@ use std::{
     path::{Path, PathBuf},
     time::Instant,
 };
-use zkc_runtime::interactive::StopKind;
+use zkc_runtime::vm::StopKind;
 use zkc_tools::entry::{
     BindingPolicy, Package, ProofEntry, ProofOptions, ProofRequest, inputs::Decoder,
 };
@@ -94,7 +94,7 @@ pub fn run(
     let mut entry =
         ProofEntry::admit(package, options, Default::default()).map_err(|e| e.to_string())?;
     let admit_ns = start.elapsed().as_nanos();
-    let defaults = zkc_runtime::interactive::PreparationLimits::default();
+    let defaults = zkc_runtime::vm::PreparationLimits::default();
     let mut limits = defaults;
     if let Some(entries) = preparation_entries {
         limits.entries = entries;
@@ -107,6 +107,12 @@ pub fn run(
         limits.bytes = 0;
     }
     entry = entry.with_preparation_limits(limits);
+    let observed_limits = Limits {
+        entries: limits.entries,
+        bytes: limits.bytes,
+        default_entries: defaults.entries,
+        default_bytes: defaults.bytes,
+    };
     let data = inputs
         .iter()
         .map(|input| {
@@ -225,7 +231,14 @@ pub fn run(
             }
             Ok(())
         },
-    ).map_err(|cause| Failure::Invocation {completed: completed.get(), cause: Box::new(cause), preparation_before: prior.into_inner(), preparation_after: preparation_stats(&entry)})?;
+    )
+    .map_err(|cause| Failure::Invocation {
+        completed: completed.get(),
+        cause: Box::new(cause),
+        preparation_before: prior.into_inner(),
+        preparation_after: preparation_stats(&entry),
+        preparation_limits: observed_limits,
+    })?;
     let (index, last) = last.unwrap();
     let mut report = Report::new(
         "admitted_entry_call",
@@ -242,12 +255,7 @@ pub fn run(
     report.diagnostics = last.native.diagnostics();
     let diagnostics_ns = start.elapsed().as_nanos();
     report.lifecycle = Some(Lifecycle {
-        preparation_limits: Some(Limits {
-            default_entries: defaults.entries,
-            default_bytes: defaults.bytes,
-            entries: limits.entries,
-            bytes: limits.bytes,
-        }),
+        preparation_limits: Some(observed_limits),
         capture_ns,
         admit_ns,
         calls: calls.into_inner(),
@@ -271,7 +279,7 @@ mod tests {
     use super::*;
     #[test]
     fn refusals_preserve_the_layer_that_rejected() {
-        use zkc_runtime::interactive::BackendError;
+        use zkc_runtime::vm::BackendError;
         assert_eq!(
             rejection(Some("artifact-rejected"), None),
             Some("verification")

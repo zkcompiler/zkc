@@ -1,5 +1,6 @@
 #ifndef ZKC_DIALECT_MATHEMATICAL_H
 #define ZKC_DIALECT_MATHEMATICAL_H
+#include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Dialect/Operations.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/DenseMap.h"
@@ -30,13 +31,10 @@ mlir::LogicalResult analyze(zkc::protocol_ir::MathematicalOp program,
                             Availability &result,
                             mlir::SymbolTableCollection &tables);
 mlir::LogicalResult verifyModule(protocol_ir::ProtocolModuleOp module);
-// Complete private helper formation, also for retained participant closures.
-mlir::LogicalResult verifyHelpers(protocol_ir::ProtocolModuleOp module);
 mlir::LogicalResult
 verifyParticipantModule(protocol_ir::ProtocolModuleOp module);
 mlir::LogicalResult
 verifyProjectionMetadata(protocol_ir::ProtocolModuleOp module);
-bool isTotal(mlir::Operation *operation);
 // Validate acyclic static applications and their total expansion budget.
 mlir::LogicalResult verifyApplications(protocol_ir::ProtocolModuleOp module);
 } // namespace zkc::mathematical

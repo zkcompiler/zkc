@@ -12,7 +12,7 @@ pub fn private_input_admission_boundary(
     input: &Json,
     attempts: Option<&AttemptPolicy>,
 ) {
-    use zkc_runtime::interactive::{LogicalType, PhysicalType};
+    use zkc_runtime::vm::{LogicalType, PhysicalType};
     let codec = NativeBackend::new(
         Policy::default(),
         EntryPolicy::new(Domain::new("P", "test", "main", None), None),

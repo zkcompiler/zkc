@@ -3,7 +3,7 @@
 mod support;
 use support::{backend, one};
 use zkc_backends::{Bn254Scalar, KoalaBear, Policy, RistrettoScalar, Scalar, Value};
-use zkc_runtime::interactive::{OperationBinding, Value as _};
+use zkc_runtime::vm::{OperationBinding, Value as _};
 
 #[test]
 fn slice_checks_dynamic_bounds_and_preserves_every_installed_scalar_carrier() {

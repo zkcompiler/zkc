@@ -3,12 +3,12 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/AsmState.h"
 #include "mlir/IR/Builders.h"
+#include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Mathematical.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Printing.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
-#include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Dialect/Registry.h"
 #include "zkc/Dialect/Relation/Formula.h"
 #include "zkc/Language/Builtins.h"
@@ -290,6 +290,64 @@ class Emitter {
     failure = error("source.emission", "unknown source variant alternative");
     return {};
   }
+  mlir::ArrayAttr contractSelector(const SpecificationSelector &selector,
+                                   unsigned port) {
+    return builder.getArrayAttr(
+        {builder.getStringAttr(selector.output ? "output" : "input"),
+         builder.getI64IntegerAttr(port),
+         builder.getStringAttr(nativeRoleName(selector.role))});
+  }
+  mlir::ArrayAttr contractApplication(const Declaration &owner,
+                                      const RelationApplication &application) {
+    SmallVector<mlir::Attribute> selectors;
+    for (const auto &operand : application.operands) {
+      auto slice = take(layouts.select(owner, operand));
+      if (!slice)
+        return {};
+      if (slice->layout->leaves.size() + 1 > remaining) {
+        failure = error("source.limit", "contract layout work limit exceeded");
+        return {};
+      }
+      remaining -= slice->layout->leaves.size() + 1;
+      for (unsigned i = 0; i < slice->layout->leaves.size(); ++i)
+        selectors.push_back(contractSelector(operand, slice->offset + i));
+    }
+    return builder.getArrayAttr(
+        {mlir::FlatSymbolRefAttr::get(
+             &context,
+             project.declarations()[application.relation.index].symbol),
+         builder.getArrayAttr(selectors)});
+  }
+  mlir::ArrayAttr contracts(const Declaration &owner) {
+    SmallVector<mlir::Attribute> clauses;
+    for (const auto &clause : owner.specifications) {
+      auto subject = contractApplication(owner, clause.subject);
+      if (!subject)
+        return {};
+      mlir::Attribute residual = builder.getUnitAttr(),
+                      decision = builder.getUnitAttr();
+      if (clause.residual) {
+        residual = contractApplication(owner, *clause.residual);
+        if (!residual)
+          return {};
+      }
+      if (clause.decision) {
+        auto slice = take(layouts.select(owner, *clause.decision));
+        if (!slice)
+          return {};
+        decision = contractSelector(*clause.decision, slice->offset);
+      }
+      using K = SpecificationClause::Kind;
+      StringRef kind = clause.kind == K::Target   ? "target"
+                       : clause.kind == K::Input  ? "input"
+                       : clause.kind == K::Output ? "output"
+                                                  : "continuation";
+      clauses.push_back(builder.getArrayAttr(
+          {builder.getStringAttr(kind), builder.getStringAttr(clause.name),
+           subject, residual, decision}));
+    }
+    return builder.getArrayAttr(clauses);
+  }
   bool body(const Declaration &decl, const Body &source, mlir::Block &block,
             bool region = false) {
     builder.setInsertionPointToEnd(&block);
@@ -336,7 +394,8 @@ class Emitter {
                       mlir::FlatSymbolRefAttr::get(&context, relation.symbol)),
                  attr("selectors", strings(selectors)),
                  attr("acceptance",
-                      builder.getI64IntegerAttr(acceptance->offset))}))
+                      builder.getI64IntegerAttr(acceptance->offset)),
+                 text("target", clause.name)}))
         return false;
     }
     auto flatten = [&](ArrayRef<ValueId> ids) {
@@ -1139,10 +1198,14 @@ public:
       bool protocol = decl.kind == Declaration::Kind::Protocol,
            local = decl.kind == Declaration::Kind::Local;
       if (protocol) {
+        auto retained = contracts(decl);
+        if (!retained)
+          return std::move(failure);
         std::vector<std::string> roster;
         for (unsigned i = 0; i < decl.roles.size(); ++i)
           roster.push_back(nativeRoleName(i));
-        attrs.append({attr("roles", strings(roster)),
+        attrs.append({attr("contracts", retained),
+                      attr("roles", strings(roster)),
                       attr("input_roles", builder.getArrayAttr(inRoles)),
                       attr("output_roles", builder.getArrayAttr(outRoles))});
       } else {
@@ -1221,12 +1284,19 @@ public:
         revision = "0";
       }
       builder.setInsertionPointToEnd(definitions);
-      if (!make("relation.declare", {}, {},
-                {text("sym_name", decl.symbol), text("kind", kind),
-                 text("key", key), text("revision", revision),
-                 attr("signature", mlir::TypeAttr::get(builder.getFunctionType(
-                                       inputs, {builder.getI1Type()}))),
-                 attr("purposes", strings(purposes))}))
+      SmallVector<mlir::NamedAttribute> attributes{
+          text("sym_name", decl.symbol),
+          text("kind", kind),
+          text("key", key),
+          text("revision", revision),
+          attr("signature", mlir::TypeAttr::get(builder.getFunctionType(
+                                inputs, {builder.getI1Type()}))),
+          attr("purposes", strings(purposes))};
+      if (definition.kind == K::Formula)
+        attributes.push_back(
+            attr("formula",
+                 mlir::FlatSymbolRefAttr::get(&context, formulaSymbol(decl))));
+      if (!make("relation.declare", {}, {}, attributes))
         return std::move(failure);
     }
     std::string result;

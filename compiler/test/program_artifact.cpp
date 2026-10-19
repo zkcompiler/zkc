@@ -3,9 +3,11 @@
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Protocol/Execution.h"
 #include "zkc/Program/Admission.h"
 #include "zkc/Program/Codec.h"
 #include "zkc/Support/Json.h"
+#include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/Protocol.h"
 #include "zkc/Translation/Protocol.h"
@@ -46,6 +48,26 @@ int main() {
   require(bool(module), "fixture parse refused");
   run(*module, protocol::createProjectProtocolPass(false));
   run(*module, protocol::createLowerMathPass());
+  cases.run("public readers refuse unresolved Kernel code", [&] {
+    unsigned units = 0, calls = 0;
+    module->walk([&](kernel::ModuleOp) { ++units; });
+    module->walk([&](kernel::CallOp) { ++calls; });
+    require(units && calls, "logical fixture lost numerical units");
+    auto structural = protocol::readExecutionModel(module->getOperation());
+    require(!structural, "public reader published logical Kernel signatures");
+    require(llvm::toString(structural.takeError()) == "kernel-profile",
+            "unresolved Kernel reader lost its diagnostic");
+    auto exported = protocol::exportProgram(module->getOperation());
+    require(!exported, "program export published unresolved Kernel code");
+    llvm::consumeError(exported.takeError());
+    auto carrier = protocol::exportModule(module->getOperation());
+    require(!carrier, "module export published unresolved Kernel code");
+    llvm::consumeError(carrier.takeError());
+  });
+  auto logical = OwningOpRef<ModuleOp>(cast<ModuleOp>(module->clone()));
+  run(*module, kernel::createLowerKernelsPass());
+  require(succeeded(kernel::verifyKernelLowering(*logical, *module)),
+          "actual Kernel recipes did not correspond");
   require(succeeded(protocol::lowerPhysical(*module)),
           "physical lowering refused");
   auto original = readProgram(*module);

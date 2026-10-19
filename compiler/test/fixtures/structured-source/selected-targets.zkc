@@ -1,0 +1,17 @@
+module sample;
+
+relation R(statement x:bool){return x;}
+protocol Run roles(P,V)(x:bool@(P,V))->(ok:bool@(P,V))
+  spec {
+    target left=R(in.x@P) accept out.ok@P;
+    target right=R(in.x@P) accept out.ok@V;
+  }
+{return(ok=x);}
+
+proof Left=Run{
+  prover V;verifier P;public{x};accept ok;target left;construction authored;
+}
+proof Right=Run{
+  prover P;verifier V;public{x};accept ok;target right;construction authored;
+}
+run Session=Run;

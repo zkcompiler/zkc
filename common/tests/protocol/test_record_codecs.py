@@ -1,7 +1,7 @@
 """Record byte provenance, ordered parsing and codec lifetime through the Host."""
 import json
 import pytest
-from source_modules import library_modules
+from source_modules import core_packages, library_inputs, library_modules
 from test_constructions import SOURCE
 
 CODEC = '''
@@ -134,12 +134,11 @@ def test_record_codec_external_schnorr(toolchain, journal, directory, flags):
     }
     proof ExternalProof=Fixed{prover P;verifier V;public{tag,session,base,point};accept accepted;construction External;}
     ''')
-    modules = {'sample': source, 'spongefish': root / 'libraries/spongefish/lib.zkc'}
-    modules.update({f'zkc::{name}': root / f'libraries/zkc/{name}.zkc'
-                    for name in ['bytes', 'encoding', 'shake128', 'proof']})
+    modules = {'sample': source, 'spongefish::duplex': root / 'libraries/constructions/spongefish/duplex.zkc'}
+    modules.update(library_inputs(*core_packages()))
     package = directory / 'proof.zkpkg'
     compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                             *library_modules('spongefish', 'sumcheck', overrides=modules),
+                             *library_modules('constructions/spongefish', 'protocols/polynomial/sumcheck', overrides=modules),
                              'sample::ExternalProof', f'--output={package}', *flags])
     public = journal.write('public.json', PUBLIC)
     witness = journal.write('witness.json', {'scalar': '7', 'nonce': '11'})

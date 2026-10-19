@@ -32,7 +32,7 @@ fn document() -> Value {
 }
 fn read_text(interface: &str) -> Result<Interface> {
     let frame = json!({"format":"zkc.entry/0","original":"original","interface":interface,
-        "artifact":"not interpreted by the metadata reader", "options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false},
+        "artifact":"not interpreted by the metadata reader", "options":{"simplify":true,"release_storage":false,"finite_bulk":true,"fuse_vector_reductions":false,"fuse_collect_fold":false,"calculation_batching":true},
         "assets":[]}).to_string();
     let package = Package::capture(
         frame.as_bytes(),
@@ -606,7 +606,7 @@ fn pcs_schemas_preserve_independent_boundaries() {
             "{head}"
         );
         assert_eq!(
-            zkc_runtime::interactive::LogicalType::parse(&leaf)
+            zkc_runtime::vm::LogicalType::parse(&leaf)
                 .unwrap()
                 .is_native_message_data(),
             message,

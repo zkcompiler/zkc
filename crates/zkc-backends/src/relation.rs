@@ -1,19 +1,19 @@
-//! Admitted deterministic Bundle assets, actual-column assertion evaluation,
+//! Program deterministic Bundle assets, actual-column assertion evaluation,
 //! the polynomial view's descriptors and point substitutions, and the
 //! interaction view's widths, policy, descriptors and record substitutions.
 use crate::{KoalaBear, Policy, Result, Value, exhausted, refused};
 use p3_field::{BasedVectorSpace, PrimeCharacteristicRing, PrimeField32};
 use std::{collections::BTreeMap, marker::PhantomData, sync::Arc};
 use zkc_runtime::{
-    interactive::{
-        AttributeRule, BoundSignature, Identity, Invocation, KernelSignature, OperationBinding,
-        Type,
-    },
     relation::{
         Algebra, Bundle, ChannelKind, Error, HeightAuthority, InteractionView, PolynomialArena,
         PolynomialView, Side, TableView,
     },
     ring::Expression,
+    vm::{
+        AttributeRule, BoundSignature, Identity, Invocation, OperationBinding, OperationSignature,
+        Type,
+    },
 };
 
 #[derive(Clone, Debug, Default)]
@@ -72,7 +72,10 @@ impl Registry {
             .assets
             .get(identity)
             .ok_or_else(|| refused("relation-asset-missing"))?;
-        if !matches!(carrier, Identity::KoalaBear | Identity::KoalaBearExt8) {
+        if !matches!(
+            carrier,
+            Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4
+        ) {
             return Err(refused("relation-table-carrier"));
         }
         bundle
@@ -170,6 +173,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
     let domain = match field.as_str() {
         "koala-bear" => crate::domains::KOALA_BEAR,
         "koala-bear.ext8-binomial3" => crate::domains::KOALA_BEAR_EXT8,
+        "koala-bear.ext4-binomial3" => crate::domains::KOALA_BEAR_EXT4,
         _ => return None,
     };
     let vector = domain.physical(Type::Vector)?;
@@ -191,7 +195,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         "relation.table_interaction" => (vec![index.clone(); 2], vec![index; 12]),
         _ => (vec![vector.clone()], vec![vector]),
     };
-    Some(KernelSignature {
+    Some(OperationSignature {
         inputs,
         outputs,
         attributes: AttributeRule::AssetIdentity,
@@ -464,6 +468,10 @@ fn interaction(
             points(&view, v, *rows, true, policy, budget, available)
                 .map(|values| vec![Value::KoalaBearExt8Vector(values.into())])
         }
+        ("relation.table_record_points", [Value::KoalaBearExt4Vector(v), Value::Index(rows)]) => {
+            points(&view, v, *rows, true, policy, budget, available)
+                .map(|values| vec![Value::KoalaBearExt4Vector(values.into())])
+        }
         _ => Err(refused("kernel-operands")),
     }
 }
@@ -507,6 +515,10 @@ fn polynomial(
             points(&view, v, 1, false, policy, budget, available)
                 .map(|values| vec![Value::KoalaBearExt8Vector(values.into())])
         }
+        ("relation.table_point", [Value::KoalaBearExt4Vector(v)]) => {
+            points(&view, v, 1, false, policy, budget, available)
+                .map(|values| vec![Value::KoalaBearExt4Vector(values.into())])
+        }
         ("relation.table_points", [Value::KoalaBearVector(v), Value::Index(rows)]) => {
             points(&view, v, *rows, true, policy, budget, available)
                 .map(|values| vec![Value::KoalaBearVector(values.into())])
@@ -514,6 +526,10 @@ fn polynomial(
         ("relation.table_points", [Value::KoalaBearExt8Vector(v), Value::Index(rows)]) => {
             points(&view, v, *rows, true, policy, budget, available)
                 .map(|values| vec![Value::KoalaBearExt8Vector(values.into())])
+        }
+        ("relation.table_points", [Value::KoalaBearExt4Vector(v), Value::Index(rows)]) => {
+            points(&view, v, *rows, true, policy, budget, available)
+                .map(|values| vec![Value::KoalaBearExt4Vector(values.into())])
         }
         ("relation.table_shape", [Value::Index(height)]) => {
             budget.charge(view.work())?;
@@ -578,6 +594,7 @@ pub(crate) fn apply(
     }
     dispatch!(KoalaBearVector, Identity::KoalaBear);
     dispatch!(KoalaBearExt8Vector, Identity::KoalaBearExt8);
+    dispatch!(KoalaBearExt4Vector, Identity::KoalaBearExt4);
     Err(refused("kernel-operands"))
 }
 

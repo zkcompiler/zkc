@@ -36,7 +36,7 @@ impl ProofFormat {
     pub(super) fn decode(
         self,
         backend: &zkc_backends::NativeBackend,
-        ty: &zkc_runtime::interactive::PhysicalType,
+        ty: &zkc_runtime::vm::PhysicalType,
         bytes: &[u8],
     ) -> Result<zkc_backends::Value, zkc_backends::NativeWireError> {
         match self {

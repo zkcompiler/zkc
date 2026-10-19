@@ -1,21 +1,27 @@
 //! Canonical field and Ristretto group vectors in the native wire grammar.
 use crate::{Policy, Result, Value, ark, exhausted, kernels::arithmetic::reserve};
-use zkc_runtime::interactive::Value as _;
+use zkc_runtime::vm::Value as _;
 
 pub(super) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> {
     let (tag, width, count) = match value {
         Value::KoalaBearVector(v) => (20, 4usize, v.len()),
         Value::KoalaBearExt8Vector(v) => (27, 32, v.len()),
+        Value::KoalaBearExt4Vector(v) => (22, 16, v.len()),
+        Value::Binary64Vector(v) => (74, 8, v.len()),
+        Value::Binary64Ext3Vector(v) => (77, 24, v.len()),
         Value::Vector(v) => (66, 32, v.len()),
         Value::RistrettoVector(v) => (14, 32, v.len()),
         Value::RistrettoGroups(v) => (17, 32, v.len()),
         Value::EdwardsGroups(v) => (69, 32, v.len()),
+        Value::Bls12381G2Vector(v) => (52, 96, v.len()),
         _ => return None,
     };
     Some((|| {
         value.validate_serializable()?;
         if matches!(value, Value::RistrettoGroups(_) | Value::EdwardsGroups(_)) {
             policy.dalek_groups(count)?;
+        } else if matches!(value, Value::Bls12381G2Vector(_)) {
+            policy.typed_groups::<crate::Bls12381G2>(count)?;
         } else {
             policy.vector_width(count, width)?;
         }
@@ -43,6 +49,21 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> 
                     out.extend(crate::plonky3::encode_extension(*x));
                 }
             }
+            Value::KoalaBearExt4Vector(values) => {
+                for x in values.iter() {
+                    out.extend(crate::plonky3::encode_quartic(*x));
+                }
+            }
+            Value::Binary64Vector(values) => {
+                for x in values.iter() {
+                    out.extend(crate::plonky3::binary::encode(*x));
+                }
+            }
+            Value::Binary64Ext3Vector(values) => {
+                for x in values.iter() {
+                    out.extend(crate::plonky3::binary::encode_ext3(*x));
+                }
+            }
             Value::Vector(values) => {
                 for x in values.iter() {
                     out.extend(zkc_arkworks::encode_scalar(x).map_err(ark)?);
@@ -61,6 +82,11 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> 
             Value::RistrettoGroups(values) => {
                 for x in values.iter() {
                     out.extend(x.compress().to_bytes());
+                }
+            }
+            Value::Bls12381G2Vector(values) => {
+                for x in values.iter() {
+                    out.extend(x.to_bytes().map_err(ark)?);
                 }
             }
             _ => unreachable!("selected native vector"),

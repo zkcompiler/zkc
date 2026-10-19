@@ -7,6 +7,7 @@
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Mathematical.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 using namespace mlir;
@@ -31,8 +32,8 @@ int main() {
   DialectRegistry registry;
   registerDialects(registry);
   MLIRContext context(registry);
-  for (StringRef group : {"ristretto255.group", "bls12-381.g1", "bn254.g1",
-                          "bn254.g2", "bn254.gt"}) {
+  for (StringRef group : {"ristretto255.group", "bls12-381.g1", "bls12-381.g2",
+                          "bls12-381.gt", "bn254.g1", "bn254.g2", "bn254.gt"}) {
     for (bool primitive : {false, true})
       cases.run("source identity and realization: " + group, [&] {
         auto source =
@@ -127,9 +128,12 @@ int main() {
   run(*projected, protocol::createProjectProtocolPass(false));
   auto lowered = OwningOpRef<ModuleOp>(cast<ModuleOp>((*projected)->clone()));
   run(*lowered, protocol::createLowerMathPass());
+  auto logical = OwningOpRef<ModuleOp>(cast<ModuleOp>((*lowered)->clone()));
+  run(*lowered, kernel::createLowerKernelsPass());
   cases.run("independent recipe accepts exact identity", [&] {
-    require(succeeded(
-                mathematical::verifyProjectionPreserved(*projected, *lowered)),
+    require(succeeded(mathematical::verifyProjectionPreserved(*projected,
+                                                              *logical)) &&
+                succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
             "identity recipe refused");
   });
   for (bool generator : {false, true})
@@ -167,15 +171,14 @@ int main() {
           bool diagnostic = false;
           ScopedDiagnosticHandler expected(&context, [&](Diagnostic &d) {
             diagnostic |= namesIdentifier(
-                d.str(), generator ? "mathematical-lowering-preservation"
+                d.str(), generator ? "kernel-lowering-correspondence"
                                    : "binding-operation-signature");
             return success();
           });
           if (generator) {
             require(succeeded(verify(*candidate)),
                     "generator mutation must retain formation");
-            require(failed(mathematical::verifyProjectionPreserved(*projected,
-                                                                   *candidate)),
+            require(failed(kernel::verifyKernelLowering(*logical, *candidate)),
                     "generator realized identity");
           } else {
             require(failed(verify(*candidate)),

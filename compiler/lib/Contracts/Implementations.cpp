@@ -21,22 +21,42 @@ struct ProviderDomain {
 constexpr ProviderDomain providerDomains[] = {
     {"arkworks", "bls12-381.fr"},
     {"arkworks", "bls12-381.g1"},
+    {"arkworks", "bls12-381.g2"},
+    {"arkworks", "bls12-381.gt"},
     {"arkworks", "bn254.fr"},
     {"arkworks", "bn254.g1"},
     {"arkworks", "bn254.g2"},
     {"arkworks", "bn254.gt"},
     {"arkworks", "multilinear.kzg.bls12-381/0"},
     {"arkworks", "merlin3.bls12-381.fr64be/0"},
+    {"arkworks", "hash-chain.keccak256.bls12-381.fr64be/0"},
     {"dalek", "ristretto255.scalar"},
     {"dalek", "ristretto255.group"},
     {"dalek", "edwards25519.prime"},
     {"dalek", "merlin3.ristretto255.scalar64le/0"},
     {"plonky3", "koala-bear"},
     {"plonky3", "koala-bear.ext8-binomial3"},
+    {"plonky3", "koala-bear.ext4-binomial3"},
     {"plonky3", "merlin3.koala-bear.ext8-binomial3.rejection31le/0"},
+    {"plonky3",
+     "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"},
     {"plonky3", "rows.merkle-keccak256.koala-bear/0"},
     {"plonky3", "rows.merkle-keccak256.koala-bear.ext8-binomial3/0"},
+    {"plonky3", "rows.merkle-poseidon2-16.koala-bear/0"},
+    {"plonky3", "rows.merkle-poseidon2-16.koala-bear.ext4-binomial3/0"},
+    {"plonky3", "gf2-64.pentanomial-4-3-1"},
+    {"plonky3", "gf2-64.pentanomial-4-3-1.ext3-trinomial1"},
     {"spongefish", "spongefish0.8.0.keccak.bls12-381.fr64be/0"}};
+
+// One provider can serve fields with different presentations. Rows whose
+// kernels read integer residue coordinates name the KoalaBear family, so the
+// binary fields under the same provider do not inherit them
+// (docs/spec/realization/external-constructions.md).
+constexpr StringRef koalaFamily[] = {"koala-bear", "koala-bear.ext8-binomial3",
+                                     "koala-bear.ext4-binomial3"};
+constexpr StringRef littleEndianFields[] = {
+    "koala-bear", "koala-bear.ext8-binomial3", "koala-bear.ext4-binomial3",
+    "gf2-64.pentanomial-4-3-1", "gf2-64.pentanomial-4-3-1.ext3-trinomial1"};
 
 // These finite rows are the implementation inventory, not a walk over logical
 // declarations. Adding a declaration grants no implementation. Provider sets
@@ -54,23 +74,26 @@ struct ContractRow {
   unsigned providers;
   Compatibility compatibility = Compatibility::Nominal;
   StringRef domain = {};
+  // Several domain restrictions of one row, as if listed one per row.
+  ArrayRef<StringRef> domains = {};
 };
+constexpr auto Nominal = Compatibility::Nominal;
 constexpr ContractRow contractRows[] = {
-    {"ring.point", Plonky3},
-    {"ring.rows", Plonky3},
-    {"ring.coefficients", Plonky3},
-    {"ring.affine_sum", Plonky3},
-    {"relation.table_rows", Plonky3},
-    {"relation.table_shape", Plonky3},
-    {"relation.table_input", Plonky3},
-    {"relation.table_scope", Plonky3},
-    {"relation.table_point", Plonky3},
-    {"relation.table_points", Plonky3},
-    {"relation.table_widths", Plonky3},
-    {"relation.table_policy", Plonky3},
-    {"relation.table_interactions", Plonky3},
-    {"relation.table_interaction", Plonky3},
-    {"relation.table_record_points", Plonky3},
+    {"ring.point", Plonky3, Nominal, {}, koalaFamily},
+    {"ring.rows", Plonky3, Nominal, {}, koalaFamily},
+    {"ring.coefficients", Plonky3, Nominal, {}, koalaFamily},
+    {"ring.affine_sum", Plonky3, Nominal, {}, koalaFamily},
+    {"relation.table_rows", Plonky3, Nominal, {}, koalaFamily},
+    {"relation.table_shape", Plonky3, Nominal, {}, koalaFamily},
+    {"relation.table_input", Plonky3, Nominal, {}, koalaFamily},
+    {"relation.table_scope", Plonky3, Nominal, {}, koalaFamily},
+    {"relation.table_point", Plonky3, Nominal, {}, koalaFamily},
+    {"relation.table_points", Plonky3, Nominal, {}, koalaFamily},
+    {"relation.table_widths", Plonky3, Nominal, {}, koalaFamily},
+    {"relation.table_policy", Plonky3, Nominal, {}, koalaFamily},
+    {"relation.table_interactions", Plonky3, Nominal, {}, koalaFamily},
+    {"relation.table_interaction", Plonky3, Nominal, {}, koalaFamily},
+    {"relation.table_record_points", Plonky3, Nominal, {}, koalaFamily},
     {"sequence.empty", Native, Compatibility::Independent},
     {"sequence.append", Native, Compatibility::Independent},
     {"sequence.length", Native, Compatibility::Independent},
@@ -89,6 +112,8 @@ constexpr ContractRow contractRows[] = {
     {"index.less", Native, Compatibility::Independent},
     {"encoding.index_uleb128", Native, Compatibility::Independent},
     {"encoding.fields_be", Arkworks, Compatibility::Nominal, "bls12-381.fr"},
+    {"encoding.fields_from_be", Arkworks, Compatibility::Nominal,
+     "bls12-381.fr"},
     {"encoding.fields_le", Dalek, Compatibility::Nominal,
      "ristretto255.scalar"},
     {"encoding.groups_compressed", Arkworks, Compatibility::Nominal,
@@ -102,8 +127,12 @@ constexpr ContractRow contractRows[] = {
      "bls12-381.fr"},
     {"encoding.group_compressed", Arkworks, Compatibility::Nominal,
      "bls12-381.g1"},
+    {"encoding.group_compressed", Arkworks, Compatibility::Nominal,
+     "bls12-381.g2"},
     {"encoding.group_from_compressed", Arkworks, Compatibility::Nominal,
      "bls12-381.g1"},
+    {"encoding.group_from_compressed", Arkworks, Compatibility::Nominal,
+     "bls12-381.g2"},
     {"encoding.field_le", Dalek, Compatibility::Nominal, "ristretto255.scalar"},
     {"encoding.field_from_le", Dalek, Compatibility::Nominal,
      "ristretto255.scalar"},
@@ -117,7 +146,19 @@ constexpr ContractRow contractRows[] = {
      "edwards25519.prime"},
     {"encoding.cryptonote_map", Dalek, Compatibility::Nominal,
      "edwards25519.prime"},
+    // KoalaBear and its installed extensions: four-byte words per coordinate.
+    // Binary fields: little-endian bit patterns, with no Montgomery form.
+    {"encoding.field_le", Plonky3, Nominal, {}, littleEndianFields},
+    {"encoding.field_from_le", Plonky3, Nominal, {}, littleEndianFields},
+    {"encoding.fields_le", Plonky3, Nominal, {}, littleEndianFields},
+    {"encoding.fields_from_le", Plonky3, Nominal, {}, littleEndianFields},
+    {"encoding.field_montgomery_le", Plonky3, Nominal, {}, koalaFamily},
+    {"encoding.field_from_montgomery_le", Plonky3, Nominal, {}, koalaFamily},
+    {"encoding.fields_montgomery_le", Plonky3, Nominal, {}, koalaFamily},
+    {"encoding.fields_from_montgomery_le", Plonky3, Nominal, {}, koalaFamily},
     {"hash.keccak256", Native, Compatibility::Independent},
+    {"hash.sha256", Native, Compatibility::Independent},
+    {"hash.poseidon2_16", Plonky3, Compatibility::Nominal, "koala-bear"},
     {"shake128.init", Native, Compatibility::Independent},
     {"shake128.absorb", Native, Compatibility::Independent},
     {"shake128.squeeze", Native, Compatibility::Independent},
@@ -157,6 +198,8 @@ constexpr ContractRow contractRows[] = {
     {"vector.transpose", Arithmetic},
     {"vector.length", Arithmetic},
     {"vector.rotate", Arithmetic},
+    {"vector.bit_reverse", Arithmetic},
+    {"vector.bit_reverse_rows", Arithmetic},
     {"vector.interleave", Arithmetic},
     {"vector.prefix_product", Arithmetic},
     {"vector.prefix_sum", Arithmetic},
@@ -251,6 +294,8 @@ constexpr ContractRow contractRows[] = {
     {"oracle.commit", Plonky3},
     {"oracle.open", Plonky3},
     {"oracle.check", Plonky3},
+    {"oracle.open_many", Plonky3},
+    {"oracle.check_many", Plonky3},
     {"commitments.empty", Plonky3},
     {"commitments.append", Plonky3},
     {"commitments.at", Plonky3},
@@ -271,7 +316,7 @@ constexpr ContractRow contractRows[] = {
      Arkworks | Dalek | Plonky3 | Spongefish, Compatibility::Transcript},
     {"transcript.native.indexed.observe.data",
      Arkworks | Dalek | Plonky3 | Spongefish, Compatibility::Transcript},
-    // Only the octic merlin suite grants IndexTranscript.
+    // Only the octic suites grant IndexTranscript.
     {"transcript.native.indexed.index", Plonky3, Compatibility::Transcript},
     {"field_array.from_vector", Arkworks, Compatibility::Nominal,
      "bls12-381.fr"},
@@ -398,7 +443,7 @@ Error checkImplementationScope(const ImplementationDescriptor &entry,
   if (scope.terms.size() != scope.sorts.size())
     return error("implementation-catalog-policy");
   if (entry.compatibility == Compatibility::Independent) {
-    if (entry.providerTerm != 0 || !entry.domain.empty() ||
+    if (entry.providerTerm != 0 || !entry.domains.empty() ||
         !all_of(scope.sorts,
                 [](StringRef sort) { return sort == "Type" || sort == "Nat"; }))
       return error("implementation-catalog-policy");
@@ -434,10 +479,10 @@ Error checkImplementationScope(const ImplementationDescriptor &entry,
       return error("implementation-catalog-policy");
     index = *term.parent;
   }
-  if (!entry.domain.empty() &&
-      (installedDomains().identitySort(entry.domain) != sort ||
-       !implementationProviderSupports(entry.provider, entry.domain)))
-    return error("implementation-catalog-policy");
+  for (const auto &domain : entry.domains)
+    if (installedDomains().identitySort(domain) != sort ||
+        !implementationProviderSupports(entry.provider, domain))
+      return error("implementation-catalog-policy");
   return Error::success();
 }
 
@@ -452,7 +497,8 @@ Error checkImplementationArguments(const ImplementationDescriptor &entry,
     return error("binding-implementation");
   if (entry.compatibility == Compatibility::Independent)
     return Error::success();
-  if (!entry.domain.empty() && identities[entry.providerTerm] != entry.domain)
+  if (!entry.domains.empty() &&
+      !is_contained(entry.domains, identities[entry.providerTerm]))
     return error("binding-implementation");
   if (entry.compatibility == Compatibility::Transcript) {
     const auto &suite = identities[entry.providerTerm];
@@ -471,9 +517,9 @@ Error checkImplementationArguments(const ImplementationDescriptor &entry,
         payloadField = associatedIdentity(identity, "Scalar");
       else if (sort == "Commitment")
         payloadField = associatedIdentity(identity, "ValueField");
-      if (payloadField != field &&
-          !(suite == "merlin3.koala-bear.ext8-binomial3.rejection31le/0" &&
-            payloadField == "koala-bear"))
+      // An extension-field suite also observes payloads over its base field.
+      StringRef base = associatedIdentity(field, "BaseField");
+      if (payloadField != field && (base.empty() || payloadField != base))
         return error("binding-implementation");
     }
     return Error::success();
@@ -533,17 +579,46 @@ const ImplementationCatalog &installedImplementations() {
         {Plonky3, "plonky3"},
         {Spongefish, "spongefish"},
         {Native, "native"}};
-    for (const auto &row : contractRows)
+    // Rows naming one contract, provider and policy with different domain
+    // restrictions describe a single implementation admitting each domain.
+    auto install = [&](const ContractRow &row, StringRef domain) {
       for (const auto &[flag, provider] : providers)
         if (row.providers & flag) {
           std::string identity = (provider + "/" + row.contract).str();
+          auto existing = find_if(entries, [&](const auto &entry) {
+            return entry.contract == row.contract && entry.identity == identity;
+          });
+          if (existing != entries.end()) {
+            if (existing->compatibility != row.compatibility ||
+                existing->domains.empty() || domain.empty() ||
+                is_contained(existing->domains, domain))
+              report_fatal_error("ambiguous installed implementation row",
+                                 false);
+            existing->domains.push_back(domain.str());
+            continue;
+          }
+          std::vector<std::string> domains;
+          if (!domain.empty())
+            domains.push_back(domain.str());
           entries.push_back({row.contract.str(), identity, provider.str(),
-                             row.compatibility, row.domain.str()});
+                             row.compatibility, std::move(domains)});
           preferences.push_back({row.contract.str(), provider.str(), identity});
         }
+    };
+    for (const auto &row : contractRows) {
+      if (!row.domain.empty() && !row.domains.empty())
+        report_fatal_error("ambiguous installed implementation row", false);
+      if (row.domains.empty())
+        install(row, row.domain);
+      for (StringRef domain : row.domains)
+        install(row, domain);
+    }
     // Algorithm and layout alternatives do not add a default preference.
-    entries.push_back({"vector.dot", "arkworks-pairwise/vector.dot", "arkworks",
-                       Compatibility::Nominal, "bls12-381.fr"});
+    entries.push_back({"vector.dot",
+                       "arkworks-pairwise/vector.dot",
+                       "arkworks",
+                       Compatibility::Nominal,
+                       {"bls12-381.fr"}});
     for (StringRef contract :
          {"poly.product_sum", "poly.product_round", "poly.boundary",
           "poly.round_evaluate", "poly.fold", "poly.evaluate",
@@ -553,27 +628,27 @@ const ImplementationCatalog &installedImplementations() {
                          ("arkworks-msb/" + contract).str(),
                          "arkworks",
                          Compatibility::Nominal,
-                         "bls12-381.fr",
+                         {"bls12-381.fr"},
                          {{"table", "bls12-381.fr", "arkworks.mle-msb/0"}}});
     entries.push_back(
         {"vector.mul",
          "arkworks-diagonal/vector.mul",
          "arkworks",
          Compatibility::Nominal,
-         "bls12-381.fr",
+         {"bls12-381.fr"},
          {{"vector", "bls12-381.fr", "arkworks.fr-diagonal/0", 0, true}}});
     entries.push_back(
         {"vector.dot",
          "arkworks-diagonal/vector.dot",
          "arkworks",
          Compatibility::Nominal,
-         "bls12-381.fr",
+         {"bls12-381.fr"},
          {{"vector", "bls12-381.fr", "arkworks.fr-diagonal/0", 1}}});
     entries.push_back({"curve.scale_each",
                        "dalek-diagonal/curve.scale_each",
                        "dalek",
                        Compatibility::Nominal,
-                       "ristretto255.group",
+                       {"ristretto255.group"},
                        {{"groups", "ristretto255.group",
                          "dalek.ristretto-diagonal/0", 0, true}}});
     entries.push_back(
@@ -581,7 +656,7 @@ const ImplementationCatalog &installedImplementations() {
          "dalek-diagonal/curve.msm",
          "dalek",
          Compatibility::Nominal,
-         "ristretto255.group",
+         {"ristretto255.group"},
          {{"groups", "ristretto255.group", "dalek.ristretto-diagonal/0", 1}}});
     auto result = ImplementationCatalog::create(std::move(entries),
                                                 std::move(preferences));

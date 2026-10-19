@@ -170,8 +170,18 @@ std::vector<const Record *> DeclarationOrder::sort(StringRef category) const {
   auto ordinal = [](const Record *r) {
     return r->getValue("ordinal") ? r->getValueAsInt("ordinal") : int64_t(-1);
   };
-  for (const auto *r : result)
-    (void)owner(r);
+  // Base ordinals are unique and append-only within a category; a shared
+  // value would leave the row order to TableGen record names.
+  std::map<int64_t, const Record *> baseOrdinals;
+  for (const auto *r : result) {
+    if (owner(r) != 0 || !r->getValue("ordinal"))
+      continue;
+    auto [found, inserted] = baseOrdinals.emplace(ordinal(r), r);
+    if (!inserted)
+      PrintFatalError(r, "duplicate base " + category + " ordinal " +
+                             Twine(ordinal(r)) + ": " +
+                             found->second->getName() + ", " + r->getName());
+  }
   stable_sort(result, [&](const Record *a, const Record *b) {
     auto left = owner(a), right = owner(b);
     if (left != right)

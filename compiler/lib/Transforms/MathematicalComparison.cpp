@@ -1,11 +1,12 @@
 #include "MathematicalComparison.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/RingExpression.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Algebra/RingExpression.h"
 #include "zkc/Dialect/Bindings.h"
+#include "zkc/Dialect/Kernel/IR/KernelOps.h"
 #include "zkc/Dialect/Local/IR/LocalOps.h"
 #include "zkc/Interfaces/Collection.h"
 #include "zkc/Support/Refusal.h"
@@ -23,6 +24,23 @@ using namespace mlir;
 using namespace llvm;
 namespace zkc::mathematical {
 namespace {
+// Read the actual admitted call target, including an owned numerical unit.
+// This reader never uses the producer's substituted callback or normalization.
+Operation *sourceCallee(Operation *op) {
+  if (auto call = dyn_cast<kernel::CallOp>(op)) {
+    if (auto policy = call.getPolicyAttr())
+      if (policy.size() != 3 || !isa<BoolAttr>(policy[0]) ||
+          !isa<BoolAttr>(policy[1]) || !isa<BoolAttr>(policy[2]) ||
+          !cast<BoolAttr>(policy[0]).getValue())
+        return nullptr;
+    SymbolTableCollection symbols;
+    return kernel::resolve(call, symbols);
+  }
+  auto reference = op->getAttrOfType<FlatSymbolRefAttr>("callee");
+  return reference ? SymbolTable::lookupNearestSymbolFrom(op, reference)
+                   : nullptr;
+}
+
 using Term = uint32_t;
 constexpr Term invalidTerm = UINT32_MAX;
 
@@ -646,11 +664,8 @@ class Comparison {
       Meaning result;
       // Calls are interpreted from actual retained bodies, with exact operand
       // assignments and a shared work/depth bound, including unused calls.
-      if (isa<func::CallOp, local::ApplyOp>(op)) {
-        auto callee = op.getAttrOfType<FlatSymbolRefAttr>("callee");
-        auto *helper = callee
-                           ? SymbolTable::lookupNearestSymbolFrom(&op, callee)
-                           : nullptr;
+      if (isa<func::CallOp, local::ApplyOp, kernel::CallOp>(op)) {
+        auto *helper = sourceCallee(&op);
         if (!helper || !isa<func::FuncOp, local::FuncOp>(helper) ||
             helper->getNumRegions() != 1 || !helper->getRegion(0).hasOneBlock())
           return {};
@@ -1232,10 +1247,8 @@ class ModuleComparison {
       if (!charge() || op.getNumRegions() || op.getNumResults() != 1)
         return 0;
       unsigned result = 0;
-      if (isa<func::CallOp, local::ApplyOp>(op)) {
-        auto ref = op.getAttrOfType<FlatSymbolRefAttr>("callee");
-        auto *helper =
-            ref ? SymbolTable::lookupNearestSymbolFrom(&op, ref) : nullptr;
+      if (isa<func::CallOp, local::ApplyOp, kernel::CallOp>(op)) {
+        auto *helper = sourceCallee(&op);
         if (!helper || !isa<func::FuncOp, local::FuncOp>(helper) ||
             helper->getNumRegions() != 1 || !helper->getRegion(0).hasOneBlock())
           return 0;

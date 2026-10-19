@@ -1,8 +1,8 @@
 #include "Checker.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
-#include "zkc/Contracts/Kernels.h"
 #include "zkc/Contracts/NativePolicy.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Relation.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Language/Layout.h"
@@ -53,6 +53,7 @@ std::optional<StringRef> exceededLimit(const Limits &limits,
   CHECK_LIMIT(notationDescriptors);
   CHECK_LIMIT(notationHoles);
   CHECK_LIMIT(notationInspectionBytes);
+  CHECK_LIMIT(apiInspectionBytes);
   CHECK_LIMIT(interfaceBytes);
   CHECK_LIMIT(locationBytes);
   CHECK_LIMIT(typeDepth);
@@ -614,7 +615,7 @@ std::string installedCatalogIdentity() {
          : intrinsic.domain == MathematicalIntrinsic::Domain::Group ? "group"
                                                                     : "field",
          intrinsic.scalar ? "scalar" : "intrinsic"});
-  for (const auto &kernel : protocol::kernels()) {
+  for (const auto &kernel : protocol::operationShapes()) {
     std::string value;
     detail::frame(value, "kernel");
     detail::frame(value, kernel.key);

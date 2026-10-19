@@ -2,7 +2,7 @@
 //! is preflighted; scalar draws retain consume-first output validation.
 use crate::kernels::arithmetic::{natural, reserve};
 use crate::{Policy, Result, Value, exhausted, refused, resource::Resources, value::size};
-use zkc_runtime::interactive::Invocation;
+use zkc_runtime::vm::Invocation;
 pub(crate) fn apply(
     name: &str,
     args: &[Value],
@@ -123,7 +123,7 @@ pub(crate) fn apply(
 /// Independent native port facts, also used for exact implementation assembly.
 pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
     use crate::bindings::{curve, random, transcript};
-    use zkc_runtime::interactive::{AttributeRule, Type::*};
+    use zkc_runtime::vm::{AttributeRule, Type::*};
     &[
         transcript::challenge(
             "transcript.observe",

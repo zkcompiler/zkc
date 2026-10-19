@@ -1,6 +1,6 @@
 #include "BundleInternal.h"
 #include "zkc/Contracts/Domains.h"
-#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
@@ -191,7 +191,8 @@ Expected<Presentation> presentation(StringRef field) {
     StringRef field, base;
     unsigned degree;
     StringRef nonresidue;
-  } extensions[] = {{"koala-bear.ext8-binomial3", "koala-bear", 8, "3"}};
+  } extensions[] = {{"koala-bear.ext8-binomial3", "koala-bear", 8, "3"},
+                    {"koala-bear.ext4-binomial3", "koala-bear", 4, "3"}};
   for (const auto &entry : extensions)
     if (entry.field == field &&
         catalog.hasFact("ExtensionField", {field.str()}) &&

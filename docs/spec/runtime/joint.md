@@ -64,7 +64,7 @@ nonnegative integer or null. Unknown or duplicate fields, floats, negative
 indices, missing fields and trailing JSON are refused. The candidate remains an
 exact embedded string, with no file resolution or sidecar. Runtime owns its
 positional decoding, static typing, installed-kernel admission and immutable
-custody. `Admitted::program_entry` supplies the action layout and resolved send
+custody. `Program::program_entry` supplies the action layout and resolved send
 operand types; Tools does not decode participant instructions separately.
 
 Installed ceilings and defaults are 16 MiB outer bytes, 4 MiB decoded candidate bytes, 1024 roles,
@@ -178,7 +178,7 @@ then release all endpoint leases through normal finalization.
 
 Scalar/group wire types use the exact default representations of the
 [structured native message grammar](../formats/messages.md): Boolean,
-BLS Fr/G1, BN254 Fr/G1/G2, KoalaBear base/ext8 and Ristretto scalar/group and prime-order Edwards25519.
+BLS Fr/G1, BN254 Fr/G1/G2, KoalaBear base/ext8/ext4, the binary fields GF(2^64) and GF(2^192), Ristretto scalar/group and prime-order Edwards25519.
 They reuse the installed `ZKCV` version-0 frames, including recursively nested
 sequences and variants. This bundle follows installed native codec support;
 proof deployment adds its own admission and authority checks.

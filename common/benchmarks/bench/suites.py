@@ -38,7 +38,7 @@ def prepare(args, output, capture, manifest):
     elif args.preset == 'execution':
         selected = [c for c in selected if not isinstance(c[1], Protocol)]
     elif args.preset == 'stark':
-        selected = [c for c in selected if c[1].name in ('air', 'fri', 'polynomial', 'extension', 'transcript', 'machine')]
+        selected = [c for c in selected if c[1].name in ('air', 'stark', 'fri', 'polynomial', 'extension', 'transcript', 'machine')]
     require(selected, 'selection contains no cases')
     if args.execution_counts:
         require(all(not isinstance(c[1], Protocol) for c in selected), 'execution counts require source workloads')
@@ -114,7 +114,8 @@ def compile_projects(args, output, capture, manifest, suites, journal):
         for i in range(args.processes):
             target = directory / f'{i}.zkpkg'
             record = journal.command([args.runtime, '--json', 'compile', f'--compiler={args.compiler}',
-                                      f'--project={project}', 'example::Proof', f'--output={target}'], cwd=root)
+                                      f'--project={project}', 'example::Proof', f'--output={target}',
+                                      *args.compiler_option], cwd=root)
             report = json.loads(Path(record['stdout']).read_text())
             require(report.get('status') == 'compiled', 'compilation did not publish a package')
             require(digest(target) == report['package_sha256'], 'published package identity mismatch')

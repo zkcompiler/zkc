@@ -1,0 +1,16 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"map_examples" = "map-callers.zkc"
+
+["dependencies"]
+"primitive-collections" = "../../../../libraries/core/primitives/collections"
+"primitive-algebra" = "../../../../libraries/core/primitives/algebra"
+"primitive-polynomial" = "../../../../libraries/core/primitives/polynomial"
+"primitive-cryptography" = "../../../../libraries/core/primitives/cryptography"
+"traversal" = "../../../../libraries/core/traversal"
+"collections" = "../../../../libraries/core/collections"
+"algebra" = "../../../../libraries/core/algebra"
+"polynomial" = "../../../../libraries/core/polynomial"
+"encoding" = "../../../../libraries/core/encoding"
+"services" = "../../../../libraries/core/services"

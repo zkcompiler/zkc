@@ -1,0 +1,16 @@
+module sumcheck_claim;
+domain Fr = field("bls12-381.fr");
+
+math fn weighted(value: Fr, weight: Fr) -> Fr {
+  return weight * value;
+}
+
+math fn claim(a0: Fr, a1: Fr, r: Fr) -> Fr {
+  return weighted(a0, 1 - r) + weighted(a1, r);
+}
+
+protocol Claim roles(P)(a0: Fr@P, a1: Fr@P, r: Fr@P) -> (claim: Fr@P) {
+  return claim(a0, a1, r);
+}
+
+run Run = Claim;

@@ -4,7 +4,7 @@ use serde_json::Value as Json;
 use std::{collections::BTreeMap, path::Path};
 use zkc_backends::services::ServiceRegistry;
 use zkc_backends::{Domain, EntryPolicy, FieldArray, NativeBackend, Policy, Scalar, Value};
-use zkc_runtime::interactive::{Identity, LogicalType, ProgramAction};
+use zkc_runtime::vm::{Identity, LogicalType, ProgramAction};
 use zkc_tools::run::*;
 
 #[derive(Deserialize)]

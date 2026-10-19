@@ -87,6 +87,16 @@ jobs:
             .#checks.x86_64-linux.sources \
             .#checks.x86_64-linux.format \
             2>&1 | tee build/reports/native-checks.log
+      - name: Execute affected protocol families with invalid-input controls
+        if: steps.changes.outputs.native == 'true'
+        env:
+          SMOKE_CHECKS: ${{ steps.changes.outputs.smoke }}
+        run: |
+          read -ra checks <<< "$SMOKE_CHECKS"
+          if (( ${#checks[@]} )); then
+            nix build -L --keep-going --no-link "${checks[@]}" \
+              2>&1 | tee build/reports/protocol-smoke.log
+          fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always() && steps.changes.outputs.native == 'true'
         with:

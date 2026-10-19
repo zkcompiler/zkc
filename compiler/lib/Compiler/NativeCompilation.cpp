@@ -55,16 +55,21 @@ Expected<OwningOpRef<ModuleOp>> parseNativeSource(StringRef text,
 LogicalResult lowerProgram(ModuleOp module, bool simplify, bool fixPolynomials,
                            bool releaseStorage,
                            MathematicalSelectionPolicy mathematicalSelection,
-                           LinearContractionStats &statistics) {
+                           LinearContractionStats &statistics,
+                           json::Array *stages = nullptr) {
   PassManager pipeline(module.getContext());
+  auto add = [&](std::unique_ptr<Pass> pass) {
+    if (stages)
+      stages->push_back(pass->getArgument().str());
+    pipeline.addPass(std::move(pass));
+  };
   if (simplify)
-    pipeline.addPass(protocol::createSimplifyParticipantPass());
+    add(protocol::createSimplifyParticipantPass());
   if (fixPolynomials)
-    pipeline.addPass(protocol::createFixPolynomialFactorsPass());
-  pipeline.addPass(protocol::createEliminatePolynomialsPass());
-  pipeline.addPass(protocol::createLowerMathPass(mathematicalSelection));
-  pipeline.addPass(protocol::createSelectPhysicalPass({}, false, releaseStorage,
-                                                      &statistics));
+    add(protocol::createFixPolynomialFactorsPass());
+  add(protocol::createLowerMathPass(mathematicalSelection));
+  add(protocol::createSelectPhysicalPass({}, false, releaseStorage,
+                                         &statistics));
   return pipeline.run(module);
 }
 } // namespace
@@ -126,9 +131,11 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
       return diagnostics.failure(error("polynomial-correspondence-entry"));
     correspondence = std::move(*checked);
   }
+  json::Array loweringStages;
   if (failed(lowerProgram(*result->module, options.simplify,
                           options.fixPolynomialFactors, options.releaseStorage,
-                          options.mathematicalSelection, result->statistics)) ||
+                          options.mathematicalSelection, result->statistics,
+                          &loweringStages)) ||
       diagnostics.hasErrors())
     return diagnostics.failure();
   auto bundle =
@@ -153,17 +160,12 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
     object["finite_bulk"] = options.mathematicalSelection.finiteBulk;
     object["fuse_vector_reductions"] =
         options.mathematicalSelection.vectorReductionFusion;
+    object["fuse_collect_fold"] =
+        options.mathematicalSelection.collectFoldFusion;
+    object["calculation_batching"] =
+        options.mathematicalSelection.calculationBatching;
     object["fix_polynomial_factors"] = options.fixPolynomialFactors;
-    json::Array passes;
-    if (options.simplify) {
-      passes.push_back("zkc-simplify-participant");
-    }
-    if (options.fixPolynomialFactors)
-      passes.push_back("zkc-fix-polynomial-factors");
-    passes.push_back("zkc-eliminate-polynomials");
-    passes.push_back("zkc-lower-math");
-    passes.push_back("zkc-select-physical");
-    object["post_check_passes"] = std::move(passes);
+    object["post_check_passes"] = json::Array(loweringStages);
     // Bind every checked entry from the same final module, including a
     // composed caller when a standalone component is the selected output.
     json::Object hashes;
@@ -193,30 +195,28 @@ Expected<CompiledRun> compileRun(StringRef text, StringRef filename,
     auto digest = [](StringRef value) {
       return llvm::toHex(SHA256::hash(arrayRefFromStringRef(value)), true);
     };
-    json::Value record(
-        json::Object{{"format", "zkc.compiled-public-coin/0"},
-                     {"view", std::move(*publicCoin)},
-                     {"source_sha256", digest(text)},
-                     {"bundle_sha256", digest(*bundle)},
-                     {"simplify", options.simplify},
-                     {"release_storage", options.releaseStorage},
-                     {"finite_bulk", options.mathematicalSelection.finiteBulk},
-                     {"fuse_vector_reductions",
-                      options.mathematicalSelection.vectorReductionFusion},
-                     {"fix_polynomial_factors", options.fixPolynomialFactors}});
+    json::Value record(json::Object{
+        {"format", "zkc.compiled-public-coin/0"},
+        {"view", std::move(*publicCoin)},
+        {"source_sha256", digest(text)},
+        {"bundle_sha256", digest(*bundle)},
+        {"simplify", options.simplify},
+        {"release_storage", options.releaseStorage},
+        {"finite_bulk", options.mathematicalSelection.finiteBulk},
+        {"fuse_vector_reductions",
+         options.mathematicalSelection.vectorReductionFusion},
+        {"fuse_collect_fold", options.mathematicalSelection.collectFoldFusion},
+        {"calculation_batching",
+         options.mathematicalSelection.calculationBatching},
+        {"fix_polynomial_factors", options.fixPolynomialFactors}});
     // Describe semantic pipeline stages with their public pass names. This is
     // not a PassManager execution trace: preparation is implicit here, and
     // projection consumes the privately owned prepared subject above.
     json::Array passes;
     passes.push_back("zkc-prepare-protocol");
     passes.push_back("zkc-project-protocol");
-    if (options.simplify)
-      passes.push_back("zkc-simplify-participant");
-    if (options.fixPolynomialFactors)
-      passes.push_back("zkc-fix-polynomial-factors");
-    passes.push_back("zkc-eliminate-polynomials");
-    passes.push_back("zkc-lower-math");
-    passes.push_back("zkc-select-physical");
+    for (auto &stage : loweringStages)
+      passes.push_back(stage);
     (*record.getAsObject())["post_analysis_passes"] = std::move(passes);
     (*record.getAsObject())["projection_simplify"] =
         !options.polynomialRequirements && options.simplify;
@@ -330,11 +330,14 @@ compileNativeProof(StringRef text, StringRef filename,
   json::Value deployment(json::Array{
       "zkc.native-proof/0", digest(text), constructed->descriptor,
       digest(*descriptorBytes), candidate, digest(candidate), std::move(maps),
-      json::Array{options.simplify ? "true" : "false",
-                  options.releaseStorage ? "true" : "false",
-                  options.mathematicalSelection.vectorReductionFusion ? "true"
-                                                                      : "false",
-                  options.mathematicalSelection.finiteBulk ? "true" : "false"},
+      json::Array{
+          options.simplify ? "true" : "false",
+          options.releaseStorage ? "true" : "false",
+          options.mathematicalSelection.vectorReductionFusion ? "true"
+                                                              : "false",
+          options.mathematicalSelection.finiteBulk ? "true" : "false",
+          options.mathematicalSelection.collectFoldFusion ? "true" : "false",
+          options.mathematicalSelection.calculationBatching ? "true" : "false"},
       json::Array(constructed->wireSites)});
   auto encoded = printJson(deployment);
   if (encoded.size() > 16 * 1024 * 1024)

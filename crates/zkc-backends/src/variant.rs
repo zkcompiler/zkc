@@ -2,7 +2,7 @@
 //! never issues authority and frame admission still authenticates every leaf.
 use crate::{Result, Value, refused};
 use std::sync::Arc;
-use zkc_runtime::interactive::{Backing, PhysicalType, Value as RuntimeValue, VariantDescriptor};
+use zkc_runtime::vm::{Backing, PhysicalType, Value as RuntimeValue, VariantDescriptor};
 
 #[derive(Clone, Debug)]
 pub struct Variant {
@@ -22,10 +22,9 @@ impl Variant {
         alternative: usize,
         payload: Vec<Value>,
     ) -> Result<Self> {
-        let physical_type = PhysicalType::default_for(
-            zkc_runtime::interactive::LogicalType::variant(descriptor.clone()),
-        )
-        .map_err(|_| refused("variant-payload-representation"))?;
+        let physical_type =
+            PhysicalType::default_for(zkc_runtime::vm::LogicalType::variant(descriptor.clone()))
+                .map_err(|_| refused("variant-payload-representation"))?;
         let inline = payload.iter().try_fold(0usize, |sum, value| {
             sum.checked_add(value.retained_parts(&mut |_| false))
         });

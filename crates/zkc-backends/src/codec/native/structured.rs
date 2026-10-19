@@ -3,7 +3,7 @@
 //! payload value is constructed. Descriptors never come from message bytes.
 use super::{NativeWireError as Error, unsupported};
 use crate::{NativeBackend, Policy, Value};
-use zkc_runtime::interactive::{DecodeReason, PhysicalType, Type, Value as RuntimeValue};
+use zkc_runtime::vm::{DecodeReason, PhysicalType, Type, Value as RuntimeValue};
 
 type Result<T> = std::result::Result<T, Error>;
 pub(super) fn add(a: usize, b: usize) -> Result<usize> {
@@ -15,7 +15,7 @@ pub(super) fn mul(a: usize, b: usize) -> Result<usize> {
 pub(super) fn invalid(reason: DecodeReason) -> Error {
     Error::Invalid(reason)
 }
-fn physical(ty: &zkc_runtime::interactive::LogicalType) -> Result<PhysicalType> {
+fn physical(ty: &zkc_runtime::vm::LogicalType) -> Result<PhysicalType> {
     PhysicalType::default_for(ty.clone()).map_err(|_| unsupported())
 }
 pub(super) fn tag(ty: &PhysicalType) -> Option<u8> {
@@ -255,9 +255,9 @@ pub(super) fn encode(
     let mut counts = Counts::default();
     let retained = scan(&value.physical_type(), &out, policy, key, &mut counts).map_err(
         |error| match error {
-            Error::Invalid(_) => Error::Backend(zkc_runtime::interactive::BackendError::new(
-                "native-wire-value",
-            )),
+            Error::Invalid(_) => {
+                Error::Backend(zkc_runtime::vm::BackendError::new("native-wire-value"))
+            }
             other => other,
         },
     )?;

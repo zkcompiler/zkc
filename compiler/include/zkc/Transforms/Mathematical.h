@@ -58,13 +58,13 @@ mlir::LogicalResult verifyPolynomialRecipesPreserved(mlir::ModuleOp original,
                                                      mlir::ModuleOp candidate);
 mlir::LogicalResult expandPolynomialRecipes(mlir::ModuleOp module);
 
-/// Realize admitted data-signature math helpers through the common polynomial
-/// and calculation lowerers. Calls remain ordered and expand with local.apply.
+/// Form owned logical Kernel closures for admitted data-signature helpers.
+/// Local wrappers retain ordered calls and their original logical origins.
 mlir::LogicalResult expandMathRealizations(
     mlir::ModuleOp module, MathematicalSelectionPolicy policy = {},
     RealizationWork *work = nullptr, RealizationTrace *trace = nullptr);
-/// Structural containment check, not an independent proof of the math lowerers.
-/// Checks retained declarations, data-only recipes and binding accounting.
+/// Independently compare the original helper/domain closure with the actual
+/// logical unit and exact wrapper operands, returns and occurrence inventory.
 mlir::LogicalResult verifyMathRealizationsPreserved(mlir::ModuleOp original,
                                                     mlir::ModuleOp candidate);
 
@@ -92,7 +92,8 @@ llvm::Error checkMapFormulas(mlir::ModuleOp original, uint64_t &remaining);
 // frozen and verify both subjects before calling. Preparation and projection
 // use virtual substitutions and role-indexed value terms; participant rewrites
 // use explicit Boolean/polynomial laws. Participant -> Exec separately checks
-// demand placement and recipes. Exec -> Physical checks participant data flow
+// demand placement and Kernel formation. Kernel realization has its own
+// correspondence check. Exec -> Physical checks participant data flow
 // and projection metadata only; it does not validate local materialization.
 // Use protocol::lowerPhysical or SelectPhysical for the complete checked edge;
 // their internal materialization check also covers local bodies and bindings.
@@ -104,8 +105,11 @@ llvm::Error checkMapFormulas(mlir::ModuleOp original, uint64_t &remaining);
 // ignoring locations and SSA names. Materialization and storage rewrites use
 // their dedicated checks. Skipped or backward edges refuse. Executable inputs
 // without projection records acquire no common-source claim.
-mlir::LogicalResult verifyProjectionPreserved(mlir::ModuleOp original,
-                                              mlir::ModuleOp candidate);
+/// Lowering of participant mathematics is checked against the calculation
+/// schedule of `policy`.
+mlir::LogicalResult
+verifyProjectionPreserved(mlir::ModuleOp original, mlir::ModuleOp candidate,
+                          MathematicalSelectionPolicy policy = {});
 mlir::LogicalResult verifyProtocolPreparationPreserved(mlir::Operation *before,
                                                        mlir::Operation *after);
 mlir::LogicalResult verifyAuthoredLocalsPreserved(mlir::Operation *before,

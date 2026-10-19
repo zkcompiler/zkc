@@ -2,7 +2,7 @@
 #define ZKC_RELATION_FIELD_H
 
 #include "zkc/Contracts/Domains.h"
-#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/SmallString.h"

@@ -11,8 +11,8 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Option<Result<Vec<u8>>> 
     };
     Some((|| {
         match value {
-            Value::Bn254G1Vector(_) => policy.bn254_groups::<G1>(count)?,
-            Value::Bn254G2Vector(_) => policy.bn254_groups::<G2>(count)?,
+            Value::Bn254G1Vector(_) => policy.typed_groups::<G1>(count)?,
+            Value::Bn254G2Vector(_) => policy.typed_groups::<G2>(count)?,
             _ => policy.vector(count)?,
         }
         let length = count

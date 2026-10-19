@@ -2,7 +2,7 @@
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Implementations.h"
-#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Contracts/Variant.h"

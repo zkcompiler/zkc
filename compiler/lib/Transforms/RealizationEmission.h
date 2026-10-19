@@ -3,7 +3,6 @@
 
 #include "mlir/IR/Builders.h"
 #include "zkc/Contracts/Binding.h"
-#include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "llvm/ADT/StringSet.h"
 #include <map>
 #include <tuple>
@@ -15,11 +14,13 @@ namespace zkc::mathematical {
 /// emitted by this instance are deduplicated, including their exact pins.
 ///
 /// The caller owns occurrence spelling, insertion points and candidate
-/// publication. The candidate must undergo resolved-contract verification and
-/// independent correspondence checking before publication. Readers must not
-/// use this producer to reconstruct their expected operations.
+/// publication. The owner must be a symbol table with one region and one block;
+/// emitted uses must resolve their bindings in that table. The candidate must
+/// undergo resolved-contract verification and independent correspondence
+/// checking before publication. Readers must not use this producer to
+/// reconstruct their expected operations.
 class RealizationEmitter {
-  protocol_ir::ProtocolModuleOp unit;
+  mlir::Operation *unit;
   std::string prefix;
   llvm::StringSet<> names;
   unsigned next = 0;
@@ -30,8 +31,7 @@ class RealizationEmitter {
                                   const protocol::BindingApplication &);
 
 public:
-  RealizationEmitter(protocol_ir::ProtocolModuleOp candidate,
-                     llvm::StringRef bindingPrefix);
+  RealizationEmitter(mlir::Operation *candidate, llvm::StringRef bindingPrefix);
 
   mlir::Operation *emit(mlir::OpBuilder &, mlir::Location, llvm::StringRef site,
                         const protocol::BindingApplication &,

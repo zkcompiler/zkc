@@ -1,0 +1,13 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"zkc::encoding" = "encoding.zkc"
+"zkc::oracle" = "oracle.zkc"
+"zkc::permutation" = "permutation.zkc"
+"zkc::shake128" = "shake128.zkc"
+"zkc::transcript" = "transcript.zkc"
+"zkc::primitives::hash" = "hash.zkc"
+
+["dependencies"]
+"primitive-algebra" = "../algebra"
+"primitive-collections" = "../collections"

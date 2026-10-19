@@ -1,6 +1,6 @@
 use super::support::*;
 use zkc_backends::{Policy, RistrettoScalar, Scalar, Value};
-use zkc_runtime::interactive::{Backend, PhysicalType, Representation, Value as RuntimeValue};
+use zkc_runtime::vm::{Backend, PhysicalType, Representation, Value as RuntimeValue};
 #[test]
 fn new_codecs_are_domain_distinct_exact_and_canonical() {
     let backend = backend(Policy::default());

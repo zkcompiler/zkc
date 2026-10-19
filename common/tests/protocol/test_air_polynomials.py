@@ -10,7 +10,7 @@ import pytest
 from octic_reference import P, ONE, ZERO, add, mul, power
 
 ROOT = Path(__file__).resolve().parents[3]
-LIBRARY = ROOT / 'libraries/air/polynomial.zkc'
+LIBRARY = ROOT / 'libraries/relations/air/polynomial.zkc'
 SHIFT = [3, 1, 0, 0, 0, 0, 0, 0]
 CLIENT = '''module example;
 use zkc::vector::{Vector, transpose};
@@ -81,7 +81,7 @@ def test_scope_polynomials_on_intersecting_cosets(toolchain, journal, directory,
     source.write_text(SCOPE_CLIENT)
     package = directory / 'scope.zkpkg'
     report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                           f'--module=example={source}', *library_modules('air'),
+                           f'--module=example={source}', *library_modules('relations/air'),
                            'example::Demo', f'--output={package}', *flags])
     height = 8
     subgroup = points(height)
@@ -108,7 +108,7 @@ def test_scope_polynomials_and_column_extensions(toolchain, journal, directory, 
     source.write_text(CLIENT)
     package = directory / 'math.zkpkg'
     report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                           f'--module=example={source}', *library_modules('air'),
+                           f'--module=example={source}', *library_modules('relations/air'),
                            'example::Demo', f'--output={package}', *flags])
     pin = report['package_sha256']
     for height, size in [(8, 32), (16, 64)]:

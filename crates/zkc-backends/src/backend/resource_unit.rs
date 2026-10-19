@@ -2,8 +2,8 @@
 //! and transcript capabilities.
 use super::NativeBackend;
 use crate::{Result, Value, refused};
-use zkc_runtime::interactive::{
-    AttributeRule, BoundSignature, Invocation, KernelSignature, LogicalType, OperationBinding,
+use zkc_runtime::vm::{
+    AttributeRule, BoundSignature, Invocation, LogicalType, OperationBinding, OperationSignature,
     PhysicalType,
 };
 pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
@@ -14,7 +14,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         return None;
     }
     let ty = PhysicalType::default_for(LogicalType::resource_unit(
-        zkc_runtime::interactive::ResourceDomain::parse(domain).ok()?,
+        zkc_runtime::vm::ResourceDomain::parse(domain).ok()?,
     ))
     .ok()?;
     let (inputs, outputs) = match binding.contract.as_str() {
@@ -23,7 +23,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         "resource_unit.consume" => (vec![ty], vec![]),
         _ => return None,
     };
-    Some(KernelSignature {
+    Some(OperationSignature {
         inputs,
         outputs,
         attributes: AttributeRule::None,

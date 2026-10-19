@@ -4,7 +4,7 @@
 use std::{collections::BTreeMap, path::Path};
 use zkc_backends::services::{ServiceObservation, ServiceReference, ServiceRegistry};
 use zkc_backends::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
-use zkc_runtime::interactive::{CutKind, DecodeReason, ServiceContract};
+use zkc_runtime::vm::{CutKind, DecodeReason, ServiceContract};
 use zkc_tools::run::*;
 
 fn backend(role: &str, session: &str, entry: &str) -> NativeBackend {

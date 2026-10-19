@@ -12,9 +12,12 @@ A local definition contains ordered primitive operations, role-free applications
 `local.apply` names a closed local definition and supplies its ordered argument
 and result types. The mathematical profile also permits
 [data-only helper realization](protocols.md#executable-local-calls-and-type-use);
-preparation materializes it before expansion. No unresolved helper or static
-selection enters the executable. `.zkc` static checking belongs to the
-[Language profile](../language/README.md).
+preparation forms an owned [Kernel unit](kernel.md) and an ordered Local wrapper
+before expansion. Numerical realization and physical selection share a
+[checked plan](../../compiler/representation.md#checked-physical-decisions),
+which retains the original Kernel subject until publication. No unresolved
+helper or static selection enters the executable. `.zkc` static checking belongs
+to the [Language profile](../language/README.md).
 
 The local call graph, including unused definitions, is acyclic and has at most
 64 edges on a path. Captures are explicit; declaration order does not supply

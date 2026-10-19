@@ -24,7 +24,7 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] =
     &[crate::backend::registry::Alternative {
         identity: "arkworks-pairwise/vector.dot",
         original: "arkworks/vector.dot",
-        primary: zkc_runtime::interactive::Identity::Bls12381Fr,
+        primary: zkc_runtime::vm::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Default,
         handler: Some(crate::backend::registry::pairwise),
         deterministic: true,

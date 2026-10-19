@@ -1,5 +1,5 @@
-#include "zkc/Contracts/Kernels.h"
 #include "zkc/Contracts/NativeOrigin.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "llvm/Support/raw_ostream.h"
 using namespace llvm;
 using namespace zkc::protocol;

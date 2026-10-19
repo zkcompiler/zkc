@@ -6,14 +6,14 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
-include "zkc/Dialect/Kernels.td"
+include "zkc/Dialect/BoundOperations.td"
 
-def PCSCheckOp : KernelOp<PCSDialect, "exec.check", [OpPcsCheck]>;
+def PCSCheckOp : BoundOp<PCSDialect, "exec.check", [OpPcsCheck]>;
 
-def PCSCommitOp : KernelOp<PCSDialect, "exec.commit", [OpPcsCommit]>;
+def PCSCommitOp : BoundOp<PCSDialect, "exec.commit", [OpPcsCommit]>;
 
-def PCSEqualOp : KernelOp<PCSDialect, "exec.equal", [OpPcsEqual]>;
+def PCSEqualOp : BoundOp<PCSDialect, "exec.equal", [OpPcsEqual]>;
 
-def PCSOpenOp : KernelOp<PCSDialect, "exec.open", [OpPcsOpen]>;
+def PCSOpenOp : BoundOp<PCSDialect, "exec.open", [OpPcsOpen]>;
 
 #endif

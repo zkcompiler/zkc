@@ -6,8 +6,6 @@ public import ZkcSecurity.VCVio.Schnorr
 public import ZkcSecurity.ArkLib.Sumcheck.Soundness
 
 @[expose] public section
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 
 namespace ZkcSecurity.Examples.Variants
 open ZkcExamples.NativePrograms Zkc.Verification

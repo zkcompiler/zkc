@@ -1,6 +1,6 @@
 #include "MathematicalValues.h"
+#include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Dialect/Mathematical.h"
-#include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "llvm/ADT/StringMap.h"
 #include <set>
 

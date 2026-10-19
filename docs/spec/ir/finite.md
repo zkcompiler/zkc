@@ -138,6 +138,11 @@ executes once, after every collected body has succeeded. It is not implicitly
 streamed: a later map failure must precede a reducer failure that would have
 occurred on the first item.
 
+For total numerical computations, the explicit
+[collect–fold realization](kernel.md#collectfold-composition) can eliminate a
+private field vector or field sequence when both callbacks and every collection use meet its
+checked composition rules. Partial Local computations retain the order above.
+
 ## Total bounds and formation
 
 `data.bounded_at(container, index)` and
@@ -197,6 +202,11 @@ from result dependencies. Consumers that clone a complete operation retain all
 operand dependencies until a checked decomposition supports narrower cloning.
 
 ## Realization and checking
+
+Total finite expressions and their actual helper/domain dependencies may remain
+inside [logical Kernel units](kernel.md). Their canonical and bulk recipes are
+selected during checked Kernel realization. Ordered Local finite declarations
+retain their existing partial-control contract and preparation path.
 
 Finite structure remains available through ordinary helper expansion. Recognizers
 inspect helper bodies and native contract identities. A recognition miss uses

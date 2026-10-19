@@ -1,12 +1,15 @@
-format = "zkc.project/0"
+"format" = "zkc.project/0"
 
-[modules]
+["modules"]
 "air_stark_example" = "main.zkc"
 
-[dependencies]
-stark = "../../../../../libraries/stark"
-fri = "../../../../../libraries/fri"
+["dependencies"]
+"stark-octic" = "../../../../../libraries/arguments/stark/configurations/koala_bear_octic"
+"stark-octic-table" = "../../../../../libraries/arguments/stark/single_table/koala_bear_octic"
+"core-collections" = "../../../../../libraries/core/collections"
 
-[assets.recurrence]
-format = "relation-bundle-json"
-path = "../../../../../compiler/adapters/plonky3/fixtures/recurrence/bundle.json"
+["assets"]
+
+["assets"."recurrence"]
+"format" = "relation-bundle-json"
+"path" = "../../../../../compiler/adapters/plonky3/fixtures/recurrence/bundle.json"

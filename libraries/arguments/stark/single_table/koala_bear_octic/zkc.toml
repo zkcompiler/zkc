@@ -1,0 +1,14 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"stark::octic_table" = "lib.zkc"
+
+["dependencies"]
+"stark-octic" = "../../configurations/koala_bear_octic"
+"stark-sampling" = "../../sampling"
+"algebra" = "../../../../core/algebra"
+"collections" = "../../../../core/collections"
+"polynomial" = "../../../../core/polynomial"
+"primitive-cryptography" = "../../../../core/primitives/cryptography"
+"fri" = "../../../../protocols/polynomial/fri"
+"air" = "../../../../relations/air"

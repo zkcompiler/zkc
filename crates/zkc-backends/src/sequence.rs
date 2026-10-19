@@ -1,9 +1,9 @@
 //! Immutable nested data. Charges count the expanded value, even with Arc aliases.
 use crate::{Policy, Result, Value, exhausted, refused};
 use std::sync::Arc;
-use zkc_runtime::interactive::{
-    AttributeRule, Backing, BoundSignature, Invocation, KernelSignature, LogicalType,
-    OperationBinding, PhysicalType, Retained, Value as RuntimeValue,
+use zkc_runtime::vm::{
+    AttributeRule, Backing, BoundSignature, Invocation, LogicalType, OperationBinding,
+    OperationSignature, PhysicalType, Retained, Value as RuntimeValue,
 };
 
 const _: () = assert!(std::mem::size_of::<Value>() <= 512);
@@ -486,7 +486,7 @@ pub(crate) fn signature(binding: &OperationBinding) -> Option<BoundSignature> {
         "sequence.at" => (vec![sequence, index], vec![element]),
         _ => return None,
     };
-    Some(KernelSignature {
+    Some(OperationSignature {
         inputs,
         outputs,
         attributes: AttributeRule::None,

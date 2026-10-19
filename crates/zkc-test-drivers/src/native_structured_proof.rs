@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, path::Path};
 use zkc_backends::{
     Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value, Variant,
 };
-use zkc_runtime::interactive::{LogicalType, Value as RuntimeValue, admit_supplied};
+use zkc_runtime::vm::{LogicalType, Value as RuntimeValue};
 use zkc_test_support::hex;
 use zkc_test_support::variants::logical;
 use zkc_tools::proof::NativeDeployment;
@@ -463,7 +463,12 @@ fn standalone(directory: &Path, name: &str, kind: &str, envelope: &Json, bytes: 
     assert_eq!(&proof[40..48], &(expected.len() as u64).to_le_bytes());
     assert_eq!(&proof[48..], &expected);
     // Unknown deployment formats refuse before message-type interpretation.
-    admit_supplied(envelope[4].as_str().unwrap().as_bytes(), &backend()).unwrap();
+    zkc_runtime::vm::Program::decode(envelope[4].as_str().unwrap().as_bytes())
+        .and_then(|program| {
+            program.check_installation(&backend())?;
+            Ok(program)
+        })
+        .unwrap();
     let mut changed = envelope.clone();
     changed[0] = json!("invalid.native-proof");
     let changed = serde_json::to_vec(&changed).unwrap();

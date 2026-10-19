@@ -1,6 +1,6 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
-#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
@@ -85,12 +85,24 @@ constexpr ExpectedMapping expected[] = {
     {"encoding.field_le", "crypto.exec.encoding_field_le"},
     {"encoding.field_from_le", "crypto.exec.encoding_field_from_le"},
     {"encoding.field_reduce_le", "crypto.exec.encoding_field_reduce_le"},
+    {"encoding.fields_from_le", "crypto.exec.encoding_fields_from_le"},
+    {"encoding.field_montgomery_le",
+     "crypto.exec.encoding_field_montgomery_le"},
+    {"encoding.field_from_montgomery_le",
+     "crypto.exec.encoding_field_from_montgomery_le"},
+    {"encoding.fields_montgomery_le",
+     "crypto.exec.encoding_fields_montgomery_le"},
+    {"encoding.fields_from_montgomery_le",
+     "crypto.exec.encoding_fields_from_montgomery_le"},
     {"encoding.group_decode_cofactor",
      "crypto.exec.encoding_group_decode_cofactor"},
     {"encoding.cryptonote_map", "crypto.exec.encoding_cryptonote_map"},
     {"hash.keccak256", "crypto.exec.keccak256"},
+    {"hash.sha256", "crypto.exec.sha256"},
+    {"hash.poseidon2_16", "crypto.exec.poseidon2_16"},
     {"encoding.index_uleb128", "data.exec.encoding_index_uleb128"},
     {"encoding.fields_be", "crypto.exec.encoding_fields_be"},
+    {"encoding.fields_from_be", "crypto.exec.encoding_fields_from_be"},
     {"encoding.fields_le", "crypto.exec.encoding_fields_le"},
     {"encoding.groups_compressed", "crypto.exec.encoding_groups_compressed"},
     {"encoding.field_be", "crypto.exec.encoding_field_be"},
@@ -120,6 +132,8 @@ constexpr ExpectedMapping expected[] = {
     {"vector.transpose", "algebra.exec.vector_transpose"},
     {"vector.length", "algebra.exec.vector_length"},
     {"vector.rotate", "algebra.exec.vector_rotate"},
+    {"vector.bit_reverse", "algebra.exec.vector_bit_reverse"},
+    {"vector.bit_reverse_rows", "algebra.exec.vector_bit_reverse_rows"},
     {"vector.interleave", "algebra.exec.vector_interleave"},
     {"vector.prefix_product", "algebra.exec.vector_prefix_product"},
     {"vector.prefix_sum", "algebra.exec.vector_prefix_sum"},
@@ -212,6 +226,8 @@ constexpr ExpectedMapping expected[] = {
     {"oracle.commit", "oracle.exec.commit"},
     {"oracle.open", "oracle.exec.open"},
     {"oracle.check", "oracle.exec.check"},
+    {"oracle.open_many", "oracle.exec.open_many"},
+    {"oracle.check_many", "oracle.exec.check_many"},
     {"commitments.empty", "oracle.exec.commitments_empty"},
     {"sequence.empty", "data.exec.sequence_empty"},
     {"sequence.append", "data.exec.sequence_append"},
@@ -246,7 +262,7 @@ constexpr ExpectedMapping expected[] = {
 
 void identities(MLIRContext &context) {
   llvm::StringSet<> installed, covered;
-  for (const auto &kernel : protocol::kernels())
+  for (const auto &kernel : protocol::operationShapes())
     check(installed.insert(kernel.key).second, "duplicate installed contract");
   for (const auto &row : expected) {
     check(covered.insert(row.contract).second, "duplicate expected contract");
@@ -266,7 +282,7 @@ void identities(MLIRContext &context) {
           "wrong operation-side association: " + row.operation + " / " +
               other.contract);
   }
-  for (const auto &kernel : protocol::kernels())
+  for (const auto &kernel : protocol::operationShapes())
     check(covered.contains(kernel.key),
           "missing independent oracle: " + kernel.key);
 

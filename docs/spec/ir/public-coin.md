@@ -101,8 +101,9 @@ static application admission refuses a callee that contains a statement.
   indices. `decision_dependencies` lists the selected decision's anchors.
 - `statement_inputs`, `bound_non_statement_inputs`, and
   `prover_unavailable_bound_inputs`, each in increasing port order.
-- `finite_bulk` and `fuse_vector_reductions`: Boolean choices from the supplied
-  `MathematicalSelectionPolicy`, defaulting to true and false respectively.
+- `finite_bulk`, `fuse_vector_reductions` and `fuse_collect_fold`: Boolean choices
+  from the supplied `MathematicalSelectionPolicy`; finite bulk defaults to true
+  and both fusion choices to false.
 - `source_ir_sha256`, `prepared_ir_sha256`, and `requirement_sha256`.
   The prepared identity hashes the unsimplified subject prepared using those
   exact selection choices, including when a choice has no eligible operation.
@@ -124,7 +125,7 @@ supplied selection policy, then compares JSON values exactly after checking
 integer tokens, Unicode escapes and
 key uniqueness. Whitespace and object-key order are immaterial; floating-point
 spellings are not accepted. No supplied report fact is trusted; additional keys
-are refused too. A supplied report cannot select its own policy. Both policy
+are refused too. A supplied report cannot select its own policy. All three policy
 fields are required even when different policies yield identical prepared IR.
 Neither API checks an arbitrary transformed program.
 
@@ -135,7 +136,7 @@ projection. Its entry must equal the compiled entry. Ordinary projection,
 simplification and lowering remain trusted/tested compiler passes.
 `CompiledRun.publicCoin` returns `zkc.compiled-public-coin/0`, containing
 `view`, exact input-text `source_sha256`, emitted `bundle_sha256`, and the
-`simplify`, `release_storage`, `fuse_vector_reductions`, `finite_bulk`,
+`simplify`, `release_storage`, `fuse_vector_reductions`, `finite_bulk`, `fuse_collect_fold`,
 `fix_polynomial_factors`
 options, the actual `projection_simplify` setting and ordered
 `post_analysis_passes`. The compiler
@@ -150,8 +151,9 @@ The compiled report lists `zkc-prepare-protocol` before projection in
 `post_analysis_passes`; analysis independently prepares its owned copy too.
 It is independent of participant simplification and storage release. Polynomial
 correspondence compilation and `checkPolynomialReductions` forward the same
-mathematical selection policy and record `fuse_vector_reductions` and
-`finite_bulk` in the correspondence report. `protocol-check-reductions` accepts the matching option for comparison
+mathematical selection policy and record `fuse_vector_reductions`,
+`finite_bulk` and `fuse_collect_fold` in the correspondence report.
+`protocol-check-reductions` accepts the matching options for comparison
 with a supplied candidate. A report does not make local fusion a Fiat–Shamir
 reduction or general resource-preservation theorem.
 
@@ -163,7 +165,8 @@ zkc-compile protocol-check-public-coin source.mlir requirement.json view.json
 zkc-compile protocol-checked-bundle source.mlir --public-coin=requirement.json
 ```
 
-All three commands accept `--no-finite-bulk` and `--fuse-vector-reductions`.
+All three commands accept `--no-finite-bulk`, `--fuse-vector-reductions` and
+`--fuse-collect-fold`.
 Standalone analysis and checking accept each option at most once, after their
 positional arguments. When checking a view from a nondefault compilation,
 supply the same choices independently on the checking command.

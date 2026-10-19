@@ -1,0 +1,14 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"air" = "lib.zkc"
+"air::polynomial" = "polynomial.zkc"
+"air::table" = "table.zkc"
+"air::interaction" = "interaction.zkc"
+
+["dependencies"]
+"algebra" = "../../core/algebra"
+"collections" = "../../core/collections"
+"polynomial" = "../../core/polynomial"
+"primitive-polynomial" = "../../core/primitives/polynomial"
+"traversal" = "../../core/traversal"

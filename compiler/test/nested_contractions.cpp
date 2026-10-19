@@ -42,7 +42,7 @@ OwningOpRef<ModuleOp> clone(ModuleOp source) {
 Operation *lookup(ModuleOp module, StringRef name) {
   return SymbolTable::lookupSymbolIn(&module.getBody()->front(), name);
 }
-Operation *kernel(Operation *root, StringRef contract) {
+Operation *findKernel(Operation *root, StringRef contract) {
   Operation *found = nullptr;
   root->walk([&](Operation *operation) {
     if (!operation->hasAttr("binding"))
@@ -89,8 +89,8 @@ void checkStructure(ModuleOp source, ModuleOp candidate, bool columns) {
   require(
       matvecs == 1 && !loops && !scalar,
       "whole collection requires exactly one matvec and no loop/contraction");
-  auto *bulk = kernel(function, columns ? "matrix.transpose_mul_vector"
-                                        : "matrix.mul_vector");
+  auto *bulk = findKernel(function, columns ? "matrix.transpose_mul_vector"
+                                            : "matrix.mul_vector");
   auto branch = bulk->getParentOfType<local::LocalIfOp>();
   require(bool(branch), "matvec was speculated outside outer admission");
   require(bulk->getParentRegion() == &branch->getRegion(0),
@@ -191,7 +191,7 @@ int main() {
       require(succeeded(nested::rewriteFiniteCollections(*candidate)),
               "constant seed rewrite failed");
       checkStructure(*original, *candidate, false);
-      auto *constant = kernel(outer(*candidate), "field.constant");
+      auto *constant = findKernel(outer(*candidate), "field.constant");
       Builder builder(&context);
       constant->setAttr("parameters",
                         builder.getArrayAttr({builder.getStringAttr("23")}));
@@ -220,30 +220,30 @@ int main() {
     });
   };
   mutation("wrong matrix", [&](ModuleOp candidate) {
-    auto *op = kernel(outer(candidate), "matrix.mul_vector");
+    auto *op = findKernel(outer(candidate), "matrix.mul_vector");
     op->setOperand(0, op->getBlock()->getArgument(3));
   });
   mutation("wrong vector", [&](ModuleOp candidate) {
-    auto *op = kernel(outer(candidate), "matrix.mul_vector");
+    auto *op = findKernel(outer(candidate), "matrix.mul_vector");
     op->setOperand(1, op->getBlock()->getArgument(4));
   });
   mutation("wrong seed capture", [&](ModuleOp candidate) {
-    auto *op = kernel(outer(candidate), "vector.fill");
+    auto *op = findKernel(outer(candidate), "vector.fill");
     op->setOperand(0, op->getBlock()->getArgument(6));
   });
   mutation("wrong capture at branch", [&](ModuleOp candidate) {
-    auto *op = kernel(outer(candidate), "matrix.mul_vector");
+    auto *op = findKernel(outer(candidate), "matrix.mul_vector");
     auto branch = op->getParentOfType<local::LocalIfOp>();
     branch->setOperand(2, outer(candidate).getArgument(4));
   });
   mutation("wrong orientation", [&](ModuleOp candidate) {
-    auto *op = kernel(outer(candidate), "matrix.dimension");
+    auto *op = findKernel(outer(candidate), "matrix.dimension");
     Builder builder(&context);
     op->setAttr("parameters",
                 builder.getArrayAttr({builder.getStringAttr("1")}));
   });
   mutation("wrong matvec orientation", [&](ModuleOp candidate) {
-    auto *op = kernel(outer(candidate), "matrix.mul_vector");
+    auto *op = findKernel(outer(candidate), "matrix.mul_vector");
     auto reference = op->getAttrOfType<FlatSymbolRefAttr>("binding");
     auto *binding = lookup(candidate, reference.getValue());
     binding->setAttr("contract",
@@ -274,22 +274,22 @@ int main() {
             "reordered guard mutation must remain valid IR");
   });
   mutation("missing ignored strict zip guard", [&](ModuleOp candidate) {
-    auto *first = kernel(outer(candidate), "control.require");
+    auto *first = findKernel(outer(candidate), "control.require");
     Operation *last = first;
     outer(candidate).walk([&](local::RequireOp op) { last = op; });
     last->erase();
   });
   mutation("changed inner guard identity", [&](ModuleOp candidate) {
-    kernel(outer(candidate), "control.require")
+    findKernel(outer(candidate), "control.require")
         ->setAttr("site", StringAttr::get(&context, "changed_guard"));
   });
   mutation("changed inner guard location", [&](ModuleOp candidate) {
-    kernel(outer(candidate), "control.require")
+    findKernel(outer(candidate), "control.require")
         ->setLoc(FileLineColLoc::get(&context, "wrong-fold.zkc", 9, 2));
   });
   mutation("inner admission moved before empty outer branch",
            [&](ModuleOp candidate) {
-             auto *op = kernel(outer(candidate), "matrix.mul_vector");
+             auto *op = findKernel(outer(candidate), "matrix.mul_vector");
              auto branch = op->getParentOfType<local::LocalIfOp>();
              auto &block = branch->getRegion(0).front();
              auto *first = &block.front();
@@ -583,7 +583,7 @@ int main() {
                       state, &origins)),
                   "Finish lost nested guard records");
           auto *workGuard =
-              kernel(lookup(*candidate, "work"), "control.require");
+              findKernel(lookup(*candidate, "work"), "control.require");
           require(
               workGuard->getLoc() == innerLocation &&
                   llvm::any_of(origins,

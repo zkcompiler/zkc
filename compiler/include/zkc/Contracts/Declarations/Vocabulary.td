@@ -43,6 +43,7 @@ def CapabilityGroup : ZKC_Capability<"Group", [GroupDomain]>;
 def CapabilityIndexRandomness : ZKC_Capability<"IndexRandomness", [FieldDomain]>;
 def CapabilityIndexTranscript : ZKC_Capability<"IndexTranscript", [TranscriptDomain]>;
 def CapabilityMultilinearOpening : ZKC_Capability<"MultilinearOpening", [CommitmentDomain]>;
+def CapabilityMultiOpening : ZKC_Capability<"MultiOpening", [CommitmentDomain]>;
 def CapabilityPairingField : ZKC_Capability<"PairingField", [FieldDomain]>;
 def CapabilityPrimeField : ZKC_Capability<"PrimeField", [FieldDomain]>;
 def CapabilityScalarAction : ZKC_Capability<"ScalarAction", [GroupDomain]>;
@@ -67,6 +68,7 @@ def ExportCapabilityGroup : ZKC_CapabilityExport<"zkc::curve", "Group", Capabili
 def ExportCapabilityScalarAction : ZKC_CapabilityExport<"zkc::curve", "ScalarAction", CapabilityScalarAction>;
 def ExportCapabilityMultilinearOpening : ZKC_CapabilityExport<"zkc::pcs", "MultilinearOpening", CapabilityMultilinearOpening>;
 def ExportCapabilityVectorCommitment : ZKC_CapabilityExport<"zkc::oracle", "VectorCommitment", CapabilityVectorCommitment>;
+def ExportCapabilityMultiOpening : ZKC_CapabilityExport<"zkc::oracle", "MultiOpening", CapabilityMultiOpening>;
 def ExportCapabilityTranscript : ZKC_CapabilityExport<"zkc::transcript", "TranscriptCapability", CapabilityTranscript>;
 def ExportCapabilityFieldTranscript : ZKC_CapabilityExport<"zkc::transcript", "FieldTranscript", CapabilityFieldTranscript>;
 def ExportCapabilityIndexTranscript : ZKC_CapabilityExport<"zkc::transcript", "IndexTranscript", CapabilityIndexTranscript>;

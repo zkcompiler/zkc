@@ -7,7 +7,7 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
-include "zkc/Dialect/Kernels.td"
+include "zkc/Dialect/BoundOperations.td"
 
 
 def AwaitOp : Op<ProtocolDialect, "receive",
@@ -141,7 +141,8 @@ def MathematicalOp : Op<ProtocolDialect, "func",
     [Symbol, IsolatedFromAbove, SingleBlock, HasParent<"zkc::protocol_ir::ProtocolModuleOp">]> {
   let arguments = (ins SymbolNameAttr:$sym_name,
     TypeAttrOf<FunctionType>:$function_type, ArrayAttr:$roles,
-    ArrayAttr:$input_roles, ArrayAttr:$output_roles);
+    ArrayAttr:$input_roles, ArrayAttr:$output_roles,
+    OptionalAttr<ArrayAttr>:$contracts);
   let regions = (region AnyRegion:$body);
   let hasRegionVerifier = 1;
 }
@@ -198,7 +199,7 @@ def StatementOp : Op<ProtocolDialect, "statement",
     [MemoryEffects<[MemWrite]>, HasParent<"zkc::protocol_ir::MathematicalOp">,
      DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
   let arguments = (ins Variadic<AnyType>:$inputs, FlatSymbolRefAttr:$relation,
-    ArrayAttr:$selectors, I64Attr:$acceptance);
+    ArrayAttr:$selectors, I64Attr:$acceptance, OptionalAttr<StrAttr>:$target);
   let assemblyFormat = "$relation `(` $inputs `)` attr-dict (`:` type($inputs)^)?";
 }
 

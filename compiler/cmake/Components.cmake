@@ -43,7 +43,7 @@ add_zkc_component(Contracts
   lib/Contracts/RingExpression.cpp
   lib/Contracts/RingSharing.cpp
   lib/Contracts/Domains.cpp
-  lib/Contracts/Kernels.cpp
+  lib/Contracts/OperationShapes.cpp
   lib/Contracts/NativePolicy.cpp
   lib/Contracts/NativeOrigin.cpp
   lib/Contracts/Representations.cpp
@@ -168,8 +168,12 @@ add_zkc_component(IR
   lib/Dialect/Local/IR/LocalDialect.cpp
   lib/Dialect/Local/IR/Functions.cpp
   lib/Dialect/Local/IR/Control.cpp
+  lib/Dialect/Kernel/IR/KernelDialect.cpp
+  lib/Dialect/Kernel/IR/Kernel.cpp
   lib/Dialect/Data/IR/DataDialect.cpp
   lib/Dialect/Data/IR/Domains.cpp
+  lib/Analysis/NativeTypes.cpp
+  lib/Analysis/TotalClosure.cpp
   lib/Analysis/Finite.cpp
   lib/Analysis/Computation.cpp
   lib/Analysis/ComputationMeaning.cpp
@@ -179,7 +183,7 @@ add_zkc_component(IR
   lib/Dialect/Algebra/IR/Maps.cpp
   lib/Dialect/Algebra/RingExpression.cpp
   lib/Dialect/Bindings.cpp
-  lib/Dialect/Kernels.cpp
+  lib/Dialect/BoundOperations.cpp
   lib/Dialect/MathematicalInterfaces.cpp
   lib/Dialect/PreparationCallable.cpp
   lib/Dialect/LinearContraction.cpp
@@ -191,10 +195,11 @@ add_zkc_component(IR
   lib/Dialect/PCS/IR/PCSDialect.cpp
   lib/Dialect/Protocol/IR/ProtocolDialect.cpp
   lib/Dialect/Protocol/IR/Attributes.cpp
-  lib/Dialect/Protocol/Semantics.cpp
+  lib/Dialect/MathematicalSemantics.cpp
   lib/Dialect/Protocol/NativePolicy.cpp
   lib/Dialect/Protocol/IR/Protocol.cpp
   lib/Dialect/Protocol/IR/Mathematical.cpp
+  lib/Dialect/Protocol/IR/Contracts.cpp
   lib/Dialect/Protocol/IR/ResourceOrigins.cpp
   lib/Dialect/Protocol/IR/Applications.cpp
   lib/Dialect/Protocol/IR/Construction.cpp
@@ -233,6 +238,7 @@ add_zkc_component(Translation
 add_zkc_component(Transforms
   lib/Conversion/Bindings.cpp
   lib/Conversion/PhysicalVerification.cpp
+  lib/Conversion/Storage.cpp
   lib/Conversion/Participants.cpp
   lib/Transforms/Algorithms.cpp
   lib/Transforms/AlgorithmVerification.cpp
@@ -240,8 +246,20 @@ add_zkc_component(Transforms
   lib/Transforms/ProtocolApplications.cpp
   lib/Transforms/MathLowering.cpp
   lib/Transforms/MathRealizations.cpp
+  lib/Transforms/Kernel/Formation.cpp
+  lib/Transforms/Kernel/Closure.cpp
+  lib/Transforms/Kernel/Readback.cpp
+  lib/Transforms/Kernel/Lowering.cpp
+  lib/Transforms/Kernel/Verification.cpp
+  lib/Transforms/Kernel/Schedule.cpp
+  lib/Transforms/Kernel/Recipes.cpp
+  lib/Transforms/Kernel/RecipeVerification.cpp
+  lib/Transforms/Kernel/Frontier.cpp
+  lib/Transforms/Kernel/FrontierVerification.cpp
+  lib/Transforms/Kernel/NormalizationVerification.cpp
   lib/Transforms/HelperNormalization.cpp
   lib/Transforms/HelperNormalizationVerification.cpp
+  lib/Transforms/CollectFold.cpp
   lib/Transforms/FiniteRealizations.cpp
   lib/Transforms/FiniteVerification.cpp
   lib/Transforms/RealizationEmission.cpp
@@ -270,6 +288,7 @@ add_zkc_component(Transforms
   lib/Target/Selection.cpp
   lib/Target/Catalog.cpp
   lib/Target/PhysicalPlan.cpp
+  lib/Target/StorageSchedule.cpp
 )
 add_zkc_component(Compiler
   lib/Compiler/AssetSharing.cpp
@@ -282,6 +301,7 @@ add_zkc_component(Compiler
   lib/Compiler/LanguageInspection.cpp
   lib/Compiler/Compilation.cpp
   lib/Compiler/CommonSource.cpp
+  lib/Compiler/StructuredSource.cpp
   lib/Compiler/ArtifactJson.cpp
   lib/Compiler/RunVerification.cpp
   lib/Compiler/Run.cpp
@@ -334,7 +354,7 @@ mlir_target_link_libraries(ZkcIR PUBLIC
   MLIRFuncDialect MLIRArithDialect)
 target_link_libraries(ZkcTransforms PUBLIC ZkcIR)
 mlir_target_link_libraries(ZkcTransforms PUBLIC
-  MLIRPass MLIRTransforms MLIRTransformUtils)
+  MLIRPass MLIRTransforms MLIRTransformUtils MLIRSCFDialect)
 target_link_libraries(ZkcCompiler PUBLIC ZkcTransforms ZkcTranslation)
 target_link_libraries(ZkcDriver PUBLIC ZkcCompiler)
 mlir_target_link_libraries(ZkcCompiler PUBLIC MLIRParser)

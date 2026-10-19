@@ -1,4 +1,6 @@
 """Explicit project inputs, source-only checks and protected compilation outputs."""
+
+from source_modules import core_packages, library_inputs
 import json
 import os
 from pathlib import Path
@@ -43,9 +45,8 @@ run Job=Run;
 ''')
     project = write(directory, 'zkc.toml', {'format': 'zkc.project/0', 'modules': {
         'main': source.name, 'formula': library.name,
-        **{f'zkc::{name}': str(ROOT / f'libraries/zkc/{name}.zkc')
-           for name in ('accumulation', 'curve', 'finite', 'sequence')},
-        'zkc::vector': str(ROOT / 'libraries/zkc/vector.zkc')}, 'assets': {}})
+        **{name: str(path) for name, path in library_inputs(*core_packages()).items()},
+        'zkc::vector': str(ROOT / 'libraries/core/collections/vector.zkc')}, 'assets': {}})
     command = [toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}', f'--project={project}']
     checked = journal.json([*command, '--declarations'])
     fold = next(d for d in checked['declarations'] if d['name'] == 'main::fold')
@@ -103,7 +104,7 @@ def test_source_only_check_and_selected_entry(toolchain, journal, directory):
     assert selected['scope'] == 'entry'
     assert selected['capture'] == report['capture']
     assert len(selected['original']) == 64
-    library = journal.json([*command, f'--project={ROOT}/libraries/zkc/zkc.toml'])
+    library = journal.json([*command, f'--project={ROOT}/libraries/core/polynomial/zkc.toml'])
     assert library['scope'] == 'definitions'
     source.write_text(source.read_text() + '\nfn unused()->bool{return 3;}\n')
     failed = journal.json([*command, f'--project={project}'], refuses='source-compilation')
@@ -119,6 +120,49 @@ def test_check_requires_a_successful_compiler_report(toolchain, journal, directo
         compiler.chmod(0o755)
         journal.run([toolchain.runtime, '--json', 'check', f'--compiler={compiler}',
                      f'--project={project}'], refuses='source-check-format')
+
+
+def test_api_inventory_preserves_source_and_entry_identities(toolchain, journal, directory):
+    source, project = source_project(directory)
+    source.write_text(source.read_text().replace('run Job=', 'pub run Job='))
+    command = [toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
+               f'--project={project}', 'main::Job']
+    baseline = journal.json(command)
+    inspected = journal.json([*command, '--api', '--declarations', '--notations',
+                              '--notation-private', '--notation-installation'])
+    assert inspected['api']['format'] == 'zkc.source-api/0'
+    assert inspected['api']['roots'] == ['main']
+    assert 'main::Job' in {item['name'] for item in inspected['api']['declarations']}
+    assert {key: value for key, value in inspected.items()
+            if key not in ('api', 'project_graph', 'declarations', 'notations')} == baseline
+    assert inspected['project_graph']['format'] == 'zkc.project-graph/0'
+    assert inspected['project_graph']['packages'][0]['modules'].keys() == {'main'}
+    explicit = journal.json([toolchain.runtime, '--json', 'check',
+                             f'--compiler={toolchain.compiler}',
+                             f'--module=main={directory / "main.zkc"}', '--api'])
+    assert 'project_graph' not in explicit
+
+
+@pytest.mark.parametrize('requested,returned', [
+    (False, {'format': 'zkc.source-api/0'}),
+    (True, None),
+    (True, {'format': 'zkc.source-api/1'}),
+])
+def test_check_validates_requested_api_report(toolchain, journal, directory, requested, returned):
+    _, project = source_project(directory)
+    command = [toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
+               f'--project={project}']
+    baseline = journal.json(command)
+    for key in ('mode', 'compiler', 'options', 'project'):
+        baseline.pop(key, None)
+    if returned is not None:
+        baseline['api'] = returned
+    compiler = directory / 'compiler'
+    compiler.write_text(f'#!{sys.executable}\nprint({json.dumps(baseline)!r})\n')
+    compiler.chmod(0o755)
+    command = [toolchain.runtime, '--json', 'check', f'--compiler={compiler}',
+               f'--project={project}', *(['--api'] if requested else [])]
+    journal.json(command, refuses='source-check-format')
 
 
 def test_check_validates_the_compilers_selection_report(toolchain, journal, directory):
@@ -478,11 +522,3 @@ def test_local_dependency_capture_matches_explicit_and_protects_manifests(toolch
     journal.run([*command, f'--project={project}', f'--output={directory}/cycle.zkpkg'],
                 refuses='source-project-cycle')
     assert not (directory / 'cycle.zkpkg').exists()
-
-
-@pytest.mark.parametrize('family', ['zkc', 'schnorr', 'sumcheck', 'fri', 'air', 'stark', 'spongefish'])
-def test_library_family_has_a_complete_standalone_capture(toolchain, journal, family):
-    root = Path(__file__).resolve().parents[3]
-    result = journal.json([toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
-                           f'--project={root}/libraries/{family}/zkc.toml'])
-    assert result['status'] == 'checked' and result['scope'] == 'definitions'

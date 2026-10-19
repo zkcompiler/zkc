@@ -1,6 +1,6 @@
 # Native backend adapters
 
-`zkc-backends` implements `zkc-runtime::interactive::Backend` with independently
+`zkc-backends` implements `zkc_runtime::vm::Backend` with independently
 installed operation signatures and native mathematical kernels. The runtime
 owns program admission and execution; this crate owns values, cryptographic
 operations, capability state and backend capacity checks.
@@ -35,11 +35,27 @@ do not authorize a root or replace live lease, generation and owner checks.
 
 The Arkworks, Dalek and Plonky3 providers retain their nominal field, vector,
 polynomial, round, sparse matrix, group and pairing kernels where installed.
-This includes BLS12-381, BN254, Ristretto255, KoalaBear and its degree-eight
-extension. Multilinear KZG, row-oracle operations, external Monero/OpenVM
+This includes BLS12-381, BN254, Ristretto255, KoalaBear and its degree-eight and
+degree-four extensions, and the binary fields GF(2^64) and GF(2^192). Multilinear KZG, row-oracle operations, external Monero/OpenVM
 primitives, sequences, variants, field arrays, fixed vectors and resource units
 retain their own type and capacity checks. Domain installation does not imply
 that every domain has every group, transcript or PCS operation.
+
+`plonky3::poseidon2` installs the batched width-16 KoalaBear Poseidon2
+permutation from `p3-koala-bear` 0.8.0's default parameters; it charges one
+external-work permutation per state before computing. `plonky3::words` owns the
+canonical and Montgomery four-byte coordinate words of the KoalaBear codecs.
+Bit reversal of vectors and table rows is a positional kernel of every field
+family. `merkle` installs digest-generic row commitments: an `Instance` names a
+leaf hash, compression, element type and canonical digest encoding over a
+Plonky3 `Mmcs`, and every carrier holds digests as fixed-width bytes. Its
+Poseidon2 instances, over `koala-bear` rows and over quartic-extension rows
+flattened to base coordinates, add pruned multi-openings; `merkle_differential`
+compares roots, rows and pruned proofs with Plonky3's `MerkleTreeMmcs` and
+`ExtensionMmcs` and with a reference model that makes each permutation call
+explicit. The `poseidon2_permutation` test compares the permutation with the
+upstream known answer, p3-poseidon2's generic round functions and an integer
+implementation.
 
 `backend/registry.rs` assembles exact implementation ownership. Duplicate owners
 and alternatives of alternatives refuse. Alternative implementations inherit the
@@ -53,9 +69,12 @@ Each contract row lists its actual default implementation names. Custom families
 list exact implementation/contract pairs. The inventory contains no inferred
 provider-by-contract combinations; nominal arguments still need the owner's
 signature checks. Runtime and backend rows remain independently authored.
-`prepare_binding` returns a `NativeKernel` with its exact binding, independently
-resolved signature, handler and static work classification. The Runner prepares
-each distinct binding once per backend instance. Calls retain input, attribute,
+`Backend::Operation` is `NativeOperation`, which implements
+`vm::InstalledOperation`. `prepare_binding` returns this immutable handle with
+its exact binding, independently resolved signature, handler and static work
+classification. The VM instance prepares each distinct binding once when
+loading its owned backend. Operations include effectful resource and transcript
+calls as well as numerical kernels. Calls retain input, attribute,
 resource, policy and output validation; a handle for another binding is refused.
 Operation attributes and transcript occurrences stay invocation-specific.
 
@@ -79,7 +98,7 @@ allocations they retain. Field arrays and fixed vectors share their element
 allocation and charge their descriptor per binding. Inline scalars and
 capabilities belong to their binding. Validation reuse is offered only for
 capability-free values. Row openings, element and handle accessors and length
-queries declare their operand read extents; other kernels are charged their
+queries declare their operand read extents; other operations are charged their
 full operands.
 
 ## Native inputs and wire
@@ -99,12 +118,13 @@ Shared backing is charged in full. Matrix kernels retain their local sparse
 nonzero limit; native transport also enforces the current aggregate data limit.
 
 Generated transcripts use only `transcript.native.indexed.observe.data`,
-`transcript.native.indexed.challenge` and, for the octic Merlin suite,
-`transcript.native.indexed.index`. Explicit templates and coordinates encode
+`transcript.native.indexed.challenge` and, for the octic Merlin and hash-chain
+suites, `transcript.native.indexed.index`. Explicit templates and coordinates encode
 `zkc.native-origin/0`; executor frame names do not enter these occurrences.
 Generic observations accept the current native message-data grammar, including
 supported cross-domain data. Merlin and Spongefish suites own their exact
-framing and reduction. Authored `external.*` primitives remain separate; see
+framing and reduction; the [hash-chain suites](../../docs/spec/ir/construction.md#native-hash-chain-suites)
+are zkc's own construction over Keccak-256 (`transcript.rs`). Authored `external.*` primitives remain separate; see
 [their source pins and construction details](src/external/README.md).
 
 ## Validation

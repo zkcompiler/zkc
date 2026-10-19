@@ -10,7 +10,7 @@ use curve25519_dalek::{
     traits::{Identity, MultiscalarMul},
 };
 use std::sync::Arc;
-use zkc_runtime::interactive::Invocation;
+use zkc_runtime::vm::Invocation;
 trait Group: Copy + PartialEq {
     type Scalar: Copy;
     fn generator() -> Self;
@@ -270,7 +270,7 @@ macro_rules! bn_group {
                 Value::$many(v)
             }
             fn limit(p: &Policy, n: usize) -> Result<()> {
-                p.bn254_groups::<Self>(n)
+                p.typed_groups::<Self>(n)
             }
             fn width() -> usize {
                 std::mem::size_of::<Self>()
@@ -280,6 +280,67 @@ macro_rules! bn_group {
 }
 bn_group!(crate::Bn254G1, Bn254G1, Bn254G1Vector);
 bn_group!(crate::Bn254G2, Bn254G2, Bn254G2Vector);
+impl Group for crate::Bls12381G2 {
+    type Scalar = Scalar;
+    fn generator() -> Self {
+        Self::generator()
+    }
+    fn identity() -> Self {
+        Self::identity()
+    }
+    fn add(self, b: Self) -> Self {
+        Self::add(&self, &b)
+    }
+    fn neg(self) -> Self {
+        Self::neg(&self)
+    }
+    fn scale(self, s: Scalar) -> Self {
+        Self::scale(&self, s)
+    }
+    fn msm(s: &[Scalar], p: &[Self]) -> Result<Self> {
+        Self::msm(s, p).map_err(crate::ark)
+    }
+    fn point(v: &Value) -> Result<Self> {
+        if let Value::Bls12381G2(v) = v {
+            Ok(*v)
+        } else {
+            Err(refused("kernel-operands"))
+        }
+    }
+    fn points(v: &Value) -> Result<&Arc<[Self]>> {
+        if let Value::Bls12381G2Vector(v) = v {
+            Ok(v)
+        } else {
+            Err(refused("kernel-operands"))
+        }
+    }
+    fn scalar(v: &Value) -> Result<Scalar> {
+        if let Value::Field(v) = v {
+            Ok(*v)
+        } else {
+            Err(refused("kernel-operands"))
+        }
+    }
+    fn scalars(v: &Value) -> Result<&[Scalar]> {
+        if let Value::Vector(v) = v {
+            Ok(v)
+        } else {
+            Err(refused("kernel-operands"))
+        }
+    }
+    fn value(v: Self) -> Value {
+        Value::Bls12381G2(v)
+    }
+    fn values(v: Arc<[Self]>) -> Value {
+        Value::Bls12381G2Vector(v)
+    }
+    fn limit(p: &Policy, n: usize) -> Result<()> {
+        p.typed_groups::<Self>(n)
+    }
+    fn width() -> usize {
+        std::mem::size_of::<Self>()
+    }
+}
 pub(crate) fn apply(
     name: &str,
     args: &[Value],
@@ -287,33 +348,49 @@ pub(crate) fn apply(
     p: &Policy,
 ) -> Result<Vec<Value>> {
     if name == "pairing.apply" {
-        let [Value::Bn254G1(a), Value::Bn254G2(b)] = args else {
-            return Err(refused("kernel-operands"));
-        };
         p.output(512, i.max_output_bytes)?;
         // Bound pairing preparation scratch independently of the GT result.
         p.output(32768, usize::MAX)?;
-        return Ok(vec![Value::Bn254Gt(zkc_arkworks::bn254::pairing(a, b))]);
+        return match args {
+            [Value::Bn254G1(a), Value::Bn254G2(b)] => {
+                Ok(vec![Value::Bn254Gt(zkc_arkworks::bn254::pairing(a, b))])
+            }
+            [Value::Curve(a), Value::Bls12381G2(b)] => Ok(vec![Value::Bls12381Gt(Arc::new(
+                zkc_arkworks::bls12_381::pairing(a, b),
+            ))]),
+            _ => Err(refused("kernel-operands")),
+        };
     }
     if name == "pairing.check" {
-        let [Value::Bn254G1Vector(a), Value::Bn254G2Vector(b)] = args else {
-            return Err(refused("kernel-operands"));
+        let check = match args {
+            [Value::Bn254G1Vector(a), Value::Bn254G2Vector(b)] => {
+                equal_len(a.len(), b.len())?;
+                p.typed_groups::<crate::Bn254G1>(a.len())?;
+                p.typed_groups::<crate::Bn254G2>(b.len())?;
+                p.output(512, i.max_output_bytes)?;
+                // BN254 G2 preparations retain 91 line coefficients (three Fq2 each),
+                // plus G1 preparation and multi-Miller loop working vectors.
+                p.output(size(a.len(), 32768)?, usize::MAX)?;
+                zkc_arkworks::bn254::pairing_check(a, b)
+            }
+            [Value::Groups(a), Value::Bls12381G2Vector(b)] => {
+                equal_len(a.len(), b.len())?;
+                p.groups(a.len())?;
+                p.typed_groups::<crate::Bls12381G2>(b.len())?;
+                p.output(512, i.max_output_bytes)?;
+                // BLS12-381 G2 preparations retain 68 line coefficients (three
+                // Fq2 each), plus G1 preparation and multi-Miller loop vectors.
+                p.output(size(a.len(), 32768)?, usize::MAX)?;
+                zkc_arkworks::bls12_381::pairing_check(a, b)
+            }
+            _ => return Err(refused("kernel-operands")),
         };
-        equal_len(a.len(), b.len())?;
-        p.bn254_groups::<crate::Bn254G1>(a.len())?;
-        p.bn254_groups::<crate::Bn254G2>(b.len())?;
-        p.output(512, i.max_output_bytes)?;
-        // BN254 G2 preparations retain 91 line coefficients (three Fq2 each),
-        // plus G1 preparation and multi-Miller loop working vectors.
-        p.output(size(a.len(), 32768)?, usize::MAX)?;
-        return Ok(vec![Value::Bool(
-            zkc_arkworks::bn254::pairing_check(a, b).map_err(crate::ark)?,
-        )]);
+        return Ok(vec![Value::Bool(check.map_err(crate::ark)?)]);
     }
     if !name.starts_with("curve.") || matches!(name, "curve.commit" | "curve.response") {
         return Err(refused("kernel-operands"));
     }
-    use zkc_runtime::interactive::Identity;
+    use zkc_runtime::vm::Identity;
     let group = i
         .binding
         .declaration()
@@ -324,7 +401,9 @@ pub(crate) fn apply(
         Some(Identity::Bls12381G1) => dense::<GroupPoint>(name, args, i, p),
         Some(Identity::Bn254G1) => dense::<crate::Bn254G1>(name, args, i, p),
         Some(Identity::Bn254G2) => dense::<crate::Bn254G2>(name, args, i, p),
-        Some(Identity::Bn254Gt) => target(name, args, i, p),
+        Some(Identity::Bn254Gt) => target::<crate::Bn254Gt>(name, args, i, p),
+        Some(Identity::Bls12381G2) => dense::<crate::Bls12381G2>(name, args, i, p),
+        Some(Identity::Bls12381Gt) => target::<crate::Bls12381Gt>(name, args, i, p),
         Some(Identity::Ristretto255Group) => dense::<RistrettoPoint>(name, args, i, p),
         Some(Identity::Edwards25519Prime) => dense::<crate::EdwardsPrime>(name, args, i, p),
         _ => Err(refused("kernel-operands")),
@@ -348,7 +427,7 @@ fn dense<G: Group>(
         .signature()
         .outputs
         .iter()
-        .all(|t| t.kind() != zkc_runtime::interactive::Type::Groups)
+        .all(|t| t.kind() != zkc_runtime::vm::Type::Groups)
     {
         p.output(512, i.max_output_bytes)?;
     }
@@ -476,7 +555,7 @@ fn dense<G: Group>(
 /// Independent native port facts, also used for exact implementation assembly.
 pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
     use crate::bindings::curve;
-    use zkc_runtime::interactive::{AttributeRule, Type::*};
+    use zkc_runtime::vm::{AttributeRule, Type::*};
     &[
         curve::operation("curve.identity", &[], &[Group], AttributeRule::None)
             .implemented_by(&["arkworks/curve.identity", "dalek/curve.identity"]),
@@ -559,40 +638,112 @@ pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
 pub(crate) const PAIRINGS: &[crate::bindings::Contract] = &[
     crate::bindings::curve::pairing(
         "pairing.apply",
-        &[
-            zkc_runtime::interactive::Type::Group,
-            zkc_runtime::interactive::Type::Group,
-        ],
-        &[zkc_runtime::interactive::Type::Group],
-        zkc_runtime::interactive::AttributeRule::None,
+        &[zkc_runtime::vm::Type::Group, zkc_runtime::vm::Type::Group],
+        &[zkc_runtime::vm::Type::Group],
+        zkc_runtime::vm::AttributeRule::None,
     )
     .implemented_by(&["arkworks/pairing.apply"]),
     crate::bindings::curve::pairing(
         "pairing.check",
-        &[
-            zkc_runtime::interactive::Type::Groups,
-            zkc_runtime::interactive::Type::Groups,
-        ],
-        &[zkc_runtime::interactive::Type::Bool],
-        zkc_runtime::interactive::AttributeRule::None,
+        &[zkc_runtime::vm::Type::Groups, zkc_runtime::vm::Type::Groups],
+        &[zkc_runtime::vm::Type::Bool],
+        zkc_runtime::vm::AttributeRule::None,
     )
     .implemented_by(&["arkworks/pairing.check"]),
 ];
 
-fn target(name: &str, args: &[Value], i: &Invocation<'_>, p: &Policy) -> Result<Vec<Value>> {
-    use crate::Bn254Gt as G;
-    p.output(512, i.max_output_bytes)?;
+/// Prime-order pairing targets: individual values only, no target vectors.
+trait Target: Copy + PartialEq {
+    /// Conservative retained charge of one value, as in `Value::retained_bytes`.
+    const RETAINED: usize;
+    fn identity() -> Self;
+    fn generator() -> Self;
+    fn add(self, other: Self) -> Self;
+    fn neg(self) -> Self;
+    fn scale(self, scalar: &Value) -> Result<Self>;
+    fn point(v: &Value) -> Result<Self>;
+    fn value(v: Self) -> Value;
+}
+impl Target for crate::Bn254Gt {
+    const RETAINED: usize = 512;
+    fn identity() -> Self {
+        Self::identity()
+    }
+    fn generator() -> Self {
+        Self::generator()
+    }
+    fn add(self, other: Self) -> Self {
+        Self::add(&self, &other)
+    }
+    fn neg(self) -> Self {
+        Self::neg(&self)
+    }
+    fn scale(self, scalar: &Value) -> Result<Self> {
+        let Value::Bn254Field(s) = scalar else {
+            return Err(refused("kernel-operands"));
+        };
+        Ok(Self::scale(&self, *s))
+    }
+    fn point(v: &Value) -> Result<Self> {
+        if let Value::Bn254Gt(v) = v {
+            Ok(*v)
+        } else {
+            Err(refused("kernel-operands"))
+        }
+    }
+    fn value(v: Self) -> Value {
+        Value::Bn254Gt(v)
+    }
+}
+impl Target for crate::Bls12381Gt {
+    const RETAINED: usize = 1024;
+    fn identity() -> Self {
+        Self::identity()
+    }
+    fn generator() -> Self {
+        Self::generator()
+    }
+    fn add(self, other: Self) -> Self {
+        Self::add(&self, &other)
+    }
+    fn neg(self) -> Self {
+        Self::neg(&self)
+    }
+    fn scale(self, scalar: &Value) -> Result<Self> {
+        let Value::Field(s) = scalar else {
+            return Err(refused("kernel-operands"));
+        };
+        Ok(Self::scale(&self, *s))
+    }
+    fn point(v: &Value) -> Result<Self> {
+        if let Value::Bls12381Gt(v) = v {
+            Ok(**v)
+        } else {
+            Err(refused("kernel-operands"))
+        }
+    }
+    fn value(v: Self) -> Value {
+        Value::Bls12381Gt(Arc::new(v))
+    }
+}
+fn target<G: Target>(
+    name: &str,
+    args: &[Value],
+    i: &Invocation<'_>,
+    p: &Policy,
+) -> Result<Vec<Value>> {
+    p.output(G::RETAINED, i.max_output_bytes)?;
     let v = match (name, args) {
-        ("curve.identity", []) => Value::Bn254Gt(G::identity()),
+        ("curve.identity", []) => G::value(G::identity()),
         ("curve.generator", []) => {
             p.output(32768, usize::MAX)?;
-            Value::Bn254Gt(G::generator())
+            G::value(G::generator())
         }
-        ("curve.neg", [Value::Bn254Gt(a)]) => Value::Bn254Gt(a.neg()),
-        ("curve.nonidentity", [Value::Bn254Gt(a)]) => Value::Bool(*a != G::identity()),
-        ("curve.add", [Value::Bn254Gt(a), Value::Bn254Gt(b)]) => Value::Bn254Gt(a.add(b)),
-        ("curve.scale", [Value::Bn254Gt(a), Value::Bn254Field(s)]) => Value::Bn254Gt(a.scale(*s)),
-        ("curve.equal", [Value::Bn254Gt(a), Value::Bn254Gt(b)]) => Value::Bool(a == b),
+        ("curve.neg", [a]) => G::value(G::point(a)?.neg()),
+        ("curve.nonidentity", [a]) => Value::Bool(G::point(a)? != G::identity()),
+        ("curve.add", [a, b]) => G::value(G::point(a)?.add(G::point(b)?)),
+        ("curve.scale", [a, s]) => G::value(G::point(a)?.scale(s)?),
+        ("curve.equal", [a, b]) => Value::Bool(G::point(a)? == G::point(b)?),
         _ => return Err(refused("kernel-operands")),
     };
     Ok(vec![v])

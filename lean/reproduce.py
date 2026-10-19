@@ -48,6 +48,9 @@ def build_inputs(root, with_arklib=False, with_clean=False):
     if with_arklib:
         files.append(root / 'clients/ArkLib.lean')
         optional = root / INTEGRATION
+        # A declared dependency patch is present only while an upstream change is pending.
+        files.extend(path for name in ('compatibility.json', 'compatibility.patch')
+                     if (path := optional / name).is_file())
         files.extend(optional / name for name in ('lakefile.toml', 'lake-manifest.json', 'lean-toolchain'))
         for directory in ('ZkcSecurity', 'TestsSecurity'):
             files.extend((optional / directory).rglob('*.lean'))
@@ -207,7 +210,7 @@ def run(args):
     if args.with_clean and runs['main']['status'] == 'pass':
         runs['clean'] = checked_build(lake, work / CLEAN, output / 'clean-build.log', env,
             ['CLEAN-INTEGRATION-AUDIT-PASS', 'DEPENDENCY-AUDIT-PASS',
-             'BRIDGE-AXIOMS ZkcClean.component_native_ring:'])
+             'CLEAN-UPSTREAM-BOUNDARY-PASS'])
         if runs['clean']['status'] == 'pass':
             control = clean_control(lake, work / CLEAN, work / CLEAN_CONTROL, output / 'clean-control.log', env)
     clients = {'status': 'not-run'}

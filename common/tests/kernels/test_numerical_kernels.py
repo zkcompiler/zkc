@@ -8,8 +8,8 @@ import random
 
 import pytest
 
+from binomial_reference import FIELDS, OCTIC, P
 from entry import Entry
-from octic_reference import P, ZERO, ONE, add, mul
 
 
 def wire(kind, value, extension):
@@ -18,18 +18,22 @@ def wire(kind, value, extension):
     return scalar(value) if kind == 'field' else [scalar(v) for v in value]
 
 
-def direct(coefficients, point):
-    result, power = ZERO, ONE
+def direct(ext, coefficients, point):
+    result, power = ext.ZERO, ext.ONE
     for coefficient in coefficients:
-        result = add(result, mul(coefficient, power))
-        power = mul(power, point)
+        result = ext.add(result, ext.mul(coefficient, power))
+        power = ext.mul(power, point)
     return result
 
 
-@pytest.mark.parametrize('extension', [False, True])
+@pytest.mark.parametrize('field', ['koala-bear', 'koala-bear.ext8-binomial3',
+                                   'koala-bear.ext4-binomial3'])
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage']])
-def test_coset_evaluation_interpolation_fold_and_refusals(toolchain, journal, directory, extension, flags):
-    field = 'koala-bear' + ('.ext8-binomial3' if extension else '')
+def test_coset_evaluation_interpolation_fold_and_refusals(toolchain, journal, directory, field, flags):
+    extension = field != 'koala-bear'
+    # Base-field values are embedded coordinate lists; any extension computes them.
+    ext = FIELDS[field] if extension else OCTIC
+    d, ZERO, ONE, add, mul = ext.degree, ext.ZERO, ext.ONE, ext.add, ext.mul
     source = f'''module sample;
 domain F=field("{field}");
 type Vector<E:Field>=builtin("vector",E);
@@ -52,10 +56,10 @@ protocol Run roles(P)(cs:Vector<F>@P,shift:F@P,beta:F@P,n:index@P,query:index@P)
 run Demo=Run;
 '''
     entry = Entry(toolchain, journal, directory, source, flags)
-    rng = random.Random(619)
+    rng = random.Random(619 + d)
 
     def scalar():
-        return [rng.randrange(P) for _ in range(8)] if extension else [rng.randrange(P)] + [0] * 7
+        return [rng.randrange(P) for _ in range(d)] if extension else ext.embed(rng.randrange(P))
 
     for n in (2, 4, 8, 16, 32, 64):
         cs = [scalar() for _ in range(n // 2)]
@@ -64,11 +68,11 @@ run Demo=Run;
         # Verify its order locally before using it; no backend data is queried.
         root = pow(1791270792, (1 << 24) // n, P)
         assert pow(root, n, P) == 1 and pow(root, n // 2, P) == P - 1
-        points = [mul(shift, [pow(root, i, P)] + [0] * 7) for i in range(n)]
-        values = [direct(cs, point) for point in points]
+        points = [mul(shift, ext.embed(pow(root, i, P))) for i in range(n)]
+        values = [direct(ext, cs, point) for point in points]
         folded_cs = [add(cs[i], mul(beta, cs[i + 1] if i + 1 < len(cs) else ZERO))
                      for i in range(0, len(cs), 2)]
-        folded = [direct(folded_cs, mul(point, point)) for point in points[:n // 2]]
+        folded = [direct(ext, folded_cs, mul(point, point)) for point in points[:n // 2]]
         inputs = {'cs': wire('vector', cs, extension), 'shift': wire('field', shift, extension),
                   'beta': wire('field', beta, extension), 'n': n, 'query': n - 1}
         assert entry.run(f'coset-{n}', inputs)['result'] == [wire('vector', values, extension),

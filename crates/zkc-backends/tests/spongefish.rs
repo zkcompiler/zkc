@@ -1,12 +1,11 @@
+use zkc_runtime::interpreter::Runner;
 #[path = "domains/support.rs"]
 mod support;
 use serde_json::{Value as Json, json};
 use spongefish::{DuplexSpongeInterface, instantiations::Keccak};
 use support::*;
 use zkc_backends::{Capability, Policy, Value};
-use zkc_runtime::interactive::{
-    Backend, Identity, OperationBinding, Runner, Value as RuntimeValue, admit_supplied,
-};
+use zkc_runtime::vm::{Backend, Identity, OperationBinding, Value as RuntimeValue};
 
 const SUITE: Identity = Identity::Spongefish080KeccakFr64Be;
 fn scalar(v: &Value) -> zkc_backends::Scalar {
@@ -209,7 +208,14 @@ fn nominal_provider_codec_and_wrong_field_admission() {
             Some(valid.signature().unwrap())
         );
         let bytes = program_for(SUITE, contract.contains("observe"));
-        assert!(admit_supplied(&bytes, &b).is_ok());
+        assert!(
+            zkc_runtime::vm::Program::decode(&bytes)
+                .and_then(|program| {
+                    program.check_installation(&b)?;
+                    Ok(program)
+                })
+                .is_ok()
+        );
         for bad in ["arkworks", "dalek", "uninstalled"] {
             let mut mutant = valid.clone();
             mutant.implementation = format!("{bad}/{contract}");
@@ -244,12 +250,22 @@ fn malformed_roots_wrong_suite_authority_and_budget() {
     let wrong = b
         .issue_transcript_for(Identity::Merlin3Fr64Be, domain(), 2, &root())
         .unwrap();
-    let admitted = admit_supplied(&p, &b).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&p)
+        .and_then(|program| {
+            program.check_installation(&b)?;
+            Ok(program)
+        })
+        .unwrap();
     assert!(Runner::new(&admitted, "main", "P", "session", b, vec![wrong]).is_err());
     let mut a = backend(Policy::default());
     let t = a.issue_transcript_for(SUITE, domain(), 2, &root()).unwrap();
     let other = backend(Policy::default());
-    let admitted = admit_supplied(&p, &other).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&p)
+        .and_then(|program| {
+            program.check_installation(&other)?;
+            Ok(program)
+        })
+        .unwrap();
     assert!(Runner::new(&admitted, "main", "P", "session", other, vec![t]).is_err());
     let mut b = backend(Policy::default());
     let t = b.issue_transcript_for(SUITE, domain(), 0, &root()).unwrap();
@@ -267,12 +283,24 @@ fn stale_handle_and_malformed_origin_do_not_create_a_successor() {
     let old = t.clone();
     let (out, b) = run_program(b, &p, vec![t]);
     assert!(out.is_ok());
-    let admitted = admit_supplied(&p, &b).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&p)
+        .and_then(|program| {
+            program.check_installation(&b)?;
+            Ok(program)
+        })
+        .unwrap();
     assert!(Runner::new(&admitted, "main", "P", "session", b, vec![old]).is_err());
     let b = backend(Policy::default());
     let mut malformed: Json = serde_json::from_slice(&p).unwrap();
     malformed[2][0][4][1][3] = json!(["Source", "site", "Schema", "P", "bad/frame"]);
-    assert!(admit_supplied(&serde_json::to_vec(&malformed).unwrap(), &b).is_err());
+    assert!(
+        zkc_runtime::vm::Program::decode(&serde_json::to_vec(&malformed).unwrap())
+            .and_then(|program| {
+                program.check_installation(&b)?;
+                Ok(program)
+            })
+            .is_err()
+    );
 }
 #[test]
 fn prefix_lengths_domain_context_and_event_binding() {

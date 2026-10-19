@@ -1,6 +1,6 @@
 use super::*;
 use crate::execution::ProverMaterial;
-use zkc_runtime::interactive::Identity;
+use zkc_runtime::vm::Identity;
 
 fn request(value: impl Fn() -> InputValue) -> RunInputs {
     RunInputs {

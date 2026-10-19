@@ -1,6 +1,6 @@
 module air_stark_example;
-use stark::koala_bear::{Base, Extension};
-use stark::koala_bear::table::{Statement, TableArgument};
+use stark::configurations::koala_bear_octic::{Base, Extension};
+use stark::octic_table::{Statement, TableArgument};
 use zkc::vector::{Vector};
 use zkc::vector as vec;
 domain Recurrence = bundle(asset recurrence);

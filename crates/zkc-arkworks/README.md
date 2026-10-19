@@ -1,7 +1,8 @@
 # zkc-arkworks
 
-Rust kernels for BLS12-381 field tables, groups and multilinear PCS, plus
-BN254 arithmetic and pairing kernels used by native mathematical programs, over arkworks **0.6.0**. This crate implements no participant runner, Sumcheck protocol,
+Rust kernels for BLS12-381 field tables, groups, pairings and multilinear PCS,
+plus BN254 arithmetic and pairing kernels used by native mathematical programs,
+over arkworks **0.6.0**. This crate implements no participant runner, Sumcheck protocol,
 compiler trait, Fiat–Shamir transform, or provider registry. The caller performs
 ordinary Fr add/mul/equality and composes the kernels in its authored algorithm.
 

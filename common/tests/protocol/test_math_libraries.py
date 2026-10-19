@@ -4,10 +4,10 @@ from pathlib import Path
 import pytest
 
 from entry import Entry
-from source_modules import library_modules
+from source_modules import core_packages, library_modules
 
 ROOT = Path(__file__).resolve().parents[3]
-MODULES = library_modules('zkc')
+MODULES = library_modules(*core_packages())
 
 
 def scalar(n):
@@ -150,7 +150,7 @@ protocol Check roles(P)(height:index@P)->(small:bool@P,full:bool@P,empty:bool@P)
 }
 run Demo=Check;
 '''
-    entry = Entry(toolchain, journal, directory, source, [*library_modules('zkc'), *flags])
+    entry = Entry(toolchain, journal, directory, source, [*library_modules(*core_packages()), *flags])
     for height in [0, 1, 2, 3, 16, 32, (1 << 63) - 1, 1 << 63, (1 << 64) - 1]:
         is_power = height >= 2 and height & (height - 1) == 0
         assert entry.run(f'height-{height}', {'height': str(height)}) == {
@@ -166,15 +166,20 @@ use zkc::indices::{Indices};
 use zkc::opening as opening;
 domain F=field("koala-bear");
 protocol Check roles(P)(columns:Vector<F>@P,selected:Indices@P,rotations:Indices@P,
- values:Vector<F>@P,initial:Vector<F>@P,row:Vector<F>@P,x:F@P,initial_at:F@P)
+ values:Vector<F>@P,initial:Vector<F>@P,row:Vector<F>@P,position:index@P,initial_at:F@P)
  ->(word:Vector<F>@P,weight:F@P,value:F@P,row_weight:F@P) {
- let whole=opening::deep_columns(columns,selected,rotations,values,4,3,8,7,11,initial,5);
- let at=opening::deep_column_values(row,selected,rotations,values,4,x,7,11,initial_at,5);
- return (word=whole.0,weight=whole.1,value=at.0,row_weight=at.1);
+ let geometry=zkc::coset::coset_domain<F>(3,8);
+ let input=opening::bind_openings(geometry,2,4,7,zkc::opening_claims::checked(selected, rotations, values));
+ let whole=opening::deep_columns(zkc::coset::column_batch(geometry,2,columns),input,
+   opening::vector_accumulator(geometry,11,initial,5));
+ let at=opening::deep_row(opening::query_row(geometry,2,position,row),input,
+   opening::scalar_accumulator(geometry,position,11,initial_at,5));
+ return (word=opening::vector_values(whole),weight=opening::vector_weight(whole),
+   value=opening::scalar_value(at),row_weight=opening::scalar_weight(at));
 }
 run Demo=Check;
 '''
-    entry = Entry(toolchain, journal, directory, source, [*library_modules('zkc'), *flags])
+    entry = Entry(toolchain, journal, directory, source, [*library_modules(*core_packages()), *flags])
     p = 2130706433
     root = pow(1791270792, (1 << 24) // 8, p)
     assert pow(root, 8, p) == 1 and pow(root, 4, p) == p - 1
@@ -196,7 +201,7 @@ run Demo=Check;
     base = {'columns': sum(tables, []), 'selected': selected, 'rotations': rotations,
             'values': values, 'initial': initial}
     for i, x in enumerate(points):
-        inputs = base | {'row': [table[i] for table in tables], 'x': x, 'initial_at': initial[i]}
+        inputs = base | {'row': [table[i] for table in tables], 'position': i, 'initial_at': initial[i]}
         assert entry.run(f'row-{i}', inputs) == {
             'word': vector(expected), 'weight': str(5 * 11**3),
             'value': str(expected[i]), 'row_weight': str(5 * 11**3)}

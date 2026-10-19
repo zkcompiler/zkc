@@ -1,0 +1,9 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"zkc::vector" = "vector.zkc"
+"zkc::indices" = "indices.zkc"
+
+["dependencies"]
+"primitive-collections" = "../primitives/collections"
+"traversal" = "../traversal"

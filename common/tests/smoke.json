@@ -1,0 +1,38 @@
+{
+  "schnorr": {
+    "projects": ["schnorr"],
+    "cases": ["test_source_projects.py::test_library_entry_runs_and_independent_proofs[flags0-examples/projects/schnorr]", "test_source_projects.py::test_source_protocols_reject_false_inputs[examples/projects/schnorr]"]
+  },
+  "sigma": {
+    "projects": ["sigma"],
+    "cases": ["test_sigma.py"]
+  },
+  "sumcheck": {
+    "projects": ["sumcheck", "sumcheck/composed", "sumcheck/product"],
+    "cases": ["test_source_projects.py::test_library_entry_runs_and_independent_proofs[flags0-examples/projects/sumcheck]", "test_source_projects.py::test_sumcheck_uses_received_coefficients_and_actual_claim"]
+  },
+  "gkr": {
+    "projects": ["gkr"],
+    "cases": ["test_gkr.py::test_gkr_accepts_circuit_outputs[flags0-two-layers]", "test_gkr.py::test_gkr_rejects_changed_line_coefficient"]
+  },
+  "fri": {
+    "projects": ["fri"],
+    "cases": ["test_fri.py::test_fri_polynomials_prove_and_verify[profile0-flags0]", "test_fri.py::test_fri_rejects_altered_commitments_openings_and_terminal"]
+  },
+  "stark": {
+    "projects": ["stark", "fibonacci", "femtocairo"],
+    "cases": ["test_stark_library.py::test_example_entries_prove_and_verify[Plonky3Proof-flags0]", "test_stark_library.py::test_wrong_openings_are_refused[trace-rows]"]
+  },
+  "monero": {
+    "projects": ["bulletproofs-plus"],
+    "cases": ["test_bulletproofs_plus.py::test_example_uses_managed_randomness_and_checks_witness[flags0]"]
+  },
+  "eip4844": {
+    "projects": ["eip4844"],
+    "cases": ["test_kzg_eip4844.py::test_setup_constants_and_admission"]
+  },
+  "spongefish": {
+    "projects": ["schnorr/spongefish"],
+    "cases": ["test_source_transcript.py::test_source_transcript_vector_and_decode_effect_order[flags0-False]"]
+  }
+}

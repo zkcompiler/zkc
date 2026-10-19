@@ -31,7 +31,9 @@ impl Target {
                             | "--no-simplify"
                             | "--release-storage"
                             | "--fuse-vector-reductions"
+                            | "--fuse-collect-fold"
                             | "--no-finite-bulk"
+                            | "--no-calculation-batching"
                     )
                 }))
         {

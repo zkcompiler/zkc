@@ -1,0 +1,22 @@
+module zkc::primitives::indices;
+
+pub type Indices = builtin("indices");
+
+pub fn empty() -> Indices = primitive("indices.empty");
+
+pub fn append(values: Indices, value: index) -> Indices = primitive("indices.append");
+
+pub fn length(values: Indices) -> index = primitive("indices.length");
+
+pub fn get(values: Indices, position: index) -> index = primitive("indices.at");
+
+pub math fn at(values: Indices, position: index) -> index where in_bounds(position, values)
+  = primitive("container.at");
+
+pub domain fn elements(values: Indices) -> domain<index> = domain("elements");
+
+pub domain fn indices(values: Indices) -> domain<index> = domain("indices");
+
+pub fn divide(a: index, b: index) -> index = primitive("index.div");
+
+pub fn remainder(a: index, b: index) -> index = primitive("index.mod");

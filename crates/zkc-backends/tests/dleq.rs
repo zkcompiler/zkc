@@ -1,13 +1,13 @@
 //! Standalone local DLEQ equations through the ordinary generic Runner. Test
 //! entry material is host supplied; this is not an artifact producer CLI.
 #![cfg(feature = "test-utils")]
-use zkc_runtime::interactive::Identity;
-use zkc_runtime::interactive::Value as RuntimeValue;
+use zkc_runtime::interpreter::Runner;
+use zkc_runtime::vm::Identity;
+use zkc_runtime::vm::Value as RuntimeValue;
 mod common;
 use common::{backend as new_backend, *};
 use serde_json::{Value as Json, json};
 use zkc_backends::*;
-use zkc_runtime::interactive::{Runner, admit_supplied};
 
 fn observed(site: &str, _ty: &str, input: &str, value: &str, output: &str) -> Json {
     json!([
@@ -158,10 +158,7 @@ fn run_validator(
     publics: Value,
     rs: Value,
     z: Value,
-) -> (
-    Result<Vec<Value>, zkc_runtime::interactive::Stop>,
-    NativeBackend,
-) {
+) -> (Result<Vec<Value>, zkc_runtime::vm::Stop>, NativeBackend) {
     let domain = Domain::new("V", "independent_verifier", "main", None);
     let mut backend = NativeBackend::new(
         Policy::default(),
@@ -185,7 +182,12 @@ fn run_validator(
             &backend.encode_native_value(&z).unwrap(),
         )
         .unwrap();
-    let admitted = admit_supplied(&validator(), &backend).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&validator())
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
     let runner = Runner::new(
         &admitted,
         "main",

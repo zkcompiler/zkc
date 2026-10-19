@@ -1,0 +1,17 @@
+module zkc::curve;
+
+pub use zkc::primitives::curve::{
+  identity, Groups, msm, scale_each, add, scale, empty, append, length, get, split, concat, generator, neg, nonidentity, elements, indices, at
+};
+
+pub operator + = add;
+
+pub operator * = scale;
+
+pub fn collect<I: Type + Copy + Drop, G: Group>(
+  rows: domain<I>, body: fn(item: I) -> G effects(stop) where item_from(item, rows)
+) -> Groups<G> effects(stop) = finite("local.collect.groups");
+
+// Bounds follow the selected total accessor; checked access can be rebound locally.
+
+pub indexing values[position] = at(values, position);

@@ -4,7 +4,7 @@
 #include "mlir/IR/OperationSupport.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
-#include "zkc/Dialect/Protocol/Semantics.h"
+#include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "llvm/ADT/StringMap.h"
 
@@ -166,13 +166,13 @@ LogicalResult verifyAuthoredLocalsPreserved(Operation *before,
   if (profile == protocol_ir::Profile::Protocol ||
       profile == protocol_ir::Profile::Participant) {
     for (auto &op : after->getRegion(0).front())
-      if (isa<local::FuncOp, local::OperationBindingOp>(op) &&
+      if (isa<kernel::ModuleOp, local::FuncOp, local::OperationBindingOp>(op) &&
           !sourceSymbols.lookup(SymbolTable::getSymbolName(&op)))
         return refuseLocal(after,
                            "mathematical pass added an executable definition");
   }
   for (auto &op : before->getRegion(0).front()) {
-    if (!isa<local::FuncOp, local::OperationBindingOp>(op))
+    if (!isa<kernel::ModuleOp, local::FuncOp, local::OperationBindingOp>(op))
       continue;
     auto name = SymbolTable::getSymbolName(&op);
     auto *target = targetSymbols.lookup(name);
@@ -224,7 +224,8 @@ logicalParticipant(protocol_ir::ParticipantOp participant) {
 // input, so losing a projected interface cannot turn a derived result into
 // an unrelated supplied program. This is a compiler postcondition, not an
 // independent source/candidate proof.
-LogicalResult verifyProjectionPreserved(ModuleOp original, ModuleOp candidate) {
+LogicalResult verifyProjectionPreserved(ModuleOp original, ModuleOp candidate,
+                                        MathematicalSelectionPolicy policy) {
   auto before = protocolUnit(original), after = protocolUnit(candidate);
   if (!before || !after)
     return refuse(candidate, "projected compilation lost its protocol unit");
@@ -287,7 +288,7 @@ LogicalResult verifyProjectionPreserved(ModuleOp original, ModuleOp candidate) {
                     "projected compilation changed or lost a frozen interface");
     if (before.getProfile() == protocol_ir::Profile::Participant &&
         after.getProfile() != protocol_ir::Profile::Participant &&
-        failed(verifyMathLowering(before, after)))
+        failed(verifyMathLowering(before, after, policy.calculationBatching)))
       return failure();
     if (before.getProfile() == protocol_ir::Profile::Exec ||
         before.getProfile() == protocol_ir::Profile::Physical) {

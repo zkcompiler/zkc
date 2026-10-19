@@ -1,5 +1,5 @@
 //! Native library installations, independent of admission's nominal catalogue.
-use zkc_runtime::interactive::{Identity, LogicalType, PhysicalType, Representation, Type};
+use zkc_runtime::vm::{Identity, LogicalType, PhysicalType, Representation, Type};
 
 #[derive(Clone, Copy, Debug)]
 pub struct NativeDomain {
@@ -27,6 +27,16 @@ pub const BLS: NativeDomain = NativeDomain {
     group: Some(Identity::Bls12381G1),
     provider: "arkworks",
 };
+pub const BLS_G2: NativeDomain = NativeDomain {
+    field: Identity::Bls12381Fr,
+    group: Some(Identity::Bls12381G2),
+    provider: "arkworks",
+};
+pub const BLS_GT: NativeDomain = NativeDomain {
+    field: Identity::Bls12381Fr,
+    group: Some(Identity::Bls12381Gt),
+    provider: "arkworks",
+};
 pub const EDWARDS: NativeDomain = NativeDomain {
     field: Identity::Ristretto255Scalar,
     group: Some(Identity::Edwards25519Prime),
@@ -47,15 +57,36 @@ pub const KOALA_BEAR_EXT8: NativeDomain = NativeDomain {
     group: None,
     provider: "plonky3",
 };
+pub const KOALA_BEAR_EXT4: NativeDomain = NativeDomain {
+    field: Identity::KoalaBearExt4,
+    group: None,
+    provider: "plonky3",
+};
+/// Characteristic-two fields from Plonky3 0.8.0's `p3-binary-field`.
+pub const BINARY64: NativeDomain = NativeDomain {
+    field: Identity::Binary64,
+    group: None,
+    provider: "plonky3",
+};
+pub const BINARY64_EXT3: NativeDomain = NativeDomain {
+    field: Identity::Binary64Ext3,
+    group: None,
+    provider: "plonky3",
+};
 pub const INSTALLED: &[NativeDomain] = &[
     BLS,
     RISTRETTO,
     EDWARDS,
     KOALA_BEAR,
     KOALA_BEAR_EXT8,
+    KOALA_BEAR_EXT4,
+    BINARY64,
+    BINARY64_EXT3,
     BN254_G1,
     BN254_G2,
     BN254_GT,
+    BLS_G2,
+    BLS_GT,
 ];
 impl NativeDomain {
     pub fn physical(self, kind: Type) -> Option<PhysicalType> {
@@ -74,6 +105,9 @@ impl NativeDomain {
                 (Identity::Bn254G2, Group) => R::Bn254G2,
                 (Identity::Bn254G2, Groups) => R::Bn254G2Vector,
                 (Identity::Bn254Gt, Group) => R::Bn254Gt,
+                (Identity::Bls12381G2, Group) => R::Bls12381G2,
+                (Identity::Bls12381G2, Groups) => R::Bls12381G2Vector,
+                (Identity::Bls12381Gt, Group) => R::Bls12381Gt,
                 (Identity::Ristretto255Group, Group) => R::Ristretto,
                 (Identity::Ristretto255Group, Groups) => R::RistrettoVector,
                 (Identity::Edwards25519Prime, Group) => R::EdwardsPrime,
@@ -102,6 +136,21 @@ impl NativeDomain {
             (Identity::KoalaBearExt8, Polynomial) => (self.field, R::KoalaBearExt8Polynomial),
             (Identity::KoalaBearExt8, Round) => (self.field, R::KoalaBearExt8Round),
             (Identity::KoalaBearExt8, Matrix) => (self.field, R::KoalaBearExt8SparseCoo),
+            (Identity::KoalaBearExt4, Field) => (self.field, R::KoalaBearExt4),
+            (Identity::KoalaBearExt4, Vector) => (self.field, R::KoalaBearExt4Vector),
+            (Identity::KoalaBearExt4, Polynomial) => (self.field, R::KoalaBearExt4Polynomial),
+            (Identity::KoalaBearExt4, Round) => (self.field, R::KoalaBearExt4Round),
+            (Identity::KoalaBearExt4, Matrix) => (self.field, R::KoalaBearExt4SparseCoo),
+            (Identity::Binary64, Field) => (self.field, R::Binary64),
+            (Identity::Binary64, Vector) => (self.field, R::Binary64Vector),
+            (Identity::Binary64, Polynomial) => (self.field, R::Binary64Polynomial),
+            (Identity::Binary64, Round) => (self.field, R::Binary64Round),
+            (Identity::Binary64, Matrix) => (self.field, R::Binary64SparseCoo),
+            (Identity::Binary64Ext3, Field) => (self.field, R::Binary64Ext3),
+            (Identity::Binary64Ext3, Vector) => (self.field, R::Binary64Ext3Vector),
+            (Identity::Binary64Ext3, Polynomial) => (self.field, R::Binary64Ext3Polynomial),
+            (Identity::Binary64Ext3, Round) => (self.field, R::Binary64Ext3Round),
+            (Identity::Binary64Ext3, Matrix) => (self.field, R::Binary64Ext3SparseCoo),
             (Identity::KoalaBear, Field) => (self.field, R::KoalaBear),
             (Identity::KoalaBear, Vector) => (self.field, R::KoalaBearVector),
             (Identity::KoalaBear, Polynomial) => (self.field, R::KoalaBearPolynomial),
@@ -175,5 +224,15 @@ pub const TRANSCRIPTS: &[NativeTranscript] = &[
         suite: Identity::Spongefish080KeccakFr64Be,
         domain: BLS,
         provider: "spongefish",
+    },
+    NativeTranscript {
+        suite: Identity::HashChainKeccak256Fr64Be,
+        domain: BLS,
+        provider: "arkworks",
+    },
+    NativeTranscript {
+        suite: Identity::HashChainKeccak256KoalaBearExt8,
+        domain: KOALA_BEAR_EXT8,
+        provider: "plonky3",
     },
 ];

@@ -11,8 +11,6 @@ The opening loss concerns reached checks in this same experiment. No independenc
 between openings is assumed, and arbitrary checks do not imply PCS security.
 -/
 set_option autoImplicit false
-set_option maxRecDepth 4000
-set_option maxHeartbeats 800000
 namespace Zkc.Protocols.Sumcheck.FactorOpening
 open Zkc.Source Zkc.Source.Common Zkc.Source.Common.Native
 open Zkc.Protocols.Sumcheck.Common
@@ -36,7 +34,7 @@ def received (prover : Strategy F) (first second : F) (position : Nat) : F :=
   else Common.received prover.rounds first position
 
 def transcriptHandler (prover : Strategy F) (first second : F) :
-    PIR.Handler (actions (F := F)) Nat (Action Nat language services (ScalarValue F F))
+    PIR.Handler (actions (F := F)) Nat (Participant.Action Nat Ty services (ScalarValue F F))
   | action@(.send ..), position => ⟨.returned (), position + 1, [action]⟩
   | action@(.query ..), position =>
       ⟨.returned (if position = 3 then first else second), position + 1, [action]⟩

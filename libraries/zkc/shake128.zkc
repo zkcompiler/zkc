@@ -1,8 +1,0 @@
-module zkc::shake128;
-use zkc::bytes::{Bytes};
-
-pub type State = builtin("shake128_state");
-
-pub fn init() -> State = primitive("shake128.init");
-pub fn absorb(state: State, value: Bytes) -> State = primitive("shake128.absorb");
-pub fn squeeze(state: State, length: index) -> (State, Bytes) = primitive("shake128.squeeze");

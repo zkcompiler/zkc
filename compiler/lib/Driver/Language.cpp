@@ -5,6 +5,7 @@
 #include "zkc/Compiler/LanguagePackage.h"
 #include "zkc/Language/Diagnostics.h"
 #include "zkc/Language/Inspection.h"
+#include "zkc/Support/BoundedStream.h"
 #include "zkc/Support/Refusal.h"
 #include "llvm/Support/JSON.h"
 #include "llvm/Support/raw_ostream.h"
@@ -20,6 +21,7 @@ int runLanguageCompiler(int argc, char **argv) {
   std::string entry, format;
   std::optional<EntryKind> entryKind;
   bool declarations = false;
+  bool api = false;
   bool notations = false;
   NotationInspectionOptions notationOptions;
   EntryOptions options;
@@ -114,6 +116,11 @@ int runLanguageCompiler(int argc, char **argv) {
       assetTotal += bytes->size();
       assets.push_back(
           {name.str(), format.str(), std::move(*bytes), path.str()});
+    } else if (arg == "--api") {
+      if (api || command != "language-check")
+        return refuse(error("source.options",
+                            "--api is a check option and may appear once"));
+      api = true;
     } else if (arg == "--declarations") {
       if (declarations || command != "language-check")
         return refuse(
@@ -132,7 +139,9 @@ int runLanguageCompiler(int argc, char **argv) {
       flag = true;
     } else if (command == "language-check" &&
                (arg == "--no-simplify" || arg == "--release-storage" ||
-                arg == "--fuse-vector-reductions" || arg == "--no-finite-bulk"))
+                arg == "--fuse-vector-reductions" ||
+                arg == "--fuse-collect-fold" || arg == "--no-finite-bulk" ||
+                arg == "--no-calculation-batching"))
       return refuse(
           error("source.options",
                 "checking accepts no executable optimization options"));
@@ -142,8 +151,12 @@ int runLanguageCompiler(int argc, char **argv) {
       options.releaseStorage = true;
     else if (arg == "--no-finite-bulk")
       options.mathematicalSelection.finiteBulk = false;
+    else if (arg == "--no-calculation-batching")
+      options.mathematicalSelection.calculationBatching = false;
     else if (arg == "--fuse-vector-reductions")
       options.mathematicalSelection.vectorReductionFusion = true;
+    else if (arg == "--fuse-collect-fold")
+      options.mathematicalSelection.collectFoldFusion = true;
     else
       return refuse(error("source.options", "unknown language option: " + arg));
   }
@@ -192,9 +205,26 @@ int runLanguageCompiler(int argc, char **argv) {
       return refuse(report.takeError());
     checked["notations"] = cantFail(json::parse(*report));
   }
-  if (entry.empty() && command == "language-check") {
-    outs() << json::Value(std::move(checked)) << '\n';
+  if (api) {
+    auto report = inspectPublicAPI(*project, limits);
+    if (!report)
+      return refuse(report.takeError());
+    checked["api"] = cantFail(json::parse(*report));
+  }
+  auto publishCheck = [&]() {
+    std::string bytes;
+    // All optional views share an aggregate ceiling below the SDK process
+    // reader's 64 MiB limit. Refusal never publishes a partial JSON document.
+    BoundedStream out(bytes, 32 * 1024 * 1024);
+    out << json::Value(std::move(checked)) << '\n';
+    if (out.overflow())
+      return refuse(
+          error("source.limit", "source check report byte limit exceeded"));
+    outs() << bytes;
     return 0;
+  };
+  if (entry.empty() && command == "language-check") {
+    return publishCheck();
   }
   auto selected = closeEntry(*project, entry, limits, entryKind);
   if (!selected)
@@ -205,8 +235,7 @@ int runLanguageCompiler(int argc, char **argv) {
   if (command == "language-check") {
     checked["entry"] = selected->entry().qualifiedName;
     checked["original"] = original->identity();
-    outs() << json::Value(std::move(checked)) << '\n';
-    return 0;
+    return publishCheck();
   }
   if (command == "language-emit") {
     outs() << original->bytes();

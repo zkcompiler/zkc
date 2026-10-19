@@ -2,12 +2,12 @@
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "support/NativeCases.h"
+#include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/Mathematical.h"
-#include "zkc/Dialect/Protocol/NativePolicy.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include "llvm/ADT/StringSet.h"
@@ -89,6 +89,8 @@ int main() {
              {"groups:bn254.g2", true},
              {"groups:ristretto255.group", true},
              {"group:bn254.gt", true},
+             {"groups:bls12-381.g2", true},
+             {"group:bls12-381.gt", true},
              {"matrix:koala-bear.ext8-binomial3", true},
              {"proof:rows.merkle-keccak256.koala-bear/0", true},
              {"proof:rows.merkle-keccak256.koala-bear.ext8-binomial3/0", true},

@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, path::Path};
 use zkc_backends::{
     Domain, EntryPolicy, FieldArray, GroupPoint, NativeBackend, Policy, Scalar, Value,
 };
-use zkc_runtime::interactive::{Identity, LogicalType};
+use zkc_runtime::vm::{Identity, LogicalType};
 use zkc_test_support::hex;
 use zkc_tools::proof::{NativeDeployment, NativeProofReport};
 fn backend() -> NativeBackend {
@@ -254,7 +254,7 @@ fn main() {
             }
             runs += 1;
         }
-        if case["count"].is_null() && (name.ends_with("_0") || name.ends_with("_1")) {
+        if case["count"].is_null() && ["_0", "_1", "_2"].iter().any(|s| name.ends_with(s)) {
             let too_many = inputs(&envelope, family, 9, true);
             assert!(
                 execute(&deployment, &too_many, None, family)

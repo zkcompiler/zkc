@@ -10,7 +10,7 @@ pub const GROUP_BYTES: usize = 48;
 /// A subgroup point. Raw upstream coordinates cannot bypass checked decoding.
 /// Identity and zero scalar multiplication are legitimate group operations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct GroupPoint(G1Affine);
+pub struct GroupPoint(pub(crate) G1Affine);
 impl GroupPoint {
     /// Standard arkworks G1 generator.
     pub fn generator() -> Self {

@@ -11,7 +11,7 @@ import pytest
 
 from input_files import decimal_values
 from octic_reference import P, add as extension_add, mul as extension_mul
-from source_modules import library_modules
+from source_modules import core_packages, library_modules
 from test_compositional_protocol_math import ProjectEntry, project_modules, published_inputs
 from test_total_callback_selection import compile_entry
 
@@ -162,6 +162,24 @@ def test_lookup_products_select_nested_indexed_lanes_and_reduction(
             denominator_reference(arithmetic, inputs))
 
 
+@pytest.mark.parametrize('field', FIELDS)
+@pytest.mark.parametrize('bulk', [False, True])
+def test_lookup_collect_fold_removes_intermediate_vectors(
+        toolchain, journal, directory, field, bulk):
+    flags = ['--fuse-collect-fold'] + ([] if bulk else ['--no-finite-bulk'])
+    entry, sites = compile_consumer(toolchain, journal, directory, flags, field, CONSUMERS[1])
+    assert not any(sites[contract] for contract in
+                   ('vector.empty', 'vector.append', 'vector.scale', 'vector.product')), sites
+    arithmetic = ReferenceField(field)
+    rng = random.Random(30791)
+    for size in (0, 1, 17):
+        inputs = {'fingerprints': [arithmetic.random(rng) for _ in range(size)],
+                  'gamma': arithmetic.random(rng), 'other_gamma': arithmetic.random(rng),
+                  'gate': arithmetic.random(rng), 'initial': arithmetic.random(rng)}
+        assert entry.run(f'size-{size}', inputs) == decimal_values(
+            denominator_reference(arithmetic, inputs))
+
+
 def integer_inputs(value):
     if isinstance(value, dict):
         return {key: integer_inputs(item) for key, item in value.items()}
@@ -219,4 +237,4 @@ use zkc::finite_math as total;
 domain F = field("{field}");
 ''' + body)
     journal.run([toolchain.compiler, 'language-check', '--source-format=zkc',
-                 f'--module=sample={source}', *library_modules('zkc')], refuses='source.data-bound')
+                 f'--module=sample={source}', *library_modules(*core_packages())], refuses='source.data-bound')

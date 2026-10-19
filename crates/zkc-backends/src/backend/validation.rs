@@ -1,11 +1,9 @@
-//! Shared entry, operand and result checks for every native kernel.
+//! Shared entry, operand and result checks for every native operation.
 use super::EntryPolicy;
 use crate::{Policy, Result, Value, exhausted, refused};
 use crate::{SetupRegistry, resource::Resources};
 use std::collections::HashSet;
-use zkc_runtime::interactive::{
-    Frame, FrameKind, Invocation, Retained, Type, Value as RuntimeValue,
-};
+use zkc_runtime::vm::{Frame, FrameKind, Invocation, Retained, Type, Value as RuntimeValue};
 
 pub(super) struct Core {
     pub(super) policy: Policy,
@@ -79,11 +77,15 @@ impl Core {
                 None
             }
             Value::Bn254G1Vector(v) => {
-                self.policy.bn254_groups::<crate::Bn254G1>(v.len())?;
+                self.policy.typed_groups::<crate::Bn254G1>(v.len())?;
                 None
             }
             Value::Bn254G2Vector(v) => {
-                self.policy.bn254_groups::<crate::Bn254G2>(v.len())?;
+                self.policy.typed_groups::<crate::Bn254G2>(v.len())?;
+                None
+            }
+            Value::Bls12381G2Vector(v) => {
+                self.policy.typed_groups::<crate::Bls12381G2>(v.len())?;
                 None
             }
             Value::Bytes(a) => {
@@ -104,6 +106,51 @@ impl Core {
             }
             Value::KoalaBearExt8Matrix(m) => {
                 m.policy(&self.policy)?;
+                None
+            }
+            Value::KoalaBearExt4Matrix(m) => {
+                m.policy(&self.policy)?;
+                None
+            }
+            Value::KoalaBearExt4Vector(a) => {
+                self.policy.vector_width(a.len(), 16)?;
+                None
+            }
+            Value::KoalaBearExt4Polynomial(a) => {
+                self.policy.vector_width(a.len(), 16)?;
+                if !crate::kernels::arithmetic::normalized(a) {
+                    return Err(refused("polynomial-normalization"));
+                }
+                None
+            }
+            Value::Binary64Matrix(m) => {
+                m.policy(&self.policy)?;
+                None
+            }
+            Value::Binary64Vector(a) => {
+                self.policy.vector_width(a.len(), 8)?;
+                None
+            }
+            Value::Binary64Polynomial(a) => {
+                self.policy.vector_width(a.len(), 8)?;
+                if !crate::kernels::arithmetic::normalized(a) {
+                    return Err(refused("polynomial-normalization"));
+                }
+                None
+            }
+            Value::Binary64Ext3Matrix(m) => {
+                m.policy(&self.policy)?;
+                None
+            }
+            Value::Binary64Ext3Vector(a) => {
+                self.policy.vector_width(a.len(), 24)?;
+                None
+            }
+            Value::Binary64Ext3Polynomial(a) => {
+                self.policy.vector_width(a.len(), 24)?;
+                if !crate::kernels::arithmetic::normalized(a) {
+                    return Err(refused("polynomial-normalization"));
+                }
                 None
             }
             Value::KoalaBearExt8Vector(a) => {
@@ -200,9 +247,24 @@ impl Core {
                 crate::oracle::validate_hash_count(Type::Proof, path.len(), &self.policy)?;
                 None
             }
-            Value::OracleStates(_, states) => {
+            Value::OracleStates(domain, states) => {
                 self.policy
                     .vector_width(states.len(), std::mem::size_of::<crate::oracle::State>())?;
+                if states.iter().any(|state| state.domain() != *domain) {
+                    return Err(refused("oracle-domain"));
+                }
+                None
+            }
+            Value::MerkleDigest(..) | Value::MerkleProof(..) | Value::MerkleDigests(..) => {
+                crate::merkle::validate(v, &self.policy)?;
+                None
+            }
+            Value::MerkleTrees(scheme, trees) => {
+                self.policy
+                    .vector_width(trees.len(), std::mem::size_of::<crate::merkle::State>())?;
+                if trees.iter().any(|tree| tree.scheme() != *scheme) {
+                    return Err(refused("oracle-domain"));
+                }
                 None
             }
             Value::Shake128State(..)
@@ -212,11 +274,20 @@ impl Core {
             | Value::Bn254G1(..)
             | Value::Bn254Gt(..)
             | Value::Bn254G2(..)
+            | Value::Bls12381G2(..)
+            | Value::Bls12381Gt(..)
             | Value::OracleRoot(..)
             | Value::OracleState(..)
+            | Value::MerkleTree(..)
             | Value::Index(..)
             | Value::KoalaBearExt8Field(..)
             | Value::KoalaBearExt8Round(..)
+            | Value::KoalaBearExt4Field(..)
+            | Value::KoalaBearExt4Round(..)
+            | Value::Binary64Field(..)
+            | Value::Binary64Round(..)
+            | Value::Binary64Ext3Field(..)
+            | Value::Binary64Ext3Round(..)
             | Value::KoalaBearField(..)
             | Value::KoalaBearRound(..)
             | Value::RistrettoField(..)
@@ -240,7 +311,7 @@ impl Core {
     /// Pure entry constraints; missing values are only pending resource roots.
     pub(super) fn check_entry_values<'a>(
         &self,
-        inputs: impl Iterator<Item = &'a (String, zkc_runtime::interactive::PhysicalType)> + Clone,
+        inputs: impl Iterator<Item = &'a (String, zkc_runtime::vm::PhysicalType)> + Clone,
         values: &[Option<&Value>],
     ) -> Result<()> {
         if inputs.clone().count() != values.len() {
@@ -312,11 +383,10 @@ impl Core {
         &self,
         i: &Invocation<'_>,
         args: &[Value],
-        signature: &zkc_runtime::interactive::BoundSignature,
+        signature: &zkc_runtime::vm::BoundSignature,
         call: Option<&mut Option<super::NativeCall>>,
     ) -> Result<()> {
         if i.binding.signature() != signature
-            || i.binding.implementation() != i.kernel
             || args.len() != signature.inputs.len()
             || args
                 .iter()

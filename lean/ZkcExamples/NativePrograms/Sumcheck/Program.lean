@@ -3,6 +3,7 @@ module
 public import ZkcExamples.NativePrograms.SumcheckData
 
 public import Zkc.Protocols.Sumcheck.Common.Program
+public import Mathlib.Tactic.FailIfNoProgress
 
 @[expose] public section
 
@@ -15,8 +16,6 @@ the admitted constructor data with an explicit field interpretation.
 -/
 
 set_option autoImplicit false
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 
 namespace ZkcExamples.NativePrograms.Sumcheck
 
@@ -24,8 +23,6 @@ open Zkc.Source Zkc.Source.Common Zkc.Source.Common.Native
 open Zkc.Protocols.AlgebraicRounds (Message)
 open Zkc.Polynomial Zkc.Probability
 
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 4000000 in
 def imported : Imported := SumcheckData.snapshot.check.toOption.get (by decide +kernel)
 
 export Zkc.Protocols.Sumcheck.Common
@@ -51,20 +48,28 @@ def wiring : Zkc.Protocols.Sumcheck.Common.Wiring :=
 
 abbrev experiment := Zkc.Protocols.Sumcheck.Common.experiment (F := F) wiring
 
+set_option maxRecDepth 20000 in
 def verifier (coefficients : Coefficients F) (claim : F) (service : Nat) :
     PIR.Proc (actions (F := F)) (Option Bool) :=
   imported.denote (scalarMeaning F F) id 1 (verifierInputs coefficients claim service)
 
-set_option maxRecDepth 20000 in
 set_option maxHeartbeats 4000000 in
+set_option maxRecDepth 20000 in
 theorem verifier_correspondence (coefficients : Coefficients F) (claim : F) (service : Nat) :
     verifier coefficients claim service =
       experiment coefficients claim service := by
   change (imported.program.denote (scalarMeaning F F) id 1
     (verifierInputs coefficients claim service).get).bind PIR.Proc.done = _
   rw [PIR.Proc.bind_done]
-  rfl
+  repeat' first
+    | (apply PIR.Proc.call_congr; intro reply)
+    | (change (if _ then _ else _ : PIR.Proc _ _).bind _ = _
+       rw [PIR.Proc.bind_ite]
+       simp only [↓reduceIte])
+    | rfl
+    | fail_if_no_progress congr 1
 
+set_option maxRecDepth 20000 in
 /-- This certificate is independent of the later choice of property and game. -/
 theorem contract : Zkc.Protocols.Sumcheck.Common.VerifierContract wiring (verifier (F := F)) :=
   ⟨fun coefficients claim service => ⟨verifier_correspondence coefficients claim service⟩⟩

@@ -1,9 +1,7 @@
 use super::support::*;
 use serde_json::json;
 use zkc_backends::{Policy, Value};
-use zkc_runtime::interactive::{
-    Backend, Identity, LogicalType, PhysicalType, Representation, Type, admit_supplied,
-};
+use zkc_runtime::vm::{Backend, Identity, LogicalType, PhysicalType, Representation, Type};
 #[test]
 fn nominal_associations_and_native_advertisements_are_checked_independently() {
     let backend = backend(Policy::default());
@@ -230,8 +228,14 @@ fn exact_attribute_counts_canonical_naturals_and_scalar_moduli_are_admitted() {
                 &ret,
             );
             assert_eq!(
-                admit_supplied(&bytes, &backend).unwrap_err().code,
-                zkc_runtime::interactive::ErrorCode::Attributes
+                zkc_runtime::vm::Program::decode(&bytes)
+                    .and_then(|program| {
+                        program.check_installation(&backend)?;
+                        Ok(program)
+                    })
+                    .unwrap_err()
+                    .code,
+                zkc_runtime::vm::ErrorCode::Attributes
             );
         }
     }
@@ -245,7 +249,14 @@ fn exact_attribute_counts_canonical_naturals_and_scalar_moduli_are_admitted() {
         &sig.outputs,
         &["x".into()],
     );
-    assert!(admit_supplied(&bytes, &backend).is_err());
+    assert!(
+        zkc_runtime::vm::Program::decode(&bytes)
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .is_err()
+    );
     assert!(matches!(
         call(
             false,
@@ -260,7 +271,7 @@ fn exact_attribute_counts_canonical_naturals_and_scalar_moduli_are_admitted() {
 fn runtime_refuses_wrong_implementation_and_full_operand_identity() {
     for d in [false, true] {
         let mut b = Controlled::new(super::support::backend(Policy::default()));
-        b.implementation = Some("dalek/field.neg".into());
+        b.binding = Some(binding(d, "field.neg"));
         assert_eq!(
             one(
                 b,
@@ -270,7 +281,7 @@ fn runtime_refuses_wrong_implementation_and_full_operand_identity() {
             )
             .0
             .unwrap_err(),
-            "refused:kernel-operands"
+            "refused:kernel-binding"
         );
         let mut b = Controlled::new(super::support::backend(Policy::default()));
         b.substitute = Some(field(!d, 1));

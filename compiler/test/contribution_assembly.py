@@ -455,6 +455,14 @@ def Second : ZKC_Contribution<"second", ["base"], SecondRecords>;
     inventory(prefix + first + 'def Duplicate : ZKC_Contribution<"first", [], []>;', "duplicate contribution identifier")
     inventory(prefix + first + 'def Duplicate : ZKC_Contribution<"other", [], FirstRecords>;', "multiple contribution owners")
     inventory(prefix + 'def Extra : ZKC_Type<"unowned">;', "no contribution owner")
+    # Base rows are ordered by ordinal, so the base contribution cannot repeat
+    # one; extension rows use semantic keys and may reuse any value.
+    inventory(prefix.replace(
+        '  include "zkc/Contracts/Declarations.td"\n',
+        '  include "zkc/Contracts/Declarations.td"\n'
+        '  def Twin : ZKC_Operation<"twin.empty", [], [], []> { int ordinal = 161; }\n'),
+        "duplicate base ZKC_Operation ordinal 161: OpCurveIdentity, Twin")
+    inventory(prefix + first.replace("int ordinal = 900", "int ordinal = 161"))
     cross = '''defset list<ZKC_Declaration> CrossRecords = {
 def CrossOp : ZKC_Operation<"cross.identity", [], [ZKC_Apply<ExtraType>], [ZKC_Apply<ExtraType>]>;
 }

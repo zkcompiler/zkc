@@ -1,12 +1,13 @@
-//! Bulk substitution of admitted ring expressions over KoalaBear and Ext8.
+//! Bulk substitution of admitted ring expressions over KoalaBear and its
+//! installed extensions.
 //! Assets are immutable Host configuration; a proof message cannot install one.
 use crate::{Policy, Result, Value, exhausted, refused};
 use p3_field::{Field, PackedValue, PrimeCharacteristicRing};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, sync::Arc};
 use zkc_runtime::{
-    interactive::{Identity, Invocation},
     ring::{Expression, Node},
+    vm::{Identity, Invocation},
 };
 
 pub const DEFAULT_WORK_LIMIT: u64 = 1 << 28;
@@ -17,6 +18,7 @@ mod sealed {
     pub trait Sealed {}
     impl Sealed for crate::KoalaBear {}
     impl Sealed for crate::KoalaBearExt8 {}
+    impl Sealed for crate::KoalaBearExt4 {}
 }
 pub trait Carrier: Field + sealed::Sealed {
     const IDENTITY: Identity;
@@ -26,6 +28,9 @@ impl Carrier for crate::KoalaBear {
 }
 impl Carrier for crate::KoalaBearExt8 {
     const IDENTITY: Identity = Identity::KoalaBearExt8;
+}
+impl Carrier for crate::KoalaBearExt4 {
+    const IDENTITY: Identity = Identity::KoalaBearExt4;
 }
 
 /// The expected digest must come from the authorized program's closed reference.
@@ -76,7 +81,7 @@ impl Registry {
             .cloned()
             .ok_or_else(|| refused("ring-asset-missing"))
     }
-    /// Admitted content identities in ascending order.
+    /// Program content identities in ascending order.
     pub fn identities(&self) -> impl ExactSizeIterator<Item = &str> {
         self.assets.keys().map(String::as_str)
     }
@@ -130,16 +135,17 @@ fn checked_product(a: usize, b: usize) -> Result<usize> {
     a.checked_mul(b).ok_or_else(|| exhausted("ring-shape"))
 }
 fn field_compatible(expression: &Expression, carrier: Identity) -> Result<()> {
-    if !matches!(carrier, Identity::KoalaBear | Identity::KoalaBearExt8) {
+    if !matches!(
+        carrier,
+        Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4
+    ) {
         return Err(refused("ring-carrier"));
     }
     if expression
         .inputs()
         .iter()
         .chain(expression.facts().iter().map(|f| &f.field))
-        .any(|f| {
-            *f != carrier && !(carrier == Identity::KoalaBearExt8 && *f == Identity::KoalaBear)
-        })
+        .any(|f| *f != carrier && carrier.base_field() != Some(*f))
     {
         return Err(refused("ring-carrier"));
     }
@@ -549,13 +555,16 @@ pub(crate) fn apply(
         Some(Value::KoalaBearExt8Vector(_)) => {
             dispatch!(KoalaBearExt8Vector, Identity::KoalaBearExt8)
         }
+        Some(Value::KoalaBearExt4Vector(_)) => {
+            dispatch!(KoalaBearExt4Vector, Identity::KoalaBearExt4)
+        }
         _ => Err(refused("ring-carrier")),
     }
 }
 
 pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
     use crate::bindings::poly;
-    use zkc_runtime::interactive::{AttributeRule, Type::*};
+    use zkc_runtime::vm::{AttributeRule, Type::*};
     &[
         poly::operation(
             "ring.point",

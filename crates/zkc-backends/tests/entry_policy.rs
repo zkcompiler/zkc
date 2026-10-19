@@ -1,12 +1,17 @@
+use zkc_runtime::interpreter::Runner;
 mod common;
 use common::*;
-use zkc_runtime::interactive::{Runner, admit_supplied};
 
 #[test]
 fn heterogeneous_tables_follow_explicit_entry_shapes() {
     let bytes = program(&[("small", "table"), ("large", "table")], vec![], &[], &[]);
     let backend = ark_backend(None);
-    let admitted = admit_supplied(&bytes, &backend).unwrap();
+    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+        .and_then(|program| {
+            program.check_installation(&backend)?;
+            Ok(program)
+        })
+        .unwrap();
     assert!(
         Runner::new(
             &admitted,

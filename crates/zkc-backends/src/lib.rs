@@ -9,6 +9,7 @@ mod external_kernels;
 pub mod hash;
 mod kernels;
 pub mod matrix;
+pub mod merkle;
 pub mod oracle;
 pub mod relation;
 mod resource;
@@ -22,10 +23,13 @@ mod value;
 /// Independently installed physical domains and their nominal associations.
 pub mod domains;
 pub mod plonky3;
-pub use plonky3::{KoalaBear, KoalaBearExt8, parse_decimal as parse_koala_bear_decimal};
+pub use plonky3::binary::{Binary64, Binary64Ext3};
+pub use plonky3::{
+    KoalaBear, KoalaBearExt4, KoalaBearExt8, parse_decimal as parse_koala_bear_decimal,
+};
 
 pub use backend::{
-    ComputationCheckpoint, EntryPolicy, NativeBackend, NativeCall, NativeKernel, PortConstraint,
+    ComputationCheckpoint, EntryPolicy, NativeBackend, NativeCall, NativeOperation, PortConstraint,
 };
 pub use codec::{
     NativeInputSize, NativeWireError, has_native_wire, native_wire_size, readable_wire,
@@ -35,7 +39,7 @@ pub use resource::{Capability, CapabilityObservation, Domain, LogicalUnit};
 pub use setups::SetupRegistry;
 pub use value::{Policy, Value};
 pub use zkc_arkworks::{GroupPoint, Keys, Scalar, parse_decimal};
-use zkc_runtime::interactive::BackendError;
+use zkc_runtime::vm::BackendError;
 
 /// Exact size of the BLS12-381 base/challenge field; no reduction or floating-point loss.
 /// For an independently uniform challenge and a fixed nonzero degree-d
@@ -87,6 +91,7 @@ pub use kernels::arithmetic::parse_ristretto_decimal;
 pub const RISTRETTO_SCALAR_MODULUS_DECIMAL: &str =
     "7237005577332262213973186563042994240857116359379907606001950938285454250989";
 
+pub use zkc_arkworks::bls12_381::{G2 as Bls12381G2, Gt as Bls12381Gt};
 /// BN254 scalar field and checked subgroup points.
 pub use zkc_arkworks::bn254::Gt as Bn254Gt;
 pub use zkc_arkworks::bn254::{

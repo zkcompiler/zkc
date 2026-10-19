@@ -1,0 +1,14 @@
+{
+  "first_base": {
+    "bytes": "97f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb"
+  },
+  "first_point": {
+    "bytes": "89ece308f9d1f0131765212deca99697b112d61f9be9a5f1f3780a51335b3ff981747a0b2ca2179b96d2c0c9024e5224"
+  },
+  "second_base": {
+    "bytes": "b0e7791fb972fe014159aa33a98622da3cdc98ff707965e536d8636b5fcc5ac7a91a8c46e59a00dca575af0f18fb13dc"
+  },
+  "second_point": {
+    "bytes": "a60d5589316a5e16e1d9bb03db45136afb9a3d6e97d350256129ee32a8e33396907dc44d2211762967d88d3e2840f71b"
+  }
+}

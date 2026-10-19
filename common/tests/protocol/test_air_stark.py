@@ -16,8 +16,8 @@ from logical_tree import decode_tree
 
 ROOT = Path(__file__).resolve().parents[3]
 EXAMPLE = ROOT / 'common/tests/fixtures/projects/air-stark/main.zkc'
-TABLE = ROOT / 'libraries/air/table.zkc'
-STARK = ROOT / 'libraries/stark/koala_bear/table.zkc'
+TABLE = ROOT / 'libraries/relations/air/table.zkc'
+STARK = ROOT / 'libraries/arguments/stark/single_table/koala_bear_octic/lib.zkc'
 FIXTURE = ROOT / 'compiler/adapters/plonky3/fixtures/recurrence'
 P = 2130706433
 
@@ -68,7 +68,7 @@ def compile_entry(toolchain, journal, directory, *, log_size=5, queries=8,
     path.write_text(source)
     command = [toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
                f'--module=air_stark_example={path}',
-               *library_modules('stark', overrides={'stark::koala_bear::table': stark, 'air::table': table}),
+               *library_modules('arguments/stark/configurations/contract', 'arguments/stark/configurations/koala_bear_octic', 'arguments/stark/configurations/koala_bear_quartic', 'arguments/stark/sampling', 'arguments/stark/single_table', 'arguments/stark/single_table/koala_bear_octic', 'arguments/stark/whole_bundle', overrides={'stark::octic_table': stark, 'air::table': table}),
                f'--asset=recurrence=relation-bundle-json={FIXTURE}/bundle.json',
                f'air_stark_example::{entry}', f'--output={package}', *flags]
     report = journal.json(command)
@@ -201,7 +201,7 @@ def test_stark_authenticates_claims_roots_and_late_openings(toolchain, journal, 
 def test_stark_transcript_orders_commitments_claims_and_queries(toolchain, journal):
     bundle = journal.json([toolchain.compiler, 'language-bundle', '--source-format=zkc',
         '--entry=air_stark_example::Proof', f'--module=air_stark_example={EXAMPLE}',
-        *library_modules('stark', overrides={'stark::koala_bear::table': STARK}),
+        *library_modules('arguments/stark/configurations/contract', 'arguments/stark/configurations/koala_bear_octic', 'arguments/stark/configurations/koala_bear_quartic', 'arguments/stark/sampling', 'arguments/stark/single_table', 'arguments/stark/single_table/koala_bear_octic', 'arguments/stark/whole_bundle', overrides={'stark::octic_table': STARK}),
         f'--asset=recurrence=relation-bundle-json={FIXTURE}/bundle.json'])
     descriptor = bundle[2]
     assert descriptor[0] == 'zkc.native-proof-descriptor/0'
@@ -274,7 +274,7 @@ def test_stark_rejects_consistent_dishonest_prover_words(toolchain, journal, dir
     # the honest source's generated identifiers after inserting P operations.
     emitted = journal.run([toolchain.compiler, 'language-emit', '--source-format=zkc',
         '--entry=air_stark_example::Proof', f'--module=air_stark_example={directory}/main.zkc',
-        *library_modules('stark', overrides={'stark::koala_bear::table': library}),
+        *library_modules('arguments/stark/configurations/contract', 'arguments/stark/configurations/koala_bear_octic', 'arguments/stark/configurations/koala_bear_quartic', 'arguments/stark/sampling', 'arguments/stark/single_table', 'arguments/stark/single_table/koala_bear_octic', 'arguments/stark/whole_bundle', overrides={'stark::octic_table': library}),
         f'--asset=recurrence=relation-bundle-json={FIXTURE}/bundle.json'])
     sites = re.findall(r'"protocol\.guard"\(%\d+(?:#\d+)?\) <\{owner = "(\w+)", site = "(s\d+)"\}>', emitted)
     assert [owner for owner, _ in sites[:7]] == [
@@ -294,7 +294,7 @@ def test_stark_rejects_consistent_dishonest_prover_words(toolchain, journal, dir
 
 
 SAMPLER = '''module air_stark_example;
-use stark::koala_bear::{Extension};
+use stark::configurations::koala_bear_octic::{Extension};
 use stark::sampling::{consider, finish};
 use zkc::vector::{Vector};
 fn choose(values: Vector<Extension>, shift: Extension) -> Extension {
@@ -367,7 +367,7 @@ fn inspect(trace:Vector<E>, configuration:Vector<E>, data:Vector<E>,
  let quotient=quotient_values<E,0,B>(w,c,none,data,8,shift,size,alpha);
  let chunks=split_quotient(quotient,shift,size,8,2);
  let opened=claims<E,0,B>(trace,configuration,none,data,8,zeta);
- let quotient_opened=opening_claims(chunks,2,shift,size,zeta);
+ let quotient_opened=opening_claims(zkc::coset::column_batch(zkc::coset::coset_domain(shift,size),2,chunks),zeta);
  let valid=identity<E,0,B>(opened,quotient_opened,configuration,none,data,8,zeta,alpha);
  let reduced=deep_word<E,0,B>(w,chunks,opened,quotient_opened,8,shift,size,zeta,rho,eta);
  return (quotient,chunks,opened,quotient_opened,valid,reduced);

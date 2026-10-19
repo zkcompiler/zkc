@@ -1,7 +1,7 @@
 //! Malformed messages and changed mathematical statements, with binding headers
 //! recomputed where needed so terminal failures are not just envelope failures.
 use super::*;
-use zkc_runtime::interactive::Value as RuntimeValue;
+use zkc_runtime::vm::Value as RuntimeValue;
 fn error(deployment: &NativeDeployment, input: &Json, proof: Option<&[u8]>) -> String {
     match zkc_test_drivers::execute(
         deployment,
@@ -82,8 +82,8 @@ pub fn check(
         json!([["value", ["commitment:multilinear.kzg.bls12-381/0"]]]),
     );
     for logical in ["opening_state:multilinear.kzg.bls12-381/0", &nested] {
-        let ty = zkc_runtime::interactive::PhysicalType::default_for(
-            zkc_runtime::interactive::LogicalType::parse(logical).unwrap(),
+        let ty = zkc_runtime::vm::PhysicalType::default_for(
+            zkc_runtime::vm::LogicalType::parse(logical).unwrap(),
         )
         .unwrap();
         let mut changed = envelope.clone();
@@ -109,7 +109,10 @@ pub fn check(
             .unwrap()
             .push(json!(["9", logical]));
         let bytes = serde_json::to_vec(&candidate).unwrap();
-        let admitted = zkc_runtime::interactive::admit_supplied(&bytes, &codec);
+        let admitted = zkc_runtime::vm::Program::decode(&bytes).and_then(|program| {
+            program.check_installation(&codec)?;
+            Ok(program)
+        });
         admitted.expect("unused private input must pass ordinary typed admission");
         changed[4] = json!(String::from_utf8(bytes.clone()).unwrap());
         changed[5] = json!(digest(&bytes));

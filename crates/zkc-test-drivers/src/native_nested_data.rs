@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 use std::{path::Path, sync::Arc};
 use zkc_arkworks::Keys;
 use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Scalar, Sequence, Value};
-use zkc_runtime::interactive::LogicalType;
+use zkc_runtime::vm::LogicalType;
 use zkc_test_support::hex;
 use zkc_tools::proof::NativeDeployment;
 
@@ -403,12 +403,9 @@ fn main() {
                 let proof = report.outcome.unwrap();
                 execute(&deployment, &v, Some(&proof)).unwrap();
                 assert!(
-                    report.usage.total_value_bytes
-                        < zkc_runtime::interactive::Limits::TOTAL_VALUE_BYTES
+                    report.usage.total_value_bytes < zkc_runtime::vm::Limits::TOTAL_VALUE_BYTES
                 );
-                assert!(
-                    report.usage.logical_bytes < zkc_runtime::interactive::Limits::LOGICAL_BYTES
-                );
+                assert!(report.usage.logical_bytes < zkc_runtime::vm::Limits::LOGICAL_BYTES);
             }
         }
         println!(

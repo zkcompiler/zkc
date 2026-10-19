@@ -26,6 +26,8 @@ impl Source {
             release_storage: false,
             finite_bulk: true,
             fuse_vector_reductions: false,
+            fuse_collect_fold: false,
+            calculation_batching: true,
         };
         for &(key, value) in &args.options {
             let value = value.unwrap_or("");
@@ -50,8 +52,16 @@ impl Source {
                     options.finite_bulk = false;
                     false
                 }
+                "--no-calculation-batching" => {
+                    options.calculation_batching = false;
+                    false
+                }
                 "--fuse-vector-reductions" => {
                     options.fuse_vector_reductions = true;
+                    false
+                }
+                "--fuse-collect-fold" => {
+                    options.fuse_collect_fold = true;
                     false
                 }
                 "--module" => {
@@ -105,7 +115,7 @@ impl Source {
     pub fn describe(&self, report: &mut Json) {
         report["mode"] = json!("project");
         report["compiler"] = json!(self.compiler.path());
-        report["options"] = json!({"simplify":self.options.simplify,"release_storage":self.options.release_storage,"finite_bulk":self.options.finite_bulk,"fuse_vector_reductions":self.options.fuse_vector_reductions});
+        report["options"] = json!({"simplify":self.options.simplify,"release_storage":self.options.release_storage,"finite_bulk":self.options.finite_bulk,"fuse_vector_reductions":self.options.fuse_vector_reductions,"fuse_collect_fold":self.options.fuse_collect_fold,"calculation_batching":self.options.calculation_batching});
         if let Some(path) = self.project.manifest() {
             report["project"] = json!(path);
         }
@@ -140,6 +150,7 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
                     entry,
                     CheckOptions {
                         declarations: args.has("--declarations"),
+                        api: args.has("--api"),
                         notations: args.has("--notations").then(|| NotationOptions {
                             include_private: args.has("--notation-private"),
                             include_installation: args.has("--notation-installation"),
@@ -152,6 +163,11 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
                 .as_object_mut()
                 .unwrap()
                 .extend(fields.as_object().unwrap().clone());
+            if args.has("--api")
+                && let Some(graph) = source.project.graph()
+            {
+                report["project_graph"] = json!(graph);
+            }
             report["scope"] = json!(if entry.is_some() {
                 "entry"
             } else {
@@ -205,4 +221,68 @@ pub(crate) fn run(command: &str, args: &Arguments<'_>) -> Json {
         });
     }
     report
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn source_policy_and_request_metadata_keep_compilation_choices_independent() {
+        // Loading options resolves the executable but does not invoke it.
+        let executable = std::env::current_exe().unwrap();
+        for finite_bulk in [false, true] {
+            for vector_reductions in [false, true] {
+                for collect_fold in [false, true] {
+                    for calculation_batching in [false, true] {
+                        let mut options = vec![
+                            ("--compiler", executable.to_str()),
+                            ("--module", Some("sample=sample.zkc")),
+                        ];
+                        if !finite_bulk {
+                            options.push(("--no-finite-bulk", None));
+                        }
+                        if vector_reductions {
+                            options.push(("--fuse-vector-reductions", None));
+                        }
+                        if collect_fold {
+                            options.push(("--fuse-collect-fold", None));
+                        }
+                        if !calculation_batching {
+                            options.push(("--no-calculation-batching", None));
+                        }
+                        let source = Source::load(&Arguments {
+                            positional: vec![],
+                            options,
+                        })
+                        .unwrap();
+                        assert_eq!(
+                            source.options,
+                            CompileOptions {
+                                simplify: true,
+                                release_storage: false,
+                                finite_bulk,
+                                fuse_vector_reductions: vector_reductions,
+                                fuse_collect_fold: collect_fold,
+                                calculation_batching,
+                            }
+                        );
+                        let mut report = json!({});
+                        source.describe(&mut report);
+                        assert_eq!(
+                            report["options"],
+                            json!({
+                                "simplify": true,
+                                "release_storage": false,
+                                "finite_bulk": finite_bulk,
+                                "fuse_vector_reductions": vector_reductions,
+                                "fuse_collect_fold": collect_fold,
+                                "calculation_batching": calculation_batching,
+                            })
+                        );
+                    }
+                }
+            }
+        }
+    }
 }

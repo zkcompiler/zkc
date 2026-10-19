@@ -55,9 +55,22 @@ arithmetic requires this operation; equal physical widths never insert it.
 
 The installed nominal domain `koala-bear.ext8-binomial3` denotes
 `F_p[X]/(X^8 - 3)`, where `p = 2130706433`, with base `koala-bear` and ascending
-basis `(1, X, …, X^7)`. Its identity fixes the base, degree, defining polynomial
-and basis. Arithmetic is polynomial quotient arithmetic, not integer arithmetic
-modulo `p^8`. Embedding sends `a` to `(a, 0, …, 0)`.
+basis `(1, X, …, X^7)`. The installed nominal domain `koala-bear.ext4-binomial3`
+denotes `F_p[X]/(X^4 - 3)` with the same base and ascending basis
+`(1, X, X^2, X^3)`; `X^4 - 3` is irreducible over `F_p` because 3 is not a
+square modulo `p` and `p ≡ 1 (mod 4)`. Each identity fixes the base, degree,
+defining polynomial and basis. Arithmetic is polynomial quotient arithmetic, not
+integer arithmetic modulo `p^d`. Embedding sends `a` to `(a, 0, …, 0)`. The two
+extensions are distinct domains: neither embeds in the other, and a value of one
+is never a value of the other.
+
+Both hold `ExtensionField`, `TwoAdicField`, `Field`, `CommRing` and
+`CharacteristicNotTwo`; their evaluation domains are the base field's
+power-of-two subgroups and cosets. The octic extension additionally holds
+`IndexRandomness` and is the challenge field of the installed octic Merlin and
+hash-chain suites and of the random service. A sampling service, transcript
+suite or row-commitment scheme for another field is a separate installation with
+its own identity.
 
 Natural casts land in the prime subfield. Generic source natural constants are
 specialized modulo the characteristic; closed `field.constant` and
@@ -65,13 +78,73 @@ specialized modulo the characteristic; closed `field.constant` and
 `p`. They do not encode arbitrary extension coordinates. The catalog's existing
 `modulus` member records this characteristic bound for natural casts, not the
 extension's cardinality. Public extension coordinates use the canonical
-[native structured codec](../formats/messages.md).
+[native structured codec](../formats/messages.md). A
+[binary field](#binary-fields) writes its constants other than `0` and `1` as
+[bit-pattern literals](#bit-pattern-literals).
 
-The native installation uses pinned Plonky3 0.8.0; the executable independent
+The native installation uses pinned Plonky3 0.8.0's
+`BinomialExtensionField<KoalaBear, d>` for both degrees; the executable independent
 `Tools.Interactive.ExtensionReference` uses fixed coordinates, convolution and
-checked exponentiation for inverses. It asserts no unproved Lean field instance
+checked exponentiation for inverses of the octic extension. It asserts no unproved Lean field instance
 or native adequacy theorem. Generic formal PIR semantics remains parameterized
 by mathematical fields and the embedding laws required by each consumer.
+
+## Binary fields
+
+The installed nominal domain `gf2-64.pentanomial-4-3-1` denotes
+`K = F_2[x]/(x^64 + x^4 + x^3 + x + 1)` with the polynomial basis
+`(1, x, …, x^63)`. The installed nominal domain
+`gf2-64.pentanomial-4-3-1.ext3-trinomial1` denotes `E = K[y]/(y^3 + y + 1)`
+with base `K` and basis `(1, y, y^2)`. The pentanomial is irreducible over
+`F_2`: `x^(2^64) ≡ x` modulo it and `gcd(x^(2^32) - x, x^64 + x^4 + x^3 + x + 1) = 1`.
+The trinomial is irreducible over `K`, because a root would lie in
+`F_8 ∩ K = F_2`, where `y^3 + y + 1` has none. So `|K| = 2^64` and
+`|E| = 2^192`. Each identity fixes its base, degree, defining polynomial and
+basis. Arithmetic is polynomial quotient arithmetic over `F_2`; it is not
+integer arithmetic modulo `2^64`. `field.embed<E>` and `vector.embed<E>` send
+`a` to `(a, 0, 0)`. `K` has no declared base: `F_2` is not an installed domain.
+
+Both fields have characteristic two and hold `Field` and `CommRing`; `E` also
+holds `ExtensionField` with `E.BaseField = K`. Neither holds `PrimeField`,
+`TwoAdicField` or `CharacteristicNotTwo`. Addition is the exclusive or of bit
+patterns, negation is the identity and subtraction equals addition. Operations
+that need an integer residue, a two-adic multiplicative subgroup or division by
+two are not defined on these fields: coset domains, interpolation and folding
+on two-adic subgroups, compile-time prime interpolation, Montgomery residues,
+the [Ring](ring-expressions.md) row provider's bulk kernels and
+[relation bundles](relation-bundles.md). Ring formulas over them still form,
+with the natural literals `0` and `1`, and pointwise maps realize through them.
+Inverting zero refuses, as in every installed field.
+
+An element's **bit pattern** lists its coordinates over `F_2`: bit `i` of an
+element of `K` is the coefficient of `x^i`, and bit `64 j + i` of an element of
+`E` is the coefficient of `x^i y^j`. The pattern of an element of `E` is the
+patterns of its three coordinates in basis order. Every pattern of 64 or 192
+bits is exactly one element. Natural casts land in the prime subfield `F_2`, as
+in every field: `field.from_index(n)` is `n mod 2`, and the catalog's `modulus`
+member is `2`.
+
+### Bit-pattern literals
+
+A closed constant of a binary field is written `0`, `1` or a bit-pattern
+literal: `0x` followed by lowercase hexadecimal digits without a leading zero,
+read as an unsigned integer whose binary digits are the element's bit pattern.
+Its value is at least two and below `2^d`, where `d` is 64 for `K` and 192 for
+`E`. Every element therefore has exactly one constant spelling: in `K`,
+`x^4 + x^3 + x + 1` is `0x1b`; in `E`, `y` is `0x10000000000000000`. Uppercase
+digits, leading zeros, `0x0`, `0x1`, decimals above one and values of `2^d` or
+more refuse; nothing is reduced. The form applies wherever a concrete binary
+field's constant is an attribute: `field.constant`, each element of
+`vector.constant` and `algebra.constant`. A symbolic field still admits only
+`0` and `1`, and prime fields and their extensions keep canonical decimal
+residues. In source, `kernel<K>("field.constant"; "0x1b")` writes such a
+constant; numeric source literals remain decimal.
+
+The native installation uses pinned Plonky3 0.8.0's `p3-binary-field` types
+`Poly64` and `Poly192`, which store exactly these bit patterns. Their integer
+constructors cast through `F_2`, like natural casts. Readable and wire forms
+are in the [Entry guide](../runtime/entries.md) and the
+[message grammar](../formats/messages.md).
 
 ## Group identity
 
@@ -93,10 +166,11 @@ not make native allocation infallible.
 
 The installed providers are `dalek/curve.identity` for `ristretto255.group` and
 `edwards25519.prime`, and
-`arkworks/curve.identity` for `bls12-381.g1`, `bn254.g1`, `bn254.g2`, and
-`bn254.gt`. Identity uses the same group representations and canonical codecs
-as other operations in each family. For GT it is multiplicative one; it is not
-extension-field zero. Dense GT vectors and BLS12-381 G2/GT are not installed.
+`arkworks/curve.identity` for `bls12-381.g1`, `bls12-381.g2`, `bls12-381.gt`,
+`bn254.g1`, `bn254.g2`, and `bn254.gt`. Identity uses the same group
+representations and canonical codecs as other operations in each family. For
+GT it is multiplicative one; it is not extension-field zero. Dense GT vectors
+are not installed.
 These are native profile contracts, without a native adequacy or security proof.
 
 ## Prime-order Edwards25519
@@ -128,14 +202,22 @@ Group scaling separately requires `ScalarAction` and the appropriate scalar-fiel
 association. No setup, relation satisfaction, or security theorem follows from
 this capability alone.
 
-The installed instance uses `bn254.fr`, `bn254.g1`, and `bn254.g2`; both groups'
-scalar field is `bn254.fr`. Its scalar modulus is
+Two instances are installed. The first uses `bn254.fr`, `bn254.g1`, and
+`bn254.g2`; both groups' scalar field is `bn254.fr`. Its scalar modulus is
 `21888242871839275222246405745257275088548364400416034343698204186575808495617`.
 The base field used to encode group coordinates is distinct. The scalar domain
-has the pinned generator-5 two-adic root convention and two-adicity 28. Native
-group and pairing operations use arkworks. The current scalar Lean interpretation
-uses abstract group/module equations and does not execute or prove adequacy of
-these production pairing primitives.
+has the pinned generator-5 two-adic root convention and two-adicity 28.
+The second uses `bls12-381.fr`, `bls12-381.g1`, and `bls12-381.g2`, with the
+BLS12-381 scalar modulus given above for `bls12-381.fr`. No two-adic root
+convention is installed for this field; a protocol that needs a root of unity
+states it as a constant. `bls12-381.g2` has the 96-byte compressed
+[mathematical encoding](../realization/external-constructions.md#mathematical-byte-encodings),
+canonical representation `arkworks.bls12-381-g2/0`, group vectors
+`arkworks.bls12-381-g2-vector/0`, and codecs `zkcv.group.bls12-381.g2/0`
+(tag 51) and `zkcv.groups.bls12-381.g2/0` (tag 52). Native group and pairing
+operations use arkworks. The current scalar Lean interpretation uses abstract
+group/module equations and does not execute or prove adequacy of these
+production pairing primitives.
 
 ### Pairing results
 
@@ -152,13 +234,16 @@ arbitrary element of an extension field. Abstract additive group notation is
 retained: target `group_add` multiplies target-field elements, `group_scale`
 exponentiates, zero denotes the multiplicative identity, and negation inverts.
 
-The installed target is `bn254.gt`, with scalar field `bn254.fr`, canonical
-representation `arkworks.bn254-gt/0`, and generator equal to the pairing of the
-installed G1/G2 generators. Its codec is `zkcv.group.bn254.gt/0`: ZKCV tag 50
-followed by exactly 384 canonical arkworks bytes. Decoding checks canonical
-encoding and target subgroup membership; extension-field zero is invalid.
-Only individual target-group values are installed, including recursive data
-containers; a dense `groups:bn254.gt` representation is not installed.
+The installed targets are `bn254.gt`, with scalar field `bn254.fr`, and
+`bls12-381.gt`, with scalar field `bls12-381.fr`. Each target's generator is the
+pairing of its installed G1/G2 generators. The canonical representations are
+`arkworks.bn254-gt/0` and `arkworks.bls12-381-gt/0`. The codec
+`zkcv.group.bn254.gt/0` is ZKCV tag 50 followed by exactly 384 canonical
+arkworks bytes; `zkcv.group.bls12-381.gt/0` is tag 53 followed by exactly 576
+bytes, the twelve base-field coefficients. Decoding checks canonical encoding
+and target subgroup membership; extension-field zero is invalid. Only
+individual target-group values are installed, including recursive data
+containers; dense target-group vectors are not installed.
 The current scalar Lean import profile does not admit pairing target operations
 or provide a native GT adequacy proof.
 

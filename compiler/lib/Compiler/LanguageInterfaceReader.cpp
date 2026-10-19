@@ -1,4 +1,5 @@
 #include "LanguageInterface.h"
+#include "mlir/IR/Builders.h"
 #include "zkc/Compiler/Language.h"
 #include "zkc/Contracts/NativePolicy.h"
 #include "zkc/Contracts/Relation.h"
@@ -691,8 +692,8 @@ class Reader {
       auto found = helpers.find(function->str());
       if (found == helpers.end() ||
           result.externalKind != "zkc.language.formula/0" ||
-          result.key != result.symbol ||
-          *function != relation::formulaSymbol(result.key))
+          result.key != result.symbol || !native.getFormulaAttr() ||
+          *function != native.getFormulaAttr().getValue())
         return fail("invalid formula identity or helper");
       auto helper = found->second;
       if (helper.getFunctionType() != native.getSignature() ||
@@ -1091,6 +1092,58 @@ class Reader {
         return fail("repeated clause name");
       current->clauses.push_back(std::move(*clause));
     }
+    // Independently project the logical selectors through their admitted
+    // native slices. Original PIR owns the inventory and relation references.
+    mlir::Builder builder(function.getContext());
+    auto nativeSelector = [&](const InterfaceSelector &selector,
+                              unsigned index) {
+      return builder.getArrayAttr(
+          {builder.getStringAttr(selector.output ? "output" : "input"),
+           builder.getI64IntegerAttr(index),
+           builder.getStringAttr(nativeRoleName(selector.role))});
+    };
+    auto nativeApplication = [&](const InterfaceApplication &application) {
+      SmallVector<mlir::Attribute> operands;
+      for (const auto &selector : application.operands)
+        for (auto index : selector.native)
+          operands.push_back(nativeSelector(selector, index));
+      return builder.getArrayAttr(
+          {mlir::FlatSymbolRefAttr::get(
+               function.getContext(),
+               view.relations[application.relation].symbol),
+           builder.getArrayAttr(operands)});
+    };
+    SmallVector<mlir::Attribute> retained;
+    for (const auto &clause : current->clauses) {
+      auto cost = [](const InterfaceApplication &application) {
+        uint64_t work = 1;
+        for (const auto &selector : application.operands)
+          work += 1 + selector.native.size();
+        return work;
+      };
+      if (!charge(1 + cost(clause.subject) +
+                  (clause.residual ? cost(*clause.residual) : 0)))
+        return false;
+      using K = SpecificationClause::Kind;
+      StringRef kind = clause.kind == K::Target   ? "target"
+                       : clause.kind == K::Input  ? "input"
+                       : clause.kind == K::Output ? "output"
+                                                  : "continuation";
+      mlir::Attribute residual = builder.getUnitAttr(),
+                      decision = builder.getUnitAttr();
+      if (clause.residual)
+        residual = nativeApplication(*clause.residual);
+      if (clause.decision)
+        decision =
+            nativeSelector(*clause.decision, clause.decision->native.front());
+      retained.push_back(builder.getArrayAttr(
+          {builder.getStringAttr(kind), builder.getStringAttr(clause.name),
+           nativeApplication(clause.subject), residual, decision}));
+    }
+    auto native = function.getContractsAttr();
+    if ((!native && !retained.empty()) ||
+        (native && native != builder.getArrayAttr(retained)))
+      return fail("declaration contracts differ from original PIR");
     return true;
   }
 
@@ -1391,9 +1444,12 @@ class Reader {
           return fail("unexpected native Entry statement");
         const auto &clause = selected.clauses[*proof->target];
         const auto &relation = view.relations[clause.subject.relation];
-        if (statement.getRelation() != relation.symbol ||
+        if (!statement.getTargetAttr() ||
+            statement.getTargetAttr().getValue() != clause.name ||
+            statement.getRelation() != relation.symbol ||
             statement.getAcceptance() != proof->acceptance.native.front())
-          return fail("native statement relation or acceptance differs");
+          return fail(
+              "native statement target, relation or acceptance differs");
         unsigned i = 0;
         for (const auto &operand : clause.subject.operands)
           for (unsigned index : operand.native) {

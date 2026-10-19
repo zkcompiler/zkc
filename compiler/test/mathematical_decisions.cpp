@@ -1,14 +1,18 @@
 #include "../lib/Transforms/AlgorithmSupport.h"
+#include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/LaneRealization.h"
 #include "../lib/Transforms/MathematicalSupport.h"
+#include "../lib/Transforms/RealizationTrace.h"
 #include "../lib/Transforms/RecipeRealizations.h"
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
+#include "support/KernelRecipes.h"
 #include "support/NativeCases.h"
 #include "zkc/Analysis/Computation.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include <fstream>
@@ -19,6 +23,9 @@ using namespace zkc;
 using namespace zkc::test;
 using namespace zkc::mathematical;
 namespace {
+protocol_ir::ProtocolModuleOp unit(ModuleOp module) {
+  return cast<protocol_ir::ProtocolModuleOp>(module.getBody()->front());
+}
 constexpr llvm::StringLiteral fusionFixture =
     R"mlir(!F = !algebra.field<"koala-bear">
 !V = !algebra.field_vector<"koala-bear">
@@ -71,7 +78,10 @@ bool sameWork(const RealizationWork &a, const RealizationWork &b) {
          a.matching.evidence == b.matching.evidence && a.lanes == b.lanes &&
          a.helperOperations == b.helperOperations &&
          a.helperSlots == b.helperSlots && a.polynomial == b.polynomial &&
-         a.finiteExpressions == b.finiteExpressions;
+         a.finiteExpressions == b.finiteExpressions &&
+         a.collectFoldDiscovery == b.collectFoldDiscovery &&
+         a.discardedRecipeCopy == b.discardedRecipeCopy &&
+         a.discardedRecipeSiteBytes == b.discardedRecipeSiteBytes;
 }
 template <class T>
 std::vector<const RealizationEvent *> events(const RealizationTrace &trace) {
@@ -299,25 +309,178 @@ int main() {
         });
       }
       require(succeeded(verify(*source)), "total control refused");
-      auto original = copy(*source), ordered = copy(*source),
-           unobserved = copy(*source);
+      auto numerical =
+          kernelRecipeSource(unit(*source), "total", "calculation");
+      // Force allocation of a different working name in the nested case.
+      if (nested) {
+        auto reserved =
+            cast<func::FuncOp>(kernel::getEntry(*numerical)->clone());
+        reserved.setSymName("_recipe_entry");
+        reserved.setPrivate();
+        numerical->getBody().front().push_back(reserved);
+      }
+      auto original = copy(*source);
+      OwningOpRef<kernel::ModuleOp> before(
+          cast<kernel::ModuleOp>(numerical->clone()));
       RealizationTrace trace;
       RealizationWork work, controlWork, orderedWork;
+      auto ordered = realizeKernelEntry(*numerical, "calculation",
+                                        {false, false}, orderedWork);
+      auto observed = realizeKernelEntry(*numerical, "calculation", {}, work,
+                                         {100000, 1}, &trace);
+      auto unobserved = realizeKernelEntry(*numerical, "calculation", {},
+                                           controlWork, {100000, 1});
       require(
-          succeeded(
-              expandMathRealizations(*ordered, {false, false}, &orderedWork)) &&
-              succeeded(expandMathRealizations(*source, {}, &work, {100000, 1},
-                                               &trace)) &&
-              succeeded(expandMathRealizations(*unobserved, {}, &controlWork,
-                                               {100000, 1})) &&
-              same(*source, *ordered) && same(*source, *unobserved) &&
-              sameWork(work, controlWork) &&
-              succeeded(verifyMathRealizationsPreserved(*original, *source)),
+          ordered && observed && unobserved && same(*observed, *ordered) &&
+              same(*observed, *unobserved) && sameWork(work, controlWork) &&
+              same(*source, *original) &&
+              OperationEquivalence::isEquivalentTo(
+                  *numerical, *before, OperationEquivalence::IgnoreLocations) &&
+              succeeded(kernel::verifyEntryRecipes(*numerical, *observed,
+                                                   "calculation")),
           "total retry changed IR, checking, or accounting");
+      kernelRecipeOutput(*ordered);
+      kernelRecipeOutput(*observed);
+      kernelRecipeOutput(*unobserved);
       require(work.matching.structural < orderedWork.matching.structural,
               "total retry replenished matching work");
-      checkRetry(trace, "calculation-attempt");
+      checkRetry(trace, "kernel-recipe-attempt");
+      auto publications = events<PublicationDecision>(trace);
+      require(llvm::count_if(publications,
+                             [](const RealizationEvent *event) {
+                               return event->parent == 0 &&
+                                      event->service == "kernel-recipes";
+                             }) == 1 &&
+                  trace.activeScopes.empty() &&
+                  trace.declarationOrigins.empty() &&
+                  sameWork(trace.remainingWork, work),
+              "Kernel recipe service lost its publication or final balance");
+      bool observedEntry = false;
+      for (auto *event : events<SelectionDecision>(trace))
+        if (event->subject.site == kernelRecipeSite("calculation", 0)) {
+          require(event->subject.declaration == "calculation" &&
+                      event->subject.position.empty(),
+                  "working entry name escaped into the recipe trace");
+          observedEntry = true;
+        }
+      require(observedEntry, "recipe trace lost the original entry occurrence");
     });
+  cases.run(
+      "declaration origins follow observer scopes and sequential reuse", [&] {
+        auto source = fixture(context, "dot"), before = copy(*source);
+        auto *op = &SymbolTable(unit(*source))
+                        .lookup<local::FuncOp>("work")
+                        .getBody()
+                        .front()
+                        .front();
+        auto *fold = SymbolTable(unit(*source)).lookup("fold");
+        auto original = realizationSubject(op), expected = original;
+        expected.declaration = "original";
+        RealizationTrace trace;
+        RealizationWork work, initial = work;
+        std::string text, remarks;
+        llvm::raw_string_ostream stream(text);
+        trace.ir = &stream;
+        trace.remarks = true;
+        ScopedDiagnosticHandler capture(&context, [&](Diagnostic &diagnostic) {
+          llvm::raw_string_ostream out(remarks);
+          diagnostic.print(out);
+          return success();
+        });
+        {
+          RealizationScope outer(&trace, "origin-parent", op, {}, &work);
+          outer.declarationOrigin("work", "original");
+          outer.declarationOrigin("fold", "original_fold");
+          finite::ComputationDiagnostic diagnostic;
+          diagnostic.subject = op;
+          diagnostic.occurrencePath = {op, fold};
+          {
+            RealizationScope child(&trace, "origin-child", op);
+            child.selectionDiagnostic(op, DecisionFamily::Finite,
+                                      RealizationChoice::Ordered, diagnostic);
+            const auto &event = trace.events.back();
+            auto query = expected;
+            query.occurrence = {{original.site, "original"},
+                                {"local.finite_fold", "original_fold"}};
+            require(
+                event.subject == expected &&
+                    std::get<SelectionDecision>(event.payload).querySubject ==
+                        query,
+                "inherited origins changed identity fields or occurrence "
+                "paths");
+            child.declarationOrigin("work", "nested");
+            outer.selectionDiagnostic(op, DecisionFamily::Finite,
+                                      RealizationChoice::Ordered, diagnostic);
+            require(trace.events.back().subject == expected &&
+                        std::get<SelectionDecision>(trace.events.back().payload)
+                                .querySubject == query,
+                    "nested origin changed an enclosing scope's observation");
+            child.failure(
+                VerificationDecision{VerificationObservation::Mismatch,
+                                     "nested refusal",
+                                     {},
+                                     original});
+            child.complete(CompletionKind::Refused);
+            const auto &completion = trace.events.back();
+            const auto &cause =
+                *std::get<CompletionDecision>(completion.payload).cause;
+            require(
+                completion.subject.declaration == "nested" &&
+                    std::get<VerificationDecision>(cause).subject.declaration ==
+                        "nested",
+                "nested origin did not reach completion and its cause");
+          }
+          auto refuse = [&] {
+            RealizationScope refused(&trace, "origin-refusal", op);
+            refused.declarationOrigin("work", "refused");
+            refused.propose();
+            refused.failure(
+                VerificationDecision{VerificationObservation::Mismatch,
+                                     "early refusal",
+                                     {},
+                                     original});
+          };
+          refuse();
+          const auto &discard =
+              std::get<DiscardDecision>(trace.events.back().payload);
+          require(std::get<VerificationDecision>(discard.cause)
+                          .subject.declaration == "refused",
+                  "early refusal lost its scoped origin");
+          // A source spelling can also name another temporary declaration.
+          // Origin resolution is one lookup, not a transitive rename chain.
+          outer.declarationOrigin("original", "unrelated");
+          protocol::detail::AlgorithmExpansionRecord record;
+          record.occurrences[{"original", original.site}] = {
+              "definition", "original", "authored", {{"call", "work"}}, 0};
+          outer.selection(op, record, DecisionFamily::Finite,
+                          RealizationChoice::Ordered, {});
+          expected.definition = "definition";
+          expected.originalSite = "authored";
+          expected.occurrence = {{"call", "original"}};
+          require(trace.events.back().subject == expected,
+                  "origin restoration or source occurrence lookup failed");
+          outer.complete();
+        }
+        require(
+            trace.activeScopes.empty() && trace.declarationOrigins.empty() &&
+                same(*source, *before) && sameWork(work, initial) &&
+                sameWork(trace.remainingWork, work),
+            "observer origins escaped their scope or changed IR/accounting");
+        for (const auto *rendered : {&text, &remarks})
+          require(rendered->find("subject=@original") != std::string::npos &&
+                      rendered->find("subject=@nested") != std::string::npos &&
+                      rendered->find("subject=@work") == std::string::npos,
+                  "rendered decisions disagreed with recorded source identity");
+        {
+          RealizationScope reused(&trace, "origin-reused", op);
+          reused.complete();
+        }
+        require(trace.events.size() == 1 &&
+                    trace.events.front().sequence == 1 &&
+                    trace.events.front().subject == original &&
+                    trace.declarationOrigins.empty(),
+                "sequential trace reuse inherited a declaration origin");
+      });
   cases.run("reused trace resets only at the outer service", [&] {
     auto source = fixture(context, "dot");
     RealizationTrace trace;
@@ -400,11 +563,17 @@ int main() {
                 std::get<PublicationDecision>(publications.back()->payload)
                         .boundary == PublicationBoundary::PublishedToCaller,
             "demand lowering masqueraded as preparation");
+    require(events<SelectionDecision>(trace).empty(),
+            "logical formation performed numerical selection");
+    auto logical = copy(*source);
+    require(succeeded(kernel::lowerKernels(*source, {}, &trace)) &&
+                succeeded(kernel::verifyKernelLowering(*logical, *source)),
+            "observed Kernel realization failed");
     bool expression = false;
     for (auto *event : events<SelectionDecision>(trace))
       expression |= event->service == "finite-expression";
     require(expression,
-            "total finite selection missing from participant lowering");
+            "total finite selection missing from Kernel realization");
   });
   cases.run("fusion recipes and occurrence choices are observational", [&] {
     auto source = parseSourceString<ModuleOp>(fusionFixture, &context);

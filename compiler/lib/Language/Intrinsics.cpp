@@ -1,5 +1,5 @@
 #include "BodyCheck.h"
-#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Language/Builtins.h"
 #include "llvm/ADT/STLExtras.h"
 using namespace llvm;

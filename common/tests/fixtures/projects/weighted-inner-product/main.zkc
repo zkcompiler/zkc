@@ -1,7 +1,7 @@
 module example;
 use zkc::bytes::{Bytes};
 use zkc::finite_domain::{range};
-use bulletproofs::inner_product as ip;
+use bulletproofs::weighted_inner_product as ip;
 use zkc::curve as curve;
 use zkc::vector as vec;
 use zkc::encoding as encoding;

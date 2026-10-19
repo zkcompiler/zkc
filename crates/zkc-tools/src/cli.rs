@@ -25,7 +25,8 @@ macro_rules! entry_options {
     };
     ($($extra:expr),* $(,)?) => {
         entry_options!(@inspection Opt::new("--no-simplify"),
-            Opt::new("--release-storage"), Opt::new("--fuse-vector-reductions"), Opt::new("--no-finite-bulk"), $($extra),*)
+            Opt::new("--release-storage"), Opt::new("--fuse-vector-reductions"), Opt::new("--fuse-collect-fold"), Opt::new("--no-finite-bulk"),
+            Opt::new("--no-calculation-batching"), $($extra),*)
     };
 }
 const ENTRY: &str = "Select ENTRY by unique short or qualified name. With no name, execution selects the\nsole Entry of the required kind. Use project discovery, --project or explicit modules.\nPinned execution uses --package and --sha256 together and no source options.\nProject inputs default to inputs/<qualified.name>/. Proofs default to
@@ -42,6 +43,7 @@ const COMMANDS: &[Command] = &[
             Opt::new("--module=MODULE=FILE.zkc").repeated(),
             Opt::new("--asset=NAME=FORMAT=FILE").repeated(),
             Opt::new("--declarations"),
+            Opt::new("--api"),
             Opt::new("--notations"),
             Opt::new("--notation-private"),
             Opt::new("--notation-installation"),
@@ -52,6 +54,7 @@ const COMMANDS: &[Command] = &[
 All definitions are checked; ENTRY also checks closure and Protocol IR correspondence.
 Select an Entry by unique short name or qualified module::Name. The report lists Entries.
 --declarations reports completed public callable contracts.
+--api reports the public export graph, type contracts and checked source references.
 --notations reports diagnostic syntax metadata. Add --notation-private for local/private
 records or --notation-installation for installation records; both require --notations.
 Syntax metadata is not a native interface. Named-call views are tooling aids,
@@ -69,7 +72,8 @@ not capture-preserving rewrites.\nChecking does not execute the protocol or esta
             Opt::new("--asset=NAME=FORMAT=FILE").repeated(),
             Opt::new("--no-simplify"),
             Opt::new("--release-storage"),
-            Opt::new("--fuse-vector-reductions"), Opt::new("--no-finite-bulk"),
+            Opt::new("--fuse-vector-reductions"), Opt::new("--fuse-collect-fold"), Opt::new("--no-finite-bulk"),
+            Opt::new("--no-calculation-batching"),
         ],
         description: "Use the nearest zkc.toml, --project=FILE, or explicit modules/assets.\nENTRY is a unique short or qualified name; omit it only when there is one Entry.\nProject output defaults to build/zkc/<qualified.name>.zkpkg beside the manifest.\nExplicit modules require --output. Compilation trusts the selected compiler and source. The report supplies the\nexact package SHA-256 for deployment configuration. Modules and assets may repeat.",
     },
@@ -474,6 +478,57 @@ mod tests {
             let report = run(name, &args(&values));
             assert_eq!(report["code"], "cli-option", "{name}");
             assert_eq!(report["phase"], "arguments");
+        }
+    }
+    #[test]
+    fn collect_fold_flag_is_unique_valueless_and_requires_source_compilation() {
+        for name in [
+            "compile",
+            "run",
+            "prove",
+            "verify",
+            "inputs check",
+            "bindings",
+        ] {
+            let spec = command(name).unwrap();
+            assert!(spec.help().contains("--fuse-collect-fold"), "{name}");
+            let values = args(&["--fuse-collect-fold"]);
+            assert!(spec.parse(&values).unwrap().has("--fuse-collect-fold"));
+            for values in [
+                args(&["--fuse-collect-fold=true"]),
+                args(&["--fuse-collect-fold=false"]),
+                args(&["--fuse-collect-fold="]),
+                args(&["--fuse-collect-fold", "--fuse-collect-fold"]),
+            ] {
+                assert_eq!(
+                    spec.parse(&values).err().unwrap().code,
+                    "cli-option",
+                    "{name}"
+                );
+            }
+            if name != "compile" {
+                let report = run(
+                    name,
+                    &[
+                        "--fuse-collect-fold".into(),
+                        "--package=/missing/package.zkpkg".into(),
+                        format!("--sha256={}", "0".repeat(64)),
+                    ],
+                );
+                assert_eq!(report["code"], "cli-usage", "{name}");
+                assert_eq!(report["phase"], "arguments", "{name}");
+            }
+        }
+        for name in ["check", "inspect", "inputs init"] {
+            let spec = command(name).unwrap();
+            assert!(!spec.help().contains("--fuse-collect-fold"));
+            assert_eq!(
+                spec.parse(&args(&["--fuse-collect-fold"]))
+                    .err()
+                    .unwrap()
+                    .code,
+                "cli-option"
+            );
         }
     }
     #[test]

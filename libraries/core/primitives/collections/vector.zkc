@@ -1,0 +1,55 @@
+module zkc::primitives::vector;
+
+pub type Vector<F: Field> = builtin("vector", F);
+
+pub fn empty<F: Field>() -> Vector<F> = primitive("vector.empty");
+
+pub fn append<F: Field>(values: Vector<F>, value: F) -> Vector<F> = primitive("vector.append");
+
+pub fn length<F: Field>(values: Vector<F>) -> index = primitive("vector.length");
+
+pub fn get<F: Field>(values: Vector<F>, position: index) -> F = primitive("vector.get");
+
+pub fn sum<F: Field>(values: Vector<F>) -> F = primitive("vector.sum");
+
+pub fn product<F: Field>(values: Vector<F>) -> F = primitive("vector.product");
+
+pub fn split<F: Field>(values: Vector<F>) -> (Vector<F>, Vector<F>) = primitive("vector.split");
+
+pub fn add<F: Field>(left: Vector<F>, right: Vector<F>) -> Vector<F> = primitive("vector.add");
+
+pub fn hadamard<F: Field>(left: Vector<F>, right: Vector<F>) -> Vector<F> = primitive("vector.mul");
+
+pub fn scale<F: Field>(values: Vector<F>, scalar: F) -> Vector<F> = primitive("vector.scale");
+
+pub fn dot<F: Field>(left: Vector<F>, right: Vector<F>) -> F = primitive("vector.dot");
+
+pub fn fill<F: Field>(value: F, count: index) -> Vector<F> = primitive("vector.fill");
+
+pub domain fn elements<F: Field>(values: Vector<F>) -> domain<F> = domain("elements");
+
+pub domain fn indices<F: Field>(values: Vector<F>) -> domain<index> = domain("indices");
+
+pub math fn at<F: Field>(values: Vector<F>, position: index) -> F where in_bounds(position, values)
+  = primitive("container.at");
+
+pub fn subtract<F: Field>(a: Vector<F>, b: Vector<F>) -> Vector<F> = primitive("vector.sub");
+
+pub fn inverse<F: Field>(values: Vector<F>) -> Vector<F> = primitive("vector.inverse");
+
+pub fn geometric<F: Field>(base: F, count: index) -> Vector<F> = primitive("vector.geometric");
+
+pub fn rotate<F: Field>(values: Vector<F>, offset: index) -> Vector<F> = primitive("vector.rotate");
+// Bit-reversal permutations: element i moves from the position with the low
+// log2(height) bits of i reversed. The height must be a power of two.
+
+pub fn bit_reverse<F: Field>(values: Vector<F>) -> Vector<F> = primitive("vector.bit_reverse");
+
+pub fn bit_reverse_rows<F: Field>(values: Vector<F>, width: index) -> Vector<F>
+  = primitive("vector.bit_reverse_rows");
+
+pub fn equal<F: Field>(left: Vector<F>, right: Vector<F>) -> bool = primitive("vector.equal");
+
+pub fn prefix_sum<F: Field>(values: Vector<F>) -> Vector<F> = primitive("vector.prefix_sum");
+
+pub fn prefix_product<F: Field>(values: Vector<F>) -> Vector<F> = primitive("vector.prefix_product");

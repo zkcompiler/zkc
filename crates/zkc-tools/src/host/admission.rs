@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
 use zkc_arkworks::{ProverKey, VerifierKey};
 use zkc_backends::{NativeBackend, Policy, Value};
-use zkc_runtime::interactive::{Limits, PhysicalType, Type, Value as RuntimeValue};
+use zkc_runtime::vm::{Limits, PhysicalType, Type, Value as RuntimeValue};
 
 /// Per-bind ceilings for retained input bytes, value/operand count and
 /// cumulative loading work. Requests above the Host's installed loading ceilings refuse.
@@ -32,7 +32,7 @@ impl Default for LoadLimits {
 #[derive(Clone, Copy)]
 pub(crate) struct ResourceInput {
     pub kind: Type,
-    pub field: zkc_runtime::interactive::Identity,
+    pub field: zkc_runtime::vm::Identity,
     pub budget: u64,
 }
 /// A planned entry operand. Hosts obtain these from Admission before loading.

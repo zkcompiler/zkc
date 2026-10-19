@@ -1,7 +1,8 @@
 //! Execute compiler-generated Boolean recipes with the installed native backend.
 use std::path::Path;
 use zkc_backends::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
-use zkc_runtime::interactive::{Action, Runner, admit_supplied};
+use zkc_runtime::interpreter::Runner;
+use zkc_runtime::vm::Action;
 
 fn main() {
     let directory = std::env::args()
@@ -19,7 +20,12 @@ fn main() {
                         Default::default(),
                     )
                     .unwrap();
-                    let admitted = admit_supplied(&bytes, &backend).unwrap();
+                    let admitted = zkc_runtime::vm::Program::decode(&bytes)
+                        .and_then(|program| {
+                            program.check_installation(&backend)?;
+                            Ok(program)
+                        })
+                        .unwrap();
                     let group =
                         |n: u64| Value::Curve(GroupPoint::generator().scale(Scalar::from(n)));
                     let mut runner = Runner::new(
@@ -85,7 +91,12 @@ fn main() {
             Default::default(),
         )
         .unwrap();
-        let admitted = admit_supplied(&bytes, &backend).unwrap();
+        let admitted = zkc_runtime::vm::Program::decode(&bytes)
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap();
         let mut runner = Runner::new(&admitted, "main", "P", "boolean_test", backend, inputs)
             .unwrap_or_else(|_| panic!("Boolean-only entry"));
         loop {

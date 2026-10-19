@@ -2,7 +2,7 @@
 //! metadata cannot register a key. Opening state remains local.
 use super::{NativeWireError, unsupported};
 use crate::{NativeBackend, Policy, Value};
-use zkc_runtime::interactive::{DecodeReason, Identity, PhysicalType, Type};
+use zkc_runtime::vm::{DecodeReason, Identity, PhysicalType, Type};
 
 pub(super) fn tag(ty: &PhysicalType) -> Option<u8> {
     let logical = ty.logical();
@@ -39,7 +39,7 @@ pub(super) fn encoded_width(
     };
     if key.get(metadata).is_none() {
         return Err(NativeWireError::Backend(
-            zkc_runtime::interactive::BackendError::new(if key.is_empty() {
+            zkc_runtime::vm::BackendError::new(if key.is_empty() {
                 "native-wire-setup-required"
             } else {
                 "native-wire-setup-mismatch"
@@ -62,7 +62,7 @@ fn error(error: zkc_arkworks::Error) -> NativeWireError {
 }
 
 pub(super) fn encode(value: &Value, policy: &Policy) -> Result<Vec<u8>, NativeWireError> {
-    use zkc_runtime::interactive::Value as RuntimeValue;
+    use zkc_runtime::vm::Value as RuntimeValue;
     let (tag, metadata) = match value {
         Value::Commitment(c) => (6, c.metadata()),
         Value::Proof(p) => (7, p.metadata()),
@@ -94,7 +94,7 @@ pub(super) fn encode(value: &Value, policy: &Policy) -> Result<Vec<u8>, NativeWi
     bytes.extend_from_slice(&payload);
     if bytes.len() != size {
         return Err(NativeWireError::Backend(
-            zkc_runtime::interactive::BackendError::new("native-wire-width"),
+            zkc_runtime::vm::BackendError::new("native-wire-width"),
         ));
     }
     Ok(bytes)
@@ -108,7 +108,7 @@ pub(super) fn preflight<'a>(
     use NativeWireError::Invalid;
     if setups.is_empty() {
         return Err(NativeWireError::Backend(
-            zkc_runtime::interactive::BackendError::new("native-wire-setup-required"),
+            zkc_runtime::vm::BackendError::new("native-wire-setup-required"),
         ));
     }
     if bytes.len() < 87 {
@@ -140,7 +140,7 @@ pub(super) fn decode(
     bytes: &[u8],
 ) -> Result<Value, NativeWireError> {
     use NativeWireError::Limit;
-    use zkc_runtime::interactive::Value as RuntimeValue;
+    use zkc_runtime::vm::Value as RuntimeValue;
     let key = preflight(backend.setups(), tag, bytes)?;
     let size = bytes.len();
     let policy = backend.policy();

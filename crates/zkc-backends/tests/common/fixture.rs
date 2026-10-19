@@ -11,7 +11,8 @@
 
 use zkc_arkworks::VerifierKey;
 use zkc_backends::{Domain, EntryPolicy, NativeBackend, Policy, Value};
-use zkc_runtime::interactive::{Action, Backend, Runner, Stop, StopKind};
+use zkc_runtime::interpreter::Runner;
+use zkc_runtime::vm::{Action, Backend, Stop, StopKind};
 
 /// The one execution identity these tests run under.
 pub fn domain() -> Domain {
@@ -87,8 +88,15 @@ pub fn drive<B: Backend<Value = Value>>(
         while runner.advance_local_control().unwrap() {}
         match runner.poll() {
             Action::Local(action) => runner.execute_local(&action.cut).unwrap(),
-            Action::Returned(values) => return (Ok(values), runner.into_backend()),
-            Action::Stopped(stop) => return (Err(stop), runner.into_backend()),
+            Action::Returned(values) => {
+                assert_terminal_usage(runner.usage(), values.len());
+                return (Ok(values), runner.into_backend());
+            }
+            Action::Stopped(stop) => {
+                assert_vm_frames(&stop);
+                assert_terminal_usage(runner.usage(), 0);
+                return (Err(stop), runner.into_backend());
+            }
             other => panic!("unexpected {other:?}"),
         }
     }
@@ -100,5 +108,27 @@ pub fn code(stop: &Stop) -> &str {
     match &stop.kind {
         StopKind::Backend(e) => &e.code,
         other => panic!("unexpected {other:?}"),
+    }
+}
+
+/// VM nesting failures are interpreter defects, never expected backend refusals.
+pub fn assert_vm_frames(stop: &Stop) {
+    let primary = match &stop.kind {
+        StopKind::Backend(error) => Some(error),
+        _ => None,
+    };
+    for error in primary.into_iter().chain(&stop.cleanup_errors) {
+        assert!(!matches!(
+            error.code.as_str(),
+            "vm-frame-order" | "vm-frame-parent"
+        ));
+    }
+}
+
+/// Terminal diagnostics must retain only values exposed by a successful return.
+pub fn assert_terminal_usage(usage: zkc_runtime::vm::Usage, returned: usize) {
+    assert_eq!(usage.live_values, returned);
+    if returned == 0 {
+        assert_eq!(usage.live_value_bytes, 0);
     }
 }

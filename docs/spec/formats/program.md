@@ -57,6 +57,12 @@ proof producer and joint Host use the same participant ceiling; their outer
 file and proof limits remain separate. Node, array, definition, instruction,
 name and depth bounds still apply independently.
 
+The complete program admits at most 65,536 static instructions across all
+definitions, including storage releases, nested bodies and returns. Each array
+retains its separate 32,768-element ceiling. C++ and Rust enforce the same
+instruction limit. The allowance includes the validation and release bookkeeping
+of checked library contexts; it does not increase execution work budgets.
+
 The byte allowance supports composition of protocol libraries whose specialized
 local definitions remain within those structural bounds. It changes capacity,
 not the program grammar or instruction meanings. Generic array-JSON consumers
@@ -121,8 +127,8 @@ and cleanup obey the local machine's existing stop and custody rules. Terminal
 values remain retained for stable repeated polling.
 
 `Backend::supports_boolean_literals` is a stable installation fact, false by
-default. Admission checks it when any retained local body contains a literal;
-runner initialization checks it again before installing entry frames. This
+default. Installation checks it when any retained local body contains a literal;
+runner initialization links its owned backend before installing entry frames. This
 query must not execute work or construct a sample value. A backend advertising
 support must implement the constructor consistently. The runner still validates
 the constructed value; a dishonest or failing adapter causes a backend stop,
@@ -165,9 +171,11 @@ reports the iteration whose yield was attempted. Earlier effects remain installe
 
 ## Consumers and assurance boundary
 
-The Rust runner admits supplied physical programs through
-`admit_supplied`; the native backend supplies Boolean construction and the
-existing kernels/codecs. Structural admission does not establish correspondence
+`vm::Program::decode` structurally admits supplied physical programs without a
+backend. `Program::check_installation` optionally checks a deployment's installed
+signatures; each execution independently links its owned backend. The native
+backend supplies Boolean construction and the existing kernels/codecs. The
+[VM contract](../runtime/vm.md) defines this boundary. Structural admission does not establish correspondence
 to a mathematical source. A generic role runner can expose a message to a named
 external peer; its host must authorize the peer roster and route/envelope. Joint
 bundle and proof admission enforce their own closed roster policies.
@@ -175,8 +183,9 @@ The [proof host](proof.md) and joint host consume
 this same program format with distinct Host responsibilities. The single proof
 policy independently constrains actual messages, loops, keys and transcript
 transitions; the program format alone grants no proof authority.
-Independent Lean participant models do not interpret this format. Native checking
-support requires its own interpretation and correspondence evidence.
+The format fixes no formal interpretation. A formal consumer, such as the Lean
+[executable stage](../../../lean/docs/spec/executable.md), supplies its own
+interpretation and correspondence evidence.
 
 ## Conditional completion extension
 

@@ -1,6 +1,6 @@
 //! Domain-free Boolean operations have a fixed native implementation.
 use super::*;
-use zkc_runtime::interactive::{LogicalType, PhysicalType};
+use zkc_runtime::vm::{LogicalType, PhysicalType};
 pub(crate) const fn operation(
     name: &'static str,
     inputs: &'static [Type],

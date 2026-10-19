@@ -5,9 +5,7 @@ use std::{
     sync::Arc,
 };
 use zkc_arkworks::{RandomSource, Scalar};
-use zkc_runtime::interactive::{
-    Frame, FrameExit, FrameKind, Identity, Type, Value as RuntimeValue,
-};
+use zkc_runtime::vm::{Frame, FrameExit, FrameKind, Identity, Type, Value as RuntimeValue};
 
 /// Host-selected service authority scope. An instance restriction is exact:
 /// a differently named child must receive a separately scoped resource or an
@@ -59,7 +57,7 @@ impl LogicalUnit {
     pub fn capability(&self) -> &Capability {
         &self.token
     }
-    pub fn domain(&self) -> zkc_runtime::interactive::ResourceDomain {
+    pub fn domain(&self) -> zkc_runtime::vm::ResourceDomain {
         self.token.resource_domain.expect("issued logical unit")
     }
 }
@@ -74,7 +72,7 @@ struct Seal;
 #[derive(Clone)]
 pub struct Capability {
     kind: Type,
-    resource_domain: Option<zkc_runtime::interactive::ResourceDomain>,
+    resource_domain: Option<zkc_runtime::vm::ResourceDomain>,
     identity: Identity,
     authority: Arc<Authority>,
     seal: Arc<Seal>,
@@ -85,7 +83,7 @@ impl Capability {
     pub(crate) fn kind(&self) -> Type {
         self.kind
     }
-    pub fn resource_domain(&self) -> Option<zkc_runtime::interactive::ResourceDomain> {
+    pub fn resource_domain(&self) -> Option<zkc_runtime::vm::ResourceDomain> {
         self.resource_domain
     }
     pub fn identity(&self) -> Identity {
@@ -137,7 +135,7 @@ impl Source {
     }
 }
 enum State {
-    ResourceUnit(zkc_runtime::interactive::ResourceDomain),
+    ResourceUnit(zkc_runtime::vm::ResourceDomain),
     Bn254Rng(Box<RandomSource>),
     #[cfg(feature = "test-utils")]
     Bn254Tape(std::collections::VecDeque<crate::Bn254Scalar>),
@@ -303,7 +301,7 @@ impl Resources {
     pub fn create_unit(
         &mut self,
         frame: &Frame,
-        domain: zkc_runtime::interactive::ResourceDomain,
+        domain: zkc_runtime::vm::ResourceDomain,
     ) -> Result<Value> {
         self.active(frame)?;
         let owner = Domain::new(
@@ -384,10 +382,12 @@ impl Resources {
             bytes
         };
         let value = match suite {
-            Identity::Merlin3KoalaBearExt8 => {
+            Identity::Merlin3KoalaBearExt8 | Identity::HashChainKeccak256KoalaBearExt8 => {
                 Value::KoalaBearExt8Field(crate::sampling::extension(block)?)
             }
-            Identity::Merlin3Fr64Be | Identity::Spongefish080KeccakFr64Be => {
+            Identity::Merlin3Fr64Be
+            | Identity::Spongefish080KeccakFr64Be
+            | Identity::HashChainKeccak256Fr64Be => {
                 Value::Field(zkc_arkworks::scalar_from_wide_be(&block()))
             }
             Identity::Merlin3Ristretto64Le => {
@@ -410,7 +410,7 @@ impl Resources {
         origin: &[u8],
         bound: u64,
     ) -> Result<(Value, Capability)> {
-        if t.identity != Identity::Merlin3KoalaBearExt8 {
+        if !t.identity.has_index_transcript() {
             return Err(refused("transcript-suite"));
         }
         crate::sampling::index_bound(bound)?;

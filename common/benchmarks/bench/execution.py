@@ -17,7 +17,9 @@ def compile_program(args, output, capture, manifest, case, program):
     source.write_text(program.source)
     project = directory/'zkc.toml'
     text = f'format="zkc.project/0"\n[modules]\n{json.dumps(program.entry.split("::")[0])}="main.zkc"\n[dependencies]\n'
-    text += ''.join(f'{json.dumps(name)}={json.dumps(str(root/"libraries"/name))}\n' for name in program.dependencies)
+    text += ''.join(f'{json.dumps(name)}={{workspace={json.dumps(name)}}}\n' for name in program.dependencies)
+    if program.dependencies:
+        text += f'\n[workspace]\npath={json.dumps(str(root/"zkc.workspace.toml"))}\n'
     for name, value in program.assets.items():
         path = directory/f'{name}.json'
         write_json(path, value)
@@ -37,7 +39,8 @@ def compile_program(args, output, capture, manifest, case, program):
     flags += [f'--asset={name}={kind}={copied[path]}' for name, (kind, path) in sorted(assets.items())]
     package = directory/'entry.zkpkg'
     record = Journal(directory/'compile', args.timeout).command(
-        [args.compiler, 'language-package', '--source-format=zkc', f'--entry={program.entry}', *flags],
+        [args.compiler, 'language-package', '--source-format=zkc', f'--entry={program.entry}',
+         *args.compiler_option, *flags],
         cwd=root, stdout=package)
     capture.add(package)
     manifest.setdefault('compilation', {})[case.identifier] = [{'wall_seconds': record['wall_seconds'],

@@ -15,6 +15,8 @@ OUT = records()
 commands = Commands(OUT)
 CLIENT = Path(__file__).parent / "fixtures/language/index_sampling.zkc"
 SUITE = "merlin3.koala-bear.ext8-binomial3.rejection31le/0"
+# The hash-chain suite over the same field has the same index sampler.
+CHAIN_SUITE = "hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0"
 SERVICE = '!protocol.service_ref<"random.koala-bear.ext8-binomial3/0">'
 manifest = []
 
@@ -182,23 +184,26 @@ proof Proof = Echo<pow2(5), 4> {
   accept accepted;
   construction fiat_shamir("SUITE", coins);
 }
-'''.replace("SUITE", SUITE)
+'''
 
 with case("derived transcripts carry typed index events with their bound"):
-    for suffix, flags in [("", []), ("_plain", ["--no-simplify"]),
-                          ("_release", ["--release-storage"])]:
-        name = "echo" + suffix
-        deployment = language("language-bundle", ECHO, "Proof", *flags, name=name)
-        envelope = json.loads(deployment)
-        assert envelope[0] == "zkc.native-proof/0"
-        policy, events = envelope[2][1], envelope[2][3]
-        assert policy[5] == SUITE and len(policy[8]) == 2
-        assert [e[0] for e in events] == ["query", "message", "index", "message", "message", "message"]
-        assert events[2][2] == "32" and all(len(e) == 2 for i, e in enumerate(events) if i != 2)
-        (OUT / f"{name}.deployment").write_text(deployment)
-        manifest.append({"name": name, "bound": 32, "rounds": 3})
+    for suite, prefix in [(CHAIN_SUITE, "echo_chain"), (SUITE, "echo")]:
+        for suffix, flags in [("", []), ("_plain", ["--no-simplify"]),
+                              ("_release", ["--release-storage"])]:
+            name = prefix + suffix
+            deployment = language("language-bundle", ECHO.replace("SUITE", suite), "Proof",
+                                  *flags, name=name)
+            envelope = json.loads(deployment)
+            assert envelope[0] == "zkc.native-proof/0"
+            policy, events = envelope[2][1], envelope[2][3]
+            assert policy[5] == suite and len(policy[8]) == 2
+            assert [e[0] for e in events] == ["query", "message", "index", "message", "message", "message"]
+            assert events[2][2] == "32" and all(len(e) == 2 for i, e in enumerate(events) if i != 2)
+            (OUT / f"{name}.deployment").write_text(deployment)
+            manifest.append({"name": name, "bound": 32, "rounds": 3})
     (OUT / "echo.policy").write_text(json.dumps(policy))
-    original = language("language-emit", ECHO, "Proof", name="echo_original")
+    original = language("language-emit", ECHO.replace("SUITE", SUITE), "Proof",
+                        name="echo_original")
     (OUT / "echo.mlir").write_text(original)
 
 with case("the explicit policy reconstructs and checks the same candidate"):
@@ -206,11 +211,13 @@ with case("the explicit policy reconstructs and checks the same candidate"):
     candidate = commands.run([compiler, "protocol-construct-proof", source, policy])
     (OUT / "echo.candidate.mlir").write_text(candidate)
     commands.run([compiler, "protocol-check-proof", source, policy, OUT / "echo.candidate.mlir"])
-    constant = re.search(r'"algebra.exec.index_constant"\(\) <\{[^}]*parameters = \["32"\]', candidate)
-    assert constant, "the helper materializes its static bound"
+    # Mutate the projected bound, leaving authored queries untouched.
+    constant = re.search(r'"data.index"\(\) <\{[^}]*value = "(32)"', candidate)
+    assert constant, "the projected program retains its static bound"
+    start, end = constant.span(1)
     for value, reason in [("64", "native-proof-correspondence"), ("3", "native-proof-correspondence")]:
         changed = OUT / f"echo.candidate.{value}.mlir"
-        changed.write_text(candidate.replace('parameters = ["32"]', f'parameters = ["{value}"]'))
+        changed.write_text(candidate[:start] + value + candidate[end:])
         commands.run([compiler, "protocol-check-proof", source, policy, changed], refuses=reason)
 
 

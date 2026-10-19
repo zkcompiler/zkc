@@ -3,7 +3,7 @@
 use super::NativeBackend;
 use crate::{Result, Value, refused};
 use std::{collections::BTreeMap, sync::OnceLock};
-use zkc_runtime::interactive::{BoundSignature, Identity, Invocation, OperationBinding};
+use zkc_runtime::vm::{BoundSignature, Identity, Invocation, OperationBinding};
 
 #[derive(Clone, Copy)]
 enum Signature {
@@ -208,6 +208,11 @@ pub(super) fn installed() -> Result<&'static Registry> {
                 hash,
             )?;
             r.pure_family(
+                crate::plonky3::poseidon2::IMPLEMENTATIONS,
+                Signature::Custom(crate::plonky3::poseidon2::signature),
+                poseidon2,
+            )?;
+            r.pure_family(
                 crate::kernels::bytes::IMPLEMENTATIONS,
                 Signature::Custom(crate::kernels::bytes::signature),
                 bytes,
@@ -226,6 +231,11 @@ pub(super) fn installed() -> Result<&'static Registry> {
                 crate::oracle::IMPLEMENTATIONS,
                 Signature::Custom(crate::oracle::signature),
                 oracle,
+            )?;
+            r.family(
+                crate::merkle::IMPLEMENTATIONS,
+                Signature::Custom(crate::merkle::signature),
+                merkle,
             )?;
             r.pure_family(
                 crate::field_array::IMPLEMENTATIONS,
@@ -373,6 +383,16 @@ fn hash(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec
         &mut b.external_work,
     )
 }
+fn poseidon2(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
+    crate::plonky3::poseidon2::apply(
+        &i.binding.declaration().contract,
+        args,
+        i.attributes,
+        &b.core.policy,
+        i.max_output_bytes,
+        &mut b.external_work,
+    )
+}
 fn bytes(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
     crate::kernels::bytes::apply(
         &i.binding.declaration().contract,
@@ -403,6 +423,9 @@ fn external(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result
 }
 fn oracle(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
     crate::oracle::apply(&i.binding.declaration().contract, args, i, &b.core.policy)
+}
+fn merkle(b: &mut NativeBackend, i: &Invocation<'_>, args: &[Value]) -> Result<Vec<Value>> {
+    crate::merkle::apply(&i.binding.declaration().contract, args, i, &b.core.policy)
 }
 pub(crate) fn diagonal(
     b: &mut NativeBackend,

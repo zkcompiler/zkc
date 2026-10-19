@@ -21,6 +21,8 @@ class Case:
             return library_cases.bulletproofs(root, shape, directory)
         if self.name in ('fri', 'air'):
             return getattr(stark, self.name)(root, shape)
+        if self.name == 'stark':
+            return stark.library(root, shape)
         return getattr(programs, self.name)(shape)
 
 
@@ -30,7 +32,7 @@ def cases():
         result.append(Case(name, family, shape, category, mix, limitation))
     for field, short in [('koala-bear', 'kb'), ('bls12-381.fr', 'fr')]:
         for n in (0, 17, 1024, 8192):
-            for form in ('reduce', 'collect', 'bulk'):
+            for form in ('reduce', 'collect', 'bulk', 'total-collect-fold', 'total-fold'):
                 add(f'finite-{short}-{form}-{n}', 'finite', {'field': field, 'elements': n, 'form': form},
                     'operation', ('pointwise multiply/add', 'sum'), 'Same formula across source forms; includes equality check and Host costs.')
     for n in (17, 1024, 4096):
@@ -68,6 +70,9 @@ def cases():
         add(f'air-h{height}-w{width}-b{blowup}', 'air', {'height': height, 'width': width, 'evaluation_size': height*blowup, 'queries': 8},
             'protocol', ('trace extension', 'quadratic AIR', 'quotients', 'FRI', 'Merkle', 'transcript'),
             'Independent height/width/blowup sweeps; one table with no lookup or memory argument.')
+        add(f'stark-h{height}-w{width}-b{blowup}', 'stark', {'height': height, 'width': width, 'evaluation_size': height*blowup, 'queries': 8},
+            'protocol', ('trace extension', 'quadratic AIR', 'quotients', 'FRI', 'Merkle multi-opening', 'transcript'),
+            'The air cases\' AIR and sizes through the parameterized library; quartic challenges, Poseidon2 Merkle trees.')
     for n in (1, 3, 8, 16):
         add(f'bulletproofs-{n}', 'bulletproofs', {'commitments': n}, 'protocol', ('vector scale', 'MSM', 'transcript'),
             'Retained fixture amounts/masks; includes non-power-of-two aggregation. Not a sampled wallet workload.')

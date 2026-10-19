@@ -11,11 +11,14 @@ scripts and their small adapter dependencies.
 
 For SDK-call measurements, growing trace shapes, dense polynomial workloads and
 changing statements, use the common [execution benchmark suite](README.md).
-The two tools share process journals and the exclusive
-`/tmp/zkc-benchmark-execution.lock`. Each harness acquires the lock itself across
-preparation, timing and validation; do not wrap it in a second acquisition.
-Exit 75 means the slot is busy. Use the same lock for other CPU-heavy builds or
-experiments, and never unlink it. Command start/end times are recorded.
+The two tools share process journals and run without a host-wide lock by default.
+Pass `--exclusive` for a scheduled precision measurement to acquire
+`/tmp/zkc-benchmark-execution.lock` across preparation, timing and validation.
+Do not wrap that mode in a second acquisition. Exit 75 means the slot is busy.
+Never unlink a live lock file. `coordination.json` records the selected mode and
+run start/end times. Ordinary builds do not take this lock, so arrange a quiet
+interval explicitly when precise timings are needed. Concurrent measurements
+are useful for exploratory trends, with variability checked before conclusions.
 
 ## Run a comparison
 
@@ -43,7 +46,9 @@ python3 common/benchmarks/protocol_math.py \
 
 The matrix always contains baseline default, current default and current
 `--no-finite-bulk`. `--release-storage` adds current default with storage release
-as its own policy; it does not silently change either default. The same binary
+as its own policy, and `--no-calculation-batching` adds current default with
+each calculation computed before the first action that follows it in source
+order; neither silently changes either default. The same binary
 paths may be supplied for both sources to isolate source changes. Distinct
 binaries compare the combined source/tool changes. A binary's SHA-256 is its
 identity here; the adjacent source revision is **not** a verified build provenance

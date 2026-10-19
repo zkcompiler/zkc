@@ -50,10 +50,11 @@ impl Bundle {
             .into_iter()
             .collect();
         let selected = t.arena.select(&positions)?;
-        if selected.facts().iter().any(|f| {
-            f.field != field
-                && !(field == Identity::KoalaBearExt8 && f.field == Identity::KoalaBear)
-        }) {
+        if selected
+            .facts()
+            .iter()
+            .any(|f| f.field != field && field.base_field() != Some(f.field))
+        {
             return Err(Error("relation-table-carrier"));
         }
         let mut widths = [0; 3];

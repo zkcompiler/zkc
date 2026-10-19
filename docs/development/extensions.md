@@ -39,7 +39,7 @@ The [ring arena](../spec/domains/ring-expressions.md) owns typed arithmetic and
 substitution. Its reusable bulk operations have domain contracts, ordered
 Algebra dialect operations and backend implementations. Their inputs contain no
 protocol rounds, roles, commitments or acceptance decisions. The
-[Sumcheck library](../../libraries/sumcheck/expression.zkc) composes those
+[Sumcheck library](../../libraries/protocols/polynomial/sumcheck/expression.zkc) composes those
 operations with messages, challenges and checks in ordinary source. The Entry
 package carries their expression bodies and the Host independently admits them
 against the program's digest references. The compiler admits the captured bodies,
@@ -64,6 +64,12 @@ arguments, permissions, effects, resource transitions and representation facts.
 Update neutral declarations and their exact consumers together. Catalog presence
 does not grant a source spelling, codec, total recipe or transcript construction.
 Each boundary needs explicit admission.
+
+A base declaration's `ordinal` fixes its row in the generated inventory. Give a
+new base record the next unused ordinal of its category and never reuse or
+renumber one, including a retired ordinal. Generation refuses a repeated base
+ordinal, and the contribution-assembly test pins the base inventory digest.
+Extension contributions are ordered by semantic key and need no ordinal.
 
 An operation that can stop, consume a resource, query a service or change history
 belongs to ordered execution. Do not mark it pure/speculatable merely because

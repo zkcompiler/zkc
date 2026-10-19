@@ -25,7 +25,7 @@ Increasing the second `next` by one gives residuals `[0, 2130706432]`.
 
 Callers supply valid inverses of two and each nonzero domain point. Domain-point
 calculation and inversion remain Local in the complete
-[FRI library](../../../../../libraries/fri/lib.zkc); this slice performs no inversion.
+[FRI library](../../../../../libraries/protocols/polynomial/fri/lib.zkc); this slice performs no inversion.
 It assumes the pair values and claimed next layer are already prepared. It does
 not authenticate openings, enforce a degree bound, or implement a complete FRI
 proof. Zero residuals establish only these supplied pair equations.

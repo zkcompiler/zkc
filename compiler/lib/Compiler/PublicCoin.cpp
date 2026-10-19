@@ -1,10 +1,10 @@
 #include "zkc/Compiler/PublicCoin.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/PassManager.h"
+#include "zkc/Analysis/NativeTypes.h"
 #include "zkc/Contracts/Services.h"
 #include "zkc/Dialect/Mathematical.h"
-#include "zkc/Dialect/Protocol/NativePolicy.h"
-#include "zkc/Dialect/Protocol/Semantics.h"
+#include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Support/Json.h"
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Passes.h"
@@ -502,6 +502,7 @@ Expected<json::Value> analyzePublicCoin(ModuleOp original, StringRef text,
   (*view)["requirement_sha256"] = digest(text);
   (*view)["finite_bulk"] = policy.finiteBulk;
   (*view)["fuse_vector_reductions"] = policy.vectorReductionFusion;
+  (*view)["fuse_collect_fold"] = policy.collectFoldFusion;
   return json::Value(std::move(*view));
 }
 Error checkPublicCoin(ModuleOp original, StringRef requirement, StringRef text,

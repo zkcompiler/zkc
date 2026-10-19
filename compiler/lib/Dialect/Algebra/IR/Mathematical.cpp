@@ -1,6 +1,6 @@
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Contracts/Domains.h"
-#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Diagnostics.h"
 

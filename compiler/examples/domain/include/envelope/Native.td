@@ -15,7 +15,7 @@ def Envelope : TypeDef<EnvelopeDialect, "Envelope"> {
   let parameters = (ins "::mlir::Type":$elementType, "uint64_t":$length);
   let assemblyFormat = "`<` $elementType `,` $length `>`";
 }
-def KeepOp : KernelOp<EnvelopeDialect, "keep", [EnvelopeKeep]> {
+def KeepOp : BoundOp<EnvelopeDialect, "keep", [EnvelopeKeep]> {
   // This domain's carrier is intentionally outside the base coarse type list.
   // The shared logical verifier still checks exact admitted signatures.
   let arguments = (ins Variadic<AnyType>:$inputs, StrAttr:$site,

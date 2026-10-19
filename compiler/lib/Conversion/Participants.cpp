@@ -2,10 +2,11 @@
 #include "mlir/IR/Verifier.h"
 #include "mlir/Pass/Pass.h"
 #include "zkc/Contracts/Bindings.h"
-#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/detail/Builders.h"
 #include "zkc/Support/Json.h"
+#include "zkc/Transforms/Kernel.h"
 #include "zkc/Transforms/LinearContraction.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/Protocol.h"
@@ -35,17 +36,8 @@ lowerPhysical(ModuleOp module,
   // without reconstructing and discarding the same admitted records.
   if (root.getProfile() != zkc::protocol_ir::Profile::Exec)
     return diagnostics::emit(root.emitError(), "interactive-physical-stage");
-  OwningOpRef<ModuleOp> selected(cast<ModuleOp>(module->clone()));
-  LinearContractionStats selectedStats;
-  if (failed(lowerBoundPhysical(*selected, selections, linearContractions,
-                                &selectedStats)) ||
-      (releaseStorage && failed(releaseLocalStorage(*selected))) ||
-      failed(verify(*selected)))
-    return failure();
-  module.getBodyRegion().takeBody(selected->getBodyRegion());
-  if (stats)
-    *stats = selectedStats;
-  return success();
+  return lowerBoundPhysical(module, selections, linearContractions, stats,
+                            releaseStorage);
 }
 namespace {
 struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
@@ -82,6 +74,7 @@ struct PhysicalPass : PassWrapper<PhysicalPass, OperationPass<ModuleOp>> {
   }
   void getDependentDialects(DialectRegistry &registry) const final {
     registry.insert<zkc::plan::PlanDialect>();
+    kernel::createLowerKernelsPass()->getDependentDialects(registry);
   }
   void runOnOperation() final {
     LinearContractionStats stats;

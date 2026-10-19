@@ -86,7 +86,7 @@ test-lean-clean: (build-lean "clean")
     python3 common/tests/run.py lean-clean
 
 # Compare native and Lean semantics and check authored security claims and refusals.
-test-lean-native profile="release": (build-compiler profile) (build-lean "main") (build-lean "arklib")
+test-lean-native profile="release": (build-compiler profile) build-rust (build-lean "main") (build-lean "arklib")
     python3 common/tests/run.py lean-native --profile "$1"
 
 # Test the optional AIR adapter, including independent native comparisons.

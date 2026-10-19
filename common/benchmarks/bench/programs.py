@@ -11,7 +11,7 @@ class Program:
     source: str
     inputs: list
     entry: str = 'example::Demo'
-    dependencies: tuple = ('zkc',)
+    dependencies: tuple = ('core.collections',)
     assets: dict = field(default_factory=dict)
     proof: bool = False
     changed: dict | None = None
@@ -63,10 +63,19 @@ def finite(shape):
         'reduce': 'finite::sum(xs, fn(x)=>x*x+x)',
         'collect': 'v::sum(v::collect(xs, fn(x)=>x*x+x))',
         'bulk': 'v::sum(v::add(v::hadamard(xs,xs),xs))',
+        'total-collect-fold': 'total::fold(v::elements(collect(v::elements(xs),fn(x)=>x*x+x)),seed,fn(s,x)=>s+x)',
+        'total-fold': 'total::fold(v::elements(xs),seed,fn(s,x)=>s+x*x+x)',
     }
-    return local(field, 'xs:Vector<F>, expected:F',
-                 f'return {bodies[form]} == expected;',
-                 {'xs': list(map(str, values)), 'expected': str(sum(x*x+x for x in values) % modulus)})
+    seed = 'let seed:F=0; ' if form.startswith('total-') else ''
+    program = local(field, 'xs:Vector<F>, expected:F',
+                    f'{seed}return {bodies[form]} == expected;',
+                    {'xs': list(map(str, values)), 'expected': str(sum(x*x+x for x in values) % modulus)})
+    if form.startswith('total-'):
+        program.source = program.source.replace('fn compute(', '''use zkc::finite_math as total;
+math fn collect<I:Type+Copy+Drop>(rows:domain<I>,body:math fn(item:I)->F where item_from(item,rows))->Vector<F>
+  = finite("math.collect.vector");
+math fn compute(''')
+    return program
 
 
 def scan(shape):
@@ -178,7 +187,7 @@ run Demo=Work;
     expected = sum(x*y*scale for x, y in zip(xs, weights, strict=True)) % a.FR
     inputs = {'xs': list(map(str, xs)), 'weights': list(map(str, weights)),
               'scale': str(scale), 'expected': str(expected)}
-    return Program(source, [{'P': inputs}], incorrect={'P': increment_first(inputs, 'expected', a.FR)},
+    return Program(source, [{'P': inputs}], dependencies=('core.algebra',), incorrect={'P': increment_first(inputs, 'expected', a.FR)},
                    oracle='Python scalar identity plus group law; shares native group kernels, not an independent curve implementation')
 
 
@@ -201,7 +210,7 @@ run Demo=Work;
     modulus = 21888242871839275222246405745257275088548364400416034343698204186575808495617
     r = a.dense(1, seed=75, modulus=modulus)[0][0]
     inputs = {'n': str(n//2), 'r': str(r), 'expected': str(r)}
-    return Program(source, [{'P': inputs}], incorrect={'P': increment_first(inputs, 'expected', modulus)},
+    return Program(source, [{'P': inputs}], dependencies=('core.algebra',), incorrect={'P': increment_first(inputs, 'expected', modulus)},
                    oracle='bilinearity consistency control; shares native pairing implementation')
 
 

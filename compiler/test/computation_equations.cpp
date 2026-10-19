@@ -7,6 +7,7 @@
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Data/IR/DataAttrs.h"
 #include "zkc/Dialect/IR.h"
+#include "zkc/Dialect/Kernel/IR/KernelOps.h"
 #include "zkc/Transforms/Finite.h"
 #include "zkc/Transforms/NestedContractions.h"
 #include <fstream>
@@ -23,6 +24,37 @@ std::string fixture(StringRef name) {
   std::ostringstream text;
   text << input.rdbuf();
   return text.str();
+}
+std::string printed(Operation *operation) {
+  std::string text;
+  llvm::raw_string_ostream stream(text);
+  operation->print(stream);
+  return text;
+}
+std::string numericalAdditionFixture(StringRef name, StringRef output,
+                                     StringRef operands) {
+  auto text = fixture(name);
+  auto helper = text.find(" local.func private @step");
+  require(helper != std::string::npos, "missing Local step");
+  text.insert(helper, R"mlir(
+ kernel.module @numbers {
+   func.func @entry(%a:!F,%b:!F) -> !F {
+     %sum = algebra.field_add %a,%b : (!F,!F)->!F
+     func.return %sum : !F
+   }
+ }
+)mlir");
+  auto begin =
+      text.find("   " + output.str() + " = \"algebra.exec.field_add\"");
+  auto end = text.find('\n', begin);
+  require(begin != std::string::npos && end != std::string::npos,
+          "missing addition to replace");
+  text.replace(
+      begin, end - begin,
+      "   " + output.str() + " = kernel.call @numbers::@entry(" +
+          operands.str() +
+          ") {site=\"numerical\",policy=[false,false,false]} : (!F,!F)->!F");
+  return text;
 }
 finite::Computation computation(ModuleOp module) {
   Operation *found = nullptr;
@@ -153,6 +185,276 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
+  // Include omitted defaults and every combination of the three policy bits.
+  for (unsigned callPolicy = 0; callPolicy < 9; ++callPolicy)
+    cases.run(
+        "reused scalar view and policy " + std::to_string(callPolicy),
+        [&, callPolicy] {
+          auto module = parseSourceString<ModuleOp>(
+              numericalAdditionFixture("sum", "%next", "%state,%item"),
+              &context);
+          require(bool(module), "numerical callback did not parse");
+          auto c = computation(*module);
+          auto *call = &c.helper->getRegion(0).front().front();
+          OpBuilder builder(&context);
+          if (!callPolicy)
+            call->removeAttr("policy");
+          else
+            call->setAttr("policy", builder.getBoolArrayAttr(
+                                        {((callPolicy - 1) & 2) != 0,
+                                         ((callPolicy - 1) & 1) != 0,
+                                         ((callPolicy - 1) & 4) != 0}));
+          require(succeeded(verify(*module)), "numerical policy not admitted");
+          auto before = printed(*module);
+          auto view = finite::analyzeComputation(c);
+          require(view && view->numericalBody &&
+                      isa<func::FuncOp>(view->callbackBody->getParentOp()),
+                  "standard structural view missing");
+          finite::ComputationWork work;
+          work.structural = work.evidence = 0;
+          auto enabled = mathematical::selectComputation(*view, {}, work);
+          auto disabled =
+              mathematical::selectComputation(*view, {false, true}, work);
+          bool allowed = !callPolicy || ((callPolicy - 1) & 2) != 0;
+          require(
+              enabled.equations.reduction && disabled.equations.reduction &&
+                  enabled.kind ==
+                      (allowed ? mathematical::RealizationKind::Reduction
+                               : mathematical::RealizationKind::Ordered) &&
+                  enabled.outcome() ==
+                      (allowed ? OptimizationStatus::Succeeded
+                               : OptimizationStatus::ReplacementRestricted) &&
+                  disabled.kind == mathematical::RealizationKind::Ordered &&
+                  disabled.outcome() == OptimizationStatus::PolicyDisabled &&
+                  enabled.view->numericalBody == view->numericalBody &&
+                  disabled.view->callbackBody == view->callbackBody &&
+                  enabled.view->numericalCalls().front() == call &&
+                  !work.structural && !work.evidence,
+              "reuse lost equations, policy separation, or shared SSA "
+              "ownership");
+          auto body = view->callbackBody;
+          view.reset();
+          require(enabled.view->payload.front()->getBlock() == body &&
+                      disabled.view->result == enabled.view->result &&
+                      printed(*module) == before,
+                  "selection lost owned storage or mutated source IR");
+        });
+  cases.run("reused selection charges each recognition without a cache", [&] {
+    auto module = parseSourceString<ModuleOp>(
+        numericalAdditionFixture("sum", "%next", "%state,%item"), &context);
+    require(bool(module), "numerical callback did not parse");
+    auto c = computation(*module);
+    c.helper->getRegion(0).front().front().removeAttr("policy");
+    require(succeeded(verify(*module)), "selection control not admitted");
+    auto before = printed(*module);
+    auto view = finite::analyzeComputation(c);
+    require(bool(view), "structural view missing");
+    finite::ComputationWork measured;
+    measured.structural = measured.evidence = 0;
+    measured.equations = 1000;
+    auto selected = mathematical::selectComputation(*view, {}, measured);
+    uint64_t cost = 1000 - measured.equations;
+    require(selected.kind == mathematical::RealizationKind::Reduction &&
+                cost > 1 && cost < 1000,
+            "reused recognition/selection was not charged");
+    finite::ComputationWork fresh;
+    fresh.equations = 1000;
+    auto convenience = mathematical::selectComputation(c, {}, fresh);
+    require(
+        convenience.kind == selected.kind && convenience.equations.reduction &&
+            fresh.equations == measured.equations &&
+            fresh.structural < finite::ComputationWork{}.structural,
+        "convenience selection did not delegate with the same equation work");
+    finite::ComputationWork exact;
+    exact.structural = exact.evidence = 0;
+    exact.equations = cost;
+    require(mathematical::selectComputation(*view, {}, exact).kind ==
+                    mathematical::RealizationKind::Reduction &&
+                !exact.equations,
+            "reused view did not consume its exact selection allowance");
+    auto exhausted = mathematical::selectComputation(*view, {}, exact);
+    require(exhausted.kind == mathematical::RealizationKind::Ordered &&
+                exhausted.outcome() == OptimizationStatus::Capacity &&
+                exhausted.diagnostic.outcome.capacity &&
+                exhausted.diagnostic.outcome.capacity->owner ==
+                    WorkOwner::Equations &&
+                !exact.structural && !exact.evidence,
+            "second reuse replenished work or cached a successful selection");
+    exact.equations = cost;
+    auto moved = mathematical::selectComputation(std::move(*view), {}, exact);
+    view.reset();
+    require(moved.kind == mathematical::RealizationKind::Reduction &&
+                moved.view->payload.front()->getBlock() ==
+                    moved.view->callbackBody &&
+                !exact.equations && printed(*module) == before,
+            "moving a view lost storage, changed work, or mutated the source");
+  });
+  cases.run(
+      "shared numerical unit retains distinct call policies and axes", [&] {
+        auto module = parseSourceString<ModuleOp>(
+            numericalAdditionFixture("sum", "%next", "%state,%item"), &context);
+        require(bool(module), "numerical callback did not parse");
+        auto first = computation(*module);
+        OpBuilder builder(first.operation);
+        auto otherHelper = cast<local::FuncOp>(builder.clone(*first.helper));
+        otherHelper.setSymName("other_step");
+        otherHelper->setAttr(
+            "logical_origin",
+            builder.getArrayAttr({builder.getStringAttr("other_step"),
+                                  builder.getArrayAttr({})}));
+        auto &otherBody = otherHelper.getBody().front();
+        auto *otherCall = &otherBody.front();
+        otherCall->setAttr("policy",
+                           builder.getBoolArrayAttr({true, false, false}));
+        otherCall->setOperands(
+            {otherBody.getArgument(1), otherBody.getArgument(0)});
+        auto *other = builder.clone(*first.operation);
+        other->setAttr("sym_name", builder.getStringAttr("other_fold"));
+        other->setAttr("step",
+                       FlatSymbolRefAttr::get(otherHelper.getSymNameAttr()));
+        require(succeeded(verify(*module)), "second callback not admitted");
+        finite::Computation second;
+        require(succeeded(finite::describe(other, second)),
+                "second computation not described");
+        auto before = printed(*module);
+        auto a = finite::analyzeComputation(first);
+        auto b = finite::analyzeComputation(second);
+        require(a && b &&
+                    a->numericalCalls().front() !=
+                        b->numericalCalls().front() &&
+                    b->numericalCalls().front() == otherCall &&
+                    a->sourceOperation(a->payload.front()) ==
+                        b->sourceOperation(b->payload.front()) &&
+                    a->axes[0].identity != b->axes[0].identity &&
+                    b->payload.front()->getOperand(0) == b->items[0].formal &&
+                    b->payload.front()->getOperand(1) == b->seeds[0].formal,
+                "shared source merged call occurrences or permuted same-type "
+                "arguments");
+        finite::ComputationWork work;
+        auto disabled = mathematical::selectComputation(*a, {}, work);
+        auto enabled = mathematical::selectComputation(*b, {}, work);
+        require(disabled.equations.reduction && enabled.equations.reduction &&
+                    disabled.outcome() ==
+                        OptimizationStatus::ReplacementRestricted &&
+                    enabled.kind == mathematical::RealizationKind::Reduction &&
+                    printed(*module) == before,
+                "one call policy escaped into another occurrence or changed "
+                "its source");
+      });
+  cases.run("reused view retains malformed call policy restrictions", [&] {
+    auto module = parseSourceString<ModuleOp>(
+        numericalAdditionFixture("sum", "%next", "%state,%item"), &context);
+    require(bool(module) && succeeded(verify(*module)),
+            "numerical callback not admitted");
+    auto c = computation(*module);
+    auto *call = &c.helper->getRegion(0).front().front();
+    OpBuilder builder(&context);
+    SmallVector<Attribute> policies{
+        builder.getArrayAttr({}),
+        builder.getArrayAttr({builder.getBoolAttr(true)}),
+        builder.getBoolArrayAttr({true, false}),
+        builder.getBoolArrayAttr({true, false, false, false}),
+        builder.getArrayAttr({builder.getBoolAttr(true),
+                              builder.getStringAttr("invalid"),
+                              builder.getBoolAttr(false)}),
+        builder.getArrayAttr({builder.getBoolAttr(true),
+                              builder.getBoolAttr(false),
+                              builder.getStringAttr("invalid")}),
+        builder.getArrayAttr({builder.getStringAttr("invalid"),
+                              builder.getBoolAttr(false),
+                              builder.getBoolAttr(false)})};
+    // Deliberate post-admission mutations probe conservative selection only.
+    // Each mutation invalidates the previous borrowed structural view.
+    for (Attribute policy : policies) {
+      call->setAttr("policy", policy);
+      require(call->getAttr("policy") == policy,
+              "malformed policy mutation did not reach the source");
+      auto before = printed(*module);
+      auto view = finite::analyzeComputation(c);
+      require(bool(view), "malformed policy erased structural facts");
+      finite::ComputationWork work;
+      auto selection = mathematical::selectComputation(*view, {}, work);
+      require(selection.equations.reduction &&
+                  selection.kind == mathematical::RealizationKind::Ordered &&
+                  selection.outcome() ==
+                      OptimizationStatus::ReplacementRestricted &&
+                  selection.view->numericalCalls().front() == call &&
+                  printed(*module) == before,
+              "malformed policy gained replacement permission through reuse");
+    }
+  });
+  for (bool pinned : {false, true})
+    cases.run(
+        pinned ? "reused nested numerical view preserves pins"
+               : "disabled inner call restricts enabled nested selection",
+        [&, pinned] {
+          auto module = parseSourceString<ModuleOp>(
+              numericalAdditionFixture("nested-matrix", "%out", "%s,%p"),
+              &context);
+          require(bool(module), "nested numerical callback did not parse");
+          if (pinned) {
+            module->walk(
+                [&](kernel::CallOp call) { call->removeAttr("policy"); });
+            module->walk([&](local::OperationBindingOp binding) {
+              if (binding.getSymName() == "mul")
+                binding->setAttr(
+                    "implementation",
+                    StringAttr::get(&context, "arkworks/field.mul"));
+            });
+          }
+          require(succeeded(verify(*module)),
+                  "nested policy/pin control not admitted");
+          auto before = printed(*module);
+          auto view = finite::analyzeComputation(computation(*module));
+          require(view && view->nested.size() == 1 &&
+                      view->nested.front().numericalBody &&
+                      view->nested.front().numericalCalls().size() == 1,
+                  "nested owned view or original numerical occurrence missing");
+          finite::ComputationWork work;
+          auto inner =
+              mathematical::selectComputation(view->nested.front(), {}, work);
+          auto outer = mathematical::selectNestedContraction(*view, work);
+          require(
+              inner.equations.reduction && outer.equation && !outer.recipe &&
+                  inner.outcome() ==
+                      OptimizationStatus::ReplacementRestricted &&
+                  outer.outcome() ==
+                      OptimizationStatus::ReplacementRestricted &&
+                  (!pinned || !finite::replaceable(
+                                  view->nested.front().payload.front())) &&
+                  printed(*module) == before,
+              "enabled outer strategy bypassed an inner call policy or pin");
+          if (!pinned) {
+            auto fallback = clone(*module);
+            require(succeeded(nested::rewriteFiniteCollections(*fallback)) &&
+                        !hasKernel(*fallback, "matrix.mul_vector") &&
+                        succeeded(nested::verifyFiniteCollections(*module,
+                                                                  *fallback)),
+                    "disabled inner call lost independently checked nested "
+                    "fallback");
+            // Build an actual optimized candidate under a permissive policy,
+            // then restore its retained source declarations. The independent
+            // reader must refuse that algorithm for the original disabled
+            // occurrence.
+            auto forbidden = clone(*module);
+            forbidden->walk(
+                [&](kernel::CallOp call) { call->removeAttr("policy"); });
+            require(succeeded(nested::rewriteFiniteCollections(*forbidden)) &&
+                        hasKernel(*forbidden, "matrix.mul_vector"),
+                    "permissive nested comparison control did not optimize");
+            forbidden->walk([&](kernel::CallOp call) {
+              call->setAttr(
+                  "policy",
+                  view->nested.front().numericalCalls().front()->getAttr(
+                      "policy"));
+            });
+            require(
+                failed(nested::verifyFiniteCollections(*module, *forbidden)) &&
+                    printed(*module) == before,
+                "independent reader accepted replacement through disabled "
+                "inner policy");
+          }
+        });
   cases.run("exact nominal facets", [&] {
     auto field = take(protocol::parseBoundType("field:bls12-381.fr", false));
     auto other = take(protocol::parseBoundType("field:bn254.fr", false));
@@ -721,6 +1023,15 @@ int main() {
     view = finite::analyzeComputation(c, work);
     require(view && view->accesses.size() == 1 && !work.evidence,
             "first extent query did not consume exact allowance");
+    auto before = printed(*source);
+    finite::ComputationWork reuse;
+    reuse.structural = reuse.evidence = 0;
+    auto selected = mathematical::selectComputation(*view, {}, reuse);
+    require(
+        selected.kind == mathematical::RealizationKind::Reduction &&
+            selected.equations.reduction && !reuse.structural &&
+            !reuse.evidence && printed(*source) == before,
+        "selection reread evidence instead of reusing immutable access facts");
     auto second = clone(*source);
     view = finite::analyzeComputation(computation(*second), work);
     require(view && view->accesses.empty() &&

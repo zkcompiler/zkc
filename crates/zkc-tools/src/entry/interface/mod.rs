@@ -12,7 +12,7 @@ mod validate;
 use super::Package;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use zkc_runtime::interactive::LogicalType;
+use zkc_runtime::vm::LogicalType;
 
 type Result<T> = std::result::Result<T, InterfaceError>;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

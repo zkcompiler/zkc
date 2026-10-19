@@ -38,7 +38,10 @@ behavior. A host never performs an implicit second absorption. Observing an
 erased challenge delivery or a post-final-challenge message retains the selected
 ordered transition policy; no extra entropy or security benefit is claimed. A
 different observation policy is a distinct construction, not an optimization
-justified by an unused digest alone.
+justified by an unused digest alone. The
+[construction obligations](construction-obligations.md) define the admissible
+observation classes, the binding obligations and the obligations of other
+transcript providers.
 
 A source-selected service port is removed only when every reachable query on
 that selected authority is accounted for, including unused replies and nested
@@ -289,10 +292,11 @@ A selected `index` query becomes `transcript.native.indexed.index`:
 (Transcript<T>, index bound, indices) -> (index, Transcript<T>)
 ```
 
-It requires the suite fact `IndexTranscript(T)`; the installed suite with that fact
-is `merlin3.koala-bear.ext8-binomial3.rejection31le/0`. The bound must be a power of
-two from 1 through 2^63; otherwise the transition refuses before consuming the
-state. Otherwise it consumes the state and, in order:
+It requires the suite fact `IndexTranscript(T)`; the installed suites with that
+fact are `merlin3.koala-bear.ext8-binomial3.rejection31le/0` and
+`hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0`. The bound must be
+a power of two from 1 through 2^63; otherwise the transition refuses before
+consuming the state. Otherwise it consumes the state and, in order:
 
 1. absorbs the dynamic occurrence bytes under the suite's `origin` label;
 2. absorbs the bound as eight little-endian bytes under the label `bound`;
@@ -309,6 +313,112 @@ service method (`draw` or `index`), which every admission path checks against th
 transition contract, and by their distinct static labels. The exact-uniformity
 statement is conditional on uniform squeeze bytes; this construction supplies no
 random-oracle or Fiat–Shamir theorem.
+
+## Native hash-chain suites
+
+A hash-chain suite is an installed native transcript suite whose state is one
+full digest of a byte hash `H` with 32-byte outputs. It realizes the same
+operations as the other installed suites: the `binding` initialization, labelled
+absorption, and 64-byte requests that the field and UniformIndex samplers
+decode. Its name has the form `hash-chain.<hash>.<challenge field>.<decoder>/0`,
+so another byte hash, such as SHA-256 or BLAKE2s-256, is a further installed
+instance with its own identity rather than a parameter of an existing one.
+
+| Suite | `H` | Challenge field | Field decoder | `IndexTranscript` |
+|---|---|---|---|---|
+| `hash-chain.keccak256.bls12-381.fr64be/0` | Keccak-256 | `bls12-381.fr` | `fr64be` | no |
+| `hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0` | Keccak-256 | `koala-bear.ext8-binomial3` | `rejection31le` | yes |
+
+Keccak-256 is the original Keccak submission's 256-bit instance (rate 136 bytes,
+padding byte `0x01`), as used by Ethereum, not FIPS 202 SHA3-256.
+
+### Encoding
+
+Every absorbed event and every request is one frame:
+
+```text
+frame(kind, label, data) = kind:u8 ‖ |label|:u64be ‖ label ‖ |data|:u64be ‖ data
+```
+
+with kind 0 for fixed domain data, 1 for a message and 2 for a request. This is
+the framing of the installed Spongefish suite. A frame determines its own length,
+so a concatenation of frames parses uniquely, and a message never equals a
+request with the same label and data. Each primitive input begins with one of
+three role tags:
+
+```text
+t_bind    = "zkc.hash-chain.bind/0"    ‖ 0x00
+t_absorb  = "zkc.hash-chain.absorb/0"  ‖ 0x00
+t_request = "zkc.hash-chain.request/0" ‖ 0x00
+```
+
+No tag is a prefix of another. The primitive inputs are:
+
+```text
+s_0 = H(t_bind ‖ frame(0, "domain", "zkc.artifact/0") ‖ frame(0, "suite", suite)
+           ‖ frame(1, "binding", root))
+absorb(label, data):  s_{j+1} = H(t_absorb ‖ s_j ‖ frame(1, label, data))
+request(label, n):    r = frame(2, label, n:u64be)
+                      answer = (B_0 ‖ B_1 ‖ …)[0, n),  B_k = H(t_request ‖ s_j ‖ r ‖ k:u64be)
+                      s_{j+1} = H(t_absorb ‖ s_j ‖ r)
+```
+
+`suite` is the suite's UTF-8 name and `root` the full canonical invocation root
+of [transcript state](#transcript-state-and-occurrence-identity). A request
+answer longer than one digest is the concatenation of counter blocks, truncated
+to `n` bytes. A request is also an event: its frame advances the state, so two
+consecutive requests with no message between them have different answers.
+
+The native transitions map onto these operations exactly as for the other
+suites: an observation absorbs `("origin", occurrence)` and then
+`("value", canonical frame)`; a field challenge absorbs `("origin",
+occurrence)` and then makes the `("challenge", 64)` requests its decoder needs; a
+[UniformIndex transition](#uniformindex-transitions) absorbs `("origin",
+occurrence)` and `("bound", bound:u64le)` and makes one `("index", 64)` request.
+The managed source methods use the source label in place of the occurrence.
+
+### Decoders
+
+- `fr64be` reads one 64-byte answer as a big-endian integer and reduces it
+  modulo the BLS12-381 scalar order `r`. The result is within statistical
+  distance `r/2^512` of uniform; it is not an exact draw.
+- `rejection31le` reads each 64-byte answer as sixteen little-endian 32-bit
+  words, clears the top bit of each and accepts a word below the KoalaBear
+  modulus `p` as the next coordinate, in basis order. It stops when all eight
+  coordinates are accepted, and stops with `exhausted:challenge-rejection-limit`
+  after sixteen answers. Rejected words are never reduced modulo `p`. Given
+  uniform answers, an accepted value is exactly uniform on the octic extension.
+- The UniformIndex sampler is the
+  [installed power-of-two sampler](../runtime/services.md#uniformindex-realization)
+  applied to the `index` answer.
+
+### Serialization and the history oracle
+
+Each primitive input parses uniquely into its role, the 32-byte state where
+present, one frame, and the counter of a request block. The state after a history
+is therefore an injective function of the suite, the binding root and the
+ordered events, including earlier requests, except where two distinct inputs of
+`H` give the same digest. The occurrence of each request is recoverable from the
+state: every native or managed request follows the absorption of its
+occurrence or label. Distinct reachable transcript queries thus reach distinct
+primitive inputs outside a collision of `H`, and no request answer shares an
+input with a state, because their tags differ.
+
+Modelling `H` as a random oracle, the suite reduces to the random oracle on
+transcript histories up to one bad event in the joint primitive-query trace of
+the adversary and the verifier, in call order: a *collision*, where two distinct
+chain inputs give the same state, or a *prediction*, where a fresh call that
+generates a state returns a value that an earlier call already used as a state
+input. With `q` adversary calls and `V` verifier calls, initialization
+included, the probability of that event is about `(q + V)^2 / 2^256`. A direct
+query at an unreachable state is answered by the simulator of the reduction and
+is not a bad event. The reduction is stated per security property, with an
+adversary translation and its query-cost relation.
+
+The suite's tags separate its inputs from those of the Keccak-256 row
+commitments, whose inputs begin with `zkc.oracle.keccak256.` tags. Explicit
+`hash.keccak256` calls on authored bytes share the same primitive; any security
+statement covers them in the same joint primitive-query trace.
 
 ## Checking and analysis inputs
 

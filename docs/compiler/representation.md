@@ -2,7 +2,7 @@
 
 Mathematical values retain their domain meaning through the
 [pipeline](pipeline.md). Logical types, operation contracts and role
-availability remain separate from installed storage and kernel choices. A new
+availability remain separate from installed storage and implementation choices. A new
 representation must preserve its declared values, complete outcomes, residual
 state and observations under the [realization laws](../spec/realization/representations.md).
 
@@ -22,23 +22,39 @@ not authorize moving a failure, erasing a draw or reusing a consumed capability.
 
 ## Checked physical decisions
 
-Physical lowering separates three steps inside Target and Conversion:
+One physical plan retains the original subject, including any
+[logical Kernel units](../spec/ir/kernel.md), until selection and checking finish.
+Kernel transforms propose a complete Local candidate without changing that
+subject. The candidate records the actual numerical choices, including ordered
+fallbacks; compile-time permission flags alone do not determine those choices.
+Numerical selection currently proposes one candidate independently of catalog
+preferences. If the catalog withholds an operation required by that candidate,
+planning refuses even if an ordered numerical alternative could execute.
 
-1. Propose binding implementations, physical ports and direct conversions against
-   unchanged logical IR. Keep explicit application choices fixed.
-2. Independently validate the proposal against installed Contracts, actual SSA
-   uses and the selected policy. Only validation constructs a checked plan.
-3. Materialize that plan on an owned candidate, verify the resulting IR and
-   publish it. Materialization does not search for another implementation.
+Physical lowering separates three steps:
 
-The checked object owns choices and binds the current module identity and input
-content. Stale input refuses. This is an invocation-local guard, not a persisted
+1. Retain the numerical candidate and propose binding implementations, physical
+   ports and direct conversions for its actual operations. Keep explicit
+   application choices fixed and record any selected storage releases.
+2. Independently check numerical correspondence with the original Kernel subject,
+   then validate physical decisions against installed Contracts and actual SSA
+   uses in the candidate, including release positions and lifetimes. Only
+   validation constructs a checked plan.
+3. Clone the retained candidate, apply the checked decisions, independently check
+   the actual physical output and publish once. Materialization performs no
+   numerical selection or catalog search.
+
+Physical operation indices refer to the selected Local candidate. They are not
+indices into the original Kernel subject. The checked object privately retains
+that candidate and owns the physical choices. Inspection returns a separate clone.
+Module identity and complete source content guard validation and publication;
+stale input refuses. This is an invocation-local guard, not a persisted
 certificate or protection against concurrent mutation of IR.
 
 Each mismatched operand gets its conversion immediately before its consumer, in
 operand order. Declarations may be shared; dynamic instructions and results are
 not silently shared or hoisted. Function/control ports use installed defaults;
-kernel results retain their chosen representation until a use needs conversion.
+operation results retain their chosen representation until a use needs conversion.
 The candidate catalog supplies preferences for installed implementations and
 direct adapters. It cannot create a conversion law or install a new contract.
 
@@ -59,6 +75,34 @@ Candidate discovery enumerates applicable installed implementations by identity;
 policy can reorder or withhold them. Registration order grants no preference.
 Adding implementations can change an automatically selected artifact, whose
 recorded physical choices determine execution costs and limits.
+
+## Scheduled lifetimes
+
+Structured Local control and selected Plan operations form the executable
+schedule. Physical planning preserves their order and records optional binding
+releases alongside implementations, ports and conversions. With storage release
+enabled, the producer chooses the earliest legal point in each isolated Local
+block. The checker validates the recorded choices independently; it does not
+repeat that heuristic and accepts safe delayed or omitted releases. The option
+controls automatic proposals, not which legal schedules the checker accepts.
+Materialization consumes those choices without discovering last uses, and the
+output reader checks the actual release positions and operands.
+
+Schedule coordinates distinguish operation results, block arguments and
+conversion results. A conversion is an actual use: its input and output can
+have different last uses. A release must follow the definition and every use
+in the same block. Returned or yielded bindings escape, and used affine
+bindings have already transferred their permission. Existing releases remain
+ordered instructions. Only discardable physical types permit new releases.
+
+Releasing a binding does not establish unique ownership of its backing. The VM
+retains allocations still referenced by other bindings, views, frames or returned
+values. This schedule grants no writable-buffer access or scratch reservation.
+Releases add no execution tick and do not refund cumulative work or allocation.
+Released storage stays logically charged until its region exits, as specified
+by [Local control accounting](../spec/ir/control.md#execution).
+Loop transformations and native arithmetic require their own representation and
+failure contracts; they are not implied by lifetime selection.
 
 ## Execution and evidence
 

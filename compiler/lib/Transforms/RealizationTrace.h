@@ -7,15 +7,21 @@
 #include "zkc/Analysis/Computation.h"
 #include "zkc/Transforms/MathematicalTrace.h"
 #include "llvm/Support/raw_ostream.h"
+#include <cstddef>
 #include <type_traits>
 
 namespace zkc::mathematical {
 inline RealizationSubject
 realizationSubject(mlir::Operation *op,
-                   const protocol::detail::AlgorithmExpansionRecord &record) {
+                   const protocol::detail::AlgorithmExpansionRecord &record,
+                   llvm::ArrayRef<std::pair<std::string, std::string>>
+                       declarationOrigins = {}) {
   auto result = realizationSubject(op);
-  if (auto *origin = protocol::detail::occurrence(record, result.declaration,
-                                                  result.site)) {
+  // Lookup uses the immutable declaration; append resolves the event once.
+  // Keep the raw subject here so an overlapping spelling is not remapped twice.
+  auto key = sourceSubject(result, declarationOrigins);
+  if (auto *origin =
+          protocol::detail::occurrence(record, key.declaration, key.site)) {
     result.definition = origin->definition;
     result.originalSite = origin->originalSite;
     result.occurrence.assign(origin->path.begin(), origin->path.end());
@@ -216,13 +222,33 @@ class RealizationScope {
   uint64_t id = 0, parent = 0;
   std::string service;
   RealizationSubject subject;
+  std::size_t inheritedDeclarationOrigins = 0, visibleDeclarationOrigins = 0;
   bool proposed = false, finished = false;
   DecisionCause failureCause = RequiredFailure{"service refused", {}};
 
+  // A child's overrides must not relabel an enclosing scope's own events.
+  llvm::ArrayRef<std::pair<std::string, std::string>>
+  declarationOrigins() const {
+    return {trace->declarationOrigins.data(), visibleDeclarationOrigins};
+  }
+  void resolveCause(DecisionCause &cause) const {
+    if (auto *verification = std::get_if<VerificationDecision>(&cause))
+      verification->subject =
+          sourceSubject(std::move(verification->subject), declarationOrigins());
+  }
   void append(RealizationEventPayload payload, const RealizationSubject &key) {
     if (!trace)
       return;
-    trace->events.push_back({trace->events.size() + 1, id, parent, service, key,
+    if (auto *selection = std::get_if<SelectionDecision>(&payload))
+      selection->querySubject = sourceSubject(
+          std::move(selection->querySubject), declarationOrigins());
+    if (auto *discard = std::get_if<DiscardDecision>(&payload))
+      resolveCause(discard->cause);
+    if (auto *completion = std::get_if<CompletionDecision>(&payload);
+        completion && completion->cause)
+      resolveCause(*completion->cause);
+    trace->events.push_back({trace->events.size() + 1, id, parent, service,
+                             sourceSubject(key, declarationOrigins()),
                              std::move(payload)});
     const auto &event = trace->events.back();
     if (!trace->remarks && !trace->ir)
@@ -231,10 +257,10 @@ class RealizationScope {
     llvm::raw_string_ostream out(text);
     out << "mathematical decision " << event.sequence << " scope=" << id
         << " parent=" << parent << " service=" << service;
-    if (!key.declaration.empty())
-      out << " subject=@" << key.declaration;
-    if (!key.site.empty())
-      out << " site=" << key.site;
+    if (!event.subject.declaration.empty())
+      out << " subject=@" << event.subject.declaration;
+    if (!event.subject.site.empty())
+      out << " site=" << event.subject.site;
     std::visit([&](const auto &value) { render(out, value); }, event.payload);
     if (trace->remarks && anchor)
       anchor->emitRemark() << text;
@@ -261,7 +287,8 @@ class RealizationScope {
   static void render(llvm::raw_ostream &out, const ProposalDecision &value) {
     out << " proposal finite-bulk=" << value.effectivePolicy.finiteBulk
         << " vector-reduction-fusion="
-        << value.effectivePolicy.vectorReductionFusion;
+        << value.effectivePolicy.vectorReductionFusion
+        << " collect-fold-fusion=" << value.effectivePolicy.collectFoldFusion;
   }
   static void render(llvm::raw_ostream &out, const DiscardDecision &value) {
     out << " discard";
@@ -279,7 +306,8 @@ class RealizationScope {
   }
   static void render(llvm::raw_ostream &out, const RetryDecision &value) {
     out << " retry discarded=" << value.discardedScope
-        << " finite-bulk=" << value.effectivePolicy.finiteBulk;
+        << " finite-bulk=" << value.effectivePolicy.finiteBulk
+        << " collect-fold-fusion=" << value.effectivePolicy.collectFoldFusion;
   }
   static void render(llvm::raw_ostream &out, const PublicationDecision &value) {
     out << " publication=" << decisionName(value.boundary);
@@ -304,6 +332,7 @@ public:
       trace->policy = policy;
       trace->stages.clear();
       trace->events.clear();
+      trace->declarationOrigins.clear();
       trace->nextScope = 1;
       trace->initialWork = work ? *work : RealizationWork{};
       trace->remainingWork = trace->initialWork;
@@ -311,6 +340,8 @@ public:
       parent = trace->activeScopes.back();
     id = trace->nextScope++;
     trace->activeScopes.push_back(id);
+    inheritedDeclarationOrigins = visibleDeclarationOrigins =
+        trace->declarationOrigins.size();
     this->subject = subject ? std::move(*subject) : realizationSubject(anchor);
   }
   RealizationScope(const RealizationScope &) = delete;
@@ -326,7 +357,16 @@ public:
     }
     if (work)
       trace->remainingWork = *work;
+    trace->declarationOrigins.resize(inheritedDeclarationOrigins);
     trace->activeScopes.pop_back();
+  }
+  /// Register on the innermost scope. Nested observations inherit the mapping
+  /// to an immutable declaration until this scope exits.
+  void declarationOrigin(llvm::StringRef declaration, llvm::StringRef origin) {
+    if (trace) {
+      trace->declarationOrigins.emplace_back(declaration.str(), origin.str());
+      visibleDeclarationOrigins = trace->declarationOrigins.size();
+    }
   }
   void propose() {
     propose(trace ? trace->policy : MathematicalSelectionPolicy{});
@@ -356,7 +396,8 @@ public:
                  DecisionFamily family, RealizationChoice choice,
                  OptimizationOutcome outcome) {
     if (trace)
-      selection(realizationSubject(op, record), family, choice, outcome);
+      selection(realizationSubject(op, record, declarationOrigins()), family,
+                choice, outcome);
   }
   void selection(const RealizationSubject &key, DecisionFamily family,
                  RealizationChoice choice, OptimizationOutcome outcome,

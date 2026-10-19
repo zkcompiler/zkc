@@ -7,12 +7,21 @@ maintains independent research models and checks.
 
 ## Selecting checks
 
+Retained structured protocol changes use the compiler's `structured-source`,
+`structured-applications` and `structured-repeats` CTest cases. The repeat case
+captures complete original sources and interfaces, checks optional participant
+execution and exact refusals, and exercises native preparation, projection,
+Math lowering and physical export. Runner integration and the native affine
+resource suites provide separate evidence; reference agreement is not a
+production correctness theorem.
+
 | Change | Command | Scope |
 |---|---|---|
 | Harness, configuration or command wiring | `just test-harness` | Python controls without compiled project tools |
 | C++ compiler, dialects or passes | `just test-compiler` | CMake/CTest; accepts `dev`, `sanitize` or `shared` |
 | Runner, Host or backends | `just test-rust` | Root Cargo workspace, all features |
 | Source-to-execution integration | `just test-integration` | Protocol and kernel pytest suites against built compiler and Rust tools |
+| Compact family execution | `python3 common/tests/run.py smoke` | Package boundaries, literal README recipes and small valid/invalid protocol controls; `--family NAME` selects one family |
 | SDK discovery and dependency isolation | `just test-sdk` | Small static/shared CMake fixtures; no LLVM installation needed |
 | Installed SDK | `just test-install` | Fresh compiler installation and independent consumer |
 | Installed domain contribution | `just test-install-domain` | Separate base/domain installations and consumers |
@@ -34,6 +43,8 @@ The driver uses existing project tools. Cargo tests and SDK checks compile their
 python3 common/tests/run.py harness
 python3 common/tests/run.py sdk
 python3 common/tests/run.py integration
+python3 common/tests/run.py smoke
+python3 common/tests/run.py smoke --family sigma
 python3 common/tests/run.py compiler --profile dev
 python3 common/tests/run.py rust
 python3 common/tests/run.py install --profile dev
@@ -58,7 +69,7 @@ representative controls and states their evidence limits.
   signatures, including independently authored witnesses and deliberate drift.
   Relation-bundle and machine relation tests send the same carriers to the C++
   and Rust evaluators and require identical reports.
-- `kernels/` compares extension-field arithmetic, sparse matrices, vector
+- `kernels/` compares extension-field and binary-field arithmetic, sparse matrices, vector
   scatter, coset evaluation/interpolation/folding and pointwise maps beside the
   Ring provider and formal products against independent integer calculations
   through `.zkc` Entries, including disabled simplification, storage release
@@ -101,9 +112,22 @@ of that control runs in `just test-integration` without Lean.
 `just test-lean-fresh` rebuilds research packages without previous
 project/dependency objects. These can be expensive.
 
-`just test-lean-native` prepares the native compiler, main Lean package and ArkLib integration, then
-runs independent finite SSA/Lean comparisons, the source/property request matrix,
-and authored-target controls. To use an existing build, run
+`just test-lean-native` prepares the native compiler, the runtime CLI, the main Lean package and the ArkLib integration, then
+runs independent scalar and structured SSA/Lean comparisons, including primitive
+bindings and unchanged table helpers, the source/property
+request matrix, and authored-target controls. The [structured bridge](../../lean/bridges/structured/README.md)
+also has a standalone command and optional production Runner comparisons.
+The separate [participant probe](../../lean/bridges/structured/participant.md)
+compares actual Schnorr endpoints, native G1 codecs, pending actions and provider
+state; build its test driver explicitly and run the documented standalone command.
+It requires the structured open replay executable and is not a default native check.
+`lean-native` also runs the [transcript-construction bridge](../../lean/bridges/construction/README.md),
+which checks the validators of the compiled Schnorr, Sumcheck, composed Sumcheck,
+Schnorr AND and Chaum–Pedersen proof Entries with the Lean rules, and the
+[executable bridge](../../lean/bridges/executable/README.md), which checks the validator
+program the runtime admits with the Lean lowering rule and compares the runtime CLI
+selected by `ZKC_NATIVE_BIN` with the Lean executable meaning.
+To use an existing build, run
 `python3 common/tests/run.py lean-native --compiler-build=build/compiler`.
 This scope exercises wrong-program, wrong-relation and unproved-certificate
 refusals as well as successful claims. Reports are retained under

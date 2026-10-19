@@ -1,11 +1,12 @@
+use zkc_runtime::interpreter::Runner;
 mod common;
 use common::*;
 use serde_json::{Value as Json, json};
 use zkc_backends::Value;
 use zkc_backends::*;
-use zkc_runtime::interactive::Identity;
-use zkc_runtime::interactive::Value as _;
-use zkc_runtime::{interactive::*, logical};
+use zkc_runtime::vm::Identity;
+use zkc_runtime::vm::Value as _;
+use zkc_runtime::{logical, vm::*};
 
 // Independently written fixture encoder; does not use the runtime logical codec.
 fn tree(v: &Json) -> Vec<u8> {
@@ -148,7 +149,12 @@ fn exact_merlin_runner_match_and_session_role_invariance() {
         // Generated names have no authority over the source challenge attrs.
         j[2][0][1] = json!("generated_helper");
         j[3][0][6][0][2] = json!("generated_helper");
-        let admitted = admit_supplied(&serde_json::to_vec(&j).unwrap(), &backend).unwrap();
+        let admitted = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&j).unwrap())
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap();
         let runner = Runner::new(&admitted, "main", role, session, backend, vec![tok, f(7)])
             .unwrap_or_else(|e| panic!("{}", e.error));
         let (out, backend) = finish(runner);
@@ -170,8 +176,8 @@ fn exact_merlin_runner_match_and_session_role_invariance() {
         assert_eq!(
             backend
                 .decode_native_value(
-                    &zkc_runtime::interactive::PhysicalType::default_for(
-                        zkc_runtime::interactive::LogicalType::parse(
+                    &zkc_runtime::vm::PhysicalType::default_for(
+                        zkc_runtime::vm::LogicalType::parse(
                             "transcript:merlin3.bls12-381.fr64be/0"
                         )
                         .unwrap()
@@ -350,7 +356,12 @@ fn wrong_authority_owner_instance_and_aliases_never_consume() {
             .issue_transcript_for(Identity::Merlin3Fr64Be, wrong, 3, &root())
             .unwrap();
         let old = tok.clone();
-        let a = admit_supplied(&bytes, &backend).unwrap();
+        let a = zkc_runtime::vm::Program::decode(&bytes)
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap();
         let e = Runner::new(&a, "main", "P", "session", backend, vec![tok, f(7)])
             .err()
             .unwrap();
@@ -373,7 +384,12 @@ fn wrong_authority_owner_instance_and_aliases_never_consume() {
         &["transcript", "transcript"],
         &["a", "b"],
     );
-    let a = admit_supplied(&bytes, &issuer).unwrap();
+    let a = zkc_runtime::vm::Program::decode(&bytes)
+        .and_then(|program| {
+            program.check_installation(&issuer)?;
+            Ok(program)
+        })
+        .unwrap();
     let old = tok.clone();
     let e = Runner::new(&a, "main", "P", "session", issuer, vec![tok.clone(), tok])
         .err()
@@ -399,7 +415,11 @@ fn original_rng_remains_separate_and_transcript_is_affine() {
     let mut j: Json = serde_json::from_slice(&program1()).unwrap();
     j[2][0][4][2] = challenge("t", "c", "t2");
     assert_eq!(
-        admit_supplied(&serde_json::to_vec(&j).unwrap(), &backend)
+        zkc_runtime::vm::Program::decode(&serde_json::to_vec(&j).unwrap())
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
             .unwrap_err()
             .code,
         ErrorCode::Ssa
@@ -407,7 +427,11 @@ fn original_rng_remains_separate_and_transcript_is_affine() {
     let mut j: Json = serde_json::from_slice(&program1()).unwrap();
     j[2][0][4][1][3] = json!(["Source"]);
     assert_eq!(
-        admit_supplied(&serde_json::to_vec(&j).unwrap(), &backend)
+        zkc_runtime::vm::Program::decode(&serde_json::to_vec(&j).unwrap())
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
             .unwrap_err()
             .code,
         ErrorCode::Attributes
@@ -428,11 +452,11 @@ impl Backend for Probe {
     type Call = ();
     type Checkpoint = ();
     type Value = zkc_backends::Value;
-    type Kernel = zkc_backends::NativeKernel;
+    type Operation = zkc_backends::NativeOperation;
     fn prepare_binding(
         &self,
-        binding: &zkc_runtime::interactive::OperationBinding,
-    ) -> Option<Self::Kernel> {
+        binding: &zkc_runtime::vm::OperationBinding,
+    ) -> Option<Self::Operation> {
         self.inner.prepare_binding(binding)
     }
     fn validate_value(&self, v: &Self::Value) -> Result<(), BackendError> {
@@ -454,7 +478,7 @@ impl Backend for Probe {
     }
     fn apply(
         &mut self,
-        kernel: &Self::Kernel,
+        operation: &Self::Operation,
         i: &Invocation<'_>,
         a: &[Self::Value],
     ) -> Result<Vec<Self::Value>, BackendError> {
@@ -464,7 +488,7 @@ impl Backend for Probe {
             .contract
             .starts_with("transcript.native.indexed.")
         {
-            return self.inner.apply(kernel, i, a);
+            return self.inner.apply(operation, i, a);
         }
         if !self.checked {
             self.checked = true;
@@ -472,15 +496,21 @@ impl Backend for Probe {
                 let mut hidden = a.to_vec();
                 hidden[0] = self.hidden.clone();
                 assert_eq!(
-                    self.inner.apply(kernel, i, &hidden).unwrap_err().code,
+                    self.inner.apply(operation, i, &hidden).unwrap_err().code,
                     "refused:capability-out-of-view"
                 );
                 let wrong_frame = Invocation {
-                    frame: self.root_frame.as_ref().unwrap(),
+                    context: zkc_runtime::vm::CallContext {
+                        frame: self.root_frame.as_ref().unwrap(),
+                        ..i.context
+                    },
                     ..*i
                 };
                 assert_eq!(
-                    self.inner.apply(kernel, &wrong_frame, a).unwrap_err().code,
+                    self.inner
+                        .apply(operation, &wrong_frame, a)
+                        .unwrap_err()
+                        .code,
                     "refused:inactive-frame"
                 );
                 // The active local frame cannot close its active ancestor.
@@ -506,14 +536,14 @@ impl Backend for Probe {
                     max_output_bytes: 0,
                     ..*i
                 };
-                return self.inner.apply(kernel, &small, a);
+                return self.inner.apply(operation, &small, a);
             } else {
                 // A later backend failure does not undo completed transcript state.
-                self.inner.apply(kernel, i, a)?;
+                self.inner.apply(operation, i, a)?;
                 return Err(BackendError::new("refused:injected-after-transition"));
             }
         }
-        self.inner.apply(kernel, i, a)
+        self.inner.apply(operation, i, a)
     }
 }
 #[test]
@@ -717,7 +747,12 @@ fn native_contracts_bind_explicit_source_occurrences_not_runtime_frames() {
         }
         program[3][0][3] = json!(role);
         program[4][0][2][0][0] = json!(role);
-        let admitted = admit_supplied(&serde_json::to_vec(&program).unwrap(), &backend).unwrap();
+        let admitted = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&program).unwrap())
+            .and_then(|program| {
+                program.check_installation(&backend)?;
+                Ok(program)
+            })
+            .unwrap();
         let runner = Runner::new(
             &admitted,
             "main",

@@ -90,7 +90,7 @@ def test_machine_committed_false_auxiliary_is_rejected(toolchain, journal, direc
            '    let lde = extend_columns(changed, layout.reduction.columns, height, shift, size);\n'
            '    Auxiliary { columns: changed, lde, claims: built.1 }')
     package, pin = compile_entry(toolchain, journal, directory, entry,
-                                edits=[TRUNCATE, ('stark::koala_bear::bundle', old, new)])
+                                edits=[TRUNCATE, ('stark::whole_bundle', old, new)])
     rejected_proof(toolchain, journal, directory, package, pin, requests('store-load'),
                    'false-auxiliary', 'identity')
 
@@ -130,7 +130,7 @@ fn other_program(values: Vector<Base>) -> Vector<Base> {
     # admits this same internally consistent false configuration.
     disabled = directory / 'disabled'
     disabled.mkdir()
-    edit = ('stark::koala_bear::bundle', '    both(known, combined == recombine(opened.quotient, height, zeta))',
+    edit = ('stark::whole_bundle', '    both(known, combined == recombine(opened.quotient, height, zeta))',
             '    combined == recombine(opened.quotient, height, zeta)')
     package, pin = compile_entry(toolchain, journal, disabled, 'ProofLogUp', source=source, edits=[edit])
     prove_and_verify(toolchain, journal, directory, package, pin, 'without-known-slot-check', pair)

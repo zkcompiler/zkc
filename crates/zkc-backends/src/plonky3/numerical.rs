@@ -1,11 +1,13 @@
 //! Checked native installation of coset kernels. Each backend owns its DFT
 //! preparation; no protocol value or transcript state lives in this cache.
 use super::polynomial::{self, Domain, Error, Kernels};
-use crate::{KoalaBear, KoalaBearExt8, Policy, Result, Value, exhausted, refused, value::size};
+use crate::{
+    KoalaBear, KoalaBearExt4, KoalaBearExt8, Policy, Result, Value, exhausted, refused, value::size,
+};
 use p3_field::ExtensionField;
-use zkc_runtime::interactive::{Identity, Invocation};
+use zkc_runtime::vm::{Identity, Invocation};
 
-fn failure(error: Error) -> zkc_runtime::interactive::BackendError {
+fn failure(error: Error) -> zkc_runtime::vm::BackendError {
     refused(match error {
         Error::DomainSize => "coset-size",
         Error::ElementLimit => "coset-element-limit",
@@ -74,6 +76,12 @@ family!(
     KoalaBearExt8Vector,
     KoalaBearExt8Polynomial
 );
+family!(
+    KoalaBearExt4,
+    KoalaBearExt4Field,
+    KoalaBearExt4Vector,
+    KoalaBearExt4Polynomial
+);
 
 pub(crate) fn apply(
     name: &str,
@@ -101,6 +109,9 @@ pub(crate) fn apply(
         }
         Some(Identity::KoalaBearExt8) => {
             execute::<KoalaBearExt8>(name, args, policy, invocation.max_output_bytes, kernels)
+        }
+        Some(Identity::KoalaBearExt4) => {
+            execute::<KoalaBearExt4>(name, args, policy, invocation.max_output_bytes, kernels)
         }
         _ => Err(refused("coset-field")),
     }
@@ -195,7 +206,7 @@ fn execute<E: Family>(
 /// Independent native port facts, also used for exact implementation assembly.
 pub(crate) const CONTRACTS: &[crate::bindings::Contract] = {
     use crate::bindings::poly;
-    use zkc_runtime::interactive::{AttributeRule, Type::*};
+    use zkc_runtime::vm::{AttributeRule, Type::*};
     &[
         poly::operation(
             "poly.coset_evaluate",

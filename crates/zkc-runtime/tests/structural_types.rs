@@ -1,5 +1,5 @@
 use serde_json::json;
-use zkc_runtime::interactive::{
+use zkc_runtime::vm::{
     ArgumentKind, AttributeRule, ErrorCode, Identity, LogicalType, OperationBinding, PhysicalType,
     Representation, Type, TypeArgument,
 };

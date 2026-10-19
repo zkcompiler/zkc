@@ -1,8 +1,8 @@
 module accumulator_machine;
-use stark::koala_bear::{Base, Extension};
+use stark::configurations::koala_bear_octic::{Base, Extension};
 use zkc::vector::{Vector};
 use zkc::vector as vec;
-use stark::koala_bear::bundle::{Statement, TableStatement, ThreeTableArgument};
+use stark::whole_bundle::{Statement, TableStatement, ThreeTableArgument};
 use air::interaction::{Reduction, LogUp, GrandProduct};
 domain Machine = bundle(asset machine);
 

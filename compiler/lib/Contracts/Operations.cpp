@@ -1,15 +1,15 @@
 #include "zkc/Contracts/Operations.h"
-#include "zkc/Contracts/Kernels.h"
+#include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/TypeProperties.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringMap.h"
 
 namespace zkc::protocol {
 namespace {
-const Kernel *findKernel(llvm::StringRef key) {
+const OperationShape *findOperationShape(llvm::StringRef key) {
   static const auto catalog = [] {
-    llvm::StringMap<const Kernel *> entries;
-    for (const auto &k : kernels())
+    llvm::StringMap<const OperationShape *> entries;
+    for (const auto &k : operationShapes())
       entries.try_emplace(k.key, &k);
     return entries;
   }();
@@ -65,13 +65,15 @@ const CosetConvention *cosetConvention(llvm::StringRef field) {
   static const CosetConvention koala{"koala-bear.two-adic.1791270792/0",
                                      "koala-bear", "1791270792",
                                      "shift * root(size)^i; i = 0..size-1", 24};
-  return field == "koala-bear" || field == "koala-bear.ext8-binomial3"
+  // Installed KoalaBear extensions evaluate on the base field's subgroups.
+  return field == "koala-bear" || field == "koala-bear.ext8-binomial3" ||
+                 field == "koala-bear.ext4-binomial3"
              ? &koala
              : nullptr;
 }
 const OperationContracts *operationContracts(llvm::StringRef key) {
-  const auto *kernel = findKernel(key);
-  return kernel ? &kernel->contracts : nullptr;
+  const auto *application = findOperationShape(key);
+  return application ? &application->contracts : nullptr;
 }
 const SamplingContract *samplingContract(llvm::StringRef key) {
   auto *c = operationContracts(key);
@@ -94,7 +96,7 @@ bool isConstructionDraw(llvm::StringRef key) {
   return c && !c->derivedCounterpart.empty();
 }
 bool hasUnclassifiedProviderEffect(llvm::StringRef key) {
-  const auto *k = findKernel(key);
+  const auto *k = findOperationShape(key);
   if (!k)
     return true;
   if (k->contracts.sampling || k->contracts.observation)

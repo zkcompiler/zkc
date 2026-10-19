@@ -3,8 +3,8 @@
 //! transcript resources, and do not advertise automatic Fiat-Shamir rules.
 use crate::external::{Work, monero, openvm};
 use crate::{Policy, Result, Value, exhausted, refused, value::size};
-use zkc_runtime::interactive::{
-    AttributeRule, BoundSignature, Identity, KernelSignature, LogicalType, OperationBinding,
+use zkc_runtime::vm::{
+    AttributeRule, BoundSignature, Identity, LogicalType, OperationBinding, OperationSignature,
     PhysicalType, Type,
 };
 
@@ -59,7 +59,7 @@ pub(crate) fn signature(b: &OperationBinding) -> Option<BoundSignature> {
         _ => return None,
     };
     let port = |kind| PhysicalType::default_for(LogicalType::new(kind, Identity::None).ok()?).ok();
-    Some(KernelSignature {
+    Some(OperationSignature {
         inputs: ins.iter().copied().map(port).collect::<Option<_>>()?,
         outputs: outs.iter().copied().map(port).collect::<Option<_>>()?,
         attributes: AttributeRule::None,
@@ -140,7 +140,7 @@ fn packed(d: &openvm::Duplex) -> Value {
             .chain([s.absorb_index as u64, s.sample_index as u64]),
     )
 }
-fn primitive(e: crate::external::Error) -> zkc_runtime::interactive::BackendError {
+fn primitive(e: crate::external::Error) -> zkc_runtime::vm::BackendError {
     let code = e.code().replacen("external:", "external-", 1);
     // A size past u64 exhausts the work that could be done; it is one form
     // wherever it arises, as the runtime's own size overflows are.

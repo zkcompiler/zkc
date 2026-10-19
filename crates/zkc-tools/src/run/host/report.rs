@@ -203,7 +203,7 @@ pub(super) fn check_units(
     for value in values {
         match value {
             Value::ResourceUnit(unit) => {
-                zkc_runtime::interactive::Backend::validate_value(backend, value)
+                zkc_runtime::vm::Backend::validate_value(backend, value)
                     .map_err(|e| e.to_string())?;
                 let state = backend
                     .observe(unit.capability())

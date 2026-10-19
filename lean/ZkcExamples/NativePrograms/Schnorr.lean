@@ -19,15 +19,13 @@ namespace ZkcExamples.NativePrograms.Schnorr
 
 open Zkc.Source Zkc.Source.Common Zkc.Source.Common.Native
 
-set_option maxRecDepth 10000 in
-set_option maxHeartbeats 4000000 in
 def imported : Imported := (SchnorrData.snapshot.check).toOption.get (by decide +kernel)
 
 variable {F G : Type} [Field F] [DecidableEq F]
     [AddCommGroup G] [Module F G] [DecidableEq G]
 
 abbrev meaning := scalarMeaning F G
-abbrev actions := interface Nat language services (ScalarValue F G)
+abbrev actions := Participant.interface Nat Ty services (ScalarValue F G)
 
 def verifierInputs (base key : G) (challengeService : Nat) :
     Values (fun ty => Option (ScalarValue F G ty)) SchnorrData.snapshot.inputs :=
@@ -42,8 +40,6 @@ abbrev experiment := Zkc.Protocols.Schnorr.Common.experiment (F := F) (G := G) w
 def verifier (base key : G) (service : Nat) : PIR.Proc (actions (F := F) (G := G)) (Option Bool) :=
   imported.denote (scalarMeaning F G) id 1 (verifierInputs base key service)
 
-set_option maxRecDepth 10000 in
-set_option maxHeartbeats 1000000 in
 /-- Equality of open processes preserves every handler's replies, stops, state
 and events, including malicious responses and aborted prefixes. -/
 theorem verifier_correspondence (base key : G) (challengeService : Nat) :

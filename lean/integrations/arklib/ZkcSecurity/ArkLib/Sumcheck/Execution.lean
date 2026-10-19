@@ -18,7 +18,7 @@ open OracleSpec OracleComp
 
 variable {F : Type} [Field F] [DecidableEq F] [SampleableType F]
 
-abbrev Event (F : Type) := Action Nat language services (ScalarValue F F)
+abbrev Event (F : Type) := Participant.Action Nat Ty services (ScalarValue F F)
 
 def handler (prover : Strategy F) :
     PIR.MonadHandler ProbComp (actions (F := F)) (Nat × F) (Event F)
@@ -71,8 +71,6 @@ def game (coefficients : Coefficients F) (claim : F) (prover : Strategy F) : Pro
     else return False
   else return False
 
-set_option maxRecDepth 4000 in
-set_option maxHeartbeats 800000 in
 theorem execution_game {wiring : Wiring} {program : Verifier F}
     (certificate : VerifierContract wiring program) (coefficients : Coefficients F)
     (claim : F) (service : Nat) (prover : Strategy F) :

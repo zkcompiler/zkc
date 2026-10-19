@@ -1,7 +1,7 @@
 //! Structural materialization; family owners select domains and applicability.
 use super::*;
 use crate::domains::NativeDomain;
-use zkc_runtime::interactive::{KernelSignature, PhysicalType};
+use zkc_runtime::vm::{OperationSignature, PhysicalType};
 
 pub(super) fn field_domain(binding: &OperationBinding) -> Option<NativeDomain> {
     let [name] = binding.arguments.as_slice() else {
@@ -37,11 +37,19 @@ fn literal_rule(rule: AttributeRule, field: Identity) -> AttributeRule {
         (Identity::Ristretto255Scalar, AttributeRule::FieldDecimals) => {
             AttributeRule::RistrettoDecimals
         }
-        (Identity::KoalaBear | Identity::KoalaBearExt8, AttributeRule::FieldDecimal) => {
-            AttributeRule::KoalaBearDecimal
-        }
-        (Identity::KoalaBear | Identity::KoalaBearExt8, AttributeRule::FieldDecimals) => {
-            AttributeRule::KoalaBearDecimals
+        (
+            Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4,
+            AttributeRule::FieldDecimal,
+        ) => AttributeRule::KoalaBearDecimal,
+        (
+            Identity::KoalaBear | Identity::KoalaBearExt8 | Identity::KoalaBearExt4,
+            AttributeRule::FieldDecimals,
+        ) => AttributeRule::KoalaBearDecimals,
+        (Identity::Binary64, AttributeRule::FieldDecimal) => AttributeRule::Binary64Literal,
+        (Identity::Binary64, AttributeRule::FieldDecimals) => AttributeRule::Binary64Literals,
+        (Identity::Binary64Ext3, AttributeRule::FieldDecimal) => AttributeRule::Binary64Ext3Literal,
+        (Identity::Binary64Ext3, AttributeRule::FieldDecimals) => {
+            AttributeRule::Binary64Ext3Literals
         }
         (Identity::Bn254Fr, AttributeRule::FieldDecimal) => AttributeRule::Bn254Decimal,
         (Identity::Bn254Fr, AttributeRule::FieldDecimals) => AttributeRule::Bn254Decimals,
@@ -88,7 +96,7 @@ pub(super) fn materialize(
         };
         *port = PhysicalType::new(port.logical(), representation).ok()?;
     }
-    Some(KernelSignature {
+    Some(OperationSignature {
         inputs,
         outputs,
         attributes: literal_rule(row.attributes, field),

@@ -56,7 +56,7 @@ The [setup contract](../spec/formats/messages.md#application-authorized-setups)
 distinguishes input pins, authorized receives, observation timing and unchecked
 returned PCS data.
 
-Compiler checks, structural admission, installed kernel contracts and runtime
+Compiler checks, structural admission, installed operation contracts and runtime
 tests cover distinct trust boundaries. Native Lean correspondence is open. The
 independent formal realization laws state how complete results and states would
 have to relate; they do not supply a correctness theorem for this Runner.

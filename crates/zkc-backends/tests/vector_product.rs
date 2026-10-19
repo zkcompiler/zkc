@@ -6,7 +6,7 @@ use p3_field::BasedVectorSpace;
 use serde_json::json;
 use support::{Controlled, assert_value, backend, one, program};
 use zkc_backends::{Bn254Scalar, KoalaBear, KoalaBearExt8, Policy, RistrettoScalar, Scalar, Value};
-use zkc_runtime::interactive::{Backend, ErrorCode, OperationBinding, Value as _, admit_supplied};
+use zkc_runtime::vm::{Backend, ErrorCode, OperationBinding, Value as _};
 
 fn cases(numbers: &[u64], expected: u64) -> [(Value, Value); 5] {
     let p = Policy::default();
@@ -172,16 +172,19 @@ fn product_refuses_wrong_value_kind_nominal_field_parameters_and_implementation(
             assert!(observed.outputs.is_empty());
         }
         let mut controlled = Controlled::new(backend(Policy::default()));
-        controlled.implementation = Some(
-            binding(vector)
+        let original = binding(vector);
+        controlled.binding = Some(OperationBinding {
+            contract: "vector.sum".into(),
+            implementation: original
                 .implementation
                 .replace("vector.product", "vector.sum"),
-        );
+            arguments: original.arguments,
+        });
         assert_eq!(
             one(controlled, binding(vector), &[], vec![vector.clone()])
                 .0
                 .unwrap_err(),
-            "refused:kernel-operands"
+            "refused:kernel-binding"
         );
 
         let mut controlled = Controlled::new(backend(Policy::default()));
@@ -245,7 +248,11 @@ fn native_reader_refuses_product_port_and_attribute_mutations() {
                 &["out".into()],
             );
             assert_eq!(
-                admit_supplied(&bytes, &backend(Policy::default()))
+                zkc_runtime::vm::Program::decode(&bytes)
+                    .and_then(|program| {
+                        program.check_installation(&backend(Policy::default()))?;
+                        Ok(program)
+                    })
                     .unwrap_err()
                     .code,
                 code

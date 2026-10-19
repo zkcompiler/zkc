@@ -6,26 +6,27 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/ControlFlowInterfaces.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
-include "zkc/Dialect/Kernels.td"
+include "zkc/Dialect/BoundOperations.td"
 
-def EncodingFieldsBeOp : KernelOp<CryptoDialect, "exec.encoding_fields_be", [OpEncodingFieldsBe]>;
-def EncodingFieldsLeOp : KernelOp<CryptoDialect, "exec.encoding_fields_le", [OpEncodingFieldsLe]>;
-def EncodingGroupsCompressedOp : KernelOp<CryptoDialect, "exec.encoding_groups_compressed", [OpEncodingGroupsCompressed]>;
-def EncodingFieldBeOp : KernelOp<CryptoDialect, "exec.encoding_field_be", [OpEncodingFieldBe]>;
-def EncodingFieldFromBeOp : KernelOp<CryptoDialect, "exec.encoding_field_from_be", [OpEncodingFieldFromBe]>;
-def EncodingFieldReduceBeOp : KernelOp<CryptoDialect, "exec.encoding_field_reduce_be", [OpEncodingFieldReduceBe]>;
-def EncodingGroupCompressedOp : KernelOp<CryptoDialect, "exec.encoding_group_compressed", [OpEncodingGroupCompressed]>;
-def EncodingGroupFromCompressedOp : KernelOp<CryptoDialect, "exec.encoding_group_from_compressed", [OpEncodingGroupFromCompressed]>;
+def EncodingFieldsBeOp : BoundOp<CryptoDialect, "exec.encoding_fields_be", [OpEncodingFieldsBe]>;
+def EncodingFieldsFromBeOp : BoundOp<CryptoDialect, "exec.encoding_fields_from_be", [OpEncodingFieldsFromBe]>;
+def EncodingFieldsLeOp : BoundOp<CryptoDialect, "exec.encoding_fields_le", [OpEncodingFieldsLe]>;
+def EncodingGroupsCompressedOp : BoundOp<CryptoDialect, "exec.encoding_groups_compressed", [OpEncodingGroupsCompressed]>;
+def EncodingFieldBeOp : BoundOp<CryptoDialect, "exec.encoding_field_be", [OpEncodingFieldBe]>;
+def EncodingFieldFromBeOp : BoundOp<CryptoDialect, "exec.encoding_field_from_be", [OpEncodingFieldFromBe]>;
+def EncodingFieldReduceBeOp : BoundOp<CryptoDialect, "exec.encoding_field_reduce_be", [OpEncodingFieldReduceBe]>;
+def EncodingGroupCompressedOp : BoundOp<CryptoDialect, "exec.encoding_group_compressed", [OpEncodingGroupCompressed]>;
+def EncodingGroupFromCompressedOp : BoundOp<CryptoDialect, "exec.encoding_group_from_compressed", [OpEncodingGroupFromCompressed]>;
 
-def Shake128InitOp : KernelOp<CryptoDialect, "exec.shake128_init", [OpShake128Init]>;
-def Shake128AbsorbOp : KernelOp<CryptoDialect, "exec.shake128_absorb", [OpShake128Absorb]>;
-def Shake128SqueezeOp : KernelOp<CryptoDialect, "exec.shake128_squeeze", [OpShake128Squeeze]>;
+def Shake128InitOp : BoundOp<CryptoDialect, "exec.shake128_init", [OpShake128Init]>;
+def Shake128AbsorbOp : BoundOp<CryptoDialect, "exec.shake128_absorb", [OpShake128Absorb]>;
+def Shake128SqueezeOp : BoundOp<CryptoDialect, "exec.shake128_squeeze", [OpShake128Squeeze]>;
 
-def CurveCommitOp : KernelOp<CryptoDialect, "exec.curve_commit", [OpCurveCommit]>;
+def CurveCommitOp : BoundOp<CryptoDialect, "exec.curve_commit", [OpCurveCommit]>;
 
-def CurveResponseOp : KernelOp<CryptoDialect, "exec.curve_response", [OpCurveResponse]>;
+def CurveResponseOp : BoundOp<CryptoDialect, "exec.curve_response", [OpCurveResponse]>;
 
-def ExternalMoneroHashOp : KernelOp<CryptoDialect, "exec.monero_hash", [OpExternalMoneroHash]> {
+def ExternalMoneroHashOp : BoundOp<CryptoDialect, "exec.monero_hash", [OpExternalMoneroHash]> {
   let description = [{
     Hashes concatenated words to Monero scalar bytes without a chain state.
     States are explicit values, so grouping and order stay in the authored body;
@@ -33,7 +34,7 @@ def ExternalMoneroHashOp : KernelOp<CryptoDialect, "exec.monero_hash", [OpExtern
   }];
 }
 
-def ExternalMoneroInitOp : KernelOp<CryptoDialect, "exec.monero_init", [OpExternalMoneroInit]> {
+def ExternalMoneroInitOp : BoundOp<CryptoDialect, "exec.monero_init", [OpExternalMoneroInit]> {
   let description = [{
     Starts the pinned Monero scalar hash chain from its initial bytes.
     States are explicit values, so grouping and order stay in the authored body;
@@ -41,7 +42,7 @@ def ExternalMoneroInitOp : KernelOp<CryptoDialect, "exec.monero_init", [OpExtern
   }];
 }
 
-def ExternalMoneroUpdateOp : KernelOp<CryptoDialect, "exec.monero_update", [OpExternalMoneroUpdate]> {
+def ExternalMoneroUpdateOp : BoundOp<CryptoDialect, "exec.monero_update", [OpExternalMoneroUpdate]> {
   let description = [{
     Absorbs concatenated words into the Monero hash chain; returns the successor state and the derived scalar bytes.
     States are explicit values, so grouping and order stay in the authored body;
@@ -49,7 +50,7 @@ def ExternalMoneroUpdateOp : KernelOp<CryptoDialect, "exec.monero_update", [OpEx
   }];
 }
 
-def ExternalOpenvmCheckWitnessOp : KernelOp<CryptoDialect, "exec.openvm_check_witness", [OpExternalOpenvmCheckWitness]> {
+def ExternalOpenvmCheckWitnessOp : BoundOp<CryptoDialect, "exec.openvm_check_witness", [OpExternalOpenvmCheckWitness]> {
   let description = [{
     Checks a grinding witness against the requested number of bits on the live state.
     States are explicit values, so grouping and order stay in the authored body;
@@ -57,7 +58,7 @@ def ExternalOpenvmCheckWitnessOp : KernelOp<CryptoDialect, "exec.openvm_check_wi
   }];
 }
 
-def ExternalOpenvmInitOp : KernelOp<CryptoDialect, "exec.openvm_init", [OpExternalOpenvmInit]> {
+def ExternalOpenvmInitOp : BoundOp<CryptoDialect, "exec.openvm_init", [OpExternalOpenvmInit]> {
   let description = [{
     Starts the pinned OpenVM BabyBear Poseidon2 duplex state.
     States are explicit values, so grouping and order stay in the authored body;
@@ -65,7 +66,7 @@ def ExternalOpenvmInitOp : KernelOp<CryptoDialect, "exec.openvm_init", [OpExtern
   }];
 }
 
-def ExternalOpenvmObserveOp : KernelOp<CryptoDialect, "exec.openvm_observe", [OpExternalOpenvmObserve]> {
+def ExternalOpenvmObserveOp : BoundOp<CryptoDialect, "exec.openvm_observe", [OpExternalOpenvmObserve]> {
   let description = [{
     Absorbs field words into the OpenVM duplex; returns the successor state.
     States are explicit values, so grouping and order stay in the authored body;
@@ -73,7 +74,7 @@ def ExternalOpenvmObserveOp : KernelOp<CryptoDialect, "exec.openvm_observe", [Op
   }];
 }
 
-def ExternalOpenvmSampleOp : KernelOp<CryptoDialect, "exec.openvm_sample", [OpExternalOpenvmSample]> {
+def ExternalOpenvmSampleOp : BoundOp<CryptoDialect, "exec.openvm_sample", [OpExternalOpenvmSample]> {
   let description = [{
     Squeezes one base-field sample from the OpenVM duplex.
     States are explicit values, so grouping and order stay in the authored body;
@@ -81,7 +82,7 @@ def ExternalOpenvmSampleOp : KernelOp<CryptoDialect, "exec.openvm_sample", [OpEx
   }];
 }
 
-def ExternalOpenvmSampleBitsOp : KernelOp<CryptoDialect, "exec.openvm_sample_bits", [OpExternalOpenvmSampleBits]> {
+def ExternalOpenvmSampleBitsOp : BoundOp<CryptoDialect, "exec.openvm_sample_bits", [OpExternalOpenvmSampleBits]> {
   let description = [{
     Squeezes a sample and masks it to the requested number of bits, as the pinned query sampler does.
     States are explicit values, so grouping and order stay in the authored body;
@@ -89,7 +90,7 @@ def ExternalOpenvmSampleBitsOp : KernelOp<CryptoDialect, "exec.openvm_sample_bit
   }];
 }
 
-def ExternalOpenvmSampleExtOp : KernelOp<CryptoDialect, "exec.openvm_sample_ext", [OpExternalOpenvmSampleExt]> {
+def ExternalOpenvmSampleExtOp : BoundOp<CryptoDialect, "exec.openvm_sample_ext", [OpExternalOpenvmSampleExt]> {
   let description = [{
     Squeezes the four coefficients of one quartic-extension sample.
     States are explicit values, so grouping and order stay in the authored body;
@@ -97,31 +98,38 @@ def ExternalOpenvmSampleExtOp : KernelOp<CryptoDialect, "exec.openvm_sample_ext"
   }];
 }
 
-def RandomDrawOp : KernelOp<CryptoDialect, "exec.random_draw", [OpRandomDraw]>;
+def RandomDrawOp : BoundOp<CryptoDialect, "exec.random_draw", [OpRandomDraw]>;
 
-def RandomIndexOp : KernelOp<CryptoDialect, "exec.random_index", [OpRandomIndex]>;
+def RandomIndexOp : BoundOp<CryptoDialect, "exec.random_index", [OpRandomIndex]>;
 
-def RandomVectorOp : KernelOp<CryptoDialect, "exec.random_vector", [OpRandomVector]>;
+def RandomVectorOp : BoundOp<CryptoDialect, "exec.random_vector", [OpRandomVector]>;
 
-def TranscriptObserveOp : KernelOp<CryptoDialect,
+def TranscriptObserveOp : BoundOp<CryptoDialect,
     "exec.transcript_observe", [OpTranscriptObserve]>;
-def TranscriptChallengeOp : KernelOp<CryptoDialect,
+def TranscriptChallengeOp : BoundOp<CryptoDialect,
     "exec.transcript_challenge", [OpTranscriptChallenge]>;
-def TranscriptIndexOp : KernelOp<CryptoDialect,
+def TranscriptIndexOp : BoundOp<CryptoDialect,
     "exec.transcript_index", [OpTranscriptIndex]>;
-def IndexedTranscriptChallengeOp : KernelOp<CryptoDialect,
+def IndexedTranscriptChallengeOp : BoundOp<CryptoDialect,
     "exec.indexed_transcript_challenge", [OpIndexedTranscriptChallenge]>;
-def IndexedTranscriptObserveDataOp : KernelOp<CryptoDialect,
+def IndexedTranscriptObserveDataOp : BoundOp<CryptoDialect,
     "exec.indexed_transcript_observe_data", [OpIndexedTranscriptObserveData]>;
-def IndexedTranscriptIndexOp : KernelOp<CryptoDialect,
+def IndexedTranscriptIndexOp : BoundOp<CryptoDialect,
     "exec.indexed_transcript_index", [OpIndexedTranscriptIndex]>;
 
 
-def EncodingFieldLeOp : KernelOp<CryptoDialect, "exec.encoding_field_le", [OpEncodingFieldLe]>;
-def EncodingFieldFromLeOp : KernelOp<CryptoDialect, "exec.encoding_field_from_le", [OpEncodingFieldFromLe]>;
-def EncodingFieldReduceLeOp : KernelOp<CryptoDialect, "exec.encoding_field_reduce_le", [OpEncodingFieldReduceLe]>;
-def EncodingGroupDecodeCofactorOp : KernelOp<CryptoDialect, "exec.encoding_group_decode_cofactor", [OpEncodingGroupDecodeCofactor]>;
-def EncodingCryptonoteMapOp : KernelOp<CryptoDialect, "exec.encoding_cryptonote_map", [OpEncodingCryptonoteMap]>;
-def Keccak256Op : KernelOp<CryptoDialect, "exec.keccak256", [OpHashKeccak256]>;
+def EncodingFieldLeOp : BoundOp<CryptoDialect, "exec.encoding_field_le", [OpEncodingFieldLe]>;
+def EncodingFieldFromLeOp : BoundOp<CryptoDialect, "exec.encoding_field_from_le", [OpEncodingFieldFromLe]>;
+def EncodingFieldReduceLeOp : BoundOp<CryptoDialect, "exec.encoding_field_reduce_le", [OpEncodingFieldReduceLe]>;
+def EncodingFieldsFromLeOp : BoundOp<CryptoDialect, "exec.encoding_fields_from_le", [OpEncodingFieldsFromLe]>;
+def EncodingFieldMontgomeryLeOp : BoundOp<CryptoDialect, "exec.encoding_field_montgomery_le", [OpEncodingFieldMontgomeryLe]>;
+def EncodingFieldFromMontgomeryLeOp : BoundOp<CryptoDialect, "exec.encoding_field_from_montgomery_le", [OpEncodingFieldFromMontgomeryLe]>;
+def EncodingFieldsMontgomeryLeOp : BoundOp<CryptoDialect, "exec.encoding_fields_montgomery_le", [OpEncodingFieldsMontgomeryLe]>;
+def EncodingFieldsFromMontgomeryLeOp : BoundOp<CryptoDialect, "exec.encoding_fields_from_montgomery_le", [OpEncodingFieldsFromMontgomeryLe]>;
+def EncodingGroupDecodeCofactorOp : BoundOp<CryptoDialect, "exec.encoding_group_decode_cofactor", [OpEncodingGroupDecodeCofactor]>;
+def EncodingCryptonoteMapOp : BoundOp<CryptoDialect, "exec.encoding_cryptonote_map", [OpEncodingCryptonoteMap]>;
+def Keccak256Op : BoundOp<CryptoDialect, "exec.keccak256", [OpHashKeccak256]>;
+def Sha256Op : BoundOp<CryptoDialect, "exec.sha256", [OpHashSha256]>;
+def Poseidon2Width16Op : BoundOp<CryptoDialect, "exec.poseidon2_16", [OpHashPoseidon2Width16]>;
 
 #endif

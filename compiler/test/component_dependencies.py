@@ -13,7 +13,7 @@ ALLOWED = {
     "ZkcContracts": {"ZkcSupport"},
     "ZkcRelation": {"ZkcContracts"},
     "ZkcProgram": {"ZkcContracts"},
-    "ZkcTransforms": {"ZkcIR", "MLIRPass", "MLIRTransforms", "MLIRTransformUtils"},
+    "ZkcTransforms": {"ZkcIR", "MLIRPass", "MLIRTransforms", "MLIRTransformUtils", "MLIRSCFDialect"},
     "ZkcCompiler": {"ZkcTransforms", "ZkcTranslation", "MLIRParser"},
     "ZkcDriver": {"ZkcCompiler", "MLIRParser"},
     "ZkcTranslation": {"ZkcIR", "ZkcLanguage"},
@@ -27,7 +27,7 @@ HEADER_ROOTS = {
     "ZkcProgram": ["Program"],
     "ZkcTransforms": ["Transforms", "Target"],
     "ZkcCompiler": [f"Compiler/{name}.h" for name in (
-        "Compilation", "Diagnostics", "Language", "LanguageInterface", "AssetSharing", "CommonSource",
+        "Compilation", "Diagnostics", "Language", "LanguageInterface", "AssetSharing", "CommonSource", "StructuredSource",
         "LanguagePackage", "LanguageInspection", "NativeProof", "Run",
         "PolynomialReduction", "PublicCoin", "Passes", "Pipelines")],
     "ZkcDriver": ["Driver"],
@@ -156,6 +156,12 @@ def main():
         "lib/Dialect/Protocol/IR/Protocol.cpp": "ZkcIR",
         "lib/Transforms/MathematicalPreservation.cpp": "ZkcTransforms",
         "lib/Transforms/MathLoweringVerification.cpp": "ZkcTransforms",
+        "lib/Dialect/Kernel/IR/Kernel.cpp": "ZkcIR",
+        "lib/Transforms/Kernel/Formation.cpp": "ZkcTransforms",
+        "lib/Transforms/Kernel/Lowering.cpp": "ZkcTransforms",
+        "lib/Transforms/Kernel/Verification.cpp": "ZkcTransforms",
+        "lib/Transforms/Kernel/Schedule.cpp": "ZkcTransforms",
+        "lib/Transforms/CollectFold.cpp": "ZkcTransforms",
     }.items():
         assert owners[ROOT / source] == owner, f"mandatory component ownership: {source} belongs to {owner}"
     private_headers = {
@@ -168,10 +174,12 @@ def main():
     }
     private_headers["ZkcIR"].add(ROOT / "lib/Analysis/FiniteCardinality.h")
     private_headers["ZkcLanguage"].add(ROOT / "lib/Language/FiniteCardinality.h")
+    private_headers["ZkcLanguage"].add(ROOT / "lib/Language/APIRecords.h")
     private_headers["ZkcTranslation"] = {ROOT / "lib/Translation/Language/Finite.h", ROOT / "lib/Translation/Language/DataPreconditions.h"}
     private_headers["ZkcIR"].update((ROOT / "lib/Dialect/TypeAdapters").rglob("*.h"))
     private_headers["ZkcTransforms"] = {
         ROOT / "lib/Conversion/Bindings.h", ROOT / "lib/Target/PhysicalPlan.h",
+        ROOT / "lib/Conversion/Storage.h", ROOT / "lib/Target/StorageSchedule.h",
         ROOT / "lib/Transforms/MathematicalSupport.h",
         ROOT / "lib/Transforms/RealizationTrace.h",
         ROOT / "lib/Transforms/RealizationSubject.h",
@@ -182,6 +190,7 @@ def main():
         ROOT / "lib/Transforms/NestedContractionVerification.h",
         ROOT / "lib/Transforms/RecipeRealizations.h",
         ROOT / "lib/Transforms/FiniteVerification.h",
+        ROOT / "lib/Transforms/CollectFold.h",
         ROOT / "lib/Transforms/FinitePreparation.h",
         ROOT / "lib/Transforms/CheckedCandidate.h",
         ROOT / "lib/Transforms/CollectionInterpretation.h",
@@ -194,6 +203,10 @@ def main():
         ROOT / "lib/Transforms/PreparedProtocol.h",
         ROOT / "lib/Transforms/ProtocolApplications.h"
     }
+    private_headers["ZkcTransforms"].update(
+        ROOT / f"lib/Transforms/Kernel/{name}.h"
+        for name in ("Support", "FrontierVerification", "NormalizationVerification", "Schedule")
+    )
     private_headers["ZkcCompiler"] = {
         ROOT / "lib/Compiler/CompilationState.h",
         ROOT / "lib/Compiler/Run.h", ROOT / "lib/Compiler/ArtifactJson.h",
@@ -369,7 +382,8 @@ def main():
     }
     for reader in ("FiniteVerification", "MathLoweringVerification",
                    "MathematicalComparison", "NestedContractionVerification",
-                   "HelperNormalizationVerification", "AlgorithmVerification"):
+                   "HelperNormalizationVerification", "AlgorithmVerification",
+                   "Kernel/RecipeVerification"):
         pending = [ROOT / f"lib/Transforms/{reader}.cpp"]
         visited = set()
         while pending:

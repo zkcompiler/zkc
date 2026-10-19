@@ -1,0 +1,7 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"stark::configurations::koala_bear_octic" = "lib.zkc"
+
+["dependencies"]
+"collections" = "../../../../core/collections"

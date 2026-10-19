@@ -8,7 +8,6 @@ use serde_json::{Value as Json, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::Path};
 use zkc_backends::{Domain, EntryPolicy, GroupPoint, NativeBackend, Policy, Scalar, Value};
-use zkc_runtime::interactive::admit_supplied;
 use zkc_test_support::hex;
 use zkc_tools::proof::{NativeDeployment, NativeProofReport};
 
@@ -169,7 +168,11 @@ fn repin(envelope: &Json, candidate: &Json) -> Vec<u8> {
 }
 fn admitted_mutation_refuses(envelope: &Json, candidate: &Json, reason: &str) {
     let candidate_bytes = serde_json::to_vec(candidate).unwrap();
-    admit_supplied(&candidate_bytes, &backend())
+    zkc_runtime::vm::Program::decode(&candidate_bytes)
+        .and_then(|program| {
+            program.check_installation(&backend())?;
+            Ok(program)
+        })
         .expect("mutation must pass ordinary typed admission");
     // Re-pin solely to exercise the structural checker. A real application must
     // never accept a pin supplied by this candidate or by its proof producer.
@@ -201,7 +204,12 @@ fn mutations(envelope: &Json, bytes: &[u8], input: &Json, proof: &[u8]) {
             instruction[2] = json!(name);
         }
     }
-    admit_supplied(&serde_json::to_vec(&candidate).unwrap(), &backend()).unwrap();
+    zkc_runtime::vm::Program::decode(&serde_json::to_vec(&candidate).unwrap())
+        .and_then(|program| {
+            program.check_installation(&backend())?;
+            Ok(program)
+        })
+        .unwrap();
     let separate = repin(envelope, &candidate);
     let separate = NativeDeployment::admit(
         &separate,
@@ -299,9 +307,13 @@ fn mutations(envelope: &Json, bytes: &[u8], input: &Json, proof: &[u8]) {
             .unwrap();
         binding[1] = json!(contract);
         binding[3] = json!(format!("arkworks/{contract}"));
-        let error =
-            admit_supplied(&serde_json::to_vec(&candidate).unwrap(), &backend()).unwrap_err();
-        assert_eq!(error.code, zkc_runtime::interactive::ErrorCode::Signature);
+        let error = zkc_runtime::vm::Program::decode(&serde_json::to_vec(&candidate).unwrap())
+            .and_then(|program| {
+                program.check_installation(&backend())?;
+                Ok(program)
+            })
+            .unwrap_err();
+        assert_eq!(error.code, zkc_runtime::vm::ErrorCode::Signature);
         let bytes = repin(envelope, &candidate);
         assert!(
             NativeDeployment::admit(&bytes, &Sha256::digest(&bytes).into(), Default::default())
@@ -366,8 +378,8 @@ fn envelope_mutations(envelope: &Json) {
     // host has no input constructor for it. Refuse before reading input rows.
     // Keep all old inputs and transcript positions consistent with the map.
     for logical in ["point:bls12-381.fr", "polynomial:bls12-381.fr"] {
-        let ty = zkc_runtime::interactive::PhysicalType::default_for(
-            zkc_runtime::interactive::LogicalType::parse(logical).unwrap(),
+        let ty = zkc_runtime::vm::PhysicalType::default_for(
+            zkc_runtime::vm::LogicalType::parse(logical).unwrap(),
         )
         .unwrap();
         let mut changed = envelope.clone();

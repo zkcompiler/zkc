@@ -1,0 +1,16 @@
+# Standalone reference executable for the EIP-4844 corpus. It links the
+# published c-kzg-4844 crate and has its own lockfile; nothing here enters the
+# native workspace.
+[package]
+name = "zkc-c-kzg-reference"
+version = "0.0.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+# c-kzg-4844 v2.1.8, whose C sources equal the tagged revision
+# e125905e5e01186e6ccb7a0ced4845bf7eddbcfe.
+c-kzg = { version = "=2.1.8", default-features = false, features = ["std", "portable"] }
+
+[workspace]

@@ -1,6 +1,12 @@
-format = "zkc.project/0"
-[modules]
-example = "main.zkc"
-[dependencies]
-bulletproofs = "../../../../../libraries/bulletproofs"
-zkc = "../../../../../libraries/zkc"
+"format" = "zkc.project/0"
+
+["modules"]
+"example" = "main.zkc"
+
+["dependencies"]
+"weighted-inner-product" = "../../../../../libraries/arguments/bulletproofs/weighted_inner_product"
+"algebra" = "../../../../../libraries/core/algebra"
+"collections" = "../../../../../libraries/core/collections"
+"encoding" = "../../../../../libraries/core/encoding"
+"primitive-cryptography" = "../../../../../libraries/core/primitives/cryptography"
+"traversal" = "../../../../../libraries/core/traversal"

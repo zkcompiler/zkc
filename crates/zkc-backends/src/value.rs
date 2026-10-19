@@ -3,7 +3,7 @@ use std::sync::Arc;
 use zkc_arkworks::{
     Bounds, Commitment, CommittedTable, OpeningProof, ProverKey, Scalar, Table, VerifierKey,
 };
-use zkc_runtime::interactive::{
+use zkc_runtime::vm::{
     Backing, Identity, LogicalType, PhysicalType, Representation, Type, Value as RuntimeValue,
 };
 
@@ -64,7 +64,7 @@ impl Policy {
             usize::MAX,
         )
     }
-    pub(crate) fn bn254_groups<T>(&self, n: usize) -> Result<()> {
+    pub(crate) fn typed_groups<T>(&self, n: usize) -> Result<()> {
         if n > self.max_groups.min(32_768) {
             return Err(exhausted("group-limit"));
         }
@@ -154,12 +154,23 @@ value_inventory! {
     Bn254G2(crate::Bn254G2),
     Bn254Gt(crate::Bn254Gt),
     Bn254G2Vector(Arc<[crate::Bn254G2]>),
+    Bls12381G2(crate::Bls12381G2),
+    Bls12381G2Vector(Arc<[crate::Bls12381G2]>),
+    /// Boxed: twelve base-field coefficients would exceed the inline value bound.
+    Bls12381Gt(Arc<crate::Bls12381Gt>),
 
     OracleRoot(crate::oracle::Domain, crate::plonky3::oracle::Digest),
     OraclePath(crate::oracle::Domain, Arc<[crate::plonky3::oracle::Digest]>),
     OracleState(crate::oracle::State),
     OracleRoots(crate::oracle::Domain, Arc<[crate::plonky3::oracle::Digest]>),
     OracleStates(crate::oracle::Domain, Arc<[crate::oracle::State]>),
+    /// Digest-generic Merkle carriers: each digest is its scheme's fixed-width
+    /// canonical byte encoding.
+    MerkleDigest(crate::merkle::Scheme, Arc<[u8]>),
+    MerkleProof(crate::merkle::Scheme, Arc<[u8]>),
+    MerkleTree(crate::merkle::State),
+    MerkleDigests(crate::merkle::Scheme, Arc<[u8]>),
+    MerkleTrees(crate::merkle::Scheme, Arc<[crate::merkle::State]>),
     Index(u64),
     Indices(Arc<[u64]>),
     Bytes(Arc<[u8]>),
@@ -172,6 +183,21 @@ value_inventory! {
     KoalaBearExt8Vector(Arc<[crate::KoalaBearExt8]>),
     KoalaBearExt8Polynomial(Arc<[crate::KoalaBearExt8]>),
     KoalaBearExt8Round([crate::KoalaBearExt8; 3]),
+    KoalaBearExt4Matrix(crate::matrix::SparseCoo<crate::KoalaBearExt4>),
+    KoalaBearExt4Field(crate::KoalaBearExt4),
+    KoalaBearExt4Vector(Arc<[crate::KoalaBearExt4]>),
+    KoalaBearExt4Polynomial(Arc<[crate::KoalaBearExt4]>),
+    KoalaBearExt4Round([crate::KoalaBearExt4; 3]),
+    Binary64Matrix(crate::matrix::SparseCoo<crate::Binary64>),
+    Binary64Field(crate::Binary64),
+    Binary64Vector(Arc<[crate::Binary64]>),
+    Binary64Polynomial(Arc<[crate::Binary64]>),
+    Binary64Round([crate::Binary64; 3]),
+    Binary64Ext3Matrix(crate::matrix::SparseCoo<crate::Binary64Ext3>),
+    Binary64Ext3Field(crate::Binary64Ext3),
+    Binary64Ext3Vector(Arc<[crate::Binary64Ext3]>),
+    Binary64Ext3Polynomial(Arc<[crate::Binary64Ext3]>),
+    Binary64Ext3Round([crate::Binary64Ext3; 3]),
     KoalaBearField(crate::KoalaBear),
     KoalaBearVector(Arc<[crate::KoalaBear]>),
     KoalaBearPolynomial(Arc<[crate::KoalaBear]>),
@@ -283,6 +309,21 @@ impl Value {
                 Identity::Bn254G2,
                 Representation::Bn254G2Vector,
             ),
+            Self::Bls12381G2(_) => (
+                Type::Group,
+                Identity::Bls12381G2,
+                Representation::Bls12381G2,
+            ),
+            Self::Bls12381G2Vector(_) => (
+                Type::Groups,
+                Identity::Bls12381G2,
+                Representation::Bls12381G2Vector,
+            ),
+            Self::Bls12381Gt(_) => (
+                Type::Group,
+                Identity::Bls12381Gt,
+                Representation::Bls12381Gt,
+            ),
             Self::OracleRoot(d, _) => (Type::Commitment, d.identity(), Representation::MerkleRoot),
             Self::OraclePath(d, _) => (Type::Proof, d.identity(), Representation::MerklePath),
             Self::OracleState(s) => (
@@ -297,6 +338,25 @@ impl Value {
                 Type::OpeningStates,
                 d.identity(),
                 Representation::MerkleStates,
+            ),
+            Self::MerkleDigest(s, _) => {
+                (Type::Commitment, s.identity(), Representation::MerkleDigest)
+            }
+            Self::MerkleProof(s, _) => (Type::Proof, s.identity(), Representation::MerkleProof),
+            Self::MerkleTree(t) => (
+                Type::OpeningState,
+                t.scheme().identity(),
+                Representation::MerkleTree,
+            ),
+            Self::MerkleDigests(s, _) => (
+                Type::Commitments,
+                s.identity(),
+                Representation::MerkleDigests,
+            ),
+            Self::MerkleTrees(s, _) => (
+                Type::OpeningStates,
+                s.identity(),
+                Representation::MerkleTrees,
             ),
             Self::KoalaBearExt8Matrix(_) => (
                 Type::Matrix,
@@ -322,6 +382,77 @@ impl Value {
                 Type::Field,
                 Identity::KoalaBearExt8,
                 Representation::KoalaBearExt8,
+            ),
+            Self::KoalaBearExt4Matrix(_) => (
+                Type::Matrix,
+                Identity::KoalaBearExt4,
+                Representation::KoalaBearExt4SparseCoo,
+            ),
+            Self::KoalaBearExt4Round(_) => (
+                Type::Round,
+                Identity::KoalaBearExt4,
+                Representation::KoalaBearExt4Round,
+            ),
+            Self::KoalaBearExt4Polynomial(_) => (
+                Type::Polynomial,
+                Identity::KoalaBearExt4,
+                Representation::KoalaBearExt4Polynomial,
+            ),
+            Self::KoalaBearExt4Vector(_) => (
+                Type::Vector,
+                Identity::KoalaBearExt4,
+                Representation::KoalaBearExt4Vector,
+            ),
+            Self::KoalaBearExt4Field(_) => (
+                Type::Field,
+                Identity::KoalaBearExt4,
+                Representation::KoalaBearExt4,
+            ),
+            Self::Binary64Matrix(_) => (
+                Type::Matrix,
+                Identity::Binary64,
+                Representation::Binary64SparseCoo,
+            ),
+            Self::Binary64Round(_) => (
+                Type::Round,
+                Identity::Binary64,
+                Representation::Binary64Round,
+            ),
+            Self::Binary64Polynomial(_) => (
+                Type::Polynomial,
+                Identity::Binary64,
+                Representation::Binary64Polynomial,
+            ),
+            Self::Binary64Vector(_) => (
+                Type::Vector,
+                Identity::Binary64,
+                Representation::Binary64Vector,
+            ),
+            Self::Binary64Field(_) => (Type::Field, Identity::Binary64, Representation::Binary64),
+            Self::Binary64Ext3Matrix(_) => (
+                Type::Matrix,
+                Identity::Binary64Ext3,
+                Representation::Binary64Ext3SparseCoo,
+            ),
+            Self::Binary64Ext3Round(_) => (
+                Type::Round,
+                Identity::Binary64Ext3,
+                Representation::Binary64Ext3Round,
+            ),
+            Self::Binary64Ext3Polynomial(_) => (
+                Type::Polynomial,
+                Identity::Binary64Ext3,
+                Representation::Binary64Ext3Polynomial,
+            ),
+            Self::Binary64Ext3Vector(_) => (
+                Type::Vector,
+                Identity::Binary64Ext3,
+                Representation::Binary64Ext3Vector,
+            ),
+            Self::Binary64Ext3Field(_) => (
+                Type::Field,
+                Identity::Binary64Ext3,
+                Representation::Binary64Ext3,
             ),
             Self::Matrix(_) => (
                 Type::Matrix,
@@ -529,17 +660,23 @@ impl Value {
         if !ty.is_serializable() {
             return Err(refused("nonserializable"));
         }
+        if ty.kind() == Type::Group && ty.logical().identity() == Identity::Bls12381Gt {
+            // Twelve 48-byte coefficients exceed the 512-byte fixed leaf charge.
+            policy.wire(wire_len)?;
+            policy.output(1024, usize::MAX)?;
+            return Ok(1024);
+        }
         if ty.kind() == Type::Groups
             && matches!(
                 ty.logical().identity(),
-                Identity::Bn254G1 | Identity::Bn254G2
+                Identity::Bn254G1 | Identity::Bn254G2 | Identity::Bls12381G2
             )
         {
             policy.wire(wire_len)?;
-            let (wire, memory) = if ty.logical().identity() == Identity::Bn254G1 {
-                (32, std::mem::size_of::<crate::Bn254G1>())
-            } else {
-                (64, std::mem::size_of::<crate::Bn254G2>())
+            let (wire, memory) = match ty.logical().identity() {
+                Identity::Bn254G1 => (32, std::mem::size_of::<crate::Bn254G1>()),
+                Identity::Bn254G2 => (64, std::mem::size_of::<crate::Bn254G2>()),
+                _ => (96, std::mem::size_of::<crate::Bls12381G2>()),
             };
             let bytes = size(wire_len / wire, memory)?;
             policy.output(bytes, usize::MAX)?;
@@ -626,20 +763,34 @@ impl Value {
         Some(match self {
             Self::OraclePath(_, p) | Self::OracleRoots(_, p) => Backing::of(p, bytes),
             Self::OracleState(s) => s.backing().ok()?,
+            Self::MerkleDigest(_, d) | Self::MerkleProof(_, d) | Self::MerkleDigests(_, d) => {
+                Backing::of(d, bytes)
+            }
+            Self::MerkleTree(t) => t.backing().ok()?,
             Self::Bn254Matrix(m) => m.backing().ok()?,
             Self::Matrix(m) => m.backing().ok()?,
             Self::RistrettoMatrix(m) => m.backing().ok()?,
             Self::KoalaBearMatrix(m) => m.backing().ok()?,
             Self::KoalaBearExt8Matrix(m) => m.backing().ok()?,
+            Self::KoalaBearExt4Matrix(m) => m.backing().ok()?,
+            Self::Binary64Matrix(m) => m.backing().ok()?,
+            Self::Binary64Ext3Matrix(m) => m.backing().ok()?,
             Self::Bn254Vector(v) | Self::Bn254Polynomial(v) => Backing::of(v, bytes),
             Self::Bn254G1Vector(v) => Backing::of(v, bytes),
             Self::Bn254G2Vector(v) => Backing::of(v, bytes),
+            Self::Bls12381G2Vector(v) => Backing::of(v, bytes),
+            Self::Bls12381Gt(v) => Backing::of(v, bytes),
             Self::Indices(v) => Backing::of(v, bytes),
             Self::Bytes(v) => Backing::of(v, bytes),
             Self::Shake128State(v) => Backing::of(v, bytes),
             Self::KoalaBearExt8Vector(v) | Self::KoalaBearExt8Polynomial(v) => {
                 Backing::of(v, bytes)
             }
+            Self::KoalaBearExt4Vector(v) | Self::KoalaBearExt4Polynomial(v) => {
+                Backing::of(v, bytes)
+            }
+            Self::Binary64Vector(v) | Self::Binary64Polynomial(v) => Backing::of(v, bytes),
+            Self::Binary64Ext3Vector(v) | Self::Binary64Ext3Polynomial(v) => Backing::of(v, bytes),
             Self::KoalaBearVector(v) | Self::KoalaBearPolynomial(v) => Backing::of(v, bytes),
             Self::Vector(v) | Self::Polynomial(v) | Self::Point(v) => Backing::of(v, bytes),
             Self::RistrettoVector(v) | Self::RistrettoPolynomial(v) => Backing::of(v, bytes),
@@ -660,16 +811,24 @@ impl Value {
             | Self::FrDiagonal(_)
             | Self::RistrettoDiagonal(_)
             | Self::OracleStates(..)
+            | Self::MerkleTrees(..)
             | Self::ResourceUnit(_)
             | Self::Bn254Field(_)
             | Self::Bn254Round(_)
             | Self::Bn254G1(_)
             | Self::Bn254Gt(_)
             | Self::Bn254G2(_)
+            | Self::Bls12381G2(_)
             | Self::OracleRoot(..)
             | Self::Index(_)
             | Self::KoalaBearExt8Field(_)
             | Self::KoalaBearExt8Round(_)
+            | Self::KoalaBearExt4Field(_)
+            | Self::KoalaBearExt4Round(_)
+            | Self::Binary64Field(_)
+            | Self::Binary64Round(_)
+            | Self::Binary64Ext3Field(_)
+            | Self::Binary64Ext3Round(_)
             | Self::KoalaBearField(_)
             | Self::KoalaBearRound(_)
             | Self::RistrettoField(_)
@@ -703,11 +862,19 @@ impl Value {
             | Self::Bn254Gt(..)
             | Self::Bn254G2(..)
             | Self::Bn254G2Vector(..)
+            | Self::Bls12381G2(..)
+            | Self::Bls12381G2Vector(..)
+            | Self::Bls12381Gt(..)
             | Self::OracleRoot(..)
             | Self::OraclePath(..)
             | Self::OracleState(..)
             | Self::OracleRoots(..)
             | Self::OracleStates(..)
+            | Self::MerkleDigest(..)
+            | Self::MerkleProof(..)
+            | Self::MerkleTree(..)
+            | Self::MerkleDigests(..)
+            | Self::MerkleTrees(..)
             | Self::Index(..)
             | Self::Indices(..)
             | Self::Bytes(..)
@@ -720,6 +887,21 @@ impl Value {
             | Self::KoalaBearExt8Vector(..)
             | Self::KoalaBearExt8Polynomial(..)
             | Self::KoalaBearExt8Round(..)
+            | Self::KoalaBearExt4Matrix(..)
+            | Self::KoalaBearExt4Field(..)
+            | Self::KoalaBearExt4Vector(..)
+            | Self::KoalaBearExt4Polynomial(..)
+            | Self::KoalaBearExt4Round(..)
+            | Self::Binary64Matrix(..)
+            | Self::Binary64Field(..)
+            | Self::Binary64Vector(..)
+            | Self::Binary64Polynomial(..)
+            | Self::Binary64Round(..)
+            | Self::Binary64Ext3Matrix(..)
+            | Self::Binary64Ext3Field(..)
+            | Self::Binary64Ext3Vector(..)
+            | Self::Binary64Ext3Polynomial(..)
+            | Self::Binary64Ext3Round(..)
             | Self::KoalaBearField(..)
             | Self::KoalaBearVector(..)
             | Self::KoalaBearPolynomial(..)
@@ -795,12 +977,19 @@ impl RuntimeValue for Value {
             Self::KoalaBearExt8Field(value) => {
                 Some(crate::plonky3::encode_extension(*value).to_vec())
             }
+            Self::KoalaBearExt4Field(value) => {
+                Some(crate::plonky3::encode_quartic(*value).to_vec())
+            }
+            Self::Binary64Field(value) => Some(crate::plonky3::binary::encode(*value).to_vec()),
+            Self::Binary64Ext3Field(value) => {
+                Some(crate::plonky3::binary::encode_ext3(*value).to_vec())
+            }
             _ => None,
         }
     }
 
     fn pack_variant(
-        descriptor: Arc<zkc_runtime::interactive::VariantDescriptor>,
+        descriptor: Arc<zkc_runtime::vm::VariantDescriptor>,
         alternative: usize,
         payload: Vec<Self>,
     ) -> Result<Self> {
@@ -812,11 +1001,7 @@ impl RuntimeValue for Value {
     }
     fn unpack_variant(
         &self,
-    ) -> Result<(
-        Arc<zkc_runtime::interactive::VariantDescriptor>,
-        usize,
-        Vec<Self>,
-    )> {
+    ) -> Result<(Arc<zkc_runtime::vm::VariantDescriptor>, usize, Vec<Self>)> {
         match self {
             Self::Variant(v) => {
                 v.validate()?;
@@ -865,11 +1050,19 @@ impl RuntimeValue for Value {
             | Self::Bn254G2(..)
             | Self::Bn254Gt(..)
             | Self::Bn254G2Vector(..)
+            | Self::Bls12381G2(..)
+            | Self::Bls12381G2Vector(..)
+            | Self::Bls12381Gt(..)
             | Self::OracleRoot(..)
             | Self::OraclePath(..)
             | Self::OracleState(..)
             | Self::OracleRoots(..)
             | Self::OracleStates(..)
+            | Self::MerkleDigest(..)
+            | Self::MerkleProof(..)
+            | Self::MerkleTree(..)
+            | Self::MerkleDigests(..)
+            | Self::MerkleTrees(..)
             | Self::Index(..)
             | Self::Indices(..)
             | Self::Bytes(..)
@@ -882,6 +1075,21 @@ impl RuntimeValue for Value {
             | Self::KoalaBearExt8Vector(..)
             | Self::KoalaBearExt8Polynomial(..)
             | Self::KoalaBearExt8Round(..)
+            | Self::KoalaBearExt4Matrix(..)
+            | Self::KoalaBearExt4Field(..)
+            | Self::KoalaBearExt4Vector(..)
+            | Self::KoalaBearExt4Polynomial(..)
+            | Self::KoalaBearExt4Round(..)
+            | Self::Binary64Matrix(..)
+            | Self::Binary64Field(..)
+            | Self::Binary64Vector(..)
+            | Self::Binary64Polynomial(..)
+            | Self::Binary64Round(..)
+            | Self::Binary64Ext3Matrix(..)
+            | Self::Binary64Ext3Field(..)
+            | Self::Binary64Ext3Vector(..)
+            | Self::Binary64Ext3Polynomial(..)
+            | Self::Binary64Ext3Round(..)
             | Self::KoalaBearField(..)
             | Self::KoalaBearVector(..)
             | Self::KoalaBearPolynomial(..)
@@ -969,10 +1177,18 @@ impl RuntimeValue for Value {
             Self::OraclePath(_, p) | Self::OracleRoots(_, p) => size(p.len(), 32),
             Self::OracleState(s) => s.retained_bytes(),
             Self::OracleStates(_, states) => crate::oracle::states_bytes(states),
+            Self::MerkleDigest(_, d) | Self::MerkleProof(_, d) | Self::MerkleDigests(_, d) => {
+                size(d.len(), 1)
+            }
+            Self::MerkleTree(t) => t.retained_bytes(),
+            Self::MerkleTrees(_, trees) => crate::merkle::states_bytes(trees),
             Self::Bn254Matrix(m) => m.retained_bytes(),
             Self::Bn254Vector(v) | Self::Bn254Polynomial(v) => size(v.len(), 32),
             Self::Bn254G1Vector(v) => size(v.len(), std::mem::size_of::<crate::Bn254G1>()),
             Self::Bn254G2Vector(v) => size(v.len(), std::mem::size_of::<crate::Bn254G2>()),
+            Self::Bls12381G2Vector(v) => size(v.len(), std::mem::size_of::<crate::Bls12381G2>()),
+            // Twelve 48-byte base-field coefficients exceed the 512-byte leaf charge.
+            Self::Bls12381Gt(_) => Ok(1024),
             Self::Indices(v) => size(v.len(), 8),
             Self::Bytes(v) => size(v.len(), 1),
             Self::Shake128State(_) => Ok(crate::hash::Shake128State::RETAINED_BYTES),
@@ -981,6 +1197,12 @@ impl RuntimeValue for Value {
             Self::KoalaBearMatrix(m) => m.retained_bytes(),
             Self::KoalaBearExt8Matrix(m) => m.retained_bytes(),
             Self::KoalaBearExt8Vector(v) | Self::KoalaBearExt8Polynomial(v) => size(v.len(), 32),
+            Self::KoalaBearExt4Matrix(m) => m.retained_bytes(),
+            Self::KoalaBearExt4Vector(v) | Self::KoalaBearExt4Polynomial(v) => size(v.len(), 16),
+            Self::Binary64Matrix(m) => m.retained_bytes(),
+            Self::Binary64Vector(v) | Self::Binary64Polynomial(v) => size(v.len(), 8),
+            Self::Binary64Ext3Matrix(m) => m.retained_bytes(),
+            Self::Binary64Ext3Vector(v) | Self::Binary64Ext3Polynomial(v) => size(v.len(), 24),
             Self::KoalaBearVector(v) | Self::KoalaBearPolynomial(v) => size(v.len(), 4),
             Self::Vector(v) | Self::Polynomial(v) => size(v.len(), 32),
             Self::RistrettoVector(v) | Self::RistrettoPolynomial(v) => size(v.len(), 32),
@@ -1003,8 +1225,15 @@ impl RuntimeValue for Value {
             | Self::Bn254G1(_)
             | Self::Bn254Gt(_)
             | Self::Bn254G2(_)
+            | Self::Bls12381G2(_)
             | Self::KoalaBearExt8Round(_)
             | Self::KoalaBearExt8Field(_)
+            | Self::KoalaBearExt4Round(_)
+            | Self::KoalaBearExt4Field(_)
+            | Self::Binary64Round(_)
+            | Self::Binary64Field(_)
+            | Self::Binary64Ext3Round(_)
+            | Self::Binary64Ext3Field(_)
             | Self::KoalaBearField(_)
             | Self::KoalaBearRound(_)
             | Self::RistrettoField(_)
@@ -1040,6 +1269,7 @@ impl RuntimeValue for Value {
             Self::FrDiagonal(d) => crate::diagonal::Diagonal::retained_parts(d, shared),
             Self::RistrettoDiagonal(d) => crate::diagonal::Diagonal::retained_parts(d, shared),
             Self::OracleStates(_, states) => crate::oracle::states_parts(states, shared),
+            Self::MerkleTrees(_, trees) => crate::merkle::states_parts(trees, shared),
             leaf => Ok(match leaf.leaf_backing() {
                 Some(backing) => {
                     shared(backing);
@@ -1061,6 +1291,7 @@ impl RuntimeValue for Value {
             Self::FrDiagonal(d) => Some(crate::diagonal::Diagonal::view(d)),
             Self::RistrettoDiagonal(d) => Some(crate::diagonal::Diagonal::view(d)),
             Self::OracleStates(_, states) => crate::oracle::states_list(states).ok(),
+            Self::MerkleTrees(_, trees) => crate::merkle::states_list(trees).ok(),
             leaf => leaf.leaf_backing(),
         }
     }
@@ -1209,7 +1440,7 @@ mod admission_size_tests {
 mod custody_traversal_tests {
     use super::*;
     use serde_json::json;
-    use zkc_runtime::interactive::Backend;
+    use zkc_runtime::vm::Backend;
 
     fn pack(name: &str, values: Vec<Value>) -> Value {
         let types: Vec<_> = values
@@ -1273,7 +1504,7 @@ mod custody_traversal_tests {
             .visit_active_leaves(&mut |leaf| {
                 native.validate_value(leaf)?;
                 visited.push(leaf.ty());
-                Ok::<_, zkc_runtime::interactive::BackendError>(())
+                Ok::<_, zkc_runtime::vm::BackendError>(())
             })
             .unwrap();
         assert_eq!(visited, [Type::Index, Type::Index, Type::Rng, Type::Index]);

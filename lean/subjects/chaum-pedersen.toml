@@ -1,0 +1,54 @@
+schema = "zkc.subject/0"
+name = "chaum-pedersen"
+
+[source]
+project = "examples/projects/sigma"
+
+[entries]
+proof = "example::EqualityProof"
+interactive = "example::EqualityInteractive"
+
+[profiles]
+structured = true
+construction = true
+
+[generated]
+data = "lean/ZkcExamples/Construction/ChaumPedersenProofData.lean"
+bodies = "lean/ZkcExamples/Construction/ChaumPedersenProofBodies.lean"
+participant = "lean/ZkcExamples/Construction/ChaumPedersenProofParticipant.lean"
+glue = "lean/ZkcExamples/Construction/ChaumPedersenProof.lean"
+interactive_data = "lean/ZkcExamples/Structured/ChaumPedersenData.lean"
+interactive_bodies = "lean/ZkcExamples/Structured/ChaumPedersenBodies.lean"
+interactive_views = "lean/ZkcExamples/Structured/ChaumPedersenViews.lean"
+interactive_export = "lean/bridges/structured/fixtures/chaum-pedersen.json"
+interactive_source = "lean/bridges/structured/fixtures/chaum-pedersen.mlir"
+
+[normal_forms]
+request = "lean/bridges/structured/normal-forms/chaum-pedersen.toml"
+
+[family]
+module = "ZkcSecurity.VCVio.Schnorr"
+instance = "ZkcSecurity.Examples.ChaumPedersenSigma"
+kind = "sigma"
+
+[claims]
+endpoint = "ideal-meaning"
+properties = ["knowledge-soundness"]
+statement = "fixed"
+
+[assumptions]
+requested = ["exporter.structured-denotation", "exporter.checked-candidate",
+             "transport.canonical-decoding"]
+
+[mutations]
+kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
+         "challenge-names-delivery", "equality-self", "conjunction-self",
+         "native-challenge-reads-host", "native-domain-separator"]
+
+[construction]
+admission = "views"
+inputs = "values"
+
+[bodies]
+entry = "proof"
+interactive_entry = "interactive"

@@ -1,0 +1,11 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"zkc::accumulation" = "accumulation.zkc"
+"zkc::finite_domain" = "finite_domain.zkc"
+"zkc::finite" = "finite.zkc"
+"zkc::finite_math" = "finite_math.zkc"
+
+["dependencies"]
+"primitive-algebra" = "../primitives/algebra"
+"primitive-collections" = "../primitives/collections"

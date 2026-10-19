@@ -1,4 +1,4 @@
-//! Exact samplers for the installed octic-field transcript suite. The bounded
+//! Exact samplers for the installed octic-field transcript suites. The bounded
 //! rejection loop has an explicit exhaustion outcome; it never reduces a
 //! rejected coordinate modulo the characteristic.
 use crate::{KoalaBear, KoalaBearExt8, Result, exhausted, refused};

@@ -7,7 +7,11 @@ let
     "scripts/reporting.py"
     "scripts/workspace.py"
   ];
-  runner = processSupport ++ [ "common/tests/run.py" ];
+  runner = processSupport ++ [
+    "common/tests/run.py"
+    "common/tests/smoke.py"
+    "common/tests/smoke.json"
+  ];
   pytest = runner ++ [
     "pyproject.toml"
     "uv.lock"
@@ -30,6 +34,7 @@ let
     "common/unicode"
   ];
   projects = [
+    "zkc.workspace.toml"
     "examples"
     "libraries"
     "common/tests/fixtures/projects"
@@ -65,12 +70,16 @@ let
     rust.paths = rust;
     rustTests.paths = rust ++ runner ++ rustFixtures ++ projects;
     application.paths = [
+      "zkc.workspace.toml"
       "common/tests/check_install.py"
       "common/tests/support/project.py"
-      "libraries/schnorr/lib.zkc"
+      "libraries"
       "examples/projects/schnorr"
-      "common/tests/fixtures/projects/mathematics/main.zkc"
-      "libraries/zkc"
+      "common/tests/fixtures/projects/mathematics"
+    ];
+    libraries.paths = [
+      "zkc.workspace.toml"
+      "libraries"
     ];
     format.paths = [
       "scripts/format.py"
@@ -120,6 +129,7 @@ let
       "lean/clients"
       "lean/support/lake.py"
       "lean/support/evidence.py"
+      "lean/support/compatibility.py"
     ];
     leanChecks.paths = [
       "lean"

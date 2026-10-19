@@ -111,6 +111,9 @@ int main() {
   });
   cases.run("omitting declaration and predicate together refuses", [&] {
     auto candidate = parse(bytes);
+    candidate->walk([&](zkc::protocol_ir::MathematicalOp op) {
+      op.setContractsAttr(mlir::ArrayAttr::get(&context, {}));
+    });
     relation(*candidate).erase();
     for (const auto &decl : entry.declarations())
       if (decl.relation && decl.origin) {
@@ -128,6 +131,39 @@ int main() {
     refuses(compareOriginal(entry, *candidate), "source.correspondence");
   });
   cases.run(
+      "symbol rename updates exact retained formula and clause references",
+      [&] {
+        auto candidate = parse(bytes);
+        auto declaration = relation(*candidate);
+        auto *unit = declaration->getParentOp();
+        auto helper = mlir::SymbolTable::lookupSymbolIn(
+            unit, declaration.getFormulaAttr());
+        require(helper, "formula reference absent");
+        auto old = mlir::SymbolTable::getSymbolName(helper);
+        require(succeeded(mlir::SymbolTable::replaceAllSymbolUses(
+                    old, mlir::StringAttr::get(&context, "renamed_predicate"),
+                    unit)),
+                "formula rename failed");
+        mlir::SymbolTable::setSymbolName(helper, "renamed_predicate");
+        require(declaration.getFormulaAttr().getValue() == "renamed_predicate",
+                "formula reference was not a symbol use");
+        require(succeeded(mlir::SymbolTable::replaceAllSymbolUses(
+                    declaration.getSymNameAttr(),
+                    mlir::StringAttr::get(&context, "RenamedRelation"), unit)),
+                "relation rename failed");
+        declaration.setSymName("RenamedRelation");
+        require(succeeded(mlir::verify(*candidate)),
+                "renamed contracts invalid");
+        candidate->walk([&](zkc::protocol_ir::MathematicalOp op) {
+          auto clause = mlir::cast<mlir::ArrayAttr>(op.getContractsAttr()[0]);
+          auto application = mlir::cast<mlir::ArrayAttr>(clause[2]);
+          require(
+              mlir::cast<mlir::FlatSymbolRefAttr>(application[0]).getValue() ==
+                  "RenamedRelation",
+              "contract reference was not renamed");
+        });
+      });
+  cases.run(
       "source clauses round trip through independent native bindings", [&] {
         auto original = take(prepareOriginal(entry));
         auto decoded =
@@ -143,9 +179,56 @@ int main() {
           throw std::runtime_error(toString(std::move(error)));
         take(compileEntry(original));
       });
+  for (StringRef mutation : {"missing-owner", "duplicate-owner", "math-owner",
+                             "missing-clause", "wrong-decision-role"})
+    cases.run("interface contract inventory refuses " + mutation, [&] {
+      auto original = take(prepareOriginal(entry));
+      auto encoded = take(json::parse(original.interfaceJson()));
+      auto *protocols = encoded.getAsObject()->getArray("protocols");
+      require(protocols && protocols->size() == 1, "protocol inventory absent");
+      auto *protocol = (*protocols)[0].getAsObject();
+      if (mutation == "missing-owner")
+        protocols->clear();
+      else if (mutation == "duplicate-owner") {
+        auto duplicate = (*protocols)[0];
+        protocols->push_back(std::move(duplicate));
+      } else if (mutation == "math-owner")
+        (*protocol)["symbol"] = *original.interface().relations[0].formula;
+      else if (mutation == "missing-clause")
+        protocol->getArray("clauses")->clear();
+      else {
+        auto *clause = (*protocol->getArray("clauses"))[0].getAsObject();
+        (*clause->getObject("decision"))["role"] = "P";
+      }
+      refuses(readInterface(original.bytes(), zkc::printJson(encoded)),
+              "source.interface");
+    });
   cases.run(
-      "source completeness refuses an omitted clause or changed valid binding",
-      [&] {
+      "well-typed formula rebinding is a different source association", [&] {
+        auto original = take(prepareOriginal(entry));
+        auto candidate = parse(original.bytes());
+        auto declaration = relation(*candidate);
+        auto *helper = mlir::SymbolTable::lookupSymbolIn(
+            declaration->getParentOp(), declaration.getFormulaAttr());
+        auto *replacement = helper->clone();
+        mlir::SymbolTable::setSymbolName(replacement, "replacement_predicate");
+        helper->getBlock()->push_back(replacement);
+        declaration.setFormulaAttr(
+            mlir::FlatSymbolRefAttr::get(&context, "replacement_predicate"));
+        require(succeeded(mlir::verify(*candidate)),
+                "well-typed rebind invalid");
+        std::string changed;
+        raw_string_ostream stream(changed);
+        candidate->print(stream, zkc::canonicalPrintingFlags());
+        auto encoded = take(json::parse(original.interfaceJson()));
+        (*encoded.getAsObject())["original"] =
+            toHex(SHA256::hash(arrayRefFromStringRef(changed)), true);
+        refuses(readInterface(changed, zkc::printJson(encoded)),
+                "source.interface");
+        refuses(compareOriginal(entry, *candidate), "source.correspondence");
+      });
+  cases.run(
+      "PIR ownership refuses omitted clauses and changed valid bindings", [&] {
         auto original = take(prepareOriginal(entry));
         for (bool remove : {false, true}) {
           auto encoded = take(json::parse(original.interfaceJson()));
@@ -162,13 +245,8 @@ int main() {
                     "operands");
             std::swap(operands[0], operands[1]);
           }
-          auto decoded =
-              take(readInterface(original.bytes(), zkc::printJson(encoded)));
-          auto error = compareInterface(entry, decoded);
-          require(bool(error), "changed source clause was accepted");
-          require(StringRef(toString(std::move(error)))
-                      .contains("source.correspondence"),
-                  "unexpected source comparison refusal");
+          refuses(readInterface(original.bytes(), zkc::printJson(encoded)),
+                  "source.interface");
         }
       });
   cases.run(
@@ -647,14 +725,16 @@ int main() {
                       observed.str() + R"();
             return x==x;
           })";
-                  auto run = take(prepareOriginal(close(helper + R"(
+                  auto run = prepareOriginal(close(helper + R"(
           protocol Run roles(P)(x:F@P)->(ok:bool@P){return(ok=probe(x));}
-          run Demo=Run;)")));
-                  auto executed = compileEntry(run);
-                  require(bool(executed) == fits,
-                          "execution observation verdict differs");
-                  if (!executed) {
-                    auto message = toString(executed.takeError());
+          run Demo=Run;)"));
+                  require(bool(run) == fits,
+                          "executed helper admission verdict differs");
+                  if (run) {
+                    for (bool simplify : {false, true})
+                      take(compileEntry(*run, {simplify, false}));
+                  } else {
+                    auto message = toString(run.takeError());
                     require(StringRef(message).contains("fitting degree bound"),
                             message);
                   }

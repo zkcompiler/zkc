@@ -1,0 +1,14 @@
+module raw_kernel;
+domain Fr = field("bls12-381.fr");
+math fn polynomial(a:Fr,b:Fr,x:Fr)->Fr {
+  let values = intrinsic<Fr,2>("array.pack",[a,b]);
+  let p = intrinsic<Fr,2>("poly.from_coefficients",values);
+  let square = intrinsic<Fr,1>("poly.multiply",p,p);
+  return intrinsic<Fr,1>("poly.evaluate",square,[x]);
+}
+fn calculate(a:Fr,b:Fr,x:Fr)->Fr { return polynomial(a,b,x); }
+protocol Run roles(P)(a:Fr@P,b:Fr@P,x:Fr@P)->(r:Fr@P) {
+  let r @P = calculate(a,b,x);
+  return(r=r);
+}
+run Demo=Run;

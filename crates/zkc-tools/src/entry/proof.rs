@@ -120,14 +120,11 @@ impl ProofReport {
 }
 impl ProofEntry {
     /// Set deployment-owned public computation storage. Zero limits disable it.
-    pub fn with_preparation_limits(
-        mut self,
-        limits: zkc_runtime::interactive::PreparationLimits,
-    ) -> Self {
+    pub fn with_preparation_limits(mut self, limits: zkc_runtime::vm::PreparationLimits) -> Self {
         self.native = self.native.with_preparation_limits(limits);
         self
     }
-    pub fn preparation_stats(&self) -> zkc_runtime::interactive::PreparationStats {
+    pub fn preparation_stats(&self) -> zkc_runtime::vm::PreparationStats {
         self.native.preparation_stats()
     }
 
@@ -204,7 +201,7 @@ impl ProofEntry {
     pub(crate) fn output_types(
         &self,
         operation: ProofOperation,
-    ) -> &[zkc_runtime::interactive::PhysicalType] {
+    ) -> &[zkc_runtime::vm::PhysicalType] {
         let role = match operation {
             ProofOperation::Prove => self.native.entry().producer(),
             ProofOperation::Verify => self.native.entry().validator(),

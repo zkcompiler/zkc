@@ -7,8 +7,6 @@ public import ZkcSecurity.ArkLib.Sumcheck.Soundness
 
 /-! ArkLib soundness of the actual exported two-round PIR verifier. -/
 
-set_option maxRecDepth 20000
-set_option maxHeartbeats 4000000
 
 namespace ZkcSecurity.Examples.Sumcheck
 open Zkc.Protocols.Sumcheck.Common

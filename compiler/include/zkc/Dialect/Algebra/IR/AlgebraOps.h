@@ -10,7 +10,7 @@
 #include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "zkc/Dialect/Algebra/IR/AlgebraTypes.h"
-#include "zkc/Dialect/KernelSupport.h"
+#include "zkc/Dialect/BoundOperations.h"
 #include "zkc/Interfaces/LinearContraction.h"
 #include "zkc/Interfaces/Mathematical.h"
 #include "zkc/Interfaces/PreparationCallable.h"

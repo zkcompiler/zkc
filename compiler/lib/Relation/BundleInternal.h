@@ -43,9 +43,10 @@ uint32_t readRow(BundleReadModel, uint32_t height, uint32_t row,
 
 /// Closed reference presentations for supplied-data value encoding and the
 /// reference interpreter. A prime field has degree 1. The installed
-/// extension `koala-bear.ext8-binomial3` is F_p[X]/(X^8 - 3) over koala-bear
-/// with the ascending basis (docs/spec/domains/values.md). The domain catalog
-/// records the base association but not the degree or defining polynomial.
+/// extensions `koala-bear.ext8-binomial3` and `koala-bear.ext4-binomial3` are
+/// F_p[X]/(X^8 - 3) and F_p[X]/(X^4 - 3) over koala-bear with the ascending
+/// basis (docs/spec/domains/values.md). The domain catalog records the base
+/// association but not the degree or defining polynomial.
 struct Presentation {
   std::string prime;
   unsigned degree = 1;

@@ -1,7 +1,7 @@
 //! General nested data, canonical framing and preallocation limits.
 use serde_json::json;
 use zkc_backends::{NativeBackend, NativeWireError, Policy, Scalar, Sequence, Value, Variant};
-use zkc_runtime::interactive::{DecodeReason, LogicalType, PhysicalType, Value as RuntimeValue};
+use zkc_runtime::vm::{DecodeReason, LogicalType, PhysicalType, Value as RuntimeValue};
 
 fn sequence(element: &str, values: Vec<Value>) -> Value {
     Value::Sequence(
@@ -298,7 +298,7 @@ fn collection_framing_distinguishes_partitions_and_matrix_shapes() {
 
 #[path = "domains/support.rs"]
 mod support;
-use zkc_runtime::interactive::{Backend, OperationBinding};
+use zkc_runtime::vm::{Backend, OperationBinding};
 fn binding(name: &str, element: &str) -> OperationBinding {
     OperationBinding {
         contract: format!("sequence.{name}"),
@@ -579,7 +579,7 @@ fn nested_data_and_external_calls_retain_independent_work_across_failed_frames()
         (backend.sequence_work_spent(), backend.external_work_spent()),
         (6, 65)
     );
-    // This call spends its traversal allowance, then fails in the kernel.
+    // This call spends its traversal allowance, then fails in the operation.
     // A backend that commits work only on success must fail this assertion.
     let (out, backend) = one(
         backend,

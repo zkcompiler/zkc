@@ -6,9 +6,7 @@ use zkc_backends::{
     Bn254G1, Bn254G2, Bn254Gt, Bn254Scalar as F, NativeBackend, NativeWireError as Error, Policy,
     RistrettoScalar, Value,
 };
-use zkc_runtime::interactive::{
-    DecodeReason, LogicalType, OperationBinding, Value as RuntimeValue,
-};
+use zkc_runtime::vm::{DecodeReason, LogicalType, OperationBinding, Value as RuntimeValue};
 
 fn backend(policy: Policy) -> NativeBackend {
     support::backend(policy)

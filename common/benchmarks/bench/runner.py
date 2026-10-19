@@ -10,7 +10,7 @@ import shutil
 import sys
 
 from .io import Journal, digest, identity, measurement_slot, command_environment, performance_environment, read_report, require, write_json
-from .results import FORMAT, publish, validate_manifest, validate_preparation, validate_worker
+from .results import FORMAT, publish, validate_manifest, validate_preparation, validate_preparation_limits, validate_worker
 
 CONTROL = {'warmups': 0, 'samples': 1, 'iterations': 1}
 
@@ -89,13 +89,7 @@ def execute_job(job, directory, plan, timeout):
                 [i % count for i in range((plan['warmups']+plan['samples'])*plan['iterations'])],
                 'worker changed the input schedule')
     if job.backend.get('kind') == 'host':
-        limit = job.backend.get('preparation_entries')
-        limits = report['lifecycle']['preparation_limits']
-        limit = limits['default_entries'] if limit is None else limit
-        byte_limit = job.backend.get('preparation_bytes')
-        byte_limit = limits['default_bytes'] if byte_limit is None else byte_limit
-        expected = (limit, byte_limit) if job.backend['preparation'] else (0, 0)
-        require((limits['entries'], limits['bytes']) == expected, 'preparation limits differ from the request')
+        validate_preparation_limits(report['lifecycle']['preparation_limits'], job.backend)
     if job.operation == 'run':
         require(report['proof_bytes'] == 0, 'run worker reported a proof')
     elif job.operation == 'prove' or job.backend.get('kind') != 'host' or len(job.backend['inputs']) == 1:
@@ -122,12 +116,12 @@ def execute_job(job, directory, plan, timeout):
 
 
 def run(args, prepare):
-    # Acquisition is fail-fast and precedes compilation or worker launch.
-    with measurement_slot(args.output.resolve() / 'coordination.json'):
-        return run_locked(args, prepare)
+    # Optional acquisition is fail-fast and precedes compilation or worker launch.
+    with measurement_slot(args.output.resolve() / 'coordination.json', exclusive=args.exclusive):
+        return run_suite(args, prepare)
 
 
-def run_locked(args, prepare):
+def run_suite(args, prepare):
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     original_affinity = None
@@ -136,6 +130,7 @@ def run_locked(args, prepare):
     manifest = {'format': FORMAT, 'status': 'running', 'phase': 'preparation', 'results': [], 'contracts': {},
                 'plan': {'samples': args.samples, 'warmups': args.warmups, 'iterations': args.iterations},
                 'processes': args.processes, 'seed': args.seed, 'label': args.label,
+                'compiler_options': args.compiler_option,
                 'observation': 'execution_counts' if args.execution_counts else 'timing',
                 'argv': sys.argv, 'host': {}, 'files': capture.files, 'checks': []}
     try:
@@ -248,10 +243,9 @@ def refuse(job, directory, timeout, *, truncated=False, completed=None, classes=
         require(isinstance(observed, dict) and observed.get('class') in classes,
                 'negative control refused at the wrong layer')
     if job.backend.get('kind') == 'host' and completed is not None:
+        limits = report.get('preparation_limits')
+        validate_preparation_limits(limits, job.backend)
         stats = report.get('preparation')
         require(isinstance(stats, dict) and set(stats) == {'before', 'after'}, 'missing refusal preparation observations')
-        for value in stats.values():
-            validate_preparation(value)
-            if not job.backend['preparation']:
-                require(all(v == 0 for v in value.values()), 'disabled preparation retained state on refusal')
-        require(stats['after']['hits'] >= stats['before']['hits'], 'refusal preparation hits moved backwards')
+        validate_preparation(stats['before'], limits)
+        validate_preparation(stats['after'], limits, stats['before']['hits'])

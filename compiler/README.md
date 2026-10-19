@@ -10,7 +10,8 @@ Language captures explicit module buffers and relation Assets, checks declaratio
 and closes a selected Entry. Translation emits a mathematical `protocol.module`.
 Preparation expands local applications and protocol applications; projection
 assigns actions and values to participants. Mathematical lowering produces the
-`exec` profile. Representation and kernel selection produce `physical` programs,
+`exec` profile with owned logical Kernel units and ordered Local control. Checked
+Kernel realization, representation and implementation selection produce `physical` programs,
 exported as `zkc.program/0` for the generic participant runtime.
 
 ## Build and validate
@@ -31,7 +32,11 @@ are `language-check`, `language-emit`, `language-interface`, `language-bundle`,
 and `language-package`, with explicit `--module=NAME=FILE.zkc`, selected Entry,
 and optional `--asset=NAME=FORMAT=FILE` inputs. `language-check` may omit the
 Entry to check definitions alone; `--declarations` reports completed public
-callable contracts. The separate
+callable contracts. `--api` reports the public export graph, type contracts and
+checked reference providers alongside canonical targets. Both views are bounded
+diagnostic metadata, as specified in the
+[language contract](../docs/spec/language/definitions.md).
+The separate
 [notation inspection surface](../docs/language/notation.md#inspect-notation-and-locations)
 provides `--notations` and explicit private/installation visibility options; its
 completion status is tracked in [status](../docs/status.md#source-and-application-boundary).

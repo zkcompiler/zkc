@@ -1,0 +1,10 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"example" = "main.zkc"
+
+["dependencies"]
+"gkr" = { workspace = "protocols.polynomial.gkr" }
+
+[workspace]
+path = "../../../zkc.workspace.toml"

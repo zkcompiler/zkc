@@ -14,20 +14,20 @@ use crate::{Capability, CapabilityObservation, Domain, Policy, Result, Value};
 pub use policy::{EntryPolicy, PortConstraint};
 use validation::Core;
 use zkc_arkworks::{Metadata, VerifierKey};
-use zkc_runtime::interactive::{Backend, Frame, FrameExit, Invocation};
+use zkc_runtime::vm::{Backend, Frame, FrameExit, Invocation};
 
 /// Immutable implementation selection, independently resolved by this backend.
 /// Dynamic policy, inputs, resource custody and work limits are checked at use.
-pub struct NativeKernel {
-    declaration: zkc_runtime::interactive::OperationBinding,
-    signature: zkc_runtime::interactive::BoundSignature,
+pub struct NativeOperation {
+    declaration: zkc_runtime::vm::OperationBinding,
+    signature: zkc_runtime::vm::BoundSignature,
     handler: registry::Handler,
     read_extent: work::ReadExtent,
     sequence: bool,
     deterministic: bool,
 }
-impl zkc_runtime::interactive::InstalledKernel for NativeKernel {
-    fn signature(&self) -> &zkc_runtime::interactive::BoundSignature {
+impl zkc_runtime::vm::InstalledOperation for NativeOperation {
+    fn signature(&self) -> &zkc_runtime::vm::BoundSignature {
         &self.signature
     }
     fn deterministic(&self) -> bool {
@@ -51,20 +51,20 @@ pub struct NativeBackend {
 impl NativeBackend {
     fn invoke(
         &mut self,
-        kernel: &NativeKernel,
+        operation: &NativeOperation,
         call: Option<&mut Option<NativeCall>>,
         i: &Invocation<'_>,
         args: &[Value],
     ) -> Result<Vec<Value>> {
         self.core.resources.active(i.frame)?;
-        if kernel.declaration != *i.binding.declaration() {
+        if operation.declaration != *i.binding.declaration() {
             return Err(crate::refused("kernel-binding"));
         }
-        if kernel.sequence {
+        if operation.sequence {
             self.sequence_work.charge(args, i.retained)?;
         }
-        self.core.invoke(i, args, &kernel.signature, call)?;
-        let outputs = (kernel.handler)(self, i, args)?;
+        self.core.invoke(i, args, &operation.signature, call)?;
+        let outputs = (operation.handler)(self, i, args)?;
         self.core.outputs(i, args, outputs)
     }
 
@@ -93,10 +93,10 @@ impl NativeBackend {
     /// RNG/nonce/transcript slots may be None; all ordinary values must exist.
     pub fn check_entry_values(
         &self,
-        role: &zkc_runtime::interactive::EntryRole,
+        role: &zkc_runtime::vm::EntryRole,
         values: &[Option<&Value>],
     ) -> Result<()> {
-        use zkc_runtime::interactive::Value as _;
+        use zkc_runtime::vm::Value as _;
         if role.inputs.len() != values.len() {
             return Err(crate::refused("frame-arguments"));
         }
@@ -112,7 +112,7 @@ impl NativeBackend {
     }
 
     /// Bound cumulative sequence work: `3 * (1 + examined operand nodes)` per
-    /// call. A validated root retained by this Runner counts as one; other
+    /// call. A validated root retained by this instance counts as one; other
     /// subtrees count fully, including each repeated occurrence.
     /// Previously spent work survives frame cleanup and changes to the limit.
     pub fn with_sequence_work_limit(mut self, limit: u64) -> Self {
@@ -196,7 +196,7 @@ impl NativeBackend {
     /// Issue a random source for an explicitly selected installed field.
     pub fn issue_rng_for(
         &mut self,
-        field: zkc_runtime::interactive::Identity,
+        field: zkc_runtime::vm::Identity,
         domain: Domain,
         budget: u64,
     ) -> Result<Value> {
@@ -205,7 +205,7 @@ impl NativeBackend {
     /// Issue an opaque nonce for an explicitly selected curve scalar field.
     pub fn issue_nonce_for(
         &mut self,
-        field: zkc_runtime::interactive::Identity,
+        field: zkc_runtime::vm::Identity,
         domain: Domain,
         budget: u64,
     ) -> Result<Value> {
@@ -215,7 +215,7 @@ impl NativeBackend {
     /// Domain controls custody; its local session is not hashed.
     pub fn issue_transcript_for(
         &mut self,
-        suite: zkc_runtime::interactive::Identity,
+        suite: zkc_runtime::vm::Identity,
         domain: Domain,
         budget: u64,
         root: &[u8],
@@ -320,20 +320,20 @@ impl Backend for NativeBackend {
         true
     }
     type Value = Value;
-    type Kernel = NativeKernel;
+    type Operation = NativeOperation;
     fn service_support(
         &self,
-        contract: zkc_runtime::interactive::ServiceContract,
+        contract: zkc_runtime::vm::ServiceContract,
         method: &str,
-    ) -> Option<zkc_runtime::interactive::ServiceSupport> {
+    ) -> Option<zkc_runtime::vm::ServiceSupport> {
         crate::services::support(contract, method)
     }
     fn query(
         &mut self,
-        invocation: &zkc_runtime::interactive::ServiceInvocation<'_>,
+        invocation: &zkc_runtime::vm::ServiceInvocation<'_>,
         arguments: &[Value],
     ) -> Result<Vec<Value>> {
-        use zkc_runtime::interactive::FrameKind;
+        use zkc_runtime::vm::FrameKind;
         self.core.resources.active(invocation.frame)?;
         if !matches!(
             invocation.frame.kind(),
@@ -356,10 +356,7 @@ impl Backend for NativeBackend {
         }
         .map(|value| vec![value])
     }
-    fn reject_service_reply(
-        &mut self,
-        invocation: &zkc_runtime::interactive::ServiceInvocation<'_>,
-    ) {
+    fn reject_service_reply(&mut self, invocation: &zkc_runtime::vm::ServiceInvocation<'_>) {
         if let Some(services) = &self.services {
             services.poison(&invocation.port.name);
         }
@@ -367,8 +364,8 @@ impl Backend for NativeBackend {
 
     fn prepare_binding(
         &self,
-        binding: &zkc_runtime::interactive::OperationBinding,
-    ) -> Option<NativeKernel> {
+        binding: &zkc_runtime::vm::OperationBinding,
+    ) -> Option<NativeOperation> {
         let implementation = self.implementations.get(&binding.implementation)?;
         let signature = implementation.signature(binding)?;
         // Traversal charging belongs to the operation contract. Observing a
@@ -377,7 +374,7 @@ impl Backend for NativeBackend {
             || crate::sequence::IMPLEMENTATIONS
                 .iter()
                 .any(|(_, contract)| *contract == binding.contract);
-        Some(NativeKernel {
+        Some(NativeOperation {
             declaration: binding.clone(),
             signature,
             handler: implementation.handler,
@@ -392,20 +389,20 @@ impl Backend for NativeBackend {
     fn validate_value_retained(
         &self,
         v: &Value,
-        retained: zkc_runtime::interactive::Retained<'_>,
+        retained: zkc_runtime::vm::Retained<'_>,
     ) -> Result<()> {
         self.core.validate_retained(v, retained)
     }
     fn enter_frame(&mut self, f: &Frame, args: &[Value]) -> Result<()> {
-        self.enter_frame_retained(f, args, zkc_runtime::interactive::Retained::NONE)
+        self.enter_frame_retained(f, args, zkc_runtime::vm::Retained::NONE)
     }
     fn enter_frame_retained(
         &mut self,
         f: &Frame,
         args: &[Value],
-        retained: zkc_runtime::interactive::Retained<'_>,
+        retained: zkc_runtime::vm::Retained<'_>,
     ) -> Result<()> {
-        let entry = matches!(f.kind(), zkc_runtime::interactive::FrameKind::Entry);
+        let entry = matches!(f.kind(), zkc_runtime::vm::FrameKind::Entry);
         if entry {
             match &mut self.services {
                 Some(services) => services.enter(f)?,
@@ -424,14 +421,14 @@ impl Backend for NativeBackend {
         Ok(())
     }
     fn leave_frame(&mut self, f: &Frame, exit: FrameExit, outputs: &[Value]) -> Result<()> {
-        self.leave_frame_retained(f, exit, outputs, zkc_runtime::interactive::Retained::NONE)
+        self.leave_frame_retained(f, exit, outputs, zkc_runtime::vm::Retained::NONE)
     }
     fn leave_frame_retained(
         &mut self,
         f: &Frame,
         exit: FrameExit,
         outputs: &[Value],
-        retained: zkc_runtime::interactive::Retained<'_>,
+        retained: zkc_runtime::vm::Retained<'_>,
     ) -> Result<()> {
         // Always perform resource cleanup even if a non-resource output is invalid.
         let validation = outputs
@@ -447,27 +444,27 @@ impl Backend for NativeBackend {
     }
     fn operand_work(
         &self,
-        kernel: &NativeKernel,
-        _i: &Invocation<'_>,
+        operation: &NativeOperation,
+        _i: &zkc_runtime::vm::CallContext<'_>,
         args: &[Value],
     ) -> Option<u64> {
-        kernel.read_extent.bytes(args)
+        operation.read_extent.bytes(args)
     }
     fn apply(
         &mut self,
-        kernel: &NativeKernel,
+        operation: &NativeOperation,
         i: &Invocation<'_>,
         args: &[Value],
     ) -> Result<Vec<Value>> {
-        self.invoke(kernel, None, i, args)
+        self.invoke(operation, None, i, args)
     }
     fn apply_prepared(
         &mut self,
-        kernel: &NativeKernel,
+        operation: &NativeOperation,
         call: &mut Option<NativeCall>,
         i: &Invocation<'_>,
         args: &[Value],
     ) -> Result<Vec<Value>> {
-        self.invoke(kernel, Some(call), i, args)
+        self.invoke(operation, Some(call), i, args)
     }
 }

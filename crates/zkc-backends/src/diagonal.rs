@@ -2,7 +2,7 @@
 //! views; factors and values retain their complete immutable Arc slices.
 use crate::{Result, exhausted, refused, value::size};
 use std::sync::Arc;
-use zkc_runtime::interactive::Backing;
+use zkc_runtime::vm::Backing;
 #[derive(Clone, Debug)]
 pub struct Diagonal<S, B> {
     factors: Arc<[S]>,
@@ -48,17 +48,19 @@ impl<S, B> Diagonal<S, B> {
 const VIEW_BYTES: usize = 256;
 
 pub(crate) fn apply(
-    i: &zkc_runtime::interactive::Invocation<'_>,
+    i: &zkc_runtime::vm::Invocation<'_>,
     args: &[crate::Value],
     p: &crate::Policy,
 ) -> Result<Vec<crate::Value>> {
     use crate::Value::*;
     use crate::kernels::arithmetic::equal_len;
     use curve25519_dalek::traits::MultiscalarMul;
-    if !i.kernel.starts_with("arkworks-diagonal/") && !i.kernel.starts_with("dalek-diagonal/") {
+    if !i.binding.implementation().starts_with("arkworks-diagonal/")
+        && !i.binding.implementation().starts_with("dalek-diagonal/")
+    {
         return Err(refused("kernel-operands"));
     }
-    let result = match (i.kernel, args) {
+    let result = match (i.binding.implementation(), args) {
         ("arkworks-diagonal/vector.mul", [Vector(f), Vector(b)]) => {
             equal_len(f.len(), b.len())?;
             let d = Diagonal::new(f.clone(), b.clone())?;
@@ -102,11 +104,11 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
     crate::backend::registry::Alternative {
         identity: "arkworks-diagonal/vector.mul",
         original: "arkworks/vector.mul",
-        primary: zkc_runtime::interactive::Identity::Bls12381Fr,
+        primary: zkc_runtime::vm::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Diagonal {
             output: true,
             port: 0,
-            representation: zkc_runtime::interactive::Representation::FrDiagonal,
+            representation: zkc_runtime::vm::Representation::FrDiagonal,
         },
         handler: Some(crate::backend::registry::diagonal),
         deterministic: true,
@@ -114,11 +116,11 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
     crate::backend::registry::Alternative {
         identity: "arkworks-diagonal/vector.dot",
         original: "arkworks/vector.dot",
-        primary: zkc_runtime::interactive::Identity::Bls12381Fr,
+        primary: zkc_runtime::vm::Identity::Bls12381Fr,
         ports: crate::bindings::PortTransform::Diagonal {
             output: false,
             port: 1,
-            representation: zkc_runtime::interactive::Representation::FrDiagonal,
+            representation: zkc_runtime::vm::Representation::FrDiagonal,
         },
         handler: Some(crate::backend::registry::diagonal),
         deterministic: true,
@@ -126,11 +128,11 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
     crate::backend::registry::Alternative {
         identity: "dalek-diagonal/curve.scale_each",
         original: "dalek/curve.scale_each",
-        primary: zkc_runtime::interactive::Identity::Ristretto255Group,
+        primary: zkc_runtime::vm::Identity::Ristretto255Group,
         ports: crate::bindings::PortTransform::Diagonal {
             output: true,
             port: 0,
-            representation: zkc_runtime::interactive::Representation::RistrettoDiagonal,
+            representation: zkc_runtime::vm::Representation::RistrettoDiagonal,
         },
         handler: Some(crate::backend::registry::diagonal),
         deterministic: true,
@@ -138,11 +140,11 @@ pub(crate) const ALTERNATIVES: &[crate::backend::registry::Alternative] = &[
     crate::backend::registry::Alternative {
         identity: "dalek-diagonal/curve.msm",
         original: "dalek/curve.msm",
-        primary: zkc_runtime::interactive::Identity::Ristretto255Group,
+        primary: zkc_runtime::vm::Identity::Ristretto255Group,
         ports: crate::bindings::PortTransform::Diagonal {
             output: false,
             port: 1,
-            representation: zkc_runtime::interactive::Representation::RistrettoDiagonal,
+            representation: zkc_runtime::vm::Representation::RistrettoDiagonal,
         },
         handler: Some(crate::backend::registry::diagonal),
         deterministic: true,

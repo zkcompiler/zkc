@@ -1,4 +1,5 @@
 import ArkLib.ProofSystem.Sumcheck.Interaction.ComputableSoundness
+import ZkcTools.DeclarationAudit
 
 open OracleComp
 open scoped ENNReal
@@ -33,5 +34,4 @@ theorem computable_sumcheck_bound
   exact Sumcheck.Interaction.Computable.execute_soundness n degree F domain count start
     finish queries original statement handler prover polynomial realizes falseClaim
 
-#print axioms uniform_guess_probability
-#print axioms computable_sumcheck_bound
+run_cmd ZkcTools.DeclarationAudit.checkCurrent "ARKLIB-COMPATIBILITY-AXIOM-PASS"

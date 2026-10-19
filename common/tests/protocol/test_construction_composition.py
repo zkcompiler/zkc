@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 import pytest
-from source_modules import library_modules
+from source_modules import core_packages, library_modules
 
 from test_constructions import SOURCE, reject_deployment
 from test_record_codecs import CODEC
@@ -84,6 +84,8 @@ def composed_source(empty, nested=False):
 @pytest.mark.parametrize('nested', [False, True])
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--release-storage'],
                                    ['--no-finite-bulk'],
+                                   ['--fuse-collect-fold'],
+                                   ['--fuse-collect-fold', '--no-finite-bulk'],
                                    ['--fuse-vector-reductions', '--no-simplify', '--release-storage']])
 def test_child_state_arguments_and_root_codec(toolchain, journal, directory, empty, nested, flags):
     source = directory / 'main.zkc'
@@ -93,9 +95,7 @@ def test_child_state_arguments_and_root_codec(toolchain, journal, directory, emp
     source.write_text(composed_source(empty, nested).replace(
         'State(unpack(t)*3+v)',
         'State(zkc::finite::fold(zkc::vector::fill(unpack(t),3),v,fn(s,x)=>s+x))'))
-    root = Path(__file__).resolve().parents[3]
-    modules = [f'--module=zkc::{name}={root}/libraries/zkc/{name}.zkc'
-               for name in ['vector', 'finite', 'finite_domain', 'sequence', 'accumulation', 'curve']]
+    modules = library_modules(*core_packages())
     package = directory / 'proof.zkpkg'
     compiled = journal.json([toolchain.runtime, '--json', 'compile',
                              f'--compiler={toolchain.compiler}', f'--module=sample={source}',
@@ -105,7 +105,9 @@ def test_child_state_arguments_and_root_codec(toolchain, journal, directory, emp
     choices = {'simplify': '--no-simplify' not in flags,
                'release_storage': '--release-storage' in flags,
                'fuse_vector_reductions': '--fuse-vector-reductions' in flags,
-               'finite_bulk': '--no-finite-bulk' not in flags}
+               'finite_bulk': '--no-finite-bulk' not in flags,
+               'fuse_collect_fold': '--fuse-collect-fold' in flags,
+               'calculation_batching': '--no-calculation-batching' not in flags}
     assert stored['options'] == choices
     assert deployment[7] == [str(value).lower() for value in choices.values()]
     bindings = json.loads(deployment[4])[1]
@@ -198,7 +200,7 @@ def test_native_root_can_delegate_to_an_explicit_managed_child(toolchain, journa
     source.write_text(text)
     package = directory / 'proof.zkpkg'
     compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                             *library_modules('zkc', overrides={'sample': source}),
+                             *library_modules(*core_packages(), overrides={'sample': source}),
                              'sample::Composed', f'--output={package}', *flags])
     public = journal.write('public.json', {'public': '5'})
     witness = journal.write('witness.json', {'secret': '7'})

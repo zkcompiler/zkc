@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -34,23 +35,75 @@ def test_coverage_has_matched_forms_and_independent_stark_dimensions(modules):
     names = {c.identifier for c in cases}
     assert len(names) == len(cases)
     assert set(modules['coverage'].SMOKE) <= names
-    assert {c.name for c in cases} >= {'finite', 'matrix', 'curve', 'pairing', 'control', 'transcript', 'air', 'fri', 'machine'}
+    assert {c.name for c in cases} >= {'finite', 'matrix', 'curve', 'pairing', 'control', 'transcript', 'air', 'stark', 'fri', 'machine'}
     for field in ('koala-bear', 'bls12-381.fr'):
         for n in (0, 17, 1024, 8192):
             forms = [c for c in cases if c.name == 'finite' and c.shape['field'] == field and c.shape['elements'] == n]
-            assert {c.shape['form'] for c in forms} == {'reduce', 'collect', 'bulk'}
+            assert {c.shape['form'] for c in forms} == {'reduce', 'collect', 'bulk', 'total-collect-fold', 'total-fold'}
             programs = [modules['programs'].finite(c.shape) for c in forms]
-            assert programs[0].inputs == programs[1].inputs == programs[2].inputs
+            assert all(program.inputs == programs[0].inputs for program in programs)
     air = [c.shape for c in cases if c.name == 'air']
     assert len({s['height'] for s in air if s['width'] == 1}) >= 3
     assert all(any(s['height'] >= 1024 and s['width'] == width for s in air) for width in (1, 4))
     assert len({s['width'] for s in air if s['height'] == 32 and s['evaluation_size'] == 128}) >= 3
     assert len({s['evaluation_size'] for s in air if s['height'] == 32 and s['width'] == 4}) >= 2
+    # The parameterized library is measured on exactly the air cases' shapes.
+    assert sorted(map(str, air)) == sorted(str(c.shape) for c in cases if c.name == 'stark')
+
+
+def test_generated_compilation_forwards_explicit_policy(modules, tmp_path):
+    execution = importlib.import_module('bench.execution')
+    root = tmp_path / 'source'
+    root.mkdir()
+    output = tmp_path / 'output'
+    output.mkdir()
+    compiler = tmp_path / 'compiler'
+    arguments = tmp_path / 'arguments.json'
+    compiler.write_text(f'''#!{sys.executable}
+import json,sys
+from pathlib import Path
+Path({str(arguments)!r}).write_text(json.dumps(sys.argv[1:]))
+print('{{}}')
+''')
+    compiler.chmod(0o755)
+    args = SimpleNamespace(source=root, compiler=compiler, timeout=5,
+                           compiler_option=['--fuse-collect-fold', '--no-finite-bulk'])
+    case = next(c for c in modules['coverage'].cases() if c.identifier == 'finite-kb-total-collect-fold-17')
+    program = modules['programs'].Program('module example;', [], dependencies=())
+    manifest = {}
+    capture = modules['runner'].Capture(output / 'capture')
+    _, package = execution.compile_program(args, output, capture, manifest, case, program)
+    forwarded = json.loads(arguments.read_text())
+    assert all(forwarded.count(option) == 1 for option in args.compiler_option)
+    assert forwarded[0] == 'language-package'
+    assert manifest['compilation'][case.identifier][0]['sha256'] == modules['io'].digest(package)
+
+
+def test_generated_families_capture_workspace_dependency_closures(modules, tmp_path):
+    execution = importlib.import_module('bench.execution')
+    root = Path(__file__).resolve().parents[3]
+    compiler = tmp_path/'compiler'
+    compiler.write_text(f'#!{sys.executable}\nprint("{{}}")\n')
+    compiler.chmod(0o755)
+    args = SimpleNamespace(source=root, compiler=compiler, timeout=10, compiler_option=[])
+    families = {}
+    for case in modules['coverage'].cases():
+        families.setdefault(case.name, case)
+    capture = modules['runner'].Capture(tmp_path/'capture')
+    for family, case in families.items():
+        directory = tmp_path/'generated'/family
+        directory.mkdir(parents=True)
+        program = case.generate(root, directory)
+        execution.compile_program(args, tmp_path/'output', capture, {}, case, program)
+    assert (capture.directory/'source/zkc.workspace.toml').is_file()
+    assert (capture.directory/'source/libraries/core/primitives/algebra/curve.zkc').is_file()
+    assert (capture.directory/'source/libraries/arguments/stark/whole_bundle/zkc.toml').is_file()
+    capture.check()
 
 
 def test_distinct_stark_statements_keep_the_same_program(modules, tmp_path):
     root = Path(__file__).resolve().parents[3]
-    for family in ('fri', 'air', 'transcript', 'bulletproofs'):
+    for family in ('fri', 'air', 'stark', 'transcript', 'bulletproofs'):
         case = next(c for c in modules['coverage'].cases() if c.name == family)
         programs = [case.generate(root, tmp_path, i) for i in range(4)]
         left, right = programs[:2]
@@ -63,21 +116,21 @@ def test_distinct_stark_statements_keep_the_same_program(modules, tmp_path):
 def test_shared_slot_is_exclusive_fail_fast_and_preserves_evidence(modules, tmp_path):
     io = modules['io']
     output = tmp_path/'new'
-    with io.measurement_slot(output/'coordination.json'):
+    with io.measurement_slot(output/'coordination.json', exclusive=True):
         output.mkdir()
         code = ('import fcntl,sys; f=open(sys.argv[1],"a"); '
                 'fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB)')
         other = subprocess.run([sys.executable, '-c', code, io.MEASUREMENT_LOCK], capture_output=True)
         assert other.returncode > 0 and b'BlockingIOError' in other.stderr
         with pytest.raises(io.MeasurementBusy):
-            with io.measurement_slot(tmp_path/'other/coordination.json'):
+            with io.measurement_slot(tmp_path/'other/coordination.json', exclusive=True):
                 pytest.fail('nested slot acquired')
     evidence = output/'coordination.json'
     original = evidence.read_bytes()
     record = json.loads(original)
     assert record['attempted_utc'] <= record['acquired_utc'] <= record['finished_utc']
     with pytest.raises(FileExistsError):
-        with io.measurement_slot(evidence):
+        with io.measurement_slot(evidence, exclusive=True):
             pytest.fail('existing evidence accepted')
     assert evidence.read_bytes() == original
     assert io.MEASUREMENT_LOCK.exists()
@@ -85,7 +138,7 @@ def test_shared_slot_is_exclusive_fail_fast_and_preserves_evidence(modules, tmp_
 
 def test_command_inherits_the_owned_lock_descriptor(modules, tmp_path):
     io = modules['io']
-    with io.measurement_slot(tmp_path/'run/coordination.json'):
+    with io.measurement_slot(tmp_path/'run/coordination.json', exclusive=True):
         fd = io._measurement_fd.get()
         script = 'import os,sys; assert os.fstat(int(sys.argv[1])).st_ino == os.stat(sys.argv[2]).st_ino'
         io.Journal(tmp_path/'run/commands', 10).command(
@@ -167,7 +220,7 @@ def test_selected_limits_allow_retention_above_native_defaults(modules, entries,
 
 @pytest.mark.parametrize('entries,capacity,enabled', [
     (None, None, True), (512, None, True), (None, 64 << 20, True),
-    (512, 64 << 20, True), (0, 0, True), (512, 64 << 20, False),
+    (512, 64 << 20, True), (0, 0, True), (0, None, True), (None, 0, True), (512, 64 << 20, False),
 ])
 @pytest.mark.parametrize('changed_bound', [None, 'entries', 'bytes'])
 def test_worker_must_honor_both_requested_preparation_bounds(modules, tmp_path, entries, capacity, enabled, changed_bound):
@@ -193,8 +246,9 @@ def test_worker_must_honor_both_requested_preparation_bounds(modules, tmp_path, 
 
 
 def test_changing_statements_keep_individual_first_visits_and_distributions(modules):
-    job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call'}
-    manifest = {'format': 'zkc.benchmark/0', 'observation': 'timing', 'status': 'passed', 'processes': 2,
+    job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call',
+           'backend': {'kind': 'host', 'preparation': True}}
+    manifest = {'format': 'zkc.benchmark/0', 'compiler_options': [], 'observation': 'timing', 'status': 'passed', 'processes': 2,
                 'plan': {'warmups': 2, 'samples': 2, 'iterations': 1}, 'matrix': [job],
                 'results': [job | {'status': 'passed', 'repetition': i, 'worker': lifecycle_worker(times)}
                             for i, times in enumerate(((10, 100, 30, 300), (20, 200, 50, 500)))]}
@@ -202,6 +256,25 @@ def test_changing_statements_keep_individual_first_visits_and_distributions(modu
     assert [v['first_visit_ns']['median'] for v in row['inputs']] == [15, 150]
     assert [v['ns_per_call']['median'] for v in row['inputs']] == [40, 400]
     assert row['decode_ns_per_call']['median'] == 5
+
+
+@pytest.mark.parametrize('backend', [
+    {'kind': 'host', 'preparation': True, 'preparation_entries': 512},
+    {'kind': 'host', 'preparation': True, 'preparation_bytes': 64 << 20},
+    {'kind': 'host', 'preparation': False},
+    None,
+])
+def test_saved_manifest_checks_requested_limits(modules, backend):
+    job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify',
+           'boundary': 'admitted_entry_call'}
+    if backend is not None:
+        job['backend'] = backend
+    manifest = {'format': 'zkc.benchmark/0', 'status': 'passed', 'processes': 1,
+                'compiler_options': [], 'observation': 'timing',
+                'plan': {'warmups': 2, 'samples': 2, 'iterations': 1}, 'matrix': [job],
+                'results': [job | {'status': 'passed', 'repetition': 0, 'worker': lifecycle_worker()}]}
+    with pytest.raises(modules['io'].MeasurementError, match='preparation (limits differ|request)'):
+        modules['results'].validate_manifest(manifest)
 
 
 def test_workers_receive_only_declared_environment(modules, monkeypatch):
@@ -229,10 +302,36 @@ def test_warm_refusal_requires_a_successful_preceding_call(modules, tmp_path, co
             modules['runner'].refuse(job, tmp_path/'negative', 5, completed=1)
 
 
+@pytest.mark.parametrize('fault', [None, 'before_entries', 'after_bytes', 'hits', 'zero_entries', 'zero_bytes', 'request'])
+def test_refusal_preparation_respects_requested_contract(modules, tmp_path, fault):
+    limits = {'entries': 512, 'bytes': 64 << 20, 'default_entries': 128, 'default_bytes': 8 << 20}
+    stats = {phase: {'entries': 200, 'retained_bytes': 9 << 20, 'hits': 1} for phase in ('before', 'after')}
+    backend = {'kind': 'host', 'preparation': True, 'preparation_entries': 512, 'preparation_bytes': 64 << 20}
+    if fault == 'before_entries': stats['before']['entries'] = 513
+    elif fault == 'after_bytes': stats['after']['retained_bytes'] = (64 << 20) + 1
+    elif fault == 'hits': stats['after']['hits'] = 0
+    elif fault in ('zero_entries', 'zero_bytes'):
+        bound = fault.removeprefix('zero_')
+        limits[bound] = backend[f'preparation_{bound}'] = 0
+        for observation in stats.values(): observation.update(entries=0, retained_bytes=0)
+    elif fault == 'request': limits['entries'] = 256
+    response = {'format': 'zkc.benchmark-worker/0', 'status': 'rejected', 'completed_calls': 1,
+                'preparation': stats, 'preparation_limits': limits}
+    executable = tmp_path/'worker'
+    executable.write_text(f'#!{sys.executable}\nimport json,sys\nprint(json.dumps({response!r}))\nsys.exit(1)\n')
+    executable.chmod(0o755)
+    job = modules['runner'].Job('case', 'zkc', 'verify', executable, backend, tmp_path/'proof', 'admitted_entry_call')
+    if fault is None:
+        modules['runner'].refuse(job, tmp_path/'negative', 5, completed=1)
+    else:
+        with pytest.raises(modules['io'].MeasurementError, match='preparation'):
+            modules['runner'].refuse(job, tmp_path/'negative', 5, completed=1)
+
+
 def test_every_run_has_a_generator_owned_incorrect_expectation(modules):
     root = Path(__file__).resolve().parents[3]
     for case in modules['coverage'].cases():
-        if case.name in ('fri', 'air', 'bulletproofs', 'machine', 'transcript'):
+        if case.name in ('fri', 'air', 'stark', 'bulletproofs', 'machine', 'transcript'):
             continue
         program = case.generate(root, root/'unused')
         assert program.incorrect is not None
@@ -251,6 +350,12 @@ def test_stark_claim_mutation_preserves_framing_and_canonical_coordinates(module
     assert mutated[-32:] == bytes(32)
     with pytest.raises(ValueError, match='missing extension'):
         stark.mutate_claim(proof[:40])
+    quartic = b'ZKCV\x00\x16' + (1).to_bytes(4, 'little') + (a.P-1).to_bytes(4, 'little') + bytes(12)
+    proof = b'ZKCPRF00' + bytes(32) + len(quartic).to_bytes(8, 'little') + quartic
+    mutated = stark.mutate_claim(proof, b'ZKCV\x00\x16', 26)
+    assert len(mutated) == len(proof) and mutated[-16:] == bytes(16)
+    with pytest.raises(ValueError, match='missing extension'):
+        stark.mutate_claim(proof)
 
 
 @pytest.mark.parametrize('observed', ['format', 'binding', 'verification', None])
@@ -291,12 +396,15 @@ def test_monero_response_control_refuses_framed_or_noncanonical_layout(modules):
 @pytest.mark.parametrize('bound', ['entries', 'bytes', 'default_entries', 'default_bytes'])
 def test_comparison_rejects_changed_preparation_bounds(modules, bound):
     from copy import deepcopy
-    job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call'}
-    baseline = {'format': 'zkc.benchmark/0', 'observation': 'timing', 'status': 'passed', 'processes': 1,
+    job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call',
+           'backend': {'kind': 'host', 'preparation': True}}
+    baseline = {'format': 'zkc.benchmark/0', 'compiler_options': [], 'observation': 'timing', 'status': 'passed', 'processes': 1,
                 'plan': {'warmups': 2, 'samples': 2, 'iterations': 1}, 'matrix': [job], 'host': {}, 'contracts': {},
                 'results': [job | {'status': 'passed', 'repetition': 0, 'worker': lifecycle_worker()}]}
     changed = deepcopy(baseline)
     changed['results'][0]['worker']['lifecycle']['preparation_limits'][bound] *= 2
+    name = bound.removeprefix('default_')
+    changed['matrix'][0]['backend'][f'preparation_{name}'] = changed['results'][0]['worker']['lifecycle']['preparation_limits'][name]
     with pytest.raises(modules['io'].MeasurementError, match='preparation limits differ'):
         modules['results'].compare(baseline, changed)
 
@@ -317,8 +425,8 @@ from types import SimpleNamespace
 sys.path.insert(0, {str(root/'common/benchmarks')!r})
 from bench import io, runner
 io.MEASUREMENT_LOCK = Path({str(tmp_path/'slot')!r})
-args = SimpleNamespace(output=Path({str(output)!r}), samples=1, warmups=0, iterations=1,
-    processes=1, seed=0, cpu=None, threads=1, label='signal', timeout=1, execution_counts=False)
+args = SimpleNamespace(output=Path({str(output)!r}), exclusive=True, samples=1, warmups=0, iterations=1,
+    processes=1, seed=0, cpu=None, threads=1, label='signal', timeout=1, execution_counts=False, compiler_option=[])
 def prepare(*args):
     os.kill(os.getpid(), signal.SIGTERM)
 raise SystemExit(runner.run(args, prepare))
@@ -343,8 +451,9 @@ def counted_manifest():
     worker['build']['execution_counts'] = True
     for call in worker['lifecycle']['calls']:
         call['execution_counts'] = {'events': dict.fromkeys(EVENTS, 0), 'operations': {}}
-    job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call'}
-    return {'format': 'zkc.benchmark/0', 'observation': 'execution_counts', 'status': 'passed',
+    job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call',
+           'backend': {'kind': 'host', 'preparation': True}}
+    return {'format': 'zkc.benchmark/0', 'compiler_options': [], 'observation': 'execution_counts', 'status': 'passed',
             'processes': 1, 'plan': {'warmups': 2, 'samples': 2, 'iterations': 1},
             'matrix': [job], 'contracts': {},
             'results': [job | {'status': 'passed', 'repetition': 0, 'worker': worker}]}
@@ -411,3 +520,41 @@ def test_failed_count_report_keeps_run_and_cell_errors(modules, tmp_path):
     assert 'worker refused input' in text
     assert 'No comparison is published' in text
     assert json.loads((tmp_path/'summary.json').read_text())['comparisons'] == []
+
+
+def test_exploratory_run_does_not_create_a_lock_and_records_failure(modules, tmp_path):
+    io = modules['io']
+    output = tmp_path/'exploratory'
+    with pytest.raises(RuntimeError, match='worker failed'):
+        with io.measurement_slot(output/'coordination.json'):
+            output.mkdir()
+            assert io._measurement_fd.get() is None
+            raise RuntimeError('worker failed')
+    assert not io.MEASUREMENT_LOCK.exists()
+    record = json.loads((output/'coordination.json').read_text())
+    assert record['mode'] == 'uncoordinated'
+    assert record['path'] is None and record['acquired_utc'] is None
+    assert record['attempted_utc'] <= record['started_utc'] <= record['finished_utc']
+    with pytest.raises(FileExistsError):
+        with io.measurement_slot(output/'coordination.json'):
+            pytest.fail('existing results accepted')
+
+
+def test_exploratory_run_proceeds_while_another_process_holds_the_slot(modules, tmp_path):
+    io = modules['io']
+    code = ('import fcntl,sys; f=open(sys.argv[1],"a"); '
+            'fcntl.flock(f,fcntl.LOCK_EX); print("locked",flush=True); sys.stdin.read()')
+    holder = subprocess.Popen([sys.executable, '-c', code, io.MEASUREMENT_LOCK],
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    try:
+        assert holder.stdout.readline().strip() == 'locked'
+        output = tmp_path/'parallel'
+        with io.measurement_slot(output/'coordination.json'):
+            output.mkdir()
+            assert io._measurement_fd.get() is None
+        with pytest.raises(io.MeasurementBusy):
+            with io.measurement_slot(tmp_path/'exclusive/coordination.json', exclusive=True):
+                pytest.fail('exclusive acquisition accepted')
+    finally:
+        holder.communicate(timeout=10)
+    assert holder.returncode == 0
