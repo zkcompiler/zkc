@@ -102,7 +102,9 @@ import ZkcSecurity.HashChain.Steps
 import ZkcSecurity.Oracle.Encoding
 import ZkcSecurity.Oracle.Keys
 import ZkcSecurity.Registry
+import ZkcSecurity.Stage.Commitment
 import ZkcSecurity.Stage.FiatShamir
+import ZkcSecurity.Stage.Joint
 import ZkcSecurity.Stage.Provider
 import ZkcSecurity.Stage.Relation
 import ZkcSecurity.VCVio.Composition
