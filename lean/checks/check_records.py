@@ -6,7 +6,8 @@
    `propext`, `Classical.choice` and `Quot.sound`.
 2. Check the claims ledger (`claims.toml`) against the records and the lock
    (`claims.lock.json`): stale theorem names, changed statement hashes and
-   theorems with forbidden axioms fail.
+   theorems with forbidden axioms fail. Qualified Lean names cited in
+   `docs/status.md` and the formal documents must still exist.
 3. Render the "What is proved" table and, from subject manifests, one
    `zkc.assurance-report/0` per subject and the subject rows; compare each
    rendering with the generated region of its document when the document has
@@ -124,6 +125,8 @@ def main():
         ledger.LOCK.write_text(json.dumps(lock, indent=2, ensure_ascii=False) + "\n")
     findings, checked, skipped = ledger.check(claims, lock, records)
     failures += findings
+    cited, cited_checked, cited_skipped = ledger.check_documents(records)
+    failures += cited
 
     table = ledger.render_proved(claims)
     (output / "what-is-proved.md").write_text(table)
@@ -151,6 +154,7 @@ def main():
         "status": "fail" if failures else "pass",
         "packages": {package: records.headers[package].get("declarations") for package in packages},
         "ledger": {"rows": len(claims.get("proved", [])), "checked": len(checked), "skipped": len(skipped)},
+        "document_names": {"checked": cited_checked, "skipped": cited_skipped},
         "reports": {report["subject"]: report["outcome"] for report in built},
         "controls": control_rows,
         "failures": failures,

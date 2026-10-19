@@ -14,6 +14,7 @@ definition the statement mentions may still have changed.
 
 import json
 from pathlib import Path
+import re
 import tomllib
 
 from .declarations import forbidden_axioms
@@ -148,3 +149,40 @@ def replace_region(text, name, content):
     head, rest = text.split(start, 1)
     _, tail = rest.split(stop, 1)
     return f"{head}{start}\n{content.rstrip(chr(10))}\n{stop}{tail}"
+
+
+# Documents whose prose cites Lean declarations by qualified name, and the
+# package that owns each root namespace.
+DOCUMENTS = ["docs/status.md", "lean/README.md", "lean/docs/**/*.md", "lean/integrations/*/README.md"]
+ROOTS = {"Zkc": "main", "ZkcExamples": "main", "ZkcTools": "main", "Tests": "main", "PIR": "main",
+         "ZkcSecurity": "arklib", "TestsSecurity": "arklib", "ZkcClean": "clean", "TestsClean": "clean"}
+PACKAGE_DIRECTORIES = {"main": LEAN, "arklib": LEAN / "integrations/arklib", "clean": LEAN / "integrations/clean"}
+QUALIFIED = re.compile(r"`((?:" + "|".join(ROOTS) + r")\.[A-Za-z0-9_.']+)`")
+
+
+def check_documents(records, root=LEAN.parent):
+    """Qualified Lean names cited in prose must still exist: as a declaration,
+    as a namespace of declarations, or as a module or module directory. Names
+    of packages that were not emitted are skipped and counted. This catches
+    renames, not semantic drift."""
+    findings, checked, skipped = [], 0, 0
+    names = set(records.by_name)
+    names |= {record["name"] for record in records.declarations}
+    prefixes = set()
+    for name in names:
+        parts = name.split(".")
+        prefixes |= {".".join(parts[:index]) for index in range(1, len(parts))}
+    paths = sorted({path for pattern in DOCUMENTS for path in root.glob(pattern)})
+    for path in paths:
+        for token in sorted(set(QUALIFIED.findall(path.read_text()))):
+            package = ROOTS[token.split(".")[0]]
+            if package not in records.packages():
+                skipped += 1
+                continue
+            checked += 1
+            module = PACKAGE_DIRECTORIES[package].joinpath(*token.split("."))
+            if token in names or token in prefixes or module.with_suffix(".lean").exists() or module.is_dir():
+                continue
+            findings.append(f"stale name: {path.relative_to(root)} cites {token}, which is not a declaration, "
+                            "namespace or module")
+    return findings, checked, skipped

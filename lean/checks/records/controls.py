@@ -1,7 +1,8 @@
 """Negative controls for the ledger check and the report generator.
 
 Each control builds a small synthetic input, changes one thing, and requires
-the documented reaction: a stale or changed headline fails the ledger check,
+the documented reaction: a stale or changed headline, or a stale name cited in
+a document, fails the check,
 a theorem that depends on `sorryAx` is unresolved, and an omitted premise, a
 mismatched artifact or an unsupported endpoint claim make a report
 `unresolved`. A control that would pass on the unchanged input is checked on
@@ -172,4 +173,13 @@ def run():
     expect("region-current", ledger.region(document, "what-is-proved") == table)
     stale = document.replace("A result", "An older result")
     expect("region-stale", ledger.region(stale, "what-is-proved") != table)
+    # A qualified name cited in prose must still name a declaration.
+    with tempfile.TemporaryDirectory(prefix="zkc-records-documents-") as temporary:
+        root = Path(temporary)
+        (root / "docs").mkdir()
+        (root / "docs/status.md").write_text("Cites `Zkc.Sample.present` and `Zkc.Sample.renamed`.\n")
+        cited = Records({"main": {}}, [dict(record("Zkc.Sample.present"), package="main")])
+        findings, checked, _ = ledger.check_documents(cited, root)
+        expect("document-stale-name", checked == 2 and len(findings) == 1 and "Zkc.Sample.renamed" in findings[0],
+               findings)
     return rows

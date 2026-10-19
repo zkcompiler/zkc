@@ -199,6 +199,8 @@ the allowed set; a reviewed row is accepted by rewriting the lock. The table,
 and one row per subject manifest summarizing its report, are rendered between
 `<!-- BEGIN GENERATED ... -->` and `<!-- END GENERATED ... -->` markers; the
 check fails when a document's region differs from the rendering, and `--write`
-rewrites it. Theorem-name and statement-hash checks catch renames
-and changed statements, not semantic drift of the definitions a statement
-mentions.
+rewrites it. Prose stays hand-written elsewhere: every qualified Lean name
+that `docs/status.md`, the formal guide, these documents or an integration guide
+cites must still be a declaration, a namespace of declarations or a module.
+Theorem-name and statement-hash checks catch renames and changed statements, not
+semantic drift of the definitions a statement mentions.
