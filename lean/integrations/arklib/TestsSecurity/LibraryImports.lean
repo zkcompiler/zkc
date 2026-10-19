@@ -143,6 +143,7 @@ import TestsSecurity.ExecutableSchnorrFiatShamir
 import TestsSecurity.FiatShamirTyped
 import TestsSecurity.FriSecurity
 import TestsSecurity.HeterogeneousRequests
+import TestsSecurity.InterfaceAxioms
 import TestsSecurity.LawRecords
 import TestsSecurity.LocalCoupling
 import TestsSecurity.LocalCouplingAudit
