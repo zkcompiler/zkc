@@ -167,6 +167,8 @@ class Driver(Runner):
         artifacts = pipeline_compile.proof_entry(self, subject, self.args.compiler, self.directory(subject, "proof"),
                                                  executable_profile)
         modules = record
+        if subject.generated("original_export"):
+            self.generated(subject, "original_export", artifacts["original_text"], modules)
         data, participant = subject.module_name("data"), subject.module_name("participant")
         self.generated(subject, "data", structured.render(artifacts["original"], data), modules)
         self.generated(subject, "participant", constructed.render(artifacts["exported"], participant), modules)
