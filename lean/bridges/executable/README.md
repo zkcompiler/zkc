@@ -50,7 +50,9 @@ For each subject with the executable profile, after the construction checks:
    validator instruction for instruction (checked against `[executable] exact`
    when declared). The acceptance threshold is derived from the Lean charge: the
    static total charge, or the manifest's charge function at the public inputs
-   it names. The manifest's generic program mutation kinds are applied to the
+   it names, evaluated once the generated facts are regenerated. Every module a
+   generated Lean file imports, hand proofs included, is built before the file
+   is evaluated, so no result comes from a stale build. The manifest's generic program mutation kinds are applied to the
    fresh program: each applicable one must be refused by the rule (its reason is
    recorded), or accepted when its kind changes only what the rule does not read
    (a helper body's computation, which a preparation obligation covers).
