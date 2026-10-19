@@ -272,7 +272,10 @@ a postcondition `Post history value` on returned values in place of rejection
   are per-occurrence certificates (`Certificate.toReduction`) and uniform-sort
   certificates of law interfaces (`UniformCertificate.toReduction`).
 
-The plain GKR verifier's certificate is assembled from these combinators.
+Reductions over the common participant actions with a uniform error
+(`ZkcSecurity.FiatShamir.Reduction`, from which the plain GKR verifier's
+certificate is assembled) become charged reductions
+(`ZkcSecurity.FiatShamir.Reduction.typed`).
 
 ## Path bounds
 
@@ -552,10 +555,27 @@ exactly when its model statement is (`falsePolicy_iff`). In
 `TestsSecurity.StatementBindings` a relation that is not functional breaks the
 transfer.
 
+Determination says nothing about a policy statement that denotes no model
+statement (`StatementBinding.Unmapped`): under the empty relation every policy
+statement is unmapped and none is false in the model, so the modeled event
+cannot see an accepted statement the application calls false. An adaptive
+endpoint needs coverage of the application's false statements in one of two
+forms. Either every application-false policy statement is false in the model or
+unmapped (`StatementBinding.Covers`) and the validators of unmapped statements
+are doomed, which makes the validators of all application-false statements
+doomed when those of model-false statements are
+(`StatementBinding.doomed_of_covers`); or the application's false-acceptance
+event implies the modeled event (`EventImplication`), which transfers the bound
+(`EventImplication.prEvent_le`). `TestsSecurity.StatementBindings` shows the
+gap with the empty relation and a validator that accepts every statement: an
+accepted false statement is invisible to the modeled event, coverage holds only
+through unmapped statements, and the rejection it then requires fails.
+
 Statement determination is the first of four binding obligations. The other
 three are typed obligation structures, each with its claim and its status
-(`ObligationStatus`: a proof, or a reported assumption named by its registry
-identifier):
+(`ObligationStatus`: a proof, or a reported assumption that cites an entry of
+the obligation's own category in the registry `ZkcSecurity.Registry`, found by
+its identifier with `registryEntry`):
 
 - **Collision-bounded identity** (`CollisionBoundedIdentity`): a collision game
   over every digest in scope, whether computed at setup, recomputed by the
@@ -1387,6 +1407,13 @@ adversary's plus the loss `loss b`.
 Tgt.bad A ≤ ⨆ A' ∈ support (translate b A), Src.bad A' + loss b
 ```
 
+The bound is against the worst adversary in the translation's support, not the
+average over the translation's randomness: a translation that succeeds with
+small probability can determine the supremum. This suffices for bounds that
+hold at every budget for every admissible adversary, which is how the stages
+are used; a stage that preserves a randomized translation's average success,
+as a computational reduction does, is not of this form.
+
 Composition runs the translations in sequence and transports budgets before
 evaluating the earlier stage's loss: the loss of `first.comp second` at `b` is
 `second.loss b + first.loss (second.budget b)` (`Relation.comp`, `comp_loss`).
@@ -1450,12 +1477,18 @@ call one primitive, their composition needs a contract
   primitive, which the adversary may call on any input. Namespace separation is
   an obligation, the joint injectivity of the two encodings (`separated`), not an
   assumption that cells are fresh.
-- **Statement and history interpretation** (`Checkpoint`, `implies`): the
-  extraction for a key reads the log before the key's first query and is frozen
-  afterwards (the bridge's extraction is one, `bridgeCheckpoint`); an intended
-  application event enters the bound only through its implication of the
-  checkpoint event. The implication is a required field, since the checkpoint
-  event needs a transcript query of the verifier.
+- **Statement and history interpretation** (`Checkpoint`, `checkpointed`,
+  `implies`): the extraction for a key factors through the log entries
+  strictly before the first entry that queries the key (`Checkpoint.factors`),
+  so it is frozen afterwards (`Checkpoint.frozen`); the bridge's extraction is
+  one (`bridgeCheckpoint`). The joint game is the oracle game of a prover
+  experiment whose event is required to be the checkpoint event: the result is
+  false at the extraction of one of the verifier's transcript keys
+  (`checkpointed`); the bridge's false acceptance is of this form
+  (`falseAcceptance_iff_checkpoint`). An intended application event enters the
+  bound only through its implication of the concrete game's failure. The
+  implication is a required field, since the checkpoint event needs a
+  transcript query of the verifier.
 - **Adversary translation, verifier expansion, budgets and losses**
   (`provider`): the provider stage, a stage relation from the joint game, in
   which transcript keys and hash calls are cells of one oracle, to the concrete
@@ -1466,14 +1499,26 @@ event of a concrete adversary admissible at `b` has probability at most
 `provider.loss b + commitment.loss (provider.budget b)`.
 
 A provider stage over the joint oracle comes from a **frame** (`Frame`): a
-provider simulation whose simulator answers every hash call from its own ideal
-cell (`passThrough`), lets no other call realize a hash cell (`separated`, tag
-separation: no hash answer becomes a chain state), and whose loss is charged
-over the joint trace and the joint budget, every call to the shared primitive by
-the adversary in any family or by the verifier's expansion counting towards one
-total (`joint`). These are the obligations of a joint provider theorem; the
-remaining one, transport between pair keys and history keys, is the zero-loss
-stage above. When the ideal failure of a mixture of provers is that of a
+provider simulation together with the namespaces its simulator uses and the
+obligations of a joint provider theorem.
+
+- The simulator answers every hash call from its own ideal cell
+  (`passThrough`), lets no other call realize a hash cell (`separated`) and
+  realizes transcript cells only by chain calls (`chainOnly`), all at the
+  frame's encodings (`namespaces`).
+- A hash call's reply is its cell's answer read through a fixed range
+  equivalence (`hashRange`, `hashAnswer`).
+- The simulator's state has a provider-state projection (`chainState`) that
+  recording a hash answer leaves unchanged (`recordHash`), and every call that
+  is not a hash call is assigned and privately answered as a function of that
+  projection (`attemptChain`, `respondChain`): no hash answer becomes provider
+  state.
+- The loss is charged over the joint trace and the joint budget, every call to
+  the shared primitive by the adversary in any family or by the verifier's
+  expansion counting towards one total (`joint`).
+
+A frame's contract (`Frame.contract`) takes its namespaces from the frame, so
+the namespaces the contract records are those the simulator uses. When the ideal failure of a mixture of provers is that of a
 random-oracle experiment after drawing the prover (`oracleMixture`,
 `oracleMixture_mixes`), the frame's simulation is a provider stage from that
 experiment's oracle game (`Frame.oracleRelation`). In

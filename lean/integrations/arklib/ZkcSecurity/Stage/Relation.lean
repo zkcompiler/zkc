@@ -16,7 +16,12 @@ A stage relation (`Relation Src Tgt`) bounds the target game by the source game:
 a target adversary admissible at budget `b` is translated, possibly with private
 randomness, into source adversaries admissible at the transported budget
 `budget b`, and the target's bad probability is at most the worst translated
-adversary's source bad probability plus the loss `loss b`. Exact compilation
+adversary's source bad probability plus the loss `loss b`. The bound is against the
+worst adversary in the translation's support, not the average over its randomness, so a
+translation that succeeds only with small probability can determine it: this suffices
+for bounds that hold at every budget for every admissible adversary, but a relation does
+not preserve a randomized translation's average success as a computational reduction
+does. Exact compilation
 equalities are zero-loss deterministic translations (`Relation.ofLe`);
 executable pruning is acceptance inclusion; a provider simulation translates
 primitive-oracle adversaries into history-oracle adversaries with a statistical
