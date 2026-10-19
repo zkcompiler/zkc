@@ -87,6 +87,7 @@ import Zkc.Semantics.Machine
 import Zkc.Semantics.MonadExecution
 import Zkc.Semantics.Relation
 import Zkc.Semantics.RelationComposition
+import Zkc.Semantics.Yields
 import Zkc.Source.Common.Format
 import Zkc.Source.Common.Import
 import Zkc.Source.Common.Region
@@ -387,6 +388,7 @@ import ZkcExamples.Structured.GkrSourceBodies
 import ZkcExamples.Structured.GkrSourceData
 import ZkcExamples.Structured.GkrSourceLaws
 import ZkcExamples.Structured.GkrSourceNormalForms
+import ZkcExamples.Structured.GkrSourceVerifier
 import ZkcExamples.Structured.GkrSourceViews
 import ZkcExamples.Structured.GkrVerifierProcess
 import ZkcExamples.Structured.LogicalContextControls
