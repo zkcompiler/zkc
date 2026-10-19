@@ -7,7 +7,8 @@ next stage: the validator participant of the deployment's `zkc.program/0`
 candidate, which the runtime admits and executes. A per-compile lowering rule
 relates the two, so that a theorem about the constructed validator transfers to
 the executable program. The modules are `Zkc.Executable.{Program, Execution,
-Installed, Lowering, Relation, Evaluation, Soundness, Pruning, Cleanup}`.
+Installed, Refusal, Normalization, Lowering, Relation, Evaluation, Soundness,
+Pruning, Completeness, NormalizationSoundness, Cleanup}`.
 
 ## Carrier
 
@@ -131,7 +132,9 @@ The compiler schedules pure arithmetic differently from the constructed export:
 it computes a value in a calculation call placed before the first instruction
 that needs it, shares equal values and drops unused ones.
 `checkNormalized inputs exported exportedReturned reading readingReturned`
-compares two instruction lists up to such schedules.
+compares two instruction lists up to such schedules, which the native
+[normalization invariant](../../../docs/spec/verification/refinement.md#normalization-across-transcript-operations)
+permits.
 
 - An instruction is movable when it is a calculation that never stops on
   operands of its declared sorts (every calculation except `boundedAt`) or
@@ -252,18 +255,9 @@ and a stop holds trivially. A run that stops needs no further budget.
 | `execute_sufficient` / `validate_sufficient` | Under `Sufficient` on the decoded proof, the executable's observation and challenge interaction are those of the reading's ideal meaning; with the expected header, host validation is the ideal acceptance of the decoded proof |
 
 A program's completeness then needs a charge bound for the inputs it admits and
-the ideal meaning's acceptance of the honest proof.
-
-The rule refuses a program whose calculations come in another order than the
-constructed instructions. A normalization that reschedules pure, total
-calculations without crossing a transcript operation's inputs
-([normalization invariant](../../../docs/spec/verification/refinement.md#normalization-across-transcript-operations))
-preserves the ideal meaning's outcome and challenge interaction, but not where a
-bounded run stops: the metered meaning charges each instruction where it runs.
-A theorem about such a program's metered executions therefore needs its own
-pruning relation at every budget, as `metered_prunes` is for the lowering rule,
-or a budget of at least the total charge, under which `execute_ideal` and
-`validate_ideal` identify the metered meaning with the ideal one.
+the ideal meaning's acceptance of the honest proof. For a program the rule
+accepts through [normalization](#normalization), the charges are those of the
+program's own reading, since normalization relates ideal meanings only.
 
 ## The compiled Schnorr proof verifier
 
@@ -340,8 +334,9 @@ terminal check charging `62 + 22 · rounds` on its actual arguments
 honest-prover completeness of the executable: for every challenge function,
 codec whose decoder inverts its encoder on round messages of bounded length,
 budget of at least `charge rounds`, expected binding of 32 bytes, initial
-transcript and table of `2 ^ rounds` values with at most two rounds, host
-validation accepts the honest proof bytes of the table's sum. The honest
+transcript and table of `2 ^ rounds` values with at most two rounds, the
+Entry's static maximum, host validation accepts the honest proof bytes of the
+table's sum. The honest
 producer absorbs what the verifier absorbs and draws what it draws, sending the
 sums of the low and high halves of its current table in each round and then
 restricting the table at the challenge. At two rounds the bound is 190
@@ -363,7 +358,9 @@ event of the application context and the row of those inputs, in order, the
 table as a vector, the claim as a scalar and the round count as a count
 (`CompiledSumcheckFiatShamir.publicInitial`). The row determines the statement
 (`initial_determined`, from `ZkcSecurity.FiatShamir.determined_single`), which
-discharges the determining premise of the compiled adaptive theorem.
+discharges the determining premise of the compiled adaptive theorem. This is
+statement determination only; that the runtime's transcript absorbs these rows
+is the host-binding assumption below.
 
 ## A rescheduled program
 

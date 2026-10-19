@@ -5,10 +5,14 @@ any number of challenges, derived from round-by-round soundness of the
 interactive validator. The general theorems hold for any transcript interface
 with typed query sites and an error per site; the transform
 `Zkc.Construction.transform` of the [construction chapter](fiat-shamir.md) is one
-instance, and the imported Sumcheck verifier is an instance of that. The general
+instance, and the imported Sumcheck verifier, the plain GKR verifier and the
+compiled Sumcheck, GKR and guessing Entries are instances of that. The general
 theorems are in `ZkcSecurity.FiatShamir` (`Interface`, `Typed`, `Soundness`,
-`Decoding`, `Sampling`, `Grinding`, `Roles`); the Sumcheck instance is
-`ZkcSecurity.Examples.SumcheckFiatShamir`.
+`Decoding`, `Sampling`, `Grinding`, `Roles`, `Composition`, `Laws`, `Lifting`,
+`Binding`, `Upstream`, `Realization`, `Obligations`, `ProviderSimulation`), the
+hash-chain provider simulation in `ZkcSecurity.HashChain` and the bound for
+verifiers with committed tables in `ZkcSecurity.Commitment`; the Sumcheck
+instance is `ZkcSecurity.Examples.SumcheckFiatShamir`.
 
 ## Typed query sites
 
@@ -399,6 +403,9 @@ injectively into the transcript events and the row determines the statement
 the raw Sumcheck statement (table values, claim and round count, with no length
 check) is bound by one event and determined, while binding the table entries one
 event each with no count or length is not prefix-free and is not determined.
+A binding codec establishes statement determination only; that the native
+transcript absorbs the encoded rows, in order, belongs to the encoding and
+transcript-state [obligation](#obligations).
 
 ## Imports from ArkLib's round-by-round soundness
 
@@ -459,16 +466,28 @@ The averaged form `Verifier.rbrSoundness` is not imported: its bound is over a
 mixture of prefixes the prover samples, not a per-prefix step.
 
 The import of ArkLib's interaction-stack soundness (`OrdinaryState` and
-`LocalSoundness`) is deferred. It has three blockers, all upstream of zkc:
+`LocalSoundness`) is outstanding adapter and instance work. The implementation
+attempted so far met three obstacles:
 
 - its protocols are trees whose residuals and execution prefixes
   (`ExecutionPrefix`) live in `Type 1`, while a validator's operation signature
-  is in `Type`, so the import needs a process form over those trees;
+  is in `Type`, so a process form over those trees does not fit an operation
+  signature;
 - its challenge models (`ChallengeModel.sample`) sample an arbitrary
-  distribution rather than a uniform raw answer, so the import needs a
-  law-record premise relating each challenge model to a uniform raw answer;
+  distribution rather than a uniform raw answer;
 - the one interaction-stack instance, Sumcheck's local soundness model, is
   private to its module.
+
+These are obstacles of that implementation, not prerequisites of every
+adapter. A restricted route, not yet checked, keeps the upstream execution
+prefix inside a propositional realization relation instead of an operation
+signature, and defines the doomed participant residuals as those that realize
+the residual of some false upstream prefix, as `Realizes.certificate` does for
+process forms. It requires correspondence for messages, actual prefix
+extensions, challenge distributions, and rank and error charges. Non-uniform
+sampling stays an explicit law premise relating each challenge model to a
+uniform raw answer, and the private Sumcheck instance blocks only the reuse of
+that instance, not the generic adapter.
 
 ### Imported certificates for compiled verifiers
 
@@ -547,7 +566,8 @@ cost of each grinding attempt. This is a separate obligation of each transcript
 construction, stated with the idealization above; role separation at one key
 does not discharge it. Its type is fixed in
 [provider simulations](#provider-simulations), where it is proved for the
-hash-chain suites; for the duplex suites it remains a named obligation.
+hash-chain suites' byte-level chain model; for the duplex suites it remains a
+named obligation.
 
 ## The participant transform
 
@@ -759,7 +779,9 @@ vector, the claim as a scalar and the round count as a count. Its row determines
 the statement (`publicInitial_determined`, from `determined_single`), and
 `adaptive_soundness_public` is the adaptive bound with no determination premise
 left; the [executable statement](executable.md#the-compiled-sumcheck-proof-verifier)
-uses the same binding.
+uses the same binding. The binding establishes statement determination only;
+native absorption of the encoded rows remains a named assumption of the
+[executable stage](executable.md#named-assumptions-and-trusted-links).
 
 The controls (`TestsSecurity.CompiledSumcheckFiatShamir`) use the one-round
 `ZMod 5` instance of the imported verifier's controls. The premises hold
@@ -1030,7 +1052,10 @@ injective and prefix-free and the three role tags pairwise non-prefix, and
 `byte_soundness` transfers the bound to a hash on bytes, given injective state
 encodings of one length, injective event encodings and `width ≤ 2^64`. The
 theorems assume `0 < width` and nonempty initial histories; every request has
-the same number of blocks.
+the same number of blocks. They are about the construction's byte-level chain
+model: that the compiled transcript handlers and the installed Keccak-256
+kernels implement that model, and that the suites' decoders are modelled ones,
+remain obligations.
 
 ### The committed-opening experiment
 

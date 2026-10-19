@@ -244,7 +244,7 @@ no runtime predicate evaluation or proof transport through those transforms.
 | Calls, roles and control | Static application, role projection, structured local control, nested repetition and [conditional completion](compiler/control.md). General dynamic protocol composition remains open. |
 | Structured values | Products, alternatives, extents, checked indexing and [nested immutable data](compiler/mathematics.md), including independently shaped matrices; source sequence elements include contextually packed records, tuples, source arrays and empty products, with explicit packing/unpacking and source comparison; affine and non-Drop elements are excluded. Persistent sequence storage and retained validation support default-budget Local collection of 16,384 indices and 8,192 two-index records in maintained controls. Whole-value encoding has a separate peak-storage limit; a collection that executes locally can exceed it when exported. |
 | Affine resources and services | Exact-origin analysis, state successors, resource custody, entry service aliases and failure cleanup; [resource origins](compiler/resource-origins.md). Equal roots do not prove equal state or independent randomness. |
-| FRI source library | [Binary FRI](../examples/projects/fri/README.md) over natural-order two-adic cosets, with commitment/fold/query/terminal checks and independent-reference tests. The library retains a checked coset word across folds; the AIR library consumes the authenticated positions and values. An independent Lean model of its verifier with ideal commitments is [complete on codewords and has a round-by-round soundness theorem](../lean/docs/spec/fri-security.md), with interactive bounds in the unique-decoding regime and up to the cube-root proximity radius `1 - (ρ + η)^(1/3)`, also stated over the verifier's residual processes, and transferred to a Fiat–Shamir bound for adaptively chosen initial words with commitments read in the clear and one key for the query block; commitment security, the source's sequential position draws and the compiled verifier remain separate obligations. |
+| FRI source library | [Binary FRI](../examples/projects/fri/README.md) over natural-order two-adic cosets, with commitment/fold/query/terminal checks and independent-reference tests. The library retains a checked coset word across folds; the AIR library consumes the authenticated positions and values. An independent Lean model of its verifier with ideal commitments is [complete on codewords and has a round-by-round soundness theorem](../lean/docs/spec/fri-security.md), with interactive bounds in the unique-decoding regime and up to the cube-root proximity radius `1 - (ρ + η)^(1/3)`, also stated over the verifier's residual processes, and transferred to a Fiat–Shamir bound for adaptively chosen initial words with one key for the query block, with [commitments read in the clear](../lean/docs/spec/fri-security.md#fiatshamir-transfer) and with [words committed](../lean/docs/spec/fri-security.md#committed-words) by Merkle trees with one field element per hashed leaf, in one random oracle with the hash calls. The committed bound covers acceptance together with the initial word being far from the code for the extraction at a verifier checkpoint, completed with zero at the entries the extraction misses. The model is a transcription of the library verifier, not the compiled library; the implication from an application's bad event to that checkpoint event, the installed schemes' leaf encoding (tag, codec, width and height), the source's sequential position draws and the compiled verifier remain separate obligations. |
 | Pairing groups | BN254 and BLS12-381 each install G1, G2 and a prime-order target with group arithmetic, `pairing.check`, `pairing.apply`, canonical compressed codecs and native frames; [contract](spec/domains/values.md#pairing-field-capabilities). BLS12-381 G2 uses the 96-byte compressed encoding of the Ethereum consensus specifications. Independent arkworks comparisons and Ethereum ceremony points check arithmetic and encodings; no native adequacy proof. |
 | General numerical composition | Installed field/group/vector/matrix, polynomial, pairing and oracle kernels with [composed clients](compiler/mathematics.md) and [changing numeric state](compiler/mathematics.md). The [linear-expression library](../libraries/zkc/README.md#linear-group-expressions) composes ordered scalar/point terms and evaluates one equation through an ordinary MSM; authors combine shared-basis coefficients explicitly. Complete Groth16 applications remain separate work. The source [Bulletproofs+ library](../libraries/bulletproofs/README.md) implements weighted inner-product rounds and Monero 64-bit aggregated range proofs for 1..16 commitments; pinned upstream controls compare exact bytes at every count. Full transaction integration, batch verification and security proofs remain outside this library. The source [KZG library](../libraries/kzg/README.md) implements the EIP-4844 commitment, proof, challenge, batch-verification and precompile functions. Its constructions reproduce c-kzg-4844's explicit challenge hash inputs, tagged `FSBLOBVERIFY_V1_` and `RCKZGBATCH___V1_`, and all 262 c-kzg-4844 v2.1.8 vectors and 57 derived reference cases agree; no Fiat–Shamir security theorem covers these constructions. Under default execution capacity a batch verifies up to 63 blobs, where the proof Host's public-input binding stops, and proves up to 19, where the allocation budget stops; bit-reversing each 4096-element blob in source dominates the prover's allocation. Asset formats carry relation data only, so the prover receives the setup's G1 Lagrange points as an ordinary input that the library admits only with their pinned SHA-256, and the verifier key is a library constant. The batch transcript construction recomputes each blob's evaluation point and value from the statement, because a construction observes only messages and start inputs. No KZG security proof is claimed. |
 | GKR source library | The [GKR library](../libraries/gkr/README.md) verifies layered arithmetic circuits of uniform width with public stacked add and mul wiring: degree-two Sumcheck rounds per layer, a line restriction to the next layer and the input check, with an honest prover in the same unit. Lean proves [Fiat–Shamir soundness](../lean/docs/spec/fiat-shamir-security.md#the-compiled-gkr-proof-entry) of the plain verifier and of the compiled example Entry for fixed well-formed statements. Non-uniform widths, succinct or private wiring and commitments to the inputs are outside the library. |
@@ -255,7 +255,7 @@ no runtime predicate evaluation or proof transport through those transforms.
 | OpenVM relation comparison | The optional [OpenVM adapter](../compiler/adapters/openvm/README.md) captures five upstream AIRs for a KoalaBear RV32 branch slice. Upstream recorder/DAG/debug checks, the adapter evaluator and both native Bundle evaluators agree on selected traces and mutations. Its memory-bus test partner permits inconsistent reads, so these checks establish neither execution nor termination under VM semantics, nor authentication of initial memory. Deployed BabyBear, persistent memory, full ISA and OpenVM proof compatibility are outside this selection. Its five-table layout is outside the current three-table source argument; admitting signed field balance alone does not supply the missing execution semantics. |
 | Clean export comparison | A [pinned Clean flat AIR export](../lean/integrations/clean/README.md) is compared with native finite-AIR evaluation and the KoalaBear/Ext8 ring provider on fixed honest, invalid and mutated rows. This checks native agreement on those rows; it does not prove the native decoders correct. |
 | Native proofs | Separate producer/validator execution, derived or authored transcripts, structured framing and authorized setups; [proof contract](compiler/construction.md). One policy covers flat, iterated, PCS and structured programs in `zkc.program/0`. |
-| Native hash-chain suites | [`hash-chain.keccak256.bls12-381.fr64be/0` and `hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0`](spec/ir/construction.md#native-hash-chain-suites): Keccak-256 chains with full-digest states, framed events, counter-expanded requests and the decoders of the Merlin suites over the same challenge fields; the octic instance has UniformIndex transitions. States are host-owned affine capabilities, as for the other suites, implemented by the field backends. Known-answer vectors from an [independent Python reference](../common/tests/support/hash_chain_reference.py), whose Keccak-f[1600] is checked against published Keccak-256 answers and Python's SHA3-256, fix the backend's states, request answers and decoded challenges. Independent replays of compiled native proofs (Schnorr, DLEQ and Sumcheck families, octic index rounds), the maintained Schnorr, Sumcheck and FRI examples and managed transcript methods prove and verify under them. No quartic-extension or base-field KoalaBear instance exists, because those fields have no random service. The reduction to the history oracle is a separate proof obligation; no Lean theorem names these suites. |
+| Native hash-chain suites | [`hash-chain.keccak256.bls12-381.fr64be/0` and `hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0`](spec/ir/construction.md#native-hash-chain-suites): Keccak-256 chains with full-digest states, framed events, counter-expanded requests and the decoders of the Merlin suites over the same challenge fields; the octic instance has UniformIndex transitions. States are host-owned affine capabilities, as for the other suites, implemented by the field backends. Known-answer vectors from an [independent Python reference](../common/tests/support/hash_chain_reference.py), whose Keccak-f[1600] is checked against published Keccak-256 answers and Python's SHA3-256, fix the backend's states, request answers and decoded challenges. Independent replays of compiled native proofs (Schnorr, DLEQ and Sumcheck families, octic index rounds), the maintained Schnorr, Sumcheck and FRI examples and managed transcript methods prove and verify under them. No quartic-extension or base-field KoalaBear instance exists, because those fields have no random service. Lean proves the reduction of the suites' chain to the history oracle, with the byte hash as a random oracle and loss `(q + V)² / \|S\|` for `q` adversary and `V` verifier calls ([provider simulations](../lean/docs/spec/fiat-shamir-security.md#provider-simulations)). The hash-chain theorem is about the construction's byte-level chain model; that the compiled transcript handlers and the installed Keccak-256 kernels implement that model, and that the suites' decoders are modelled ones, remain obligations. |
 | Programmable constructions | [Labelled messages and queries](spec/language/entries.md) select ordinary typed Local handlers, one inherited base and whole-rule overrides. Checked plans preserve state, actual payloads and loop order through participant lowering and independent runtime admission. Providers use private copyable data or an authorized managed transcript with explicit byte-labelled methods. Finite authority sets retain each query's actual service contract; unselected verifier services remain private, with checked dependencies and explicit budgets. Whole-call delegation preserves one live root, actual child-start inputs and root codec coverage across nested, repeated and empty children. Iterated Sumcheck and Schnorr exercise execution and malformed-input order; record codecs support sequential and disjoint round chunks, original-byte observations and conditional completion. |
 | Structured participant comparison | The optional [source-bound native probe](../lean/bridges/structured/participant.md) compares both actual Interactive Schnorr endpoints and generic service fixtures with original-SSA and Lean replay. It checks sampled generator-multiple G1 values, independent inputs/receives, pending prefixes, canonical codec failures and provider residual state. Native cleanup and failure adapters are explicit additional observations; this is bounded evidence, not Rust refinement or arbitrary-point decoding correctness. |
 | Attempts and retained work | [Persistent attempts](runtime/attempts.md) retain provider state, failed work and unpublished buffers under explicit application policy. |
@@ -338,39 +338,44 @@ model: a false claim is accepted with probability at most `(Q + n) / |F|` for a
 fixed well-formed statement with `n` rounds (the Entry admits at most two), and
 at most `(Q + 2) (1 / |F| + loss)` for adaptively chosen well-formed statements,
 `loss` being the challenge decoding's excess, when the initial
-transcript determines the statement. The host's binding of the Entry's vector
-and count public inputs is not modelled; the adaptive premise is discharged
-only for a model binding that stands for those public rows.
+transcript determines the statement. The adaptive premise is discharged by one
+typed public-value binding event whose row holds the table values as a vector,
+the claim as a scalar and the round count as a count. The typed public-value
+binding establishes statement determination only; that the native transcript
+absorbs the encoded rows, in order, remains assumed.
 For the GKR Entry, Lean proves that the
 interactive reading of the exported instructions is the plain GKR verifier on
 well-formed statements within the Entry's maxima, and bounds the compiled
 verifier's acceptance of claimed outputs other than the circuit's by
 `(Q + width + layers (2 width + 1)) max 2 width / |F|` for a fixed statement.
 The [executable bridge](../lean/bridges/executable/README.md) reads the validators
-of the Schnorr and Sumcheck Entries' `zkc.program/0` candidates, which the runtime
-admits. Lean checks each against its constructed validator with a
+of the `zkc.program/0` candidates of the Schnorr and Sumcheck Entries and of a
+deferred-rounds fixture, which the runtime admits. Lean checks each against its constructed validator with a
 [lowering rule](../lean/docs/spec/executable.md) whose meaning covers proof
 framing, decoding failures, instruction budgets, loops, local calls with frames,
 helper calls and transcript custody. The rule compares instructions up to checked
 normalization of pure total calculations, so a schedule that computes values
 before their first consumer, as the compiler's calculation batching does, is
 accepted when its anchors and their operand terms agree with the export's. The
-compiled Schnorr and Sumcheck programs equal their exports; a two-round fixture
-whose program defers the first round's product past the second draw is accepted
-through normalization, and compiled with `--no-calculation-batching`, which
+compiled Schnorr and Sumcheck programs equal their exports; the two-round
+deferred-rounds fixture, whose program defers the first round's product past
+the second draw, is accepted through normalization, and compiled with `--no-calculation-batching`, which
 computes values where the source defines them, by equality. That fixture's
 theorems stop at the constructed validator, since the participant projection
 rule is not applied to it. For Sumcheck the program's helper functions are proved to
 implement the source's checked helpers, and honest-prover completeness of the
-executable holds at every budget of at least `68 + 61 · rounds` instructions,
-which at two rounds is the runtime's acceptance threshold. The security bounds
+executable holds for tables of at most two rounds, the Entry's static maximum,
+at every budget of at least `68 + 61 · rounds` instructions, which at two rounds
+is the runtime's acceptance threshold. The security bounds
 transfer to provers of proof bytes through the general construction, projection
 and lowering rules, with no equation specific to an Entry about the compiled
 program: Schnorr knowledge soundness for a fixed statement, and Sumcheck soundness
-for fixed and adaptively chosen statements, the latter with a binding of the
-table values, claim and round count whose rows determine the statement; the
-shared transcript model's binding event carries scalar values only, so that
-binding encodes the vector and the count in its rows. The bridge compares the
+for fixed and adaptively chosen statements, the latter from the typed
+public-value binding of the transcript model, one event whose row holds the
+table values as a vector, the claim as a scalar and the round count as a count,
+and determines the statement. The typed public-value binding establishes
+statement determination only; that the native transcript absorbs the encoded
+rows of the invocation root, in order, remains assumed. The bridge compares the
 runtime's stops and observations with that meaning, at every budget up to the
 acceptance threshold and on mutated proofs, and checks that the runtime executes
 the program a verification receipt names, with the acceptance output and public
@@ -384,18 +389,21 @@ query identities, construction classes, realized laws, observation classes with
 certified openings, blocks, gates, cryptographic effects, binding, provider and
 explicit-input obligations, equivalence notions and the model of claims. The
 native construction implements the profile that absorbs every message, over the
-installed Merlin and spongefish suites, and its request operands are `index`
+installed Merlin, spongefish and hash-chain suites, and its request operands are `index`
 bounds defined by `data.index` constants, which meets operand provenance
 statically. Programmable handlers may ignore values, and nothing checks the
 omission classes for them. No gate, block request, declared role of hash calls,
 challenge-input coverage, configuration provenance check or interaction-pattern
-digest is implemented, the salt kind is not admitted natively, and no provider
-has a simulation theorem. Lean states formal readings of the obligations,
-refutes each with a model counterexample
+digest is implemented, and the salt kind is not admitted natively. Lean states
+formal readings of the obligations, refutes each with a model counterexample
 ([support](../lean/docs/support.md#construction-obligation-counterexamples)),
-fixes the type of provider simulations and states the joint experiment of a
-committed opening with its extraction checkpoint convention, without proving its
-bound. It also states law records with their five constructors and the gated
+fixes the type of provider simulations and proves one for the hash-chain
+suites' byte-level chain model (the duplex providers' simulations remain
+named), and states the joint experiment of a committed opening with its
+extraction checkpoint convention and proves its bound for a total straight-line
+extractor; a general bound for verifiers with committed tables, read in one
+random oracle with their hash calls, also applies to it. The committed opening
+is a model protocol, not a compiled Entry. It also states law records with their five constructors and the gated
 accepted-value decoder, per-key charges in the typed Fiat–Shamir theorems,
 raw answer types by the last event and the lifting of uniform-sort certificates,
 binding codecs over typed public-value binding events, and the data shape of the
@@ -409,9 +417,13 @@ with a guarded verdict, each challenge round charged its own error, and a
 process-form certificate transports to a participant validator that realizes the
 process form: a worst-case round-by-round proof stated in ArkLib's framework
 (written for the example) bounds the compiled verifier of a guessing fixture
-Entry, and the bound is attained at zero queries. The import of ArkLib's interaction-stack soundness is deferred, blocked
-upstream by its execution prefixes in `Type 1`, its challenge models that sample
-arbitrary distributions and its private Sumcheck instance.
+Entry, and the bound is attained at zero queries. The import of ArkLib's
+interaction-stack soundness is outstanding adapter and instance work: the
+attempted implementation met its execution prefixes in `Type 1`, its challenge
+models that sample arbitrary distributions and its private Sumcheck instance,
+and a restricted route through a propositional realization relation is proposed
+but unchecked
+([imports](../lean/docs/spec/fiat-shamir-security.md#imports-from-arklibs-round-by-round-soundness)).
 
 The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retained
 PIR programs, proves open-process contracts, and applies selected ArkLib/VCVio

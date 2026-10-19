@@ -7,13 +7,14 @@ public import VCVio.OracleComp.QueryTracking.RandomOracle.Simulation
 
 /-! A committed table, one challenge and an authenticated opening.
 
-This module states, without proving its bound, the joint security experiment of
-the smallest protocol that combines commitment metadata, transcript binding, a
-challenge and an authenticated opening. The authenticated configuration
-`c = (σ, k, w)` fixes the scheme identity `σ` (which also fixes how a row is read,
-`accepts σ row`), the depth `k` of a binary Merkle tree of `2 ^ k` rows and the
-row width `w`; a root binds neither the height nor the scheme, so the
-configuration is bound explicitly.
+This module states the joint security experiment of the smallest protocol that
+combines commitment metadata, transcript binding, a challenge and an
+authenticated opening; its bound is proved in
+`ZkcSecurity.Examples.CommittedOpeningBound` (`intendedBound`). The
+authenticated configuration `c = (σ, k, w)` fixes the scheme identity `σ`
+(which also fixes how a row is read, `accepts σ row`), the depth `k` of a
+binary Merkle tree of `2 ^ k` rows and the row width `w`; a root binds neither
+the height nor the scheme, so the configuration is bound explicitly.
 
 1. Binding: the transcript starts with the binding event of the context and `c`.
 2. The producer sends a root, which is absorbed.
@@ -76,8 +77,8 @@ with probability one half while `Far` holds.
 `IntendedBound` states, as a proposition and not a theorem,
 `Pr[Accept ∧ Far(T*[c, K])] ≤ (q_T + 1) · κ · (1 - δ) + ε_ext + ε_ns`: the
 history-oracle term, the extraction and drift term over at most `q_T + 1`
-checkpoints, and the namespace term. Its proof is the commitment bridge; it is
-not given here.
+checkpoints, and the namespace term. Its proof, through the commitment bridge,
+is `ZkcSecurity.Examples.CommittedOpeningBound.intendedBound`.
 -/
 
 set_option autoImplicit false

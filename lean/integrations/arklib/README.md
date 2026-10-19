@@ -99,14 +99,16 @@ construction equality. `Examples/CompiledSumcheckFiatShamir` discharges that
 premise for the compiled Sumcheck `example::Proof` verifier with the core
 composed rules and states its
 [fixed-statement and adaptive soundness](../../docs/spec/fiat-shamir-security.md#the-compiled-sumcheck-proof-entry);
-the adaptive form keeps the determining binding as a premise.
+`adaptive_soundness_public` discharges the adaptive form's determining premise
+with one typed public-value binding event of the table values, claim and round
+count (`FiatShamir/Binding`). That binding establishes statement determination
+only; that the native transcript absorbs the encoded rows remains assumed.
 `Examples/ExecutableSumcheckFiatShamir` transfers both bounds to provers of proof
 bytes for the validator program the runtime admits, through the core
 [lowering rule](../../docs/spec/executable.md#the-compiled-sumcheck-proof-verifier)
 and `VCVio/Pruning`: host validation prunes the compiled verifier's acceptance by
 rejections at every budget, so it accepts at most as often. Its adaptive form
-uses a binding of the table values, claim and round count whose events
-determine the statement, which discharges the premise.
+uses the same typed public-value binding.
 
 `Examples/GkrFiatShamir` gives the plain GKR verifier a round-by-round
 certificate composed per phase (`FiatShamir/Composition`), with ArkLib's
@@ -127,6 +129,32 @@ process form, and `Examples/CompiledGuessFiatShamir` uses it to bound the
 compiled verifier of the construction bridge's guessing fixture by a worst-case
 round-by-round proof stated in ArkLib's framework (written for the example); a
 query-free prover attains the bound.
+
+`FiatShamir/Laws` states law records of decoded query sites, with five
+constructors and the gated accepted-value decoder; `FiatShamir/Lifting` raw
+answers by the last event and the lifting of uniform-sort certificates to typed
+certificates; and `FiatShamir/Binding` binding codecs over typed public-value
+binding events, which discharge statement determination.
+`FiatShamir/Obligations` states formal readings of the
+[construction obligations](../../docs/spec/fiat-shamir-security.md#construction-obligations),
+which the model counterexamples of `TestsSecurity.Counterexamples` refute one by
+one, and `FiatShamir/ProviderSimulation` the type of a provider simulation with
+its query-cost relation.
+
+`HashChain` instantiates that type for the native hash-chain suites
+([provider simulations](../../docs/spec/fiat-shamir-security.md#provider-simulations)).
+`Model` is the chain over an abstract hash with full-digest states. `Simulator`,
+`Steps` and `Reduction` couple the concrete experiment with a lazily sampling
+simulator over the history oracle until a collision or prediction in the joint
+primitive-query trace, whose probability `Bound` bounds by `(q + V)² / |S|`.
+`Provider` and `Bridge` give the simulator with a private tape and its law,
+`Instance` the simulation and its composition with the typed engine, and
+`Encoding` and `Bytes` the injective, prefix-free byte framing and the transfer
+to a byte hash. `VCVio/UntilBad` (identical until bad, for two simulations with
+different states) and `VCVio/Deferral` (deferred sampling) supply the coupling
+and the law. These theorems are about the construction's byte-level chain
+model; that the compiled transcript handlers and the installed Keccak-256
+kernels implement it remains an obligation.
 
 `ArkLib/Fri` models the verifier of the FRI library's low-degree test with
 ideal commitments and proves its completeness and
@@ -168,7 +196,9 @@ the committed-opening experiment's intended bound, and
 `Examples/CommittedOpeningBridge` applies the general bound to the same
 verifier. `Cost` charges the concrete reading by the charges on the verifier's
 paths, and `Examples/CommittedFri` applies the bound to the FRI verifier with
-committed words ([committed words](../../docs/spec/fri-security.md#committed-words)).
+committed words ([committed words](../../docs/spec/fri-security.md#committed-words)),
+for acceptance together with a far initial word extracted at a verifier
+checkpoint and completed with zero, with one field element per hashed leaf.
 
 `VCVio/SigmaAnd` composes two VCVio Σ-protocols with one shared challenge.
 Completeness and special soundness compose directly; zero knowledge composes

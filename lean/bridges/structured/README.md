@@ -282,8 +282,14 @@ trusted claim. The maintained requests are in [`normal-forms/`](normal-forms):
 | Request | Subject |
 |---|---|
 | [`chaum-pedersen.toml`](normal-forms/chaum-pedersen.toml) | Both roles of the original-stage `sigma::ChaumPedersen` root and its `knowledge` clause |
+| [`okamoto.toml`](normal-forms/okamoto.toml) | Both roles of the original-stage `okamoto::Interactive` root of [`fixtures/okamoto.zkc`](fixtures/okamoto.zkc) and its `knowledge` clause |
 | [`sumcheck-bodies.toml`](normal-forms/sumcheck-bodies.toml) | The typed `Reduce` body shared by the Sumcheck units, with its repeat maximum as a parameter |
 | [`sumcheck-round.toml`](normal-forms/sumcheck-round.toml) | One round and the whole `Reduce` body at both roles, for every unit whose checked body is the shared one |
+
+The Okamoto unit has no bridge driver: no maintained check regenerates its
+retained export, JSON or constructor data from the fixture. Its
+[formal support](../../docs/support.md#okamoto-representation-proof) states what
+is proved over the generated declarations.
 
 A request is TOML. `fixture` is the retained JSON snapshot, `output` the Lean
 module to write, `namespace` its namespace, `imports` and `open` its imports
