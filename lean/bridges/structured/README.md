@@ -392,6 +392,22 @@ process equations are unchanged, and the masked-state theorems become
 instances of `NormalForm.maskValues_embed`. The compiled run is not trusted: a
 form it prints wrongly is a failed kernel check.
 
+A whole-body role (`[[shared.roles]]` with `inputs`) takes `proof =
+"normal-form"` too; its equation is an instance of `NormalForm.sound_uniform`,
+and a repeat in the body is presented by the callback region the entry's
+`callback_body` names (with its `repeat_spec`). Laws keep their request syntax
+and are read by shape: results that are arguments (`"{2}"`) or literals
+(`"false"`) are presented as such, a Math law with `components = true` passes
+argument components, and each argument a law reads at every use is pinned to
+an input or to a literal. `opaque` helpers stay owned calls on components. For
+each protocol application the role takes part in, the generator states the
+callee's invocation in this unit at any child context
+(`<application>_<callee role>_invoke`, from `<declaration>_view`, the callee's
+process theorem and `<application>_<callee role>_returned`), the callee
+processes the form applies (`<role>Callees`) and the premise that each callee
+presents its applications (`<role>_callees`); a callee whose process theorem
+has premises is pinned to the caller's inputs its binders receive.
+
 A whole-body entry over a `[unit]` may also name its `declaration` (and a `raw`
 equation when its `body` is not the one the views use). Each role then also gets
 `<declaration>_view` (the declaration's checked body between its input and
@@ -416,10 +432,12 @@ unit, from the export) and `<declaration>_view`, and, per caller role, the
 callee's masked outputs. At each role of the callee's roster the caller's
 normal form binds the callee's generated normal form at the child context, on
 the caller's operands after the callee's input masks, and continues on the
-callee's results after its output masks; the step is
+callee's results after its output masks; in a step proof the step is
 `NormalFormSteps.apply_step`, which rests on the generic call substitution rule,
 and `NormalFormSteps.apply_step_after` inside a repeat callback, whose normal
-form is followed by the embedding of its carried state.
+form is followed by the embedding of its carried state; in a normal-form proof
+it is the application case of the normalizer's soundness theorem, with the
+callee summaries above as its premise.
 
 **Kept calls.** `opaque` lists helpers whose owned Local calls stay as their
 participant rule (`Participant.owned`) when no law is wanted; their results are

@@ -121,6 +121,30 @@ inductive Slot where
 
 abbrev Scope := List Slot
 
+/-! Input patterns. -/
+
+/-- How a role holds one input of the body. -/
+inductive Input : Ty → Type where
+  | absent {ty : Ty} : Input ty
+  | present {ty : Ty} : Input ty
+  /-- Present or absent; decided where first needed. -/
+  | optional {ty : Ty} : Input ty
+  | index (value : Nat) : Input .index
+  | field (domain : String) (value : Nat) : Input (.field domain)
+  | bool (value : Bool) : Input .boolean
+
+abbrev InputPattern (Γ : List Ty) := Values Input Γ
+
+/-- One binder per present or optional input, in input order. -/
+def InputPattern.scope : {Γ : List Ty} → InputPattern Γ → Scope
+  | [], .nil => []
+  | ty :: _, .cons .present rest => .value ty :: scope rest
+  | ty :: _, .cons .optional rest => .component ty :: scope rest
+  | _ :: _, .cons .absent rest => scope rest
+  | _ :: _, .cons (.index _) rest => scope rest
+  | _ :: _, .cons (.field ..) rest => scope rest
+  | _ :: _, .cons (.bool _) rest => scope rest
+
 /-- One result of a law that returns. -/
 inductive LawOutput where
   /-- The law's result function gives it. -/
@@ -144,15 +168,37 @@ inductive LawShape where
   | passes (positions : List Nat)
   deriving DecidableEq, Repr
 
+/-- What a law asks of one argument of the calls it covers. -/
+inductive LawPin where
+  /-- Any argument. -/
+  | free
+  /-- The body's input at this position, which must be present. -/
+  | input (position : Nat)
+  /-- This literal of the argument's sort. -/
+  | literal (value : Nat)
+  deriving DecidableEq, Repr
+
 /-- A helper law, keyed by the helper, never by an occurrence. `pins` follows
-the helper's inputs: `some j` restricts the law to calls whose argument at that
-position is the body's input `j`, which must be present; `none` leaves the
-argument free. A missing entry is free. -/
+the helper's inputs and restricts the law to the calls whose arguments they
+describe; a missing entry is free. -/
 structure LawKey where
   helper : Helper
   shape : LawShape
-  pins : List (Option Nat) := []
+  pins : List LawPin := []
   deriving DecidableEq, Repr
+
+/-- A protocol a body may apply, keyed by its signature: the callee role this
+participant plays, how it holds the callee's inputs, and the caller inputs some
+of the callee's binders are pinned to (`some k`), when the callee's equation
+holds only there. -/
+structure CalleeKey where
+  signature : ProtocolSignature
+  role : Nat
+  pattern : InputPattern signature.inputs
+  pins : List (Option Nat) := []
+
+/-- The callee at an index. -/
+def calleeAt (callees : List CalleeKey) (callee : Fin callees.length) : CalleeKey := callees[callee]
 
 /-- The part of a request the normalizer reads. -/
 structure Signature where
@@ -168,7 +214,8 @@ structure Signature where
   /-- Owned calls of these helpers are kept as the helper's owned invocation on
   the arguments' components, without deciding their presence. -/
   kept : List Helper := []
-  deriving Repr
+  /-- The protocols the body may apply, with the callee forms that present them. -/
+  callees : List CalleeKey := []
 
 /-- The decidable equalities a guard can compare. -/
 inductive Equality : Ty → Type where
@@ -212,49 +259,62 @@ inductive Comp (laws : List LawKey) (Δ : Scope) (ty : Ty) where
   | input (binder : Var Δ (.component ty))
   | read {types : List Ty} (binder : Var Δ (.tuple types)) (position : Var types ty)
 
+/-- A callee's argument for one of its binders: a present value or a component. -/
+abbrev Argument (laws : List LawKey) (Δ : Scope) : Slot → Type
+  | .value ty => Term laws Δ ty
+  | .component ty => Comp laws Δ ty
+  | .results types => Terms laws Δ types
+  | .tuple types => Values (Comp laws Δ) types
+
 /-- One role's process for a body. -/
-inductive Form (laws : List LawKey) : Scope → List Ty → Type where
-  | done {Δ : Scope} {out : List Ty} (values : Values (Comp laws Δ) out) : Form laws Δ out
-  | halt {Δ : Scope} {out : List Ty} (reason : PIR.Stop) : Form laws Δ out
+inductive Form (laws : List LawKey) (callees : List CalleeKey) : Scope → List Ty → Type where
+  | done {Δ : Scope} {out : List Ty} (values : Values (Comp laws Δ) out) : Form laws callees Δ out
+  | halt {Δ : Scope} {out : List Ty} (reason : PIR.Stop) : Form laws callees Δ out
   | send {Δ : Scope} {out : List Ty} (ty : Ty) (site : String) (peer : Nat)
-      (value : Term laws Δ ty) (next : Form laws Δ out) : Form laws Δ out
+      (value : Term laws Δ ty) (next : Form laws callees Δ out) : Form laws callees Δ out
   | receive {Δ : Scope} {out : List Ty} (ty : Ty) (site : String) (peer : Nat)
-      (next : Form laws (.value ty :: Δ) out) : Form laws Δ out
+      (next : Form laws callees (.value ty :: Δ) out) : Form laws callees Δ out
   /-- A service request; the reply has the sort the request declares. -/
   | query {Δ : Scope} {out : List Ty} (site : String) (request : services.Op)
       (args : Terms laws Δ (services.arguments request))
-      (next : Form laws (.value (services.result request) :: Δ) out) : Form laws Δ out
+      (next : Form laws callees (.value (services.result request) :: Δ) out) : Form laws callees Δ out
   /-- The absent and present cases of a component. -/
   | split {Δ : Scope} {out : List Ty} {ty : Ty} (subject : Comp laws Δ ty)
-      (absent : Form laws Δ out) (present : Form laws (.value ty :: Δ) out) : Form laws Δ out
+      (absent : Form laws callees Δ out) (present : Form laws callees (.value ty :: Δ) out) : Form laws callees Δ out
   /-- Continue when the two values are equal; otherwise reject. -/
   | guard {Δ : Scope} {out : List Ty} {ty : Ty} (equality : Equality ty)
-      (left right : Term laws Δ ty) (next : Form laws Δ out) : Form laws Δ out
+      (left right : Term laws Δ ty) (next : Form laws callees Δ out) : Form laws callees Δ out
   /-- A kept helper call on present arguments: its effects and stops, then its
   present results. -/
   | strict {Δ : Scope} {out : List Ty} (helper : Helper) (args : Terms laws Δ helper.inputs)
-      (next : Form laws (.results helper.outputs :: Δ) out) : Form laws Δ out
+      (next : Form laws callees (.results helper.outputs :: Δ) out) : Form laws callees Δ out
   /-- A calculation that can stop, on present arguments: its stop, or its
   present results. -/
   | compute {Δ : Scope} {out : List Ty} (op : Op) (allowed : op.isCalculation = true)
       (args : Terms laws Δ op.arguments)
-      (next : Form laws (.results op.results :: Δ) out) : Form laws Δ out
+      (next : Form laws callees (.results op.results :: Δ) out) : Form laws callees Δ out
   /-- A call of `helper` presented by the law `entry`: its results, if any,
   are the law's terms in `next`, and a stopping law's stop is `next`. -/
   | byLaw {Δ : Scope} {out : List Ty} (entry : Fin laws.length) (helper : Helper)
-      (next : Form laws Δ out) : Form laws Δ out
+      (next : Form laws callees Δ out) : Form laws callees Δ out
   /-- A kept call of a helper at its owner on the arguments' components: it
   stops as incomplete when one is absent, else runs the helper; the returned
   components are bound as a tuple. -/
   | owned {Δ : Scope} {out : List Ty} (owner : Nat) (helper : Helper) (args : Values (Comp laws Δ) helper.inputs)
-      (next : Form laws (.tuple helper.outputs :: Δ) out) : Form laws Δ out
+      (next : Form laws callees (.tuple helper.outputs :: Δ) out) : Form laws callees Δ out
   /-- A repeat of a callback region on a count, a carried state and captures;
   the final state is bound as a tuple. -/
   | «repeat» {Δ : Scope} {out : List Ty} (spec : RepeatSpec) (site : String)
       (callback : Region protocolDialect (.index :: (spec.state ++ spec.captures)) spec.state)
       (count : Comp laws Δ .index) (state : Values (Comp laws Δ) spec.state)
       (captures : Values (Comp laws Δ) spec.captures)
-      (next : Form laws (.tuple spec.state :: Δ) out) : Form laws Δ out
+      (next : Form laws callees (.tuple spec.state :: Δ) out) : Form laws callees Δ out
+  /-- An application of a callee at the child context of `site` and `roles`, on
+  the callee binders' arguments; the callee's returned tuple is bound. The
+  applied signature is recorded so an instance checks it is the callee's. -/
+  | apply {Δ : Scope} {out : List Ty} (callee : Fin callees.length) (signature : ProtocolSignature)
+      (roles : List Nat) (site : String) (args : Values (Argument laws Δ) (calleeAt callees callee).pattern.scope)
+      (next : Form laws callees (.tuple (calleeAt callees callee).signature.outputs :: Δ) out) : Form laws callees Δ out
 
 /-- A named reason for not normalizing a body. -/
 abbrev Refusal := String

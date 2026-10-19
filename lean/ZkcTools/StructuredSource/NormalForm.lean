@@ -77,12 +77,19 @@ def compsJson {Δ : Scope} : {types : List Ty} → Values (Comp laws Δ) types �
   | [], .nil => []
   | _ :: _, .cons head tail => compJson head :: compsJson tail
 
+def argumentsJson {Δ : Scope} : {scope : Scope} → Values (Argument laws Δ) scope → List Json
+  | [], .nil => []
+  | .value _ :: _, .cons term rest => termJson term :: argumentsJson rest
+  | .component _ :: _, .cons comp rest => compJson comp :: argumentsJson rest
+  | .results _ :: _, .cons terms rest => .arr (termsJson terms).toArray :: argumentsJson rest
+  | .tuple _ :: _, .cons comps rest => .arr (compsJson comps).toArray :: argumentsJson rest
+
 def equalityJson {ty : Ty} : Equality ty → Json
   | .field domain => .arr #[.str "field", .str domain]
   | .group domain => .arr #[.str "group", .str domain]
   | .index => .arr #[.str "index"]
 
-def formJson {out : List Ty} : {Δ : Scope} → Form laws Δ out → Json
+def formJson {callees : List CalleeKey} {out : List Ty} : {Δ : Scope} → Form laws callees Δ out → Json
   | _, .done values => .arr #[.str "done", .arr (compsJson values).toArray]
   | _, .halt reason => .arr #[.str "halt", stopJson reason]
   | _, .send ty site peer value next =>
@@ -103,6 +110,9 @@ def formJson {out : List Ty} : {Δ : Scope} → Form laws Δ out → Json
   | _, .repeat _ site _ count state captures next =>
     .arr #[.str "repeat", .str site, compJson count, .arr (compsJson state).toArray,
       .arr (compsJson captures).toArray, formJson next]
+  | _, .apply callee _ roles site args next =>
+    .arr #[.str "apply", nat callee.val, .arr (roles.map nat).toArray, .str site,
+      .arr (argumentsJson args).toArray, formJson next]
 
 /-! Requests. -/
 
@@ -129,6 +139,12 @@ def decodePin : Json → Except String (Option Nat)
   | .null => .ok none
   | json => return some (← Format.decimal (← Format.string json))
 
+/-- A law pin: `null` (free), an input position, or `["literal", value]`. -/
+def decodeLawPin : Json → Except String LawPin
+  | .null => .ok .free
+  | .arr #[.str "literal", value] => return .literal (← Format.decimal (← Format.string value))
+  | json => return .input (← Format.decimal (← Format.string json))
+
 /-- One result of a returning law: `["result"]`, `["argument", position]` or `["literal", value]`. -/
 def decodeLawOutput : Json → Except String LawOutput
   | .arr #[.str "result"] => .ok .result
@@ -150,7 +166,7 @@ def decodeLaw (definitions : List CheckedDefinition) (json : Json) : Except Stri
       pure (LawShape.passes (← (← Format.array positions).mapM fun position => do
         Format.decimal (← Format.string position)))
     | _ => throw "normal-form-law-shape"
-  let pins ← (← Format.array pins).mapM decodePin
+  let pins ← (← Format.array pins).mapM decodeLawPin
   return ⟨definition.helper, shape, pins⟩
 
 /-- A protocol body, or the callback of one of its repeats. -/
@@ -168,21 +184,36 @@ def findRepeat (site : String) : {Γ out : List Ty} → Region protocolDialect �
       | _, _ => none
     inner.orElse fun _ => findRepeat site next
 
-/-- Whether every law use presents a call of the law's own helper. -/
-def callsMatch {laws : List LawKey} {Δ : Scope} {out : List Ty} (form : Form laws Δ out) : Bool :=
-  form.lawCalls.all fun call => decide (laws[call.1].helper = call.2)
+/-- Whether every law use presents a call of the law's own helper, and every
+application is of its callee's signature. -/
+def callsMatch {laws : List LawKey} {callees : List CalleeKey} {Δ : Scope} {out : List Ty}
+    (form : Form laws callees Δ out) : Bool :=
+  form.lawCalls.all (fun call => decide (laws[call.1].helper = call.2)) &&
+    form.calleeCalls.all fun call => decide ((calleeAt callees call.1).signature = call.2)
 
-/-- The request `[protocol, repeat, role, roster, pattern, laws, strict, kept]`:
+/-- `[protocol, role, pattern, pins]`: a callee by its retained name, the callee
+role this participant plays, its input pattern and its pins. -/
+def decodeCallee (program : Program) (json : Json) : Except String CalleeKey := do
+  let [name, role, pattern, pins] ← Format.array json | throw "normal-form-callee"
+  let name ← Format.string name
+  let some definition := program.payload.protocols.find? (·.name == name) | throw "normal-form-callee"
+  let role ← Format.decimal (← Format.string role)
+  let pattern ← decodePattern definition.signature.inputs (← Format.array pattern)
+  let pins ← (← Format.array pins).mapM decodePin
+  return ⟨definition.signature, role, pattern, pins⟩
+
+/-- The request `[protocol, repeat, role, roster, pattern, laws, strict, kept, callees]`:
 a protocol name, the site of the repeat whose callback is normalized (or
 `null`), the role and roster size, one input pattern entry per input of the
 body, the signature's laws, whether owned calls without a law are kept as
-strict invocations, and the helpers whose owned calls are kept on components.
+strict invocations, the helpers whose owned calls are kept on components, and
+the callees whose forms present applications.
 Laws are chosen by signature first; if that presents a call by another
 helper's law or is refused, the run is repeated choosing by name too, and the
 reply says when that was needed (`names`), for the printed signature to ask
 for it. -/
 def run (program : Program) (request : Json) : Except String Json := do
-  let [protocolName, repeatSite, role, roster, pattern, laws, strict, kept] ← Format.array request
+  let [protocolName, repeatSite, role, roster, pattern, laws, strict, kept, callees] ← Format.array request
     | throw "normal-form-request"
   let protocolName ← Format.string protocolName
   let some definition := program.payload.protocols.find? (·.name == protocolName)
@@ -202,8 +233,9 @@ def run (program : Program) (request : Json) : Except String Json := do
     pure definition.helper
   let ⟨inputs, _, region⟩ := body
   let pattern ← decodePattern inputs (← Format.array pattern)
-  let byName := normalize ⟨laws, strict, true, kept⟩ region role roster pattern
-  let (names, form) ← match normalize ⟨laws, strict, false, kept⟩ region role roster pattern with
+  let callees ← (← Format.array callees).mapM (decodeCallee program)
+  let byName := normalize ⟨laws, strict, true, kept, callees⟩ region role roster pattern
+  let (names, form) ← match normalize ⟨laws, strict, false, kept, callees⟩ region role roster pattern with
     | .ok bySignature => if callsMatch bySignature then pure (false, bySignature) else pure (true, ← byName)
     | .error refusal => match byName with
       | .ok form => pure (true, form)

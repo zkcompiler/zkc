@@ -16,7 +16,7 @@ def verifierPattern : InputPattern ChaumPedersenViews.program.payload.entry.inpu
   .cons .present (.cons .present (.cons .present (.cons .present (.cons .absent (.cons .absent (.cons .present .nil))))))
 
 /-- The verifier's form with the challenge sent to the response's site. -/
-noncomputable def misdirected : Form [] verifierPattern.scope
+noncomputable def misdirected : Form [] [] verifierPattern.scope
     ChaumPedersenViews.program.payload.entry.outputs :=
   .receive (.group "bls12-381.g1") "label_66697273745f636f6d6d69746d656e74_0" 0 <|
   .receive (.group "bls12-381.g1") "label_7365636f6e645f636f6d6d69746d656e74_0" 0 <|
@@ -44,9 +44,9 @@ example : normalize {} SumcheckVerifierBodies.roundBody 0 2 SumcheckRoundNormalF
     .error "no-law" := by kernel_rfl
 
 /-- A law pinned to an input the call does not read is refused. -/
-example : normalize ⟨[⟨SumcheckHelperBodies.sumsHelper, .returns [], [some 2, some 2, some 3]⟩,
+example : normalize ⟨[⟨SumcheckHelperBodies.sumsHelper, .returns [], [.input 2, .input 2, .input 3]⟩,
       ⟨MapFirstBodies.firstHelper, .returns [], []⟩, ⟨SumcheckHelperBodies.appendHelper, .returns [], []⟩], false,
-      false, []⟩
+      false, [], []⟩
     SumcheckVerifierBodies.roundBody 0 2 SumcheckRoundNormalForms.proverPattern = .error "law-pins" := by
   kernel_rfl
 
@@ -54,11 +54,11 @@ example : normalize ⟨[⟨SumcheckHelperBodies.sumsHelper, .returns [], [some 2
 def renamedSums : Helper := { SumcheckHelperBodies.sumsHelper with name := "renamed" }
 
 /-- A signature whose only law is about the renamed helper. -/
-def renamedSignature (names : Bool) : Signature := ⟨[⟨renamedSums, .stops .reject, []⟩], false, names, []⟩
+def renamedSignature (names : Bool) : Signature := ⟨[⟨renamedSums, .stops .reject, []⟩], false, names, [], []⟩
 
 /-- Choosing laws by signature presents the sums call by the renamed helper's law;
 the form records the helper actually called. -/
-noncomputable def renamedForm : Form (renamedSignature false).laws
+noncomputable def renamedForm : Form (renamedSignature false).laws (renamedSignature false).callees
     SumcheckRoundNormalForms.proverEmptyPattern.scope SumcheckVerifierBodies.repeatState :=
   .byLaw ⟨0, by decide⟩ SumcheckHelperBodies.sumsHelper (.halt .reject)
 

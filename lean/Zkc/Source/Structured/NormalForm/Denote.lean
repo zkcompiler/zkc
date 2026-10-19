@@ -77,7 +77,7 @@ structure LawResults (model : DomainModel) (laws : List LawKey) where
   result : (entry : Fin laws.length) → Values model.Value laws[entry].helper.inputs →
     Values model.Value laws[entry].helper.outputs
 
-variable {model : DomainModel} {laws : List LawKey}
+variable {model : DomainModel} {laws : List LawKey} {callees : List CalleeKey}
 
 mutual
   def Term.eval (results : LawResults model laws) {Δ : Scope} {ty : Ty} :
@@ -112,6 +112,21 @@ def Comps.eval (results : LawResults model laws) {Δ : Scope} :
   | _, .nil, _ => .nil
   | _, .cons head tail, binders => .cons (head.eval results binders) (Comps.eval results tail binders)
 
+/-- A callee argument's value: a binder value of the callee's scope. -/
+def Argument.eval (results : LawResults model laws) {Δ : Scope} :
+    {slot : Slot} → Argument laws Δ slot → Binders model Δ → Slot.Value model slot
+  | .value _, term, binders => Term.eval results (term : Term laws Δ _) binders
+  | .component _, comp, binders => Comp.eval results (comp : Comp laws Δ _) binders
+  | .results _, terms, binders => Terms.eval results terms binders
+  | .tuple _, comps, binders => Comps.eval results comps binders
+
+/-- A callee's binders from its arguments. -/
+def Arguments.eval (results : LawResults model laws) {Δ : Scope} :
+    {scope : Scope} → Values (Argument laws Δ) scope → Binders model Δ → Binders model scope
+  | _, .nil, _ => .nil
+  | _, .cons head tail, binders =>
+    .cons (Argument.eval results head binders) (Arguments.eval results tail binders)
+
 /-- The decision procedure of a compared sort. -/
 def Equality.decide (model : DomainModel) : {ty : Ty} → Equality ty → DecidableEq (model.Value ty)
   | _, .field domain => model.fieldDecEq domain
@@ -137,14 +152,20 @@ structure Runs (model : DomainModel) where
     RegionFunction (Component model.Value) (Interface model) (.index :: (spec.state ++ spec.captures), spec.state) →
     PIR.Proc (Interface model) (Values (Component model.Value) spec.state)
 
+/-- The callees' presented processes, one per callee of the signature, at a child
+context and on the callee's binders. -/
+abbrev CalleeProcesses (model : DomainModel) (callees : List CalleeKey) :=
+  (callee : Fin callees.length) → ProtocolContext → Binders model (calleeAt callees callee).pattern.scope →
+    PIR.Proc (Interface model) (Values (Component model.Value) (calleeAt callees callee).signature.outputs)
+
 section Denote
 variable (model) (tables : Tables model) (results : LawResults model laws)
-  (context : ProtocolContext) (runs : Runs model) {out : List Ty}
+  (context : ProtocolContext) (runs : Runs model) (processes : CalleeProcesses model callees) {out : List Ty}
 
 /-- A form's process, with the given meaning of its returned tuples. -/
 def Form.denoteWith {A : Type}
     (leaf : {Δ : Scope} → Values (Comp laws Δ) out → Binders model Δ → PIR.Proc (Interface model) A) :
-    {Δ : Scope} → Form laws Δ out → Binders model Δ → PIR.Proc (Interface model) A
+    {Δ : Scope} → Form laws callees Δ out → Binders model Δ → PIR.Proc (Interface model) A
   | _, .done values, binders => leaf values binders
   | _, .halt reason, _ => .halt reason
   | _, .send ty site peer value next, binders =>
@@ -178,30 +199,78 @@ def Form.denoteWith {A : Type}
       (runs.run spec (count.eval results binders) (Comps.eval results state binders)
         (Comps.eval results captures binders) (runs.callback spec callback)).bind fun values =>
           next.denoteWith leaf (.cons values binders)
+  | _, .apply callee _ roles site args next, binders =>
+      (processes callee (context.enter site roles) (Arguments.eval results args binders)).bind fun values =>
+        next.denoteWith leaf (.cons values binders)
 
 /-- A form's process, returning its tuple of components. -/
-def Form.denote {Δ : Scope} (form : Form laws Δ out) (binders : Binders model Δ) :
+def Form.denote {Δ : Scope} (form : Form laws callees Δ out) (binders : Binders model Δ) :
     PIR.Proc (Interface model) (Values (Component model.Value) out) :=
-  form.denoteWith model tables results context runs
+  form.denoteWith model tables results context runs processes
     (fun values binders => .done (Comps.eval results values binders)) binders
 
 end Denote
 
-/-! Hypotheses of the soundness theorem. -/
+/-- The inputs the pattern's binders give. -/
+def InputPattern.environment (model : DomainModel) : {Γ : List Ty} → (pattern : InputPattern Γ) →
+    Binders model pattern.scope → Values (Component model.Value) Γ
+  | [], .nil, _ => .nil
+  | ty :: _, .cons .present rest, binders =>
+    let binders : Values (Slot.Value model) (.value ty :: InputPattern.scope rest) := binders
+    match binders with
+    | .cons value binders => .cons (some value) (environment model rest binders)
+  | ty :: _, .cons .optional rest, binders =>
+    let binders : Values (Slot.Value model) (.component ty :: InputPattern.scope rest) := binders
+    match binders with
+    | .cons value binders => .cons value (environment model rest binders)
+  | _ :: _, .cons .absent rest, binders => .cons none (environment model rest binders)
+  | _ :: _, .cons (.index value) rest, binders => .cons (some value) (environment model rest binders)
+  | _ :: _, .cons (.field domain value) rest, binders =>
+    .cons (some (fieldLiteral model.toFieldModel domain value)) (environment model rest binders)
+  | _ :: _, .cons (.bool value) rest, binders => .cons (some value) (environment model rest binders)
 
-/-- The arguments a law covers: each pinned argument is the present value of
-its input. A pin that names no input of the argument's sort covers nothing. -/
-def Pinned {Γ₀ : List Ty} (inputs : Values (Component model.Value) Γ₀) :
-    {types : List Ty} → List (Option Nat) → Values model.Value types → Prop
-  | [], _, .nil => True
-  | _ :: _, [], .cons _ _ => True
-  | ty :: _, pin :: pins, .cons value values =>
-      (match pin with
-        | none => True
-        | some index =>
-          match Var.decode Γ₀ ty index with
-          | some binder => inputs.get binder = some value
-          | none => False) ∧ Pinned inputs pins values
+/-- The sorts of the inputs a pattern leaves absent. -/
+def InputPattern.absentTypes : {Γ : List Ty} → InputPattern Γ → List Ty
+  | [], .nil => []
+  | ty :: _, .cons .absent rest => ty :: absentTypes rest
+  | _ :: _, .cons .present rest => absentTypes rest
+  | _ :: _, .cons .optional rest => absentTypes rest
+  | _ :: _, .cons (.index _) rest => absentTypes rest
+  | _ :: _, .cons (.field ..) rest => absentTypes rest
+  | _ :: _, .cons (.bool _) rest => absentTypes rest
+
+/-- The inputs a pattern's binders give, with `others` at the absent positions. -/
+def InputPattern.fill (model : DomainModel) : {Γ : List Ty} → (pattern : InputPattern Γ) →
+    Binders model pattern.scope → Values (Component model.Value) pattern.absentTypes →
+      Values (Component model.Value) Γ
+  | [], .nil, _, _ => .nil
+  | ty :: _, .cons .present rest, binders, others =>
+    let binders : Values (Slot.Value model) (.value ty :: InputPattern.scope rest) := binders
+    match binders with
+    | .cons value binders => .cons (some value) (fill model rest binders others)
+  | ty :: _, .cons .optional rest, binders, others =>
+    let binders : Values (Slot.Value model) (.component ty :: InputPattern.scope rest) := binders
+    match binders with
+    | .cons value binders => .cons value (fill model rest binders others)
+  | ty :: _, .cons .absent rest, binders, others =>
+    let others : Values (Component model.Value) (ty :: InputPattern.absentTypes rest) := others
+    match others with
+    | .cons other others => .cons other (fill model rest binders others)
+  | _ :: _, .cons (.index value) rest, binders, others => .cons (some value) (fill model rest binders others)
+  | _ :: _, .cons (.field domain value) rest, binders, others =>
+    .cons (some (fieldLiteral model.toFieldModel domain value)) (fill model rest binders others)
+  | _ :: _, .cons (.bool value) rest, binders, others => .cons (some value) (fill model rest binders others)
+
+/-- A participant's view of a returned tuple at the given positions: the
+positions whose scope contains its role; the others are absent. -/
+def staticMask {V : Ty → Type} (role : Nat) {types : List Ty} (values : Values (Component V) types) :
+    List (List Nat) → {kept : List Ty} → Values (Var types) kept → Values (Component V) kept
+  | _, _, .nil => .nil
+  | scopes, _, .cons position rest =>
+    .cons (if (scopes.headD []).contains role then values.get position else none)
+      (staticMask role values scopes.tail rest)
+
+/-! Hypotheses of the soundness theorem. -/
 
 /-- A literal's value: an index, a Boolean (`1` is true) or a field element. -/
 def literalValue (model : DomainModel) : (ty : Ty) → Nat → Option (model.Value ty)
@@ -211,6 +280,22 @@ def literalValue (model : DomainModel) : (ty : Ty) → Nat → Option (model.Val
   | .vector _, _ => none
   | .group _, _ => none
   | .service _, _ => none
+
+/-- The arguments a law covers: each argument pinned to an input is that
+input's present value, and each argument pinned to a literal is that literal. A
+pin that names no input of the argument's sort covers nothing. -/
+def Pinned {Γ₀ : List Ty} (inputs : Values (Component model.Value) Γ₀) :
+    {types : List Ty} → List LawPin → Values model.Value types → Prop
+  | [], _, .nil => True
+  | _ :: _, [], .cons _ _ => True
+  | ty :: _, pin :: pins, .cons value values =>
+      (match pin with
+        | .free => True
+        | .input index =>
+          match Var.decode Γ₀ ty index with
+          | some binder => inputs.get binder = some value
+          | none => False
+        | .literal literal => literalValue model ty literal = some value) ∧ Pinned inputs pins values
 
 /-- A returning law's results, mirroring `lawComps`: from the result function,
 from the arguments, or literals. -/
@@ -250,7 +335,7 @@ def LawsHold {Γ₀ : List Ty} {I : PIR.Signature} (tables : Evaluation.Componen
   ∀ entry : Fin laws.length, LawHolds tables inputs laws[entry] (results.result entry)
 
 /-- Every law use of a form presents a call of the law's own helper. -/
-def Form.LawsMatch {out : List Ty} : {Δ : Scope} → Form laws Δ out → Prop
+def Form.LawsMatch {out : List Ty} : {Δ : Scope} → Form laws callees Δ out → Prop
   | _, .done _ => True
   | _, .halt _ => True
   | _, .send _ _ _ _ next => next.LawsMatch
@@ -263,9 +348,10 @@ def Form.LawsMatch {out : List Ty} : {Δ : Scope} → Form laws Δ out → Prop
   | _, .byLaw entry helper next => laws[entry].helper = helper ∧ next.LawsMatch
   | _, .owned _ _ _ next => next.LawsMatch
   | _, .repeat _ _ _ _ _ _ next => next.LawsMatch
+  | _, .apply callee signature _ _ _ next => (calleeAt callees callee).signature = signature ∧ next.LawsMatch
 
 /-- The law uses of a form with their called helpers, in order. -/
-def Form.lawCalls {out : List Ty} : {Δ : Scope} → Form laws Δ out → List (Fin laws.length × Helper)
+def Form.lawCalls {out : List Ty} : {Δ : Scope} → Form laws callees Δ out → List (Fin laws.length × Helper)
   | _, .done _ => []
   | _, .halt _ => []
   | _, .send _ _ _ _ next => next.lawCalls
@@ -278,32 +364,66 @@ def Form.lawCalls {out : List Ty} : {Δ : Scope} → Form laws Δ out → List (
   | _, .byLaw entry helper next => (entry, helper) :: next.lawCalls
   | _, .owned _ _ _ next => next.lawCalls
   | _, .repeat _ _ _ _ _ _ next => next.lawCalls
+  | _, .apply _ _ _ _ _ next => next.lawCalls
+
+/-- The applications of a form with their applied signatures, in order. -/
+def Form.calleeCalls {out : List Ty} : {Δ : Scope} → Form laws callees Δ out →
+    List (Fin callees.length × ProtocolSignature)
+  | _, .done _ => []
+  | _, .halt _ => []
+  | _, .send _ _ _ _ next => next.calleeCalls
+  | _, .receive _ _ _ next => next.calleeCalls
+  | _, .query _ _ _ next => next.calleeCalls
+  | _, .split _ absent present => absent.calleeCalls ++ present.calleeCalls
+  | _, .guard _ _ _ next => next.calleeCalls
+  | _, .strict _ _ next => next.calleeCalls
+  | _, .compute _ _ _ next => next.calleeCalls
+  | _, .byLaw _ _ next => next.calleeCalls
+  | _, .owned _ _ _ next => next.calleeCalls
+  | _, .repeat _ _ _ _ _ _ next => next.calleeCalls
+  | _, .apply callee signature _ _ _ next => (callee, signature) :: next.calleeCalls
 
 /-- The law uses' helpers, as an equation of two lists: an instance checks it
 by definitional equality of helper terms, so equal helpers are recognized at
 once and the kernel never evaluates a comparison of their names. -/
-abbrev Form.CallsMatch {out : List Ty} {Δ : Scope} (form : Form laws Δ out) : Prop :=
-  form.lawCalls.map (fun call => laws[call.1].helper) = form.lawCalls.map Prod.snd
+abbrev Form.CallsMatch {out : List Ty} {Δ : Scope} (form : Form laws callees Δ out) : Prop :=
+  (form.lawCalls.map (fun call => laws[call.1].helper), form.calleeCalls.map fun call => (calleeAt callees call.1).signature) =
+    (form.lawCalls.map Prod.snd, form.calleeCalls.map Prod.snd)
 
-theorem Form.lawsMatch_of_callsMatch {out : List Ty} :
-    {Δ : Scope} → (form : Form laws Δ out) → form.CallsMatch → form.LawsMatch
-  | _, .done _, _ => trivial
-  | _, .halt _, _ => trivial
-  | _, .send _ _ _ _ next, same => next.lawsMatch_of_callsMatch same
-  | _, .receive _ _ _ next, same => next.lawsMatch_of_callsMatch same
-  | _, .query _ _ _ next, same => next.lawsMatch_of_callsMatch same
-  | _, .split _ absent present, same => by
-    simp only [Form.CallsMatch, Form.lawCalls, List.map_append] at same
-    have parts := List.append_inj same (by simp)
-    exact ⟨absent.lawsMatch_of_callsMatch parts.1, present.lawsMatch_of_callsMatch parts.2⟩
-  | _, .guard _ _ _ next, same => next.lawsMatch_of_callsMatch same
-  | _, .strict _ _ next, same => next.lawsMatch_of_callsMatch same
-  | _, .compute _ _ _ next, same => next.lawsMatch_of_callsMatch same
-  | _, .byLaw _ _ next, same => by
-    simp only [Form.CallsMatch, Form.lawCalls, List.map_cons, List.cons.injEq] at same
-    exact ⟨same.1, next.lawsMatch_of_callsMatch same.2⟩
-  | _, .owned _ _ _ next, same => next.lawsMatch_of_callsMatch same
-  | _, .repeat _ _ _ _ _ _ next, same => next.lawsMatch_of_callsMatch same
+theorem Form.lawsMatch_of_lists {out : List Ty} :
+    {Δ : Scope} → (form : Form laws callees Δ out) →
+      form.lawCalls.map (fun call => laws[call.1].helper) = form.lawCalls.map Prod.snd →
+      form.calleeCalls.map (fun call => (calleeAt callees call.1).signature) = form.calleeCalls.map Prod.snd →
+        form.LawsMatch
+  | _, .done _, _, _ => trivial
+  | _, .halt _, _, _ => trivial
+  | _, .send _ _ _ _ next, laws, applied => next.lawsMatch_of_lists laws applied
+  | _, .receive _ _ _ next, laws, applied => next.lawsMatch_of_lists laws applied
+  | _, .query _ _ _ next, laws, applied => next.lawsMatch_of_lists laws applied
+  | _, .split _ absent present, laws, applied => by
+    simp only [Form.lawCalls, Form.calleeCalls, List.map_append] at laws applied
+    have lawParts := List.append_inj laws (by simp)
+    have appliedParts := List.append_inj applied (by simp)
+    exact ⟨absent.lawsMatch_of_lists lawParts.1 appliedParts.1,
+      present.lawsMatch_of_lists lawParts.2 appliedParts.2⟩
+  | _, .guard _ _ _ next, laws, applied => next.lawsMatch_of_lists laws applied
+  | _, .strict _ _ next, laws, applied => next.lawsMatch_of_lists laws applied
+  | _, .compute _ _ _ next, laws, applied => next.lawsMatch_of_lists laws applied
+  | _, .byLaw _ _ next, laws, applied => by
+    simp only [Form.lawCalls, List.map_cons, List.cons.injEq] at laws
+    exact ⟨laws.1, next.lawsMatch_of_lists laws.2 applied⟩
+  | _, .owned _ _ _ next, laws, applied => next.lawsMatch_of_lists laws applied
+  | _, .repeat _ _ _ _ _ _ next, laws, applied => next.lawsMatch_of_lists laws applied
+  | _, .apply _ _ _ _ _ next, laws, applied => by
+    simp only [Form.calleeCalls, List.map_cons, List.cons.injEq] at applied
+    exact ⟨applied.1, next.lawsMatch_of_lists laws applied.2⟩
+
+theorem Form.lawsMatch_of_callsMatch {out : List Ty} {Δ : Scope} (form : Form laws callees Δ out)
+    (same : form.CallsMatch) : form.LawsMatch :=
+  form.lawsMatch_of_lists (congrArg Prod.fst same) (congrArg Prod.snd same)
+
+/-- No callees: a body without applications. -/
+def noCallees (model : DomainModel) : CalleeProcesses model [] := fun callee => callee.elim0
 
 /-- Every other role of the roster is played by a different participant. -/
 def RosterDistinct (context : ProtocolContext) (role roster : Nat) : Prop :=
@@ -324,6 +444,45 @@ theorem RosterDistinct.ofValid {rootRoles localRoles : List String} {context : P
     (valid : ProtocolContext.Valid rootRoles localRoles context) (role : Nat)
     (bound : role < localRoles.length) : RosterDistinct context role localRoles.length :=
   fun other otherBound different same => different (valid.2 other otherBound role bound same)
+
+/-- A callee binder pinned to a caller input is that input's present value. -/
+def pinnedSlot {Γ₀ : List Ty} (inputs : Values (Component model.Value) Γ₀) :
+    (slot : Slot) → Option Nat → Slot.Value model slot → Prop
+  | _, none, _ => True
+  | .value ty, some input, value =>
+    match Var.decode Γ₀ ty input with
+    | some binder => inputs.get binder = some value
+    | none => False
+  | .component _, some _, _ => False
+  | .results _, some _, _ => False
+  | .tuple _, some _, _ => False
+
+/-- The callee binders the pins name are the caller inputs' values. -/
+def CalleePinned {Γ₀ : List Ty} (inputs : Values (Component model.Value) Γ₀) :
+    {scope : Scope} → List (Option Nat) → Binders model scope → Prop
+  | [], _, _ => True
+  | _ :: _, [], _ => True
+  | slot :: _, pin :: pins, .cons value rest => pinnedSlot inputs slot pin value ∧ CalleePinned inputs pins rest
+
+/-- Each callee's invocation at a participant of its roster is its presented
+process followed by the participant's view of the returned tuple, on every
+input its pattern describes; a pinned callee only at the caller's inputs. -/
+def CalleesHold {Γ₀ : List Ty} (protocols : ProtocolTable model.Value (Interface model))
+    (processes : CalleeProcesses model callees) (inputs : Values (Component model.Value) Γ₀) : Prop :=
+  ∀ (callee : Fin callees.length) (context : ProtocolContext)
+    (binders : Binders model (calleeAt callees callee).pattern.scope)
+    (others : Values (Component model.Value) (calleeAt callees callee).pattern.absentTypes),
+    CalleePinned inputs (calleeAt callees callee).pins binders →
+    RosterDistinct context (calleeAt callees callee).role (calleeAt callees callee).signature.roles.length →
+    invokeProtocol protocols (calleeAt callees callee).signature context (context.roles (calleeAt callees callee).role)
+        ((calleeAt callees callee).pattern.fill model binders others) =
+      (processes callee context binders).bind fun out =>
+        .done (staticMask (calleeAt callees callee).role out (calleeAt callees callee).signature.outputScopes
+          (Operands.identity (calleeAt callees callee).signature.outputs))
+
+theorem noCallees_hold {Γ₀ : List Ty} (protocols : ProtocolTable model.Value (Interface model))
+    (inputs : Values (Component model.Value) Γ₀) : CalleesHold protocols (noCallees model) inputs :=
+  fun callee => callee.elim0
 
 end NormalForm
 end Zkc.Source.Structured

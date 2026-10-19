@@ -42,7 +42,7 @@ set_option autoImplicit false
 namespace Zkc.Source.Structured
 namespace NormalForm
 
-variable {laws : List LawKey}
+variable {laws : List LawKey} {callees : List CalleeKey}
 
 /-! Scope operations. -/
 
@@ -352,19 +352,20 @@ def Term.same {Δ : Scope} {ty : Ty} (left right : Term laws Δ ty) : Bool :=
 
 /-- Whether the call's present arguments are the pinned inputs. -/
 def pinsMatch {Δ : Scope} (inputs : Values (Comp laws Δ) Γ₀) :
-    {types : List Ty} → List (Option Nat) → Terms laws Δ types → Bool
+    {types : List Ty} → List LawPin → Terms laws Δ types → Bool
   | _, _, .nil => true
   | _, [], .cons _ _ => true
   | _, pin :: pins, .cons (ty := ty) term terms =>
     (match pin with
-      | none => true
-      | some index =>
+      | .free => true
+      | .input index =>
         match Var.decode Γ₀ ty index with
         | some binder =>
           match entryAt inputs binder with
           | .present pinned => term.same pinned
           | _ => false
-        | none => false) && pinsMatch inputs pins terms
+        | none => false
+      | .literal value => term.literal? == some value) && pinsMatch inputs pins terms
 
 /-- The decision of a guard's present condition. -/
 inductive Decision (laws : List LawKey) (Δ : Scope) where
@@ -388,11 +389,114 @@ def decision {Δ : Scope} : Term laws Δ .boolean → Decision laws Δ
 section Normalize
 variable {out : List Ty}
 
+/-! Applications. -/
+
+/-- A tuple at an equal list of sorts. -/
+def recast {V : Ty → Type} {types types' : List Ty} (same : types = types') (values : Values V types) :
+    Values V types' :=
+  same ▸ values
+
+/-- The first position of a role in a role list. -/
+def rolePosition (role : Nat) : List Nat → Option Nat
+  | [] => none
+  | head :: rest => if head = role then some 0 else (rolePosition role rest).map (· + 1)
+
+/-- The first callee whose signature has the applied one's sorts, role count and
+scopes (and name, when names are compared), and whose role is `role`. The
+equalities returned are those the arguments and results need; that the callee's
+signature is the applied one is checked on the form. -/
+def findCallee (names : Bool) (signature : ProtocolSignature) (role : Nat) :
+    (callees : List CalleeKey) → Option (Σ' callee : Fin callees.length,
+      (calleeAt callees callee).signature.inputs = signature.inputs ∧ (calleeAt callees callee).signature.outputs = signature.outputs)
+  | [] => none
+  | key :: rest =>
+    if key.role = role ∧ key.signature.roles.length = signature.roles.length ∧
+        key.signature.inputScopes = signature.inputScopes ∧ key.signature.outputScopes = signature.outputScopes ∧
+        (names = false ∨ key.signature.name = signature.name) then
+      if same : key.signature.inputs = signature.inputs ∧ key.signature.outputs = signature.outputs then
+        some ⟨⟨0, Nat.zero_lt_succ _⟩, same⟩
+      else (findCallee names signature role rest).map fun found => ⟨found.1.succ, found.2⟩
+    else (findCallee names signature role rest).map fun found => ⟨found.1.succ, found.2⟩
+
+def Term.fieldValue? {Δ : Scope} {ty : Ty} : Term laws Δ ty → Option Nat
+  | .var _ => none
+  | .result .. => none
+  | .index _ => none
+  | .bool _ => none
+  | .field _ value => some value
+  | .groupZero _ => none
+  | .calc .. => none
+  | .law .. => none
+
+/-- A result kept only when the condition holds. -/
+def onlyIf {α : Type} (condition : Bool) (result : Option α) : Option α :=
+  if condition then result else none
+
+theorem onlyIf_eq_some {α : Type} {condition : Bool} {result : Option α} {value : α}
+    (found : onlyIf condition result = some value) : condition = true ∧ result = some value := by
+  unfold onlyIf at found
+  cases condition
+  · cases found
+  · exact ⟨rfl, found⟩
+
+/-- The callee binders' arguments from the operands: a present input needs a
+present operand, an optional one takes the operand's component, a literal must
+be the same literal, and an absent input takes nothing. -/
+def calleeArguments {Δ : Scope} : {Γ : List Ty} → (pattern : InputPattern Γ) → Values (Comp laws Δ) Γ →
+    Option (Values (Argument laws Δ) pattern.scope)
+  | [], .nil, .nil => some .nil
+  | ty :: _, .cons .present rest, .cons comp comps =>
+    match comp.term? with
+    | none => none
+    | some term => (calleeArguments rest comps).map fun args =>
+        (.cons (term : Argument laws Δ (.value ty)) args : Values (Argument laws Δ) (.value ty :: InputPattern.scope rest))
+  | ty :: _, .cons .optional rest, .cons comp comps => (calleeArguments rest comps).map fun args =>
+      (.cons (comp : Argument laws Δ (.component ty)) args : Values (Argument laws Δ) (.component ty :: InputPattern.scope rest))
+  | _ :: _, .cons .absent rest, .cons _ comps => calleeArguments rest comps
+  | _ :: _, .cons (.index value) rest, .cons comp comps =>
+    match comp.term? with
+    | none => none
+    | some term => onlyIf (term.index? == some value) (calleeArguments rest comps)
+  | _ :: _, .cons (.field _ value) rest, .cons comp comps =>
+    match comp.term? with
+    | none => none
+    | some term => onlyIf (term.fieldValue? == some value) (calleeArguments rest comps)
+  | _ :: _, .cons (.bool value) rest, .cons comp comps =>
+    match comp.term? with
+    | none => none
+    | some term => onlyIf (term.bool? == some value) (calleeArguments rest comps)
+
+/-- Whether the pinned callee binders' arguments are the pinned inputs. -/
+def calleePinsMatch {Δ : Scope} (inputs : Values (Comp laws Δ) Γ₀) :
+    {scope : Scope} → List (Option Nat) → Values (Argument laws Δ) scope → Bool
+  | _, [], _ => true
+  | _, _ :: _, .nil => true
+  | _, none :: pins, .cons _ args => calleePinsMatch inputs pins args
+  | _, some input :: pins, .cons (ty := .value ty) term args =>
+    (match Var.decode Γ₀ ty input with
+      | some binder =>
+        match entryAt inputs binder with
+        | .present pinned => Term.same (term : Term laws Δ ty) pinned
+        | _ => false
+      | none => false) && calleePinsMatch inputs pins args
+  | _, some _ :: _, .cons (ty := .component _) _ _ => false
+  | _, some _ :: _, .cons (ty := .results _) _ _ => false
+  | _, some _ :: _, .cons (ty := .tuple _) _ _ => false
+
+/-- The caller's components of a callee's returned tuple bound at the newest
+binder: those whose scope contains the callee role; the others are absent. -/
+def calleeOutputs {Δ : Scope} (role : Nat) {types : List Ty} :
+    List (List Nat) → {kept : List Ty} → Values (Var types) kept → Values (Comp laws (.tuple types :: Δ)) kept
+  | _, _, .nil => .nil
+  | scopes, _, .cons position rest =>
+    .cons (if (scopes.headD []).contains role then .read .here position else .absent)
+      (calleeOutputs role scopes.tail rest)
+
 /-- A calculation that cannot stop, on resolved operands. -/
 def totalCalculation (sig : Signature) {Γ : List Ty} (op : Op) (total : op.total = true)
     (args : Operands Γ op.arguments) {Δ : Scope} (state : State sig.laws Γ₀ Δ Γ)
-    (next : {Δ' : Scope} → State sig.laws Γ₀ Δ' (op.results ++ Γ) → Except Refusal (Form sig.laws Δ' out)) :
-    Except Refusal (Form sig.laws Δ out) :=
+    (next : {Δ' : Scope} → State sig.laws Γ₀ Δ' (op.results ++ Γ) → Except Refusal (Form sig.laws sig.callees Δ' out)) :
+    Except Refusal (Form sig.laws sig.callees Δ out) :=
   let operands := lookup state.env args
   if anyAbsent operands then next (state.push (absentComps op.results))
   else
@@ -403,8 +507,8 @@ def totalCalculation (sig : Signature) {Γ : List Ty} (op : Op) (total : op.tota
 /-- A Math call, presented by a passing law on the operands' components. -/
 def mathCall (sig : Signature) {Γ : List Ty} (helper : Helper) (args : Operands Γ helper.inputs) {Δ : Scope}
     (state : State sig.laws Γ₀ Δ Γ)
-    (next : {Δ' : Scope} → State sig.laws Γ₀ Δ' (helper.outputs ++ Γ) → Except Refusal (Form sig.laws Δ' out)) :
-    Except Refusal (Form sig.laws Δ out) :=
+    (next : {Δ' : Scope} → State sig.laws Γ₀ Δ' (helper.outputs ++ Γ) → Except Refusal (Form sig.laws sig.callees Δ' out)) :
+    Except Refusal (Form sig.laws sig.callees Δ out) :=
   if helper.kind = .math then
     match findLaw sig.names helper sig.laws with
     | some ⟨entry, _, _⟩ =>
@@ -423,8 +527,8 @@ def mathCall (sig : Signature) {Γ : List Ty} (helper : Helper) (args : Operands
 /-- A calculation: total ones as terms, Math calls through a passing law. -/
 def calculateOperation (sig : Signature) {Γ : List Ty} (op : Op) (args : Operands Γ op.arguments) {Δ : Scope}
     (state : State sig.laws Γ₀ Δ Γ)
-    (next : {Δ' : Scope} → State sig.laws Γ₀ Δ' (op.results ++ Γ) → Except Refusal (Form sig.laws Δ' out)) :
-    Except Refusal (Form sig.laws Δ out) :=
+    (next : {Δ' : Scope} → State sig.laws Γ₀ Δ' (op.results ++ Γ) → Except Refusal (Form sig.laws sig.callees Δ' out)) :
+    Except Refusal (Form sig.laws sig.callees Δ out) :=
   if total : op.total = true then totalCalculation sig op total args state next
   else
     match op, args, @next with
@@ -435,8 +539,8 @@ def calculateOperation (sig : Signature) {Γ : List Ty} (op : Op) (args : Operan
 def lawReturn (sig : Signature) {Γ : List Ty} (entry : Fin sig.laws.length) (helper : Helper) {Δ : Scope}
     (state : State sig.laws Γ₀ Δ Γ) (lawArgs : Terms sig.laws Δ sig.laws[entry].helper.inputs)
     (outputsSame : sig.laws[entry].helper.outputs = helper.outputs) (outputs : List LawOutput)
-    (next : {Δ' : Scope} → State sig.laws Γ₀ Δ' (helper.outputs ++ Γ) → Except Refusal (Form sig.laws Δ' out)) :
-    Except Refusal (Form sig.laws Δ out) :=
+    (next : {Δ' : Scope} → State sig.laws Γ₀ Δ' (helper.outputs ++ Γ) → Except Refusal (Form sig.laws sig.callees Δ' out)) :
+    Except Refusal (Form sig.laws sig.callees Δ out) :=
   match lawComps entry lawArgs _ (fun position => position) outputs with
   | some lawResults => do
     let rest ← next (state.push (outputsSame ▸ lawResults : Values (Comp sig.laws Δ) helper.outputs))
@@ -447,8 +551,8 @@ def lawReturn (sig : Signature) {Γ : List Ty} (entry : Fin sig.laws.length) (he
 or the helper's strict invocation. -/
 def ownedCall (sig : Signature) {Γ : List Ty} (helper : Helper) {Δ : Scope} (state : State sig.laws Γ₀ Δ Γ)
     (terms : Terms sig.laws Δ helper.inputs)
-    (next : {Δ' : Scope} → State sig.laws Γ₀ Δ' (helper.outputs ++ Γ) → Except Refusal (Form sig.laws Δ' out)) :
-    Except Refusal (Form sig.laws Δ out) :=
+    (next : {Δ' : Scope} → State sig.laws Γ₀ Δ' (helper.outputs ++ Γ) → Except Refusal (Form sig.laws sig.callees Δ' out)) :
+    Except Refusal (Form sig.laws sig.callees Δ out) :=
   match findLaw sig.names helper sig.laws with
   | some ⟨entry, inputsSame, outputsSame⟩ =>
     let lawArgs : Terms sig.laws Δ sig.laws[entry].helper.inputs := inputsSame ▸ terms
@@ -465,11 +569,35 @@ def ownedCall (sig : Signature) {Γ : List Ty} (helper : Helper) {Δ : Scope} (s
       pure (.strict helper terms rest)
     else .error "no-law"
 
+/-- An application at a participant of the callee's roster, presented by the
+callee form keyed by the applied signature. -/
+def applyCallee (sig : Signature) {Γ : List Ty} (signature : ProtocolSignature) (roles : List Nat) (site : String)
+    (calleeRole : Nat) (args : Operands Γ signature.inputs) {Δ : Scope} (state : State sig.laws Γ₀ Δ Γ)
+    (next : {Δ' : Scope} → State sig.laws Γ₀ Δ' (signature.outputs ++ Γ) →
+      Except Refusal (Form sig.laws sig.callees Δ' out)) :
+    Except Refusal (Form sig.laws sig.callees Δ out) :=
+  match findCallee sig.names signature calleeRole sig.callees with
+  | none => .error "no-callee"
+  | some ⟨callee, inputsSame, outputsSame⟩ =>
+    let operands : Values (Comp sig.laws Δ) (calleeAt sig.callees callee).signature.inputs :=
+      recast inputsSame.symm (lookup state.env args)
+    match calleeArguments (calleeAt sig.callees callee).pattern operands with
+    | none => .error "callee-arguments"
+    | some arguments =>
+      if calleePinsMatch state.inputs (calleeAt sig.callees callee).pins arguments then do
+        let kept : Values (Comp sig.laws (.tuple (calleeAt sig.callees callee).signature.outputs :: Δ))
+            (calleeAt sig.callees callee).signature.outputs :=
+          calleeOutputs calleeRole (calleeAt sig.callees callee).signature.outputScopes
+            (Operands.identity (calleeAt sig.callees callee).signature.outputs)
+        let rest ← next ((state.weaken (.tuple (calleeAt sig.callees callee).signature.outputs)).push (recast outputsSame kept))
+        pure (.apply callee signature roles site arguments rest)
+      else .error "callee-pins"
+
 /-- One operation on resolved operands, then the continuation on its results. -/
 def operation (sig : Signature) (role roster : Nat) {Γ : List Ty} : (op : ProtocolOp) → Operands Γ op.arguments →
     Regions protocolDialect op.regions → {Δ : Scope} → State sig.laws Γ₀ Δ Γ →
-    ({Δ' : Scope} → State sig.laws Γ₀ Δ' (op.results ++ Γ) → Except Refusal (Form sig.laws Δ' out)) →
-    Except Refusal (Form sig.laws Δ out)
+    ({Δ' : Scope} → State sig.laws Γ₀ Δ' (op.results ++ Γ) → Except Refusal (Form sig.laws sig.callees Δ' out)) →
+    Except Refusal (Form sig.laws sig.callees Δ out)
   | .calculate op _, args, _, _, state, next => calculateOperation sig op args state next
   | .localCall helper _ owner _, args, _, _, state, next =>
     if roster ≤ owner then .error "role-outside-roster"
@@ -529,7 +657,13 @@ def operation (sig : Signature) (role roster : Nat) {Γ : List Ty} : (op : Proto
       | _ => .error "undecided-operand"
   | .statement .., _, _, _, state, next => next (state.push .nil)
   | .mark _, _, _, _, state, next => next (state.push .nil)
-  | .protocolApply .., _, _, _, _, _ => .error "protocol-application"
+  | .protocolApply signature roles site, args, _, _, state, next =>
+    if roles.any (roster ≤ ·) || roles.length != signature.roles.length || !decide roles.Nodup then
+      .error "role-outside-roster"
+    else
+      match rolePosition role roles with
+      | none => next (state.push (absentComps signature.outputs))
+      | some calleeRole => applyCallee sig signature roles site calleeRole args state next
   | .repeat spec site, .cons count rest, .cons callback .nil, _, state, next =>
     let parts := Values.split spec.state (lookup state.env rest)
     do
@@ -539,8 +673,8 @@ def operation (sig : Signature) (role roster : Nat) {Γ : List Ty} : (op : Proto
 /-- Split on the undecided inputs the operation needs, in operand order. -/
 def resolve (sig : Signature) (role : Nat) {Γ : List Ty} (op : ProtocolOp) (args : Operands Γ op.arguments) :
     Nat → {Δ : Scope} → State sig.laws Γ₀ Δ Γ →
-    ({Δ' : Scope} → State sig.laws Γ₀ Δ' Γ → Except Refusal (Form sig.laws Δ' out)) →
-    Except Refusal (Form sig.laws Δ out)
+    ({Δ' : Scope} → State sig.laws Γ₀ Δ' Γ → Except Refusal (Form sig.laws sig.callees Δ' out)) →
+    Except Refusal (Form sig.laws sig.callees Δ out)
   | 0, _, state, proceed => proceed state
   | fuel + 1, _, state, proceed =>
     if demanded sig role op (lookup state.env args) then
@@ -553,7 +687,7 @@ def resolve (sig : Signature) (role : Nat) {Γ : List Ty} (op : ProtocolOp) (arg
     else proceed state
 
 def normalizeRegion (sig : Signature) (role roster : Nat) : {Γ : List Ty} → Region protocolDialect Γ out → {Δ : Scope} →
-    State sig.laws Γ₀ Δ Γ → Except Refusal (Form sig.laws Δ out)
+    State sig.laws Γ₀ Δ Γ → Except Refusal (Form sig.laws sig.callees Δ out)
   | _, .ret values, _, state => .ok (.done (lookup state.env values))
   | _, .stop reason, _, _ => .ok (.halt reason)
   | _, .bind .., _, _ => .error "region-bind"
@@ -564,28 +698,6 @@ def normalizeRegion (sig : Signature) (role roster : Nat) : {Γ : List Ty} → R
 end Normalize
 
 /-! Input patterns. -/
-
-/-- How a role holds one input of the body. -/
-inductive Input : Ty → Type where
-  | absent {ty : Ty} : Input ty
-  | present {ty : Ty} : Input ty
-  /-- Present or absent; decided where first needed. -/
-  | optional {ty : Ty} : Input ty
-  | index (value : Nat) : Input .index
-  | field (domain : String) (value : Nat) : Input (.field domain)
-  | bool (value : Bool) : Input .boolean
-
-abbrev InputPattern (Γ : List Ty) := Values Input Γ
-
-/-- One binder per present or optional input, in input order. -/
-def InputPattern.scope : {Γ : List Ty} → InputPattern Γ → Scope
-  | [], .nil => []
-  | ty :: _, .cons .present rest => .value ty :: scope rest
-  | ty :: _, .cons .optional rest => .component ty :: scope rest
-  | _ :: _, .cons .absent rest => scope rest
-  | _ :: _, .cons (.index _) rest => scope rest
-  | _ :: _, .cons (.field ..) rest => scope rest
-  | _ :: _, .cons (.bool _) rest => scope rest
 
 /-- The inputs as components of the pattern's binders, placed in a scope by
 `lift`. Each binder is placed once, so the inputs cost one step each rather
@@ -608,27 +720,9 @@ def InputPattern.initialIn {Δ : Scope} : {Γ : List Ty} → (pattern : InputPat
 def InputPattern.initial {Γ : List Ty} (pattern : InputPattern Γ) : Values (Comp laws pattern.scope) Γ :=
   pattern.initialIn fun binder => binder
 
-/-- The inputs the pattern's binders give. -/
-def InputPattern.environment (model : DomainModel) : {Γ : List Ty} → (pattern : InputPattern Γ) →
-    Binders model pattern.scope → Values (Component model.Value) Γ
-  | [], .nil, _ => .nil
-  | ty :: _, .cons .present rest, binders =>
-    let binders : Values (Slot.Value model) (.value ty :: InputPattern.scope rest) := binders
-    match binders with
-    | .cons value binders => .cons (some value) (environment model rest binders)
-  | ty :: _, .cons .optional rest, binders =>
-    let binders : Values (Slot.Value model) (.component ty :: InputPattern.scope rest) := binders
-    match binders with
-    | .cons value binders => .cons value (environment model rest binders)
-  | _ :: _, .cons .absent rest, binders => .cons none (environment model rest binders)
-  | _ :: _, .cons (.index value) rest, binders => .cons (some value) (environment model rest binders)
-  | _ :: _, .cons (.field domain value) rest, binders =>
-    .cons (some (fieldLiteral model.toFieldModel domain value)) (environment model rest binders)
-  | _ :: _, .cons (.bool value) rest, binders => .cons (some value) (environment model rest binders)
-
 /-- One role's form of a body, for the inputs the pattern describes. -/
 def normalize (sig : Signature) {Γ out : List Ty} (body : Region protocolDialect Γ out)
-    (role roster : Nat) (pattern : InputPattern Γ) : Except Refusal (Form sig.laws pattern.scope out) :=
+    (role roster : Nat) (pattern : InputPattern Γ) : Except Refusal (Form sig.laws sig.callees pattern.scope out) :=
   normalizeRegion sig role roster body ⟨pattern.initial, pattern.initial⟩
 
 end NormalForm
