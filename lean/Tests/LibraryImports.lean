@@ -176,6 +176,11 @@ import Zkc.Source.Structured.MapEvaluation
 import Zkc.Source.Structured.MapLaws
 import Zkc.Source.Structured.Meaning
 import Zkc.Source.Structured.ModelAdmission
+import Zkc.Source.Structured.NormalForm.Denote
+import Zkc.Source.Structured.NormalForm.Normalize
+import Zkc.Source.Structured.NormalForm.Presentation
+import Zkc.Source.Structured.NormalForm.Soundness
+import Zkc.Source.Structured.NormalForm.Syntax
 import Zkc.Source.Structured.OpenAdmission
 import Zkc.Source.Structured.OpenLaws
 import Zkc.Source.Structured.OpenMeaning
@@ -267,6 +272,7 @@ import Tests.StructuredLinking
 import Tests.StructuredMapClients
 import Tests.StructuredMapRestrictions
 import Tests.StructuredMaps
+import Tests.StructuredNormalForms
 import Tests.StructuredOpenAdmission
 import Tests.StructuredOpenEvaluation
 import Tests.StructuredParticipant
@@ -559,5 +565,6 @@ import ZkcTools.JsonSupport
 import ZkcTools.StructuredSource
 import ZkcTools.StructuredSource.Bounds
 import ZkcTools.StructuredSource.Evaluation
+import ZkcTools.StructuredSource.NormalForm
 import ZkcTools.StructuredSource.OpenEvaluation
 import ZkcTools.StructuredSource.OpenValues

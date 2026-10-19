@@ -3,8 +3,9 @@ import ZkcExamples.Structured.ServiceOrderViews
 
 /-! Controls for generated unit views and kernel-only equations. Every
 admitted subject is a positive control of `structured_views`; these cases show
-that `kernel_rfl` refuses false or open equations, that the generator refuses
-a stale body at the phase equation it fails (leaving no partial unit), and
+that `kernel_rfl` refuses false equations, also under binders, that the
+generator refuses a stale body at the phase equation it fails (leaving no
+partial unit), and
 that inconsistent entry lists are refused before any declaration is emitted. -/
 set_option autoImplicit false
 namespace Tests.StructuredUnitViews
@@ -15,11 +16,23 @@ example : (2 : Nat) + 2 ≠ 5 := by
   fail_if_success have : (2 : Nat) + 2 = 5 := by kernel_rfl
   decide
 
-/-- An equation over local variables is refused; the tactic only closes
-closed goals. -/
+/-- An equation over local variables is checked under its binders, for every
+value at once; a false one is refused. -/
 example (value : Nat) : value + 0 = value := by
+  kernel_rfl
+
+example (value : Nat) : value + 1 ≠ value := by
+  fail_if_success have : value + 1 = value := by kernel_rfl
+  omega
+
+/-- Section variables and instances are reverted too: an equation that holds
+only by a ring law, not by reduction, is refused. -/
+example {F : Type} [CommRing F] (x : F) : x + 0 = x := by
   fail_if_success kernel_rfl
-  rfl
+  simp
+
+example : ∀ value : Nat, value + 0 = value := by
+  kernel_rfl
 
 /-- The service-order draw body with the operands of its first addition
 swapped: the same signature, scopes and availability, a different tree. -/

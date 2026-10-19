@@ -1048,7 +1048,10 @@ width.
   loop read as the fold of its callback's generated normal form, the layer
   Sumcheck applications as their generated normal forms, and every helper call
   read with the admitted unit's own helper equations
-  (`ZkcExamples.Structured.GkrSourceLaws`).
+  (`ZkcExamples.Structured.GkrSourceLaws`). Each generated normal form is an
+  instance of the
+  [normalizer's soundness](structured-source.md#participant-normal-forms),
+  checked by kernel evaluation.
 - `soundness_charged`: for a fixed well-formed statement and initial
   transcript, against a prover whose queries charge at most `proverCost` on
   every path, each oracle key charged the error of its challenge site

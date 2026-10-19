@@ -3,9 +3,10 @@ import ZkcTools.DeclarationAudit
 
 /-! Regression check for the maintained proof chain, rather than another
 substitution wrapper: every source verifier equation must actually depend on
-the generic interpreted source-call rule, through the generated root normal
-form and its application step. Inspect stored proof bodies, including private
-helpers; merely importing the rule cannot satisfy this check. -/
+the normalizer's soundness theorem, whose application case is the generic
+call rule, through the generated root normal form. Inspect stored proof
+bodies, including private helpers; merely importing the theorem cannot satisfy
+this check. -/
 namespace Tests.SumcheckSourceComposition
 open Lean Elab Command
 
@@ -30,15 +31,16 @@ private partial def dependencyPath (env : Lean.Environment) (modules : List Name
 into the main tests. Only actual proof-body edges count as dependencies. -/
 def checkDependencies (modules roots : List Name) : CommandElabM Unit := do
   let env ← getEnv
-  let wanted := ``Zkc.Source.Structured.UnitPayload.protocolApply_interpret_substitute
+  let wanted := ``Zkc.Source.Structured.NormalForm.normalize_sound
   for root in roots do
     let some path := dependencyPath env modules wanted [(root, [])]
-      | throwError "source verifier proof does not use generic call substitution: {root}"
+      | throwError "source verifier proof does not use the normalizer's soundness: {root}"
     logInfo m!"SOURCE-COMPOSITION-DEPENDENCY {path}"
 
 run_cmd do
   checkDependencies [`ZkcExamples.Structured.SumcheckSourceVerifier,
-      `ZkcExamples.Structured.SumcheckSourceNormalForms, `ZkcExamples.Structured.NormalFormSteps]
+      `ZkcExamples.Structured.SumcheckSourceNormalForms, `Zkc.Source.Structured.NormalForm.Presentation,
+      `Zkc.Source.Structured.NormalForm.Soundness]
     [``ZkcExamples.Structured.SumcheckSourceVerifier.root_context_expansion,
      ``ZkcExamples.Structured.SumcheckSourceVerifier.verifier_linked,
      ``ZkcExamples.Structured.SumcheckSourceVerifier.verifier_missing,
@@ -53,7 +55,7 @@ run_cmd do
      `Zkc.Source.Structured.ContractComposition]
     "SUMCHECK-SOURCE-COMPOSITION-AUDIT-PASS" true
 
-/-- error: source verifier proof does not use generic call substitution: ZkcExamples.Structured.SumcheckSourceVerifier.reduce_invoke_plain -/
+/-- error: source verifier proof does not use the normalizer's soundness: ZkcExamples.Structured.SumcheckSourceVerifier.reduce_invoke_plain -/
 #guard_msgs in
 run_cmd do
   checkDependencies [`ZkcExamples.Structured.SumcheckSourceVerifier]

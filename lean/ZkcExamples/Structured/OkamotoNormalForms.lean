@@ -50,7 +50,7 @@ def proverProcess (firstBase secondBase : G) (firstScalar secondScalar : F) (non
 theorem prover_process (firstBase secondBase point : G) (firstScalar secondScalar : F) (nonces : Nat) :
     program.participant F G 0 (proverInputs firstBase secondBase point firstScalar secondScalar nonces) =
       proverProcess firstBase secondBase firstScalar secondScalar nonces := by
-  rfl
+  kernel_rfl
 
 /-- The replies of one prover run: received values by type and site, and
 drawn values by site. Other requests are refused. -/
@@ -92,7 +92,7 @@ def verifierProcess (firstBase secondBase point : G) (challenges : Nat) :
 theorem verifier_process (firstBase secondBase point : G) (challenges : Nat) :
     program.participant F G 1 (verifierInputs firstBase secondBase point challenges) =
       verifierProcess firstBase secondBase point challenges := by
-  rfl
+  kernel_rfl
 
 /-- The replies of one verifier run: received values by type and site, and
 drawn values by site. Other requests are refused. -/

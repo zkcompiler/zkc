@@ -35,6 +35,7 @@ roles.proverReduce = { bodies = "bodies", countBound = "Nat.lt_trans shape.2.1 (
 [[shared.roles]]
 role = 1
 name = "verifier"
+proof = "normal-form"
 binders = "(bodies : SumcheckVerifierHelpers.Bodies SumcheckSourceViews.unit.definitions)"
 inputs = [{ name = "raw", mode = "optional" }, { name = "claim", mode = "optional" },
           { name = "count", mode = "optional" }, { name = "service", mode = "optional" }]
@@ -43,6 +44,7 @@ opaque = ["checkHelper"]
 [[shared.roles]]
 role = 0
 name = "prover"
+proof = "normal-form"
 binders = "(bodies : SumcheckUnitContracts.Bodies SumcheckSourceViews.unit.definitions)"
 premises = "(shape : HasShape raw rounds 1) (bound : raw.length < indexLimit)"
 inputs = [{ name = "raw" }, { name = "claim", mode = "absent" }, { name = "rounds" },

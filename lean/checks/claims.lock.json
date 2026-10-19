@@ -85,6 +85,18 @@
       "structural": "3f763a5c1ea6fe64",
       "explicit": "b40241d02562bd02"
     },
+    "Zkc.Source.Structured.NormalForm.callback_sound_uniform": {
+      "package": "main",
+      "module": "Zkc.Source.Structured.NormalForm.Presentation",
+      "structural": "529f33256f8066c2",
+      "explicit": "4b7842612aab4d7e"
+    },
+    "Zkc.Source.Structured.NormalForm.normalize_sound": {
+      "package": "main",
+      "module": "Zkc.Source.Structured.NormalForm.Soundness",
+      "structural": "8a9ac1dcc3a12d8a",
+      "explicit": "42b48f65106f5623"
+    },
     "Zkc.Source.Structured.check_ok_inversion": {
       "package": "main",
       "module": "Zkc.Source.Structured.Import",
@@ -193,6 +205,12 @@
       "structural": "4f783f52e73012e0",
       "explicit": "f1d64ddbd2ec670d"
     },
+    "ZkcExamples.Structured.GkrSourceNormalForms.verifierLayer_process": {
+      "package": "main",
+      "module": "ZkcExamples.Structured.GkrSourceNormalForms",
+      "structural": "254516ad91351b4a",
+      "explicit": "052a154280480da1"
+    },
     "ZkcExamples.Structured.GkrSourceNormalForms.verifier_participant": {
       "package": "main",
       "module": "ZkcExamples.Structured.GkrSourceNormalForms",
@@ -204,18 +222,6 @@
       "module": "ZkcExamples.Structured.GkrSourceVerifier",
       "structural": "8b55c0260f799411",
       "explicit": "3981d3c32178a2e4"
-    },
-    "ZkcExamples.Structured.NormalFormSteps.apply_step": {
-      "package": "main",
-      "module": "ZkcExamples.Structured.NormalFormSteps",
-      "structural": "39826b7bbf45dab0",
-      "explicit": "9ab9ed37cfdd2d92"
-    },
-    "ZkcExamples.Structured.NormalFormSteps.apply_step_after": {
-      "package": "main",
-      "module": "ZkcExamples.Structured.NormalFormSteps",
-      "structural": "1801efb6a05dbca7",
-      "explicit": "dfc6e3284d2065f8"
     },
     "ZkcExamples.Structured.NormalFormSteps.repeat_embed": {
       "package": "main",

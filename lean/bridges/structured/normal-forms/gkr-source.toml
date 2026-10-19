@@ -7,7 +7,6 @@ namespace = "ZkcExamples.Structured.GkrSourceNormalForms"
 summary = "The root of the original GKR Entry and its participants' normal forms"
 imports = ["ZkcExamples.Structured.GkrRoundsNormalForms", "ZkcExamples.Structured.NormalFormSteps"]
 open = ["SumcheckVerifierHelpers"]
-options = ["maxHeartbeats 1600000"]
 helper_modules = ["lean/ZkcExamples/Structured/GkrSourceBodies.lean"]
 
 [bodies]
@@ -32,6 +31,7 @@ function = "outputFn"
 [[shared.roles]]
 role = 1
 name = "verifierOutput"
+proof = "normal-form"
 fold = true
 slots = [{ name = "point", mode = "optional" }]
 captures = [{ name = "service", mode = "optional" }]
@@ -40,6 +40,7 @@ strict = ["*"]
 [[shared.roles]]
 role = 0
 name = "proverOutput"
+proof = "normal-form"
 fold = true
 slots = [{ name = "point", mode = "optional" }]
 captures = [{ name = "service", mode = "optional" }]
@@ -54,6 +55,7 @@ function = "coefficientFn"
 [[shared.roles]]
 role = 1
 name = "verifierCoefficient"
+proof = "normal-form"
 fold = true
 slots = [{ name = "coefficients", mode = "optional" }]
 captures = [{ name = "line", mode = "optional" }]
@@ -62,6 +64,7 @@ strict = ["*"]
 [[shared.roles]]
 role = 0
 name = "proverCoefficient"
+proof = "normal-form"
 fold = true
 slots = []
 captures = [{ name = "line", mode = "optional" }]
@@ -99,6 +102,7 @@ roles.proverRounds = {}
 [[shared.roles]]
 role = 1
 name = "verifierLayer"
+proof = "normal-form"
 fold = true
 slots = [{ name = "point", mode = "optional" }, { name = "claim", mode = "optional" }]
 captures = [{ name = "inputs", mode = "optional" }, { name = "add", mode = "optional" },
@@ -110,6 +114,7 @@ strict = ["*"]
 [[shared.roles]]
 role = 0
 name = "proverLayer"
+proof = "normal-form"
 fold = true
 slots = [{ name = "point", mode = "optional" }]
 captures = [{ name = "inputs", mode = "optional" }, { name = "add", mode = "optional" },
@@ -128,6 +133,7 @@ raw = "gkrBody_raw"
 [[shared.roles]]
 role = 1
 name = "verifier"
+proof = "normal-form"
 inputs = [{ name = "inputs", mode = "optional" }, { name = "outputs", mode = "optional" },
           { name = "add", mode = "optional" }, { name = "mul", mode = "optional" },
           { name = "layers", mode = "optional" }, { name = "selector", mode = "optional" },
@@ -137,6 +143,7 @@ strict = ["*"]
 [[shared.roles]]
 role = 0
 name = "prover"
+proof = "normal-form"
 inputs = [{ name = "inputs", mode = "optional" }, { name = "outputs", mode = "absent" },
           { name = "add", mode = "optional" }, { name = "mul", mode = "optional" },
           { name = "layers", mode = "optional" }, { name = "selector", mode = "optional" },

@@ -52,7 +52,7 @@ def proverProcess (firstBase secondBase : G) (firstWitness secondWitness : F) (n
 theorem prover_process (firstBase firstKey secondBase secondKey : G) (firstWitness secondWitness : F) (nonces : Nat) :
     program.participant F G 0 (proverInputs firstBase firstKey secondBase secondKey firstWitness secondWitness nonces) =
       proverProcess firstBase secondBase firstWitness secondWitness nonces := by
-  rfl
+  kernel_rfl
 
 /-- The replies of one prover run: received values by type and site, and
 drawn values by site. Other requests are refused. -/
@@ -96,7 +96,7 @@ def verifierProcess (firstBase firstKey secondBase secondKey : G) (challenges : 
 theorem verifier_process (firstBase firstKey secondBase secondKey : G) (challenges : Nat) :
     program.participant F G 1 (verifierInputs firstBase firstKey secondBase secondKey challenges) =
       verifierProcess firstBase firstKey secondBase secondKey challenges := by
-  rfl
+  kernel_rfl
 
 /-- The replies of one verifier run: received values by type and site, and
 drawn values by site. Other requests are refused. -/

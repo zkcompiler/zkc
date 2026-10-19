@@ -257,7 +257,9 @@ for Sumcheck: the compiled verifier's ideal meaning is the Fiat–Shamir
 transform of the original GKR validator, read through its acceptance output.
 On a well-formed statement that original validator is the plain GKR verifier
 (`ZkcExamples.Structured.GkrSourceVerifier.verifier_reads`, over the generated
-normal form of the admitted root, `GkrSourceNormalForms.verifier_participant`),
+normal form of the admitted root, `GkrSourceNormalForms.verifier_participant`,
+an instance of the
+[normalizer's soundness](structured-source.md#participant-normal-forms)),
 which `ZkcSecurity.Examples.CompiledGkrFiatShamir` bounds
 ([multi-round security](fiat-shamir-security.md#the-compiled-gkr-proof-entry)).
 No equation about the compiled program's meaning is specific to the Entry.

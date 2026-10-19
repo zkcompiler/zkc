@@ -35,6 +35,7 @@ roles.proverReduce = { bodies = "bodies", countBound = "Nat.lt_trans shape.2.1 (
 [[shared.roles]]
 role = 1
 name = "verifier"
+proof = "normal-form"
 binders = "(bodies : SumcheckVerifierHelpers.Bodies SumcheckReduceViews.unit.definitions)"
 inputs = [{ name = "raw", mode = "absent" }, { name = "dimension", mode = "absent" },
           { name = "claim", mode = "optional" }, { name = "count", mode = "optional" },
@@ -44,6 +45,7 @@ laws.valuesHelper = { term = "values_optional SumcheckReduceViews.unit bodies {0
 [[shared.roles]]
 role = 0
 name = "prover"
+proof = "normal-form"
 binders = "(bodies : SumcheckUnitContracts.Bodies SumcheckReduceViews.unit.definitions)"
 premises = "(shape : HasShape raw count 1) (bound : raw.length < indexLimit) (enough : rounds ≤ count)"
 inputs = [{ name = "raw" }, { name = "count" }, { name = "claim", mode = "absent" }, { name = "rounds" },

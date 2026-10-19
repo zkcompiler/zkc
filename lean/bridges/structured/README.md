@@ -118,13 +118,25 @@ the bridge checks the structured result before classifying it.
 ## Lean reference executable
 
 The `structured-source` executable in `ZkcTools.StructuredSource` checks and
-runs admitted snapshots:
+runs admitted snapshots, and prints participant normal forms:
 
 ```text
 structured-source check SNAPSHOT.json
 structured-source run SNAPSHOT.json INPUTS.json
 structured-source open SNAPSHOT.json REQUEST.json
+structured-source normal-form SNAPSHOT.json REQUEST.json
 ```
+
+A `normal-form` request is an array `[protocol, repeat, role, roster, pattern,
+laws, strict]`: the protocol's retained name, the site of the repeat whose
+callback is normalized (or `null` for the body), the role and roster size as
+decimal strings, one input pattern entry per input (`"absent"`, `"present"`,
+`"optional"`, or a fixed `["index", "0"]`, `["field", "1"]` or `["bool", true]`),
+the laws (`[helper, "returns" | ["stops", reason], pins]`, a pin being `null` or
+an input position) and whether owned calls without a law are kept. It prints
+the compiled normalizer's form as JSON for `normal_forms.py`, with `names` set
+when laws had to be chosen by helper name as well as by signature; the run is
+not trusted, since the kernel checks every printed form.
 
 Closed runs take and return typed input/output arrays. Open requests and
 results follow the native schema: optional ordered inputs, selected role,
@@ -337,8 +349,10 @@ Each of the following sections is optional:
 | `[[shared]]` with `[[shared.roles]]` | Normal forms over a typed body that several units share (the request's `body`): a repeat callback (`repeat` names a callback of `[bodies] callbacks`, a source label its callback carries, or the repeat's site) or a whole protocol body, at each listed role, with the process equation of the role's normal form for every unit whose tables satisfy the named helper laws. A repeat callback's role also gets `<role><Slot>Position` and `<role><Slot>Slot` for each carried slot it names, so statements about the state need no literal positions, and with `fold = true` also `<role>_fold`: the repeat on an admitted count, from any state whose masked slots are given, is the fold of the role's normal form over the iteration indices (`NormalFormSteps.repeat_embed`) |
 | `[unit]` with `name`, `views`, `helpers`, `program` | The admitted unit a whole-body entry over one unit is stated with: its plain tables, the names `structured_views` gives its declarations (`<views>.<declaration>Definition`, `_member`, `_raw`, `_signature`) and its program. A whole-body entry then needs no `meaning`, `closed` or `components` |
 
-Root equations are definitional. Shared equations are proved by explicit
-operation steps generated together with the normal form. A shared entry names
+Root equations are definitional; `proof = "kernel"` in `[root]` checks them by
+`kernel_rfl` alone. Shared equations are proved by explicit operation steps
+generated together with the normal form, unless the role asks for
+normal-form proofs (below). A shared entry names
 the typed `body`, the `function` to define, its `parameters`, the participant
 `meaning`, the `closed` and `components` helper tables, and, for a body with a
 repeat that ends the body, the `repeat_spec` and the `callback` function; a
@@ -355,6 +369,48 @@ true` makes them the optional components of a Math call. `guards` gives a proof
 for a guard whose condition is not a decided proposition, and `rewrites` states
 facts (`expr`, `value`, `proof`) that the proof rewrites with, for example a
 comparison that a premise decides.
+
+**Normal-form proofs.** With `proof = "normal-form"` in a `[[shared.roles]]`
+entry (whose `[[shared]]` entry names its helper `tables` and `protocols`; a
+request with a `[unit]` supplies both), an equation is an instance of the
+normalizer's soundness theorem
+(`Zkc.Source.Structured.NormalForm.normalize_sound`) instead of a step script,
+and the module imports the normalizer.
+The generator runs the compiled normalizer (`structured-source normal-form`,
+built by `lake build structured-source`; `ZKC_STRUCTURED_SOURCE` selects
+another binary) and prints, per role, `<role>Pattern` (the inputs as the
+normalizer reads them), `<role>Form` (the role's form as a literal) and, for a
+callback, `<role>Signature` (the role's laws keyed by helper, each pinned to the
+inputs its call reads at every use), `<role>Results` (the results its laws
+present, from the request's templates), `<role>Finish` (the carried positions
+the role presents) and `<role>_laws` (each law premise discharged by the
+request's law term). The kernel alone checks `<role>_normalized` (the
+normalizer returns the literal), `<role>_lawsMatch` (every law use in the
+literal is a call of the law's own helper, compared as terms rather than by
+name), `<role>_presentation` (the literal's process is the readable one),
+`<role>_environment`, `<role>_finishes` and `<role>_embedding`. The statements of the readable definitions and of the
+process equations are unchanged, the masked-state theorems become
+instances of `NormalForm.maskValues_embed`, and a callback role's `fold` is
+stated and proved from its process equation as before. The compiled run is not
+trusted: a form it prints wrongly is a failed kernel check.
+
+A whole-body role (`[[shared.roles]]` with `inputs`) takes `proof =
+"normal-form"` too; its equation is an instance of `NormalForm.sound_uniform`.
+A repeat in a body is presented by its callback region: the callback's own
+entry when the request states one (named in `[bodies] callbacks`, or with a
+`repeat_spec`), else the entry's `callback_body` with its `repeat_spec`. Laws keep their request syntax
+and are read by shape: results that are arguments (`"{2}"`) or literals
+(`"false"`) are presented as such, a Math law with `components = true` passes
+argument components, and each argument a law reads at every use is pinned to
+an input or to a literal. `opaque` helpers stay owned calls on components. For
+each protocol application the role takes part in, whole-body and callback roles
+alike, the generator states the callee's invocation in this unit at any child
+context (`<declaration>_<callee role>_invoke`, from `<declaration>_view`, the
+callee's process theorem and `<declaration>_<callee role>_returned`), the callee
+processes the form applies (`<role>Callees`) and the premise that each callee
+presents its applications (`<role>_callees`). Applications of one callee role
+on the same input pattern share one callee; a callee whose process theorem has
+premises is pinned to the caller's inputs its binders receive.
 
 A whole-body entry over a `[unit]` may also name its `declaration` (and a `raw`
 equation when its `body` is not the one the views use). Each role then also gets
@@ -380,10 +436,12 @@ unit, from the export) and `<declaration>_view`, and, per caller role, the
 callee's masked outputs. At each role of the callee's roster the caller's
 normal form binds the callee's generated normal form at the child context, on
 the caller's operands after the callee's input masks, and continues on the
-callee's results after its output masks; the step is
+callee's results after its output masks; in a step proof the step is
 `NormalFormSteps.apply_step`, which rests on the generic call substitution rule,
 and `NormalFormSteps.apply_step_after` inside a repeat callback, whose normal
-form is followed by the embedding of its carried state.
+form is followed by the embedding of its carried state; in a normal-form proof
+it is the application case of the normalizer's soundness theorem, with the
+callee summaries above as its premise.
 
 **Kept calls.** `opaque` lists helpers whose owned Local calls stay as their
 participant rule (`Participant.owned`) when no law is wanted; their results are

@@ -742,3 +742,30 @@ projection after embedding preserves the entire process. Projection of extra
 index/vector messages refuses explicitly. Concrete contract use must establish
 that its actual process lies in the supported fragment; the adapter supplies no
 relation binding or security assumption.
+
+## Participant normal forms
+
+`Structured.NormalForm.normalize` computes one role's form of a typed protocol
+body by symbolic evaluation under the participant rules above. A form lists the
+role's ordered sends, receives and queries; presence splits on an optional
+input or on a component of a returned tuple, where an operation first needs it;
+guards on decided equalities; kept helper invocations and helper laws; repeats
+of callback regions; and callee applications at child contexts. It ends in
+returned components or a stop. Every step is structural, and a body outside the
+fragment is refused with a named reason. A form is indexed by a signature: the
+helper laws it may use, keyed by the helper's sorts and pinned to inputs or
+literals, and the callee forms it may apply, keyed by callee signature and role.
+
+`NormalForm.normalize_sound` states that when normalization returns a form
+whose law uses call their laws' own helpers (`CallsMatch`), the body's
+participant process at the role is the form's process, in every model, for
+every context whose mapped roster roles are distinct from the role
+(`RosterDistinct`), on every input the pattern describes, under every helper
+table whose invocations satisfy the signature's laws (`LawsHold`) and every
+protocol table whose invocations of the signature's callees are the given
+callee processes (`CalleesHold`). `sound_uniform`, `callback_sound_uniform` and
+`participant_sound_uniform` restate it for the uniform participant meaning, for
+a repeat callback's carried state and for an entry's `Program.participant`.
+Each generated participant normal form is an instance: the kernel checks by
+evaluation that the normalizer returns the printed form and that the form's
+process is the readable one.

@@ -27,7 +27,10 @@ elaborated and checked by the kernel, so a generator error, a stale request or
 a changed program is reported as a failed equation rather than trusted. Root
 equations are definitional. Equations over a shared typed body (for every unit
 whose checked body it is) are proved by explicit operation steps that use the
-helper laws named in the request.
+helper laws named in the request. A request may instead ask for normal-form
+proofs: each equation is then an instance of the normalizer's soundness
+theorem, with the form the compiled normalizer prints as a literal that the
+kernel checks.
 
 Within a body, a repeat whose callback the request states over (a `[[shared]]`
 entry whose `repeat` names it) may stand anywhere: its returned state is bound
@@ -49,7 +52,9 @@ fails when they differ, without writing it.
 
 import argparse
 import json
+import os
 import re
+import subprocess
 import sys
 import tomllib
 from dataclasses import dataclass, field
@@ -249,6 +254,30 @@ def scope_literal(scopes):
 
 def list_literal(items):
     return "[" + ", ".join(str(item) for item in items) + "]"
+
+
+def binder_groups(text):
+    """The parenthesized binder groups of a Lean binder string, in order."""
+    groups, depth, start = [], 0, None
+    for position, character in enumerate(text or ""):
+        if character == "(":
+            if depth == 0:
+                start = position
+            depth += 1
+        elif character == ")":
+            depth -= 1
+            if depth == 0 and start is not None:
+                groups.append(text[start:position + 1])
+    return groups
+
+
+def binders_used(text, statement):
+    """The binder groups of `text` some of whose names the statement mentions."""
+    kept = []
+    for group in binder_groups(text):
+        if any(re.search(rf"(?<![\w.]){re.escape(name)}(?![\w'])", statement) for name in binder_names(group)):
+            kept.append(group)
+    return " ".join(kept)
 
 
 def binder_names(text):
@@ -554,6 +583,8 @@ class Frame:
     opaque: tuple = ()           # helpers whose owned calls stay as they are
     strict: tuple = ()           # helpers whose owned calls stay as invocations on present arguments
     role_name: str = ""
+    law_uses: list = field(default_factory=list)   # (retained helper, call arguments) of each law use
+    application_uses: dict = field(default_factory=dict)   # site -> callee binder name -> argument term
 
 
 @dataclass
@@ -574,6 +605,7 @@ class Application:
     callee_roles: dict           # callee role index -> callee role information
     values: dict                 # callee role index -> request table of binder and premise terms
     results: list = field(default_factory=list)   # names of the callee's results, by position
+    callee: str = ""             # the callee's retained name
 
 
 class Evaluator:
@@ -920,6 +952,7 @@ class Evaluator:
         if self.strict(descriptor[1]):
             return self.strict_call(descriptor, args, results, site, rest, terminator, env, proof, indent)
         law = self.law(descriptor[1])
+        self.frame.law_uses.append((descriptor[1], list(args)))
         if law.stop:
             step.halt(op, law.stop, ("owned", law, helper, args))
             return Halt(law.stop)
@@ -1072,6 +1105,7 @@ class Evaluator:
                                      f"the callee's normal form takes it present")
             else:
                 values[item["name"]] = arg.expr
+        frame.application_uses[site] = dict(values)
         child = f"({app.context} ctx)"
         me = self.role_term(frame.role)
 
@@ -1463,6 +1497,78 @@ def load_laws(table):
     return laws
 
 
+def law_pin(arg, fixed_inputs):
+    """What a law asks of an argument at every use: the input it is, or the literal."""
+    if arg.kind != "present":
+        return None
+    if arg.expr in fixed_inputs:
+        return ("input", fixed_inputs[arg.expr])
+    code = literal_code(arg.expr)
+    if code is not None:
+        return ("literal", code, arg.expr)
+    return None
+
+
+def pin_lean(pin):
+    if pin is None:
+        return ".free"
+    if pin[0] == "input":
+        return f".input {pin[1]}"
+    return f".literal {pin[1]}"
+
+
+def pin_json(pin):
+    if pin is None:
+        return None
+    if pin[0] == "input":
+        return str(pin[1])
+    return ["literal", str(pin[1])]
+
+
+def literal_code(template):
+    """A literal result template as the normalizer reads it: false, true or a natural."""
+    text = template.strip()
+    if text == "false":
+        return 0
+    if text == "true":
+        return 1
+    if re.fullmatch(r"\d+", text):
+        return int(text)
+    return None
+
+
+def law_shape(law):
+    """A law's shape for the normalizer, as request JSON and as a Lean literal: a stop, a
+    passing law on components (results that are arguments), literal results, or results
+    the law's result function gives."""
+    if law.stop:
+        return ["stops", law.stop], f".stops .{law.stop}"
+    if law.components:
+        positions = []
+        for template in law.results:
+            match = re.fullmatch(r"\{(\d+)\}", template.strip())
+            if match is None:
+                raise GeneratorError(f"a law on components must return its arguments, not {template}")
+            positions.append(int(match.group(1)))
+        return ["passes", [str(position) for position in positions]], f".passes {list_literal(positions)}"
+    outputs, lean = [], []
+    for template in law.results:
+        argument = re.fullmatch(r"\{(\d+)\}", template.strip())
+        code = literal_code(template)
+        if argument is not None:
+            outputs.append(["argument", argument.group(1)])
+            lean.append(f".argument {argument.group(1)}")
+        elif code is not None:
+            outputs.append(["literal", str(code)])
+            lean.append(f".literal {code}")
+        else:
+            outputs.append(["result"])
+            lean.append(".result")
+    if all(output == ["result"] for output in outputs):
+        return "returns", ".returns []"
+    return ["returns", outputs], f".returns [{', '.join(lean)}]"
+
+
 def site_names(unit_function_blocks, renames):
     """Lean names of the action sites, from source labels where present."""
     sites, used = {}, set()
@@ -1487,6 +1593,192 @@ def site_names(unit_function_blocks, renames):
         used.add(name)
         sites[site] = name
     return sites
+
+
+# ---------------------------------------------------------------------------
+# Forms of the Lean normalizer
+#
+# With `proof = "normal-form"`, a role's equation is an instance of the
+# normalizer's soundness theorem: the compiled normalizer (the `normal-form`
+# mode of `structured-source`) prints the role's form as JSON, this module
+# prints it as a Lean literal, and the kernel checks that the normalizer
+# returns exactly that literal and that its denotation is the readable process.
+# The compiled run is not trusted.
+
+STRUCTURED_SOURCE = Path(os.environ.get("ZKC_STRUCTURED_SOURCE", ROOT / "lean/.lake/build/bin/structured-source"))
+NORMALIZER_MODULE = "Zkc.Source.Structured.NormalForm.Presentation"
+
+
+def run_normalizer(fixture, request, name):
+    """The form the compiled normalizer computes for a role's request."""
+    if not STRUCTURED_SOURCE.is_file():
+        raise GeneratorError(f"{STRUCTURED_SOURCE} is missing; build it with `lake build structured-source`")
+    path = ROOT / "build/normal-forms" / (re.sub(r"[^0-9A-Za-z]+", "-", json.dumps(request))[:120] + ".json")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(request), encoding="utf-8")
+    try:
+        completed = subprocess.run([str(STRUCTURED_SOURCE), "normal-form", str(ROOT / fixture), str(path)],
+                                   capture_output=True, text=True, check=False)
+    finally:
+        path.unlink()
+    try:
+        result = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        raise GeneratorError(f"the normalizer printed no form: {completed.stdout}{completed.stderr}")
+    if result.get("status") != "normalized":
+        raise GeneratorError(f"{name}: the normalizer refused the request: {result.get('code')}")
+    return result
+
+
+def lean_wire(wire):
+    return lean_ty(wire, literal=True)
+
+
+def lean_op(op):
+    head, args = op[0], op[1:]
+    if head == "unsupported":
+        raise GeneratorError("the form contains an operation the printer does not support")
+    if not args:
+        return f".{head}"
+    rendered = []
+    for arg in args:
+        if isinstance(arg, bool):
+            rendered.append("true" if arg else "false")
+        elif isinstance(arg, int):
+            rendered.append(str(arg))
+        elif isinstance(arg, list):
+            rendered.append(lean_wire(arg))
+        else:
+            rendered.append(json.dumps(arg))
+    return f"(.{head} {' '.join(rendered)})"
+
+
+def lean_term(term):
+    head = term[0]
+    if head == "var":
+        return f"(.var {variable(term[1])})"
+    if head == "result":
+        return f"(.result {variable(term[1])} {variable(term[2])})"
+    if head == "index":
+        return f"(.index {term[1]})"
+    if head == "bool":
+        return f"(.bool {'true' if term[1] else 'false'})"
+    if head == "field":
+        return f"(.field {json.dumps(term[1])} {term[2]})"
+    if head == "groupZero":
+        return f"(.groupZero {json.dumps(term[1])})"
+    if head == "calc":
+        return f"(.calc {lean_op(term[1])} rfl {lean_terms(term[2])} {variable(term[3])})"
+    if head == "law":
+        return f"(.law ⟨{term[1]}, by decide⟩ {lean_terms(term[2])} {variable(term[3])})"
+    raise GeneratorError(f"unknown term {head}")
+
+
+def lean_terms(terms):
+    text = ".nil"
+    for term in reversed(terms):
+        text = f"(.cons {lean_term(term)} {text})"
+    return text
+
+
+def lean_comp(comp):
+    head = comp[0]
+    if head == "absent":
+        return ".absent"
+    if head == "present":
+        return f"(.present {lean_term(comp[1])})"
+    if head == "input":
+        return f"(.input {variable(comp[1])})"
+    if head == "read":
+        return f"(.read {variable(comp[1])} {variable(comp[2])})"
+    raise GeneratorError(f"unknown component {head}")
+
+
+def lean_equality(equality):
+    return f"(.{equality[0]} {json.dumps(equality[1])})" if len(equality) > 1 else f".{equality[0]}"
+
+
+def qualified(text, inductive):
+    """A constructor application whose head names its inductive, for positions whose
+    expected type does not determine it."""
+    if text.startswith("(."):
+        return f"({inductive}." + text[2:]
+    if text.startswith("."):
+        return f"{inductive}." + text[1:]
+    return text
+
+
+def lean_form(form, indent, helpers, repeats=None, callees=None):
+    """A form literal; each node's continuation follows on the next line. `repeats` gives
+    each repeat site's spec and callback region as Lean terms, and `callees` each callee's
+    signature term and whether each of its binders is a present value."""
+    pad = " " * indent
+    head = form[0]
+    if head == "done":
+        return f"{pad}.done {paren(values_literal([lean_comp(comp) for comp in form[1]])) if form[1] else '.nil'}"
+    if head == "halt":
+        return f"{pad}.halt .{form[1]}"
+    if head == "send":
+        _, ty, site, peer, value, rest = form
+        return (f"{pad}.send {lean_wire(ty)} {json.dumps(site)} {peer} {lean_term(value)} <|\n"
+                + lean_form(rest, indent, helpers, repeats, callees))
+    if head == "receive":
+        _, ty, site, peer, rest = form
+        return f"{pad}.receive {lean_wire(ty)} {json.dumps(site)} {peer} <|\n" + lean_form(rest, indent, helpers, repeats, callees)
+    if head == "query":
+        _, site, request, args, rest = form
+        return (f"{pad}.query {json.dumps(site)} {json.dumps(request)} {lean_terms(args)} <|\n"
+                + lean_form(rest, indent, helpers, repeats, callees))
+    if head == "split":
+        _, subject, absent_form, present_form = form
+        return (f"{pad}.split {lean_comp(subject)}\n{pad}  (\n" + lean_form(absent_form, indent + 4, helpers, repeats, callees)
+                + f")\n{pad}  (\n" + lean_form(present_form, indent + 4, helpers, repeats, callees) + ")")
+    if head == "guard":
+        _, equality, left, right, rest = form
+        return (f"{pad}.guard {lean_equality(equality)} {lean_term(left)} {lean_term(right)} <|\n"
+                + lean_form(rest, indent, helpers, repeats, callees))
+    if head == "strict":
+        _, helper, args, rest = form
+        return (f"{pad}.strict {helpers(helper)} {lean_terms(args)} <|\n" + lean_form(rest, indent, helpers, repeats, callees))
+    if head == "byLaw":
+        _, entry, helper, rest = form
+        return (f"{pad}.byLaw ⟨{entry}, by decide⟩ {helpers(helper)} <|\n"
+                + lean_form(rest, indent, helpers, repeats, callees))
+    if head == "owned":
+        _, owner, helper, args, rest = form
+        return (f"{pad}.owned {owner} {helpers(helper)} {paren(values_literal([lean_comp(c) for c in args]))} <|\n"
+                + lean_form(rest, indent, helpers, repeats, callees))
+    if head == "repeat":
+        _, site, count, state, captures, rest = form
+        if site not in (repeats or {}):
+            raise GeneratorError(f"the form repeats at {site}; name its spec and callback region")
+        spec, callback = repeats[site]
+        return (f"{pad}.repeat {paren(spec)} {json.dumps(site)} {paren(callback)} {lean_comp(count)}\n"
+                f"{pad}  {paren(values_literal([lean_comp(c) for c in state]))}\n"
+                f"{pad}  {paren(values_literal([lean_comp(c) for c in captures]))} <|\n"
+                + lean_form(rest, indent, helpers, repeats, callees))
+    if head == "apply":
+        _, callee, roles, site, args, rest = form
+        if callees is None or callee >= len(callees):
+            raise GeneratorError(f"the form applies callee {callee}; name the callees")
+        signature, values = callees[callee]
+        rendered = [qualified(lean_term(arg), "NormalForm.Term") if present else qualified(lean_comp(arg), "NormalForm.Comp")
+                    for arg, (present, _) in zip(args, values)]
+        slots = list_literal([f"{'.value' if present else '.component'} {lean_wire(wire)}" for present, wire in values])
+        arguments = (f"({values_literal(rendered)} : Values (NormalForm.Argument _ _) {slots})"
+                     if rendered else ".nil")
+        return (f"{pad}.apply ⟨{callee}, by decide⟩ {signature} {list_literal(roles)} {json.dumps(site)}\n"
+                f"{pad}  {arguments} <|\n"
+                + lean_form(rest, indent, helpers, repeats, callees))
+    raise GeneratorError(f"unsupported form node {head}")
+
+
+def binders_literal(names):
+    """A tuple of binder values, first binder first."""
+    text = ".nil"
+    for name in reversed(names):
+        text = f"(.cons {name} {text})"
+    return text[1:-1] if text != ".nil" else text
 
 
 class Module:
@@ -1516,7 +1808,12 @@ class Module:
                 "  [DecidableEq F] [DecidableEq G]")
 
     def header(self):
-        imports = "\n".join(f"public import {name}" for name in self.request["imports"])
+        names = list(self.request["imports"])
+        # Normal-form proofs cite the normalizer's soundness and its presentation lemmas.
+        if any(role.get("proof") == "normal-form" for spec in self.request.get("shared", [])
+               for role in spec.get("roles", [])) and NORMALIZER_MODULE not in names:
+            names.append(NORMALIZER_MODULE)
+        imports = "\n".join(f"public import {name}" for name in names)
         opens = " ".join(["Zkc.Source", "Zkc.Source.Structured", *self.request.get("open", [])])
         request = self.path.relative_to(ROOT) if self.path.is_relative_to(ROOT) else self.path
         options = "".join(f"set_option {option}\n" for option in self.request.get("options", []))
@@ -1571,14 +1868,21 @@ class Module:
             out.append(f"def {process} {used_binders}:\n    PIR.Proc (participantInterface F G)\n"
                        f"      (Values (Component (assignment F G)) {program}.payload.entry.outputs) :=\n"
                        f"{text}\n")
+            proof = spec.get("proof", "rfl")
+            if proof not in ("rfl", "kernel"):
+                raise GeneratorError("root equations are definitional: their proof is rfl or kernel")
+            tactic = "kernel_rfl" if proof == "kernel" else "rfl"
             out.append(f"theorem {role_name}_process {binders}:\n    {program}.participant F G {role} "
-                       f"({inputs_name} {arguments}) =\n      {application} := by\n  rfl\n")
+                       f"({inputs_name} {arguments}) =\n      {application} := by\n  {tactic}\n")
             replies = self.run_equation(out, program, role, role_name, inputs_name, arguments, binders, node)
             self.roles_info[role] = {"name": role_name, "inputs": inputs_name, "held": held,
                                      "arguments": arguments, "binders": binders, "replies": replies,
                                      "node": node}
         self.parts.append("\n".join(out))
         self.root_spec = (entry, sites, names, role_names, program)
+
+    def helper_term_of(self, name):
+        return Evaluator(Frame(self.unit, [], 0, "root", {}, self.helpers(), {}, {}), Names(), None).helper_term(name)
 
     def callback_sites(self):
         """Repeat site -> callback name for the callbacks `[bodies]` names; each is given by
@@ -1610,6 +1914,26 @@ class Module:
             if site in callbacks:
                 terms[site] = (f"{callbacks[site]}Spec", spec["function"])
         return terms
+
+    def repeat_regions(self, spec):
+        """Repeat site -> (spec, callback region) as Lean terms, for printing repeat nodes:
+        from callback entries that name both, and from a whole-body entry's `repeat_spec`
+        and `callback_body` for the repeats directly in its body."""
+        regions = {}
+        named = self.repeat_terms()
+        for other in self.request.get("shared", []):
+            if not other.get("repeat"):
+                continue
+            site = self.repeat_site(other)
+            repeat_spec = other.get("repeat_spec") or named.get(site, (None, None))[0]
+            if repeat_spec:
+                regions[site] = (repeat_spec, other["body"])
+        if spec.get("repeat_spec") and spec.get("callback_body"):
+            protocol = self.unit.function(spec.get("protocol", self.unit.entry))
+            for instruction in protocol.body[1]:
+                if instruction[0][0] == "protocol_repeat":
+                    regions[instruction[4]] = (spec["repeat_spec"], spec["callback_body"])
+        return regions
 
     def slot_names(self, role):
         """Repeat site -> {slot position: name} for the slots this request names at `role`."""
@@ -2101,7 +2425,7 @@ class Module:
                 raise GeneratorError(f"{entry['callee']}: {entry['function']} is not over the applied "
                                      f"protocol's signature")
             by_index[info["role"]] = dict(info, process=f"{prefix}.{info['process']}",
-                                          theorem=f"{prefix}.{info['theorem']}")
+                                          theorem=f"{prefix}.{info['theorem']}", name=role_name)
             values[info["role"]] = dict(supplied)
         return by_index, values
 
@@ -2156,7 +2480,8 @@ class Module:
                 name, site, roles, self.signature_term(callee), context, self.unit_terms()["name"],
                 f"{views}.{declaration}Definition", f"{views}.{declaration}_member",
                 f"{views}.{declaration}_signature", entry["body"], entry.get("raw", f"{views}.{declaration}_raw"),
-                dict(entry.get("arguments", {})), callee_roles, values, list(entry.get("results", [])))
+                dict(entry.get("arguments", {})), callee_roles, values, list(entry.get("results", [])),
+                instruction[0][1])
         return applications
 
     def shared(self, spec):
@@ -2191,6 +2516,8 @@ class Module:
             spec.setdefault("meaning", terms["meaning"])
             spec.setdefault("closed", f"({terms['helpers']}).closed")
             spec.setdefault("components", f"({terms['helpers']}).components")
+            spec.setdefault("tables", terms["helpers"])
+            spec.setdefault("protocols", f"{terms['name']}.plainProtocolTable F G")
         applications = self.applications(out, spec, protocol, block)
         function = spec["function"]
         parameters = spec.get("parameters", "")
@@ -2249,14 +2576,23 @@ class Module:
                        f"{ty_list(state, True)} :=\n  {values_literal(components)}\n")
             scopes = "[" + ", ".join("[" + ", ".join(map(str, scope)) + "]" for scope in state_scopes) + "]"
             arguments = " ".join(slot["name"] for slot in slots)
+            if role_spec.get("proof") == "normal-form":
+                finish_name = f"{name}Finish"
+                out.append(f"/-- The positions of the carried state the {name} presents. -/")
+                out.append(f"def {finish_name} : Values (fun (_ : Ty) => NormalForm.Carried) {ty_list(state, True)} :=\n"
+                           f"  {values_literal(self.finish_modes(slots, len(state)))}\n")
             out.append(f"omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in\n"
                        f"/-- Masking the carried state to its declared scopes keeps the {name}'s components. -/")
+            if role_spec.get("proof") == "normal-form":
+                masked_proof = (f"  subst self\n  exact NormalForm.maskValues_embed (Value := assignment F G) ctx {role} "
+                                f"{finish_name} _ rfl\n    {paren(binders_literal([slot['name'] for slot in slots]))}\n")
+            else:
+                masked_proof = (f"  subst self\n  unfold {embed}\n  iterate {len(state) + 1} unfold maskValues\n"
+                                f"  simp [ProtocolContext.mapScopes, Participant.restrict]\n")
             out.append(f"theorem {embed}_masked (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles {role})\n"
                        f"    {self.binders(pairs)}:\n"
                        f"    maskValues self (ctx.mapScopes {scopes}) ({f'{embed} (F := F) (G := G) {arguments}'.strip()}) =\n"
-                       f"      {embed} {arguments} := by\n"
-                       f"  subst self\n  unfold {embed}\n  iterate {len(state) + 1} unfold maskValues\n"
-                       f"  simp [ProtocolContext.mapScopes, Participant.restrict]\n")
+                       f"      {embed} {arguments} := by\n" + masked_proof)
             # Stable names for the role's carried slots: statements about the state use
             # these instead of positions, so a reordered layout changes only this module.
             out.append(f"/-! Positions of the {name}'s carried slots in the repeat state, named by the request. -/")
@@ -2349,6 +2685,17 @@ class Module:
         theorem = role_spec.get("theorem", f"{name}_process")
         premises = role_spec.get("premises", "")
         binders = role_spec.get("binders", "")
+        if role_spec.get("proof") == "normal-form":
+            application = f"{process} {process_arguments}".strip()
+            self.shared_form(out, spec, role_spec, protocol, inputs, outputs, state, slots, captures,
+                             capture_specs, frame, process, role, uses_separate, others[0], theorem, function,
+                             parameter_names, embed, state_args, capture_components, theorem_binders, premises,
+                             binders, application, result_type, projections)
+            if role_spec.get("fold"):
+                self.fold(out, spec, role_spec, role, others[0], name, embed, process, theorem, function,
+                          parameter_names, state, slots, capture_binders, capture_components, used_pairs,
+                          uses_separate, result_type)
+            return
         out.append("set_option linter.unusedSimpArgs false in")
         out.append(f"/-- The process equation of `{process}` over the typed body. -/")
         separate_binder = f"\n    (separate : ctx.roles {others[0]} ≠ self)" if uses_separate else ""
@@ -2369,6 +2716,280 @@ class Module:
             self.fold(out, spec, role_spec, role, others[0], name, embed, process, theorem, function,
                       parameter_names, state, slots, capture_binders, capture_components, used_pairs,
                       uses_separate, result_type)
+
+    @staticmethod
+    def finish_modes(slots, count):
+        modes = []
+        for index in range(count):
+            slot = next((slot for slot in slots if slot["slot"] == index), None)
+            if slot is None:
+                modes.append(".absent")
+            elif slot.get("mode", "present") == "optional":
+                modes.append(".optional")
+            else:
+                modes.append(".present")
+        return modes
+
+    def law_table(self, role_spec, frame, inputs, fixed_inputs):
+        """The role's laws as the normalizer reads them: retained helper, shape and pins.
+        A pin ties an argument to a present or fixed input; it holds at every use of the law."""
+        names = {term.split(".")[-1]: raw for raw, term in self.helpers().items()}
+        laws = []
+        for key, law in load_laws(role_spec.get("laws")).items():
+            raw = names.get(key, key)
+            helper = self.unit.function(raw)
+            uses = [args for used, args in frame.law_uses if used == raw]
+            pins = None
+            for args in uses:
+                current = [law_pin(arg, fixed_inputs) for arg in args]
+                pins = current if pins is None else [a if a == b else None for a, b in zip(pins, current)]
+            shape_json, shape_lean = law_shape(law)
+            if shape_json != "returns" and shape_json[0] == "passes":
+                pins = []
+            laws.append({"key": key, "raw": raw, "law": law, "helper": helper, "pins": pins or [],
+                         "term": self.helper_term_of(raw), "shape_json": shape_json, "shape_lean": shape_lean})
+        return laws
+
+    def kept_helpers(self, role_spec):
+        """The retained names and Lean terms of the helpers whose owned calls stay owned."""
+        names = {term.split(".")[-1]: raw for raw, term in self.helpers().items()}
+        raws = [names.get(key, key) for key in role_spec.get("opaque", [])]
+        return raws, [self.helper_term_of(raw) for raw in raws]
+
+    def signature_literal(self, laws, names, kept_terms, strict=False, callees=()):
+        keys = ", ".join(f"⟨{law['term']}, {law['shape_lean']}, {list_literal([pin_lean(pin) for pin in law['pins']])}⟩"
+                         for law in laws)
+        callee_keys = ", ".join(f"⟨{callee['signature']}, {callee['index']}, {callee['pattern_lean']}, "
+                                f"{list_literal(['none' if pin is None else f'some {pin}' for pin in callee['pins']])}⟩"
+                                for callee in callees)
+        return (f"⟨[{keys}], {'true' if strict else 'false'}, {'true' if names else 'false'}, "
+                f"{list_literal(kept_terms)}, [{callee_keys}]⟩")
+
+    def law_request(self, laws):
+        return [[law["raw"], law["shape_json"], [pin_json(pin) for pin in law["pins"]]] for law in laws]
+
+    def results_body(self, laws, signature):
+        """The law results function: the request's templates for laws whose results it gives,
+        any value of the output sort for the others."""
+        defaults = {"field": "0", "index": "0", "bool": "false", "vector": "[]", "group": "0", "service": "0"}
+        cases = []
+        for entry, law in enumerate(laws):
+            helper = law["helper"]
+            arguments = [f"(args.get {variable(index)})" for index in range(len(helper.inputs))]
+            if law["shape_json"] == "returns" or law["shape_json"][0] == "returns":
+                values = [paren(template.format(*arguments)) for template in law["law"].results]
+            else:
+                values = [defaults[wire[0]] for wire in helper.outputs]
+            cases.append(f"    | ⟨{entry}, _⟩ => fun (args : Values (assignment F G) {ty_list(helper.inputs, True)}) =>\n"
+                         f"      ({values_literal(values)} : Values (assignment F G) {ty_list(helper.outputs, True)})")
+        if laws:
+            cases.append(f"    | ⟨_ + {len(laws)}, outside⟩ => absurd outside (by simp [{signature}])")
+            return "⟨fun entry => match entry with\n" + "\n".join(cases) + "⟩"
+        return "⟨fun entry => entry.elim0⟩"
+
+    def shared_form(self, out, spec, role_spec, protocol, inputs, outputs, state, slots, captures, capture_specs,
+                    frame, process, role, uses_separate, other, theorem, function, parameter_names, embed,
+                    state_args, capture_components, theorem_binders, premises, binders, application, result_type,
+                    projections):
+        """A callback role's equation as an instance of the normalizer's soundness theorem."""
+        name = role_spec["name"]
+        # The callback's inputs: the index, the carried state and the captures.
+        pattern, scope_names, fixed_inputs = ["present"], ["index"], {}
+        for index, wire in enumerate(state):
+            slot = next((slot for slot in slots if slot["slot"] == index), None)
+            position = 1 + index
+            if slot is None:
+                pattern.append("absent")
+            elif "value" in slot:
+                kind = wire[0]
+                if kind not in ("index", "field", "bool"):
+                    raise GeneratorError(f"{name}: fixed slots of sort {kind} are not supported")
+                pattern.append([kind, slot["value"]])
+                fixed_inputs[slot["value"]] = position
+            elif slot.get("mode", "present") == "optional":
+                pattern.append("optional")
+                scope_names.append(slot["name"])
+            else:
+                pattern.append("present")
+                scope_names.append(slot["name"])
+                fixed_inputs[slot["name"]] = position
+        for index, wire in enumerate(captures):
+            capture = capture_specs[index] if index < len(capture_specs) else {"name": f"capture{index}"}
+            position = 1 + len(state) + index
+            if capture.get("mode", "optional") == "optional":
+                pattern.append("optional")
+            else:
+                pattern.append("present")
+                fixed_inputs[capture["name"]] = position
+            scope_names.append(capture["name"])
+        laws = self.law_table(role_spec, frame, inputs, fixed_inputs)
+        kept_raws, kept_terms = self.kept_helpers(role_spec)
+        strict = bool(role_spec.get("strict"))
+        roster = len(protocol.roles) if uses_separate else 1
+        if not uses_separate and role != 0:
+            raise GeneratorError(f"{name}: a role other than the first needs the separate roster premise")
+        callees = self.callee_keys(out, frame, role, role_spec, fixed_inputs)
+        request = [protocol.name, self.repeat_site(spec), str(role), str(roster), pattern,
+                   self.law_request(laws), strict, kept_raws,
+                   [[callee["raw"], str(callee["index"]), callee["pattern_json"],
+                     [None if pin is None else str(pin) for pin in callee["pins"]]] for callee in callees]]
+        result = run_normalizer(self.request["fixture"], request, name)
+        types = ty_list(inputs, True)
+        signature, pattern_name, finish_name = f"{name}Signature", f"{name}Pattern", f"{name}Finish"
+        results_name, form_name = f"{name}Results", f"{name}Form"
+        if role_spec.get("reuse_state"):
+            finish_name = f"{role_spec.get('finish', name + 'Finish')}"
+            out.append(f"/-- The positions of the carried state the {name} presents. -/")
+            out.append(f"def {finish_name} : Values (fun (_ : Ty) => NormalForm.Carried) {ty_list(state, True)} :=\n"
+                       f"  {values_literal(self.finish_modes(slots, len(state)))}\n")
+        out.append(f"/-- The {name}'s laws as the normalizer reads them, keyed by helper. -/")
+        out.append(f"def {signature} : NormalForm.Signature :=\n"
+                   f"  {self.signature_literal(laws, result.get('names'), kept_terms, strict, callees)}\n")
+        result_body = self.results_body(laws, signature)
+        out.append(f"/-- The results the {name}'s laws present, from the request's templates. -/")
+        out.append(f"def {results_name} : NormalForm.LawResults (ringModel F G) {signature}.laws :=\n  {result_body}\n")
+        processes, _ = self.callee_processes(out, name, signature, callees, spec)
+        out.append(f"/-- The {name}'s inputs as the normalizer reads them. -/")
+        pattern_literal = values_literal([self.pattern_entry(item) for item in pattern])
+        out.append(f"def {pattern_name} : NormalForm.InputPattern {types} :=\n  {pattern_literal}\n")
+        out.append(f"/-- The {name}'s form, printed from the compiled normalizer; the kernel checks it. -/")
+        out.append(f"noncomputable def {form_name} : NormalForm.Form {signature}.laws {signature}.callees {pattern_name}.scope {ty_list(outputs, True)} :=\n"
+                   + lean_form(result["form"], 2, self.helper_term_of, self.repeat_regions(spec),
+                               [(callee["signature"], [(present, wire) for _, _, present, wire in callee["scope"]])
+                                for callee in callees]) + "\n")
+        out.append(f"theorem {name}_normalized :\n    NormalForm.normalize {signature} {spec['body']} {role} {roster} "
+                   f"{pattern_name} = .ok {form_name} := by\n  kernel_rfl\n")
+        out.append(f"theorem {name}_lawsMatch : {form_name}.CallsMatch := by\n  kernel_rfl\n")
+        out.append(f"theorem {name}_finishes : {form_name}.finishes {finish_name} = true := by\n  kernel_rfl\n")
+        binders_value = binders_literal(scope_names)
+        scope_binders = self.scope_binders(scope_names, state, slots, captures, capture_specs)
+        environment = (f".cons (some index)\n      (({f'{embed} ' + ' '.join(state_args) if state_args else embed}).append "
+                       f"{paren(values_literal(capture_components))})")
+        out.append(f"theorem {name}_environment {scope_binders}:\n"
+                   f"    {pattern_name}.environment (ringModel F G) ({binders_value}) =\n"
+                   f"      ({environment} : Values (Component (assignment F G)) {types}) := by\n  kernel_rfl\n")
+        out.append("/-- The form's presented process is the readable process. -/")
+        tables, protocols = spec["tables"], spec["protocols"]
+        out.append(f"theorem {name}_presentation {spec.get('parameters', '')} (ctx : ProtocolContext)\n"
+                   f"    {scope_binders}:\n"
+                   f"    {form_name}.denoteWith (ringModel F G) ({tables}).toOn {results_name} ctx\n"
+                   f"        (NormalForm.Runs.uniform ({tables}) ({protocols}) ctx (ctx.roles {role}))\n"
+                   f"        {processes}\n"
+                   f"        (NormalForm.finishLeaf (ringModel F G) {results_name} {finish_name}) ({binders_value}) =\n"
+                   f"      {application} := by\n  kernel_rfl\n")
+        tuple_type = paren(result_type) if " " in result_type else result_type
+        embedded = f"{embed} {' '.join(projections)}".strip()
+        out.append(f"theorem {name}_embedding (result : {tuple_type}) :\n"
+                   f"    NormalForm.embed (assignment F G) {finish_name} (NormalForm.Tuple.toValues result) =\n"
+                   f"      {embedded} := by\n  kernel_rfl\n")
+        laws_binders = f"{spec.get('parameters', '')} {binders} (index : Nat) {theorem_binders}{premises}"
+        laws_arguments = " ".join(binder_names(laws_binders))
+        self.law_proofs(out, name, laws, results_name, spec, laws_binders, environment, types, fixed_inputs)
+        callees_call = self.callee_proofs(out, name, signature, callees, processes, spec, role_spec,
+                                          scope_binders, environment, types, [other])
+        separate_binder = f"\n    (separate : ctx.roles {other} ≠ self)" if uses_separate else ""
+        distinct = "(.ofSeparate separate (by decide))" if uses_separate else "(NormalForm.RosterDistinct.only ctx)"
+        names_in_order = " ".join(scope_names)
+        laws_call = f"{name}_laws {laws_arguments}"
+        out.append(f"/-- The process equation of `{process}`, an instance of the normalizer's soundness. -/")
+        out.append(f"theorem {theorem} {spec.get('parameters', '')} {binders}\n"
+                   f"    (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles {role}){separate_binder}\n"
+                   f"    (index : Nat) {theorem_binders}{premises}{' ' if premises else ''}:\n"
+                   f"    {function} (F := F) (G := G) {parameter_names} ctx self (.cons (some index)\n"
+                   f"      (({f'{embed} ' + ' '.join(state_args) if state_args else embed}).append {paren(values_literal(capture_components))})) =\n"
+                   f"      ({application}).bind (fun {'result' if slots else '_'} => .done ({embedded})) := by\n"
+                   f"  subst self\n"
+                   f"  exact (NormalForm.callback_sound_uniform {signature} {spec['body']} {role} {roster} {pattern_name}\n"
+                   f"    {finish_name} {form_name} {name}_normalized {name}_lawsMatch {name}_finishes ctx {distinct}\n"
+                   f"    ({spec['tables']}) ({spec['protocols']}) {results_name} {processes} ({binders_value}) _\n"
+                   f"    ({name}_environment {names_in_order}) ({laws_call}) {callees_call}).trans\n"
+                   f"    (congrArg₂ PIR.Proc.bind ({name}_presentation {parameter_names} ctx {names_in_order})\n"
+                   f"      (funext fun result => congrArg PIR.Proc.done ({name}_embedding result)))\n")
+
+    @staticmethod
+    def pattern_entry(item):
+        if isinstance(item, str):
+            return f".{item}"
+        kind, value = item
+        if kind == "bool":
+            return f"(.bool {value})"
+        if kind == "field":
+            return f"(.field _ {value})"
+        return f"(.index {value})"
+
+    def scope_binders(self, scope_names, state, slots, captures, capture_specs):
+        kinds = {"index": "Nat"}
+        for slot in slots:
+            base = value_type(state[slot["slot"]])
+            kinds[slot["name"]] = f"Option {paren(base)}" if slot.get("mode", "present") == "optional" else base
+        for index, wire in enumerate(captures):
+            capture = capture_specs[index] if index < len(capture_specs) else {"name": f"capture{index}"}
+            base = value_type(wire)
+            kinds[capture["name"]] = f"Option {paren(base)}" if capture.get("mode", "optional") == "optional" else base
+        return self.binders([(name, kinds[name]) for name in scope_names])
+
+    def law_proofs(self, out, name, laws, results_name, spec, laws_binders, environment, types, fixed_inputs):
+        """One premise per law, each discharged by the admitted helper's own law from the request."""
+        position_names = {position: input_name for input_name, position in fixed_inputs.items()}
+        cases = []
+        for entry, law in enumerate(laws):
+            helper = law["helper"]
+            args = [f"a{index}" for index in range(len(helper.inputs))]
+            typed_outputs = f"Values (Component (assignment F G)) {ty_list(helper.outputs, True)}"
+            if law["shape_json"] != "returns" and law["shape_json"][0] == "passes":
+                arguments_pattern = values_literal(args) if args else ".nil"
+                passed = [template.format(*args) for template in law["law"].results]
+                cases.append(f"  | ⟨{entry}, _⟩ => fun args => match args with\n"
+                             f"    | {arguments_pattern} => fun values found => by\n"
+                             f"      obtain rfl : values = ({values_literal(passed)} : {typed_outputs}) :=\n"
+                             f"        Option.some.inj (found.symm.trans (by kernel_rfl))\n"
+                             f"      exact {law['law'].term.format(*args)}")
+                continue
+            pins = law["pins"] + [None] * (len(helper.inputs) - len(law["pins"]))
+            pinned = [f"p{index}" if pin is not None else "_" for index, pin in enumerate(law["pins"])]
+            def pinned_term(pin, index):
+                if pin is None:
+                    return args[index]
+                return position_names[pin[1]] if pin[0] == "input" else pin[2]
+            filled = [pinned_term(pin, index) for index, pin in enumerate(pins)]
+            term = law["law"].term.format(*filled)
+            rewrites = []
+            for index, pin in enumerate(pins):
+                if pin is None:
+                    continue
+                if pin[0] == "input":
+                    rewrites.append(f"← (Option.some.inj p{index} : {position_names[pin[1]]} = a{index})")
+                else:
+                    rewrites.append(f"← (Option.some.inj (p{index} : some {paren(pin[2])} = some a{index}) : "
+                                    f"{pin[2]} = a{index})")
+            substitutions = f"      rw [{', '.join(rewrites)}]\n" if rewrites else ""
+            arguments_pattern = values_literal(args) if args else ".nil"
+            pinned_pattern = "⟨" + ", ".join(pinned + ["_"]) + "⟩" if law["pins"] else "_"
+            if law["shape_json"] == "returns" or law["shape_json"][0] == "returns":
+                shown = [template.format(*args) for template in law["law"].results]
+                cases.append(f"  | ⟨{entry}, _⟩ => fun args pinned => match args, pinned with\n"
+                             f"    | {arguments_pattern}, {pinned_pattern} => fun values found => by\n"
+                             f"      obtain rfl : values = ({values_literal(shown)} : "
+                             f"Values (assignment F G) {ty_list(helper.outputs, True)}) :=\n"
+                             f"        Option.some.inj (found.symm.trans (by kernel_rfl))\n{substitutions}"
+                             f"      show invoke ({spec['tables']}).closed {law['term']} _ = .done "
+                             f"({values_literal([template.format(*filled) for template in law['law'].results])} : "
+                             f"Values (assignment F G) {ty_list(helper.outputs, True)})\n"
+                             f"      exact {term}")
+                continue
+            cases.append(f"  | ⟨{entry}, _⟩ => fun args pinned => match args, pinned with\n"
+                         f"    | {arguments_pattern}, {pinned_pattern} => by\n{substitutions}"
+                         f"      exact {term}")
+        if laws:
+            cases.append(f"  | ⟨_ + {len(laws)}, outside⟩ => absurd outside (by simp [{name}Signature])")
+            body = "fun entry => match entry with\n" + "\n".join(cases)
+        else:
+            body = "fun entry => entry.elim0"
+        tables = spec["tables"]
+        out.append(f"/-- The {name}'s laws hold at its inputs, by the admitted helpers' laws. -/")
+        out.append(f"theorem {name}_laws {laws_binders}:\n"
+                   f"    NormalForm.LawsHold ({tables}).toOn {results_name}\n"
+                   f"      ({environment} : Values (Component (assignment F G)) {types}) :=\n  {body}\n")
 
     def fold(self, out, spec, role_spec, role, other, name, embed, process, theorem, function,
              parameter_names, state, slots, capture_binders, capture_components, used_pairs, uses_separate,
@@ -2478,6 +3099,20 @@ class Module:
         out.append(f"def {process} {process_binders}:\n    PIR.Proc (participantInterface F G)\n"
                    f"      (Values (Component (assignment F G)) {ty_list(protocol.outputs, True)}) :=\n{text}\n")
         theorem = role_spec.get("theorem", f"{name}_process")
+        if role_spec.get("proof") == "normal-form":
+            self.protocol_form(out, spec, role_spec, protocol, frame, specs, binders, components, process,
+                               process_arguments, theorem, function, parameter_names, uses_separate,
+                               separate_binder)
+            self.role_infos[(function, name)] = {
+                "role": role, "process": process, "process_binders": [variable for variable, _ in used],
+                "theorem": theorem, "parameters": binder_names(spec.get("parameters", "")),
+                "binders": binder_names(role_spec.get("binders", "")),
+                "premises": binder_names(role_spec.get("premises", "")), "uses_separate": uses_separate,
+                "inputs": specs, "outputs": protocol.outputs}
+            if spec.get("declaration"):
+                self.invocation(out, spec, role_spec, protocol, process, used, theorem, binders, components,
+                                uses_separate)
+            return
         default_unfold = [spec["body"]] if re.fullmatch(r"[\w.']+", spec["body"]) else []
         unfolds = " ".join([function, *spec.get("unfold", default_unfold)])
         out.append("set_option linter.unusedSimpArgs false in")
@@ -2503,6 +3138,313 @@ class Module:
         if spec.get("declaration"):
             self.invocation(out, spec, role_spec, protocol, process, used, theorem, binders, components,
                             uses_separate)
+
+    def protocol_form(self, out, spec, role_spec, protocol, frame, specs, binders, components, process,
+                      process_arguments, theorem, function, parameter_names, uses_separate, separate_binder):
+        """A whole-body role's equation as an instance of the normalizer's soundness theorem."""
+        role = role_spec["role"]
+        name = role_spec["name"]
+        pattern, fixed_inputs = [], {}
+        for position, (wire, item) in enumerate(zip(protocol.inputs, specs)):
+            mode = item.get("mode", "present")
+            if mode == "absent":
+                pattern.append("absent")
+            elif "value" in item:
+                kind = wire[0]
+                if kind not in ("index", "field", "bool"):
+                    raise GeneratorError(f"{name}: fixed inputs of sort {kind} are not supported")
+                pattern.append([kind, str(item["value"])])
+                fixed_inputs[str(item["value"])] = position
+            elif mode == "optional":
+                pattern.append("optional")
+            else:
+                pattern.append("present")
+                fixed_inputs[item["name"]] = position
+        laws = self.law_table(role_spec, frame, protocol.inputs, fixed_inputs)
+        kept_raws, kept_terms = self.kept_helpers(role_spec)
+        strict = bool(role_spec.get("strict"))
+        others = [other for other in range(len(protocol.roles)) if other != role]
+        roster = len(protocol.roles) if uses_separate else 1
+        if not uses_separate and role != 0:
+            raise GeneratorError(f"{name}: a role other than the first needs the separate roster premise")
+        callees = self.callee_keys(out, frame, role, role_spec, fixed_inputs)
+        request = [protocol.name, None, str(role), str(roster), pattern, self.law_request(laws), strict, kept_raws,
+                   [[callee["raw"], str(callee["index"]), callee["pattern_json"],
+                     [None if pin is None else str(pin) for pin in callee["pins"]]] for callee in callees]]
+        result = run_normalizer(self.request["fixture"], request, name)
+        signature, pattern_name, results_name, form_name = (f"{name}Signature", f"{name}Pattern",
+                                                            f"{name}Results", f"{name}Form")
+        types = ty_list(protocol.inputs, True)
+        out.append(f"/-- The {name}'s laws as the normalizer reads them, keyed by helper. -/")
+        out.append(f"def {signature} : NormalForm.Signature :=\n"
+                   f"  {self.signature_literal(laws, result.get('names'), kept_terms, strict, callees)}\n")
+        out.append(f"/-- The results the {name}'s laws present, from the request's templates. -/")
+        out.append(f"def {results_name} : NormalForm.LawResults (ringModel F G) {signature}.laws :=\n"
+                   f"  {self.results_body(laws, signature)}\n")
+        processes, processes_parameters = self.callee_processes(out, name, signature, callees, spec)
+        out.append(f"/-- The {name}'s inputs as the normalizer reads them. -/")
+        out.append(f"def {pattern_name} : NormalForm.InputPattern {types} :=\n"
+                   f"  {values_literal([self.pattern_entry(item) for item in pattern])}\n")
+        form_text = lean_form(result["form"], 2, self.helper_term_of, self.repeat_regions(spec),
+                              [(callee["signature"], [(present, wire) for _, _, present, wire in callee["scope"]])
+                               for callee in callees])
+        form_parameters = binders_used(spec.get("parameters", ""), form_text)
+        form_term = paren(f"{form_name} {' '.join(binder_names(form_parameters))}".strip())
+        out.append(f"/-- The {name}'s form, printed from the compiled normalizer; the kernel checks it. -/")
+        out.append(f"noncomputable def {form_name} {form_parameters} : NormalForm.Form {signature}.laws {signature}.callees "
+                   f"{pattern_name}.scope {ty_list(protocol.outputs, True)} :=\n" + form_text + "\n")
+        normalized_parameters = binders_used(spec.get("parameters", ""), f"{spec['body']} {form_term}")
+        out.append(f"theorem {name}_normalized {normalized_parameters} :\n"
+                   f"    NormalForm.normalize {signature} {paren(spec['body'])} {role} {roster} "
+                   f"{pattern_name} = .ok {form_term} := by\n  kernel_rfl\n")
+        out.append(f"theorem {name}_lawsMatch {form_parameters} : {form_term}.CallsMatch := by\n  kernel_rfl\n")
+        scope_names = [binder for binder, _ in binders]
+        binders_value = binders_literal(scope_names)
+        scope_binders = self.binders(binders)
+        out.append(f"theorem {name}_environment {scope_binders}:\n"
+                   f"    {pattern_name}.environment (ringModel F G) ({binders_value}) =\n"
+                   f"      ({values_literal(components)} : Values (Component (assignment F G)) {types}) := by\n"
+                   f"  kernel_rfl\n")
+        tables, protocols = spec["tables"], spec["protocols"]
+        out.append("/-- The form's process is the readable process. -/")
+        out.append(f"theorem {name}_presentation {spec.get('parameters', '')} (ctx : ProtocolContext)\n"
+                   f"    {scope_binders}:\n"
+                   f"    {form_term}.denote (ringModel F G) ({tables}).toOn {results_name} ctx\n"
+                   f"        (NormalForm.Runs.uniform ({tables}) ({protocols}) ctx (ctx.roles {role})) "
+                   f"{processes}\n        ({binders_value}) =\n"
+                   f"      {process} {process_arguments} := by\n  kernel_rfl\n")
+        environment = values_literal(components)
+        laws_text = f"{tables} {environment} " + " ".join(law["law"].term for law in laws)
+        laws_binders = (f"{binders_used(spec.get('parameters', ''), laws_text)} "
+                        f"{binders_used(role_spec.get('binders', ''), laws_text)} "
+                        f"{scope_binders}{binders_used(role_spec.get('premises', ''), laws_text)}")
+        laws_arguments = " ".join(binder_names(laws_binders))
+        self.law_proofs(out, name, laws, results_name, spec, laws_binders, environment, types, fixed_inputs)
+        callees_call = self.callee_proofs(out, name, signature, callees, processes, spec, role_spec,
+                                          scope_binders, environment, types, others)
+        distinct = "(.ofSeparate separate (by decide))" if uses_separate else "(NormalForm.RosterDistinct.only ctx)"
+        names_in_order = " ".join(scope_names)
+        out.append(f"/-- The process equation of `{process}`, an instance of the normalizer's soundness. -/")
+        out.append(f"theorem {theorem} {spec.get('parameters', '')} {role_spec.get('binders', '')}\n"
+                   f"    (ctx : ProtocolContext) (self : Nat) (role : self = ctx.roles {role}){separate_binder}\n"
+                   f"    {self.binders(binders)}{role_spec.get('premises', '')}"
+                   f"{' ' if role_spec.get('premises') else ''}:\n"
+                   f"    {function} (F := F) (G := G) {parameter_names} ctx self\n"
+                   f"      {paren(values_literal(components))} =\n"
+                   f"      {process} {process_arguments} := by\n"
+                   f"  subst self\n"
+                   f"  exact (NormalForm.sound_uniform {signature} {paren(spec['body'])} {role} {roster} {pattern_name}\n"
+                   f"    {form_term} ({name}_normalized {' '.join(binder_names(normalized_parameters))}) "
+                   f"({name}_lawsMatch {' '.join(binder_names(form_parameters))}) ctx {distinct}\n"
+                   f"    ({tables}) ({protocols}) {results_name} {processes} ({binders_value}) _\n"
+                   f"    ({name}_environment {names_in_order}) ({name}_laws {laws_arguments}) {callees_call}).trans\n"
+                   f"    ({name}_presentation {parameter_names} ctx {names_in_order})\n")
+
+    def callee_keys(self, out, frame, role, role_spec, fixed_inputs):
+        """The callee forms that present this role's applications, keyed by callee signature and
+        role, with each callee's summary: its invocation in this unit at any child context."""
+        callees = []
+        for site, app in frame.applications.items():
+            if role not in app.roles:
+                continue
+            index = app.roles.index(role)
+            info = app.callee_roles.get(index)
+            if info is None:
+                raise GeneratorError(f"application {app.name}: no callee normal form for callee role {index}")
+            function = self.unit.function(app.callee)
+            uses = frame.application_uses.get(site, {})
+            pattern_json, scope = [], []
+            for wire, item in zip(function.inputs, info["inputs"]):
+                mode = item.get("mode", "present")
+                if mode == "absent":
+                    pattern_json.append("absent")
+                elif "value" in item:
+                    pattern_json.append([wire[0], str(item["value"])])
+                elif mode == "optional":
+                    pattern_json.append("optional")
+                    scope.append((item["name"], f"Option {paren(value_type(wire))}", False, wire))
+                else:
+                    pattern_json.append("present")
+                    scope.append((item["name"], value_type(wire), True, wire))
+            pinned = bool(info["premises"])
+            pins = []
+            for binder, _, present_binder, _ in scope:
+                term = uses.get(binder)
+                pins.append(fixed_inputs.get(term) if pinned and present_binder and term in fixed_inputs else None)
+            # Applications of one callee role on the same pattern and pins share one callee form.
+            if any(known["signature"] == app.signature and known["index"] == index
+                   and known["pattern_json"] == pattern_json and known["pins"] == pins for known in callees):
+                continue
+            callee = {"app": app, "index": index, "info": info, "function": function, "raw": app.callee,
+                      "signature": app.signature, "pattern_json": pattern_json, "scope": scope, "pins": pins,
+                      "pattern_lean": paren(values_literal([self.pattern_entry(item) for item in pattern_json])),
+                      "uses": uses}
+            self.callee_summary(out, callee, role_spec, fixed_inputs)
+            callees.append(callee)
+        return callees
+
+    def callee_summary(self, out, callee, role_spec, fixed_inputs):
+        """A callee's invocation in this unit at any child context: the input masks, the callee's
+        process theorem and the participant's view of the returned tuple."""
+        app, index, info, function = callee["app"], callee["index"], callee["info"], callee["function"]
+        others = [other for other in range(len(app.roles)) if other != index]
+        if len(others) != 1:
+            raise GeneratorError(f"application {app.name}: callee summaries are stated for two-role callees")
+        other = others[0]
+        # Named by the callee's declaration: the summary holds at any child context.
+        declaration = camel(app.definition.rsplit(".", 1)[1].removesuffix("Definition"))
+        stem = f"{declaration}_{info['name']}"
+        if stem in self.applied:
+            return
+        self.applied.add(stem)
+        kept, hides = self.masked_outputs(out, f"{stem}_returned", function, "ctx", index, other, index)
+        pinned = any(pin is not None for pin in callee["pins"])
+        # Binder values: the caller's arguments where pinned, else the callee's binder names.
+        values = {}
+        for (binder, _, _, _), pin in zip(callee["scope"], callee["pins"]):
+            values[binder] = callee["uses"][binder] if pin is not None else binder
+        declared, unpinned = {}, set()
+        for (binder, kind, _, _), pin in zip(callee["scope"], callee["pins"]):
+            declared.setdefault(values[binder], kind)
+            if pin is None:
+                unpinned.add(binder)
+        arguments, masked, absent_names = [], [], []
+        for position, (wire, item) in enumerate(zip(function.inputs, info["inputs"])):
+            mode = item.get("mode", "present")
+            if mode == "absent":
+                variable_name = f"input{position}"
+                absent_names.append((variable_name, f"Option {paren(value_type(wire))}"))
+                arguments.append(variable_name)
+                masked.append("none")
+            elif "value" in item:
+                arguments.append(f"some {paren(str(item['value']))}")
+                masked.append(f"some {paren(str(item['value']))}")
+            elif mode == "optional":
+                arguments.append(values[item["name"]])
+                masked.append(values[item["name"]])
+            else:
+                arguments.append(f"some {paren(values[item['name']])}")
+                masked.append(f"some {paren(values[item['name']])}")
+        def argument(name):
+            if name == "ctx":
+                return "ctx"
+            if name in app.arguments:
+                return app.arguments[name]
+            if name in values:
+                return values[name]
+            raise GeneratorError(f"application {app.name}: no value for the callee's {name}")
+        process = " ".join([info["process"]] + [paren(argument(name)) for name in info["process_binders"]])
+        supplied = app.values.get(index, {})
+        theorem_arguments = [info["theorem"]]
+        theorem_arguments += [f"({name} := {app.arguments[name]})" for name in info["parameters"]]
+        theorem_arguments += [f"({name} := {supplied[name]})" for name in info["binders"]]
+        theorem_arguments += ["(ctx := ctx)", f"(self := ctx.roles {index})", "(role := rfl)"]
+        if info["uses_separate"]:
+            theorem_arguments.append("(separate := separate)")
+        theorem_arguments += [f"({binder} := {values[binder]})" for binder, _, _, _ in callee["scope"]]
+        theorem_arguments += [f"({name} := {supplied[name]})" for name in info["premises"]]
+        typed = f"Values (Component (assignment F G)) {ty_list(function.inputs, True)}"
+        premise_text = " ".join(supplied.get(name, "") for name in info["premises"] + info["binders"])
+        role_binders = binders_used(role_spec.get("binders", ""), premise_text)
+        premises = binders_used(role_spec.get("premises", ""), premise_text) if pinned else ""
+        separate = f" (separate : ctx.roles {other} ≠ ctx.roles {index})" if (hides or info["uses_separate"]) else ""
+        binder_declarations = self.binders(list(declared.items()) + absent_names)
+        callee["summary"] = f"{stem}_invoke"
+        callee["summary_binders"] = (role_binders, separate != "",
+                                     [(term, term in unpinned) for term in declared],
+                                     [n for n, _ in absent_names], premises)
+        view = camel(app.definition.rsplit(".", 1)[1].removesuffix("Definition")) + "_view"
+        out.append("set_option linter.unusedSimpArgs false in")
+        out.append(f"/-- The `{app.name}` callee at role {index}: its invocation in this unit at any child context. -/")
+        out.append(f"theorem {stem}_invoke {role_binders} (ctx : ProtocolContext){separate}\n"
+                   f"    {binder_declarations}{premises}{' ' if premises else ''}:\n"
+                   f"    invokeProtocol ({app.unit}.plainProtocolTable F G) {app.signature} ctx (ctx.roles {index})\n"
+                   f"      ({values_literal(arguments)} : {typed}) =\n"
+                   f"      ({process}).bind (fun out => .done {paren(kept.replace('values.get', 'out.get'))}) := by\n"
+                   f"  refine ({view} ctx (ctx.roles {index}) _ ({values_literal(masked)} : {typed}) ?_).trans ?_\n"
+                   f"  · iterate {len(function.inputs) + 1} unfold maskValues\n"
+                   f"    simp [ProtocolContext.mapScopes, Participant.restrict"
+                   f"{', separate, Ne.symm separate' if separate else ''}]\n"
+                   f"  refine (congrArg (fun process => PIR.Proc.bind process _)\n"
+                   f"    ({' '.join(theorem_arguments)})).trans ?_\n"
+                   f"  apply congrArg (PIR.Proc.bind _)\n"
+                   f"  funext out\n"
+                   f"  exact congrArg PIR.Proc.done ({stem}_returned ctx{' separate' if hides else ''} out)\n")
+
+    def callee_processes(self, out, name, signature, callees, spec):
+        """The callees' presented processes, by callee index, at a child context and on the
+        callee's binders."""
+        if not callees:
+            return "(NormalForm.noCallees _)", ""
+        cases = []
+        for position, callee in enumerate(callees):
+            info, app = callee["info"], callee["app"]
+            names = [binder for binder, _, _, _ in callee["scope"]]
+            def argument(binder):
+                if binder == "ctx":
+                    return "ctx"
+                if binder in app.arguments:
+                    return app.arguments[binder]
+                if binder in names:
+                    return f"(NormalForm.entryAt binders {variable(names.index(binder))})"
+                raise GeneratorError(f"application {app.name}: no value for the callee's {binder}")
+            process = " ".join([info["process"]] + [paren(argument(binder)) for binder in info["process_binders"]])
+            cases.append(f"  | ⟨{position}, _⟩ => fun ctx binders => {process}")
+        cases.append(f"  | ⟨_ + {len(callees)}, outside⟩ => absurd outside (by simp [{signature}])")
+        text = "\n".join(cases)
+        parameters = binders_used(spec.get("parameters", ""), text)
+        out.append(f"/-- The {name}'s callees' processes, by callee. -/")
+        out.append(f"def {name}Callees {parameters} : NormalForm.CalleeProcesses (ringModel F G) {signature}.callees :=\n"
+                   f"  fun callee => match callee with\n{text}\n")
+        return paren(f"{name}Callees {' '.join(binder_names(parameters))}".strip()), parameters
+
+    def callee_proofs(self, out, name, signature, callees, processes, spec, role_spec, scope_binders,
+                      environment, types, others):
+        """The callees' premise: each callee's summary, at the binders and child contexts the
+        soundness theorem names."""
+        if not callees:
+            return "(NormalForm.noCallees_hold _ _)"
+        cases = []
+        all_binders = ""
+        for position, callee in enumerate(callees):
+            role_binders, separated, declared, absent_names, premises = callee["summary_binders"]
+            names = ["callee" + binder[0].upper() + binder[1:] for binder, _, _, _ in callee["scope"]]
+            pinned = [f"p{index}" if pin is not None else "_" for index, pin in enumerate(callee["pins"])]
+            binders_pattern = values_literal(names) if names else ".nil"
+            others_pattern = values_literal(absent_names) if absent_names else ".nil"
+            pinned_pattern = "⟨" + ", ".join(pinned + ["_"]) + "⟩" if any(pin is not None for pin in callee["pins"]) else "_"
+            rewrites = []
+            scope_names = [binder for binder, _, _, _ in callee["scope"]]
+            for index, pin in enumerate(callee["pins"]):
+                if pin is not None:
+                    caller = callee["uses"][scope_names[index]]
+                    rewrites.append(f"← (Option.some.inj (p{index} : some {caller} = some {names[index]}) : "
+                                    f"{caller} = {names[index]})")
+            other = [o for o in range(len(callee['app'].roles)) if o != callee['index']][0]
+            separate = (f" (distinct {other} (show {other} < {len(callee['app'].roles)} by decide) "
+                        f"(show ({other} : Nat) ≠ {callee['index']} by decide))") if separated else ""
+            summary_arguments = " ".join(binder_names(role_binders))
+            fresh = dict(zip(scope_names, names))
+            declared_arguments = " ".join(paren(fresh[term] if is_binder else term) for term, is_binder in declared)
+            premise_arguments = " ".join(binder_names(premises))
+            body = (f"    | {binders_pattern}, {others_pattern}, {pinned_pattern} => by\n"
+                    + (f"      rw [{', '.join(rewrites)}]\n" if rewrites else "")
+                    + f"      exact {callee['summary']} {summary_arguments} ctx{separate} {declared_arguments} "
+                      f"{' '.join(absent_names)} {premise_arguments}")
+            cases.append(f"  | ⟨{position}, _⟩ => fun ctx binders others pinned distinct =>\n"
+                         f"    match binders, others, pinned with\n{body}")
+            all_binders += f" {role_binders} {premises}"
+        cases.append(f"  | ⟨_ + {len(callees)}, outside⟩ => absurd outside (by simp [{signature}])")
+        text = "\n".join(cases)
+        parameters = binders_used(spec.get("parameters", ""), f"{processes} {spec['protocols']}")
+        theorem_binders = f"{parameters} {binders_used(role_spec.get('binders', ''), text)} {scope_binders}" \
+                          f"{binders_used(role_spec.get('premises', ''), text)}"
+        out.append(f"/-- The {name}'s callees present their applications: each callee's invocation in this unit. -/")
+        out.append(f"theorem {name}_callees {theorem_binders}:\n"
+                   f"    NormalForm.CalleesHold ({spec['protocols']}) {processes}\n"
+                   f"      ({environment} : Values (Component (assignment F G)) {types}) :=\n"
+                   f"  fun callee => match callee with\n{text}\n")
+        return paren(f"{name}_callees {' '.join(binder_names(theorem_binders))}")
 
     def invocation(self, out, spec, role_spec, protocol, process, used, theorem, binders, components,
                    uses_separate):

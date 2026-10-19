@@ -363,8 +363,10 @@ the claim as a scalar and the round count as a count. The typed public-value
 binding establishes statement determination only; that the native transcript
 absorbs the encoded rows, in order, remains assumed.
 For the GKR Entry, Lean proves that the
-admitted original validator, through its generated normal form, is the plain
-GKR verifier on well-formed statements within the Entry's maxima, and bounds the
+admitted original validator, through its generated normal form (an instance of
+the participant normalizer's soundness theorem,
+`Zkc.Source.Structured.NormalForm.normalize_sound`, checked by kernel
+evaluation), is the plain GKR verifier on well-formed statements within the Entry's maxima, and bounds the
 compiled verifier's acceptance of claimed outputs other than the circuit's for a
 fixed statement through the composed check's transform of that original, with a
 charge per phase: against a weighted adversary budget whose oracle keys are
@@ -507,7 +509,10 @@ construction-start selection are outside this profile.
 
 Lean independently checks each structured export's metadata, signatures, helper
 linking, role scopes, service provenance and computational availability, and
-proves its process equations on the shared Region carrier. It resolves every
+proves its process equations on the shared Region carrier: each generated
+participant normal form is an instance of one soundness theorem of a verified
+normalizer (`Zkc.Source.Structured.NormalForm.normalize_sound`), checked by
+kernel evaluation. It resolves every
 domain identity against the exported catalogue rows and admits the rows that
 agree with its environment: the BLS12-381 scalar field, its pairing groups and
 its random service, at field, vector, G1 and service types. Other installed

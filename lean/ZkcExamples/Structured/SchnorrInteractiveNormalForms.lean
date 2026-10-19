@@ -46,7 +46,7 @@ def proverProcess (base : G) (witness : F) (nonces : Nat) :
 theorem prover_process (base key : G) (witness : F) (nonces : Nat) :
     program.participant F G 0 (proverInputs base key witness nonces) =
       proverProcess base witness nonces := by
-  rfl
+  kernel_rfl
 
 /-- The replies of one prover run: received values by type and site, and
 drawn values by site. Other requests are refused. -/
@@ -85,7 +85,7 @@ def verifierProcess (base key : G) (challenges : Nat) :
 theorem verifier_process (base key : G) (challenges : Nat) :
     program.participant F G 1 (verifierInputs base key challenges) =
       verifierProcess base key challenges := by
-  rfl
+  kernel_rfl
 
 /-- The replies of one verifier run: received values by type and site, and
 drawn values by site. Other requests are refused. -/
