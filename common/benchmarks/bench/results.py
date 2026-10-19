@@ -168,7 +168,7 @@ def validate_manifest(manifest):
         job = expected[key]
         validate_worker(result.get('worker'), plan, job['boundary'])
         if job['boundary'] == 'admitted_entry_call':
-            require('backend' in job, 'missing preparation request')
+            require(isinstance(job.get('backend'), dict), 'missing preparation request')
             validate_preparation_limits(result['worker']['lifecycle']['preparation_limits'], job['backend'])
         require(result['worker']['build'].get('execution_counts', False) is (manifest['observation'] == 'execution_counts'),
                 'manifest observation capability mismatch')

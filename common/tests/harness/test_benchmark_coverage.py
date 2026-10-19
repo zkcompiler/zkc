@@ -262,12 +262,12 @@ def test_changing_statements_keep_individual_first_visits_and_distributions(modu
     {'kind': 'host', 'preparation': True, 'preparation_entries': 512},
     {'kind': 'host', 'preparation': True, 'preparation_bytes': 64 << 20},
     {'kind': 'host', 'preparation': False},
-    None,
+    None, 'absent',
 ])
 def test_saved_manifest_checks_requested_limits(modules, backend):
     job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify',
            'boundary': 'admitted_entry_call'}
-    if backend is not None:
+    if backend != 'absent':
         job['backend'] = backend
     manifest = {'format': 'zkc.benchmark/0', 'status': 'passed', 'processes': 1,
                 'compiler_options': [], 'observation': 'timing',
