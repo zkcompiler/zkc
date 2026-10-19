@@ -195,14 +195,15 @@ subjects = ["schnorr-and", "chaum-pedersen"]
 [[proved]]
 subject = "Okamoto"
 result = '''
-Over the generated normal forms of the original-stage Okamoto unit: two accepting verifier runs with one commitment and distinct challenges give a representation of the point for which the retained target holds, and the actual verifier accepts the honest prover's messages'''
+Over the generated normal forms of the original-stage Okamoto unit: two accepting verifier runs with one commitment and distinct challenges give a representation of the point for which the retained target holds, and the actual verifier accepts the honest prover's messages; the composed construction and projection check accepts a compiled Okamoto proof Entry, whose ideal interpretation is the transform of its original verifier, with no security theorem'''
 owners = [["Okamoto subject", "docs/support.md#okamoto-representation-proof"]]
 theorems = [
   "ZkcExamples.Structured.Okamoto.extract_representation",
   "ZkcExamples.Structured.Okamoto.extracted_target",
   "ZkcExamples.Structured.Okamoto.honest_accepts",
+  "ZkcExamples.Construction.OkamotoProof.compiled_transform",
 ]
-subjects = ["okamoto"]
+subjects = ["okamoto", "okamoto-proof"]
 
 [[proved]]
 subject = "Participant normal forms"

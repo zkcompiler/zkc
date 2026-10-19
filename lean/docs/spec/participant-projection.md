@@ -175,6 +175,21 @@ rule supplies `ideal = transform ∘ spec` and the projection rule supplies
 original validator. The admission ties the checked program to the snapshot and
 so to the export's source digest.
 
+The equation leaves three positional premises to each Entry: where the export
+returns its acceptance output, how its data inputs hold the original validator's
+inputs, and how many data inputs there are. `select imported participant`
+constructs that selection from the admitted original and the export's policy:
+the derived context, the acceptance output's position among the returned values,
+the types of the published inputs in policy order, the validator's input slots
+and its acceptance output. `Selection.check` validates it against the export
+(the acceptance output precedes the final transcript, every slot holds a
+published value of its type, the replaced service or nothing, and the acceptance
+output is the validator's output at that position), and `selection_sound`
+proves the three premises from an accepted check. `compiled_selected` then
+states the equation for every list of published values of the selected types,
+read through the acceptance output on both sides, with no positional fact about
+the Entry.
+
 ## Reading exported programs
 
 `Zkc.Construction.Reading` gives general laws of the interactive reading `spec`
@@ -218,11 +233,12 @@ chosen statements are bounded under a binding that determines them.
 protocol applies the Sumcheck `Reduce` protocol at two sites, each with its own
 repeat and both drawing from one challenge service, then runs two terminal
 checks and conjoins them with the Math helper `zkc::boolean::both`, which the
-compiler inlines as a Boolean conjunction. No typed bodies are authored for this
-original: the kernel evaluates its admission (`admissible`), and the composed
-check accepts the export (`compiled`). `compiled_transform` is the generic
-composition theorem at this program: no proof is specific to the Entry. No
-security theorem is stated for this Entry.
+compiler inlines as a Boolean conjunction. Its original is admitted from the
+typed bodies printed from the admitted snapshot (`admitted`), the composed check
+accepts the export (`compiled`) and the selection check accepts it
+(`selection_checked`), so `compiled_transform` is `compiled_selected` at the
+Entry's published inputs and acceptance output: no proof is specific to the
+Entry. No security theorem is stated for this Entry.
 
 ## The compiled Sigma proof Entries
 

@@ -300,8 +300,9 @@ trusted claim. The maintained requests are in [`normal-forms/`](normal-forms):
 | [`sumcheck-source.toml`](normal-forms/sumcheck-source.toml), [`sumcheck-reduction.toml`](normal-forms/sumcheck-reduction.toml), [`sumcheck-repacked.toml`](normal-forms/sumcheck-repacked.toml) | The original Sumcheck roots, which apply `Reduce`: both roles, their invocation at any caller context and their participants |
 | [`gkr-rounds.toml`](normal-forms/gkr-rounds.toml) | The layer Sumcheck (`gkr::Rounds`) of the original GKR Entry: its typed body and the verifier's normal forms of one round and of the whole body |
 
-The Okamoto unit has no bridge driver: no maintained check regenerates its
-retained export, JSON or constructor data from the fixture. Its
+The subject driver regenerates the Okamoto unit's retained export, JSON,
+constructor data, printed bodies and Views from the fixture and checks its
+request ([`lean/subjects/okamoto.toml`](../../subjects/okamoto.toml)). Its
 [formal support](../../docs/support.md#okamoto-representation-proof) states what
 is proved over the generated declarations.
 
