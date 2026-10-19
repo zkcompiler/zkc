@@ -1,8 +1,10 @@
-format = "zkc.project/0"
+"format" = "zkc.project/0"
 
-[modules]
+["modules"]
 "fri_fold" = "main.zkc"
 
-[dependencies]
-fri = "../../../../../libraries/fri"
-zkc = "../../../../../libraries/zkc"
+["dependencies"]
+"collections" = "../../../../../libraries/core/collections"
+"primitive-collections" = "../../../../../libraries/core/primitives/collections"
+"traversal" = "../../../../../libraries/core/traversal"
+"fri" = "../../../../../libraries/protocols/polynomial/fri"

@@ -330,7 +330,7 @@ def main():
             setattr(args, name, target)
         suite=Suite(args,temporary)
         flags=['--source-format=zkc','--module=example=examples/projects/schnorr/main.zkc',
-               '--module=schnorr=libraries/schnorr/lib.zkc','--entry=example::Interactive']
+               '--module=schnorr=libraries/protocols/sigma/schnorr/lib.zkc','--entry=example::Interactive']
         text=execute([args.compiler,'language-emit',*flags])
         interface=json.loads(execute([args.compiler,'language-interface',*flags]))
         assert interface['original']==hashlib.sha256(text.encode()).hexdigest()

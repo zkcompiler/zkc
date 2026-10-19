@@ -44,7 +44,11 @@ public:
   };
   std::optional<DeclarationId>
   resolve(const Declaration &, llvm::StringRef, Span, bool required = true,
-          std::vector<ModuleLookup> *route = nullptr);
+          std::vector<ModuleLookup> *route = nullptr,
+          std::optional<DeclarationId> *provider = nullptr);
+  bool recordReference(const Declaration &, DeclarationId, DeclarationId,
+                       llvm::StringRef, Span,
+                       std::optional<std::string> abstractModule = {});
   std::optional<Type> type(const Declaration &, const SyntaxType &,
                            unsigned = 1);
 
@@ -114,10 +118,14 @@ private:
     DeclarationId target;
     Span span;
     bool isPublic;
+    std::optional<DeclarationId> provider;
   };
   bool checkingVisibility = false;
   std::function<bool(DeclarationId, llvm::StringRef)> loadBinding;
   std::map<std::string, DeclarationId> qualified;
+  // Keep the written interface route with its binder, including inherited
+  // module parameters. Canonical interfaces alone lose facade provenance.
+  std::map<std::string, DeclarationId> moduleParameterProviders;
   std::vector<std::map<std::string, ScopeBinding>> visible;
   using OperatorSite = std::pair<unsigned, unsigned>;
   std::vector<std::vector<OperatorSite>> visibleOperators, exportedOperators;
@@ -156,6 +164,7 @@ private:
   std::optional<DeclarationId> member(const Declaration &, DeclarationId,
                                       llvm::StringRef, Span);
   bool moduleContracts();
+  bool retainAPI();
   bool signature(DeclarationId, unsigned = 1);
   bool conformance(DeclarationId);
   bool requirements(Declaration &);

@@ -2,7 +2,7 @@
 
 This client proves the recurrence AIR exported by the
 [Plonky3 adapter](../../../../../compiler/adapters/plonky3/README.md), using ordinary
-[protocol libraries](../../../../../libraries/stark/README.md). The relation, read
+[protocol libraries](../../../../../libraries/arguments/stark/README.md). The relation, read
 offsets, assertion scopes and degree facts come from the captured Bundle.
 The prover input is the actual base-field trace; configuration and boundary
 values are public. The verifier receives commitments, polynomial-opening claims

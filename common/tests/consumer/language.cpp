@@ -74,6 +74,14 @@ int main() {
   if (declarations->find("m::swap") == std::string::npos ||
       zkc::language::formatDiagnostics({}, &*capture).size() != 0)
     return 11;
+  auto api = zkc::language::inspectPublicAPI(*checked);
+  if (!api) {
+    llvm::errs() << llvm::toString(api.takeError());
+    return 18;
+  }
+  if (api->find("zkc.source-api/0") == std::string::npos ||
+      api->find("m::Vector") == std::string::npos)
+    return 19;
   auto notations = zkc::language::inspectNotations(*checked);
   if (!notations) {
     llvm::errs() << llvm::toString(notations.takeError());

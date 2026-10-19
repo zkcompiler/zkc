@@ -1,6 +1,6 @@
 //! Explicit source inputs. Imports never perform filesystem discovery.
 use crate::host::io;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
@@ -23,11 +23,27 @@ struct Manifest {
     #[serde(default)]
     assets: BTreeMap<String, Asset>,
 }
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Asset {
     pub format: String,
     pub path: String,
+}
+
+/// Filesystem provenance for tooling, separate from the compiler's capture.
+/// A dependency identifies its visible manifest context, even for file symlinks.
+#[derive(Serialize)]
+pub struct ProjectGraph {
+    pub format: &'static str,
+    pub root: PathBuf,
+    pub packages: Vec<ProjectPackage>,
+}
+#[derive(Serialize)]
+pub struct ProjectPackage {
+    pub manifest: PathBuf,
+    pub modules: BTreeMap<String, String>,
+    pub assets: BTreeMap<String, Asset>,
+    pub dependencies: BTreeMap<String, PathBuf>,
 }
 
 /// Explicit source paths, made absolute when loaded. Imports are resolved only
@@ -36,6 +52,7 @@ pub struct Project {
     pub(crate) flags: Vec<String>,
     pub(crate) paths: Vec<String>,
     pub(crate) manifest: Option<PathBuf>,
+    graph: Option<ProjectGraph>,
 }
 impl Project {
     pub fn discover() -> Result<Self> {
@@ -60,6 +77,10 @@ impl Project {
     pub fn paths(&self) -> impl Iterator<Item = &str> {
         self.paths.iter().map(String::as_str)
     }
+    /// Explicit SDK input maps have no filesystem package graph.
+    pub fn graph(&self) -> Option<&ProjectGraph> {
+        self.graph.as_ref()
+    }
     fn from_parts(
         manifest: Option<PathBuf>,
         mut modules: BTreeMap<String, String>,
@@ -71,10 +92,16 @@ impl Project {
             flags: vec![],
             paths: vec![],
             manifest: manifest.clone(),
+            graph: None,
         };
         if let Some(path) = manifest {
             let mut capture = Capture::default();
-            capture.load(&path)?;
+            let root = capture.load(&path)?;
+            result.graph = Some(ProjectGraph {
+                format: "zkc.project-graph/0",
+                root,
+                packages: capture.packages.into_values().collect(),
+            });
             modules = capture.modules;
             assets = capture.assets;
             result.paths = capture.manifests;
@@ -113,9 +140,10 @@ struct Capture {
     manifests: Vec<String>,
     active: BTreeSet<PathBuf>,
     visited: BTreeSet<PathBuf>,
+    packages: BTreeMap<PathBuf, ProjectPackage>,
 }
 impl Capture {
-    fn load(&mut self, path: &Path) -> Result<()> {
+    fn load(&mut self, path: &Path) -> Result<PathBuf> {
         let parent = path
             .parent()
             .ok_or("source-project-format")?
@@ -126,7 +154,7 @@ impl Capture {
             return Err("source-project-cycle".into());
         }
         if self.visited.contains(&context) {
-            return Ok(());
+            return Ok(context);
         }
         if self.visited.len() + self.active.len() >= MANIFESTS || self.active.len() >= DEPTH {
             return Err("source-project-limit".into());
@@ -149,9 +177,16 @@ impl Capture {
         self.active.insert(context.clone());
         self.manifests
             .push(context.to_str().ok_or("source-project-format")?.into());
+        let mut package = ProjectPackage {
+            manifest: context.clone(),
+            modules: BTreeMap::new(),
+            assets: BTreeMap::new(),
+            dependencies: BTreeMap::new(),
+        };
         for (name, path) in project.modules {
             validate_name(&name)?;
             let path = resolve(&parent, &path)?;
+            package.modules.insert(name.clone(), path.clone());
             if let Some(previous) = self.modules.get(&name) {
                 if !same_file(previous, &path) {
                     return Err("source-project-conflict".into());
@@ -167,6 +202,7 @@ impl Capture {
                 format: asset.format,
                 path: resolve(&parent, &asset.path)?,
             };
+            package.assets.insert(name.clone(), asset.clone());
             if let Some(previous) = self.assets.get(&name) {
                 if previous.format != asset.format || !same_file(&previous.path, &asset.path) {
                     return Err("source-project-conflict".into());
@@ -181,11 +217,13 @@ impl Capture {
         for (name, path) in project.dependencies {
             validate_name(&name)?;
             let directory = resolve(&parent, &path)?;
-            self.load(&Path::new(&directory).join("zkc.toml"))?;
+            let dependency = self.load(&Path::new(&directory).join("zkc.toml"))?;
+            package.dependencies.insert(name, dependency);
         }
         self.active.remove(&context);
-        self.visited.insert(context);
-        Ok(())
+        self.visited.insert(context.clone());
+        self.packages.insert(context.clone(), package);
+        Ok(context)
     }
 }
 
@@ -304,6 +342,27 @@ mod tests {
             assert!(project.paths().any(|found| Path::new(found) == path));
         }
         assert_eq!(project.paths().count(), 5);
+        let graph = project.graph().unwrap();
+        assert_eq!(graph.format, "zkc.project-graph/0");
+        assert_eq!(graph.root, root.join("top/zkc.toml"));
+        assert_eq!(graph.packages.len(), 4);
+        let top = graph
+            .packages
+            .iter()
+            .find(|p| p.manifest == graph.root)
+            .unwrap();
+        assert_eq!(top.dependencies["left"], root.join("left/zkc.toml"));
+        assert_eq!(top.dependencies["right"], root.join("right/zkc.toml"));
+        assert!(top.modules.is_empty());
+        let leaf = graph
+            .packages
+            .iter()
+            .find(|p| !p.modules.is_empty())
+            .unwrap();
+        assert_eq!(
+            leaf.modules["shared"],
+            root.join("leaf/lib.zkc").to_str().unwrap()
+        );
     }
 
     #[test]

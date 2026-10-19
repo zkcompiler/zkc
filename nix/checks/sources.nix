@@ -9,6 +9,9 @@ runCommand "zkc-source-boundaries" { } ''
   test ! -e ${sources.compiler}/lean
   test -f ${sources.compilerTests}/common/tests/fixtures/clean/air-control.json
   test -f ${sources.compilerTests}/compiler/test/CMakeLists.txt
+  test -f ${sources.compilerTests}/compiler/test/support/source_project.py
+  test -f ${sources.compilerTests}/common/tests/support/project.py
+  test -f ${sources.compilerTests}/libraries/protocols/polynomial/sumcheck/zkc.toml
   test -f ${sources.compilerTests}/common/tests/fixtures/projects/scoped-computations/main.zkc
   test ! -e ${sources.compilerTests}/common/tests/run.py
   test -f ${sources.rust}/crates/zkc-tools/Cargo.toml
@@ -21,6 +24,10 @@ runCommand "zkc-source-boundaries" { } ''
   test ! -e ${sources.integration}/common/tests/harness
   test ! -e ${sources.integration}/common/tests/consumer
   test -f ${sources.integration}/docs/getting-started.md
+  test -f ${sources.integration}/common/tests/protocol/test_library_packages.py
+  test -f ${sources.integration}/common/tests/protocol/test_example_recipes.py
+  test -f ${sources.integration}/examples/projects/fri/README.md
+  test -f ${sources.integration}/libraries/constructions/ethereum/eip4844/example_vectors.json
   test -f ${sources.integration}/compiler/adapters/clean/adapter.py
   test -f ${sources.integration}/compiler/adapters/ring_arena.py
   test -f ${sources.integration}/compiler/adapters/clean/fixtures/femtocairo/bundle.json
@@ -33,8 +40,10 @@ runCommand "zkc-source-boundaries" { } ''
   test -f ${sources.leanChecks}/common/tests/fixtures/clean/air-control.json
   test ! -e ${sources.arklib}/lean/integrations/clean
   test -f ${sources.arklib}/lean/checks/check_clients.py
-  test -f ${sources.application}/libraries/zkc/finite.zkc
-  test -f ${sources.application}/libraries/zkc/sequence.zkc
+  test -f ${sources.application}/libraries/core/traversal/finite.zkc
+  test -f ${sources.application}/libraries/core/primitives/collections/sequence.zkc
+  test -f ${sources.application}/common/tests/support/project.py
+  test -f ${sources.application}/libraries/protocols/sigma/schnorr/zkc.toml
   test ! -e ${sources.application}/crates
   mkdir -p "$out"
 ''

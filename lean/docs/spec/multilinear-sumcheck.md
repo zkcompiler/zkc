@@ -2,7 +2,7 @@
 
 `Zkc.Protocols.Sumcheck.Multilinear` is an independent mathematical foundation
 for the scalar multilinear library in
-[`libraries/sumcheck/lib.zkc`](../../../libraries/sumcheck/lib.zkc).
+[`libraries/protocols/polynomial/sumcheck/lib.zkc`](../../../libraries/protocols/polynomial/sumcheck/lib.zkc).
 It models endpoint messages, ordered table restriction, residual truth and
 complete public-table discharge without importing that source or defining its
 open process. The quadratic Sumcheck and factor-opening contracts are separate

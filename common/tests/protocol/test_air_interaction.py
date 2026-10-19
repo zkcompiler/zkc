@@ -29,7 +29,7 @@ def test_field_balance_logup_signed_counts_and_inactive_poles(toolchain, journal
     request = input_files(journal, 'weighted', roles={'P': {'inputs': inputs}})
     arguments = [f'--compiler={toolchain.compiler}',
         f'--module=inspect_reduction={ROOT}/common/tests/protocol/sources/interaction-reduction.zkc',
-        *library_modules('air')]
+        *library_modules('relations/air')]
     output = directory / 'weighted-results.json'
     journal.json([toolchain.runtime, '--json', 'run', *arguments,
                   'inspect_reduction::LogUpRun', *request, f'--results={output}'])
@@ -60,7 +60,7 @@ def test_mixed_interactions_range_only_natural_counts(toolchain, journal, direct
     output = directory / 'mixed-results.json'
     journal.json([toolchain.runtime, '--json', 'run', f'--compiler={toolchain.compiler}',
         f'--module=inspect_reduction={ROOT}/common/tests/protocol/sources/interaction-reduction.zkc',
-        *library_modules('air'), 'inspect_reduction::LogUpRun', *request, f'--results={output}'])
+        *library_modules('relations/air'), 'inspect_reduction::LogUpRun', *request, f'--results={output}'])
     actual = json.loads(output.read_text())['roles']['P']
     # Field weights 3 and 4 are unrestricted. The natural record's count 2
     # violates its Boolean range equation, regardless of the LogUp recurrence.
@@ -102,7 +102,7 @@ def test_source_reduction_matches_independent_staged_reference(toolchain, journa
     package = directory / 'reduction.zkpkg'
     report = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
         f'--module=inspect_reduction={ROOT}/common/tests/protocol/sources/interaction-reduction.zkc',
-        *library_modules('air'),
+        *library_modules('relations/air'),
         f'inspect_reduction::{entry}', f'--output={package}'])
     pin = report['package_sha256']
     reduction = reductions.Reduction(kind, bundle, [True, True, True])

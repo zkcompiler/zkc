@@ -1,8 +1,9 @@
 """Ordered collection codecs and byte assembly through source, IR and Host."""
+
+from source_modules import core_packages, library_modules
 import pytest
 
 from entry import Entry
-from toolchain import ROOT
 
 
 @pytest.mark.parametrize('field,codec,order', [
@@ -27,8 +28,7 @@ protocol Run roles(P)(values:Vector<F>@P,byte:index@P,count:index@P)
   ->(result:bytes::Bytes@P) {{ return encode(values,byte,count); }}
 run Demo=Run;
 '''
-    modules = [f'--module=zkc::{path.stem}={path}'
-               for path in (ROOT / 'libraries/zkc').glob('*.zkc')]
+    modules = library_modules(*core_packages())
     entry = Entry(toolchain, journal, directory, source, (*flags, *modules))
     for n in (0, 1, 16, 256):
         values = [i * 19 + 5 for i in range(n)]
@@ -60,15 +60,14 @@ fn check()->bool {{
 protocol Run roles(P)()->(ok:bool@P) {{ let ok @P=check();return ok; }}
 run Demo=Run;
 '''
-    modules = [f'--module=zkc::{path.stem}={path}'
-               for path in (ROOT / 'libraries/zkc').glob('*.zkc')]
+    modules = library_modules(*core_packages())
     entry = Entry(toolchain, journal, directory, source, modules)
     assert entry.run('groups', {})['ok'] is True
 
 
 @pytest.mark.parametrize('flags', [(), ('--no-simplify', '--release-storage')])
 def test_unsigned_leb128_encoding(toolchain, journal, directory, flags):
-    from source_modules import library_modules
+    from source_modules import core_packages, library_modules
 
     source = '''module sample;
 use zkc::encoding as encoding;
@@ -78,7 +77,7 @@ protocol Run roles(P)(value:index@P)->(bytes:Bytes@P) {
 }
 run Demo=Run;
 '''
-    entry = Entry(toolchain, journal, directory, source, (*library_modules('zkc'), *flags))
+    entry = Entry(toolchain, journal, directory, source, (*library_modules(*core_packages()), *flags))
     values = [0, 1, 300, 624485, 2**64-1]
     values += [value for bit in range(7, 64, 7) for value in (2**bit-1, 2**bit, 2**bit+1)]
     for value in values:

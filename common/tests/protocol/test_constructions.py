@@ -9,7 +9,7 @@ import hashlib
 import json
 
 import pytest
-from source_modules import library_modules
+from source_modules import core_packages, library_inputs, library_modules
 
 SOURCE = '''module sample;
 domain F=field("bls12-381.fr");
@@ -271,14 +271,13 @@ def test_source_construction_cryptographic_histories(toolchain, journal, directo
     from test_source_transcript import PUBLIC, VECTOR
     root = Path(__file__).resolve().parents[3]
     modules = {'sample': root / f'common/tests/fixtures/constructions/{protocol}.zkc',
-               'spongefish': root / 'libraries/spongefish/lib.zkc'}
-    modules.update({f'zkc::{name}': root / f'libraries/zkc/{name}.zkc'
-                    for name in ['multilinear', 'bytes', 'shake128', 'encoding', 'vector', 'boolean', 'finite', 'sequence', 'accumulation', 'curve']})
+               'spongefish::duplex': root / 'libraries/constructions/spongefish/duplex.zkc'}
+    modules.update(library_inputs(*core_packages()))
     if protocol == 'sumcheck':
-        modules['sumcheck'] = root / 'libraries/sumcheck/lib.zkc'
+        modules['sumcheck'] = root / 'libraries/protocols/polynomial/sumcheck/lib.zkc'
     package = directory / 'proof.zkpkg'
     compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                             *library_modules('spongefish', 'sumcheck', overrides=modules),
+                             *library_modules('constructions/spongefish', 'protocols/polynomial/sumcheck', overrides=modules),
                              'sample::Demo', f'--output={package}', *flags])
     public_value = PUBLIC if protocol == 'schnorr' else {
         'values': ['1', '2', '3', '4'], 'claim': '10', 'rounds': '2'}
@@ -325,11 +324,10 @@ def test_managed_provider_methods_are_ordinary_checked_functions(toolchain, jour
     source.write_text((root / 'common/tests/fixtures/constructions/managed.zkc').read_text()
                       .replace('merlin3.bls12-381.fr64be/0', suite))
     modules = {'sample': source}
-    modules.update({f'zkc::{name}': root / f'libraries/zkc/{name}.zkc'
-                    for name in ['bytes', 'encoding', 'transcript']})
+    modules.update(library_inputs(*core_packages()))
     package = directory / 'proof.zkpkg'
     compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                             *library_modules('spongefish', 'sumcheck', overrides=modules),
+                             *library_modules('constructions/spongefish', 'protocols/polynomial/sumcheck', overrides=modules),
                              'sample::Demo', f'--output={package}', *flags])
     public = journal.write('public.json', {'public': '5'})
     witness = journal.write('witness.json', {'secret': '7'})
@@ -369,10 +367,10 @@ def test_managed_index_methods_reject_invalid_bounds_and_clean_up(toolchain, jou
     proof Demo=Choose{prover P;verifier V;public{};accept ok;construction Custom;}
     '''.replace('BOUND', str(bound)).replace('SUITE', suite))
     package = directory / 'proof.zkpkg'
-    modules = {'sample': source, 'zkc::transcript': root / 'libraries/zkc/transcript.zkc',
-               'zkc::bytes': root / 'libraries/zkc/bytes.zkc'}
+    modules = {'sample': source, 'zkc::transcript': root / 'libraries/core/primitives/cryptography/transcript.zkc',
+               'zkc::bytes': root / 'libraries/core/encoding/bytes.zkc'}
     compiled = journal.json([toolchain.runtime, '--json', 'compile', f'--compiler={toolchain.compiler}',
-                             *library_modules('spongefish', 'sumcheck', overrides=modules),
+                             *library_modules('constructions/spongefish', 'protocols/polynomial/sumcheck', overrides=modules),
                              'sample::Demo', f'--output={package}'])
     args = [f'--package={package}', f'--sha256={compiled["package_sha256"]}']
     proof = directory / 'proof.bin'

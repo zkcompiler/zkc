@@ -39,7 +39,7 @@ format = "zkc.project/0"
 example = "main.zkc"
 
 [dependencies]
-schnorr = "../../libraries/schnorr"
+schnorr = "../../libraries/protocols/sigma/schnorr"
 
 # Optional external relation data.
 [assets.constraints]
@@ -85,10 +85,18 @@ Reports include the selected compiler, manifest when used, output path and packa
 SHA-256. Paths do not enter source capture identity. The `.zkpkg` extension is a
 filename convention; readers check the package format.
 
+`zkc check --api` also reports `project_graph` when using a manifest. Its
+`zkc.project-graph/0` diagnostic format records the root manifest and packages
+sorted by manifest context. Each package retains its own explicit module and
+asset maps and direct dependencies, mapping dependency labels to manifest
+contexts. File symlinks keep their visible parent context; shared directory
+contexts appear once. This metadata is separate from source capture and is
+absent for explicit module/asset maps and SDK captures.
+
 ## Inspect completed declarations
 
 ```sh
-zkc check --project=libraries/zkc/zkc.toml --declarations
+zkc check --project=libraries/core/polynomial/zkc.toml --declarations
 ```
 
 The report's `declarations` array lists public mathematical functions,
@@ -105,6 +113,14 @@ written names (or null for unnamed inputs); `item_origins` lists canonical input
 and domain indices, independent of those labels. Private helpers
 are still checked but are omitted from this view. The report is diagnostic data,
 not an importable interface or a proof of protocol security.
+
+Use `--api` for public types, aliases, reexport routes, notation exports and
+source dependency provenance. Its `api` object keeps the selected provider
+separate from the canonical target, so clients of a facade do not acquire its
+private implementation dependencies. Public record descriptions omit private
+fields; associated representations remain private. Reference records include
+private helpers for dependency analysis and grant no access to those helpers.
+The [specification](../spec/language/definitions.md) defines the bounded view.
 
 Type errors identify conflicting shapes and related source locations. Unresolved
 statics name the parameter needing an argument or result annotation; ambiguous

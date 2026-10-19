@@ -219,9 +219,50 @@ not a serialization accepted by the checker. The view never supplies linking
 or admission authority. Its unembedded JSON array is bounded by `interfaceBytes`;
 an exceeded bound refuses without publishing a partial result.
 
+`zkc check --api` adds a diagnostic `api` object with format `zkc.source-api/0`.
+Its `roots` are the captured root modules. Its `exports` form a compact graph:
+each edge records the canonical `owner`, exported `name`, canonical `target`,
+whether it is `imported`, and its source location. Following an alias does not
+allocate another declaration or enumerate every possible path. `notations`
+records exported syntax bindings per reachable owner, with descriptor key,
+symbol, canonical target, static arguments and binding source. The separate
+notation view retains detailed syntax environments and occurrences.
+
+`declarations` describes all declarations reachable through these public routes,
+including types, domains, associated types, relations and Entries. Callable
+contracts use the same descriptive fields as the declaration inventory.
+Capability requirements additionally provide `export`, a canonical qualified
+source name for writing the predicate in a `where` clause.
+`requirements_written` and `effects_written` distinguish authored contracts
+from completion by the checker. Record and variant descriptions expose public
+fields and constructor visibility, but omit private field names and types.
+Associated types report permissions and abstract status without their private
+representation. Canonical names may pass through private ancestors when a
+public reexport provides access; inspection grants no additional source access.
+
+`references` records checked references from captured source, including private
+helpers and unused imports. Each record has the source `owner`, `written` path,
+the `provider` source module selected by that path, its `provider_origin`
+(`captured` or `installation`), canonical `target`, its
+`target_module`, and source location. A facade provider remains distinct from
+its implementation target. Calls through a static module parameter additionally
+identify the `abstract_module` and its interface member. Locations use logical
+source module, origin, and UTF-8 byte offsets. The provider of an abstract call
+is the route used to bind its interface, including for inherited parameters;
+reexporting an interface does not impose its implementation package on callers.
+Tables are sorted by canonical
+names and source spans; repeated equivalent references are coalesced.
+
+The API view is bounded by `apiInspectionBytes` (8 MiB by default), checked
+work/declaration/operation limits and public graph depth. Limit exhaustion
+refuses with `source.limit` and publishes no partial successful report. The
+combined successful check report is bounded by 32 MiB. Inspection is diagnostic
+metadata: it changes no capture, installation, original or program identity,
+and does not supply linking, admission or security authority.
+
 The direct compiler and CLI emit the same flat `zkc.source-check/0` successful
 result. It records `status`, `phase`, `scope`, `capture`, `installation`, optional
-`declarations`, and `entry`/`original` for Entry scope. The CLI adds `compiler`.
+`declarations`, `api`, `notations`, and `entry`/`original` for Entry scope. The CLI adds `compiler`.
 The separate [notation inspection view](notation.md#inspection) describes syntax
 environments and occurrences; it does not change callable declaration records.
 

@@ -23,3 +23,24 @@ The [explicit transcript client](../../../../common/tests/fixtures/projects/spon
 independent byte-level reference. Tests compare both paths to upstream vectors
 and exercise malformed encodings. Agreement is not a security proof or a claim
 of compatibility with every Spongefish configuration.
+
+## Executable quick start
+
+Run these literal commands from this project directory with `zkc` and
+`zkc-compile` on `PATH` (Python 3 for generated inputs). The test suite runs
+this block in a separate consumer tree using only declared package dependencies.
+
+```sh zkc-example
+zkc check
+zkc prove Proof --allow-authored
+zkc verify Proof --allow-authored
+```
+
+Inputs: inputs/example.Proof/{public,witness}.json.
+
+Profile: BLS12-381 G1/Fr; SHAKE128, 48-byte points, 32-byte scalars and an 80-byte proof.
+
+Expected negative control: A truncated encoding or a changed session refuses verification.
+
+Generated packages, proofs and result documents are written under `build/`
+inside this project. Existing input maps remain source inputs.

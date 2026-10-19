@@ -1,7 +1,11 @@
-format = "zkc.project/0"
-[modules]
-example = "main.zkc"
-statement = "protocol.zkc"
-[dependencies]
-schnorr = "../../../../libraries/schnorr"
-spongefish = "../../../../libraries/spongefish"
+"format" = "zkc.project/0"
+
+["modules"]
+"example" = "main.zkc"
+"statement" = "protocol.zkc"
+
+["dependencies"]
+"spongefish" = "../../../../libraries/constructions/spongefish"
+"core-encoding" = "../../../../libraries/core/encoding"
+"core-primitives-cryptography" = "../../../../libraries/core/primitives/cryptography"
+"schnorr" = "../../../../libraries/protocols/sigma/schnorr"

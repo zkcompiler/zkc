@@ -3,15 +3,15 @@
 # Each table names one retained export: the suite that regenerates and compares
 # it, the Entry it exports, its sources and the Lean data module of the retained
 # snapshot (`ZkcExamples.Structured.<data>Data`). Sources are a module map
-# (`modules`), a project manifest (`project`), or a caller module compiled with
-# every `libraries/zkc` module (`library_caller`). The suites read this file;
+# (`modules`), a project manifest (`project`), or an explicit fixture manifest
+# (`manifest`) selecting its library closure. The suites read this file;
 # the cases they run over each subject stay in their code. Subject manifests in
 # `lean/subjects` may also regenerate a retained export they own.
 
 [schnorr-interactive]
 suite = "open_protocol"
 entry = "example::Interactive"
-modules = { example = "examples/projects/schnorr/main.zkc", schnorr = "libraries/schnorr/lib.zkc" }
+modules = { example = "examples/projects/schnorr/main.zkc", schnorr = "libraries/protocols/sigma/schnorr/lib.zkc" }
 data = "SchnorrInteractive"
 
 [schnorr-helpers]
@@ -35,73 +35,73 @@ data = "SchnorrEarlyChallenge"
 [schnorr-and]
 suite = "open_protocol"
 entry = "example::AndInteractive"
-modules = { example = "examples/projects/sigma/main.zkc", sigma = "libraries/sigma/lib.zkc" }
+modules = { example = "examples/projects/sigma/main.zkc", sigma = "libraries/protocols/sigma/compositions/lib.zkc" }
 data = "SchnorrAnd"
 
 [chaum-pedersen]
 suite = "open_protocol"
 entry = "example::EqualityInteractive"
-modules = { example = "examples/projects/sigma/main.zkc", sigma = "libraries/sigma/lib.zkc" }
+modules = { example = "examples/projects/sigma/main.zkc", sigma = "libraries/protocols/sigma/compositions/lib.zkc" }
 data = "ChaumPedersen"
 
 [primitive-shape]
 suite = "primitives"
 entry = "primitive_examples::ShapeEntry"
-library_caller = "compiler/test/fixtures/structured-source/primitive-callers.zkc"
+manifest = "compiler/test/fixtures/structured-source/primitive-callers.toml"
 data = "PrimitiveShape"
 
 [primitive-table]
 suite = "primitives"
 entry = "primitive_examples::TableEntry"
-library_caller = "compiler/test/fixtures/structured-source/primitive-callers.zkc"
+manifest = "compiler/test/fixtures/structured-source/primitive-callers.toml"
 data = "PrimitiveTable"
 
 [primitive-halves]
 suite = "primitives"
 entry = "primitive_examples::HalvesEntry"
-library_caller = "compiler/test/fixtures/structured-source/primitive-callers.zkc"
+manifest = "compiler/test/fixtures/structured-source/primitive-callers.toml"
 data = "PrimitiveHalves"
 
 [primitive-sequence]
 suite = "primitives"
 entry = "primitive_examples::SequenceEntry"
-library_caller = "compiler/test/fixtures/structured-source/primitive-callers.zkc"
+manifest = "compiler/test/fixtures/structured-source/primitive-callers.toml"
 data = "PrimitiveSequence"
 
 [primitive-pure-index]
 suite = "primitives"
 entry = "primitive_examples::PureIndexEntry"
-library_caller = "compiler/test/fixtures/structured-source/primitive-callers.zkc"
+manifest = "compiler/test/fixtures/structured-source/primitive-callers.toml"
 data = "PrimitivePureIndex"
 
 [map-first]
 suite = "maps"
 entry = "map_examples::FirstEntry"
-library_caller = "compiler/test/fixtures/structured-source/map-callers.zkc"
+manifest = "compiler/test/fixtures/structured-source/map-callers.toml"
 data = "MapFirst"
 
 [map-prefix]
 suite = "maps"
 entry = "map_examples::PrefixEntry"
-library_caller = "compiler/test/fixtures/structured-source/map-callers.zkc"
+manifest = "compiler/test/fixtures/structured-source/map-callers.toml"
 data = "MapPrefix"
 
 [map-combination]
 suite = "maps"
 entry = "map_examples::LinearCombinationEntry"
-library_caller = "compiler/test/fixtures/structured-source/map-callers.zkc"
+manifest = "compiler/test/fixtures/structured-source/map-callers.toml"
 data = "MapCombination"
 
 [map-constant]
 suite = "maps"
 entry = "map_examples::ConstantRowsEntry"
-library_caller = "compiler/test/fixtures/structured-source/map-callers.zkc"
+manifest = "compiler/test/fixtures/structured-source/map-callers.toml"
 data = "MapConstant"
 
 [realization-values]
 suite = "maps"
 entry = "map_examples::RealizeValuesEntry"
-library_caller = "compiler/test/fixtures/structured-source/map-callers.zkc"
+manifest = "compiler/test/fixtures/structured-source/map-callers.toml"
 data = "RealizationValues"
 
 [application]

@@ -1396,5 +1396,51 @@ module {
         require(succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
                 "shared binding was not independently checked");
       });
+  cases.run(
+      "projection aliases share captures without merging distinct leaves", [&] {
+        auto source = parse(R"mlir(
+!F = !algebra.field<"bls12-381.fr">
+module { "protocol.module"() ({
+ func.func private @identity(%x:!F)->!F { func.return %x : !F }
+ local.realize @identity_local = @identity : (!F)->!F
+ local.func @work(%a:!F,%b:!F,%flag:i1)->!F attributes {logical_origin=["work",[]]} {
+   %alias = local.apply @identity_local(%a) {site="identity"} : (!F)->!F
+   %other = local.apply @identity_local(%b) {site="other"} : (!F)->!F
+   %again = local.apply @identity_local(%a) {site="again"} : (!F)->!F
+   %result = "local.if"(%flag,%a,%alias,%b,%other,%again) ({
+   ^yes(%x:!F,%y:!F,%z:!F,%u:!F,%v:!F): "local.yield"(%v) : (!F)->()
+   }, {
+   ^no(%x:!F,%y:!F,%z:!F,%u:!F,%v:!F): "local.yield"(%u) : (!F)->()
+   }) {site="choose"} : (i1,!F,!F,!F,!F,!F)->!F
+   local.return %result : !F
+ }
+ "protocol.func"() ({ ^entry(%a:!F,%b:!F,%flag:i1):
+   %result = "protocol.local_call"(%a,%b,%flag) {callee=@work,site="work",role="P"} : (!F,!F,i1)->!F
+   "protocol.return"(%result) : (!F)->()
+ }) {sym_name="main",function_type=(!F,!F,i1)->!F,roles=["P"],input_roles=[["P"],["P"],["P"]],output_roles=[["P"]]} : ()->()
+}) {profile=#protocol.profile<protocol>} : ()->() }
+)mlir",
+                            context);
+        auto logical = exec(*source);
+        auto lowered = copy(*logical);
+        require(succeeded(kernel::lowerKernels(*lowered)),
+                "alias capture lowering failed");
+        auto function = localFunction(*lowered, "work");
+        auto branch =
+            *function.getBody().front().getOps<local::LocalIfOp>().begin();
+        require(branch->getNumOperands() == 3 &&
+                    branch->getRegion(0).front().getNumArguments() == 2,
+                "shared leaf was not captured once");
+        require(succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
+                "alias layout correspondence failed");
+        auto left = branch->getOperand(1), right = branch->getOperand(2);
+        branch->setOperand(1, right);
+        branch->setOperand(2, left);
+        require(succeeded(verify(*lowered)),
+                "same-type capture mutation must remain formed");
+        expectRefusal(*lowered, "kernel-lowering-correspondence", [&] {
+          return kernel::verifyKernelLowering(*logical, *lowered);
+        });
+      });
   return cases.result();
 }

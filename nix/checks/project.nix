@@ -8,15 +8,17 @@
   testSupport,
   python3,
   cacert,
+  scope ? "integration",
+  family ? null,
 }:
 tools.overrideAttrs (
   old:
   (environment.outputs {
-    compilerBin = "${compiler.testSupport}/bin";
+    compilerBin = if scope == "smoke" then "${compiler}/bin" else "${compiler.testSupport}/bin";
     nativeBin = "${testSupport}/bin";
   })
   // {
-    pname = "zkc-project-checks";
+    pname = "zkc-${scope}${if family == null then "" else "-${family}"}-checks";
     version = "0.0.0";
     src = source;
     # Generated bindings are compiled as a separate consumer crate. Reuse the
@@ -40,7 +42,7 @@ tools.overrideAttrs (
       runHook preCheck
       export UV_CACHE_DIR="$TMPDIR/uv-cache"
       ${environment.checks}
-      python3 common/tests/run.py integration
+      python3 common/tests/run.py ${scope} ${if family == null then "" else "--family=${family}"}
       runHook postCheck
     '';
     installPhase = ''

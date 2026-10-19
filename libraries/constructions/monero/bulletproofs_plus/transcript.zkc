@@ -1,0 +1,32 @@
+module monero::bulletproofs_plus::transcript;
+
+pub interface HashChain {
+  type State: Copy + Drop;
+  fn initialize() -> State effects(stop, opaque);
+  fn start(state: State, statement: Bytes) -> State effects(stop, opaque);
+  fn observe(state: State, raw: Bytes) -> State effects(stop, opaque);
+  fn pair(state: State, raw: (Bytes,Bytes)) -> State effects(stop, opaque);
+  fn draw(state: State) -> (State,F) effects(stop, opaque);
+}
+pub module Provider: HashChain {
+  type State: Copy + Drop = (Bytes,Bytes);
+  fn initialize() -> State effects(stop) where () { return State((initial_transcript(),bytes::empty())); }
+  fn start(state: State, statement: Bytes) -> State effects(stop) where () {
+    let (root, pending) = unpack(state);
+    let digest = encoding::field_le(hash_scalar(statement));
+    let next = encoding::field_le(hash_scalar(bytes::concat(root, digest)));
+    return State((next, bytes::empty()));
+  }
+  fn observe(state: State, raw: Bytes) -> State effects(stop) where () {
+    let (root,pending) = unpack(state);
+    return State((root,bytes::concat(pending,raw)));
+  }
+  fn pair(state: State, raw: (Bytes,Bytes)) -> State effects(stop) where () {
+    return observe(state, bytes::concat(raw.0, raw.1));
+  }
+  fn draw(state: State) -> (State,F) effects(stop) where () {
+    let (root,pending) = unpack(state);
+    let result = hash_scalar(bytes::concat(root,pending));
+    return (State((encoding::field_le(result),bytes::empty())),result);
+  }
+}

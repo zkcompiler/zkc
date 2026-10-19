@@ -1,0 +1,22 @@
+module zkc::accumulation;
+
+// Executable operations only. Implementing this interface grants no rewrite law.
+pub interface Combiner<T: Type + Copy + Drop> {
+  math fn identity() -> T;
+  math fn combine(state: T, value: T) -> T;
+}
+
+pub module FieldSum<F: Field>: Combiner<F> {
+  math fn identity() -> F where () { return 0; }
+  math fn combine(state: F, value: F) -> F where () { return state + value; }
+}
+
+pub module FieldProduct<F: Field>: Combiner<F> {
+  math fn identity() -> F where () { return 1; }
+  math fn combine(state: F, value: F) -> F where () { return state * value; }
+}
+
+pub module GroupSum<G: Group>: Combiner<G> where zkc::curve::ScalarAction(G) {
+  math fn identity() -> G where zkc::curve::ScalarAction(G) { return zkc::primitives::curve::identity<G>(); }
+  math fn combine(state: G, value: G) -> G where zkc::curve::ScalarAction(G) { return state + value; }
+}

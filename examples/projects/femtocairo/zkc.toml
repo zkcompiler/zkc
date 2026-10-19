@@ -1,11 +1,16 @@
-format = "zkc.project/0"
+"format" = "zkc.project/0"
 
-[modules]
-example = "main.zkc"
+["modules"]
+"example" = "main.zkc"
 
-[dependencies]
-stark = "../../../libraries/stark"
+["dependencies"]
+"stark-octic" = "../../../libraries/arguments/stark/configurations/koala_bear_octic"
+"stark-whole-bundle" = "../../../libraries/arguments/stark/whole_bundle"
+"core-collections" = "../../../libraries/core/collections"
+"relations-air" = "../../../libraries/relations/air"
 
-[assets.execution]
-format = "relation-bundle-json"
-path = "../../../compiler/adapters/clean/fixtures/femtocairo/bundle.json"
+["assets"]
+
+["assets"."execution"]
+"format" = "relation-bundle-json"
+"path" = "../../../compiler/adapters/clean/fixtures/femtocairo/bundle.json"

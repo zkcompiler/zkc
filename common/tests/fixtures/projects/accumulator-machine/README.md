@@ -9,7 +9,7 @@ not become compiler cases.
 
 `Run` exposes the interactive LogUp protocol. `ProofLogUp` and `ProofProduct`
 apply the same Fiat–Shamir construction to LogUp and grand-product reductions
-respectively. Both use the [three-table library profile](../../../../../libraries/stark/README.md#whole-bundle-argument):
+respectively. Both use the [three-table library profile](../../../../../libraries/arguments/stark/README.md#whole-bundle-argument):
 base-field trace commitment, extension-field auxiliary and quotient commitments,
 OOD checks, DEEP composition and a shared FRI instance. The compiler sees
 native vector maps, finite folds and imported record expressions. Shared

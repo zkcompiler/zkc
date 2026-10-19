@@ -5,10 +5,10 @@ import json
 import pytest
 
 from entry import Entry
-from source_modules import library_modules
+from source_modules import core_packages, library_modules
 
 ROOT = Path(__file__).resolve().parents[3]
-MODULES = library_modules('zkc')
+MODULES = library_modules(*core_packages())
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify'], ['--no-finite-bulk']])

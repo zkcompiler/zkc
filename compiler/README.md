@@ -32,7 +32,11 @@ are `language-check`, `language-emit`, `language-interface`, `language-bundle`,
 and `language-package`, with explicit `--module=NAME=FILE.zkc`, selected Entry,
 and optional `--asset=NAME=FORMAT=FILE` inputs. `language-check` may omit the
 Entry to check definitions alone; `--declarations` reports completed public
-callable contracts. The separate
+callable contracts. `--api` reports the public export graph, type contracts and
+checked reference providers alongside canonical targets. Both views are bounded
+diagnostic metadata, as specified in the
+[language contract](../docs/spec/language/definitions.md).
+The separate
 [notation inspection surface](../docs/language/notation.md#inspect-notation-and-locations)
 provides `--notations` and explicit private/installation visibility options; its
 completion status is tracked in [status](../docs/status.md#source-and-application-boundary).

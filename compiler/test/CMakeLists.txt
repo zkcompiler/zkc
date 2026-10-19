@@ -12,6 +12,23 @@ function(add_zkc_test name component)
   endif()
 endfunction()
 
+# Source fixtures use the same dependency closure as CLI consumers.
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+file(GLOB_RECURSE source_project_manifests CONFIGURE_DEPENDS
+  "${PROJECT_SOURCE_DIR}/../libraries/*/zkc.toml")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  ${source_project_manifests}
+  "${CMAKE_CURRENT_SOURCE_DIR}/support/source_project.py"
+  "${PROJECT_SOURCE_DIR}/../common/tests/support/project.py")
+function(zkc_source_project target manifest)
+  set(output "${CMAKE_CURRENT_BINARY_DIR}/${target}-sources.json")
+  execute_process(COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/support/source_project.py" "${manifest}" "${output}"
+    COMMAND_ERROR_IS_FATAL ANY)
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${manifest}")
+  target_compile_definitions(${target} PRIVATE ZKC_SOURCE_PROJECT="${output}")
+endfunction()
+
 add_zkc_test(kernel_ir IR kernel-ir)
 mlir_target_link_libraries(zkc-kernel_ir-test PRIVATE MLIRParser)
 
@@ -129,9 +146,9 @@ add_zkc_test(asset_sharing Compiler asset-sharing)
 add_zkc_test(language_interface Compiler language-interface)
 add_zkc_test(language_assets Language language-assets)
 add_zkc_test(language_expression_assets Language language-expression-assets)
+zkc_source_project(zkc-language_expression_assets-test
+  "${PROJECT_SOURCE_DIR}/../examples/projects/sumcheck/product/zkc.toml")
 target_compile_definitions(zkc-language_expression_assets-test PRIVATE
-  ZKC_MATH_LIBRARIES="${PROJECT_SOURCE_DIR}/../libraries/zkc"
-  ZKC_SUMCHECK_LIBRARY="${PROJECT_SOURCE_DIR}/../libraries/sumcheck/expression.zkc"
   ZKC_EXPRESSION_SUMCHECK_PROJECT="${PROJECT_SOURCE_DIR}/../examples/projects/sumcheck/product")
 add_zkc_test(language_asset_ir Compiler language-asset-ir)
 mlir_target_link_libraries(zkc-language_asset_ir-test PRIVATE MLIRParser)
@@ -179,7 +196,8 @@ add_zkc_test(language_finite_domains Language language-finite-domains)
 add_zkc_test(language_callback_origins Language language-callback-origins)
 add_zkc_test(language_scoped_ir Compiler language-scoped-ir)
 mlir_target_link_libraries(zkc-language_scoped_ir-test PRIVATE MLIRParser)
-target_compile_definitions(zkc-language_scoped_ir-test PRIVATE ZKC_SCOPED_ROOT="${PROJECT_SOURCE_DIR}/..")
+zkc_source_project(zkc-language_scoped_ir-test
+  "${PROJECT_SOURCE_DIR}/../common/tests/fixtures/projects/scoped-computations/zkc.toml")
 add_zkc_test(language_reductions Language language-reductions)
 add_zkc_test(language_reduction_ir Compiler language-reduction-ir)
 mlir_target_link_libraries(zkc-language_reduction_ir-test PRIVATE MLIRParser)
@@ -190,6 +208,7 @@ add_zkc_test(operator_inference Language operator-inference)
 add_zkc_test(library_operators Compiler library-operators)
 add_zkc_test(language_notation Language language-notation)
 add_zkc_test(language_notation_inspection Language language-notation-inspection)
+add_zkc_test(language_api_inspection Language language-api-inspection)
 add_zkc_test(notation_semantics Language notation-semantics)
 add_zkc_test(language_arguments Compiler language-arguments)
 add_zkc_test(language_logic Compiler language-logic)

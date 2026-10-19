@@ -1,0 +1,9 @@
+"format" = "zkc.project/0"
+
+["modules"]
+"zkc::polynomial" = "polynomial.zkc"
+"zkc::symbolic" = "symbolic.zkc"
+"zkc::primitives::coset" = "coset.zkc"
+
+["dependencies"]
+"primitive-collections" = "../collections"

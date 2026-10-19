@@ -45,6 +45,7 @@ pub struct Entry {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CheckOptions {
     pub declarations: bool,
+    pub api: bool,
     pub notations: Option<NotationOptions>,
 }
 #[derive(Clone, Copy, Debug, Default)]
@@ -67,6 +68,8 @@ pub struct Checked {
     pub declarations: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub notations: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api: Option<serde_json::Value>,
 }
 #[derive(Debug)]
 pub struct Error {
@@ -206,6 +209,9 @@ impl Compiler {
         if options.declarations {
             flags.push("--declarations");
         }
+        if options.api {
+            flags.push("--api");
+        }
         if let Some(notations) = options.notations {
             flags.push("--notations");
             if notations.include_private {
@@ -236,6 +242,10 @@ impl Compiler {
                     "definitions"
                 }
             || !selection::valid_check(&report, entry)
+            || report.get("declarations").is_some() != options.declarations
+            || report.get("notations").is_some() != options.notations.is_some()
+            || report.get("api").is_some() != options.api
+            || (options.api && report["api"]["format"] != "zkc.source-api/0")
         {
             return Err("source-check-format".into());
         }

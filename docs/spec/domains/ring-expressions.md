@@ -221,7 +221,7 @@ consuming view.
 
 ## Maintained clients and formal laws
 
-The [expression Sumcheck library](../../../libraries/sumcheck/expression.zkc)
+The [expression Sumcheck library](../../../libraries/protocols/polynomial/sumcheck/expression.zkc)
 uses a statically selected component for round coefficients and terminal
 evaluation. Its [source client](../../../examples/projects/sumcheck/product/README.md)
 binds a product arena and supports KoalaBear input tables promoted to Ext8,

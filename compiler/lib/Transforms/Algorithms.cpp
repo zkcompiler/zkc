@@ -15,6 +15,8 @@
 #include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/Protocol.h"
+#include "llvm/ADT/BitVector.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/SHA256.h"
@@ -62,12 +64,12 @@ LogicalResult detail::canonicalizeCaptures(Operation *op) {
     unsigned prefix =
         isa<zkc::local::LocalForOp>(op) ? 2 + op->getNumResults() : 1;
     unsigned captures = op->getNumOperands() - prefix;
-    for (unsigned i = captures; i-- > 0;) {
+    llvm::DenseMap<Value, unsigned> firstOccurrences;
+    SmallVector<std::pair<unsigned, unsigned>> aliases;
+    for (unsigned i = 0; i < captures; ++i) {
       Value value = op->getOperand(prefix + i);
-      unsigned first = 0;
-      while (first < i && op->getOperand(prefix + first) != value)
-        ++first;
-      if (first == i)
+      auto [first, inserted] = firstOccurrences.try_emplace(value, i);
+      if (inserted)
         continue;
       auto type = encodeBoundType(value.getType(), false);
       if (!type)
@@ -75,21 +77,37 @@ LogicalResult detail::canonicalizeCaptures(Operation *op) {
       if (!duplicable(type->spelling()))
         return diagnostics::emit(op->emitOpError(),
                                  "interactive-resource-reuse");
+      aliases.emplace_back(i, first->second);
+    }
+    if (!aliases.empty()) {
+      // Batch port removal avoids rescanning or shifting the capture list for
+      // each alias. Distinct SSA values retain their first-occurrence order.
+      llvm::BitVector operands(op->getNumOperands());
+      for (auto [alias, first] : aliases)
+        operands.set(prefix + alias);
       for (Region &region : op->getRegions()) {
         Block &block = region.front();
         unsigned start = block.getNumArguments() - captures;
-        block.getArgument(start + i).replaceAllUsesWith(
-            block.getArgument(start + first));
+        llvm::BitVector arguments(block.getNumArguments());
+        for (auto [alias, first] : aliases) {
+          block.getArgument(start + alias)
+              .replaceAllUsesWith(block.getArgument(start + first));
+          arguments.set(start + alias);
+        }
         if (isa<zkc::local::LocalForOp>(op) &&
             isa<zkc::local::LocalYieldOp, zkc::local::LocalConditionOp>(
-                block.back()))
-          block.back().eraseOperand(
-              op->getNumResults() + i +
-              (isa<zkc::local::LocalConditionOp>(block.back()) ? 1 : 0));
-        block.eraseArgument(start + i);
+                block.back())) {
+          llvm::BitVector forwarded(block.back().getNumOperands());
+          unsigned offset =
+              op->getNumResults() +
+              (isa<zkc::local::LocalConditionOp>(block.back()) ? 1 : 0);
+          for (auto [alias, first] : aliases)
+            forwarded.set(offset + alias);
+          block.back().eraseOperands(forwarded);
+        }
+        block.eraseArguments(arguments);
       }
-      op->eraseOperand(prefix + i);
-      --captures;
+      op->eraseOperands(operands);
     }
   }
   for (Region &region : op->getRegions())

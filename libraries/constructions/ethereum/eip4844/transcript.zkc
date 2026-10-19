@@ -1,0 +1,68 @@
+module ethereum::eip4844::transcript;
+use zkc::evaluation_domain as evaluation;
+use zkc::evaluation_domain::{EvaluationDomain};
+
+// The two challenge hash inputs of EIP-4844, as c-kzg-4844 computes them, as
+// copyable data. Each query handler returns the hash of exactly the bytes the
+// specification hashes; no Fiat-Shamir security claim follows from them.
+
+// Statement binding: the evaluation point of a blob opening is the hash of the
+// blob and its commitment (compute_challenge).
+pub interface Evaluation {
+  type State: Copy + Drop;
+  fn initialize() -> State effects(stop, opaque);
+  fn start(state: State, blob: Bytes, commitment: Bytes) -> State effects(stop, opaque);
+  fn draw(state: State) -> (State, F) effects(stop, opaque);
+}
+pub module Statement: Evaluation {
+  type State: Copy + Drop = (Bytes, Bytes);
+  fn initialize() -> State effects(stop) where () { return State((bytes::empty(), bytes::empty())); }
+  fn start(state: State, blob: Bytes, commitment: Bytes) -> State effects() where () {
+    return State((blob, commitment));
+  }
+  fn draw(state: State) -> (State, F) effects(stop) where () {
+    let (blob, commitment) = unpack(state);
+    return (state, compute_challenge(blob, commitment));
+  }
+}
+
+// Batch binding (verify_kzg_proof_batch): the combination weight hashes
+// RCKZGBATCH___V1_, the 8-byte degree bound and count, then the commitment,
+// point z, value y and proof of every opening in order. Blobs are not hashed
+// again. Each z is the opening's evaluation challenge and each y = p(z) is
+// computed from the statement, as the verifier does; neither is a message.
+pub interface Batching {
+  type State: Copy + Drop;
+  fn initialize() -> State effects(stop, opaque);
+  fn start(state: State, blobs: Bytes, commitments: Bytes, count: index) -> State
+    effects(stop, opaque);
+  fn proof(state: State, raw: Bytes) -> State effects(stop, opaque);
+  fn draw(state: State) -> (State, F) effects(stop, opaque);
+}
+pub module Combination: Batching {
+  // Blobs, commitments, the evaluation domain, the next opening and the
+  // bytes to hash.
+  type State: Copy + Drop = (Bytes, Bytes, EvaluationDomain<F>, index, Bytes);
+  fn initialize() -> State effects(stop) where () {
+    let empty = bytes::empty();
+    return State((empty, empty, evaluation::two_adic<F>(1, 1), 0, empty));
+  }
+  fn start(state: State, blobs: Bytes, commitments: Bytes, count: index) -> State effects(stop) where () {
+    let header = bytes::concat(batch_tag(), bytes::concat(integer(4096, 8), integer(count, 8)));
+    return State((blobs, commitments, blob_domain(), 0, header));
+  }
+  fn proof(state: State, raw: Bytes) -> State effects(stop) where () {
+    let (blobs, commitments, unity, next, data) = unpack(state);
+    let blob = blob_at(blobs, next);
+    let commitment = commitment_at(commitments, next);
+    let z = compute_challenge(blob, commitment);
+    let y = kzg::evaluate(evaluation::evaluations(unity, blob_to_polynomial(blob)), z);
+    let claim = bytes::concat(encoding::field_be(z), encoding::field_be(y));
+    let opened = bytes::concat(bytes::concat(commitment, claim), raw);
+    return State((blobs, commitments, unity, next + 1, bytes::concat(data, opened)));
+  }
+  fn draw(state: State) -> (State, F) effects(stop) where () {
+    let (_, _, _, _, data) = unpack(state);
+    return (state, encoding::field_reduce_be<F>(bytes::sha256(data)));
+  }
+}

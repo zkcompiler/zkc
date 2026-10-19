@@ -214,7 +214,7 @@ protocol Run roles(P,V)(values:vec::Vector<F>@P,claim:F@V,challenges:Random<F>@V
         remaining=mle::variables(residual1),value=e1.value);
 }run Demo=Run;
 '''
-    entry = Entry(toolchain, journal, directory, source, (*library_modules('sumcheck'), *flags))
+    entry = Entry(toolchain, journal, directory, source, (*library_modules('protocols/polynomial/sumcheck'), *flags))
     result = entry.run_roles('two-prefixes', {
         'P': {'inputs': {'values': ['1', '2', '3', '4']}},
         'V': {'inputs': {'claim': '10'}}})

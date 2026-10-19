@@ -91,14 +91,14 @@ theorem countRetargeted_refused :
 /-- The empty point helper observes the transcript: its body is the first
 round's observation. -/
 def helperObserves : Validator :=
-  withFunction actual "zkl_411728361dd91cce996681067ff835983db4b50a2c76153019bcfb3dff123b46" fun function =>
+  withFunction actual "zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f" fun function =>
     { function with body := match actual.function? "_transcript_1" with
         | some observation => observation.body
         | none => [] }
 
 theorem helperObserves_refused :
     refusal (checkLowering installed constructed helperObserves) =
-      some (.helper "zkl_411728361dd91cce996681067ff835983db4b50a2c76153019bcfb3dff123b46") := by
+      some (.helper "zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f") := by
   decide +kernel
 
 /-- The terminal check reads its first constant as 2: the rule still accepts,

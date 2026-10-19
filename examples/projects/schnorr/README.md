@@ -1,6 +1,6 @@
 # Schnorr source project
 
-[main.zkc](main.zkc) imports the generic [Schnorr library](../../../libraries/schnorr/lib.zkc)
+[main.zkc](main.zkc) imports the generic [Schnorr library](../../../libraries/protocols/sigma/schnorr/lib.zkc)
 and chooses BLS12-381 G1 and the installed Merlin transcript suite. `Proof` is
 noninteractive; `Interactive` uses the same protocol with actual messages and
 managed random services. No application-specific executor is involved.
@@ -25,3 +25,25 @@ construction remain separate work.
 
 The [Spongefish variant](spongefish/README.md) uses the same generic protocol
 with an application-selected transcript and raw external proof encoding.
+
+## Executable quick start
+
+Run these literal commands from this project directory with `zkc` and
+`zkc-compile` on `PATH` (Python 3 for generated inputs). The test suite runs
+this block in a separate consumer tree using only declared package dependencies.
+
+```sh zkc-example
+zkc check
+zkc run Interactive
+zkc prove Proof
+zkc verify Proof
+```
+
+Inputs: inputs/example.Proof/{public,witness}.json and participant maps for Interactive.
+
+Profile: BLS12-381 G1; the demonstration witness is public knowledge.
+
+Expected negative control: Changing the public point while retaining a proof refuses verification.
+
+Generated packages, proofs and result documents are written under `build/`
+inside this project. Existing input maps remain source inputs.

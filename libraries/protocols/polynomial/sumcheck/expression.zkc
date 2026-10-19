@@ -1,0 +1,84 @@
+module sumcheck::expression;
+
+use zkc::vector::{Vector, length, has_length, empty, append, get};
+use zkc::indices::{divide};
+use zkc::polynomial::{from_coefficients, boundary, evaluate};
+
+// The captured arena A fixes one closed expression and its ordered factor
+// slots. Values are row-major assignments with A::Inputs columns. Round
+// returns the exact coefficient sum over affine pairs; terminal substitutes
+// the final factor values and reads the single output.
+fn round<F: Field, A: Ring>(values: Table<F>) -> Vector<F> {
+  let halves = multilinear::halves(values);
+  let rows = divide(length(halves.0), index<A::Inputs>());
+  return kernel<F>("ring.affine_sum", halves.0, halves.1, rows; A);
+}
+fn terminal<F: Field, A: Ring>(values: Vector<F>) -> F {
+  let result = kernel<F>("ring.point", values; A);
+  return get(result, 0);
+}
+pub use zkc::multilinear::{Evaluation};
+use zkc::multilinear as multilinear;
+use zkc::multilinear::{Table, fix_first, fix_prefix};
+
+// An MSB-first prefix and residual-sum obligation:
+// sum_y A(f1(point || y), ..., fk(point || y)) = value, over the remaining
+// Boolean variables. The caller binds the factor polynomials and dimension.
+pub protocol Reduce<F: Field, Max: nat, A: Ring> roles(P,V)
+    (values: Table<F> @P, claim: F @V, rounds: index @(P,V),
+     challenges: Random<F> @V)
+    -> (point: Vector<F> @P, residual: Table<F> @P,
+        evaluation: Evaluation<F> @V)
+    where 1 <= A::Inputs, 1 <= A::Outputs, A::Outputs <= 1 {
+  require @P multilinear::width(values) == index<A::Inputs>();
+  require @P !zkc::indices::less(multilinear::variables(values), rounds);
+  let mut tableP = values;
+  let mut pointP @P = empty<F>();
+  let mut pointV @V = empty<F>();
+  let mut current = claim;
+  for _ in 0..rounds roles(P,V) max Max {
+    let proposed = round<F,A>(tableP);
+    #[site(round)] let received = send P -> V(proposed);
+    require has_length<F,A::Degree+1>(received);
+    let actual = from_coefficients(received);
+    require current == boundary(actual);
+    #[site(challenge)] let cv = challenges.draw();
+    #[site(delivery)] let cp = send V -> P(cv);
+    tableP = fix_first(tableP, cp);
+    pointP = append(pointP, cp);
+    pointV = append(pointV, cv);
+    current = evaluate(actual, cv);
+  }
+  let evaluation @V = Evaluation<F> { point: pointV, value: current };
+  return (point = pointP, residual = tableP, evaluation = evaluation);
+}
+
+// Public factor tables, MSB-first variable order. The verifier folds the public
+// factors and checks the exact terminal expression. The table width and the
+// round-polynomial degree are derived from the captured arena: each round
+// carries A::Degree + 1 coefficients and the terminal row has A::Inputs
+// factors. A commitment/opening protocol can replace this direct terminal
+// evaluation in a separate library.
+pub protocol Sumcheck<F: Field, Max: nat, A: Ring> roles(P,V)
+    (prover_values: Vector<F> @P, verifier_values: Vector<F> @V,
+     claim: F @V, rounds: index @(P,V),
+     challenges: Random<F> @V) -> (accepted: bool @V)
+    where 1 <= A::Inputs, 1 <= A::Outputs, A::Outputs <= 1 {
+  let table @P = multilinear::table(prover_values, rounds, index<A::Inputs>());
+  #[site(reduce)] let (point, residual, evaluation) =
+    Reduce<F,Max,A>(table, claim, rounds, challenges);
+  return check<F,A>(verifier_values, evaluation);
+}
+
+// Authenticated factor values must follow the captured arena's input order.
+pub fn check_factors<F: Field, A: Ring>(factors: Vector<F>, expected: F) -> bool
+    effects(stop) where 1 <= A::Inputs, 1 <= A::Outputs, A::Outputs <= 1 {
+  require has_length<F,A::Inputs>(factors);
+  return terminal<F,A>(factors) == expected;
+}
+
+pub fn check<F: Field, A: Ring>(values: Vector<F>, evaluation: Evaluation<F>) -> bool
+    effects(stop) where 1 <= A::Inputs, 1 <= A::Outputs, A::Outputs <= 1 {
+  let table = multilinear::table(values, length(evaluation.point), index<A::Inputs>());
+  return check_factors<F,A>(multilinear::values(fix_prefix(table, evaluation.point)), evaluation.value);
+}

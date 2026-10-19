@@ -1,7 +1,7 @@
 """The parameterized single-table STARK library at its KoalaBear configuration.
 
-`stark::argument::TableArgument` is generic over a `stark::configurations::
-Configuration`; these tests run it with `stark::koala_bear::quartic::Poseidon2`
+`stark::single_table::TableArgument` is generic over a `stark::configurations::contract::
+Configuration`; these tests run it with `stark::configurations::koala_bear_quartic::Poseidon2`
 (KoalaBear trace, quartic extension, Poseidon2 Merkle trees with pruned
 multi-openings, natural layout with both fold siblings in one FRI leaf,
 challenges derived from the octic KoalaBear Merlin suite) and with a second,
@@ -23,7 +23,7 @@ from source_modules import library_modules
 ROOT = Path(__file__).resolve().parents[3]
 PROJECT = ROOT / 'examples/projects/stark'
 EXISTING = ROOT / 'examples/projects/fibonacci'
-LIBRARY = ROOT / 'libraries/stark'
+LIBRARY = ROOT / 'libraries/arguments/stark'
 RECURRENCE = ROOT / 'compiler/adapters/plonky3/fixtures/recurrence'
 SUITE = 'merlin3.koala-bear.ext8-binomial3.rejection31le/0'
 P = 2130706433
@@ -96,7 +96,7 @@ class Package:
         path = directory / f'{name}.zkc'
         path.write_text(source)
         return cls(toolchain, journal, directory,
-                   [f'--module=example={path}', *library_modules('stark', overrides=overrides),
+                   [f'--module=example={path}', *library_modules('arguments/stark/configurations/contract', 'arguments/stark/configurations/koala_bear_octic', 'arguments/stark/configurations/koala_bear_quartic', 'arguments/stark/sampling', 'arguments/stark/single_table', 'arguments/stark/single_table/koala_bear_octic', 'arguments/stark/whole_bundle', overrides=overrides),
                     *[f'--asset={k}=relation-bundle-json={v}' for k, v in assets.items()],
                     'example::Proof', *flags], name)
 
@@ -197,9 +197,9 @@ def quadratic_air(height, width):
 
 
 GENERATED = '''module example;
-use stark::koala_bear::{Base, Extension};
-use stark::koala_bear::quartic::{Poseidon2};
-use stark::argument::{Statement, TableArgument};
+use stark::configurations::koala_bear_octic::{Base, Extension};
+use stark::configurations::koala_bear_quartic::{Poseidon2};
+use stark::single_table::{Statement, TableArgument};
 use zkc::vector::{Vector};
 use zkc::vector as v;
 domain Trace = bundle(asset trace);
@@ -249,9 +249,9 @@ def test_generated_air_parameters(toolchain, journal, directory, height, width, 
 
 
 RECURRENCE_SOURCE = '''module example;
-use stark::koala_bear::{Base, Extension};
-use stark::koala_bear::quartic::{Poseidon2};
-use stark::argument::{Statement, TableArgument};
+use stark::configurations::koala_bear_octic::{Base, Extension};
+use stark::configurations::koala_bear_quartic::{Poseidon2};
+use stark::single_table::{Statement, TableArgument};
 use zkc::vector::{Vector};
 use zkc::vector as v;
 domain Recurrence = bundle(asset recurrence);
@@ -353,18 +353,18 @@ fn shifted(positions: Indices, size: index) -> Indices {
 def test_wrong_openings_are_refused(toolchain, journal, directory, variant):
     """The prover opens its own commitments, but not where the verifier asked."""
     if variant == 'fri-siblings':
-        path = edited(directory, LIBRARY / 'low_degree.zkc', [(
+        path = edited(directory, LIBRARY / 'single_table/low_degree.zkc', [(
             'let proposed @P = sibling_values(opened.0, atP, nextP);',
             'let proposed @P = sibling_values(opened.0, pair_indices(atP, 1), nextP);')],
             'low_degree.zkc')
-        overrides = {'stark::low_degree': path}
+        overrides = {'stark::single_table::low_degree': path}
     else:
         target = {'trace-rows': 'K::open_base(trace_tree.1, positionsP, sizeP)',
                   'quotient-rows': 'K::open_extension(quotient_tree.1, positionsP, sizeP)'}[variant]
-        path = edited(directory, LIBRARY / 'argument.zkc', [
+        path = edited(directory, LIBRARY / 'single_table/lib.zkc', [
             (target, target.replace('positionsP', 'shifted(positionsP, sizeP)')),
             ('fn deep_values<', SHIFTED + 'fn deep_values<')], 'argument.zkc')
-        overrides = {'stark::argument': path}
+        overrides = {'stark::single_table': path}
     package = dishonest(toolchain, journal, directory, variant, overrides)
     public, witness = fibonacci_inputs('Plonky3Proof')
     produced, proof = package.prove(public, witness)
@@ -397,7 +397,7 @@ def test_dishonest_quotients_are_refused(toolchain, journal, directory):
     trace = [int(x) for x in witness['trace']]
     trace[5] = (trace[5] + 1) % P
     false = {'trace': [str(x) for x in trace]}
-    truncate = edited(directory, ROOT / 'libraries/air/polynomial.zkc', [(
+    truncate = edited(directory, ROOT / 'libraries/relations/air/polynomial.zkc', [(
         '  require boolean::negate(less(capacity, actual));\n'
         '  let padded = concat(coefficients, fill<F>(0, capacity - actual));',
         '  let padded = if less(capacity, actual) { slice(coefficients, 0, capacity) }\n'
@@ -408,21 +408,21 @@ def test_dishonest_quotients_are_refused(toolchain, journal, directory):
     assert produced['status'] == 'produced'
     identity = rejected(package.verify(public, proof, refuses=True))
 
-    claims = edited(directory, LIBRARY / 'argument.zkc', [
+    claims = edited(directory, LIBRARY / 'single_table/lib.zkc', [
         ('  let proposed_quotient @P = opening_claims(chunks, factsP.chunks, shift_extensionP, sizeP, zetaP);',
          '  let honest_quotient @P = opening_claims(chunks, factsP.chunks, shift_extensionP, sizeP, zetaP);\n'
          '  let proposed_quotient @P = compensated<K::Extension,Table,B>(honest_quotient, proposed,\n'
          '    heightP, zetaP, alphaP);'),
         ('fn deep_values<', COMPENSATED + 'fn deep_values<')], 'argument.zkc')
-    final = edited(directory, LIBRARY / 'low_degree.zkc', [(
+    final = edited(directory, LIBRARY / 'single_table/low_degree.zkc', [(
         '  require !less(count, length(coefficients));\n'
         '  return concat(coefficients, fill<F>(0, count - length(coefficients)));',
         '  return if less(count, length(coefficients)) { zkc::vector::slice(coefficients, 0, count) }\n'
         '    else { concat(coefficients, fill<F>(0, count - length(coefficients))) };')],
         'low_degree.zkc')
     package = dishonest(toolchain, journal, directory, 'compensated',
-                        {'air::polynomial': truncate, 'stark::argument': claims,
-                         'stark::low_degree': final})
+                        {'air::polynomial': truncate, 'stark::single_table': claims,
+                         'stark::single_table::low_degree': final})
     produced, proof = package.prove(public, false)
     assert produced['status'] == 'produced'
     terminal = rejected(package.verify(public, proof, refuses=True))
@@ -431,31 +431,31 @@ def test_dishonest_quotients_are_refused(toolchain, journal, directory):
 
 
 CONFIGURATIONS = '''
-use stark::configurations::{Configuration, reversed_rows, reversed_pairs, reverse_positions,
+use stark::configurations::contract::{Configuration, reversed_rows, reversed_pairs, reverse_positions,
   pair_positions};
-use stark::koala_bear::quartic::{Quartic, KoalaBearRows, QuarticRows};
+use stark::configurations::koala_bear_quartic::{Quartic, KoalaBearRows, QuarticRows};
 use zkc::indices::{Indices};
 use zkc::oracle as oracle;
 use zkc::oracle::{Root, Path, State};
 module Reversed: Configuration {
-  type Base: Field = stark::koala_bear::Base;
+  type Base: Field = stark::configurations::koala_bear_octic::Base;
   type Extension: Field = Quartic;
-  type Challenge: Field = stark::koala_bear::Extension;
+  type Challenge: Field = stark::configurations::koala_bear_octic::Extension;
   type BaseRows: Commitment = KoalaBearRows;
   type ExtensionRows: Commitment = QuarticRows;
-  fn challenge(draw: stark::koala_bear::Extension) -> Quartic { return Poseidon2::challenge(draw); }
-  fn embed(values: Vector<stark::koala_bear::Base>) -> Vector<Quartic> { return Poseidon2::embed(values); }
-  fn lift(value: stark::koala_bear::Base) -> Quartic { return Poseidon2::lift(value); }
-  fn shift() -> stark::koala_bear::Base { return 3; }
-  fn commit_base(rows: Vector<stark::koala_bear::Base>, width: index) -> (Root<KoalaBearRows>, State<KoalaBearRows>) {
+  fn challenge(draw: stark::configurations::koala_bear_octic::Extension) -> Quartic { return Poseidon2::challenge(draw); }
+  fn embed(values: Vector<stark::configurations::koala_bear_octic::Base>) -> Vector<Quartic> { return Poseidon2::embed(values); }
+  fn lift(value: stark::configurations::koala_bear_octic::Base) -> Quartic { return Poseidon2::lift(value); }
+  fn shift() -> stark::configurations::koala_bear_octic::Base { return 3; }
+  fn commit_base(rows: Vector<stark::configurations::koala_bear_octic::Base>, width: index) -> (Root<KoalaBearRows>, State<KoalaBearRows>) {
     return oracle::commit<KoalaBearRows>(reversed_rows(rows, width), width);
   }
   fn open_base(state: State<KoalaBearRows>, positions: Indices, height: index)
-      -> (Vector<stark::koala_bear::Base>, Path<KoalaBearRows>) {
+      -> (Vector<stark::configurations::koala_bear_octic::Base>, Path<KoalaBearRows>) {
     return oracle::open_many<KoalaBearRows>(state, reverse_positions(positions, height));
   }
   fn check_base(root: Root<KoalaBearRows>, width: index, height: index, positions: Indices,
-      rows: Vector<stark::koala_bear::Base>, proof: Path<KoalaBearRows>) -> bool {
+      rows: Vector<stark::configurations::koala_bear_octic::Base>, proof: Path<KoalaBearRows>) -> bool {
     return oracle::check_many<KoalaBearRows>(root, width, height,
       reverse_positions(positions, height), rows, proof);
   }
@@ -484,24 +484,24 @@ module Reversed: Configuration {
   }
 }
 module Separate: Configuration {
-  type Base: Field = stark::koala_bear::Base;
+  type Base: Field = stark::configurations::koala_bear_octic::Base;
   type Extension: Field = Quartic;
-  type Challenge: Field = stark::koala_bear::Extension;
+  type Challenge: Field = stark::configurations::koala_bear_octic::Extension;
   type BaseRows: Commitment = KoalaBearRows;
   type ExtensionRows: Commitment = QuarticRows;
-  fn challenge(draw: stark::koala_bear::Extension) -> Quartic { return Poseidon2::challenge(draw); }
-  fn embed(values: Vector<stark::koala_bear::Base>) -> Vector<Quartic> { return Poseidon2::embed(values); }
-  fn lift(value: stark::koala_bear::Base) -> Quartic { return Poseidon2::lift(value); }
-  fn shift() -> stark::koala_bear::Base { return 3; }
-  fn commit_base(rows: Vector<stark::koala_bear::Base>, width: index) -> (Root<KoalaBearRows>, State<KoalaBearRows>) {
+  fn challenge(draw: stark::configurations::koala_bear_octic::Extension) -> Quartic { return Poseidon2::challenge(draw); }
+  fn embed(values: Vector<stark::configurations::koala_bear_octic::Base>) -> Vector<Quartic> { return Poseidon2::embed(values); }
+  fn lift(value: stark::configurations::koala_bear_octic::Base) -> Quartic { return Poseidon2::lift(value); }
+  fn shift() -> stark::configurations::koala_bear_octic::Base { return 3; }
+  fn commit_base(rows: Vector<stark::configurations::koala_bear_octic::Base>, width: index) -> (Root<KoalaBearRows>, State<KoalaBearRows>) {
     return Poseidon2::commit_base(rows, width);
   }
   fn open_base(state: State<KoalaBearRows>, positions: Indices, height: index)
-      -> (Vector<stark::koala_bear::Base>, Path<KoalaBearRows>) {
+      -> (Vector<stark::configurations::koala_bear_octic::Base>, Path<KoalaBearRows>) {
     return Poseidon2::open_base(state, positions, height);
   }
   fn check_base(root: Root<KoalaBearRows>, width: index, height: index, positions: Indices,
-      rows: Vector<stark::koala_bear::Base>, proof: Path<KoalaBearRows>) -> bool {
+      rows: Vector<stark::configurations::koala_bear_octic::Base>, proof: Path<KoalaBearRows>) -> bool {
     return Poseidon2::check_base(root, width, height, positions, rows, proof);
   }
   fn commit_extension(rows: Vector<Quartic>, width: index) -> (Root<QuarticRows>, State<QuarticRows>) {
@@ -560,8 +560,8 @@ def test_layout_and_leaf_grouping_are_configurations(toolchain, journal, directo
 
 
 DERIVATION = '''module sample;
-use stark::koala_bear::{Extension};
-use stark::koala_bear::quartic::{Poseidon2, Quartic};
+use stark::configurations::koala_bear_octic::{Extension};
+use stark::configurations::koala_bear_quartic::{Poseidon2, Quartic};
 protocol Run roles(P)(draw: Extension @P) -> (challenge: Quartic @P) {
   let challenge @P = Poseidon2::challenge(draw);
   return (challenge = challenge);
@@ -572,7 +572,7 @@ run Demo = Run;
 
 def test_quartic_challenges_are_octic_prefixes(toolchain, journal, directory):
     from entry import Entry
-    entry = Entry(toolchain, journal, directory, DERIVATION, library_modules('stark'))
+    entry = Entry(toolchain, journal, directory, DERIVATION, library_modules('arguments/stark/configurations/contract', 'arguments/stark/configurations/koala_bear_octic', 'arguments/stark/configurations/koala_bear_quartic', 'arguments/stark/sampling', 'arguments/stark/single_table', 'arguments/stark/single_table/koala_bear_octic', 'arguments/stark/whole_bundle'))
     for draw in ([1, 2, 3, 4, 5, 6, 7, 8], [P - 1] * 8, [0] * 7 + [9]):
         result = entry.run(f'draw-{draw[0]}-{draw[-1]}', {'draw': [str(x) for x in draw]})
         assert result['challenge'] == [str(x) for x in draw[:4]]

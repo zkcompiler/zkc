@@ -1,0 +1,32 @@
+module zkc::opening_claims;
+use zkc::vector as vector;
+use zkc::vector::{Vector};
+use zkc::indices as indices;
+use zkc::indices::{Indices};
+use zkc::boolean::{both};
+
+// Ordered opening descriptors. Repeated columns and rotations are meaningful.
+// This view establishes shape and bounds, not commitment authentication.
+pub struct OpeningClaims<F: Field> {
+  selected: Indices,
+  offsets: Indices,
+  claimed: Vector<F>
+}
+pub fn checked<F: Field>(column_indices: Indices, rotation_indices: Indices, claims: Vector<F>)
+    -> OpeningClaims<F> effects(stop) where () {
+  require both(indices::length(column_indices) == indices::length(rotation_indices),
+      indices::length(column_indices) == vector::length(claims));
+  return OpeningClaims<F> { selected: column_indices, offsets: rotation_indices, claimed: claims };
+}
+pub fn within<F: Field>(input: OpeningClaims<F>, width: index, height: index)
+    -> OpeningClaims<F> effects(stop) where () {
+  require !(height == 0);
+  for i in 0..indices::length(input.selected) {
+    require both(indices::less(indices::get(input.selected, i), width),
+        indices::less(indices::get(input.offsets, i), height));
+  }
+  return input;
+}
+pub math fn columns<F: Field>(input: OpeningClaims<F>) -> Indices where () { return input.selected; }
+pub math fn rotations<F: Field>(input: OpeningClaims<F>) -> Indices where () { return input.offsets; }
+pub math fn values<F: Field>(input: OpeningClaims<F>) -> Vector<F> where () { return input.claimed; }

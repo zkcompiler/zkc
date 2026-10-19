@@ -1,5 +1,7 @@
 """Sparse native matrices checked against dense integer arithmetic via Entry."""
 
+from source_modules import core_packages, library_modules
+
 import random
 from pathlib import Path
 
@@ -9,8 +11,7 @@ from binomial_reference import FIELDS as EXTENSIONS
 from entry import Entry
 
 ROOT = Path(__file__).resolve().parents[3]
-MODULES = [f'--module=zkc::{name}={ROOT}/libraries/zkc/{name}.zkc'
-           for name in ('vector', 'matrix', 'finite', 'sequence', 'accumulation', 'curve')]
+MODULES = library_modules(*core_packages())
 
 FIELDS = [
     ('bls12-381.fr', 23, 66, 1, 32,

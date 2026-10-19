@@ -13,17 +13,17 @@ namespace ZkcExamples.Executable.SumcheckProofProgramData
 open Zkc.Construction Zkc.Executable
 
 /-- SHA-256 of the exact `zkc.program/0` bytes this data was read from. -/
-def program : String := "sha256:13ebe5bb7e06e8f0cbf05cb8bfb6cf18aa285cd094d043b0d14b730e49485e3f"
+def program : String := "sha256:79e74a4db9e176eefe29de66ee1841e044ed486aeea2dfeafded47cf19cff9fb"
 
-/-- The local function `zkl_411728361dd91cce996681067ff835983db4b50a2c76153019bcfb3dff123b46`. -/
+/-- The local function `zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f`. -/
 def function0 : Function :=
-  ⟨"zkl_411728361dd91cce996681067ff835983db4b50a2c76153019bcfb3dff123b46", [], [⟨.data (.vector "bls12-381.fr"), "arkworks.fr-vector/0"⟩], [
+  ⟨"zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f", [], [⟨.data (.vector "bls12-381.fr"), "arkworks.fr-vector/0"⟩], [
     .operation "s0" "zkl_binding_7" [] [] ["v83"],
     .ret ["v83"]]⟩
 
-/-- The local function `zkl_e9d4e02b4f3bba21b953f31470da5acb0cd796fdc4c7898da74fbc3f5af04e58`. -/
+/-- The local function `zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d`. -/
 def function1 : Function :=
-  ⟨"zkl_e9d4e02b4f3bba21b953f31470da5acb0cd796fdc4c7898da74fbc3f5af04e58", [("v116", ⟨.data (.vector "bls12-381.fr"), "arkworks.fr-vector/0"⟩), ("v117", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩)], [⟨.data (.vector "bls12-381.fr"), "arkworks.fr-vector/0"⟩], [
+  ⟨"zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d", [("v116", ⟨.data (.vector "bls12-381.fr"), "arkworks.fr-vector/0"⟩), ("v117", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩)], [⟨.data (.vector "bls12-381.fr"), "arkworks.fr-vector/0"⟩], [
     .operation "s0" "zkl_binding_11" [] ["v116", "v117"] ["v118"],
     .ret ["v118"]]⟩
 
@@ -97,8 +97,8 @@ def validator : Validator where
   inputs := [("v425", ⟨.data (.vector "bls12-381.fr"), "arkworks.fr-vector/0"⟩), ("v426", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩), ("v427", ⟨.data .index, "native.index/0"⟩), ("v428", ⟨.transcript "merlin3.bls12-381.fr64be/0", "host.resource/0"⟩)]
   results := [⟨.data .boolean, "native.bool/0"⟩, ⟨.transcript "merlin3.bls12-381.fr64be/0", "host.resource/0"⟩]
   body := [
-    .call "apply_18_label_726564756365_s12" "zkl_411728361dd91cce996681067ff835983db4b50a2c76153019bcfb3dff123b46" [] ["v429"],
-    .loop "apply_18_label_726564756365_s15" "v427" 2 "v430" [("v431", "v429"), ("v432", "v426"), ("v433", "v428")] [] [.receive "apply_18_label_726564756365_label_726f756e64_0" "apply_18_label_726564756365_label_726f756e64_0" "role00000000" "v434" ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩, .call "_transcript_12" "_transcript_1" ["v433", "v434", "v430"] ["v435"], .receive "apply_18_label_726564756365_label_726f756e64_1" "apply_18_label_726564756365_label_726f756e64_1" "role00000000" "v436" ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩, .call "_transcript_13" "_transcript_4" ["v435", "v436", "v430"] ["v437"], .call "apply_18_label_726564756365_s24" "_calculation_3" ["v434", "v436", "v432"] [], .call "_transcript_14" "_transcript_6" ["v437", "v430"] ["v438", "v439"], .call "_transcript_15" "_transcript_7" ["v439", "v438", "v430"] ["v440"], .call "apply_18_label_726564756365_s33" "zkl_e9d4e02b4f3bba21b953f31470da5acb0cd796fdc4c7898da74fbc3f5af04e58" ["v431", "v438"] ["v441"], .call "calculation_0" "_calculation_4" ["v438", "v434", "v436"] ["v442"], .yield ["v441", "v442", "v440"]] ["v443", "v444", "v445"],
+    .call "apply_18_label_726564756365_s12" "zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f" [] ["v429"],
+    .loop "apply_18_label_726564756365_s15" "v427" 2 "v430" [("v431", "v429"), ("v432", "v426"), ("v433", "v428")] [] [.receive "apply_18_label_726564756365_label_726f756e64_0" "apply_18_label_726564756365_label_726f756e64_0" "role00000000" "v434" ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩, .call "_transcript_12" "_transcript_1" ["v433", "v434", "v430"] ["v435"], .receive "apply_18_label_726564756365_label_726f756e64_1" "apply_18_label_726564756365_label_726f756e64_1" "role00000000" "v436" ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩, .call "_transcript_13" "_transcript_4" ["v435", "v436", "v430"] ["v437"], .call "apply_18_label_726564756365_s24" "_calculation_3" ["v434", "v436", "v432"] [], .call "_transcript_14" "_transcript_6" ["v437", "v430"] ["v438", "v439"], .call "_transcript_15" "_transcript_7" ["v439", "v438", "v430"] ["v440"], .call "apply_18_label_726564756365_s33" "zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d" ["v431", "v438"] ["v441"], .call "calculation_0" "_calculation_4" ["v438", "v434", "v436"] ["v442"], .yield ["v441", "v442", "v440"]] ["v443", "v444", "v445"],
     .call "s7" "zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc" ["v425", "v443", "v444"] ["v446"],
     .ret ["v446", "v445"]]
   functions := [function0, function1, function2, function3, function4, function5, function6, function7, function8]

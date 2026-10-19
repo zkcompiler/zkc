@@ -38,8 +38,8 @@ def compile_entry(toolchain, journal, directory, entry, *, flags=(), source=None
                f'--module=accumulator_machine={path}',
                f'--asset=machine=relation-bundle-json={asset or FIXTURES / "bundle.json"}',
                f'accumulator_machine::{entry}', f'--output={package}', *flags]
-    from project import project_inputs
-    modules, _ = project_inputs(ROOT / 'libraries/stark/zkc.toml')
+    from source_modules import library_inputs
+    modules = library_inputs('arguments/stark/whole_bundle')
     for module, module_path in modules.items():
         replacements = [(old, new) for owner, old, new in edits if owner == module]
         if replacements:

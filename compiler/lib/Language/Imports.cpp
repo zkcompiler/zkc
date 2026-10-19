@@ -95,8 +95,8 @@ bool Checker::imports() {
     bindingHeight[id][index] = 1;
     ++bindingDepth;
     bindingStack.emplace_back(id, index);
-    auto selected =
-        resolve(context, import.module, import.span, false, &routes[id][index]);
+    auto selected = resolve(context, import.module, import.span, false,
+                            &routes[id][index], &import.provider);
     if (!selected ||
         output.declarations[selected->index].kind != Declaration::Kind::Module)
       return types.diagnostic
@@ -110,7 +110,8 @@ bool Checker::imports() {
       if (!types.charge(1, import.span))
         return false;
       auto [position, inserted] = visible[id].emplace(
-          name.str(), ScopeBinding{target, import.span, import.isPublic});
+          name.str(),
+          ScopeBinding{target, import.span, import.isPublic, import.provider});
       if (!inserted && position->second.target.index != target.index)
         return types.fail("source.duplicate",
                           "import conflicts with visible name: " + name,
@@ -213,9 +214,16 @@ bool Checker::imports() {
       };
       if (import.alias && !exportable(*import.target))
         return false;
+      if (!recordReference(context, import.provider.value_or(*import.target),
+                           *import.target, import.module, import.span))
+        return false;
       for (const auto &name : import.names) {
         auto selected = lookup(context, *import.target, name, import.span);
         if (!selected || !exportable(*selected))
+          return false;
+        if (!recordReference(context, import.provider.value_or(*import.target),
+                             *selected, import.module + "::" + name,
+                             import.span))
           return false;
       }
     }

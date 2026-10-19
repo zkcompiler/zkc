@@ -1,0 +1,85 @@
+module zkc::opening;
+use zkc::vector::{Vector, length, empty, append, get, slice, accumulate};
+use zkc::indices::{Indices};
+use zkc::indices as indices;
+use zkc::coset::{point, column_at, opening_quotient};
+use zkc::scalar::{inverse};
+use zkc::boolean::{both};
+use zkc::opening_claims as claims;
+use zkc::opening_claims::{OpeningClaims};
+
+// Algebra for batched univariate openings. The caller owns commitments,
+// degree bounds, challenges and the final comparison with authenticated rows.
+// Every opening point zeta*g^rotation must lie outside the evaluation coset;
+// a protocol checks this at both roles before using the quotient equations.
+fn shifted_point<F: Field>(height: index, rotation: index, zeta: F) -> F {
+  return zeta * point<F>(1, height, rotation);
+}
+
+pub fn opening_claims<F: Field>(columns: Vector<F>, count: index, shift: F,
+    size: index, zeta: F) -> Vector<F> effects(stop) where zkc::algebra::TwoAdicField(F) {
+  require length(columns) == count * size;
+  let mut result = empty<F>();
+  for column in 0..count {
+    result = append(result, column_at(columns, column, size, zeta, shift));
+  }
+  return result;
+}
+
+// Opening j reads column selected_j at zeta*g^rotation_j, with claimed value_j.
+pub fn deep_columns<F: Field>(columns: Vector<F>, input: OpeningClaims<F>, height: index, shift: F, size: index, zeta: F, rho: F,
+    initial: Vector<F>, first_weight: F) -> (Vector<F>, F) effects(stop) where zkc::algebra::TwoAdicField(F) {
+  require !(size == 0);
+  require indices::remainder(length(columns), size) == 0;
+  require !(height == 0);
+  let width = indices::divide(length(columns), size);
+  let selected = claims::columns(input);
+  let rotations = claims::rotations(input);
+  let values = claims::values(input);
+  let count = indices::length(selected);
+  require length(initial) == size;
+  let mut result = initial;
+  let mut weight = first_weight;
+  for opening in 0..count {
+    let column_index = indices::get(selected, opening);
+    let rotation = indices::get(rotations, opening);
+    require both(indices::less(column_index, width), indices::less(rotation, height));
+    let column = slice(columns, column_index * size, size);
+    let x = shifted_point(height, rotation, zeta);
+    // The quotient primitive checks every denominator against its coset.
+    let reduced = opening_quotient(column, shift, x, get(values, opening));
+    result = accumulate(result, reduced, weight);
+    weight = weight * rho;
+  }
+  return (result, weight);
+}
+pub fn deep_column_values<F: Field>(row: Vector<F>, input: OpeningClaims<F>, height: index, x: F, zeta: F, rho: F,
+    initial: F, first_weight: F) -> (F, F) effects(stop) where zkc::algebra::TwoAdicField(F) {
+  require !(height == 0);
+  let selected = claims::columns(input);
+  let rotations = claims::rotations(input);
+  let values = claims::values(input);
+  let count = indices::length(selected);
+  let mut result = initial;
+  let mut weight = first_weight;
+  for opening in 0..count {
+    let column_index = indices::get(selected, opening);
+    let rotation = indices::get(rotations, opening);
+    require both(indices::less(column_index, length(row)), indices::less(rotation, height));
+    let at = shifted_point(height, rotation, zeta);
+    let reduced = (get(row, column_index) - get(values, opening)) * inverse(x - at);
+    result = result + weight * reduced;
+    weight = weight * rho;
+  }
+  return (result, weight);
+}
+// Quotient chunks are opened at zeta itself: rotation zero.
+pub fn same_rotation(count: index, rotation: index) -> (Indices, Indices) effects(stop) where () {
+  let mut selected = indices::empty();
+  let mut rotations = indices::empty();
+  for column in 0..count {
+    selected = indices::append(selected, column);
+    rotations = indices::append(rotations, rotation);
+  }
+  return (selected, rotations);
+}

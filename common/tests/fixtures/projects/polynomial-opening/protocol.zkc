@@ -20,8 +20,7 @@ pub protocol Open<C: Commitment> roles(P,V)
   let root = send P -> V(tree.0);
   let columns @P = opening::same_rotation(1, 0);
   let claimP @P = vector::fill(value, 1);
-  let reduced @P = opening::deep_columns(word, columns.0, columns.1,
-    claimP, 8, shift, 32, point, 1, vector::fill<C::ValueField>(0, 32), 1);
+  let reduced @P = opening::deep_columns(word, zkc::opening_claims::checked(columns.0, columns.1, claimP), 8, shift, 32, point, 1, vector::fill<C::ValueField>(0, 32), 1);
   let rounds: index @(P,V) = 2;
   let queries: index @(P,V) = 8;
   let (ok, positionsP, positionsV, valuesV) =
@@ -36,8 +35,7 @@ pub protocol Open<C: Commitment> roles(P,V)
     let position @V = indices::get(positionsV, query);
     require @V oracle::check<C>(root, 1, 32, position, received, path);
     let x @V = coset::point(shift, 32, position);
-    let expected @V = opening::deep_column_values(received, columnsV.0,
-      columnsV.1, claimV, 8, x, point, 1, 0, 1);
+    let expected @V = opening::deep_column_values(received, zkc::opening_claims::checked(columnsV.0, columnsV.1, claimV), 8, x, point, 1, 0, 1);
     require @V expected.0 == vector::get(valuesV, query);
   }
   return true;

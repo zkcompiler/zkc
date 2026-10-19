@@ -2,7 +2,7 @@
 """Exercise an installed zkc and its companion compiler outside the checkout."""
 import argparse
 import json
-from support.project import project_text
+from support.project import copy_project
 from pathlib import Path
 import shutil
 import subprocess
@@ -12,9 +12,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def check(binary, compiler, output):
     output.mkdir(parents=True, exist_ok=False)
-    for source, name in [(ROOT / "libraries/schnorr/lib.zkc", "schnorr.zkc"),
-                         (ROOT / "examples/projects/schnorr/main.zkc", "main.zkc"),
-                         (ROOT / "examples/projects/schnorr/inputs/example.Proof/witness.json", "witness.json"),
+    copy_project(ROOT / "examples/projects/schnorr/zkc.toml", output)
+    for source, name in [(ROOT / "examples/projects/schnorr/inputs/example.Proof/witness.json", "witness.json"),
                          (ROOT / "examples/projects/schnorr/inputs/example.Proof/public.json", "public.json")]:
         shutil.copyfile(source, output / name)
     # Only the wrapper may introduce the companion compiler. Ambient checkout,
@@ -32,8 +31,6 @@ def check(binary, compiler, output):
 
     invoke("help", "--help")
     invoke("version", "--version")
-    (output / "zkc.toml").write_text(project_text({"format": "zkc.project/0",
-        "modules": {"schnorr": "schnorr.zkc", "example": "main.zkc"}, "assets": {}}))
     checked = json.loads(invoke("check", "check", "--project=zkc.toml", "--declarations"))
     assert checked["status"] == "checked" and checked["scope"] == "definitions"
     assert any(d["name"] == "schnorr::Schnorr" for d in checked["declarations"])
@@ -61,19 +58,14 @@ def check(binary, compiler, output):
 
     # The shared fold crosses source-library, generic map and native realization
     # boundaries. Exercise it with the installed compiler, outside the checkout.
-    shutil.copyfile(ROOT / "common/tests/fixtures/projects/mathematics/main.zkc", output / "mathematics.zkc")
-    math_modules = ("vector", "multilinear", "symbolic", "accumulation", "curve", "finite", "sequence", "indices")
-    for name in math_modules:
-        shutil.copyfile(ROOT / f"libraries/zkc/{name}.zkc", output / f"{name}.zkc")
-    (output / "mathematics.toml").write_text(project_text({"format": "zkc.project/0", "modules": {
-        "example": "mathematics.zkc", **{f"zkc::{name}": f"{name}.zkc"
-        for name in math_modules}
-    }, "assets": {}}))
-    checked = json.loads(invoke("math-check", "check", "--project=mathematics.toml",
+    mathematics = output / "mathematics"
+    mathematics.mkdir()
+    copy_project(ROOT / "common/tests/fixtures/projects/mathematics/zkc.toml", mathematics)
+    checked = json.loads(invoke("math-check", "check", "--project=mathematics/zkc.toml",
                                 "example::Run", "--declarations"))
     assert checked["scope"] == "entry"
     assert any(d["name"] == "zkc::multilinear::fix_first" for d in checked["declarations"])
-    compiled = json.loads(invoke("math-compile", "compile", "--project=mathematics.toml",
+    compiled = json.loads(invoke("math-compile", "compile", "--project=mathematics/zkc.toml",
                                  "example::Run", "--output=mathematics.zkpkg"))
 
     (output / "mathematics-inputs.json").write_text(json.dumps({

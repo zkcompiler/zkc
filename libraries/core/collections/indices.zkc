@@ -1,0 +1,34 @@
+module zkc::indices;
+
+pub use zkc::primitives::indices::{
+  Indices, empty, append, length, get, at, elements, indices, divide, remainder
+};
+
+pub fn collect<I: Type + Copy + Drop>(
+  rows: domain<I>, body: fn(item: I) -> index effects(stop) where item_from(item, rows)
+) -> Indices effects(stop) = finite("local.collect.indices");
+
+// Bounds follow the selected total accessor; checked access can be rebound locally.
+
+pub indexing values[position] = at(values, position);
+
+pub fn concat(left: Indices, right: Indices) -> Indices effects(stop) where () {
+  let mut result = left;
+  for position in 0..length(right) { result = append(result, get(right, position)); }
+  return result;
+}
+
+pub fn less(left: index, right: index) -> bool effects(stop) where () { return kernel("index.less", left, right); }
+
+pub fn maximum(left: index, right: index) -> index effects(stop) where () { return if less(left, right) { right } else { left }; }
+// Powers of two in [2, 2^LogMaximum], within the unsigned index carrier.
+
+pub fn two_adic<LogMaximum: nat>(height: index) -> bool effects(stop) where LogMaximum <= 63 {
+  let mut candidate: index = 1;
+  let mut found = false;
+  for _ in 0..index<LogMaximum>() {
+    candidate = candidate * 2;
+    found = if candidate == height { true } else { found };
+  }
+  return found;
+}

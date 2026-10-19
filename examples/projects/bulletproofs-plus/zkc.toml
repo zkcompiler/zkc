@@ -1,5 +1,7 @@
-format = "zkc.project/0"
-[modules]
+"format" = "zkc.project/0"
+
+["modules"]
 "example" = "main.zkc"
-[dependencies]
-bulletproofs = "../../../libraries/bulletproofs"
+
+["dependencies"]
+"monero" = "../../../libraries/constructions/monero/bulletproofs_plus"

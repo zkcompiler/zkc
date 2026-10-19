@@ -67,6 +67,7 @@ struct Limits {
   uint64_t irBytes = 16777216, symbolBytes = 4096;
   uint64_t notationDescriptors = 4096, notationHoles = 64;
   uint64_t notationInspectionBytes = 8388608;
+  uint64_t apiInspectionBytes = 8388608;
   uint64_t interfaceBytes = 4194304, locationBytes = 16777216;
   uint64_t typeDepth = 32, typeNodes = 100000, instances = 4096;
   uint64_t aggregateLeaves = 1024, naturalTerms = 1024, naturalFactors = 64;
@@ -798,6 +799,8 @@ private:
   friend llvm::Expected<std::string>
   inspectNotations(const CheckedProject &, const NotationInspectionOptions &,
                    const Limits &);
+  friend llvm::Expected<std::string> inspectPublicAPI(const CheckedProject &,
+                                                      const Limits &);
 };
 
 /// Recovery tokens and diagnostics cannot be promoted to checked state.

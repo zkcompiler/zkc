@@ -7,7 +7,11 @@ let
     "scripts/reporting.py"
     "scripts/workspace.py"
   ];
-  runner = processSupport ++ [ "common/tests/run.py" ];
+  runner = processSupport ++ [
+    "common/tests/run.py"
+    "common/tests/smoke.py"
+    "common/tests/smoke.json"
+  ];
   pytest = runner ++ [
     "pyproject.toml"
     "uv.lock"
@@ -67,10 +71,9 @@ let
     application.paths = [
       "common/tests/check_install.py"
       "common/tests/support/project.py"
-      "libraries/schnorr/lib.zkc"
+      "libraries"
       "examples/projects/schnorr"
-      "common/tests/fixtures/projects/mathematics/main.zkc"
-      "libraries/zkc"
+      "common/tests/fixtures/projects/mathematics"
     ];
     format.paths = [
       "scripts/format.py"

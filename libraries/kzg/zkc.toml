@@ -1,7 +1,0 @@
-format = "zkc.project/0"
-[modules]
-"kzg" = "lib.zkc"
-"kzg::eip4844" = "eip4844.zkc"
-"kzg::eip4844::transcript" = "eip4844/transcript.zkc"
-[dependencies]
-zkc = "../zkc"

@@ -1,0 +1,13 @@
+module stark::configurations::koala_bear_octic;
+use zkc::vector::{Vector};
+pub domain Base = field("koala-bear");
+pub domain Extension = field("koala-bear.ext8-binomial3");
+pub domain TraceRows = commitment("rows.merkle-keccak256.koala-bear/0");
+pub domain ExtensionRows = commitment("rows.merkle-keccak256.koala-bear.ext8-binomial3/0");
+
+// These embeddings and the count bound belong to this exact preset.
+pub fn embed_vector(values: Vector<Base>) -> Vector<Extension> effects(stop) where () {
+  return kernel<Extension>("vector.embed", values);
+}
+pub fn embed_scalar(value: Base) -> Extension effects(stop) where () { return kernel<Extension>("field.embed", value); }
+pub fn characteristic() -> index effects() where () { return 2130706433; }

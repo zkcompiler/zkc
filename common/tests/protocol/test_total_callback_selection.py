@@ -8,7 +8,7 @@ import pytest
 from entry import Entry
 from input_files import decimal_values
 from octic_reference import ONE, P, ZERO, add, mul
-from source_modules import library_modules
+from source_modules import core_packages, library_modules
 
 FLAGS = [(), ('--no-simplify',), ('--no-finite-bulk',),
          ('--no-simplify', '--no-finite-bulk')]
@@ -34,7 +34,7 @@ run Demo = Inspect;
 
 
 def compile_entry(toolchain, journal, directory, source, flags, modules=()):
-    options = list(dict.fromkeys([*library_modules('zkc'), *modules, *flags]))
+    options = list(dict.fromkeys([*library_modules(*core_packages()), *modules, *flags]))
     entry = Entry(toolchain, journal, directory, source, options)
     bundle = journal.json([
         toolchain.compiler, 'language-bundle', '--source-format=zkc',

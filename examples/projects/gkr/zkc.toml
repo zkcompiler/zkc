@@ -1,8 +1,7 @@
-format = "zkc.project/0"
+"format" = "zkc.project/0"
 
-[modules]
+["modules"]
 "example" = "main.zkc"
 
-[dependencies]
-gkr = "../../../libraries/gkr"
-zkc = "../../../libraries/zkc"
+["dependencies"]
+"gkr" = "../../../libraries/protocols/polynomial/gkr"

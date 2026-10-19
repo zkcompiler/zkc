@@ -1,0 +1,156 @@
+module stark::single_table;
+pub module low_degree;
+use stark::configurations::contract::{Configuration};
+use stark::single_table::low_degree::{Commit, Open, query_points};
+use zkc::vector::{Vector, length, get, append, empty, fill, transpose};
+use zkc::indices::{Indices, less};
+use zkc::coset::{extend_columns, disjoint_coset, outside_domains};
+use zkc::opening::{opening_claims, deep_columns, deep_column_values, same_rotation};
+use air::polynomial::{split_quotient};
+use air::table::{Shape, Inputs, shape, inputs, claims, quotient_values, identity, read_quotients,
+  read_values};
+
+// The verifier's statement. Configuration and public columns are row-major,
+// public data in the Bundle's public-slot order. The coset shift is not part of
+// the statement: the configuration fixes it.
+pub struct Statement<F: Field> {
+  pub configuration: Vector<F>,
+  pub public_columns: Vector<F>,
+  pub public_data: Vector<F>
+}
+
+fn admissible<F: Field>(facts: Shape, statement: Statement<F>, height: index, size: index,
+    shift: F) -> bool {
+  return !(facts.witness == 0) && !less(size, facts.chunks * height) &&
+    disjoint_coset(height, size, shift) &&
+    length(statement.configuration) == facts.configuration * height &&
+    length(statement.public_columns) == facts.public_columns * height &&
+    length(statement.public_data) == facts.public_slots;
+}
+
+// DEEP quotient values at the queried points: every witness read at its
+// opening point, then every quotient chunk at zeta, with successive powers of
+// gamma. Rows are the authenticated rows in query order.
+fn deep_values<F: Field>(slots: Inputs, chunks: (Indices, Indices), witness_rows: Vector<F>,
+    width: index, quotient_rows: Vector<F>, count: index, opened: Vector<F>,
+    opened_quotient: Vector<F>, height: index, points: Vector<F>, zeta: F, gamma: F)
+    -> Vector<F> {
+  let mut result = empty<F>();
+  for query in 0..length(points) {
+    let x = get(points, query);
+    let reads = read_values(slots, zkc::vector::slice(witness_rows, query * width, width),
+      opened, height, x, zeta, gamma, 0, 1);
+    let combined = deep_column_values(zkc::vector::slice(quotient_rows, query * count, count), zkc::opening_claims::checked(chunks.0, chunks.1, opened_quotient), height, x, zeta, gamma, reads.0, reads.1);
+    result = append(result, combined.0);
+  }
+  return result;
+}
+
+// A nonhiding STARK for the assertions of one present table of a relation
+// Bundle, generic over its configuration K. The trace has height
+// n = 2^(LogFinal + Rounds) and is extended to N = n * 2^LogBlowup points of
+// the configuration's coset. FRI tests the DEEP word against degree < n with
+// Rounds folds and a final polynomial of 2^LogFinal coefficients.
+//
+// Order: trace commitment; constraint-composition challenge alpha; quotient
+// commitment; one out-of-domain point zeta, rejected unless outside the trace
+// subgroup and the evaluation coset; trace and quotient evaluations at the
+// opening points, checked against the AIR; DEEP batching challenge gamma; FRI
+// commitments, fold challenges and final polynomial; every query position;
+// then the openings: trace and quotient rows, followed by the FRI layers.
+pub protocol TableArgument<K: Configuration, Table: nat, B: Bundle, LogFinal: nat, Rounds: nat,
+    LogBlowup: nat, Queries: nat> roles(P,V)
+    (trace: Vector<K::Base> @P, statementP: Statement<K::Base> @P,
+     statementV: Statement<K::Base> @V, coins: Random<K::Challenge> @V)
+    -> (accepted: bool @V)
+    where zkc::algebra::TwoAdicField(K::Base), zkc::algebra::TwoAdicField(K::Extension),
+      zkc::algebra::CharacteristicNotTwo(K::Extension), zkc::random::IndexRandomness(K::Challenge),
+      zkc::oracle::VectorCommitment(K::ExtensionRows), 1 <= Rounds, 1 <= LogBlowup, 1 <= Queries {
+  let heightP @P = index<pow2(LogFinal + Rounds)>();
+  let heightV @V = index<pow2(LogFinal + Rounds)>();
+  let sizeP @P = index<pow2(LogFinal + Rounds + LogBlowup)>();
+  let sizeV @V = index<pow2(LogFinal + Rounds + LogBlowup)>();
+  let shiftP @P = K::shift();
+  let shiftV @V = K::shift();
+  let factsP @P = shape<K::Base,Table,B>(heightP);
+  let factsV @V = shape<K::Base,Table,B>(heightV);
+  require @V admissible(factsV, statementV, heightV, sizeV, shiftV);
+  require @P admissible(factsP, statementP, heightP, sizeP, shiftP);
+  require @P length(trace) == factsP.witness * heightP;
+
+  // Trace columns, extended to the coset and committed as rows.
+  let trace_columns @P = transpose(trace, heightP, factsP.witness);
+  let configP @P = transpose(statementP.configuration, heightP, factsP.configuration);
+  let configV @V = transpose(statementV.configuration, heightV, factsV.configuration);
+  let publicP @P = transpose(statementP.public_columns, heightP, factsP.public_columns);
+  let publicV @V = transpose(statementV.public_columns, heightV, factsV.public_columns);
+  let trace_lde @P = extend_columns(trace_columns, factsP.witness, heightP, shiftP, sizeP);
+  let config_lde @P = extend_columns(configP, factsP.configuration, heightP, shiftP, sizeP);
+  let public_lde @P = extend_columns(publicP, factsP.public_columns, heightP, shiftP, sizeP);
+  let trace_tree @P = K::commit_base(transpose(trace_lde, factsP.witness, sizeP), factsP.witness);
+  let trace_root = send P -> V(trace_tree.0);
+
+  // Constraint composition and the quotient commitment.
+  let alphaDraw = coins.draw();
+  let alphaSent = send V -> P(alphaDraw);
+  let alphaV @V = K::challenge(alphaDraw);
+  let alphaP @P = K::challenge(alphaSent);
+  let shift_extensionP @P = K::lift(shiftP);
+  let shift_extensionV @V = K::lift(shiftV);
+  let trace_extension @P = K::embed(trace_lde);
+  let dataP @P = K::embed(statementP.public_data);
+  let dataV @V = K::embed(statementV.public_data);
+  let quotient @P = quotient_values<K::Extension,Table,B>(trace_extension, K::embed(config_lde),
+    K::embed(public_lde), dataP, heightP, shift_extensionP, sizeP, alphaP);
+  let chunks @P = split_quotient(quotient, shift_extensionP, sizeP, heightP, factsP.chunks);
+  let quotient_tree @P = K::commit_extension(transpose(chunks, factsP.chunks, sizeP), factsP.chunks);
+  let quotient_root = send P -> V(quotient_tree.0);
+
+  // One out-of-domain point. Both roles stop unless it avoids the trace
+  // subgroup and the evaluation coset; rotations by the trace generator stay
+  // outside the coset.
+  let zetaDraw = coins.draw();
+  let zetaSent = send V -> P(zetaDraw);
+  let zetaV @V = K::challenge(zetaDraw);
+  let zetaP @P = K::challenge(zetaSent);
+  require @V outside_domains(heightV, sizeV, shift_extensionV, zetaV);
+  require @P outside_domains(heightP, sizeP, shift_extensionP, zetaP);
+  let proposed @P = claims<K::Extension,Table,B>(K::embed(trace_columns), K::embed(configP),
+    K::embed(publicP), dataP, heightP, zetaP);
+  let proposed_quotient @P = opening_claims(chunks, factsP.chunks, shift_extensionP, sizeP, zetaP);
+  let opened = send P -> V(proposed);
+  let opened_quotient = send P -> V(proposed_quotient);
+  require @V identity<K::Extension,Table,B>(opened, opened_quotient, K::embed(configV),
+    K::embed(publicV), dataV, heightV, zetaV, alphaV);
+
+  // DEEP batching of every witness read and quotient chunk, then FRI.
+  let gammaDraw = coins.draw();
+  let gammaSent = send V -> P(gammaDraw);
+  let gammaV @V = K::challenge(gammaDraw);
+  let gammaP @P = K::challenge(gammaSent);
+  let slotsP @P = inputs<K::Extension,Table,B>(heightP);
+  let chunk_openingsP @P = same_rotation(factsP.chunks, 0);
+  let reads @P = read_quotients(slotsP, trace_extension, proposed, heightP, shift_extensionP, sizeP,
+    zetaP, gammaP, fill<K::Extension>(0, sizeP), 1);
+  let word @P = deep_columns(chunks, zkc::opening_claims::checked(chunk_openingsP.0, chunk_openingsP.1, proposed_quotient), heightP, shift_extensionP, sizeP, zetaP, gammaP, reads.0, reads.1);
+  let (statesP, positionsP, rootsV, betasV, finalV, positionsV) =
+    Commit<K,LogFinal,Rounds,LogBlowup,Queries>(word.0, shiftP, coins);
+
+  // Openings, after every request.
+  let trace_open @P = K::open_base(trace_tree.1, positionsP, sizeP);
+  let quotient_open @P = K::open_extension(quotient_tree.1, positionsP, sizeP);
+  let trace_rows = send P -> V(trace_open.0);
+  let trace_proof = send P -> V(trace_open.1);
+  let quotient_rows = send P -> V(quotient_open.0);
+  let quotient_proof = send P -> V(quotient_open.1);
+  require @V K::check_base(trace_root, factsV.witness, sizeV, positionsV, trace_rows, trace_proof);
+  require @V K::check_extension(quotient_root, factsV.chunks, sizeV, positionsV, quotient_rows,
+    quotient_proof);
+  let slotsV @V = inputs<K::Extension,Table,B>(heightV);
+  let first @V = deep_values(slotsV, same_rotation(factsV.chunks, 0), K::embed(trace_rows),
+    factsV.witness, quotient_rows, factsV.chunks, opened, opened_quotient, heightV,
+    query_points<K::Extension>(shift_extensionV, sizeV, positionsV), zetaV, gammaV);
+  let accepted = Open<K,LogFinal,Rounds,LogBlowup,Queries>(statesP, positionsP, rootsV, betasV,
+    finalV, positionsV, first, shiftV);
+  return (accepted = accepted);
+}

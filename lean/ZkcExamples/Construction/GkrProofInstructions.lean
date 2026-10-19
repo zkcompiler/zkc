@@ -43,7 +43,7 @@ def outputBody : List Zkc.Construction.Instruction := [
   ⟨.indicesEmpty, [], [.indices], []⟩,
   ⟨.indicesAppend, [16, 9], [.indices], []⟩,
   ⟨.observe "merlin3.bls12-381.fr64be/0" ⟨"zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", [⟨"repeat", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", "s4"⟩], ["message", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", "label_6f75747075745f64656c6976657279_0", "label_6f75747075745f64656c6976657279_0", "role00000001", "role00000000"]⟩, [15, 14, 17], [.transcript "merlin3.bls12-381.fr64be/0"], []⟩,
-  ⟨.call "zkl_e9d4e02b4f3bba21b953f31470da5acb0cd796fdc4c7898da74fbc3f5af04e58", [10, 14], [.data (.vector "bls12-381.fr")], []⟩]
+  ⟨.call "zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d", [10, 14], [.data (.vector "bls12-381.fr")], []⟩]
 
 def leftBodyA : List Zkc.Construction.Instruction := [
   ⟨.receive "apply_14_label_6c656674_label_726f756e64_0" "apply_14_label_6c656674_label_726f756e64_0" "role00000000" (.field "bls12-381.fr"), [], [.data (.field "bls12-381.fr")], []⟩,
@@ -82,7 +82,7 @@ def leftBodyE : List Zkc.Construction.Instruction := [
   ⟨.indicesAppend, [45, 12], [.indices], []⟩,
   ⟨.indicesAppend, [46, 17], [.indices], []⟩,
   ⟨.observe "merlin3.bls12-381.fr64be/0" ⟨"zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", [⟨"repeat", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", "s23"⟩, ⟨"apply", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", "label_6c656674"⟩, ⟨"repeat", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "s6"⟩], ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_64656c6976657279_0", "label_64656c6976657279_0", "role00000001", "role00000000"]⟩, [44, 43, 47], [.transcript "merlin3.bls12-381.fr64be/0"], []⟩,
-  ⟨.call "zkl_e9d4e02b4f3bba21b953f31470da5acb0cd796fdc4c7898da74fbc3f5af04e58", [18, 43], [.data (.vector "bls12-381.fr")], []⟩,
+  ⟨.call "zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d", [18, 43], [.data (.vector "bls12-381.fr")], []⟩,
   ⟨.calculate (.fieldMultiply "bls12-381.fr"), [43, 31], [.data (.field "bls12-381.fr")], []⟩,
   ⟨.calculate (.fieldAdd "bls12-381.fr"), [26, 50], [.data (.field "bls12-381.fr")], []⟩,
   ⟨.calculate (.fieldMultiply "bls12-381.fr"), [43, 51], [.data (.field "bls12-381.fr")], []⟩,
@@ -129,7 +129,7 @@ def rightBodyE : List Zkc.Construction.Instruction := [
   ⟨.indicesAppend, [49, 12], [.indices], []⟩,
   ⟨.indicesAppend, [50, 21], [.indices], []⟩,
   ⟨.observe "merlin3.bls12-381.fr64be/0" ⟨"zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", [⟨"repeat", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", "s23"⟩, ⟨"apply", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", "label_7269676874"⟩, ⟨"repeat", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "s6"⟩], ["message", "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba", "label_64656c6976657279_0", "label_64656c6976657279_0", "role00000001", "role00000000"]⟩, [48, 47, 51], [.transcript "merlin3.bls12-381.fr64be/0"], []⟩,
-  ⟨.call "zkl_e9d4e02b4f3bba21b953f31470da5acb0cd796fdc4c7898da74fbc3f5af04e58", [22, 47], [.data (.vector "bls12-381.fr")], []⟩,
+  ⟨.call "zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d", [22, 47], [.data (.vector "bls12-381.fr")], []⟩,
   ⟨.calculate (.fieldMultiply "bls12-381.fr"), [47, 35], [.data (.field "bls12-381.fr")], []⟩,
   ⟨.calculate (.fieldAdd "bls12-381.fr"), [30, 54], [.data (.field "bls12-381.fr")], []⟩,
   ⟨.calculate (.fieldMultiply "bls12-381.fr"), [47, 55], [.data (.field "bls12-381.fr")], []⟩,
@@ -146,7 +146,7 @@ def coefficientBody : List Zkc.Construction.Instruction := [
   ⟨.indicesAppend, [34, 12], [.indices], []⟩,
   ⟨.indicesAppend, [35, 30], [.indices], []⟩,
   ⟨.observe "merlin3.bls12-381.fr64be/0" ⟨"zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", [⟨"repeat", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", "s23"⟩, ⟨"repeat", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", "s48"⟩], ["message", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", "label_6c696e655f636f656666696369656e74_0", "label_6c696e655f636f656666696369656e74_0", "role00000000", "role00000001"]⟩, [32, 33, 36], [.transcript "merlin3.bls12-381.fr64be/0"], []⟩,
-  ⟨.call "zkl_e9d4e02b4f3bba21b953f31470da5acb0cd796fdc4c7898da74fbc3f5af04e58", [31, 33], [.data (.vector "bls12-381.fr")], []⟩]
+  ⟨.call "zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d", [31, 33], [.data (.vector "bls12-381.fr")], []⟩]
 
 def leftLoop : Zkc.Construction.Instruction :=
   ⟨.loop "apply_14_label_6c656674_s6" 4 [49, 53, 48], [6, 16, 14, 15], [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"], leftBody⟩
@@ -158,21 +158,21 @@ def coefficientLoop : Zkc.Construction.Instruction :=
   ⟨.loop "s48" 4 [38, 37], [6, 29, 27], [.data (.vector "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"], coefficientBody⟩
 
 def layerStart : List Zkc.Construction.Instruction := [
-  ⟨.call "zkl_411728361dd91cce996681067ff835983db4b50a2c76153019bcfb3dff123b46", [], [.data (.vector "bls12-381.fr")], []⟩]
+  ⟨.call "zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f", [], [.data (.vector "bls12-381.fr")], []⟩]
 
 def layerMiddle : List Zkc.Construction.Instruction := [
-  ⟨.call "zkl_411728361dd91cce996681067ff835983db4b50a2c76153019bcfb3dff123b46", [], [.data (.vector "bls12-381.fr")], []⟩]
+  ⟨.call "zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f", [], [.data (.vector "bls12-381.fr")], []⟩]
 
 def layerLine : List Zkc.Construction.Instruction := [
   ⟨.receive "label_6c696e655f636f6e7374616e74_0" "label_6c696e655f636f6e7374616e74_0" "role00000000" (.field "bls12-381.fr"), [], [.data (.field "bls12-381.fr")], []⟩,
   ⟨.indicesEmpty, [], [.indices], []⟩,
   ⟨.indicesAppend, [25, 12], [.indices], []⟩,
   ⟨.observe "merlin3.bls12-381.fr64be/0" ⟨"zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", [⟨"repeat", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", "s23"⟩], ["message", "zkl_c0372bf2a0caec53ac4800eb2a35b7daaf18a424854430934453ed7d7d0ee7f2", "label_6c696e655f636f6e7374616e74_0", "label_6c696e655f636f6e7374616e74_0", "role00000000", "role00000001"]⟩, [23, 24, 26], [.transcript "merlin3.bls12-381.fr64be/0"], []⟩,
-  ⟨.call "zkl_411728361dd91cce996681067ff835983db4b50a2c76153019bcfb3dff123b46", [], [.data (.vector "bls12-381.fr")], []⟩,
-  ⟨.call "zkl_e9d4e02b4f3bba21b953f31470da5acb0cd796fdc4c7898da74fbc3f5af04e58", [28, 24], [.data (.vector "bls12-381.fr")], []⟩]
+  ⟨.call "zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f", [], [.data (.vector "bls12-381.fr")], []⟩,
+  ⟨.call "zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d", [28, 24], [.data (.vector "bls12-381.fr")], []⟩]
 
 def layerTailA : List Zkc.Construction.Instruction := [
-  ⟨.call "zkl_be7976639f3a008cbb8e0434318fcf706bb5fc7884c4737fa9efb008c72e6d91", [30], [.data (.field "bls12-381.fr")], []⟩,
+  ⟨.call "zkl_6ec6b9d6cb41b6bf4ef8e898ba1b283d099252f7de2db0b173f26714e3a46216", [30], [.data (.field "bls12-381.fr")], []⟩,
   ⟨.call "zkl_c019abe42d43d9f2b24ebe6716aad9e3a3c425a78c3b3ff212966c3ef4db181e", [2, 12, 5], [.data (.vector "bls12-381.fr")], []⟩,
   ⟨.call "zkl_161d519d8d5fe2674feddb6e6d14269c9cca82ff216b6b3205ade46cc8b8d35f", [33, 13, 17, 21], [.data (.field "bls12-381.fr")], []⟩,
   ⟨.call "zkl_c019abe42d43d9f2b24ebe6716aad9e3a3c425a78c3b3ff212966c3ef4db181e", [3, 12, 5], [.data (.vector "bls12-381.fr")], []⟩,
@@ -213,7 +213,7 @@ def layerLoop : Zkc.Construction.Instruction :=
   ⟨.loop "s23" 4 [51, 50, 49], [4, 9, 11, 10], [.data (.vector "bls12-381.fr"), .data (.field "bls12-381.fr"), .transcript "merlin3.bls12-381.fr64be/0"], layerBody⟩
 
 def topStart : List Zkc.Construction.Instruction := [
-  ⟨.call "zkl_411728361dd91cce996681067ff835983db4b50a2c76153019bcfb3dff123b46", [], [.data (.vector "bls12-381.fr")], []⟩]
+  ⟨.call "zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f", [], [.data (.vector "bls12-381.fr")], []⟩]
 
 def topMiddle : List Zkc.Construction.Instruction := [
   ⟨.call "zkl_28c1498dbf9d83fc38ed7b21a89d56146297abcbf1ac78968a8b454c9eef5496", [1, 9], [.data (.field "bls12-381.fr")], []⟩]
@@ -389,14 +389,14 @@ theorem call_of_invoke (helper : Helper)
 
 theorem call_empty :
     callHelper (meanings (F := F) (G := G))
-        "zkl_411728361dd91cce996681067ff835983db4b50a2c76153019bcfb3dff123b46" [] =
+        "zkl_e079e1b3b9b36b339af5ada50497ef0577edcd5a30324fa8945b1f7d1b40765f" [] =
       .returned [.vector "bls12-381.fr" []] :=
   call_of_invoke SumcheckHelperBodies.emptyHelper (List.mem_map.mpr ⟨_, empty_member, empty_signature⟩)
     [] .nil rfl (.cons [] .nil) empty_equation
 
 theorem call_append (xs : List F) (x : F) :
     callHelper (meanings (F := F) (G := G))
-        "zkl_e9d4e02b4f3bba21b953f31470da5acb0cd796fdc4c7898da74fbc3f5af04e58"
+        "zkl_08763b0dc78a869ee1ab72b02c31b0587181b10d6b99ff47d041839795c25e7d"
         [.vector "bls12-381.fr" xs, .data (.field "bls12-381.fr" x)] =
       .returned [.vector "bls12-381.fr" (xs ++ [x])] :=
   call_of_invoke SumcheckHelperBodies.appendHelper (List.mem_map.mpr ⟨_, append_member, append_signature⟩)
@@ -404,7 +404,7 @@ theorem call_append (xs : List F) (x : F) :
 
 theorem call_sum (xs : List F) :
     callHelper (meanings (F := F) (G := G))
-        "zkl_be7976639f3a008cbb8e0434318fcf706bb5fc7884c4737fa9efb008c72e6d91"
+        "zkl_6ec6b9d6cb41b6bf4ef8e898ba1b283d099252f7de2db0b173f26714e3a46216"
         [.vector "bls12-381.fr" xs] =
       .returned [.data (.field "bls12-381.fr" xs.sum)] :=
   call_of_invoke GkrSourceBodies.sumHelper (List.mem_map.mpr ⟨_, sum_member, sum_signature⟩)

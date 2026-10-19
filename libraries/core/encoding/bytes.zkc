@@ -1,0 +1,9 @@
+module zkc::bytes;
+
+pub use zkc::primitives::bytes::{
+  Bytes, repeat, join, empty, append, concat, slice, at, length, equal
+};
+
+pub use zkc::primitives::hash::{
+  keccak256, sha256
+};

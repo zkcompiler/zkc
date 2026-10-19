@@ -4,10 +4,10 @@ from pathlib import Path
 import pytest
 
 from entry import Entry
-from source_modules import library_modules
+from source_modules import core_packages, library_modules
 
 ROOT = Path(__file__).resolve().parents[3]
-MODULES = library_modules('zkc')
+MODULES = library_modules(*core_packages())
 
 
 def scalar(n):
@@ -150,7 +150,7 @@ protocol Check roles(P)(height:index@P)->(small:bool@P,full:bool@P,empty:bool@P)
 }
 run Demo=Check;
 '''
-    entry = Entry(toolchain, journal, directory, source, [*library_modules('zkc'), *flags])
+    entry = Entry(toolchain, journal, directory, source, [*library_modules(*core_packages()), *flags])
     for height in [0, 1, 2, 3, 16, 32, (1 << 63) - 1, 1 << 63, (1 << 64) - 1]:
         is_power = height >= 2 and height & (height - 1) == 0
         assert entry.run(f'height-{height}', {'height': str(height)}) == {
@@ -168,13 +168,13 @@ domain F=field("koala-bear");
 protocol Check roles(P)(columns:Vector<F>@P,selected:Indices@P,rotations:Indices@P,
  values:Vector<F>@P,initial:Vector<F>@P,row:Vector<F>@P,x:F@P,initial_at:F@P)
  ->(word:Vector<F>@P,weight:F@P,value:F@P,row_weight:F@P) {
- let whole=opening::deep_columns(columns,selected,rotations,values,4,3,8,7,11,initial,5);
- let at=opening::deep_column_values(row,selected,rotations,values,4,x,7,11,initial_at,5);
+ let whole=opening::deep_columns(columns, zkc::opening_claims::checked(selected, rotations, values), 4, 3, 8, 7, 11, initial, 5);
+ let at=opening::deep_column_values(row, zkc::opening_claims::checked(selected, rotations, values), 4, x, 7, 11, initial_at, 5);
  return (word=whole.0,weight=whole.1,value=at.0,row_weight=at.1);
 }
 run Demo=Check;
 '''
-    entry = Entry(toolchain, journal, directory, source, [*library_modules('zkc'), *flags])
+    entry = Entry(toolchain, journal, directory, source, [*library_modules(*core_packages()), *flags])
     p = 2130706433
     root = pow(1791270792, (1 << 24) // 8, p)
     assert pow(root, 8, p) == 1 and pow(root, 4, p) == p - 1

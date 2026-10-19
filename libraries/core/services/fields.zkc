@@ -1,0 +1,23 @@
+module zkc::sampling::fields;
+
+fn pending(found: bool) -> index { return if found { 0 } else { 1 }; }
+
+// A bounded rejection sampler over an explicit managed field service. Repeated
+// draws retain the same service root; no fallback changes the distribution.
+// Independent uniform field draws give a uniform nonzero result conditional on
+// success. Exhaustion stops; the compiler does not prove the provider premise.
+pub protocol Nonzero<F: Field, Attempts: nat> roles(P)
+    (randomness: Random<F> @P) -> (value: F @P) where () {
+  let mut chosen: F @P = 0;
+  let mut found @P = false;
+  for _ in 0..index<Attempts>() roles(P) max Attempts {
+    let needed @P = pending(found);
+    for _ in 0..needed roles(P) max 1 {
+      let candidate = randomness.draw();
+      chosen = candidate;
+      found = !(candidate == 0);
+    }
+  }
+  require found;
+  return (value = chosen);
+}

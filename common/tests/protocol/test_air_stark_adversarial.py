@@ -18,8 +18,8 @@ import pytest
 from test_air_stark import (EXAMPLE, FIXTURE, P, ROOT, STARK, TABLE, frames, inputs,
                             request, scalar, unpack, vector)
 
-POLYNOMIAL = ROOT / 'libraries/air/polynomial.zkc'
-FRI = ROOT / 'libraries/fri/lib.zkc'
+POLYNOMIAL = ROOT / 'libraries/relations/air/polynomial.zkc'
+FRI = ROOT / 'libraries/protocols/polynomial/fri/lib.zkc'
 # The guards of TableArgument and of LowDegree in source order, each named by
 # its native owner and the number of loops around it, as the FRI tests name theirs.
 # Both source rosters are (P,V), so their native owners have ordinals 0 and 1.
@@ -119,7 +119,7 @@ def build(toolchain, journal, directory, name, *, main=None, asset=None, edits=(
     where = directory / name
     where.mkdir()
     texts = {'air_stark_example': EXAMPLE.read_text() if main is None else main,
-             'stark::koala_bear::table': STARK.read_text(), 'air::table': TABLE.read_text(),
+             'stark::octic_table': STARK.read_text(), 'air::table': TABLE.read_text(),
              'air::polynomial': POLYNOMIAL.read_text(), 'fri': FRI.read_text()}
     for module, old, new in edits:
         assert texts[module].count(old) == 1, (module, old)
@@ -131,7 +131,7 @@ def build(toolchain, journal, directory, name, *, main=None, asset=None, edits=(
         path = where / f'{module}.zkc'
         path.write_text(text)
         overrides[module] = path
-    arguments = library_modules('stark', overrides=overrides)
+    arguments = library_modules('arguments/stark/configurations/contract', 'arguments/stark/configurations/koala_bear_octic', 'arguments/stark/configurations/koala_bear_quartic', 'arguments/stark/sampling', 'arguments/stark/single_table', 'arguments/stark/single_table/koala_bear_octic', 'arguments/stark/whole_bundle', overrides=overrides)
     label, bundle = asset or ('recurrence', FIXTURE / 'bundle.json')
     arguments.append(f'--asset={label}=relation-bundle-json={bundle}')
     package = where / 'Proof.zkpkg'
@@ -261,11 +261,11 @@ def test_witness_claim_lie_consistent_at_zeta_stops_at_fri_degree(toolchain, jou
     bundle = json.loads((FIXTURE / 'bundle.json').read_text())
     assert bundle[3][0][6][0] == ['read', 0, '0', 0]
     helpers = 'bump_slot, compensate' if compensated else 'bump_slot'
-    edits = [('stark::koala_bear::table', USE_TABLE, USE_TABLE.replace('deep_value}', f'deep_value, {helpers}}}')),
-             ('stark::koala_bear::table', CLAIMS, CLAIMS.replace('let proposed @P', 'let honest @P')
+    edits = [('stark::octic_table', USE_TABLE, USE_TABLE.replace('deep_value}', f'deep_value, {helpers}}}')),
+             ('stark::octic_table', CLAIMS, CLAIMS.replace('let proposed @P', 'let honest @P')
               + '\n  let proposed @P = bump_slot(honest, index<0>());')]
     if compensated:
-        edits.append(('stark::koala_bear::table', QUOTIENT_CLAIMS,
+        edits.append(('stark::octic_table', QUOTIENT_CLAIMS,
                       QUOTIENT_CLAIMS.replace('let proposed_quotient @P', 'let honest_quotient @P')
                       + '\n  let proposed_quotient @P = compensate<Extension,Table,B>('
                       'honest_quotient, honest, proposed, heightP, zetaP, alphaP);'))
@@ -289,8 +289,8 @@ COLUMN_BUNDLE = ['zkc.relation-bundle/0', [['x0', 'koala-bear']], [], [[
     [['read', 0, '0', 0], ['read', 0, '1', 0], ['public', 0]],
     [[0, ['interior', 0, 1]], [1, ['first']]], []]]]
 COLUMN_MAIN = '''module air_stark_example;
-use stark::koala_bear::{Base, Extension};
-use stark::koala_bear::table::{Statement, TableArgument};
+use stark::configurations::koala_bear_octic::{Base, Extension};
+use stark::octic_table::{Statement, TableArgument};
 use zkc::vector::{Vector};
 domain Column = bundle(asset column);
 
@@ -357,11 +357,11 @@ USE_POLYNOMIAL = 'use air::polynomial::{split_quotient};'
 
 EXTENSION = ('let trace_lde @P = extend_columns(trace_columns, factsP.witness, heightP, '
              'statementP.shift, sizeP);')
-LIFTED = [('stark::koala_bear::table', USE_POLYNOMIAL, USE_POLYNOMIAL.replace('split_quotient}', 'split_quotient, lift}')),
-          ('stark::koala_bear::table', USE_TABLE, USE_TABLE.replace('deep_value}', 'deep_value, claims_lde}')),
-          ('stark::koala_bear::table', EXTENSION, EXTENSION.replace('= extend_columns(', '= lift(extend_columns(')
+LIFTED = [('stark::octic_table', USE_POLYNOMIAL, USE_POLYNOMIAL.replace('split_quotient}', 'split_quotient, lift}')),
+          ('stark::octic_table', USE_TABLE, USE_TABLE.replace('deep_value}', 'deep_value, claims_lde}')),
+          ('stark::octic_table', EXTENSION, EXTENSION.replace('= extend_columns(', '= lift(extend_columns(')
            .replace('sizeP);', 'sizeP), heightP, statementP.shift, sizeP);')),
-          ('stark::koala_bear::table', CLAIMS, '  let proposed @P = claims_lde<Extension,Table,B>('
+          ('stark::octic_table', CLAIMS, '  let proposed @P = claims_lde<Extension,Table,B>('
                                 'trace_extension, dataP, heightP, shiftP, sizeP, zetaP);')]
 # The (1 + eta X) degree adjustment removed from both the prover's DEEP word
 # and the verifier's DEEP value.

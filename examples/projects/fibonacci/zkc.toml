@@ -1,15 +1,19 @@
-format = "zkc.project/0"
+"format" = "zkc.project/0"
 
-[modules]
-example = "main.zkc"
+["modules"]
+"example" = "main.zkc"
 
-[dependencies]
-stark = "../../../libraries/stark"
+["dependencies"]
+"stark-octic" = "../../../libraries/arguments/stark/configurations/koala_bear_octic"
+"stark-octic-table" = "../../../libraries/arguments/stark/single_table/koala_bear_octic"
+"core-collections" = "../../../libraries/core/collections"
 
-[assets.clean]
-format = "relation-bundle-json"
-path = "../../../compiler/adapters/clean/fixtures/fibonacci/bundle.json"
+["assets"]
 
-[assets.plonky3]
-format = "relation-bundle-json"
-path = "../../../compiler/adapters/plonky3/fixtures/fibonacci/bundle.json"
+["assets"."clean"]
+"format" = "relation-bundle-json"
+"path" = "../../../compiler/adapters/clean/fixtures/fibonacci/bundle.json"
+
+["assets"."plonky3"]
+"format" = "relation-bundle-json"
+"path" = "../../../compiler/adapters/plonky3/fixtures/fibonacci/bundle.json"

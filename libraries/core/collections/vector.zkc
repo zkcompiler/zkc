@@ -1,0 +1,61 @@
+module zkc::vector;
+
+pub use zkc::primitives::vector::{
+  Vector, empty, append, length, get, sum, product, split, add, hadamard, scale, dot, fill, elements, indices, at, subtract, inverse, geometric, rotate, bit_reverse, bit_reverse_rows, equal, prefix_sum, prefix_product
+};
+
+pub fn has_length<F: Field, N: nat>(values: Vector<F>) -> bool effects(stop) where () {
+  return length(values) == index<N>();
+}
+
+pub operator + = add;
+
+pub operator * = scale;
+
+pub operator infixl(70) ⊙ = hadamard;
+
+pub notation ⟪ left, right ⟫ = dot(left, right);
+
+pub use zkc::finite::{reduction ∑, reduction ∏};
+
+pub fn collect<I: Type + Copy + Drop, F: Field>(
+  rows: domain<I>, body: fn(item: I) -> F effects(stop) where item_from(item, rows)
+) -> Vector<F> effects(stop) = finite("local.collect.vector");
+
+pub fn collect_where<I: Type + Copy + Drop, F: Field>(
+  rows: domain<I>, keep: fn(item: I) -> bool effects(stop) where item_from(item, rows),
+  body: fn(item: I) -> F effects(stop) where item_from(item, rows)
+) -> Vector<F> effects(stop) = finite("local.collect.vector_where");
+
+// Materialize every selected body result before invoking the reducer once.
+
+pub fn reduce<I: Type + Copy + Drop, F: Field, R: Type>(
+  rows: domain<I>, body: fn(item: I) -> F effects(stop) where item_from(item, rows),
+  reducer: fn(Vector<F>) -> R effects(stop)
+) -> R effects(stop) where () {
+  return reducer(collect(rows, body));
+}
+
+// Bounds follow the selected total accessor; checked access can be rebound locally.
+
+pub indexing values[position] = at(values, position);
+
+pub fn concat<F: Field>(left: Vector<F>, right: Vector<F>) -> Vector<F> effects(stop) where () {
+  return kernel<F>("vector.concat", left, right);
+}
+
+pub fn slice<F: Field>(values: Vector<F>, start: index, count: index) -> Vector<F> effects(stop) where () {
+  return kernel<F>("vector.slice", values, start, count);
+}
+
+math fn add_product<F: Field>(current: F, term: F, weight: F) -> F {
+  return current + term * weight;
+}
+
+pub fn accumulate<F: Field>(current: Vector<F>, term: Vector<F>, weight: F) -> Vector<F> effects(stop) where () {
+  return map add_product<F>(each current, each term, weight);
+}
+
+pub fn transpose<F: Field>(values: Vector<F>, rows: index, columns: index) -> Vector<F> effects(stop) where () {
+  return kernel<F>("vector.transpose", values, rows, columns);
+}

@@ -228,7 +228,28 @@ in
       source = sources.rustTests;
       python3 = python;
     };
-  };
+  }
+  //
+    pkgs.lib.genAttrs
+      (map (name: "smoke-${name}") (
+        builtins.attrNames (builtins.fromJSON (builtins.readFile ../common/tests/smoke.json))
+      ))
+      (
+        name:
+        pkgs.callPackage ./checks/project.nix {
+          inherit
+            pythonTools
+            environment
+            tools
+            testSupport
+            ;
+          compiler = compiler;
+          source = sources.integration;
+          python3 = python;
+          scope = "smoke";
+          family = pkgs.lib.removePrefix "smoke-" name;
+        }
+      );
   formatter = pkgs.writeShellApplication {
     name = "zkc-nixfmt";
     runtimeInputs = [ pkgs.nixfmt ];

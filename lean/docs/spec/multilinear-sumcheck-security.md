@@ -4,7 +4,7 @@ The optional `ZkcSecurity.ArkLib.Sumcheck.Multilinear` package connects the
 [independent table and endpoint contracts](multilinear-sumcheck.md) to ArkLib's
 actual interactive Sumcheck development. It proves complete soundness,
 honest completeness and partial residual soundness for arbitrary round counts
-without importing `libraries/sumcheck/lib.zkc`;
+without importing `libraries/protocols/polynomial/sumcheck/lib.zkc`;
 [uniform queries](uniform-query-service.md#actual-imported-roots) connect these
 results to the admitted library roots, and native execution correspondence is a
 separate claim. The imported two-round quadratic examples are separate models.

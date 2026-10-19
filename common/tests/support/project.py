@@ -1,6 +1,7 @@
 """Write small authored project fixtures without a second TOML dependency."""
 import json
 from pathlib import Path
+import shutil
 import tomllib
 
 
@@ -57,3 +58,27 @@ def project_arguments(path):
     return ([f'--module={name}={source}' for name, source in sorted(modules.items())]
             + [f'--asset={name}={kind}={source}'
                for name, (kind, source) in sorted(assets.items())])
+
+
+def copy_project(path, directory, *, manifest='zkc.toml'):
+    """Copy a trusted manifest closure into an independent consumer directory.
+
+    The consumer has explicit inputs, with no paths back to the checkout.
+    Logical module and asset names remain unchanged. Ownership policy uses the
+    original manifests; this flattened capture tests the installed tools.
+    """
+    directory = Path(directory)
+    modules, assets = project_inputs(path)
+    copied_modules, copied_assets = {}, {}
+    for index, (name, source) in enumerate(sorted(modules.items())):
+        target = f'module-{index:03}.zkc'
+        shutil.copyfile(source, directory / target)
+        copied_modules[name] = target
+    for index, (name, (kind, source)) in enumerate(sorted(assets.items())):
+        target = f'asset-{index:03}{source.suffix}'
+        shutil.copyfile(source, directory / target)
+        copied_assets[name] = {'format': kind, 'path': target}
+    target = directory / manifest
+    target.write_text(project_text({'format': 'zkc.project/0', 'modules': copied_modules,
+                                    'assets': copied_assets}))
+    return target

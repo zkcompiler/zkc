@@ -1,7 +1,7 @@
 # FRI security at the ideal interpretation
 
 This page specifies the independent model of the verifier of
-[`fri::LowDegree`](../../../libraries/fri/lib.zkc), its completeness on the
+[`fri::LowDegree`](../../../libraries/protocols/polynomial/fri/lib.zkc), its completeness on the
 tested code, its round-by-round soundness theorem, its Fiat–Shamir transfer
 with one query-block site and the same verifier with words committed by Merkle
 trees. The model is a transcription of the library verifier, related line by
@@ -40,7 +40,7 @@ model's words have their expected sizes and the verifier reads committed values.
 
 ## Source correspondence
 
-Line numbers refer to `libraries/fri/lib.zkc`. Each model definition is in
+Line numbers refer to `libraries/protocols/polynomial/fri/lib.zkc`. Each model definition is in
 `ZkcSecurity.ArkLib.Fri.Protocol` unless the table names another module.
 
 | Source (lines) | Model | Relation to ArkLib |

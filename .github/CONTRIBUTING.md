@@ -47,7 +47,10 @@ to `main` directly. Branch names are short and topical — `feat/…`, `fix/…`
    integration validation, not for every edit. Run optional suites when their
    integration boundary changes, and describe the checks actually performed.
    Automatic CI checks sources, formatting, documentation and the test harness.
-   Native changes also run Rust tests and installed CLI/SDK package checks.
+   Native changes also run Rust tests, installed CLI/SDK package checks and
+   package boundary checks, literal example recipes and compact protocol cases
+   selected from library manifest consumers. Compiler,
+   runtime and shared tooling changes select all compact protocol families.
    Full compiler/protocol integration and optional suites have manual workflow scopes. Run affected checks locally and record their results; see the
    [maintenance guide](../docs/development/maintenance.md).
 2. Open the pull request and write its title and body as described below.

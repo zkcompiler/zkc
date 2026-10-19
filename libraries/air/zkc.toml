@@ -1,8 +1,0 @@
-format = "zkc.project/0"
-[modules]
-air = "lib.zkc"
-"air::polynomial" = "polynomial.zkc"
-"air::table" = "table.zkc"
-"air::interaction" = "interaction.zkc"
-[dependencies]
-zkc = "../zkc"

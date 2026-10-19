@@ -24,6 +24,6 @@ the outputs are `selected = 77` and `rows = [19, 90]`. The selected row uses one
 scalar contraction; the nested Local collection can use one whole matvec.
 `--no-finite-bulk` keeps ordered finite loops, independently of `--no-simplify`.
 
-See the [library guide](../../../../../libraries/zkc/README.md#finite-computations) and
+See the [library guide](../../../../../libraries/core/README.md#finite-computations) and
 [finite source contract](../../../../../docs/spec/language/definitions.md#finite-domains)
 for argument order, capture snapshots, filters and mathematical admission.

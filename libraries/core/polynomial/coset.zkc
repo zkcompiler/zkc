@@ -1,0 +1,69 @@
+module zkc::coset;
+use zkc::primitives::coset as raw;
+pub use zkc::primitives::coset::{point,points,root,opening_quotient};
+use zkc::boolean as boolean;
+use zkc::vector::{Vector, length, empty, concat, slice};
+use zkc::polynomial::{Polynomial, evaluate};
+use zkc::scalar::{power};
+use zkc::indices::{maximum};
+use zkc::boolean::{both};
+
+// Natural-order evaluations on shift*<omega>. Private fields prevent a caller
+// from changing the shift or claiming another ordering without re-admission.
+pub struct Word<F: Field> {
+  data: Vector<F>,
+  shift: F
+}
+
+pub fn word<F: Field>(data: Vector<F>, shift: F) -> Word<F> effects(stop) where zkc::algebra::TwoAdicField(F) {
+  // point checks the installed two-adic size bound, including nonempty input.
+  require !(point(shift, length(data), 0) == 0);
+  return Word<F> { data: data, shift: shift };
+}
+pub math fn values<F: Field>(input: Word<F>) -> Vector<F> where () { return input.data; }
+pub math fn offset<F: Field>(input: Word<F>) -> F where () { return input.shift; }
+
+pub fn interpolate<F: Field>(input: Word<F>) -> Polynomial<F> effects(stop) where zkc::algebra::TwoAdicField(F) {
+  return raw::interpolate(input.data, input.shift);
+}
+
+pub fn evaluate_coset<F: Field>(polynomial: Polynomial<F>, shift: F, size: index) -> Word<F> effects(stop) where zkc::algebra::TwoAdicField(F) {
+  let data = raw::evaluate(polynomial, shift, size);
+  return Word<F> { data: data, shift: shift };
+}
+
+pub fn extend_columns<F: Field>(columns: Vector<F>, count: index,
+    height: index, shift: F, size: index) -> Vector<F> effects(stop) where zkc::algebra::TwoAdicField(F) {
+  require length(columns) == height * count;
+  let mut extended = empty<F>();
+  for column in 0..count {
+    let evaluations = slice(columns, column * height, height);
+    let polynomial = interpolate(word(evaluations, 1));
+    extended = concat(extended, values(evaluate_coset(polynomial, shift, size)));
+  }
+  return extended;
+}
+
+pub fn column_at<F: Field>(columns: Vector<F>, column: index, size: index,
+    position: F, shift: F) -> F effects(stop) where zkc::algebra::TwoAdicField(F) {
+  return evaluate(interpolate(word(slice(columns, column * size, size), shift)), position);
+}
+
+pub fn disjoint_coset<F: Field>(height: index, size: index, shift: F) -> bool effects(stop) where zkc::algebra::TwoAdicField(F) {
+  // Two two-adic cosets intersect exactly when shift^max(height,size) = 1.
+  let valid_root = raw::root<F>(size);
+  let valid_trace_root = raw::root<F>(height);
+  return both(both(boolean::negate(shift == 0), boolean::negate(power(shift, maximum(height, size)) == 1)),
+    both(boolean::negate(valid_root == 0), boolean::negate(valid_trace_root == 0)));
+}
+
+pub fn outside_domains<F: Field>(height: index, size: index, shift: F, x: F) -> bool effects(stop) where () {
+  return both(boolean::negate(power(x, height) == 1), boolean::negate(power(x, size) == power(shift, size)));
+}
+
+// Pair natural-order antipodal evaluations. The resulting word is on the
+// squared coset, with half the input length.
+pub fn fold<F: Field>(input: Word<F>, beta: F) -> Word<F> effects(stop) where zkc::algebra::TwoAdicField(F), zkc::algebra::CharacteristicNotTwo(F) {
+  let data = raw::fold(input.data, input.shift, beta);
+  return Word<F> { data: data, shift: input.shift * input.shift };
+}
