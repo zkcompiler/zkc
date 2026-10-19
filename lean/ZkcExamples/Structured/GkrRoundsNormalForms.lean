@@ -329,6 +329,24 @@ theorem verifier_process
       simp only [Participant.guard, Bool.false_eq_true, ↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]
       rfl
 
+/-- The repeat of `roundFn` at the verifier on an admitted count: the fold of its normal
+form over the iteration indices, from any state whose masked slots are `initial`. -/
+theorem verifier_fold (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
+    (service : Option Nat) (count : Nat) (bounded : count ≤ (repeatSpec 4).maximum)
+    (state : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) (initial : (Option (List F)) × (Option F))
+    (start : maskValues (ctx.roles 1) (ctx.mapScopes (repeatSpec 4).stateScopes) state =
+      verifierState initial.1 initial.2) :
+    denoteRepeat (repeatSpec 4) ctx (ctx.roles 1) (some count) state
+      (.cons service .nil) (roundFn ctx (ctx.roles 1)) =
+      (Finite.fold (fun result _ => verifierProcess ctx service result.1 result.2) (List.range' 0 count) initial).bind
+        (fun result => .done (verifierState result.1 result.2)) :=
+  NormalFormSteps.repeat_embed (repeatSpec 4) ctx (ctx.roles 1) (by simp) _ _
+    (fun result => verifierState result.1 result.2)
+    (fun result => verifierState_masked ctx _ rfl result.1 result.2)
+    _ (fun result index => verifier_process (ctx := ctx) (self := (ctx.roles 1)) (role := rfl) (separate := separate)
+      (index := index) (service := service) (point := result.1) (claim := result.2))
+    count bounded state initial start
+
 /-- The prover's components of the carried state; the other slots are absent. -/
 def proverState (add mul left right point : Option (List F)) :
     Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] :=
@@ -546,6 +564,24 @@ theorem prover_process
             refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
             refine (Region.denote_letOp_done m (.calculate (.fieldAdd "bls12-381.fr") rfl) _ _ _ _ (.cons none .nil : Values (Component (assignment F G)) [.field "bls12-381.fr"]) rfl).trans ?_
             rfl
+
+/-- The repeat of `roundFn` at the prover on an admitted count: the fold of its normal
+form over the iteration indices, from any state whose masked slots are `initial`. -/
+theorem prover_fold (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.roles 0)
+    (service : Option Nat) (count : Nat) (bounded : count ≤ (repeatSpec 4).maximum)
+    (state : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) (initial : (Option (List F)) × (Option (List F)) × (Option (List F)) × (Option (List F)) × (Option (List F)))
+    (start : maskValues (ctx.roles 0) (ctx.mapScopes (repeatSpec 4).stateScopes) state =
+      proverState initial.1 initial.2.1 initial.2.2.1 initial.2.2.2.1 initial.2.2.2.2) :
+    denoteRepeat (repeatSpec 4) ctx (ctx.roles 0) (some count) state
+      (.cons service .nil) (roundFn ctx (ctx.roles 0)) =
+      (Finite.fold (fun result _ => proverProcess ctx result.1 result.2.1 result.2.2.1 result.2.2.2.1 result.2.2.2.2) (List.range' 0 count) initial).bind
+        (fun result => .done (proverState result.1 result.2.1 result.2.2.1 result.2.2.2.1 result.2.2.2.2)) :=
+  NormalFormSteps.repeat_embed (repeatSpec 4) ctx (ctx.roles 0) (by simp) _ _
+    (fun result => proverState result.1 result.2.1 result.2.2.1 result.2.2.2.1 result.2.2.2.2)
+    (fun result => proverState_masked ctx _ rfl result.1 result.2.1 result.2.2.1 result.2.2.2.1 result.2.2.2.2)
+    _ (fun result index => prover_process (ctx := ctx) (self := (ctx.roles 0)) (role := rfl) (separate := separate)
+      (index := index) (service := service) (add := result.1) (mul := result.2.1) (left := result.2.2.1) (right := result.2.2.2.1) (point := result.2.2.2.2))
+    count bounded state initial start
 
 /-- The typed body's process at one participant, with this unit's tables. -/
 def roundsFn (ctx : ProtocolContext) (self : Nat) :

@@ -309,6 +309,24 @@ theorem verifierOutput_process
         rfl
       rfl
 
+/-- The repeat of `outputFn` at the verifierOutput on an admitted count: the fold of its normal
+form over the iteration indices, from any state whose masked slots are `initial`. -/
+theorem verifierOutput_fold (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
+    (service : Option Nat) (count : Nat) (bounded : count ≤ outputSpec.maximum)
+    (state : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr"]) (initial : (Option (List F)))
+    (start : maskValues (ctx.roles 1) (ctx.mapScopes outputSpec.stateScopes) state =
+      verifierOutputState initial) :
+    denoteRepeat outputSpec ctx (ctx.roles 1) (some count) state
+      (.cons service .nil) (outputFn ctx (ctx.roles 1)) =
+      (Finite.fold (fun result _ => verifierOutputProcess ctx service result) (List.range' 0 count) initial).bind
+        (fun result => .done (verifierOutputState result)) :=
+  NormalFormSteps.repeat_embed outputSpec ctx (ctx.roles 1) (by simp) _ _
+    (fun result => verifierOutputState result)
+    (fun result => verifierOutputState_masked ctx _ rfl result)
+    _ (fun result index => verifierOutput_process (ctx := ctx) (self := (ctx.roles 1)) (role := rfl) (separate := separate)
+      (index := index) (service := service) (point := result))
+    count bounded state initial start
+
 /-- The proverOutput's components of the carried state; the other slots are absent. -/
 def proverOutputState (point : Option (List F)) :
     Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr"] :=
@@ -393,6 +411,24 @@ theorem proverOutput_process
       cases appendResults with | cons value0 appendResults => cases appendResults; rfl
     intro appendResults
     rfl
+
+/-- The repeat of `outputFn` at the proverOutput on an admitted count: the fold of its normal
+form over the iteration indices, from any state whose masked slots are `initial`. -/
+theorem proverOutput_fold (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.roles 0)
+    (service : Option Nat) (count : Nat) (bounded : count ≤ outputSpec.maximum)
+    (state : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr"]) (initial : (Option (List F)))
+    (start : maskValues (ctx.roles 0) (ctx.mapScopes outputSpec.stateScopes) state =
+      proverOutputState initial) :
+    denoteRepeat outputSpec ctx (ctx.roles 0) (some count) state
+      (.cons service .nil) (outputFn ctx (ctx.roles 0)) =
+      (Finite.fold (fun result _ => proverOutputProcess ctx result) (List.range' 0 count) initial).bind
+        (fun result => .done (proverOutputState result)) :=
+  NormalFormSteps.repeat_embed outputSpec ctx (ctx.roles 0) (by simp) _ _
+    (fun result => proverOutputState result)
+    (fun result => proverOutputState_masked ctx _ rfl result)
+    _ (fun result index => proverOutput_process (ctx := ctx) (self := (ctx.roles 0)) (role := rfl) (separate := separate)
+      (index := index) (service := service) (point := result))
+    count bounded state initial start
 
 /-! Action sites of the body, qualified by the application prefix. -/
 abbrev lineCoefficientSite (ctx : ProtocolContext) : String :=
@@ -485,6 +521,24 @@ theorem verifierCoefficient_process
     intro appendResults
     rfl
 
+/-- The repeat of `coefficientFn` at the verifierCoefficient on an admitted count: the fold of its normal
+form over the iteration indices, from any state whose masked slots are `initial`. -/
+theorem verifierCoefficient_fold (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
+    (line : Option (List F)) (count : Nat) (bounded : count ≤ coefficientSpec.maximum)
+    (state : Values (Component (assignment F G)) [.vector "bls12-381.fr"]) (initial : (Option (List F)))
+    (start : maskValues (ctx.roles 1) (ctx.mapScopes coefficientSpec.stateScopes) state =
+      verifierCoefficientState initial) :
+    denoteRepeat coefficientSpec ctx (ctx.roles 1) (some count) state
+      (.cons line .nil) (coefficientFn ctx (ctx.roles 1)) =
+      (Finite.fold (fun result _ => verifierCoefficientProcess ctx result) (List.range' 0 count) initial).bind
+        (fun result => .done (verifierCoefficientState result)) :=
+  NormalFormSteps.repeat_embed coefficientSpec ctx (ctx.roles 1) (by simp) _ _
+    (fun result => verifierCoefficientState result)
+    (fun result => verifierCoefficientState_masked ctx _ rfl result)
+    _ (fun result index => verifierCoefficient_process (ctx := ctx) (self := (ctx.roles 1)) (role := rfl) (separate := separate)
+      (index := index) (line := line) (coefficients := result))
+    count bounded state initial start
+
 /-- The proverCoefficient's components of the carried state; the other slots are absent. -/
 def proverCoefficientState :
     Values (Component (assignment F G)) [.vector "bls12-381.fr"] :=
@@ -560,6 +614,24 @@ theorem proverCoefficient_process
       rw [Participant.owned_other _ _ separate]
       rfl
     rfl
+
+/-- The repeat of `coefficientFn` at the proverCoefficient on an admitted count: the fold of its normal
+form over the iteration indices, from any state whose masked slots are `initial`. -/
+theorem proverCoefficient_fold (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.roles 0)
+    (line : Option (List F)) (count : Nat) (bounded : count ≤ coefficientSpec.maximum)
+    (state : Values (Component (assignment F G)) [.vector "bls12-381.fr"]) (initial : Unit)
+    (start : maskValues (ctx.roles 0) (ctx.mapScopes coefficientSpec.stateScopes) state =
+      proverCoefficientState) :
+    denoteRepeat coefficientSpec ctx (ctx.roles 0) (some count) state
+      (.cons line .nil) (coefficientFn ctx (ctx.roles 0)) =
+      (Finite.fold (fun _ index => proverCoefficientProcess ctx index line) (List.range' 0 count) initial).bind
+        (fun _ => .done (proverCoefficientState)) :=
+  NormalFormSteps.repeat_embed coefficientSpec ctx (ctx.roles 0) (by simp) _ _
+    (fun _ => proverCoefficientState)
+    (fun _ => proverCoefficientState_masked ctx _ rfl)
+    _ (fun _ index => proverCoefficient_process (ctx := ctx) (self := (ctx.roles 0)) (role := rfl) (separate := separate)
+      (index := index) (line := line))
+    count bounded state initial start
 
 /-! Action sites of the body, qualified by the application prefix. -/
 abbrev lineConstantSite (ctx : ProtocolContext) : String :=
@@ -1042,6 +1114,24 @@ theorem verifierLayer_process
                     simp only [Participant.guard, Bool.false_eq_true, ↓reduceIte, PIR.Proc.interpret, PIR.Proc.bind]
                     rfl
 
+/-- The repeat of `layerFn` at the verifierLayer on an admitted count: the fold of its normal
+form over the iteration indices, from any state whose masked slots are `initial`. -/
+theorem verifierLayer_fold (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1)
+    (inputs add mul : Option (List F)) (layers selector width service : Option Nat) (count : Nat) (bounded : count ≤ layerSpec.maximum)
+    (state : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) (initial : (Option (List F)) × (Option F))
+    (start : maskValues (ctx.roles 1) (ctx.mapScopes layerSpec.stateScopes) state =
+      verifierLayerState initial.1 initial.2) :
+    denoteRepeat layerSpec ctx (ctx.roles 1) (some count) state
+      (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil))))))) (layerFn ctx (ctx.roles 1)) =
+      (Finite.fold (fun result index => verifierLayerProcess ctx index add mul selector width service result.1 result.2) (List.range' 0 count) initial).bind
+        (fun result => .done (verifierLayerState result.1 result.2)) :=
+  NormalFormSteps.repeat_embed layerSpec ctx (ctx.roles 1) (by simp) _ _
+    (fun result => verifierLayerState result.1 result.2)
+    (fun result => verifierLayerState_masked ctx _ rfl result.1 result.2)
+    _ (fun result index => verifierLayer_process (ctx := ctx) (self := (ctx.roles 1)) (role := rfl) (separate := separate)
+      (index := index) (inputs := inputs) (add := add) (mul := mul) (layers := layers) (selector := selector) (width := width) (service := service) (point := result.1) (claim := result.2))
+    count bounded state initial start
+
 /-- The proverLayer's components of the carried state; the other slots are absent. -/
 def proverLayerState (point : Option (List F)) :
     Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"] :=
@@ -1383,6 +1473,24 @@ theorem proverLayer_process
                       cases linePointResults with | cons value0 linePointResults => cases linePointResults; rfl
                     intro linePointResults
                     rfl
+
+/-- The repeat of `layerFn` at the proverLayer on an admitted count: the fold of its normal
+form over the iteration indices, from any state whose masked slots are `initial`. -/
+theorem proverLayer_fold (ctx : ProtocolContext) (separate : ctx.roles 1 ≠ ctx.roles 0)
+    (inputs add mul : Option (List F)) (layers selector width service : Option Nat) (count : Nat) (bounded : count ≤ layerSpec.maximum)
+    (state : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .field "bls12-381.fr"]) (initial : (Option (List F)))
+    (start : maskValues (ctx.roles 0) (ctx.mapScopes layerSpec.stateScopes) state =
+      proverLayerState initial) :
+    denoteRepeat layerSpec ctx (ctx.roles 0) (some count) state
+      (.cons inputs (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.cons service .nil))))))) (layerFn ctx (ctx.roles 0)) =
+      (Finite.fold (fun result index => proverLayerProcess ctx index inputs add mul layers selector width result) (List.range' 0 count) initial).bind
+        (fun result => .done (proverLayerState result)) :=
+  NormalFormSteps.repeat_embed layerSpec ctx (ctx.roles 0) (by simp) _ _
+    (fun result => proverLayerState result)
+    (fun result => proverLayerState_masked ctx _ rfl result)
+    _ (fun result index => proverLayer_process (ctx := ctx) (self := (ctx.roles 0)) (role := rfl) (separate := separate)
+      (index := index) (inputs := inputs) (add := add) (mul := mul) (layers := layers) (selector := selector) (width := width) (service := service) (point := result))
+    count bounded state initial start
 
 /-- The typed body's process at one participant, with this unit's tables. -/
 def gkrFn (ctx : ProtocolContext) (self : Nat) :

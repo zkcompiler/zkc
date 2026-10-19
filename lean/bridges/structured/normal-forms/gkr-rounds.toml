@@ -30,6 +30,7 @@ protocol = "zkl_5a80545f362c672054af2a3a1c33ef1f972bb503c8360b0dc7d4a80c436a43ba
 repeat = "s6"
 body = "roundBody"
 function = "roundFn"
+repeat_spec = "repeatSpec 4"
 meaning = "participantMeaningWith (.silent _) (participantActions F G) (plainHelpers GkrSourceViews.unit) self (GkrSourceViews.unit.plainProtocolTable F G) ctx"
 closed = "(plainHelpers (F := F) (G := G) GkrSourceViews.unit).closed"
 components = "(plainHelpers (F := F) (G := G) GkrSourceViews.unit).components"
@@ -37,6 +38,7 @@ components = "(plainHelpers (F := F) (G := G) GkrSourceViews.unit).components"
 [[shared.roles]]
 role = 1
 name = "verifier"
+fold = true
 slots = [{ name = "point", mode = "optional" }, { name = "claim", mode = "optional" }]
 captures = [{ name = "service", mode = "optional" }]
 strict = ["*"]
@@ -44,6 +46,7 @@ strict = ["*"]
 [[shared.roles]]
 role = 0
 name = "prover"
+fold = true
 slots = [{ name = "add", mode = "optional" }, { name = "mul", mode = "optional" },
          { name = "left", mode = "optional" }, { name = "right", mode = "optional" },
          { name = "point", mode = "optional" }]

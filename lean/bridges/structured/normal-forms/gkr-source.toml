@@ -31,6 +31,7 @@ function = "outputFn"
 [[shared.roles]]
 role = 1
 name = "verifierOutput"
+fold = true
 slots = [{ name = "point", mode = "optional" }]
 captures = [{ name = "service", mode = "optional" }]
 strict = ["*"]
@@ -38,6 +39,7 @@ strict = ["*"]
 [[shared.roles]]
 role = 0
 name = "proverOutput"
+fold = true
 slots = [{ name = "point", mode = "optional" }]
 captures = [{ name = "service", mode = "optional" }]
 strict = ["*"]
@@ -51,6 +53,7 @@ function = "coefficientFn"
 [[shared.roles]]
 role = 1
 name = "verifierCoefficient"
+fold = true
 slots = [{ name = "coefficients", mode = "optional" }]
 captures = [{ name = "line", mode = "optional" }]
 strict = ["*"]
@@ -58,6 +61,7 @@ strict = ["*"]
 [[shared.roles]]
 role = 0
 name = "proverCoefficient"
+fold = true
 slots = []
 captures = [{ name = "line", mode = "optional" }]
 strict = ["*"]
@@ -94,6 +98,7 @@ roles.proverRounds = {}
 [[shared.roles]]
 role = 1
 name = "verifierLayer"
+fold = true
 slots = [{ name = "point", mode = "optional" }, { name = "claim", mode = "optional" }]
 captures = [{ name = "inputs", mode = "optional" }, { name = "add", mode = "optional" },
             { name = "mul", mode = "optional" }, { name = "layers", mode = "optional" },
@@ -104,6 +109,7 @@ strict = ["*"]
 [[shared.roles]]
 role = 0
 name = "proverLayer"
+fold = true
 slots = [{ name = "point", mode = "optional" }]
 captures = [{ name = "inputs", mode = "optional" }, { name = "add", mode = "optional" },
             { name = "mul", mode = "optional" }, { name = "layers", mode = "optional" },
