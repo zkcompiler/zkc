@@ -99,6 +99,7 @@ import ZkcSecurity.HashChain.Simulator
 import ZkcSecurity.HashChain.Steps
 import ZkcSecurity.Oracle.Encoding
 import ZkcSecurity.Registry
+import ZkcSecurity.Stage.Relation
 import ZkcSecurity.VCVio.Composition
 import ZkcSecurity.VCVio.Coupling
 import ZkcSecurity.VCVio.Deferral
