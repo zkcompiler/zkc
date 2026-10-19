@@ -984,10 +984,11 @@ bound `3 / 5`.
 `ZkcExamples.Structured.GkrVerifier.verifier`, the verifier of the
 [GKR library](../../../libraries/protocols/polynomial/gkr/README.md) for a statement already decoded
 to tables: the claimed outputs and the inputs as tables of the width, and each
-layer's add and mul wiring as a table over `(z, x, y)`. Its round-by-round
-certificate composes one certificate per phase with
-`ZkcSecurity.FiatShamir.Reduction`, whose sequential composition (`bind`,
-`repeatN`, `union`, `receive`) keeps the error of each challenge:
+layer's add and mul wiring as a table over `(z, x, y)`. Its certificate is a
+charged reduction over the transcript interface of the common actions
+(`ZkcSecurity.FiatShamir.Typed.Reduction`), composed with `bind`, `repeatN`,
+`union` and `receive` from one reduction per phase, each charged at its own
+challenge site (`siteCharge`):
 
 - **Output point.** While the claimed outputs differ from the circuit's
   outputs, their difference is nonzero at some Boolean values of the remaining
@@ -1008,11 +1009,21 @@ certificate composes one certificate per phase with
   the line restriction).
 - **Inputs.** A false claim about the input layer fails the input check.
 
-With error `max 2 width / |F|` per challenge and `width + layers (2 width + 1)`
-challenges, `soundness` bounds the probability that claimed outputs other than
-the circuit's outputs on the inputs are accepted by
-`(Q + width + layers (2 width + 1)) max 2 width / |F|`, for a fixed statement and
-initial transcript, in the random-oracle experiment of the general theorems.
+A phase is first a reduction with its own uniform error whose doomed queries
+are all at its site (`outputCertificate`, `roundCertificate`,
+`lineCertificate`); `sited` makes it a charged reduction for the site charge,
+and the charged reductions compose into the certificate.
+
+`soundness_charged` takes a weighted adversary budget: a prover whose queries
+charge at most `proverCost` on every path, each oracle key charged its site's
+error, makes claimed outputs other than the circuit's outputs on the inputs
+accepted with probability at most `proverCost` plus the verifier's own charge,
+at most `(width + layers (2 width + 1)) max 2 width / |F|`, for a fixed statement
+and initial transcript, in the random-oracle experiment of the general
+theorems. The per-phase errors improve the bound only through this weighting:
+against a total budget of `Q` queries a prover can place every query at the most
+expensive site, so `soundness` bounds acceptance by
+`(Q + width + layers (2 width + 1)) max 2 width / |F|`.
 
 ## The compiled GKR proof Entry
 
@@ -1026,21 +1037,30 @@ width.
 
 - `construction`: on a well-formed statement (`WellFormed`), for every
   challenge function, the compiled verifier is the transform of the plain GKR
-  verifier at the decoded tables. It composes two equations.
-  `GkrProof.spec_transform` follows from the transcript-construction rule
-  alone: the compiled meaning is the transform of the interactive reading
-  (`spec`) of the exported instructions. `GkrProof.reading` proves that reading
-  equal to the plain verifier. Each loop of the export reads as repeated steps
-  of the plain verifier (`Zkc.Construction.iterate_range_repeatN`), because the
-  reading never inspects transcript histories (`specK_similar`); helper calls
-  are read with the admitted unit's own helper equations
-  (`ZkcExamples.Structured.GkrSourceLaws`). The composed check also accepts the
-  export, so the same meaning is the transform of the original GKR validator
-  (`GkrProof.compiled_transform`).
-- `soundness`: for a fixed well-formed statement and initial transcript, the
-  compiled verifier accepts claimed outputs other than the circuit's outputs on
-  its inputs with probability at most
-  `(Q + width + layers (2 width + 1)) max 2 width / |F|`.
+  verifier at the decoded tables. It composes two equations. The composed
+  construction and projection check accepts the export, so the compiled meaning
+  is the transform of the admitted original GKR validator, read through its
+  acceptance output (`GkrProof.compiled_transform`). On a well-formed statement
+  that validator is the plain verifier
+  (`ZkcExamples.Structured.GkrSourceVerifier.verifier_reads`): the generated
+  normal form of the admitted root at the verifier
+  (`ZkcExamples.Structured.GkrSourceNormalForms.verifier_participant`), each
+  loop read as the fold of its callback's generated normal form, the layer
+  Sumcheck applications as their generated normal forms, and every helper call
+  read with the admitted unit's own helper equations
+  (`ZkcExamples.Structured.GkrSourceLaws`).
+- `soundness_charged`: for a fixed well-formed statement and initial
+  transcript, against a prover whose queries charge at most `proverCost` on
+  every path, each oracle key charged the error of its challenge site
+  (`1 / |F|` at the output point, `2 / |F|` at a layer Sumcheck round,
+  `width / |F|` at the line challenge, nothing elsewhere), the compiled verifier
+  accepts claimed outputs other than the circuit's outputs on its inputs with
+  probability at most
+  `proverCost + (width + layers (2 width + 1)) max 2 width / |F|`.
+- `soundness`: against a prover with at most `Q` queries the bound is
+  `(Q + width + layers (2 width + 1)) max 2 width / |F|`; a total budget lets
+  the prover place every query at the most expensive site, so the per-phase
+  errors improve the bound only against the weighted budget.
 
 A statement is well-formed when the input values and claimed outputs decode to
 tables of the width, the stacked tables have `2 ^ selector` blocks of

@@ -145,10 +145,10 @@ compiled verifiers' ideal interpretations inherit the bounds without a proof
 about the compiled programs. `CompiledGuessFiatShamir` does the same with a
 certificate imported from a worst-case round-by-round proof stated in ArkLib's
 framework and carried to the original validator by `Realizes.certificate`.
-`CompiledGkrFiatShamir` takes another route: it composes the construction rule's
-equation (`GkrProof.spec_transform`) with a reading of the exported instructions
-as the plain GKR verifier on well-formed statements (`GkrProof.reading`), proved
-for that Entry, rather than with the transform of the original. `ExecutableSchnorrFiatShamir` and
+`CompiledGkrFiatShamir` composes the same equation (`GkrProof.compiled_transform`)
+with the original GKR validator read as the plain verifier on well-formed
+statements (`GkrSourceVerifier.verifier_reads`, over the generated normal form of
+the admitted root) and a certificate charged per phase. `ExecutableSchnorrFiatShamir` and
 `ExecutableSumcheckFiatShamir` continue one stage down through the lowering
 rule, the latter with the Sumcheck program's helper preparation, and a walk over
 their proofs' dependencies shows that they reach the general rules and the

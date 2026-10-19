@@ -98,12 +98,15 @@ subjects = ["sumcheck", "composed-sumcheck"]
 [[proved]]
 subject = "GKR"
 result = '''
-The plain verifier of the GKR library has a round-by-round certificate composed per phase (ArkLib's degree-two successor bound for the layer rounds, Schwartz–Zippel on a line for the line challenge); its transform accepts claimed outputs other than the circuit's with probability at most `(Q + width + layers (2 width + 1)) max 2 width / \|F\|` in a random oracle on all typed histories. The composed construction and projection check accepts the compiled GKR proof Entry, whose instructions read as the plain verifier on well-formed statements within the Entry's maxima (width and layers at most four), so its ideal interpretation inherits the bound for a fixed statement'''
+The plain verifier of the GKR library has a charged certificate composed from one reduction per phase, each at its challenge site's error (`1 / \|F\|` at the output point, ArkLib's degree-two successor bound `2 / \|F\|` for the layer rounds, Schwartz–Zippel on a line `width / \|F\|` for the line challenge); against a weighted adversary budget, each oracle key charged its site's error, its transform accepts claimed outputs other than the circuit's with probability at most the prover's charge plus `(width + layers (2 width + 1)) max 2 width / \|F\|`, and against `Q` queries at most `(Q + width + layers (2 width + 1)) max 2 width / \|F\|`, in a random oracle on all typed histories. The composed construction and projection check accepts the compiled GKR proof Entry, so its ideal interpretation is the transform of the admitted original, whose generated normal form reads as the plain verifier on well-formed statements within the Entry's maxima (width and layers at most four); the compiled verifier inherits both bounds for a fixed statement'''
 owners = [["Multi-round security", "docs/spec/fiat-shamir-security.md#the-plain-gkr-verifier"], ["support", "docs/support.md"]]
 theorems = [
   "ZkcSecurity.Examples.GkrFiatShamir.soundness",
+  "ZkcSecurity.Examples.GkrFiatShamir.soundness_charged",
   "ZkcExamples.Construction.GkrProof.compiled_transform",
+  "ZkcExamples.Structured.GkrSourceVerifier.verifier_reads",
   "ZkcSecurity.Examples.CompiledGkrFiatShamir.soundness",
+  "ZkcSecurity.Examples.CompiledGkrFiatShamir.soundness_charged",
 ]
 subjects = ["gkr"]
 

@@ -9,7 +9,6 @@ import Zkc.Construction.Participant
 import Zkc.Construction.Pattern
 import Zkc.Construction.Projection
 import Zkc.Construction.ProjectionSoundness
-import Zkc.Construction.Reading
 import Zkc.Construction.Rule
 import Zkc.Construction.Semantics
 import Zkc.Construction.Soundness
@@ -87,6 +86,7 @@ import Zkc.Semantics.Machine
 import Zkc.Semantics.MonadExecution
 import Zkc.Semantics.Relation
 import Zkc.Semantics.RelationComposition
+import Zkc.Semantics.Yields
 import Zkc.Source.Common.Format
 import Zkc.Source.Common.Import
 import Zkc.Source.Common.Region
@@ -306,9 +306,7 @@ import ZkcExamples.Construction.DeferredRounds
 import ZkcExamples.Construction.DeferredRoundsData
 import ZkcExamples.Construction.DeferredRoundsParticipant
 import ZkcExamples.Construction.GkrProof
-import ZkcExamples.Construction.GkrProofInstructions
 import ZkcExamples.Construction.GkrProofParticipant
-import ZkcExamples.Construction.GkrProofReading
 import ZkcExamples.Construction.GuessProof
 import ZkcExamples.Construction.GuessProofBodies
 import ZkcExamples.Construction.GuessProofData
@@ -387,6 +385,7 @@ import ZkcExamples.Structured.GkrSourceBodies
 import ZkcExamples.Structured.GkrSourceData
 import ZkcExamples.Structured.GkrSourceLaws
 import ZkcExamples.Structured.GkrSourceNormalForms
+import ZkcExamples.Structured.GkrSourceVerifier
 import ZkcExamples.Structured.GkrSourceViews
 import ZkcExamples.Structured.GkrVerifierProcess
 import ZkcExamples.Structured.LogicalContextControls
