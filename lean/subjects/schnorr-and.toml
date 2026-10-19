@@ -29,15 +29,18 @@ instance = "ZkcSecurity.Examples.SchnorrAndSigma"
 kind = "sigma"
 
 [claims]
-endpoint = "transform-equation"
+endpoint = "ideal-meaning"
 properties = ["knowledge-soundness"]
 statement = "fixed"
 
 [assumptions]
-requested = ["lean.kernel", "export.structured-renderer"]
+requested = ["exporter.structured-denotation", "exporter.checked-candidate",
+             "transport.canonical-decoding"]
 
 [mutations]
-kinds = ["observe-repeats-value", "equality-self", "conjunction-self", "native-domain-separator"]
+kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
+         "challenge-names-delivery", "equality-self", "conjunction-self",
+         "native-challenge-reads-host", "native-domain-separator"]
 
 [construction]
 admission = "views"

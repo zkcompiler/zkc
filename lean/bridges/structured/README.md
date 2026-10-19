@@ -22,6 +22,11 @@ python3 lean/bridges/structured/open_protocol.py \
   --report build/experiments/structured-open/report.json
 ```
 
+The suites' retained subjects (each one's Entry, sources and Lean data module)
+are listed in [`fixtures.toml`](fixtures.toml); the cases run over each stay in
+the suites' code. `--write-fixtures` replaces the retained exports and data
+from the fresh ones.
+
 To add production execution comparisons, build `zkc` and supply it explicitly:
 
 ```sh
@@ -254,9 +259,14 @@ python3 lean/bridges/structured/bodies.py \
 It admits the snapshot with the checker in a scratch module, materializes each
 checked helper, protocol and (with `--closed`) projected root body, and prints
 them as `<|` chains. `--name DECLARATION=local` replaces the default
-`helperN`/`protocolN` name of that retained declaration.
+`helperN`/`protocolN` name of that retained declaration; `--check` compares the
+printed module with the existing file instead of writing it.
 The printed module is ordinary source, not an admission certificate: a wrong
-or stale body fails the generated phase equations.
+or stale body fails the generated phase equations. The subject driver
+(`lean/bridges/subject.py`) prints the Bodies and generates the Views of every
+subject manifest that owns them, and compares them under `--check`; the Entry's
+protocol takes the manifest's local name and a unique relation formula is named
+`formula`.
 
 ### Generated participant normal forms
 
@@ -385,43 +395,26 @@ inductions, invariants) and the connection to a proof library.
 
 ### Adding a structured subject
 
-From the repository root in the pinned development environment, with the
-compiler built (`just build`) and Lean set up
-([development guide](../../../docs/development/README.md)):
+A subject is a manifest in [`lean/subjects`](../../subjects/README.md); the
+subject driver does every mechanical step from it. From the repository root in
+the pinned development environment, with the compiler built (`just build`) and
+Lean set up ([development guide](../../../docs/development/README.md)):
 
 1. Write the protocol and an Entry that runs it, for example
    `run EqualityInteractive = ChaumPedersen<G>;` in a project module.
-2. Emit and export the Entry, and render its constructor data:
-
-   ```sh
-   build/compiler/zkc-compile language-emit --source-format=zkc \
-     --entry=example::EqualityInteractive \
-     --module=example=examples/projects/sigma/main.zkc \
-     --module=sigma=libraries/sigma/lib.zkc > lean/bridges/structured/fixtures/chaum-pedersen.mlir
-   build/compiler/zkc-compile language-interface --source-format=zkc \
-     --entry=example::EqualityInteractive \
-     --module=example=examples/projects/sigma/main.zkc \
-     --module=sigma=libraries/sigma/lib.zkc   # its "protocol" field is the root symbol
-   build/compiler/zkc-compile protocol-structured \
-     lean/bridges/structured/fixtures/chaum-pedersen.mlir --symbol=ROOT_SYMBOL \
-     > lean/bridges/structured/fixtures/chaum-pedersen.json
-   python3 lean/bridges/structured/snapshot.py \
-     lean/bridges/structured/fixtures/chaum-pedersen.json \
-     lean/ZkcExamples/Structured/ChaumPedersenData.lean \
-     --namespace ZkcExamples.Structured.ChaumPedersenData
-   ```
-
-3. Build the data module (`lake build ZkcExamples.Structured.ChaumPedersenData`
-   in `lean/`) and print its typed bodies with `bodies.py`, naming each retained
-   declaration (`--name RETAINED=local`). `bodies.py` elaborates a scratch module
-   with Lake itself, so run it in the Lean development shell like a build.
-4. Admit the unit from the printed bodies with `structured_views`, as in
-   [`ChaumPedersenViews`](../../ZkcExamples/Structured/ChaumPedersenViews.lean):
-   `helpers [formula := ChaumPedersenBodies.formula]` and
-   `protocols [interactive := ChaumPedersenBodies.interactive]` use
-   `formulaHelper`/`formulaBody` and `interactiveSignature`/`interactiveBody`.
-5. Write a normal-form request and generate the module.
-6. State the protocol's mathematics over the generated declarations and connect
+2. Write the manifest: its sources (a project or a module map), the Entry under
+   `[entries] interactive`, the structured profile, and under `[generated]` the
+   retained export (`interactive_export`, `interactive_source`), the data module
+   (`interactive_data`) and, to admit the unit from printed bodies, the Bodies
+   and Views modules (`interactive_bodies`, `interactive_views`), as
+   [`chaum-pedersen.toml`](../../subjects/chaum-pedersen.toml) does.
+3. Run `python3 lean/bridges/subject.py --subject NAME --write`. It exports the
+   Entry, renders the data, builds it, prints the bodies and writes the Views
+   module, which admits the unit with `structured_views`; `--check` later
+   requires all of them to be unchanged.
+4. Write a normal-form request, name it under `[normal_forms] request`, and
+   generate the module with `normal_forms.py`; the driver checks it.
+5. State the protocol's mathematics over the generated declarations and connect
    it to a library, as
    [`ChaumPedersenBinding`](../../ZkcExamples/Structured/ChaumPedersenBinding.lean)
    (extraction from two accepting transcripts) and
@@ -429,9 +422,14 @@ compiler built (`just build`) and Lean set up
    (VCVio's Schnorr Σ-protocol at the base pair) do. The package treats warnings
    as errors: a lemma that does not use every section instance needs
    `omit [...] in`, written before its docstring.
-7. List the new modules with `python3 lean/checks/audit_imports.py --write`, build
+6. List the new modules with `python3 lean/checks/audit_imports.py --write`, build
    (`python3 scripts/develop.py lean --deps main`, and `--deps arklib` for a
    library connection) and run `python3 common/tests/run.py lean`.
+
+A compiled proof Entry is added the same way with `[entries] proof` and the
+construction profile; the driver then also generates its constructed
+participant data, printed bodies and per-Entry glue
+([construction bridge](../construction/README.md)).
 
 ## Open participants
 

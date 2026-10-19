@@ -1,70 +1,110 @@
 module
 
-public import ZkcExamples.Structured.SumcheckSourceVerifier
-public import ZkcExamples.Construction.SumcheckProofParticipant
 public import Zkc.Construction.Compiled
 public import Zkc.Source.Structured.CommonAdapter
+public import ZkcExamples.Structured.SumcheckSourceData
+public import ZkcExamples.Construction.SumcheckProofParticipant
+public import ZkcExamples.Structured.SumcheckSourceViews
 
 @[expose] public section
 
-/-! The compiled non-interactive Sumcheck verifier of `example::Proof`.
+/-! Generated construction facts of the compiled `example::Proof` Entry of the subject
+`sumcheck`. Regenerate with `lean/bridges/subject.py --write`.
 
-The Proof Entry's original export is the admitted Sumcheck source
-`SumcheckSourceData`: the bridge checks that it renders to exactly the same
-data. `SumcheckProofParticipant` is the compiler's constructed validator for the
-Entry: one helper call, then a loop for the source repeat inside the `reduce`
-application, with two received round messages, the round check as a guard, the
-challenge and its delivery, and the claim update, and finally the terminal
-check as a helper call. The transcript-construction rule and the participant
-projection rule both accept it (`compiled`), so by their composed soundness the
-compiled verifier's ideal meaning is the Fiat–Shamir transform of the original
-Sumcheck validator for every challenge function (`compiled_transform`). No
-equation specific to this Entry is assumed. With a decoded verifier table and an
-admitted round count, the original validator is the source rounds followed by
-the multilinear terminal check (`compiled_transform_rounds`).
--/
+`SumcheckSourceData` is the Entry's original export and
+`SumcheckProofParticipant` its constructed validator. The composed
+transcript-construction and participant projection check accepts the pair
+(`compiled`), and the selection check (`selection_checked`) discharges the
+positional premises of the composed rules from data the kernel reads, so
+`compiled_transform` holds with no proof specific to this Entry: for every
+challenge function, the compiled verifier's ideal meaning is the Fiat–Shamir
+transform of the original validator. -/
 
 namespace ZkcExamples.Construction.SumcheckProof
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 
 set_option smartUnfolding false
 
+/-! ## The original Proof Entry -/
+
 abbrev program := ZkcExamples.Structured.SumcheckSourceViews.program
-/-- The admitted original: the Sumcheck source and the program it admits. -/
+/-- The admitted original. -/
 abbrev imported : Structured.Imported ZkcExamples.Structured.SumcheckSourceData.snapshot :=
   ZkcExamples.Structured.SumcheckSourceViews.imported
-abbrev participant := SumcheckProofParticipant.participant
 
-/-- The occurrence context the check derives from the original roster and the
-exported policy. -/
-def context : Context :=
-  (exportContext ZkcExamples.Structured.SumcheckSourceData.snapshot participant).get (by decide +kernel)
+abbrev snapshot := ZkcExamples.Structured.SumcheckSourceData.snapshot
+abbrev participant := ZkcExamples.Construction.SumcheckProofParticipant.participant
 
-theorem context_admitted :
-    exportContext ZkcExamples.Structured.SumcheckSourceData.snapshot participant = some context := by
-  rfl
-
-set_option smartUnfolding true in
-/-- The per-compile construction check accepts the actual export. -/
-theorem accepted : checkExport ZkcExamples.Structured.SumcheckSourceData.snapshot participant = .ok () := by
-  decide +kernel
-
-set_option smartUnfolding true in
-/-- The participant projection rule accepts the actual export. -/
-theorem projected : project program context participant = .ok () := by decide +kernel
+/-! ## The constructed validator and its checked selection -/
 
 set_option smartUnfolding true in
 /-- The composed per-compile check accepts the actual export against the
 admitted original. -/
-theorem compiled : checkCompiled imported participant = .ok () := by
-  decide +kernel
-
-theorem validator_eq : context.validator = 1 := by rw [show context = _ from rfl]; rfl
+theorem compiled : checkCompiled imported participant = .ok () := by decide +kernel
 
 set_option smartUnfolding true in
+/-- The selection of the export's inputs and acceptance output, constructed from
+the admitted original and the export's policy. -/
+def selection : Selection imported.program.payload.entry.outputs :=
+  (select imported participant).get (by decide +kernel)
+
+theorem selected : select imported participant = some selection := (Option.some_get _).symm
+
+set_option smartUnfolding true in
+/-- The selection check accepts the export. -/
+theorem selection_checked : selection.check imported participant = true := by decide +kernel
+
+/-- The occurrence context the check derives from the original roster and the
+exported policy. -/
+def context : Context := selection.context
+
+theorem context_admitted : exportContext ZkcExamples.Structured.SumcheckSourceData.snapshot participant = some context :=
+  (select_sound imported participant selected).1
+
+set_option smartUnfolding true in
+/-- The derived context: entry, roster, producer and validator positions, the
+replaced service input, its contract and the draw request its challenges
+carry, the suite and the selected query/delivery sites. -/
+theorem context_eq : context =
+    ⟨ZkcExamples.Structured.SumcheckSourceData.snapshot.entry, ["role00000000", "role00000001"], 0, 1, 3, "random.bls12-381.fr/0", some (.draw "bls12-381.fr"), participant.policy.suite, [("apply_18_label_726564756365_label_6368616c6c656e6765", "apply_18_label_726564756365_label_64656c6976657279_0")]⟩ := by
+  decide +kernel
+
+/-- The composed check's two rules, each on the actual export. -/
+theorem compiled_rules : checkExport ZkcExamples.Structured.SumcheckSourceData.snapshot participant = .ok () ∧ check context participant = .ok () ∧
+    project program context participant = .ok () := by
+  have accepted := compiled
+  unfold checkCompiled at accepted
+  split at accepted
+  · rename_i context' exported found
+    rw [context_admitted] at found
+    cases found
+    obtain ⟨context'', found', checked⟩ := checkExport_sound exported
+    rw [context_admitted] at found'
+    cases found'
+    exact ⟨exported, checked, accepted⟩
+  · cases accepted
+  · cases accepted
+
+/-- The per-compile construction check accepts the actual export. -/
+theorem accepted : checkExport ZkcExamples.Structured.SumcheckSourceData.snapshot participant = .ok () := compiled_rules.1
+
+/-- The transcript-construction rule accepts the actual export. -/
+theorem checked : check context participant = .ok () := compiled_rules.2.1
+
+/-- The participant projection rule accepts the actual export. -/
+theorem projected : project program context participant = .ok () := compiled_rules.2.2
+
+set_option smartUnfolding true in
+theorem validator_eq : context.validator = 1 := by decide +kernel
+
+set_option smartUnfolding true in
+theorem producer_eq : context.producer = 0 := by decide +kernel
+
 /-- Where the export returns the selected acceptance output. -/
-def acceptancePosition : Nat :=
-  (exportAcceptance ZkcExamples.Structured.SumcheckSourceData.snapshot participant).get (by decide +kernel)
+def acceptancePosition : Nat := selection.position
+
+theorem acceptance_admitted : exportAcceptance ZkcExamples.Structured.SumcheckSourceData.snapshot participant = some acceptancePosition :=
+  (select_sound imported participant selected).2.1
 
 set_option smartUnfolding true in
 theorem acceptancePosition_eq : acceptancePosition = 0 := by decide +kernel
@@ -88,102 +128,96 @@ omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 among the validator's outputs. -/
 theorem acceptance_decision (values : List (Value F G))
     (length : values.length = participant.returned.length) :
-    acceptance values = decision (values.dropLast.map some) := by
-  have returnedLength : participant.returned.length = 2 := rfl
-  rw [returnedLength] at length
-  rcases values with _ | ⟨first, _ | ⟨second, _ | _⟩⟩ <;> simp at length
-  simp only [acceptance, decision, acceptancePosition_eq, List.dropLast_cons_cons,
-    List.dropLast_singleton, List.map_cons, List.map_nil, List.getElem?_cons_zero]
-  rcases first with ⟨_ | _ | _⟩ | _ | _ | _ | _ <;> rfl
+    acceptance values = decision (values.dropLast.map some) :=
+  (selection_sound (F := F) (G := G) imported participant selected selection_checked).1 values length
 
-/-- Data inputs of the constructed validator: the verifier's table values, the
-claimed sum and the round count. -/
-def inputs (values : List F) (claim : F) (rounds : Nat) : List (Value F G) :=
-  [.vector "bls12-381.fr" values, .data (.field "bls12-381.fr" claim), .index rounds]
+/-- Data inputs of the constructed validator: the policy's public inputs, in
+policy order. -/
+def inputs (valuesValue : List F) (claim : F) (rounds : Nat) : List (Value F G) :=
+  [.vector "bls12-381.fr" valuesValue, .data (.field "bls12-381.fr" claim), .index rounds]
 
-/-- The validator's original inputs: table values, claim, round count and the
-challenge service handle. -/
-abbrev verifierInputs (values : List F) (claim : F) (rounds handle : Nat) :=
-  ZkcExamples.Structured.SumcheckSourceVerifier.sourceRootInputs (G := G) (some values) (some claim)
-    (some rounds) (some handle)
+/-- The validator's original inputs: the published values at their positions,
+absent inputs of other roles, and the challenge service handle. -/
+def verifierInputs (valuesValue : List F) (claim : F) (rounds : Nat) (handle : Nat) :
+    Values (Component (assignment F G)) program.payload.entry.inputs :=
+  .cons (some valuesValue) (.cons (some claim) (.cons (some rounds) (.cons (some handle) (.nil))))
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
-/-- The constructed program's data inputs hold the validator's original inputs. -/
-theorem inputs_related (values : List F) (claim : F) (rounds handle : Nat) (initial : History F G) :
-    HoldsValues handle (inputs values claim rounds ++ [.transcript initial])
+/-- The constructed program's data inputs hold the validator's original inputs:
+the published values at their exported positions and the handle as the replaced
+service. -/
+theorem inputs_related (valuesValue : List F) (claim : F) (rounds : Nat) (handle : Nat) (initial : History F G) :
+    HoldsValues handle (inputs valuesValue claim rounds ++ [.transcript initial])
       (inputSlots context participant.policy program.payload.entry.inputs)
-      (verifierInputs (G := G) values claim rounds handle) := by
-  have slotsEq : inputSlots context participant.policy program.payload.entry.inputs =
-      [.held 0, .held 1, .held 2, .service] := by
-    rfl
-  rw [slotsEq]
-  refine ⟨⟨values, rfl, ?_⟩, ⟨claim, rfl, ?_⟩, ⟨rounds, rfl, ?_⟩, rfl, trivial⟩ <;>
-    simp [inputs, Value.decode]
+      (verifierInputs (F := F) (G := G) valuesValue claim rounds handle) :=
+  (selection_sound (F := F) (G := G) imported participant selected selection_checked).2.1 handle
+    (.cons valuesValue (.cons claim (.cons rounds (.nil)))) [.transcript initial]
 
-/-- The original Sumcheck validator, read through its acceptance output. -/
-def verifier (values : List F) (claim : F) (rounds handle : Nat) :
-    PIR.Proc (Actions F G) (Option Bool) :=
-  ((program.participant F G 1 (verifierInputs values claim rounds handle)).bind fun outputs =>
-    .done (outputs.get .here)).interpret CommonAdapter.project
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+/-- The constructed program's data inputs are the published inputs and the
+initial transcript. -/
+theorem inputs_arity (valuesValue : List F) (claim : F) (rounds : Nat) :
+    (inputs (F := F) (G := G) valuesValue claim rounds).length + 1 = participant.inputs.length :=
+  rfl
+
+/-- Helper calls of the constructed program denote the original's checked
+helpers. -/
+abbrev table : Structured.Meanings F G := helperTable program F G
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 /-- The decision among the validator's outputs is its acceptance output. -/
 theorem decision_outputs (outputs : Values (Component (assignment F G)) program.payload.entry.outputs) :
-    decision (validatorOutputs 1 program.payload.entry.outputScopes outputs) = outputs.get .here := by
-  have scopesEq : program.payload.entry.outputScopes = [[1]] := rfl
-  rw [scopesEq]
-  rcases outputs with _ | ⟨value, _ | _⟩
-  simp only [decision, acceptancePosition_eq]
-  cases value <;> rfl
+    decision (validatorOutputs 1 program.payload.entry.outputScopes outputs) = outputs.get .here :=
+  (selection_sound (F := F) (G := G) imported participant selected selection_checked).2.2.2 outputs
 
-/-- The compiled Sumcheck verifier, under the ideal transcript model with any
-challenge function in any lawful monad, is the Fiat–Shamir transform of the
-original Sumcheck validator, with equal outcomes and unread proof suffixes. -/
-theorem compiled_transform {m : Type → Type} [Monad m] [LawfulMonad m]
-    (challenge : History F G → m F) (values : List F) (claim : F) (rounds handle : Nat)
-    (initial : History F G) (proof : Proof F G) :
-    (fun result => (mapOutcome acceptance result.1, result.2)) <$>
-        ideal context challenge (helperTable program F G) participant.returned participant.instructions
-          (inputs values claim rounds ++ [.transcript initial]) proof =
-      transform context challenge (verifier values claim rounds handle) initial proof := by
-  obtain ⟨context', found, composed⟩ :=
-    Zkc.Construction.compiled_transform (F := F) (G := G) imported participant compiled
-  rw [context_admitted] at found
-  cases found
-  dsimp only [imported, ZkcExamples.Structured.SumcheckSourceViews.imported] at composed
-  rw [composed challenge acceptance decision acceptance_decision handle (inputs values claim rounds) initial
-    proof (verifierInputs values claim rounds handle) (inputs_related values claim rounds handle initial) rfl]
-  unfold verifier
+/-- The admitted root's validator process, read through its acceptance output. -/
+def process (valuesValue : List F) (claim : F) (rounds : Nat) (handle : Nat) : PIR.Proc (participantInterface F G) (Option Bool) :=
+  (program.participant F G 1 (verifierInputs valuesValue claim rounds handle)).bind fun outputs =>
+    .done (outputs.get .here)
+
+/-- The original validator, read through its acceptance output. -/
+def verifier (valuesValue : List F) (claim : F) (rounds : Nat) (handle : Nat) : PIR.Proc (Actions F G) (Option Bool) :=
+  (process valuesValue claim rounds handle).interpret CommonAdapter.project
+
+/-- The original validator, read through its outputs, is the verifier. -/
+theorem original_verifier (valuesValue : List F) (claim : F) (rounds : Nat) (handle : Nat) :
+    ((program.participant F G context.validator (verifierInputs valuesValue claim rounds handle)).bind fun outputs =>
+      .done (decision (validatorOutputs context.validator program.payload.entry.outputScopes
+        outputs))).interpret CommonAdapter.project = verifier valuesValue claim rounds handle := by
+  unfold verifier process
   rw [validator_eq]
   simp only [decision_outputs]
 
-/-- With an admitted round count and a decoded verifier table, the compiled
-verifier is the Fiat–Shamir transform of the source rounds followed by the
-multilinear terminal check of the final point and claim. -/
-theorem compiled_transform_rounds {m : Type → Type} [Monad m] [LawfulMonad m]
-    (challenge : History F G → m F) (rounds : Nat) (admitted : rounds ≤ 2) (values : List F) (claim : F)
-    (handle : Nat) (table : Zkc.Polynomial.Multilinear.Table F rounds)
-    (decoded : Zkc.Polynomial.Multilinear.ofList? rounds values = some table)
-    (vectorBound : values.length < indexLimit) (initial : History F G) (proof : Proof F G) :
+/-- The compiled verifier, under the ideal transcript model with any challenge
+function in any lawful monad, is the Fiat–Shamir transform of the original
+Proof Entry's validator: equal acceptance outcomes, stops and unread proof
+suffixes, for every published input, initial transcript, proof and service
+handle. An instance of `Zkc.Construction.compiled_selected`, whose positional
+premises the checked selection discharges. -/
+theorem compiled_transform {m : Type → Type} [Monad m] [LawfulMonad m]
+    (challenge : History F G → m F) (valuesValue : List F) (claim : F) (rounds : Nat) (handle : Nat) (initial : History F G)
+    (proof : Proof F G) :
     (fun result => (mapOutcome acceptance result.1, result.2)) <$>
-        ideal context challenge (helperTable program F G) participant.returned participant.instructions
-          (inputs values claim rounds ++ [.transcript initial]) proof =
+        ideal context challenge table participant.returned participant.instructions
+          (inputs valuesValue claim rounds ++ [.transcript initial]) proof =
+      transform context challenge (verifier valuesValue claim rounds handle) initial proof :=
+  (compiled_selected imported participant compiled selected selection_checked).2 challenge handle
+    (.cons valuesValue (.cons claim (.cons rounds (.nil)))) initial proof
+
+/-- By the construction rule alone, the compiled verifier is the Fiat–Shamir
+transform of the interactive reading of its exported instructions, read through
+the acceptance output, for every service handle. -/
+theorem spec_transform {m : Type → Type} [Monad m] [LawfulMonad m]
+    (challenge : History F G → m F) (handle : Nat) (data : List (Value F G))
+    (arity : data.length = 3) (initial : History F G) (proof : Proof F G) :
+    (fun result => (mapOutcome acceptance result.1, result.2)) <$>
+        ideal context challenge table participant.returned participant.instructions
+          (data ++ [.transcript initial]) proof =
       transform context challenge
-        (((PIR.repeatN rounds (ZkcExamples.Structured.SumcheckVerifierLaws.roundPlain (G := G)
-            ZkcExamples.Structured.SumcheckSourceVerifier.childContext (some handle)) (some [], some claim)).bind
-          (fun pc => match pc.1, pc.2 with
-            | some point, some value => .done (some (decide (point.length = rounds ∧
-                Zkc.Polynomial.Multilinear.extension rounds table
-                  (Zkc.Polynomial.coordinates rounds point) = value)))
-            | _, _ => .halt .incomplete)).interpret CommonAdapter.project) initial proof := by
-  rw [compiled_transform challenge values claim rounds handle initial proof]
-  unfold verifier
-  rw [ZkcExamples.Structured.SumcheckSourceVerifier.verifier_checked rounds admitted values (some claim)
-    (some handle) table decoded vectorBound]
-  congr 2
-  rw [PIR.Proc.bind_assoc]
-  congr 1
-  funext pc
-  rcases pc with ⟨_ | point, _ | value⟩ <;> rfl
+        ((spec context handle table participant.returned participant.instructions
+          (data ++ [.transcript initial])).bind fun values => .done (acceptance values))
+        initial proof := by
+  rw [check_sound context challenge handle table participant checked data initial proof
+    (by rw [arity]; rfl), transform_bind_done]
 
 end ZkcExamples.Construction.SumcheckProof

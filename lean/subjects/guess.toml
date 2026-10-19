@@ -28,10 +28,13 @@ statement = "fixed"
 regime = "exact-uniform challenges"
 
 [assumptions]
-requested = ["lean.kernel", "export.structured-renderer", "transcript.random-oracle"]
+requested = ["exporter.structured-denotation", "model.history-oracle", "exporter.checked-candidate",
+             "transport.canonical-decoding"]
 
 [mutations]
-kinds = ["challenge-names-delivery", "equality-self", "native-domain-separator"]
+kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
+         "challenge-names-delivery", "equality-self", "native-challenge-reads-host",
+         "native-domain-separator"]
 
 [construction]
 admission = "views"

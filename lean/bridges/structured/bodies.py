@@ -177,6 +177,12 @@ def elaborate(runner, path, lake="lake"):
 
 def generate(data, namespace, closed=False, names=None, runner=None, lake="lake"):
     """The printed bodies module of the admitted snapshot `data.snapshot`."""
+    return printed_module(data, namespace, closed, names, runner, lake)[0]
+
+
+def printed_module(data, namespace, closed=False, names=None, runner=None, lake="lake"):
+    """The printed bodies module and the local names of its helpers and
+    protocols, in the checked program's order."""
     runner = runner or Runner()
     names = names or {}
     # First pass: inventory only, to know how many bodies to materialize.
@@ -222,7 +228,9 @@ def generate(data, namespace, closed=False, names=None, runner=None, lake="lake"
         entry = next(protocol for protocol in protocols if protocol[0] == entry_name)
         parts.append(f"def entryBody : Region dialect {entry[2]} {entry[3]} :=\n{printed(output, 'root')}\n")
     parts.append(f"end {namespace}\n")
-    return "\n".join(parts)
+    helper_names = [names.get(name, f"helper{index}") for index, (name, *_) in enumerate(helpers)]
+    protocol_names = [names.get(name, f"protocol{index}") for index, (name, *_) in enumerate(protocols)]
+    return "\n".join(parts), helper_names, protocol_names
 
 
 def main():

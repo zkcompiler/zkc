@@ -35,17 +35,21 @@ statement = "adaptive"
 regime = "decoded challenges with the suite's stated loss"
 
 [assumptions]
-requested = ["lean.kernel", "export.structured-renderer", "export.program-renderer",
+requested = ["exporter.structured-denotation", "runtime.program-reader",
              "runtime.acceptance-inclusion", "runtime.installed-kernels", "runtime.codec-function",
-             "transcript.injective-encoding", "transcript.random-oracle", "transcript.decoding-loss",
-             "host.public-absorption"]
+             "transcript.encoding-injective", "model.history-oracle", "law.realized-decoding",
+             "binding.native-absorption", "exporter.checked-candidate", "transport.canonical-decoding"]
 
 [mutations]
-kinds = ["challenge-names-delivery", "drop-guard", "update-self", "stale-yield", "equality-self",
-         "native-helper-constant",
-         "lowering-loop-maximum-raised", "lowering-loop-count-retargeted", "lowering-loop-carried-swapped",
-         "lowering-operand-self", "lowering-stale-transcript", "lowering-helper-retargeted",
-         "lowering-results-swapped", "lowering-uninstalled-binding", "lowering-helper-constant"]
+kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
+         "challenge-names-delivery", "drop-guard", "equality-self", "update-self", "stale-yield",
+         "native-challenge-reads-host", "native-domain-separator", "native-helper-constant",
+         "lowering-swap-operands", "lowering-operand-self", "lowering-retarget-operand",
+         "lowering-results-swapped", "lowering-observe-reads-input", "lowering-observe-reads-message",
+         "lowering-stale-transcript", "lowering-uninstalled-binding",
+         "lowering-unchecked-representation", "lowering-formal-retyped",
+         "lowering-function-duplicated", "lowering-helper-retargeted", "lowering-loop-maximum-raised",
+         "lowering-loop-count-retargeted", "lowering-loop-carried-swapped", "lowering-helper-constant"]
 
 [executable]
 threshold = "derived"

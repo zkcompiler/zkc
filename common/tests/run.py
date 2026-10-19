@@ -128,11 +128,18 @@ def execute(scope, args):
              "--output", output / "requests"])
         run([sys.executable, bridge / "intent_tests.py", "--compiler", compiler / "zkc-compile",
              "--output", output / "intent"])
-        run([sys.executable, ROOT / "lean/bridges/construction/check.py",
-             "--compiler", compiler / "zkc-compile", "--output", new_directory(output, "construction")])
-        run([sys.executable, ROOT / "lean/bridges/executable/check.py",
+        # Every subject manifest: exports, generated modules, kernel checks, generic
+        # mutations, the runtime differential and the per-subject evidence records.
+        subjects = new_directory(output, "subjects")
+        run([sys.executable, ROOT / "lean/bridges/subject.py", "--check", "--runtime",
              "--compiler", compiler / "zkc-compile", "--native", output_directory("native") / "zkc",
-             "--output", new_directory(output, "executable")])
+             "--output", subjects])
+        for request in sorted((ROOT / "lean/bridges/structured/normal-forms").glob("*.toml")):
+            run([sys.executable, ROOT / "lean/bridges/structured/normal_forms.py", request, "--check"])
+        records = ROOT / "lean/checks/check_records.py"
+        if records.exists():
+            # The assurance reports join the declaration records with this run's evidence.
+            run([sys.executable, records, "--evidence", subjects / "evidence"])
     elif scope == "install":
         from check_sdk import check_install
         check_install(args, run)

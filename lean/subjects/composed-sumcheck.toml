@@ -12,18 +12,26 @@ construction = true
 
 [generated]
 data = "lean/ZkcExamples/Construction/ComposedSumcheckProofData.lean"
+bodies = "lean/ZkcExamples/Construction/ComposedSumcheckProofBodies.lean"
 participant = "lean/ZkcExamples/Construction/ComposedSumcheckProofParticipant.lean"
 glue = "lean/ZkcExamples/Construction/ComposedSumcheckProof.lean"
 
 [claims]
-endpoint = "transform-equation"
+endpoint = "ideal-meaning"
 
 [assumptions]
-requested = ["lean.kernel", "export.structured-renderer"]
+requested = ["exporter.structured-denotation", "exporter.checked-candidate",
+             "transport.canonical-decoding"]
 
 [mutations]
-kinds = ["conjunction-self", "call-reads-sibling", "native-helper-constant"]
+kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
+         "challenge-names-delivery", "drop-guard", "equality-self", "conjunction-self", "update-self",
+         "stale-yield", "call-reads-sibling", "native-challenge-reads-host", "native-domain-separator",
+         "native-helper-constant"]
 
 [construction]
-admission = "kernel"
+admission = "views"
 inputs = "values"
+
+[bodies]
+entry = "proof"

@@ -1,31 +1,19 @@
-# Assumption identifiers that subject manifests request, with the text a
-# report prints for each. `{context}` names the Entry's checked occurrence
-# context. The records pipeline maps these identifiers to its registry.
+# The assumption identifiers subject manifests may request, with their one-line
+# statements. The identifiers are those of the security integration's registry
+# (`ZkcSecurity.Registry`), which owns their categories and schemas; a report
+# lists the assumptions the evidence actually carries. The subject driver
+# refuses a requested identifier this table does not list.
 
-[lean]
-kernel = "Lean kernel and the installed Lean toolchain"
-
-[export]
-structured-renderer = "the protocol-structured exporter and its renderer denote the original MLIR"
-program-renderer = "the zkc.program/0 renderer reads the admitted program bytes as the runtime's program loader does"
-
-[runtime]
-acceptance-inclusion = "the runtime accepts proof bytes for the admitted validator only when Zkc.Executable.validate accepts them under the Entry's checked occurrence context {context}"
-installed-kernels = "installed kernels implement the meanings of Zkc.Executable.installed"
-codec-function = "the native codec is a function of a message's bytes and type"
-
-[transcript]
-injective-encoding = "the bytes the native kernels absorb are an injective encoding of the model events: the suite's framing, labels and payload codecs encode typed histories injectively, and each occurrence template's model occurrence under {context} determines its native bytes (the occurrence-template encoding is proved injective by Zkc.Construction.occurrence_inj)"
-random-oracle = "the Merlin suite behaves as a random oracle on its absorbed byte histories"
-exact-uniform = "reduced 64-byte challenges are treated as exactly uniform scalars"
-decoding-loss = "the suite's challenge derivation is the decoding of the adaptive theorem, with its stated loss"
-
-[host]
-binding = "the host binds the authorized public context and the policy's public inputs"
-public-absorption = "the managed transcript absorbs the invocation's public values injectively, as the Entry's initial transcript encodes them"
-
-[statement]
-fixed = "fixed statement: the statement is chosen before the prover runs"
-
-[projection]
-not-applied = "the participant projection rule is not applied to this Entry: the theorems relate host validation to the constructed validator, not to the original protocol"
+"exporter.structured-denotation" = "The structured exporter and its renderer denote the original program."
+"exporter.checked-candidate" = "The exporter prints the checked candidate, and native field, group and transcript kernels implement their mathematical meanings."
+"transport.canonical-decoding" = "Proof bytes decode canonically to the typed messages in order."
+"transcript.encoding-injective" = "The suite's framing, labels and payload codecs encode typed histories injectively."
+"runtime.acceptance-inclusion" = "The runtime accepts proof bytes for the admitted validator only when host validation accepts them under the Entry's checked occurrence context, binding, data inputs and budget."
+"runtime.installed-kernels" = "Installed native kernels implement the meanings of the installed operations at the admitted representations."
+"runtime.codec-function" = "The native codec is a function of a message's bytes and type."
+"runtime.program-reader" = "The renderer of zkc.program/0 bytes reads them as the runtime's program loader does."
+"model.history-oracle" = "The transcript challenge on an absorbed history is a uniformly random function of the typed history, shared by the prover and verification (a lazily sampled random oracle)."
+"model.exact-uniform-challenges" = "The oracle answers field challenges directly, as exactly uniform elements; the suite's reduction of squeezed bytes to a field element is treated as exact."
+"law.realized-decoding" = "A decoder with refusal realizes the ideal law with a factor and a slack."
+"binding.statement-determination" = "The initial transcript of a statement, followed by any events, determines the statement, malformed statements included."
+"binding.native-absorption" = "The managed transcript absorbs the invocation's public values injectively; a typed public-value binding does not discharge this."

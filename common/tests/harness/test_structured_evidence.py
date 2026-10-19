@@ -114,7 +114,8 @@ def repeat_tree(repeats, bridge, monkeypatch, tmp_path):
     }
     for name in ("snapshot", "check", "evidence", "open_protocol", "repeats"):
         files[f"lean/bridges/structured/{name}.py"] = (BRIDGE / f"{name}.py").read_text()
-    for name in ("scripts/reporting.py", "common/tests/support/project.py"):
+    for name in ("scripts/reporting.py", "common/tests/support/project.py", "lean/bridges/common/lean_render.py",
+                 "lean/bridges/structured/fixtures.toml"):
         files[name] = (ROOT / name).read_text()
     for name, value in files.items():
         path = root / name
@@ -406,6 +407,7 @@ def test_repeat_inventory_captures_owners_and_runs_from_git_free_archive(
         "lean/ZkcTools/StructuredSource/Bounds.lean", "lean/ZkcTools/JsonSupport.lean",
         "lean/FutureOwner/Dependency.lean", "scripts/reporting.py", "common/tests/support/project.py",
         "lean/support/lake.py", "libraries/lib/lib.zkc", "libraries/lib/zkc.toml",
+        "lean/bridges/common/lean_render.py", "lean/bridges/structured/fixtures.toml",
         "compiler/include/zkc/Support/Json.h", "compiler/lib/Compiler/StructuredSource.cpp",
         "compiler/test/structured_reference.cpp",
         "common/unicode/manifest.json",

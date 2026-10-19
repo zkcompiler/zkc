@@ -57,13 +57,14 @@ suite also produces must agree byte for byte.
 
 | Table | Field | Meaning |
 |---|---|---|
-| `construction` | `admission` | how the glue admits the original: `views` (from the printed Bodies), `kernel` (kernel evaluation) or `external` (an existing Views module) |
+| `construction` | `admission` | how the glue admits the original: `views` (default: from the printed Bodies, which `generated.bodies` must name) or `external` (an existing Views module) |
 | `construction` | `views` | the Views module for `external` admission |
 | `construction` | `inputs` | `values` (default) or `payloads`: the form of the generated `inputs` |
 | `construction` | `names` | binder names of the published inputs (default: source names) |
 | `construction` | `model`, `model_imports` | a Lean term the original validator's process is definitionally equal to, and its modules |
 | `construction` | `rule` | `compiled` (default: construction and projection) or `construction` (construction rule only) |
 | `construction` | `doc` | module documentation of the generated glue |
+| `construction` | `omit` | generated declarations not emitted because a hand module in the glue's namespace declares them |
 | `bodies` | `entry`, `interactive_entry` | local name of the Entry protocol in the printed Bodies; a unique relation formula is named `formula` |
 | `bodies` | `closed` | print the closed-profile root as well |
 | `receipt` | `theorem`, `security_module`, `completeness_module`, `chain`, `used`, `unused` | theorems whose axiom closures and dependencies the executable receipt checks |

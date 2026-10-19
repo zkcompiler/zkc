@@ -38,17 +38,19 @@ statement = "fixed"
 regime = "exact-uniform challenges"
 
 [assumptions]
-requested = ["lean.kernel", "export.structured-renderer", "export.program-renderer",
+requested = ["exporter.structured-denotation", "runtime.program-reader",
              "runtime.acceptance-inclusion", "runtime.installed-kernels", "runtime.codec-function",
-             "transcript.injective-encoding", "transcript.random-oracle", "transcript.exact-uniform",
-             "host.binding", "statement.fixed"]
+             "transcript.encoding-injective", "model.history-oracle", "model.exact-uniform-challenges",
+             "binding.native-absorption", "exporter.checked-candidate", "transport.canonical-decoding"]
 
 [mutations]
-kinds = ["observe-reads-input", "challenge-reads-host", "challenge-names-delivery", "equality-self",
-         "native-challenge-reads-host", "native-domain-separator",
-         "lowering-swap-operands", "lowering-operand-self", "lowering-results-swapped",
-         "lowering-observe-reads-input", "lowering-stale-transcript", "lowering-uninstalled-binding",
-         "lowering-unchecked-representation", "lowering-formal-retyped", "lowering-function-duplicated"]
+kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
+         "challenge-names-delivery", "equality-self", "native-challenge-reads-host",
+         "native-domain-separator", "lowering-swap-operands", "lowering-operand-self",
+         "lowering-retarget-operand", "lowering-results-swapped", "lowering-observe-reads-input",
+         "lowering-observe-reads-message", "lowering-stale-transcript", "lowering-uninstalled-binding",
+         "lowering-unchecked-representation", "lowering-formal-retyped",
+         "lowering-function-duplicated"]
 
 [executable]
 threshold = "derived"

@@ -63,7 +63,8 @@ FIELDS = {
                    "exact": TABLE, "charge": STRING, "charge_arguments": STRINGS, "completeness_module": STRING},
     # Optional extensions (lean/subjects/README.md).
     "construction": {"admission": STRING, "views": STRING, "inputs": STRING, "names": STRINGS,
-                     "model": STRING, "model_imports": STRINGS, "rule": STRING, "doc": STRING},
+                     "model": STRING, "model_imports": STRINGS, "rule": STRING, "doc": STRING,
+                     "omit": STRINGS},
     "bodies": {"entry": STRING, "interactive_entry": STRING, "closed": BOOLEAN},
     "interactive": {"views_doc": STRING},
     "receipt": {"theorem": STRING, "security_module": STRING, "completeness_module": STRING,
@@ -75,9 +76,9 @@ FIELDS = {
 REQUIRED = {"": ("schema", "name")}
 CHOICES = {
     ("family", "kind"): ("sigma", "certificate", "upstream"),
-    ("claims", "endpoint"): ("ideal-meaning", "executable-bytes", "transform-equation", "admission"),
+    ("claims", "endpoint"): ("ideal-meaning", "executable-bytes"),
     ("claims", "statement"): ("fixed", "adaptive"),
-    ("construction", "admission"): ("views", "kernel", "external"),
+    ("construction", "admission"): ("views", "external"),
     ("construction", "inputs"): ("values", "payloads"),
     ("construction", "rule"): ("compiled", "construction"),
 }

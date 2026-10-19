@@ -1,56 +1,68 @@
 module
 
-public import ZkcExamples.Structured.GkrSourceViews
-public import ZkcExamples.Construction.GkrProofParticipant
 public import Zkc.Construction.Compiled
 public import Zkc.Source.Structured.CommonAdapter
+public import ZkcExamples.Structured.GkrSourceData
+public import ZkcExamples.Construction.GkrProofParticipant
+public import ZkcExamples.Structured.GkrSourceViews
 
 @[expose] public section
 
-/-! The compiled non-interactive GKR verifier of `example::Proof`.
+/-! Generated construction facts of the compiled `example::Proof` Entry of the subject
+`gkr`. Regenerate with `lean/bridges/subject.py --write`.
 
-The Proof Entry's original export is the admitted GKR source `GkrSourceData`:
-the construction bridge checks that it renders to exactly the same data.
-`GkrProofParticipant` is the compiler's constructed validator for the Entry: the
-output-point loop, then the layer loop with the two `Rounds` applications as
-inner loops, the line polynomial's coefficients, the wiring check as a guard,
-the line challenge and the next claim, and finally the input check. The
-transcript-construction rule and the participant projection rule both accept it
-(`compiled`). By their composed soundness the compiled verifier's ideal meaning
-is the Fiat–Shamir transform of the original GKR validator for every challenge
-function (`compiled_transform`); by the construction rule alone it is the
-Fiat–Shamir transform of the interactive reading of the exported instructions
-(`spec_transform`). No equation specific to this Entry is assumed.
--/
+`GkrSourceData` is the Entry's original export and
+`GkrProofParticipant` its constructed validator. The composed
+transcript-construction and participant projection check accepts the pair
+(`compiled`), and the selection check (`selection_checked`) discharges the
+positional premises of the composed rules from data the kernel reads, so
+`compiled_transform` holds with no proof specific to this Entry: for every
+challenge function, the compiled verifier's ideal meaning is the Fiat–Shamir
+transform of the original validator. -/
 
 namespace ZkcExamples.Construction.GkrProof
 open Zkc.Source Zkc.Source.Structured Zkc.Construction
 
 set_option smartUnfolding false
 
+/-! ## The original Proof Entry -/
+
 abbrev program := ZkcExamples.Structured.GkrSourceViews.program
-/-- The admitted original: the GKR source and the program it admits. -/
+/-- The admitted original. -/
 abbrev imported : Structured.Imported ZkcExamples.Structured.GkrSourceData.snapshot :=
   ZkcExamples.Structured.GkrSourceViews.imported
-abbrev participant := GkrProofParticipant.participant
 
-/-- The occurrence context the check derives from the original roster and the
-exported policy. -/
-def context : Context :=
-  (exportContext ZkcExamples.Structured.GkrSourceData.snapshot participant).get (by decide +kernel)
+abbrev snapshot := ZkcExamples.Structured.GkrSourceData.snapshot
+abbrev participant := ZkcExamples.Construction.GkrProofParticipant.participant
 
-theorem context_admitted :
-    exportContext ZkcExamples.Structured.GkrSourceData.snapshot participant = some context := by
-  rfl
+/-! ## The constructed validator and its checked selection -/
 
 set_option smartUnfolding true in
 /-- The composed per-compile check accepts the actual export against the
 admitted original. -/
-theorem compiled : checkCompiled imported participant = .ok () := by
-  decide +kernel
+theorem compiled : checkCompiled imported participant = .ok () := by decide +kernel
+
+set_option smartUnfolding true in
+/-- The selection of the export's inputs and acceptance output, constructed from
+the admitted original and the export's policy. -/
+def selection : Selection imported.program.payload.entry.outputs :=
+  (select imported participant).get (by decide +kernel)
+
+theorem selected : select imported participant = some selection := (Option.some_get _).symm
+
+set_option smartUnfolding true in
+/-- The selection check accepts the export. -/
+theorem selection_checked : selection.check imported participant = true := by decide +kernel
+
+/-- The occurrence context the check derives from the original roster and the
+exported policy. -/
+def context : Context := selection.context
+
+theorem context_admitted : exportContext ZkcExamples.Structured.GkrSourceData.snapshot participant = some context :=
+  (select_sound imported participant selected).1
 
 /-- The composed check's two rules, each on the actual export. -/
-theorem compiled_rules : check context participant = .ok () ∧
+theorem compiled_rules : checkExport ZkcExamples.Structured.GkrSourceData.snapshot participant = .ok () ∧ check context participant = .ok () ∧
     project program context participant = .ok () := by
   have accepted := compiled
   unfold checkCompiled at accepted
@@ -61,24 +73,30 @@ theorem compiled_rules : check context participant = .ok () ∧
     obtain ⟨context'', found', checked⟩ := checkExport_sound exported
     rw [context_admitted] at found'
     cases found'
-    exact ⟨checked, accepted⟩
+    exact ⟨exported, checked, accepted⟩
   · cases accepted
   · cases accepted
+
+/-- The per-compile construction check accepts the actual export. -/
+theorem accepted : checkExport ZkcExamples.Structured.GkrSourceData.snapshot participant = .ok () := compiled_rules.1
 
 /-- The transcript-construction rule accepts the actual export. -/
-theorem accepted : check context participant = .ok () := compiled_rules.1
+theorem checked : check context participant = .ok () := compiled_rules.2.1
 
 /-- The participant projection rule accepts the actual export. -/
-theorem projected : project program context participant = .ok () := compiled_rules.2
-
-theorem validator_eq : context.validator = 1 := by rw [show context = _ from rfl]; rfl
-
-theorem producer_eq : context.producer = 0 := by rw [show context = _ from rfl]; rfl
+theorem projected : project program context participant = .ok () := compiled_rules.2.2
 
 set_option smartUnfolding true in
+theorem validator_eq : context.validator = 1 := by decide +kernel
+
+set_option smartUnfolding true in
+theorem producer_eq : context.producer = 0 := by decide +kernel
+
 /-- Where the export returns the selected acceptance output. -/
-def acceptancePosition : Nat :=
-  (exportAcceptance ZkcExamples.Structured.GkrSourceData.snapshot participant).get (by decide +kernel)
+def acceptancePosition : Nat := selection.position
+
+theorem acceptance_admitted : exportAcceptance ZkcExamples.Structured.GkrSourceData.snapshot participant = some acceptancePosition :=
+  (select_sound imported participant selected).2.1
 
 set_option smartUnfolding true in
 theorem acceptancePosition_eq : acceptancePosition = 0 := by decide +kernel
@@ -102,97 +120,96 @@ omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 among the validator's outputs. -/
 theorem acceptance_decision (values : List (Value F G))
     (length : values.length = participant.returned.length) :
-    acceptance values = decision (values.dropLast.map some) := by
-  have returnedLength : participant.returned.length = 2 := rfl
-  rw [returnedLength] at length
-  rcases values with _ | ⟨first, _ | ⟨second, _ | _⟩⟩ <;> simp at length
-  simp only [acceptance, decision, acceptancePosition_eq, List.dropLast_cons_cons,
-    List.dropLast_singleton, List.map_cons, List.map_nil, List.getElem?_cons_zero]
-  rcases first with ⟨_ | _ | _⟩ | _ | _ | _ | _ <;> rfl
+    acceptance values = decision (values.dropLast.map some) :=
+  (selection_sound (F := F) (G := G) imported participant selected selection_checked).1 values length
 
-/-- Data inputs of the constructed validator: the circuit's input values, the
-claimed outputs, the stacked add and mul wiring tables, the number of layers,
-the number of selector coordinates and the width. -/
-def inputs (values outputs add mul : List F) (layers selector width : Nat) : List (Value F G) :=
-  [.vector "bls12-381.fr" values, .vector "bls12-381.fr" outputs, .vector "bls12-381.fr" add,
-    .vector "bls12-381.fr" mul, .index layers, .index selector, .index width]
+/-- Data inputs of the constructed validator: the policy's public inputs, in
+policy order. -/
+def inputs (inputsValue outputsValue add mul : List F) (layers selector width : Nat) : List (Value F G) :=
+  [.vector "bls12-381.fr" inputsValue, .vector "bls12-381.fr" outputsValue, .vector "bls12-381.fr" add, .vector "bls12-381.fr" mul, .index layers, .index selector, .index width]
 
-/-- The validator's original inputs: the public statement and the challenge
-service handle. -/
-abbrev verifierInputs (values outputs add mul : List F) (layers selector width handle : Nat) :
+/-- The validator's original inputs: the published values at their positions,
+absent inputs of other roles, and the challenge service handle. -/
+def verifierInputs (inputsValue outputsValue add mul : List F) (layers selector width : Nat) (handle : Nat) :
     Values (Component (assignment F G)) program.payload.entry.inputs :=
-  .cons (some values) (.cons (some outputs) (.cons (some add) (.cons (some mul)
-    (.cons (some layers) (.cons (some selector) (.cons (some width) (.cons (some handle) .nil)))))))
+  .cons (some inputsValue) (.cons (some outputsValue) (.cons (some add) (.cons (some mul) (.cons (some layers) (.cons (some selector) (.cons (some width) (.cons (some handle) (.nil))))))))
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
-/-- The constructed program's data inputs hold the validator's original inputs. -/
-theorem inputs_related (values outputs add mul : List F) (layers selector width handle : Nat)
-    (initial : History F G) :
-    HoldsValues handle (inputs values outputs add mul layers selector width ++ [.transcript initial])
+/-- The constructed program's data inputs hold the validator's original inputs:
+the published values at their exported positions and the handle as the replaced
+service. -/
+theorem inputs_related (inputsValue outputsValue add mul : List F) (layers selector width : Nat) (handle : Nat) (initial : History F G) :
+    HoldsValues handle (inputs inputsValue outputsValue add mul layers selector width ++ [.transcript initial])
       (inputSlots context participant.policy program.payload.entry.inputs)
-      (verifierInputs (G := G) values outputs add mul layers selector width handle) := by
-  have slotsEq : inputSlots context participant.policy program.payload.entry.inputs =
-      [.held 0, .held 1, .held 2, .held 3, .held 4, .held 5, .held 6, .service] := by
-    rfl
-  rw [slotsEq]
-  refine ⟨⟨values, rfl, ?_⟩, ⟨outputs, rfl, ?_⟩, ⟨add, rfl, ?_⟩, ⟨mul, rfl, ?_⟩,
-    ⟨layers, rfl, ?_⟩, ⟨selector, rfl, ?_⟩, ⟨width, rfl, ?_⟩, rfl, trivial⟩ <;>
-    simp [inputs, Value.decode]
+      (verifierInputs (F := F) (G := G) inputsValue outputsValue add mul layers selector width handle) :=
+  (selection_sound (F := F) (G := G) imported participant selected selection_checked).2.1 handle
+    (.cons inputsValue (.cons outputsValue (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.nil)))))))) [.transcript initial]
 
-/-- The original GKR validator, read through its acceptance output. -/
-def verifier (values outputs add mul : List F) (layers selector width handle : Nat) :
-    PIR.Proc (Actions F G) (Option Bool) :=
-  ((program.participant F G 1 (verifierInputs values outputs add mul layers selector width handle)).bind
-    fun outputs => .done (outputs.get .here)).interpret CommonAdapter.project
+omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+/-- The constructed program's data inputs are the published inputs and the
+initial transcript. -/
+theorem inputs_arity (inputsValue outputsValue add mul : List F) (layers selector width : Nat) :
+    (inputs (F := F) (G := G) inputsValue outputsValue add mul layers selector width).length + 1 = participant.inputs.length :=
+  rfl
+
+/-- Helper calls of the constructed program denote the original's checked
+helpers. -/
+abbrev table : Structured.Meanings F G := helperTable program F G
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 /-- The decision among the validator's outputs is its acceptance output. -/
 theorem decision_outputs (outputs : Values (Component (assignment F G)) program.payload.entry.outputs) :
-    decision (validatorOutputs 1 program.payload.entry.outputScopes outputs) = outputs.get .here := by
-  have scopesEq : program.payload.entry.outputScopes = [[1]] := rfl
-  rw [scopesEq]
-  rcases outputs with _ | ⟨value, _ | _⟩
-  simp only [decision, acceptancePosition_eq]
-  cases value <;> rfl
+    decision (validatorOutputs 1 program.payload.entry.outputScopes outputs) = outputs.get .here :=
+  (selection_sound (F := F) (G := G) imported participant selected selection_checked).2.2.2 outputs
 
-/-- The compiled GKR verifier, under the ideal transcript model with any
-challenge function in any lawful monad, is the Fiat–Shamir transform of the
-original GKR validator, with equal outcomes and unread proof suffixes. -/
-theorem compiled_transform {m : Type → Type} [Monad m] [LawfulMonad m]
-    (challenge : History F G → m F) (values outputs add mul : List F)
-    (layers selector width handle : Nat) (initial : History F G) (proof : Proof F G) :
-    (fun result => (mapOutcome acceptance result.1, result.2)) <$>
-        ideal context challenge (helperTable program F G) participant.returned participant.instructions
-          (inputs values outputs add mul layers selector width ++ [.transcript initial]) proof =
-      transform context challenge (verifier values outputs add mul layers selector width handle)
-        initial proof := by
-  obtain ⟨context', found, composed⟩ :=
-    Zkc.Construction.compiled_transform (F := F) (G := G) imported participant compiled
-  rw [context_admitted] at found
-  cases found
-  dsimp only [imported, ZkcExamples.Structured.GkrSourceViews.imported] at composed
-  rw [composed challenge acceptance decision acceptance_decision handle
-    (inputs values outputs add mul layers selector width) initial proof
-    (verifierInputs values outputs add mul layers selector width handle)
-    (inputs_related values outputs add mul layers selector width handle initial) rfl]
-  unfold verifier
+/-- The admitted root's validator process, read through its acceptance output. -/
+def process (inputsValue outputsValue add mul : List F) (layers selector width : Nat) (handle : Nat) : PIR.Proc (participantInterface F G) (Option Bool) :=
+  (program.participant F G 1 (verifierInputs inputsValue outputsValue add mul layers selector width handle)).bind fun outputs =>
+    .done (outputs.get .here)
+
+/-- The original validator, read through its acceptance output. -/
+def verifier (inputsValue outputsValue add mul : List F) (layers selector width : Nat) (handle : Nat) : PIR.Proc (Actions F G) (Option Bool) :=
+  (process inputsValue outputsValue add mul layers selector width handle).interpret CommonAdapter.project
+
+/-- The original validator, read through its outputs, is the verifier. -/
+theorem original_verifier (inputsValue outputsValue add mul : List F) (layers selector width : Nat) (handle : Nat) :
+    ((program.participant F G context.validator (verifierInputs inputsValue outputsValue add mul layers selector width handle)).bind fun outputs =>
+      .done (decision (validatorOutputs context.validator program.payload.entry.outputScopes
+        outputs))).interpret CommonAdapter.project = verifier inputsValue outputsValue add mul layers selector width handle := by
+  unfold verifier process
   rw [validator_eq]
   simp only [decision_outputs]
 
-/-- The compiled GKR verifier is the Fiat–Shamir transform of the interactive
-reading of its exported instructions, read through the acceptance output, for
-every service handle. -/
+/-- The compiled verifier, under the ideal transcript model with any challenge
+function in any lawful monad, is the Fiat–Shamir transform of the original
+Proof Entry's validator: equal acceptance outcomes, stops and unread proof
+suffixes, for every published input, initial transcript, proof and service
+handle. An instance of `Zkc.Construction.compiled_selected`, whose positional
+premises the checked selection discharges. -/
+theorem compiled_transform {m : Type → Type} [Monad m] [LawfulMonad m]
+    (challenge : History F G → m F) (inputsValue outputsValue add mul : List F) (layers selector width : Nat) (handle : Nat) (initial : History F G)
+    (proof : Proof F G) :
+    (fun result => (mapOutcome acceptance result.1, result.2)) <$>
+        ideal context challenge table participant.returned participant.instructions
+          (inputs inputsValue outputsValue add mul layers selector width ++ [.transcript initial]) proof =
+      transform context challenge (verifier inputsValue outputsValue add mul layers selector width handle) initial proof :=
+  (compiled_selected imported participant compiled selected selection_checked).2 challenge handle
+    (.cons inputsValue (.cons outputsValue (.cons add (.cons mul (.cons layers (.cons selector (.cons width (.nil)))))))) initial proof
+
+/-- By the construction rule alone, the compiled verifier is the Fiat–Shamir
+transform of the interactive reading of its exported instructions, read through
+the acceptance output, for every service handle. -/
 theorem spec_transform {m : Type → Type} [Monad m] [LawfulMonad m]
     (challenge : History F G → m F) (handle : Nat) (data : List (Value F G))
     (arity : data.length = 7) (initial : History F G) (proof : Proof F G) :
     (fun result => (mapOutcome acceptance result.1, result.2)) <$>
-        ideal context challenge (helperTable program F G) participant.returned participant.instructions
+        ideal context challenge table participant.returned participant.instructions
           (data ++ [.transcript initial]) proof =
       transform context challenge
-        ((spec context handle (helperTable program F G) participant.returned participant.instructions
+        ((spec context handle table participant.returned participant.instructions
           (data ++ [.transcript initial])).bind fun values => .done (acceptance values))
         initial proof := by
-  rw [check_sound context challenge handle (helperTable program F G) participant accepted data initial
-    proof (by rw [arity]; rfl), transform_bind_done]
+  rw [check_sound context challenge handle table participant checked data initial proof
+    (by rw [arity]; rfl), transform_bind_done]
 
 end ZkcExamples.Construction.GkrProof

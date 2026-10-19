@@ -1,157 +1,99 @@
 # Executable bridge
 
-`check.py` connects the `zkc.program/0` validators that the runtime admits for
-the compiled `example::Proof` Entries of the Schnorr and Sumcheck examples and
-of the [deferred-rounds fixture](../../../common/tests/fixtures/projects/deferred-rounds/README.md)
-to the [executable stage](../../docs/spec/executable.md) and to the runtime
-itself.
-It is part of `python3 common/tests/run.py lean-native`.
+The `zkc.program/0` validators that the runtime admits for the compiled proof
+Entries of the subject manifests in [`lean/subjects`](../../subjects/README.md)
+with the executable profile are connected to the
+[executable stage](../../docs/spec/executable.md) and to the runtime itself by
+the subject driver, [`lean/bridges/subject.py`](../subject.py), with
+`--runtime`. `check.py` here is its compatibility entry point: it runs the
+driver on every manifest with the executable profile (or the named
+`--subject`s). `render.py` renders the validator of a native deployment as Lean
+data. The driver is part of `python3 common/tests/run.py lean-native`.
 
 ## Reproduce
 
-From `lean/`, with the compiler, the runtime CLI, the main Lean package and the
-[ArkLib integration](../../integrations/arklib/README.md) built:
+From the repository root, with the compiler, the runtime CLI, the main Lean
+package and the [ArkLib integration](../../integrations/arklib/README.md)
+built:
 
 ```sh
-python3 bridges/executable/check.py --compiler ../build/compiler/zkc-compile \
-  --native ../target/release/zkc --output ../build/experiments/executable/run-1
+python3 lean/bridges/executable/check.py --output build/experiments/executable/run-1
+python3 lean/bridges/subject.py --subject sumcheck --check --runtime \
+  --output build/experiments/subjects/run-1
 ```
 
-`--lake` selects the Lake executable. `--output` must be a new or empty
-directory. `--subject schnorr`, `--subject sumcheck` or
-`--subject deferred-rounds` checks one subject (default: all). `--write`
-rewrites the committed program data, and the construction data this driver
-owns, from the fresh programs and exports instead of requiring them to be
-unchanged.
+`--compiler`, `--native` and `--lake` select the tools. `--output` must be a new
+or empty directory. `--write` rewrites the generated modules from the fresh
+programs and exports instead of requiring them to be unchanged.
 
 ## What is checked
 
-For each subject:
+For each subject with the executable profile, after the construction checks:
 
-1. `language-emit`, `language-bundle` and `language-package` produce the
-   original source, the native deployment and the Entry package. The package's
-   artifact must be the deployment, its original the emitted bytes, the
-   deployment's inner digest the SHA-256 of its `zkc.program/0` candidate, and
-   the constructed export's policy the deployment's policy.
-2. The committed program data (`SchnorrProofProgramData.lean`,
-   `SumcheckProofProgramData.lean`, `DeferredRoundsProgramData.lean`), rendered
-   by `render.py` from the
-   deployment with one definition per local function, and the construction data
-   (the original's structured rendering and the constructed participant) must
-   equal the fresh renderings byte for byte. The Sumcheck original,
-   `SumcheckSourceData.lean`, is owned by the structured bridge and compared
-   here.
+1. `language-package` produces the Entry package. The package's artifact must
+   be the deployment, its original the emitted bytes, the deployment's inner
+   digest the SHA-256 of its `zkc.program/0` candidate, and the constructed
+   export's policy the deployment's policy. Declared variants
+   (`[executable] variants`) are bundled with their options.
+2. The program data, rendered by `render.py` with one definition per local
+   function, and the generated executable facts must equal the fresh renderings
+   byte for byte. The facts module states the accepted reading (`lowered`,
+   `accepted`), the helpers the constructed validator calls, its static charge
+   and message types when they are static, and admission of the published
+   inputs; the kernel checks each.
 3. A generated Lean file runs `checkLowering` in the kernel on the fresh
    rendering against the fresh constructed-validator export, which must be
-   accepted with axioms among `propext`, `Classical.choice` and `Quot.sound`:
-   for Schnorr with a total charge of 25, for Sumcheck with the three helpers
-   the constructed validator calls by name, and for the deferred rounds with a
-   total charge of 35 and through normalization, since the program computes the
-   first round's product after the second draw and so differs from the
-   constructed validator instruction for instruction; the same Entry compiled
-   with `--no-calculation-batching` is accepted by equality. It runs the rule on
-   mutated
-   programs. Pure calculations are compared by the terms they denote, so a
-   changed calculation is refused where its value first reaches an anchor or the
-   returned values. For Schnorr nine are refused for their named reasons:
-   operands of the final addition swapped and the final comparison made trivial
-   (the returned decision denotes another term), returned values swapped, the
-   base observed instead of the commitment (the second anchor's second operand),
-   a consumed transcript state reused, an uninstalled implementation, an
-   unadmitted representation, a helper's formal retyped (its call site) and a
-   duplicated helper. For Sumcheck eight are refused: the loop's maximum raised
-   (the second anchor, the loop), the round check made trivial (the operand of
-   the guard, the loop body's fifth anchor), the loop counted by the claim and
-   the carried point and claim swapped (the loop and the round check's call
-   site), a consumed transcript state reused in a round, the empty-point call
-   retargeted to another function (its call site), returned values swapped and
-   an uninstalled observation implementation. A changed constant in the terminal
-   check's body is accepted:
-   the rule reads a helper body for its sorts and transcript freedom only, and
-   what it computes is the obligation `SumcheckHelpers.check_prepared`
-   discharges for the committed program, which step 2 ties to the fresh one.
-   For the deferred rounds four are refused: the first product taken with the
-   second challenge, the final comparison made trivial and returned values
-   swapped (the returned decision denotes another term), and the second
-   observation absorbing the first message (the sixth anchor's second
-   operand).
-   The validator's row of the deployment's role map, which the runtime uses,
-   must select the policy's acceptance output and take the policy's public
-   inputs in order, and the same file proves that the Lean statement's
-   acceptance position and public inputs are that row's.
+   accepted with axioms among `propext`, `Classical.choice` and `Quot.sound`,
+   and accepts every declared variant. Lean evaluates the reading's static
+   charge, message types, helpers and whether the reading is the constructed
+   validator instruction for instruction (checked against `[executable] exact`
+   when declared). The acceptance threshold is derived from the Lean charge: the
+   static total charge, or the manifest's charge function at the public inputs
+   it names. The manifest's generic program mutation kinds are applied to the
+   fresh program: each applicable one must be refused by the rule (its reason is
+   recorded), or accepted when its kind changes only what the rule does not read
+   (a helper body's computation, which a preparation obligation covers). The
+   validator's row of the deployment's role map, which the runtime uses, must
+   select the policy's acceptance output and take the policy's public inputs in
+   order, and the same file proves that the Lean statement's acceptance position
+   and public inputs are that row's.
 4. The runtime proves and verifies with the package under its pin. The verifier
-   runs on the honest proof at every instruction budget from 0 to one past its
-   acceptance threshold (26 for Schnorr, 191 for Sumcheck, 36 for the deferred
-   rounds) and on mutated proofs. Schnorr's eight are undecodable commitments, an out-of-range
-   response, a wrong response, a missing or truncated response, a trailing byte
-   and another header binding. Sumcheck's eight are an out-of-range and a
-   wrongly tagged round message, a changed round message in the first and in
-   the second round, a missing or truncated last message, a trailing byte and
-   another header binding. The deferred rounds' seven are an out-of-range first
-   message, a changed first and a changed second message, a missing or truncated
-   second message, a trailing byte and another header binding. For each case, the runtime's outcome, stop site,
-   local call, charged instructions, transcript transitions, read messages and
-   whole-proof consumption must equal those `execute` predicts for the same
-   bytes, under the Entry's checked occurrence context, with every value read
-   as zero in `ZMod 5` except that the decoder refuses exactly the payloads a
-   mutation corrupted and reads a changed message as one. The changed Sumcheck
-   messages stop both meanings at the round check's explicit rejection inside
-   its local call, in the round where they occur. The runtime must accept
-   exactly the honest proof at the threshold budget (25, 190 and 35), one past
-   it, and without a budget. It must reject the wrong Schnorr response and the
-   changed deferred-rounds messages as `artifact-rejected`, which the value-free
-   prediction cannot distinguish. For
-   Sumcheck, the charge bound of the completeness theorem
-   (`SumcheckCharges.charge`, which `SumcheckCompleteness.honest_accepted`
-   proves sufficient for the honest proof) must equal the runtime's threshold at
-   the public round count.
-5. In the ArkLib integration, every theorem of each receipt's chain, from the
-   lowering rule and the helper preparation to the byte-level theorems
-   (`ExecutableSchnorrFiatShamir.knowledge_soundness`,
-   `ExecutableSumcheckFiatShamir.adaptive_soundness`), must depend only on
-   `propext`, `Classical.choice` and `Quot.sound`. A walk over the constants each
-   byte-level theorem's proof uses must reach the general rules
-   (`Zkc.Construction.compiled_transform`, `check_sound`, `project_sound`, and
-   the lowering rule's `checkLowering_sound`, `validate_ideal` and
-   `validate_rejects` for Schnorr or `validate_prunes` and
-   `validate_prunes_export` for Sumcheck), the admitted original they are
-   applied to
-   and the Entry's per-compile checks (`compiled`, the executable `accepted`),
-   for Sumcheck also `SumcheckHelpers.check_prepared`, `Prunes.prEvent_le` and
-   the binding's `initial_determined`; the Schnorr proof must not reach
-   `ZkcExamples.Construction.SchnorrProof.spec_equation`. The walk then lists
-   the Entry-specific theorems it reaches (in example namespaces) whose
-   statement is an equation between processes, with whether the kernel checks
-   each by evaluation (`rfl`) and whether its statement names a compiled
-   meaning (`spec`, `ideal`, `execute`, `validate`, `metered` or their steps).
-   None may name a compiled meaning: the chains use no equation specific to an
-   Entry about the compiled program. The classification must flag
-   `spec_equation` when the walk starts from it. The original-side equations
-   are recorded in each receipt. The deferred rounds' chain ends at the
-   constructed validator (`DeferredRounds.executable_validate`, host validation
-   as its ideal acceptance at a budget of at least 35), whose proof must reach
-   `validate_ideal`, `checkLowering_sound`, `checkNormalized_sound` and the
-   executable `accepted`: the participant projection rule is not applied to
-   that Entry, so no theorem relates it to the original protocol.
-6. `receipt.json` names the compiler, runtime, Lean toolchain and manifest
-   identities, the source module, original, export, program, deployment,
-   descriptor and package digests, the Lean data digests, the runtime's
-   role-map selection, the checked rules (the composed construction and
-   projection check `checkCompiled` with its admitted subject and its soundness
-   theorems, or for the deferred rounds the construction check `checkExport`
-   alone, and the lowering rule with, for Sumcheck, the helper preparation),
-   the theorem, the checked axioms of its chain, the proof dependencies checked
-   in step 5 and the remaining assumptions. Under the receipt's package pin the
-   runtime must accept the honest proof, report that pin and reject the wrong
-   proof. A package with a mutated program (the Schnorr and deferred-rounds
-   comparisons made trivial; the Sumcheck round check and terminal comparison
-   made trivial) is refused
-   under that pin; re-pinned, it accepts the wrong proof but its program digest
-   differs from the receipt's; a program changed without its inner digest is
-   refused by the runtime's candidate binding.
+   runs on the honest proof at every instruction budget from 0 to one past the
+   derived threshold and on generic proof edits chosen by payload shape: a
+   wrongly tagged first message, a group message outside the group, a field
+   message out of range, every field message changed to another value, the last
+   message missing or truncated, a trailing byte and another header binding.
+   For each case, the runtime's outcome, stop site, local call, charged
+   instructions, transcript transitions, read messages and whole-proof
+   consumption must equal those `execute` predicts for the same bytes, under the
+   Entry's checked occurrence context, with every value read as zero in
+   `ZMod 5` except that the decoder refuses exactly the payloads an edit
+   corrupted and reads a changed message as one. The runtime must accept exactly
+   the honest proof at the threshold budget, one past it, and without a budget,
+   and must reject every changed message.
+5. In the ArkLib integration, every theorem of each manifest's receipt chain
+   must depend only on `propext`, `Classical.choice` and `Quot.sound`. A walk
+   over the constants each receipt theorem's proof uses must reach the
+   declarations the manifest lists as used and avoid those it lists as unused.
+   The walk then lists the Entry-specific theorems it reaches (in example
+   namespaces) whose statement is an equation between processes, with whether
+   the kernel checks each by evaluation (`rfl`) and whether its statement names
+   a compiled meaning (`spec`, `ideal`, `execute`, `validate`, `metered` or their
+   steps). None may name a compiled meaning. The classification must flag the
+   generated `spec_equation` of a subject with a model when the walk starts from
+   it.
+6. Each subject's `evidence.json` records the artifact digests, the runtime's
+   role-map selection, the derived threshold, the runtime summary, the axiom
+   closures and proof dependencies of step 5 and the requested assumptions. The
+   runtime must accept the honest proof under the recorded package pin, report
+   that pin and reject a changed proof. A package whose program compares every
+   data value with itself is refused under that pin; re-pinned, it accepts the
+   changed proof but its program digest differs from the record's; a program
+   changed without its inner digest is refused by the runtime's candidate
+   binding.
 
-The retained `report.json` lists commands, exit statuses, digests, the paired
-runtime and Lean observations and every check.
+The retained `report.json` lists commands, exit statuses, digests and every
+check.
 
 ## Boundaries
 
@@ -160,8 +102,8 @@ call context at a stop, framing, decoding failures, explicit rejections and
 transcript transitions; frame events are not compared. Values are mapped to a
 small field, so the verifier's Boolean on an accepted run is the runtime's; the
 Lean prediction only says that the run returned. The codec's validity decisions
-are supplied by the mutation, not checked. None of the cases reaches the inputs
-on which the runtime and the meaning are known to differ, which are listed in
+are supplied by the edit, not checked. None of the cases reaches the inputs on
+which the runtime and the meaning are known to differ, which are listed in
 [support](../../docs/support.md). This is bounded agreement evidence for the
 trusted execution link, not a proof that the runtime implements the executable
 meaning. The renderer's reading of the program bytes is a trusted link: the

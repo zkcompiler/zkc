@@ -22,13 +22,17 @@ facts = "lean/ZkcExamples/Executable/DeferredRoundsFacts.lean"
 endpoint = "executable-bytes"
 
 [assumptions]
-requested = ["lean.kernel", "export.structured-renderer", "export.program-renderer",
-             "runtime.acceptance-inclusion", "runtime.installed-kernels", "runtime.codec-function",
-             "projection.not-applied"]
+requested = ["exporter.structured-denotation", "runtime.program-reader",
+             "runtime.acceptance-inclusion", "runtime.installed-kernels", "runtime.codec-function"]
 
 [mutations]
-kinds = ["lowering-retarget-operand", "lowering-operand-self", "lowering-observe-reads-message",
-         "lowering-results-swapped"]
+kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
+         "challenge-names-delivery", "native-challenge-reads-host", "native-domain-separator",
+         "lowering-swap-operands", "lowering-operand-self", "lowering-retarget-operand",
+         "lowering-results-swapped", "lowering-observe-reads-input", "lowering-observe-reads-message",
+         "lowering-stale-transcript", "lowering-uninstalled-binding",
+         "lowering-unchecked-representation", "lowering-formal-retyped",
+         "lowering-function-duplicated"]
 
 [executable]
 threshold = "derived"

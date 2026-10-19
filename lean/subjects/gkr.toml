@@ -26,12 +26,17 @@ properties = ["soundness"]
 statement = "fixed"
 
 [assumptions]
-requested = ["lean.kernel", "export.structured-renderer", "transcript.random-oracle"]
+requested = ["exporter.structured-denotation", "model.history-oracle", "exporter.checked-candidate",
+             "transport.canonical-decoding"]
 
 [mutations]
-kinds = ["challenge-names-delivery", "drop-guard", "update-self", "stale-yield", "native-helper-constant"]
+kinds = ["observe-repeats-value", "challenge-reads-host", "challenge-names-delivery", "drop-guard",
+         "equality-self", "update-self", "stale-yield", "call-reads-sibling",
+         "native-challenge-reads-host", "native-domain-separator", "native-helper-constant"]
 
 [construction]
 admission = "external"
 views = "ZkcExamples.Structured.GkrSourceViews"
 inputs = "values"
+# The instruction reading of the GKR Entry declares its own context equation.
+omit = ["context_eq"]
