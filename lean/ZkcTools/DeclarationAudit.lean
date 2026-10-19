@@ -344,6 +344,7 @@ def checkBoundary (families upstream : List Name) (named : List Name := [])
       unless allowedAxioms.contains axiomName do
         throwError "unexpected axiom: upstream {name} depends on {axiomName}"
   logInfo m!"{marker} boundary={selected.size} named={named.length}"
+  logInfo m!"UPSTREAM-BOUNDARY {selected.toList}"
 
 /-- One registry entry as the audit sees it: its identifier, the constant of
 its proposition schema if it has one, and whether that schema must be a
