@@ -5,6 +5,23 @@ from . import algebra as a
 from .programs import local
 
 
+def host_vector(shape):
+    """Matched large inputs with minimal length work or one linear reduction."""
+    n, operation = shape['elements'], shape['operation']
+    xs = [x[0] for x in a.dense(n, seed=281)]
+    if operation == 'length':
+        expected, result, result_type = n, 'v::length(xs)', 'index'
+    elif operation == 'sum':
+        expected, result, result_type = sum(xs) % a.P, 'v::sum(xs)', 'F'
+    else:
+        raise ValueError(f'unknown Host vector operation: {operation}')
+    program = local('koala-bear', f'xs:Vector<F>, expected:{result_type}',
+                    f'return {result}==expected;',
+                    {'xs': list(map(str, xs)), 'expected': str(expected)})
+    program.oracle = 'independent linear Python length/sum; identical vector across operations; existing JSON-to-native Host Run path, no transport-only or kernel-only timing'
+    return program
+
+
 def field_vector(shape, *, root=None):
     f = a.FieldOracle(shape['field'], root=root)
     n, operation = shape['elements'], shape['operation']

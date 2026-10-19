@@ -92,6 +92,10 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 | `field_vector` | Separately named add, subtract, Hadamard multiply, scale, sum, product and dot controls; representative fields and sizes | Independent scalar expectations; SDK/run includes validation and Host costs |
 | `transform` | Separate DFT and interpolation calls, unit shift, full dense coefficients; KB/Ext4/Ext8 at 32, KB/Ext8 at 1,024 | Independent Python evaluation; polynomial adaptation and equality remain inside the SDK call |
 | `curve_operation` | Separately named BLS12-381 G1 vector scaling, per-point scaling and MSM; 1/33/128 points | Includes point generation and every result check; weaker group-law consistency, sharing native group kernels |
+| `hash_bytes` | SHA-256 over 0/64/8,192 payload bytes | Independent Python `hashlib` digest; all bytes checked |
+| `poseidon` | Width-16 KoalaBear Poseidon2, 1/17/256 states | Published Plonky3 known answer repeated per state; full batch check, one distinct state |
+| `merkle` | Poseidon2 base-row trees; separate height/row-width sweeps, single and pruned multi-openings | Independent expected rows and changed-row rejection; root/path authentication shares the provider |
+| `host_vector` | Matched KoalaBear input length/sum controls at 16,384/65,536 elements | Linear Python expectations; existing JSON-to-native Host Run path, default capacities |
 | `scan` | Scalar ordered scan and bulk prefix sum; 17/1,024/4,096 elements | Full output check; source-form comparison, no presumed storage-release benefit |
 | `control` | Rectangular nested loops, branches, indexing and carried state | Independent of machine libraries; not an unseen statistical holdout |
 | `matrix` | Rectangular matrix-vector multiplication, dense and sparse occupancy | Python expectations; R1CS-like arithmetic, not a full proof system |
@@ -104,7 +108,7 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 | `air` | Trace height, width and evaluation blowup vary separately, including original independent recurrences and new coupled quadratic/cubic columns | First/last/transition constraints; one table; default execution capacities |
 | `stark` | The `air` shapes through the [parameterized library](../../libraries/arguments/stark/README.md#parameterized-single-table-argument): quartic challenges, Poseidon2 multi-opening Merkle trees, constant final polynomial | Same AIR and queries as `air`, so the two profiles compare directly; same-stack proof verification |
 | `bulletproofs` | BP+ source workload, counts 1/3/8/16; changing statements and preparation policies | Retained conformance inputs; independent comparisons remain in `monero` |
-| `machine` | LogUp/grand-product, optional memory absent/present | Correlated STARK library regression; small fixtures, not a production zkVM scaling study |
+| `machine` | LogUp/grand-product, optional memory absent/present; bounded CPU/program and memory heights | Existing `ThreeTableArgument` and external accumulator interpreter; same-stack proof checks, not production zkVM scale |
 
 The [source catalog](bench/coverage.py) records exact dimensions, operation mix,
 category and limitations. Each run also records its oracle, input identities and
@@ -137,8 +141,8 @@ IR before attributing performance to the authored expression's shape.
 Transform directions use independent Python evaluation, rather than validating
 a native roundtrip. Curve controls use weaker scalar/group-law checks. Point
 generation, polynomial adaptation, validation and Host costs remain inside the
-SDK timer; these are **not kernel-only timings**. Hash/Merkle coverage remains
-in FRI/AIR compositions.
+SDK timer; these are **not kernel-only timings**. Separate hash/Merkle controls
+are described below.
 
 The `air-coupled-*` and `stark-coupled-*` pairs share Bundles and traces with
 simultaneous updates `next[j] = current[j]^(degree-1) * current[(j+1) % width] +
@@ -150,7 +154,69 @@ Negative controls check interior and boundary violations.
 Default capacities stay unchanged. Generator tests check arithmetic and input
 sizes; compilation, lowered-IR inspection and native resource admission are
 separate validation steps. Production-scale traces, Host-limit stress and
-multi-table scaling remain additional experiments.
+larger multi-table scaling remain additional experiments.
+
+### Hash, commitment and input controls
+
+The added panel contains three `hash_bytes`, three `poseidon`, six `merkle`,
+six bounded `machine`, and four `host_vector` cases. Existing case contracts,
+smoke lists and expression roles remain fixed. The catalog records category,
+dimensions and operation mix; generated Programs supply the captured oracle.
+
+[`commitments.py`](bench/commitments.py) uses the public byte hash, permutation
+and row-oracle APIs. SHA-256 checks every digest byte against `hashlib`.
+Poseidon2 repeats Plonky3 0.8.0's published KoalaBear answer across each batch;
+this is a retained known-answer control, not independent random-state coverage.
+Every Run also supplies an incorrect expected result to the acceptance gate.
+
+Merkle single-opening shapes `(height, row_width)` are `(16,1)`, `(256,1)`,
+`(16,8)`, `(16,9)` and `(13,9)`. These separate tree size from leaf payload,
+cross the eight-coordinate sponge rate, and include padding. A sixth case uses
+the `(256,1)` tree with four positions, including an out-of-order position and
+a duplicate. Each call commits, opens, checks every returned row against Python
+row-major expectations, authenticates it, and requires authentication of a
+canonical changed row to return false. Root/path checks use the same provider;
+there is no independent Merkle-root oracle or binding/security claim. Timings
+include commitment, opening, positive/negative authentication, equality and Host
+work; they do not isolate a tree-building or opening kernel.
+
+The machine additions reuse the fixture's source, captured Bundle, imperative
+interpreter and input preparation. Both LogUp and Product vary CPU/program
+height 8/16 with memory absent. Two LogUp cases hold CPU/program height 8 and
+the same four memory events fixed while varying present memory height 16/32.
+A matched arithmetic-only LogUp case enables an idle memory table while keeping
+the program, CPU witness and final value equal to the height-8 absent case. The
+active-memory cases also change the instruction mix and do not isolate presence.
+The existing profile stays at maximum log height 5, log domain size 6, five
+rounds, eight queries, eight attempts, two channels and shift 3. Changed-final
+statement and canonical-claim mutation checks use the existing proof controls.
+The Bundle supports CPU/program heights 4/8/16 and memory heights 8/16/32;
+larger heights or arbitrary table arity need a separate supported relation and
+profile. These controls keep fixed inputs and do not establish proof security.
+
+The large input controls use identical dense vectors for length and sum. Their
+Python expectations take linear work. Length exposes input adaptation and
+admission with minimal source work; sum adds one native reduction. The largest
+case reaches the default 65,536-element collection ceiling. JSON requests fit
+the existing 16 MiB document and 200,000-node bounds; no capacity is enlarged.
+Decode/request construction and SDK/Host execution retain their separate report
+boundaries. Worker-level native input transport and enlarged-capacity experiments
+remain separate work; these cases do not compare input transports.
+
+With the prebuilt tools from the Run section, select cases or suites explicitly:
+
+```sh
+python3 common/benchmarks/run.py run \
+  --case hash-sha256-8192 --case poseidon2-kb-states-256 \
+  --case merkle-poseidon2-h16-w9-single --case machine-logup-h8-m32-present \
+  --case host-vector-kb-sum-65536 \
+  --compiler build/compiler/zkc-compile --runtime target/release/zkc \
+  --worker target/release/zkc-benchmarks --output build/experiments/selected-controls
+```
+
+Use `--suite merkle` or `--suite host_vector` for their small dimensional panels.
+Normal runs execute validation gates before publishing timing summaries;
+source compilation and generator tests alone do not establish runtime admission.
 
 Broader coverage does not establish universal performance. Full Groth16/KZG,
 recursive proving, production zkVM traces, other fields/hash families,
@@ -340,6 +406,7 @@ boundaries/interleaving in [Google Benchmark](https://google.github.io/benchmark
 cargo test --locked -p zkc-benchmarks
 uv run --no-sync --locked pytest common/tests/harness/test_benchmarks.py \
   common/tests/harness/test_benchmark_coverage.py common/tests/harness/test_benchmark_numerical.py \
+  common/tests/harness/test_benchmark_execution.py \
   common/tests/harness/test_protocol_measurements.py \
   common/tests/harness/test_processes.py
 uv run --no-sync --locked ruff check common/benchmarks
