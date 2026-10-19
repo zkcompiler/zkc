@@ -101,16 +101,18 @@ def main():
             selected = [name for name in details if package == "arklib"]
             with (output / f"emit-{package}.log").open("w") as log:
                 result = emit(package, target, lake=lake, details=selected, log=log)
-            if result.returncode != 0:
+            # A signal death is a failure too, so success is the only accepted status.
+            emitted = result.returncode == 0
+            if not emitted:
                 raise SystemExit(f"declaration records of {package} failed; see {output / f'emit-{package}.log'}")
             if args.determinism:
                 again = output / "declarations" / f"{package}.again.jsonl"
                 with (output / f"emit-{package}-again.log").open("w") as log:
                     result = emit(package, again, lake=lake, baseline=target, details=selected, log=log)
-                if result.returncode != 0:
-                    failures.append(f"declaration records of {package} are not deterministic")
-                else:
+                if result.returncode == 0:
                     notes.append(f"declaration records of {package} are identical across two runs")
+                else:
+                    failures.append(f"declaration records of {package} are not deterministic")
             paths[package] = target
     records = Records.load(paths)
 
