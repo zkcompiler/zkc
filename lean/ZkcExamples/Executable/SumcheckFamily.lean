@@ -38,7 +38,10 @@ The charge bound and honest completeness both follow from it:
   follow from the round statement with the answers of the challenge function and
   no stop (`Zkc.Executable.idealK_oracle`), composed by
   `Zkc.Executable.iterateM_invariant` with the fold invariant: the claim is the
-  sum of the table restricted at the point.
+  sum of the table restricted at the point;
+* `prunes`: at every budget and with every framing header, host validation of
+  proof bytes prunes the ideal acceptance of the decoded proof, which a
+  soundness theorem about the constructed validator transfers through.
 -/
 
 set_option autoImplicit false
@@ -604,5 +607,30 @@ theorem honest_accepted (oracle : History F G → F) (decode : PhysicalType → 
   simp [Accepts, idealObservation, observation, Decision, selectedTrue]
 
 end Run
+
+section Bytes
+variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
+variable (a : Artifact)
+
+/-- For every challenge function in every lawful monad, decoder, budget,
+framing header and acceptance position, host validation of proof bytes prunes,
+by rejections, the constructed validator's ideal acceptance of the proof the
+message bytes decode to at the artifact's receive types. -/
+theorem prunes {m : Type → Type} [Monad m] [LawfulMonad m] (challenge : History F G → m F)
+    (decode : PhysicalType → List UInt8 → Option (Payload F G)) (budget : Nat) (binding : List UInt8)
+    (acceptance : Nat) (values : List F) (claim : F) (rounds : Nat) (initial : History F G)
+    (bytes : List UInt8) :
+    Prunes (fun accepted => accepted = false)
+      (validate installed a.validator a.context challenge decode budget binding acceptance
+        (a.inputs values claim rounds) initial bytes)
+      ((fun result => Accepts acceptance (idealObservation result)) <$>
+        ideal a.context challenge (helperTable a.program F G) a.participant.returned a.participant.instructions
+          (a.inputs values claim rounds ++ [.transcript initial])
+          (decodeProof decode (a.receives rounds) (bytes.drop 40))) := by
+  rw [← a.plan_types (a.inputs values claim rounds) rounds rfl]
+  exact validate_prunes_export installed a.validator a.context challenge _ decode budget a.accepted a.prepared
+    a.helpersSorted binding acceptance _ initial bytes (a.admits values claim rounds)
+
+end Bytes
 
 end ZkcExamples.Executable.SumcheckFamily
