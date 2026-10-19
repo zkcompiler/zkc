@@ -39,6 +39,14 @@ ENDPOINTS = {
 CONTRACTS = {"soundness": "falseStatement", "knowledge-soundness": "holds"}
 REGIMES = {"exact-uniform challenges": "Regime.exact F"}
 SEMANTICS = {"ideal-meaning": ".idealMeaning", "executable-bytes": ".executableBytes"}
+# The section variables of a claims module: the instances the endpoints of each
+# property take, and no others, so that no claim carries an unused premise.
+VARIABLES = {
+    "soundness": "variable {F G : Type} [Field F] [Fintype F] [DecidableEq F] [SampleableType F]\n"
+                 "  [AddCommGroup G] [Module F G] [DecidableEq G]",
+    "knowledge-soundness": "variable {F G : Type} [Field F] [Fintype F] [DecidableEq F] [Inhabited F] "
+                           "[SampleableType F]\n  [AddCommGroup G] [Module F G] [DecidableEq G] [SampleableType G]",
+}
 
 
 def names(manifest):
@@ -164,9 +172,60 @@ def lowering : LoweringEvidence artifacts compiled F G where
     return source
 
 
+def application_text(subject, prop, endpoint, statement, evidence_name, regime, claimed):
+    """One application: the evidence the family constructor builds at an endpoint
+    and a statement form, and the registered endpoint applied to it."""
+    theorem, property_name = ENDPOINTS[(endpoint, prop, statement)]
+    construction = subject.get("family", "construction")
+    executable = endpoint == "executable-bytes"
+    lowering = "lowering" if executable else "PUnit.unit"
+    stated = ["(art := artifacts)"]
+    adaptive = statement == "adaptive"
+    if prop == "soundness":
+        stated += ["(claim := Contract.falseStatement)", f"(regime := {regime})"]
+        binding = "⟨application⟩" if adaptive else "PUnit.unit"
+        value = f"{construction} (F := F) (G := G) {SEMANTICS[endpoint]} .{statement} {binding} {lowering}"
+        description = (f"ordinary soundness of {'program bytes' if executable else 'the ideal meaning'} for "
+                       f"{statement} statements")
+    else:
+        stated += ["(holds := Contract.holds)"]
+        value = f"{construction} (F := F) (G := G) {SEMANTICS[endpoint]} {lowering}"
+        description = f"knowledge soundness of {'program bytes' if executable else 'the ideal meaning'} for fixed statements"
+    parameter = " (application : String)" if adaptive else ""
+    argument = " application" if adaptive else ""
+    evidence_doc = textwrap.fill(f"The evidence of {description}{' in an application context' if adaptive else ''}.",
+                                 width=76)
+    lead = "The claim" if claimed else "Also covered"
+    claim_doc = textwrap.fill(f"{lead}: {description}, at the subject's artifacts and contract.", width=76)
+    return description, f"""/-- {evidence_doc} -/
+noncomputable def {evidence_name}{parameter} :=
+  {value}
+
+/-- {claim_doc} -/
+theorem {theorem}{parameter} :
+    {property_name} {' '.join(stated)}
+      ({evidence_name} (F := F) (G := G){argument}) :=
+  ZkcSecurity.Endpoint.{theorem} ({evidence_name}{argument})
+"""
+
+
+def evidence_name(endpoint, statement, prop):
+    """The name of the evidence of an endpoint and statement form other than the
+    manifest's claim."""
+    form = "fixed" if prop == "soundness" and statement == "fixed" else (
+        "adaptive" if prop == "soundness" else "")
+    semantics = "Bytes" if endpoint == "executable-bytes" else "Ideal"
+    name = f"{form}{semantics}Evidence"
+    return name[0].lower() + name[1:]
+
+
 def claims_module(subject):
     """The evidence of the claim and the claim: the registered endpoint applied to
-    the evidence, at the subject's artifacts, contract and regime."""
+    the evidence, at the subject's artifacts, contract and regime. The family
+    constructor's evidence at every other endpoint and statement form the
+    subject covers is applied too: the ideal meaning, program bytes when the
+    subject has an executable program, and both statement forms for ordinary
+    soundness."""
     claims = subject.table("claims")
     namespace = claims["namespace"]
     properties = claims.get("properties") or []
@@ -175,29 +234,19 @@ def claims_module(subject):
     endpoint, statement = claims.get("endpoint"), claims.get("statement")
     key = (endpoint, prop, statement)
     require(key in ENDPOINTS, f"{subject.name}: no registered endpoint for {key}")
-    theorem, property_name = ENDPOINTS[key]
-    construction = subject.get("family", "construction")
-    require(construction, f"{subject.name}: the manifest names no family construction")
-    executable = endpoint == "executable-bytes"
-    lowering = "lowering" if executable else "PUnit.unit"
-    stated = ["(art := artifacts)"]
-    adaptive = statement == "adaptive"
+    require(subject.get("family", "construction"), f"{subject.name}: the manifest names no family construction")
+    require(prop == "soundness" or statement == "fixed",
+            f"{subject.name}: knowledge soundness is registered for fixed statements only")
+    regime = None
     if prop == "soundness":
         regime = REGIMES.get(claims.get("regime"))
         require(regime is not None, f"{subject.name}: unsupported regime {claims.get('regime')!r}")
-        stated += ["(claim := Contract.falseStatement)", f"(regime := {regime})"]
-        binding = "⟨application⟩" if adaptive else "PUnit.unit"
-        value = f"{construction} (F := F) (G := G) {SEMANTICS[endpoint]} .{statement} {binding} {lowering}"
-        description = (f"ordinary soundness of {'program bytes' if executable else 'the ideal meaning'} for "
-                       f"{statement} statements")
-    else:
-        require(not adaptive, f"{subject.name}: knowledge soundness is registered for fixed statements only")
-        stated += ["(holds := Contract.holds)"]
-        value = f"{construction} (F := F) (G := G) {SEMANTICS[endpoint]} {lowering}"
-        description = f"knowledge soundness of {'program bytes' if executable else 'the ideal meaning'} for fixed statements"
-    claim_doc = textwrap.fill(f"The claim: {description}, at the subject's artifacts and contract.", width=76)
-    parameter = " (application : String)" if adaptive else ""
-    argument = " application" if adaptive else ""
+    adaptive = statement == "adaptive"
+    description, claimed = application_text(subject, prop, endpoint, statement, "evidence", regime, True)
+    endpoints = ["ideal-meaning"] + (["executable-bytes"] if subject.get("profiles", "executable") else [])
+    forms = ["fixed", "adaptive"] if prop == "soundness" else ["fixed"]
+    covered = [application_text(subject, prop, other, form, evidence_name(other, form, prop), regime, False)[1]
+               for other in endpoints for form in forms if (other, form) != (endpoint, statement)]
     contract = "Contract.falseStatement" if prop == "soundness" else "Contract.holds"
     doc = paragraphs(
         f"Generated claims of the subject `{subject.name}`. Regenerate with `lean/bridges/subject.py --write`.",
@@ -205,7 +254,10 @@ def claims_module(subject):
         "evidence" + (" in every bound application context" if adaptive else "")
         + f", stated at the subject's artifacts, its contract (`{contract}`)"
         + (" and its regime" if prop == "soundness" else "")
-        + ": the kernel checks that the evidence has that type.")
+        + ": the kernel checks that the evidence has that type.",
+        "The family constructor's evidence at every other endpoint and statement form the subject covers is "
+        "applied below the claim, at the same artifacts"
+        + (", contract and regime." if prop == "soundness" else " and contract."))
     imports = ["ZkcSecurity.Endpoint.Soundness" if prop == "soundness" else "ZkcSecurity.Endpoint.Knowledge",
                module_name(namespace, "Evidence")]
     source = HEADER.format(imports="\n".join(f"public import {name}" for name in imports), doc=doc)
@@ -214,19 +266,10 @@ open ZkcSecurity.Endpoint
 
 set_option linter.unusedSectionVars false
 
-variable {{F G : Type}} [Field F] [Fintype F] [DecidableEq F] [Inhabited F] [SampleableType F]
-  [AddCommGroup G] [Module F G] [DecidableEq G] [SampleableType G]
+{VARIABLES[prop]}
 
-/-- The evidence of the claim{' in an application context' if adaptive else ''}. -/
-noncomputable def evidence{parameter} :=
-  {value}
-
-/-- {claim_doc} -/
-theorem {theorem}{parameter} :
-    {property_name} {' '.join(stated)}
-      (evidence (F := F) (G := G){argument}) :=
-  ZkcSecurity.Endpoint.{theorem} (evidence{argument})
-
-end {namespace}
-"""
+{claimed}"""
+    if covered:
+        source += "\n/-! ## Other covered endpoints and statement forms -/\n\n" + "\n".join(covered)
+    source += f"\nend {namespace}\n"
     return source

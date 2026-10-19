@@ -8,29 +8,33 @@ public import ZkcSecurity.Examples.SumcheckFiatShamir
 
 /-! Ordinary soundness evidence of the subject `sumcheck`.
 
-**Model relation.** A policy statement denotes the well-formed public statement
-with its vector, claim and round count when the vector has a table at that count
-and the count is within the admitted original's maximum, two; the model
-statement is false when its claim is not the vector's total.
+**Model relation.** At a static maximum, a policy statement denotes the
+well-formed public statement with its vector, claim and round count when the
+vector has a table at that count and the count is at most the maximum; the
+model statement is false when its claim is not the vector's total
+(`relationAt`). The subject's relation is the one at the admitted original's
+maximum (`maximum`).
 
 **Family.** The certificate of `SumcheckFiatShamir` for every table and claim
 (`DoomedAny`), extended with the runs whose terminal never accepts
 (`Rejecting`): the verifier's rounds from any claim followed by a terminal that
 returns false or stops whenever the point has the round count's length. A
 challenge cannot leave such a run, so its rounds keep it doomed at every
-challenge.
+challenge. The certificate and its step obligations hold for every round count.
 
-**Coverage.** A statement the contract counts as false is false in the model
-when its vector has a table at an admitted count: the vector then has at most
-four entries, below the index limit, where the retained formula is
-`claim = total` (`SumcheckContractBindings.public_formula_equation`). Every other
-statement denotes no model statement, and its validator is doomed: above the
-maximum the admitted original refuses before any action
-(`importedValidator_excess`), and at an admitted count a vector without a table
-runs the rounds and then fails the terminal's shape check, or stops on a vector
-beyond the index limit (`importedValidator_malformed`, `terminal_rejects`).
+**Coverage.** At every maximum whose tables fit the index limit (`coversAt`), a
+statement the contract counts as false is false in the model when its vector
+has a table at an admitted count: the vector is then below the index limit,
+where the retained formula is `claim = total`
+(`SumcheckContractBindings.public_formula_equation`). Every other statement
+denotes no model statement, and its validator is doomed: above the maximum the
+admitted original refuses before any action (`importedValidator_excess`), and
+at an admitted count a vector without a table runs the rounds and then fails
+the terminal's shape check, or stops on a vector beyond the index limit
+(`importedValidator_malformed`, `terminal_rejects`, which holds at every count
+below the terminal's coordinate bound).
 
-**Charge.** Every original validator makes at most two challenges
+**Charge.** Every original validator makes at most `maximum` challenges
 (`original_queryBound`), each charged `1 / |F|`. -/
 
 namespace ZkcSecurity.Examples.Subjects.Sumcheck
@@ -154,6 +158,9 @@ noncomputable def allCertificate (ctx : ProtocolContext) (handle : Nat) :
 
 end Rejection
 
+/-- The static maximum round count of the admitted original. -/
+abbrev maximum : Nat := SumcheckSourceNormalForms.reduceMaximum
+
 section Original
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
@@ -164,7 +171,7 @@ def terminalK (raw : List F) (pc : List F × F) : PIR.Proc (Actions F G) (Option
 
 /-- At an admitted count, the admitted original runs the rounds from the claim
 and then its terminal on the vector, whatever the vector. -/
-theorem importedValidator_malformed (count : Nat) (admitted : count ≤ 2) (raw : List F) (claim : F)
+theorem importedValidator_malformed (count : Nat) (admitted : count ≤ maximum) (raw : List F) (claim : F)
     (handle : Nat) :
     importedValidator (G := G) raw claim count handle =
       (PIR.repeatN count (verifierRound SumcheckSourceVerifier.childContext handle) ([], claim)).bind
@@ -192,14 +199,15 @@ theorem importedValidator_malformed (count : Nat) (admitted : count ≤ 2) (raw 
   simp only [roundPresent_project]
   rfl
 
-/-- At a point of an admitted length, the terminal on a vector without a table
-at that length returns false, or stops for a vector beyond the index limit. -/
-theorem terminal_rejects (raw : List F) (count : Nat) (admitted : count ≤ 2)
+/-- At a point of any length below the terminal's coordinate bound, the terminal
+on a vector without a table at that length returns false, or stops for a vector
+beyond the index limit. -/
+theorem terminal_rejects (raw : List F) (count : Nat) (bounded : count < 64)
     (malformed : ofList? count raw = none) (pc : List F × F) (sized : pc.1.length = count) :
     Rejects (terminalK (G := G) raw pc) := by
   have point : pc.1.length < indexLimit := by
     rw [sized]
-    exact lt_of_le_of_lt admitted (by decide)
+    exact lt_of_lt_of_le bounded (by decide)
   by_cases bound : raw.length < indexLimit
   · have shape : ¬ ZkcExamples.Structured.PrimitiveLibrary.HasShape raw pc.1.length 1 := by
       rintro ⟨_, _, _, size⟩
@@ -247,12 +255,12 @@ end Original
 def parts {F G : Type} : artifacts.Statement F G → List F × F × Nat
   | .cons raw (.cons claim (.cons rounds .nil)) => (raw, claim, rounds)
 
-/-- A statement denotes the well-formed public statement with its vector, claim
-and admitted round count; the model statement is false when its claim is not the
-vector's total. -/
-abbrev relation {F G : Type} [Field F] : ModelRelation F G artifacts.publics where
+/-- At a static maximum, a statement denotes the well-formed public statement
+with its vector, claim and round count when the count is at most the maximum;
+the model statement is false when its claim is not the vector's total. -/
+abbrev relationAt {F G : Type} [Field F] (bound : Nat) : ModelRelation F G artifacts.publics where
   Model := PublicStatement F
-  models statement model := parts statement = (model.raw, model.claim, model.count) ∧ model.count ≤ 2
+  models statement model := parts statement = (model.raw, model.claim, model.count) ∧ model.count ≤ bound
   functional statement model other first second := by
     obtain ⟨first, -⟩ := first
     obtain ⟨second, -⟩ := second
@@ -266,6 +274,9 @@ abbrev relation {F G : Type} [Field F] : ModelRelation F G artifacts.publics whe
     cases decoded'
     rfl
   falseModel model := model.claim ≠ model.raw.sum
+
+/-- The model relation at the admitted original's maximum. -/
+abbrev relation {F G : Type} [Field F] : ModelRelation F G artifacts.publics := relationAt maximum
 
 variable {F G : Type} [Field F] [Fintype F] [DecidableEq F] [SampleableType F]
   [AddCommGroup G] [Module F G] [DecidableEq G]
@@ -287,28 +298,34 @@ noncomputable def family :
   doomed model _ falseModel := .inl (plainFamily_doomed 0 model falseModel)
 
 omit [Field F] [Fintype F] [DecidableEq F] [SampleableType F] [AddCommGroup G] [Module F G] [DecidableEq G] in
-theorem decodes_bounded {raw : List F} {count : Nat} (admitted : count ≤ 2) {table : Table F count}
-    (decoded : ofList? count raw = some table) : raw.length < indexLimit := by
+/-- A vector with a table at a count up to a maximum whose tables fit the index
+limit is below the index limit. -/
+theorem decodes_bounded {bound : Nat} (fits : 2 ^ bound < indexLimit) {raw : List F} {count : Nat}
+    (admitted : count ≤ bound) {table : Table F count} (decoded : ofList? count raw = some table) :
+    raw.length < indexLimit := by
   have size := (ofList?_isSome_iff (n := count) raw).mp (by rw [decoded]; rfl)
   rw [size]
-  calc 2 ^ count ≤ 2 ^ 2 := Nat.pow_le_pow_right (by decide) admitted
-    _ < indexLimit := by decide
+  exact lt_of_le_of_lt (Nat.pow_le_pow_right (by decide) admitted) fits
 
 omit [Fintype F] [SampleableType F] in
-/-- Every statement the contract counts as false is false in the model or
-denotes no model statement. -/
-theorem covers (statement : artifacts.Statement F G) (falseStatement : Contract.falseStatement statement) :
-    (relation (F := F) (G := G)).FalseStatement statement ∨ (relation (F := F) (G := G)).Unmapped statement := by
+/-- At every static maximum whose tables fit the index limit, every statement
+the contract counts as false is false in the model or denotes no model
+statement. -/
+theorem coversAt (bound : Nat) (fits : 2 ^ bound < indexLimit) (statement : artifacts.Statement F G)
+    (falseStatement : Contract.falseStatement statement) :
+    (relationAt (F := F) (G := G) bound).FalseStatement statement ∨
+      (relationAt (F := F) (G := G) bound).Unmapped statement := by
   match statement, falseStatement with
   | .cons raw (.cons claim (.cons rounds .nil)), falseStatement =>
-      by_cases admitted : rounds ≤ 2
+      by_cases admitted : rounds ≤ bound
       · cases decoded : ofList? rounds raw with
         | some table =>
             left
             refine ⟨⟨raw, claim, rounds, table, decoded⟩, ⟨rfl, admitted⟩, fun same => falseStatement ?_⟩
             unfold SumcheckContractBindings.PublicTruth
             have truth : decide (claim = raw.sum) = true := decide_eq_true same
-            rw [SumcheckContractBindings.public_formula_equation raw claim (decodes_bounded admitted decoded), truth]
+            rw [SumcheckContractBindings.public_formula_equation raw claim
+              (decodes_bounded fits admitted decoded), truth]
         | none =>
             right
             rintro ⟨raw', claim', count, table, decoded'⟩ ⟨same, _⟩
@@ -322,6 +339,13 @@ theorem covers (statement : artifacts.Statement F G) (falseStatement : Contract.
         simp only [parts, Prod.mk.injEq] at same
         exact admitted (same.2.2 ▸ small)
 
+omit [Fintype F] [SampleableType F] in
+/-- Every statement the contract counts as false is false in the model or
+denotes no model statement. -/
+theorem covers (statement : artifacts.Statement F G) (falseStatement : Contract.falseStatement statement) :
+    (relation (F := F) (G := G)).FalseStatement statement ∨ (relation (F := F) (G := G)).Unmapped statement :=
+  coversAt maximum (by decide) statement falseStatement
+
 /-- The original validator of a statement that denotes no model statement is
 doomed after every initial transcript. -/
 theorem unmapped (statement : artifacts.Statement F G) (unmapped : (relation (F := F) (G := G)).Unmapped statement)
@@ -330,42 +354,43 @@ theorem unmapped (statement : artifacts.Statement F G) (unmapped : (relation (F 
   match statement, unmapped with
   | .cons raw (.cons claim (.cons rounds .nil)), unmapped =>
       rw [original_eq]
-      by_cases admitted : rounds ≤ 2
+      by_cases admitted : rounds ≤ maximum
       · have malformed : ofList? rounds raw = none := by
           cases decoded : ofList? rounds raw with
           | none => rfl
           | some table => exact absurd ⟨rfl, admitted⟩ (unmapped ⟨raw, claim, rounds, table, decoded⟩)
         rw [importedValidator_malformed rounds admitted raw claim 0]
-        exact .inr ⟨rounds, terminalK raw, fun pc sized => terminal_rejects raw rounds admitted malformed pc sized,
+        exact .inr ⟨rounds, terminalK raw,
+          fun pc sized => terminal_rejects raw rounds (lt_of_le_of_lt admitted (by decide)) malformed pc sized,
           .round rounds [] claim, by simp [Sized], rfl⟩
-      · have large : 2 < rounds := Nat.lt_of_not_le admitted
+      · have large : maximum < rounds := Nat.lt_of_not_le admitted
         rw [importedValidator_excess rounds large raw claim 0]
         exact .inl (.inr rfl)
 
 omit [Fintype F] [SampleableType F] in
-/-- Every original validator makes at most two challenges. -/
+/-- Every original validator makes at most `maximum` challenges. -/
 theorem original_queryBound (statement : artifacts.Statement F G) :
-    QueryBound (compiled.original statement 0) 2 := by
+    QueryBound (compiled.original statement 0) maximum := by
   match statement with
   | .cons raw (.cons claim (.cons rounds .nil)) =>
       rw [original_eq]
-      by_cases admitted : rounds ≤ 2
+      by_cases admitted : rounds ≤ maximum
       · rw [importedValidator_malformed rounds admitted raw claim 0]
         exact QueryBound.mono _ (residualK_queryBound SumcheckSourceVerifier.childContext 0 (terminalK raw)
           (terminal_queryBound raw) rounds [] claim) admitted
-      · have large : 2 < rounds := Nat.lt_of_not_le admitted
+      · have large : maximum < rounds := Nat.lt_of_not_le admitted
         rw [importedValidator_excess rounds large raw claim 0]
         trivial
 
 /-- The charge of every original validator's challenges. -/
-noncomputable def cost : ENNReal := ((2 : ℕ) : ENNReal) * (1 / (Fintype.card F : ENNReal) + 0)
+noncomputable def cost : ENNReal := (maximum : ENNReal) * (1 / (Fintype.card F : ENNReal) + 0)
 
 theorem costBound (statement : artifacts.Statement F G) (initial : History F G) :
     Typed.ChargedCostBound (interface (G := G) compiled.context (Regime.exact F).decode)
       (family (F := F) (G := G)).charge (compiled.original statement 0) initial (cost (F := F)) :=
   Typed.QueryBound.chargedCostBound (interface (G := G) compiled.context (Regime.exact F).decode)
     (charge := (family (F := F) (G := G)).charge) (bound := 1 / (Fintype.card F : ENNReal) + 0)
-    (fun _ _ => le_rfl) _ 2 (QueryBound.typed _ _ _ 2 (original_queryBound statement)) initial
+    (fun _ _ => le_rfl) _ maximum (QueryBound.typed _ _ _ maximum (original_queryBound statement)) initial
 
 /-- Ordinary soundness evidence of the Sumcheck proof Entry at a covered endpoint
 and a statement form. -/

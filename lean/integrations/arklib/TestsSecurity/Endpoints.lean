@@ -1,5 +1,6 @@
 import ZkcSecurity.Examples.Subjects.Schnorr.Claims
 import ZkcSecurity.Examples.Subjects.Guess.Claims
+import ZkcSecurity.Examples.Subjects.Sumcheck.Claims
 import ZkcSecurity.Examples.CompiledSchnorrFiatShamir
 import Mathlib.Data.ZMod.Basic
 import Mathlib.Algebra.Field.ZMod
@@ -15,6 +16,14 @@ import Mathlib.Algebra.Field.ZMod
   (`CompiledGuessFiatShamir.guess_accepted`). Statement determination of the
   adaptive claim's binding is a named hypothesis of the binding category,
   discharged by the codec's proof (`determination_discharged`).
+- **Sumcheck.** A malformed statement the contract counts as false (a vector
+  with one entry at one round, whose claim is not its total) denotes no model
+  statement, its original validator is doomed after every initial transcript
+  (`malformed_doomed`), and the fixed-statement endpoint bounds acceptance on it
+  (`malformed_soundness`).
+- **Wrong validator.** The Schnorr original interacts before it decides, so no
+  family whose validator accepts outright satisfies the model equation
+  (`wrong_validator`).
 - **Requirements.** Lowering evidence is required exactly for program bytes and
   binding evidence exactly for adaptive statements, by the evidence's indices.
 - **Artifacts.** The composed check refuses the Schnorr original with the
@@ -70,12 +79,12 @@ theorem guess_fixed_soundness (offset : F) (initial : History F G)
         (prover >>= ZkcSecurity.Examples.CompiledGuessFiatShamir.compiledVerifier historyQuery offset initial)).run'
           ∅}[Zkc.Transcript.Accepted (· = some true) result.1] ≤
       (queries + 1) * (Fintype.card F : ℝ≥0∞)⁻¹ := by
-  have bound := fixed_soundness (soundness (F := F) (G := G) .idealMeaning .fixed PUnit.unit PUnit.unit) (.cons offset .nil)
+  have bound := ZkcSecurity.Examples.Subjects.Guess.fixed_soundness (F := F) (G := G) (.cons offset .nil)
     (Contract.falseStatement_all _) initial prover (queries * error)
     (Typed.worstCaseCostBound_of_isTotalQueryBound _ (Typed.keyCharge_le fun _ _ => le_rfl) prover queries
       proverBound)
   have same : (prover >>= ZkcSecurity.Examples.CompiledGuessFiatShamir.compiledVerifier historyQuery offset initial) =
-      prover >>= (soundness (F := F) (G := G) .idealMeaning .fixed PUnit.unit PUnit.unit).verify (.cons offset .nil) initial :=
+      prover >>= (fixedIdealEvidence (F := F) (G := G)).verify (.cons offset .nil) initial :=
     congrArg (prover >>= ·) (funext fun proof => (guess_verify_eq offset initial proof).symm)
   refine (le_of_eq (congrArg (fun computation => Pr{let result ← (simulateQ randomOracle computation).run' ∅}[
     Zkc.Transcript.Accepted (· = some true) result.1]) same)).trans (bound.trans (le_of_eq ?_))
@@ -97,6 +106,64 @@ theorem determination_discharged (application : String) :
   trivial
 
 end Guess
+
+section Sumcheck
+variable {F G : Type} [Field F] [Fintype F] [DecidableEq F] [SampleableType F]
+  [AddCommGroup G] [Module F G] [DecidableEq G]
+open ZkcSecurity.Examples.Subjects
+
+/-- A vector with one entry at one round: no table has that shape. -/
+def malformed : Sumcheck.artifacts.Statement F G := .cons [1] (.cons 0 (.cons 1 .nil))
+
+omit [Fintype F] [SampleableType F] in
+/-- The contract counts it false: its claim is not its total. -/
+theorem malformed_false : Sumcheck.Contract.falseStatement (malformed (F := F) (G := G)) := by
+  change ¬ ZkcExamples.Structured.SumcheckContractBindings.PublicTruth (G := G) [(1 : F)] 0
+  unfold ZkcExamples.Structured.SumcheckContractBindings.PublicTruth
+  rw [ZkcExamples.Structured.SumcheckContractBindings.public_formula_equation [(1 : F)] 0
+    (by rw [List.length_singleton]; decide)]
+  simp only [List.sum_singleton, zero_ne_one, decide_false]
+  nofun
+
+omit [Fintype F] [SampleableType F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
+/-- It denotes no model statement. -/
+theorem malformed_unmapped : (Sumcheck.relation (F := F) (G := G)).Unmapped malformed := by
+  rintro ⟨raw, claim, count, table, decoded⟩ ⟨same, _⟩
+  simp only [malformed, Sumcheck.parts, Prod.mk.injEq] at same
+  obtain ⟨rawEq, -, countEq⟩ := same
+  subst rawEq countEq
+  simp [Zkc.Polynomial.Multilinear.ofList?] at decoded
+
+/-- Its original validator is doomed after every initial transcript. -/
+theorem malformed_doomed (initial : History F G) :
+    (Sumcheck.family (F := F) (G := G)).certificate.doomed initial
+      (Sumcheck.compiled.original (malformed (F := F) (G := G)) 0) :=
+  Sumcheck.unmapped _ malformed_unmapped initial
+
+/-- The fixed-statement endpoint bounds acceptance on it. -/
+theorem malformed_soundness (initial : History F G) (prover : OracleComp (FieldOracle F G) (Proof F G))
+    (proverCost : ENNReal)
+    (proverBound : WorstCaseCostBound prover ⟨Typed.keyCharge (Sumcheck.family (F := F) (G := G)).charge⟩ proverCost) :
+    Pr{let result ← (simulateQ randomOracle
+        (prover >>= (Sumcheck.fixedIdealEvidence (F := F) (G := G)).verify malformed initial)).run' ∅}[
+        Zkc.Transcript.Accepted (· = some true) result.1] ≤
+      proverCost + Sumcheck.cost (F := F) :=
+  Sumcheck.fixed_soundness malformed malformed_false initial prover proverCost proverBound
+
+end Sumcheck
+
+section WrongValidator
+variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
+open ZkcSecurity.Examples.Subjects
+
+/-- The Schnorr original interacts before it decides: it is not a validator that
+accepts outright, so no family with such a validator meets the model equation. -/
+theorem wrong_validator (base key : G) :
+    Schnorr.compiled.original (F := F) (.cons base (.cons key .nil)) 0 ≠ .done (some true) := by
+  rw [Schnorr.original_eq, SchnorrProof.verifier_correspondence]
+  nofun
+
+end WrongValidator
 
 /-! ## Controls -/
 
