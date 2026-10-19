@@ -1,6 +1,36 @@
 {
   "format": "zkc.claims-lock/0",
   "theorems": {
+    "TestsSecurity.Counterexamples.Couplings.chain_collision": {
+      "package": "arklib",
+      "module": "TestsSecurity.Counterexamples.Couplings",
+      "structural": "50f1ffc281912dac",
+      "explicit": "567061e6c514c535"
+    },
+    "TestsSecurity.Counterexamples.Laws.correlated_not_realized": {
+      "package": "arklib",
+      "module": "TestsSecurity.Counterexamples.Laws",
+      "structural": "0d89fde22188976e",
+      "explicit": "10ce69ad74abe44b"
+    },
+    "TestsSecurity.Counterexamples.Openings.depth_not_fixed": {
+      "package": "arklib",
+      "module": "TestsSecurity.Counterexamples.Openings",
+      "structural": "ded92006a56a65f6",
+      "explicit": "ea2f1e13cbc8db8a"
+    },
+    "TestsSecurity.Counterexamples.Operands.count_not_authenticated": {
+      "package": "arklib",
+      "module": "TestsSecurity.Counterexamples.Operands",
+      "structural": "96448e4b6e36a7da",
+      "explicit": "fc194d8c3dccc9cd"
+    },
+    "Zkc.Executable.checkNormalized_sound": {
+      "package": "main",
+      "module": "Zkc.Executable.NormalizationSoundness",
+      "structural": "8b26b0259e666336",
+      "explicit": "35f97014474c0b1b"
+    },
     "Zkc.Protocols.Schnorr.Common.VerifierContract.perfect_completeness": {
       "package": "main",
       "module": "Zkc.Protocols.Schnorr.Common",
@@ -109,11 +139,65 @@
       "structural": "324b4b717735d3cd",
       "explicit": "d62ce2dd4482f3fc"
     },
+    "ZkcExamples.Executable.DeferredRounds.executable_validate": {
+      "package": "main",
+      "module": "ZkcExamples.Executable.DeferredRounds",
+      "structural": "7940714cb4b5ab14",
+      "explicit": "800467fc8faaccaf"
+    },
     "ZkcExamples.Executable.SchnorrProof.executable_transform": {
       "package": "main",
       "module": "ZkcExamples.Executable.SchnorrProof",
       "structural": "63869e320f91b9c1",
       "explicit": "39a8ba05966664b5"
+    },
+    "ZkcExamples.Executable.SumcheckCompleteness.honest_accepted": {
+      "package": "main",
+      "module": "ZkcExamples.Executable.SumcheckCompleteness",
+      "structural": "dcf30c5915a82fe5",
+      "explicit": "d245014cab7af9ca"
+    },
+    "ZkcExamples.Executable.SumcheckProof.executable_transform_prunes": {
+      "package": "main",
+      "module": "ZkcExamples.Executable.SumcheckProof",
+      "structural": "69a00887ad5d7bc8",
+      "explicit": "fdcae734f576b015"
+    },
+    "ZkcExamples.Structured.ChaumPedersenNormalForms.verifier_process": {
+      "package": "main",
+      "module": "ZkcExamples.Structured.ChaumPedersenNormalForms",
+      "structural": "e98dac14395bb3d1",
+      "explicit": "71819b6f6657fbc1"
+    },
+    "ZkcExamples.Structured.Okamoto.extract_representation": {
+      "package": "main",
+      "module": "ZkcExamples.Structured.Okamoto",
+      "structural": "6087fc665f0a050d",
+      "explicit": "2ce6d8b1c996bebb"
+    },
+    "ZkcExamples.Structured.Okamoto.extracted_target": {
+      "package": "main",
+      "module": "ZkcExamples.Structured.Okamoto",
+      "structural": "08ed4f65e2f98c99",
+      "explicit": "aefcc84e9089af6e"
+    },
+    "ZkcExamples.Structured.Okamoto.honest_accepts": {
+      "package": "main",
+      "module": "ZkcExamples.Structured.Okamoto",
+      "structural": "d3d68a87fdf14cce",
+      "explicit": "fe31bd8ae082076b"
+    },
+    "ZkcExamples.Structured.OkamotoNormalForms.exact_clause": {
+      "package": "main",
+      "module": "ZkcExamples.Structured.OkamotoNormalForms",
+      "structural": "2f8899e04deb3a1f",
+      "explicit": "c4aadad510592cd9"
+    },
+    "ZkcExamples.Structured.OkamotoNormalForms.verifier_process": {
+      "package": "main",
+      "module": "ZkcExamples.Structured.OkamotoNormalForms",
+      "structural": "b57280928f4ffe21",
+      "explicit": "0a9db410a499cb11"
     },
     "ZkcExamples.Structured.SchnorrBinding.target_special_soundness": {
       "package": "main",
@@ -169,6 +253,18 @@
       "structural": "2398061a54c95d55",
       "explicit": "2d41c944f756af71"
     },
+    "ZkcSecurity.Commitment.soundness": {
+      "package": "arklib",
+      "module": "ZkcSecurity.Commitment.Soundness",
+      "structural": "bdec61617a00b64f",
+      "explicit": "f16e683a760152d4"
+    },
+    "ZkcSecurity.Commitment.soundness_weighted": {
+      "package": "arklib",
+      "module": "ZkcSecurity.Commitment.Soundness",
+      "structural": "86c1e1948264ab98",
+      "explicit": "ac33dfd32f4f4959"
+    },
     "ZkcSecurity.Examples.CausalSumcheck.Iteration.repeat_uniform_residual_soundness": {
       "package": "arklib",
       "module": "ZkcSecurity.Examples.CausalSumcheck.Iteration",
@@ -193,11 +289,29 @@
       "structural": "d063589455a7c9cb",
       "explicit": "bdfd7b71e654c7b1"
     },
+    "ZkcSecurity.Examples.CommittedOpening.intendedBound": {
+      "package": "arklib",
+      "module": "ZkcSecurity.Examples.CommittedOpeningBound",
+      "structural": "a3733e41bdecca5a",
+      "explicit": "35f88928660adbae"
+    },
+    "ZkcSecurity.Examples.CommittedOpeningBridge.soundness": {
+      "package": "arklib",
+      "module": "ZkcSecurity.Examples.CommittedOpeningBridge",
+      "structural": "f411e4dc9e7efb0c",
+      "explicit": "11387039ce4b0421"
+    },
     "ZkcSecurity.Examples.CompiledGkrFiatShamir.soundness": {
       "package": "arklib",
       "module": "ZkcSecurity.Examples.CompiledGkrFiatShamir",
       "structural": "7462813c2f0b57f8",
       "explicit": "6602e6c93881367c"
+    },
+    "ZkcSecurity.Examples.CompiledGuessFiatShamir.soundness": {
+      "package": "arklib",
+      "module": "ZkcSecurity.Examples.CompiledGuessFiatShamir",
+      "structural": "db856f864ac58c59",
+      "explicit": "1c4c289216ec73ac"
     },
     "ZkcSecurity.Examples.CompiledSchnorrFiatShamir.knowledge_soundness": {
       "package": "arklib",
@@ -222,6 +336,12 @@
       "module": "ZkcSecurity.Examples.ExecutableSchnorrFiatShamir",
       "structural": "fc4f65b66be35144",
       "explicit": "645df88809daee91"
+    },
+    "ZkcSecurity.Examples.ExecutableSumcheckFiatShamir.adaptive_soundness": {
+      "package": "arklib",
+      "module": "ZkcSecurity.Examples.ExecutableSumcheckFiatShamir",
+      "structural": "8b0d5a9e2f1fa473",
+      "explicit": "b8a5f6a99b55cd55"
     },
     "ZkcSecurity.Examples.FriFiatShamir.fiatShamir_soundness": {
       "package": "arklib",
@@ -253,6 +373,12 @@
       "structural": "879a724302d4fb3d",
       "explicit": "4e1bc3d7ff408373"
     },
+    "ZkcSecurity.FiatShamir.Obligations.not_determines": {
+      "package": "arklib",
+      "module": "ZkcSecurity.FiatShamir.Obligations",
+      "structural": "5eb618cf26e66029",
+      "explicit": "3a9fa956422d701e"
+    },
     "ZkcSecurity.FiatShamir.Typed.adaptive_soundness_charged": {
       "package": "arklib",
       "module": "ZkcSecurity.FiatShamir.Typed",
@@ -265,11 +391,41 @@
       "structural": "2fac876c2bc0e023",
       "explicit": "00a224af7dea9f6d"
     },
+    "ZkcSecurity.FiatShamir.Upstream.worstCase_adaptive_soundness_weighted": {
+      "package": "arklib",
+      "module": "ZkcSecurity.FiatShamir.Upstream",
+      "structural": "d2e13c5669168604",
+      "explicit": "95120fbfc52d84ba"
+    },
+    "ZkcSecurity.FiatShamir.Upstream.worstCase_soundness": {
+      "package": "arklib",
+      "module": "ZkcSecurity.FiatShamir.Upstream",
+      "structural": "51de8ec4fbbd1a8d",
+      "explicit": "59299022c5f88c9f"
+    },
     "ZkcSecurity.FiatShamir.adaptive_soundness": {
       "package": "arklib",
       "module": "ZkcSecurity.FiatShamir.Soundness",
       "structural": "5cb766a9f7ec1e39",
       "explicit": "b4bcde4bab86bb0a"
+    },
+    "ZkcSecurity.HashChain.Encoding.frame_prefixFree": {
+      "package": "arklib",
+      "module": "ZkcSecurity.HashChain.Encoding",
+      "structural": "6c58d74152a63fe2",
+      "explicit": "0c0a0d4c93fea6de"
+    },
+    "ZkcSecurity.HashChain.concrete_le_simulated": {
+      "package": "arklib",
+      "module": "ZkcSecurity.HashChain.Bound",
+      "structural": "33c0de9bd6e5d1fe",
+      "explicit": "f88a91d53fe52a9a"
+    },
+    "ZkcSecurity.HashChain.concrete_soundness": {
+      "package": "arklib",
+      "module": "ZkcSecurity.HashChain.Instance",
+      "structural": "5a883b16d7903a2a",
+      "explicit": "37bcd1bcd980ac20"
     }
   }
 }
