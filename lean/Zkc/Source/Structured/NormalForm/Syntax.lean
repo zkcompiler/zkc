@@ -47,6 +47,54 @@ def Op.total : Op → Bool
 
 namespace NormalForm
 
+/-! Access for the kernel's evaluator.
+
+The kernel evaluates a match whose patterns fix an index of an indexed family
+through casts it checks at every step. The functions the normalizer evaluates
+match one discriminant at a time with its indices left as variables, and take
+the parts of a tuple of known length by eliminating into a sort computed from
+the index, so each step is a plain reduction. -/
+
+/-- The first entry of a nonempty tuple. -/
+def firstEntry {α : Type} {V : α → Type} {a : α} {types : List α} (values : Values V (a :: types)) : V a :=
+  Values.casesOn (motive := fun index _ => match index with | [] => PUnit | head :: _ => V head) values
+    PUnit.unit fun head _ => head
+
+/-- The entries after the first. -/
+def laterEntries {α : Type} {V : α → Type} {a : α} {types : List α} (values : Values V (a :: types)) :
+    Values V types :=
+  Values.casesOn (motive := fun index _ => match index with | [] => PUnit | _ :: tail => Values V tail) values
+    PUnit.unit fun _ tail => tail
+
+/-- The entry at a variable. -/
+def entryAt {α : Type} {V : α → Type} : {types : List α} → {a : α} → Values V types → Var types a → V a
+  | _, _, values, .here => firstEntry values
+  | _, _, values, .there position => entryAt (laterEntries values) position
+
+/-- The entries at operand variables. -/
+def lookup {α : Type} {V : α → Type} {Γ : List α} (values : Values V Γ) :
+    {types : List α} → Values (Var Γ) types → Values V types
+  | _, .nil => .nil
+  | _, .cons position rest => .cons (entryAt values position) (lookup values rest)
+
+@[simp] theorem firstEntry_cons {α : Type} {V : α → Type} {a : α} {types : List α} (head : V a)
+    (tail : Values V types) : firstEntry (.cons head tail) = head := rfl
+
+@[simp] theorem laterEntries_cons {α : Type} {V : α → Type} {a : α} {types : List α} (head : V a)
+    (tail : Values V types) : laterEntries (.cons head tail) = tail := rfl
+
+theorem entryAt_eq_get {α : Type} {V : α → Type} :
+    {types : List α} → {a : α} → (values : Values V types) → (position : Var types a) →
+      entryAt values position = values.get position
+  | _, _, .cons _ _, .here => rfl
+  | _, _, .cons _ tail, .there position => entryAt_eq_get tail position
+
+theorem lookup_eq_eval {α : Type} {V : α → Type} {Γ : List α} (values : Values V Γ) :
+    {types : List α} → (operands : Values (Var Γ) types) → lookup values operands = Operands.eval values.get operands
+  | _, .nil => rfl
+  | _, .cons position rest => by
+    simp only [lookup, Operands.eval, entryAt_eq_get, lookup_eq_eval values rest]
+
 /-- A binder of a form's scope. -/
 inductive Slot where
   /-- A present value: a present input, a received or drawn value, the present

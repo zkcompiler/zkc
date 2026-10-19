@@ -45,17 +45,13 @@ theorem get_setValue_same {α : Type} {V : α → Type} :
   | _ :: _, _, .cons _ _, .here, _ => rfl
   | _ :: _, _, .cons _ tail, .there position, value => get_setValue_same tail position value
 
-theorem var_same?_heq {α : Type} :
-    {Γ : List α} → {a b : α} → (left : Var Γ a) → (right : Var Γ b) → (same : a = b) →
-      Var.same? left right = some ⟨same⟩ → HEq left right
-  | _, _, _, .here, .here, _, _ => HEq.rfl
-  | _, _, _, .there left, .there right, same, found => by
-    have inner := var_same?_heq left right same found
-    subst same
-    cases eq_of_heq inner
-    exact HEq.rfl
-  | _, _, _, .here, .there _, _, found => by simp [Var.same?] at found
-  | _, _, _, .there _, .here, _, found => by simp [Var.same?] at found
+theorem var_same?_heq {α : Type} {Γ : List α} {a b : α} (left : Var Γ a) (right : Var Γ b) (same : a = b)
+    (found : Var.same? left right = some ⟨same⟩) : HEq left right := by
+  unfold Var.same? at found
+  split at found
+  · rename_i equal
+    exact (Var.index_heq left right equal).2
+  · cases found
 
 theorem var_same?_eq {α : Type} {Γ : List α} {a : α} {left right : Var Γ a}
     (found : (Var.same? left right).isSome) : left = right := by
@@ -112,11 +108,11 @@ theorem comps_eval_set {Δ : Scope} (binders : Binders model Δ) :
       (value : Comp laws Δ ty) → value.eval results binders = (values.get position).eval results binders →
         Comps.eval results (setValue values position value) binders = Comps.eval results values binders
   | _ :: _, _, .cons _ _, .here, _, same => by
-    simp only [setValue, Comps.eval]
+    simp only [setValue, Comps.eval, laterEntries_cons]
     rw [same]
     rfl
   | _ :: _, _, .cons _ tail, .there position, value, same => by
-    simp only [setValue, Comps.eval]
+    simp only [setValue, Comps.eval, firstEntry_cons, laterEntries_cons]
     rw [comps_eval_set binders tail position value same]
 
 /-- Evaluating the identity positions of a tuple of terms. -/
@@ -137,8 +133,8 @@ mutual
       (binders' : Binders model Δ')
       (renamed : ∀ {slot : Slot} (binder : Var Δ slot), binders'.get (rename binder) = binders.get binder) :
       {ty : Ty} → (term : Term laws Δ ty) → (term.rename rename).eval results binders' = term.eval results binders
-    | _, .var binder => by simp only [Term.rename, Term.eval, renamed]
-    | _, .result binder position => by simp only [Term.rename, Term.eval, renamed]
+    | _, .var binder => by simp only [Term.rename, Term.eval, entryAt_eq_get, renamed]
+    | _, .result binder position => by simp only [Term.rename, Term.eval, entryAt_eq_get, renamed]
     | _, .index _ => rfl
     | _, .bool _ => rfl
     | _, .field .. => rfl
@@ -166,8 +162,8 @@ theorem comp_eval_rename {Δ Δ' : Scope} (rename : Rename Δ Δ') (binders : Bi
   cases comp with
   | absent => rfl
   | present term => simp only [Comp.rename, Comp.eval, term_eval_rename results rename binders binders' renamed]
-  | input binder => simp only [Comp.rename, Comp.eval, renamed]
-  | read binder position => simp only [Comp.rename, Comp.eval, renamed]
+  | input binder => simp only [Comp.rename, Comp.eval, entryAt_eq_get, renamed]
+  | read binder position => simp only [Comp.rename, Comp.eval, entryAt_eq_get, renamed]
 
 theorem comp_eval_weaken {Δ : Scope} {slot : Slot} (value : Slot.Value model slot) (binders : Binders model Δ)
     {ty : Ty} (comp : Comp laws Δ ty) :
@@ -182,7 +178,7 @@ theorem term_eval_weaken {Δ : Scope} {slot : Slot} (value : Slot.Value model sl
 /-! Splits. -/
 
 theorem comp_eval_absentAt {Δ : Scope} {ty₀ : Ty} (subject : Var Δ (.component ty₀))
-    (binders : Binders model Δ) (absent : binders.get subject = none) {ty : Ty} (comp : Comp laws Δ ty) :
+    (binders : Binders model Δ) (absent : entryAt binders subject = none) {ty : Ty} (comp : Comp laws Δ ty) :
     (comp.absentAt subject).eval results binders = comp.eval results binders := by
   cases comp with
   | input binder =>
@@ -200,7 +196,7 @@ theorem comp_eval_absentAt {Δ : Scope} {ty₀ : Ty} (subject : Var Δ (.compone
   | read _ _ => rfl
 
 theorem comp_eval_presentAt {Δ : Scope} {ty₀ : Ty} (subject : Var Δ (.component ty₀))
-    (value : model.Value ty₀) (binders : Binders model Δ) (present : binders.get subject = some value)
+    (value : model.Value ty₀) (binders : Binders model Δ) (present : entryAt binders subject = some value)
     {ty : Ty} (comp : Comp laws Δ ty) :
     (comp.presentAt subject).eval results (.cons value binders) = comp.eval results binders := by
   cases comp with
@@ -267,7 +263,7 @@ theorem term_var?_eval {Δ : Scope} (binders : Binders model Δ) {ty : Ty} (term
     term.eval results binders = binders.get binder := by
   cases term <;> simp [Term.var?] at found
   subst found
-  rfl
+  exact entryAt_eq_get _ _
 
 theorem term_literal?_eval {Δ : Scope} (binders : Binders model Δ) {ty : Ty} (left right : Term laws Δ ty)
     (value : Nat) (first : left.literal? = some value) (second : right.literal? = some value) :
@@ -328,7 +324,7 @@ theorem pinsMatch_pinned {Γ₀ : List Ty} {Δ : Scope} (state : Values (Comp la
       simp only [decoded] at head ⊢
       split at head
       · rename_i pinned stored
-        rw [← evaluated, comps_get_eval, stored, Comp.eval, term_same_eval results binders _ _ head]
+        rw [← evaluated, comps_get_eval, ← entryAt_eq_get, stored, Comp.eval, term_same_eval results binders _ _ head]
       · simp at head
 
 /-- The value of a decided guard condition. -/
@@ -420,7 +416,7 @@ theorem calculation_eval (results : LawResults model laws) {Δ : Scope} (binders
   case groupIdentity domain => cases terms; rfl
   all_goals
     exact comps_eval_positions results binders (fun position => Term.calc _ total terms position)
-      (Op.evalTotal model _ total (Terms.eval results terms binders)) fun _ => rfl
+      (Op.evalTotal model _ total (Terms.eval results terms binders)) fun _ => entryAt_eq_get _ _
 
 /-! The plain participant rules, one operation at a time. -/
 
@@ -600,7 +596,7 @@ theorem resolve_sound (sig : Signature) (results : LawResults model sig.laws) (r
             rw [absentResult, except_bind_ok, presentResult, except_bind_ok] at normalized
             cases normalized
             simp only [Form.denote, Form.denoteWith, Comp.eval]
-            cases value : binders.get subject with
+            cases value : entryAt binders subject with
             | none =>
               have preserved := state_map_eval results (Comp.absentAt subject) binders binders
                 (comp_eval_absentAt results subject binders value) state
@@ -686,7 +682,7 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws) 
   change (protocolOperationWithOn model (.silent _) (participantActionsOn model.toCarriers) tables
     (context.roles role) op (Operands.eval (Comps.eval results state.env binders).get args)
     (bodies.denote (meaningAt model tables protocols context role)) protocols context).bind _ = _
-  rw [← comps_eval_operands]
+  rw [← comps_eval_operands, ← lookup_eq_eval]
   cases op with
   | calculate op allowed =>
     simp only [operation] at normalized
@@ -747,7 +743,7 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws) 
                   simp only [shape] at law
                   refine (bind_congr_left (bind_congr_left law _) _).trans ?_
                   exact continue_push sig results _ inputs nextRegion next sound state _ restForm rest restMatched
-                    binders inputsEq _ (comps_eval_positions results binders _ _ fun _ => rfl)
+                    binders inputsEq _ (comps_eval_positions results binders _ _ fun _ => entryAt_eq_get _ _)
                 · rename_i reason shape
                   cases normalized
                   obtain ⟨same, _⟩ := matched
@@ -771,7 +767,7 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws) 
                   apply congrArg
                   funext values
                   exact continue_weaken_push sig results _ inputs nextRegion next sound state _ values _
-                    restForm rest matched binders inputsEq _ (comps_eval_positions results _ _ _ fun _ => rfl)
+                    restForm rest matched binders inputsEq _ (comps_eval_positions results _ _ _ fun _ => entryAt_eq_get _ _)
               · cases normalized
   | exchange ty sender receiver site =>
     rcases args with _ | ⟨arg, _ | _⟩
@@ -854,7 +850,7 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws) 
     · rename_i bounded
       refine (bind_congr_left (draw_rule model tables protocols context _ owner field site _ _) _).trans ?_
       rw [interpret_plain]
-      simp only [Operands.eval]
+      simp only [lookup, Comps.eval]
       split at normalized
       · rename_i other
         have different : context.roles owner ≠ context.roles role :=
@@ -928,8 +924,8 @@ theorem operation_sound (sig : Signature) (results : LawResults model sig.laws) 
                 have kept : Comps.eval results (state.set arg (.present (.bool true))).env binders =
                     Comps.eval results state.env binders :=
                   comps_eval_set results binders state.env arg _ (by
-                    simp only [stored, Comp.eval, Term.eval, decision_compare results binders condition equality
-                      left right decided, holds, decide_true])
+                    simp only [← entryAt_eq_get, stored, Comp.eval, Term.eval, decision_compare results binders
+                      condition equality left right decided, holds, decide_true])
                 have step := continue_push sig results _ inputs nextRegion next sound
                   (state.set arg (.present (.bool true))) .nil restForm rest matched binders inputsEq _ rfl
                 rw [kept] at step
@@ -961,7 +957,7 @@ theorem normalizeRegion_sound (sig : Signature) (results : LawResults model sig.
     intro state form normalized _ binders _
     simp only [normalizeRegion, Except.ok.injEq] at normalized
     subst normalized
-    simp only [Region.denote, Form.denote, Form.denoteWith, comps_eval_operands]
+    simp only [Region.denote, Form.denote, Form.denoteWith, lookup_eq_eval, comps_eval_operands]
   | _, .stop reason => by
     intro state form normalized _ binders _
     simp only [normalizeRegion, Except.ok.injEq] at normalized
@@ -994,10 +990,10 @@ theorem initialIn_eval (results : LawResults model laws) {Δ : Scope} (binders' 
       intro lift values placed
       cases values with
       | cons value tail =>
-        change Values.cons (some (binders'.get (lift .here))) (Comps.eval results (InputPattern.initialIn
+        change Values.cons (some (entryAt (V := Slot.Value model) binders' (lift .here))) (Comps.eval results (InputPattern.initialIn
             (laws := laws) rest fun binder => lift (.there binder)) binders') =
           Values.cons (some value) (InputPattern.environment model rest tail)
-        rw [placed .here, initialIn_eval results binders' rest _ tail fun binder => placed (.there binder)]
+        rw [entryAt_eq_get, placed .here, initialIn_eval results binders' rest _ tail fun binder => placed (.there binder)]
         rfl
     exact step lift binders placed
   | ty :: _, .cons .optional rest, lift, binders, placed => by
@@ -1011,10 +1007,10 @@ theorem initialIn_eval (results : LawResults model laws) {Δ : Scope} (binders' 
       intro lift values placed
       cases values with
       | cons value tail =>
-        change (Values.cons (binders'.get (lift .here)) (Comps.eval results (InputPattern.initialIn
+        change (Values.cons (entryAt (V := Slot.Value model) binders' (lift .here)) (Comps.eval results (InputPattern.initialIn
             (laws := laws) rest fun binder => lift (.there binder)) binders') : Values (Component model.Value) _) =
           (Values.cons value (InputPattern.environment model rest tail) : Values (Component model.Value) _)
-        rw [placed .here, initialIn_eval results binders' rest _ tail fun binder => placed (.there binder)]
+        rw [entryAt_eq_get, placed .here, initialIn_eval results binders' rest _ tail fun binder => placed (.there binder)]
         rfl
     exact step lift binders placed
   | _ :: _, .cons .absent rest, lift, binders, placed =>

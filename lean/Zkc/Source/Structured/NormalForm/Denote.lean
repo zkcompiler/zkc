@@ -82,16 +82,16 @@ variable {model : DomainModel} {laws : List LawKey}
 mutual
   def Term.eval (results : LawResults model laws) {Δ : Scope} {ty : Ty} :
       Term laws Δ ty → Binders model Δ → model.Value ty
-    | .var binder, binders => binders.get binder
-    | .result binder position, binders => (binders.get binder).get position
+    | .var binder, binders => entryAt (V := Slot.Value model) binders binder
+    | .result binder position, binders => entryAt (entryAt (V := Slot.Value model) binders binder) position
     | .index value, _ => value
     | .bool value, _ => value
     | .field domain value, _ => fieldLiteral model.toFieldModel domain value
     | .groupZero _, _ => 0
     | .calc op total args position, binders =>
-        (op.evalTotal model total (Terms.eval results args binders)).get position
+        entryAt (op.evalTotal model total (Terms.eval results args binders)) position
     | .law entry args position, binders =>
-        (results.result entry (Terms.eval results args binders)).get position
+        entryAt (results.result entry (Terms.eval results args binders)) position
 
   def Terms.eval (results : LawResults model laws) {Δ : Scope} {types : List Ty} :
       Terms laws Δ types → Binders model Δ → Values model.Value types
@@ -103,14 +103,14 @@ def Comp.eval (results : LawResults model laws) {Δ : Scope} {ty : Ty} :
     Comp laws Δ ty → Binders model Δ → Option (model.Value ty)
   | .absent, _ => none
   | .present term, binders => some (term.eval results binders)
-  | .input binder, binders => binders.get binder
-  | .read binder position, binders => (binders.get binder).get position
+  | .input binder, binders => entryAt (V := Slot.Value model) binders binder
+  | .read binder position, binders => entryAt (entryAt (V := Slot.Value model) binders binder) position
 
 def Comps.eval (results : LawResults model laws) {Δ : Scope} :
     {types : List Ty} → Values (Comp laws Δ) types → Binders model Δ →
       Values (Component model.Value) types
-  | [], .nil, _ => .nil
-  | _ :: _, .cons head tail, binders => .cons (head.eval results binders) (Comps.eval results tail binders)
+  | _, .nil, _ => .nil
+  | _, .cons head tail, binders => .cons (head.eval results binders) (Comps.eval results tail binders)
 
 /-- The decision procedure of a compared sort. -/
 def Equality.decide (model : DomainModel) : {ty : Ty} → Equality ty → DecidableEq (model.Value ty)

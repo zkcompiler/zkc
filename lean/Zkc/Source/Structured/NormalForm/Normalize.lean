@@ -46,12 +46,22 @@ variable {laws : List LawKey}
 
 /-! Scope operations. -/
 
+theorem Var.index_heq {α : Type} :
+    {Γ : List α} → {a b : α} → (left : Var Γ a) → (right : Var Γ b) → left.index = right.index →
+      a = b ∧ HEq left right
+  | _, _, _, .here, .here, _ => ⟨rfl, HEq.rfl⟩
+  | _, _, _, .there left, .there right, same => by
+    have inner := Var.index_heq left right (by simpa [Var.index] using same)
+    obtain ⟨sort, heq⟩ := inner
+    subst sort
+    cases eq_of_heq heq
+    exact ⟨rfl, HEq.rfl⟩
+  | _, _, _, .here, .there _, same => by simp [Var.index] at same
+  | _, _, _, .there _, .here, same => by simp [Var.index] at same
+
 /-- Compare two variables of one context by position; equal positions have equal sorts. -/
-def Var.same? {α : Type} : {Γ : List α} → {a b : α} → Var Γ a → Var Γ b → Option (PLift (a = b))
-  | _, _, _, .here, .here => some ⟨rfl⟩
-  | _, _, _, .here, .there _ => none
-  | _, _, _, .there _, .here => none
-  | _, _, _, .there left, .there right => Var.same? left right
+def Var.same? {α : Type} {Γ : List α} {a b : α} (left : Var Γ a) (right : Var Γ b) : Option (PLift (a = b)) :=
+  if same : left.index = right.index then some ⟨(Var.index_heq left right same).1⟩ else none
 
 /-- The newest binder, at a sort known to be equal to its own. -/
 def Var.hereAs {Δ : Scope} {ty ty₀ : Ty} (same : ty = ty₀) : Var (.value ty₀ :: Δ) (.value ty) := by
@@ -86,14 +96,14 @@ def Comp.rename {Δ Δ' : Scope} (rename : Rename Δ Δ') {ty : Ty} : Comp laws 
 /-- Apply a sort-preserving map to every entry. -/
 def mapValues {α : Type} {V W : α → Type} (f : {a : α} → V a → W a) :
     {types : List α} → Values V types → Values W types
-  | [], .nil => .nil
-  | _ :: _, .cons head tail => .cons (f head) (mapValues f tail)
+  | _, .nil => .nil
+  | _, .cons head tail => .cons (f head) (mapValues f tail)
 
 /-- Replace the entry at one variable. -/
 def setValue {α : Type} {V : α → Type} :
     {types : List α} → {a : α} → Values V types → Var types a → V a → Values V types
-  | _ :: _, _, .cons _ tail, .here, value => .cons value tail
-  | _ :: _, _, .cons head tail, .there position, value => .cons head (setValue tail position value)
+  | _, _, values, .here, value => .cons value (laterEntries values)
+  | _, _, values, .there position, value => .cons (firstEntry values) (setValue (laterEntries values) position value)
 
 /-- The absent and present cases of an undecided input. -/
 def Comp.absentAt {Δ : Scope} {ty₀ : Ty} (subject : Var Δ (.component ty₀)) {ty : Ty} :
@@ -162,20 +172,20 @@ def Comp.term? {Δ : Scope} {ty : Ty} : Comp laws Δ ty → Option (Term laws Δ
   | .read _ _ => none
 
 def anyAbsent {Δ : Scope} : {types : List Ty} → Values (Comp laws Δ) types → Bool
-  | [], .nil => false
-  | _ :: _, .cons head tail => head.isAbsent || anyAbsent tail
+  | _, .nil => false
+  | _, .cons head tail => head.isAbsent || anyAbsent tail
 
 def firstInput {Δ : Scope} : {types : List Ty} → Values (Comp laws Δ) types →
     Option (Σ ty, Var Δ (.component ty))
-  | [], .nil => none
-  | _ :: _, .cons head tail =>
+  | _, .nil => none
+  | _, .cons head tail =>
     match head.input? with
     | some found => some found
     | none => firstInput tail
 
 def presentTerms {Δ : Scope} : {types : List Ty} → Values (Comp laws Δ) types → Option (Terms laws Δ types)
-  | [], .nil => some .nil
-  | _ :: _, .cons head tail =>
+  | _, .nil => some .nil
+  | _, .cons head tail =>
     match head.term?, presentTerms tail with
     | some term, some terms => some (.cons term terms)
     | some _, none => none
@@ -260,15 +270,15 @@ def Term.same {Δ : Scope} {ty : Ty} (left right : Term laws Δ ty) : Bool :=
 /-- Whether the call's present arguments are the pinned inputs. -/
 def pinsMatch {Δ : Scope} (inputs : Values (Comp laws Δ) Γ₀) :
     {types : List Ty} → List (Option Nat) → Terms laws Δ types → Bool
-  | [], _, .nil => true
-  | _ :: _, [], .cons _ _ => true
-  | ty :: _, pin :: pins, .cons term terms =>
+  | _, _, .nil => true
+  | _, [], .cons _ _ => true
+  | _, pin :: pins, .cons (ty := ty) term terms =>
     (match pin with
       | none => true
       | some index =>
         match Var.decode Γ₀ ty index with
         | some binder =>
-          match inputs.get binder with
+          match entryAt inputs binder with
           | .present pinned => term.same pinned
           | _ => false
         | none => false) && pinsMatch inputs pins terms
@@ -302,7 +312,7 @@ def operation (sig : Signature) (role roster : Nat) {Γ : List Ty} : (op : Proto
     Except Refusal (Form sig.laws Δ out)
   | .calculate op _, args, _, state, next =>
     if total : op.total = true then
-      let operands := Operands.eval state.env.get args
+      let operands := lookup state.env args
       if anyAbsent operands then next (state.push (absentComps op.results))
       else
         match presentTerms operands with
@@ -313,7 +323,7 @@ def operation (sig : Signature) (role roster : Nat) {Γ : List Ty} : (op : Proto
     if roster ≤ owner then .error "role-outside-roster"
     else if owner != role then next (state.push (absentComps helper.outputs))
     else
-      let operands := Operands.eval state.env.get args
+      let operands := lookup state.env args
       if anyAbsent operands then .ok (.halt .incomplete)
       else
         match presentTerms operands with
@@ -342,7 +352,7 @@ def operation (sig : Signature) (role roster : Nat) {Γ : List Ty} : (op : Proto
   | .exchange ty sender receiver site, .cons arg .nil, _, state, next =>
     if roster ≤ sender || roster ≤ receiver then .error "role-outside-roster"
     else if sender == role then
-      match state.env.get arg with
+      match entryAt state.env arg with
       | .absent => .ok (.halt .incomplete)
       | .present term => do
         let rest ← next (state.push (.cons (.present term) .nil))
@@ -354,13 +364,13 @@ def operation (sig : Signature) (role roster : Nat) {Γ : List Ty} : (op : Proto
     else next (state.push (.cons .absent .nil))
   | .restrict _ roles, .cons arg .nil, _, state, next =>
     if roles.any (roster ≤ ·) then .error "role-outside-roster"
-    else if roles.contains role then next (state.push (.cons (state.env.get arg) .nil))
+    else if roles.contains role then next (state.push (.cons (entryAt state.env arg) .nil))
     else next (state.push (.cons .absent .nil))
   | .draw owner field site, .cons arg .nil, _, state, next =>
     if roster ≤ owner then .error "role-outside-roster"
     else if owner != role then next (state.push (.cons .absent .nil))
     else
-      match state.env.get arg with
+      match entryAt state.env arg with
       | .absent => .ok (.halt .incomplete)
       | .present handle => do
         let rest ← next ((state.weaken (.value (services.result field))).push
@@ -371,7 +381,7 @@ def operation (sig : Signature) (role roster : Nat) {Γ : List Ty} : (op : Proto
     if roster ≤ owner then .error "role-outside-roster"
     else if owner != role then next (state.push .nil)
     else
-      match state.env.get arg with
+      match entryAt state.env arg with
       | .absent => .ok (.halt .incomplete)
       | .present condition =>
         match decision condition with
@@ -394,8 +404,8 @@ def resolve (sig : Signature) (role : Nat) {Γ : List Ty} (op : ProtocolOp) (arg
     Except Refusal (Form sig.laws Δ out)
   | 0, _, state, proceed => proceed state
   | fuel + 1, _, state, proceed =>
-    if demanded role op (Operands.eval state.env.get args) then
-      match firstInput (Operands.eval state.env.get args) with
+    if demanded role op (lookup state.env args) then
+      match firstInput (lookup state.env args) with
       | none => proceed state
       | some ⟨_, subject⟩ => do
         let absent ← resolve sig role op args fuel (state.map (Comp.absentAt subject)) proceed
@@ -405,7 +415,7 @@ def resolve (sig : Signature) (role : Nat) {Γ : List Ty} (op : ProtocolOp) (arg
 
 def normalizeRegion (sig : Signature) (role roster : Nat) : {Γ : List Ty} → Region protocolDialect Γ out → {Δ : Scope} →
     State sig.laws Γ₀ Δ Γ → Except Refusal (Form sig.laws Δ out)
-  | _, .ret values, _, state => .ok (.done (Operands.eval state.env.get values))
+  | _, .ret values, _, state => .ok (.done (lookup state.env values))
   | _, .stop reason, _, _ => .ok (.halt reason)
   | _, .bind .., _, _ => .error "region-bind"
   | _, .letOp op args _ next, _, state =>
