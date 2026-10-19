@@ -1,6 +1,5 @@
 module example;
 use zkc::vector::{Vector, get, length};
-use zkc::oracle::{Root, Path, State};
 use zkc::oracle as oracle;
 
 domain F = field("koala-bear");
