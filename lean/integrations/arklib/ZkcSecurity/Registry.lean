@@ -238,6 +238,13 @@ def entries : List Entry := [
   ⟨"binding.statement-determination.participant", .binding .statementDetermination,
     some `ZkcSecurity.FiatShamir.Determined,
     "Statement determination over the histories of the common participant actions."⟩,
+  ⟨"binding.statement-coverage", .binding .statementDetermination,
+    some `ZkcSecurity.FiatShamir.StatementBinding.Covers,
+    "Every policy statement false for the application is false in the model or denotes no \
+    model statement, and the latter are rejected."⟩,
+  ⟨"binding.event-implication", .binding .statementDetermination,
+    some `ZkcSecurity.FiatShamir.EventImplication,
+    "The application's false-acceptance event implies the modeled event."⟩,
   ⟨"binding.serialization", .binding .serialization,
     some `ZkcSecurity.FiatShamir.Obligations.PrefixFreeEncoding,
     "The serialization of the typed public representation is injective and prefix-free."⟩,
@@ -334,6 +341,8 @@ def entries : List Entry := [
   ⟨"event.committed-false-acceptance", .event, some `ZkcSecurity.Commitment.FalseAcceptance,
     "The verifier accepts and the statement is false for its tables extracted at the \
     checkpoint of one of its transcript queries."⟩,
+  ⟨"event.unmapped-policy", .event, some `ZkcSecurity.FiatShamir.StatementBinding.Unmapped,
+    "A policy statement denotes no model statement."⟩,
   ⟨"event.fri-far", .event, some `ZkcSecurity.ArkLib.Fri.Far,
     "A word at relative distance at least the radius from every codeword."⟩,
   ⟨"event.gkr-false-claim", .event, some `ZkcSecurity.ArkLib.Gkr.FalseClaim,

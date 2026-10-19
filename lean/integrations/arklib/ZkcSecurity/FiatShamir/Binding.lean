@@ -2,6 +2,7 @@ module
 
 public import ZkcSecurity.FiatShamir.Interface
 public import ZkcSecurity.Stage.Relation
+public import ZkcSecurity.Registry
 public import Zkc.Construction.Binding
 
 @[expose] public section
@@ -42,11 +43,22 @@ not only on well-formed statements.
   typed representation is injective, and that the native transcript absorbs
   that serialization, are separate obligations; a typed public-value binding
   discharges statement determination only.
+- Determination says nothing about policy statements that denote no model
+  statement (`StatementBinding.Unmapped`): with the empty relation every policy
+  statement is unmapped and none is false in the model. An adaptive endpoint
+  therefore needs coverage of the application's false statements, in one of two
+  forms. Either every application-false policy statement is false in the model
+  or unmapped (`StatementBinding.Covers`), and unmapped statements are rejected:
+  then the validators of all application-false statements are doomed whenever
+  those of model-false statements are (`StatementBinding.doomed_of_covers`). Or
+  the application's false-acceptance event implies the modeled event
+  (`EventImplication`), which transfers the bound
+  (`EventImplication.prEvent_le`).
 
 **The other binding obligations.** Besides statement determination, a claim may
 need three obligations, recorded as typed fields of its evidence with their
-status (`ObligationStatus`: a proof, or a reported assumption named by its
-registry identifier):
+status (`ObligationStatus`: a proof, or a reported assumption that cites a
+registry entry of the obligation's own category, `ZkcSecurity.Registry`):
 
 - collision-bounded identity (`CollisionBoundedIdentity`): a collision game
   over every digest in scope, those computed at setup, those the verifier
@@ -152,23 +164,74 @@ theorem falsePolicy_iff (falseModel : Model → Prop) (policy : Policy) (model :
     rwa [binding.functional policy model other denotes otherDenotes]
   · exact fun falseModel => ⟨model, denotes, falseModel⟩
 
+/-- A policy statement that denotes no model statement. -/
+def Unmapped (policy : Policy) : Prop :=
+  ∀ model, ¬ binding.models policy model
+
+/-- An unmapped policy statement is never false in the model. -/
+theorem not_falsePolicy_of_unmapped (falseModel : Model → Prop) (policy : Policy)
+    (unmapped : binding.Unmapped policy) : ¬ binding.falsePolicy falseModel policy :=
+  fun ⟨model, denotes, _⟩ => unmapped model denotes
+
+/-- Coverage of the application's false statements: every policy statement false for the
+application is false in the model or unmapped. -/
+def Covers (falseModel : Model → Prop) (applicationFalse : Policy → Prop) : Prop :=
+  ∀ policy, applicationFalse policy →
+    binding.falsePolicy falseModel policy ∨ binding.Unmapped policy
+
+/-- With coverage, the application's false statements are doomed whenever the model's false
+statements are and unmapped statements are rejected. -/
+theorem doomed_of_covers {falseModel : Model → Prop} {applicationFalse : Policy → Prop}
+    {doomed : Policy → Prop} (covers : binding.Covers falseModel applicationFalse)
+    (modelDoomed : ∀ policy model, binding.models policy model → falseModel model → doomed policy)
+    (unmappedDoomed : ∀ policy, binding.Unmapped policy → doomed policy) :
+    ∀ policy, applicationFalse policy → doomed policy := by
+  intro policy falseForApplication
+  rcases covers policy falseForApplication with ⟨model, denotes, falseAt⟩ | unmapped
+  · exact modelDoomed policy model denotes falseAt
+  · exact unmappedDoomed policy unmapped
+
 end StatementBinding
+
+/-- The application's false-acceptance event implies the modeled event. -/
+def EventImplication {Result : Type} (applicationEvent modeledEvent : Result → Prop) : Prop :=
+  ∀ result, applicationEvent result → modeledEvent result
+
+/-- An event implication transfers a bound on the modeled event to the application's event. -/
+theorem EventImplication.prEvent_le {Result : Type} {applicationEvent modeledEvent : Result → Prop}
+    (implies : EventImplication applicationEvent modeledEvent) (experiment : ProbComp Result) :
+    Pr{let result ← experiment}[applicationEvent result] ≤
+      Pr{let result ← experiment}[modeledEvent result] :=
+  prEvent_mono _ _ _ implies
 
 /-! ### The other binding obligations -/
 
-/-- How an obligation stands: discharged by a proof, or a reported assumption named by its
-registry identifier. -/
-inductive ObligationStatus (claim : Prop) where
+/-- How an obligation of a registry category stands: discharged by a proof, or a reported
+assumption citing a registry entry of that category. -/
+inductive ObligationStatus (category : Registry.Category) (claim : Prop) where
   | proved (proof : claim)
-  | assumed (identifier : String)
+  | assumed (entry : Registry.Entry) (registered : entry ∈ Registry.entries)
+      (categorized : entry.category = category)
+
+/-- The registry entry with an identifier. -/
+def registryEntry (identifier : String) : Option Registry.Entry :=
+  Registry.entries.find? fun entry => entry.identifier == identifier
+
+/-- A reported assumption citing the registry entry with an identifier, when that entry exists
+and has the obligation's category. -/
+def ObligationStatus.cite {category : Registry.Category} {claim : Prop} (identifier : String)
+    (entry : Registry.Entry) (found : registryEntry identifier = some entry)
+    (categorized : entry.category = category) : ObligationStatus category claim :=
+  .assumed entry (List.mem_of_find?_eq_some found) categorized
 
 /-- The obligation is discharged by a proof. -/
-def ObligationStatus.Discharged {claim : Prop} : ObligationStatus claim → Prop
+def ObligationStatus.Discharged {category : Registry.Category} {claim : Prop} :
+    ObligationStatus category claim → Prop
   | .proved _ => True
-  | .assumed _ => False
+  | .assumed _ _ _ => False
 
-theorem ObligationStatus.holds {claim : Prop} :
-    (status : ObligationStatus claim) → status.Discharged → claim
+theorem ObligationStatus.holds {category : Registry.Category} {claim : Prop} :
+    (status : ObligationStatus category claim) → status.Discharged → claim
   | .proved proof, _ => proof
 
 /-- Where a digest in scope comes from. -/
@@ -190,7 +253,7 @@ structure CollisionBoundedIdentity where
   origins : List DigestOrigin
   complete : ∀ origin, origin ∈ origins
   bound : collisions.Budget → ENNReal
-  status : ObligationStatus (collisions.Bounded bound)
+  status : ObligationStatus (.binding .collisionBoundedIdentity) (collisions.Bounded bound)
 
 /-- Where a configuration value comes from. -/
 inductive Provenance where
@@ -209,7 +272,8 @@ structure AuthenticatedConfiguration (Config Parameter : Type) where
   /-- The security claim at a configuration and a parameter; it quantifies the adversary
   after both. -/
   claim : Config → Parameter → Prop
-  status : ObligationStatus (∀ parameter, admissible parameter → claim configuration parameter)
+  status : ObligationStatus (.binding .authenticatedConfiguration)
+    (∀ parameter, admissible parameter → claim configuration parameter)
 
 /-- How a verification key is shown to be the intended one. -/
 inductive KeyEvidence where
@@ -226,6 +290,6 @@ structure VerificationKeyCorrectness (Key : Type) where
   key : Key
   intended : Key
   evidence : KeyEvidence
-  status : ObligationStatus (key = intended)
+  status : ObligationStatus (.binding .verificationKey) (key = intended)
 
 end ZkcSecurity.FiatShamir
