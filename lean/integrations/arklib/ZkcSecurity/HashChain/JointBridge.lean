@@ -1,6 +1,7 @@
 module
 
 public import ZkcSecurity.HashChain.JointCoupling
+public import ZkcSecurity.VCVio.Memo
 
 @[expose] public section
 
@@ -273,5 +274,364 @@ theorem verifier_eq (positive : 0 < width) {β : Type}
   exact fillCache_drop width slots step.2 _
 
 end VerifierPhase
+
+section Experiments
+variable (encoding : Encoding E Shape S Query) (width : ℕ)
+  (absorb : Typed.Interface J E P (fun _ => Fin width → S)) (scheme : Extractable Shape Value Query S)
+  (verifier : Stmt → PIR.Proc (committed J Shape Value) A) (initial : Stmt → List (Absorbed E Shape S))
+  (statementRoots : Stmt → List (Shape × S))
+
+/-- The translated experiment: draw the private tape, run the logged adversary against the joint
+simulator, then the verifier's joint-oracle reading, all on one lazily sampled joint oracle; the
+prover's log is the classified byte log. -/
+noncomputable def translatedExperiment (calls : ℕ)
+    (adversary : OracleComp (ByteHash S) (Stmt × Proof P Value S)) :
+    ProbComp (JointRun Stmt P Value S A (QueryLog (OracleSpec.ofFn (Cells E Shape S Query width)))) := do
+  let tape ← $ᵗ (Fin calls → S)
+  (simulateQ randomOracle (do
+    let claim ← (jointSimulator encoding width calls).translate adversary.withQueryLog tape
+    let verifierRun ← jointReading width absorb scheme verifier initial statementRoots claim.1.1
+      claim.1.2
+    pure (assemble encoding width claim verifierRun))).run' ∅
+
+omit [DecidableEq E] [DecidableEq Shape] [DecidableEq S] [DecidableEq Query] [Inhabited S]
+  [SampleableType S] in
+theorem combine_empty :
+    combine width (∅ : (OracleSpec.ofFn (Answer (Absorbed E Shape S) S width)).QueryCache)
+      (fun _ : Query => (none : Option S)) = ∅ := by
+  apply QueryCache.ext
+  intro key
+  cases key <;> rfl
+
+/-- The lazily sampled joint simulation has the law of the translated experiment. -/
+theorem lazy_eq_translated (positive : 0 < width)
+    (adversary : OracleComp (ByteHash S) (Stmt × Proof P Value S)) {calls : ℕ}
+    (bounded : IsTotalQueryBound adversary calls) {queries : ℕ}
+    (queryBounded : ∀ statement proof, IsTotalQueryBound
+      (jointReading width absorb scheme verifier initial statementRoots statement proof) queries) :
+    𝒮[lazyExperiment encoding width absorb scheme verifier initial statementRoots adversary] =
+      𝒮[translatedExperiment encoding width absorb scheme verifier initial statementRoots calls
+        adversary] := by
+  have logged : IsTotalQueryBound adversary.withQueryLog calls :=
+    (isTotalQueryBound_withQueryLog_iff _ _).mpr bounded
+  let slots := calls + queries
+  let finish : ((Stmt × Proof P Value S) × QueryLog (ByteHash S)) ×
+      (JointState E Shape S Query width calls ×
+        (OracleSpec.ofFn (Cells E Shape S Query width)).QueryCache) →
+      ProbComp (JointRun Stmt P Value S A (QueryLog (OracleSpec.ofFn (Cells E Shape S Query width)))) :=
+    fun result => assemble encoding width result.1 <$>
+      (simulateQ randomOracle (jointReading width absorb scheme verifier initial statementRoots
+        result.1.1.1 result.1.1.2)).run' result.2.2
+  have right : ∀ tape : Fin calls → S,
+      (simulateQ randomOracle (do
+        let claim ← (jointSimulator encoding width calls).translate adversary.withQueryLog tape
+        let verifierRun ← jointReading width absorb scheme verifier initial statementRoots claim.1.1
+          claim.1.2
+        pure (assemble encoding width claim verifierRun))).run' ∅ =
+      (simulateQ (flatJoint encoding width calls) adversary.withQueryLog).run
+          ((jointSimulator encoding width calls).start tape, ∅) >>= finish := by
+    intro tape
+    simp only [Provider.Simulator.translate, StateT.run'_eq, simulateQ_bind, simulateQ_pure,
+      StateT.run_bind, StateT.run_pure, bind_map_left]
+    rw [simulateQ_flatten]
+    simp only [flatJoint, finish, map_bind, bind_map_left, Functor.map_map, StateT.run'_eq,
+      bind_pure_comp]
+  have filled : 𝒮[translatedExperiment encoding width absorb scheme verifier initial statementRoots
+        calls adversary] =
+      𝒮[(fillJoint width calls slots (Simulated.empty width, fun _ => none) >>= fun state =>
+        (simulateQ (flatJoint encoding width calls) adversary.withQueryLog).run state) >>= finish] := by
+    simp only [translatedExperiment, right, fillJoint, fillAll, completed_empty, completedWith_empty,
+      combine_empty, map_bind, map_pure, bind_assoc, pure_bind]
+    exact (evalSPMF_uniform_drop _).symm
+  rw [filled, evalSPMF_bind, adversary_eq encoding width calls slots adversary.withQueryLog logged
+    (Simulated.empty width, fun _ => none) (fun _ _ absent => absurd rfl absent)
+    (by simp [Simulated.empty]) (by simp [Simulated.empty, slots]), ← evalSPMF_bind, bind_assoc]
+  simp only [lazyExperiment]
+  refine evalSPMF_bind_congr fun started member => ?_
+  obtain ⟨left, -, organized, room⟩ := support_simulateQ_invariant (splitSimulator encoding width)
+    (fun remaining current => Organized current.1 ∧ current.1.touched.length + remaining ≤ calls)
+    (fun remaining bytes current inv step stepMember => by
+      obtain ⟨stepOrganized, -, touched⟩ :=
+        splitSimulator_support encoding width bytes current.1 current.2 inv.1 step stepMember
+      exact ⟨stepOrganized, by omega⟩)
+    adversary.withQueryLog calls (Simulated.empty width, fun _ => none) logged
+    ⟨fun _ _ absent => absurd rfl absent, by simp [Simulated.empty]⟩ started member
+  have verified := verifier_eq width slots positive (jointReading width absorb scheme verifier initial
+    statementRoots started.1.1.1 started.1.1.2) (queryBounded _ _) started.2.1 started.2.2
+    organized (show started.2.1.touched.length + queries ≤ slots by omega)
+  have dropped : 𝒮[(fun filled => (started.1, filled)) <$> fillJoint width calls slots started.2 >>=
+        finish] =
+      𝒮[assemble encoding width started.1 <$> (fillCache width slots (started.2.1, started.2.2) >>=
+        fun cache => (simulateQ randomOracle (jointReading width absorb scheme verifier initial
+          statementRoots started.1.1.1 started.1.1.2)).run' cache)] := by
+    simp only [bind_map_left, finish, fillJoint, fillAll, fillCache, fillHistory, bind_assoc, pure_bind,
+      map_bind]
+    refine evalSPMF_bind_congr' _ fun rowsTable => ?_
+    exact evalSPMF_uniform_drop _
+  rw [dropped, evalSPMF_map_eq_of_evalSPMF_eq verified, bind_pure_comp]
+
+end Experiments
+
+section Logs
+variable (encoding : Encoding E Shape S Query) (width length : ℕ)
+
+/-- A joint simulator state corresponds to a classification: the chain part's private answers and
+recorded histories are the classification's, and a joint key has a recorded answer exactly when the
+classification has read it. -/
+def Corresponds (state : JointState E Shape S Query width length)
+    (classification : Classification E Shape S Query) : Prop :=
+  state.chain.answers = classification.answers ∧ state.chain.reached = classification.reached ∧
+    ∀ key, ((jointSimulator encoding width length).recorded state key).isSome =
+      classification.emitted key
+
+omit [Inhabited S] [SampleableType S] in
+theorem corresponds_start [Inhabited S] (tape : Fin length → S) :
+    Corresponds encoding width length ((jointSimulator encoding width length).start tape)
+      Classification.empty :=
+  ⟨rfl, rfl, fun key => by cases key <;> rfl⟩
+
+omit [SampleableType S] in
+/-- One call of the joint simulator logs, on the joint oracle, what the classification reads from
+the call and its reply, and keeps the correspondence. -/
+theorem handle_log (bytes : Bytes) (state : JointState E Shape S Query width length)
+    (classification : Classification E Shape S Query)
+    (corresponds : Corresponds encoding width length state classification) :
+    ∀ result ∈ support ((((jointSimulator encoding width length).handle bytes).run state).withQueryLog),
+      skeleton result.2 = skeleton (classification.step encoding width bytes result.1.1).1 ∧
+        Corresponds encoding width length result.1.2
+          (classification.step encoding width bytes result.1.1).2 := by
+  obtain ⟨answers, reached, emitted⟩ := corresponds
+  intro result member
+  have sameAttempt : jointAttempt encoding width classification.reached bytes =
+      (jointSimulator encoding width length).attempt state bytes := by
+    rw [jointSimulator_attempt, reached]
+  cases assigned : (jointSimulator encoding width length).attempt state bytes with
+  | none =>
+      rw [(jointSimulator encoding width length).handle_private assigned, withQueryLog_pure,
+        support_pure, Set.mem_singleton_iff] at member
+      subst member
+      have outside : jointAttempt encoding width classification.reached bytes = none :=
+        sameAttempt.trans assigned
+      cases fresh : state.chain.answers (encoding.chainInput bytes) with
+      | some answer =>
+          have stored : classification.answers (encoding.chainInput bytes) = some answer := by
+            rw [← answers]; exact fresh
+          have respond : state.chain.respond (encoding.chainInput bytes) = (answer, state.chain) := by
+            simp only [ChainState.respond, fresh]
+          simp only [Classification.step, outside, stored]
+          refine ⟨trivial, ?_⟩
+          rw [respond]
+          exact ⟨answers, reached, emitted⟩
+      | none =>
+          have stored : classification.answers (encoding.chainInput bytes) = none := by
+            rw [← answers]; exact fresh
+          simp only [Classification.step, outside, stored]
+          refine ⟨trivial, ?_, ?_, fun key => ?_⟩
+          · change (state.chain.respond (encoding.chainInput bytes)).2.answers = _
+            simp only [ChainState.respond, fresh, answers]
+          · change (state.chain.respond (encoding.chainInput bytes)).2.reached = _
+            simp only [ChainState.respond, fresh, reached]
+          · rw [← emitted key]
+            exact congrArg Option.isSome
+              ((jointSimulator encoding width length).recorded_respond state bytes key)
+  | some key =>
+      have inside : jointAttempt encoding width classification.reached bytes = some key :=
+        sameAttempt.trans assigned
+      cases recorded : (jointSimulator encoding width length).recorded state key with
+      | some ideal =>
+          rw [(jointSimulator encoding width length).handle_recorded assigned recorded, withQueryLog_pure,
+            support_pure, Set.mem_singleton_iff] at member
+          subst member
+          have read : classification.emitted key = true := by
+            rw [← emitted key, recorded]; rfl
+          simp only [Classification.step, inside, read, ↓reduceIte]
+          exact ⟨trivial, answers, reached, emitted⟩
+      | none =>
+          rw [(jointSimulator encoding width length).handle_fresh assigned recorded,
+            ZkcSecurity.VCVio.Memo.withQueryLog_map, withQueryLog_query, support_map] at member
+          obtain ⟨⟨ideal, log⟩, inner, rfl⟩ := member
+          simp only [mem_support_bind_iff, support_pure, Set.mem_singleton_iff] at inner
+          obtain ⟨answer, -, same⟩ := inner
+          obtain ⟨rfl, rfl⟩ := Prod.mk.inj same
+          have unread : classification.emitted key = false := by
+            rw [← emitted key, recorded]; rfl
+          have stepped : classification.step encoding width bytes
+              ((jointSimulator encoding width length).shared bytes key ideal) =
+              ([keyEntry key ((jointSimulator encoding width length).shared bytes key ideal)],
+                { classification with emitted := Function.update classification.emitted key true }) := by
+            simp only [Classification.step, inside, unread, Bool.false_eq_true, ↓reduceIte]
+          change skeleton [⟨key, ideal⟩] = skeleton (classification.step encoding width bytes
+              ((jointSimulator encoding width length).shared bytes key ideal)).1 ∧
+            Corresponds encoding width length ((jointSimulator encoding width length).record state key
+              ideal) (classification.step encoding width bytes
+                ((jointSimulator encoding width length).shared bytes key ideal)).2
+          rw [stepped]
+          refine ⟨?_, ?_, ?_, fun other => ?_⟩
+          · cases key <;> rfl
+          · rw [← answers]
+            cases key <;> rfl
+          · rw [← reached]
+            cases key <;> rfl
+          · by_cases same : other = key
+            · subst same
+              rw [(jointSimulator encoding width length).recorded_record]
+              exact (Function.update_self other true classification.emitted).symm
+            · rw [(jointSimulator encoding width length).recorded_record_of_ne _ _ _ _ same]
+              exact (emitted other).trans (Function.update_of_ne same true classification.emitted).symm
+
+omit [SampleableType S] in
+/-- A run of the joint simulator on the logged adversary asks the joint oracle what the
+classification reads from the adversary's logged calls: the joint oracle's record and the
+classified byte log have one skeleton. -/
+theorem run_log {α : Type} (adversary : OracleComp (ByteHash S) α) :
+    ∀ (state : JointState E Shape S Query width length)
+      (classification : Classification E Shape S Query),
+      Corresponds encoding width length state classification →
+      ∀ result ∈ support (((simulateQ (jointSimulator encoding width length).handle
+          adversary.withQueryLog).run state).withQueryLog),
+        skeleton result.2 = skeleton (classification.read encoding width result.1.1.2) := by
+  induction adversary using OracleComp.inductionOn with
+  | pure value =>
+      intro state classification _ result member
+      simp only [withQueryLog_pure, simulateQ_pure, StateT.run_pure, support_pure,
+        Set.mem_singleton_iff] at member
+      subst member
+      rfl
+  | query_bind bytes next ih =>
+      intro state classification corresponds result member
+      rw [withQueryLog_bind, withQueryLog_query] at member
+      simp only [bind_assoc, pure_bind, simulateQ_bind, simulateQ_spec_query, simulateQ_map,
+        StateT.run_bind, StateT.run_map] at member
+      rw [withQueryLog_bind, mem_support_bind_iff] at member
+      obtain ⟨step, stepMember, restMember⟩ := member
+      rw [support_map, ZkcSecurity.VCVio.Memo.withQueryLog_map, support_map] at restMember
+      obtain ⟨_, ⟨inner, innerMember, rfl⟩, rfl⟩ := restMember
+      obtain ⟨stepSkeleton, stepCorresponds⟩ :=
+        handle_log encoding width length bytes state classification corresponds step stepMember
+      have restSkeleton := ih step.1.1 step.1.2 _ stepCorresponds inner innerMember
+      simp only [Prod.map, id, List.singleton_append, Classification.read, skeleton_append,
+        stepSkeleton, restSkeleton]
+
+end Logs
+
+section Ideal
+variable (encoding : Encoding E Shape S Query) (width : ℕ)
+  (absorb : Typed.Interface J E P (fun _ => Fin width → S)) (scheme : Extractable Shape Value Query S)
+  (verifier : Stmt → PIR.Proc (committed J Shape Value) A) (initial : Stmt → List (Absorbed E Shape S))
+  (statementRoots : Stmt → List (Shape × S))
+
+omit [DecidableEq E] [DecidableEq Shape] [DecidableEq S] [DecidableEq Query] [Inhabited S]
+  [SampleableType S] in
+/-- Dropping the log of a logged computation gives the computation. -/
+theorem fst_withQueryLog {ι α : Type} {spec : OracleSpec ι} (computation : OracleComp spec α) :
+    Prod.fst <$> computation.withQueryLog = computation :=
+  loggingOracle.fst_map_run_simulateQ computation
+
+omit [SampleableType S] in
+/-- On every run of a translated logged adversary, the joint oracle's record of the translated
+prover's queries has the skeleton of the classified byte log. -/
+theorem translate_skeleton (calls : ℕ) {α : Type} (adversary : OracleComp (ByteHash S) α)
+    (tape : Fin calls → S) :
+    ∀ result ∈ support (((jointSimulator encoding width calls).translate adversary.withQueryLog
+        tape).withQueryLog),
+      skeleton result.2 = skeleton (classifyLog encoding width result.1.2) := by
+  intro result member
+  unfold Provider.Simulator.translate at member
+  rw [StateT.run'_eq, ZkcSecurity.VCVio.Memo.withQueryLog_map, support_map] at member
+  obtain ⟨inner, innerMember, rfl⟩ := member
+  exact run_log encoding width calls adversary _ _ (corresponds_start encoding width calls tape) inner
+    innerMember
+
+omit [SampleableType S] in
+/-- The translated program of an adversary drops the log of the translated logged adversary. -/
+theorem translate_fst (calls : ℕ) {α : Type} (adversary : OracleComp (ByteHash S) α)
+    (tape : Fin calls → S) :
+    (jointSimulator encoding width calls).translate adversary tape =
+      Prod.fst <$> (jointSimulator encoding width calls).translate adversary.withQueryLog tape := by
+  conv_lhs => rw [← fst_withQueryLog adversary]
+  unfold Provider.Simulator.translate
+  rw [simulateQ_map, StateT.run'_eq, StateT.run'_eq, StateT.run_map, Functor.map_map,
+    Functor.map_map]
+
+/-- The bridge's event has the same probability in the translated experiment, whose prover log is
+the classified byte log, as for the translated prover mixture in the joint experiment, whose prover
+log is the joint oracle's record of the prover's queries. -/
+theorem translated_eq_ideal (words : Words J Shape Value) (calls : ℕ)
+    (adversary : OracleComp (ByteHash S) (Stmt × Proof P Value S))
+    (falseStatement : Stmt → List (Table Value) → Prop) (accepts : A → Prop) :
+    Pr{let result ← translatedExperiment encoding width absorb scheme verifier initial
+        statementRoots calls adversary}[
+      FalseAcceptance words scheme statementRoots falseStatement accepts result] =
+      Stage.Joint.oracleMixture
+        (ZkcSecurity.Commitment.experiment absorb scheme verifier initial statementRoots)
+        (FalseAcceptance words scheme statementRoots falseStatement accepts)
+        (do let tape ← $ᵗ (Fin calls → S)
+            pure ((jointSimulator encoding width calls).translate adversary tape)) := by
+  have pointwise : ∀ tape : Fin calls → S,
+      Pr{let result ← (simulateQ randomOracle (do
+          let claim ← (jointSimulator encoding width calls).translate adversary.withQueryLog tape
+          let verifierRun ← jointReading width absorb scheme verifier initial statementRoots claim.1.1
+            claim.1.2
+          pure (assemble encoding width claim verifierRun))).run' ∅}[
+        FalseAcceptance words scheme statementRoots falseStatement accepts result] =
+      Pr{let result ← (simulateQ randomOracle (ZkcSecurity.Commitment.experiment absorb scheme verifier
+          initial statementRoots ((jointSimulator encoding width calls).translate adversary tape))).run'
+            ∅}[FalseAcceptance words scheme statementRoots falseStatement accepts result] := by
+    intro tape
+    let logged := ((jointSimulator encoding width calls).translate adversary.withQueryLog tape).withQueryLog
+    let reading : (((Stmt × Proof P Value S) × QueryLog (ByteHash S)) ×
+        QueryLog (OracleSpec.ofFn (Cells E Shape S Query width))) →
+        OracleComp (OracleSpec.ofFn (Cells E Shape S Query width))
+          ((((Stmt × Proof P Value S) × QueryLog (ByteHash S)) ×
+            QueryLog (OracleSpec.ofFn (Cells E Shape S Query width))) ×
+            (PIR.Outcome A × QueryLog (OracleSpec.ofFn (Cells E Shape S Query width)))) :=
+      fun claim => (fun verifierRun => (claim, verifierRun)) <$>
+        jointReading width absorb scheme verifier initial statementRoots claim.1.1.1 claim.1.1.2
+    have left : (do
+        let claim ← (jointSimulator encoding width calls).translate adversary.withQueryLog tape
+        let verifierRun ← jointReading width absorb scheme verifier initial statementRoots claim.1.1
+          claim.1.2
+        pure (assemble encoding width claim verifierRun)) =
+        (fun pair => assemble encoding width pair.1.1 pair.2) <$> (logged >>= reading) := by
+      conv_lhs => rw [← fst_withQueryLog ((jointSimulator encoding width calls).translate
+        adversary.withQueryLog tape)]
+      simp only [logged, reading, bind_map_left, map_bind, Functor.map_map, bind_pure_comp]
+    have right : ZkcSecurity.Commitment.experiment absorb scheme verifier initial statementRoots
+        ((jointSimulator encoding width calls).translate adversary tape) =
+        (fun pair => (JointRun.mk pair.1.1.1.1 pair.1.1.1.2 pair.2.1 pair.1.2 pair.2.2 :
+            JointRun Stmt P Value S A (QueryLog (OracleSpec.ofFn (Cells E Shape S Query width))))) <$>
+          (logged >>= reading) := by
+      rw [translate_fst encoding width calls adversary tape]
+      unfold ZkcSecurity.Commitment.experiment
+      rw [ZkcSecurity.VCVio.Memo.withQueryLog_map]
+      simp only [logged, reading, bind_map_left, map_bind, Functor.map_map, bind_pure_comp, jointReading,
+        Prod.map]
+      rfl
+    rw [left, right, simulateQ_map, simulateQ_map, StateT.run'_eq, StateT.run'_eq, StateT.run_map,
+      StateT.run_map, Functor.map_map, Functor.map_map, prEvent_map, prEvent_map]
+    refine le_antisymm (prEvent_mono_of_support _ _ _ fun run member holds => ?_)
+      (prEvent_mono_of_support _ _ _ fun run member holds => ?_)
+    all_goals
+      have reachable : run.1 ∈ support (logged >>= reading) :=
+        support_simulateQ_run'_subset randomOracle (logged >>= reading) ∅
+          (by rw [StateT.run'_eq, support_map]; exact ⟨run, member, rfl⟩)
+      rw [mem_support_bind_iff] at reachable
+      obtain ⟨claim, claimMember, readingMember⟩ := reachable
+      simp only [reading, support_map] at readingMember
+      obtain ⟨verifierRun, -, same⟩ := readingMember
+      have skeletons := translate_skeleton encoding width calls adversary tape claim claimMember
+      rw [← same] at holds ⊢
+    · exact (falseAcceptance_congr_skeleton words scheme statementRoots falseStatement accepts
+        (assemble encoding width claim.1 verifierRun)
+        (JointRun.mk claim.1.1.1 claim.1.1.2 verifierRun.1 claim.2 verifierRun.2) rfl rfl rfl
+        skeletons.symm).mp holds
+    · exact (falseAcceptance_congr_skeleton words scheme statementRoots falseStatement accepts
+        (JointRun.mk claim.1.1.1 claim.1.1.2 verifierRun.1 claim.2 verifierRun.2)
+        (assemble encoding width claim.1 verifierRun) rfl rfl rfl skeletons).mp holds
+  have composed := prEvent_bind_congr (m := ProbComp) ($ᵗ (Fin calls → S)) _ _ _ _ pointwise
+  unfold Stage.Joint.oracleMixture translatedExperiment
+  simpa only [bind_assoc, pure_bind] using composed
+
+end Ideal
 
 end ZkcSecurity.HashChain.Joint
