@@ -27,9 +27,9 @@ The verifier has two readings.
   receives and sends absorb the ideal interface's events.
 
 The joint oracle answers a transcript key `(history, occurrence)` in the raw type of the
-occurrence alone, `R [occurrence]`, which is the raw type the typed certificate bounds with an
-empty preceding history. Keys are pairs rather than histories ending with the occurrence; the two
-encodings are in bijection on the histories that end with a query occurrence.
+occurrence, `Raw occurrence`, which is the raw type the typed certificate bounds. Keys are pairs
+rather than histories ending with the occurrence; `ZkcSecurity.Oracle.Keys` relates the two key
+forms by a transport of oracle cells, answers and costs.
 
 `replay` walks the verifier along absorbed concrete events, answering transcript queries from a
 table of answers and every committed root from an extraction (`extracted`), and returns the
@@ -74,7 +74,7 @@ def lookup {Value : Type} (tables : List (Table Value)) (handle position : ℕ) 
   | some table => table position
   | none => none
 
-variable {J : PIR.Signature} {E P Shape Value Query Y A : Type} {R : List E → Type}
+variable {J : PIR.Signature} {E P Shape Value Query Y A : Type} {Raw : E → Type}
 
 /-- The ideal reading: commitments receive their tables in the clear, reads return the entries of
 received tables, and a read outside every received table rejects. -/
@@ -128,72 +128,72 @@ abbrev JointKey (E Shape Y Query : Type) := TranscriptKey E Shape Y ⊕ Query
 
 /-- Answers of the joint oracle: a transcript key is answered in the raw type of its occurrence
 alone, a hash call by a hash value. -/
-def JointRange {E : Type} (R : List E → Type) (Shape Y Query : Type) :
+def JointRange {E : Type} (Raw : E → Type) (Shape Y Query : Type) :
     JointKey E Shape Y Query → Type
-  | .inl key => R [key.2]
+  | .inl key => Raw key.2
   | .inr _ => Y
 
 /-- The joint oracle on transcript keys and hash calls. -/
-abbrev joint {E : Type} (R : List E → Type) (Shape Y Query : Type) :=
-  OracleSpec.ofFn (JointRange R Shape Y Query)
+abbrev joint {E : Type} (Raw : E → Type) (Shape Y Query : Type) :=
+  OracleSpec.ofFn (JointRange Raw Shape Y Query)
 
-instance jointSampleable {E : Type} (R : List E → Type) (Shape Y Query : Type)
-    [∀ key, SampleableType (R key)] [SampleableType Y] :
-    ∀ key, SampleableType (JointRange R Shape Y Query key)
-  | .inl key => inferInstanceAs (SampleableType (R [key.2]))
+instance jointSampleable {E : Type} (Raw : E → Type) (Shape Y Query : Type)
+    [∀ key, SampleableType (Raw key)] [SampleableType Y] :
+    ∀ key, SampleableType (JointRange Raw Shape Y Query key)
+  | .inl key => inferInstanceAs (SampleableType (Raw key.2))
   | .inr _ => inferInstanceAs (SampleableType Y)
 
 section Hash
 
 /-- Hash calls answered by the joint oracle. -/
-def hashCall (R : List E → Type) (Shape : Type) :
-    QueryImpl (Query →ₒ Y) (OracleComp (joint R Shape Y Query)) := fun query =>
-  (liftM ((joint R Shape Y Query).query (.inr query)) : OracleComp (joint R Shape Y Query) Y)
+def hashCall (Raw : E → Type) (Shape : Type) :
+    QueryImpl (Query →ₒ Y) (OracleComp (joint Raw Shape Y Query)) := fun query =>
+  (liftM ((joint Raw Shape Y Query).query (.inr query)) : OracleComp (joint Raw Shape Y Query) Y)
 
 /-- A hash computation run on the joint oracle. -/
-def liftHash (R : List E → Type) (Shape : Type) {α : Type}
-    (computation : OracleComp (Query →ₒ Y) α) : OracleComp (joint R Shape Y Query) α :=
-  simulateQ (hashCall R Shape) computation
+def liftHash (Raw : E → Type) (Shape : Type) {α : Type}
+    (computation : OracleComp (Query →ₒ Y) α) : OracleComp (joint Raw Shape Y Query) α :=
+  simulateQ (hashCall Raw Shape) computation
 
 /-- The hash part of a joint answer table. -/
-def hashAnswers (table : (key : JointKey E Shape Y Query) → JointRange R Shape Y Query key) :
+def hashAnswers (table : (key : JointKey E Shape Y Query) → JointRange Raw Shape Y Query key) :
     Query → Y := fun query => table (.inr query)
 
 theorem evalWithAnswerFn_liftHash {α : Type}
-    (table : (key : JointKey E Shape Y Query) → JointRange R Shape Y Query key)
+    (table : (key : JointKey E Shape Y Query) → JointRange Raw Shape Y Query key)
     (computation : OracleComp (Query →ₒ Y) α) :
-    evalWithAnswerFn (QueryImpl.ofFn table) (liftHash R Shape computation) =
+    evalWithAnswerFn (QueryImpl.ofFn table) (liftHash Raw Shape computation) =
       evalWithAnswerFn (QueryImpl.ofFn (hashAnswers table)) computation := by
   rw [liftHash, evalWithAnswerFn_simulateQ]
   rfl
 
 theorem tableQueryLog_liftHash {α : Type}
-    (table : (key : JointKey E Shape Y Query) → JointRange R Shape Y Query key) :
+    (table : (key : JointKey E Shape Y Query) → JointRange Raw Shape Y Query key) :
     ∀ computation : OracleComp (Query →ₒ Y) α,
-      tableQueryLog (liftHash R Shape computation) table =
+      tableQueryLog (liftHash Raw Shape computation) table =
         (tableQueryLog computation (hashAnswers table)).map fun entry =>
           (⟨.inr entry.1, entry.2⟩ :
-            (key : JointKey E Shape Y Query) × JointRange R Shape Y Query key) := by
+            (key : JointKey E Shape Y Query) × JointRange Raw Shape Y Query key) := by
   intro computation
   induction computation using OracleComp.inductionOn with
   | pure value => simp [liftHash]
   | query_bind queried next ih =>
       simp only [liftHash, simulateQ_bind, simulateQ_spec_query, hashCall] at ih ⊢
-      refine (tableQueryLog_query_bind (R := JointRange R Shape Y Query) (Sum.inr queried)
-        (fun answer => simulateQ (hashCall R Shape) (next answer)) table).trans ?_
+      refine (tableQueryLog_query_bind (R := JointRange Raw Shape Y Query) (Sum.inr queried)
+        (fun answer => simulateQ (hashCall Raw Shape) (next answer)) table).trans ?_
       rw [tableQueryLog_query_bind, List.map_cons]
       exact congrArg (List.cons _) (ih _)
 
 end Hash
 
 section Run
-variable (absorb : Typed.Interface J E P R) (scheme : Extractable Shape Value Query Y)
+variable (absorb : Typed.Interface J E P Raw) (scheme : Extractable Shape Value Query Y)
 
 /-- The concrete reading of a verifier with committed tables against the joint oracle, from the
 absorbed `history` and the committed `roots`, reading `messages` and `openings`. -/
 def run : PIR.Proc (committed J Shape Value) A → List (Absorbed E Shape Y) → List (Shape × Y) →
     List (Message P Y) → List (Opening Value Y) →
-    OracleComp (joint R Shape Y Query) (PIR.Outcome A)
+    OracleComp (joint Raw Shape Y Query) (PIR.Outcome A)
   | .done value, _, _, _, _ => pure (.returned value)
   | .halt stop, _, _, _, _ => pure (.stopped stop)
   | .call (.base operation) next, history, roots, messages, openings =>
@@ -209,8 +209,8 @@ def run : PIR.Proc (committed J Shape Value) A → List (Absorbed E Shape Y) →
       | .send event value =>
           run (next value) (history ++ [.event event]) roots messages openings
       | .query event decode => do
-          let raw ← liftM ((joint R Shape Y Query).query (.inl (history, event)))
-          match decode [] raw with
+          let raw ← liftM ((joint Raw Shape Y Query).query (.inl (history, event)))
+          match decode raw with
           | some value => run (next value) (history ++ [.event event]) roots messages openings
           | none => pure (.stopped .exhausted)
       | .refuse => pure (.stopped .refused)
@@ -222,7 +222,7 @@ def run : PIR.Proc (committed J Shape Value) A → List (Absorbed E Shape Y) →
   | .call (.read handle position) next, history, roots, messages, openings =>
       match roots[handle]?, openings with
       | some (shape, root), opening :: rest => do
-          let accepted ← liftHash R Shape (scheme.authenticate shape root position opening)
+          let accepted ← liftHash Raw Shape (scheme.authenticate shape root position opening)
           match accepted with
           | true => run (next opening.value) history roots messages rest
           | false => pure (.stopped .reject)
@@ -232,7 +232,7 @@ end Run
 
 section Replay
 variable [DecidableEq E] [DecidableEq Shape] [DecidableEq Y]
-variable (absorb : Typed.Interface J E P R) (words : Words J Shape Value)
+variable (absorb : Typed.Interface J E P Raw) (words : Words J Shape Value)
 
 /-- Answer the reads at the head of a process from the tables. -/
 def settle (tables : List (Table Value)) :
@@ -249,7 +249,7 @@ normalized extraction of their roots, and reads are answered from the recorded t
 result is the residual after the events, with its reads at the head answered, and its tables;
 `none` when the events are not a history the concrete reading could absorb. -/
 def replay (extracted : Shape → Y → Table Value)
-    (answers : (key : TranscriptKey E Shape Y) → R [key.2]) :
+    (answers : (key : TranscriptKey E Shape Y) → Raw key.2) :
     PIR.Proc (committed J Shape Value) A → List (Table Value) → List (Absorbed E Shape Y) →
       List (Absorbed E Shape Y) →
       Option (PIR.Proc (committed J Shape Value) A × List (Table Value))
@@ -276,7 +276,7 @@ def replay (extracted : Shape → Y → Table Value)
           else none
       | .query event decode =>
           if observed = .event event then
-            match decode [] (answers (history, event)) with
+            match decode (answers (history, event)) with
             | some value =>
                 replay extracted answers (next value) tables (history ++ [observed]) rest
             | none => none
@@ -294,30 +294,30 @@ def replay (extracted : Shape → Y → Table Value)
 end Replay
 
 section Escape
-variable (absorb : Typed.Interface J E P R) (words : Words J Shape Value)
+variable (absorb : Typed.Interface J E P Raw) (words : Words J Shape Value)
 
 /-- A residual at a transcript query, doomed in its ideal reading, whose query decodes `raw` to a
 reply that leaves the doomed set. Only base queries can escape. -/
 def Escapes (doomed : PIR.Proc J A → Prop) :
-    PIR.Proc (committed J Shape Value) A → List (Table Value) → (event : E) → R [event] → Prop
+    PIR.Proc (committed J Shape Value) A → List (Table Value) → (event : E) → Raw event → Prop
   | .call (.base operation) next, tables, event, raw =>
       ∃ decode, absorb operation = .query event decode ∧
         doomed (withTables words tables (.call (.base operation) next)) ∧
-        ∃ value, decode [] raw = some value ∧ ¬ doomed (withTables words tables (next value))
+        ∃ value, decode raw = some value ∧ ¬ doomed (withTables words tables (next value))
   | _, _, _, _ => False
 
-variable [∀ key, SampleableType (R key)]
+variable [∀ key, SampleableType (Raw key)]
 
 /-- A fixed residual escapes at a fresh raw answer with probability at most the error of the
 occurrence. -/
 theorem escapes_le {accepts : A → Prop} {error : E → ENNReal}
     (certificate : Typed.Certificate absorb accepts error)
     (process : PIR.Proc (committed J Shape Value) A) (tables : List (Table Value)) (event : E) :
-    Pr{let raw ← $ᵗ (R [event])}[Escapes absorb words certificate.doomed process tables event raw] ≤
+    Pr{let raw ← $ᵗ (Raw event)}[Escapes absorb words certificate.doomed process tables event raw] ≤
       error event := by
   classical
   have impossible : (∀ raw, ¬ Escapes absorb words certificate.doomed process tables event raw) →
-      Pr{let raw ← $ᵗ (R [event])}[
+      Pr{let raw ← $ᵗ (Raw event)}[
         Escapes absorb words certificate.doomed process tables event raw] ≤ error event :=
     fun never => (prEvent_eq_zero_of_forall_not _ _ never).trans_le zero_le
   match process with
@@ -332,12 +332,12 @@ theorem escapes_le {accepts : A → Prop} {error : E → ENNReal}
         have step := certificate.step _ doomed
         simp only [withTables, Typed.Step, absorbed] at step
         refine (prEvent_mono _ _
-          (fun raw => ∃ value, decode [] raw = some value ∧
+          (fun raw => ∃ value, decode raw = some value ∧
             ¬ certificate.doomed (withTables words tables (next value)))
-          (fun raw escapes => ?_)).trans (step [])
+          (fun raw escapes => ?_)).trans step
         obtain ⟨decode', absorbed', _, escaping⟩ := escapes
         rw [absorbed] at absorbed'
-        obtain ⟨-, same⟩ := Typed.Absorption.query.inj absorbed'
+        obtain ⟨-, same⟩ := Zkc.Transcript.Absorption.query.inj absorbed'
         subst same
         exact escaping
       · exact impossible fun _ escapes => by

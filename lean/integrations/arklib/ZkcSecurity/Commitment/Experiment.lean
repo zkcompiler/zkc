@@ -40,10 +40,10 @@ namespace ZkcSecurity.Commitment
 
 open OracleComp OracleSpec ZkcSecurity.FiatShamir
 
-variable {J : PIR.Signature} {E P Shape Value Query Y A Stmt : Type} {R : List E → Type}
+variable {J : PIR.Signature} {E P Shape Value Query Y A Stmt : Type} {Raw : E → Type}
 
 /-- The hash calls of a joint log. -/
-def hashEntries (log : QueryLog (joint R Shape Y Query)) : HashLog Query Y :=
+def hashEntries (log : QueryLog (joint Raw Shape Y Query)) : HashLog Query Y :=
   log.filterMap fun entry =>
     match entry with
     | ⟨.inr query, answer⟩ => some ⟨query, answer⟩
@@ -53,7 +53,7 @@ section Logs
 variable [DecidableEq E] [DecidableEq Shape] [DecidableEq Y] [DecidableEq Query]
 
 theorem map_fst_beforeFirst (key : JointKey E Shape Y Query) :
-    ∀ log : QueryLog (joint R Shape Y Query),
+    ∀ log : QueryLog (joint Raw Shape Y Query),
       (beforeFirst key log).map Sigma.fst = beforeFirstKey key (log.map Sigma.fst)
   | [] => rfl
   | entry :: rest => by
@@ -65,8 +65,8 @@ theorem map_fst_beforeFirst (key : JointKey E Shape Y Query) :
 
 omit [DecidableEq E] [DecidableEq Shape] [DecidableEq Y] [DecidableEq Query] in
 /-- The hash calls of a table log are the hash log of its keys. -/
-theorem hashEntries_eq (table : JointTable R Shape Y Query) :
-    ∀ log : QueryLog (joint R Shape Y Query),
+theorem hashEntries_eq (table : JointTable Raw Shape Y Query) :
+    ∀ log : QueryLog (joint Raw Shape Y Query),
       (∀ entry ∈ log, entry = ⟨entry.1, table entry.1⟩) →
       hashEntries log = hashLog table (log.map Sigma.fst)
   | [] => fun _ => rfl
@@ -98,22 +98,22 @@ theorem not_mem_beforeFirstKey (key : JointKey E Shape Y Query) :
           decide_true, ↓reduceIte, List.mem_cons, not_or]
         exact ⟨Ne.symm same, not_mem_beforeFirstKey key tail⟩
 
-theorem beforeFirstKey_update {α : Type} (game : OracleComp (joint R Shape Y Query) α)
-    (table : JointTable R Shape Y Query) (key : JointKey E Shape Y Query)
-    (answer : JointRange R Shape Y Query key) :
+theorem beforeFirstKey_update {α : Type} (game : OracleComp (joint Raw Shape Y Query) α)
+    (table : JointTable Raw Shape Y Query) (key : JointKey E Shape Y Query)
+    (answer : JointRange Raw Shape Y Query key) :
     beforeFirstKey key ((tableQueryLog game (Function.update table key answer)).map Sigma.fst) =
       beforeFirstKey key ((tableQueryLog game table).map Sigma.fst) := by
   rw [← map_fst_beforeFirst, ← map_fst_beforeFirst, beforeFirst_update]
 
-theorem hashLog_update_inl (table : JointTable R Shape Y Query) (key : TranscriptKey E Shape Y)
-    (answer : JointRange R Shape Y Query (.inl key)) (keys : List (JointKey E Shape Y Query)) :
+theorem hashLog_update_inl (table : JointTable Raw Shape Y Query) (key : TranscriptKey E Shape Y)
+    (answer : JointRange Raw Shape Y Query (.inl key)) (keys : List (JointKey E Shape Y Query)) :
     hashLog (Function.update table (.inl key) answer) keys = hashLog table keys := by
   unfold hashLog
   congr 1
 
 theorem targets_update_inr (scheme : Extractable Shape Value Query Y) (bound : ℕ)
-    (table : JointTable R Shape Y Query) (query : Query)
-    (answer : JointRange R Shape Y Query (.inr query)) :
+    (table : JointTable Raw Shape Y Query) (query : Query)
+    (answer : JointRange Raw Shape Y Query (.inr query)) :
     ∀ keys : List (JointKey E Shape Y Query), (.inr query : JointKey E Shape Y Query) ∉ keys →
       targets scheme bound (Function.update table (.inr query) answer) keys =
         targets scheme bound table keys
@@ -135,7 +135,7 @@ end Logs
 /-- At most `bound` labels per key in the targets of a record. -/
 theorem targets_length_le (scheme : Extractable Shape Value Query Y) (bound inputBound : ℕ)
     (inputs : ∀ query, (scheme.inputs query).length ≤ inputBound)
-    (table : JointTable R Shape Y Query) :
+    (table : JointTable Raw Shape Y Query) :
     ∀ keys : List (JointKey E Shape Y Query),
       (targets scheme bound table keys).length ≤ (bound + inputBound + 1) * keys.length
   | [] => by simp [targets]
@@ -168,7 +168,7 @@ theorem prEvent_mem_le [SampleableType Y] [Fintype Y] (labels : List Y) :
     (List.toFinset_card_le labels)
 
 section Experiment
-variable (absorb : Typed.Interface J E P R) (words : Words J Shape Value)
+variable (absorb : Typed.Interface J E P Raw) (words : Words J Shape Value)
   (scheme : Extractable Shape Value Query Y)
 
 /-- The logged runs of the joint experiment: the prover's claim, the verifier's outcome, and the
@@ -184,9 +184,9 @@ structure JointRun (Stmt P Value Y A Log : Type) where
 its proof, on one shared oracle, both logged. -/
 def experiment (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
     (initial : Stmt → List (Absorbed E Shape Y)) (statementRoots : Stmt → List (Shape × Y))
-    (prover : OracleComp (joint R Shape Y Query) (Stmt × Proof P Value Y)) :
-    OracleComp (joint R Shape Y Query)
-      (JointRun Stmt P Value Y A (QueryLog (joint R Shape Y Query))) :=
+    (prover : OracleComp (joint Raw Shape Y Query) (Stmt × Proof P Value Y)) :
+    OracleComp (joint Raw Shape Y Query)
+      (JointRun Stmt P Value Y A (QueryLog (joint Raw Shape Y Query))) :=
   prover.withQueryLog >>= fun proverRun =>
     (run absorb scheme (verifier proverRun.1.1) (initial proverRun.1.1)
       (statementRoots proverRun.1.1) proverRun.1.2.messages proverRun.1.2.openings).withQueryLog
@@ -196,7 +196,7 @@ def experiment (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
 
 /-- The statement's tables extracted at the checkpoint of a transcript key. -/
 def checkpointTables [DecidableEq E] [DecidableEq Shape] [DecidableEq Y] [DecidableEq Query]
-    (statementRoots : Stmt → List (Shape × Y)) (log : QueryLog (joint R Shape Y Query))
+    (statementRoots : Stmt → List (Shape × Y)) (log : QueryLog (joint Raw Shape Y Query))
     (key : TranscriptKey E Shape Y) (statement : Stmt) : List (Table Value) :=
   (statementRoots statement).map fun pair =>
     normalized words (scheme.extract (hashEntries (beforeFirst (.inl key) log))) pair.1 pair.2
@@ -205,7 +205,7 @@ def checkpointTables [DecidableEq E] [DecidableEq Shape] [DecidableEq Y] [Decida
 of one of the verifier's transcript queries. -/
 def FalseAcceptance [DecidableEq E] [DecidableEq Shape] [DecidableEq Y] [DecidableEq Query]
     (statementRoots : Stmt → List (Shape × Y)) (falseStatement : Stmt → List (Table Value) → Prop)
-    (accepts : A → Prop) (result : JointRun Stmt P Value Y A (QueryLog (joint R Shape Y Query))) :
+    (accepts : A → Prop) (result : JointRun Stmt P Value Y A (QueryLog (joint Raw Shape Y Query))) :
     Prop :=
   Accepted accepts result.outcome ∧
     ∃ entry ∈ result.verifierLog, ∃ key, entry.1 = .inl key ∧
@@ -214,9 +214,9 @@ def FalseAcceptance [DecidableEq E] [DecidableEq Shape] [DecidableEq Y] [Decidab
 
 variable (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
   (initial : Stmt → List (Absorbed E Shape Y)) (statementRoots : Stmt → List (Shape × Y))
-  (prover : OracleComp (joint R Shape Y Query) (Stmt × Proof P Value Y))
+  (prover : OracleComp (joint Raw Shape Y Query) (Stmt × Proof P Value Y))
 
-theorem evalWithAnswerFn_experiment (table : JointTable R Shape Y Query) :
+theorem evalWithAnswerFn_experiment (table : JointTable Raw Shape Y Query) :
     evalWithAnswerFn (QueryImpl.ofFn table)
         (experiment absorb scheme verifier initial statementRoots prover) =
       { statement := (evalWithAnswerFn (QueryImpl.ofFn table) prover).1
@@ -237,7 +237,7 @@ theorem evalWithAnswerFn_experiment (table : JointTable R Shape Y Query) :
   simp only [experiment, evalWithAnswerFn_bind, evalWithAnswerFn_withQueryLog,
     evalWithAnswerFn_pure]
 
-theorem tableQueryLog_experiment (table : JointTable R Shape Y Query) :
+theorem tableQueryLog_experiment (table : JointTable Raw Shape Y Query) :
     tableQueryLog (experiment absorb scheme verifier initial statementRoots prover) table =
       tableQueryLog prover table ++ tableQueryLog (run absorb scheme
           (verifier (evalWithAnswerFn (QueryImpl.ofFn table) prover).1)
@@ -252,23 +252,23 @@ end Experiment
 
 section Bad
 variable [DecidableEq E] [DecidableEq Shape] [DecidableEq Y] [DecidableEq Query]
-variable (absorb : Typed.Interface J E P R) (words : Words J Shape Value)
+variable (absorb : Typed.Interface J E P Raw) (words : Words J Shape Value)
   (scheme : Extractable Shape Value Query Y)
 
 /-- The extraction at the checkpoint of a transcript key: from the hash calls before the key's
 first query in the table run of `game`. -/
-def checkpointExtract {α : Type} (game : OracleComp (joint R Shape Y Query) α)
-    (table : JointTable R Shape Y Query) (key : TranscriptKey E Shape Y) : Shape → Y → Table Value :=
+def checkpointExtract {α : Type} (game : OracleComp (joint Raw Shape Y Query) α)
+    (table : JointTable Raw Shape Y Query) (key : TranscriptKey E Shape Y) : Shape → Y → Table Value :=
   scheme.extract (hashLog table (beforeFirstKey (.inl key) ((tableQueryLog game table).map Sigma.fst)))
 
 /-- Bad keys of the joint table run of `game`. A transcript key is bad when replaying a
 statement's verifier along it, with every root read as its checkpoint extraction, reaches a doomed
 query whose answer at the key escapes. A hash call is bad when its answer hits a target of the
 record before its first query. -/
-def Bad {α : Type} (game : OracleComp (joint R Shape Y Query) α) (doomed : PIR.Proc J A → Prop)
+def Bad {α : Type} (game : OracleComp (joint Raw Shape Y Query) α) (doomed : PIR.Proc J A → Prop)
     (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
     (initial : Stmt → List (Absorbed E Shape Y)) (statementRoots : Stmt → List (Shape × Y))
-    (bound : ℕ) : (key : JointKey E Shape Y Query) → JointTable R Shape Y Query → Prop
+    (bound : ℕ) : (key : JointKey E Shape Y Query) → JointTable Raw Shape Y Query → Prop
   | .inl key, table =>
       ∃ statement events residual tables, key.1 = initial statement ++ events ∧
         replay absorb words (checkpointExtract scheme game table key)

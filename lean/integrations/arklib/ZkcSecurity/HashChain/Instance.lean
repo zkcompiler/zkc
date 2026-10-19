@@ -55,7 +55,7 @@ provers. -/
 noncomputable def idealEvent (absorb : Typed.Interface I E P (Raw E S width))
     (validator : Stmt → PIR.Proc I A) (initial : Stmt → List E)
     (event : Stmt × (PIR.Outcome A × List P) → Prop)
-    (provers : ProbComp (OracleComp (OracleSpec.ofFn (Raw E S width)) (Stmt × List P)))
+    (provers : ProbComp (OracleComp (OracleSpec.ofFn (Answer E S width)) (Stmt × List P)))
     (_ : Unit) : ENNReal :=
   Pr{let result ← provers >>= fun prover =>
       (simulateQ randomOracle (Typed.experiment absorb validator initial prover)).run' ∅}[
@@ -70,7 +70,7 @@ noncomputable def simulation (positive : 0 < width) (absorb : Typed.Interface I 
     (callBounded : ∀ statement, CallBound absorb (validator statement) (callBudget statement))
     (within : ∀ statement, (initial statement).length + callBudget statement ≤ verifierCalls)
     (event : Stmt × (PIR.Outcome A × List P) → Prop) :
-    Provider.Simulation (Primitive E S X) (fun _ => ()) (Raw E S width)
+    Provider.Simulation (Primitive E S X) (fun _ => ()) (Answer E S width)
       (α := Stmt × List P) (ExecBound := Unit)
       (concreteEvent absorb validator initial event) (idealEvent absorb validator initial event) where
   Tape budget := Fin (budget ()) → S

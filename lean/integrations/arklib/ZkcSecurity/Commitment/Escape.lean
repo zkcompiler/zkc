@@ -26,11 +26,11 @@ namespace ZkcSecurity.Commitment
 
 open OracleComp OracleSpec ZkcSecurity.FiatShamir
 
-variable {J : PIR.Signature} {E P Shape Value Query Y A : Type} {R : List E → Type}
+variable {J : PIR.Signature} {E P Shape Value Query Y A : Type} {Raw : E → Type}
 
 section History
-variable (absorb : Typed.Interface J E P R) (scheme : Extractable Shape Value Query Y)
-  (table : JointTable R Shape Y Query)
+variable (absorb : Typed.Interface J E P Raw) (scheme : Extractable Shape Value Query Y)
+  (table : JointTable Raw Shape Y Query)
 
 /-- Every transcript key a run queries extends the run's starting history. -/
 theorem runTable_history :
@@ -64,7 +64,7 @@ theorem runTable_history :
           · simp only [runTable, absorbed] at member
             exact (List.prefix_append _ _).trans (ih value _ _ _ _ key member)
           · simp only [runTable, absorbed] at member
-            cases decoded : decode [] (table (.inl (history, event))) with
+            cases decoded : decode (table (.inl (history, event))) with
             | none =>
                 rw [decoded] at member
                 simp only [List.mem_singleton, Sum.inl.injEq] at member
@@ -133,9 +133,9 @@ theorem settle_commit (tables : List (Table Value)) (shape : Shape)
 end Tables
 
 section Escape
-variable [DecidableEq E] [DecidableEq Shape] [DecidableEq Y] [∀ key, SampleableType (R key)]
-variable (absorb : Typed.Interface J E P R) (words : Words J Shape Value)
-  (scheme : Extractable Shape Value Query Y) (table : JointTable R Shape Y Query)
+variable [DecidableEq E] [DecidableEq Shape] [DecidableEq Y] [∀ key, SampleableType (Raw key)]
+variable (absorb : Typed.Interface J E P Raw) (words : Words J Shape Value)
+  (scheme : Extractable Shape Value Query Y) (table : JointTable Raw Shape Y Query)
   (extracted : Shape → Y → Table Value)
 
 /-- An accepting concrete run from a doomed ideal reading escapes at one of its own transcript
@@ -212,7 +212,7 @@ theorem runTable_escape {accepts : A → Prop} {error : E → ENNReal}
               Option.bind_some, settle_base, ← shape]
             exact replay_send absorb words extracted _ absorbed _ _
           · simp only [runTable, absorbed] at included accepted ⊢
-            cases decoded : decode [] (table (.inl (history, event))) with
+            cases decoded : decode (table (.inl (history, event))) with
             | none => rw [decoded] at accepted; exact accepted.elim
             | some value =>
                 rw [decoded] at included accepted

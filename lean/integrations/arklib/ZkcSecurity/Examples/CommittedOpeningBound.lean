@@ -127,7 +127,7 @@ theorem jointKey_injective :
 
 /-- The answers of the joint namespace as a joint-record table: only the hash answers matter. -/
 def jointAnswers (answers : (query : Query Context Scheme (List Coordinate) Digest) → Range query) :
-    JointTable (fun _ : List (Event Context Scheme (List Coordinate) Digest) => Unit) ℕ Digest
+    JointTable (fun _ : Event Context Scheme (List Coordinate) Digest => Unit) ℕ Digest
       (HashCall (List Coordinate) Digest)
   | .inl _ => ()
   | .inr call => answers (.hash call)

@@ -191,7 +191,7 @@ theorem chainTransform_queryBound (absorb : Typed.Interface I E P (Raw E S width
           (collect_queryBound width _) fun raw =>
             isTotalQueryBound_query_bind_iff.mpr ⟨by omega, fun advanced => ?_⟩).mono
               (by omega)
-        cases decode history raw with
+        cases decode raw with
         | none => trivial
         | some value =>
             exact (ih value _ _ _ _ (bounded.2 value)).mono (by omega)

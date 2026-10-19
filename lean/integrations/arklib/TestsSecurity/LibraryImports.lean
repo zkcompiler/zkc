@@ -76,6 +76,7 @@ import ZkcSecurity.FiatShamir.Composition
 import ZkcSecurity.FiatShamir.Decoding
 import ZkcSecurity.FiatShamir.Grinding
 import ZkcSecurity.FiatShamir.Interface
+import ZkcSecurity.FiatShamir.Keyed
 import ZkcSecurity.FiatShamir.Laws
 import ZkcSecurity.FiatShamir.Lifting
 import ZkcSecurity.FiatShamir.Obligations

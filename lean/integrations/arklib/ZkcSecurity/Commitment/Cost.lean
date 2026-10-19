@@ -26,10 +26,10 @@ namespace ZkcSecurity.Commitment
 
 open OracleComp OracleSpec ZkcSecurity.FiatShamir
 
-variable {J : PIR.Signature} {E P Shape Value Query Y A : Type} {R : List E → Type}
+variable {J : PIR.Signature} {E P Shape Value Query Y A : Type} {Raw : E → Type}
 
 section Charged
-variable (absorb : Typed.Interface J E P R) (admissible : Shape → Prop)
+variable (absorb : Typed.Interface J E P Raw) (admissible : Shape → Prop)
 
 /-- Every path of a verifier with committed tables charges at most `budget`: a transcript query
 its occurrence's charge, a read `readCharge`; every committed shape is admissible. -/
@@ -75,11 +75,11 @@ theorem Charged.mono {ω : Type} [AddCommMonoid ω] [Preorder ω] (charge : E �
 end Charged
 
 section Run
-variable (absorb : Typed.Interface J E P R) (admissible : Shape → Prop)
+variable (absorb : Typed.Interface J E P Raw) (admissible : Shape → Prop)
   (scheme : Extractable Shape Value Query Y)
 
-theorem worstCaseCostBound_le {α : Type} {computation : OracleComp (joint R Shape Y Query) α}
-    {cost : CostModel (joint R Shape Y Query) ENNReal} {bound larger : ENNReal}
+theorem worstCaseCostBound_le {α : Type} {computation : OracleComp (joint Raw Shape Y Query) α}
+    {cost : CostModel (joint Raw Shape Y Query) ENNReal} {bound larger : ENNReal}
     (bounded : WorstCaseCostBound computation cost bound) (le : bound ≤ larger) :
     WorstCaseCostBound computation cost larger :=
   (worstCaseCostBound_iff_support_bound _ _ _).mpr fun z member =>
@@ -233,7 +233,7 @@ theorem run_queryBound (authCalls : ℕ)
       · rename_i shape root opening others found
         have member : (shape, root) ∈ roots := List.mem_of_getElem? found
         refine (isTotalQueryBound_bind
-          (liftHash_queryBound (R := R) (Shape := Shape) _ _
+          (liftHash_queryBound (Raw := Raw) (Shape := Shape) _ _
             (authenticated shape (rooted _ member) root position opening))
           fun accepted => ?_).mono charged
         cases accepted

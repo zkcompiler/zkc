@@ -228,6 +228,12 @@ def historyBlock (key : List E) (block : Fin width) : StateT (Simulated E S X wi
 def historyAnswer (key : List E) : StateT (Simulated E S X width) ProbComp (Fin width → S) :=
   collect width (historyBlock width key)
 
+/-- The history oracle asked by the transform: its answer at the absorbed
+history followed by the query's occurrence. -/
+def historyAsk (preceding : List E) (event : E) :
+    StateT (Simulated E S X width) ProbComp (Fin width → S) :=
+  historyAnswer width (preceding ++ [event])
+
 /-- The simulator: a request at a state with a recorded history and a block below
 the width is the history cell of that history followed by the request's
 occurrence; every other call is an auxiliary cell. -/
@@ -252,7 +258,7 @@ noncomputable def simulatedExperiment (absorb : Typed.Interface I E P (Raw E S w
     (adversary : OracleComp (Primitive E S X) (Stmt × List P)) :
     ProbComp (Stmt × (PIR.Outcome A × List P)) := do
   let started ← (simulateQ (simulator width) adversary).run (Simulated.empty width)
-  let result ← (Typed.transform absorb (historyAnswer width) (validator started.1.1)
+  let result ← (Typed.transform absorb (historyAsk width) (validator started.1.1)
     (initial started.1.1) started.1.2).run' started.2
   pure (started.1.1, result)
 

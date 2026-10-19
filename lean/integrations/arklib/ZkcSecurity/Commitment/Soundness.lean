@@ -42,32 +42,32 @@ namespace ZkcSecurity.Commitment
 
 open OracleComp OracleSpec ZkcSecurity.FiatShamir
 
-variable {J : PIR.Signature} {E P Shape Value Query Y A Stmt : Type} {R : List E → Type}
+variable {J : PIR.Signature} {E P Shape Value Query Y A Stmt : Type} {Raw : E → Type}
 variable [DecidableEq E] [DecidableEq Shape] [DecidableEq Y] [DecidableEq Query]
-variable [∀ key, SampleableType (R key)]
-variable (absorb : Typed.Interface J E P R) (words : Words J Shape Value)
+variable [∀ key, SampleableType (Raw key)]
+variable (absorb : Typed.Interface J E P Raw) (words : Words J Shape Value)
   (scheme : Extractable Shape Value Query Y)
 
 /-- Resampling a transcript key's answer makes it bad with probability at most the error of its
 occurrence: its checkpoint extraction and the replay before it are fixed before the answer. -/
 theorem bad_transcript_resample [SampleableType Y] {accepts : A → Prop} {error : E → ENNReal}
     (certificate : Typed.Certificate absorb accepts error) {α : Type}
-    (game : OracleComp (joint R Shape Y Query) α)
+    (game : OracleComp (joint Raw Shape Y Query) α)
     (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
     (initial : Stmt → List (Absorbed E Shape Y)) (determined : Typed.Determined initial)
     (statementRoots : Stmt → List (Shape × Y)) (bound : ℕ) (key : TranscriptKey E Shape Y)
-    (table : JointTable R Shape Y Query) :
-    Pr{let answer ← $ᵗ (JointRange R Shape Y Query (.inl key))}[
+    (table : JointTable Raw Shape Y Query) :
+    Pr{let answer ← $ᵗ (JointRange Raw Shape Y Query (.inl key))}[
       Bad absorb words scheme game certificate.doomed verifier initial statementRoots bound (.inl key)
         (Function.update table (.inl key) answer)] ≤ error key.2 := by
-  have frozen : ∀ answer : JointRange R Shape Y Query (.inl key),
+  have frozen : ∀ answer : JointRange Raw Shape Y Query (.inl key),
       checkpointExtract scheme game (Function.update table (.inl key) answer) key =
         checkpointExtract scheme game table key := by
     intro answer
     unfold checkpointExtract
     rw [beforeFirstKey_update, hashLog_update_inl]
   set extract := checkpointExtract scheme game table key
-  have shorter : ∀ (answer : JointRange R Shape Y Query (.inl key)) (statement : Stmt)
+  have shorter : ∀ (answer : JointRange Raw Shape Y Query (.inl key)) (statement : Stmt)
       (events : List (Absorbed E Shape Y)), key.1 = initial statement ++ events →
       replay absorb words extract (fun other => Function.update table (.inl key) answer (.inl other))
           (verifier statement) ((statementRoots statement).map fun pair =>
@@ -89,7 +89,7 @@ theorem bad_transcript_resample [SampleableType Y] {accepts : A → Prop} {error
         ((statementRoots statement).map fun pair => normalized words extract pair.1 pair.2)
         (initial statement) events = some (residual, tables)
   · obtain ⟨statement, events, residual, tables, shape, replayed⟩ := found
-    have reduced : ∀ answer : JointRange R Shape Y Query (.inl key),
+    have reduced : ∀ answer : JointRange Raw Shape Y Query (.inl key),
         Bad absorb words scheme game certificate.doomed verifier initial statementRoots bound
             (.inl key) (Function.update table (.inl key) answer) →
           Escapes absorb words certificate.doomed residual tables key.2 answer := by
@@ -106,7 +106,7 @@ theorem bad_transcript_resample [SampleableType Y] {accepts : A → Prop} {error
     exact (prEvent_mono _ _ (fun answer => Escapes absorb words certificate.doomed residual tables
       key.2 answer) fun answer bad => reduced answer bad).trans
       (escapes_le absorb words certificate residual tables key.2)
-  · have never : ∀ answer : JointRange R Shape Y Query (.inl key),
+  · have never : ∀ answer : JointRange Raw Shape Y Query (.inl key),
         ¬ Bad absorb words scheme game certificate.doomed verifier initial statementRoots bound
           (.inl key) (Function.update table (.inl key) answer) := by
       intro answer bad
@@ -118,19 +118,19 @@ theorem bad_transcript_resample [SampleableType Y] {accepts : A → Prop} {error
 /-- Resampling a hash call's answer makes it bad with probability at most the number of targets
 over the number of hash values: the targets are fixed before the call's first query. -/
 theorem bad_hash_resample [SampleableType Y] [Fintype Y] {α : Type}
-    (game : OracleComp (joint R Shape Y Query) α) (doomed : PIR.Proc J A → Prop)
+    (game : OracleComp (joint Raw Shape Y Query) α) (doomed : PIR.Proc J A → Prop)
     (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
     (initial : Stmt → List (Absorbed E Shape Y)) (statementRoots : Stmt → List (Shape × Y))
     (bound targetBound : ℕ)
-    (targetsBounded : ∀ table : JointTable R Shape Y Query,
+    (targetsBounded : ∀ table : JointTable Raw Shape Y Query,
       (targets scheme bound table ((tableQueryLog game table).map Sigma.fst)).length ≤ targetBound)
-    (query : Query) (table : JointTable R Shape Y Query) :
-    Pr{let answer ← $ᵗ (JointRange R Shape Y Query (.inr query))}[
+    (query : Query) (table : JointTable Raw Shape Y Query) :
+    Pr{let answer ← $ᵗ (JointRange Raw Shape Y Query (.inr query))}[
       Bad absorb words scheme game doomed verifier initial statementRoots bound (.inr query)
         (Function.update table (.inr query) answer)] ≤
       (targetBound : ENNReal) / Fintype.card Y := by
   set before := beforeFirstKey (.inr query) ((tableQueryLog game table).map Sigma.fst)
-  have fixed : ∀ answer : JointRange R Shape Y Query (.inr query),
+  have fixed : ∀ answer : JointRange Raw Shape Y Query (.inr query),
       Bad absorb words scheme game doomed verifier initial statementRoots bound (.inr query)
           (Function.update table (.inr query) answer) ↔
         (answer : Y) ∈ targets scheme bound table before := by
@@ -149,7 +149,7 @@ theorem bad_hash_resample [SampleableType Y] [Fintype Y] {α : Type}
     conv_rhs => rw [← split]
     rw [targets_append, List.length_append]
     exact Nat.le_add_right _ _
-  calc Pr{let answer ← $ᵗ (JointRange R Shape Y Query (.inr query))}[
+  calc Pr{let answer ← $ᵗ (JointRange Raw Shape Y Query (.inr query))}[
           Bad absorb words scheme game doomed verifier initial statementRoots bound (.inr query)
             (Function.update table (.inr query) answer)]
       = Pr{let answer ← $ᵗ Y}[answer ∈ targets scheme bound table before] :=
@@ -162,10 +162,10 @@ theorem bad_hash_resample [SampleableType Y] [Fintype Y] {α : Type}
 section Trace
 variable (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
   (initial : Stmt → List (Absorbed E Shape Y)) (statementRoots : Stmt → List (Shape × Y))
-  (prover : OracleComp (joint R Shape Y Query) (Stmt × Proof P Value Y))
+  (prover : OracleComp (joint Raw Shape Y Query) (Stmt × Proof P Value Y))
 
 omit [DecidableEq E] [DecidableEq Shape] [DecidableEq Y] [DecidableEq Query]
-  [∀ key, SampleableType (R key)] in
+  [∀ key, SampleableType (Raw key)] in
 /-- A transcript key whose history starts with a statement's initial history keeps the
 statement's roots among its first `bound` roots. -/
 theorem statement_mem_keyRoots {bound : ℕ} {statementRoots : List (Shape × Y)}
@@ -181,7 +181,7 @@ theorem statement_mem_keyRoots {bound : ℕ} {statementRoots : List (Shape × Y)
   exact List.mem_append_left _ (List.mem_map_of_mem member)
 
 omit [DecidableEq E] [DecidableEq Shape] [DecidableEq Y] [DecidableEq Query]
-  [∀ key, SampleableType (R key)] in
+  [∀ key, SampleableType (Raw key)] in
 /-- A history whose committed roots are the statement's roots followed by at most
 `bound - |statement roots|` more roots keeps all of them among its first `bound`. -/
 theorem mem_keyRoots {bound : ℕ} {statementRoots : List (Shape × Y)}
@@ -218,7 +218,7 @@ theorem trace {accepts : A → Prop} {error : E → ENNReal}
     (falseStatement : Stmt → List (Table Value) → Prop)
     (doomedValidator : ∀ statement tables, falseStatement statement tables →
       certificate.doomed (withTables words tables (verifier statement)))
-    (table : JointTable R Shape Y Query)
+    (table : JointTable Raw Shape Y Query)
     (event : FalseAcceptance words scheme statementRoots falseStatement accepts
       (evalWithAnswerFn (QueryImpl.ofFn table)
         (experiment absorb scheme verifier initial statementRoots prover))) :
@@ -247,7 +247,7 @@ theorem trace {accepts : A → Prop} {error : E → ENNReal}
     obtain ⟨entry, entryMember, rfl⟩ := member
     exact List.mem_map_of_mem (inKeys entry entryMember)
   have entryOf : ∀ key : JointKey E Shape Y Query, key ∈ keys →
-      (⟨key, table key⟩ : (key : JointKey E Shape Y Query) × JointRange R Shape Y Query key) ∈
+      (⟨key, table key⟩ : (key : JointKey E Shape Y Query) × JointRange Raw Shape Y Query key) ∈
         tableQueryLog game table := by
     intro key member
     obtain ⟨entry, entryMember, rfl⟩ := List.mem_map.mp member
@@ -345,12 +345,12 @@ section Main
 variable [SampleableType Y] [Fintype Y]
 variable (verifier : Stmt → PIR.Proc (committed J Shape Value) A)
   (initial : Stmt → List (Absorbed E Shape Y)) (statementRoots : Stmt → List (Shape × Y))
-  (prover : OracleComp (joint R Shape Y Query) (Stmt × Proof P Value Y))
+  (prover : OracleComp (joint Raw Shape Y Query) (Stmt × Proof P Value Y))
 
 omit [DecidableEq E] [DecidableEq Shape] [DecidableEq Y] [DecidableEq Query]
-  [∀ key, SampleableType (R key)] [SampleableType Y] [Fintype Y] in
+  [∀ key, SampleableType (Raw key)] [SampleableType Y] [Fintype Y] in
 /-- The experiment charges the prover's cost plus the verifier's. -/
-theorem experiment_costBound (cost : CostModel (joint R Shape Y Query) ENNReal)
+theorem experiment_costBound (cost : CostModel (joint Raw Shape Y Query) ENNReal)
     (proverCost verifierCost : ENNReal) (proverBound : WorstCaseCostBound prover cost proverCost)
     (verifierBound : ∀ statement (proof : Proof P Value Y), WorstCaseCostBound
       (run absorb scheme (verifier statement) (initial statement) (statementRoots statement)
@@ -366,7 +366,7 @@ theorem experiment_costBound (cost : CostModel (joint R Shape Y Query) ENNReal)
     fun _ => (worstCaseCostBound_pure _ cost (0 : ENNReal)).mpr le_rfl
 
 omit [DecidableEq E] [DecidableEq Shape] [DecidableEq Y] [DecidableEq Query]
-  [∀ key, SampleableType (R key)] [SampleableType Y] [Fintype Y] in
+  [∀ key, SampleableType (Raw key)] [SampleableType Y] [Fintype Y] in
 /-- The experiment makes at most the prover's queries plus the verifier's. -/
 theorem experiment_queryBound (proverQueries verifierQueries : ℕ)
     (proverCount : IsTotalQueryBound prover proverQueries)
@@ -404,7 +404,7 @@ theorem soundness_weighted {accepts : A → Prop} {error : E → ENNReal}
     (doomedValidator : ∀ statement tables, falseStatement statement tables →
       certificate.doomed (withTables words tables (verifier statement)))
     (targetBound : ℕ)
-    (targetsBounded : ∀ table : JointTable R Shape Y Query,
+    (targetsBounded : ∀ table : JointTable Raw Shape Y Query,
       (targets scheme rootBound table ((tableQueryLog
         (experiment absorb scheme verifier initial statementRoots prover) table).map
           Sigma.fst)).length ≤ targetBound)

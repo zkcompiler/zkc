@@ -71,7 +71,7 @@ def rowAt {slots : ℕ} (rows : Fin slots → Fin width → S) (slot : ℕ) : Fi
 read cells answers its read cells and, elsewhere, the row of its position among
 the read keys; a key without read cells has no answer. -/
 def completed (tables : Simulated E S X width) {slots : ℕ} (rows : Fin slots → Fin width → S) :
-    (OracleSpec.ofFn (Raw E S width)).QueryCache :=
+    (OracleSpec.ofFn (Answer E S width)).QueryCache :=
   QueryCache.ofFn fun key =>
     if key ∈ tables.touched then
       some fun block => (tables.history (key, block)).getD
@@ -189,7 +189,7 @@ law of sampling the cell and filling afterwards. -/
 theorem touched_law {tables : Simulated E S X width} {key : List E}
     (touched : key ∈ tables.touched) {block : Fin width}
     (fresh : tables.history (key, block) = none) (below : tables.touched.idxOf key < slots)
-    (continuation : S → (OracleSpec.ofFn (Raw E S width)).QueryCache → ProbComp α) :
+    (continuation : S → (OracleSpec.ofFn (Answer E S width)).QueryCache → ProbComp α) :
     𝒮[($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
         continuation (rowAt rows (tables.touched.idxOf key) block) (completed tables rows)] =
       𝒮[($ᵗ S) >>= fun value => ($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
@@ -209,7 +209,7 @@ the law of sampling the key's first cell and filling afterwards. -/
 theorem untouched_law {tables : Simulated E S X width} (organized : Organized tables)
     {key : List E} (untouched : key ∉ tables.touched) {block : Fin width}
     (below : tables.touched.length < slots)
-    (continuation : S → (OracleSpec.ofFn (Raw E S width)).QueryCache → ProbComp α) :
+    (continuation : S → (OracleSpec.ofFn (Answer E S width)).QueryCache → ProbComp α) :
     𝒮[($ᵗ (Fin slots → Fin width → S)) >>= fun rows => ($ᵗ (Fin width → S)) >>= fun answer =>
         continuation (answer block) ((completed tables rows).cacheQuery key answer)] =
       𝒮[($ᵗ S) >>= fun value => ($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
@@ -270,42 +270,49 @@ theorem readBlocks_queryBound {width : ℕ} :
         (n₂ := 0) (readBlocks_queryBound count fun index => blockOf index.succ) fun _ => trivial
       simpa [readBlocks] using tail
 
-variable {I : PIR.Signature} {E P A : Type} {R : List E → Type}
+variable {I : PIR.Signature} {E P A : Type} {Raw : E → Type} {R : List E → Type}
+  [Typed.ReadsByOccurrence R Raw]
 
 /-- The typed transform with the history oracle, simulated, is the transform with
-the simulated oracle. -/
-theorem simulateQ_transform (absorb : Typed.Interface I E P R)
+the simulated oracle, read by occurrence. -/
+theorem simulateQ_transform (absorb : Typed.Interface I E P Raw)
     (impl : QueryImpl (OracleSpec.ofFn R) n) :
     ∀ (process : PIR.Proc I A) (history : List E) (proof : List P),
-      simulateQ impl (Typed.transform absorb Typed.answer process history proof) =
-        Typed.transform absorb (fun key => impl key) process history proof := by
+      simulateQ impl (Typed.transform absorb Typed.ask process history proof) =
+        Typed.transform absorb (fun preceding event =>
+          Typed.ReadsByOccurrence.read preceding event <$> impl (preceding ++ [event]))
+          process history proof := by
   intro process
   induction process with
-  | done value => intro history proof; simp [Typed.transform]
-  | halt stop => intro history proof; simp [Typed.transform]
+  | done value => intro history proof; simp
+  | halt stop => intro history proof; simp
   | call operation next ih =>
       intro history proof
       rcases absorbed : absorb operation with ⟨event, recover⟩ | ⟨event, value⟩ |
         ⟨event, decode⟩ | _
       · cases proof with
         | nil =>
-            rw [Typed.transform_receive_nil absorb _ absorbed,
-              Typed.transform_receive_nil absorb _ absorbed]
+            rw [Zkc.Transcript.transform_receive_nil absorb _ absorbed,
+              Zkc.Transcript.transform_receive_nil absorb _ absorbed]
             simp
         | cons message rest =>
-            rw [Typed.transform_receive absorb _ absorbed, Typed.transform_receive absorb _ absorbed]
+            rw [Zkc.Transcript.transform_receive absorb _ absorbed,
+              Zkc.Transcript.transform_receive absorb _ absorbed]
             cases recover (event message) with
             | none => simp
             | some value => exact ih value _ _
-      · rw [Typed.transform_send absorb _ absorbed, Typed.transform_send absorb _ absorbed]
+      · rw [Zkc.Transcript.transform_send absorb _ absorbed,
+          Zkc.Transcript.transform_send absorb _ absorbed]
         exact ih value _ _
-      · rw [Typed.transform_query absorb _ absorbed, Typed.transform_query absorb _ absorbed,
+      · rw [Zkc.Transcript.transform_query absorb _ absorbed,
+          Zkc.Transcript.transform_query absorb _ absorbed, Typed.ask_bind, bind_map_left,
           simulateQ_bind, Typed.answer, simulateQ_spec_query]
         refine bind_congr fun raw => ?_
-        cases decode history raw with
+        cases decode (Typed.ReadsByOccurrence.read history event raw) with
         | none => simp
         | some value => exact ih value _ _
-      · rw [Typed.transform_refuse absorb _ absorbed, Typed.transform_refuse absorb _ absorbed]
+      · rw [Zkc.Transcript.transform_refuse absorb _ absorbed,
+          Zkc.Transcript.transform_refuse absorb _ absorbed]
         simp
 
 end Programs
@@ -315,10 +322,10 @@ variable {E S : Type} [DecidableEq E] [SampleableType S] {width : ℕ}
 
 /-- One counter block of the history oracle's answer at a key. -/
 def oracleBlock (key : List E) (block : Fin width) :
-    StateT (OracleSpec.ofFn (Raw E S width)).QueryCache ProbComp S :=
-  (fun answer => answer block) <$> randomOracle (spec := OracleSpec.ofFn (Raw E S width)) key
+    StateT (OracleSpec.ofFn (Answer E S width)).QueryCache ProbComp S :=
+  (fun answer => answer block) <$> randomOracle (spec := OracleSpec.ofFn (Answer E S width)) key
 
-theorem collect_oracleBlock_cached {key : List E} {cache : (OracleSpec.ofFn (Raw E S width)).QueryCache}
+theorem collect_oracleBlock_cached {key : List E} {cache : (OracleSpec.ofFn (Answer E S width)).QueryCache}
     {answer : Fin width → S} (cached : cache key = some answer) :
     ∀ (count : ℕ) (blockOf : Fin count → Fin width),
       (collect count fun index => oracleBlock key (blockOf index)).run cache =
@@ -339,9 +346,9 @@ theorem collect_oracleBlock_cached {key : List E} {cache : (OracleSpec.ofFn (Raw
 
 /-- Reading every counter block of a key reads the history oracle's answer there. -/
 theorem collect_oracleBlock (positive : 0 < width) (key : List E)
-    (cache : (OracleSpec.ofFn (Raw E S width)).QueryCache) :
+    (cache : (OracleSpec.ofFn (Answer E S width)).QueryCache) :
     (collect width fun block => oracleBlock key block).run cache =
-      (randomOracle (spec := OracleSpec.ofFn (Raw E S width)) key).run cache := by
+      (randomOracle (spec := OracleSpec.ofFn (Answer E S width)) key).run cache := by
   rw [randomOracle.run_eq]
   cases cached : cache key with
   | some answer =>
@@ -366,7 +373,7 @@ variable {E S X : Type} [DecidableEq E] [DecidableEq S] [DecidableEq X] [Inhabit
 
 /-- The history answers of a lazy state, filled with uniform rows. -/
 def fillHistory (slots : ℕ) (tables : Simulated E S X width) :
-    ProbComp (OracleSpec.ofFn (Raw E S width)).QueryCache :=
+    ProbComp (OracleSpec.ofFn (Answer E S width)).QueryCache :=
   ($ᵗ (Fin slots → Fin width → S)) >>= fun rows => pure (completed tables rows)
 
 omit [DecidableEq S] [DecidableEq X] [SampleableType S] in
@@ -454,7 +461,7 @@ theorem answer_commute (positive : 0 < width) {slots : ℕ} (key : List E)
     (tables : Simulated E S X width) (organized : Organized tables)
     (room : tables.touched.length < slots) :
     𝒮[fillHistory slots tables >>= fun cache =>
-        (randomOracle (spec := OracleSpec.ofFn (Raw E S width)) key).run cache] =
+        (randomOracle (spec := OracleSpec.ofFn (Answer E S width)) key).run cache] =
       𝒮[(historyAnswer width key).run tables >>= fun step =>
         (fun cache => (step.1, cache)) <$> fillHistory slots step.2] := by
   let Inv : ℕ → Simulated E S X width → Prop := fun _ current =>
@@ -542,12 +549,12 @@ theorem verifier_eq (positive : 0 < width) (absorb : Typed.Interface I E P (Raw 
     (tables : Simulated E S X width) (organized : Organized tables)
     (room : tables.touched.length + queries ≤ slots) :
     𝒮[fillHistory slots tables >>= fun cache =>
-        (simulateQ randomOracle (Typed.transform absorb Typed.answer process history proof)).run'
+        (simulateQ randomOracle (Typed.transform absorb Typed.ask process history proof)).run'
           cache] =
-      𝒮[(Typed.transform absorb (historyAnswer width) process history proof).run' tables] := by
+      𝒮[(Typed.transform absorb (historyAsk width) process history proof).run' tables] := by
   let Inv : ℕ → Simulated E S X width → Prop := fun remaining current =>
     Organized current ∧ current.touched.length + remaining ≤ slots
-  have filled := evalSPMF_simulateQ_fill (spec := OracleSpec.ofFn (Raw E S width))
+  have filled := evalSPMF_simulateQ_fill (spec := OracleSpec.ofFn (Answer E S width))
     (fun key => historyAnswer width key) randomOracle (fillHistory slots) Inv
     (fun _ key current inv => answer_commute positive key current inv.1 (by omega))
     (fun remaining key current inv step member => by
@@ -558,9 +565,16 @@ theorem verifier_eq (positive : 0 < width) (absorb : Typed.Interface I E P (Raw 
       rcases stepTouched with same | ⟨-, appended⟩
       · rw [same]; omega
       · rw [appended, List.length_append, List.length_singleton]; omega)
-    (Typed.transform absorb Typed.answer process history proof) queries tables
+    (Typed.transform absorb Typed.ask process history proof) queries tables
     (Typed.transform_queryBound absorb process queries history proof bounded) ⟨organized, room⟩
-  rw [simulateQ_transform absorb (fun key => historyAnswer width key)] at filled
+  rw [simulateQ_transform (R := Answer E S width) absorb
+    (fun key => historyAnswer (X := X) width key)] at filled
+  have asked : (fun (preceding : List E) (event : E) =>
+      Typed.ReadsByOccurrence.read (R := Answer E S width) (Raw := Raw E S width) preceding event <$>
+        historyAnswer (X := X) width (preceding ++ [event])) = historyAsk width := by
+    funext preceding event
+    exact id_map _
+  rw [asked] at filled
   simp only [StateT.run'_eq, map_eq_bind_pure_comp, Function.comp_def]
   rw [← bind_assoc, evalSPMF_bind, filled, ← evalSPMF_bind, bind_assoc]
   refine evalSPMF_bind_congr fun step _ => ?_
@@ -577,7 +591,7 @@ variable {E S X : Type} [DecidableEq E] [DecidableEq S] [DecidableEq X] [Inhabit
 /-- The hash-chain simulator's state a lazy state determines, with the unread tape
 entries and the history answers given. -/
 def completedWith (tables : Simulated E S X width) (suffix : Fin length → S)
-    (cache : (OracleSpec.ofFn (Raw E S width)).QueryCache) : ChainState E S X width length where
+    (cache : (OracleSpec.ofFn (Answer E S width)).QueryCache) : ChainState E S X width length where
   tape index := if below : index.val < tables.consumed.length then tables.consumed[index.val]
     else suffix index
   position := tables.consumed.length
@@ -588,14 +602,14 @@ def completedWith (tables : Simulated E S X width) (suffix : Fin length → S)
 /-- The lazy state filled ahead: uniform rows for the history answers and a
 uniform tape after the consumed entries. -/
 def fillAll (slots : ℕ) (tables : Simulated E S X width) :
-    ProbComp (ChainState E S X width length × (OracleSpec.ofFn (Raw E S width)).QueryCache) :=
+    ProbComp (ChainState E S X width length × (OracleSpec.ofFn (Answer E S width)).QueryCache) :=
   ($ᵗ (Fin slots → Fin width → S)) >>= fun rows => ($ᵗ (Fin length → S)) >>= fun suffix =>
     pure (completedWith tables suffix (completed tables rows), completed tables rows)
 
 /-- The hash-chain simulator against the lazy history oracle, as one simulation. -/
 def flatSimulator (width length : ℕ) :
     QueryImpl (Primitive E S X)
-      (StateT (ChainState E S X width length × (OracleSpec.ofFn (Raw E S width)).QueryCache)
+      (StateT (ChainState E S X width length × (OracleSpec.ofFn (Answer E S width)).QueryCache)
         ProbComp) :=
   flatten (chainSimulator width length).handle randomOracle
 
@@ -606,7 +620,7 @@ variable {E S X : Type} [DecidableEq E] [DecidableEq S] [DecidableEq X] [Inhabit
   [SampleableType S] {width length : ℕ}
 
 theorem flat_run_private {state : ChainState E S X width length}
-    {cache : (OracleSpec.ofFn (Raw E S width)).QueryCache} {input : Input E S X}
+    {cache : (OracleSpec.ofFn (Answer E S width)).QueryCache} {input : Input E S X}
     (outside : chainAttempt width state.reached input = none) :
     (flatSimulator width length input).run (state, cache) =
       pure ((state.respond input).1, ((state.respond input).2, cache)) := by
@@ -615,7 +629,7 @@ theorem flat_run_private {state : ChainState E S X width length}
   simp
 
 theorem flat_run_recorded {state : ChainState E S X width length}
-    {cache : (OracleSpec.ofFn (Raw E S width)).QueryCache} {input : Input E S X} {key : List E}
+    {cache : (OracleSpec.ofFn (Answer E S width)).QueryCache} {input : Input E S X} {key : List E}
     (belongs : chainAttempt width state.reached input = some key) {answer : Fin width → S}
     (recorded : state.recorded key = some answer) :
     (flatSimulator width length input).run (state, cache) =
@@ -626,11 +640,11 @@ theorem flat_run_recorded {state : ChainState E S X width length}
   simp
 
 theorem flat_run_fresh {state : ChainState E S X width length}
-    {cache : (OracleSpec.ofFn (Raw E S width)).QueryCache} {input : Input E S X} {key : List E}
+    {cache : (OracleSpec.ofFn (Answer E S width)).QueryCache} {input : Input E S X} {key : List E}
     (belongs : chainAttempt width state.reached input = some key)
     (recorded : state.recorded key = none) :
     (flatSimulator width length input).run (state, cache) =
-      (randomOracle (spec := OracleSpec.ofFn (Raw E S width)) key).run cache >>= fun step =>
+      (randomOracle (spec := OracleSpec.ofFn (Answer E S width)) key).run cache >>= fun step =>
         pure (chainShared width input step.1,
           ({ state with recorded := Function.update state.recorded key (some step.1) }, step.2)) := by
   simp only [flatSimulator, flatten, StateT.run_mk]
@@ -648,7 +662,7 @@ variable {E S X : Type} [DecidableEq E] [DecidableEq S] [DecidableEq X] [Inhabit
 
 /-- The simulator's state after its next private answer, read from the tape. -/
 def afterPrivate (tables : Simulated E S X width) (input : Input E S X) (suffix : Fin length → S)
-    (cache : (OracleSpec.ofFn (Raw E S width)).QueryCache) (answer : S) :
+    (cache : (OracleSpec.ofFn (Answer E S width)).QueryCache) (answer : S) :
     ChainState E S X width length :=
   { completedWith tables suffix cache with
     position := tables.consumed.length + 1
@@ -658,7 +672,7 @@ def afterPrivate (tables : Simulated E S X width) (input : Input E S X) (suffix 
 omit [SampleableType S] in
 theorem respond_completedWith_fresh {tables : Simulated E S X width} {input : Input E S X}
     (fresh : tables.aux input = none) (room : tables.consumed.length < length)
-    (suffix : Fin length → S) (cache : (OracleSpec.ofFn (Raw E S width)).QueryCache) :
+    (suffix : Fin length → S) (cache : (OracleSpec.ofFn (Answer E S width)).QueryCache) :
     (completedWith tables suffix cache).respond input =
       (suffix ⟨_, room⟩, afterPrivate tables input suffix cache (suffix ⟨_, room⟩)) := by
   have read : tapeAt (completedWith tables suffix cache).tape tables.consumed.length =
@@ -672,7 +686,7 @@ theorem respond_completedWith_fresh {tables : Simulated E S X width} {input : In
 omit [Inhabited S] [SampleableType S] in
 theorem completedWith_recordAux (tables : Simulated E S X width) (input : Input E S X)
     (room : tables.consumed.length < length) (suffix : Fin length → S)
-    (cache : (OracleSpec.ofFn (Raw E S width)).QueryCache) (answer : S) :
+    (cache : (OracleSpec.ofFn (Answer E S width)).QueryCache) (answer : S) :
     completedWith (tables.recordAux width input answer) suffix cache =
       afterPrivate tables input (Function.update suffix ⟨_, room⟩ answer) cache answer := by
   simp only [completedWith, afterPrivate, Simulated.recordAux, List.length_append,
@@ -691,7 +705,7 @@ theorem completedWith_recordAux (tables : Simulated E S X width) (input : Input 
 
 omit [DecidableEq S] [DecidableEq X] [Inhabited S] [SampleableType S] in
 theorem completedWith_cacheQuery (tables : Simulated E S X width) (suffix : Fin length → S)
-    (cache : (OracleSpec.ofFn (Raw E S width)).QueryCache) (key : List E)
+    (cache : (OracleSpec.ofFn (Answer E S width)).QueryCache) (key : List E)
     (answer : Fin width → S) :
     ({ completedWith tables suffix cache with
         recorded := Function.update (completedWith tables suffix cache).recorded key
@@ -934,7 +948,7 @@ theorem simulatedExperiment_eq_translated (positive : 0 < width)
         (simulateQ (flatSimulator width calls) adversary).run
             ((chainSimulator width calls).start tape, ∅) >>= fun result =>
           (fun outcome => (result.1.1, outcome)) <$>
-            (simulateQ randomOracle (Typed.transform absorb Typed.answer (validator result.1.1)
+            (simulateQ randomOracle (Typed.transform absorb Typed.ask (validator result.1.1)
               (initial result.1.1) result.1.2)).run' result.2.2 := by
     intro tape
     simp only [Typed.experiment, Provider.Simulator.translate, StateT.run'_eq, simulateQ_bind,
@@ -943,9 +957,9 @@ theorem simulatedExperiment_eq_translated (positive : 0 < width)
     simp only [flatSimulator, map_bind, bind_map_left, Functor.map_map]
   let slots := calls + queries
   let finish : (Stmt × List P) × (ChainState E S X width calls ×
-      (OracleSpec.ofFn (Raw E S width)).QueryCache) → ProbComp (Stmt × (PIR.Outcome A × List P)) :=
+      (OracleSpec.ofFn (Answer E S width)).QueryCache) → ProbComp (Stmt × (PIR.Outcome A × List P)) :=
     fun result => (fun outcome => (result.1.1, outcome)) <$>
-      (simulateQ randomOracle (Typed.transform absorb Typed.answer (validator result.1.1)
+      (simulateQ randomOracle (Typed.transform absorb Typed.ask (validator result.1.1)
         (initial result.1.1) result.1.2)).run' result.2.2
   have filled : 𝒮[($ᵗ (Fin calls → S)) >>= fun tape =>
         (simulateQ randomOracle (Typed.experiment absorb validator initial
@@ -975,10 +989,10 @@ theorem simulatedExperiment_eq_translated (positive : 0 < width)
   rw [evalSPMF_bind_congr' _ fun rows => evalSPMF_uniform_drop _]
   have regroup : (($ᵗ (Fin slots → Fin width → S)) >>= fun rows =>
       (fun outcome => (started.1.1, outcome)) <$>
-        (simulateQ randomOracle (Typed.transform absorb Typed.answer (validator started.1.1)
+        (simulateQ randomOracle (Typed.transform absorb Typed.ask (validator started.1.1)
           (initial started.1.1) started.1.2)).run' (completed started.2 rows)) =
       (fun outcome => (started.1.1, outcome)) <$> (fillHistory slots started.2 >>= fun cache =>
-        (simulateQ randomOracle (Typed.transform absorb Typed.answer (validator started.1.1)
+        (simulateQ randomOracle (Typed.transform absorb Typed.ask (validator started.1.1)
           (initial started.1.1) started.1.2)).run' cache) := by
     simp only [fillHistory, bind_assoc, pure_bind, map_bind]
   rw [regroup, evalSPMF_map, verified, ← evalSPMF_map, map_eq_bind_pure_comp]

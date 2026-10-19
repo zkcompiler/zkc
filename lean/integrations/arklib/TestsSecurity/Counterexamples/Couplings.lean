@@ -174,12 +174,12 @@ inductive Event where
   | draw
   deriving DecidableEq
 
-abbrev Raw : List Event → Type := fun _ => Fin 2
+abbrev Raw : Event → Type := fun _ => Fin 2
 
 /-- The pinned witness is absorbed as a constant event. -/
 def absorb : Typed.Interface signature Event Unit Raw
   | .pinned => .send .pinned ()
-  | .draw => .query .draw fun _ raw => some raw
+  | .draw => .query .draw fun raw => some raw
 
 /-- Without the pinned witness: draw and return the bit. -/
 def ungated : PIR.Proc signature (Fin 2) := .call Op.draw fun bit => .done bit
@@ -187,8 +187,10 @@ def ungated : PIR.Proc signature (Fin 2) := .call Op.draw fun bit => .done bit
 /-- With the pinned witness absorbed first. -/
 def pinnedFirst : PIR.Proc signature (Fin 2) := .call Op.pinned fun _ => ungated
 
-/-- A challenge function that reads the length of its key. -/
-def byLength : (key : List Event) → Raw key := fun key => if key.length = 1 then 0 else 1
+/-- A challenge function that reads the length of its key: the absorbed history
+before the occurrence, followed by the occurrence. -/
+def byLength : (preceding : List Event) → (event : Event) → Raw event :=
+  fun preceding event => if (preceding ++ [event]).length = 1 then 0 else 1
 
 theorem ungated_transform :
     Typed.transform (m := Id) absorb byLength ungated [] [] = (.returned 0, []) := rfl

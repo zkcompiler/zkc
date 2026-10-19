@@ -120,7 +120,7 @@ theorem chainTransform_congr (absorb : Typed.Interface I E P (Raw E S width))
         rw [collect_congr fun block => same (.request state event block.val) block.isLt,
           same (.absorb state event) trivial]
         refine bind_congr fun raw => bind_congr fun advanced => ?_
-        cases decode history raw with
+        cases decode raw with
         | none => rfl
         | some value => exact ih value _ _ _
       · simp only [chainTransform, absorbed]

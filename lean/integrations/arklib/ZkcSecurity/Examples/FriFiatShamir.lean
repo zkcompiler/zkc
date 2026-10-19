@@ -88,32 +88,23 @@ inductive Event (F : Type) where
 
 variable {F : Type} {b s : ℕ}
 
-/-- Raw answers by the last event of a key. -/
-def Raw (F : Type) (block : Block b s) : Option (Event F) → Type
-  | some (.fold _) => F
-  | some (.positions _ _) => block.Raw
+/-- The raw answer of a query occurrence: a field element after a folding occurrence, the block
+sampler's raw answer after the query block occurrence. -/
+def Raw (F : Type) (block : Block b s) : Event F → Type
+  | .fold _ => F
+  | .positions _ _ => block.Raw
   | _ => Unit
 
-/-- The oracle's answer type at a key. -/
-abbrev Answer (F : Type) (block : Block b s) (key : List (Event F)) : Type :=
-  Raw F block key.getLast?
+/-- The oracle's answer type at a key: the raw answer of its last event. -/
+abbrev Answer (F : Type) (block : Block b s) : List (Event F) → Type :=
+  ByLast (Raw F block)
 
 instance rawSampleable [SampleableType F] (block : Block b s) :
-    ∀ last : Option (Event F), SampleableType (Raw F block last)
-  | some (.fold _) => inferInstanceAs (SampleableType F)
-  | some (.positions _ _) => inferInstanceAs (SampleableType block.Raw)
-  | some (.word _) => inferInstanceAs (SampleableType Unit)
-  | some (.final _) => inferInstanceAs (SampleableType Unit)
-  | none => inferInstanceAs (SampleableType Unit)
-
-instance answerSampleable [SampleableType F] (block : Block b s) (key : List (Event F)) :
-    SampleableType (Answer F block key) :=
-  rawSampleable block key.getLast?
-
-/-- The answer type at a key ending with an occurrence is the occurrence's raw type. -/
-theorem answer_last (block : Block b s) (preceding : List (Event F)) (event : Event F) :
-    Answer F block (preceding ++ [event]) = Raw F block (some event) := by
-  simp [Answer]
+    ∀ event : Event F, SampleableType (Raw F block event)
+  | .fold _ => inferInstanceAs (SampleableType F)
+  | .positions _ _ => inferInstanceAs (SampleableType block.Raw)
+  | .word _ => inferInstanceAs (SampleableType Unit)
+  | .final _ => inferInstanceAs (SampleableType Unit)
 
 /-- A committed word of size `2 ^ logSize`, recovered from its event. -/
 def recoverWord (logSize : ℕ) : Event F → Option (Fin (2 ^ logSize) → F)
@@ -141,12 +132,10 @@ theorem decodeBlock_self (block : Block b s) (raw : block.Raw) :
   simp [decodeBlock]
 
 /-- The transcript interface of the verifier with the block sampler `block`. -/
-def absorb (block : Block b s) : Interface (operations F) (Event F) (List F) (Answer F block)
-  | .fold round => .query (.fold round) fun preceding raw =>
-      some (cast (answer_last block preceding (.fold round)) raw)
-  | .positions logSize count => .query (.positions logSize count) fun preceding raw =>
-      decodeBlock block logSize count (cast (answer_last block preceding (.positions logSize count))
-        raw)
+def absorb (block : Block b s) : Interface (operations F) (Event F) (List F) (Raw F block)
+  | .fold round => .query (.fold round) fun raw => some raw
+  | .positions logSize count => .query (.positions logSize count) fun raw =>
+      decodeBlock block logSize count raw
   | .word _ logSize => .receive Event.word (recoverWord logSize)
   | .final => .receive Event.final recoverFinal
 
@@ -176,38 +165,32 @@ theorem typedStep (block : Block b s) {doomed : PIR.Proc (operations F) Bool →
       cases operation with
       | fold round =>
           change Pr{let beta ← $ᵗ F}[¬ doomed (next beta)] ≤ foldError round at step
-          intro preceding
-          refine (prEvent_mono _ _
-            (fun raw => ¬ doomed (next (cast (answer_last block preceding (.fold round)) raw)))
-            fun raw escaping => ?_).trans ?_
+          refine (prEvent_mono _ _ (fun raw => ¬ doomed (next raw)) fun raw escaping => ?_).trans ?_
           · obtain ⟨value, decoded, outside⟩ := escaping
             cases Option.some.inj decoded
             exact outside
           · exact (le_of_eq (SampleableType.prEvent_uniformSample_equiv
-              (Equiv.cast (answer_last block preceding (.fold round)))
+              (α := Raw F block (.fold round)) (β := F) (Equiv.refl F)
               fun beta : F => ¬ doomed (next beta))).trans step
       | positions logSize count =>
           change Pr{let positions ← $ᵗ (Fin count → Fin (2 ^ logSize))}[
             ¬ doomed (next positions)] ≤ queryError at step
-          intro preceding
           by_cases shape : logSize = b ∧ count = s
           · obtain ⟨rfl, rfl⟩ := shape
             refine (prEvent_mono _ _
-              (fun raw => ∃ value, block.decode
-                (cast (answer_last block preceding (.positions logSize count)) raw) = some value ∧
+              (fun raw : block.Raw => ∃ value, block.decode raw = some value ∧
                   ¬ doomed (next value))
               fun raw escaping => ?_).trans ?_
             · obtain ⟨value, decoded, outside⟩ := escaping
               exact ⟨value, (decodeBlock_self block _).symm.trans decoded, outside⟩
             · exact (le_of_eq (SampleableType.prEvent_uniformSample_equiv
-                (Equiv.cast (answer_last block preceding (.positions logSize count)))
+                (α := Raw F block (.positions logSize count)) (β := block.Raw) (Equiv.refl _)
                 fun raw : block.Raw => ∃ value, block.decode raw = some value ∧
                   ¬ doomed (next value))).trans (block.realized.escape_le _ step)
           · refine le_of_eq_of_le (prEvent_eq_zero_of_forall_not _ _ fun raw escaping => ?_)
               zero_le
             obtain ⟨value, decoded, -⟩ := escaping
-            have refused : decodeBlock block logSize count
-                (cast (answer_last block preceding (.positions logSize count)) raw) = none := by
+            have refused : decodeBlock block logSize count raw = none := by
               unfold decodeBlock
               split
               · exact absurd ‹_› shape

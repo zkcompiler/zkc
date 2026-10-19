@@ -398,7 +398,10 @@ inductive PlacedEvent where
 
 /-- One TranscriptQuery per attempt, answered with a gate value and a
 challenge. -/
-abbrev PlacedRaw : List PlacedEvent → Type := fun _ => Answer × Answer
+abbrev PlacedRaw : PlacedEvent → Type := fun _ => Answer × Answer
+
+/-- The history oracle answers every history with a gate value and a challenge. -/
+abbrev PlacedHistoryRaw : List PlacedEvent → Type := fun _ => Answer × Answer
 
 def recoverContext : PlacedEvent → Option (Attempts × Attempts)
   | .context state witness => some (state, witness)
@@ -406,7 +409,7 @@ def recoverContext : PlacedEvent → Option (Attempts × Attempts)
 
 def placedAbsorb : Typed.Interface placedSignature PlacedEvent (Attempts × Attempts) PlacedRaw
   | .context => .receive (fun context => .context context.1 context.2) recoverContext
-  | .draw => .query .gated fun _ raw => some raw
+  | .draw => .query .gated fun raw => some raw
 
 /-- Accept when the gate passes and the challenge hits. -/
 def placedDraw : PIR.Proc placedSignature Bool :=
@@ -428,8 +431,7 @@ def placedCertificate : Typed.Certificate placedAbsorb (· = true) (fun _ => 1 /
     rcases member with rfl | rfl | rfl | ⟨stop, rfl⟩
     · intro _
       exact Or.inr (Or.inl rfl)
-    · intro preceding
-      change Pr{let raw ← $ᵗ (Answer × Answer)}[
+    · change Pr{let raw ← $ᵗ (Answer × Answer)}[
         ∃ value, some raw = some value ∧ ¬ placedDoomed (.done (decide (value = (0, 0))))] ≤ 1 / 256
       rw [prEvent_congr _ _ (fun raw : Answer × Answer => raw = (0, 0)) fun raw => by
         constructor
@@ -450,7 +452,7 @@ theorem placedValidator_queryBound : Typed.QueryBound placedAbsorb placedValidat
 
 /-- Every prover with at most `queries` TranscriptQueries is accepted by the
 placed validator with probability at most `(queries + 1) / 256`. -/
-theorem placed_bound (prover : OracleComp (OracleSpec.ofFn PlacedRaw) (List (Attempts × Attempts)))
+theorem placed_bound (prover : OracleComp (OracleSpec.ofFn PlacedHistoryRaw) (List (Attempts × Attempts)))
     (queries : ℕ) (bounded : IsTotalQueryBound prover queries) :
     Pr{let result ← (simulateQ randomOracle
         (Typed.fixedExperiment placedAbsorb placedValidator [] prover)).run' ∅}[
