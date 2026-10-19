@@ -31,12 +31,13 @@ Options:
   category, schema constant and statement, and record it in the header; a
   missing table is an error.
 - `--endpoints NAME`: evaluate the table of registered endpoints `NAME`, a list
-  of covered endpoint, property, statement form and theorem, and record it in
-  the header.
+  of covered endpoint, property, statement form and theorem, record it in the
+  header and record every registered endpoint theorem in detail.
 - `--detail NAME`: also record the pretty-printed statement and premises of the
   declaration `NAME`, its premise telescope whatever its kind, and the
   registered constants (registry schemas and endpoints) it reaches through
-  repository declarations (repeatable); a missing declaration is an error.
+  repository declarations (repeatable). A name that is not a declaration of the
+  selected modules is noted and skipped; its consumer reports the absence.
 
 The output is deterministic for a fixed toolchain and fixed sources. Equal
 statement hashes are regression evidence, not semantic preservation. -/
@@ -216,9 +217,11 @@ unsafe def main (arguments : List String) : IO UInt32 := do
     let some index := env.getModuleIdxFor? name | return none
     let some module := env.header.modules[index.toNat]? | return none
     return if families.any (·.isPrefixOf module.module) then some module.module else none
+  -- A requested declaration that does not exist is reported by its consumer
+  -- (an assurance report names a missing evidence instance), not here.
   for name in options.details do
     unless env.contains name do
-      IO.eprintln s!"detailed declaration is missing: {name}"; return 1
+      IO.eprintln s!"detailed declaration is not in the selected modules: {name}"
   let mut registry := Json.null
   let mut registered : Std.HashSet Name := {}
   if let some name := options.registry then
@@ -232,6 +235,7 @@ unsafe def main (arguments : List String) : IO UInt32 := do
     for (_, _, schema, _) in table do
       if let some schema := schema then registered := registered.insert schema
   let mut endpoints := Json.null
+  let mut endpointTheorems : Array Name := #[]
   if let some name := options.endpoints then
     unless env.contains name do
       IO.eprintln s!"endpoint table is missing: {name}"; return 1
@@ -239,7 +243,9 @@ unsafe def main (arguments : List String) : IO UInt32 := do
     endpoints := Json.arr <| table.toArray.map fun (endpoint, property, statement, target) =>
       Json.mkObj [("endpoint", Json.str endpoint), ("property", Json.str property),
         ("statement", Json.str statement), ("theorem", Json.str target.toString)]
-    for (_, _, _, target) in table do registered := registered.insert target
+    for (_, _, _, target) in table do
+      registered := registered.insert target
+      endpointTheorems := endpointTheorems.push target
   let mut selected : Array (String × Name × Name × ConstantInfo) := #[]
   for (name, info) in env.constants.map₁.toList do
     let some module := moduleOf name | continue
@@ -260,7 +266,8 @@ unsafe def main (arguments : List String) : IO UInt32 := do
     ("endpoints", endpoints)]
   let mut lines := #[header.compress]
   for (_, module, name, info) in sorted do
-    let json ← runMeta env (record env registered name info module (options.details.contains name))
+    let detailed := options.details.contains name || endpointTheorems.contains name
+    let json ← runMeta env (record env registered name info module detailed)
     lines := lines.push json.compress
   IO.FS.writeFile output (String.intercalate "\n" lines.toList ++ "\n")
   IO.println s!"{sorted.size} declarations from {modules.size} modules"
