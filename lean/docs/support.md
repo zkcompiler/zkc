@@ -93,6 +93,15 @@ full-size BLS12-381 scalar values with direct SSA execution and selected product
 Runner cases. Those finite comparisons do not establish native executable
 soundness, randomness or transcript encoding.
 
+## Compiled subjects
+
+One row per subject manifest, from its generated [assurance report](spec/assurance-report.md).
+
+<!-- BEGIN GENERATED subject-rows: lean/checks/check_records.py --write -->
+| Subject | Entry | Endpoint | Property | Statement | Assumptions | Report |
+|---|---|---|---|---|---|---|
+<!-- END GENERATED subject-rows -->
+
 ## Finite fold subjects
 
 `TotalState` and `UnitState` admit the actual `finite/total-state.mlir` and
