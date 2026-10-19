@@ -91,7 +91,7 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 | `expression` | Fixed panel of short/deep Horner, wide independent, shared-subexpression, capture-heavy and input-heavy functions; KB, Fr, dense KB Ext4/Ext8, binary64 and binary Ext3 | Independent authored Python formulas; map/sum/product; two additional validation-only shapes; source shape needs lowered-IR inspection |
 | `field_vector` | Separately named add, subtract, Hadamard multiply, scale, sum, product and dot controls; representative fields and sizes | Independent scalar expectations; SDK/run includes validation and Host costs |
 | `transform` | Separate DFT and interpolation calls, unit shift, full dense coefficients; KB/Ext4/Ext8 at 32, KB/Ext8 at 1,024 | Independent Python evaluation; polynomial adaptation and equality remain inside the SDK call |
-| `coset` | Separate point enumeration and even/odd folding; KB/Ext4/Ext8 at 32 and 8,192, dense non-base shifts | Independent integer field arithmetic; arbitrary fold inputs, full result checks and Host costs |
+| `coset` | Separate point enumeration and even/odd folding; KB/Ext4/Ext8 at 32 and 8,192, dense extension shifts | Independent integer field arithmetic; arbitrary fold inputs, full result checks and Host costs |
 | `curve_operation` | Separately named BLS12-381 G1 vector scaling, per-point scaling and MSM; 1/33/128 points | Includes point generation and every result check; weaker group-law consistency, sharing native group kernels |
 | `hash_bytes` | SHA-256 over 0/64/8,192 payload bytes | Independent Python `hashlib` digest; all bytes checked |
 | `poseidon` | Width-16 KoalaBear Poseidon2, 1/17/256 states | Published Plonky3 known answer repeated per state; full batch check, one distinct state |
@@ -123,7 +123,7 @@ controls explicitly use weaker algebraic consistency checks.
 
 ### Fixed numerical panel
 
-The panel adds 50 `expression`, 14 `field_vector`, 10 `transform`, nine
+The panel adds 50 `expression`, 14 `field_vector`, 10 `transform`, 12 `coset`, nine
 `curve_operation`, and ten coupled AIR/STARK cases. Existing identifiers,
 formulas and the smoke list stay unchanged. Case counts imply no suite weights.
 
@@ -140,10 +140,13 @@ IR before attributing performance to the authored expression's shape.
 
 [`operations.py`](bench/operations.py) isolates named operations in source.
 Transform directions use independent Python evaluation, rather than validating
-a native roundtrip. Curve controls use weaker scalar/group-law checks. Point
-generation, polynomial adaptation, validation and Host costs remain inside the
-SDK timer; these are **not kernel-only timings**. Separate hash/Merkle controls
-are described below.
+a native roundtrip. Coset controls separately enumerate points and fold arbitrary
+evaluations over base, quartic and octic fields, using dense extension shifts.
+Their integer oracle follows the public subgroup convention and checks every
+coordinate; folding does not assert a degree bound. Curve controls use weaker
+scalar/group-law checks. Point generation, polynomial adaptation, validation and
+Host costs remain inside the SDK timer; these are **not kernel-only timings**.
+Separate hash/Merkle controls are described below.
 
 The `air-coupled-*` and `stark-coupled-*` pairs share Bundles and traces with
 simultaneous updates `next[j] = current[j]^(degree-1) * current[(j+1) % width] +
@@ -160,7 +163,7 @@ larger multi-table scaling remain additional experiments.
 ### Hash, commitment and input controls
 
 The added panel contains three `hash_bytes`, three `poseidon`, six `merkle`,
-six bounded `machine`, and four `host_vector` cases. Existing case contracts,
+seven bounded `machine`, and four `host_vector` cases. Existing case contracts,
 smoke lists and expression roles remain fixed. The catalog records category,
 dimensions and operation mix; generated Programs supply the captured oracle.
 

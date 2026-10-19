@@ -147,7 +147,7 @@ def cases():
             for operation in ('points', 'fold'):
                 add(f'coset-ext{degree}-{operation}-{n}', 'coset',
                     {'extension_degree': degree, 'elements': n, 'operation': operation},
-                    'operation', ('non-base shift', operation, 'vector equality'),
+                    'operation', ('coset shift', operation, 'vector equality'),
                     'Independent integer field oracle; dense extension coordinates and arbitrary fold inputs. Includes equality and Host costs, not a low-degree test.')
     for n in (1, 33, 128):
         for operation in ('vector-scale', 'scale-each', 'msm'):

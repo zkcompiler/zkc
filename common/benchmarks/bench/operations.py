@@ -80,7 +80,7 @@ def transform(shape):
 
 
 def coset(shape):
-    """Separate subgroup traversal and folding with non-base coset shifts."""
+    """Separate subgroup traversal and folding with arbitrary coset shifts."""
     degree, n, operation = shape['extension_degree'], shape['elements'], shape['operation']
     field = 'koala-bear' + (f'.ext{degree}-binomial3' if degree != 1 else '')
     f = a.FieldOracle(field)
