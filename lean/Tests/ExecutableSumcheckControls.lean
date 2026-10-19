@@ -62,7 +62,10 @@ the body's fifth anchor is the guard. -/
 def roundCheckTrivial : Validator :=
   withFunction actual "_calculation_3" fun function =>
     { function with
-      body := function.body.set 1 (.operation "value_1" "_calculation_11" [] ["v415", "v415"] ["v416"]) }
+      body := function.body.modify 1 fun
+        | .operation site binding parameters [_, right] outputs =>
+            .operation site binding parameters [right, right] outputs
+        | step => step }
 
 theorem roundCheckTrivial_refused :
     refusal (checkLowering installed constructed roundCheckTrivial) = some (.anchorOperand 4 0) := by

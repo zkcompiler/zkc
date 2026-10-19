@@ -374,18 +374,29 @@ module { "protocol.module"() ({
         auto *start = packetStart(loop(*scheduled));
         auto *at = start;
         uint64_t ample = 100000;
-        require(succeeded(kernel::readScheduledLoop(at, ample)) &&
-                    ample < 100000,
+        auto matched = kernel::readScheduledLoop(at, ample);
+        require(succeeded(matched) && matched->has_value() && ample < 100000,
                 "schema inspection did not charge actual scheduled work");
         uint64_t cost = 100000 - ample;
         uint64_t exact = cost, shortWork = cost - 1;
         at = start;
-        require(succeeded(kernel::readScheduledLoop(at, exact)) && exact == 0,
+        auto boundary = kernel::readScheduledLoop(at, exact);
+        require(succeeded(boundary) && boundary->has_value() && exact == 0,
                 "schema exact allowance was refused");
         at = start;
         require(failed(kernel::readScheduledLoop(at, shortWork)) &&
                     at == start && same(*scheduled, *before),
                 "schema capacity advanced cursor or modified the schedule");
+        uint64_t empty = 0;
+        auto *ordinary = &function(*scheduled).front().back();
+        at = ordinary;
+        auto absent = kernel::readScheduledLoop(at, empty);
+        require(succeeded(absent) && !absent->has_value() && at == ordinary &&
+                    empty == 0,
+                "an unmatched operation confused zero allowance with failure");
+        at = start;
+        require(failed(kernel::readScheduledLoop(at, empty)) && at == start,
+                "a real packet was inspected without allowance");
       });
 
   for (StringRef mutation :
@@ -402,10 +413,10 @@ module { "protocol.module"() ({
       auto *start = packetStart(traversal);
       auto *at = start;
       auto valid = kernel::readScheduledLoop(at);
-      require(succeeded(valid) && at == traversal->getNextNode() &&
-                  valid->states == 2 &&
-                  valid->lower == function(*candidate).getArgument(0) &&
-                  valid->upper == function(*candidate).getArgument(1),
+      require(succeeded(valid) && valid->has_value() &&
+                  at == traversal->getNextNode() && (*valid)->states == 2 &&
+                  (*valid)->lower == function(*candidate).getArgument(0) &&
+                  (*valid)->upper == function(*candidate).getArgument(1),
               "schema positive control failed");
       auto *lower = traversal->getPrevNode()->getPrevNode()->getPrevNode();
       auto *upper = lower->getNextNode();
@@ -449,7 +460,8 @@ module { "protocol.module"() ({
         start->getRegion(0).front().back().erase();
       }
       at = start;
-      require(failed(kernel::readScheduledLoop(at)) && at == start,
+      auto unmatched = kernel::readScheduledLoop(at);
+      require(succeeded(unmatched) && !unmatched->has_value() && at == start,
               "malformed packet was accepted or advanced caller cursor");
       uint64_t work = 1000000;
       require(!kernel::consumeSchedule(*candidate, work) &&

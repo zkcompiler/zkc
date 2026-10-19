@@ -117,15 +117,16 @@ class Reader {
                      unsigned regions) {
     if (name == "local.for") {
       auto *at = cursor;
-      auto scheduled = zkc::kernel::readScheduledLoop(at, remaining);
-      if (failed(scheduled) && !remaining) {
+      auto parsed = zkc::kernel::readScheduledLoop(at, remaining);
+      if (failed(parsed)) {
         result = {VerificationStatus::RequiredCapacity, "finite reader work",
                   CapacityCause{WorkOwner::RequiredFiniteReader, {}, remaining},
                   mathematical::realizationSubject(c.operation)};
         fail();
         return nullptr;
       }
-      if (succeeded(scheduled)) {
+      auto &scheduled = *parsed;
+      if (scheduled) {
         if (!remaining) {
           result = {
               VerificationStatus::RequiredCapacity, "finite reader work",

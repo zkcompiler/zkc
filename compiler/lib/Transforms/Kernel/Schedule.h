@@ -3,6 +3,7 @@
 #include "../FiniteVerification.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "zkc/Transforms/Kernel.h"
+#include <optional>
 namespace zkc::kernel {
 // Closed private packet: two zero-trip Local bound admissions, exact ui64/i64
 // bridges, unit i64 step, unsigned scf.for, and exact induction bridge. The
@@ -14,12 +15,15 @@ struct ScheduledLoop {
   llvm::SmallVector<mlir::Value> arguments;
   llvm::SmallVector<mlir::Value> inputs;
 };
-// Pure schema inspection. Advances only on complete success, never emits IR.
-mlir::FailureOr<ScheduledLoop> readScheduledLoop(mlir::Operation *&cursor);
+// Pure schema inspection. A present result advances the cursor. An empty
+// result means no packet matched; failure means inspection capacity ran out.
+// Zero remaining work alone does not mean failure. Never emits IR.
+mlir::FailureOr<std::optional<ScheduledLoop>>
+readScheduledLoop(mlir::Operation *&cursor);
 // Production readers share a cumulative required allowance, including nested
-// frame scans. Exhaustion sets the remaining allowance to zero.
-mlir::FailureOr<ScheduledLoop> readScheduledLoop(mlir::Operation *&cursor,
-                                                 uint64_t &remaining);
+// frame scans. Exhaustion returns failure and sets the allowance to zero.
+mlir::FailureOr<std::optional<ScheduledLoop>>
+readScheduledLoop(mlir::Operation *&cursor, uint64_t &remaining);
 llvm::SmallVector<mlir::Value> traversalArguments(mlir::Block *);
 // Producer consumes an admitted Local recipe fragment, returning standard
 // func.func plus scheduled control. Required copying is charged before work.

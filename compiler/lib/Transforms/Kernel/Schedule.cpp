@@ -234,10 +234,11 @@ LogicalResult lowerBlock(Block &source, Block &target, IRMapping values,
   while (cursor) {
     builder.setInsertionPointToEnd(&target);
     auto *after = cursor;
-    auto packet = readScheduledLoop(after, remaining);
-    if (!remaining && failed(packet))
+    auto parsed = readScheduledLoop(after, remaining);
+    if (failed(parsed))
       return failure();
-    if (succeeded(packet)) {
+    auto &packet = *parsed;
+    if (packet) {
       auto inputs = mapped(packet->inputs, values);
       if (failed(inputs))
         return failure();
@@ -294,27 +295,27 @@ LogicalResult lowerBlock(Block &source, Block &target, IRMapping values,
   return success();
 }
 } // namespace
-FailureOr<ScheduledLoop> readScheduledLoop(Operation *&cursor) {
+FailureOr<std::optional<ScheduledLoop>> readScheduledLoop(Operation *&cursor) {
   uint64_t remaining = 1000000;
   return readScheduledLoop(cursor, remaining);
 }
-FailureOr<ScheduledLoop> readScheduledLoop(Operation *&cursor,
-                                           uint64_t &remaining) {
+FailureOr<std::optional<ScheduledLoop>> readScheduledLoop(Operation *&cursor,
+                                                          uint64_t &remaining) {
   auto *first = cursor;
   Value lower, upper;
   if (!admission(first, lower))
-    return failure();
+    return std::optional<ScheduledLoop>{};
   auto *second = first->getNextNode();
   if (!admission(second, upper))
-    return failure();
+    return std::optional<ScheduledLoop>{};
   auto *lowerCast = second->getNextNode();
   auto ui64 = lower.getType();
   auto i64 = IntegerType::get(lower.getContext(), 64);
   if (!bridge(lowerCast, ui64, i64) || lowerCast->getOperand(0) != lower)
-    return failure();
+    return std::optional<ScheduledLoop>{};
   auto *upperCast = lowerCast->getNextNode();
   if (!bridge(upperCast, ui64, i64) || upperCast->getOperand(0) != upper)
-    return failure();
+    return std::optional<ScheduledLoop>{};
   auto *step = upperCast->getNextNode();
   auto constant = dyn_cast_or_null<arith::ConstantOp>(step);
   auto one =
@@ -323,7 +324,7 @@ FailureOr<ScheduledLoop> readScheduledLoop(Operation *&cursor,
       step->getResult(0).getType() != i64 || step->getNumRegions() ||
       step->getNumSuccessors() || one.getType() != i64 || one.getValue() != 1 ||
       step->getAttrs().size() != 1 || !step->getResult(0).hasOneUse())
-    return failure();
+    return std::optional<ScheduledLoop>{};
   auto loop = dyn_cast_or_null<scf::ForOp>(step->getNextNode());
   if (!loop || loop->getNumOperands() < 3 || loop->getNumRegions() != 1 ||
       loop->getNumSuccessors() ||
@@ -334,7 +335,7 @@ FailureOr<ScheduledLoop> readScheduledLoop(Operation *&cursor,
       loop.getStep() != step->getResult(0) ||
       !lowerCast->getResult(0).hasOneUse() ||
       !upperCast->getResult(0).hasOneUse())
-    return failure();
+    return std::optional<ScheduledLoop>{};
   auto states = loop->getAttrOfType<IntegerAttr>("state_count");
   auto site = loop->getAttrOfType<StringAttr>("site");
   if (!states || !states.getType().isSignlessInteger(64) ||
@@ -345,7 +346,7 @@ FailureOr<ScheduledLoop> readScheduledLoop(Operation *&cursor,
           (site.getValue() + "_schedule_lower").str() ||
       second->getAttrOfType<StringAttr>("site").getValue() !=
           (site.getValue() + "_schedule_upper").str())
-    return failure();
+    return std::optional<ScheduledLoop>{};
   unsigned count = states.getValue().getZExtValue();
   auto &body = *loop.getBody();
   if (body.empty() || body.getNumArguments() != loop.getNumResults() + 1 ||
@@ -353,22 +354,22 @@ FailureOr<ScheduledLoop> readScheduledLoop(Operation *&cursor,
       loop.getInitArgs().getTypes() != loop.getResultTypes() ||
       ValueRange(body.getArguments().drop_front()).getTypes() !=
           loop.getResultTypes())
-    return failure();
+    return std::optional<ScheduledLoop>{};
   auto *induction = &body.front();
   if (!bridge(induction, i64, ui64) ||
       induction->getOperand(0) != body.getArgument(0) ||
       !body.getArgument(0).hasOneUse())
-    return failure();
+    return std::optional<ScheduledLoop>{};
   auto end = dyn_cast<scf::YieldOp>(body.back());
   if (!end || end->getNumResults() || end->getNumRegions() ||
       end->getNumSuccessors() || end->getAttrs().size() ||
       end.getNumOperands() != loop.getNumResults() ||
       end.getOperandTypes() != loop.getResultTypes())
-    return failure();
+    return std::optional<ScheduledLoop>{};
   for (unsigned i = count; i < loop.getNumResults(); ++i)
     if (!loop.getResult(i).use_empty() ||
         end.getOperand(i) != body.getArgument(i + 1))
-      return failure();
+      return std::optional<ScheduledLoop>{};
   uint64_t cost = 16 + 2 * uint64_t(loop.getNumOperands()) +
                   2 * uint64_t(loop.getNumResults());
   if (cost > remaining) {
@@ -376,14 +377,17 @@ FailureOr<ScheduledLoop> readScheduledLoop(Operation *&cursor,
     return failure();
   }
   remaining -= cost;
-  if (!closed(body, remaining))
-    return failure();
+  if (!closed(body, remaining)) {
+    if (!remaining)
+      return failure();
+    return std::optional<ScheduledLoop>{};
+  }
   ScheduledLoop result{
       loop, lower, upper, count, {induction->getResult(0)}, {lower, upper}};
   append_range(result.arguments, body.getArguments().drop_front());
   append_range(result.inputs, loop.getInitArgs());
   cursor = loop->getNextNode();
-  return result;
+  return std::optional<ScheduledLoop>(std::move(result));
 }
 SmallVector<Value> traversalArguments(Block *block) {
   if (!block)
@@ -484,10 +488,11 @@ public:
         return false;
       --remaining;
       auto *next = at;
-      auto packet = readScheduledLoop(next, remaining);
-      if (!remaining && failed(packet))
+      auto parsed = readScheduledLoop(next, remaining);
+      if (failed(parsed))
         return false;
-      if (succeeded(packet)) {
+      auto &packet = *parsed;
+      if (packet) {
         auto loop = dyn_cast<local::LocalForOp>(actual);
         auto inputs = mapped(packet->inputs, values);
         if (!loop || failed(inputs) ||
