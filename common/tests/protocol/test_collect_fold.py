@@ -35,6 +35,7 @@ def assert_streamed(sites, flags):
         # or bulk producer may hide behind an absent append instruction.
         assert {name for name, count in sites.items()
                 if count and name.startswith('vector.')} <= {'vector.length', 'vector.get'}
+        assert not sites['numerical.map'], sites
 
 
 @pytest.mark.parametrize('field', ['koala-bear', 'bls12-381.fr'])
@@ -57,7 +58,7 @@ def test_benchmark_exercises_composition(toolchain, journal, directory, monkeypa
             if fused:
                 assert_streamed(sites, flags)
             else:
-                assert sites['vector.mul' if bulk else 'vector.append']
+                assert sites['numerical.map' if bulk else 'vector.append']
         assert entry.run(f'correct-{fused}', program.inputs[0]['P']) == {'accepted': True}
         assert entry.run(f'incorrect-{fused}', program.incorrect['P']) == {'accepted': False}
         package = json.loads(entry.package.read_text())

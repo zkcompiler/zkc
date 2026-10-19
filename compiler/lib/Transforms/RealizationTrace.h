@@ -308,6 +308,9 @@ class RealizationScope {
     out << " retry discarded=" << value.discardedScope
         << " finite-bulk=" << value.effectivePolicy.finiteBulk
         << " collect-fold-fusion=" << value.effectivePolicy.collectFoldFusion;
+    if (value.occurrence)
+      out << " occurrence=" << value.occurrence->declaration << ":"
+          << value.occurrence->site;
   }
   static void render(llvm::raw_ostream &out, const PublicationDecision &value) {
     out << " publication=" << decisionName(value.boundary);
@@ -409,8 +412,9 @@ public:
     append(DiscardDecision{std::move(cause)}, subject);
     finished = true;
   }
-  void retry(MathematicalSelectionPolicy effective) {
-    append(RetryDecision{id, effective}, subject);
+  void retry(MathematicalSelectionPolicy effective,
+             std::optional<RealizationSubject> occurrence = {}) {
+    append(RetryDecision{id, effective, std::move(occurrence)}, subject);
   }
   void publish() {
     publish(parent ? PublicationBoundary::IncorporatedIntoParent

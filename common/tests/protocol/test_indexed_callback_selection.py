@@ -90,7 +90,7 @@ def test_table_claims_select_indexed_dot_and_keep_distinct_values(
     bulk = '--no-finite-bulk' not in flags
     assert bool(sites['vector.dot']) == bulk, sites
     # The weighted collect reads the exact container named by its index domain.
-    assert bool(sites['vector.scale']) == bulk, sites
+    assert bool(sites['numerical.map']) == bulk, sites
     arithmetic = ReferenceField(field)
     zero, one = arithmetic.value(0), arithmetic.value(1)
     values = [arithmetic.value(2, 1), arithmetic.value(3, 2), arithmetic.value(5, 3)]
@@ -127,7 +127,7 @@ def test_lookup_products_select_nested_indexed_lanes_and_reduction(
     bulk = '--no-finite-bulk' not in flags
     assert bool(sites['vector.product']) == bulk, sites
     # Product selection alone would miss a fallback in denominator_at's collect.
-    assert bool(sites['vector.scale']) == bulk, sites
+    assert bool(sites['numerical.map']) == bulk, sites
     arithmetic = ReferenceField(field)
     zero, one = arithmetic.value(0), arithmetic.value(1)
     values = [arithmetic.value(2, 1), arithmetic.value(3, 2), arithmetic.value(5, 3)]
@@ -169,7 +169,7 @@ def test_lookup_collect_fold_removes_intermediate_vectors(
     flags = ['--fuse-collect-fold'] + ([] if bulk else ['--no-finite-bulk'])
     entry, sites = compile_consumer(toolchain, journal, directory, flags, field, CONSUMERS[1])
     assert not any(sites[contract] for contract in
-                   ('vector.empty', 'vector.append', 'vector.scale', 'vector.product')), sites
+                   ('vector.empty', 'vector.append', 'vector.scale', 'vector.product', 'numerical.map')), sites
     arithmetic = ReferenceField(field)
     rng = random.Random(30791)
     for size in (0, 1, 17):

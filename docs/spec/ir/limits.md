@@ -18,7 +18,7 @@ An exhausted checker refuses; it does not establish semantic inequivalence.
 | Finite correspondence | 100,000 required-reader units per declaration or total expression; optional comparison capped at 100,000 and the reader's remaining allowance |
 | Optional lane realization | 1,000,000 work units; exhaustion retains ordered execution |
 | Required finite expressions and polynomial expansion | Separate cumulative allowances of 100,000 each |
-| Kernel normalization and frontier | 2,000,000 shared copy/context/frontier work units per lowering subject; independent normalization readers have 4,000,000 units per closure, helper depth 64 and polynomial depth 128 |
+| Kernel normalization and frontier | 1,000,000 shared copy/context/frontier work units per lowering subject; independent normalization readers have 4,000,000 units per closure, helper depth 64 and polynomial depth 128 |
 | Kernel recipe materialization and correspondence | Separate allowances of 1,000,000 operation/slot units and 16 MiB generated-site text; discarded recipe construction has an additional cumulative reserve of the same sizes; existing recipe limits also apply |
 | Native R1CS reduction adapter | BLS Fr; at most 8 rows, 128 columns and 1,024 nonzero terms |
 

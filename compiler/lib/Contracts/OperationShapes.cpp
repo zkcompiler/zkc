@@ -3,6 +3,7 @@
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/NativeOrigin.h"
+#include "zkc/Contracts/Numerical.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
 
@@ -10,6 +11,8 @@ using namespace llvm;
 namespace zkc::protocol {
 Error checkParameters(const BindingApplication &binding,
                       ArrayRef<std::string> parameters) {
+  if (numericalContract(binding.contract))
+    return checkNumericalParameters(binding, parameters);
   std::string field;
   const auto *schema = parameterContract(binding.contract);
   if (schema && schema->fieldTerm) {
@@ -74,6 +77,10 @@ Error checkParametersImpl(StringRef key, llvm::ArrayRef<std::string> parameters,
   if (parameters.size() < schema->minimum ||
       (schema->maximum && parameters.size() > *schema->maximum))
     return error("interactive-kernel-parameters");
+  // A numerical body needs its complete closed [F,M] application. A
+  // field-only or generic caller cannot establish positional agreement.
+  if (validator == ParameterValidator::NumericalExpression)
+    return error("numerical-body-signature");
   if (validator == ParameterValidator::MatrixIdentity ||
       validator == ParameterValidator::AssetIdentity) {
     StringRef digest = parameters.front();

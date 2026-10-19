@@ -7,11 +7,16 @@
 using namespace mlir;
 using namespace llvm;
 namespace zkc::kernel {
-bool chargeCopy(Operation *body, uint64_t &remaining) {
+bool chargeCopy(Operation *body, uint64_t &remaining,
+                std::optional<CapacityCause> *capacity) {
   auto walk = body->walk([&](Operation *op) {
     uint64_t cost = 1 + op->getNumOperands() + op->getNumResults();
-    if (cost > remaining)
+    if (cost > remaining) {
+      if (capacity)
+        *capacity =
+            CapacityCause{WorkOwner::AlgorithmExpansion, cost, remaining};
       return WalkResult::interrupt();
+    }
     remaining -= cost;
     return WalkResult::advance();
   });
@@ -106,11 +111,12 @@ OwningOpRef<func::FuncOp> exactReadback(func::FuncOp source, Operation *owner,
 // The original unit and all of its dependency/source roots stay immutable.
 OwningOpRef<ModuleOp>
 normalizeUnit(ModuleOp unit, uint64_t &remaining,
-              llvm::DenseSet<Operation *> &polynomialGenerated) {
+              llvm::DenseSet<Operation *> &polynomialGenerated,
+              std::optional<CapacityCause> *capacity) {
   auto entry = getEntry(unit);
   if (!entry || !entry.getBody().hasOneBlock())
     return {};
-  if (!chargeCopy(unit, remaining))
+  if (!chargeCopy(unit, remaining, capacity))
     return {};
   mathematical::CheckedHelperNormalizations helpers(unit);
   if (failed(helpers.prepare(entry)))
@@ -134,7 +140,7 @@ normalizeUnit(ModuleOp unit, uint64_t &remaining,
   for (auto &declaration : unit.getBody().front()) {
     auto checked = helpers.lookup(&declaration);
     auto *selected = checked ? checked.getOperation() : &declaration;
-    if (!chargeCopy(selected, remaining))
+    if (!chargeCopy(selected, remaining, capacity))
       return {};
     builder.clone(*selected, mapping);
   }

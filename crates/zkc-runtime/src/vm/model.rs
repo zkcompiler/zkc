@@ -284,6 +284,8 @@ pub enum AttributeRule {
     NativeMessageTemplate,
     NativeChallengeTemplate,
     NativeIndexTemplate,
+    /// One canonical, exactly typed Ring body for a closed numerical binding.
+    NumericalExpression,
 }
 /// Port types and attribute rules for an operation, including effectful ones.
 #[derive(Clone, Debug, PartialEq, Eq)]

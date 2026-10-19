@@ -1,13 +1,16 @@
 #include "../AlgorithmSupport.h"
 #include "../CheckedCandidate.h"
+#include "../RealizationSubject.h"
 #include "../RealizationTrace.h"
 #include "Support.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Verifier.h"
+#include "zkc/Analysis/Finite.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Transforms/Passes.h"
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringMap.h"
 
 using namespace mlir;
@@ -19,25 +22,39 @@ LogicalResult refuse(Operation *op, StringRef detail) {
 }
 LogicalResult materialize(protocol_ir::ProtocolModuleOp owner,
                           MathematicalSelectionPolicy fallback,
-                          mathematical::RealizationTrace *trace) {
+                          mathematical::RealizationTrace *trace,
+                          mathematical::NumericalSelection &selection,
+                          mathematical::VerificationDecision *outcome,
+                          bool optionalConstruction) {
   SmallVector<CallOp> calls;
   owner.walk([&](CallOp call) { calls.push_back(call); });
   SymbolTable outer(owner);
   unsigned nextBinding = 0;
   llvm::DenseMap<DictionaryAttr, std::string> importedBindings;
-  uint64_t remaining = 1000000, remainingBytes = 16 * 1024 * 1024;
-  mathematical::RealizationWork work;
-  for (auto call : calls) {
+  auto &remaining = selection.remainingCopy;
+  auto &remainingBytes = selection.remainingSiteBytes;
+  auto &work = selection.work;
+  for (auto [invocation, call] : enumerate(calls)) {
+    selection.enterInvocation(invocation);
     SymbolTableCollection symbols;
     auto entry = resolve(call, symbols);
-    auto policy = selectionPolicy(call, fallback);
+    auto policy = effectiveSelectionPolicy(call, fallback);
     if (!entry || failed(policy))
       return refuse(call, "invalid numerical closure or policy");
     auto unit = cast<ModuleOp>(entry->getParentOp());
     auto scratch = realizeEntry(unit, call.getSite(), *policy, work, remaining,
-                                remainingBytes, {}, trace);
-    if (!scratch)
+                                remainingBytes, {}, trace, &selection, outcome,
+                                optionalConstruction);
+    if (!scratch) {
+      if (outcome) {
+        outcome->invocation = invocation;
+        return failure();
+      }
       return refuse(call, "numerical recipes refused the actual closure");
+    }
+    auto clearScratchOrigins = llvm::scope_exit([&] {
+      scratch->walk([&](Operation *op) { selection.origins.erase(op); });
+    });
     auto output =
         cast<protocol_ir::ProtocolModuleOp>(scratch->getBody()->front());
     auto function =
@@ -76,6 +93,16 @@ LogicalResult materialize(protocol_ir::ProtocolModuleOp owner,
     OpBuilder builder(owner.getContext());
     builder.setInsertionPointToStart(&owner.getBody().front());
     for (auto binding : bindings) {
+      std::optional<CapacityCause> capacity;
+      if (!chargeCopy(binding, remaining, &capacity)) {
+        if (outcome)
+          *outcome = {
+              optionalConstruction
+                  ? mathematical::VerificationObservation::OptionalCapacity
+                  : mathematical::VerificationObservation::RequiredCapacity,
+              "Kernel binding import capacity", capacity};
+        return failure();
+      }
       auto *copy = builder.clone(*binding.getOperation());
       SymbolTable::setSymbolName(copy, renamed.lookup(binding.getSymName()));
       outer.insert(copy);
@@ -86,14 +113,27 @@ LogicalResult materialize(protocol_ir::ProtocolModuleOp owner,
     for (auto &op : function.getBody().front().without_terminator()) {
       auto walk = op.walk([&](Operation *nested) {
         uint64_t cost = 1 + nested->getNumOperands() + nested->getNumResults();
-        if (cost > remaining)
+        if (cost > remaining) {
+          if (outcome)
+            *outcome = {
+                optionalConstruction
+                    ? mathematical::VerificationObservation::OptionalCapacity
+                    : mathematical::VerificationObservation::RequiredCapacity,
+                "Kernel inline copy capacity",
+                CapacityCause{WorkOwner::AlgorithmExpansion, cost, remaining}};
           return WalkResult::interrupt();
+        }
         remaining -= cost;
         return WalkResult::advance();
       });
       if (walk.wasInterrupted())
-        return refuse(call, "inlining work limit");
+        return outcome ? failure() : refuse(call, "inlining work limit");
       builder.clone(op, values);
+      op.walk([&](Operation *nested) {
+        auto owners = selection.owners(nested);
+        for (auto occurrence : owners)
+          selection.record(values.lookup(nested), occurrence);
+      });
     }
     auto returned = cast<local::ReturnOp>(function.getBody().front().back());
     if (returned.getNumOperands() != call.getNumResults())
@@ -115,9 +155,46 @@ LogicalResult materialize(protocol_ir::ProtocolModuleOp owner,
   return success();
 }
 } // namespace
+LogicalResult discoverKernelCalls(mlir::ModuleOp module,
+                                  MathematicalSelectionPolicy fallback,
+                                  mathematical::NumericalSelection &selection) {
+  SmallVector<CallOp> calls;
+  module.walk([&](CallOp call) { calls.push_back(call); });
+  SymbolTableCollection symbols;
+  for (auto [invocation, call] : enumerate(calls)) {
+    selection.enterInvocation(invocation);
+    auto entry = resolve(call, symbols);
+    auto policy = effectiveSelectionPolicy(call, fallback);
+    if (!entry || failed(policy))
+      return refuse(call, "invalid numerical closure or policy");
+    for (auto &op : entry.front().without_terminator()) {
+      if (!selection.chargeCatalog())
+        return refuse(call, "numerical occurrence discovery capacity");
+      if (!finite::isComputation(&op))
+        continue;
+      auto occurrence =
+          selection.discover(mathematical::realizationSubject(&op),
+                             policy->finiteBulk, policy->numericalExpressions);
+      if (!occurrence)
+        return diagnostics::emit(call.emitOpError(), occurrence.takeError());
+    }
+  }
+  return success();
+}
+LogicalResult materializeKernelCalls(
+    mlir::ModuleOp candidate, MathematicalSelectionPolicy policy,
+    mathematical::RealizationTrace *trace,
+    mathematical::NumericalSelection &selection,
+    mathematical::VerificationDecision *outcome, bool optionalConstruction) {
+  return materialize(
+      cast<protocol_ir::ProtocolModuleOp>(candidate.getBody()->front()), policy,
+      trace, selection, outcome, optionalConstruction);
+}
 OwningOpRef<mlir::ModuleOp>
 proposeKernelLowering(mlir::ModuleOp source, MathematicalSelectionPolicy policy,
-                      mathematical::RealizationTrace *trace) {
+                      mathematical::RealizationTrace *trace,
+                      mathematical::NumericalSelection *selection,
+                      mlir::ModuleOp prepared) {
   source.getContext()->getOrLoadDialect<algebra::AlgebraDialect>();
   source.getContext()->getOrLoadDialect<local::LocalDialect>();
   if (failed(verify(source)) || !hasSingleElement(*source.getBody()))
@@ -131,17 +208,35 @@ proposeKernelLowering(mlir::ModuleOp source, MathematicalSelectionPolicy policy,
   mathematical::RealizationScope scope(trace, "propose-kernel-lowering", source,
                                        policy);
   scope.propose(policy);
-  auto candidate = prepareKernelLowering(source);
+  mathematical::NumericalSelection standalone;
+  if (!selection)
+    selection = &standalone;
+  selection->origins.clear();
+  OwningOpRef<mlir::ModuleOp> normalized;
+  if (!prepared) {
+    normalized = prepareKernelLowering(source, &selection->remainingCopy);
+    if (normalized)
+      prepared = *normalized;
+  }
+  OwningOpRef<mlir::ModuleOp> candidate;
+  bool retained = false;
+  auto clearRefusedOrigins = llvm::scope_exit([&] {
+    if (!retained)
+      selection->origins.clear();
+  });
+  if (prepared && chargeCopy(prepared, selection->remainingCopy))
+    candidate = cast<mlir::ModuleOp>(prepared->clone());
   if (!candidate) {
     (void)refuse(source, "checked normalization or concrete frontier refused");
     return {};
   }
-  auto proposed =
-      cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
-  if (failed(materialize(proposed, policy, trace)) ||
+  if (failed(discoverKernelCalls(*candidate, policy, *selection)))
+    return {};
+  if (failed(materializeKernelCalls(*candidate, policy, trace, *selection)) ||
       failed(verify(*candidate)))
     return {};
   scope.publish(mathematical::PublicationBoundary::ReturnedCandidate);
+  retained = true;
   return candidate;
 }
 LogicalResult lowerKernels(mlir::ModuleOp source,
@@ -171,16 +266,18 @@ struct LowerKernelsPass
   Option<bool> collectFoldFusion{*this, "fuse-collect-fold",
                                  llvm::cl::init(false)};
   mathematical::RealizationTrace *trace = nullptr;
+  MathematicalSelectionPolicy fallbackPolicy;
   LowerKernelsPass() = default;
   LowerKernelsPass(MathematicalSelectionPolicy policy,
                    mathematical::RealizationTrace *trace)
-      : trace(trace) {
+      : trace(trace), fallbackPolicy(policy) {
     finiteBulk = policy.finiteBulk;
     vectorReductionFusion = policy.vectorReductionFusion;
     collectFoldFusion = policy.collectFoldFusion;
   }
   LowerKernelsPass(const LowerKernelsPass &other)
-      : PassWrapper(other), trace(other.trace) {}
+      : PassWrapper(other), trace(other.trace),
+        fallbackPolicy(other.fallbackPolicy) {}
   void getDependentDialects(DialectRegistry &registry) const final {
     registry.insert<local::LocalDialect, algebra::AlgebraDialect,
                     kernel::KernelDialect, func::FuncDialect, scf::SCFDialect,
@@ -192,9 +289,11 @@ struct LowerKernelsPass
            "execution";
   }
   void runOnOperation() final {
-    if (failed(kernel::lowerKernels(
-            getOperation(),
-            {finiteBulk, vectorReductionFusion, collectFoldFusion}, trace)))
+    auto policy = fallbackPolicy;
+    policy.finiteBulk = finiteBulk;
+    policy.vectorReductionFusion = vectorReductionFusion;
+    policy.collectFoldFusion = collectFoldFusion;
+    if (failed(kernel::lowerKernels(getOperation(), policy, trace)))
       signalPassFailure();
   }
 };

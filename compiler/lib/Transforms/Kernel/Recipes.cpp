@@ -543,7 +543,9 @@ LogicalResult lowerRecipes(func::FuncOp entry, BindingSymbols &symbols,
                            RealizationWork *work = nullptr,
                            RealizationTrace *trace = nullptr,
                            RealizationScope *attempt = nullptr,
-                           bool orderedRetry = false) {
+                           bool orderedRetry = false,
+                           NumericalSelection *selection = nullptr,
+                           ArrayRef<RealizationSubject> subjects = {}) {
   // Finite bodies emit directly before primitive conversion. Callback
   // expansion and polynomial normalization still use a checked scratch clone
   // and can fail after mutation, so this phase cannot yet satisfy the
@@ -551,6 +553,10 @@ LogicalResult lowerRecipes(func::FuncOp entry, BindingSymbols &symbols,
   RealizationWork standalone;
   auto &realizationWork = work ? *work : standalone;
   auto &finiteWork = realizationWork.finiteExpressions;
+  llvm::DenseMap<Operation *, RealizationSubject> sourceSubjects;
+  if (selection)
+    for (auto [op, subject] : zip(entry.front().without_terminator(), subjects))
+      sourceSubjects[&op] = subject;
   while (true) {
     Operation *next = nullptr;
     entry.walk<WalkOrder::PreOrder>([&](Operation *op) {
@@ -569,7 +575,37 @@ LogicalResult lowerRecipes(func::FuncOp entry, BindingSymbols &symbols,
     --finiteWork;
     IRRewriter builder(next->getContext());
     builder.setInsertionPoint(next);
-    if (policy.collectFoldFusion && finiteWork) {
+    auto sourceSubject = sourceSubjects.lookup(next);
+    auto *previous = next->getPrevNode();
+    auto attributeChildren = [&] {
+      unsigned child = 0;
+      auto *first =
+          previous ? previous->getNextNode() : &next->getBlock()->front();
+      for (auto *at = first; at != next; at = at->getNextNode())
+        at->walk<WalkOrder::PreOrder>([&](Operation *nested) {
+          if (finite::isComputation(nested))
+            sourceSubjects[nested] = NumericalSelection::childSubject(
+                sourceSubject, nested->getName().getStringRef(), child++);
+        });
+    };
+    auto effective = policy;
+    std::optional<NumericalOccurrence> occurrence;
+    if (selection) {
+      auto selected = selection->discover(sourceSubject, policy.finiteBulk,
+                                          policy.numericalExpressions);
+      if (!selected) {
+        diagnostics::emit(next->emitError(), selected.takeError());
+        return failure();
+      }
+      occurrence = *selected;
+      effective = selection->policy(*selected, policy);
+    }
+    realizationWork.numericalSelection = selection;
+    realizationWork.numericalOccurrence = occurrence;
+    if (effective.collectFoldFusion && finiteWork &&
+        (!policy.finiteBulk || !selection ||
+         selection->alternative(*occurrence) ==
+             NumericalAlternative::Specialized)) {
       auto pair = finite::readCollectFold(next, next->getNextNode(),
                                           realizationWork.collectFoldDiscovery);
       if (succeeded(pair)) {
@@ -579,16 +615,18 @@ LogicalResult lowerRecipes(func::FuncOp entry, BindingSymbols &symbols,
         if (failed(results))
           return failure();
         --finiteWork;
+        attributeChildren();
         builder.replaceOp(pair->consumer.operation, *results);
         builder.eraseOp(next);
         continue;
       }
     }
     auto result =
-        finite::realizeExpression(next, next->getOperands(), builder, policy,
+        finite::realizeExpression(next, next->getOperands(), builder, effective,
                                   &realizationWork, trace, orderedRetry);
     if (failed(result))
       return failure();
+    attributeChildren();
     builder.replaceOp(next, *result);
   }
   ConversionTarget target(*entry.getContext());
@@ -610,13 +648,13 @@ LogicalResult lowerRecipes(func::FuncOp entry, BindingSymbols &symbols,
 // The private builtin module is a conversion workspace. Standard functions
 // retain the mathematical input until recipes have replaced it; only then is
 // the entry converted to the existing executable Local function vocabulary.
-OwningOpRef<mlir::ModuleOp> recipeCandidate(ModuleOp source, StringRef callSite,
-                                            func::FuncOp &function,
-                                            uint64_t &remaining,
-                                            uint64_t &remainingBytes) {
+OwningOpRef<mlir::ModuleOp>
+recipeCandidate(ModuleOp source, StringRef callSite, func::FuncOp &function,
+                uint64_t &remaining, uint64_t &remainingBytes,
+                std::optional<CapacityCause> &capacity) {
   auto entry = getEntry(source);
   if (!entry || !entry.getBody().hasOneBlock() || callSite.empty() ||
-      !chargeCopy(source, remaining))
+      !chargeCopy(source, remaining, &capacity))
     return {};
   OwningOpRef<mlir::ModuleOp> candidate(
       mlir::ModuleOp::create(source.getLoc()));
@@ -625,7 +663,7 @@ OwningOpRef<mlir::ModuleOp> recipeCandidate(ModuleOp source, StringRef callSite,
     builder.clone(definition);
   // Keep source declarations intact, including dormant references to the
   // public entry. Only this separately named working copy is converted.
-  if (!chargeCopy(entry, remaining))
+  if (!chargeCopy(entry, remaining, &capacity))
     return {};
   function = cast<func::FuncOp>(entry->clone());
   function.setSymName("_recipe_entry");
@@ -639,7 +677,8 @@ OwningOpRef<mlir::ModuleOp> recipeCandidate(ModuleOp source, StringRef callSite,
         protocol::algorithmSite({{callSite.str(), "kernel"}},
                                 std::to_string(ordinal++), remainingBytes);
     if (!site) {
-      diagnostics::emit(entry.emitError(), site.takeError());
+      consumeError(site.takeError());
+      capacity = CapacityCause{WorkOwner::AlgorithmOriginBytes};
       return {};
     }
     op.setAttr("site", builder.getStringAttr(*site));
@@ -680,85 +719,199 @@ OwningOpRef<mlir::ModuleOp>
 realizeEntry(ModuleOp source, StringRef callSite,
              MathematicalSelectionPolicy policy, RealizationWork &available,
              uint64_t &remaining, uint64_t &remainingBytes,
-             finite::VerificationLimits limits, RealizationTrace *trace) {
+             finite::VerificationLimits limits, RealizationTrace *trace,
+             NumericalSelection *selection, VerificationDecision *reported,
+             bool optionalConstruction) {
+  if (reported)
+    *reported = {VerificationObservation::Mismatch,
+                 "Kernel construction differs"};
   auto entry = getEntry(source);
   if (!entry)
     return {};
+  if (!limits.sharedReader)
+    limits.sharedReader = &available.requiredFiniteChecking;
+  if (!limits.sharedComparison)
+    limits.sharedComparison = &available.optionalFiniteChecking;
+  if (!limits.sharedContext)
+    limits.sharedContext = &available.numericalContextChecking;
+  if (!limits.sharedSiteBytes)
+    limits.sharedSiteBytes = &available.numericalCheckSiteBytes;
   RealizationScope scope(trace, "kernel-recipes", source, policy, &available);
-  // Reserve the worst-case construction debit before speculation. If the
-  // cumulative discard reserve cannot cover it, retain ordered execution.
-  // This avoids a new retry path for partially constructed proposals.
-  if (policy.finiteBulk &&
-      (remaining > available.discardedRecipeCopy ||
-       remainingBytes > available.discardedRecipeSiteBytes)) {
-    policy.finiteBulk = false;
-    scope.selection(entry, DecisionFamily::Finite, RealizationChoice::Ordered,
-                    {OptimizationStatus::Capacity, OptimizationReason::Work});
-  }
+  // Each speculative construction is capped by the remaining discard
+  // reserve before copying. Its selected debit is settled into the caller's
+  // quotas; optional verification failure instead debits that reserve.
   scope.propose(policy);
+  SmallVector<RealizationSubject> subjects;
+  if (!finite::consumeComputationWork(available.selectionBookkeeping,
+                                      entry.front().getOperations().size()))
+    return {};
+  for (auto &op : entry.front().without_terminator())
+    subjects.push_back(finite::isComputation(&op) ? realizationSubject(&op)
+                                                  : RealizationSubject{});
+  NumericalSelection localSelection(&available);
+  if (!selection) {
+    localSelection.remainingCopy = remaining;
+    localSelection.remainingSiteBytes = remainingBytes;
+    selection = &localSelection;
+  }
+  for (auto &op : entry.front().without_terminator())
+    if (finite::isComputation(&op)) {
+      auto occurrence =
+          selection->discover(realizationSubject(&op), policy.finiteBulk,
+                              policy.numericalExpressions);
+      if (!occurrence) {
+        diagnostics::emit(op.emitError(), occurrence.takeError());
+        return {};
+      }
+    }
   bool orderedRetry = false;
   for (;;) {
     // Retry from the immutable numerical unit. Optional matching allowances
     // remain cumulative; required construction keeps its ordered reserve.
-    auto attemptWork = available;
-    auto attemptRemaining = remaining;
-    auto attemptBytes = remainingBytes;
+    auto &attemptWork = available;
+    RecipeConstructionWork construction(available);
+    bool speculative = !reported && policy.finiteBulk &&
+                       selection->canSpeculate() &&
+                       selection->hasInvocationAlternatives() &&
+                       construction.canDiscard(available) &&
+                       remaining <= available.discardedRecipeCopy &&
+                       remainingBytes <= available.discardedRecipeSiteBytes;
+    if (!reported && policy.finiteBulk && !speculative &&
+        selection->hasInvocationAlternatives())
+      scope.selection(entry, DecisionFamily::Finite, RealizationChoice::Ordered,
+                      {OptimizationStatus::Capacity, OptimizationReason::Work});
+    bool previousPermission = true;
+    if (!reported)
+      previousPermission = selection->allowSpeculation(speculative);
+    auto restorePermission = llvm::scope_exit([&] {
+      if (!reported)
+        selection->allowSpeculation(previousPermission);
+    });
+    auto copyCeiling = speculative
+                           ? std::min(remaining, available.discardedRecipeCopy)
+                           : remaining;
+    auto byteCeiling =
+        speculative
+            ? std::min(remainingBytes, available.discardedRecipeSiteBytes)
+            : remainingBytes;
+    auto attemptRemaining = copyCeiling;
+    auto attemptBytes = byteCeiling;
     auto commitConstruction = llvm::scope_exit([&] {
-      remaining = attemptRemaining;
-      remainingBytes = attemptBytes;
+      remaining -= copyCeiling - attemptRemaining;
+      remainingBytes -= byteCeiling - attemptBytes;
     });
     RealizationScope attempt(trace, "kernel-recipe-attempt", source, policy);
     attempt.propose(policy);
     func::FuncOp function;
-    auto candidate = recipeCandidate(source, callSite, function,
-                                     attemptRemaining, attemptBytes);
-    if (!candidate)
+    std::optional<CapacityCause> constructionCapacity;
+    auto candidate =
+        recipeCandidate(source, callSite, function, attemptRemaining,
+                        attemptBytes, constructionCapacity);
+    auto retryConstruction = [&] {
+      if (constructionCapacity && reported)
+        *reported = {optionalConstruction
+                         ? VerificationObservation::OptionalCapacity
+                         : VerificationObservation::RequiredCapacity,
+                     "Kernel construction capacity", constructionCapacity};
+      if (!constructionCapacity || !speculative)
+        return false;
+      auto advanced = selection->advanceInvocation();
+      if (!advanced) {
+        diagnostics::emit(source.emitError(), advanced.takeError());
+        return false;
+      }
+      if (!*advanced)
+        return false;
+      if (candidate)
+        candidate->walk([&](Operation *op) { selection->origins.erase(op); });
+      if (!construction.discard(available))
+        return false;
+      available.discardedRecipeCopy -= copyCeiling - attemptRemaining;
+      available.discardedRecipeSiteBytes -= byteCeiling - attemptBytes;
+      commitConstruction.release();
+      attempt.discard(VerificationDecision{
+          VerificationObservation::OptionalCapacity,
+          "optional recipe construction capacity", constructionCapacity});
+      return true;
+    };
+    if (!candidate) {
+      if (retryConstruction())
+        continue;
       return {};
+    }
     attempt.declarationOrigin(function.getSymName(), entry.getSymName());
     BindingSymbols symbols(*candidate);
     auto lowered = lowerRecipes(function, symbols, policy, &attemptWork, trace,
-                                &attempt, orderedRetry);
-    available.matching = attemptWork.matching;
-    available.lanes = attemptWork.lanes;
-    available.collectFoldDiscovery = attemptWork.collectFoldDiscovery;
+                                &attempt, orderedRetry, selection, subjects);
+    // Every performed helper, equation and emission debit survives a retry.
+    available.numericalSelection = nullptr;
+    available.numericalOccurrence.reset();
     if (failed(lowered))
       return {};
     executableCandidate(*candidate, function, entry);
     finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
                                        {}};
-    auto schedule = scheduleEntry(*candidate, attemptRemaining);
-    if (!schedule)
+    auto schedule =
+        scheduleEntry(*candidate, attemptRemaining, &constructionCapacity);
+    if (!schedule) {
+      if (retryConstruction())
+        continue;
       return {};
+    }
     auto checked = verifyEntrySchedule(source, *schedule, callSite, policy,
                                        limits, &outcome);
     if (succeeded(checked)) {
       // The returned executable is consumed from the actual scheduled payload.
       // The earlier recipe workspace supplies no final body or SSA values.
-      auto executable = consumeSchedule(*schedule, attemptRemaining);
-      if (!executable || failed(verifyScheduleLowering(*schedule, *executable)))
+      auto executable =
+          consumeSchedule(*schedule, attemptRemaining, &constructionCapacity);
+      if (!executable) {
+        if (retryConstruction())
+          continue;
         return {};
+      }
+      if (failed(verifyScheduleLowering(*schedule, *executable,
+                                        limits.sharedContext, &outcome))) {
+        if (reported)
+          *reported = verificationDecision(outcome);
+        return {};
+      }
       candidate = std::move(executable);
       checked = verifyEntryRecipes(source, *candidate, callSite, policy, limits,
-                                   &outcome);
+                                   &outcome, selection);
     }
     if (succeeded(checked)) {
-      available = attemptWork;
       attempt.publish();
       scope.publish();
       return candidate;
     }
+    candidate->walk([&](Operation *op) { selection->origins.erase(op); });
     attempt.discard(verificationDecision(outcome));
+    if (reported) {
+      *reported = verificationDecision(outcome);
+      return {};
+    }
+    bool retry = false;
     if (outcome.status == finite::VerificationStatus::OptionalCapacity &&
         policy.finiteBulk) {
+      auto ordered = selection->order(outcome.subject);
+      if (!ordered) {
+        diagnostics::emit(source.emitError(), ordered.takeError());
+        return {};
+      }
+      retry = *ordered;
+    }
+    if (retry) {
       // Transfer the discarded construction debit to its cumulative reserve.
       // The ordered attempt keeps both incoming quotas. Terminal failures
       // instead retain their actual debit through commitConstruction.
-      available.discardedRecipeCopy -= remaining - attemptRemaining;
-      available.discardedRecipeSiteBytes -= remainingBytes - attemptBytes;
+      if (!construction.discard(available))
+        return {};
+      available.discardedRecipeCopy -= copyCeiling - attemptRemaining;
+      available.discardedRecipeSiteBytes -= byteCeiling - attemptBytes;
       commitConstruction.release();
-      policy.finiteBulk = false;
       orderedRetry = true;
-      attempt.retry(policy);
+      attempt.retry(policy, outcome.subject);
       continue;
     }
     if (outcome.status == finite::VerificationStatus::OptionalCapacity ||

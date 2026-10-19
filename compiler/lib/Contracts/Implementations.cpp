@@ -1,6 +1,7 @@
 #include "zkc/Contracts/Implementations.h"
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
+#include "zkc/Contracts/Numerical.h"
 #include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/STLExtras.h"
@@ -184,6 +185,9 @@ constexpr ContractRow contractRows[] = {
     {"external.openvm.sample_ext", Native, Compatibility::Independent},
     {"external.openvm.sample_bits", Native, Compatibility::Independent},
     {"external.openvm.check_witness", Native, Compatibility::Independent},
+    {"numerical.map", Arithmetic},
+    {"numerical.sum", Arithmetic},
+    {"numerical.product", Arithmetic},
     {"field.constant", Arithmetic},
     {"field.from_index", Arithmetic},
     {"field.add", Arithmetic},
@@ -416,8 +420,13 @@ ImplementationCatalog::defaultFor(const BindingApplication &binding) const {
   const auto *logical = declaration(binding.contract);
   if (!logical)
     return error("binding-implementation");
-  auto identities =
-      resolveStaticArguments(logical->signature.scope, binding.arguments);
+  ArrayRef<std::string> arguments = binding.arguments;
+  if (numericalContract(binding.contract)) {
+    if (auto e = checkNumericalArguments(binding))
+      return e;
+    arguments = arguments.take_front(1);
+  }
+  auto identities = resolveStaticArguments(logical->signature.scope, arguments);
   if (!identities)
     return identities.takeError();
   const ImplementationDescriptor *selected = nullptr;

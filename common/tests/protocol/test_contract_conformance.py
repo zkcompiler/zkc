@@ -263,6 +263,8 @@ def candidates(inventory):
             choices = [([payload], "native") for payload in
                        ["index", "field:bn254.fr", "group:bn254.g2", "field:koala-bear",
                         "sequence<field:ristretto255.scalar>", "rng:bls12-381.fr"]]
+        elif group == "numerical":
+            choices = [([d["identity"], "1"], d["provider"]) for d in by_sort["Field"]]
         elif group == "native_data_observation":
             choices = [([t["identity"], payload], t["provider"])
                        for t in by_sort["Transcript"] for payload in
@@ -303,6 +305,13 @@ def candidates(inventory):
 
 
 def expected_ports(operation, arguments, inventory):
+    # Numerical calls own their positional signature outside generic terms.
+    if operation["name"] in ("numerical.map", "numerical.sum", "numerical.product"):
+        field, mask = arguments
+        return {
+            "inputs": ["index"] + [f"{'vector' if bit == '1' else 'field'}:{field}" for bit in mask],
+            "outputs": [f"{'vector' if operation['name'] == 'numerical.map' else 'field'}:{field}"],
+        }
     # resource_unit is an explicitly documented non-generic core carrier. Its
     # nominal slot is not represented by the generated generic scope.
     if operation["name"].startswith("resource_unit."):
@@ -528,6 +537,12 @@ def test_explicit_semantic_witnesses(drivers, directory):
         *(("curve.identity", [group], [], [f"group:{group}"])
           for group in ("ristretto255.group", "bls12-381.g1", "bn254.g1", "bn254.g2", "bn254.gt")),
         ("field.add", ["koala-bear"], ["field:koala-bear"] * 2, ["field:koala-bear"]),
+        ("numerical.map", ["koala-bear", "001"],
+         ["index", "field:koala-bear", "field:koala-bear", "vector:koala-bear"], ["vector:koala-bear"]),
+        ("numerical.sum", ["bls12-381.fr", ""], ["index"], ["field:bls12-381.fr"]),
+        ("numerical.product", ["koala-bear.ext8-binomial3", "10"],
+         ["index", "vector:koala-bear.ext8-binomial3", "field:koala-bear.ext8-binomial3"],
+         ["field:koala-bear.ext8-binomial3"]),
         *(("vector.product", [field], [f"vector:{field}"], [f"field:{field}"])
           for field in ("bls12-381.fr", "bn254.fr", "ristretto255.scalar",
                         "koala-bear", "koala-bear.ext8-binomial3",
@@ -1108,6 +1123,35 @@ def test_actual_parameter_and_program_admission(drivers, directory):
     cases = json.loads((FIXTURES / "attribute-admission.json").read_text())
     assert len({case["name"] for case in cases}) == len(cases)
     assert 60 <= len(cases) <= 120, "review the bounded attribute witness set"
+    replies = query(drivers, [attribute_request(case) for case in cases], directory)
+    finish(directory, admission_failures(cases, replies))
+
+
+def test_numerical_expression_independent_admission(drivers, directory):
+    cases = []
+    for field, provider in [
+        ("bls12-381.fr", "arkworks"), ("bn254.fr", "arkworks"),
+        ("ristretto255.scalar", "dalek"), ("koala-bear", "plonky3"),
+        ("koala-bear.ext4-binomial3", "plonky3"), ("koala-bear.ext8-binomial3", "plonky3"),
+        ("gf2-64.pentanomial-4-3-1", "plonky3"),
+        ("gf2-64.pentanomial-4-3-1.ext3-trinomial1", "plonky3"),
+    ]:
+        body = ["zkc.ring/0", [field, field], [["input", 0], ["input", 1], ["mul", 0, 1]], [2]]
+        canonical = json.dumps(body, separators=(",", ":"))
+        wrong_field = deepcopy(body)
+        wrong_field[1][1] = "bn254.fr" if field != "bn254.fr" else "koala-bear"
+        wrong_outputs = deepcopy(body)
+        wrong_outputs[3] = [2, 2]
+        for mode in ("map", "sum", "product"):
+            for attributes, admitted in [
+                ([canonical], True), ([], False), ([canonical, canonical], False),
+                ([canonical + " "], False), (["{}"], False),
+                ([json.dumps(wrong_field, separators=(",", ":"))], False),
+                ([json.dumps(wrong_outputs, separators=(",", ":"))], False),
+            ]:
+                cases.append({"contract": f"numerical.{mode}", "arguments": [field, "01"],
+                              "implementation": f"{provider}/numerical.{mode}",
+                              "attributes": attributes, "admitted": admitted})
     replies = query(drivers, [attribute_request(case) for case in cases], directory)
     finish(directory, admission_failures(cases, replies))
 

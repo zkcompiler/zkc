@@ -34,22 +34,29 @@ llvm::StringRef comparisonCapacityName(ComparisonCapacity capacity);
 /// On success cursor follows the consumed payload and the returned SSA
 /// value denotes the formula vector. The caller must check its actual use and
 /// preserve the unchanged suffix. Cursor and bindings are unchanged on failure.
-mlir::FailureOr<mlir::Value>
-compareLaneFormula(mlir::Block &source, llvm::ArrayRef<bool> rowwise,
-                   mlir::ValueRange inputs, mlir::Value rows,
-                   mlir::Operation *&cursor, mlir::SymbolTable &symbols,
-                   llvm::DenseSet<mlir::Operation *> &bindings,
-                   uint64_t &remaining, mlir::Operation *end = nullptr);
+/// If supplied, capacity is reset on entry and distinguishes interpreter
+/// exhaustion from a mismatch. An exact allowance may be consumed on success.
+/// An engaged output names the actual result. An engaged empty Value permits
+/// any matching result inside the complete span; the caller checks its use.
+/// Without output, a supplied end must be the single-output terminator.
+mlir::FailureOr<mlir::Value> compareLaneFormula(
+    mlir::Block &source, llvm::ArrayRef<bool> rowwise, mlir::ValueRange inputs,
+    mlir::Value rows, mlir::Operation *&cursor, mlir::SymbolTable &symbols,
+    llvm::DenseSet<mlir::Operation *> &bindings, uint64_t &remaining,
+    mlir::Operation *end = nullptr, ComparisonCapacity *capacity = nullptr,
+    std::optional<CapacityCause> *debit = nullptr,
+    std::optional<mlir::Value> output = std::nullopt);
 
 /// Compare the sum of a mapped scalar formula with actual candidate payload
 /// operations (for example a dot product). The ordered length guards and
 /// unchanged surrounding context have the same obligations as above.
-mlir::FailureOr<mlir::Value>
-compareLaneSum(mlir::Block &source, llvm::ArrayRef<bool> rowwise,
-               mlir::ValueRange inputs, mlir::Value rows,
-               mlir::Operation *&cursor, mlir::SymbolTable &symbols,
-               llvm::DenseSet<mlir::Operation *> &bindings, uint64_t &remaining,
-               mlir::Operation *end = nullptr);
+mlir::FailureOr<mlir::Value> compareLaneSum(
+    mlir::Block &source, llvm::ArrayRef<bool> rowwise, mlir::ValueRange inputs,
+    mlir::Value rows, mlir::Operation *&cursor, mlir::SymbolTable &symbols,
+    llvm::DenseSet<mlir::Operation *> &bindings, uint64_t &remaining,
+    mlir::Operation *end = nullptr, ComparisonCapacity *capacity = nullptr,
+    std::optional<CapacityCause> *debit = nullptr,
+    std::optional<mlir::Value> output = std::nullopt);
 
 /// Independently interpret a finite source domain/helper and actual candidate
 /// payload. `inputs` maps the finite signature to candidate SSA; `rows` is the

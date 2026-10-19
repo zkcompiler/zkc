@@ -36,6 +36,13 @@ impl Table {
         Ok(Self::permuted(values, n))
     }
 
+    /// Consume evaluations already in low-bit physical order, without permuting.
+    /// The caller owns the allocation; shape and bounds are checked before publish.
+    pub fn from_physical_vec(values: Vec<Scalar>, bounds: &Bounds) -> Result<Self, Error> {
+        let n = bounds.table_length(values.len())?;
+        Ok(Self::backend(values, n))
+    }
+
     fn permuted(mut values: Vec<Scalar>, n: usize) -> Self {
         for j in 0..values.len() {
             let i = bit_reverse(j, n);
@@ -87,6 +94,12 @@ impl Table {
         self.polynomial.evaluations.capacity()
     }
 
+    /// Borrow immutable low-bit storage. Logical coordinate zero is the low bit,
+    /// so restricting it pairs adjacent entries, rather than the two halves.
+    pub fn physical_values(&self) -> &[Scalar] {
+        &self.polynomial.evaluations
+    }
+
     /// A valid table is never empty, including at zero arity.
     pub fn is_empty(&self) -> bool {
         false
@@ -124,10 +137,27 @@ impl Table {
             return Err(Error::PositiveArityRequired);
         }
         let mut values = vector(self.len() / 2)?;
-        for pair in self.polynomial.evaluations.as_chunks::<2>().0 {
-            values.push(pair[0] + r * (pair[1] - pair[0]));
-        }
+        values.resize(self.len() / 2, Scalar::ZERO);
+        self.restrict_first_into(r, &mut values)?;
         Ok(Self::backend(values, self.arity() - 1))
+    }
+
+    /// Restrict into initialized low-bit storage. Validate the entire shape
+    /// before writing; input tables and their aliases remain immutable.
+    pub fn restrict_first_into(&self, r: Scalar, destination: &mut [Scalar]) -> Result<(), Error> {
+        if self.arity() == 0 {
+            return Err(Error::PositiveArityRequired);
+        }
+        if destination.len() != self.len() / 2 {
+            return Err(Error::InvalidTableLength);
+        }
+        for (out, pair) in destination
+            .iter_mut()
+            .zip(self.physical_values().as_chunks::<2>().0)
+        {
+            *out = pair[0] + r * (pair[1] - pair[0]);
+        }
+        Ok(())
     }
 
     /// Evaluate by the tensor-product definition, independently of restriction

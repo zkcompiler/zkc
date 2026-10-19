@@ -2,6 +2,7 @@
 #include "zkc/Contracts/Declarations.h"
 #include "zkc/Contracts/Domains.h"
 #include "zkc/Contracts/Implementations.h"
+#include "zkc/Contracts/Numerical.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/ResourceUnit.h"
 #include "zkc/Contracts/TypeProperties.h"
@@ -241,6 +242,37 @@ resolveBindingSignature(const BindingApplication &binding, bool physical,
     if (*from == *to)
       return error("binding-conversion");
     return BoundOperation{{*from}, {*to}};
+  }
+  if (numericalContract(binding.contract)) {
+    auto result = resolveNumericalSignature(binding);
+    if (!result)
+      return result.takeError();
+    if (!physical)
+      return result;
+    const auto *implementation =
+        catalog->find(binding.contract, binding.implementation);
+    if (!implementation)
+      return error("binding-implementation");
+    const generic::Signature *declaration = nullptr;
+    for (const auto &op : executableOperationContracts())
+      if (op.name == binding.contract)
+        declaration = &op.signature;
+    if (!declaration)
+      return error("binding-contract");
+    if (auto e = checkImplementationArguments(
+            *implementation, declaration->scope,
+            ArrayRef<std::string>(binding.arguments).take_front(1)))
+      return e;
+    for (auto *ports : {&result->inputs, &result->outputs})
+      for (auto &port : *ports) {
+        auto selected = defaultRepresentation(port);
+        if (!selected)
+          return selected.takeError();
+        port = std::move(*selected);
+      }
+    if (auto e = applyImplementationRepresentations(*implementation, *result))
+      return e;
+    return result;
   }
   const generic::Signature *signature = nullptr;
   for (const auto &op : executableOperationContracts())

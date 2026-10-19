@@ -17,7 +17,7 @@ Examples are informative. [Status](../status.md) records implemented coverage.
 | Serialized artifacts | [Program](formats/program.md), [Entry package and interface](formats/entry.md), [proof deployment and transport](formats/proof.md), [message frames and setups](formats/messages.md) |
 | Formal import | [Scalar mathematical source](formats/common-source.md): retained program and relation-body exports; [structured source](formats/structured-source.md): original protocol-stage units with helpers, participants, contracts, applications and repeats; [constructed validator](formats/constructed-participant.md): a checked proof candidate's validator participant |
 | Host execution | [Entries](runtime/entries.md), [joint bundles](runtime/joint.md), [proofs](runtime/proofs.md), [attempts](runtime/attempts.md), [services](runtime/services.md) |
-| Operational boundaries | [VM execution](runtime/vm.md), [capacity](runtime/capacity.md), [file admission and publication](runtime/publication.md) |
+| Operational boundaries | [VM execution](runtime/vm.md), [numerical calls](runtime/numerical.md), [capacity](runtime/capacity.md), [file admission and publication](runtime/publication.md) |
 
 The four MLIR profiles constrain one program at successive compilation
 boundaries; they are not four dialects. An artifact's structural admission does

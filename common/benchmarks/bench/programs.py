@@ -93,6 +93,52 @@ def scan(shape):
                  {'xs': list(map(str, xs)), 'expected': ys})
 
 
+def numerical(shape):
+    """Matched column/capture expressions with vector and scalar destinations."""
+    field, n, form, sink = (shape[k] for k in ('field', 'elements', 'form', 'sink'))
+    degree = 8 if field == 'koala-bear.ext8-binomial3' else 1
+    modulus = a.FR if field == 'bls12-381.fr' else a.P
+    xs, ys = (a.dense(n, degree, seed, modulus) for seed in (61, 62))
+    capture = a.dense(1, degree, 63, modulus)[0]
+    zero, one = (0,) * degree, (1,) + (0,) * (degree - 1)
+    def add(x, y):
+        return tuple((u + v) % modulus for u, v in zip(x, y, strict=True))
+    def mul(x, y):
+        return a.mul(x, y) if degree == 8 else (x[0] * y[0] % modulus,)
+    invariant = add(mul(capture, capture), one)
+    rows = [add(add(mul(x, y), mul(capture, add(x, y))), invariant)
+            for x, y in zip(xs, ys, strict=True)]
+    expected = rows
+    if sink != 'map':
+        expected = zero if sink == 'sum' else one
+        combine = add if sink == 'sum' else mul
+        for row in rows:
+            expected = combine(expected, row)
+    formula = 'x*y+c*(x+y)+(c*c+1)'
+    domain = 'domains::zip(v::elements(xs),v::elements(ys))'
+    if form == 'map':
+        expression = 'map term(each xs, each ys, c)'
+    elif form == 'collect':
+        expression = f'v::collect({domain},fn((x,y))=>{formula})'
+    elif form == 'bulk':
+        expression = ('v::add(v::add(v::hadamard(xs,ys),v::scale(v::add(xs,ys),c)),'
+                      'v::fill(c*c+1,v::length(xs)))')
+    else:
+        raise ValueError(f'unknown numerical source form: {form}')
+    if sink != 'map':
+        expression = f'v::{sink}({expression})'
+    check = 'v::equal(out,expected)' if sink == 'map' else 'out == expected'
+    parameters = 'xs:Vector<F>, ys:Vector<F>, c:F, expected:' + ('Vector<F>' if sink == 'map' else 'F')
+    program = local(field, parameters, f'let out={expression}; return {check};',
+                    {'xs': list(map(a.encode, xs)), 'ys': list(map(a.encode, ys)),
+                     'c': a.encode(capture),
+                     'expected': list(map(a.encode, expected)) if sink == 'map' else a.encode(expected)})
+    program.source = program.source.replace('fn compute(', f'''use zkc::finite_domain as domains;
+math fn term(x:F,y:F,c:F)->F {{ return {formula}; }}
+fn compute(''')
+    return program
+
+
 def control(shape):
     rows, columns = shape['rows'], shape['columns']
     xs = [x[0] for x in a.dense(rows * columns, seed=41)]

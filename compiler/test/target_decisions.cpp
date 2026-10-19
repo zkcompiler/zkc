@@ -158,6 +158,7 @@ void refusedMutation(ModuleOp module, PhysicalPlan &plan, StringRef code) {
 class TestCandidates final : public CandidateCatalog {
 public:
   bool reverseOrder = false, available = true, invalidFirst = true;
+  bool withholdOrdinary = false;
   bool diagonalAvailable = true, invalidDiagonalFirst = false;
   std::string withheldDiagonalContract;
   std::vector<std::string> diagonalImplementations(
@@ -173,6 +174,8 @@ public:
   }
   Expected<std::vector<std::string>>
   implementations(const BindingApplication &application) const override {
+    if (withholdOrdinary)
+      return std::vector<std::string>{};
     if (application.contract == "poly.fold" &&
         application.arguments == std::vector<std::string>{"bls12-381.fr"}) {
       std::vector<std::string> result{"arkworks-msb/poly.fold",
@@ -440,6 +443,40 @@ int main() {
         require(dense.bindings.size() == 2,
                 "dense choice needs no conversions");
         take(validatePhysical(*module, dense, catalog));
+      });
+  cases.run(
+      "explicit pins bypass withheld automatic implementation preferences",
+      [&] {
+        TestCandidates catalog;
+        catalog.withholdOrdinary = true;
+        auto module = take(executableFixture(layouts(false), context));
+        auto plan = take(proposePhysical(*module, catalog,
+                                         {{"msb", "arkworks-msb/poly.fold"},
+                                          {"dense", "arkworks/poly.fold"}}));
+        require(plan.bindings[0].fixed && plan.bindings[1].fixed,
+                "explicit selections were recorded as automatic preferences");
+        take(validatePhysical(*module, plan, catalog));
+        auto pinned = take(executableFixture(layouts(), context));
+        refuses(
+            proposePhysical(*pinned, catalog, {{"msb", "arkworks/poly.fold"}}),
+            "binding-selection-conflict");
+      });
+  cases.run(
+      "automatic implementation advances after real conversion refusal", [&] {
+        TestCandidates catalog;
+        catalog.available = false;
+        auto module = take(executableFixture(layouts(false), context));
+        auto before = printed(*module);
+        auto plan = take(proposePhysical(*module, catalog));
+        require(plan.bindings.front().binding.application.implementation ==
+                    "arkworks/poly.fold",
+                "conversion refusal discarded a later feasible implementation");
+        for (const auto &decision : plan.operations)
+          require(decision.conversions.empty(),
+                  "dense implementation retained stale conversion decisions");
+        take(validatePhysical(*module, plan, catalog));
+        require(printed(*module) == before,
+                "implementation retry changed the original SSA subject");
       });
   cases.run(
       "unavailable conversion fails read-only proposal and validation", [&] {

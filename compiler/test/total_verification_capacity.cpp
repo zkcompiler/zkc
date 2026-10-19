@@ -87,7 +87,9 @@ void checkConstructionReserve(MLIRContext &context, int copySlack,
   require(remaining <= initialCopy && remainingBytes <= initialBytes &&
               work.discardedRecipeCopy <= initialWork.discardedRecipeCopy &&
               work.discardedRecipeSiteBytes <=
-                  initialWork.discardedRecipeSiteBytes,
+                  initialWork.discardedRecipeSiteBytes &&
+              work.discardedRecipeExpansion <=
+                  initialWork.discardedRecipeExpansion,
           "construction replenished a cumulative quota");
   if (copySlack < 0 || siteSlack < 0) {
     require(!candidate, "insufficient construction reserve published output");
@@ -122,13 +124,17 @@ void checkConstructionReserve(MLIRContext &context, int copySlack,
     require(work.discardedRecipeCopy == initialWork.discardedRecipeCopy &&
                 work.discardedRecipeSiteBytes ==
                     initialWork.discardedRecipeSiteBytes &&
-                work.matching.structural == orderedWork.matching.structural,
+                work.matching.structural == orderedWork.matching.structural &&
+                work.discardedRecipeExpansion ==
+                    initialWork.discardedRecipeExpansion,
             "insufficient discard reserve attempted speculation");
   } else {
     require(work.discardedRecipeCopy < initialWork.discardedRecipeCopy &&
                 work.discardedRecipeSiteBytes ==
                     initialWork.discardedRecipeSiteBytes - siteCost &&
-                work.matching.structural < orderedWork.matching.structural,
+                work.matching.structural < orderedWork.matching.structural &&
+                work.discardedRecipeExpansion <
+                    initialWork.discardedRecipeExpansion,
             "discarded construction or recognition work was refunded");
   }
 }
@@ -152,6 +158,26 @@ int main() {
   cases.run(
       "insufficient discarded-site reserve retains ordered construction",
       [&] { checkConstructionReserve(context, 0, 0, false, false, true); });
+  cases.run(
+      "exhausted discarded expansion preserves required construction", [&] {
+        auto source = parseSourceString<ModuleOp>(
+            fixture("../structured-source/realization-finite.mlir"), &context);
+        require(bool(source), "sum source refused");
+        auto numerical =
+            kernelRecipeSource(unit(*source), "sum", "calculation");
+        mathematical::RealizationWork work, orderedWork;
+        work.discardedRecipeExpansion = 0;
+        auto candidate =
+            realizeKernelEntry(*numerical, "x", {}, work, {100000, 1});
+        auto ordered =
+            realizeKernelEntry(*numerical, "x", {false, false}, orderedWork);
+        require(candidate && ordered && same(*candidate, *ordered) &&
+                    work.helperOperations == orderedWork.helperOperations &&
+                    work.helperSlots == orderedWork.helperSlots &&
+                    work.finiteExpressions == orderedWork.finiteExpressions &&
+                    work.discardedRecipeExpansion == 0,
+                "exhausted speculative work consumed the required reserve");
+      });
   cases.run("discarded construction stays cumulative across calls", [&] {
     auto source = parseSourceString<ModuleOp>(
         fixture("../structured-source/realization-finite.mlir"), &context);

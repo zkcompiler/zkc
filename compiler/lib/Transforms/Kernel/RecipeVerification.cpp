@@ -2,6 +2,7 @@
 #include "../CollectionInterpretation.h"
 #include "../HelperNormalization.h"
 #include "../MathematicalSupport.h"
+#include "../RealizationSubject.h"
 #include "Support.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "zkc/Analysis/Finite.h"
@@ -14,6 +15,7 @@
 #include "zkc/Transforms/Finite.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/ScopeExit.h"
 
 #include "zkc/Transforms/Algorithms.h"
 
@@ -30,6 +32,9 @@ class RecipeReader {
   const CheckedHelperNormalizations &helpers;
   uint64_t remaining = 1000000;
   bool allowFiniteBulk = true;
+  NumericalSelection *selection = nullptr;
+  std::optional<RealizationSubject> activeSubject;
+  unsigned nextChild = 0;
   uint64_t compositionInspection = 100000;
   finite::VerificationLimits finiteLimits;
   finite::VerificationResult finiteOutcome{finite::VerificationStatus::Mismatch,
@@ -158,8 +163,26 @@ class RecipeReader {
     }
     return results;
   }
-  FailureOr<SmallVector<Value>>
-  finiteRecipe(Operation *source, Operation *&cursor, ValueRange inputs) {
+  FailureOr<SmallVector<Value>> finiteRecipe(Operation *source,
+                                             Operation *&cursor,
+                                             ValueRange inputs,
+                                             bool root = false) {
+    auto inherited = activeSubject;
+    auto inheritedChild = nextChild;
+    auto subject = root || !activeSubject
+                       ? realizationSubject(source)
+                       : NumericalSelection::childSubject(
+                             *activeSubject, source->getName().getStringRef(),
+                             nextChild++);
+    if (!root)
+      inheritedChild = nextChild;
+    activeSubject = subject;
+    nextChild = 0;
+    auto restore = llvm::scope_exit([&] {
+      activeSubject = inherited;
+      nextChild = inheritedChild;
+    });
+    auto *begin = cursor;
     finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
                                        {}};
     auto result = finite::verifyExpression(
@@ -169,6 +192,26 @@ class RecipeReader {
           return readHelper(helper, args, at);
         },
         sourceRoot, finiteLimits, outcome, {allowFiniteBulk, false});
+    if (failed(result) &&
+        (outcome.status == finite::VerificationStatus::OptionalCapacity ||
+         outcome.status == finite::VerificationStatus::RequiredCapacity))
+      outcome.subject = subject;
+    if (succeeded(result) && selection && !root) {
+      auto owner = selection->discover(subject, allowFiniteBulk);
+      if (!owner) {
+        consumeError(owner.takeError());
+        finiteOutcome = {finite::VerificationStatus::RequiredCapacity,
+                         "numerical occurrence discovery",
+                         {},
+                         subject};
+        return failure();
+      }
+      for (auto *at = begin; at != cursor; at = at->getNextNode()) {
+        if (!at)
+          return failure();
+        at->walk([&](Operation *nested) { selection->record(nested, *owner); });
+      }
+    }
     // A recursive finite callback may already have reported capacity; its
     // enclosing ordered reader must not replace that cause with a mismatch.
     if (failed(result) &&
@@ -430,9 +473,9 @@ class RecipeReader {
 public:
   RecipeReader(Operation *sourceRoot, Operation *targetRoot,
                const CheckedHelperNormalizations &helpers,
-               finite::VerificationLimits limits)
+               finite::VerificationLimits limits, NumericalSelection *selection)
       : sourceRoot(sourceRoot), symbols(targetRoot), helpers(helpers),
-        finiteLimits(limits) {}
+        selection(selection), finiteLimits(limits) {}
   FailureOr<SmallVector<Value>> read(func::FuncOp entry, StringRef callSite,
                                      ValueRange arguments, Operation *&cursor,
                                      uint64_t &budget, uint64_t &remainingBytes,
@@ -489,6 +532,10 @@ public:
       auto *begin = cursor;
       SmallVector<Value> results;
       bool finite = finite::isComputation(&op);
+      if (finite) {
+        activeSubject = realizationSubject(&op);
+        nextChild = 0;
+      }
       Operation *resultSource = &op;
       bool composed = false;
       std::optional<finite::VerificationResult> compositionFailure;
@@ -534,7 +581,7 @@ public:
       if (composed) {
         // Both source callbacks have been read against this actual traversal.
       } else if (finite) {
-        auto read = finiteRecipe(&op, cursor, inputs);
+        auto read = finiteRecipe(&op, cursor, inputs, true);
         if (failed(read)) {
           if (compositionFailure &&
               finiteOutcome.status == finite::VerificationStatus::Mismatch)
@@ -547,6 +594,23 @@ public:
         if (!value)
           return finish(false);
         results.push_back(value);
+      }
+      if (finite && selection) {
+        auto owner =
+            selection->discover(realizationSubject(&op), policy.finiteBulk,
+                                policy.numericalExpressions);
+        if (!owner) {
+          consumeError(owner.takeError());
+          finiteOutcome = {finite::VerificationStatus::RequiredCapacity,
+                           "numerical occurrence discovery"};
+          return finish(false);
+        }
+        for (auto *at = begin; at != cursor; at = at->getNextNode()) {
+          if (!at)
+            return finish(false);
+          at->walk(
+              [&](Operation *nested) { selection->record(nested, *owner); });
+        }
       }
       auto site =
           protocol::algorithmSite({{callSite.str(), "kernel"}},
@@ -580,7 +644,8 @@ FailureOr<SmallVector<Value>> verifyKernelRecipes(
     func::FuncOp source, Operation *targetRoot, StringRef callSite,
     ValueRange arguments, Operation *&cursor, uint64_t &remaining,
     uint64_t &remainingBytes, MathematicalSelectionPolicy policy,
-    finite::VerificationLimits limits, finite::VerificationResult &outcome) {
+    finite::VerificationLimits limits, finite::VerificationResult &outcome,
+    NumericalSelection *selection) {
   outcome = {finite::VerificationStatus::Mismatch, "numerical recipes differ"};
   auto unit =
       source ? dyn_cast_or_null<ModuleOp>(source->getParentOp()) : ModuleOp();
@@ -590,7 +655,7 @@ FailureOr<SmallVector<Value>> verifyKernelRecipes(
   CheckedHelperNormalizations helpers(unit);
   if (failed(helpers.readback(&remaining)))
     return failure();
-  return RecipeReader(unit, targetRoot, helpers, limits)
+  return RecipeReader(unit, targetRoot, helpers, limits, selection)
       .read(source, callSite, arguments, cursor, remaining, remainingBytes,
             policy, outcome);
 }
@@ -615,7 +680,8 @@ LogicalResult verifyEntryRecipes(ModuleOp source, mlir::ModuleOp candidate,
                                  StringRef callSite,
                                  MathematicalSelectionPolicy policy,
                                  finite::VerificationLimits limits,
-                                 finite::VerificationResult *reported) {
+                                 finite::VerificationResult *reported,
+                                 NumericalSelection *selection) {
   finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
                                      "numerical recipes differ"};
   auto finish = [&](bool valid) -> LogicalResult {
@@ -664,9 +730,17 @@ LogicalResult verifyEntryRecipes(ModuleOp source, mlir::ModuleOp candidate,
   // only the one output function and its used bindings. Source dependencies
   // remain in the immutable Kernel owner used by the independent reader.
   llvm::DenseSet<Operation *> used;
-  uint64_t remaining = 1000000, remainingBytes = 16 * 1024 * 1024;
-  if (!chargeCopy(candidate, remaining))
+  uint64_t standalone = 1000000, standaloneBytes = 16 * 1024 * 1024;
+  auto &remaining = limits.sharedContext ? *limits.sharedContext : standalone;
+  auto &remainingBytes =
+      limits.sharedSiteBytes ? *limits.sharedSiteBytes : standaloneBytes;
+  std::optional<CapacityCause> capacity;
+  if (!chargeCopy(candidate, remaining, &capacity)) {
+    outcome = {finite::VerificationStatus::RequiredCapacity,
+               "Kernel recipe context checking capacity",
+               CapacityCause{WorkOwner::AlgorithmChecking}};
     return finish(false);
+  }
   target.walk([&](Operation *op) {
     if (auto ref = op->getAttrOfType<FlatSymbolRefAttr>("binding"))
       used.insert(symbols.lookup(ref.getValue()));
@@ -679,9 +753,9 @@ LogicalResult verifyEntryRecipes(ModuleOp source, mlir::ModuleOp candidate,
       return finish(false);
   }
   auto *cursor = &target.getBody().front().front();
-  auto outputs =
-      verifyKernelRecipes(entry, owner, callSite, target.getArguments(), cursor,
-                          remaining, remainingBytes, policy, limits, outcome);
+  auto outputs = verifyKernelRecipes(
+      entry, owner, callSite, target.getArguments(), cursor, remaining,
+      remainingBytes, policy, limits, outcome, selection);
   auto returned = dyn_cast_or_null<local::ReturnOp>(cursor);
   return finish(succeeded(outputs) && returned && !returned->getNextNode() &&
                 returned.getInputs() == ValueRange(*outputs));

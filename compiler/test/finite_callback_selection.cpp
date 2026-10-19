@@ -213,8 +213,11 @@ OwningOpRef<ModuleOp> emit(ModuleOp source, RealizationWork &work,
       cast<kernel::ModuleOp>(numerical->clone()));
   // The entry contains the original standard-function fold. Optional callback
   // preparation and required ordered fallback share the caller's work object.
-  auto candidate = realizeKernelEntry(*numerical, "selection",
-                                      {optimize, false}, work, limits, trace);
+  MathematicalSelectionPolicy policy{optimize, false};
+  // These cases mutate the vector alternative's concrete instructions.
+  policy.numericalExpressions = NumericalExpressionMode::VectorOnly;
+  auto candidate =
+      realizeKernelEntry(*numerical, "selection", policy, work, limits, trace);
   require(bool(candidate), "checked callback lowering failed");
   kernelRecipeOutput(*candidate);
   require(succeeded(kernel::verifyRecipeOutput(*candidate)),

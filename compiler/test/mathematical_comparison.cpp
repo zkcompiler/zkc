@@ -150,11 +150,15 @@ bool compareMap(ModuleOp module, uint64_t budget = 100000, bool sum = false) {
   Operation *originalCursor = cursor;
   llvm::DenseSet<Operation *> bindings;
   const bool rowwise[] = {true, true, false};
-  auto compare =
-      sum ? mathematical::compareLaneSum : mathematical::compareLaneFormula;
-  auto result = compare(source.getBody().front(), rowwise,
-                        body.getArguments().take_front(3), body.getArgument(3),
-                        cursor, symbols, bindings, budget, &body.back());
+  auto result =
+      sum ? mathematical::compareLaneSum(source.getBody().front(), rowwise,
+                                         body.getArguments().take_front(3),
+                                         body.getArgument(3), cursor, symbols,
+                                         bindings, budget, &body.back())
+          : mathematical::compareLaneFormula(
+                source.getBody().front(), rowwise,
+                body.getArguments().take_front(3), body.getArgument(3), cursor,
+                symbols, bindings, budget, &body.back());
   if (failed(result)) {
     require(cursor == originalCursor && bindings.empty(),
             "failed comparison changed caller context");

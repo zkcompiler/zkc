@@ -1,5 +1,8 @@
 #include "../lib/Transforms/FiniteVerification.h"
+#include "../lib/Transforms/Kernel/Schedule.h"
+#include "../lib/Transforms/Kernel/Support.h"
 #include "../lib/Transforms/MathematicalComparison.h"
+#include "../lib/Transforms/NumericalSelection.h"
 #include "../lib/Transforms/RecipeRealizations.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/OperationSupport.h"
@@ -9,6 +12,7 @@
 #include "zkc/Contracts/RingExpression.h"
 #include "zkc/Dialect/IR.h"
 #include <fstream>
+#include <limits>
 #include <sstream>
 
 using namespace mlir;
@@ -16,6 +20,8 @@ using namespace zkc;
 using namespace zkc::test;
 
 namespace {
+constexpr MathematicalSelectionPolicy vectorPolicy{
+    true, false, false, true, NumericalExpressionMode::VectorOnly};
 OwningOpRef<ModuleOp> fixture(MLIRContext &context, StringRef name) {
   std::ifstream input(std::string(ZKC_FINITE_FIXTURES) + "/" + name.str() +
                       ".mlir");
@@ -46,6 +52,72 @@ bool hasLoop(ModuleOp module, StringRef name) {
   bool result = false;
   function(module, name).walk([&](local::LocalForOp) { result = true; });
   return result;
+}
+OwningOpRef<ModuleOp> kernelReductions(MLIRContext &context) {
+  auto result = parseSourceString<ModuleOp>(R"mlir(
+!F = !algebra.field<"bls12-381.fr">
+!V = !algebra.field_vector<"bls12-381.fr">
+module { kernel.module @reductions {
+ "data.domain"() ({ ^entry(%xs:!V):
+   %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
+   "data.domain_yield"(%d) : (!data.domain<!F>)->()
+ }) {sym_name="items",sym_visibility="private",function_type=(!V)->!data.domain<!F>} : ()->()
+ func.func private @add(%acc:!F,%x:!F,%xs:!V)->!F {
+   %s = "algebra.field_add"(%acc,%x) : (!F,!F)->!F
+   func.return %s : !F
+ }
+ func.func private @multiply(%acc:!F,%x:!F,%xs:!V)->!F {
+   %s = "algebra.field_multiply"(%acc,%x) : (!F,!F)->!F
+   func.return %s : !F
+ }
+ func.func @evaluate(%xs:!V,%zero:!F,%one:!F)->(!F,!F) {
+   %sum = "algebra.finite_fold"(%xs,%zero) {domain=@items,step=@add} : (!V,!F)->!F
+   %product = "algebra.finite_fold"(%xs,%one) {domain=@items,step=@multiply} : (!V,!F)->!F
+   func.return %sum,%product : !F,!F
+ }
+} }
+)mlir",
+                                            &context);
+  require(bool(result) && succeeded(verify(*result)),
+          "two-occurrence Kernel fixture did not admit");
+  return result;
+}
+OwningOpRef<ModuleOp> nestedKernelReductions(MLIRContext &context) {
+  auto result = parseSourceString<ModuleOp>(R"mlir(
+!F = !algebra.field<"bls12-381.fr">
+!V = !algebra.field_vector<"bls12-381.fr">
+module { kernel.module @reductions {
+ "data.domain"() ({ ^entry(%xs:!V):
+   %d = "data.domain_elements"(%xs) : (!V)->!data.domain<!F>
+   "data.domain_yield"(%d) : (!data.domain<!F>)->()
+ }) {sym_name="items",sym_visibility="private",function_type=(!V)->!data.domain<!F>} : ()->()
+ func.func private @add(%acc:!F,%x:!F,%xs:!V)->!F {
+   %s = "algebra.field_add"(%acc,%x) : (!F,!F)->!F
+   func.return %s : !F
+ }
+ func.func private @nested(%acc:!F,%x:!F,%xs:!V)->!F {
+   %first = "algebra.finite_fold"(%xs,%acc) {domain=@items,step=@add} : (!V,!F)->!F
+   %second = "algebra.finite_fold"(%xs,%first) {domain=@items,step=@add} : (!V,!F)->!F
+   %s = "algebra.field_add"(%second,%x) : (!F,!F)->!F
+   func.return %s : !F
+ }
+ func.func @evaluate(%xs:!V,%zero:!F)->!F {
+   %sum = "algebra.finite_fold"(%xs,%zero) {domain=@items,step=@nested} : (!V,!F)->!F
+   func.return %sum : !F
+ }
+} }
+)mlir",
+                                            &context);
+  require(bool(result) && succeeded(verify(*result)),
+          "nested Kernel fixture did not admit");
+  return result;
+}
+void requiredReaderCapacity(const finite::VerificationResult &outcome) {
+  require(outcome.status == finite::VerificationStatus::RequiredCapacity &&
+              outcome.detail == "finite reader work" && outcome.capacity &&
+              outcome.capacity->owner == WorkOwner::RequiredFiniteReader &&
+              outcome.capacity->available == 0,
+          "nested reader lost its typed required capacity cause");
 }
 // Extend the ordinary square into x^(multiplications + 1). Both scalar and
 // vector operations stay well formed, and the two actual formulas agree.
@@ -100,13 +172,222 @@ int main() {
   MLIRContext context(registry);
   context.loadAllAvailableDialects();
   Cases cases;
+  for (bool scheduled : {false, true})
+    cases.run(
+        scheduled ? "nested scheduled readers share actual work"
+                  : "nested Local readers share actual work",
+        [&] {
+          auto source = nestedKernelReductions(context);
+          auto original = clone(*source);
+          auto unit = *source->getBody()->getOps<kernel::ModuleOp>().begin();
+          mathematical::RealizationWork work;
+          work.requiredFiniteChecking = 1000;
+          work.optionalFiniteChecking = 0;
+          uint64_t copies = 1000000, bytes = 16 * 1024 * 1024;
+          auto ordered = kernel::realizeEntry(unit, "nested", {false, false},
+                                              work, copies, bytes);
+          require(bool(ordered), "outer reader starved its nested callbacks");
+          unsigned loops = 0, nestedLoops = 0;
+          ordered->walk([&](local::LocalForOp loop) {
+            ++loops;
+            nestedLoops += bool(loop->getParentOfType<local::LocalForOp>());
+          });
+          require(loops == 3 && nestedLoops == 2,
+                  "fixture lost its outer fold or sibling nested folds");
+          auto candidate = scheduled ? kernel::scheduleEntry(*ordered, copies)
+                                     : clone(*ordered);
+          require(bool(candidate), "nested schedule construction refused");
+          auto before = clone(*candidate);
+          finite::VerificationResult outcome{
+              finite::VerificationStatus::Mismatch, {}};
+          auto check = [&](uint64_t localCap, uint64_t &shared) {
+            finite::VerificationLimits limits{localCap, 0, &shared};
+            return scheduled
+                       ? kernel::verifyEntrySchedule(unit, *candidate, "nested",
+                                                     {false, false}, limits,
+                                                     &outcome)
+                       : kernel::verifyEntryRecipes(unit, *candidate, "nested",
+                                                    {false, false}, limits,
+                                                    &outcome);
+          };
+          uint64_t shared = 1000;
+          require(succeeded(check(100000, shared)) &&
+                      outcome.status == finite::VerificationStatus::Verified,
+                  "ample shared nested check refused");
+          const uint64_t cost = 1000 - shared;
+          require(cost > 1 && cost < 1000,
+                  "nested check did not debit actual shared work");
+          uint64_t localCap = 0;
+          for (; localCap <= cost; ++localCap) {
+            shared = 1000;
+            if (succeeded(check(localCap, shared)))
+              break;
+            requiredReaderCapacity(outcome);
+          }
+          require(
+              localCap > 1 && localCap < cost,
+              "nested work was charged to one reader instead of local caps");
+          shared = cost;
+          require(succeeded(check(localCap, shared)) && shared == 0,
+                  "exact cumulative nested allowance refused");
+          shared = cost - 1;
+          require(failed(check(localCap, shared)) && shared == 0,
+                  "one-short cumulative nested allowance was replenished");
+          requiredReaderCapacity(outcome);
+          if (!scheduled)
+            require(outcome.capacity->requested == 1,
+                    "failed instruction lost its requested debit");
+          shared = 1000;
+          require(failed(check(localCap - 1, shared)) && shared > 0,
+                  "shared work bypassed the per-reader local cap");
+          requiredReaderCapacity(outcome);
+          shared = 2 * cost;
+          require(
+              succeeded(check(localCap, shared)) && shared == cost &&
+                  succeeded(check(localCap, shared)) && shared == 0 &&
+                  failed(check(localCap, shared)) && shared == 0,
+              "nested checks refunded work or reset the containing balance");
+          requiredReaderCapacity(outcome);
+          const auto maximum = std::numeric_limits<uint64_t>::max();
+          shared = maximum;
+          require(succeeded(check(maximum, shared)) && shared == maximum - cost,
+                  "nested accounting overflowed at the maximum allowance");
+          require(failed(check(0, shared)) && shared == maximum - cost,
+                  "zero local cap spent or replenished shared work");
+          requiredReaderCapacity(outcome);
+          shared = 0;
+          require(failed(check(maximum, shared)) && shared == 0,
+                  "zero shared work underflowed");
+          requiredReaderCapacity(outcome);
+          require(same(*source, *original) && same(*candidate, *before) &&
+                      work.optionalFiniteChecking == 0,
+                  "nested checking edited IR or spent optional work");
+        });
+  cases.run("nested construction exact and one-short checks are atomic", [&] {
+    auto source = nestedKernelReductions(context);
+    auto original = clone(*source);
+    auto unit = *source->getBody()->getOps<kernel::ModuleOp>().begin();
+    mathematical::RealizationWork work;
+    work.requiredFiniteChecking = 1000;
+    work.optionalFiniteChecking = 0;
+    uint64_t copies = 1000000, bytes = 16 * 1024 * 1024;
+    auto measured = kernel::realizeEntry(unit, "nested", {false, false}, work,
+                                         copies, bytes);
+    require(bool(measured), "nested construction measurement refused");
+    const uint64_t cost = 1000 - work.requiredFiniteChecking;
+    require(cost > 1 && cost < 1000,
+            "nested construction did not share required checking work");
+    work = {};
+    work.requiredFiniteChecking = cost;
+    work.optionalFiniteChecking = 0;
+    copies = 1000000;
+    bytes = 16 * 1024 * 1024;
+    auto exact = kernel::realizeEntry(unit, "nested", {false, false}, work,
+                                      copies, bytes);
+    require(bool(exact) && work.requiredFiniteChecking == 0 &&
+                same(*measured, *exact),
+            "exact nested construction allowance changed or refused output");
+    work = {};
+    work.requiredFiniteChecking = cost - 1;
+    work.optionalFiniteChecking = 0;
+    copies = 1000000;
+    bytes = 16 * 1024 * 1024;
+    mathematical::VerificationDecision outcome;
+    auto refused =
+        kernel::realizeEntry(unit, "nested", {false, false}, work, copies,
+                             bytes, {}, nullptr, nullptr, &outcome);
+    require(!refused && work.requiredFiniteChecking == 0 &&
+                outcome.outcome ==
+                    mathematical::VerificationObservation::RequiredCapacity &&
+                outcome.detail == "finite reader work" && outcome.capacity &&
+                outcome.capacity->owner == WorkOwner::RequiredFiniteReader &&
+                outcome.capacity->available == 0 && same(*source, *original) &&
+                same(*measured, *exact),
+            "one-short nested construction published output or lost capacity");
+  });
+  cases.run("Kernel optional retries debit both occurrences cumulatively", [&] {
+    auto source = kernelReductions(context);
+    auto before = clone(*source);
+    auto unit = *source->getBody()->getOps<kernel::ModuleOp>().begin();
+    mathematical::NumericalSelection session;
+    auto initial = session.work;
+    auto candidate = kernel::realizeEntry(
+        unit, "reductions", {}, session.work, session.remainingCopy,
+        session.remainingSiteBytes, {100000, 1}, nullptr, &session);
+    require(bool(candidate),
+            "attributable optional retries refused ordered source");
+    unsigned loops = 0;
+    candidate->walk([&](local::LocalForOp) { ++loops; });
+    require(
+        loops == 2 && same(*source, *before) &&
+            succeeded(
+                kernel::verifyEntryRecipes(unit, *candidate, "reductions")),
+        "targeted retries changed source or lost independent correspondence");
+    require(session.work.discardedRecipeCopy < initial.discardedRecipeCopy &&
+                session.work.matching.structural <
+                    initial.matching.structural &&
+                session.work.helperOperations < initial.helperOperations &&
+                session.work.finiteExpressions < initial.finiteExpressions,
+            "discarded attempts replenished cumulative construction or "
+            "discovery work");
+  });
+  cases.run(
+      "Kernel ordered copy exact and one-short boundaries are atomic", [&] {
+        auto source = kernelReductions(context);
+        auto before = clone(*source);
+        auto unit = *source->getBody()->getOps<kernel::ModuleOp>().begin();
+        mathematical::RealizationWork work;
+        uint64_t copies = 1000000, bytes = 16 * 1024 * 1024;
+        auto measured = kernel::realizeEntry(unit, "boundary", {false, false},
+                                             work, copies, bytes);
+        require(bool(measured), "ordered copy measurement refused");
+        uint64_t cost = 1000000 - copies;
+        require(cost > 1, "ordered construction did not charge copies");
+        work = {};
+        copies = cost;
+        bytes = 16 * 1024 * 1024;
+        require(bool(kernel::realizeEntry(unit, "boundary", {false, false},
+                                          work, copies, bytes)) &&
+                    copies == 0,
+                "exact ordered copy allowance refused");
+        work = {};
+        copies = cost - 1;
+        bytes = 16 * 1024 * 1024;
+        ScopedDiagnosticHandler quiet(&context,
+                                      [](Diagnostic &) { return success(); });
+        require(
+            !kernel::realizeEntry(unit, "boundary", {false, false}, work,
+                                  copies, bytes) &&
+                same(*source, *before),
+            "one-short required copy capacity published a partial candidate");
+      });
+  cases.run("owned occurrence discovery and catalog visits share one ceiling",
+            [&] {
+              mathematical::RealizationSubject first;
+              first.declaration = "evaluate";
+              first.position = {0, 0, 0};
+              auto second = first;
+              second.position.back() = 1;
+              mathematical::NumericalSelection session;
+              session.work.selectionBookkeeping = 1;
+              auto id = session.discover(first, true);
+              require(bool(id) && session.work.selectionBookkeeping == 0,
+                      "exact discovery allowance refused");
+              auto unavailable = session.discover(second, true);
+              require(!unavailable && !session.chargeCatalog(),
+                      "another occurrence or catalog visit replenished "
+                      "discovery allowance");
+              auto reason = llvm::toString(unavailable.takeError());
+              require(namesIdentifier(reason, "finite-analysis-limit"),
+                      "discovery capacity lost its identifier");
+            });
   for (StringRef name : {"collect", "dot", "matrix-row", "matrix-column",
                          "bilinear", "msm-direct"}) {
     StringRef declaration = name == "collect" ? "collect" : "fold";
     cases.run(name + " precise independent comparison boundary", [&] {
       auto source = fixture(context, name);
       auto candidate = clone(*source);
-      require(succeeded(finite::realizeLocals(*candidate)),
+      require(succeeded(finite::realizeLocals(*candidate, vectorPolicy)),
               "bulk realization failed");
       auto target = function(*candidate, declaration);
       auto *result =
@@ -147,7 +428,7 @@ int main() {
     cases.run(name + " changed result remains a hard refusal", [&] {
       auto source = fixture(context, name);
       auto candidate = clone(*source);
-      require(succeeded(finite::realizeLocals(*candidate)),
+      require(succeeded(finite::realizeLocals(*candidate, vectorPolicy)),
               "bulk realization failed");
       auto target = function(*candidate, declaration);
       target.getBody().front().back().setOperand(
@@ -178,8 +459,8 @@ int main() {
         return success();
       });
       require(succeeded(finite::realizeLocalsWithLimits(
-                  *fallback, {}, &work, mathematical::mathematicalRecipes(),
-                  {100000, 1})) &&
+                  *fallback, vectorPolicy, &work,
+                  mathematical::mathematicalRecipes(), {100000, 1})) &&
                   diagnostic.empty(),
               "transient capacity did not retry silently");
       require(
@@ -215,8 +496,8 @@ int main() {
         return success();
       });
       require(failed(finite::realizeLocalsWithLimits(
-                  *source, {}, nullptr, mathematical::mathematicalRecipes(),
-                  {cost - 1, 1})) &&
+                  *source, vectorPolicy, nullptr,
+                  mathematical::mathematicalRecipes(), {cost - 1, 1})) &&
                   same(*source, *original) &&
                   namesIdentifier(diagnostic, "finite-verification-capacity") &&
                   diagnostic.find("finite reader work") != std::string::npos,
@@ -227,7 +508,7 @@ int main() {
   cases.run("ordinary valid formula reaches independent term depth limit", [&] {
     auto source = fixture(context, "collect");
     auto candidate = clone(*source);
-    require(succeeded(finite::realizeLocals(*candidate)),
+    require(succeeded(finite::realizeLocals(*candidate, vectorPolicy)),
             "initial collect realization failed");
     extendProduct(function(*source, "square"), ring::Limits::depth);
     extendProduct(function(*candidate, "square"), ring::Limits::depth);

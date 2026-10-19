@@ -106,10 +106,13 @@ int main() {
     const MathematicalRecipes broadcast{lanes, installed.reductions,
                                         installed.matrixContractions};
     auto direct = clone(*source), expanded = clone(*source);
-    require(
-        succeeded(finite::realizeLocals(*direct, {}, nullptr, installed)) &&
-            succeeded(finite::realizeLocals(*expanded, {}, nullptr, broadcast)),
-        "valid selected lane recipe did not pass independent checking");
+    MathematicalSelectionPolicy vectorPolicy;
+    vectorPolicy.numericalExpressions = NumericalExpressionMode::VectorOnly;
+    require(succeeded(finite::realizeLocals(*direct, vectorPolicy, nullptr,
+                                            installed)) &&
+                succeeded(finite::realizeLocals(*expanded, vectorPolicy,
+                                                nullptr, broadcast)),
+            "valid selected lane recipe did not pass independent checking");
     require(
         hasKernel(*direct, "vector.scale") &&
             !hasKernel(*expanded, "vector.scale") &&

@@ -6,6 +6,9 @@
 #include "zkc/Program/Model.h"
 #include "zkc/Target/Catalog.h"
 #include "zkc/Transforms/LinearContraction.h"
+#include "zkc/Transforms/MathematicalSelection.h"
+#include "zkc/Transforms/MathematicalWork.h"
+#include <functional>
 #include <memory>
 
 namespace zkc::target {
@@ -17,6 +20,7 @@ llvm::Error verifyPhysicalMaterialization(mlir::ModuleOp, mlir::ModuleOp,
 }
 namespace zkc::target {
 struct InputSnapshot;
+class PhysicalPlan;
 using OperationIndex = size_t;
 using BindingIndex = size_t;
 /// Original declarations include bindings generated in the selected Local
@@ -52,13 +56,43 @@ struct ContractionDecision {
   OperationIndex producer;
   llvm::SmallVector<OperationIndex> consumers;
 };
+enum class PhysicalFailureKind {
+  Terminal,
+  ImplementationUnavailable,
+  ConversionUnavailable,
+  OptionalProgramCapacity
+};
+/// Attribution uses the current retained Local index space, never pointers
+/// into a candidate that can be discarded. Conversion reports both endpoints.
+struct PhysicalFailure {
+  PhysicalFailureKind kind = PhysicalFailureKind::Terminal;
+  llvm::SmallVector<OperationIndex> operations;
+  llvm::SmallVector<BindingIndex> bindings;
+  std::optional<unsigned> operand;
+  mlir::Type from, to;
+};
 struct PhysicalPlanOptions {
   bool linearContractions = false;
   // Propose earliest legal releases; validation also accepts safe alternatives.
   bool releaseStorage = false;
+  /// Optional final escaped-program preflight. Receives a charged private
+  /// clone; the caller applies the supplied choices and uses the ordinary
+  /// program reader. The clone is borrowed only for the callback's duration.
+  /// A success result is empty; only an attributable optional capacity refusal
+  /// may report operation indices. All other errors remain terminal. This
+  /// callback cannot publish or search. Conversion owns physical application.
+  std::function<llvm::Expected<llvm::SmallVector<OperationIndex>>(
+      mlir::ModuleOp, const PhysicalPlan &)>
+      programCapacity = {};
+  /// Optional caller-owned existing work account. Every return settles actual
+  /// debits, including failed physical attempts; no retry replenishes it.
+  mathematical::RealizationWork *numericalWork = nullptr;
+  uint64_t *numericalCopy = nullptr;
+  uint64_t *numericalSiteBytes = nullptr;
+  MathematicalSelectionPolicy numericalPolicy = {};
 };
 class PhysicalPlan {
-  // Own the original identity/content snapshot and, for Kernel input, the
+  // Own the original identity/content snapshot and, for numerical input, the
   // actual selected Local payload. Copies share private immutable state; no
   // public MLIR handle can mutate the retained payload. The original module
   // and its MLIR context must remain live when checking or materializing.

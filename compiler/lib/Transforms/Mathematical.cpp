@@ -1,4 +1,4 @@
-#include "zkc/Transforms/Mathematical.h"
+#include "zkc/Dialect/Algebra/Mathematical.h"
 #include "MathematicalSupport.h"
 #include "MathematicalValues.h"
 #include "PreparedProtocol.h"
@@ -24,6 +24,7 @@
 #include "zkc/Support/Refusal.h"
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Finite.h"
+#include "zkc/Transforms/Mathematical.h"
 #include "zkc/Transforms/NestedContractions.h"
 #include "zkc/Transforms/Passes.h"
 #include "zkc/Transforms/VectorReductions.h"
@@ -615,10 +616,14 @@ public:
          common.getBody().front().getOps<protocol_ir::MathematicalOp>())
       program.walk(
           [&](Operation *op) { hasFinite |= finite::isComputation(op); });
+    llvm::DenseSet<Operation *> mapHelpers;
+    if (failed(algebra::collectMapHelpers(common, mapHelpers)))
+      return {};
     for (auto &op : common.getBody().front()) {
       if (auto symbol = SymbolTable::getSymbolName(&op))
         names.insert(symbol.getValue());
-      if ((hasFinite && isa<data::DomainOp, func::FuncOp>(op)) ||
+      if (mapHelpers.contains(&op) || isa<algebra::MapRealizeOp>(op) ||
+          (hasFinite && isa<data::DomainOp, func::FuncOp>(op)) ||
           isa<zkc::relation::DeclareOp, zkc::kernel::ModuleOp,
               zkc::local::FuncOp, zkc::local::OperationBindingOp>(op)) {
         auto *copy = builder.clone(op);
@@ -928,6 +933,23 @@ OwningOpRef<ModuleOp> rewriteLocalAlgorithms(ModuleOp source,
   }
   scope.propose(policy);
   OwningOpRef<ModuleOp> candidate(cast<ModuleOp>(source->clone()));
+  // Retain effective family restrictions with each request. Later selection
+  // may narrow them, but cannot revive a family disabled during preparation.
+  auto candidateUnit =
+      cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front());
+  for (auto map :
+       candidateUnit.getBody().front().getOps<algebra::MapRealizeOp>()) {
+    auto previous = map->getAttrOfType<ArrayAttr>("policy");
+    SmallVector<Attribute> flags;
+    for (auto [index, enabled] : llvm::enumerate(
+             ArrayRef<bool>{policy.finiteBulk, policy.vectorReductionFusion,
+                            policy.collectFoldFusion}))
+      flags.push_back(BoolAttr::get(
+          source.getContext(),
+          enabled &&
+              (!previous || cast<BoolAttr>(previous[index]).getValue())));
+    map->setAttr("policy", ArrayAttr::get(source.getContext(), flags));
+  }
   if (trace) {
     trace->initialWork = work;
     std::string configuration;
@@ -961,10 +983,12 @@ OwningOpRef<ModuleOp> rewriteLocalAlgorithms(ModuleOp source,
       })))
     return {};
   // Services publish independently checked edges. Retain structure through
-  // nested/ordinary finite selection and fusion, using the same expansion
+  // nested/ordinary finite selection, using the same expansion
   // state for both phases. Observability does not split this transaction.
   bool retain = policy.vectorReductionFusion;
-  candidate->walk([&](Operation *op) { retain |= finite::isDeclaration(op); });
+  candidate->walk([&](Operation *op) {
+    retain |= finite::isDeclaration(op) || isa<algebra::MapRealizeOp>(op);
+  });
   protocol::AlgorithmExpansionState expansion;
   if (retain) {
     if (failed(stage("retain-computations",
@@ -983,16 +1007,10 @@ OwningOpRef<ModuleOp> rewriteLocalAlgorithms(ModuleOp source,
           return finite::realizeLocals(*candidate, policy, &work, trace);
         })))
       return {};
-    if (policy.vectorReductionFusion && failed(stage("vector-reductions", [&] {
-          return mathematical::fuseVectorReductions(*candidate, expansion,
-                                                    trace);
-        })))
-      return {};
   }
-  if (failed(stage(
-          "map-realizations",
-          [&] { return expandMapRealizations(*candidate, &work, trace); })) ||
-      failed(stage("finish-expansion", [&] {
+  // Maps and adjacent reductions remain exact until physical feasibility is
+  // known. Ordinary algorithms still finish; only admitted map requests remain.
+  if (failed(stage("finish-expansion", [&] {
         return retain
                    ? protocol::expandAlgorithms(
                          *candidate, protocol::AlgorithmExpansionPhase::Finish,
@@ -1034,8 +1052,12 @@ OwningOpRef<ModuleOp> prepareSource(ModuleOp source, bool simplify,
   // executable realization separately, after placement.
   OwningOpRef<ModuleOp> frozenLocals(ModuleOp::create(unit.getLoc()));
   OpBuilder snapshotBuilder(frozenLocals->getBodyRegion());
+  llvm::DenseSet<Operation *> mapHelpers;
+  if (failed(algebra::collectMapHelpers(unit, mapHelpers)))
+    return {};
   for (auto &op : unit.getBody().front())
-    if (isa<zkc::kernel::ModuleOp, zkc::local::FuncOp,
+    if (mapHelpers.contains(&op) ||
+        isa<algebra::MapRealizeOp, zkc::kernel::ModuleOp, zkc::local::FuncOp,
             zkc::local::OperationBindingOp>(op))
       snapshotBuilder.clone(op);
   unsigned remainingHelpers = realizedHelperOperationLimit;

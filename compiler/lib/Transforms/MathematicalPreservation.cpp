@@ -2,10 +2,12 @@
 #include "MathematicalValues.h"
 #include "ProtocolApplications.h"
 #include "mlir/IR/OperationSupport.h"
+#include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/IR.h"
 #include "zkc/Dialect/MathematicalSemantics.h"
 #include "zkc/Transforms/Mathematical.h"
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringMap.h"
 
 using namespace mlir;
@@ -159,6 +161,10 @@ LogicalResult verifyProtocolPreparationPreserved(Operation *before,
 LogicalResult verifyAuthoredLocalsPreserved(Operation *before,
                                             Operation *after) {
   SymbolTable sourceSymbols(before), targetSymbols(after);
+  llvm::DenseSet<Operation *> sourceHelpers, targetHelpers;
+  if (failed(algebra::collectMapHelpers(before, sourceHelpers)) ||
+      failed(algebra::collectMapHelpers(after, targetHelpers)))
+    return failure();
   auto profile = cast<protocol_ir::ProtocolModuleOp>(after).getProfile();
   // Projection and mathematical simplification cannot invent executable work.
   // Lowering may add generated calculations while preserving every authored
@@ -166,13 +172,17 @@ LogicalResult verifyAuthoredLocalsPreserved(Operation *before,
   if (profile == protocol_ir::Profile::Protocol ||
       profile == protocol_ir::Profile::Participant) {
     for (auto &op : after->getRegion(0).front())
-      if (isa<kernel::ModuleOp, local::FuncOp, local::OperationBindingOp>(op) &&
+      if ((targetHelpers.contains(&op) ||
+           isa<algebra::MapRealizeOp, kernel::ModuleOp, local::FuncOp,
+               local::OperationBindingOp>(op)) &&
           !sourceSymbols.lookup(SymbolTable::getSymbolName(&op)))
         return refuseLocal(after,
                            "mathematical pass added an executable definition");
   }
   for (auto &op : before->getRegion(0).front()) {
-    if (!isa<kernel::ModuleOp, local::FuncOp, local::OperationBindingOp>(op))
+    if (!sourceHelpers.contains(&op) &&
+        !isa<algebra::MapRealizeOp, kernel::ModuleOp, local::FuncOp,
+             local::OperationBindingOp>(op))
       continue;
     auto name = SymbolTable::getSymbolName(&op);
     auto *target = targetSymbols.lookup(name);

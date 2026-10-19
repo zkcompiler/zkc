@@ -20,11 +20,11 @@ domain F=field("koala-bear");
 """
 
 
-def work_operations(entry):
+def work_instructions(entry):
     package = json.loads(entry.package.read_text())
     bundle = json.loads(package["artifact"])
     program = json.loads(bundle["candidate"])
-    bindings = {binding[0]: binding[1] for binding in program[1]}
+    bindings = {binding[0]: binding for binding in program[1]}
     work = next(
         function
         for function in program[2]
@@ -36,7 +36,7 @@ def work_operations(entry):
         if not isinstance(value, list) or not value:
             return
         if value[0] == "op":
-            operations.append((bindings[value[2]], depth))
+            operations.append((bindings[value[2]], value, depth))
         if value[0] == "for":
             depth += 1
         for item in value:
@@ -45,6 +45,10 @@ def work_operations(entry):
 
     visit(work[4])
     return operations
+
+
+def work_operations(entry):
+    return [(binding[1], depth) for binding, _, depth in work_instructions(entry)]
 
 
 @pytest.mark.parametrize(
@@ -80,7 +84,7 @@ run Demo=Run;
 
 
 @pytest.mark.parametrize("style", ["map", "collect"])
-def test_common_lane_emitter_shares_scalar_work(toolchain, journal, directory, style):
+def test_numerical_expression_shares_scalar_work(toolchain, journal, directory, style):
     expression = "(x+(a*a))*(x+(a*a))"
     body = (
         "map shifted(each xs,a)"
@@ -100,9 +104,20 @@ run Demo=Run;
     )
     entry = Entry(toolchain, journal, directory, source, MODULES)
     operations = work_operations(entry)
-    assert operations.count(("field.mul", 0)) == 1
-    assert operations.count(("vector.fill", 0)) == 1
-    assert operations.count(("vector.add", 0)) == 1
+    assert operations.count(("numerical.map", 0)) == 1
+    assert not any(contract in ("field.mul", "vector.fill", "vector.add")
+                   for contract, _ in operations)
+    binding, instruction, _ = next(
+        site for site in work_instructions(entry) if site[0][1] == "numerical.map"
+    )
+    assert binding[2] == ["koala-bear", "10"]  # Column x and scalar a.
+    _, _, nodes, outputs = json.loads(instruction[3][0])
+    # Both authored copies of a*a and x+a*a have one shared DAG node.
+    assert sum(node[0] == "mul" for node in nodes) == 2
+    assert sum(node[0] == "add" for node in nodes) == 1
+    result = nodes[outputs[0]]
+    assert result[0] == "mul" and result[1] == result[2]
+    assert nodes[result[1]][0] == "add"
     assert entry.run("values", {"xs": ["2", "3"], "a": "5"})["result"] == ["729", "784"]
     assert entry.run("empty", {"xs": [], "a": "5"})["result"] == []
 

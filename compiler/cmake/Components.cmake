@@ -42,6 +42,7 @@ add_zkc_component(Contracts
   lib/Contracts/FiniteCardinality.cpp
   lib/Contracts/RingExpression.cpp
   lib/Contracts/RingSharing.cpp
+  lib/Contracts/Numerical.cpp
   lib/Contracts/Domains.cpp
   lib/Contracts/OperationShapes.cpp
   lib/Contracts/NativePolicy.cpp
@@ -266,6 +267,8 @@ add_zkc_component(Transforms
   lib/Transforms/CollectionRealization.cpp
   lib/Transforms/ComputationEquations.cpp
   lib/Transforms/ComputationSelection.cpp
+  lib/Transforms/NumericalSelection.cpp
+  lib/Transforms/NumericalLowering.cpp
   lib/Transforms/MathematicalRecipes.cpp
   lib/Transforms/LaneRealization.cpp
   lib/Transforms/MathematicalComparison.cpp

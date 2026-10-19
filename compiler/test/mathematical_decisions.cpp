@@ -81,7 +81,20 @@ bool sameWork(const RealizationWork &a, const RealizationWork &b) {
          a.finiteExpressions == b.finiteExpressions &&
          a.collectFoldDiscovery == b.collectFoldDiscovery &&
          a.discardedRecipeCopy == b.discardedRecipeCopy &&
-         a.discardedRecipeSiteBytes == b.discardedRecipeSiteBytes;
+         a.discardedRecipeSiteBytes == b.discardedRecipeSiteBytes &&
+         a.discardedRecipeExpansion == b.discardedRecipeExpansion &&
+         a.requiredMapChecking == b.requiredMapChecking &&
+         a.optionalMapChecking == b.optionalMapChecking &&
+         a.numericalContextChecking == b.numericalContextChecking &&
+         a.numericalCheckCopy == b.numericalCheckCopy &&
+         a.numericalCheckSiteBytes == b.numericalCheckSiteBytes &&
+         a.requiredMapConstruction == b.requiredMapConstruction &&
+         a.optionalMapConstruction == b.optionalMapConstruction &&
+         a.requiredFiniteChecking == b.requiredFiniteChecking &&
+         a.optionalFiniteChecking == b.optionalFiniteChecking &&
+         a.selectionBookkeeping == b.selectionBookkeeping &&
+         a.numericalSelection == b.numericalSelection &&
+         a.numericalOccurrence == b.numericalOccurrence;
 }
 template <class T>
 std::vector<const RealizationEvent *> events(const RealizationTrace &trace) {
@@ -96,7 +109,9 @@ void checkRetry(const RealizationTrace &trace, StringRef service) {
   require(retries.size() == 1 && retries[0]->service == service,
           "missing or duplicated retry");
   const auto &retry = std::get<RetryDecision>(retries[0]->payload);
-  require(trace.policy.finiteBulk && !retry.effectivePolicy.finiteBulk,
+  require(trace.policy.finiteBulk &&
+              (retry.occurrence ? retry.effectivePolicy.finiteBulk
+                                : !retry.effectivePolicy.finiteBulk),
           "effective fallback overwrote requested policy");
   const RealizationEvent *discard = nullptr;
   for (auto *event : events<DiscardDecision>(trace))
@@ -113,6 +128,8 @@ void checkRetry(const RealizationTrace &trace, StringRef service) {
               verification->capacity->owner == WorkOwner::OptionalComparison &&
               !verification->subject.operation.empty(),
           "optional reader cause or actual subject was lost");
+  require(!retry.occurrence || *retry.occurrence == verification->subject,
+          "targeted retry lost the independently reported occurrence");
   const RealizationEvent *later = nullptr;
   for (auto *event : events<ProposalDecision>(trace))
     if (event->service == service && event->sequence > retries[0]->sequence)
@@ -253,7 +270,7 @@ int main() {
             cause->capacity->requested == 1 && cause->capacity->available == 0,
         "required reader capacity became a recognition failure");
   });
-  cases.run("later map failure invalidates earlier finite incorporation", [&] {
+  cases.run("map helper expansion remains deferred until realization", [&] {
     auto source = fixture(context, "dot"),
          maps = fixture(context, "map-realization", true);
     auto unit = cast<protocol_ir::ProtocolModuleOp>(source->getBody()->front());
@@ -271,30 +288,31 @@ int main() {
     ScopedDiagnosticHandler quiet(&context,
                                   [](Diagnostic &) { return success(); });
     auto candidate = rewriteLocalAlgorithms(*source, {}, &trace, work);
-    require(!candidate && same(*source, *original),
-            "later required failure escaped atomically");
-    uint64_t parent = 0;
-    for (auto *event : events<DiscardDecision>(trace))
-      if (event->service == "local-algorithms")
-        parent = event->scope;
-    bool incorporated = false, failedMap = false;
-    for (auto *event : events<PublicationDecision>(trace)) {
-      require(
-          std::get<PublicationDecision>(event->payload).boundary ==
-              PublicationBoundary::IncorporatedIntoParent,
-          "failed preparation claimed a returned or caller-visible candidate");
-      if (event->service == "finite-attempt")
-        incorporated = true;
-    }
-    for (auto *event : events<DiscardDecision>(trace))
+    require(
+        candidate && same(*source, *original) &&
+            !cast<protocol_ir::ProtocolModuleOp>(candidate->getBody()->front())
+                 .getBody()
+                 .front()
+                 .getOps<algebra::MapRealizeOp>()
+                 .empty(),
+        "preparation expanded a retained map or changed its source");
+    require(events<DiscardDecision>(trace).empty() &&
+                trace.activeScopes.empty(),
+            "successful preparation retained a discarded or active scope");
+    auto prepared = copy(*candidate);
+    RealizationTrace mapTrace;
+    require(failed(expandMapRealizations(*candidate, &work, &mapTrace)) &&
+                same(*candidate, *prepared),
+            "required map expansion failed to refuse atomically");
+    bool failedMap = false;
+    for (auto *event : events<DiscardDecision>(mapTrace))
       if (event->service == "map-realizations") {
         auto *cause = std::get_if<RequiredFailure>(
             &std::get<DiscardDecision>(event->payload).cause);
-        failedMap = event->parent == parent && cause && cause->capacity &&
+        failedMap = cause && cause->capacity &&
                     cause->capacity->owner == WorkOwner::HelperOperations;
       }
-    require(parent && incorporated && failedMap,
-            "history omitted incorporation or parent refusal");
+    require(failedMap, "late map failure lost its typed capacity cause");
   });
   for (bool nested : {false, true})
     cases.run(nested ? "nested total retry" : "ordinary total retry", [&,

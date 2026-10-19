@@ -13,6 +13,7 @@ import pytest
 from entry import Entry
 from input_files import decimal_values, input_files
 from octic_reference import ONE, P, ZERO, add, mul
+from test_total_callback_selection import operation_sites
 
 ROOT = Path(__file__).resolve().parents[3]
 FIELDS = [
@@ -352,7 +353,15 @@ def test_fusion_proof_construction_preserves_protocol_origins(toolchain, journal
         candidate = entry.directory / 'candidate.mlir'
         candidate.write_text(journal.run([
             toolchain.compiler, 'protocol-construct-proof', original, policy, *flags]))
-        assert ('algebra.exec.vector_dot' in candidate.read_text()) == bool(flags)
+        # Projection retains the map and its policy; physical selection owns
+        # the concrete dot or map realization. Check both boundaries.
+        projected = candidate.read_text()
+        assert 'algebra.map_realize' in projected
+        assert 'algebra.exec.vector_dot' not in projected
+        assert f'policy = [true, {str(bool(flags)).lower()}, false]' in projected
+        sites = operation_sites(json.loads(deployment[4]))
+        assert bool(sites['vector.dot']) == bool(flags), sites
+        assert bool(sites['numerical.map']) != bool(flags), sites
         journal.run([toolchain.compiler, 'protocol-check-proof', original, policy,
                      candidate, *flags])
         journal.run([toolchain.compiler, 'protocol-check-proof', original, policy,
@@ -470,4 +479,15 @@ def test_registered_participant_pipeline_forwards_fusion(toolchain, journal, dir
         projected = journal.run([
             toolchain.optimizer, original,
             f'--zkc-participant-pipeline=project-only=true fuse-vector-reductions={choice}'])
-        assert ('algebra.exec.vector_dot' in projected) == fuse
+        assert 'algebra.map_realize' in projected
+        assert 'algebra.exec.vector_dot' not in projected
+        assert f'policy = [true, {choice}, false]' in projected
+        physical = journal.run([
+            toolchain.optimizer, original,
+            f'--zkc-participant-pipeline=fuse-vector-reductions={choice}'])
+        physical_file = directory / f'physical-{choice}.mlir'
+        physical_file.write_text(physical)
+        sites = operation_sites(journal.json([
+            toolchain.compiler, 'protocol-export', physical_file]))
+        assert bool(sites['vector.dot']) == fuse, sites
+        assert bool(sites['numerical.map']) != fuse, sites

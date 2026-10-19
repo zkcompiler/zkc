@@ -4,6 +4,8 @@
 #include "zkc/Contracts/Bindings.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Services.h"
+#include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
+#include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
 #include "zkc/Dialect/Kernel/IR/KernelOps.h"
@@ -12,6 +14,7 @@
 #include "zkc/Program/Admission.h"
 #include "zkc/Support/Json.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/DenseSet.h"
 
 using namespace llvm;
 using namespace mlir;
@@ -21,12 +24,39 @@ class ExecutionModelReader {
   Operation *root;
   zkc::protocol_ir::ProfileAttr profile;
   bool localDefinitionsOnly = false;
+  bool allowMapRequests = false;
   bool physical;
   std::string problem;
   unsigned next = 0;
   SymbolTableCollection kernelSymbols;
   llvm::DenseMap<Operation *, std::string> kernelEntries;
   SmallVector<LocalRealization> kernelRealizations;
+  llvm::DenseSet<Operation *> mapHelpers;
+
+  bool collectMaps() {
+    if (failed(zkc::algebra::collectMapHelpers(root, mapHelpers))) {
+      fail("algebra-map-formula");
+      return false;
+    }
+    for (auto map :
+         root->getRegion(0).front().getOps<algebra::MapRealizeOp>()) {
+      LocalRealization value;
+      value.name = map.getSymName().str();
+      for (bool input : {true, false})
+        for (auto port : input ? map.getFunctionType().getInputs()
+                               : map.getFunctionType().getResults()) {
+          auto bound = encodeBoundType(port, false);
+          if (!bound) {
+            consumeError(bound.takeError());
+            fail("local-realization-signature");
+            return false;
+          }
+          (input ? value.inputs : value.outputs).push_back(bound->spelling());
+        }
+      kernelRealizations.push_back(std::move(value));
+    }
+    return true;
+  }
 
   // Internal validation signatures, never executable bodies or published
   // symbols. The Kernel region verifier has admitted every retained closure.
@@ -163,9 +193,12 @@ class ExecutionModelReader {
     Operation *definition = SymbolTable::lookupSymbolIn(root, callee);
     bool kind =
         isa_and_nonnull<zkc::local::FuncOp>(definition) ||
-        (localDefinitionsOnly && isa<zkc::local::ApplyOp>(op) &&
-         profile.getValue() == zkc::protocol_ir::Profile::Protocol &&
-         isa_and_nonnull<zkc::PreparationCallableOpInterface>(definition));
+        (isa<zkc::local::ApplyOp>(op) &&
+         ((localDefinitionsOnly &&
+           profile.getValue() == zkc::protocol_ir::Profile::Protocol &&
+           isa_and_nonnull<zkc::PreparationCallableOpInterface>(definition)) ||
+          (allowMapRequests &&
+           isa_and_nonnull<zkc::algebra::MapRealizeOp>(definition))));
     if (!kind) {
       fail("interactive-symbol-kind");
       return false;
@@ -272,7 +305,12 @@ class ExecutionModelReader {
                                                  names(op->getOperands(), env),
                                                  results(op, env)}});
       } else if (auto call = dyn_cast<zkc::local::ApplyOp>(op)) {
-        if (!localDefinitionsOnly || !local ||
+        auto *callee = SymbolTable::lookupSymbolIn(root, call.getCallee());
+        bool common = localDefinitionsOnly &&
+                      profile.getValue() == protocol_ir::Profile::Protocol;
+        bool retainedMap =
+            allowMapRequests && isa_and_nonnull<algebra::MapRealizeOp>(callee);
+        if ((!common && !retainedMap) || !local ||
             !attributes(op, {"site", "callee"}) ||
             !callTypes(op, call.getCallee())) {
           fail("algorithm-call-context");
@@ -633,7 +671,11 @@ public:
     // mathematical IR for the shared local-control admission checks.
     localDefinitionsOnly = true;
     physical = false;
+    allowMapRequests = profile.getValue() != protocol_ir::Profile::Physical;
     program::LocalDefinitions module;
+    if (allowMapRequests &&
+        failed(zkc::algebra::collectMapHelpers(root, mapHelpers)))
+      return error("algebra-map-formula");
     if (!collectKernels())
       return error(problem);
     SmallVector<LocalRealization> realizations(kernelRealizations);
@@ -650,13 +692,14 @@ public:
       } else if (isa<zkc::local::RealizeOp, zkc::algebra::MapRealizeOp,
                      zkc::local::FiniteFoldOp, zkc::local::FiniteCollectOp>(
                      op)) {
-        // Both declarations are admitted explicitly in this profile.
+        // Only maps survive common preparation as closed logical requests.
         bool map = isa<zkc::algebra::MapRealizeOp>(op);
         bool finite = zkc::finite::isDeclaration(&op);
-        if (profile.getValue() != zkc::protocol_ir::Profile::Protocol ||
+        if ((profile.getValue() != zkc::protocol_ir::Profile::Protocol &&
+             !(map && allowMapRequests)) ||
             (!finite &&
-             (map ? !attributes(
-                        &op, {"sym_name", "helper", "function_type", "rowwise"})
+             (map ? !attributes(&op, {"sym_name", "helper", "function_type",
+                                      "rowwise", "policy"})
                   : !attributes(&op, {"sym_name", "helper", "function_type"}))))
           return error("local-realization-context");
         auto signature = cast<zkc::PreparationCallableOpInterface>(op)
@@ -703,10 +746,20 @@ public:
       return error("interactive-module");
     if (allowLogicalKernels && !collectKernels())
       return error(problem);
+    allowMapRequests = allowLogicalKernels && !physical;
+    if (allowMapRequests && !collectMaps())
+      return error(problem);
     program::Participants participants;
     participants.stage = physical ? program::Participants::Stage::Physical
                                   : program::Participants::Stage::Logical;
     for (auto &op : root->getRegion(0).front()) {
+      if (isa<algebra::MapRealizeOp>(op)) {
+        if (!allowMapRequests)
+          return error("algebra-map-context");
+        continue;
+      }
+      if (mapHelpers.contains(&op))
+        continue;
       if (isa<zkc::kernel::ModuleOp>(op)) {
         // MLIR already checked the owned numerical closure. Only internal
         // logical admission may retain it; publication must realize it first.
@@ -772,6 +825,17 @@ Expected<program::Participants> readExecutionModel(Operation *root) {
       return error("interactive-module-count");
     root = &module.getBody()->front();
   }
+  // Publication reads the complete carrier, including dormant definitions.
+  // Signature-only logical requests are exclusively an internal admission aid.
+  std::string residual;
+  root->walk([&](Operation *op) {
+    if (residual.empty() && isa<zkc::algebra::MapRealizeOp>(op))
+      residual = "algebra-map-context";
+    if (residual.empty() && isa<zkc::local::ApplyOp>(op))
+      residual = "algorithm-call-context";
+  });
+  if (!residual.empty())
+    return error(residual);
   return ExecutionModelReader(root).run();
 }
 LogicalResult verifyLocalDefinitions(Operation *root) {

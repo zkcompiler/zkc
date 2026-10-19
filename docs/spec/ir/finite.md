@@ -324,14 +324,22 @@ allowance of 100,000 work units. Optional exact payload comparison receives at
 most 100,000 units, capped by the required reader's remaining allowance without
 spending it. A successful comparison may consume its final unit. Work or
 representation exhaustion is distinguished from a correspondence mismatch.
-On optional comparison exhaustion, the enclosing candidate is discarded and
-retried once from the immutable source with finite bulk selection disabled.
-The retry preserves spent optional recognition/lane work and reserves required
-construction work for ordered execution. Declaration realization retries its
-whole module; total-expression realization retries its selected calculations.
-Already checked earlier stages remain unchanged. An observed mismatch fails
-immediately. Required-reader exhaustion, or exhaustion of the ordered retry,
-refuses with `finite-verification-capacity`; it never publishes unchecked IR.
+On optional comparison exhaustion, standalone Local declaration realization
+retries its whole module with finite bulk selection disabled. Late Kernel
+selection advances only the independently identified occurrence, retaining
+other choices. Numerical selection shares 1,000,000 required-reader units and
+1,000,000 optional-comparison units across its checks and attempts; each nested
+check also keeps its own bound. It never replenishes spent recognition or
+checking work.
+
+Rejected Kernel construction transfers its actual copy, site and expansion
+charges to separate cumulative reserves before restoring the selected
+construction allowance. The expansion reserve is 16,777,216 units, counting
+helper operations, helper slots, polynomial work and finite expressions. The
+planner reserves a conservative upper bound before speculation; exhausted
+optional reserves retain required execution. Required construction or reader
+exhaustion, and every correspondence mismatch, remain terminal. No exhausted
+check publishes unchecked IR.
 
 Optional decision observations distinguish unsupported structure or equations,
 missing extent/bound evidence, actual capacity failure, policy disablement,

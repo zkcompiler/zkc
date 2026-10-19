@@ -222,6 +222,7 @@ struct Combine {
   Operation *operation;
   Value term;
   const protocol::ComputationContract *facet;
+  SmallVector<Value> additionalTerms;
 };
 std::optional<Combine> combine(const ComputationFacts &facts) {
   const auto &view = facts.view;
@@ -234,17 +235,65 @@ std::optional<Combine> combine(const ComputationFacts &facts) {
   if (!facet || !facet->law.associative || op->getNumOperands() != 2)
     return std::nullopt;
   Value accumulator = view.seeds.front().formal;
-  Value left = facts.payload.transparent(op->getOperand(0));
-  Value right = facts.payload.transparent(op->getOperand(1));
-  if (left == accumulator && right != accumulator)
-    return Combine{op, right, facet};
-  if (facet->law.commutative && right == accumulator && left != accumulator)
-    return Combine{op, left, facet};
-  return std::nullopt;
+  Value directLeft = facts.payload.transparent(op->getOperand(0));
+  Value directRight = facts.payload.transparent(op->getOperand(1));
+  if (directLeft == accumulator && directRight != accumulator)
+    return Combine{op, directRight, facet, {}};
+  if (facet->law.commutative && directRight == accumulator &&
+      directLeft != accumulator)
+    return Combine{op, directLeft, facet, {}};
+  // Count dependencies once in topological SSA order, saturating at two.
+  // Shared operands count on each incoming edge, so a doubled accumulator is
+  // refused without ever unfolding a shared expression DAG.
+  llvm::DenseMap<Value, unsigned> occurrences;
+  occurrences[accumulator] = 1;
+  for (Operation *instruction : facts.payload.operations) {
+    if (!facts.payload.work.take(1 + instruction->getNumOperands()))
+      return std::nullopt;
+    unsigned count = 0;
+    for (Value operand : instruction->getOperands())
+      count = std::min(2u, count + occurrences.lookup(operand));
+    occurrences[instruction->getResult(0)] = count;
+  }
+  if (occurrences.lookup(result) != 1)
+    return std::nullopt;
+  SmallVector<Value> terms;
+  Value cursor = result;
+  while (cursor != accumulator) {
+    if (!facts.payload.work.take())
+      return std::nullopt;
+    auto *node = cursor.getDefiningOp();
+    const auto *meaning = facts.payload.contract(cursor);
+    if (!node || node->getNumOperands() != 2 || !meaning ||
+        meaning->identity != facet->identity || !meaning->law.associative)
+      return std::nullopt;
+    Value left = facts.payload.transparent(node->getOperand(0));
+    Value right = facts.payload.transparent(node->getOperand(1));
+    if (occurrences.lookup(left) == 1 && !occurrences.lookup(right)) {
+      terms.push_back(right);
+      cursor = left;
+    } else if (facet->law.commutative && occurrences.lookup(right) == 1 &&
+               !occurrences.lookup(left)) {
+      terms.push_back(left);
+      cursor = right;
+    } else
+      return std::nullopt;
+  }
+  if (terms.empty())
+    return std::nullopt;
+  // Moving siblings across the spine needs commutativity. Noncommutative
+  // declarations retain only the original direct accumulator-left rule.
+  if (terms.size() > 1 && !facet->law.commutative)
+    return std::nullopt;
+  std::reverse(terms.begin(), terms.end());
+  Combine combined{op, terms.front(), facet, {}};
+  append_range(combined.additionalTerms, ArrayRef<Value>(terms).drop_front());
+  return combined;
 }
 std::optional<Reduction> analyzeReduction(const ComputationFacts &facts,
                                           const Combine &combined) {
-  if (!facts.extentIteration || !facts.payload.supported ||
+  if (!combined.additionalTerms.empty() || !facts.extentIteration ||
+      !facts.payload.supported ||
       llvm::any_of(facts.view.accesses, [](const Access &access) {
         return access.kind == AccessKind::MatrixCell;
       }))
@@ -339,16 +388,18 @@ std::optional<Reduction> analyzeReduction(const ComputationFacts &facts,
   return result;
 }
 
-std::optional<Elementwise>
-analyzeLanes(Block &body, Type field, ValueRange laneArguments,
-             const llvm::DenseMap<Value, Value> &lookups,
-             const PayloadAnalysis &payload,
-             ArrayRef<ComputationDiagnostic> accessDeclines = {},
-             Value yielded = {}, Value state = {}) {
+std::optional<Elementwise> analyzeLanes(
+    Block &body, Type field, ValueRange laneArguments,
+    const llvm::DenseMap<Value, Value> &lookups, const PayloadAnalysis &payload,
+    ArrayRef<ComputationDiagnostic> accessDeclines = {}, Value yielded = {},
+    Value state = {}, ValueRange additionalYields = {}) {
   if (!isa<algebra::FieldType>(field) || body.empty() || !payload.supported ||
       !isa<func::ReturnOp, local::ReturnOp>(body.back()) ||
       body.back().getNumOperands() != 1 ||
       body.back().getOperand(0).getType() != field)
+    return std::nullopt;
+  if (!payload.work.take(body.getNumArguments() + laneArguments.size() + 1 +
+                         additionalYields.size()))
     return std::nullopt;
   llvm::DenseSet<Value> scalars, lanes, stateDependent;
   if (state)
@@ -410,11 +461,17 @@ analyzeLanes(Block &body, Type field, ValueRange laneArguments,
   Value returned = yielded ? yielded : body.back().getOperand(0);
   if (!lanes.contains(returned) && !scalars.contains(returned))
     return std::nullopt;
+  // Reuse the complete classification for every spine sibling. Repeated SSA
+  // values still represent separate arithmetic contributions in the formula.
+  for (Value value : additionalYields)
+    if (!lanes.contains(value) && !scalars.contains(value))
+      return std::nullopt;
   return result;
 }
-std::optional<Elementwise> analyzeAlignedLanes(const ComputationFacts &facts,
-                                               Type field, Value yielded = {},
-                                               Value state = {}) {
+std::optional<Elementwise>
+analyzeAlignedLanes(const ComputationFacts &facts, Type field,
+                    Value yielded = {}, Value state = {},
+                    ValueRange additionalYields = {}) {
   const auto &view = facts.view;
   auto c = view.computation;
   if (c.predicate || !facts.aligned || !view.result)
@@ -435,7 +492,7 @@ std::optional<Elementwise> analyzeAlignedLanes(const ComputationFacts &facts,
             facts.factor(access.item)->getOperand(0)) == access.input)
       lookups[access.value] = facts.inputs[access.input];
   return analyzeLanes(*view.callbackBody, field, lanes, lookups, facts.payload,
-                      view.accessDeclines, yielded, state);
+                      view.accessDeclines, yielded, state, additionalYields);
 }
 std::optional<Elementwise> analyzeElementwise(const ComputationFacts &facts) {
   auto c = facts.view.computation;
@@ -446,17 +503,19 @@ std::optional<Elementwise> analyzeElementwise(const ComputationFacts &facts) {
 std::optional<PointwiseReduction>
 analyzePointwiseReduction(const ComputationFacts &facts,
                           const Combine &combined) {
-  if (combined.facet->identity != MathematicalIdentity::FieldAdd ||
+  if ((combined.facet->identity != MathematicalIdentity::FieldAdd &&
+       combined.facet->identity != MathematicalIdentity::FieldMultiply) ||
       !facts.extentIteration || facts.missingAccess)
     return std::nullopt;
   auto state = facts.view.seeds.front().formal;
-  auto formula =
-      analyzeAlignedLanes(facts, state.getType(), combined.term, state);
+  auto formula = analyzeAlignedLanes(facts, state.getType(), combined.term,
+                                     state, combined.additionalTerms);
   if (!formula)
     return std::nullopt;
   PointwiseReduction result;
   result.combine = combined.facet->identity;
   result.term = combined.term;
+  result.additionalTerms = combined.additionalTerms;
   result.formula = std::move(*formula);
   return result;
 }
@@ -464,7 +523,8 @@ std::optional<Bilinear> analyzeBilinear(const ComputationFacts &facts,
                                         const Combine &combined) {
   const auto &view = facts.view;
   const auto &product = view.iteration[view.root];
-  if (combined.facet->identity != MathematicalIdentity::FieldAdd ||
+  if (!combined.additionalTerms.empty() ||
+      combined.facet->identity != MathematicalIdentity::FieldAdd ||
       !facts.payload.supported || product.kind != IterationKind::Product ||
       product.children.size() != 2 || view.items.size() != 4)
     return std::nullopt;
@@ -606,8 +666,9 @@ ComputationEquations matchComputation(const ComputationView &view,
   if (auto combined = combine(facts)) {
     result.reduction = analyzeReduction(facts, *combined);
     result.bilinear = analyzeBilinear(facts, *combined);
-    if (!result.reduction && !result.bilinear)
-      result.pointwiseReduction = analyzePointwiseReduction(facts, *combined);
+    // Retain general equations alongside specialized ones so a target can
+    // select a checked fallback when its preferred native operation is absent.
+    result.pointwiseReduction = analyzePointwiseReduction(facts, *combined);
   }
   result.elementwise = analyzeElementwise(facts);
   if (work.exhausted)

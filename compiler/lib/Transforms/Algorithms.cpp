@@ -156,8 +156,9 @@ class Expander {
         if (auto call = dyn_cast<local::ApplyOp>(op)) {
           calling.insert(name);
           auto callee = call.getCallee().str();
-          if (phase == AlgorithmExpansionPhase::RetainMaps &&
-              maps.count(callee)) {
+          if (maps.count(callee) &&
+              (phase == AlgorithmExpansionPhase::RetainMaps ||
+               isa<algebra::MapRealizeOp>(maps.at(callee)))) {
             selectFunction(name);
           } else if (functions.count(callee)) {
             callers[callee].push_back(name);
@@ -253,8 +254,11 @@ class Expander {
                                "interactive-call-depth");
     for (auto &op : block) {
       auto call = dyn_cast<local::ApplyOp>(op);
-      bool expand = call && !(phase == AlgorithmExpansionPhase::RetainMaps &&
-                              maps.count(call.getCallee().str()));
+      auto declaration = call ? maps.find(call.getCallee().str()) : maps.end();
+      bool retained = declaration != maps.end() &&
+                      (phase == AlgorithmExpansionPhase::RetainMaps ||
+                       isa<algebra::MapRealizeOp>(declaration->second));
+      bool expand = call && !retained;
       // The existing root body was charged to source inspection. Substitution
       // charges its call and every callee visit, even a return-only helper.
       // A callee's own declaration never pays for copies in another root.
@@ -488,18 +492,18 @@ expandAlgorithmsImpl(ModuleOp module, AlgorithmExpansionPhase phase,
     if (unit && unit.getProfile() == protocol_ir::Profile::Protocol) {
       if (failed(verify(module)))
         return failure();
-      if (phase == AlgorithmExpansionPhase::RetainMaps) {
-        // Admission explicitly names maps and checks all expanded scalar work.
-        // A preparation interface by itself never authorizes atomic retention.
-        uint64_t remaining = 1000000;
-        if (auto error = mathematical::checkMapFormulas(module, remaining))
-          return diagnostics::emit(module.emitError(), std::move(error));
-      } else {
+      // Both phases retain only explicitly admitted map formulas. A callable
+      // preparation interface alone never authorizes retention in Finish.
+      uint64_t remaining = 1000000;
+      if (auto error = mathematical::checkMapFormulas(module, remaining))
+        return diagnostics::emit(module.emitError(), std::move(error));
+      if (phase == AlgorithmExpansionPhase::Finish) {
         for (Operation &op : unit.getBody().front())
-          if (isa<PreparationCallableOpInterface>(op))
+          if (isa<PreparationCallableOpInterface>(op) &&
+              !isa<algebra::MapRealizeOp>(op))
             return diagnostics::emit(
                 op.emitOpError(), "algorithm-call-symbol",
-                "Finish requires realized preparation declarations");
+                "Finish requires realized non-map preparation declarations");
       }
       scope.propose();
       mathematical::CheckedCandidate candidate(module);

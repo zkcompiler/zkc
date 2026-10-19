@@ -15,6 +15,15 @@ class SymbolTableCollection;
 } // namespace mlir
 namespace zkc::algebra {
 class MapRealizeOp;
+/// Admit and collect the complete scalar helper closure of retained maps.
+/// The expanded operation count shares the existing helper admission bound.
+mlir::LogicalResult
+collectMapHelpers(mlir::Operation *owner,
+                  llvm::DenseSet<mlir::Operation *> &helpers,
+                  uint64_t &expandedOperations);
+mlir::LogicalResult
+collectMapHelpers(mlir::Operation *owner,
+                  llvm::DenseSet<mlir::Operation *> &helpers);
 // Finite data formation; arrays acquire polynomial meaning only through poly.
 inline constexpr uint64_t MaximumArrayLength = 1048576;
 bool isFieldArray(mlir::Type type);

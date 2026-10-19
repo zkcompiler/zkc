@@ -9,9 +9,11 @@ namespace zkc::mathematical {
 struct RealizationTrace;
 }
 namespace zkc::kernel {
-/// Materialize every ordered logical invocation into the existing Local
-/// execution vocabulary. Transactional Exec -> Exec edge, independently checked
-/// before publication; no runtime frame, opcode or hidden target fallback.
+/// Materialize logical invocations into the existing Local execution
+/// vocabulary, retaining each call's policy. Numerical alternatives belong to
+/// individual source occurrences; the reader checks their actual payloads.
+/// Transactional Exec -> Exec edge, independently checked before publication;
+/// no runtime frame, opcode or hidden target fallback.
 mlir::LogicalResult lowerKernels(mlir::ModuleOp,
                                  MathematicalSelectionPolicy = {},
                                  mathematical::RealizationTrace * = nullptr);

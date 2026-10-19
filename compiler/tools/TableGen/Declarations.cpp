@@ -365,6 +365,7 @@ void Model::validateOperation(const Record *op) {
       {"MatrixVector", {3, 3}},
       {"GatherIndices", {0, -1}},
       {"ScatterIndices", {1, -1}},
+      {"NumericalExpression", {1, 1}},
       {"NativeOrigin", {1, 1}}};
   auto found = schemas.find(name(parameters).str());
   require(found != schemas.end() &&

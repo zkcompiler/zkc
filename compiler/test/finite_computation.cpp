@@ -1,3 +1,4 @@
+#include "../lib/Transforms/ComputationSelection.h"
 #include "../lib/Transforms/LaneRealization.h"
 #include "../lib/Transforms/MathematicalRecipes.h"
 #include "mlir/IR/Verifier.h"
@@ -112,6 +113,94 @@ int main(int argc, char **argv) {
   Cases cases;
   auto original = parseSourceString<ModuleOp>(source, &context);
   require(bool(original), "finite source refused");
+  cases.run("repeated associative terms have linear recognition work", [&] {
+    uint64_t smallerCost = 0;
+    for (unsigned terms : {160u, 320u}) {
+      std::string body, previous = "%state";
+      for (unsigned i = 0; i < terms; ++i) {
+        auto next = "%term" + std::to_string(i);
+        body += "   " + next + " = \"algebra.exec.field_add\"(" + previous +
+                ",%item) {binding=@add,parameters=[],site=\"term" +
+                std::to_string(i) + "\"} : (!F,!F)->!F\n";
+        previous = next;
+      }
+      auto text =
+          replace(source,
+                  "   %next = \"algebra.exec.field_add\"(%state,%item) "
+                  "{binding=@add,parameters=[],site=\"add\"} : (!F,!F)->!F\n"
+                  "   local.return %next : !F",
+                  body + "   local.return " + previous + " : !F");
+      auto module = parseSourceString<ModuleOp>(text, &context);
+      require(bool(module), "long repeated-term fold refused");
+      SymbolTable symbols(&module->getBody()->front());
+      finite::Computation subject, later;
+      require(succeeded(finite::describe(symbols.lookup("fold"), subject)),
+              "long fold has no computation view");
+      SymbolTable laterSymbols(&original->getBody()->front());
+      require(succeeded(finite::describe(laterSymbols.lookup("fold"), later)),
+              "small fold has no computation view");
+      auto view = finite::analyzeComputation(subject);
+      require(bool(view), "long fold has no structural view");
+      finite::ComputationWork shared;
+      auto selected = mathematical::selectComputation(*view, {}, shared);
+      auto cost = finite::ComputationWork{}.equations - shared.equations;
+      require(
+          selected.kind == mathematical::RealizationKind::PointwiseReduction &&
+              selected.equations.pointwiseReduction->additionalTerms.size() ==
+                  terms - 1 &&
+              cost <= 32 * terms + 128,
+          "spine classification rescanned its body or dropped repeated terms");
+      auto repeated = selected.equations.pointwiseReduction->term;
+      require(
+          llvm::all_of(selected.equations.pointwiseReduction->additionalTerms,
+                       [&](Value value) { return value == repeated; }),
+          "repeated sibling occurrences were not retained");
+      require(mathematical::selectComputation(later, {}, shared).kind ==
+                  mathematical::RealizationKind::Reduction,
+              "long spine starved a subsequent eligible fold");
+      if (smallerCost)
+        require(cost <= 2 * smallerCost + 128,
+                "doubling spine length used superlinear equation work");
+      smallerCost = cost;
+      finite::ComputationWork exact;
+      exact.equations = cost;
+      require(mathematical::selectComputation(*view, {}, exact).kind ==
+                      mathematical::RealizationKind::PointwiseReduction &&
+                  !exact.equations,
+              "exact spine recognition allowance was not consumed");
+      exact.equations = cost - 1;
+      auto declined = mathematical::selectComputation(*view, {}, exact);
+      require(declined.kind == mathematical::RealizationKind::Ordered &&
+                  declined.outcome() == OptimizationStatus::Capacity &&
+                  !exact.equations,
+              "short spine allowance did not retain ordered execution");
+      OwningOpRef<ModuleOp> candidate(cast<ModuleOp>((*module)->clone()));
+      mathematical::RealizationWork stageWork;
+      require(succeeded(finite::realizeLocals(*candidate, {}, &stageWork)) &&
+                  succeeded(finite::verifyRealizations(*module, *candidate)),
+              "long spine failed independent realized-payload comparison");
+      bool loop = false, aggregate = false;
+      candidate->walk([&](Operation *op) {
+        loop |= isa<local::LocalForOp>(op);
+        aggregate |= op->getName().getStringRef() ==
+                         protocol::boundOperationName("numerical.sum") ||
+                     op->getName().getStringRef() ==
+                         protocol::boundOperationName("vector.sum");
+      });
+      require(!loop && aggregate, "long repeated spine lost bulk selection");
+      OwningOpRef<ModuleOp> small(cast<ModuleOp>((*original)->clone()));
+      require(succeeded(finite::realizeLocals(*small, {}, &stageWork)) &&
+                  succeeded(finite::verifyRealizations(*original, *small)),
+              "later fold failed with the shared realization context");
+      loop = aggregate = false;
+      small->walk([&](Operation *op) {
+        loop |= isa<local::LocalForOp>(op);
+        aggregate |= op->getName().getStringRef() ==
+                     protocol::boundOperationName("vector.sum");
+      });
+      require(!loop && aggregate, "long spine starved later stage selection");
+    }
+  });
   cases.run("lane outcomes distinguish decline from construction failure", [&] {
     auto module = parseSourceString<ModuleOp>(fixture("collect"), &context);
     require(bool(module), "collect was refused");
@@ -208,7 +297,8 @@ int main(int argc, char **argv) {
       unsigned loops = 0, lanes = 0;
       module->walk([&](Operation *op) {
         loops += isa<local::LocalForOp>(op);
-        lanes += op->getName().getStringRef() == "algebra.exec.vector_mul";
+        lanes += op->getName().getStringRef() == "algebra.exec.vector_mul" ||
+                 op->getName().getStringRef() == "algebra.exec.numerical_map";
       });
       require(loops == (allowance ? 1u : 2u) && lanes == 2 - loops,
               "lane budget was reset or a declined candidate emitted payload");
@@ -602,7 +692,9 @@ int main(int argc, char **argv) {
           op->setOperand(1, op->getOperand(0));
           changed = true;
         } else if (name == "collect" &&
-                   op->getName().getStringRef() == "algebra.exec.vector_mul") {
+                   (op->getName().getStringRef() == "algebra.exec.vector_mul" ||
+                    op->getName().getStringRef() ==
+                        "algebra.exec.numerical_map")) {
           auto function = op->getParentOfType<local::FuncOp>();
           function.getBody().front().back().setOperand(0,
                                                        function.getArgument(0));

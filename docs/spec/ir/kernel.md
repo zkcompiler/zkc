@@ -73,6 +73,14 @@ checked plan owns the selected Local candidate and the binding, port and
 conversion decisions for that candidate. Materialization applies those decisions
 without rerunning numerical selection. The [physical plan](../../compiler/representation.md#checked-physical-decisions)
 checks both correspondence edges before publishing the physical result.
+The same late transaction handles retained pointwise maps and mixed map/Kernel
+subjects. Each occurrence has bounded legal alternatives; a missing implementation,
+unavailable conversion or attributable program-capacity refusal can advance that
+occurrence before publication. Semantic mismatches and malformed bindings remain
+terminal. Optional attempts keep cumulative work accounts and a separate reserve
+for required construction. The final reader checks the original source and actual
+selected body; a record of the selection is not semantic evidence.
+
 Normalization and native recipes use
 the existing bounded mechanisms and independent readers; they do not define a
 second mathematical semantics. An optional call `policy` records the selected
@@ -124,8 +132,10 @@ arbitrary work or memory limits.
 The unit remains the logical source. Numerical realization produces a private
 scheduled function before its selected Local realization and physical
 conversions. The physical plan also checks optional binding-lifetime decisions
-before publication. Writable-buffer layouts and target-specific vectorization
-remain separate work.
+before publication. [Native numerical calls](../runtime/numerical.md) use checked
+typed storage views and private destinations inside existing installed handlers.
+This does not turn nominal scheduled values into addressable buffers.
+Compiler buffer lowering and target-specific vectorization remain separate work.
 Participant scheduling, transcript state, transport and capability authority
 remain with their existing owners.
 

@@ -22,21 +22,25 @@ not authorize moving a failure, erasing a draw or reusing a consumed capability.
 
 ## Checked physical decisions
 
-One physical plan retains the original subject, including any
+One physical plan retains the original subject, including retained maps and
 [logical Kernel units](../spec/ir/kernel.md), until selection and checking finish.
 Kernel transforms propose a complete Local candidate without changing that
 subject. The candidate records the actual numerical choices, including ordered
 fallbacks; compile-time permission flags alone do not determine those choices.
-Numerical selection currently proposes one candidate independently of catalog
-preferences. If the catalog withholds an operation required by that candidate,
-planning refuses even if an ordered numerical alternative could execute.
+Selection checks complete physical feasibility before retaining a candidate.
+An unavailable implementation or direct conversion can advance the implicated
+numerical occurrence to another admitted realization. Specialized contractions,
+pointwise expressions, vector operations and ordered execution share this bounded
+selection process. Explicit implementation choices remain fixed; an unrelated
+malformed operation or correspondence mismatch remains a refusal. Attempts share
+compile-time allowances, including discarded candidate construction.
 
 Physical lowering separates three steps:
 
 1. Retain the numerical candidate and propose binding implementations, physical
    ports and direct conversions for its actual operations. Keep explicit
    application choices fixed and record any selected storage releases.
-2. Independently check numerical correspondence with the original Kernel subject,
+2. Independently check numerical correspondence with the original mathematical subject,
    then validate physical decisions against installed Contracts and actual SSA
    uses in the candidate, including release positions and lifetimes. Only
    validation constructs a checked plan.
@@ -45,7 +49,7 @@ Physical lowering separates three steps:
    numerical selection or catalog search.
 
 Physical operation indices refer to the selected Local candidate. They are not
-indices into the original Kernel subject. The checked object privately retains
+indices into the original mathematical subject. The checked object privately retains
 that candidate and owns the physical choices. Inspection returns a separate clone.
 Module identity and complete source content guard validation and publication;
 stale input refuses. This is an invocation-local guard, not a persisted

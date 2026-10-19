@@ -178,159 +178,86 @@ of a total helper:
 algebra.map_realize @rows = @scalar_helper [true, false] : (!V, !F) -> !V
 ```
 
-Algebra owns this declaration and its validation. The helper is private, defined
+Algebra owns the declaration and its validation. The helper is private, defined
 and has the exact signature `(F, ..., F) -> F` for one installed field `F`.
-`rowwise[i]` marks input `i` as a dynamic vector of `F`, read one element per row;
-other inputs are scalars of `F` shared by every row. At least one input is rowwise
-and the single result is a vector of `F`. Like `local.realize`, it is invoked only
-by `local.apply`, has no body or runtime provider and is forbidden after
-preparation. Both declarations implement the preparation-callable interface read
-by `local.apply`; the interface grants no admission, and this profile admits both
-operations explicitly. Formation refuses with `algebra-map-signature` or
-`algebra-map-helper`.
+`rowwise[i]` marks a vector input; other inputs are scalar captures. At least one
+input is rowwise and the result is a vector of `F`. `local.apply` invokes the
+declaration through the preparation-callable interface. The interface grants no
+purity or execution authority.
 
-After whole-module helper analysis admits the helper and its callees, this
-profile applies Algebra's map formula rule to that closure: every operation of
-every reachable helper body, used or not, is a field constant, addition,
-subtraction or multiplication in `F`, or a call whose operands and results are
-all `F`. Anything else, including unused work in another field, refuses with
-`algebra-map-formula` during ordinary IR verification. The rule reads each helper
-body at most once per field in one verification, without expansion.
+Formation admits every operation in the complete scalar helper closure, including
+unused work. Supported formulas contain field constants, addition, subtraction,
+multiplication and calls with exact field ports. Invalid signatures, helpers and
+formulas report `algebra-map-signature`, `algebra-map-helper` and
+`algebra-map-formula`. Expansion consumes shared helper operation/slot budgets;
+the expanded formula also obeys [Ring limits](limits.md).
 
-Preparation charges the root helper, including unused operations, before cloning
-it and charges each callee body as it is expanded. Both use the shared helper
-expansion budget; exhaustion refuses with `mathematical-expansion-limit`.
-It admits the detached formula with the shared
-[Ring view](../domains/ring-expressions.md), which applies the
-[Ring limits](limits.md) to the expanded formula: 65,536 nodes and depth 1,024.
-These limits depend on expansion, so a declaration that passes verification can
-still refuse here with `algebra-map-formula`. Admission of a source original runs
-the same check. The resulting `local.func` keeps the declaration's symbol and
-signature, and its logical origin names the helper with no static arguments, as
-for `local.realize`. Origin arguments are static bindings, so the row mask is
-carried by the declaration symbol and the generated body rather than the origin.
-Its body:
+Preparation expands ordinary Local helpers while retaining map calls, declarations
+and their exact scalar helper closure. Projection preserves this subject. Internal
+logical Exec admission accepts only this closed map form of `local.apply`;
+physical admission and executable publication refuse residual maps and helpers,
+including unused definitions. The standalone checked map-realization API remains
+available for callers that explicitly request early realization.
 
-1. measures the first rowwise input with `vector.length`; then, in input order,
-   measures each later rowwise input and compares it with the first through
-   `index.equal` and `control.require`. This prefix includes inputs the formula
-   never reads and precedes all arithmetic;
-2. evaluates live scalar subexpressions with `field.*` operations;
-3. combines rows with `vector.add`, `vector.sub` and `vector.mul`, uses
-   `vector.scale` when one factor is scalar, and broadcasts a scalar addend
-   with one `vector.fill(x, rows)` of the first input's length immediately
-   before its first use;
-4. broadcasts a scalar result the same way.
+Late realization first measures the initial rowwise input, then checks every
+later rowwise input in declaration order with `vector.length`, `index.equal` and
+`control.require`. Unused inputs retain these checks. A mismatch is
+`rejected:require`; an unused result still checks shapes. Scalar arguments and
+other surrounding ordered operations retain their original evaluation positions.
 
-The body has O(formula) operations, independent of runtime row counts. Its
-storage is not: each vector operation produces a vector of the row count, and
-intermediates remain in the local frame until cleanup unless
-`--release-storage` selects checked storage release. By default, peak storage
-therefore grows with the number of vector operations plus rowwise inputs,
-multiplied by the row count. Empty equal-length inputs succeed. A mismatch is a
-backend failure of the bound `control.require`, reported as `rejected:require`
-like a vector kernel's own shape check; it is not a native `reject`. The
-application is ordered and has no purity grant, so an unused result still checks
-shapes.
+The admitted formula has two executable realizations:
 
-Three choices in this body simplify the formula, each with a stated effect:
-expanding callees realizes one map instead of a map per helper, so no
-intermediate column is allocated or shape-checked on its own; a subformula over
-scalar inputs is one scalar operation instead of a row operation with a
-broadcast; a scalar operation whose result the formula never reaches is not
-realized. None of them removes or reorders a shape check, and the participant
-simplifier does not rewrite realized bodies. Their value laws are the
-[pointwise map laws](../domains/vectors.md#pointwise-maps); their effects are
-measured by the [map tests](../../../common/tests/protocol/test_native_map.py).
+- A [native expression call](../runtime/numerical.md#pointwise-expressions) borrows exact
+  typed columns and scalar captures and constructs one private output.
+- A vector realization uses installed `field.*`, `vector.add/sub/mul/scale` and
+  `vector.fill` operations. It evaluates scalar subexpressions once and shares
+  admitted equal subexpressions. Intermediate vectors follow ordinary Local
+  storage and optional checked release rules.
 
-The map reader interprets the retained scalar helper and actual generated
-payload separately. It checks all source instructions, exact nominal fields,
-scalar and row inputs, broadcasts, literals and the returned value. Admitted
-ring laws allow shared subexpressions and commuted additions or multiplications.
-Ordered shape guards and unchanged surrounding declarations are checked outside
-that payload comparison. Failure reports `algebra-map-correspondence`.
+An identity map can return its original column after the complete guard prefix.
+Empty aligned inputs succeed. Formula extraction admits the entire source before
+removing unused total arithmetic; it never removes or moves an ordered guard.
 
-Helper expansion, installed contract semantics and Ring admission are shared
-foundations. The reader does not consume the selector's lane classifications,
-product slots or emission plan. The relation covers equal values and ordered
-shape refusals under sufficient resources. Allocation and instruction charges,
-arbitrary provider failures and exact resource exhaustion are outside it.
+The independent reader interprets the original scalar closure and the actual
+candidate. It checks nominal fields, literals, scalar/row positions, expression
+bodies, broadcasts, guards, sites, aliases, result uses and surrounding code.
+It does not consume the producer's classifications or emission plan. The relation
+covers equal values and ordered shape refusals under sufficient resources;
+allocation charges and exact resource exhaustion may differ between realizations.
 
-Preparation then expands admitted `local.apply` using `canonical-expanded-locals/0`
-before freezing local definitions. An application inside a local region remains
-inside that region; it is not hoisted to protocol mathematics. Occurrence names
-encode the ordered call-site/callee pairs and leaf site with length prefixes.
-An encoding longer than 128 bytes uses `lc_h_` followed by its SHA-256 digest;
-the provenance map retains the full path. Existing shorter names retain their
-encoding. Generated site collisions are refused by ordinary local formation,
-and the expansion checker independently checks the expected name. Encoding work
-has a cumulative 16 MiB byte limit, charged before construction and separately
-by expansion and its checker (`algorithm-origin-limit`). Subsequent common preparation,
-projection, participant simplification and lowering preserve those bodies and their
-binding declarations. Physical selection may change representations and insert
-checked storage releases under the selected execution contract. An authored
-partial inverse stays in a local function; a preceding mathematical guard does
-not make inversion a total operation.
+Local expansion uses `canonical-expanded-locals/0`. Sites encode ordered
+call-site/callee paths; encodings longer than 128 bytes use `lc_h_` plus SHA-256,
+with full paths retained in provenance. Expansion and its checker separately
+charge a cumulative 16 MiB origin-byte allowance. Retained calls keep those
+identities through late lowering. Partial operations remain in Local control;
+a preceding guard does not grant a totality law.
 
 ### Optional vector reduction fusion
 
-`--fuse-vector-reductions` is disabled by default. It selects a preparation
-rewrite independently of mathematical simplification and storage release. The
-disabled path keeps the existing realization/expansion sequence, executable
-operations and occurrence sites. The enabled path uses the existing
-`algebra.map_realize`, `local.apply` and typed native vector reduction operations;
-it introduces no separate mathematical graph or runtime callback.
-The C++ preparation/project pass factories and `PreparedProtocol::prepare`
-take the same `MathematicalSelectionPolicy`, whose `vectorReductionFusion`
-choice defaults to false. Direct
-`zkc-prepare-protocol` and `zkc-project-protocol` pass invocations expose the
-`fuse-vector-reductions` Boolean option separately from `simplify`.
+`--fuse-vector-reductions` defaults to false, independently of finite bulk
+selection, simplification and storage release. The same
+`MathematicalSelectionPolicy` is carried through preparation and projection to
+late realization. Retaining a map does not itself authorize fusion.
 
-After polynomial and mathematical realization, checked local helper expansion
-runs in `RetainMaps` mode. It substitutes ordinary helpers while retaining only
-calls to admitted map declarations. An independent virtual-substitution check
-compares the original and actual candidate, including retained calls and their
-identities. This exposes maps and native reducers inside ordinary library
-wrappers without changing their ordered context. All map helper operations,
-including unused operations and declarations, remain subject to formula admission.
+An eligible pair is an adjacent map call and a single-use `vector.sum` in the
+same block, with exact field identity, no operation attributes and no fixed
+reducer implementation. Late selection can use:
 
-The admitted fusion has all of these premises:
+- `vector.dot` when the admitted live formula is exactly the product of two
+  row slots, including equal slots;
+- `numerical.sum` for a supported pointwise field formula;
+- a native or vector map followed by the original sum if fusion is unavailable.
 
-- A retained map call and its typed native `vector.sum` consumer are adjacent
-  in the same block; the mapped result has exactly one use.
-  The consumer's logical binding is `vector.sum` in the same field, with no
-  operation attributes or fixed backend implementation.
-- After admitted scalar helper expansion, the live formula is exactly a
-  multiplication of two row input slots of the same field. The slots may be
-  equal. Scalar factors, additions, other reducers and general reassociation
-  are outside this rule.
-- The replacement keeps the complete original ordered shape-check prefix,
-  including unused rows, before one typed `vector.dot` on the selected inputs.
-  Collection and scalar operand evaluations remain in place.
+Every choice preserves the complete original ordered shape-check prefix,
+including unused rows, and the surrounding argument evaluations. Fixed bindings,
+custom reducers, intervening effects, regions and escaping map results do not
+acquire replacement permission. Other reducers retain their original calls.
 
-The checker reads the retained original formula and actual replacement and
-checks operation/binding identities, fields, guards, operands, result uses,
-sites, full occurrence paths, surrounding code and declaration inventory. It
-does not authorize motion across effects, regions or custom reducers, nor
-replacement of a custom reducer based on its source name or notation. Only an
-exposed operation sequence meeting the concrete native rule can match.
-
-Residual maps use ordinary map realization. Checked `Finish` expansion removes
-the remaining helper calls before freezing executable local definitions. Both
-expansion phases retain original call/guard associations and full occurrence
-paths, including paths whose emitted names are hashed; a previously encoded
-site is not encoded again as an original leaf. Expansion and origin limits are
-cumulative across phases. The strict local snapshot remains after preparation;
-later mathematical simplification, projection and lowering preserve it.
-
-The execution relation is equal values and equal ordered shape refusals under
-the declared vector contracts and sufficient resources. The replacement has its
-own instruction and storage charges: it retains the guard prefix and charges
-dot instead of a materialized vector multiply followed by sum. This changes
-allocation and instruction behavior. It does not promise equal exhaustion,
-arbitrary backend-failure equivalence, a general resource refinement theorem or
-lower peak memory. Resource comparisons must report instruction work, logical
-value bytes, retained/live storage and cumulative allocation separately.
+The [checked physical plan](../../compiler/representation.md#checked-physical-decisions)
+selects feasible alternatives per occurrence before publication. Its independent
+reader checks the original source against the actual selected Local body;
+physical ports, implementations, conversions and final program capacity are
+checked separately. A reached runtime failure never triggers another realization.
 
 ### Admitted type uses
 

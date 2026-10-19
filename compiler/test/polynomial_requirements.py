@@ -264,7 +264,13 @@ with case("independent reduction checker rejects mismatched preparation choices"
         choice = 'true' if fuse else 'false'
         candidate = commands.verified(
             mixed, None, f'--zkc-project-protocol=simplify=false fuse-vector-reductions={choice}')
-        assert ('algebra.exec.vector_dot' in candidate) == fuse
+        # Preparation retains the map and records its family policy. Physical
+        # selection later chooses dot, numerical sum, or a separate map/sum.
+        assert 'algebra.exec.vector_dot' not in candidate
+        declaration = next(line for line in candidate.splitlines()
+                           if 'algebra.map_realize @vf_map' in line)
+        policy = declaration.split('policy = [', 1)[1].split(']', 1)[0]
+        assert policy.split(', ')[1] == choice
         candidate_path.write_text(candidate)
         flags = ['--fuse-vector-reductions'] if fuse else []
         commands.run([compiler, 'protocol-check-reductions', source_path,

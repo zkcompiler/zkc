@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from entry import Entry
+from test_total_callback_selection import operation_sites
 
 ROOT = Path(__file__).resolve().parents[3]
 PROJECT = ROOT / 'common/tests/fixtures/projects/native-map'
@@ -336,10 +337,10 @@ run Demo = Run;
 
 
 def realized_operation_counts(toolchain, journal, directory, name, source):
-    """Operations in the helper formula and in the realized map body.
+    """Count source arithmetic and actual physical operation sites.
 
-    The emitted original keeps every helper operation, used or not; the
-    prepared module holds the realized `local.func` the checker admitted.
+    Preparation retains the map request; physical selection realizes its body.
+    Unused binding declarations are not executed operations.
     """
     path = directory / f'{name}.zkc'
     path.write_text(source)
@@ -347,18 +348,15 @@ def realized_operation_counts(toolchain, journal, directory, name, source):
                            '--entry=sample::Demo', f'--module=sample={path}'])
     original = directory / f'{name}.mlir'
     original.write_text(emitted)
-    prepared = journal.run([toolchain.optimizer, '--zkc-prepare-protocol', str(original)])
+    prepared = journal.run([toolchain.optimizer, '--zkc-prepare-protocol', original])
+    assert 'algebra.map_realize' in prepared
     helper = sum(line.count('algebra.field_') + line.count('algebra.constant')
                  for line in emitted.splitlines())
-    body, inside = 0, False
-    for line in prepared.splitlines():
-        if 'local.func @zkl_map_' in line:
-            inside = True
-        elif inside and line.strip().startswith('return'):
-            inside = False
-        elif inside and ('algebra.exec.' in line or 'local.exec.' in line):
-            body += 1
-    return helper, body
+    physical = directory / f'{name}.physical.mlir'
+    physical.write_text(journal.run([
+        toolchain.optimizer, '--zkc-participant-pipeline', original]))
+    program = journal.json([toolchain.compiler, 'protocol-export', physical])
+    return helper, sum(operation_sites(program).values())
 
 
 @pytest.mark.parametrize('flags', [[], ['--no-simplify']])
@@ -405,9 +403,8 @@ def test_realizer_simplifications_are_visible_in_the_realized_body(toolchain, jo
     assert counts['dead'][1] == counts['fused'][1]
     # Fusion realizes one body; the split form realizes two maps and the
     # helper's own shape check, so it needs more operations overall. The
-    # prepared module counts both bodies here.
+    # physical program counts both bodies here.
     assert counts['split'][1] > counts['fused'][1]
     # Supplying the scalar as a column costs a fourth length check with its
-    # comparison and broadcasts instead of scalar arithmetic; the count again
-    # measures both together.
+    # comparison; the count measures both together.
     assert counts['rows'][1] > counts['fused'][1]

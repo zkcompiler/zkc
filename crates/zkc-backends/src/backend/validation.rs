@@ -396,7 +396,7 @@ impl Core {
             return Err(refused("kernel-operands"));
         }
         if let Some(call) = call {
-            super::NativeCall::prepare(call, signature.attributes, i.attributes)?;
+            super::NativeCall::prepare_invocation(call, i)?;
         } else {
             super::NativeCall::check(signature.attributes, i.attributes)?;
         }

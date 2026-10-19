@@ -7,6 +7,7 @@
 #include "HelperNormalization.h"
 #include "LaneRealization.h"
 #include "MathematicalSupport.h"
+#include "NumericalSelection.h"
 #include "RealizationEmission.h"
 #include "RealizationTrace.h"
 #include "RecipeRealizations.h"
@@ -161,6 +162,7 @@ class Realizer {
   const mathematical::MathematicalRecipes &recipes;
   mathematical::RealizationScope *observation;
   bool retryOrdered;
+  NumericalExpressionMode expressionMode;
   bool failedHelper = false;
   std::string sitePrefix = "finite_";
   std::string site() { return sitePrefix + std::to_string(occurrence++); }
@@ -339,10 +341,13 @@ class Realizer {
     }
     return {emit(*col->get, {container, position}, col->element)};
   }
-  Expected<mathematical::LaneRealizationResult>
-  elementwise(Block &body, const ComputationView &view,
-              const mathematical::Elementwise &equation, ValueRange entry,
-              Type vector, Value output = {}) {
+  Expected<mathematical::LaneRealizationResult> elementwise(
+      Block &body, const ComputationView &view,
+      const mathematical::Elementwise &equation, ValueRange entry, Type vector,
+      Value output = {},
+      mathematical::LaneResultMode mode = mathematical::LaneResultMode::Map,
+      ValueRange additionalTerms = {},
+      MathematicalIdentity combine = MathematicalIdentity::FieldAdd) {
     Value root = view.iteration[view.root].descriptor;
     llvm::DenseMap<Value, mathematical::LaneInput> inputs;
     for (const auto &access : view.accesses)
@@ -354,14 +359,39 @@ class Realizer {
       inputs[lookup] = {inputs.lookup(container).value, true};
     SmallVector<std::string> args{
         cast<algebra::FieldType>(elementType(vector)).getDomain().str()};
-    return mathematical::realizeLanes(
-        body, inputs, vector, sizes.lookup(root), &work.lanes, recipes,
-        [&](StringRef contract, ValueRange operands, Type output,
+    auto admitted = mathematical::admitLaneFormula(body, inputs, vector,
+                                                   &work.lanes, recipes, output,
+                                                   additionalTerms, combine);
+    if (!admitted)
+      return admitted.takeError();
+    if (!admitted->formula)
+      return mathematical::LaneRealizationResult{
+          admitted->status, {}, admitted->reason, admitted->outcome};
+    if (expressionMode == NumericalExpressionMode::PreferNative) {
+      auto result = mathematical::emitNumericalLanes(
+          *admitted->formula, vector, sizes.lookup(root), mode,
+          [&](const protocol::BindingApplication &binding, ValueRange operands,
+              Type result, ArrayRef<std::string> parameters) {
+            return emit(binding, operands, result, parameters);
+          });
+      if (!result ||
+          result->status == mathematical::LaneRealizationStatus::Realized)
+        return result;
+      // Body/port capacity is optional and has emitted nothing. Reuse the
+      // admitted formula; never replenish optional work for this alternative.
+      if (observation)
+        observation->selection(
+            computation.operation, mathematical::DecisionFamily::Lanes,
+            mathematical::RealizationChoice::Elementwise, result->outcome);
+    }
+    return mathematical::emitVectorLanes(
+        *admitted->formula, vector, sizes.lookup(root), recipes,
+        [&](StringRef contract, ValueRange operands, Type result,
             ArrayRef<std::string> parameters) {
-          return emit(contract, operands, output, args, parameters);
-        },
-        output);
+          return emit(contract, operands, result, args, parameters);
+        });
   }
+
   SmallVector<Value> apply(CallbackRole role, CallbackValues actuals) {
     auto callback = readCallback(computation, role);
     if (failed(callback)) {
@@ -492,12 +522,14 @@ public:
            const mathematical::MathematicalRecipes &recipes =
                mathematical::mathematicalRecipes(),
            mathematical::RealizationScope *observation = nullptr,
-           bool retryOrdered = false)
+           bool retryOrdered = false,
+           NumericalExpressionMode expressionMode =
+               NumericalExpressionMode::PreferNative)
       : unit(unit), builder(builder), loc(unit->getLoc()),
         index(IntegerType::get(unit->getContext(), 64, IntegerType::Unsigned)),
         boolean(builder.getI1Type()), emitter(unit, "_finite_binding_"),
         work(work), recipes(recipes), observation(observation),
-        retryOrdered(retryOrdered) {}
+        retryOrdered(retryOrdered), expressionMode(expressionMode) {}
   FailureOr<SmallVector<Value>> emitBody(Operation *source, ValueRange entry,
                                          bool optimize,
                                          const CollectFold *pair = nullptr,
@@ -551,6 +583,7 @@ public:
         selection =
             mathematical::selectComputation(selectionComputation, {true, false},
                                             callbackWork.remaining, recipes);
+      mathematical::applyNumericalSelection(work, selection, recipes);
       // A normalized helper's positions are not source positions. Attribute
       // queries inside that private view to the original finite occurrence.
       auto prepared = [&](Operation *op) {
@@ -646,8 +679,16 @@ public:
                     : *selection.equations.elementwise;
       Value term =
           reduction ? selection.equations.pointwiseReduction->term : Value();
-      auto result =
-          elementwise(*view->callbackBody, *view, formula, entry, vector, term);
+      const auto *equation =
+          reduction ? &*selection.equations.pointwiseReduction : nullptr;
+      auto mode = !reduction ? mathematical::LaneResultMode::Map
+                  : equation->combine == MathematicalIdentity::FieldMultiply
+                      ? mathematical::LaneResultMode::Product
+                      : mathematical::LaneResultMode::Sum;
+      auto result = elementwise(
+          *view->callbackBody, *view, formula, entry, vector, term, mode,
+          equation ? ValueRange(equation->additionalTerms) : ValueRange{},
+          equation ? equation->combine : MathematicalIdentity::FieldAdd);
       if (!result) {
         diagnostics::emit(source->emitOpError(), result.takeError());
         return failure();
@@ -657,7 +698,8 @@ public:
         if (reduction) {
           SmallVector<std::string> args{
               cast<algebra::FieldType>(resultType).getDomain().str()};
-          value = emit(reduction->target, value, resultType, args);
+          if (value.getType() == vector)
+            value = emit(reduction->target, value, resultType, args);
           value = emit(reduction->combiner, {initial.front(), value},
                        resultType, args);
         }
@@ -840,7 +882,8 @@ realizeExpression(Operation *op, ValueRange inputs, OpBuilder &builder,
     return failure();
   BodyRewriter rewriter(builder);
   Realizer realizer(unit, rewriter, available,
-                    mathematical::mathematicalRecipes(), &scope, orderedRetry);
+                    mathematical::mathematicalRecipes(), &scope, orderedRetry,
+                    policy.numericalExpressions);
   auto results = realizer.emitBody(op, inputs, policy.finiteBulk);
   builder.restoreInsertionPoint(rewriter.saveInsertionPoint());
   if (succeeded(results))
@@ -909,7 +952,8 @@ realizeLocalsWithLimits(ModuleOp module, MathematicalSelectionPolicy policy,
       return failure();
     IRRewriter rewriter(module.getContext());
     Realizer realizer(unit, rewriter, attemptWork, recipes, &attempt,
-                      policy.finiteBulk && !optimize);
+                      policy.finiteBulk && !optimize,
+                      policy.numericalExpressions);
     auto retainOptionalWork = [&] {
       available.matching = attemptWork.matching;
       available.lanes = attemptWork.lanes;

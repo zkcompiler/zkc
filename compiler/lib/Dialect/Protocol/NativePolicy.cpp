@@ -3,6 +3,7 @@
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/Verifier.h"
 #include "zkc/Contracts/TypeProperties.h"
+#include "zkc/Dialect/Algebra/IR/AlgebraOps.h"
 #include "zkc/Dialect/Algebra/Mathematical.h"
 #include "zkc/Dialect/Bindings.h"
 #include "zkc/Dialect/Diagnostics.h"
@@ -12,6 +13,7 @@
 #include "zkc/Dialect/Plan/IR/PlanOps.h"
 #include "zkc/Dialect/Polynomial/IR/PolynomialTypes.h"
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
+#include "llvm/ADT/DenseSet.h"
 using namespace mlir;
 using namespace llvm;
 namespace zkc::mathematical {
@@ -48,6 +50,14 @@ LogicalResult verifyNativeLocals(Operation *unit, bool allowApply,
   // Phase legality belongs to the enclosing profile, including dormant units.
   if (physical) {
     auto residual = unit->walk([](Operation *op) -> WalkResult {
+      if (isa<algebra::MapRealizeOp>(op)) {
+        (void)refuse(op, "physical profile requires realized map requests");
+        return WalkResult::interrupt();
+      }
+      if (isa<local::ApplyOp>(op)) {
+        (void)refuse(op, "physical profile requires expanded local requests");
+        return WalkResult::interrupt();
+      }
       if (isa<kernel::ModuleOp, kernel::CallOp>(op)) {
         (void)diagnostics::emit(
             op->emitOpError(), "kernel-profile",
@@ -59,6 +69,11 @@ LogicalResult verifyNativeLocals(Operation *unit, bool allowApply,
     if (residual.wasInterrupted())
       return failure();
   }
+
+  llvm::DenseSet<Operation *> mapHelpers;
+  if (failed(algebra::collectMapHelpers(unit, mapHelpers)))
+    return failure();
+  SymbolTableCollection symbols;
 
   auto admitted = [&](Type type) {
     if (physical) {
@@ -88,9 +103,18 @@ LogicalResult verifyNativeLocals(Operation *unit, bool allowApply,
         (void)refuse(nested, "local definition work limit");
         return WalkResult::interrupt();
       }
-      if (!allowApply && isa<local::ApplyOp>(nested)) {
-        (void)refuse(nested, "local.apply requires common preparation");
-        return WalkResult::interrupt();
+      if (!allowApply) {
+        if (auto call = dyn_cast<local::ApplyOp>(nested)) {
+          auto map = symbols.lookupNearestSymbolFrom<algebra::MapRealizeOp>(
+              call, call.getCalleeAttr());
+          if (physical || !map || map->getParentOp() != unit ||
+              call.getOperandTypes() != map.getFunctionType().getInputs() ||
+              call.getResultTypes() != map.getFunctionType().getResults()) {
+            (void)refuse(nested,
+                         "local.apply requires an admitted map request");
+            return WalkResult::interrupt();
+          }
+        }
       }
       for (auto type : nested->getResultTypes())
         if (!admitted(type)) {

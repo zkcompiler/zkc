@@ -16,6 +16,7 @@
 #include "zkc/Dialect/Protocol/IR/ProtocolOps.h"
 #include "zkc/Transforms/Finite.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/ScopeExit.h"
 using namespace mlir;
 using namespace llvm;
 namespace zkc::finite {
@@ -41,19 +42,34 @@ class Reader {
   VerificationResult result{VerificationStatus::Mismatch,
                             "finite recipe differs from its domain/helper"};
   void fail() { valid = false; }
+  uint64_t availableWork() const {
+    return limits.sharedReader ? std::min(remaining, *limits.sharedReader)
+                               : remaining;
+  }
+  bool charge(uint64_t amount = 1) {
+    auto available = availableWork();
+    if (amount > available) {
+      result = {
+          VerificationStatus::RequiredCapacity, "finite reader work",
+          CapacityCause{WorkOwner::RequiredFiniteReader, amount, available},
+          mathematical::realizationSubject(c.operation)};
+      fail();
+      return false;
+    }
+    // A callback can enter another reader before this one finishes. Leave
+    // unspent shared work available and retain this reader's own local cap.
+    remaining -= amount;
+    if (limits.sharedReader)
+      *limits.sharedReader -= amount;
+    return true;
+  }
   Operation *consume(StringRef name) {
     if (!valid || !cursor || cursor->getName().getStringRef() != name) {
       fail();
       return nullptr;
     }
-    if (!remaining) {
-      result = {VerificationStatus::RequiredCapacity, "finite reader work",
-                CapacityCause{WorkOwner::RequiredFiniteReader, 1, remaining},
-                mathematical::realizationSubject(c.operation)};
-      fail();
+    if (!charge())
       return nullptr;
-    }
-    --remaining;
     auto *op = cursor;
     cursor = cursor->getNextNode();
     return op;
@@ -117,24 +133,25 @@ class Reader {
                      unsigned regions) {
     if (name == "local.for") {
       auto *at = cursor;
-      auto parsed = zkc::kernel::readScheduledLoop(at, remaining);
+      auto available = availableWork();
+      auto scheduleWork = available;
+      auto parsed = zkc::kernel::readScheduledLoop(at, scheduleWork);
+      // Schema inspection spends required work even if no packet matches or
+      // inspection exhausts its allowance. Settle its actual debit once.
+      if (!charge(available - scheduleWork))
+        return nullptr;
       if (failed(parsed)) {
-        result = {VerificationStatus::RequiredCapacity, "finite reader work",
-                  CapacityCause{WorkOwner::RequiredFiniteReader, {}, remaining},
-                  mathematical::realizationSubject(c.operation)};
+        result = {
+            VerificationStatus::RequiredCapacity, "finite reader work",
+            CapacityCause{WorkOwner::RequiredFiniteReader, {}, availableWork()},
+            mathematical::realizationSubject(c.operation)};
         fail();
         return nullptr;
       }
       auto &scheduled = *parsed;
       if (scheduled) {
-        if (!remaining) {
-          result = {
-              VerificationStatus::RequiredCapacity, "finite reader work",
-              CapacityCause{WorkOwner::RequiredFiniteReader, 1, remaining},
-              mathematical::realizationSubject(c.operation)};
-          fail();
+        if (!charge())
           return nullptr;
-        }
         if (ValueRange(scheduled->inputs) != operands ||
             scheduled->states != results.size() ||
             !llvm::equal(scheduled->loop.getResults()
@@ -144,7 +161,6 @@ class Reader {
           fail();
           return nullptr;
         }
-        --remaining;
         cursor = at;
         return scheduled->loop;
       }
@@ -416,6 +432,13 @@ class Reader {
   }
 
 public:
+  static uint64_t reserve(uint64_t limit, uint64_t *shared) {
+    if (!shared)
+      return limit;
+    auto allowance = std::min(limit, *shared);
+    *shared -= allowance;
+    return allowance;
+  }
   Reader(Computation computation, SymbolTable &symbols,
          llvm::DenseSet<Operation *> &bindings, VerificationLimits limits = {},
          bool allowBulk = true)
@@ -481,7 +504,13 @@ public:
               protocol::boundOperationName("vector.empty")))) {
       // Semantic comparison is optional. Its bounded interpretation and
       // normalization cannot spend the ordered reader's admission budget.
-      uint64_t comparisonWork = std::min(remaining, limits.comparison);
+      uint64_t comparisonWork =
+          reserve(std::min(availableWork(), limits.comparison),
+                  limits.sharedComparison);
+      auto settleComparison = llvm::scope_exit([&] {
+        if (limits.sharedComparison)
+          *limits.sharedComparison += comparisonWork;
+      });
       mathematical::ComparisonCapacity capacity;
       std::optional<CapacityCause> debit;
       if (auto compared = mathematical::compareFinitePayload(

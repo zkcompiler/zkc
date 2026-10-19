@@ -10,6 +10,7 @@ pub mod hash;
 mod kernels;
 pub mod matrix;
 pub mod merkle;
+mod numerical;
 pub mod oracle;
 pub mod relation;
 mod resource;

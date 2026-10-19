@@ -6,7 +6,7 @@
 //! retained; the DFT acts over the base field on each coordinate.
 
 use p3_dft::{Radix2DitParallel, TwoAdicSubgroupDft};
-use p3_field::{ExtensionField, Field, TwoAdicField, batch_multiplicative_inverse};
+use p3_field::{ExtensionField, Field, TwoAdicField};
 use p3_koala_bear::KoalaBear;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -183,32 +183,84 @@ pub fn divide_opening<E: Field>(coefficients: &[E], point: E, value: E) -> Resul
 }
 
 /// Pointwise opening quotient on a coset, using one batch inversion. A point
-/// on the evaluation domain is refused before upstream inversion is called.
+/// on the evaluation domain is refused before allocating inversion workspace.
 pub fn opening_quotient<E: ExtensionField<KoalaBear>>(
     values: &[E],
     domain: Domain<E>,
     point: E,
     value: E,
 ) -> Result<Vec<E>, Error> {
-    if values.len() != domain.size {
-        return Err(Error::EvaluationCount);
-    }
-    if domain.contains(point) {
-        return Err(Error::PointOnDomain);
-    }
-    let mut x = domain.shift;
-    let denominators: Vec<E> = (0..domain.size)
-        .map(|_| {
-            let denominator = x - point;
-            x *= domain.generator;
-            denominator
+    let quotient = OpeningQuotient::new(values, domain, point, value)?;
+    let mut denominators = vec![E::ZERO; domain.size];
+    let mut result = vec![E::ZERO; domain.size];
+    quotient.write_into(&mut denominators, &mut result)?;
+    Ok(result)
+}
+
+/// Borrow checked mathematical inputs before admitting or allocating workspace.
+/// The same validation serves the public helper and the scoped native adapter.
+pub(crate) struct OpeningQuotient<'a, E> {
+    values: &'a [E],
+    domain: Domain<E>,
+    point: E,
+    value: E,
+}
+
+impl<'a, E: ExtensionField<KoalaBear>> OpeningQuotient<'a, E> {
+    pub(crate) fn new(
+        values: &'a [E],
+        domain: Domain<E>,
+        point: E,
+        value: E,
+    ) -> Result<Self, Error> {
+        if values.len() != domain.size {
+            return Err(Error::EvaluationCount);
+        }
+        if domain.contains(point) {
+            return Err(Error::PointOnDomain);
+        }
+        Ok(Self {
+            values,
+            domain,
+            point,
+            value,
         })
-        .collect();
-    Ok(values
-        .iter()
-        .zip(batch_multiplicative_inverse(&denominators))
-        .map(|(v, inverse)| (*v - value) * inverse)
-        .collect())
+    }
+
+    /// Use the initialized destination as batch-inversion prefix workspace.
+    /// Denominators are the only array scratch; no upstream allocator is called.
+    /// Validate both storage lengths before writing either slice.
+    pub(crate) fn write_into(
+        &self,
+        denominators: &mut [E],
+        destination: &mut [E],
+    ) -> Result<(), Error> {
+        if denominators.len() != self.domain.size || destination.len() != self.domain.size {
+            return Err(Error::EvaluationCount);
+        }
+        let mut x = self.domain.shift;
+        for denominator in denominators.iter_mut() {
+            *denominator = x - self.point;
+            x *= self.domain.generator;
+        }
+        let mut product = E::ONE;
+        for (prefix, denominator) in destination.iter_mut().zip(denominators.iter()) {
+            *prefix = product;
+            product *= *denominator;
+        }
+        let mut inverse = product.try_inverse().ok_or(Error::PointOnDomain)?;
+        for ((out, denominator), evaluation) in destination
+            .iter_mut()
+            .zip(denominators.iter())
+            .zip(self.values)
+            .rev()
+        {
+            let denominator_inverse = *out * inverse;
+            inverse *= *denominator;
+            *out = (*evaluation - self.value) * denominator_inverse;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -301,5 +353,35 @@ mod tests {
         assert_eq!(divide_opening::<E>(&[], E::ONE, E::ZERO), Ok(vec![]));
         assert_eq!(divide_opening(&[E::ONE], E::ONE, E::ONE), Ok(vec![]));
         assert_eq!(k.evaluate::<E>(&[], one), Ok(vec![E::ZERO]));
+    }
+
+    #[test]
+    fn quotient_destinations_validate_before_writes() {
+        let domain = Domain::new(4, sample(3), 4).unwrap();
+        let values = [sample(5); 4];
+        let mut denominators = [sample(7); 4];
+        let mut destination = [sample(11); 4];
+        for point in [domain.shift(), domain.point(3).unwrap()] {
+            assert!(matches!(
+                OpeningQuotient::new(&values, domain, point, E::ZERO),
+                Err(Error::PointOnDomain)
+            ));
+        }
+        assert!(matches!(
+            OpeningQuotient::new(&values[..3], domain, E::ZERO, E::ZERO),
+            Err(Error::EvaluationCount)
+        ));
+        let quotient = OpeningQuotient::new(&values, domain, E::ZERO, E::ZERO).unwrap();
+        for (scratch_len, output_len) in [(3, 4), (4, 3)] {
+            assert_eq!(
+                quotient.write_into(
+                    &mut denominators[..scratch_len],
+                    &mut destination[..output_len],
+                ),
+                Err(Error::EvaluationCount)
+            );
+            assert_eq!(denominators, [sample(7); 4]);
+            assert_eq!(destination, [sample(11); 4]);
+        }
     }
 }

@@ -31,6 +31,12 @@ impl MsbTable {
     /// The caller accounts for the input allocation. Shape/policy rejection
     /// drops that input; it cannot change any previously published table.
     pub fn from_logical_vec(values: Vec<Scalar>, bounds: &Bounds) -> Result<Self, Error> {
+        Self::from_physical_vec(values, bounds)
+    }
+
+    /// Consume evaluations already in MSB-first physical order. This layout's
+    /// physical and logical orders coincide; shape/policy checks still apply.
+    pub fn from_physical_vec(values: Vec<Scalar>, bounds: &Bounds) -> Result<Self, Error> {
         let arity = bounds.table_length(values.len())?;
         Ok(Self {
             values: Arc::new(values),
@@ -56,6 +62,11 @@ impl MsbTable {
     }
     /// Borrow logical evaluations without copying or exposing mutable storage.
     pub fn logical_values(&self) -> &[Scalar] {
+        self.physical_values()
+    }
+    /// Borrow immutable MSB-first storage. Logical coordinate zero separates
+    /// the lower and upper halves, which must be paired when restricting it.
+    pub fn physical_values(&self) -> &[Scalar] {
         &self.values
     }
 
@@ -79,13 +90,32 @@ impl MsbTable {
         }
         let half = self.len() / 2;
         let mut values = vector(half)?;
-        for (a, b) in self.values[..half].iter().zip(&self.values[half..]) {
-            values.push(*a + r * (*b - a));
-        }
+        values.resize(half, Scalar::ZERO);
+        self.restrict_first_into(r, &mut values)?;
         Ok(Self {
             values: Arc::new(values),
             arity: self.arity - 1,
         })
+    }
+
+    /// Restrict into initialized MSB-first storage, checking all lengths before
+    /// writing. No conversion or mutable access to published storage is needed.
+    pub fn restrict_first_into(&self, r: Scalar, destination: &mut [Scalar]) -> Result<(), Error> {
+        if self.arity == 0 {
+            return Err(Error::PositiveArityRequired);
+        }
+        let half = self.len() / 2;
+        if destination.len() != half {
+            return Err(Error::InvalidTableLength);
+        }
+        let values = self.physical_values();
+        for (out, (a, b)) in destination
+            .iter_mut()
+            .zip(values[..half].iter().zip(&values[half..]))
+        {
+            *out = *a + r * (*b - *a);
+        }
+        Ok(())
     }
 
     /// Sum the product on the Boolean cube, without allocating a new table.

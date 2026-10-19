@@ -122,6 +122,10 @@ def MatrixBilinearOp : BoundOp<AlgebraDialect, "exec.matrix_bilinear", [OpMatrix
 
 def MatrixIdentityCheckOp : BoundOp<AlgebraDialect, "exec.matrix_identity_check", [OpMatrixIdentityCheck]>;
 
+def NumericalMapOp : BoundOp<AlgebraDialect, "exec.numerical_map", [OpNumericalMap]>;
+def NumericalSumOp : BoundOp<AlgebraDialect, "exec.numerical_sum", [OpNumericalSum]>;
+def NumericalProductOp : BoundOp<AlgebraDialect, "exec.numerical_product", [OpNumericalProduct]>;
+
 def RingPointOp : BoundOp<AlgebraDialect, "exec.ring_point", [OpRingPoint]>;
 def RingRowsOp : BoundOp<AlgebraDialect, "exec.ring_rows", [OpRingRows]>;
 def RingCoefficientsOp : BoundOp<AlgebraDialect, "exec.ring_coefficients", [OpRingCoefficients]>;
@@ -266,8 +270,8 @@ def FiniteCollectOp : AlgebraFiniteOp<"finite_collect">;
 // A checked pointwise application of an existing private scalar helper over
 // runtime vectors. `rowwise[i]` selects whether input i is a whole vector of
 // the helper's scalar field (one row per element) or a scalar broadcast to
-// every row. The declaration is called by local.apply and is replaced during
-// preparation by an ordinary local.func with the same signature. It is a
+// every row. Ordered local.apply calls retain this declaration until numerical
+// selection chooses and checks their actual Local payload. It is a
 // checked bulk operation: shapes are compared before arithmetic, so it has no
 // totality or purity contract. Algebra owns its formula vocabulary.
 def MapRealizeOp : Op<AlgebraDialect, "map_realize",

@@ -1,5 +1,6 @@
 #include "MathematicalComparison.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "zkc/Contracts/Numerical.h"
 #include "zkc/Contracts/OperationShapes.h"
 #include "zkc/Contracts/Operations.h"
 #include "zkc/Contracts/RingExpression.h"
@@ -266,6 +267,10 @@ public:
     return insert(kind == ring::Kind::Add ? ring::Node::add(left, right)
                                           : ring::Node::mul(left, right));
   }
+  Term neg(Term operand) {
+    return operand == invalidTerm ? invalidTerm
+                                  : insert(ring::Node::neg(operand));
+  }
   Term arithmetic(StringRef contract, Term left, Term right) {
     if (left == invalidTerm || right == invalidTerm)
       return invalidTerm;
@@ -486,11 +491,12 @@ bool laneArithmetic(StringRef contract) {
          contract == "vector.mul" || contract == "vector.scale";
 }
 bool candidateContract(StringRef contract) {
-  return fieldArithmetic(contract) || laneArithmetic(contract) ||
-         contract == "field.constant" || contract == "vector.fill" ||
-         contract == "vector.sum" || contract == "vector.product" ||
-         contract == "vector.dot" || contract == "matrix.row_dot" ||
-         contract == "matrix.column_dot" || contract == "matrix.bilinear";
+  return protocol::numericalContract(contract) || fieldArithmetic(contract) ||
+         laneArithmetic(contract) || contract == "field.constant" ||
+         contract == "vector.fill" || contract == "vector.sum" ||
+         contract == "vector.product" || contract == "vector.dot" ||
+         contract == "matrix.row_dot" || contract == "matrix.column_dot" ||
+         contract == "matrix.bilinear";
 }
 algebra::FieldType scalarField(Type type) {
   if (isa<algebra::FieldVectorType, algebra::FieldMatrixType,
@@ -919,6 +925,70 @@ class Comparison {
       return {Meaning::Scalar,
               terms.literal(field.getDomain(), bound.parameters[0])};
     }
+    if (protocol::numericalContract(contract)) {
+      if (dimensions.size() != 1 || op.getNumOperands() == 0 ||
+          op.getOperand(0) != rows || bound.parameters.size() != 1)
+        return {};
+      auto decoded = protocol::readBinding(bound.binding);
+      if (!decoded) {
+        consumeError(decoded.takeError());
+        return {};
+      }
+      // Signature formation and parameter admission are independently checked
+      // by primitive(); interpret the actual E and positional operands here.
+      const auto &arguments = decoded->application.arguments;
+      if (arguments.size() != 2)
+        return {};
+      const auto &mask = arguments[1];
+      auto expression = protocol::readNumericalExpression(
+          bound.parameters.front(), arguments[0], mask.size());
+      if (!expression) {
+        consumeError(expression.takeError());
+        return {};
+      }
+      SmallVector<Term> slots;
+      for (auto [i, bit] : enumerate(mask)) {
+        Meaning value = bit == '1' ? lane(op.getOperand(i + 1), 0)
+                                   : scalar(op.getOperand(i + 1));
+        // Even unused slots must be aligned with the admitted row domain.
+        if (value.term == invalidTerm ||
+            value.kind != (bit == '1' ? Meaning::Lane : Meaning::Scalar))
+          return {};
+        slots.push_back(value.term);
+      }
+      SmallVector<Term> nodes;
+      for (const auto &node : expression->nodes()) {
+        if (!terms.charge())
+          return {};
+        Term value = invalidTerm;
+        switch (node.kind) {
+        case ring::Kind::Constant:
+          value = terms.literal(arguments[0], node.constant);
+          break;
+        case ring::Kind::Input:
+          value = slots[node.input];
+          break;
+        case ring::Kind::Add:
+        case ring::Kind::Mul:
+          value = terms.binary(node.kind, nodes[node.left], nodes[node.right]);
+          break;
+        case ring::Kind::Neg:
+          value = terms.neg(nodes[node.left]);
+          break;
+        case ring::Kind::Embed:
+          return {};
+        }
+        if (value == invalidTerm)
+          return {};
+        nodes.push_back(value);
+      }
+      Term payload = nodes[expression->outputs().front()];
+      if (contract == "numerical.map")
+        return {Meaning::Lane, payload};
+      auto combine =
+          contract == "numerical.sum" ? ring::Kind::Add : ring::Kind::Mul;
+      return {Meaning::Scalar, aggregate(arguments[0], combine, payload)};
+    }
     if (!bound.parameters.empty())
       return {};
     if (fieldArithmetic(contract))
@@ -985,10 +1055,10 @@ class Comparison {
       return {};
     return {Meaning::Scalar, aggregate(field.getDomain(), combine, payload)};
   }
-  FailureOr<Value> consume(Meaning expected, Type resultType,
-                           Operation *&cursor,
-                           llvm::DenseSet<Operation *> &bindings,
-                           Operation *end) {
+  FailureOr<Value>
+  consume(Meaning expected, Type resultType, Operation *&cursor,
+          llvm::DenseSet<Operation *> &bindings, Operation *end,
+          std::optional<Value> requestedOutput = std::nullopt) {
     if (expected.term == invalidTerm || expected.kind == Meaning::Unknown)
       return failure();
     Value result;
@@ -996,8 +1066,9 @@ class Comparison {
     // but compare only that output; normalizing every intermediate prefix is
     // unnecessary and can exhaust the shared budget on otherwise valid maps.
     auto output = [&](Value value) {
-      return !end ||
-             (end->getNumOperands() == 1 && end->getOperand(0) == value);
+      return requestedOutput ? !*requestedOutput || value == *requestedOutput
+                             : !end || (end->getNumOperands() == 1 &&
+                                        end->getOperand(0) == value);
     };
     // An identity formula need not emit any payload instruction.
     for (auto &entry : candidate) {
@@ -1017,7 +1088,19 @@ class Comparison {
               : local::OperationBindingOp();
       if (!declaration || !candidateContract(declaration.getContract()))
         break;
-      if (!terms.charge())
+      uint64_t cost = 1;
+      if (protocol::numericalContract(declaration.getContract())) {
+        cost += at->getNumOperands() + at->getNumResults();
+        if (auto parameters = at->getAttrOfType<ArrayAttr>("parameters"))
+          for (Attribute parameter : parameters)
+            if (auto text = dyn_cast<StringAttr>(parameter)) {
+              if (text.getValue().size() >
+                      protocol::NumericalLimits::bodyBytes ||
+                  !terms.charge(4 * text.getValue().size()))
+                return failure();
+            }
+      }
+      if (!terms.charge(cost))
         return failure();
       auto bound = primitive(*at, &symbols);
       if (!bound)
@@ -1051,7 +1134,8 @@ public:
   FailureOr<Value> map(Block &source, ArrayRef<bool> rowwise, ValueRange inputs,
                        Operation *&cursor,
                        llvm::DenseSet<Operation *> &bindings, Operation *end,
-                       bool sum = false) {
+                       bool sum = false,
+                       std::optional<Value> output = std::nullopt) {
     if (!rows || !rows.getType().isUnsignedInteger(64) ||
         rowwise.size() != inputs.size() ||
         source.getNumArguments() != inputs.size())
@@ -1089,12 +1173,12 @@ public:
     if (sum) {
       expected = {Meaning::Scalar,
                   aggregate(field.getDomain(), ring::Kind::Add, expected.term)};
-      return consume(expected, field, cursor, bindings, end);
+      return consume(expected, field, cursor, bindings, end, output);
     }
     return consume(
         expected,
         algebra::FieldVectorType::get(field.getContext(), field.getDomain()),
-        cursor, bindings, end);
+        cursor, bindings, end, output);
   }
   FailureOr<Value> finite(const finite::Computation &source, ValueRange inputs,
                           Operation *&cursor,
@@ -1476,17 +1560,47 @@ FailureOr<Value> compareLaneFormula(Block &source, ArrayRef<bool> rowwise,
                                     ValueRange inputs, Value rows,
                                     Operation *&cursor, SymbolTable &symbols,
                                     llvm::DenseSet<Operation *> &bindings,
-                                    uint64_t &remaining, Operation *end) {
-  return Comparison(symbols, rows, remaining)
-      .map(source, rowwise, inputs, cursor, bindings, end);
+                                    uint64_t &remaining, Operation *end,
+                                    ComparisonCapacity *capacity,
+                                    std::optional<CapacityCause> *debit,
+                                    std::optional<Value> output) {
+  if (capacity)
+    *capacity = ComparisonCapacity::None;
+  if (debit)
+    debit->reset();
+  Comparison comparison(symbols, rows, remaining);
+  auto result = comparison.map(source, rowwise, inputs, cursor, bindings, end,
+                               false, output);
+  if (failed(result)) {
+    if (capacity)
+      *capacity = comparison.exhausted();
+    if (debit)
+      *debit = comparison.failedDebit();
+  }
+  return result;
 }
 FailureOr<Value> compareLaneSum(Block &source, ArrayRef<bool> rowwise,
                                 ValueRange inputs, Value rows,
                                 Operation *&cursor, SymbolTable &symbols,
                                 llvm::DenseSet<Operation *> &bindings,
-                                uint64_t &remaining, Operation *end) {
-  return Comparison(symbols, rows, remaining)
-      .map(source, rowwise, inputs, cursor, bindings, end, true);
+                                uint64_t &remaining, Operation *end,
+                                ComparisonCapacity *capacity,
+                                std::optional<CapacityCause> *debit,
+                                std::optional<Value> output) {
+  if (capacity)
+    *capacity = ComparisonCapacity::None;
+  if (debit)
+    debit->reset();
+  Comparison comparison(symbols, rows, remaining);
+  auto result = comparison.map(source, rowwise, inputs, cursor, bindings, end,
+                               true, output);
+  if (failed(result)) {
+    if (capacity)
+      *capacity = comparison.exhausted();
+    if (debit)
+      *debit = comparison.failedDebit();
+  }
+  return result;
 }
 FailureOr<Value> compareFinitePayload(const finite::Computation &source,
                                       ValueRange inputs, Value rows,

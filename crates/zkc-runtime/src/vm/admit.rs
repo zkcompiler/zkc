@@ -602,7 +602,11 @@ fn local_body(
                 } else {
                     u64::MAX
                 };
-                attributes(sig.attributes, a, range_reason, natural_limit)?;
+                if sig.attributes == AttributeRule::NumericalExpression {
+                    super::operations::numerical::parameters(binding.declaration(), a)?;
+                } else {
+                    attributes(sig.attributes, a, range_reason, natural_limit)?;
+                }
                 operands(&mut env, inputs, &sig.inputs).map_err(|error| {
                     if error.code == ErrorCode::Signature {
                         err(

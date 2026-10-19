@@ -1,6 +1,11 @@
 {
   "profile": "zkc.contract-conformance-coverage",
   "operations": {
+    "numerical": [
+      "numerical.map",
+      "numerical.sum",
+      "numerical.product"
+    ],
     "field": [
       "encoding.fields_be",
       "encoding.fields_from_be",

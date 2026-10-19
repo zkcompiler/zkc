@@ -215,14 +215,22 @@ copies consume cumulative operation and slot budgets across the preparation
 window. Domain constructors retain unknown MLIR effects until their ordered
 admission is explicit in the lowered code.
 
+An aligned field formula can compose with addition or multiplication reductions.
+The recognizer separates the accumulator from the complete associative spine,
+retains sibling terms and keeps the authored seed outside the identity reduction.
+Specialized contraction equations and general pointwise equations coexist;
+target availability selects between checked realizations. This does not authorize
+partial, effectful or accumulator-dependent terms as pointwise formulas.
+
 Finite correspondence distinguishes a mismatch from exhausted comparison work.
-If an optional bulk candidate exceeds comparison capacity, the service discards
-it and retries ordered realization once from the immutable source. This applies
-to Local finite declarations and total finite expressions in outlined calculations
-or `local.realize`. The retry preserves spent optional work and a separate reserve
-for required construction. The ordered candidate must still pass independent
-checking. Required-reader exhaustion reports `finite-verification-capacity`;
-a correspondence mismatch remains a refusal.
+An optional candidate that exceeds comparison capacity is discarded. Kernel
+selection advances the reader-identified occurrence while preserving unrelated
+choices. Standalone Local finite realization retains its conservative ordered
+retry. Both paths preserve cumulative recognition and checking work, and charge
+rejected expansion to a separate discard reserve before restoring required
+construction quotas. The ordered candidate must still pass independent checking.
+Required-reader exhaustion reports `finite-verification-capacity`; a
+correspondence mismatch remains a refusal.
 
 Demand determines the contraction's size. A single selected row or column uses
 `matrix.row_dot` or `matrix.column_dot` and returns one scalar. Collecting a
@@ -256,15 +264,20 @@ vector to a scalar with empty identity one, separately from elementwise
 multiplication. The [source contract](../spec/language/definitions.md#finite-reduction-binders)
 owns binder scope, captures and shared scoped extraction.
 
-Optional `--fuse-vector-reductions` exposes admitted maps through checked
-`RetainMaps` local expansion, recognizes adjacent single-use multiply-map/sum,
-and selects the declared dot recipe, retaining all original shape guards.
-Without that reduction recipe, the map and sum remain unchanged. Residual maps
-and helpers finish through the ordinary realization path before the strict
-local snapshot. Independent checks compare both expansion stages and the
-actual fused candidate with their originals, retaining full occurrence paths.
+Maps and their scalar closures remain available through preparation and
+projection. Late physical selection uses installed capabilities to choose
+specialized primitives, native pointwise expression calls, vector operations or
+an ordered finite realization. Required maps retain their vector alternative;
+they do not gain an invented ordered callback path. Independent readers compare
+the retained source with the actual candidate before publication.
+
+Optional `--fuse-vector-reductions` admits adjacent single-use map/sum pairs.
+A product of two row inputs can use a dot product; a supported field formula can
+use `numerical.sum`. If those choices are unavailable, the original sum consumes
+a native or vector map. All original shape guards and occurrence paths remain.
 The [IR contract](../spec/ir/protocols.md#optional-vector-reduction-fusion)
-defines exact eligibility and shared bounds.
+defines eligibility and the [native contract](../spec/runtime/numerical.md)
+defines execution and resource boundaries.
 
 `EntryOptions`, `RunOptions` and `NativeProofOptions` carry one
 `mathematicalSelection` policy, with independent `finiteBulk` and
@@ -378,13 +391,10 @@ instruction charges may change exhaustion.
 No general optimization theorem, backend-failure equivalence or peak-memory
 improvement follows. The current scalar Lean bridge does not cover these native vector reductions.
 
-Finite comparison distinguishes a mismatch from exhausted checker capacity.
-An optional candidate that exhausts comparison is discarded; the transaction
-retries once with ordered finite execution and reserved required work. This is
-a conservative whole-candidate fallback, so sibling computations can also lose
-bulk selection. Required-reader exhaustion reports
-`finite-verification-capacity`. The [finite contract](../spec/ir/finite.md)
-defines these per-subject allowances separately from stage-wide recognition.
+The [finite contract](../spec/ir/finite.md) defines checking allowances separately
+from stage-wide recognition. Late numerical selection shares those balances
+across occurrences and retries; exhausting optional comparison cannot grant
+additional required checking work.
 
 ## Protocol and relation consumers
 
