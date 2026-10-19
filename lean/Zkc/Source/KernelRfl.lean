@@ -37,22 +37,37 @@ meta def kernelRflProof (statement : Expr) : MetaM Expr := do
     body.assign (mkApp2 (mkConst ``Eq.refl [← getLevel α]) α lhs)
   instantiateMVars proof
 
+/-- The local declarations of a declaration's type and value. -/
+meta def declarationFVars (fvar : FVarId) : MetaM (Array FVarId) := do
+  let declaration ← fvar.getDecl
+  let mut inner := collectFVars {} (← instantiateMVars declaration.type)
+  if let some value := declaration.value? then
+    inner := collectFVars inner (← instantiateMVars value)
+  return inner.fvarIds
+
 /-- The local declarations an expression depends on, directly or through the
-types and values of other declarations, in context order. -/
+types and values of other declarations, in context order. Reverting them also
+reverts every declaration that depends on one of them, so those and their own
+dependencies are included too, and the reverted statement is closed. -/
 meta def dependencies (expression : Expr) : MetaM (Array FVarId) := do
-  let mut pending := (collectFVars {} expression).fvarIds.toList
-  let mut found : FVarIdSet := {}
-  while !pending.isEmpty do
-    let fvar := pending.head!
-    pending := pending.tail!
-    if found.contains fvar then continue
-    found := found.insert fvar
-    let declaration ← fvar.getDecl
-    let mut inner := collectFVars {} (← instantiateMVars declaration.type)
-    if let some value := declaration.value? then
-      inner := collectFVars inner (← instantiateMVars value)
-    pending := pending ++ inner.fvarIds.toList
   let context ← getLCtx
+  let mut found : FVarIdSet := {}
+  let mut pending := (collectFVars {} expression).fvarIds.toList
+  let mut changed := true
+  while changed do
+    while !pending.isEmpty do
+      let fvar := pending.head!
+      pending := pending.tail!
+      if found.contains fvar then continue
+      found := found.insert fvar
+      pending := pending ++ (← declarationFVars fvar).toList
+    changed := false
+    for declaration in context do
+      if declaration.isImplementationDetail || found.contains declaration.fvarId then continue
+      let uses ← declarationFVars declaration.fvarId
+      if uses.any found.contains then
+        pending := pending ++ [declaration.fvarId]
+        changed := true
   return context.foldl (init := #[]) fun selected declaration =>
     if found.contains declaration.fvarId then selected.push declaration.fvarId else selected
 
