@@ -275,7 +275,8 @@ theorem attempt_callBytes (state : (jointSimulator encoding width length).State)
 
 /-- Only a hash call's bytes realize its cell. -/
 theorem eq_callBytes_of_attempt {state : (jointSimulator encoding width length).State} {bytes : Bytes}
-    {call : Query} (assigned : (jointSimulator encoding width length).attempt state bytes = some (.inr call)) :
+    {call : Query}
+    (assigned : (jointSimulator encoding width length).attempt state bytes = some (.inr call)) :
     bytes = encoding.callBytes call := by
   change jointAttempt encoding width state.chain.reached bytes = some (.inr call) at assigned
   unfold jointAttempt at assigned
@@ -507,7 +508,8 @@ theorem flatJoint_run_chain {bytes : Bytes} {input : Input (Absorbed E Shape S) 
       | some answer =>
           rw [flat_run_recorded attempt recorded]
           simp only [flatJoint, flatten, StateT.run_mk]
-          rw [(jointSimulator encoding width length).handle_recorded (state := (⟨chain, hashes⟩ : JointState E Shape S Query width length))
+          rw [(jointSimulator encoding width length).handle_recorded
+            (state := (⟨chain, hashes⟩ : JointState E Shape S Query width length))
             (query := bytes) (key := .inl key) (ideal := answer) assigned recorded]
           simp only [simulateQ_pure, StateT.run_pure, map_pure]
           change pure (chainShared width (encoding.chainInput bytes) answer, _) = _
@@ -515,7 +517,8 @@ theorem flatJoint_run_chain {bytes : Bytes} {input : Input (Absorbed E Shape S) 
       | none =>
           rw [flat_run_fresh attempt recorded]
           simp only [flatJoint, flatten, StateT.run_mk]
-          rw [(jointSimulator encoding width length).handle_fresh (state := (⟨chain, hashes⟩ : JointState E Shape S Query width length))
+          rw [(jointSimulator encoding width length).handle_fresh
+            (state := (⟨chain, hashes⟩ : JointState E Shape S Query width length))
             (query := bytes) (key := .inl key) assigned recorded]
           simp only [simulateQ_map, simulateQ_spec_query, StateT.run_map, Functor.map_map]
           rw [randomOracle_combine]
@@ -541,11 +544,13 @@ theorem flatJoint_run_hash (call : Query) (chain : ChainState (Absorbed E Shape 
   simp only [flatJoint, flatten, StateT.run_mk]
   cases recorded : hashes call with
   | some answer =>
-      rw [(jointSimulator encoding width length).handle_recorded (state := (⟨chain, hashes⟩ : JointState E Shape S Query width length))
+      rw [(jointSimulator encoding width length).handle_recorded
+            (state := (⟨chain, hashes⟩ : JointState E Shape S Query width length))
         (key := .inr call) (ideal := answer) assigned recorded]
       simp
   | none =>
-      rw [(jointSimulator encoding width length).handle_fresh (state := (⟨chain, hashes⟩ : JointState E Shape S Query width length))
+      rw [(jointSimulator encoding width length).handle_fresh
+            (state := (⟨chain, hashes⟩ : JointState E Shape S Query width length))
         (key := .inr call) assigned recorded]
       simp only [simulateQ_map, simulateQ_spec_query, StateT.run_map, Functor.map_map,
         randomOracle.run_eq, combine_inr, recorded]

@@ -200,7 +200,8 @@ theorem transcript_commute (positive : 0 < width) (key : TranscriptKey E Shape S
   refine (evalSPMF_map_eq_of_evalSPMF_eq
     (answer_commute positive (chainKey key) tables organized room) _).trans ?_
   congr 1
-  show _ = ((fun result => (result.1, (result.2, rows))) <$> (historyAnswer width (chainKey key)).run tables) >>=
+  show _ = ((fun result => (result.1, (result.2, rows))) <$>
+      (historyAnswer width (chainKey key)).run tables) >>=
     fun (step : (Fin width → S) × (Simulated (Absorbed E Shape S) S Bytes width × (Query → Option S))) =>
       (fun cache => (step.1, cache)) <$> fillCache width slots step.2
   simp only [bind_map_left, fillCache]

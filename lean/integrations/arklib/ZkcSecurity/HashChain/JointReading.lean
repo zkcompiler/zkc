@@ -314,7 +314,8 @@ theorem chainRead_congr {first second : Input (Absorbed E Shape S) S Bytes → m
 
 theorem absorbAll_congr' {first second : Input (Absorbed E Shape S) S Bytes → m S}
     (same : ∀ input, ReadInput width input → first input = second input) :
-    ∀ (events : List (Absorbed E Shape S)) (state : S), absorbAll first state events = absorbAll second state events
+    ∀ (events : List (Absorbed E Shape S)) (state : S),
+      absorbAll first state events = absorbAll second state events
   | [], _ => rfl
   | event :: rest, state => by
       simp only [absorbAll]

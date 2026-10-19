@@ -36,9 +36,9 @@ with the digests in the chain's state encoding. The installed Keccak-256 rows us
 
 **Separation from bytes.** Tagged rows carry the separation of their tags: the leaf and node tags
 and the three chain tags are pairwise non-prefix (`TagsSeparated`). Row calls and chain calls then
-have jointly injective encodings (`TaggedRows.separated`): a tag that is not a prefix of another fixes the role, a leaf input then
-fixes its row through the row codec, a node input its two fixed-length digests, and a chain input
-is fixed by `encodeInput_injective`. The Keccak tags are separated (`keccak_tagsSeparated`); a row
+have jointly injective encodings (`TaggedRows.separated`): a tag that is not a prefix of another
+fixes the role, a leaf input then fixes its row through the row codec, a node input its two
+fixed-length digests, and a chain input is fixed by `encodeInput_injective`. The Keccak tags are separated (`keccak_tagsSeparated`); a row
 tag that prefixes a chain tag is not (`TestsSecurity.HashChainJointFrame`). An `Encoding` packages
 the encodings with this separation, and its `namespaces` are the joint stage's
 `ZkcSecurity.Stage.Joint.Namespaces`.
@@ -131,10 +131,17 @@ other and from the chain tags, a fixed leaf header and an injective row codec. -
 structure TaggedRows (Row : Type) where
   leafTag : Bytes
   nodeTag : Bytes
-  separatedTags : TagsSeparated leafTag nodeTag
+  /-- The tags are separated (`TagsSeparated`), stated as its conjunction. -/
+  separatedTags : Unrelated leafTag nodeTag ∧ Unrelated leafTag bindTag ∧
+    Unrelated leafTag absorbTag ∧ Unrelated leafTag requestTag ∧ Unrelated nodeTag bindTag ∧
+      Unrelated nodeTag absorbTag ∧ Unrelated nodeTag requestTag
   header : Bytes
   rowBytes : Row → Bytes
   rowInjective : Function.Injective rowBytes
+
+/-- Tagged rows' tags are separated. -/
+theorem TaggedRows.tagsSeparated (rows : TaggedRows Row) : TagsSeparated rows.leafTag rows.nodeTag :=
+  rows.separatedTags
 
 /-- The bytes of a row call, with digests in the state encoding. -/
 def TaggedRows.callBytes (rows : TaggedRows Row) (stateBytes : S → Bytes) : RowCall Row S → Bytes :=
@@ -196,10 +203,12 @@ theorem TaggedRows.separated (rows : TaggedRows Row) {stateBytes : S → Bytes}
           exfalso
           cases first with
           | leaf row =>
-              simp only [Sum.elim_inl, Sum.elim_inr, TaggedRows.callBytes, taggedCallBytes, List.append_assoc] at same
+              simp only [Sum.elim_inl, Sum.elim_inr, TaggedRows.callBytes, taggedCallBytes,
+                List.append_assoc] at same
               exact chainTag _ _ second leafBind leafAbsorb leafRequest same
           | node left right =>
-              simp only [Sum.elim_inl, Sum.elim_inr, TaggedRows.callBytes, taggedCallBytes, List.append_assoc] at same
+              simp only [Sum.elim_inl, Sum.elim_inr, TaggedRows.callBytes, taggedCallBytes,
+                List.append_assoc] at same
               exact chainTag _ _ second nodeBind nodeAbsorb nodeRequest same
   | inr first =>
       cases second with
@@ -207,10 +216,12 @@ theorem TaggedRows.separated (rows : TaggedRows Row) {stateBytes : S → Bytes}
           exfalso
           cases second with
           | leaf row =>
-              simp only [Sum.elim_inl, Sum.elim_inr, TaggedRows.callBytes, taggedCallBytes, List.append_assoc] at same
+              simp only [Sum.elim_inl, Sum.elim_inr, TaggedRows.callBytes, taggedCallBytes,
+                List.append_assoc] at same
               exact chainTag _ _ first leafBind leafAbsorb leafRequest same.symm
           | node left right =>
-              simp only [Sum.elim_inl, Sum.elim_inr, TaggedRows.callBytes, taggedCallBytes, List.append_assoc] at same
+              simp only [Sum.elim_inl, Sum.elim_inr, TaggedRows.callBytes, taggedCallBytes,
+                List.append_assoc] at same
               exact chainTag _ _ first nodeBind nodeAbsorb nodeRequest same.symm
       | inr second =>
           congr 1

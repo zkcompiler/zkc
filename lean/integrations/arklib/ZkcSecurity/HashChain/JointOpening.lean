@@ -76,7 +76,8 @@ def chainCertificate (accepts : Row → Bool) (fraction : ENNReal) (default : Ro
     · rw [withTables_validator]
       change Pr{let raw ← $ᵗ (Fin width → S)}[∃ value, some (decode raw) = some value ∧
         ¬ Doomed accepts depth fraction default (.done (accepts (rows value)))] ≤ 1 - fraction
-      refine (prEvent_mono _ _ (fun raw => accepts (rows (decode raw)) = true) fun raw escaping => ?_).trans ?_
+      refine (prEvent_mono _ _ (fun raw => accepts (rows (decode raw)) = true)
+        fun raw escaping => ?_).trans ?_
       · obtain ⟨value, same, outside⟩ := escaping
         cases Option.some.inj same
         by_contra rejected
