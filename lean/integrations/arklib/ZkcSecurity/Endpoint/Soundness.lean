@@ -29,13 +29,19 @@ program bytes. Each is a chain of quantitative stage relations
    budget and with every framing header (`validate_prunes_export`), a zero-loss
    stage (`Relation.ofPrunesImage`).
 
-Fixed-statement endpoints bound the acceptance of a policy statement that
-denotes a false model statement. Adaptive endpoints let the prover choose any
+Fixed-statement endpoints bound the acceptance of a policy statement the
+application claim counts as false. Adaptive endpoints let the prover choose any
 policy statement, malformed ones included, after its queries; the verifier
 starts from the binding codec's initial transcript of that statement, which
 determines it, and the bound covers every statement the application counts as
-false, through the evidence's coverage. The validator charge of an adaptive
+false. Both reach the doomed set through the evidence's coverage
+(`SoundnessEvidence.original_doomed`). The validator charge of an adaptive
 endpoint is the supremum of the per-statement charges.
+
+Each endpoint states its property as a definition over the evidence
+(`FixedSoundness`, `AdaptiveSoundness`, `FixedSoundnessBytes`,
+`AdaptiveSoundnessBytes`), so a claim's application declaration has the type of
+the property at its evidence, and its statement is the property's instance.
 
 The prover's budget is its pathwise weighted cost (`WorstCaseCostBound`), every
 oracle key charged the family's charge of its last event after the history
@@ -82,11 +88,11 @@ end Bounds
 
 section Endpoints
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
-  {art : Artifacts} {endpoint : Semantics} {form : Form} {relation : StatementRelation F G art.publics}
+  {art : Artifacts} {endpoint : Semantics} {form : Form} {claim : art.Statement F G → Prop}
   {regime : Regime F}
 
 namespace SoundnessEvidence
-variable (evidence : SoundnessEvidence art endpoint form relation regime)
+variable (evidence : SoundnessEvidence art endpoint form claim regime)
 
 /-- The transcript interface of the checked context with the regime's decoding. -/
 abbrev absorb : Typed.Interface (Actions F G) (Event F G) (Payload F G) fun _ => regime.Answer :=
@@ -105,14 +111,16 @@ theorem verify_eq (statement : art.Statement F G) (initial : History F G) (proof
         initial proof := by
   rw [verify, Compiled.transform_eq _ _ statement evidence.handle, transform_eq]
 
-/-- The original validator of a statement that denotes a false model statement
-is doomed after every initial transcript. -/
-theorem original_doomed {statement : art.Statement F G} (falseStatement : relation.FalseStatement statement)
+/-- The original validator of a statement the application counts as false is
+doomed after every initial transcript: the statement is false in the model, whose
+validator is the original, or it denotes no model statement. -/
+theorem original_doomed {statement : art.Statement F G} (falseStatement : ApplicationFalse claim statement)
     (initial : History F G) :
     evidence.family.certificate.doomed initial (evidence.compiled.original statement evidence.handle) := by
-  obtain ⟨model, denotes, falseModel⟩ := falseStatement
-  rw [evidence.model statement model denotes]
-  exact evidence.family.doomed model initial falseModel
+  rcases evidence.covers statement falseStatement with ⟨model, denotes, falseModel⟩ | unmapped
+  · rw [evidence.model statement model denotes]
+    exact evidence.family.doomed model initial falseModel
+  · exact evidence.unmapped statement unmapped initial
 
 /-- The original validator's charge is at most the supremum of the
 per-statement charges. -/
@@ -124,7 +132,7 @@ theorem costBound_iSup (statement : art.Statement F G) (initial : History F G) :
 end SoundnessEvidence
 
 section Fixed
-variable (evidence : SoundnessEvidence art endpoint form relation regime)
+variable (evidence : SoundnessEvidence art endpoint form claim regime)
 
 /-- The fixed-statement game of a verifier on proofs: provers are oracle
 computations with a pathwise weighted budget, the bad event is acceptance. -/
@@ -137,7 +145,7 @@ noncomputable def fixedGame (verifier : Proof F G →
 /-- The Fiat–Shamir stage: the typed transform of the doomed original validator
 is bounded at every weighted budget `c` by `c` plus the validator's charge. -/
 noncomputable def fixedTyped (statement : art.Statement F G)
-    (falseStatement : relation.FalseStatement statement) (initial : History F G) :
+    (falseStatement : ApplicationFalse claim statement) (initial : History F G) :
     Relation Game.trivial (fixedGame evidence fun proof => Typed.transform evidence.absorb Typed.ask
       (evidence.compiled.original statement evidence.handle) initial proof) :=
   Relation.ofBound _ (fun cost : ENNReal => cost + evidence.cost statement) fun cost prover admissible =>
@@ -156,11 +164,11 @@ noncomputable def fixedConstruction (statement : art.Statement F G) (initial : H
 
 /-- The ideal-meaning stages composed. -/
 noncomputable def fixedIdeal (statement : art.Statement F G)
-    (falseStatement : relation.FalseStatement statement) (initial : History F G) :
+    (falseStatement : ApplicationFalse claim statement) (initial : History F G) :
     Relation Game.trivial (fixedGame evidence (evidence.verify statement initial)) :=
   (fixedTyped evidence statement falseStatement initial).comp (fixedConstruction evidence statement initial)
 
-theorem fixedIdeal_loss (statement : art.Statement F G) (falseStatement : relation.FalseStatement statement)
+theorem fixedIdeal_loss (statement : art.Statement F G) (falseStatement : ApplicationFalse claim statement)
     (initial : History F G) (cost : ENNReal) :
     (fixedIdeal evidence statement falseStatement initial).loss cost = cost + evidence.cost statement :=
   zero_add _
@@ -168,35 +176,37 @@ theorem fixedIdeal_loss (statement : art.Statement F G) (falseStatement : relati
 end Fixed
 
 /-- **Ordinary soundness of the compiled verifier's ideal meaning, fixed
-statement.** For a policy statement that denotes a false model statement and
+statement.** For a policy statement the application counts as false and
 every initial transcript, a prover of typed proofs whose oracle queries charge
 at most `proverCost` on every path makes the compiled verifier accept with
 probability at most `proverCost` plus the original validator's charge on the
 statement, in one lazily sampled random oracle on all typed histories with
 the regime's challenges, shared by the prover and the verifier. -/
-theorem fixed_soundness (evidence : SoundnessEvidence art .idealMeaning .fixed relation regime)
-    (statement : art.Statement F G) (falseStatement : relation.FalseStatement statement)
-    (initial : History F G) (prover : OracleComp (Oracle F G regime.Answer) (Proof F G)) (proverCost : ENNReal)
-    (proverBound : WorstCaseCostBound prover ⟨Typed.keyCharge evidence.family.charge⟩ proverCost) :
+def FixedSoundness (evidence : SoundnessEvidence art .idealMeaning .fixed claim regime) : Prop :=
+  ∀ (statement : art.Statement F G), ApplicationFalse claim statement →
+    ∀ (initial : History F G) (prover : OracleComp (Oracle F G regime.Answer) (Proof F G))
+      (proverCost : ENNReal), WorstCaseCostBound prover ⟨Typed.keyCharge evidence.family.charge⟩ proverCost →
     Pr{let result ← (simulateQ randomOracle
         (prover >>= evidence.verify statement initial)).run' ∅}[
-      Zkc.Transcript.Accepted (· = some true) result.1] ≤ proverCost + evidence.cost statement := by
+      Zkc.Transcript.Accepted (· = some true) result.1] ≤ proverCost + evidence.cost statement
+
+theorem fixed_soundness (evidence : SoundnessEvidence art .idealMeaning .fixed claim regime) :
+    FixedSoundness evidence := by
+  intro statement falseStatement initial prover proverCost proverBound
   have bounded := (fixedIdeal evidence statement falseStatement initial).bounded proverCost prover proverBound
   rwa [fixedIdeal_loss] at bounded
 
 section Adaptive
-variable (evidence : SoundnessEvidence art endpoint .adaptive relation regime)
+variable (evidence : SoundnessEvidence art endpoint .adaptive claim regime)
 
 namespace SoundnessEvidence
 
 /-- The binding evidence of an adaptive claim. -/
-def bound : BindingEvidence relation (fun initial statement =>
-    evidence.family.certificate.doomed initial (evidence.compiled.original statement evidence.handle)) :=
-  evidence.binding
+def bound : BindingEvidence := evidence.binding
 
-/-- The binding codec of an adaptive claim: the initial transcript of every policy
-statement. -/
-abbrev codec : BindingCodec (art.Statement F G) (Event F G) := evidence.bound.codec
+/-- The binding codec of an adaptive claim: the policy-derived initial transcript
+of every policy statement in the bound application context. -/
+abbrev codec : BindingCodec (art.Statement F G) (Event F G) := policyCodec art.publics evidence.bound.application
 
 end SoundnessEvidence
 
@@ -215,55 +225,25 @@ noncomputable def adaptiveGame {Result : Type}
 initial transcript of the chosen statement. -/
 noncomputable def compiledAdaptiveGame : Game :=
   adaptiveGame evidence (fun statement => evidence.verify statement (evidence.codec.encode statement))
-    fun result => relation.applicationFalse result.1 ∧ Zkc.Transcript.Accepted (· = some true) result.2.1
+    fun result => ApplicationFalse claim result.1 ∧ Zkc.Transcript.Accepted (· = some true) result.2.1
 
-/-- The Fiat–Shamir and construction stages for adaptive statements, for the
-statements a predicate counts as false, whose validators are doomed. -/
-noncomputable def adaptiveStages (falseStatement : art.Statement F G → Prop)
-    (doomed : ∀ statement, falseStatement statement → evidence.family.certificate.doomed
-      (evidence.codec.encode statement) (evidence.compiled.original statement evidence.handle))
-    (implies : ∀ statement (outcome : PIR.Outcome (Option Bool)),
-      relation.applicationFalse statement ∧ Zkc.Transcript.Accepted (· = some true) outcome →
-        falseStatement statement ∧ Zkc.Transcript.Accepted (· = some true) outcome) :
-    Relation Game.trivial (compiledAdaptiveGame evidence) :=
+/-- The Fiat–Shamir and construction stages for adaptive statements: the
+original validators of the statements the application counts as false are
+doomed at their initial transcripts, which determine the statements. -/
+noncomputable def adaptiveIdeal : Relation Game.trivial (compiledAdaptiveGame evidence) :=
   (weightedRelation (R := fun _ : History F G => regime.Answer) evidence.family.certificate
     (fun statement => evidence.compiled.original statement evidence.handle) evidence.codec.encode
-    evidence.codec.determined falseStatement doomed (⨆ statement, evidence.cost statement)
+    evidence.codec.determined (ApplicationFalse claim)
+    (fun _ falseStatement => evidence.original_doomed falseStatement _) (⨆ statement, evidence.cost statement)
     fun statement => evidence.costBound_iSup statement _).comp
-  (Relation.ofImage _ _ _ id (fun result accepted => implies result.1 result.2.1 accepted) fun prover => by
+  (Relation.ofImage _ _ _ id (fun _ accepted => accepted) fun prover => by
     rw [id_map]
     exact congrArg (prover >>= ·) (funext fun claimed => congrArg ((fun result => (claimed.1, result)) <$> ·)
       (evidence.verify_eq claimed.1 (evidence.codec.encode claimed.1) claimed.2)))
 
-/-- The adaptive stages through the evidence's coverage. -/
-noncomputable def adaptiveIdeal : Relation Game.trivial (compiledAdaptiveGame evidence) :=
-  match evidence.bound.coverage with
-  | .rejects covers unmapped =>
-      adaptiveStages evidence relation.applicationFalse
-        ((StatementBinding.mk evidence.codec relation.models relation.functional).doomed_of_covers covers
-          (fun statement model denotes falseModel => by
-            rw [evidence.model statement model denotes]
-            exact evidence.family.doomed model _ falseModel) unmapped)
-        fun _ _ holds => holds
-  | .implies implication =>
-      adaptiveStages evidence relation.FalseStatement
-        (fun statement falseStatement => evidence.original_doomed falseStatement _)
-        fun statement outcome holds => implication (statement, outcome) holds
-
-theorem adaptiveStages_loss (falseStatement : art.Statement F G → Prop)
-    (doomed : ∀ statement, falseStatement statement → evidence.family.certificate.doomed
-      (evidence.codec.encode statement) (evidence.compiled.original statement evidence.handle))
-    (implies : ∀ statement (outcome : PIR.Outcome (Option Bool)),
-      relation.applicationFalse statement ∧ Zkc.Transcript.Accepted (· = some true) outcome →
-        falseStatement statement ∧ Zkc.Transcript.Accepted (· = some true) outcome) (cost : ENNReal) :
-    (adaptiveStages evidence falseStatement doomed implies).loss cost =
-      cost + ⨆ statement, evidence.cost statement :=
-  zero_add _
-
 theorem adaptiveIdeal_loss (cost : ENNReal) :
-    (adaptiveIdeal evidence).loss cost = cost + ⨆ statement, evidence.cost statement := by
-  unfold adaptiveIdeal
-  split <;> exact adaptiveStages_loss _ _ _ _ cost
+    (adaptiveIdeal evidence).loss cost = cost + ⨆ statement, evidence.cost statement :=
+  zero_add _
 
 end Adaptive
 
@@ -274,14 +254,18 @@ every path, makes the compiled verifier, started from the binding codec's
 initial transcript of the chosen statement, accept a statement the application
 counts as false with probability at most `proverCost` plus the supremum of the
 original validator's per-statement charges. -/
-theorem adaptive_soundness (evidence : SoundnessEvidence art .idealMeaning .adaptive relation regime)
-    (prover : OracleComp (Oracle F G regime.Answer) (art.Statement F G × Proof F G)) (proverCost : ENNReal)
-    (proverBound : WorstCaseCostBound prover ⟨Typed.keyCharge evidence.family.charge⟩ proverCost) :
+def AdaptiveSoundness (evidence : SoundnessEvidence art .idealMeaning .adaptive claim regime) : Prop :=
+  ∀ (prover : OracleComp (Oracle F G regime.Answer) (art.Statement F G × Proof F G)) (proverCost : ENNReal),
+    WorstCaseCostBound prover ⟨Typed.keyCharge evidence.family.charge⟩ proverCost →
     Pr{let result ← (simulateQ randomOracle (prover >>= fun claimed =>
         (fun result => (claimed.1, result)) <$>
           evidence.verify claimed.1 (evidence.codec.encode claimed.1) claimed.2)).run' ∅}[
-      relation.applicationFalse result.1 ∧ Zkc.Transcript.Accepted (· = some true) result.2.1] ≤
-      proverCost + ⨆ statement, evidence.cost statement := by
+      ApplicationFalse claim result.1 ∧ Zkc.Transcript.Accepted (· = some true) result.2.1] ≤
+      proverCost + ⨆ statement, evidence.cost statement
+
+theorem adaptive_soundness (evidence : SoundnessEvidence art .idealMeaning .adaptive claim regime) :
+    AdaptiveSoundness evidence := by
+  intro prover proverCost proverBound
   have bounded := (adaptiveIdeal evidence).bounded proverCost prover proverBound
   rwa [adaptiveIdeal_loss] at bounded
 
@@ -337,7 +321,7 @@ end LoweringEvidence
 end Bytes
 
 namespace SoundnessEvidence
-variable (evidence : SoundnessEvidence art .executableBytes form relation regime)
+variable (evidence : SoundnessEvidence art .executableBytes form claim regime)
 
 /-- The lowering evidence of a claim about program bytes. -/
 def lowered : LoweringEvidence art evidence.compiled F G := evidence.lowering
@@ -345,7 +329,7 @@ def lowered : LoweringEvidence art evidence.compiled F G := evidence.lowering
 end SoundnessEvidence
 
 section FixedBytes
-variable (evidence : SoundnessEvidence art .executableBytes form relation regime)
+variable (evidence : SoundnessEvidence art .executableBytes form claim regime)
   (codec : Zkc.Executable.PhysicalType → List UInt8 → Option (Payload F G)) (budget : Nat)
   (binding : List UInt8)
 
@@ -388,7 +372,7 @@ noncomputable def fixedPruning (statement : art.Statement F G) (initial : Histor
       exact .bind _ _ _ fun bytes => evidence.lowered.prunes _ codec budget binding statement initial bytes
 
 /-- The program-bytes stages composed. -/
-noncomputable def fixedBytes (statement : art.Statement F G) (falseStatement : relation.FalseStatement statement)
+noncomputable def fixedBytes (statement : art.Statement F G) (falseStatement : ApplicationFalse claim statement)
     (initial : History F G) :
     Relation Game.trivial
       (bytesGame evidence (evidence.lowered.validate regime.challenge codec budget binding statement initial)
@@ -397,7 +381,7 @@ noncomputable def fixedBytes (statement : art.Statement F G) (falseStatement : r
     (fixedDecoding evidence codec statement initial)).comp
     (fixedPruning evidence codec budget binding statement initial)
 
-theorem fixedBytes_loss (statement : art.Statement F G) (falseStatement : relation.FalseStatement statement)
+theorem fixedBytes_loss (statement : art.Statement F G) (falseStatement : ApplicationFalse claim statement)
     (initial : History F G) (cost : ENNReal) :
     (fixedBytes evidence codec budget binding statement falseStatement initial).loss cost =
       cost + evidence.cost statement := by
@@ -407,26 +391,30 @@ theorem fixedBytes_loss (statement : art.Statement F G) (falseStatement : relati
 end FixedBytes
 
 /-- **Ordinary soundness of host validation of program bytes, fixed statement.**
-For a policy statement that denotes a false model statement, every initial
+For a policy statement the application counts as false, every initial
 transcript, every codec of the native message bytes, every instruction budget
 and every expected binding, a prover of proof bytes whose oracle queries charge
 at most `proverCost` on every path makes host validation accept with
 probability at most `proverCost` plus the original validator's charge on the
 statement. -/
-theorem fixed_soundness_bytes (evidence : SoundnessEvidence art .executableBytes .fixed relation regime)
-    (codec : Zkc.Executable.PhysicalType → List UInt8 → Option (Payload F G)) (budget : Nat)
-    (binding : List UInt8) (statement : art.Statement F G) (falseStatement : relation.FalseStatement statement)
-    (initial : History F G) (prover : OracleComp (Oracle F G regime.Answer) (List UInt8)) (proverCost : ENNReal)
-    (proverBound : WorstCaseCostBound prover ⟨Typed.keyCharge evidence.family.charge⟩ proverCost) :
+def FixedSoundnessBytes (evidence : SoundnessEvidence art .executableBytes .fixed claim regime) : Prop :=
+  ∀ (codec : Zkc.Executable.PhysicalType → List UInt8 → Option (Payload F G)) (budget : Nat)
+    (binding : List UInt8) (statement : art.Statement F G), ApplicationFalse claim statement →
+    ∀ (initial : History F G) (prover : OracleComp (Oracle F G regime.Answer) (List UInt8)) (proverCost : ENNReal),
+      WorstCaseCostBound prover ⟨Typed.keyCharge evidence.family.charge⟩ proverCost →
     Pr{let accepted ← (simulateQ randomOracle (prover >>=
         evidence.lowered.validate regime.challenge codec budget binding statement initial)).run' ∅}[
-      accepted = true] ≤ proverCost + evidence.cost statement := by
+      accepted = true] ≤ proverCost + evidence.cost statement
+
+theorem fixed_soundness_bytes (evidence : SoundnessEvidence art .executableBytes .fixed claim regime) :
+    FixedSoundnessBytes evidence := by
+  intro codec budget binding statement falseStatement initial prover proverCost proverBound
   have bounded := (fixedBytes evidence codec budget binding statement falseStatement initial).bounded proverCost
     prover proverBound
   rwa [fixedBytes_loss] at bounded
 
 section AdaptiveBytes
-variable (evidence : SoundnessEvidence art .executableBytes .adaptive relation regime)
+variable (evidence : SoundnessEvidence art .executableBytes .adaptive claim regime)
   (codec : Zkc.Executable.PhysicalType → List UInt8 → Option (Payload F G)) (budget : Nat)
   (binding : List UInt8)
 
@@ -446,7 +434,7 @@ noncomputable def adaptiveDecoding :
     Relation (compiledAdaptiveGame evidence)
       (adaptiveBytesGame evidence (fun statement bytes => evidence.verify statement
         (evidence.codec.encode statement) (evidence.lowered.decoded codec statement bytes))
-        fun result => relation.applicationFalse result.1 ∧ Zkc.Transcript.Accepted (· = some true) result.2.1) :=
+        fun result => ApplicationFalse claim result.1 ∧ Zkc.Transcript.Accepted (· = some true) result.2.1) :=
   Relation.ofLe (fun prover => (fun claimed : art.Statement F G × List UInt8 =>
       (claimed.1, evidence.lowered.decoded codec claimed.1 claimed.2)) <$> prover) (fun cost => cost)
     (fun cost prover admissible => Typed.worstCaseCostBound_map _ prover _ cost admissible)
@@ -463,16 +451,16 @@ noncomputable def adaptiveDecoding :
           fun claimed => (fun result => (claimed.1, result)) <$>
             evidence.verify claimed.1 (evidence.codec.encode claimed.1) claimed.2).symm
       exact le_of_eq (congrArg (fun computation => Pr{let result ← (simulateQ randomOracle computation).run' ∅}[
-        relation.applicationFalse result.1 ∧ Zkc.Transcript.Accepted (· = some true) result.2.1]) same)
+        ApplicationFalse claim result.1 ∧ Zkc.Transcript.Accepted (· = some true) result.2.1]) same)
 
 /-- The adaptive pruning stage. -/
 noncomputable def adaptivePruning :
     Relation (adaptiveBytesGame evidence (fun statement bytes => evidence.verify statement
         (evidence.codec.encode statement) (evidence.lowered.decoded codec statement bytes))
-        fun result => relation.applicationFalse result.1 ∧ Zkc.Transcript.Accepted (· = some true) result.2.1)
+        fun result => ApplicationFalse claim result.1 ∧ Zkc.Transcript.Accepted (· = some true) result.2.1)
       (adaptiveBytesGame evidence (fun statement => evidence.lowered.validate regime.challenge codec budget binding
         statement (evidence.codec.encode statement))
-        fun result => relation.applicationFalse result.1 ∧ result.2 = true) :=
+        fun result => ApplicationFalse claim result.1 ∧ result.2 = true) :=
   Relation.ofPrunesImage _ _ _
     (fun result : art.Statement F G × (PIR.Outcome (Option Bool) × Proof F G) => (result.1, verdict result.2))
     (rejects := fun result => result.2 = false)
@@ -492,7 +480,7 @@ noncomputable def adaptiveBytes :
     Relation Game.trivial
       (adaptiveBytesGame evidence (fun statement => evidence.lowered.validate regime.challenge codec budget binding
         statement (evidence.codec.encode statement))
-        fun result => relation.applicationFalse result.1 ∧ result.2 = true) :=
+        fun result => ApplicationFalse claim result.1 ∧ result.2 = true) :=
   ((adaptiveIdeal evidence).comp (adaptiveDecoding evidence codec)).comp
     (adaptivePruning evidence codec budget binding)
 
@@ -511,16 +499,19 @@ transcript of the chosen statement, accept a statement the application counts
 as false with probability at most `proverCost` plus the supremum of the
 original validator's per-statement charges, for every codec of the native
 message bytes, instruction budget and expected binding. -/
-theorem adaptive_soundness_bytes (evidence : SoundnessEvidence art .executableBytes .adaptive relation regime)
-    (codec : Zkc.Executable.PhysicalType → List UInt8 → Option (Payload F G)) (budget : Nat)
+def AdaptiveSoundnessBytes (evidence : SoundnessEvidence art .executableBytes .adaptive claim regime) : Prop :=
+  ∀ (codec : Zkc.Executable.PhysicalType → List UInt8 → Option (Payload F G)) (budget : Nat)
     (binding : List UInt8) (prover : OracleComp (Oracle F G regime.Answer) (art.Statement F G × List UInt8))
-    (proverCost : ENNReal)
-    (proverBound : WorstCaseCostBound prover ⟨Typed.keyCharge evidence.family.charge⟩ proverCost) :
+    (proverCost : ENNReal), WorstCaseCostBound prover ⟨Typed.keyCharge evidence.family.charge⟩ proverCost →
     Pr{let result ← (simulateQ randomOracle (prover >>= fun claimed =>
         (fun accepted => (claimed.1, accepted)) <$> evidence.lowered.validate regime.challenge codec budget
           binding claimed.1 (evidence.codec.encode claimed.1) claimed.2)).run' ∅}[
-      relation.applicationFalse result.1 ∧ result.2 = true] ≤
-      proverCost + ⨆ statement, evidence.cost statement := by
+      ApplicationFalse claim result.1 ∧ result.2 = true] ≤
+      proverCost + ⨆ statement, evidence.cost statement
+
+theorem adaptive_soundness_bytes (evidence : SoundnessEvidence art .executableBytes .adaptive claim regime) :
+    AdaptiveSoundnessBytes evidence := by
+  intro codec budget binding prover proverCost proverBound
   have bounded := (adaptiveBytes evidence codec budget binding).bounded proverCost prover proverBound
   rwa [adaptiveBytes_loss] at bounded
 

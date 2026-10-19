@@ -34,12 +34,17 @@ family's model validator), the statement/witness-relation correspondence (the
 application's witness relation is the protocol's relation at the statement's
 protocol statement) and, for program bytes, the lowering evidence.
 
-`knowledge_soundness` concludes for the compiled verifier's ideal meaning, read
-through complete acceptance, and `knowledge_soundness_bytes` for host
-validation of proof bytes: host validation prunes the ideal acceptance of the
-decoded typed proof, which is at most the acceptance of what the proof reads as,
-so the bound transfers to the prover of what its bytes decode to, for every
-codec, instruction budget and expected binding.
+`KnowledgeEvidence.knowledge` is the bridge for provers of commitments and
+responses. The registered endpoints state their property as a definition over
+the evidence (`KnowledgeSoundness`, `KnowledgeSoundnessBytes`).
+`knowledge_soundness` concludes for the compiled verifier's ideal meaning on
+arbitrary typed proofs, read through complete acceptance: a typed proof is
+accepted at most as often as what it reads as (`typedAcceptance_le`, from
+`off_shape`), with the same query budget. `knowledge_soundness_bytes` concludes
+for host validation of proof bytes: host validation prunes the ideal acceptance
+of the decoded typed proof, which is at most the acceptance of what the proof
+reads as, so the bound transfers to the prover of what its bytes decode to, for
+every codec, instruction budget and expected binding.
 -/
 
 set_option autoImplicit false
@@ -144,8 +149,8 @@ noncomputable def acceptance [SampleableType F] (prover : Sigma.Prover F G Stmt 
 
 end KnowledgeEvidence
 
-/-- The Sigma bridge applied to evidence at any covered endpoint: the bound of
-`knowledge_soundness` for the compiled verifier's ideal meaning. -/
+/-- The Sigma bridge applied to evidence at any covered endpoint, for provers of
+commitments and responses. -/
 theorem KnowledgeEvidence.knowledge [DecidableEq Commit] [SampleableType F] [Fintype F] [Inhabited F]
     [SampleableType Wit] (evidence : KnowledgeEvidence art endpoint Stmt Wit Commit PrvState Resp holds)
     (statement : art.Statement F G) (initial : History F G) (prover : Sigma.Prover F G Stmt Commit Resp)
@@ -163,28 +168,100 @@ theorem KnowledgeEvidence.knowledge [DecidableEq Commit] [SampleableType F] [Fin
   simp only [KnowledgeEvidence.acceptance, evidence.relation]
   exact bridge
 
+section Typed
+
+/-- A prover of typed proofs for a fixed statement, with uniform coins and the
+transcript oracle on every history. -/
+abbrev TypedProver (F G Stmt : Type) := Stmt → History F G → OracleComp (Sigma.HistorySpec F G) (Proof F G)
+
+namespace KnowledgeEvidence
+variable (evidence : KnowledgeEvidence art endpoint Stmt Wit Commit PrvState Resp holds)
+
+/-- The prover of what its typed proofs read as. -/
+def readProver (prover : TypedProver F G Stmt) : Sigma.Prover F G Stmt Commit Resp :=
+  fun key message => evidence.family.shape.read <$> prover key message
+
+/-- The knowledge experiment of the compiled verifier on typed proofs: the
+prover sees the protocol statement and the initial transcript; its coins and
+oracle queries precede the compiled verifier's complete acceptance of its proof
+in one initially empty cache. -/
+def typedRun (prover : TypedProver F G Stmt) (statement : art.Statement F G) (initial : History F G) :
+    OracleComp (_root_.FiatShamir.Fork.wrappedSpec F) Bool :=
+  StateT.run' (simulateQ (Sigma.forwardUniform (F := F) (G := G) + Sigma.historyOracle (F := F) (G := G)) (do
+    let proof ← prover (evidence.family.key statement) initial
+    verdict <$> evidence.compiled.verifier Sigma.historyChallenge statement initial proof))
+    (∅ : Sigma.Cache F G)
+
+section Probability
+variable [SampleableType F]
+
+local instance : ∀ t, MeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec F).Range t) :=
+  fun _ => ⊤
+local instance : ∀ t, DiscreteMeasurableSpace ((_root_.FiatShamir.Fork.wrappedSpec F).Range t) :=
+  fun _ => inferInstance
+noncomputable local instance : IsUniformMeasureSpec (_root_.FiatShamir.Fork.wrappedSpec F) :=
+  IsUniformMeasureSpec.ofFiniteNonempty _
+
+/-- The probability that the compiled verifier accepts the prover's typed proof. -/
+noncomputable def typedAcceptance (prover : TypedProver F G Stmt) (statement : art.Statement F G)
+    (initial : History F G) : ENNReal :=
+  Pr{let accepted ← evidence.typedRun prover statement initial}[accepted = true]
+
+/-- The compiled verifier accepts typed proofs at most as often as it accepts
+what they read as: every other proof is rejected on every path (`off_shape`). -/
+theorem typedAcceptance_le (prover : TypedProver F G Stmt) (statement : art.Statement F G)
+    (initial : History F G) :
+    evidence.typedAcceptance prover statement initial ≤
+      evidence.acceptance (evidence.readProver prover) statement initial := by
+  unfold typedAcceptance typedRun acceptance Sigma.acceptance Sigma.run readProver
+  simp only [bind_map_left, simulateQ_bind, StateT.run'_bind']
+  refine ZkcSecurity.VCVio.Pruning.prEvent_bind_mono _ _ _ _ fun pair => ?_
+  obtain ⟨proof, cache⟩ := pair
+  rcases evidence.verdict_cases Sigma.historyChallenge statement initial proof with same | ⟨β, rejecting, rejects⟩
+  · rw [same]
+    exact le_rfl
+  · rw [rejects, simulateQ_map, StateT.run'_map', prEvent_map,
+      prEvent_eq_zero_of_forall_not _ _ fun _ => Bool.false_ne_true]
+    exact zero_le
+
+end Probability
+
+end KnowledgeEvidence
+
 /-- **Fixed-statement knowledge soundness of the compiled verifier's ideal
-meaning.** For every policy statement and initial transcript, every prover that
-sees the protocol statement and the initial transcript and makes at most
-`budget` transcript-oracle queries on every path is accepted by the compiled
-verifier, read through complete acceptance, with probability `accepting` such
-that VCVio's replay extractor, run on the routed prover, outputs a witness of
-the application's relation with probability at least
-`accepting * (accepting / (budget + 1) - 1 / |F|)`. Challenges are exactly
-uniform field elements of one lazily sampled oracle on typed histories, shared
-by the prover and verification. Subtraction is truncated in `ENNReal`. -/
-theorem knowledge_soundness [DecidableEq Commit] [SampleableType F] [Fintype F] [Inhabited F]
-    [SampleableType Wit] (evidence : KnowledgeEvidence art .idealMeaning Stmt Wit Commit PrvState Resp holds)
-    (statement : art.Statement F G) (initial : History F G) (prover : Sigma.Prover F G Stmt Commit Resp)
-    (budget : Nat)
-    (bounded : IsQueryBoundP (prover (evidence.family.key statement) initial) (· matches .inr _) budget) :
-    let accepting := evidence.acceptance prover statement initial
+meaning.** For every policy statement and initial transcript, every prover of
+typed proofs that sees the protocol statement and the initial transcript and
+makes at most `budget` transcript-oracle queries on every path is accepted by
+the compiled verifier, read through complete acceptance, with probability
+`accepting` such that VCVio's replay extractor, run on the routed prover of what
+the proofs read as, outputs a witness of the application's relation with
+probability at least `accepting * (accepting / (budget + 1) - 1 / |F|)`.
+Challenges are exactly uniform field elements of one lazily sampled oracle on
+typed histories, shared by the prover and verification. Subtraction is truncated
+in `ENNReal`. -/
+def KnowledgeSoundness [DecidableEq Commit] [SampleableType F] [Fintype F] [Inhabited F]
+    [SampleableType Wit] (evidence : KnowledgeEvidence art .idealMeaning Stmt Wit Commit PrvState Resp holds) :
+    Prop :=
+  ∀ (statement : art.Statement F G) (initial : History F G) (prover : TypedProver F G Stmt) (budget : Nat),
+    IsQueryBoundP (prover (evidence.family.key statement) initial) (· matches .inr _) budget →
+    let accepting := evidence.typedAcceptance prover statement initial
     accepting * (accepting / (budget + 1 : ENNReal) - _root_.FiatShamir.challengeSpaceInv F) ≤
       Pr{let witness ← _root_.FiatShamir.knowledgeExtractor (evidence.family.sigma statement)
           (evidence.family.generable statement) (History F G ⊕ History F G)
-          (evidence.family.shape.reduce prover) (.inl initial) budget (evidence.family.key statement)}[
-        holds statement witness] :=
-  evidence.knowledge statement initial prover budget bounded
+          (evidence.family.shape.reduce (evidence.readProver prover)) (.inl initial) budget
+          (evidence.family.key statement)}[holds statement witness]
+
+theorem knowledge_soundness [DecidableEq Commit] [SampleableType F] [Fintype F] [Inhabited F]
+    [SampleableType Wit] (evidence : KnowledgeEvidence art .idealMeaning Stmt Wit Commit PrvState Resp holds) :
+    KnowledgeSoundness evidence := by
+  intro statement initial prover budget bounded accepting
+  have mapped := (isQueryBoundP_map_iff (prover (evidence.family.key statement) initial)
+    evidence.family.shape.read budget).mpr bounded
+  have pairs := evidence.knowledge statement initial (evidence.readProver prover) budget mapped
+  have le := evidence.typedAcceptance_le prover statement initial
+  exact le_trans (mul_le_mul' le (tsub_le_tsub_right (ENNReal.div_le_div_right le _) _)) pairs
+
+end Typed
 
 section Bytes
 
@@ -271,19 +348,24 @@ host validation with probability `accepting` such that VCVio's replay
 extractor, run on the routed prover of what the bytes decode to, outputs a
 witness of the application's relation with probability at least
 `accepting * (accepting / (queries + 1) - 1 / |F|)`. -/
-theorem knowledge_soundness_bytes [DecidableEq Commit] [SampleableType F] [Fintype F] [Inhabited F]
-    [SampleableType Wit] (evidence : KnowledgeEvidence art .executableBytes Stmt Wit Commit PrvState Resp holds)
-    (codec : Zkc.Executable.PhysicalType → List UInt8 → Option (Payload F G)) (budget : Nat)
+def KnowledgeSoundnessBytes [DecidableEq Commit] [SampleableType F] [Fintype F] [Inhabited F]
+    [SampleableType Wit] (evidence : KnowledgeEvidence art .executableBytes Stmt Wit Commit PrvState Resp holds) :
+    Prop :=
+  ∀ (codec : Zkc.Executable.PhysicalType → List UInt8 → Option (Payload F G)) (budget : Nat)
     (binding : List UInt8) (statement : art.Statement F G) (initial : History F G)
-    (prover : BytesProver F G Stmt) (queries : Nat)
-    (bounded : IsQueryBoundP (prover (evidence.family.key statement) initial) (· matches .inr _) queries) :
+    (prover : BytesProver F G Stmt) (queries : Nat),
+    IsQueryBoundP (prover (evidence.family.key statement) initial) (· matches .inr _) queries →
     let accepting := evidence.bytesAcceptance codec budget binding prover statement initial
     accepting * (accepting / (queries + 1 : ENNReal) - _root_.FiatShamir.challengeSpaceInv F) ≤
       Pr{let witness ← _root_.FiatShamir.knowledgeExtractor (evidence.family.sigma statement)
           (evidence.family.generable statement) (History F G ⊕ History F G)
           (evidence.family.shape.reduce (evidence.decodedProver codec statement prover)) (.inl initial) queries
-          (evidence.family.key statement)}[holds statement witness] := by
-  intro accepting
+          (evidence.family.key statement)}[holds statement witness]
+
+theorem knowledge_soundness_bytes [DecidableEq Commit] [SampleableType F] [Fintype F] [Inhabited F]
+    [SampleableType Wit] (evidence : KnowledgeEvidence art .executableBytes Stmt Wit Commit PrvState Resp holds) :
+    KnowledgeSoundnessBytes evidence := by
+  intro codec budget binding statement initial prover queries bounded accepting
   have mapped := (isQueryBoundP_map_iff (prover (evidence.family.key statement) initial)
     (fun bytes => evidence.family.shape.read (evidence.lowered.decoded codec statement bytes)) queries).mpr bounded
   have typed := evidence.knowledge statement initial (evidence.decodedProver codec statement prover)

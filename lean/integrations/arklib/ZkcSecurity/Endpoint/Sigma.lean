@@ -15,8 +15,9 @@ Knowledge soundness of a verifier that asks one transcript challenge, from
 VCVio's replay extraction for the Fiat–Shamir transform of a Sigma protocol.
 
 A one-challenge transcript shape (`Shape`) describes how the verifier absorbs a
-proof: the commitment's message events, in their order (one or more: a
-Chaum–Pedersen or AND proof sends two commitments before the challenge), and
+proof: the commitment's message events, in their order (any number, zero
+included; a Chaum–Pedersen or AND proof sends two commitments before the
+challenge), and
 the challenge occurrence; how a commitment and a response are delivered as a
 typed proof (`Shape.proof`, commitments then responses), and how a typed proof
 is read back (`Shape.read`). The encoders and decoders are checked: reading the
@@ -61,7 +62,8 @@ typed proofs. -/
 structure Shape (F G Commit Resp : Type) where
   /-- The events that absorb a commitment, in order. -/
   commitments : Commit → History F G
-  /-- The number of commitment events. -/
+  /-- The number of commitment events; zero is allowed, the challenge then
+  directly follows the prior history. -/
   width : Nat
   width_eq : ∀ commitment, (commitments commitment).length = width
   /-- The commitment that a list of events absorbs, if any. -/

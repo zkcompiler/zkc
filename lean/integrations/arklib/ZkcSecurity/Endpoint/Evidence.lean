@@ -22,10 +22,14 @@ claim is about:
   meaning, or host validation of program bytes;
 - the **statement form** (`Form`): a statement fixed before the prover runs, or
   chosen by the prover after its oracle queries;
-- the **statement relation** (`StatementRelation`): the policy statements (the
-  values a host binds), the model statements the family's mathematics is about,
-  the functional relation between them, which model statements are false, and
-  which policy statements the application counts as false;
+- the **application claim**: for ordinary soundness, which policy statements
+  (the values a host binds, malformed ones included) the application counts as
+  false; for knowledge soundness, the application's witness relation. A
+  registered claim takes it from the admitted original's retained contract, read
+  at the policy's published inputs, so the evidence cannot choose it: the claim's
+  application declaration states the evidence's type with the contract's
+  constant, and the kernel checks the evidence against that type. The generic
+  endpoints are parametric in it, and no false statement is required to exist;
 - the **parameter regime** (`Regime`): how a challenge is derived from the
   oracle's answer, exactly uniform field elements (`Regime.exact`, the model
   `model.exact-uniform-challenges`) or a decoding of another answer type.
@@ -34,33 +38,49 @@ The property is fixed by the evidence structure: ordinary soundness here
 (`SoundnessEvidence`), knowledge soundness with a Sigma family
 (`ZkcSecurity.Endpoint.KnowledgeEvidence`).
 
-Evidence of ordinary soundness carries the checked compilation (`Compiled`), a
+Evidence of ordinary soundness carries the checked compilation (`Compiled`), the
+family's model relation (`ModelRelation`: model statements, the functional
+relation from policy statements to them and the false model statements), a
 model equation (the admitted original validator on a policy statement is the
 family's model validator of every model statement it denotes, proved by `rfl`
 or a generated normal form), the family evidence (`CertificateFamily`: a charged
 certificate over the checked context's transcript interface, dooming the model
-validator of every false model statement), a cost bound of the original
-validator on every statement, and two requirements selected by the indices:
+validator of every false model statement), the **coverage** of the application
+claim by the family (every application-false statement is false in the model
+or denotes no model statement, and the original validator of a statement that
+denotes none is doomed after every initial transcript), a cost bound of the
+original validator on every statement, and two requirements selected by the
+indices:
 
 - **binding**, required when the form is adaptive (`BindingRequirement`): the
   application context the host binds, so that every policy statement's initial
   transcript is its policy-derived binding event, which discharges statement
-  determination (`policyCodec`), and coverage of the application's false statements (`Coverage`): either every
-  application-false statement is false in the model or unmapped, with the
-  validators of unmapped statements doomed, or the application's false-acceptance
-  event implies the modeled one;
+  determination (`policyCodec`);
 - **lowering**, required when the endpoint covers program bytes
   (`LoweringRequirement`): the artifacts' executable validator, accepted by the
   lowering rule against the constructed validator, with prepared helpers, sorted
   helper results and admitted published values.
 
-Named hypotheses (`Hypothesis`) are instantiated propositions with their status:
-a proof, or a reported assumption citing a registry entry of the hypothesis's
-category (`ZkcSecurity.FiatShamir.ObligationStatus`). The endpoints of this
+Coverage is required at both forms, after every initial transcript; a fixed
+statement needs it only at the transcript it is run from.
+
+Named hypotheses (`Hypothesis`) cite a registry entry by identifier, with the
+proposition its schema instantiates to and its status: a proof, or a reported
+assumption citing a registry entry of the hypothesis's category
+(`ZkcSecurity.FiatShamir.ObligationStatus`). That the proposition is an
+instantiation of the cited entry's schema is checked by the declaration-record
+emitter, which records the instantiation's arguments. The endpoints of this
 package need none of the collision-bounded identity, authenticated configuration
 or verification-key obligations: their statements fix the artifacts and the
 configuration before quantifying the adversary, and no current subject has a
 verification key; a claim that needs one records it here.
+
+This record covers the current compiled path: one field and group, a total
+decoder of one answer type into the field, the common participant interface,
+and the ordinary random-oracle experiment. Domain-indexed carriers,
+request-dependent decoding with refusal, separately identified decoder and
+proximity laws with admissible parameters, and provider or joint-stage evidence
+with event and budget transport are later extensions of this path.
 -/
 
 set_option autoImplicit false
@@ -116,30 +136,39 @@ attribute [instance] Regime.sampleable
 /-- Exactly uniform field challenges: the oracle answers field elements. -/
 def Regime.exact (F : Type) [SampleableType F] : Regime F := ⟨F, inferInstance, id⟩
 
-/-- What a claim's statements are: policy statements (values of the published
-types), the model statements the family's mathematics is about, the functional
-relation from policy to model statements, the false model statements, and the
-policy statements the application counts as false. -/
-structure StatementRelation (F G : Type) (publics : List Ty) where
+/-- A policy statement the application claim counts as false. -/
+def ApplicationFalse {Statement : Type} (claim : Statement → Prop) (statement : Statement) : Prop :=
+  claim statement
+
+/-- The family's model relation: model statements, the functional relation from
+policy statements to the model statements they denote, and the false model
+statements. -/
+structure ModelRelation (F G : Type) (publics : List Ty) where
   Model : Type
   models : Values (assignment F G) publics → Model → Prop
   functional : ∀ statement model other, models statement model → models statement other → model = other
   falseModel : Model → Prop
-  applicationFalse : Values (assignment F G) publics → Prop
 
-namespace StatementRelation
-variable {F G : Type} {publics : List Ty} (relation : StatementRelation F G publics)
+namespace ModelRelation
+variable {F G : Type} {publics : List Ty} (relation : ModelRelation F G publics)
 
 /-- A policy statement that denotes a false model statement. -/
 def FalseStatement (statement : Values (assignment F G) publics) : Prop :=
   ∃ model, relation.models statement model ∧ relation.falseModel model
 
-end StatementRelation
+/-- A policy statement that denotes no model statement. -/
+def Unmapped (statement : Values (assignment F G) publics) : Prop :=
+  ∀ model, ¬ relation.models statement model
 
-/-- A named hypothesis of a claim: an instantiated proposition of a registry
-category and its status, a proof or a reported assumption citing a registry
-entry of that category. -/
+end ModelRelation
+
+/-- A named hypothesis of a claim: the registry identifier it cites, an
+instantiated proposition of that entry's category and its status, a proof or a
+reported assumption citing a registry entry of that category. The declaration
+record emitter checks that the proposition's head is the cited entry's schema
+and records its arguments. -/
 structure Hypothesis where
+  identifier : String
   category : Registry.Category
   claim : Prop
   status : ObligationStatus category claim
@@ -174,70 +203,55 @@ transcript interface of the checked context with the regime's decoding, whose
 doomed set contains the model validator of every false model statement after
 every initial transcript. -/
 structure CertificateFamily (context : Context) (regime : Regime F) {publics : List Ty}
-    (relation : StatementRelation F G publics) where
+    (relation : ModelRelation F G publics) where
   validator : relation.Model → PIR.Proc (Actions F G) (Option Bool)
   charge : History F G → Event F G → ENNReal
   certificate : Typed.ChargedCertificate (interface (G := G) context regime.decode) (· = some true) charge
   doomed : ∀ model initial, relation.falseModel model → certificate.doomed initial (validator model)
 
-/-- How the application's false statements are covered by the modeled bound. -/
-inductive Coverage {publics : List Ty} (relation : StatementRelation F G publics)
-    (codec : BindingCodec (Values (assignment F G) publics) (Event F G))
-    (doomed : Values (assignment F G) publics → Prop) where
-  /-- Every application-false statement is false in the model or unmapped, and
-  the validator of every unmapped statement is doomed at its initial
-  transcript. -/
-  | rejects (covers : (StatementBinding.mk codec relation.models relation.functional).Covers
-        relation.falseModel relation.applicationFalse)
-      (unmapped : (StatementBinding.mk codec relation.models relation.functional).RejectsUnmapped doomed)
-  /-- The application's false-acceptance event implies the modeled event. -/
-  | implies (implication : EventImplication
-      (fun result : Values (assignment F G) publics × PIR.Outcome (Option Bool) =>
-        relation.applicationFalse result.1 ∧ Zkc.Transcript.Accepted (· = some true) result.2)
-      (fun result => relation.FalseStatement result.1 ∧ Zkc.Transcript.Accepted (· = some true) result.2))
+end Evidence
 
 /-- Binding evidence of an adaptive claim: the application context the host
 binds, so that the initial transcript of every policy statement, malformed ones
-included, is its policy-derived binding event (`policyCodec`), and the coverage
-of the application's false statements. -/
-structure BindingEvidence {publics : List Ty} (relation : StatementRelation F G publics)
-    (doomed : History F G → Values (assignment F G) publics → Prop) where
+included, is its policy-derived binding event (`policyCodec`). -/
+structure BindingEvidence where
   application : String
-  coverage : Coverage relation (policyCodec publics application) fun statement =>
-    doomed ((policyCodec publics application).encode statement) statement
-
-/-- The binding codec of adaptive binding evidence: the policy-derived codec of
-its application context. -/
-abbrev BindingEvidence.codec {publics : List Ty} {relation : StatementRelation F G publics}
-    {doomed : History F G → Values (assignment F G) publics → Prop} (binding : BindingEvidence relation doomed) :
-    BindingCodec (Values (assignment F G) publics) (Event F G) :=
-  policyCodec publics binding.application
 
 /-- Binding evidence, required exactly when the statement is adaptive. -/
-def BindingRequirement {publics : List Ty} (relation : StatementRelation F G publics)
-    (doomed : History F G → Values (assignment F G) publics → Prop) : Form → Type
+def BindingRequirement : Form → Type
   | .fixed => PUnit
-  | .adaptive => BindingEvidence relation doomed
+  | .adaptive => BindingEvidence
+
+section Evidence
+variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
 /-- Evidence of ordinary soundness for artifacts, a covered endpoint, a statement
-form, a statement relation and a regime. -/
+form, the application claim (the policy statements it counts as false) and a
+regime. -/
 structure SoundnessEvidence (art : Artifacts) (endpoint : Semantics) (form : Form)
-    (relation : StatementRelation F G art.publics) (regime : Regime F) where
+    (claim : art.Statement F G → Prop) (regime : Regime F) where
   compiled : Compiled art
   /-- The replaced service handle at which the model equation is read. -/
   handle : Nat
+  relation : ModelRelation F G art.publics
   family : CertificateFamily compiled.context regime relation
   /-- The admitted original validator of a statement is the family's model
   validator of every model statement it denotes. -/
   model : ∀ statement model, relation.models statement model →
     compiled.original statement handle = family.validator model
+  /-- Every statement the application counts as false is false in the model or
+  denotes no model statement. -/
+  covers : ∀ statement, claim statement → relation.FalseStatement statement ∨ relation.Unmapped statement
+  /-- The original validator of a statement that denotes no model statement is
+  doomed after every initial transcript. -/
+  unmapped : ∀ statement, relation.Unmapped statement → ∀ initial,
+    family.certificate.doomed initial (compiled.original statement handle)
   /-- The charge of the original validator's queries on a statement, from every
   initial transcript. -/
   cost : art.Statement F G → ENNReal
   costBound : ∀ statement initial, Typed.ChargedCostBound (interface (G := G) compiled.context regime.decode)
     family.charge (compiled.original statement handle) initial (cost statement)
-  binding : BindingRequirement relation
-    (fun initial statement => family.certificate.doomed initial (compiled.original statement handle)) form
+  binding : BindingRequirement form
   lowering : LoweringRequirement art compiled F G endpoint
   hypotheses : List Hypothesis
 
