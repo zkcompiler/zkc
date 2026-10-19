@@ -1602,6 +1602,141 @@ reply exposes the hash answer; no frame has its simulation, whatever the
 projection (`transfer_no_frame`), while the same simulator without the copy has
 one (`keptFrame`).
 
+### The hash-chain frame
+
+A verifier with committed tables deployed over a
+[native hash-chain suite](../../../docs/spec/ir/construction.md#native-hash-chain-suites)
+calls one byte hash for its transcript and for its Merkle trees.
+`ZkcSecurity.HashChain.Joint` states the frame of that deployment and composes it
+with the commitment stage.
+
+**Namespaces from bytes.** A Merkle tree with hashed leaves makes leaf calls on
+rows and node calls on two child digests (`RowCall`, with its model
+`rowHashing`), encoded under tags (`TaggedRows`, `taggedCallBytes`):
+
+```text
+leaf:  leafTag ‖ header ‖ row bytes
+node:  nodeTag ‖ left ‖ right
+```
+
+Tagged rows carry the separation of their tags (`TagsSeparated`): the leaf and
+node tags and the chain's three role tags are pairwise non-prefix. With digests
+of one byte length, an injective row codec and an injective event encoding, row
+calls and chain calls are then jointly injective (`TaggedRows.separated`): a
+tag fixes the role, a leaf input fixes its row through the codec, a node input
+its two digests, and a chain input is fixed by `encodeInput_injective`. A chain
+call is a binding, an absorption, or a counter block below `2^64` of a request
+whose occurrence is the event of a base operation (`ChainInput`, `ChainCall`);
+roots are absorbed but never requested. An `Encoding` packages the encodings
+with their separation, and its namespaces are the joint stage's
+(`Encoding.namespaces`). Every byte string is classified as the row call or the
+chain call it encodes, or as another input (`Encoding.classify`), injectively.
+The installed Keccak-256 rows, with tags `"zkc.oracle.keccak256.leaf/0" ‖ 0x00`
+and `"zkc.oracle.keccak256.node/0" ‖ 0x00` and the leaf header
+`|codec|:u64le ‖ codec ‖ width:u64le ‖ height:u64le` (`keccakRows`), are
+separated from the chain tags (`keccak_tagsSeparated`).
+
+**The deployed verifier** (`chainRead`, `chainVerify`, `deployed`) binds the
+first event of the statement's initial history and absorbs the rest; absorbs
+received and sent events and committed roots, one call each; answers a query by
+the counter blocks `0, …, width - 1` of a request at the current state and then
+absorbs the occurrence; and authenticates an opening with row calls. It logs
+every transcript key with its raw answer and every hash call with its answer, as
+the joint oracle's reading `ZkcSecurity.Commitment.run` logs its queries.
+
+**The concrete event** (`concreteExperiment`, `concreteFailure`) is the bridge's
+false acceptance on the run whose prover log is the classification of the
+adversary's byte calls (`classifyLog`): a row call is that hash call; a counter
+block below the width of a request whose state has a recorded history `h` and
+whose occurrence is `.event e` is a query of the transcript key `(h, e)`; a fresh
+binding, or a fresh absorption at a state with a recorded history, records the
+history its answer reaches, the first one kept; and each joint key is read at
+the first call of its attempt only. So the checkpoint of one of the verifier's
+transcript keys is the first request at that key's state made after a chain call
+reached the state, and the extraction reads the row calls before it. A request
+made before its state is reached is not a query of the key: reaching the state
+afterwards is the prediction case of the chain's bad event.
+
+**The simulator** (`jointSimulator`) assigns a row call's bytes to its own cell
+of the joint oracle and answers it by the cell's answer; every other input is
+handled by `chainSimulator`, a counter block below the width of a request at a
+state with recorded history `h` and occurrence `.event e` belonging to the
+transcript cell `(h, e)`, whose answer is recorded under the chain history
+`h ++ [.event e]` (`chainKey`). Its state is the chain simulator's state and the
+recorded hash answers (`JointState`).
+
+**The simulation** (`simulation`) has a private tape of `q` digests, cost `q`,
+the deployed verifier's calls `V` as expansion and loss `(q + V)² / |S|`. Its
+inequality is three steps.
+
+- The concrete experiment exceeds a lazily sampled joint simulation by at most
+  `(q + V)² / |S|` (`concrete_le_lazy`). Splitting the byte hash by
+  classification gives hash calls a lazily sampled table of their own beside the
+  traced chain oracle (`split_coupling`); every coupling step of the hash chain
+  carries over with that table alongside, for the adversary
+  (`adversary_coupling`) and for the deployed verifier against the joint
+  oracle's reading (`read_coupling`); and the bad flag reads chain inputs only
+  (`split_bad_le`), with `V` counting the deployed verifier's calls of every
+  kind (`concreteExperiment_queryBound`).
+- The lazily sampled joint simulation has the law of the translated experiment,
+  in which the tape is drawn ahead and transcript and hash cells are cells of one
+  lazily sampled joint oracle (`lazy_eq_translated`): on a chain input the joint
+  simulator's step is the chain simulator's with the cache read at chain
+  histories (`flatJoint_run_chain`), and each step commutes with filling the lazy
+  state ahead (`chain_commute`, `hash_commute`, `verifier_eq`).
+- The bridge's event has the same probability with the classified log as with the
+  joint oracle's record of the translated prover's queries
+  (`translated_eq_ideal`): a run of the joint simulator asks the joint oracle
+  exactly at the first call of each attempt, so the two logs have one skeleton,
+  their keys and hash answers (`handle_log`, `run_log`, `translate_skeleton`),
+  and the event reads a prover log only through its skeleton
+  (`falseAcceptance_congr_skeleton`).
+
+**The frame** (`frame`) records the simulation with every obligation of
+`Frame`, proved: a row call's bytes belong to its own cell in every state
+(`attempt_callBytes`), only those bytes realize it (`eq_callBytes_of_attempt`),
+transcript cells are realized only by chain calls (`chainCall_of_attempt`), a
+row call's reply is its cell's answer (`shared_callBytes`); recording a hash
+answer leaves the chain simulator's state unchanged (`record_hash_chain`), and
+every other call reads and moves the state only through it: its attempt
+(`attempt_chain`), recorded transcript answers (`recorded_chain`), recording a
+transcript answer (`record_transcript_chain`) and its private reply and
+successor (`respond_chain`); the loss is charged over the joint trace. The
+adversary's queries of hash cells before the verifier runs, repeated calls
+answered from the record, the private tape and the log at the first occurrence
+of each key are those of the simulator itself.
+
+**Budgets and composition.** The provider stage's budget map sends an
+adversary's budget to its total number of byte-hash calls (`provider_budget`),
+and the map is proved: every program the simulation translates makes at most
+that many joint-oracle queries, transcript and hash cells together, on every
+path (`translate_queryBound`). The frame's contract (`contract`) has the bridge's
+checkpoint extraction and checkpoint event, and the concrete failure as intended
+event, so for any commitment stage over the joint game an adversary with at most
+`q` calls makes the deployed verifier fail with probability at most
+`(q + V)² / |S| + commitment.loss q` (`committed_soundness`).
+
+**The committed opening.** The committed-opening verifier decodes its index from
+one request's counter blocks (`chainAbsorb`); when the decoder has the exact
+uniform law (`ExactLaw`), the drawn row of a far table is accepted with
+probability at most `1 - δ` (`chainCertificate`) and the commitment stage's loss
+at `q` prover queries is `q · ((1 - δ) + h q) + ((1 - δ) + (depth + 1) · h q)`
+with `h q = 4 (q + depth + 2) / |S|` (`chainStage`, `chainStage_loss`). The
+deployed verifier makes `V = width + depth + 3` calls: the binding of the root,
+`width` counter blocks and the absorption of the index occurrence, a leaf call
+and `depth` node calls (`deployed_queryBound`); its joint-oracle reading makes
+`depth + 2` queries (`jointReading_queryBound`). Hence (`opening_soundness`)
+
+```text
+Pr[accept ∧ far(T at the checkpoint)] ≤ (q + V)² / |S|
+    + q · ((1 - δ) + h q) + ((1 - δ) + (depth + 1) · h q).
+```
+
+Over Keccak-256 digests read as 32 big-endian bytes, with one-block requests
+whose digest modulo `2^depth` is the index (`keccakIndex`, exact by
+`keccakIndex_uniform` for `depth ≤ 256`), `|S| = 2^256` and `V = depth + 4`
+(`keccak_soundness`).
+
 ## Obligations
 
 The informal "random oracle" assumption separates into five obligations:

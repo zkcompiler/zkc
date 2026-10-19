@@ -235,9 +235,12 @@ hash answer reaches at any later call, and a loss over the joint trace. The
 contract composes. `VCVio/Memo` and `Commitment/Repeats` show that a simulator's
 memoization of repeated calls does not change the bridge's event for extractors
 that read through first matches. A frame is constructed for a tagged provider
-whose tags are the joint key's summands (`TestsSecurity.JointSimulation`); no
-frame is constructed for the hash-chain provider, so no theorem bounds the
-native suites together with a committed verifier in one primitive.
+whose tags are the joint key's summands (`TestsSecurity.JointSimulation`).
+`HashChain/Joint*` constructs the frame of the hash-chain provider with the
+commitment's row calls passed through on one byte hash, and bounds the abstract
+committed-opening verifier over the Keccak-256 hash chain with byte tags
+(`ZkcSecurity.HashChain.Joint.keccak_soundness`); no compiled Entry or native
+transcript reading is connected to it.
 
 `VCVio/SigmaAnd` composes two VCVio Σ-protocols with one shared challenge.
 Completeness and special soundness compose directly; zero knowledge composes

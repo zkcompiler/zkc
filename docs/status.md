@@ -474,11 +474,17 @@ contract with jointly injective namespaces, a checkpoint extraction, the
 checkpoint event and an implication from the intended event, and its frame
 records a provider simulation with namespace, hash-answer, state-separation and
 joint-loss obligations; the contract composes, and a frame is constructed for a
-provider whose primitive inputs are the joint oracle's own tagged keys. No frame
-is constructed for the hash-chain provider, whose chain calls and the
-commitment's hash calls would share the byte hash, so no theorem bounds a
-committed verifier under the native hash-chain suites in one primitive; that
-collision and prediction loss over the joint trace remains open. Statement
+provider whose primitive inputs are the joint oracle's own tagged keys. The
+[hash-chain frame](../lean/docs/spec/fiat-shamir-security.md#the-hash-chain-frame)
+passes the commitment's tagged row calls through to their own cells while the
+chain realizes the transcript on the same byte hash; every frame obligation and
+the provider's budget map are proved, and the abstract committed-opening
+verifier over the Keccak-256 hash chain is bounded by the collision and
+prediction loss over the joint trace, `(q + depth + 4)² / 2^256`, plus the
+commitment stage's loss at `q`. The bound is about the model's deployed reading:
+its event encoding is a model encoding rather than the native frames, its index
+is one digest modulo `2^depth` rather than the installed index request, and no
+compiled Entry, native transcript reading or executable is connected. Statement
 bindings relate policy statements to model statements, with the coverage of the
 application's false statements and the rejection of unmapped statements as
 separate registered obligations.
