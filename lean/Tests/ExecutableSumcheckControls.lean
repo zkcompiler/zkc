@@ -17,7 +17,7 @@ the changed constant, an installed operation that implements another structured
 operation and a rebound name, each with its named reason. Semantic controls run
 the executable meaning on a small concrete instance (values in `ZMod 5`, every
 message a one-byte frame, a constant challenge) and fix observations the runtime
-reports for the same situations: the honest run returns from 190 instructions, a round
+reports for the same situations: the honest run returns from 186 instructions, a round
 message that fails the round check stops at the check's explicit rejection inside
 its local call after 21 instructions, and a stop inside a loop iteration leaves
 the call's frame, the iteration's frame and the participant's frame, innermost
@@ -80,7 +80,7 @@ theorem roundCheckTrivial_refused :
 def countRetargeted : Validator :=
   withLoop actual fun
     | .loop site _ maximum induction carried captures body outputs =>
-        .loop site "v426" maximum induction carried captures body outputs
+        .loop site "v401" maximum induction carried captures body outputs
     | action => action
 
 theorem countRetargeted_refused :
@@ -106,8 +106,8 @@ because what a helper body computes is the preparation proof's obligation. -/
 def checkConstantChanged : Validator :=
   withFunction actual "zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc" fun function =>
     { function with body := function.body.map fun
-        | .operation "lc_2_s2" binding [.text "1"] inputs outputs =>
-            .operation "lc_2_s2" binding [.text "2"] inputs outputs
+        | .operation "lc_7_lc_2_s2" binding [.text "1"] inputs outputs =>
+            .operation "lc_7_lc_2_s2" binding [.text "2"] inputs outputs
         | step => step }
 
 theorem checkConstantChanged_accepted :
@@ -138,7 +138,7 @@ theorem check_outside_table : helperRefusal actual checkName = some (.recipe "lo
 /-- The changed constant of the terminal check, which the lowering rule accepts,
 is refused at its step: the installed constant is not the structured one. -/
 theorem checkConstantChanged_refused :
-    helperRefusal checkConstantChanged checkName = some (.step "lc_2_s2") := by
+    helperRefusal checkConstantChanged checkName = some (.step "lc_7_lc_2_s2") := by
   decide +kernel
 
 /-- The point extension applies the empty vector's binding: the installed
@@ -156,7 +156,7 @@ theorem appendWrongOperation_refused : helperRefusal appendWrongOperation append
 rebound name could change what the formal denotes. -/
 def appendRebound : Validator :=
   withFunction actual appendName fun function =>
-    { function with body := [.operation "s0" "zkl_binding_11" [] ["v116", "v117"] ["v116"], .ret ["v116"]] }
+    { function with body := [.operation "s0" "zkl_binding_11" [] ["v105", "v106"] ["v105"], .ret ["v105"]] }
 
 theorem appendRebound_refused : helperRefusal appendRebound appendName = some (.rebound "s0") := by
   decide +kernel
@@ -198,12 +198,12 @@ def observed (run : Run F G) :
     | .stopped _ site call => some (site, call)
     | .returned _ => none, run.used, run.transitions, run.messages)
 
-/-- The honest proof is accepted from 190 instructions, with 8 transitions and
-4 messages, as the runtime reports; at 189 the final return is not charged. -/
+/-- The honest proof is accepted from 186 instructions, with 8 transitions and
+4 messages, as the runtime reports; at 185 the final return is not charged. -/
 theorem honest_threshold :
-    (runAt 190 honest).accepts SumcheckProof.acceptancePosition = true ∧
-      observed (runAt 190 honest) = (none, 190, 8, 4) ∧
-      (runAt 189 honest).result.outcome = .stopped .exhausted := by
+    (runAt 186 honest).accepts SumcheckProof.acceptancePosition = true ∧
+      observed (runAt 186 honest) = (none, 186, 8, 4) ∧
+      (runAt 185 honest).result.outcome = .stopped .exhausted := by
   decide +kernel
 
 /-- A first round message that fails the round check stops at the check's
@@ -221,7 +221,7 @@ for that budget: the stop site is the instruction's, the local call the
 check's. -/
 theorem exhausted_in_check :
     observed (runAt 100 honest) =
-      (some (some "lc_2_s3_54_s3h7a6b6311h6d756c74696c696e6561729h6861735f7368617065_3_s25_44_s3h7a6b6311h6d756c74696c696e6561724h726f7773_2_s0",
+      (some (some "lc_h_12c01db8f313ed943761ac0825838046ef00d84dcfc058d37638790cc3129f63",
         some ("s7", "zkl_0861cc269909e563bb5bba257221bc271da7a3c6e097d1e621b4924aa733d3cc")), 100, 8, 4) := by
   decide +kernel
 

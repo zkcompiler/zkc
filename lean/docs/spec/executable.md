@@ -414,11 +414,12 @@ empty point and the point extension (`rule_accepted`). The terminal check
 iterates and is outside the rule's table (`check_outside`); its preparation
 (`check_prepared`) evaluates its body, which checks the authored table shape
 with a doubling loop and then folds the table over the point one coordinate at
-a time, interpolating its low and high halves. The fold is
+a time, interpolating its low and high halves with one numerical map call
+(`map_returns`), whose decoded expression is `low + (high - low) r`. The fold is
 `Zkc.Polynomial.Multilinear.restrictPrefixValues`, and the source contract of
 the check (`SumcheckSourceContracts.check_equation` and the stop contracts for
 out-of-range lengths) gives the same result in every case. The same evaluation
-gives the check's charge, `62 + 22 · n` on a well-shaped table and a point of
+gives the check's charge, `62 + 20 · n` on a well-shaped table and a point of
 `n` coordinates (`check_cost`).
 
 `ZkcExamples.Executable.SumcheckFamily` proves the executable theorems once for
@@ -453,9 +454,10 @@ a table of `2 ^ rounds` values. The charge is derived from the reading
 of the rounds' charges and yields, the terminal check's call with what its body
 charges, and the return. The loop is bounded by `FitsK.loop_invariant` with the
 invariant that the carried point has one coordinate per completed round. For
-this Entry `charge rounds = 68 + 61 · rounds` (`charge_eq`): per round, 38
+this Entry `charge rounds = 68 + 59 · rounds` (`charge_eq`): per round, 38
 instructions in the loop body, the point extension's body included, its yield,
-and 22 in the terminal check's fold. It is `Sufficient` for every proof and
+and 20 in the terminal check: 14 in its fold and 3 in each of its two shape
+checks' doubling loops. It is `Sufficient` for every proof and
 every round count (`sufficient`).
 `ZkcExamples.Executable.SumcheckCompleteness.honest_accepted` states
 honest-prover completeness of the executable: for every challenge function,
@@ -468,7 +470,7 @@ draws, sending the sums of the low and high halves of its current table in each
 round and then restricting the table at the challenge. Each honest round passes
 by the round statement with the challenge function's answers and no stop, and
 the rounds compose by the fold invariant: the claim is the sum of the table
-restricted at the point. At two rounds the bound is 190 instructions, the
+restricted at the point. At two rounds the bound is 186 instructions, the
 runtime's measured threshold.
 
 `ZkcSecurity.Examples.ExecutableSumcheckFiatShamir` transfers the compiled

@@ -22,10 +22,11 @@ theorem (`empty_prepared`, `append_prepared`). The terminal check is outside
 the rule's recipe table: its body iterates, which the table refuses
 (`check_outside`). Its preparation is a proof of its own (`check_prepared`): the
 body evaluates the authored shape predicate, then folds the table over the point
-one coordinate at a time, interpolating its low and high halves. The fold is
+one coordinate at a time, interpolating its low and high halves with one native
+numerical call (`map_returns`). The fold is
 `Zkc.Polynomial.Multilinear.restrictPrefixValues`, whose sum the source contract
 compares with the claim. The body is evaluated once, with its charge
-(`check_shaped_cost`: `62 + 22 · n` instructions for a point of `n`
+(`check_shaped_cost`: `62 + 20 · n` instructions for a point of `n`
 coordinates), and both its result and its cost are read off that evaluation.
 -/
 
@@ -236,6 +237,32 @@ theorem add_returns {xs ys : List F} (same : xs.length = ys.length) :
       .returned [.vector "bls12-381.fr" (List.zipWith (· + ·) xs ys)] := by
   simp [Resolved.evaluate, Computation.apply, same]
 
+/-- The expression the fold's numerical call carries over its low half, high
+half and challenge: `in0 + (in1 + (-in0)) * in2`. -/
+def interpolation : Zkc.Algebra.RingExpression.Expr Nat Nat :=
+  .add (.input 0) (.mul (.add (.input 1) (.neg (.input 0))) (.input 2))
+
+/-- The numerical map over two vectors and a broadcast scalar computes the
+interpolation of `interpolate_eq` at every row. -/
+theorem map_returns {low high : List F} {r : F} (same : low.length = high.length) :
+    (Resolved.compute (.numerical .map "bls12-381.fr" [true, true, false] interpolation)).evaluate
+      [(.index low.length : Value F G), .vector "bls12-381.fr" low, .vector "bls12-381.fr" high,
+        .data (.field "bls12-381.fr" r)] =
+      .returned [.vector "bls12-381.fr" (List.zipWith (fun low high => low + (high - low) * r) low high)] := by
+  have slots : Numerical.slots (F := F) (G := G) "bls12-381.fr" low.length [true, true, false]
+      [.vector "bls12-381.fr" low, .vector "bls12-381.fr" high, .data (.field "bls12-381.fr" r)] =
+      some [.column low, .column high, .scalar r] := by
+    simp [Numerical.slots, same]
+  simp only [Resolved.evaluate, Computation.apply, slots, PIR.Outcome.returned.injEq, List.cons.injEq,
+    Value.vector.injEq, true_and, and_true]
+  apply List.ext_getElem
+  · simp [same]
+  · intro index inRange _
+    have inLow : index < low.length := by simpa using inRange
+    have inHigh : index < high.length := same ▸ inLow
+    simp [Numerical.row, Zkc.Algebra.RingExpression.Expr.map, Zkc.Algebra.RingExpression.Expr.eval,
+      Numerical.Slot.read, interpolation, inLow, inHigh, sub_eq_add_neg]
+
 theorem sum_returns {xs : List F} :
     (Resolved.compute (.primitive (.vectorSum "bls12-381.fr"))).evaluate
       [(.vector "bls12-381.fr" xs : Value F G)] =
@@ -323,6 +350,19 @@ def restrictionBody : List Zkc.Executable.Step :=
       | _ => []
   | _ => []
 
+/-- The parameters of the fold loop's numerical call: its expression. -/
+def interpolationParameters : List Parameter :=
+  match restrictionBody with
+  | [_, _, _, _, _, _, _, _, _, .operation _ _ parameters _ _, _, _, _] => parameters
+  | _ => []
+
+/-- The fold's numerical call resolves to the installed map over a low vector,
+a high vector and a scalar, with the decoded interpolation. -/
+theorem interpolation_resolves :
+    validator.binding? "_map_binding_3" >>= (installed.resolve · interpolationParameters) =
+      some (.compute (.numerical .map "bls12-381.fr" [true, true, false] interpolation)) := by
+  decide +kernel
+
 omit [DecidableEq F] in
 /-- Interpolating halves as the fold loop computes it. -/
 theorem interpolate_eq (low high : List F) (r : F) :
@@ -337,8 +377,8 @@ theorem interpolate_eq (low high : List F) (r : F) :
 
 /-- The arguments of the check as the body names them. -/
 abbrev checkEnv (xs point : List F) (claim : F) : Env F G :=
-  [("v119", .vector "bls12-381.fr" xs), ("v120", .vector "bls12-381.fr" point),
-    ("v121", .data (.field "bls12-381.fr" claim))]
+  [("v108", .vector "bls12-381.fr" xs), ("v109", .vector "bls12-381.fr" point),
+    ("v110", .data (.field "bls12-381.fr" claim))]
 
 /-- One installed operation that returns, with its exact charge. -/
 local macro "charged_operation " evaluates:term : tactic =>
@@ -388,17 +428,17 @@ theorem doubling_cost {first second two doubled carried induction : String}
           exact doubling_cost carriedTwo carriedInduction count (k + 1) (start + 1) (by omega)
       · omega
 
-/-- The fold loop of the check charges sixteen instructions an iteration. -/
+/-- The fold loop of the check charges fourteen instructions an iteration. -/
 theorem restriction_cost (point : List F) (small : point.length < 64) :
     ∀ (count start : Nat) (current : List F), start + count = point.length →
       current.length = 2 ^ count →
-      (evalFor (fun env => evalSteps installed validator restrictionBody env) "v180"
-          ["v181", "v182", "v183"]
-          [("v120", .vector "bls12-381.fr" point), ("v178", .index point.length)]
+      (evalFor (fun env => evalSteps installed validator restrictionBody env) "v169"
+          ["v170", "v171", "v172"]
+          [("v109", .vector "bls12-381.fr" point), ("v167", .index point.length)]
           (List.range' start count)
           [(.vector "bls12-381.fr" current : Value F G), .index count, .index 1]).ReturnsAfter
         [.vector "bls12-381.fr" (restrictPrefixValues current (point.drop start)), .index 0, .index 1]
-        (16 * count)
+        (14 * count)
   | 0, start, current, ends, _ => by
       have dropped : point.drop start = [] := List.drop_eq_nil_of_le (by omega)
       rw [dropped]
@@ -412,9 +452,7 @@ theorem restriction_cost (point : List F) (small : point.length < 64) :
       have positive : 0 < 2 ^ count := Nat.two_pow_pos count
       apply Evaluated.ReturnsAfter.of_eq
       · apply Evaluated.ReturnsAfter.for_cons (yielded := [.vector "bls12-381.fr"
-          (List.zipWith (· + ·) (current.take (current.length / 2))
-            ((List.zipWith (· - ·) (current.drop (current.length / 2)) (current.take (current.length / 2))).map
-              (· * point[start]))), .index (count + 1 - 1), .index 1]) (length := rfl)
+          (restrictValues current point[start]), .index (count + 1 - 1), .index 1]) (length := rfl)
         · charged_operation (get_returns inside)
           charged_operation (constant_returns 0)
           charged_operation (less_true (a := 0) (by decide) countBound (by omega))
@@ -425,26 +463,24 @@ theorem restriction_cost (point : List F) (small : point.length < 64) :
           charged_operation (length_returns (by simp only [List.length_drop]; omega))
           charged_operation (equal_true (by simp only [List.length_take, List.length_drop]; omega))
           charged_operation require_returns
-          charged_operation (subtract_returns (by simp only [List.length_take, List.length_drop]; omega))
-          charged_operation scale_returns
-          charged_operation (add_returns (by
-            simp only [List.length_take, List.length_drop, List.length_map, List.length_zipWith]; omega))
+          apply Evaluated.ReturnsAfter.operation installed validator interpolation_resolves (by rfl)
+            (map_returns (by simp only [List.length_take, List.length_drop]; omega)) (by rfl)
           charged_operation (constant_returns 1)
           charged_operation (sub_returns (b := 1) countBound (by decide) (by omega))
           charged_yield
-        · rw [interpolate_eq, List.drop_eq_getElem_cons inside, restrictPrefixValues_cons]
+        · rw [List.drop_eq_getElem_cons inside, restrictPrefixValues_cons]
           exact restriction_cost point small count (start + 1) (restrictValues current point[start]) (by omega)
             (restrictValues_length current point[start] doubled)
       · omega
 
-/-- With a well-shaped table, the check charges `62 + 22 * n` instructions for a
+/-- With a well-shaped table, the check charges `62 + 20 * n` instructions for a
 point of `n` coordinates. -/
 theorem check_shaped_cost {xs point : List F} {claim : F} (pointBound : point.length < indexLimit)
     (small : point.length < 64) (vectorBound : xs.length < indexLimit)
     (shaped : xs.length = 2 ^ point.length) :
     (evalSteps installed validator checkFunction.body (checkEnv (G := G) xs point claim)).ReturnsAfter
       [.data (.boolean (decide ((restrictPrefixValues xs point).foldl (· + ·) 0 = claim)))]
-      (62 + 22 * point.length) := by
+      (62 + 20 * point.length) := by
   apply Evaluated.ReturnsAfter.of_eq
   · charged_operation (length_returns pointBound)
     charged_operation (constant_returns 1)
@@ -717,7 +753,7 @@ theorem check_cost {xs point : List F} {claim : F} (small : point.length < 64)
     (shaped : xs.length = 2 ^ point.length) :
     helperCost installed validator checkHelper.name
       [(.vector "bls12-381.fr" xs : Value F G), .vector "bls12-381.fr" point,
-        .data (.field "bls12-381.fr" claim)] = 62 + 22 * point.length := by
+        .data (.field "bls12-381.fr" claim)] = 62 + 20 * point.length := by
   have pointBound : point.length < indexLimit := lt_trans small (by decide)
   have vectorBound : xs.length < indexLimit := by
     rw [shaped]
