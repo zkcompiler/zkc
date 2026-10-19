@@ -39,6 +39,17 @@ def cases():
         for form in ('scalar', 'bulk'):
             add(f'scan-{form}-{n}', 'scan', {'elements': n, 'form': form}, 'operation',
                 ('ordered accumulation', 'vector construction'), 'Local program; no storage-release performance claim.')
+    for field, short in [('koala-bear', 'kb'), ('bls12-381.fr', 'fr'),
+                         ('koala-bear.ext8-binomial3', 'ext8')]:
+        # Three encoded extension columns at 8192 exceed the normal Host
+        # request-byte ceiling. Keep that ceiling, and record the smaller shape.
+        for n in (0, 17, 1024, 4096 if short == 'ext8' else 8192):
+            for sink in ('map', 'sum', 'product'):
+                for form in ('map', 'collect', 'bulk'):
+                    add(f'numerical-{short}-{sink}-{form}-{n}', 'numerical',
+                        {'field': field, 'elements': n, 'form': form, 'sink': sink},
+                        'operation', ('two columns', 'scalar captures', 'pointwise arithmetic', sink),
+                        'Identical inputs and polynomial across source forms; includes equality and Host costs. Non-base extension captures vary every coordinate.')
     for rows, columns in ((7, 13), (32, 33), (128, 31)):
         add(f'control-{rows}x{columns}', 'control', {'rows': rows, 'columns': columns}, 'composition',
             ('nested loops', 'conditional', 'indexing', 'carried scalar state'), 'Independent of machine libraries; not a previously unseen statistical holdout.')

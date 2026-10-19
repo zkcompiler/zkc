@@ -78,6 +78,25 @@ print('{{}}')
     assert manifest['compilation'][case.identifier][0]['sha256'] == modules['io'].digest(package)
 
 
+def test_numerical_forms_share_inputs_and_empty_reduction_identities(modules):
+    generate = modules['programs'].numerical
+    for field in ('koala-bear', 'bls12-381.fr', 'koala-bear.ext8-binomial3'):
+        for size in (0, 17):
+            for sink in ('map', 'sum', 'product'):
+                programs = [generate({'field': field, 'elements': size, 'sink': sink, 'form': form})
+                            for form in ('map', 'collect', 'bulk')]
+                assert all(p.inputs == programs[0].inputs for p in programs)
+                value = programs[0].inputs[0]['P']
+                assert programs[0].incorrect != programs[0].inputs[0]
+                if field.endswith('ext8-binomial3'):
+                    assert all(int(x) != 0 for x in value['c'][1:])
+                if size == 0:
+                    expected = [] if sink == 'map' else ('0' if sink == 'sum' else '1')
+                    if sink != 'map' and field.endswith('ext8-binomial3'):
+                        expected = [expected] + ['0'] * 7
+                    assert value['expected'] == expected
+
+
 def test_distinct_stark_statements_keep_the_same_program(modules, tmp_path):
     root = Path(__file__).resolve().parents[3]
     for family in ('fri', 'air', 'stark', 'transcript', 'bulletproofs'):
