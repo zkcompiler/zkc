@@ -134,7 +134,10 @@ query-free prover attains the bound.
 constructors and the gated accepted-value decoder; `FiatShamir/Lifting` raw
 answers by the last event and the lifting of uniform-sort certificates to typed
 certificates; and `FiatShamir/Binding` binding codecs over typed public-value
-binding events, which discharge statement determination.
+binding events, which discharge statement determination, and statement
+bindings from policy statements to model statements, with the coverage of the
+application's false statements and the rejection of unmapped statements as
+separate registered obligations.
 `FiatShamir/Obligations` states formal readings of the
 [construction obligations](../../docs/spec/fiat-shamir-security.md#construction-obligations),
 which the model counterexamples of `TestsSecurity.Counterexamples` refute one by
@@ -199,6 +202,41 @@ paths, and `Examples/CommittedFri` applies the bound to the FRI verifier with
 committed words ([committed words](../../docs/spec/fri-security.md#committed-words)),
 for acceptance together with a far initial word extracted at a verifier
 checkpoint and completed with zero, with one field element per hashed leaf.
+
+The shared interfaces connect these results through one probabilistic endpoint
+and one composition rule. `FiatShamir/Keyed` states keyed bad-event
+certificates over any key space of VCVio's lazily sampled oracle, with an
+all-table resampling obligation and a trace obligation; its soundness theorem is
+the endpoint, which typed certificates and the commitment bridge reach through
+transformers. `FiatShamir/Reduction` states charged reductions, sub-validators
+whose returned values satisfy a postcondition, composed by bind, bounded
+repetition, union and receive; certificates of every other form become
+reductions through the charged certificate. `FiatShamir/Budget` reads the typed
+engine's query count, cost per occurrence and charged cost as path bounds of one
+walk combinator, with conversions between the metrics. `Oracle/Keys` transports
+executions, query bounds and weighted costs between oracle key forms through
+renamings of cells, and `Commitment/HistoryKeys` applies it to the commitment
+bridge's joint keys and history keys, checkpoints included.
+
+`Stage/Relation` states quantitative stage relations between attack games:
+composition transports budgets before evaluating the earlier stage's loss, and
+a bound is against the worst adversary in a translation's support.
+`Stage/FiatShamir`, `Stage/Provider` and `Stage/Commitment` state the
+construction, projection and pruning equalities, the typed theorem, provider
+simulations and the commitment bridge as stages. `Stage/Joint` states the
+contract of a commitment and a transcript provider that share one primitive:
+jointly injective namespaces, a checkpoint extraction that reads only the log
+before a key's first query, the checkpoint event, and an implication from the
+intended application event. Its frame records a provider simulation with the
+obligations of a joint provider theorem: the simulator's namespaces, hash
+answers through a fixed range equivalence, a provider-state projection that no
+hash answer reaches at any later call, and a loss over the joint trace. The
+contract composes. `VCVio/Memo` and `Commitment/Repeats` show that a simulator's
+memoization of repeated calls does not change the bridge's event for extractors
+that read through first matches. A frame is constructed for a tagged provider
+whose tags are the joint key's summands (`TestsSecurity.JointSimulation`); no
+frame is constructed for the hash-chain provider, so no theorem bounds the
+native suites together with a committed verifier in one primitive.
 
 `VCVio/SigmaAnd` composes two VCVio Σ-protocols with one shared challenge.
 Completeness and special soundness compose directly; zero knowledge composes
