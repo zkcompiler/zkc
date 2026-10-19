@@ -44,12 +44,6 @@ namespace ZkcSecurity.HashChain.Joint
 open OracleComp OracleSpec OracleComp.ProgramLogic.Relational ZkcSecurity.FiatShamir
   ZkcSecurity.Commitment ZkcSecurity.HashChain.Encoding ZkcSecurity.VCVio.UntilBad
 
-/- A transcript cell's answer type is `Fin width → S` only after unfolding the cases of
-`JointRange`; they are made reducible in this module so that rewriting sees the logged transcript
-answers at that type. This changes elaboration only. -/
-set_option allowUnsafeReducibility true in
-attribute [local reducible] JointRange
-
 section Focus
 variable {σ τ α : Type}
 
@@ -401,6 +395,17 @@ theorem absorbAll_onFirst {σ τ : Type} (step : Input (Absorbed E Shape S) S By
       exact bind_congr fun next => absorbAll_onFirst step rest next.1 next.2 second
 
 omit [DecidableEq E] [DecidableEq Shape] [DecidableEq S] [DecidableEq Query] [SampleableType S] in
+/-- A hash call's query logged on the joint oracle, stated at the hash value type at which
+`hashCall` asks it. -/
+theorem withQueryLog_hashQuery {width : ℕ} (query : Query) :
+    (liftM ((joint (fun _ : E => Fin width → S) Shape S Query).query (.inr query)) :
+        OracleComp (joint (fun _ : E => Fin width → S) Shape S Query) S).withQueryLog =
+      (liftM ((joint (fun _ : E => Fin width → S) Shape S Query).query (.inr query)) :
+          OracleComp (joint (fun _ : E => Fin width → S) Shape S Query) S) >>= fun answer =>
+        pure (answer, [⟨.inr query, answer⟩]) :=
+  withQueryLog_query _
+
+omit [DecidableEq E] [DecidableEq Shape] [DecidableEq S] [DecidableEq Query] [SampleableType S] in
 /-- A hash computation logged on the joint oracle is the computation logged, its entries read as
 hash cells. -/
 theorem withQueryLog_liftHash {width : ℕ} {α : Type} :
@@ -413,7 +418,7 @@ theorem withQueryLog_liftHash {width : ℕ} {α : Type} :
   | pure value => simp [liftHash]
   | query_bind query next ih =>
       simp only [liftHash, simulateQ_bind, simulateQ_spec_query, hashCall] at ih ⊢
-      rw [withQueryLog_bind, withQueryLog_query, withQueryLog_bind, withQueryLog_query]
+      rw [withQueryLog_bind, withQueryLog_hashQuery, withQueryLog_bind, withQueryLog_query]
       simp only [bind_assoc, pure_bind, simulateQ_bind, simulateQ_spec_query, simulateQ_map,
         map_bind]
       refine bind_congr fun answer => ?_
@@ -430,8 +435,7 @@ theorem simulateQ_lazyJoint_liftHash (width : ℕ) {α : Type} (computation : Or
       simulateQ (fun call => onSecond (rowImpl call)) computation := by
   rw [liftHash, ZkcSecurity.Oracle.simulateQ_simulateQ]
   refine congrArg (fun impl => simulateQ impl computation) (funext fun query => ?_)
-  simp only [hashCall, simulateQ_spec_query]
-  rfl
+  exact simulateQ_spec_query (impl := lazyJoint (E := E) (Shape := Shape) width) (Sum.inr query)
 
 end Lifts
 
@@ -559,7 +563,10 @@ theorem read_coupling (small : width ≤ 2 ^ 64) :
                 (collect width fun block => traced (.request state (.event event) block.val)).run
                   trace) >>= _)
               ((onFirst (historyAnswer width (chainKey (history, event)))).run (tables, rows) >>= _) _
-            rw [onFirst_run, bind_map_left, bind_map_left]
+            rw [onFirst_run, bind_map_left]
+            -- The continuation logs the cells at the transcript key's answer type, which is
+            -- `Fin width → S` only after unfolding `JointRange`.
+            rw (config := { transparency := .default }) [bind_map_left]
             refine relTriple_bind (collect_coupling (.event event) width (fun block => block) trace
               tables consistent reached) fun blocks cells ⟨same, consistent', reached'⟩ => ?_
             simp only [onFirst_run, bind_map_left]
