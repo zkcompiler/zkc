@@ -61,6 +61,14 @@ def context : Context := selection.context
 theorem context_admitted : exportContext ZkcExamples.Structured.GkrSourceData.snapshot participant = some context :=
   (select_sound imported participant selected).1
 
+set_option smartUnfolding true in
+/-- The derived context: entry, roster, producer and validator positions, the
+replaced service input, its contract and the draw request its challenges
+carry, the suite and the selected query/delivery sites. -/
+theorem context_eq : context =
+    ⟨ZkcExamples.Structured.GkrSourceData.snapshot.entry, ["role00000000", "role00000001"], 0, 1, 7, "random.bls12-381.fr/0", some (.draw "bls12-381.fr"), participant.policy.suite, [("label_6f7574707574", "label_6f75747075745f64656c6976657279_0"), ("apply_14_label_6c656674_label_6368616c6c656e6765", "apply_14_label_6c656674_label_64656c6976657279_0"), ("apply_16_label_7269676874_label_6368616c6c656e6765", "apply_16_label_7269676874_label_64656c6976657279_0"), ("label_6c696e655f6368616c6c656e6765", "label_6c696e655f64656c6976657279_0")]⟩ := by
+  decide +kernel
+
 /-- The composed check's two rules, each on the actual export. -/
 theorem compiled_rules : checkExport ZkcExamples.Structured.GkrSourceData.snapshot participant = .ok () ∧ check context participant = .ok () ∧
     project program context participant = .ok () := by

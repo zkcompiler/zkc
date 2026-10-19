@@ -42,5 +42,3 @@ kinds = ["observe-repeats-value", "challenge-reads-host", "challenge-names-deliv
 admission = "external"
 views = "ZkcExamples.Structured.GkrSourceViews"
 inputs = "values"
-# The instruction reading of the GKR Entry declares its own context equation.
-omit = ["context_eq"]

@@ -9,7 +9,6 @@ import Zkc.Construction.Participant
 import Zkc.Construction.Pattern
 import Zkc.Construction.Projection
 import Zkc.Construction.ProjectionSoundness
-import Zkc.Construction.Reading
 import Zkc.Construction.Rule
 import Zkc.Construction.Semantics
 import Zkc.Construction.Soundness
@@ -307,9 +306,7 @@ import ZkcExamples.Construction.DeferredRounds
 import ZkcExamples.Construction.DeferredRoundsData
 import ZkcExamples.Construction.DeferredRoundsParticipant
 import ZkcExamples.Construction.GkrProof
-import ZkcExamples.Construction.GkrProofInstructions
 import ZkcExamples.Construction.GkrProofParticipant
-import ZkcExamples.Construction.GkrProofReading
 import ZkcExamples.Construction.GuessProof
 import ZkcExamples.Construction.GuessProofBodies
 import ZkcExamples.Construction.GuessProofData
