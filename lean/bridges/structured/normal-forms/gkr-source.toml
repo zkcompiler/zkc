@@ -35,6 +35,13 @@ slots = [{ name = "point", mode = "optional" }]
 captures = [{ name = "service", mode = "optional" }]
 strict = ["*"]
 
+[[shared.roles]]
+role = 0
+name = "proverOutput"
+slots = [{ name = "point", mode = "optional" }]
+captures = [{ name = "service", mode = "optional" }]
+strict = ["*"]
+
 # One further coefficient of a layer's line polynomial.
 [[shared]]
 repeat = "s48"
@@ -45,6 +52,13 @@ function = "coefficientFn"
 role = 1
 name = "verifierCoefficient"
 slots = [{ name = "coefficients", mode = "optional" }]
+captures = [{ name = "line", mode = "optional" }]
+strict = ["*"]
+
+[[shared.roles]]
+role = 0
+name = "proverCoefficient"
+slots = []
 captures = [{ name = "line", mode = "optional" }]
 strict = ["*"]
 
@@ -64,6 +78,7 @@ callee = "lean/bridges/structured/normal-forms/gkr-rounds.toml"
 function = "roundsFn"
 results = ["point", "", "", "", "", "point", "value"]
 roles.verifierRounds = {}
+roles.proverRounds = {}
 
 [[shared.applications]]
 name = "right"
@@ -74,11 +89,22 @@ callee = "lean/bridges/structured/normal-forms/gkr-rounds.toml"
 function = "roundsFn"
 results = ["point", "", "", "", "", "point", "value"]
 roles.verifierRounds = {}
+roles.proverRounds = {}
 
 [[shared.roles]]
 role = 1
 name = "verifierLayer"
 slots = [{ name = "point", mode = "optional" }, { name = "claim", mode = "optional" }]
+captures = [{ name = "inputs", mode = "optional" }, { name = "add", mode = "optional" },
+            { name = "mul", mode = "optional" }, { name = "layers", mode = "optional" },
+            { name = "selector", mode = "optional" }, { name = "width", mode = "optional" },
+            { name = "service", mode = "optional" }]
+strict = ["*"]
+
+[[shared.roles]]
+role = 0
+name = "proverLayer"
+slots = [{ name = "point", mode = "optional" }]
 captures = [{ name = "inputs", mode = "optional" }, { name = "add", mode = "optional" },
             { name = "mul", mode = "optional" }, { name = "layers", mode = "optional" },
             { name = "selector", mode = "optional" }, { name = "width", mode = "optional" },
@@ -99,4 +125,13 @@ inputs = [{ name = "inputs", mode = "optional" }, { name = "outputs", mode = "op
           { name = "add", mode = "optional" }, { name = "mul", mode = "optional" },
           { name = "layers", mode = "optional" }, { name = "selector", mode = "optional" },
           { name = "width", mode = "optional" }, { name = "service", mode = "optional" }]
+strict = ["*"]
+
+[[shared.roles]]
+role = 0
+name = "prover"
+inputs = [{ name = "inputs", mode = "optional" }, { name = "outputs", mode = "absent" },
+          { name = "add", mode = "optional" }, { name = "mul", mode = "optional" },
+          { name = "layers", mode = "optional" }, { name = "selector", mode = "optional" },
+          { name = "width", mode = "optional" }, { name = "service", mode = "absent" }]
 strict = ["*"]
