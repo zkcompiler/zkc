@@ -27,7 +27,7 @@ open SumcheckVerifierHelpers SumcheckVerifierPrelude
 theorem reduce_invoke_plain (ctx : ProtocolContext) (self : Nat)
     (arguments : Values (Component (assignment F G)) SumcheckVerifierBodies.reduceInputs) :
     invokeProtocol (unit.plainProtocolTable F G) SumcheckReduceBodies.reduceSignature
-      ctx self arguments = reduceDenote 4 unit ctx self arguments :=
+      ctx self arguments = reduceDenote SumcheckRepackedNormalForms.reduceMaximum unit ctx self arguments :=
   SumcheckRepackedNormalForms.reduce_view ctx self arguments _ rfl
 
 /-- Inputs in the repacked order: claim, rounds, variables, values, challenges. -/
@@ -46,7 +46,7 @@ theorem verifier_context_optional (ctx : ProtocolContext) (self : Nat)
     (service : Option Nat) :
     invokeProtocol (unit.plainProtocolTable F G) runSignature
       ctx self (rootInputs claim count dimension xs service) =
-      (admittedRounds 4 (ctx.enter "s3" [0, 1]) count service claim).bind
+      (admittedRounds SumcheckRepackedNormalForms.reduceMaximum (ctx.enter "s3" [0, 1]) count service claim).bind
         (fun pc => .done (rootResults pc)) := by
   refine (SumcheckRepackedNormalForms.verifier_invoke (bodies := helperBodies) (ctx := ctx)
     (self := self) (role := verifier) (separate := separate) (claim := claim) (count := count)
@@ -74,7 +74,7 @@ theorem root_context_expansion (ctx : ProtocolContext) (self : Nat)
   rw [verifier_context_optional ctx self verifier separate,
     reduce_invoke_plain (ctx.enter "s3" [0, 1]) self (reduceArguments none none none claim count service),
     reduce_optional unit helperBodies (ctx.enter "s3" [0, 1]) self verifier separate
-      4 none none none claim count service]
+      SumcheckRepackedNormalForms.reduceMaximum none none none claim count service]
   refine Eq.trans ?_ (PIR.Proc.bind_assoc _ _ _).symm
   rfl
 
@@ -82,18 +82,18 @@ theorem root_context_expansion (ctx : ProtocolContext) (self : Nat)
 theorem verifier_optional (claim : Option F) (count dimension : Option Nat)
     (xs : Option (List F)) (service : Option Nat) :
     program.participant F G 1 (rootInputs claim count dimension xs service) =
-      (admittedRounds 4 (ProtocolContext.enter {} "s3" [0, 1]) count service claim).bind
+      (admittedRounds SumcheckRepackedNormalForms.reduceMaximum (ProtocolContext.enter {} "s3" [0, 1]) count service claim).bind
         (fun pc => .done (rootResults pc)) :=
   (unit.protocolTable_forgetSites (F := F) (G := G)
     runSignature {} 1 (rootInputs claim count dimension xs service)).trans
     (verifier_context_optional {} 1 rfl (by decide) claim count dimension xs service)
 
-theorem verifier_excess (claim : Option F) (count : Nat) (large : 4 < count)
+theorem verifier_excess (claim : Option F) (count : Nat) (large : SumcheckRepackedNormalForms.reduceMaximum < count)
     (dimension : Option Nat) (xs : Option (List F)) (service : Option Nat) :
     program.participant F G 1 (rootInputs claim (some count) dimension xs service) =
       .halt .refused := by
   refine (verifier_optional claim (some count) dimension xs service).trans ?_
-  rw [admittedRounds_excess 4 count _ large]
+  rw [admittedRounds_excess SumcheckRepackedNormalForms.reduceMaximum count _ large]
   rfl
 
 /-- Process-level repacking: the repacked participant is the retained one with

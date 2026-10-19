@@ -27,8 +27,8 @@ theorem helperBodies : SumcheckVerifierHelpers.Bodies unit.definitions :=
    SumcheckSourceAssociations.variables_association,
    SumcheckSourceAssociations.values_association⟩
 
-/-- The original full Source Reduce tree has maximum 2 independently of Reduction. -/
-theorem reduce_raw : reduceDefinition.raw = (SumcheckVerifierBodies.reduceBody 2).erase := by
+/-- The original full Source Reduce tree has its own maximum, independently of Reduction. -/
+theorem reduce_raw : reduceDefinition.raw = (SumcheckVerifierBodies.reduceBody SumcheckSourceNormalForms.reduceMaximum).erase := by
   refine SumcheckSourceViews.reduce_raw.trans ?_
   unfold SumcheckVerifierBodies.reduceBody SumcheckVerifierBodies.roundBody
     SumcheckVerifierBodies.reduceReturn
@@ -37,11 +37,11 @@ theorem reduce_raw : reduceDefinition.raw = (SumcheckVerifierBodies.reduceBody 2
 variable {F G : Type} [CommRing F] [AddCommGroup G] [Module F G]
   [DecidableEq F] [DecidableEq G]
 
-/-- The actual complete Source protocol table selects the maximum-two child body. -/
+/-- The actual complete Source protocol table selects the child body at its maximum. -/
 theorem reduce_invoke_plain (ctx : ProtocolContext) (self : Nat)
     (arguments : Values (Component (assignment F G)) SumcheckVerifierBodies.reduceInputs) :
     invokeProtocol (unit.plainProtocolTable F G) SumcheckSourceBodies.reduceSignature
-      ctx self arguments = SumcheckVerifierPrelude.reduceDenote 2 unit ctx self arguments :=
+      ctx self arguments = SumcheckVerifierPrelude.reduceDenote SumcheckSourceNormalForms.reduceMaximum unit ctx self arguments :=
   SumcheckSourceNormalForms.reduce_view ctx self arguments _ rfl
 
 def sourceRootInputs (rawV : Option (List F)) (claim : Option F)
@@ -79,7 +79,7 @@ theorem verifier_context_optional (ctx : ProtocolContext) (self : Nat)
     (rawV : Option (List F)) (claim : Option F) (count service : Option Nat) :
     invokeProtocol (unit.plainProtocolTable F G) SumcheckSourceBodies.runSignature
       ctx self (sourceRootInputs rawV claim count service) =
-      (SumcheckVerifierPrelude.admittedRounds 2
+      (SumcheckVerifierPrelude.admittedRounds SumcheckSourceNormalForms.reduceMaximum
         (ctx.enter "label_726564756365" [0, 1]) count service claim).bind
         (fun pc => SumcheckVerifierTerminal.actualOwnedCheck unit self rawV pc.1 pc.2) := by
   refine (SumcheckSourceNormalForms.verifier_invoke helperBodies ctx self verifier separate
@@ -109,7 +109,7 @@ theorem root_context_expansion (ctx : ProtocolContext) (self : Nat)
   rw [verifier_context_optional ctx self verifier separate,
     reduce_invoke_plain (ctx.enter "label_726564756365" [0, 1]) self (childInputs claim count service)]
   erw [SumcheckVerifierPrelude.reduce_optional unit helperBodies (ctx.enter "label_726564756365" [0, 1])
-    self verifier separate 2 none none none claim count service]
+    self verifier separate SumcheckSourceNormalForms.reduceMaximum none none none claim count service]
   refine Eq.trans ?_ (PIR.Proc.bind_assoc _ _ _).symm
   rfl
 
@@ -126,12 +126,12 @@ theorem verifier_linked (rawV : Option (List F)) (claim : Option F)
     SumcheckSourceBodies.runSignature {} 1 (sourceRootInputs rawV claim count service)).trans
     (root_context_expansion {} 1 rfl (by decide) rawV claim count service)
 
-/-- Complete original Source verifier: maximum-two admission, actual rounds,
+/-- Complete original Source verifier: admission at its maximum, actual rounds,
 then the actual terminal on the unchanged raw verifier vector. -/
 theorem verifier_optional (rawV : Option (List F)) (claim : Option F)
     (count service : Option Nat) :
     program.participant F G 1 (sourceRootInputs rawV claim count service) =
-      (SumcheckVerifierPrelude.admittedRounds 2 childContext count service claim).bind
+      (SumcheckVerifierPrelude.admittedRounds SumcheckSourceNormalForms.reduceMaximum childContext count service claim).bind
         (fun pc => SumcheckVerifierTerminal.actualOwnedCheck unit 1 rawV pc.1 pc.2) :=
   (unit.protocolTable_forgetSites (F := F) (G := G)
     SumcheckSourceBodies.runSignature {} 1 (sourceRootInputs rawV claim count service)).trans
@@ -145,12 +145,12 @@ theorem verifier_missing (rawV : Option (List F)) (claim : Option F)
   rw [verifier_optional]
   rfl
 
-/-- Source's own maximum is two, independently of the separate Reduction unit. -/
+/-- Source's own maximum, independently of the separate Reduction unit. -/
 theorem verifier_excess (rawV : Option (List F)) (claim : Option F)
-    (count : Nat) (service : Option Nat) (large : 2 < count) :
+    (count : Nat) (service : Option Nat) (large : SumcheckSourceNormalForms.reduceMaximum < count) :
     program.participant F G 1 (sourceRootInputs rawV claim (some count) service) =
       .halt .refused := by
-  rw [verifier_optional, SumcheckVerifierPrelude.admittedRounds_excess 2 count _ large]
+  rw [verifier_optional, SumcheckVerifierPrelude.admittedRounds_excess SumcheckSourceNormalForms.reduceMaximum count _ large]
   rfl
 
 /-- Zero rounds still perform the actual source terminal and need no service. -/
@@ -199,7 +199,7 @@ theorem verifier_permuted_optional (rawV : Option (List F)) (claim : Option F)
     invokeProtocol (unit.plainProtocolTable F G) SumcheckSourceBodies.runSignature
       ⟨some "outer", roleSubstitution [2, 0]⟩ 0
       (sourceRootInputs rawV claim count service) =
-      (SumcheckVerifierPrelude.admittedRounds 2
+      (SumcheckVerifierPrelude.admittedRounds SumcheckSourceNormalForms.reduceMaximum
         (ProtocolContext.enter ⟨some "outer", roleSubstitution [2, 0]⟩
           "label_726564756365" [0, 1]) count service claim).bind
         (fun pc => SumcheckVerifierTerminal.actualOwnedCheck unit 0 rawV pc.1 pc.2) :=
@@ -207,7 +207,7 @@ theorem verifier_permuted_optional (rawV : Option (List F)) (claim : Option F)
 
 /-- A decoded raw V table supplies the terminal mathematical checker. Point
 length follows from successful rounds; initial claim and service remain optional. -/
-theorem verifier_checked (count : Nat) (admitted : count ≤ 2)
+theorem verifier_checked (count : Nat) (admitted : count ≤ SumcheckSourceNormalForms.reduceMaximum)
     (raw : List F) (claim : Option F) (service : Option Nat)
     (table : Zkc.Polynomial.Multilinear.Table F count)
     (decoded : Zkc.Polynomial.Multilinear.ofList? count raw = some table)

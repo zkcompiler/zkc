@@ -1826,6 +1826,12 @@ class Module:
                        f"application site and its roles map to the caller's roles {roles}. -/")
             out.append(f"abbrev {context} (ctx : ProtocolContext) : ProtocolContext :=\n"
                        f"  ctx.enter {json.dumps(site)} {list_literal(roles)}\n")
+            # The callee's static repeat maximum in this unit, read from the retained export, so
+            # statements about this unit's application need not spell it.
+            repeats = [row for row in callee.body[1] if row[0][0] == "protocol_repeat"]
+            if len(repeats) == 1:
+                out.append(f"/-- The repeat maximum of the applied `{name}` body in this unit. -/")
+                out.append(f"abbrev {name}Maximum : Nat := {int(repeats[0][0][2])}\n")
             self.view(out, name, callee, entry["declaration"], entry["body"], entry.get("raw"))
             callee_roles, values = self.callee(entry, callee)
             for role_spec in spec["roles"]:

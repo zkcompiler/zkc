@@ -24,9 +24,9 @@ theorem helperBodies : SumcheckVerifierHelpers.Bodies unit.definitions where
   «variables» := SumcheckReduceAssociations.variables_association
   values := SumcheckReduceAssociations.values_association
 
-/-- Complete maximum-four body association, including the nested callback and suffix. -/
+/-- Complete body association at the unit's own maximum, including the nested callback and suffix. -/
 theorem reduce_raw_shared :
-    reduceDefinition.raw = (SumcheckVerifierBodies.reduceBody 4).erase := by
+    reduceDefinition.raw = (SumcheckVerifierBodies.reduceBody SumcheckReductionNormalForms.reduceMaximum).erase := by
   refine SumcheckReduceViews.reduce_raw.trans ?_
   unfold SumcheckVerifierBodies.reduceBody SumcheckVerifierBodies.roundBody
     SumcheckVerifierBodies.reduceReturn
@@ -41,7 +41,7 @@ open SumcheckVerifierHelpers SumcheckVerifierPrelude
 theorem reduce_invoke_plain (ctx : ProtocolContext) (self : Nat)
     (arguments : Values (Component (assignment F G)) SumcheckVerifierBodies.reduceInputs) :
     invokeProtocol (unit.plainProtocolTable F G) SumcheckReduceBodies.reduceSignature
-      ctx self arguments = reduceDenote 4 unit ctx self arguments :=
+      ctx self arguments = reduceDenote SumcheckReductionNormalForms.reduceMaximum unit ctx self arguments :=
   SumcheckReductionNormalForms.reduce_view ctx self arguments _ rfl
 
 def reduceRootInputs (xs : Option (List F)) (dimension : Option Nat)
@@ -61,7 +61,7 @@ theorem verifier_context_optional (ctx : ProtocolContext) (self : Nat)
     (count service : Option Nat) :
     invokeProtocol (unit.plainProtocolTable F G) SumcheckReduceBodies.runSignature
       ctx self (reduceRootInputs xs dimension claim count service) =
-      (admittedRounds 4 (ctx.enter "s3" [0, 1]) count service claim).bind
+      (admittedRounds SumcheckReductionNormalForms.reduceMaximum (ctx.enter "s3" [0, 1]) count service claim).bind
         (fun pc => .done (reduceRootResults pc)) := by
   refine (SumcheckReductionNormalForms.verifier_invoke (bodies := helperBodies) (ctx := ctx)
     (self := self) (role := verifier) (separate := separate) (raw := xs) (dimension := dimension)
@@ -89,7 +89,7 @@ theorem root_context_expansion (ctx : ProtocolContext) (self : Nat)
   rw [verifier_context_optional ctx self verifier separate,
     reduce_invoke_plain (ctx.enter "s3" [0, 1]) self (reduceArguments none none none claim count service),
     reduce_optional unit helperBodies (ctx.enter "s3" [0, 1]) self verifier separate
-      4 none none none claim count service]
+      SumcheckReductionNormalForms.reduceMaximum none none none claim count service]
   refine Eq.trans ?_ (PIR.Proc.bind_assoc _ _ _).symm
   rfl
 
@@ -98,7 +98,7 @@ output masks and the original child selected in its full protocol table. -/
 theorem verifier_optional (xs : Option (List F)) (dimension : Option Nat)
     (claim : Option F) (count service : Option Nat) :
     program.participant F G 1 (reduceRootInputs xs dimension claim count service) =
-      (admittedRounds 4 (ProtocolContext.enter {} "s3" [0, 1]) count service claim).bind
+      (admittedRounds SumcheckReductionNormalForms.reduceMaximum (ProtocolContext.enter {} "s3" [0, 1]) count service claim).bind
         (fun pc => .done (reduceRootResults pc)) :=
   (unit.protocolTable_forgetSites (F := F) (G := G)
     SumcheckReduceBodies.runSignature {} 1 (reduceRootInputs xs dimension claim count service)).trans
@@ -111,13 +111,13 @@ theorem verifier_missing (xs : Option (List F)) (dimension : Option Nat)
       .halt .incomplete :=
   (verifier_optional xs dimension claim none service).trans rfl
 
-/-- Counts above the original maximum four are refused before any callback. -/
+/-- Counts above the unit's own maximum are refused before any callback. -/
 theorem verifier_excess (xs : Option (List F)) (dimension : Option Nat)
-    (claim : Option F) (count : Nat) (large : 4 < count) (service : Option Nat) :
+    (claim : Option F) (count : Nat) (large : SumcheckReductionNormalForms.reduceMaximum < count) (service : Option Nat) :
     program.participant F G 1 (reduceRootInputs xs dimension claim (some count) service) =
       .halt .refused := by
   refine (verifier_optional xs dimension claim (some count) service).trans ?_
-  rw [admittedRounds_excess 4 count _ large]
+  rw [admittedRounds_excess SumcheckReductionNormalForms.reduceMaximum count _ large]
   rfl
 
 /-- With zero rounds, the actual root returns emptyV and the unchanged optional
@@ -136,7 +136,7 @@ theorem verifier_permuted_optional (xs : Option (List F)) (dimension : Option Na
     invokeProtocol (unit.plainProtocolTable F G) SumcheckReduceBodies.runSignature
       ⟨some "outer", roleSubstitution [2, 0]⟩ 0
       (reduceRootInputs xs dimension claim count service) =
-      (admittedRounds 4
+      (admittedRounds SumcheckReductionNormalForms.reduceMaximum
         (ProtocolContext.enter ⟨some "outer", roleSubstitution [2, 0]⟩ "s3" [0, 1])
         count service claim).bind (fun pc => .done (reduceRootResults pc)) :=
   verifier_context_optional _ 0 rfl (by decide) xs dimension claim count service
@@ -146,7 +146,7 @@ entry per admitted round. Zero preserves the optional claim; a positive return
 has a present claim. Every interaction reply and phase remains quantified. -/
 theorem verifier_returns (P : PIR.Interaction (participantInterface F G))
     (xs : Option (List F)) (dimension : Option Nat) (claim : Option F)
-    (count : Nat) (bounded : count ≤ 4) (service : Option Nat) (phase : P.Phase) :
+    (count : Nat) (bounded : count ≤ SumcheckReductionNormalForms.reduceMaximum) (service : Option Nat) (phase : P.Phase) :
     PIR.Boundary.Returns P (fun result _ =>
       ∃ point current, result = reduceRootResults (G := G) (some point, current) ∧
         point.length = count ∧ (count = 0 → current = claim) ∧

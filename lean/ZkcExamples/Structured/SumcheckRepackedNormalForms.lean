@@ -27,18 +27,21 @@ application site and its roles map to the caller's roles [0, 1]. -/
 abbrev reduceContext (ctx : ProtocolContext) : ProtocolContext :=
   ctx.enter "s3" [0, 1]
 
+/-- The repeat maximum of the applied `reduce` body in this unit. -/
+abbrev reduceMaximum : Nat := 4
+
 /-- The checked body of `reduce` at any context, between its input and output
 masks, with this unit's plain tables. -/
 theorem reduce_view (ctx : ProtocolContext) (self : Nat) (args masked : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"])
     (mask : maskValues self (ctx.mapScopes [[0], [0], [0], [1], [0, 1], [1]]) args = masked) :
     invokeProtocol (SumcheckRepackedViews.unit.plainProtocolTable F G) SumcheckReduceBodies.reduceSignature ctx self args =
-      ((SumcheckVerifierBodies.reduceBody 4).denote
+      ((SumcheckVerifierBodies.reduceBody reduceMaximum).denote
         (participantMeaningWith (.silent _) (participantActions F G) (plainHelpers (F := F) (G := G) SumcheckRepackedViews.unit) self (SumcheckRepackedViews.unit.plainProtocolTable F G) ctx) masked.get).bind
         (fun out => .done (maskValues self (ctx.mapScopes [[0], [0], [0], [0], [1], [1]]) out)) := by
   rw [← mask]
   exact protocol_invoke_body_view (.silent _) (participantActions F G) (plainHelpers (F := F) (G := G) SumcheckRepackedViews.unit)
     SumcheckRepackedViews.unit.protocols SumcheckRepackedViews.unit.protocolsLinked SumcheckRepackedViews.reduceDefinition
-    SumcheckRepackedViews.reduce_member (SumcheckVerifierBodies.reduceBody 4) SumcheckRepackedViews.reduce_raw ctx self args
+    SumcheckRepackedViews.reduce_member (SumcheckVerifierBodies.reduceBody reduceMaximum) SumcheckRepackedViews.reduce_raw ctx self args
 
 set_option linter.unusedSimpArgs false in
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
@@ -98,7 +101,7 @@ theorem run_view (ctx : ProtocolContext) (self : Nat) (args masked : Values (Com
 def verifierProcess (ctx : ProtocolContext) (claim : Option F) (count service : Option Nat) :
     PIR.Proc (participantInterface F G)
       (Values (Component (assignment F G)) [.vector "bls12-381.fr", .field "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr"]) :=
-  (SumcheckRoundNormalForms.verifierReduceProcess SumcheckRepackedViews.unit 4 (reduceContext ctx) claim count service).bind fun (reduceReturned : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr"]) =>
+  (SumcheckRoundNormalForms.verifierReduceProcess SumcheckRepackedViews.unit reduceMaximum (reduceContext ctx) claim count service).bind fun (reduceReturned : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr"]) =>
   .done (.cons (reduceReturned.get (.there (.there (.there (.there .here))))) (.cons (reduceReturned.get (.there (.there (.there (.there (.there .here)))))) (.cons none (.cons none .nil))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .field "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr"])
 
 set_option linter.unusedSimpArgs false in
@@ -122,17 +125,17 @@ theorem verifier_process (bodies : SumcheckVerifierHelpers.Bodies SumcheckRepack
     rw [Participant.owned_other _ _ separate]
     rfl
   refine (Region.denote_letOp_done m (.mark "s3") _ _ _ _ .nil rfl).trans ?_
-  refine NormalFormSteps.apply_step SumcheckRepackedViews.unit SumcheckRepackedViews.reduceDefinition SumcheckRepackedViews.reduce_member SumcheckReduceBodies.reduceSignature SumcheckRepackedViews.reduce_signature (SumcheckVerifierBodies.reduceBody 4) SumcheckRepackedViews.reduce_raw
+  refine NormalFormSteps.apply_step SumcheckRepackedViews.unit SumcheckRepackedViews.reduceDefinition SumcheckRepackedViews.reduce_member SumcheckReduceBodies.reduceSignature SumcheckRepackedViews.reduce_signature (SumcheckVerifierBodies.reduceBody reduceMaximum) SumcheckRepackedViews.reduce_raw
     [0, 1] "s3" ctx (ctx.roles 1) _ _ _
     ((ProtocolContext.contains_iff _ _ _).mpr ⟨1, by decide, rfl⟩)
     (.cons none (.cons none (.cons none (.cons claim (.cons count (.cons service .nil))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) ?_
-    (SumcheckRoundNormalForms.verifierReduceProcess SumcheckRepackedViews.unit 4 (reduceContext ctx) claim count service) ?_
+    (SumcheckRoundNormalForms.verifierReduceProcess SumcheckRepackedViews.unit reduceMaximum (reduceContext ctx) claim count service) ?_
     (fun reduceReturned => .cons none (.cons none (.cons none (.cons none (.cons (reduceReturned.get (.there (.there (.there (.there .here))))) (.cons (reduceReturned.get (.there (.there (.there (.there (.there .here)))))) .nil)))))) ?_ _ ?_
   · change maskValues (ctx.roles 1) ((ctx.enter "s3" [0, 1]).mapScopes [[0], [0], [0], [1], [0, 1], [1]]) (.cons none (.cons none (.cons none (.cons claim (.cons count (.cons service .nil))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) = _
     iterate 7 unfold maskValues
     simp [ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
       Participant.restrict, separate, Ne.symm separate]
-  · exact SumcheckRoundNormalForms.verifierReduce_process (U := SumcheckRepackedViews.unit) (maximum := 4) (bodies := bodies) (ctx := (reduceContext ctx)) (self := (ctx.roles 1)) (role := rfl) (separate := separate) (claim := claim) (count := count) (service := service)
+  · exact SumcheckRoundNormalForms.verifierReduce_process (U := SumcheckRepackedViews.unit) (maximum := reduceMaximum) (bodies := bodies) (ctx := (reduceContext ctx)) (self := (ctx.roles 1)) (role := rfl) (separate := separate) (claim := claim) (count := count) (service := service)
   · exact reduce_verifier_outputs ctx separate
   intro reduceReturned
   refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_
@@ -193,7 +196,7 @@ theorem verifier_participant (bodies : SumcheckVerifierHelpers.Bodies SumcheckRe
 def proverProcess (ctx : ProtocolContext) (rounds count : Nat) (raw : List F) :
     PIR.Proc (participantInterface F G)
       (Values (Component (assignment F G)) [.vector "bls12-381.fr", .field "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr"]) :=
-  (SumcheckRoundNormalForms.proverReduceProcess SumcheckRepackedViews.unit 4 (reduceContext ctx) raw count rounds).bind fun (reduceReturned : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr"]) =>
+  (SumcheckRoundNormalForms.proverReduceProcess SumcheckRepackedViews.unit reduceMaximum (reduceContext ctx) raw count rounds).bind fun (reduceReturned : Values (Component (assignment F G)) [.vector "bls12-381.fr", .vector "bls12-381.fr", .index, .index, .vector "bls12-381.fr", .field "bls12-381.fr"]) =>
   .done (.cons none (.cons none (.cons (reduceReturned.get (.there .here)) (.cons (reduceReturned.get .here) .nil))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .field "bls12-381.fr", .vector "bls12-381.fr", .vector "bls12-381.fr"])
 
 set_option linter.unusedSimpArgs false in
@@ -216,17 +219,17 @@ theorem prover_process (bodies : SumcheckUnitContracts.Bodies SumcheckRepackedVi
   · change Participant.owned (ctx.roles 0) (ctx.roles 0) (invoke (plainHelpers (F := F) (G := G) SumcheckRepackedViews.unit).closed MapFirstBodies.tableHelper) (.cons raw (.cons count (.cons 1 .nil)) : Values (assignment F G) [.vector "bls12-381.fr", .index, .index]).present = _
     exact NormalFormSteps.owned_done _ _ (SumcheckProverLaws.table_present SumcheckRepackedViews.unit bodies raw count shape bound)
   refine (Region.denote_letOp_done m (.mark "s3") _ _ _ _ .nil rfl).trans ?_
-  refine NormalFormSteps.apply_step SumcheckRepackedViews.unit SumcheckRepackedViews.reduceDefinition SumcheckRepackedViews.reduce_member SumcheckReduceBodies.reduceSignature SumcheckRepackedViews.reduce_signature (SumcheckVerifierBodies.reduceBody 4) SumcheckRepackedViews.reduce_raw
+  refine NormalFormSteps.apply_step SumcheckRepackedViews.unit SumcheckRepackedViews.reduceDefinition SumcheckRepackedViews.reduce_member SumcheckReduceBodies.reduceSignature SumcheckRepackedViews.reduce_signature (SumcheckVerifierBodies.reduceBody reduceMaximum) SumcheckRepackedViews.reduce_raw
     [0, 1] "s3" ctx (ctx.roles 0) _ _ _
     ((ProtocolContext.contains_iff _ _ _).mpr ⟨0, by decide, rfl⟩)
     (.cons (some raw) (.cons (some count) (.cons (some 1) (.cons none (.cons (some rounds) (.cons none .nil))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) ?_
-    (SumcheckRoundNormalForms.proverReduceProcess SumcheckRepackedViews.unit 4 (reduceContext ctx) raw count rounds) ?_
+    (SumcheckRoundNormalForms.proverReduceProcess SumcheckRepackedViews.unit reduceMaximum (reduceContext ctx) raw count rounds) ?_
     (fun reduceReturned => .cons (reduceReturned.get .here) (.cons (reduceReturned.get (.there .here)) (.cons (reduceReturned.get (.there (.there .here))) (.cons (reduceReturned.get (.there (.there (.there .here)))) (.cons none (.cons none .nil)))))) ?_ _ ?_
   · change maskValues (ctx.roles 0) ((ctx.enter "s3" [0, 1]).mapScopes [[0], [0], [0], [1], [0, 1], [1]]) (.cons (some raw) (.cons (some count) (.cons (some 1) (.cons none (.cons (some rounds) (.cons none .nil))))) : Values (Component (assignment F G)) [.vector "bls12-381.fr", .index, .index, .field "bls12-381.fr", .index, .service "random.bls12-381.fr/0"]) = _
     iterate 7 unfold maskValues
     simp [ProtocolContext.mapScopes, ProtocolContext.enter, roleSubstitution,
       Participant.restrict, separate, Ne.symm separate]
-  · exact SumcheckRoundNormalForms.proverReduce_process (U := SumcheckRepackedViews.unit) (maximum := 4) (bodies := bodies) (ctx := (reduceContext ctx)) (self := (ctx.roles 0)) (role := rfl) (separate := separate) (entries := raw) (count := count) (rounds := rounds) (countBound := Nat.lt_trans shape.2.1 (by decide +kernel)) (roundsBound := Nat.lt_of_le_of_lt enough (Nat.lt_trans shape.2.1 (by decide +kernel))) (enough := enough)
+  · exact SumcheckRoundNormalForms.proverReduce_process (U := SumcheckRepackedViews.unit) (maximum := reduceMaximum) (bodies := bodies) (ctx := (reduceContext ctx)) (self := (ctx.roles 0)) (role := rfl) (separate := separate) (entries := raw) (count := count) (rounds := rounds) (countBound := Nat.lt_trans shape.2.1 (by decide +kernel)) (roundsBound := Nat.lt_of_le_of_lt enough (Nat.lt_trans shape.2.1 (by decide +kernel))) (enough := enough)
   · exact reduce_prover_outputs ctx separate
   intro reduceReturned
   refine (Region.denote_letOp_done m (.mark "") _ _ _ _ .nil rfl).trans ?_

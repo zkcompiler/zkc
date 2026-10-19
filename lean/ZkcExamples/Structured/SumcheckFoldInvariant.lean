@@ -253,11 +253,11 @@ theorem source_frames (raw : List F) (count : Nat) (shape : HasShape raw count 1
     PIR.Boundary.Returns (receivedChallenges (G := G) SumcheckSourceVerifier.childContext)
       (fun state received => HonestFrame raw count iterations received state ∧
         Holds count table iterations state)
-      (Repeat.loop (repeatSpec 2) SumcheckSourceVerifier.childContext 0 (cap none)
+      (Repeat.loop (repeatSpec SumcheckSourceNormalForms.reduceMaximum) SumcheckSourceVerifier.childContext 0 (cap none)
         (bodyFn SumcheckSourceViews.unit SumcheckSourceVerifier.childContext 0) 0 iterations
         (embedP (G := G) (honestState raw count []))) [] :=
   prover_frames SumcheckSourceViews.unit SumcheckSourceContracts.bodies
-    SumcheckSourceVerifier.childContext 0 rfl (by decide) 2 none raw count shape bound table decoded
+    SumcheckSourceVerifier.childContext 0 rfl (by decide) SumcheckSourceNormalForms.reduceMaximum none raw count shape bound table decoded
     iterations
 
 /-- The fold invariant at the prover of the complete Reduction unit's Reduce. -/
@@ -267,11 +267,11 @@ theorem reduction_frames (raw : List F) (count : Nat) (shape : HasShape raw coun
     PIR.Boundary.Returns (receivedChallenges (G := G) (ProtocolContext.enter {} "s3" [0, 1]))
       (fun state received => HonestFrame raw count iterations received state ∧
         Holds count table iterations state)
-      (Repeat.loop (repeatSpec 4) (ProtocolContext.enter {} "s3" [0, 1]) 0 (cap none)
+      (Repeat.loop (repeatSpec SumcheckReductionNormalForms.reduceMaximum) (ProtocolContext.enter {} "s3" [0, 1]) 0 (cap none)
         (bodyFn SumcheckReduceViews.unit (ProtocolContext.enter {} "s3" [0, 1]) 0) 0 iterations
         (embedP (G := G) (honestState raw count []))) [] :=
   prover_frames SumcheckReduceViews.unit SumcheckReduceContracts.bodies
-    (ProtocolContext.enter {} "s3" [0, 1]) 0 rfl (by decide) 4 none raw count shape bound table
+    (ProtocolContext.enter {} "s3" [0, 1]) 0 rfl (by decide) SumcheckReductionNormalForms.reduceMaximum none raw count shape bound table
     decoded iterations
 
 /-! ### Exported frame metadata -/
@@ -319,13 +319,13 @@ def frameExport (count : Nat) : RawFrame where
     ⟨roundIdentity count, [.binder 0, .carried proverPointPosition, .carried proverEntriesPosition]⟩]
 
 /-- The Reduction unit's actual Reduce body has its repeat at site `s15`, with
-maximum four; the Source unit's has maximum two. -/
+its own maximum, as does the Source unit's. -/
 theorem reduction_repeat :
-    repeatAt SumcheckReduceViews.reduceDefinition.raw.operations "s15" = some (repeatSpec 4) := by
+    repeatAt SumcheckReduceViews.reduceDefinition.raw.operations "s15" = some (repeatSpec SumcheckReductionNormalForms.reduceMaximum) := by
   decide +kernel
 
 theorem source_repeat :
-    repeatAt SumcheckSourceViews.reduceDefinition.raw.operations "s15" = some (repeatSpec 2) := by
+    repeatAt SumcheckSourceViews.reduceDefinition.raw.operations "s15" = some (repeatSpec SumcheckSourceNormalForms.reduceMaximum) := by
   decide +kernel
 
 omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] in
@@ -334,7 +334,7 @@ body's own repeat occurrence to exactly the invariant proved on its callback. -/
 theorem frame_export_checks (count : Nat) :
     checkFrame (Value := assignment F G) resolution
       (repeatAt SumcheckReduceViews.reduceDefinition.raw.operations) (tableContext count)
-      (frameExport count) = .ok ⟨repeatSpec 4, proverInvariant count⟩ := by
+      (frameExport count) = .ok ⟨repeatSpec SumcheckReductionNormalForms.reduceMaximum, proverInvariant count⟩ := by
   simp only [checkFrame]
   simp [checkFrameAtoms, checkFrameAtom, checkFrameTerms, checkFrameTerm, resolution,
     Resolution.ofCandidates, sortCandidate, predicateCandidate, frameExport,
@@ -347,7 +347,7 @@ omit [CommRing F] [AddCommGroup G] [Module F G] [DecidableEq F] [DecidableEq G] 
 theorem source_frame_export_checks (count : Nat) :
     checkFrame (Value := assignment F G) resolution
       (repeatAt SumcheckSourceViews.reduceDefinition.raw.operations) (tableContext count)
-      (frameExport count) = .ok ⟨repeatSpec 2, proverInvariant count⟩ := by
+      (frameExport count) = .ok ⟨repeatSpec SumcheckSourceNormalForms.reduceMaximum, proverInvariant count⟩ := by
   simp only [checkFrame]
   simp [checkFrameAtoms, checkFrameAtom, checkFrameTerms, checkFrameTerm, resolution,
     Resolution.ofCandidates, sortCandidate, predicateCandidate, frameExport,

@@ -25,10 +25,10 @@ function = "runFn"
 
 [[shared.applications]]
 declaration = "reduce"
-body = "SumcheckVerifierBodies.reduceBody 2"
+body = "SumcheckVerifierBodies.reduceBody reduceMaximum"
 callee = "lean/bridges/structured/normal-forms/sumcheck-round.toml"
 function = "reduceFn"
-arguments = { U = "SumcheckSourceViews.unit", maximum = "2" }
+arguments = { U = "SumcheckSourceViews.unit", maximum = "reduceMaximum" }
 roles.verifierReduce = { bodies = "bodies" }
 roles.proverReduce = { bodies = "bodies", countBound = "Nat.lt_trans shape.2.1 (by decide +kernel)", roundsBound = "Nat.lt_trans shape.2.1 (by decide +kernel)", enough = "Nat.le_refl _" }
 

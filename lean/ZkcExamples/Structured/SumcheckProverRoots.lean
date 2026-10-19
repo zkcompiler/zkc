@@ -28,12 +28,12 @@ section Source
 open SumcheckSourceViews
 
 /-- The complete Source root at the prover in an arbitrary caller context: the
-checked table, the actual maximum-two Reduce on the prover's own state, and no
+checked table, the actual Reduce at the unit's own maximum on the prover's state, and no
 terminal. -/
 theorem source_context_prover (ctx : ProtocolContext) (self : Nat)
     (prover : self = ctx.roles 0) (separate : ctx.roles 1 ≠ self)
     (raw : List F) (rounds : Nat) (shape : HasShape raw rounds 1)
-    (bound : raw.length < indexLimit) (admitted : rounds ≤ 2)
+    (bound : raw.length < indexLimit) (admitted : rounds ≤ SumcheckSourceNormalForms.reduceMaximum)
     (claim : Option F) (service : Option Nat) :
     invokeProtocol (unit.plainProtocolTable F G) SumcheckSourceBodies.runSignature ctx self
       (SumcheckSourceVerifier.sourceRootInputs (some raw) claim (some rounds) service) =
@@ -46,13 +46,13 @@ theorem source_context_prover (ctx : ProtocolContext) (self : Nat)
   subst self
   unfold SumcheckSourceNormalForms.proverProcess
   rw [proverReduce_honest unit SumcheckSourceContracts.bodies
-    (SumcheckSourceNormalForms.reduceContext ctx) separate 2 raw rounds shape bound
+    (SumcheckSourceNormalForms.reduceContext ctx) separate SumcheckSourceNormalForms.reduceMaximum raw rounds shape bound
     rounds admitted]
   simp only [PIR.Proc.bind_assoc, PIR.Proc.bind]
 
 /-- The complete Source root at the prover. -/
 theorem source_prover (raw : List F) (rounds : Nat) (shape : HasShape raw rounds 1)
-    (bound : raw.length < indexLimit) (admitted : rounds ≤ 2)
+    (bound : raw.length < indexLimit) (admitted : rounds ≤ SumcheckSourceNormalForms.reduceMaximum)
     (claim : Option F) (service : Option Nat) :
     program.participant F G 0
       (SumcheckSourceVerifier.sourceRootInputs (some raw) claim (some rounds) service) =
@@ -77,11 +77,11 @@ def reductionResults (raw : List F) (point : List F) :
   .cons (some point) (.cons (some (restrictPrefixValues raw point)) (.cons none (.cons none .nil)))
 
 /-- The complete Reduction root at the prover in an arbitrary caller context: the
-checked table, the actual maximum-four Reduce and the residual projection. -/
+checked table, the actual Reduce at the unit's own maximum and the residual projection. -/
 theorem reduction_context_prover (ctx : ProtocolContext) (self : Nat)
     (prover : self = ctx.roles 0) (separate : ctx.roles 1 ≠ self)
     (raw : List F) (count rounds : Nat) (shape : HasShape raw count 1)
-    (bound : raw.length < indexLimit) (admitted : rounds ≤ 4) (enough : rounds ≤ count)
+    (bound : raw.length < indexLimit) (admitted : rounds ≤ SumcheckReductionNormalForms.reduceMaximum) (enough : rounds ≤ count)
     (claim : Option F) (service : Option Nat) :
     invokeProtocol (unit.plainProtocolTable F G) SumcheckReduceBodies.runSignature ctx self
       (SumcheckReduceVerifier.reduceRootInputs (some raw) (some count) claim (some rounds) service) =
@@ -94,14 +94,14 @@ theorem reduction_context_prover (ctx : ProtocolContext) (self : Nat)
   subst self
   unfold SumcheckReductionNormalForms.proverProcess
   rw [proverReduce_honest unit SumcheckReduceContracts.bodies
-    (SumcheckReductionNormalForms.reduceContext ctx) separate 4 raw count shape bound
+    (SumcheckReductionNormalForms.reduceContext ctx) separate SumcheckReductionNormalForms.reduceMaximum raw count shape bound
     rounds admitted]
   simp only [PIR.Proc.bind_assoc, PIR.Proc.bind]
   rfl
 
 /-- The complete Reduction root at the prover. -/
 theorem reduction_prover (raw : List F) (count rounds : Nat) (shape : HasShape raw count 1)
-    (bound : raw.length < indexLimit) (admitted : rounds ≤ 4) (enough : rounds ≤ count)
+    (bound : raw.length < indexLimit) (admitted : rounds ≤ SumcheckReductionNormalForms.reduceMaximum) (enough : rounds ≤ count)
     (claim : Option F) (service : Option Nat) :
     program.participant F G 0
       (SumcheckReduceVerifier.reduceRootInputs (some raw) (some count) claim (some rounds) service) =
