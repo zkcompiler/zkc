@@ -124,8 +124,10 @@ arbitrary work or memory limits.
 The unit remains the logical source. Numerical realization produces a private
 scheduled function before its selected Local realization and physical
 conversions. The physical plan also checks optional binding-lifetime decisions
-before publication. Writable-buffer layouts and target-specific vectorization
-remain separate work.
+before publication. [Native numerical calls](../runtime/numerical.md) use checked
+typed storage views and private destinations inside existing installed handlers.
+This does not turn nominal scheduled values into addressable buffers.
+Compiler buffer lowering and target-specific vectorization remain separate work.
 Participant scheduling, transcript state, transport and capability authority
 remain with their existing owners.
 

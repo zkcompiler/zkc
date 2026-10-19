@@ -56,7 +56,10 @@ Existing installed backends execute the resulting operations. The checked physic
 schedule records optional binding releases, including conversion temporaries;
 materialization performs no lifetime selection. Private numerical schedules use
 standard SCF loops and are independently checked before Local lowering.
-Writable-buffer layouts, target-specific vectorization and JIT/AOT engines remain
+Native [numerical calls](spec/runtime/numerical.md) have typed immutable storage
+views, private initialized destinations and scoped construction/work limits for
+dense matvec/split, BLS table fold and KoalaBear opening quotient.
+Compiler buffer lowering, target-specific vectorization and JIT/AOT engines remain
 unimplemented. This separation establishes
 ownership without claiming a speedup or a formal native correspondence proof.
 

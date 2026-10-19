@@ -1,7 +1,9 @@
 //! Native dispatch after common invocation admission, before common output validation.
 use super::NativeBackend;
 use crate::{
-    Result, Value, ark, exhausted, refused,
+    Result, Value, ark, exhausted,
+    numerical::Call,
+    refused,
     value::{opening_state_bytes, size},
 };
 use std::sync::Arc;
@@ -45,8 +47,23 @@ impl NativeBackend {
                 vec![Round(a.round_product(b).map_err(ark)?)]
             }
             ("poly.fold", [TableMsb(t), Field(r)]) => {
-                p.output(size(t.len() / 2, 32)?, i.max_output_bytes)?;
-                vec![TableMsb(Arc::new(t.restrict_first(*r).map_err(ark)?))]
+                let len = t.physical_values().len() / 2;
+                let retained = size(len, 32)?;
+                p.output(retained, i.max_output_bytes)?;
+                if t.arity() == 0 {
+                    return Err(ark(zkc_arkworks::Error::PositiveArityRequired));
+                }
+                let call = Call::new(&p, i.max_output_bytes);
+                call.work(fold_work(len)?)?;
+                let mut output = call.output(len, crate::Scalar::from(0), retained)?;
+                t.restrict_first_into(*r, output.as_mut_slice())
+                    .map_err(ark)?;
+                vec![output.finish(|values| {
+                    Ok(TableMsb(Arc::new(
+                        zkc_arkworks::MsbTable::from_physical_vec(values, &p.ark_bounds())
+                            .map_err(ark)?,
+                    )))
+                })?]
             }
             ("poly.evaluate", [TableMsb(t), Point(point)]) => {
                 vec![Field(t.evaluate(point).map_err(ark)?)]
@@ -60,8 +77,23 @@ impl NativeBackend {
                 vec![Round(a.round_product(b).map_err(ark)?)]
             }
             ("poly.fold", [Table(t), Field(r)]) => {
-                p.output(size(t.len() / 2, 32)?, i.max_output_bytes)?;
-                vec![Table(Arc::new(t.restrict_first(*r).map_err(ark)?))]
+                let len = t.physical_values().len() / 2;
+                let retained = size(len, 32)?;
+                p.output(retained, i.max_output_bytes)?;
+                if t.arity() == 0 {
+                    return Err(ark(zkc_arkworks::Error::PositiveArityRequired));
+                }
+                let call = Call::new(&p, i.max_output_bytes);
+                call.work(fold_work(len)?)?;
+                let mut output = call.output(len, crate::Scalar::from(0), retained)?;
+                t.restrict_first_into(*r, output.as_mut_slice())
+                    .map_err(ark)?;
+                vec![output.finish(|values| {
+                    Ok(Table(Arc::new(
+                        zkc_arkworks::Table::from_physical_vec(values, &p.ark_bounds())
+                            .map_err(ark)?,
+                    )))
+                })?]
             }
             ("poly.evaluate", [Table(t), Point(point)]) => {
                 vec![Field(t.evaluate(point).map_err(ark)?)]
@@ -123,6 +155,16 @@ impl NativeBackend {
         };
         Ok(result)
     }
+}
+
+fn fold_work(len: usize) -> Result<u64> {
+    // Per pair: subtraction, multiplication, addition, initialized destination
+    // and bounded indexing/writes. Scalar operations are native field units.
+    u64::try_from(len)
+        .ok()
+        .and_then(|n| n.checked_mul(8))
+        .and_then(|n| n.checked_add(1))
+        .ok_or_else(|| exhausted("numerical-work"))
 }
 
 /// Independent native port facts, also used for exact implementation assembly.

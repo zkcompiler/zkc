@@ -728,19 +728,27 @@ fn dense<S: Family>(
         "vector.split" => {
             let a = v(0)?;
             let half = split_len(a.len())?;
+            let bytes = size(half, width)?;
             p.output(
-                size(half, width)?
+                bytes
                     .checked_mul(2)
                     .ok_or_else(|| exhausted("size-overflow"))?,
                 i.max_output_bytes,
             )?;
-            let mut left = allocation(half)?;
-            let mut right = allocation(half)?;
-            left.extend_from_slice(&a[..half]);
-            right.extend_from_slice(&a[half..]);
+            p.vector_width(half, width)?;
+            let call = crate::numerical::Call::new(p, i.max_output_bytes);
+            call.work(
+                (a.len() as u64)
+                    .checked_mul(2)
+                    .ok_or_else(|| exhausted("numerical-work"))?,
+            )?;
+            let mut left = call.output(half, S::zero(), bytes)?;
+            let mut right = call.output(half, S::zero(), bytes)?;
+            left.as_mut_slice().copy_from_slice(&a[..half]);
+            right.as_mut_slice().copy_from_slice(&a[half..]);
             Ok(vec![
-                S::vector_value(left.into()),
-                S::vector_value(right.into()),
+                left.finish(|values| Ok(S::vector_value(values.into())))?,
+                right.finish(|values| Ok(S::vector_value(values.into())))?,
             ])
         }
         "vector.splat" | "vector.powers" => {
@@ -834,31 +842,51 @@ fn dense<S: Family>(
             if transpose > 1 {
                 return Err(refused("matrix-shape"));
             }
-            equal_len(
-                a.len(),
-                rows.checked_mul(cols)
-                    .ok_or_else(|| exhausted("size-overflow"))?,
-            )?;
+            rows.checked_mul(cols)
+                .ok_or_else(|| exhausted("size-overflow"))?;
+            let matrix = crate::numerical::RowMajor::new(a, rows, cols)
+                .ok_or_else(|| refused("length-mismatch"))?;
             let (inner, outer) = if transpose == 0 {
-                (cols, rows)
+                (matrix.cols(), matrix.rows())
             } else {
-                (rows, cols)
+                (matrix.rows(), matrix.cols())
             };
             equal_len(b.len(), inner)?;
-            let mut out = allocation(outer)?;
-            for j in 0..outer {
+            // Keep the existing shape and output refusals ahead of the new
+            // per-call bounds. Matrix elements stay in their exact field type;
+            // transposition changes indexing without materializing a copy.
+            p.vector_width(outer, width)?;
+            let bytes = size(outer, width)?;
+            p.output(bytes, i.max_output_bytes)?;
+            let call = crate::numerical::Call::new(p, i.max_output_bytes);
+            let work = (a.len() as u64)
+                .checked_mul(2)
+                .and_then(|n| n.checked_add(outer as u64))
+                .ok_or_else(|| exhausted("numerical-work"))?;
+            call.work(work)?;
+            let mut out = call.output(outer, S::zero(), bytes)?;
+            for (j, destination) in out.as_mut_slice().iter_mut().enumerate() {
                 let mut sum = S::zero();
-                for k in 0..inner {
-                    let index = if transpose == 0 {
-                        j * cols + k
-                    } else {
-                        k * cols + j
-                    };
-                    sum = sum + a[index] * b[k];
+                if transpose == 0 {
+                    for (a, b) in matrix
+                        .row(j)
+                        .expect("checked matrix row")
+                        .iter()
+                        .zip(b.iter())
+                    {
+                        sum = sum + *a * *b;
+                    }
+                } else {
+                    for (k, b) in b.iter().enumerate() {
+                        let a = matrix.transpose(j, k).expect("checked matrix coordinates");
+                        sum = sum + *a * *b;
+                    }
                 }
-                out.push(sum);
+                *destination = sum;
             }
-            Ok(vec![S::vector_value(out.into())])
+            Ok(vec![
+                out.finish(|values| Ok(S::vector_value(values.into())))?,
+            ])
         }
         _ => Err(refused("kernel-operands")),
     }

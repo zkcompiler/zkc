@@ -78,6 +78,14 @@ calls as well as numerical kernels. Calls retain input, attribute,
 resource, policy and output validation; a handle for another binding is refused.
 Operation attributes and transcript occurrences stay invocation-specific.
 
+`numerical` owns checked row-major views and scoped construction for the
+[native numerical-call contract](../../docs/spec/runtime/numerical.md).
+Its private initialized destinations and scratch share checked memory and work
+limits. Exact field adapters and table storage owners supply interpretation;
+the scope grants no resource authority or mutation of published inputs.
+Dense matvec/split, BLS table fold and KoalaBear opening quotient exercise this
+path. Other provider allocations retain their existing owners and limits.
+
 Private custody checks visit active variant payloads and sequence elements in
 declaration order without collecting a temporary leaf list. Each capability is
 authenticated against the current store; traversal retains neither authority

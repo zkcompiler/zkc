@@ -7,7 +7,7 @@ use zkc_runtime::vm::{
     Backing, Identity, LogicalType, PhysicalType, Representation, Type, Value as RuntimeValue,
 };
 
-/// Explicit per-value, transport and service-store execution ceilings.
+/// Explicit per-value, numerical-call, transport and service-store ceilings.
 /// PCS temporary allocation is bounded indirectly by rank, not reserved here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Policy {
@@ -20,6 +20,11 @@ pub struct Policy {
     pub max_wire_bytes: usize,
     /// Conservative per-value/allocation payload bytes; no global RSS reservation.
     pub max_value_bytes: usize,
+    /// Accumulated conservative loop/field-operation units in one numerical call.
+    pub max_numerical_work: u64,
+    /// Live managed scratch, staging payload and final storage in one numerical call.
+    /// Requested storage only; excludes unmanaged provider allocations and allocator RSS.
+    pub max_numerical_bytes: usize,
     /// PCS setup work measured as arity * 2^arity, not allocated bytes.
     pub max_setup_cells: usize,
     /// Simultaneously occupied authoritative resource slots in each store.
@@ -35,6 +40,8 @@ impl Default for Policy {
             max_table_elements: 1 << 16,
             max_wire_bytes: 16 << 20,
             max_value_bytes: 64 << 20,
+            max_numerical_work: 1 << 26,
+            max_numerical_bytes: 256 << 20,
             max_setup_cells: 16 << 16,
             max_capabilities: 4096,
             max_groups: 4096,

@@ -300,7 +300,8 @@ pub struct Invocation<'a> {
     /// Backend must check allocation/shape bounds before allocating its result.
     /// This bounds newly allocated result storage; storage a result shares with
     /// its operands is already retained. It is not a reservation of external
-    /// PCS scratch. The instance still checks the full charge of each result.
+    /// scratch or construction overlap; a numerical adapter bounds those
+    /// separately. The instance still checks the full charge of each result.
     pub max_output_bytes: usize,
     /// Evidence about still-live immutable allocations, bound to this backend's
     /// instance. Replacing an operand never gives the replacement this evidence.

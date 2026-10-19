@@ -120,6 +120,11 @@ while the full operand-read charge accounts for reading its fragments.
 
 ## Host allowances
 
+[Numerical calls](numerical.md#managed-construction) additionally bound managed
+scratch, result-construction overlap and numerical work in their migrated native
+handlers. These per-call backend policy ceilings are separate from the CLI
+capacity record and the VM's retained-value ledgers.
+
 [Joint dispatch](joint.md#joint-dispatch-and-handoff) owns dispatch, message
 and cumulative wire limits; the [joint Host](joint.md#installed-host-and-authority)
 owns its external-work allowance. [Proof transport](../formats/proof.md) owns

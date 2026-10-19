@@ -2,7 +2,8 @@
 //! preparation; no protocol value or transcript state lives in this cache.
 use super::polynomial::{self, Domain, Error, Kernels};
 use crate::{
-    KoalaBear, KoalaBearExt4, KoalaBearExt8, Policy, Result, Value, exhausted, refused, value::size,
+    KoalaBear, KoalaBearExt4, KoalaBearExt8, Policy, Result, Value, exhausted, numerical::Call,
+    refused, value::size,
 };
 use p3_field::ExtensionField;
 use zkc_runtime::vm::{Identity, Invocation};
@@ -194,13 +195,38 @@ fn execute<E: Family>(
             let v = vector(0)?;
             let d = domain(v.len(), field(1)?)?;
             allocation(v.len())?;
-            E::vector_value(
-                polynomial::opening_quotient(v, d, field(2)?, field(3)?).map_err(failure)?,
-            )
+            let point = field(2)?;
+            let value = field(3)?;
+            let quotient = polynomial::OpeningQuotient::new(v, d, point, value).map_err(failure)?;
+            let call = Call::new(policy, available);
+            call.work(opening_quotient_work(v.len())?)?;
+            let mut output = call.output(v.len(), E::ZERO, size(v.len(), width)?)?;
+            {
+                let mut denominators = call.scratch(v.len(), E::ZERO)?;
+                quotient
+                    .write_into(denominators.as_mut(), output.as_mut_slice())
+                    .map_err(failure)?;
+            }
+            output.finish(|values| Ok(E::vector_value(values)))?
         }
         _ => return Err(refused("coset-operation")),
     };
     Ok(vec![output])
+}
+
+fn opening_quotient_work(len: usize) -> Result<u64> {
+    // Sixteen units per element cover initialized output/scratch, denominator
+    // generation, prefix products, and the reverse quotient
+    // pass. A unit is one native field operation or bounded scalar-loop step.
+    // The fixed allowance covers two <=64-bit membership powers (<=256 field
+    // operations) and the pinned KoalaBear degree-1/4/8 inversion routines:
+    // finite quartic/octic formulas and the base field's bounded 31-bit GCD.
+    // This is a work bound, not elapsed time or a constant-time guarantee.
+    u64::try_from(len)
+        .ok()
+        .and_then(|n| n.checked_mul(16))
+        .and_then(|n| n.checked_add(4096))
+        .ok_or_else(|| exhausted("numerical-work"))
 }
 
 /// Independent native port facts, also used for exact implementation assembly.

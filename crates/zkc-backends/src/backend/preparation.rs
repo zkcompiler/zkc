@@ -125,4 +125,23 @@ mod tests {
         assert_eq!(backend.sequence_work.spent, 5);
         assert_eq!(backend.ring_work.spent, 7);
     }
+
+    #[test]
+    fn replay_preserves_numerical_call_policy() {
+        use crate::{Domain, EntryPolicy, SetupRegistry};
+        let policy = Policy::default();
+        let mut backend = NativeBackend::new(
+            policy,
+            EntryPolicy::new(Domain::new("P", "s", "e", None), None),
+            SetupRegistry::new(vec![], &policy).unwrap(),
+        )
+        .unwrap();
+        let before = backend.checkpoint();
+        assert!(backend.replay(before, before));
+        backend.core.policy.max_numerical_work -= 1;
+        assert!(!backend.replay(before, before));
+        backend.core.policy = policy;
+        backend.core.policy.max_numerical_bytes -= 1;
+        assert!(!backend.replay(before, before));
+    }
 }
