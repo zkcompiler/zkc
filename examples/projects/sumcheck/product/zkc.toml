@@ -4,11 +4,14 @@
 "example" = "main.zkc"
 
 ["dependencies"]
-"collections" = "../../../../libraries/core/collections"
-"sumcheck" = "../../../../libraries/protocols/polynomial/sumcheck"
+"collections" = { workspace = "core.collections" }
+"sumcheck" = { workspace = "protocols.polynomial.sumcheck" }
 
 ["assets"]
 
 ["assets"."product"]
 "format" = "ring-json"
 "path" = "product.ring.json"
+
+[workspace]
+path = "../../../../zkc.workspace.toml"

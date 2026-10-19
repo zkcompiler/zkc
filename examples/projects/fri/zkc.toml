@@ -4,5 +4,8 @@
 "example" = "main.zkc"
 
 ["dependencies"]
-"core-collections" = "../../../libraries/core/collections"
-"fri" = "../../../libraries/protocols/polynomial/fri"
+"core-collections" = { workspace = "core.collections" }
+"fri" = { workspace = "protocols.polynomial.fri" }
+
+[workspace]
+path = "../../../zkc.workspace.toml"

@@ -1,5 +1,6 @@
 module air::table;
-use zkc::opening::{deep_columns, deep_column_values, same_rotation};
+use zkc::opening as opening_context;
+use zkc::opening::{deep_columns, deep_row, same_rotation};
 use zkc::coset as coset;
 use zkc::vector as vector;
 use zkc::indices as indices;
@@ -305,21 +306,30 @@ pub fn deep_word<F: Field, Table: nat, B: Bundle>(witness: Vector<F>,
   let reads = deep_reads<F,Table,B>(witness, assignments, height, shift, size, zeta, rho,
     fill<F>(0, size), 1);
   let chunks = same_rotation(facts.chunks, 0);
-  let combined = deep_columns(quotients, zkc::opening_claims::checked(chunks.0, chunks.1, quotient_claims), height, shift, size, zeta, rho, reads.0, reads.1);
-  let result = combined.0;
+  let geometry = coset::coset_domain(shift, size);
+  let columns = coset::column_batch(geometry, facts.chunks, quotients);
+  let bound = opening_context::bind_openings(geometry, facts.chunks, height, zeta,
+    zkc::opening_claims::checked(chunks.0, chunks.1, quotient_claims));
+  let state = opening_context::vector_accumulator(geometry, rho, reads.0, reads.1);
+  let result = opening_context::vector_values(deep_columns(columns, bound, state));
   let xs = coset::points(shift, size);
   return vector::hadamard(result, add(fill<F>(1, size), scale(xs, adjustment)));
 }
 
 pub fn deep_value<F: Field, Table: nat, B: Bundle>(witness_row: Vector<F>,
     quotient_row: Vector<F>, assignments: Vector<F>, quotient_claims: Vector<F>,
-    height: index, x: F, zeta: F, rho: F, adjustment: F) -> F effects(stop) where zkc::algebra::TwoAdicField(F) {
+    height: index, geometry: coset::CosetDomain<F>, position: index,
+    zeta: F, rho: F, adjustment: F) -> F effects(stop) where zkc::algebra::TwoAdicField(F) {
+  let x = coset::domain_point(geometry, position);
   let facts = shape<F,Table,B>(height);
   require both(length(witness_row) == facts.witness, length(quotient_row) == facts.chunks);
   require both(length(assignments) == facts.inputs, length(quotient_claims) == facts.chunks);
   let reads = deep_read_values<F,Table,B>(witness_row, assignments, height, x, zeta, rho, 0, 1);
   let chunks = same_rotation(facts.chunks, 0);
-  let combined = deep_column_values(quotient_row, zkc::opening_claims::checked(chunks.0, chunks.1, quotient_claims), height, x, zeta, rho, reads.0, reads.1);
-  let result = combined.0;
+  let row = opening_context::query_row(geometry, facts.chunks, position, quotient_row);
+  let bound = opening_context::bind_openings(geometry, facts.chunks, height, zeta,
+    zkc::opening_claims::checked(chunks.0, chunks.1, quotient_claims));
+  let state = opening_context::scalar_accumulator(geometry, position, rho, reads.0, reads.1);
+  let result = opening_context::scalar_value(deep_row(row, bound, state));
   return result * (1 + adjustment * x);
 }

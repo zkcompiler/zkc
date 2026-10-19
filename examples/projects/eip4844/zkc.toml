@@ -4,4 +4,7 @@
 "example" = "main.zkc"
 
 ["dependencies"]
-"eip4844" = "../../../libraries/constructions/ethereum/eip4844"
+"eip4844" = { workspace = "constructions.ethereum.eip4844" }
+
+[workspace]
+path = "../../../zkc.workspace.toml"

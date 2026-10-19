@@ -34,6 +34,16 @@ def check(binary, compiler, output):
     checked = json.loads(invoke("check", "check", "--project=zkc.toml", "--declarations"))
     assert checked["status"] == "checked" and checked["scope"] == "definitions"
     assert any(d["name"] == "schnorr::Schnorr" for d in checked["declarations"])
+    # The source catalog is part of the installed package, consumed explicitly
+    # from this external directory without the checkout's manifests or sources.
+    installed = binary.parent.parent / "share/zkc/zkc.workspace.toml"
+    (output / "installed.zkc").write_text("module installed; use schnorr::{Schnorr};\n")
+    (output / "installed.toml").write_text(
+        'format="zkc.project/0"\n[modules]\ninstalled="installed.zkc"\n'
+        f'[workspace]\npath={json.dumps(str(installed))}\n'
+        '[dependencies]\nschnorr={workspace="protocols.sigma.schnorr"}\n')
+    external = json.loads(invoke("installed-catalog", "check", "--project=installed.toml", "--api"))
+    assert any(d["name"] == "schnorr::Schnorr" for d in external["api"]["declarations"])
     arguments = ["compile", "example::Proof", "--project=zkc.toml", "--output=proof.zkpkg"]
     built = json.loads(invoke("compile", *arguments))
     assert Path(built["compiler"]).resolve() == compiler.resolve()

@@ -47,6 +47,26 @@ format = "ring-json"
 path = "constraints.ring.json"
 ```
 
+An explicit local catalog avoids repeating library directory paths:
+
+```toml
+[workspace]
+path = "../../zkc.workspace.toml"
+
+[dependencies]
+schnorr = { workspace = "protocols.sigma.schnorr" }
+```
+
+Use this dependency table in place of the path table above. The repository's
+[catalog](../../zkc.workspace.toml) lists leaf packages. A catalog contains
+`format = "zkc.workspace/0"` and a `[packages]` table of keys to directories or
+manifest files, relative to its own visible parent. Only selected packages are
+loaded. Each consuming manifest names its catalog explicitly; children do not
+inherit a parent's choice. Existing string path dependencies remain supported.
+The installed `zkc` package supplies `share/zkc/zkc.workspace.toml` and its source
+tree; an external project can explicitly select that catalog or one installed
+leaf directory. Catalogs perform no download or version selection.
+
 From the project directory or a subdirectory:
 
 ```sh
@@ -92,6 +112,10 @@ asset maps and direct dependencies, mapping dependency labels to manifest
 contexts. File symlinks keep their visible parent context; shared directory
 contexts appear once. This metadata is separate from source capture and is
 absent for explicit module/asset maps and SDK captures.
+Every package also has `catalog_dependencies`, mapping only catalog-selected
+dependency labels to objects with `catalog` (the visible catalog context) and
+`package` (the selected key). `dependencies` retains every resolved provider
+manifest regardless of how it was selected. Both maps are sorted by label.
 
 ## Inspect completed declarations
 

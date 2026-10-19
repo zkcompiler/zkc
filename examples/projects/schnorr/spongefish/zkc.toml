@@ -5,7 +5,10 @@
 "statement" = "protocol.zkc"
 
 ["dependencies"]
-"spongefish" = "../../../../libraries/constructions/spongefish"
-"core-encoding" = "../../../../libraries/core/encoding"
-"core-primitives-cryptography" = "../../../../libraries/core/primitives/cryptography"
-"schnorr" = "../../../../libraries/protocols/sigma/schnorr"
+"spongefish" = { workspace = "constructions.spongefish" }
+"core-encoding" = { workspace = "core.encoding" }
+"core-primitives-cryptography" = { workspace = "core.primitives.cryptography" }
+"schnorr" = { workspace = "protocols.sigma.schnorr" }
+
+[workspace]
+path = "../../../../zkc.workspace.toml"

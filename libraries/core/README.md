@@ -32,13 +32,36 @@ roots, non-power-of-two fast inputs and smaller-order generators stop.
 `evaluations(unity, data)` fixes equal extent. Getter operations expose the
 admitted observations without permitting replacement of private fields.
 
-`opening_claims::checked` fixes the equal extents of columns, rotations and
-values. `within` checks the descriptor against a column width and positive
-trace height. Order and duplicates are preserved. `opening::deep_columns` and
-`deep_column_values` consume this view and check each descriptor's bounds while
-accumulating. The former also checks column layout and delegates exclusion of
-opening points from the evaluation coset to the quotient primitive. An opening
-descriptor does not authenticate its values or prove a degree bound.
+`coset::coset_domain(shift, size)` admits one canonical natural-order two-adic
+coset. `ColumnBatch` fixes its width and exact column-major extent, with checked
+index arithmetic before slicing. `opening_claims::checked` preserves ordered,
+possibly repeated column/rotation/value descriptors. `opening::bind_openings`
+binds those descriptors to one coset, width, admitted trace height and zeta,
+checks bounds, and excludes every derived opening point from the evaluation
+coset. The trace domain is checked even for an empty descriptor list.
+
+`VectorAccumulator` fixes a coset, an exactly sized initial vector, a ratio and
+the next weight. `QueryRow` fixes a coset, a bounded query index and an exact row
+width; its point is derived from this context. `ScalarAccumulator` carries the
+matching coset and query index with the same weight recurrence.
+
+```text
+let geometry = coset::coset_domain(shift, size);
+let columns = coset::column_batch(geometry, width, data);
+let bound = opening::bind_openings(geometry, width, height, zeta, descriptors);
+let state = opening::vector_accumulator(geometry, rho, initial, first_weight);
+let next = opening::deep_columns(columns, bound, state);
+```
+
+`deep_columns` and `deep_row` compare domain values and widths at each join;
+the row form also compares query indices. Independently reconstructed equal
+contexts work. Thread the returned accumulator to continue weights across
+batches. An empty list preserves values and next weight while retaining all
+context checks. Private fields prevent construction, mutation or projection
+outside the owning module; raw Entry inputs and messages cannot assert these
+invariants. Receive public components and reconstruct each view locally.
+These checks establish mathematical layout and denominators; authentication,
+degree bounds, sampling and acceptance remain protocol obligations.
 
 ## Representation contracts
 
@@ -81,13 +104,6 @@ products preserve every prefix, while ordinary sums and products return one
 value. `polynomial` stores univariate coefficients in increasing
 power order; an empty coefficient vector denotes zero.
 
-`opening::deep_columns` and `deep_column_values` batch ordered column openings
-with successive powers of `rho`, continuing the supplied accumulator and first
-weight. The vector accumulator has the evaluation-domain size, including for
-an empty batch. The quotient primitive refuses every rotated opening point on
-that domain; protocols own any additional exclusion from the trace domain.
-The row form checks the same equation at one authenticated row; the caller
-still supplies authentication, degree checks and acceptance.
 
 ## Linear group expressions
 

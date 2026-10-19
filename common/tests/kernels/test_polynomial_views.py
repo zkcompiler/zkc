@@ -134,28 +134,48 @@ def test_invalid_domains_and_evaluation_extents_stop(toolchain, journal, directo
     ('evaluation::EvaluationDomain<F>', 'evaluation::EvaluationDomain<F>{points:values}'),
     ('evaluation::Evaluations<F>', 'evaluation::Evaluations<F>{unity:evaluation::checked_roots(values),values:values}'),
     ('claims::OpeningClaims<F>', 'claims::OpeningClaims<F>{selected:indices::empty(),offsets:indices::empty(),claimed:values}'),
+    ('coset::CosetDomain<F>', 'coset::CosetDomain<F>{shift:3,size:4}'),
+    ('coset::ColumnBatch<F>', 'coset::ColumnBatch<F>{geometry:coset::coset_domain<F>(3,4),width:1,data:values}'),
+    ('opening::BoundOpenings<F>', 'opening::BoundOpenings<F>{geometry:coset::coset_domain<F>(3,4),width:1,height:2,zeta:5,descriptors:claims::checked(indices::empty(),indices::empty(),values),points:values}'),
+    ('opening::VectorAccumulator<F>', 'opening::VectorAccumulator<F>{geometry:coset::coset_domain<F>(3,4),weights:opening::GeometricWeights<F>{ratio:1,next:1},values:values}'),
+    ('opening::QueryRow<F>', 'opening::QueryRow<F>{geometry:coset::coset_domain<F>(3,4),width:1,position:0,values:values}'),
+    ('opening::ScalarAccumulator<F>', 'opening::ScalarAccumulator<F>{geometry:coset::coset_domain<F>(3,4),position:0,weights:opening::GeometricWeights<F>{ratio:1,next:1},value:0}'),
 ])
-@pytest.mark.parametrize('boundary', ['construct', 'entry', 'message'])
+@pytest.mark.parametrize('boundary', ['construct', 'project', 'entry', 'message'])
 def test_checked_polynomial_views_require_owner_admission(toolchain, journal, directory, view, construction, boundary):
     source = '''module sample; use zkc::vector::{Vector}; use zkc::indices as indices;
       use zkc::evaluation_domain as evaluation; use zkc::opening_claims as claims;
-      domain F=field("bls12-381.fr");'''
+      use zkc::coset as coset; use zkc::opening as opening;
+      domain F=field("koala-bear");'''
     if boundary == 'construct':
         source += f'fn bypass(values:Vector<F>)->{view}{{return {construction};}}'
+    elif boundary == 'project':
+        field = {'evaluation::EvaluationDomain<F>': 'points',
+                 'evaluation::Evaluations<F>': 'values', 'claims::OpeningClaims<F>': 'claimed',
+                 'coset::CosetDomain<F>': 'shift', 'coset::ColumnBatch<F>': 'data',
+                 'opening::BoundOpenings<F>': 'points', 'opening::VectorAccumulator<F>': 'values',
+                 'opening::QueryRow<F>': 'values', 'opening::ScalarAccumulator<F>': 'value'}[view]
+        source += f'fn bypass(value:{view}){{return value.{field};}}'
     elif boundary == 'entry':
         source += f'protocol Run roles(P)(value:{view}@P)->(result:{view}@P){{return value;}}run Demo=Run;'
     else:
         make = {'evaluation::EvaluationDomain<F>': 'evaluation::checked_roots(values)',
                 'evaluation::Evaluations<F>': 'evaluation::evaluations(evaluation::checked_roots(values),values)',
-                'claims::OpeningClaims<F>': 'claims::checked(indices::empty(),indices::empty(),values)'}[view]
+                'claims::OpeningClaims<F>': 'claims::checked(indices::empty(),indices::empty(),values)',
+                'coset::CosetDomain<F>': 'coset::coset_domain<F>(3,4)',
+                'coset::ColumnBatch<F>': 'coset::column_batch(coset::coset_domain<F>(3,4),1,values)',
+                'opening::BoundOpenings<F>': 'opening::bind_openings(coset::coset_domain<F>(3,4),1,2,5,claims::checked(indices::empty(),indices::empty(),values))',
+                'opening::VectorAccumulator<F>': 'opening::vector_accumulator(coset::coset_domain<F>(3,4),7,values,1)',
+                'opening::QueryRow<F>': 'opening::query_row(coset::coset_domain<F>(3,4),1,0,values)',
+                'opening::ScalarAccumulator<F>': 'opening::scalar_accumulator(coset::coset_domain<F>(3,4),0,7,0,1)'}[view]
         source += f'''protocol Run roles(P,V)(values:Vector<F>@P)->(accepted:bool@V){{
-          let input={make};let received=send P->V(input);return true;}}run Demo=Run;'''
+          let input @P={make};let received=send P->V(input);return true;}}run Demo=Run;'''
     path = directory / 'private.zkc'
     path.write_text(source)
     report = journal.json([toolchain.runtime, '--json', 'check', f'--compiler={toolchain.compiler}',
                            f'--module=sample={path}', *MODULES,
                            *(['sample::Demo'] if boundary == 'entry' else [])], refuses='source-compilation')
-    assert report['diagnostics'].startswith(('source.private' if boundary == 'construct' else 'source.ingress') + ':')
+    assert report['diagnostics'].startswith(('source.private' if boundary in ('construct', 'project') else 'source.ingress') + ':')
 
 
 def test_opening_claims_preserve_repeated_order_and_validate_bounds(toolchain, journal, directory):
@@ -183,22 +203,23 @@ def test_deep_openings_check_bounds_and_denominators(toolchain, journal, directo
     use zkc::opening as opening;use zkc::opening_claims as claims;use zkc::coset as coset;
     domain F=field("koala-bear");
     protocol Run roles(P)(columns:Vector<F>@P,row:Vector<F>@P,selected:Indices@P,
-      offsets:Indices@P,data:Vector<F>@P,height:index@P,size:index@P,zeta:F@P,x:F@P)
+      offsets:Indices@P,data:Vector<F>@P,height:index@P,size:index@P,zeta:F@P,position:index@P)
       ->(result:Vector<F>@P,weight:F@P,points:Vector<F>@P){
-      let input=claims::checked(selected,offsets,data);
+      let geometry=coset::coset_domain<F>(3,size);
+      let input=opening::bind_openings(geometry,2,height,zeta,claims::checked(selected,offsets,data));
       let reduced=REDUCE;
-      return(result=RESULT,weight=reduced.1,points=coset::points<F>(3,size));
+      return(result=RESULT,weight=WEIGHT,points=coset::points<F>(3,size));
     }run Demo=Run;'''
     if operation == 'columns':
-        source = source.replace('REDUCE', '''opening::deep_columns(columns,input,height,3,size,zeta,7,
-          vector::fill<F>(0,size),1)''').replace('RESULT', 'reduced.0')
+        source = source.replace('REDUCE', '''opening::deep_columns(coset::column_batch(geometry,2,columns),input,
+          opening::vector_accumulator(geometry,7,vector::fill<F>(0,size),1))''').replace('RESULT', 'opening::vector_values(reduced)').replace('WEIGHT', 'opening::vector_weight(reduced)')
     else:
-        source = source.replace('REDUCE', 'opening::deep_column_values(row,input,height,x,zeta,7,0,1)')
-        source = source.replace('RESULT', 'vector::fill(reduced.0,size)')
+        source = source.replace('REDUCE', 'opening::deep_row(opening::query_row(geometry,2,position,row),input,opening::scalar_accumulator(geometry,position,7,0,1))')
+        source = source.replace('RESULT', 'vector::fill(opening::scalar_value(reduced),size)').replace('WEIGHT', 'opening::scalar_weight(reduced)')
     entry = Entry(toolchain, journal, directory, source, (*flags, *MODULES))
     inputs = {'columns': ['11']*4 + ['13']*4, 'row': ['11','13'],
               'selected': ['1','0','1'], 'offsets': ['1','0','1'], 'data': ['7','9','7'],
-              'height': '2', 'size': '4', 'zeta': '5', 'x': '2'}
+              'height': '2', 'size': '4', 'zeta': '5', 'position': '1'}
     output = entry.run('ordered-duplicates', inputs)
     modulus = 2130706433
 
@@ -210,7 +231,7 @@ def test_deep_openings_check_bounds_and_denominators(toolchain, journal, directo
 
     points = [int(value) for value in output['points']]
     assert [int(value) for value in output['result']] == [
-        expected(point if operation == 'columns' else 2) for point in points]
+        expected(point if operation == 'columns' else points[1]) for point in points]
     assert output['weight'] == '343'
     empty = entry.run('empty', inputs | {'selected': [], 'offsets': [], 'data': []})
     assert empty['result'] == ['0']*4 and empty['weight'] == '1'
@@ -221,6 +242,6 @@ def test_deep_openings_check_bounds_and_denominators(toolchain, journal, directo
         changes += [{'size': '0'}, {'columns': ['11']*7},
                     {'selected': ['0'], 'offsets': ['0'], 'data': ['11'], 'zeta': '3'}]
     else:
-        changes += [{'row': ['11']}, {'x': '5'}]
+        changes += [{'row': ['11']}, {'position': '4'}, {'zeta': '3'}]
     for number, change in enumerate(changes):
         entry.run(f'invalid-{number}', inputs | change, refuses='entry-run-incomplete')

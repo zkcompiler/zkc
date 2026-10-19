@@ -48,7 +48,7 @@ def select_families(paths, root=ROOT):
                 owned.update(path.resolve() for _, path in assets.values())
                 owned.update(manifests)
             consumers[family] = owned
-    except (OSError, ValueError, AssertionError):
+    except (OSError, ValueError, AssertionError, KeyError, TypeError):
         return all_families
     selected = set()
     for path in relevant:

@@ -409,8 +409,8 @@ def test_dishonest_quotients_are_refused(toolchain, journal, directory):
     identity = rejected(package.verify(public, proof, refuses=True))
 
     claims = edited(directory, LIBRARY / 'single_table/lib.zkc', [
-        ('  let proposed_quotient @P = opening_claims(chunks, factsP.chunks, shift_extensionP, sizeP, zetaP);',
-         '  let honest_quotient @P = opening_claims(chunks, factsP.chunks, shift_extensionP, sizeP, zetaP);\n'
+        ('  let proposed_quotient @P = opening_claims(coset::column_batch(geometryP, factsP.chunks, chunks), zetaP);',
+         '  let honest_quotient @P = opening_claims(coset::column_batch(geometryP, factsP.chunks, chunks), zetaP);\n'
          '  let proposed_quotient @P = compensated<K::Extension,Table,B>(honest_quotient, proposed,\n'
          '    heightP, zetaP, alphaP);'),
         ('fn deep_values<', COMPENSATED + 'fn deep_values<')], 'argument.zkc')

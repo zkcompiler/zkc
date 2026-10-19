@@ -422,7 +422,7 @@ OwningOpRef<mlir::ModuleOp> prepareKernelLowering(mlir::ModuleOp source) {
   auto owner =
       cast<protocol_ir::ProtocolModuleOp>(proposal->getBody()->front());
   llvm::DenseSet<Operation *> shareable;
-  uint64_t remaining = 1000000;
+  uint64_t remaining = 2000000;
   SymbolTableCollection symbols;
   SmallVector<KernelNormalizationRewrite> rewrites;
   SmallVector<CallOp> calls;

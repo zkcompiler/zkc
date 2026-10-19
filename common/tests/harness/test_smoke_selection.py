@@ -50,3 +50,19 @@ def test_deleted_manifest_and_unknown_base_select_all(repository):
 
 def test_selected_and_unclassified_changes_select_all(repository):
     assert smoke.select_families(['libraries/separate/lib.zkc', 'unknown.source'], repository) == {'one', 'two', 'three'}
+
+
+def test_catalog_changes_select_users_and_missing_keys_select_all(repository):
+    project = repository / 'examples/projects/one/zkc.toml'
+    project.write_text('''format="zkc.project/0"
+[workspace]
+path="../../../zkc.workspace.toml"
+[dependencies]
+base={workspace="shared"}
+''')
+    catalog = repository / 'zkc.workspace.toml'
+    catalog.write_text('format="zkc.workspace/0"\n[packages]\nshared="libraries/shared"\nunused="absent"\n')
+    assert smoke.select_families(['zkc.workspace.toml'], repository) == {'one'}
+    assert smoke.select_families(['libraries/shared/lib.zkc'], repository) == {'one', 'two'}
+    catalog.write_text('format="zkc.workspace/0"\n[packages]\nother="absent"\n')
+    assert smoke.select_families(['zkc.workspace.toml'], repository) == {'one', 'two', 'three'}

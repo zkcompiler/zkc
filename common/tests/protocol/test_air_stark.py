@@ -367,7 +367,7 @@ fn inspect(trace:Vector<E>, configuration:Vector<E>, data:Vector<E>,
  let quotient=quotient_values<E,0,B>(w,c,none,data,8,shift,size,alpha);
  let chunks=split_quotient(quotient,shift,size,8,2);
  let opened=claims<E,0,B>(trace,configuration,none,data,8,zeta);
- let quotient_opened=opening_claims(chunks,2,shift,size,zeta);
+ let quotient_opened=opening_claims(zkc::coset::column_batch(zkc::coset::coset_domain(shift,size),2,chunks),zeta);
  let valid=identity<E,0,B>(opened,quotient_opened,configuration,none,data,8,zeta,alpha);
  let reduced=deep_word<E,0,B>(w,chunks,opened,quotient_opened,8,shift,size,zeta,rho,eta);
  return (quotient,chunks,opened,quotient_opened,valid,reduced);

@@ -98,7 +98,7 @@ pub protocol TableArgument<Table: nat, B: Bundle,
   let (zetaP, zetaV) = Outside<Extension,LogHeight,LogSize,Attempts>(shiftP, shiftV, attempt_count, coins);
   let proposed @P = claims<Extension,Table,B>(trace_baseP, config_baseP, public_baseP,
     dataP, heightP, zetaP);
-  let proposed_quotient @P = opening_claims(chunks, factsP.chunks, shiftP, sizeP, zetaP);
+  let proposed_quotient @P = opening_claims(zkc::coset::column_batch(zkc::coset::coset_domain(shiftP, sizeP), factsP.chunks, chunks), zetaP);
   let opened = send P -> V(proposed);
   let opened_quotient = send P -> V(proposed_quotient);
   let identity_ok @V = identity<Extension,Table,B>(opened, opened_quotient, config_baseV, public_baseV,
@@ -126,10 +126,9 @@ pub protocol TableArgument<Table: nat, B: Bundle,
     require @V trace_ok;
     let quotient_ok @V = oracle::check<ExtensionRows>(quotient_root, factsV.chunks, sizeV, indexV, quotient_row, quotient_path);
     require @V quotient_ok;
-    let x @V = point(shiftV, sizeV, indexV);
     let extended_row @V = embed_vector(trace_row);
     let expected @V = deep_value<Extension,Table,B>(extended_row, quotient_row, opened,
-      opened_quotient, heightV, x, zetaV, rhoV, adjustmentV);
+      opened_quotient, heightV, zkc::coset::coset_domain(shiftV, sizeV), indexV, zetaV, rhoV, adjustmentV);
     let actual @V = vector::get(valuesV, query);
     require @V expected == actual;
   }

@@ -44,6 +44,11 @@ runCommand "zkc-source-boundaries" { } ''
   test -f ${sources.application}/libraries/core/primitives/collections/sequence.zkc
   test -f ${sources.application}/common/tests/support/project.py
   test -f ${sources.application}/libraries/protocols/sigma/schnorr/zkc.toml
+  test -f ${sources.application}/zkc.workspace.toml
+  test -f ${sources.integration}/zkc.workspace.toml
+  test -f ${sources.libraries}/zkc.workspace.toml
+  test -f ${sources.libraries}/libraries/core/polynomial/zkc.toml
+  test ! -e ${sources.libraries}/crates
   test ! -e ${sources.application}/crates
   mkdir -p "$out"
 ''

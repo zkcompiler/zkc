@@ -68,7 +68,7 @@ protocol ports, runtime matrices or specification binding.
 
 The CLI accepts a TOML manifest with `format = "zkc.project/0"`, an optional
 `modules` table mapping logical names to paths, an optional `dependencies` table
-mapping local labels to library directories, and an optional `assets` table
+mapping local labels to library directories or workspace selections, and an optional `assets` table
 mapping names to tables with exactly `format` and `path`. Unknown or duplicate
 keys and unsupported types refuse. A manifest is a bounded regular file (at most
 1 MiB). Each dependency directory supplies its own `zkc.toml`, interpreted
@@ -87,6 +87,30 @@ still distinct providers. The resulting maps are sorted by name before capture.
 All participating manifests and mapped files are protected compilation inputs.
 No registry lookup, implicit module discovery or version selection occurs. Each supplied path
 is nonempty, contains no NUL, and is at most 4096 bytes.
+
+A manifest may declare `[workspace]` with exactly one string `path`. A dependency
+may then be a table with exactly one nonempty string `workspace`, naming a
+package in that explicitly selected catalog. String dependencies retain their
+directory meaning. Mixed forms and unknown keys refuse. The workspace path is
+relative to the declaring manifest's visible parent; dependencies do not inherit
+another manifest's workspace. There is no ancestor catalog search.
+
+A catalog is a regular TOML file with exactly `format = "zkc.workspace/0"` and
+`packages`, a table mapping nonempty package names to location strings. The
+whole syntax and every name and location are validated, including unselected
+entries. A selected location resolves against the catalog's visible parent and
+names a directory containing `zkc.toml` or an explicit manifest file. File
+symlinks preserve visible parent semantics. Only selected files are opened;
+declaring an unused workspace validates its table but does not open its catalog.
+Catalog keys and dependency labels never rename source modules.
+
+At most 16 used catalog contexts, 256 entries per catalog and 1 MiB per catalog
+are admitted, independently of the project closure limits. Every used catalog
+joins the protected input set. The same cycle, provider and asset checks apply
+to path and catalog edges. Catalog formatting, paths and selection provenance
+are metadata and do not enter capture or artifact identity. Invalid schema or a
+missing selection refuses with `source-project-format`; unreadable selected
+files with `source-project-io`; exceeded ceilings with `source-project-limit`.
 
 `--project=FILE` selects an explicit manifest. Otherwise explicit `--module` or
 `--asset` inputs disable discovery; they cannot be combined with `--project`.

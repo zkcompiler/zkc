@@ -114,7 +114,10 @@ let
   };
   zkc = pkgs.symlinkJoin {
     name = "zkc";
-    paths = [ tools ];
+    paths = [
+      tools
+      libraries
+    ];
     nativeBuildInputs = [ pkgs.makeWrapper ];
     postBuild = ''
       wrapProgram "$out/bin/zkc" --prefix PATH : "${compiler}/bin"
@@ -123,6 +126,11 @@ let
       description = "zkc compiler and execution CLI";
     };
   };
+  libraries = pkgs.runCommand "zkc-libraries" { } ''
+    mkdir -p "$out/share/zkc"
+    cp -r ${sources.libraries}/libraries "$out/share/zkc/libraries"
+    cp ${sources.libraries}/zkc.workspace.toml "$out/share/zkc/zkc.workspace.toml"
+  '';
   lakeSourcesFor = pkgs.callPackage ./lake-sources.nix { };
   fetchSource = pkgs.callPackage ./external-source.nix { };
   llzk = pkgs.callPackage ./llzk.nix {
@@ -155,6 +163,7 @@ in
       compiler
       tools
       zkc
+      libraries
       lean
       arklib
       llzk

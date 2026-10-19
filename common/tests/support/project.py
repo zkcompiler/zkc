@@ -28,7 +28,7 @@ def project_inputs(path, *, manifests=None):
     Production admission and refusal cases belong to the Rust loader. This
     helper does not load untrusted manifests or reproduce those checks.
     """
-    modules, assets, seen = {}, {}, set()
+    modules, assets, seen, catalogs = {}, {}, set(), set()
 
     def visit(path):
         path = Path(path)
@@ -47,8 +47,18 @@ def project_inputs(path, *, manifests=None):
             value = (asset['format'], (path.parent / asset['path']).resolve())
             assert name not in assets or assets[name] == value
             assets[name] = value
-        for directory in config.get('dependencies', {}).values():
-            visit(path.parent / directory / 'zkc.toml')
+        for dependency in config.get('dependencies', {}).values():
+            if isinstance(dependency, str):
+                visit(path.parent / dependency / 'zkc.toml')
+            else:
+                catalog = path.parent / config['workspace']['path']
+                catalog = catalog.parent.resolve() / catalog.name
+                if manifests is not None and catalog not in catalogs:
+                    manifests.append(catalog)
+                catalogs.add(catalog)
+                locations = tomllib.loads(catalog.read_text())['packages']
+                selected = catalog.parent / locations[dependency['workspace']]
+                visit(selected / 'zkc.toml' if selected.is_dir() else selected)
     visit(path)
     return modules, assets
 

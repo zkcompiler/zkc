@@ -258,7 +258,7 @@ class Admission {
         if (instruction.get<program::Stop>())
           return fail("native-participant-terminal");
       }
-      if (++instructions > 32768)
+      if (++instructions > program::staticInstructionLimit)
         return fail("interactive-instruction-limit");
       if (instruction.isTerminator() !=
           (&instruction == &instructionsBody.back()))

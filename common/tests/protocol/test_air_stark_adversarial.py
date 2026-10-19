@@ -203,8 +203,8 @@ USE_TABLE = ('use air::table::{shape, claims, quotient_values, '
              'identity, deep_word, deep_value};')
 CLAIMS = ('  let proposed @P = claims<Extension,Table,B>(trace_baseP, config_baseP, public_baseP,\n'
           '    dataP, heightP, zetaP);')
-QUOTIENT_CLAIMS = ('  let proposed_quotient @P = opening_claims(chunks, factsP.chunks, '
-                   'shiftP, sizeP, zetaP);')
+QUOTIENT_CLAIMS = ('  let proposed_quotient @P = opening_claims(zkc::coset::column_batch('
+                   'zkc::coset::coset_domain(shiftP, sizeP), factsP.chunks, chunks), zetaP);')
 # Prover-only helpers: a claim that lies about one witness opening, and the
 # verifier's own combined value at zeta recomputed so that the difference can
 # be moved into the first chunk claim, whose recombination weight is one.

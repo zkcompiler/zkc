@@ -17,7 +17,8 @@ use zkc::coset::{point, extend_columns, column_at, disjoint_coset};
 use air::polynomial::{split_quotient, recombine, chunks_for};
 use air::table::{Shape, shape, claims, domain_assignments, assertion_scopes, divide_scopes,
   combine_scopes, known_inputs, deep_reads, deep_read_values};
-use zkc::opening::{opening_claims, deep_columns, deep_column_values, same_rotation};
+use zkc::opening as opening_context;
+use zkc::opening::{opening_claims, deep_columns, deep_row, same_rotation};
 use air::interaction::{Interactions, Layout, Reduction, interactions, no_interactions,
   range_constraints};
 use fri::{LowDegree};
@@ -399,7 +400,7 @@ fn open_table<Table: nat, B: Bundle>(extended: Extended, auxiliary: Auxiliary,
         indices::get(layout.reduction.opened, opening), height, x, 1));
     }
     Opened { inputs, auxiliary: values,
-      quotient: opening_claims(chunks, layout.chunks, shift, size, zeta) }
+      quotient: opening_claims(coset::column_batch(coset::coset_domain(shift, size), layout.chunks, chunks), zeta) }
   } else { Opened { inputs: nothing(), auxiliary: nothing(), quotient: nothing() } };
 }
 fn open_tables<B: Bundle>(extended: [Extended; 3], tables: [Auxiliary; 3],
@@ -468,9 +469,18 @@ fn deep_table<Table: nat, B: Bundle>(extended: Extended, auxiliary: Auxiliary,
     let height = layout.height;
     let reads = deep_reads<Extension,Table,B>(embed_vector(extended.trace_lde), opened.inputs,
       height, shift, size, zeta, rho, result, weight);
-    let terms = deep_columns(auxiliary.lde, zkc::opening_claims::checked(layout.reduction.opened, layout.reduction.rotations, opened.auxiliary), height, shift, size, zeta, rho, reads.0, reads.1);
+    let geometry = coset::coset_domain(shift, size);
+    let initial = opening_context::vector_accumulator(geometry, rho, reads.0, reads.1);
+    let auxiliary_columns = coset::column_batch(geometry, layout.reduction.columns, auxiliary.lde);
+    let auxiliary_bounds = opening_context::bind_openings(geometry, layout.reduction.columns, height, zeta,
+      zkc::opening_claims::checked(layout.reduction.opened, layout.reduction.rotations, opened.auxiliary));
+    let terms = deep_columns(auxiliary_columns, auxiliary_bounds, initial);
     let quotient = same_rotation(layout.chunks, 0);
-    deep_columns(chunks, zkc::opening_claims::checked(quotient.0, quotient.1, opened.quotient), height, shift, size, zeta, rho, terms.0, terms.1)
+    let quotient_columns = coset::column_batch(geometry, layout.chunks, chunks);
+    let quotient_bounds = opening_context::bind_openings(geometry, layout.chunks, height, zeta,
+      zkc::opening_claims::checked(quotient.0, quotient.1, opened.quotient));
+    let combined = deep_columns(quotient_columns, quotient_bounds, terms);
+    (opening_context::vector_values(combined), opening_context::vector_weight(combined))
   } else { (result, weight) };
 }
 fn deep_tables<B: Bundle>(extended: [Extended; 3], tables: [Auxiliary; 3],
@@ -488,31 +498,42 @@ fn deep_tables<B: Bundle>(extended: [Extended; 3], tables: [Auxiliary; 3],
 }
 fn deep_table_value<Table: nat, B: Bundle>(layout: TableLayout, base_row: Vector<Extension>,
     auxiliary_row: Vector<Extension>, quotient_row: Vector<Extension>, opened: Opened,
-    x: Extension, zeta: Extension, rho: Extension, result: Extension, weight: Extension)
-    -> (Extension, Extension) {
+    geometry: coset::CosetDomain<Extension>, position: index, zeta: Extension,
+    rho: Extension, result: Extension, weight: Extension) -> (Extension, Extension) {
   return if layout.present {
+    let x = coset::domain_point(geometry, position);
     let height = layout.height;
     let reads = deep_read_values<Extension,Table,B>(base_row, opened.inputs, height, x, zeta,
       rho, result, weight);
-    let terms = deep_column_values(auxiliary_row, zkc::opening_claims::checked(layout.reduction.opened, layout.reduction.rotations, opened.auxiliary), height, x, zeta, rho, reads.0, reads.1);
+    let initial = opening_context::scalar_accumulator(geometry, position, rho, reads.0, reads.1);
+    let auxiliary_values = opening_context::query_row(geometry, layout.reduction.columns, position, auxiliary_row);
+    let auxiliary_bounds = opening_context::bind_openings(geometry, layout.reduction.columns, height, zeta,
+      zkc::opening_claims::checked(layout.reduction.opened, layout.reduction.rotations, opened.auxiliary));
+    let terms = deep_row(auxiliary_values, auxiliary_bounds, initial);
     let quotient = same_rotation(layout.chunks, 0);
-    deep_column_values(quotient_row, zkc::opening_claims::checked(quotient.0, quotient.1, opened.quotient), height, x, zeta, rho, terms.0, terms.1)
+    let quotient_values = opening_context::query_row(geometry, layout.chunks, position, quotient_row);
+    let quotient_bounds = opening_context::bind_openings(geometry, layout.chunks, height, zeta,
+      zkc::opening_claims::checked(quotient.0, quotient.1, opened.quotient));
+    let combined = deep_row(quotient_values, quotient_bounds, terms);
+    (opening_context::scalar_value(combined), opening_context::scalar_weight(combined))
   } else { (result, weight) };
 }
 fn deep_tables_value<B: Bundle>(layouts: [TableLayout; 3], base_row: Vector<Base>,
     auxiliary_row: Vector<Extension>, quotient_row: Vector<Extension>, opened: [Opened; 3],
-    x: Extension, zeta: Extension, rho: Extension, adjustment: Extension) -> Extension {
+    geometry: coset::CosetDomain<Extension>, position: index, zeta: Extension,
+    rho: Extension, adjustment: Extension) -> Extension {
+  let x = coset::domain_point(geometry, position);
   let bases = partition(embed_vector(base_row), layouts[0].facts.witness, layouts[1].facts.witness,
     layouts[2].facts.witness);
   let auxiliaries = partition(auxiliary_row, layouts[0].reduction.columns,
     layouts[1].reduction.columns, layouts[2].reduction.columns);
   let quotients = partition(quotient_row, layouts[0].chunks, layouts[1].chunks, layouts[2].chunks);
   let first = deep_table_value<0,B>(layouts[0], bases[0], auxiliaries[0], quotients[0],
-    opened[0], x, zeta, rho, 0, 1);
+    opened[0], geometry, position, zeta, rho, 0, 1);
   let second = deep_table_value<1,B>(layouts[1], bases[1], auxiliaries[1], quotients[1],
-    opened[1], x, zeta, rho, first.0, first.1);
+    opened[1], geometry, position, zeta, rho, first.0, first.1);
   let third = deep_table_value<2,B>(layouts[2], bases[2], auxiliaries[2], quotients[2],
-    opened[2], x, zeta, rho, second.0, second.1);
+    opened[2], geometry, position, zeta, rho, second.0, second.1);
   return third.0 * (1 + adjustment * x);
 }
 
@@ -630,9 +651,9 @@ pub protocol ThreeTableArgument<B: Bundle, R: Reduction<Extension>,
     let quotient_ok @V = oracle::check<ExtensionRows>(quotient_root, quotient_widthV, sizeV,
       indexV, quotient_row, quotient_path);
     require @V quotient_ok;
-    let x @V = point(shiftV, sizeV, indexV);
-    let expected @V = deep_tables_value<B>(layoutsV, base_row, auxiliary_row, quotient_row, openedV, x,
-      zetaV, rhoV, adjustmentV);
+    let geometry @V = coset::coset_domain(shiftV, sizeV);
+    let expected @V = deep_tables_value<B>(layoutsV, base_row, auxiliary_row, quotient_row, openedV,
+      geometry, indexV, zetaV, rhoV, adjustmentV);
     let actual @V = vector::get(valuesV, query);
     require @V expected == actual;
   }

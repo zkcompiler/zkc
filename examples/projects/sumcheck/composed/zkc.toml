@@ -5,7 +5,10 @@
 "sums" = "protocol.zkc"
 
 ["dependencies"]
-"algebra" = "../../../../libraries/core/algebra"
-"collections" = "../../../../libraries/core/collections"
-"polynomial" = "../../../../libraries/core/polynomial"
-"sumcheck" = "../../../../libraries/protocols/polynomial/sumcheck"
+"algebra" = { workspace = "core.algebra" }
+"collections" = { workspace = "core.collections" }
+"polynomial" = { workspace = "core.polynomial" }
+"sumcheck" = { workspace = "protocols.polynomial.sumcheck" }
+
+[workspace]
+path = "../../../../zkc.workspace.toml"

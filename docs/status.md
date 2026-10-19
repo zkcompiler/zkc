@@ -64,6 +64,12 @@ ownership without claiming a speedup or a formal native correspondence proof.
 
 `run` and `proof` explicitly select joint execution or proving/verification.
 `zkc.toml` supplies the module/asset map; the CLI discovers the nearest manifest.
+Explicit local workspace catalogs select leaf packages alongside path
+dependencies, preserve capture identity, and report selected-edge provenance in
+`check --api`. The installed package includes the catalog and library sources.
+Polynomial opening APIs bind canonical cosets, column batches, descriptors and
+accumulators in private checked views; row evaluation derives its point from
+the admitted query index. These are mathematical context checks.
 Commands accept unique short or qualified Entry names. Execution filters omitted
 names by run/proof kind; inspection and compilation require a single Entry.
 `new` and `init` create separate protocol and Entry files with input templates;

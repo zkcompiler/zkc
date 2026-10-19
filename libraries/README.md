@@ -46,15 +46,22 @@ For a project at `examples/projects/my-project`:
 format = "zkc.project/0"
 [modules]
 example = "main.zkc"
+[workspace]
+path = "../../../zkc.workspace.toml"
 [dependencies]
-sumcheck = "../../../libraries/protocols/polynomial/sumcheck"
+sumcheck = { workspace = "protocols.polynomial.sumcheck" }
 ```
 
 ```text
 use sumcheck::{Reduce, check};
 ```
 
-Paths are relative to the declaring manifest. Labels do not rename source
+The [local catalog](../zkc.workspace.toml) selects individual leaf packages.
+Catalog locations use the catalog's visible parent; the workspace path uses
+the declaring manifest's visible parent. A path dependency such as
+`sumcheck = "../../../libraries/protocols/polynomial/sumcheck"` works independently
+of a catalog. Installed sources retain this layout under `share/zkc`.
+Labels and catalog keys do not rename source
 modules. Dependencies load once; conflicting providers and cycles refuse.
 The loader captures the selected closure, including private modules. It adds
 no registry, download or implicit global import.

@@ -4,4 +4,7 @@
 "example" = "main.zkc"
 
 ["dependencies"]
-"sumcheck" = "../../../libraries/protocols/polynomial/sumcheck"
+"sumcheck" = { workspace = "protocols.polynomial.sumcheck" }
+
+[workspace]
+path = "../../../zkc.workspace.toml"

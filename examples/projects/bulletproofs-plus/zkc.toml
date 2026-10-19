@@ -4,4 +4,7 @@
 "example" = "main.zkc"
 
 ["dependencies"]
-"monero" = "../../../libraries/constructions/monero/bulletproofs_plus"
+"monero" = { workspace = "constructions.monero.bulletproofs_plus" }
+
+[workspace]
+path = "../../../zkc.workspace.toml"

@@ -1,11 +1,13 @@
 module stark::single_table;
 pub module low_degree;
 use stark::configurations::contract::{Configuration};
-use stark::single_table::low_degree::{Commit, Open, query_points};
+use stark::single_table::low_degree::{Commit, Open};
 use zkc::vector::{Vector, length, get, append, empty, fill, transpose};
 use zkc::indices::{Indices, less};
 use zkc::coset::{extend_columns, disjoint_coset, outside_domains};
-use zkc::opening::{opening_claims, deep_columns, deep_column_values, same_rotation};
+use zkc::opening as opening_context;
+use zkc::opening::{opening_claims, deep_columns, deep_row, same_rotation};
+use zkc::coset as coset;
 use air::polynomial::{split_quotient};
 use air::table::{Shape, Inputs, shape, inputs, claims, quotient_values, identity, read_quotients,
   read_values};
@@ -33,15 +35,20 @@ fn admissible<F: Field>(facts: Shape, statement: Statement<F>, height: index, si
 // gamma. Rows are the authenticated rows in query order.
 fn deep_values<F: Field>(slots: Inputs, chunks: (Indices, Indices), witness_rows: Vector<F>,
     width: index, quotient_rows: Vector<F>, count: index, opened: Vector<F>,
-    opened_quotient: Vector<F>, height: index, points: Vector<F>, zeta: F, gamma: F)
+    opened_quotient: Vector<F>, height: index, geometry: coset::CosetDomain<F>, positions: Indices, zeta: F, gamma: F)
     -> Vector<F> {
   let mut result = empty<F>();
-  for query in 0..length(points) {
-    let x = get(points, query);
+  let bound = opening_context::bind_openings(geometry, count, height, zeta,
+    zkc::opening_claims::checked(chunks.0, chunks.1, opened_quotient));
+  for query in 0..zkc::indices::length(positions) {
+    let position = zkc::indices::get(positions, query);
+    let x = coset::domain_point(geometry, position);
     let reads = read_values(slots, zkc::vector::slice(witness_rows, query * width, width),
       opened, height, x, zeta, gamma, 0, 1);
-    let combined = deep_column_values(zkc::vector::slice(quotient_rows, query * count, count), zkc::opening_claims::checked(chunks.0, chunks.1, opened_quotient), height, x, zeta, gamma, reads.0, reads.1);
-    result = append(result, combined.0);
+    let row = opening_context::query_row(geometry, count, position,
+      zkc::vector::slice(quotient_rows, query * count, count));
+    let state = opening_context::scalar_accumulator(geometry, position, gamma, reads.0, reads.1);
+    result = append(result, opening_context::scalar_value(deep_row(row, bound, state)));
   }
   return result;
 }
@@ -97,6 +104,8 @@ pub protocol TableArgument<K: Configuration, Table: nat, B: Bundle, LogFinal: na
   let alphaP @P = K::challenge(alphaSent);
   let shift_extensionP @P = K::lift(shiftP);
   let shift_extensionV @V = K::lift(shiftV);
+  let geometryP @P = coset::coset_domain(shift_extensionP, sizeP);
+  let geometryV @V = coset::coset_domain(shift_extensionV, sizeV);
   let trace_extension @P = K::embed(trace_lde);
   let dataP @P = K::embed(statementP.public_data);
   let dataV @V = K::embed(statementV.public_data);
@@ -117,7 +126,7 @@ pub protocol TableArgument<K: Configuration, Table: nat, B: Bundle, LogFinal: na
   require @P outside_domains(heightP, sizeP, shift_extensionP, zetaP);
   let proposed @P = claims<K::Extension,Table,B>(K::embed(trace_columns), K::embed(configP),
     K::embed(publicP), dataP, heightP, zetaP);
-  let proposed_quotient @P = opening_claims(chunks, factsP.chunks, shift_extensionP, sizeP, zetaP);
+  let proposed_quotient @P = opening_claims(coset::column_batch(geometryP, factsP.chunks, chunks), zetaP);
   let opened = send P -> V(proposed);
   let opened_quotient = send P -> V(proposed_quotient);
   require @V identity<K::Extension,Table,B>(opened, opened_quotient, K::embed(configV),
@@ -132,9 +141,13 @@ pub protocol TableArgument<K: Configuration, Table: nat, B: Bundle, LogFinal: na
   let chunk_openingsP @P = same_rotation(factsP.chunks, 0);
   let reads @P = read_quotients(slotsP, trace_extension, proposed, heightP, shift_extensionP, sizeP,
     zetaP, gammaP, fill<K::Extension>(0, sizeP), 1);
-  let word @P = deep_columns(chunks, zkc::opening_claims::checked(chunk_openingsP.0, chunk_openingsP.1, proposed_quotient), heightP, shift_extensionP, sizeP, zetaP, gammaP, reads.0, reads.1);
+  let chunk_batch @P = coset::column_batch(geometryP, factsP.chunks, chunks);
+  let chunk_bounds @P = opening_context::bind_openings(geometryP, factsP.chunks, heightP, zetaP,
+    zkc::opening_claims::checked(chunk_openingsP.0, chunk_openingsP.1, proposed_quotient));
+  let initial @P = opening_context::vector_accumulator(geometryP, gammaP, reads.0, reads.1);
+  let word @P = deep_columns(chunk_batch, chunk_bounds, initial);
   let (statesP, positionsP, rootsV, betasV, finalV, positionsV) =
-    Commit<K,LogFinal,Rounds,LogBlowup,Queries>(word.0, shiftP, coins);
+    Commit<K,LogFinal,Rounds,LogBlowup,Queries>(opening_context::vector_values(word), shiftP, coins);
 
   // Openings, after every request.
   let trace_open @P = K::open_base(trace_tree.1, positionsP, sizeP);
@@ -149,7 +162,7 @@ pub protocol TableArgument<K: Configuration, Table: nat, B: Bundle, LogFinal: na
   let slotsV @V = inputs<K::Extension,Table,B>(heightV);
   let first @V = deep_values(slotsV, same_rotation(factsV.chunks, 0), K::embed(trace_rows),
     factsV.witness, quotient_rows, factsV.chunks, opened, opened_quotient, heightV,
-    query_points<K::Extension>(shift_extensionV, sizeV, positionsV), zetaV, gammaV);
+    geometryV, positionsV, zetaV, gammaV);
   let accepted = Open<K,LogFinal,Rounds,LogBlowup,Queries>(statesP, positionsP, rootsV, betasV,
     finalV, positionsV, first, shiftV);
   return (accepted = accepted);

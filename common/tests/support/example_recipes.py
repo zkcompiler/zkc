@@ -1,6 +1,7 @@
 """Select literal example recipes and copy their declared consumer closures."""
 from pathlib import Path
 import shutil
+import tomllib
 
 from project import project_inputs
 
@@ -25,7 +26,8 @@ def copy_consumer(project, root, destination):
     """Preserve relative manifest paths in a separate, minimal source tree."""
     manifests = []
     modules, assets = project_inputs(project / 'zkc.toml', manifests=manifests)
-    directories = {project, *(manifest.parent for manifest in manifests)}
+    directories = {project, *(manifest.parent for manifest in manifests
+                             if tomllib.loads(manifest.read_text()).get('format') != 'zkc.workspace/0')}
     for directory in sorted(directories):
         for path in directory.rglob('*'):
             if not path.is_file() or any(part in ('build', '__pycache__')
@@ -38,7 +40,7 @@ def copy_consumer(project, root, destination):
             target = destination / path.relative_to(root)
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(path, target)
-    for path in {*modules.values(), *(path for _, path in assets.values())}:
+    for path in {*manifests, *modules.values(), *(path for _, path in assets.values())}:
         target = destination / path.relative_to(root)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(path, target)

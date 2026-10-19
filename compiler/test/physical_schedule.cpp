@@ -995,8 +995,10 @@ local.return %result : !F
     auto module = take(executableFixture(chunkSource(8192), context));
     auto function = first<local::FuncOp>(*module);
     OpBuilder builder(function);
-    auto *extra = builder.clone(*function);
-    SymbolTable::setSymbolName(extra, "extraWork");
+    for (unsigned i = 0; i < 3; ++i) {
+      auto *extra = builder.clone(*function);
+      SymbolTable::setSymbolName(extra, "extraWork" + std::to_string(i));
+    }
     auto checked = check(*module, propose(*module));
     auto before = printed(*module);
     auto identities = physicalPlanOperations(*module);

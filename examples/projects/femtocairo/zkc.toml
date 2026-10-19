@@ -4,13 +4,16 @@
 "example" = "main.zkc"
 
 ["dependencies"]
-"stark-octic" = "../../../libraries/arguments/stark/configurations/koala_bear_octic"
-"stark-whole-bundle" = "../../../libraries/arguments/stark/whole_bundle"
-"core-collections" = "../../../libraries/core/collections"
-"relations-air" = "../../../libraries/relations/air"
+"stark-octic" = { workspace = "arguments.stark.configurations.koala_bear_octic" }
+"stark-whole-bundle" = { workspace = "arguments.stark.whole_bundle" }
+"core-collections" = { workspace = "core.collections" }
+"relations-air" = { workspace = "relations.air" }
 
 ["assets"]
 
 ["assets"."execution"]
 "format" = "relation-bundle-json"
 "path" = "../../../compiler/adapters/clean/fixtures/femtocairo/bundle.json"
+
+[workspace]
+path = "../../../zkc.workspace.toml"

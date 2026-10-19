@@ -34,6 +34,7 @@ let
     "common/unicode"
   ];
   projects = [
+    "zkc.workspace.toml"
     "examples"
     "libraries"
     "common/tests/fixtures/projects"
@@ -69,11 +70,16 @@ let
     rust.paths = rust;
     rustTests.paths = rust ++ runner ++ rustFixtures ++ projects;
     application.paths = [
+      "zkc.workspace.toml"
       "common/tests/check_install.py"
       "common/tests/support/project.py"
       "libraries"
       "examples/projects/schnorr"
       "common/tests/fixtures/projects/mathematics"
+    ];
+    libraries.paths = [
+      "zkc.workspace.toml"
+      "libraries"
     ];
     format.paths = [
       "scripts/format.py"

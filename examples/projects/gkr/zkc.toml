@@ -4,4 +4,7 @@
 "example" = "main.zkc"
 
 ["dependencies"]
-"gkr" = "../../../libraries/protocols/polynomial/gkr"
+"gkr" = { workspace = "protocols.polynomial.gkr" }
+
+[workspace]
+path = "../../../zkc.workspace.toml"

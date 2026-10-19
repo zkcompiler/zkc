@@ -8,6 +8,59 @@ use zkc::scalar::{power};
 use zkc::indices::{maximum};
 use zkc::boolean::{both};
 
+// Canonical natural-order points on a nonempty installed two-adic coset.
+pub struct CosetDomain<F: Field> {
+  shift: F,
+  size: index
+}
+
+pub fn coset_domain<F: Field>(shift: F, size: index) -> CosetDomain<F>
+    effects(stop) where zkc::algebra::TwoAdicField(F) {
+  require !(point(shift, size, 0) == 0);
+  return CosetDomain<F> { shift: shift, size: size };
+}
+pub math fn domain_size<F: Field>(input: CosetDomain<F>) -> index where () {
+  return input.size;
+}
+pub math fn domain_shift<F: Field>(input: CosetDomain<F>) -> F where () {
+  return input.shift;
+}
+pub math fn same_domain<F: Field>(left: CosetDomain<F>, right: CosetDomain<F>) -> bool
+    where () {
+  return both(left.size == right.size, left.shift == right.shift);
+}
+pub fn domain_point<F: Field>(input: CosetDomain<F>, position: index) -> F
+    effects(stop) where zkc::algebra::TwoAdicField(F) {
+  require zkc::indices::less(position, input.size);
+  return point(input.shift, input.size, position);
+}
+
+// Column-major values with an exact width and one canonical evaluation domain.
+pub struct ColumnBatch<F: Field> {
+  geometry: CosetDomain<F>,
+  width: index,
+  data: Vector<F>
+}
+pub fn column_batch<F: Field>(geometry: CosetDomain<F>, width: index, data: Vector<F>)
+    -> ColumnBatch<F> effects(stop) where () {
+  require length(data) == width * geometry.size;
+  return ColumnBatch<F> { geometry: geometry, width: width, data: data };
+}
+pub math fn batch_domain<F: Field>(input: ColumnBatch<F>) -> CosetDomain<F> where () {
+  return input.geometry;
+}
+pub math fn batch_width<F: Field>(input: ColumnBatch<F>) -> index where () {
+  return input.width;
+}
+pub math fn batch_values<F: Field>(input: ColumnBatch<F>) -> Vector<F> where () {
+  return input.data;
+}
+pub fn batch_column<F: Field>(input: ColumnBatch<F>, position: index) -> Vector<F>
+    effects(stop) where () {
+  require zkc::indices::less(position, input.width);
+  return slice(input.data, position * input.geometry.size, input.geometry.size);
+}
+
 // Natural-order evaluations on shift*<omega>. Private fields prevent a caller
 // from changing the shift or claiming another ordering without re-admission.
 pub struct Word<F: Field> {

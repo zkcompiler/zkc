@@ -11,6 +11,14 @@ MANIFESTS = sorted(LIBRARIES.rglob('zkc.toml'))
 EXAMPLES = sorted((ROOT / 'examples/projects').rglob('zkc.toml'))
 
 
+def test_repository_catalog_names_each_library_leaf_once():
+    catalog = tomllib.loads((ROOT / 'zkc.workspace.toml').read_text())
+    assert catalog['format'] == 'zkc.workspace/0'
+    selected = [(ROOT / location / 'zkc.toml').resolve() for location in catalog['packages'].values()]
+    assert len(selected) == len(set(selected))
+    assert set(selected) == set(MANIFESTS)
+
+
 @pytest.mark.parametrize('manifest', MANIFESTS + EXAMPLES,
                          ids=lambda path: str(path.relative_to(ROOT)))
 def test_manifest_closure_obeys_library_boundaries(toolchain, journal, manifest):

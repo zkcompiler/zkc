@@ -166,11 +166,16 @@ use zkc::indices::{Indices};
 use zkc::opening as opening;
 domain F=field("koala-bear");
 protocol Check roles(P)(columns:Vector<F>@P,selected:Indices@P,rotations:Indices@P,
- values:Vector<F>@P,initial:Vector<F>@P,row:Vector<F>@P,x:F@P,initial_at:F@P)
+ values:Vector<F>@P,initial:Vector<F>@P,row:Vector<F>@P,position:index@P,initial_at:F@P)
  ->(word:Vector<F>@P,weight:F@P,value:F@P,row_weight:F@P) {
- let whole=opening::deep_columns(columns, zkc::opening_claims::checked(selected, rotations, values), 4, 3, 8, 7, 11, initial, 5);
- let at=opening::deep_column_values(row, zkc::opening_claims::checked(selected, rotations, values), 4, x, 7, 11, initial_at, 5);
- return (word=whole.0,weight=whole.1,value=at.0,row_weight=at.1);
+ let geometry=zkc::coset::coset_domain<F>(3,8);
+ let input=opening::bind_openings(geometry,2,4,7,zkc::opening_claims::checked(selected, rotations, values));
+ let whole=opening::deep_columns(zkc::coset::column_batch(geometry,2,columns),input,
+   opening::vector_accumulator(geometry,11,initial,5));
+ let at=opening::deep_row(opening::query_row(geometry,2,position,row),input,
+   opening::scalar_accumulator(geometry,position,11,initial_at,5));
+ return (word=opening::vector_values(whole),weight=opening::vector_weight(whole),
+   value=opening::scalar_value(at),row_weight=opening::scalar_weight(at));
 }
 run Demo=Check;
 '''
@@ -196,7 +201,7 @@ run Demo=Check;
     base = {'columns': sum(tables, []), 'selected': selected, 'rotations': rotations,
             'values': values, 'initial': initial}
     for i, x in enumerate(points):
-        inputs = base | {'row': [table[i] for table in tables], 'x': x, 'initial_at': initial[i]}
+        inputs = base | {'row': [table[i] for table in tables], 'position': i, 'initial_at': initial[i]}
         assert entry.run(f'row-{i}', inputs) == {
             'word': vector(expected), 'weight': str(5 * 11**3),
             'value': str(expected[i]), 'row_weight': str(5 * 11**3)}

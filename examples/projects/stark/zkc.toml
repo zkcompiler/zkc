@@ -4,10 +4,10 @@
 "example" = "main.zkc"
 
 ["dependencies"]
-"stark-octic" = "../../../libraries/arguments/stark/configurations/koala_bear_octic"
-"stark-quartic" = "../../../libraries/arguments/stark/configurations/koala_bear_quartic"
-"stark-single-table" = "../../../libraries/arguments/stark/single_table"
-"core-collections" = "../../../libraries/core/collections"
+"stark-octic" = { workspace = "arguments.stark.configurations.koala_bear_octic" }
+"stark-quartic" = { workspace = "arguments.stark.configurations.koala_bear_quartic" }
+"stark-single-table" = { workspace = "arguments.stark.single_table" }
+"core-collections" = { workspace = "core.collections" }
 
 ["assets"]
 
@@ -18,3 +18,6 @@
 ["assets"."plonky3"]
 "format" = "relation-bundle-json"
 "path" = "../../../compiler/adapters/plonky3/fixtures/fibonacci/bundle.json"
+
+[workspace]
+path = "../../../zkc.workspace.toml"
