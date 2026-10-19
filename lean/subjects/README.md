@@ -48,6 +48,7 @@ root.
 | `executable` | `variants` | other compilations of the Entry, `{ Name = [options] }` |
 | `executable` | `exact` | expected exactness of the lowering reading per program (`actual` and variants) |
 | `executable` | `charge`, `charge_arguments`, `completeness_module` | Lean charge function, the public inputs it takes, and its module |
+| `executable` | `namespace` | namespace of the generated facts (default: the facts module's name); a hand executable module of the Entry continues it |
 
 Every generated path is owned by this subject: `--write` rewrites it and
 `--check` compares it. Generated paths that another subject or a structured

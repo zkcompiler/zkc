@@ -54,6 +54,7 @@ kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
 
 [executable]
 threshold = "derived"
+namespace = "ZkcExamples.Executable.SchnorrProof"
 
 [construction]
 admission = "views"

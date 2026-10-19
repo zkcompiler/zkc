@@ -12,7 +12,7 @@ Regenerate with `lean/bridges/subject.py --write`. The per-compile lowering
 rule accepts the validator against the constructed validator (`accepted`);
 each fact below is checked by the kernel. -/
 
-namespace ZkcExamples.Executable.SchnorrProofFacts
+namespace ZkcExamples.Executable.SchnorrProof
 open Zkc.Construction Zkc.Executable
 
 abbrev validator : Validator := ZkcExamples.Executable.SchnorrProofProgramData.validator
@@ -57,4 +57,4 @@ omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem admitted (base point : G) : validator.admits ((ZkcExamples.Construction.SchnorrProof.inputs (F := F) (G := G) base point).map .data) = true := by
   rfl
 
-end ZkcExamples.Executable.SchnorrProofFacts
+end ZkcExamples.Executable.SchnorrProof

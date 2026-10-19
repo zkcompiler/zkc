@@ -12,7 +12,7 @@ Regenerate with `lean/bridges/subject.py --write`. The per-compile lowering
 rule accepts the validator against the constructed validator (`accepted`);
 each fact below is checked by the kernel. -/
 
-namespace ZkcExamples.Executable.DeferredRoundsFacts
+namespace ZkcExamples.Executable.DeferredRounds
 open Zkc.Construction Zkc.Executable
 
 abbrev validator : Validator := ZkcExamples.Executable.DeferredRoundsProgramData.validator
@@ -57,4 +57,4 @@ omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem admitted (x : F) : validator.admits (ZkcExamples.Construction.DeferredRounds.inputs (F := F) (G := G) x) = true := by
   rfl
 
-end ZkcExamples.Executable.DeferredRoundsFacts
+end ZkcExamples.Executable.DeferredRounds

@@ -1,5 +1,6 @@
 module
 
+public import ZkcExamples.Executable.SumcheckProofFacts
 public import ZkcExamples.Executable.SumcheckHelpers
 public import ZkcExamples.Executable.SumcheckFamily
 public import Zkc.Executable.NormalizationSoundness
@@ -16,6 +17,7 @@ participant projection check accepted (`accepted`): it reads back as exactly
 those instructions, with the round loop bounded by the Entry's static maximum
 (`maximum`) and the three helper calls, and its local functions of the called
 helpers implement the source's checked helpers (`SumcheckHelpers.prepared`).
+The lowering facts are generated (`SumcheckProofFacts`, in this namespace).
 
 The kernel recognizes the pair as an artifact of the Sumcheck family
 (`artifact`, `ZkcExamples.Executable.SumcheckFamily.Artifact`): the family's
@@ -42,25 +44,13 @@ namespace ZkcExamples.Executable.SumcheckProof
 open Zkc.Construction Zkc.Executable
 open ZkcExamples.Construction
 
-abbrev validator : Validator := SumcheckProofProgramData.validator
-
-set_option maxRecDepth 20000 in
-/-- The reading of the executable validator. -/
-def lowered : Lowered :=
-  (checkLowering installed SumcheckProof.participant validator).toOption.get (by decide +kernel)
-
-/-- The per-compile lowering rule accepts the actual executable validator. -/
-theorem accepted : checkLowering installed SumcheckProof.participant validator = .ok lowered :=
-  ok_of_isSome _ _
-
 /-- The constructed validator calls the empty point, the point extension and
 the terminal check by name. -/
-theorem helpers : Instruction.helpers SumcheckProof.participant.instructions =
+theorem helpers_named : Instruction.helpers SumcheckProof.participant.instructions =
     [ZkcExamples.Structured.SumcheckHelperBodies.emptyHelper.name,
       ZkcExamples.Structured.SumcheckHelperBodies.appendHelper.name,
-      ZkcExamples.Structured.SumcheckHelperBodies.checkHelper.name] := by
-  rw [← Instruction.helperList_eq]
-  decide +kernel
+      ZkcExamples.Structured.SumcheckHelperBodies.checkHelper.name] :=
+  helpers
 
 /-- The helper calls of the constructed validator, at the result sorts of the
 called helpers. -/
@@ -105,17 +95,10 @@ theorem plan_types (values : List F) (claim : F) (rounds : Nat) :
   by_cases admitted : rounds ≤ maximum <;>
     simp [Plan.types, SumcheckProof.inputs, receives, admitted, round]
 
-omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
-/-- The executable admits the validator's data inputs: table values, claim and
-round count. -/
-theorem admitted (values : List F) (claim : F) (rounds : Nat) :
-    validator.admits (SumcheckProof.inputs (G := G) values claim rounds) = true := by
-  rfl
-
 /-- Every helper the reading calls is prepared. -/
 theorem prepared : ∀ name ∈ Instruction.helpers SumcheckProof.participant.instructions,
     Prepared installed validator (helperTable SumcheckProof.program F G) name := by
-  rw [helpers]
+  rw [helpers_named]
   exact SumcheckHelpers.prepared
 
 /-- Every helper the reading calls returns values of its declared result sorts. -/

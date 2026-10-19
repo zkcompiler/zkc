@@ -36,6 +36,7 @@ kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
 
 [executable]
 threshold = "derived"
+namespace = "ZkcExamples.Executable.DeferredRounds"
 variants = { Unbatched = ["--no-calculation-batching"] }
 exact = { actual = false, Unbatched = true }
 

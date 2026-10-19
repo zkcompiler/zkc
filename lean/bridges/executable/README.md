@@ -40,7 +40,8 @@ For each subject with the executable profile, after the construction checks:
    byte for byte. The facts module states the accepted reading (`lowered`,
    `accepted`), the helpers the constructed validator calls, its static charge
    and message types when they are static, and admission of the published
-   inputs; the kernel checks each.
+   inputs; the kernel checks each. The facts are declared in the namespace
+   the Entry's hand executable module continues (`[executable] namespace`).
 3. A generated Lean file runs `checkLowering` in the kernel on the fresh
    rendering against the fresh constructed-validator export, which must be
    accepted with axioms among `propext`, `Classical.choice` and `Quot.sound`,

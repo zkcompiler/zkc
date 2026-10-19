@@ -60,7 +60,8 @@ FIELDS = {
     "assumptions": {"requested": STRINGS},
     "mutations": {"kinds": STRINGS},
     "executable": {"threshold": {STRING, INTEGER}, "public": STRING, "witness": STRING, "variants": TABLE,
-                   "exact": TABLE, "charge": STRING, "charge_arguments": STRINGS, "completeness_module": STRING},
+                   "exact": TABLE, "charge": STRING, "charge_arguments": STRINGS, "completeness_module": STRING,
+                   "namespace": STRING},
     # Optional extensions (lean/subjects/README.md).
     "construction": {"admission": STRING, "views": STRING, "inputs": STRING, "names": STRINGS,
                      "model": STRING, "model_imports": STRINGS, "rule": STRING, "doc": STRING,

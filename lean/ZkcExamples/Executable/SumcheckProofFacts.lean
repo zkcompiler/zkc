@@ -12,7 +12,7 @@ Regenerate with `lean/bridges/subject.py --write`. The per-compile lowering
 rule accepts the validator against the constructed validator (`accepted`);
 each fact below is checked by the kernel. -/
 
-namespace ZkcExamples.Executable.SumcheckProofFacts
+namespace ZkcExamples.Executable.SumcheckProof
 open Zkc.Construction Zkc.Executable
 
 abbrev validator : Validator := ZkcExamples.Executable.SumcheckProofProgramData.validator
@@ -39,4 +39,4 @@ omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem admitted (valuesValue : List F) (claim : F) (rounds : Nat) : validator.admits (ZkcExamples.Construction.SumcheckProof.inputs (F := F) (G := G) valuesValue claim rounds) = true := by
   rfl
 
-end ZkcExamples.Executable.SumcheckProofFacts
+end ZkcExamples.Executable.SumcheckProof

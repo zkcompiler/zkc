@@ -53,6 +53,7 @@ kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
 
 [executable]
 threshold = "derived"
+namespace = "ZkcExamples.Executable.SumcheckProof"
 charge = "ZkcExamples.Executable.SumcheckCharges.charge"
 charge_arguments = ["rounds"]
 completeness_module = "ZkcExamples.Executable.SumcheckCompleteness"

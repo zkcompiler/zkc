@@ -328,8 +328,11 @@ class Driver(Runner):
         if subject.generated("facts"):
             form = subject.get("construction", "inputs", "values")
             construction = dict(names=entry.names, types=entry.types, glue=subject.module_name("glue"))
-            self.generated(subject, "facts", glue.facts_module(subject.module_name("facts"), construction, program,
-                                                               facts, form), modules)
+            # The facts are declared in the namespace the Entry's hand executable module
+            # continues, so that its names are the facts' own declarations.
+            namespace = subject.get("executable", "namespace") or subject.module_name("facts")
+            self.generated(subject, "facts", glue.facts_module(namespace, construction, program, facts, form),
+                           modules)
             self.build(subject.module_name("facts"))
         return facts
 
