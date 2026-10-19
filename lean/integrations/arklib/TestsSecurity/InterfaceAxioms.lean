@@ -5,6 +5,7 @@ import ZkcSecurity.FiatShamir.Budget
 import ZkcSecurity.FiatShamir.Reduction
 import ZkcSecurity.FiatShamir.Binding
 import ZkcSecurity.Commitment.HistoryKeys
+import ZkcSecurity.Commitment.Repeats
 import ZkcTools.DeclarationAudit
 
 /-! Axiom closures and dependency rules of the shared interfaces: the core transcript interface
@@ -19,5 +20,6 @@ run_cmd do
      `ZkcSecurity.FiatShamir.Keyed, `ZkcSecurity.FiatShamir.Reduction,
      `ZkcSecurity.FiatShamir.Budget, `ZkcSecurity.FiatShamir.Lifting,
      `ZkcSecurity.FiatShamir.Binding, `ZkcSecurity.Stage, `ZkcSecurity.Oracle,
-     `ZkcSecurity.VCVio.Pruning, `ZkcSecurity.Commitment, `ZkcSecurity.HashChain]
+     `ZkcSecurity.VCVio.Pruning, `ZkcSecurity.VCVio.Memo, `ZkcSecurity.Commitment,
+     `ZkcSecurity.HashChain]
     "SHARED-INTERFACES-AUDIT-PASS"

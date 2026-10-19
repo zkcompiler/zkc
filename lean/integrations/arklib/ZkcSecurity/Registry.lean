@@ -316,6 +316,10 @@ def entries : List Entry := [
   ⟨"family.upstream-realization", .familyProperty, some `ZkcSecurity.FiatShamir.Upstream.Realizes,
     "A participant process realizes an upstream process-form residual operation by \
     operation."⟩,
+  ⟨"family.extractor-first-match", .familyProperty,
+    some `ZkcSecurity.Commitment.Extractable.FirstMatch,
+    "A commitment extractor reads its record only through first matches: records with the same \
+    first match for every predicate extract the same tables."⟩,
   ⟨"family.fri-round-by-round", .familyProperty, some `ZkcSecurity.ArkLib.Fri.RoundByRound,
     "The round-by-round soundness certificate of the FRI verifier at the ideal \
     interpretation, with errors per folding round and for the query block."⟩,

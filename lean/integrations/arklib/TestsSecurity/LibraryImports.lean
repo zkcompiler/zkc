@@ -35,6 +35,7 @@ import ZkcSecurity.Commitment.HashedLeaves
 import ZkcSecurity.Commitment.HistoryKeys
 import ZkcSecurity.Commitment.Merkle
 import ZkcSecurity.Commitment.Record
+import ZkcSecurity.Commitment.Repeats
 import ZkcSecurity.Commitment.Replay
 import ZkcSecurity.Commitment.Soundness
 import ZkcSecurity.Commitment.TableLog
@@ -112,6 +113,7 @@ import ZkcSecurity.VCVio.Composition
 import ZkcSecurity.VCVio.Coupling
 import ZkcSecurity.VCVio.Deferral
 import ZkcSecurity.VCVio.Execution
+import ZkcSecurity.VCVio.Memo
 import ZkcSecurity.VCVio.Pruning
 import ZkcSecurity.VCVio.Schnorr
 import ZkcSecurity.VCVio.SigmaAnd
