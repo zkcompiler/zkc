@@ -21,6 +21,7 @@
 #include "zkc/Transforms/Algorithms.h"
 #include "zkc/Transforms/Finite.h"
 #include "zkc/Transforms/Mathematical.h"
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/StringSet.h"
 #include <map>
@@ -684,17 +685,33 @@ realizeEntry(ModuleOp source, StringRef callSite,
   if (!entry)
     return {};
   RealizationScope scope(trace, "kernel-recipes", source, policy, &available);
+  // Reserve the worst-case construction debit before speculation. If the
+  // cumulative discard reserve cannot cover it, retain ordered execution.
+  // This avoids a new retry path for partially constructed proposals.
+  if (policy.finiteBulk &&
+      (remaining > available.discardedRecipeCopy ||
+       remainingBytes > available.discardedRecipeSiteBytes)) {
+    policy.finiteBulk = false;
+    scope.selection(entry, DecisionFamily::Finite, RealizationChoice::Ordered,
+                    {OptimizationStatus::Capacity, OptimizationReason::Work});
+  }
   scope.propose(policy);
   bool orderedRetry = false;
   for (;;) {
     // Retry from the immutable numerical unit. Optional matching allowances
     // remain cumulative; required construction keeps its ordered reserve.
     auto attemptWork = available;
+    auto attemptRemaining = remaining;
+    auto attemptBytes = remainingBytes;
+    auto commitConstruction = llvm::scope_exit([&] {
+      remaining = attemptRemaining;
+      remainingBytes = attemptBytes;
+    });
     RealizationScope attempt(trace, "kernel-recipe-attempt", source, policy);
     attempt.propose(policy);
     func::FuncOp function;
-    auto candidate =
-        recipeCandidate(source, callSite, function, remaining, remainingBytes);
+    auto candidate = recipeCandidate(source, callSite, function,
+                                     attemptRemaining, attemptBytes);
     if (!candidate)
       return {};
     attempt.declarationOrigin(function.getSymName(), entry.getSymName());
@@ -709,7 +726,7 @@ realizeEntry(ModuleOp source, StringRef callSite,
     executableCandidate(*candidate, function, entry);
     finite::VerificationResult outcome{finite::VerificationStatus::Mismatch,
                                        {}};
-    auto schedule = scheduleEntry(*candidate, remaining);
+    auto schedule = scheduleEntry(*candidate, attemptRemaining);
     if (!schedule)
       return {};
     auto checked = verifyEntrySchedule(source, *schedule, callSite, policy,
@@ -717,7 +734,7 @@ realizeEntry(ModuleOp source, StringRef callSite,
     if (succeeded(checked)) {
       // The returned executable is consumed from the actual scheduled payload.
       // The earlier recipe workspace supplies no final body or SSA values.
-      auto executable = consumeSchedule(*schedule, remaining);
+      auto executable = consumeSchedule(*schedule, attemptRemaining);
       if (!executable || failed(verifyScheduleLowering(*schedule, *executable)))
         return {};
       candidate = std::move(executable);
@@ -733,6 +750,12 @@ realizeEntry(ModuleOp source, StringRef callSite,
     attempt.discard(verificationDecision(outcome));
     if (outcome.status == finite::VerificationStatus::OptionalCapacity &&
         policy.finiteBulk) {
+      // Transfer the discarded construction debit to its cumulative reserve.
+      // The ordered attempt keeps both incoming quotas. Terminal failures
+      // instead retain their actual debit through commitConstruction.
+      available.discardedRecipeCopy -= remaining - attemptRemaining;
+      available.discardedRecipeSiteBytes -= remainingBytes - attemptBytes;
+      commitConstruction.release();
       policy.finiteBulk = false;
       orderedRetry = true;
       attempt.retry(policy);

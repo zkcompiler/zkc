@@ -430,12 +430,18 @@ class FrontierReader {
       return refuse(wrapper, "actual wrapper return interface changed");
     for (auto [value, result] :
          zip(wrapperReturn.getInputs(), invocation.getResults())) {
-      auto coordinate = dyn_cast<OpResult>(value);
-      if (!coordinate || coordinate.getOwner() != call.getOperation() ||
-          coordinate.getResultNumber() >= returned->size())
+      // Preserve the distinction between a wrapper input and a numerical
+      // result coordinate. ContextReader already fixes every original return
+      // operand, including duplicate aliases and the order of mixed returns.
+      uint64_t id = input(value);
+      if (auto coordinate = dyn_cast<OpResult>(value);
+          coordinate && coordinate.getOwner() == call.getOperation() &&
+          coordinate.getResultNumber() < returned->size())
+        id = (*returned)[coordinate.getResultNumber()];
+      if (!id)
         return refuse(wrapper,
-                      "actual wrapper return is not a numerical coordinate");
-      auto id = (*returned)[coordinate.getResultNumber()];
+                      "actual wrapper return is not a wrapper input or "
+                      "numerical coordinate");
       if (result.getResultNumber() >= source.invocation.getNumResults())
         extraValues.insert(id);
       frontier.outer[result] = id;

@@ -20,7 +20,7 @@ struct Step {
   CallOp call;
   func::FuncOp entry;
   unsigned originalArguments = 0, originalResults = 0;
-  unsigned originalKernelResults = 0;
+  unsigned originalKernelArguments = 0, originalKernelResults = 0;
 };
 // Every key describes an actual typed instruction over already available SSA
 // values. Only polynomial-created instructions enter the table. Concrete source
@@ -61,6 +61,21 @@ class Frontier {
     callerValues[value] = id;
     return id;
   }
+  Value wrapperInput(Step &step, Value value) {
+    auto argument = dyn_cast<BlockArgument>(value);
+    if (!argument || argument.getOwner() != &step.wrapper.getBody().front() ||
+        argument.getArgNumber() >= step.invocation.getNumOperands())
+      return {};
+    return step.invocation.getOperand(argument.getArgNumber());
+  }
+  Value numericalReturn(Step &step, Value value) {
+    auto result = dyn_cast<OpResult>(value);
+    auto returned = cast<func::ReturnOp>(step.entry.front().back());
+    if (!result || result.getOwner() != step.call.getOperation() ||
+        result.getResultNumber() >= returned.getNumOperands())
+      return {};
+    return returned.getOperand(result.getResultNumber());
+  }
   Value exportValue(unsigned producer, Value value) {
     auto key = std::make_pair(producer, value);
     if (auto found = exports.find(key); found != exports.end())
@@ -73,8 +88,14 @@ class Frontier {
     for (auto [index, output] : enumerate(wrapperReturn.getInputs())) {
       if (!charge())
         return {};
-      auto coordinate = cast<OpResult>(output).getResultNumber();
-      if (returned.getOperand(coordinate) == value) {
+      // A forwarding return names a wrapper input, not a Kernel result
+      // coordinate. Reuse it only for the corresponding exact entry argument.
+      auto argument = dyn_cast<BlockArgument>(value);
+      bool forwarded = wrapperInput(step, output) && argument &&
+                       argument.getOwner() == &step.entry.front() &&
+                       argument.getArgNumber() < step.call.getNumOperands() &&
+                       step.call.getOperand(argument.getArgNumber()) == output;
+      if (forwarded || numericalReturn(step, output) == value) {
         auto result = step.invocation.getResult(index);
         exports.try_emplace(key, result);
         return result;
@@ -136,11 +157,12 @@ class Frontier {
       return {};
     callerValues[input] = id;
     auto &step = steps[consumer];
-    for (auto [index, operand] : enumerate(step.invocation.getInputs())) {
+    for (auto [argument, operand] :
+         zip(step.entry.getArguments(), step.call.getInputs())) {
       if (!charge())
         return {};
-      if (operand == input)
-        return step.entry.getArgument(index);
+      if (wrapperInput(step, operand) == input)
+        return argument;
     }
     if (!charge(16 + step.entry.getNumArguments()))
       return {};
@@ -166,8 +188,13 @@ public:
   LogicalResult run() {
     for (auto [position, step] : enumerate(steps)) {
       llvm::DenseMap<Value, unsigned> values;
-      for (auto [argument, input] :
-           zip(step.entry.getArguments(), step.invocation.getInputs())) {
+      for (auto [argument, operand] :
+           zip(step.entry.getArguments(), step.call.getInputs())) {
+        if (!charge())
+          return refuse(step.entry, "normalization frontier input work limit");
+        auto input = wrapperInput(step, operand);
+        if (!input)
+          return refuse(step.wrapper, "numerical input is not a wrapper port");
         auto id = anchor(input);
         values[argument] = id;
         available.try_emplace(id, Available{unsigned(position), argument});
@@ -277,13 +304,16 @@ public:
           instructions.push_back({&op, inputs, outputs, unsigned(position)});
         }
       }
-      auto returned = cast<func::ReturnOp>(step.entry.front().back());
       auto wrapperReturn =
           cast<local::ReturnOp>(step.wrapper.getBody().front().back());
       for (auto [value, result] :
            zip(wrapperReturn.getInputs(), step.invocation.getResults())) {
-        auto coordinate = cast<OpResult>(value).getResultNumber();
-        auto id = values.lookup(returned.getOperand(coordinate));
+        if (!charge())
+          return refuse(step.wrapper,
+                        "normalization frontier return work limit");
+        auto input = wrapperInput(step, value);
+        auto id =
+            input ? anchor(input) : values.lookup(numericalReturn(step, value));
         if (!id)
           return refuse(step.wrapper, "normalization frontier lost a return");
         callerValues[result] = id;
@@ -347,11 +377,17 @@ public:
         step.call.erase();
         step.call = replacement;
       }
+      // Numerical inputs and wrapper ports have independent coordinates. A
+      // wrapper argument can be omitted, repeated or forwarded only by return.
       for (unsigned index = step.entry.getNumArguments();
-           index-- > step.originalArguments;)
+           index-- > step.originalKernelArguments;)
         if (step.entry.getArgument(index).use_empty()) {
           step.entry.front().eraseArgument(index);
           step.call->eraseOperand(index);
+        }
+      for (unsigned index = step.wrapper.getNumArguments();
+           index-- > step.originalArguments;)
+        if (step.wrapper.getArgument(index).use_empty()) {
           step.wrapper.getBody().front().eraseArgument(index);
           step.invocation->eraseOperand(index);
         }
@@ -471,11 +507,13 @@ OwningOpRef<mlir::ModuleOp> prepareKernelLowering(mlir::ModuleOp source) {
         continue; // A guard-only wrapper has no numerical work.
       SymbolTableCollection localSymbols;
       auto entry = resolve(call, localSymbols);
-      if (!entry || call.getInputs() != wrapper.getArguments())
+      if (!entry)
         return {};
+      // Resolve actual wrapper ports in run(); their order and multiplicity
+      // need not match the numerical entry's argument coordinates.
       steps.push_back({wrapper, invocation, call, entry,
                        wrapper.getNumArguments(), wrapper.getNumResults(),
-                       call.getNumResults()});
+                       call.getNumOperands(), call.getNumResults()});
     }
     if (steps.empty())
       continue;

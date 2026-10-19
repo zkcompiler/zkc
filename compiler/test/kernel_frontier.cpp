@@ -71,6 +71,37 @@ void accepts(mlir::ModuleOp before, mlir::ModuleOp after) {
                                                  remaining)),
           "valid frontier rejected");
 }
+void forwardingReturns(mlir::ModuleOp module) {
+  auto first = wrapper(module, "first");
+  auto returned = cast<local::ReturnOp>(first.getBody().front().back());
+  returned.setOperand(0, first.getArgument(0));
+  returned.setOperand(2, returned.getOperand(1));
+  auto second = wrapper(module, "second");
+  returned = cast<local::ReturnOp>(second.getBody().front().back());
+  returned.setOperand(0, second.getArgument(0));
+  returned.setOperand(2, second.getArgument(0));
+  // The earlier forwarded result aliases the participant input. Later
+  // generated work must retain that identity when it imports the result.
+  invocation(module, "second")
+      ->setOperand(0, invocation(module, "first").getResult(0));
+}
+void appendReturn(mlir::ModuleOp module, StringRef name, Value value) {
+  auto function = wrapper(module, name);
+  auto returned = cast<local::ReturnOp>(function.getBody().front().back());
+  returned->insertOperands(returned.getNumOperands(), value);
+  SmallVector<Type> types(function.getResultTypes());
+  types.push_back(value.getType());
+  auto call = invocation(module, name);
+  OpBuilder builder(call);
+  function.setFunctionType(
+      builder.getFunctionType(function.getArgumentTypes(), types));
+  auto replacement =
+      local::CallOp::create(builder, call.getLoc(), types, call.getInputs(),
+                            call.getCalleeAttr(), call.getSiteAttr());
+  call->replaceAllUsesWith(
+      replacement.getResults().take_front(call.getNumResults()));
+  call.erase();
+}
 void rejects(mlir::ModuleOp candidate,
              llvm::function_ref<LogicalResult()> check) {
   bool identifier = false;
@@ -115,6 +146,112 @@ int main() {
     auto after = fixture(context, "frontier-after.mlir");
     accepts(*before, *after);
   });
+  auto forwarding = [&](StringRef name, bool expected,
+                        llvm::function_ref<void(mlir::ModuleOp)> mutate) {
+    cases.run(name, [&] {
+      auto before = fixture(context, "frontier-before.mlir");
+      auto after = fixture(context, "frontier-after.mlir");
+      forwardingReturns(*before);
+      forwardingReturns(*after);
+      mutate(*after);
+      if (expected)
+        accepts(*before, *after);
+      else {
+        uint64_t remaining = 100000;
+        rejects(*after, [&] {
+          return kernel::verifyKernelFrontier(*before, *after, origins(*before),
+                                              remaining);
+        });
+      }
+    });
+  };
+  cases.run("identity with mixed forwarding and duplicate return aliases", [&] {
+    auto before = fixture(context, "frontier-before.mlir");
+    auto after = fixture(context, "frontier-before.mlir");
+    forwardingReturns(*before);
+    forwardingReturns(*after);
+    accepts(*before, *after);
+  });
+  cases.run("all original wrapper results may be forwarding aliases", [&] {
+    auto before = fixture(context, "frontier-before.mlir");
+    auto after = fixture(context, "frontier-after.mlir");
+    for (auto module : {before.get(), after.get()}) {
+      forwardingReturns(module);
+      for (StringRef name : {"first", "second"}) {
+        auto function = wrapper(module, name);
+        auto returned =
+            cast<local::ReturnOp>(function.getBody().front().back());
+        for (unsigned i = 0; i < 3; ++i)
+          returned.setOperand(i, function.getArgument(0));
+      }
+    }
+    accepts(*before, *after);
+  });
+  cases.run("forwarding preserves permuted inner input coordinates", [&] {
+    auto before = fixture(context, "frontier-before.mlir");
+    auto after = fixture(context, "frontier-after.mlir");
+    for (auto module : {before.get(), after.get()}) {
+      forwardingReturns(module);
+      auto call = inner(module, "second");
+      auto a = call.getOperand(0), b = call.getOperand(1);
+      call->setOperand(0, b);
+      call->setOperand(1, a);
+    }
+    // The generated product now reads (b, a), so its exact earlier producer
+    // is the second product, even though field multiplication commutes.
+    invocation(*after, "second")
+        ->setOperand(4, invocation(*after, "first").getResult(4));
+    accepts(*before, *after);
+  });
+  forwarding("forwarding aliases survive an earlier generated import", true,
+             [](auto) {});
+  forwarding("appended return may forward an imported generated value", true,
+             [&](auto module) {
+               appendReturn(module, "second",
+                            wrapper(module, "second").getArgument(4));
+             });
+  forwarding("forwarded original argument coordinate cannot change", false,
+             [&](auto module) {
+               auto function = wrapper(module, "first");
+               function.getBody().front().back().setOperand(
+                   0, function.getArgument(1));
+             });
+  forwarding("duplicate numerical return aliases cannot diverge", false,
+             [&](auto module) {
+               wrapper(module, "first")
+                   .getBody()
+                   .front()
+                   .back()
+                   .setOperand(2, inner(module, "first").getResult(2));
+             });
+  forwarding("original forwarding cannot become a numerical return", false,
+             [&](auto module) {
+               wrapper(module, "second")
+                   .getBody()
+                   .front()
+                   .back()
+                   .setOperand(0, inner(module, "second").getResult(0));
+             });
+  forwarding("generated import cannot use an unrelated forwarding alias", false,
+             [&](auto module) {
+               invocation(module, "second")
+                   ->setOperand(4, invocation(module, "first").getResult(0));
+             });
+  forwarding("extra forwarding requires a checked normalization value", false,
+             [&](auto module) {
+               appendReturn(module, "second",
+                            wrapper(module, "second").getArgument(0));
+             });
+  forwarding("forwarded argument must belong to the actual wrapper", false,
+             [&](auto module) {
+               appendReturn(module, "second",
+                            wrapper(module, "first").getArgument(0));
+             });
+  forwarding("numerical coordinate must belong to the actual inner call", false,
+             [&](auto module) {
+               appendReturn(module, "second",
+                            inner(module, "first").getResult(0));
+             });
   for (StringRef mutation : {"none", "arity", "premise", "presence"})
     cases.run("numerical port metadata comparison: " + mutation, [&] {
       auto before = fixture(context, "frontier-before.mlir");

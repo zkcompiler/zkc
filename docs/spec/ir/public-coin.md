@@ -125,7 +125,7 @@ supplied selection policy, then compares JSON values exactly after checking
 integer tokens, Unicode escapes and
 key uniqueness. Whitespace and object-key order are immaterial; floating-point
 spellings are not accepted. No supplied report fact is trusted; additional keys
-are refused too. A supplied report cannot select its own policy. Both policy
+are refused too. A supplied report cannot select its own policy. All three policy
 fields are required even when different policies yield identical prepared IR.
 Neither API checks an arbitrary transformed program.
 

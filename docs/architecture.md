@@ -104,8 +104,9 @@ the complete numerical body available independently of participant control.
 Normalization, analysis and recipe verification read standard-function bodies;
 Local functions are the executable output. Source symbol context and output
 binding allocation remain separate.
-Explicit numerical schedules and storage layouts remain future work. Participant
-scheduling, transport and resource authority stay with their existing owners.
+Numerical realization uses a private standard SCF schedule before Local lowering.
+Writable-buffer layouts and target-specific vectorization remain future work.
+Participant scheduling, transport and resource authority stay with their existing owners.
 Installed numerical and effectful operations share the binding mechanism;
 installation alone does not authorize extraction into a numerical unit.
 

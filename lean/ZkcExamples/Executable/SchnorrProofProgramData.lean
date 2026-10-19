@@ -13,15 +13,15 @@ namespace ZkcExamples.Executable.SchnorrProofProgramData
 open Zkc.Construction Zkc.Executable
 
 /-- SHA-256 of the exact `zkc.program/0` bytes this data was read from. -/
-def program : String := "sha256:3650329d5be46cdaa41e7249da27dc740091f88df3a673915a4711394accb88a"
+def program : String := "sha256:d44ad7e97f8d8ff5f80b6a18a546477181119c5aecef841cc9324683f8cb8b51"
 
 /-- The local function `_calculation_2`. -/
 def function0 : Function :=
   ⟨"_calculation_2", [("v20", ⟨.data (.group "bls12-381.g1"), "arkworks.g1/0"⟩), ("v21", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩), ("v22", ⟨.data (.group "bls12-381.g1"), "arkworks.g1/0"⟩), ("v23", ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩), ("v24", ⟨.data (.group "bls12-381.g1"), "arkworks.g1/0"⟩)], [⟨.data .boolean, "native.bool/0"⟩], [
-    .operation "value_0" "_calculation_3" [] ["v20", "v21"] ["v25"],
-    .operation "value_1" "_calculation_3" [] ["v22", "v23"] ["v26"],
-    .operation "value_2" "_calculation_6" [] ["v24", "v26"] ["v27"],
-    .operation "value_3" "_calculation_7" [] ["v25", "v27"] ["v28"],
+    .operation "lc_6_kernel_6_kernel_1_0" "_kernel_binding_0" [] ["v20", "v21"] ["v25"],
+    .operation "lc_6_kernel_6_kernel_1_1" "_kernel_binding_0" [] ["v22", "v23"] ["v26"],
+    .operation "lc_6_kernel_6_kernel_1_2" "_kernel_binding_4" [] ["v24", "v26"] ["v27"],
+    .operation "lc_6_kernel_6_kernel_1_3" "_kernel_binding_3" [] ["v25", "v27"] ["v28"],
     .ret ["v28"]]⟩
 
 /-- The local function `_transcript_1`. -/
@@ -69,9 +69,9 @@ def validator : Validator where
     .ret ["v39", "v38"]]
   functions := [function0, function1, function2, function3, function4]
   bindings := [
-    ⟨"_calculation_7", "curve.equal", ["bls12-381.g1"], "arkworks/curve.equal"⟩,
-    ⟨"_calculation_6", "curve.add", ["bls12-381.g1"], "arkworks/curve.add"⟩,
-    ⟨"_calculation_3", "curve.scale", ["bls12-381.g1"], "arkworks/curve.scale"⟩,
+    ⟨"_kernel_binding_3", "curve.equal", ["bls12-381.g1"], "arkworks/curve.equal"⟩,
+    ⟨"_kernel_binding_4", "curve.add", ["bls12-381.g1"], "arkworks/curve.add"⟩,
+    ⟨"_kernel_binding_0", "curve.scale", ["bls12-381.g1"], "arkworks/curve.scale"⟩,
     ⟨"_transcript_5", "transcript.native.indexed.observe.data", ["merlin3.bls12-381.fr64be/0", "field:bls12-381.fr"], "arkworks/transcript.native.indexed.observe.data"⟩,
     ⟨"_transcript_3", "transcript.native.indexed.challenge", ["merlin3.bls12-381.fr64be/0"], "arkworks/transcript.native.indexed.challenge"⟩,
     ⟨"_transcript_2", "indices.empty", [], "native/indices.empty"⟩,

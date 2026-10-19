@@ -394,6 +394,26 @@ int main() {
   require(preparedHashes[0].size() == 4 && preparedHashes[1].size() == 4,
           "fixture must distinguish finite/vector preparation policies under "
           "each collect-fold choice");
+  for (bool simplify : {false, true})
+    for (bool fix : {false, true}) {
+      options.simplify = simplify;
+      options.fixPolynomialFactors = fix;
+      auto result =
+          compileRun(fixture, "reported-stages.mlir", options, registry);
+      require(bool(result) && result->publicCoin, "reported pipeline refused");
+      auto compiled = json::parse(*result->publicCoin);
+      require(bool(compiled), "compiled pipeline report is not JSON");
+      json::Array expected{"zkc-prepare-protocol", "zkc-project-protocol"};
+      if (simplify)
+        expected.push_back("zkc-simplify-participant");
+      if (fix)
+        expected.push_back("zkc-fix-polynomial-factors");
+      expected.push_back("zkc-lower-math");
+      expected.push_back("zkc-select-physical");
+      auto *passes = compiled->getAsObject()->getArray("post_analysis_passes");
+      require(passes && *passes == expected,
+              "compiled report differs from selected pipeline stages");
+    }
   options.entry = "absent";
   auto refused = compileRun(fixture, "public-coin.mlir", options, registry);
   require(!refused, "entry mismatch accepted");

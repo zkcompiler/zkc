@@ -115,6 +115,24 @@ OwningOpRef<mlir::ModuleOp> exec(mlir::ModuleOp source,
           "lower-math did not produce Exec");
   return result;
 }
+local::CallOp appendReturns(local::FuncOp function, local::CallOp invocation,
+                            ValueRange values) {
+  auto returned = cast<local::ReturnOp>(function.getBody().front().back());
+  returned->insertOperands(returned.getNumOperands(), values);
+  SmallVector<Type> types(function.getResultTypes());
+  for (Value value : values)
+    types.push_back(value.getType());
+  OpBuilder builder(invocation);
+  function.setFunctionType(builder.getFunctionType(
+      function.getBody().front().getArgumentTypes(), types));
+  auto replacement = local::CallOp::create(
+      builder, invocation.getLoc(), types, invocation.getInputs(),
+      invocation.getCalleeAttr(), invocation.getSiteAttr());
+  invocation->replaceAllUsesWith(
+      replacement.getResults().take_front(invocation.getNumResults()));
+  invocation.erase();
+  return replacement;
+}
 } // namespace
 int main() {
   DialectRegistry registry;
@@ -954,6 +972,142 @@ module {
         require(succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
                 "mixed helper cut coordinates failed correspondence");
       });
+  cases.run(
+      "authored forwarding wrapper is admitted before and after projection",
+      [&] {
+        auto source = parse(realization, context);
+        require(succeeded(mathematical::expandMathRealizations(*source)),
+                "authored numerical wrapper formation failed");
+        auto function = localFunction(*source, "realized");
+        function.getBody().front().back().setOperand(0,
+                                                     function.getArgument(1));
+        require(succeeded(verify(*source)),
+                "original profile refused a forwarding Local return");
+        auto normalized = kernel::prepareKernelLowering(*source);
+        require(bool(normalized) && succeeded(verify(*normalized)),
+                "original forwarding wrapper normalization failed");
+        auto logical = exec(*source);
+        require(succeeded(verify(*logical)),
+                "projected authored forwarding wrapper was refused");
+        auto lowered = copy(*logical);
+        require(succeeded(kernel::lowerKernels(*lowered)) &&
+                    succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
+                "authored forwarding wrapper lost correspondence");
+        auto actual = localFunction(*lowered, "realized");
+        require(actual.getFunctionType() == function.getFunctionType() &&
+                    actual.getBody().front().back().getOperand(0) ==
+                        actual.getArgument(1),
+                "authored forwarding interface changed");
+      });
+  for (StringRef wiring : {"identity", "permuted", "duplicated"})
+    cases.run(
+        "admitted generated forwarding ports with " + wiring +
+            " numerical inputs",
+        [&] {
+          auto source = fixture(context, "kernel/shared-polynomial.mlir");
+          auto logical = exec(*source);
+          SmallVector<local::CallOp> invocations;
+          logical->walk([&](protocol_ir::ParticipantOp participant) {
+            participant.walk(
+                [&](local::CallOp call) { invocations.push_back(call); });
+          });
+          require(invocations.size() == 2,
+                  "shared fixture no longer has two calculation cuts");
+          auto first = localFunction(*logical, invocations[0].getCallee());
+          auto second = localFunction(*logical, invocations[1].getCallee());
+          auto call = cast<kernel::CallOp>(first.getBody().front().front());
+          if (wiring != "identity") {
+            bool changed = false;
+            for (unsigned i = 0; i < call.getNumOperands() && !changed; ++i)
+              for (unsigned j = i + 1; j < call.getNumOperands(); ++j)
+                if (call.getOperand(i).getType() ==
+                    call.getOperand(j).getType()) {
+                  auto a = call.getOperand(i), b = call.getOperand(j);
+                  call->setOperand(i, b);
+                  if (wiring == "permuted")
+                    call->setOperand(j, a);
+                  changed = true;
+                  break;
+                }
+            require(changed, "fixture has no matching numerical inputs");
+          }
+          unsigned firstResults = first.getNumResults();
+          SmallVector<Value> forwarded(first.getArguments());
+          forwarded.push_back(first.getArgument(0));
+          forwarded.push_back(call.getResult(0));
+          forwarded.push_back(call.getResult(0));
+          invocations[0] = appendReturns(first, invocations[0], forwarded);
+          // This original wrapper port imports an earlier forwarding
+          // alias without passing it to the Kernel at all. Kernel and
+          // wrapper argument coordinates must therefore stay separate.
+          auto alias = invocations[0].getResult(firstResults);
+          auto argument = second.getBody().front().addArgument(alias.getType(),
+                                                               alias.getLoc());
+          invocations[1]->insertOperands(invocations[1].getNumOperands(),
+                                         alias);
+          unsigned secondResults = second.getNumResults();
+          invocations[1] = appendReturns(
+              second, invocations[1],
+              ValueRange{argument, argument, second.getArgument(0)});
+          require(succeeded(verify(*logical)),
+                  "projected profile refused genuine forwarding ports");
+          auto snapshot = copy(*logical);
+          auto normalized = kernel::prepareKernelLowering(*logical);
+          require(bool(normalized) && succeeded(verify(*normalized)),
+                  "admitted forwarding frontier was refused");
+          require(
+              OperationEquivalence::isEquivalentTo(
+                  *logical, *snapshot, OperationEquivalence::IgnoreLocations),
+              "frontier preparation changed the admitted source");
+          auto actualFirst = localFunction(*normalized, first.getSymName());
+          auto actualSecond = localFunction(*normalized, second.getSymName());
+          auto returned =
+              cast<local::ReturnOp>(actualFirst.getBody().front().back());
+          for (auto [index, input] :
+               llvm::enumerate(actualFirst.getArguments().take_front(
+                   first.getNumArguments())))
+            require(returned.getOperand(firstResults + index) == input,
+                    "original forwarding coordinate changed");
+          require(returned.getOperand(firstResults + first.getNumArguments()) ==
+                          actualFirst.getArgument(0) &&
+                      returned.getOperand(firstResults +
+                                          first.getNumArguments() + 1) ==
+                          returned.getOperand(firstResults +
+                                              first.getNumArguments() + 2),
+                  "duplicate original return aliases diverged");
+          returned =
+              cast<local::ReturnOp>(actualSecond.getBody().front().back());
+          require(returned.getOperand(secondResults) ==
+                          actualSecond.getArgument(argument.getArgNumber()) &&
+                      returned.getOperand(secondResults + 1) ==
+                          returned.getOperand(secondResults),
+                  "earlier imported forwarding aliases changed");
+          if (wiring == "identity")
+            require(actualFirst.getNumResults() > first.getNumResults() &&
+                        actualSecond.getNumArguments() >
+                            second.getNumArguments(),
+                    "forwarding fixture did not exercise frontier exports");
+          auto lowered = copy(*logical);
+          require(
+              succeeded(kernel::lowerKernels(*lowered)) &&
+                  succeeded(kernel::verifyKernelLowering(*logical, *lowered)),
+              "forwarding frontier recipe correspondence failed");
+          // A same-typed return mutation remains profile-admitted but
+          // must fail exact original-coordinate correspondence.
+          auto changed = localFunction(*lowered, first.getSymName());
+          bool mutated = false;
+          for (Value input : changed.getArguments().drop_front())
+            if (input.getType() == changed.getArgument(0).getType()) {
+              changed.getBody().front().back().setOperand(firstResults, input);
+              mutated = true;
+              break;
+            }
+          require(mutated && succeeded(verify(*lowered)),
+                  "forwarding coordinate mutation malformed");
+          expectRefusal(*lowered, "kernel-lowering-correspondence", [&] {
+            return kernel::verifyKernelLowering(*logical, *lowered);
+          });
+        });
   for (unsigned ports : {1u, 2u, 3u})
     cases.run(
         "standard call metadata survives concrete port growth " + Twine(ports),

@@ -19,7 +19,7 @@ An exhausted checker refuses; it does not establish semantic inequivalence.
 | Optional lane realization | 1,000,000 work units; exhaustion retains ordered execution |
 | Required finite expressions and polynomial expansion | Separate cumulative allowances of 100,000 each |
 | Kernel normalization and frontier | 1,000,000 shared copy/context/frontier work units per lowering subject; independent normalization readers have 4,000,000 units per closure, helper depth 64 and polynomial depth 128 |
-| Kernel recipe materialization and correspondence | Separate allowances of 1,000,000 operation/slot units and 16 MiB generated-site text; existing recipe limits also apply |
+| Kernel recipe materialization and correspondence | Separate allowances of 1,000,000 operation/slot units and 16 MiB generated-site text; discarded recipe construction has an additional cumulative reserve of the same sizes; existing recipe limits also apply |
 | Native R1CS reduction adapter | BLS Fr; at most 8 rows, 128 columns and 1,024 nonzero terms |
 
 Ring depth counts an input or literal as one level. Each addition or
@@ -42,3 +42,20 @@ the helper-normalization allowance.
 Optional recognition and candidate comparison have separate allowances from
 ordered emission and checking. These limits bound compiler work; they are not
 runtime cost estimates or mathematical assumptions.
+
+Kernel recipe copy/site quotas are cumulative across calls and charge the
+selected attempt, including scheduling and consumption of the actual schedule.
+A terminal failure retains its construction debit. A discarded bulk proposal
+instead charges separate cumulative copy/site reserves in the shared
+realization work. Before a bulk attempt, both discarded-construction reserves
+must cover the entire incoming copy/site quotas; otherwise construction selects
+ordered execution directly. This conservative reservation may skip a smaller
+bulk proposal that would have fit the unused discard reserve.
+Only optional comparison capacity permits retry, and disabling bulk permits
+at most one ordered retry per call. Required construction has its original
+allowance on that retry; optional recognition and lane work remain cumulative.
+Selected and discarded construction together therefore consume at most
+2,000,000 charged operation/slot units and 32 MiB of charged generated-site text
+across calls with default allowances. Independent correspondence readers retain
+their own limits. These are charged construction bounds, not a bound on all
+compiler instructions or allocations.

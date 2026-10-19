@@ -41,6 +41,11 @@ selectionPolicy(CallOp call, MathematicalSelectionPolicy fallback);
 // Convert one immutable normalized Kernel entry into an owned executable
 // candidate through a checked standard numerical schedule. Local is output.
 // Callers share copy/site and realization budgets across the entire module.
+// Copy/site quotas charge the selected attempt (or a terminal failure).
+// A bulk attempt requires work's separate cumulative discarded-construction
+// reserve to cover both incoming quotas; otherwise select ordered execution.
+// At most one optional-comparison retry can debit that reserve, preserving the
+// ordered construction quotas without refunding spent speculative work.
 // Failure publishes nothing. Only optional comparison capacity permits retry.
 mlir::OwningOpRef<mlir::ModuleOp>
 realizeEntry(ModuleOp source, llvm::StringRef callSite,

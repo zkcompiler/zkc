@@ -306,5 +306,8 @@ with case("finite policy matches independent reconstruction with and without sim
             assert compiled['correspondence']['finite_bulk'] is bulk
             assert compiled['correspondence']['fuse_collect_fold'] is False
             assert compiled['correspondence']['simplify'] is simplify
+            assert compiled['correspondence']['post_check_passes'] == (
+                (['zkc-simplify-participant'] if simplify else [])
+                + ['zkc-lower-math', 'zkc-select-physical'])
 
 print(f"polynomial requirements: {counted()} cases")

@@ -18,6 +18,12 @@ struct RealizationWork {
   uint64_t helperSlots = 1000000;
   uint64_t polynomial = 100000;
   unsigned finiteExpressions = 100000;
+  // Separate cumulative reserve for discarded Kernel recipe construction.
+  // Selected construction uses the caller's copy/site quotas. Bulk proposals
+  // require this reserve to cover those quotas before attempting a retryable
+  // construction, so discarding work never replenishes a work ceiling.
+  uint64_t discardedRecipeCopy = 1000000;
+  uint64_t discardedRecipeSiteBytes = 16 * 1024 * 1024;
 };
 } // namespace zkc::mathematical
 #endif

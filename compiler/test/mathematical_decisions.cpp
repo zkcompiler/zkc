@@ -78,7 +78,10 @@ bool sameWork(const RealizationWork &a, const RealizationWork &b) {
          a.matching.evidence == b.matching.evidence && a.lanes == b.lanes &&
          a.helperOperations == b.helperOperations &&
          a.helperSlots == b.helperSlots && a.polynomial == b.polynomial &&
-         a.finiteExpressions == b.finiteExpressions;
+         a.finiteExpressions == b.finiteExpressions &&
+         a.collectFoldDiscovery == b.collectFoldDiscovery &&
+         a.discardedRecipeCopy == b.discardedRecipeCopy &&
+         a.discardedRecipeSiteBytes == b.discardedRecipeSiteBytes;
 }
 template <class T>
 std::vector<const RealizationEvent *> events(const RealizationTrace &trace) {
