@@ -412,7 +412,9 @@ stops (refused when its two messages are not scalar coordinates, rejected when
 their sum is not the claim) or passes on to the point extended by the drawn
 answer, the claim updated by the answer and the transcript with both messages,
 the challenge and its delivery absorbed. Its charge (`roundCharge`) is computed
-from the reading by evaluation. Nothing in the family depends on the maximum.
+from the reading by evaluation. No proof in the family depends on the value of
+the maximum, which an artifact bounds below 64, the terminal check's bound on
+the point's coordinates.
 `ZkcExamples.Executable.SumcheckProof.artifact` is this Entry's artifact.
 
 `executable_metered` instantiates `execute_metered`. `executable_prunes` and

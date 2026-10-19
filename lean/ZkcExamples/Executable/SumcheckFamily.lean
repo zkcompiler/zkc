@@ -17,8 +17,9 @@ and executable program, their deployment context and admitted original, and the
 per-compile facts the kernel checks for it: the lowering rule's acceptance, the
 family's shape (`SumcheckShape`) with the Entry's static maximum, the reading's
 code and receive plan, and the helper meanings and preparation the original's
-helper table gives. Nothing in this module depends on the maximum or on the
-artifact's names.
+helper table gives. No proof in this module depends on the value of the
+maximum, which an artifact bounds below 64 (the terminal check's bound on the
+point's coordinates), or on the artifact's names.
 
 One statement describes a round (`round_passes`): on every proof and under every
 answer a relation admits, the round either stops (refused when its two messages

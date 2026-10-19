@@ -22,7 +22,7 @@ and two rounds. The proof is the family's
 bound with `Zkc.Executable.validate_sufficient` and the lowering rule, and runs
 the constructed validator's ideal meaning on the decoded honest proof, each
 round by the family's round statement and the rounds by the fold invariant.
-Nothing in it depends on the maximum.
+Nothing in it depends on the value of the maximum.
 -/
 
 set_option autoImplicit false
