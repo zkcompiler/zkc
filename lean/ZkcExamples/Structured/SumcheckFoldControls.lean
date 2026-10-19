@@ -84,7 +84,7 @@ def deliveries : PIR.Handler (participantInterface F F) (List F) Unit
 
 /-- The actual prover loop of the Source unit, delivering the challenges 2 and 3. -/
 theorem loop_reaches_honest_frame :
-    ((Repeat.loop (repeatSpec 2) SumcheckSourceVerifier.childContext 0 (cap none)
+    ((Repeat.loop (repeatSpec SumcheckSourceNormalForms.reduceMaximum) SumcheckSourceVerifier.childContext 0 (cap none)
         (bodyFn SumcheckSourceViews.unit SumcheckSourceVerifier.childContext 0) 0 2
         (embedP (G := F) (honestState raw 2 []))).run deliveries [2, 3]).outcome =
       .returned (embedP (honestState raw 2 [2, 3])) := by
@@ -99,7 +99,7 @@ theorem invariant_holds_at_reached_frame :
 
 /-- The same run with its received challenges recorded as the phase. -/
 abbrev recordedRun :=
-  (Repeat.loop (repeatSpec 2) SumcheckSourceVerifier.childContext 0 (cap none)
+  (Repeat.loop (repeatSpec SumcheckSourceNormalForms.reduceMaximum) SumcheckSourceVerifier.childContext 0 (cap none)
     (bodyFn SumcheckSourceViews.unit SumcheckSourceVerifier.childContext 0) 0 2
     (embedP (G := F) (honestState raw 2 []))).run
     (PIR.ExecutionPath.handler (receivedChallenges (F := F) (G := F) SumcheckSourceVerifier.childContext)
@@ -131,7 +131,7 @@ theorem source_frames_at_reached_frame :
 /-- The round messages from the initial frame are the endpoints of the correct
 round polynomial: `f(0,0)+f(0,1) = 1` and `f(1,0)+f(1,1) = 6 = 1`. -/
 theorem first_round_messages :
-    Repeat.step (repeatSpec 2) SumcheckSourceVerifier.childContext 0 (cap none)
+    Repeat.step (repeatSpec SumcheckSourceNormalForms.reduceMaximum) SumcheckSourceVerifier.childContext 0 (cap none)
         (bodyFn SumcheckSourceViews.unit SumcheckSourceVerifier.childContext 0)
         (embedP (G := F) (honestState raw 2 [])) 0 =
       .call (.send (ty := .field "bls12-381.fr") (lowSite SumcheckSourceVerifier.childContext)
@@ -149,7 +149,7 @@ theorem first_round_messages :
 /-- Past the table's dimension the actual step stops at the halves of a
 zero-dimensional table, before any send. -/
 theorem step_past_dimension_rejects :
-    Repeat.step (repeatSpec 2) SumcheckSourceVerifier.childContext 0 (cap none)
+    Repeat.step (repeatSpec SumcheckSourceNormalForms.reduceMaximum) SumcheckSourceVerifier.childContext 0 (cap none)
         (bodyFn SumcheckSourceViews.unit SumcheckSourceVerifier.childContext 0)
         (embedP (G := F) (honestState raw 2 [2, 3])) 2 = .halt .reject := by
   rw [step_honest SumcheckSourceViews.unit SumcheckSourceContracts.bodies

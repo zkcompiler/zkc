@@ -14,18 +14,18 @@ open Zkc.Source Zkc.Source.Structured
 open Zkc.Protocols.Sumcheck.Multilinear
 open SumcheckContractBindings SumcheckContractControls
 
-/-- These are the actual retained source counts, not the unrestricted family. -/
+/-- One above each unit's own retained maximum is refused, not only in the unrestricted family. -/
 theorem public_excess_refuses :
     SumcheckSourceViews.imported.program.participant F F 1
-      (SumcheckSourceVerifier.sourceRootInputs (some [0, 0]) (some 1) (some 3) none) =
+      (SumcheckSourceVerifier.sourceRootInputs (some [0, 0]) (some 1) (some (SumcheckSourceNormalForms.reduceMaximum + 1)) none) =
       .halt .refused :=
-  SumcheckSourceVerifier.verifier_excess _ _ 3 _ (by decide)
+  SumcheckSourceVerifier.verifier_excess _ _ _ _ (Nat.lt_succ_self _)
 
 theorem reduction_excess_refuses :
     SumcheckReduceViews.imported.program.participant F F 1
-      (SumcheckReduceVerifier.reduceRootInputs none none (some 1) (some 5) none) =
+      (SumcheckReduceVerifier.reduceRootInputs none none (some 1) (some (SumcheckReductionNormalForms.reduceMaximum + 1)) none) =
       .halt .refused :=
-  SumcheckReduceVerifier.verifier_excess _ _ _ 5 (by decide) _
+  SumcheckReduceVerifier.verifier_excess _ _ _ _ (Nat.lt_succ_self _) _
 
 theorem missing_count_is_incomplete :
     SumcheckSourceViews.imported.program.participant F F 1
