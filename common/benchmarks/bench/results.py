@@ -10,9 +10,30 @@ from .observations import validate_counts, summarize_counts
 FORMAT = 'zkc.benchmark/0'
 
 
-def validate_preparation(stats):
+def validate_preparation(stats, limits=None, previous_hits=0):
     require(isinstance(stats, dict) and set(stats) == {'entries', 'retained_bytes', 'hits'}
             and all(type(v) is int and v >= 0 for v in stats.values()), 'invalid preparation statistics')
+    require(stats['hits'] >= previous_hits, 'preparation hits moved backwards')
+    if limits is not None:
+        require(stats['entries'] <= limits['entries'] and stats['retained_bytes'] <= limits['bytes'],
+                'preparation exceeded its resource contract')
+        if limits['entries'] == 0 or limits['bytes'] == 0:
+            require(all(value == 0 for value in stats.values()), 'disabled preparation retained state')
+
+
+def validate_preparation_limits(limits, request=None):
+    require(isinstance(limits, dict) and set(limits) == {'entries', 'bytes', 'default_entries', 'default_bytes'}
+            and all(type(v) is int and v >= 0 for v in limits.values()), 'invalid preparation limits')
+    if request is None:
+        return
+    require(isinstance(request, dict) and request.get('kind') == 'host'
+            and type(request.get('preparation')) is bool, 'missing preparation request')
+    expected = []
+    for name in ('entries', 'bytes'):
+        value = request.get(f'preparation_{name}')
+        require(value is None or type(value) is int and value >= 0, 'invalid requested preparation limit')
+        expected.append((limits[f'default_{name}'] if value is None else value) if request['preparation'] else 0)
+    require((limits['entries'], limits['bytes']) == tuple(expected), 'preparation limits differ from the request')
 
 
 def validate_worker(report, plan, boundary):
@@ -64,10 +85,7 @@ def validate_worker(report, plan, boundary):
                 'diagnostics_ns', 'peak_rss_before_diagnostics', 'peak_rss_after_diagnostics', 'preparation_limits'}, 'invalid lifecycle fields')
         limits = lifecycle['preparation_limits']
         if boundary == 'admitted_entry_call':
-            require(isinstance(limits, dict) and set(limits) == {'entries', 'bytes', 'default_entries', 'default_bytes'}
-                    and all(type(v) is int and v >= 0 for v in limits.values()), 'invalid preparation limits')
-            require(limits['entries'] <= limits['default_entries'] and limits['bytes'] <= limits['default_bytes'],
-                    'preparation raised the default bounds')
+            validate_preparation_limits(limits)
         else:
             require(limits is None, 'unexpected preparation limits')
         for name in ('capture_ns', 'admit_ns', 'diagnostics_ns'):
@@ -77,6 +95,7 @@ def validate_worker(report, plan, boundary):
             require(lifecycle[name] is None or type(lifecycle[name]) is int and lifecycle[name] >= 0, f'invalid {name}')
         calls = lifecycle['calls']
         require(isinstance(calls, list) and len(calls) == len(values)*plan['iterations'], 'incomplete lifecycle calls')
+        previous_hits = 0
         for call in calls:
             require(isinstance(call, dict) and {'input_index', 'decode_ns'} <= call.keys()
                     and not (call.keys() - {'input_index', 'decode_ns', 'preparation', 'execution_counts'}), 'invalid lifecycle call')
@@ -85,7 +104,9 @@ def validate_worker(report, plan, boundary):
             if boundary == 'admitted_entry_call':
                 require('preparation' in call, 'missing preparation statistics')
             if 'preparation' in call:
-                validate_preparation(call['preparation'])
+                stats = call['preparation']
+                validate_preparation(stats, limits, previous_hits)
+                previous_hits = stats['hits']
             require(('execution_counts' in call) == counted, 'call observation capability mismatch')
             if counted:
                 validate_counts(call['execution_counts'])
@@ -136,7 +157,7 @@ def validate_manifest(manifest):
         for repetition in range(processes):
             key = (job['case'], job['implementation'], job['operation'], repetition)
             require(key not in expected, 'duplicate matrix job')
-            expected[key] = job['boundary']
+            expected[key] = job
     seen = set()
     for result in results:
         require(isinstance(result, dict) and result.get('status') == 'passed', 'unsuccessful measurement in successful run')
@@ -144,7 +165,11 @@ def validate_manifest(manifest):
         require(all(isinstance(value, str) for value in key[:3]) and type(key[3]) is int, 'invalid result identity')
         require(key in expected and key not in seen, 'unexpected or duplicate measurement')
         seen.add(key)
-        validate_worker(result.get('worker'), plan, expected[key])
+        job = expected[key]
+        validate_worker(result.get('worker'), plan, job['boundary'])
+        if job['boundary'] == 'admitted_entry_call':
+            require(isinstance(job.get('backend'), dict), 'missing preparation request')
+            validate_preparation_limits(result['worker']['lifecycle']['preparation_limits'], job['backend'])
         require(result['worker']['build'].get('execution_counts', False) is (manifest['observation'] == 'execution_counts'),
                 'manifest observation capability mismatch')
     require(seen == expected.keys(), 'incomplete successful measurement matrix')

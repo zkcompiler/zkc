@@ -29,6 +29,7 @@ pub enum Failure {
         cause: Box<Failure>,
         preparation_before: observation::Preparation,
         preparation_after: observation::Preparation,
+        preparation_limits: observation::Limits,
     },
 }
 type Result<T, E = Failure> = std::result::Result<T, E>;
@@ -60,6 +61,7 @@ enum Backend {
         inputs: Vec<host::Input>,
         preparation: bool,
         preparation_entries: Option<usize>,
+        preparation_bytes: Option<usize>,
     },
     Run {
         package: PathBuf,
@@ -175,6 +177,7 @@ fn run() -> Result<Report> {
             inputs,
             preparation,
             preparation_entries,
+            preparation_bytes,
         } => host::run(
             &request,
             package,
@@ -182,6 +185,7 @@ fn run() -> Result<Report> {
             inputs,
             *preparation,
             *preparation_entries,
+            *preparation_bytes,
         )?,
         Backend::Run {
             package,
@@ -220,18 +224,20 @@ fn main() {
     match run() {
         Ok(report) => println!("{}", serde_json::to_string(&report).unwrap()),
         Err(error) => {
-            let (completed_calls, preparation, error) = match error {
+            let (completed_calls, preparation, preparation_limits, error) = match error {
                 Failure::Invocation {
                     completed,
                     cause,
                     preparation_before,
                     preparation_after,
+                    preparation_limits,
                 } => (
                     Some(completed),
                     json!({"before":preparation_before,"after":preparation_after}),
+                    Some(preparation_limits),
                     *cause,
                 ),
-                error => (None, Value::Null, error),
+                error => (None, Value::Null, None, error),
             };
             let mut refusal = Value::Null;
             let (status, error) = match error {
@@ -255,7 +261,7 @@ fn main() {
             };
             println!(
                 "{}",
-                json!({"format":"zkc.benchmark-worker/0", "status":status, "error":error, "completed_calls":completed_calls,"refusal":refusal,"preparation":preparation})
+                json!({"format":"zkc.benchmark-worker/0", "status":status, "error":error, "completed_calls":completed_calls,"refusal":refusal,"preparation":preparation,"preparation_limits":preparation_limits})
             );
             std::process::exit(1);
         }

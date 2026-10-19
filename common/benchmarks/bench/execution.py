@@ -17,7 +17,9 @@ def compile_program(args, output, capture, manifest, case, program):
     source.write_text(program.source)
     project = directory/'zkc.toml'
     text = f'format="zkc.project/0"\n[modules]\n{json.dumps(program.entry.split("::")[0])}="main.zkc"\n[dependencies]\n'
-    text += ''.join(f'{json.dumps(name)}={json.dumps(str(root/"libraries"/name))}\n' for name in program.dependencies)
+    text += ''.join(f'{json.dumps(name)}={{workspace={json.dumps(name)}}}\n' for name in program.dependencies)
+    if program.dependencies:
+        text += f'\n[workspace]\npath={json.dumps(str(root/"zkc.workspace.toml"))}\n'
     for name, value in program.assets.items():
         path = directory/f'{name}.json'
         write_json(path, value)
@@ -80,7 +82,8 @@ def prepare_case(args, output, capture, manifest, case):
         'assets_sha256': hashlib.sha256(json.dumps(program.assets, sort_keys=True).encode()).hexdigest(),
         'input_policy': 'round-robin distinct inputs' if len(inputs) > 1 else 'fixed inputs',
         'preparation_policy': args.preparation if program.proof else 'run entry defaults',
-        'preparation_entries': args.preparation_entries if program.proof else None,
+        'requested_preparation_entries': args.preparation_entries if program.proof else None,
+        'requested_preparation_bytes': args.preparation_bytes if program.proof else None,
         'notes': [case.limitation, 'SDK timing includes result checking in the source; excludes input JSON decoding, final diagnostics and proof-file writes.',
                   'Generated-project compilation is a single compiler-process observation, excluding source generation.'],
         'boundaries': {},
@@ -123,7 +126,8 @@ def prepare_case(args, output, capture, manifest, case):
 
 def proof_jobs(args, capture, directory, name, base, files, program, proof_format):
     require(proof_format in ('raw.bytes/0', 'zkc.framed/0'), 'unknown proof format for refusal controls')
-    backend = base | {'kind': 'host', 'inputs': files, 'preparation': True, 'preparation_entries': args.preparation_entries}
+    backend = base | {'kind': 'host', 'inputs': files, 'preparation': True, 'preparation_entries': args.preparation_entries,
+                      'preparation_bytes': args.preparation_bytes}
     prototype = Job(name, 'zkc', 'prove', args.worker, backend, directory/'proof.bin', 'admitted_entry_call', execution_counts=args.execution_counts)
     # Generate a candidate for every statement, outside the measurement schedule.
     for index, inputs in enumerate(files):
