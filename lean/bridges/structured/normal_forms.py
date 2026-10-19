@@ -12,7 +12,11 @@ instructions at that role, following the participant rules, and writes:
   * the process equation of each normal form, with its proof;
   * reply scripts and the observed run of each root role;
   * for a selected contract clause, the relation binding, its argument
-    builder, the formula's process and the observed decision.
+    builder, the formula's process and the observed decision;
+  * for a body that applies other protocols, the callee's generated normal
+    form at the application's child context with its input and output masks,
+    and the role's invocation at any caller context;
+  * named positions of carried repeat slots and of the return order.
 
 The output is ordinary Lean source. Every definition and equation is
 elaborated and checked by the kernel, so a generator error, a stale request or
