@@ -347,23 +347,24 @@ well-formed statements within the Entry's maxima, and bounds the compiled
 verifier's acceptance of claimed outputs other than the circuit's by
 `(Q + width + layers (2 width + 1)) max 2 width / |F|` for a fixed statement.
 The [executable bridge](../lean/bridges/executable/README.md) reads the validators
-of the Schnorr and Sumcheck Entries' `zkc.program/0` candidates, which the runtime
-admits. Lean checks each against its constructed validator with a
+of the `zkc.program/0` candidates of the Schnorr and Sumcheck Entries and of a
+deferred-rounds fixture, which the runtime admits. Lean checks each against its constructed validator with a
 [lowering rule](../lean/docs/spec/executable.md) whose meaning covers proof
 framing, decoding failures, instruction budgets, loops, local calls with frames,
 helper calls and transcript custody. The rule compares instructions up to checked
 normalization of pure total calculations, so a schedule that computes values
 before their first consumer, as the compiler's calculation batching does, is
 accepted when its anchors and their operand terms agree with the export's. The
-compiled Schnorr and Sumcheck programs equal their exports; a two-round fixture
-whose program defers the first round's product past the second draw is accepted
-through normalization, and compiled with `--no-calculation-batching`, which
+compiled Schnorr and Sumcheck programs equal their exports; the two-round
+deferred-rounds fixture, whose program defers the first round's product past
+the second draw, is accepted through normalization, and compiled with `--no-calculation-batching`, which
 computes values where the source defines them, by equality. That fixture's
 theorems stop at the constructed validator, since the participant projection
 rule is not applied to it. For Sumcheck the program's helper functions are proved to
 implement the source's checked helpers, and honest-prover completeness of the
-executable holds at every budget of at least `68 + 61 · rounds` instructions,
-which at two rounds is the runtime's acceptance threshold. The security bounds
+executable holds for tables of at most two rounds, the Entry's static maximum,
+at every budget of at least `68 + 61 · rounds` instructions, which at two rounds
+is the runtime's acceptance threshold. The security bounds
 transfer to provers of proof bytes through the general construction, projection
 and lowering rules, with no equation specific to an Entry about the compiled
 program: Schnorr knowledge soundness for a fixed statement, and Sumcheck soundness
