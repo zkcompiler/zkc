@@ -273,6 +273,7 @@ import Tests.StructuredLinking
 import Tests.StructuredMapClients
 import Tests.StructuredMapRestrictions
 import Tests.StructuredMaps
+import Tests.StructuredNormalForms
 import Tests.StructuredOpenAdmission
 import Tests.StructuredOpenEvaluation
 import Tests.StructuredParticipant
