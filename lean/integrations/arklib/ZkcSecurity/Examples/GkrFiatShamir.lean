@@ -1,37 +1,51 @@
 module
 
 public import ZkcSecurity.FiatShamir.Composition
+public import ZkcSecurity.FiatShamir.Reduction
 public import ZkcSecurity.ArkLib.Gkr.Layer
 public import ZkcExamples.Structured.GkrVerifierProcess
 
 @[expose] public section
 
-/-! Fiat–Shamir soundness of the plain GKR verifier.
+/-! Fiat–Shamir soundness of the plain GKR verifier, with a charge per phase.
 
 The subject is `ZkcExamples.Structured.GkrVerifier.verifier`, the GKR library's
-verifier of an admitted statement over the common participant actions. Its
-round-by-round certificate composes one certificate per phase
-(`ZkcSecurity.FiatShamir.Reduction`):
+verifier of an admitted statement over the common participant actions; the
+original GKR Entry's verifier is this process
+(`ZkcExamples.Structured.GkrSourceVerifier.verifier_reads`). Its certificate is a
+charged reduction over the transcript interface of the common actions
+(`ZkcSecurity.FiatShamir.Typed.Reduction`), composed with `bind`, `repeatN`,
+`union` and `receive` from one reduction per phase, each at the error of its own
+challenge site (`siteCharge`):
 
-* Output point. While the claimed outputs differ from the circuit's outputs,
-  their difference is nonzero at some remaining Boolean coordinates
+* Output point, `1 / |F|`. While the claimed outputs differ from the circuit's
+  outputs, their difference is nonzero at some remaining Boolean coordinates
   (`OutputsDiffer`); a fresh challenge loses that with probability at most
   `1 / |F|`, since the extension is affine in each coordinate.
-* Layer Sumcheck. A false layer claim `m ≠ W~_i(r)` is a false claim about the
-  sum of the layer's gate polynomial (`ZkcSecurity.ArkLib.Gkr.gatePolynomial`),
-  whose rounds keep it false except with probability `2 / |F|` each (ArkLib's
-  round lemma at degree two) across both `Rounds` applications.
-* Line. After the wiring check passes on a false complete-point claim, the
-  received coefficients describe a polynomial other than the restriction of
-  `W~_{i+1}` to the line through the two Sumcheck points, so the line challenge
-  makes the next layer's claim true with probability at most `width / |F|`
-  (`Zkc.Polynomial.Multilinear.agreements_card_le`).
+* Layer Sumcheck, `2 / |F|`. A false layer claim `m ≠ W~_i(r)` is a false claim
+  about the sum of the layer's gate polynomial
+  (`ZkcSecurity.ArkLib.Gkr.gatePolynomial`), whose rounds keep it false except
+  with probability `2 / |F|` each (ArkLib's round lemma at degree two) across
+  both `Rounds` applications.
+* Line, `width / |F|`. After the wiring check passes on a false complete-point
+  claim, the received coefficients describe a polynomial other than the
+  restriction of `W~_{i+1}` to the line through the two Sumcheck points, so the
+  line challenge makes the next layer's claim true with probability at most
+  `width / |F|` (`Zkc.Polynomial.Multilinear.agreements_card_le`).
 * Inputs. A false claim about the input layer fails the input check.
 
-With error `max 2 width / |F|` per challenge and `width + layers (2 width + 1)`
-challenges, `soundness` bounds acceptance of claimed outputs other than the
-circuit's by `(Q + width + layers (2 width + 1)) max 2 width / |F|` in the
-random-oracle model (`ZkcSecurity.FiatShamir.soundness`).
+Each phase is first a reduction with its own uniform error (`outputCertificate`,
+`roundCertificate`, `lineCertificate`), whose doomed queries are all at its
+site; `sited` makes it a charged reduction for the site charge.
+
+The adversary budget is weighted (`soundness_charged`): a prover whose queries
+charge, on every path, at most `proverCost` with each oracle key charged its
+site's error makes claimed outputs other than the circuit's accepted with
+probability at most `proverCost` plus the validator's charge. The per-phase
+errors improve the bound only through this weighting: a prover with a total of
+`Q` queries can place all of them at the most expensive site, so against a
+total budget its contribution stays `Q max 2 width / |F|`, and `soundness`
+bounds acceptance by `(Q + width + layers (2 width + 1)) max 2 width / |F|`.
 -/
 
 set_option autoImplicit false
@@ -73,6 +87,107 @@ theorem uniform_event_le [SampleableType F] (event : F → Prop) [DecidablePred 
 end Error
 
 variable {F G : Type} [Field F] [Fintype F] [DecidableEq F] [SampleableType F]
+
+/-- The transcript interface of the common participant actions, with field
+challenges read directly from the oracle. -/
+abbrev transcript (context : Context) :
+    Typed.Interface (Actions F G) (Event F G) (Payload F G) (fun _ => F) :=
+  interface context id
+
+/-! ## Charges per challenge site -/
+
+section Charges
+variable (ctx : ProtocolContext) (context : Context) (width : Nat)
+
+/-- The charge of a key of the plain verifier's queries: the error of its
+challenge site, `1 / |F|` at the output point, `2 / |F|` at a round of either
+layer Sumcheck application, `width / |F|` at the line challenge, and nothing at
+any other key. A key at sites that coincided is charged the larger error. -/
+noncomputable def siteCharge (_ : History F G) : Event F G → ENNReal
+  | .challenge origin =>
+      max (max (if origin = context.query (outputSite ctx) (.draw "bls12-381.fr") then
+            1 / (Fintype.card F : ENNReal) else 0)
+          (if origin = context.query (challengeSite (leftContext ctx)) (.draw "bls12-381.fr") ∨
+              origin = context.query (challengeSite (rightContext ctx)) (.draw "bls12-381.fr") then
+            2 / (Fintype.card F : ENNReal) else 0))
+        (if origin = context.query (lineChallengeSite ctx) (.draw "bls12-381.fr") then
+          (width : ENNReal) / Fintype.card F else 0)
+  | _ => 0
+
+omit [Field F] [DecidableEq F] [SampleableType F] in
+theorem siteCharge_le (history : History F G) (event : Event F G) :
+    siteCharge (F := F) ctx context width history event ≤ error F width := by
+  cases event with
+  | challenge origin =>
+    refine max_le (max_le ?_ ?_) ?_ <;> split_ifs
+    · exact error_one F width
+    · exact zero_le
+    · exact error_two F width
+    · exact zero_le
+    · exact error_width F width
+    · exact zero_le
+  | binding => exact zero_le
+  | message => exact zero_le
+  | publicBinding => exact zero_le
+
+omit [Field F] [DecidableEq F] [SampleableType F] in
+theorem output_charge (history : History F G) :
+    1 / (Fintype.card F : ENNReal) ≤ siteCharge (F := F) ctx context width history
+      (.challenge (context.query (outputSite ctx) (.draw "bls12-381.fr"))) := by
+  refine le_max_of_le_left (le_max_of_le_left ?_)
+  simp
+
+omit [Field F] [DecidableEq F] [SampleableType F] in
+theorem round_charge (inner : ProtocolContext)
+    (side : inner = leftContext ctx ∨ inner = rightContext ctx) (history : History F G) :
+    2 / (Fintype.card F : ENNReal) ≤ siteCharge (F := F) ctx context width history
+      (.challenge (context.query (challengeSite inner) (.draw "bls12-381.fr"))) := by
+  refine le_max_of_le_left (le_max_of_le_right ?_)
+  rcases side with rfl | rfl <;> simp
+
+omit [Field F] [DecidableEq F] [SampleableType F] in
+theorem line_charge (history : History F G) :
+    (width : ENNReal) / Fintype.card F ≤ siteCharge (F := F) ctx context width history
+      (.challenge (context.query (lineChallengeSite ctx) (.draw "bls12-381.fr"))) := by
+  refine le_max_of_le_right ?_
+  simp
+
+end Charges
+
+omit [Field F] [Fintype F] [DecidableEq F] in
+/-- A reduction over the common participant actions with a uniform error is a
+charged reduction over their transcript interface, with the same doomed
+residuals at every history, when the charge at every query of a doomed residual
+dominates the error. -/
+def sited {A : Type} {final : A → Prop} {error : ENNReal}
+    (reduction : Reduction (F := F) (G := G) final error) (context : Context)
+    (charge : History F G → Event F G → ENNReal)
+    (covers : ∀ process, reduction.doomed process →
+      match process with
+      | .call (.query site field _) _ =>
+          ∀ history, error ≤ charge history (.challenge (context.query site (.draw field)))
+      | _ => True) :
+    Typed.Reduction (transcript (F := F) (G := G) context) (fun _ value => final value) charge where
+  doomed _ process := reduction.doomed process
+  step history process member := by
+    have step := reduction.step process member
+    have charged := covers process member
+    match process, step, charged with
+    | .done value, step, _ => exact step
+    | .halt _, _, _ => trivial
+    | .call (.receive ty site sender) next, step, _ => exact fun _ value _ => step value
+    | .call (.send site receiver sent) next, step, _ =>
+        simp only [Typed.ChargedStepTo, interface]
+        cases Payload.ofValue _ sent with
+        | none => trivial
+        | some payload => exact step
+    | .call (.query site field arguments) next, step, charged =>
+        refine le_trans (le_of_eq (prEvent_congr _ _ (fun raw => ¬ reduction.doomed (next raw))
+          fun raw => ?_)) (step.trans (charged history))
+        exact ⟨fun ⟨_, decoded, outside⟩ => by
+            cases Option.some.inj decoded
+            exact outside,
+          fun outside => ⟨_, rfl, outside⟩⟩
 
 /-! ## Output point -/
 
@@ -124,9 +239,9 @@ theorem outputsDiffer_successor (difference : Table F width) (remaining : Nat) (
 variable (ctx : ProtocolContext) (handle : Nat)
 
 /-- One output-point round, from a difference with `remaining + 1` coordinates
-left to one with `remaining` left. -/
+left to one with `remaining` left, at the output point's error `1 / |F|`. -/
 noncomputable def outputCertificate (difference : Table F width) (remaining : Nat) :
-    Reduction (F := F) (G := G) (OutputsDiffer difference remaining) (error F width) where
+    Reduction (F := F) (G := G) (OutputsDiffer difference remaining) (1 / (Fintype.card F : ENNReal)) where
   doomed process := ∃ point, OutputsDiffer difference (remaining + 1) point ∧
     (process = outputRound ctx handle point ∨
       ∃ r, OutputsDiffer difference remaining (point ++ [r]) ∧
@@ -134,18 +249,27 @@ noncomputable def outputCertificate (difference : Table F width) (remaining : Na
   step := by
     rintro _ ⟨point, differ, rfl | ⟨r, next, rfl | rfl⟩⟩
     · refine (prEvent_mono _ _ (fun r => ¬ OutputsDiffer difference remaining (point ++ [r]))
-        (fun r escaped => ?_)).trans
-        ((outputsDiffer_successor difference remaining point differ).trans (error_one F width))
+        (fun r escaped => ?_)).trans (outputsDiffer_successor difference remaining point differ)
       intro next
       exact escaped ⟨point, differ, .inr ⟨r, next, .inl rfl⟩⟩
     · exact ⟨point, differ, .inr ⟨r, next, .inr rfl⟩⟩
     · exact next
 
-/-- All output-point rounds: their final points differ with no coordinate left. -/
-noncomputable def outputsCertificate (difference : Table F width) :
-    Reduction (F := F) (G := G) (OutputsDiffer difference 0) (error F width) :=
-  Reduction.repeatN (outputRound ctx handle) (outputCertificate ctx handle difference)
-    (fun _ point differ => ⟨point, differ, .inl rfl⟩)
+/-- All output-point rounds, charged per site: their final points differ with no
+coordinate left. -/
+noncomputable def outputsReduction (context : Context) (difference : Table F width) :
+    Typed.Reduction (transcript (F := F) (G := G) context) (fun _ point => OutputsDiffer difference 0 point)
+      (siteCharge ctx context width) :=
+  Typed.Reduction.repeatN (transcript context)
+    (invariant := fun _ remaining point => OutputsDiffer difference remaining point)
+    (outputRound ctx handle)
+    (fun remaining => sited (outputCertificate ctx handle difference remaining) context _
+      fun _ ⟨_, _, shape⟩ => by
+        rcases shape with rfl | ⟨_, _, rfl | rfl⟩
+        · exact fun history => output_charge ctx context width history
+        · trivial
+        · trivial)
+    (fun _ _ point differ => ⟨point, differ, .inl rfl⟩)
 
 omit [Fintype F] [DecidableEq F] [SampleableType F] in
 /-- Claimed outputs other than the circuit's differ at the empty point. -/
@@ -194,7 +318,7 @@ def RoundResidual (remaining : Nat) (state : List F × F) (process : PIR.Proc (A
 /-- One degree-two round keeps a false claim false except with probability
 `2 / |F|`. -/
 noncomputable def roundCertificate (remaining : Nat) :
-    Reduction (F := F) (G := G) (RoundsFalse statement start remaining) (error F width) where
+    Reduction (F := F) (G := G) (RoundsFalse statement start remaining) (2 / (Fintype.card F : ENNReal)) where
   doomed process := ∃ state, RoundsFalse statement start (remaining + 1) state ∧
     RoundResidual statement start ctx handle remaining state process
   step := by
@@ -209,7 +333,7 @@ noncomputable def roundCertificate (remaining : Nat) :
         obtain ⟨sized, startSize, wrong⟩ := holds
         have bound := falseClaim_successor statement (start ++ state.1) state.2 c0 c1 c2 wrong
           (by simp; omega) checked
-        refine (prEvent_mono _ _ _ (fun r escaped => ?_)).trans (bound.trans (error_two F width))
+        refine (prEvent_mono _ _ _ (fun r escaped => ?_)).trans bound
         intro stays
         apply escaped
         refine ⟨state, ⟨sized, startSize, wrong⟩, .inr (.inr (.inr (.inr ⟨c0, c1, c2, r, ?_, .inl rfl⟩)))⟩
@@ -220,16 +344,35 @@ noncomputable def roundCertificate (remaining : Nat) :
     · exact ⟨state, holds, .inr (.inr (.inr (.inr ⟨c0, c1, c2, r, next, .inr rfl⟩)))⟩
     · exact next
 
-/-- All rounds of one `Rounds` application. -/
-noncomputable def roundsCertificate :
-    Reduction (F := F) (G := G) (RoundsFalse statement start 0) (error F width) :=
-  Reduction.repeatN (round ctx handle) (roundCertificate statement start ctx handle)
-    (fun _ state holds => ⟨state, holds, .inl rfl⟩)
+/-- All rounds of one `Rounds` application, at the context `ctx` of the left or
+the right application of a layer at `outer`, charged per site. -/
+noncomputable def roundsReduction (outer : ProtocolContext) (context : Context)
+    (side : ctx = leftContext outer ∨ ctx = rightContext outer) :
+    Typed.Reduction (transcript (F := F) (G := G) context) (fun _ state => RoundsFalse statement start 0 state)
+      (siteCharge outer context width) :=
+  Typed.Reduction.repeatN (transcript context)
+    (invariant := fun _ remaining state => RoundsFalse statement start remaining state)
+    (round ctx handle)
+    (fun remaining => sited (roundCertificate statement start ctx handle remaining) context _
+      fun _ ⟨state, _, shape⟩ => by
+        rcases shape with rfl | ⟨_, rfl⟩ | ⟨_, _, rfl⟩ | ⟨c0, c1, c2, rfl⟩ | ⟨_, _, _, _, _, rfl | rfl⟩
+        · trivial
+        · trivial
+        · trivial
+        · by_cases check : state.2 = c0 + c0 + c1 + c2
+          · simp only [roundCheck, check, ↓reduceIte]
+            exact fun history => round_charge outer context width ctx side history
+          · simp only [roundCheck, check, ↓reduceIte]
+        · trivial
+        · trivial)
+    (fun _ _ state holds => ⟨state, holds, .inl rfl⟩)
 
-theorem rounds_doomed (claim : F) (startSize : start.length ≤ width)
-    (wrong : FalseClaim statement start claim) :
-    (roundsCertificate (G := G) statement start ctx handle).doomed (rounds ctx handle width claim) :=
-  Reduction.repeatN_doomed _ _ _ width ([], claim) ⟨by simp, startSize, by simpa using wrong⟩
+theorem rounds_doomed (outer : ProtocolContext) (context : Context)
+    (side : ctx = leftContext outer ∨ ctx = rightContext outer) (history : History F G) (claim : F)
+    (startSize : start.length ≤ width) (wrong : FalseClaim statement start claim) :
+    (roundsReduction (G := G) statement start ctx handle outer context side).doomed history
+      (rounds ctx handle width claim) :=
+  Typed.Reduction.repeatN_doomed _ _ _ _ history width ([], claim) ⟨by simp, startSize, by simpa using wrong⟩
 
 end Rounds
 
@@ -269,9 +412,9 @@ def CoefficientsFrom (first : F) (count remaining : Nat) (coefficients : List F)
 
 variable (ctx : ProtocolContext) (handle : Nat)
 
-/-- One further line coefficient. -/
+/-- One further line coefficient; there is no challenge. -/
 noncomputable def coefficientCertificate (first : F) (remaining : Nat) :
-    Reduction (F := F) (G := G) (CoefficientsFrom first width remaining) (error F width) where
+    Reduction (F := F) (G := G) (CoefficientsFrom first width remaining) 0 where
   doomed process := ∃ coefficients, CoefficientsFrom first width (remaining + 1) coefficients ∧
     (process = lineCoefficient ctx coefficients ∨ ∃ c, process = .done (coefficients ++ [c]))
   step := by
@@ -318,7 +461,8 @@ theorem line_successor (remaining : Nat) (state : State F) (left right : List F)
         (coordinates (width + width + width) (state.2.1 ++ left ++ right)))
       first coefficients.sum) :
     Pr{let t ← $ᵗ F}[¬ LayerFalse layers inputs add mul remaining
-        (state.1 + 1, linePoints left right t, powerSum coefficients t)] ≤ error F width := by
+        (state.1 + 1, linePoints left right t, powerSum coefficients t)] ≤
+      (width : ENNReal) / Fintype.card F := by
   classical
   obtain ⟨index, pointSize, _⟩ := holds
   obtain ⟨sized, head⟩ := shape
@@ -344,8 +488,7 @@ theorem line_successor (remaining : Nat) (state : State F) (left right : List F)
       firstValue, atOne]
   refine (prEvent_mono _ _ (fun t => (coefficientPolynomial coefficients).eval t =
       extension width below (linePoint start finish t)) (fun t escaped => ?_)).trans
-    ((uniform_event_le F _ width
-      (agreements_card_le below start finish _ degree different)).trans (error_width F width))
+    (uniform_event_le F _ width (agreements_card_le below start finish _ degree different))
   by_contra notEqual
   apply escaped
   refine ⟨by omega, by simp [linePoints_length, leftSize, rightSize], ?_⟩
@@ -362,9 +505,10 @@ def LineReady (remaining : Nat) (state : State F) (left right : List F) (claim f
       (layerStatement inputs add mul remaining state.1 state.2.1).val ≠ claim ∧
     CoefficientsFrom first width 0 coefficients
 
-/-- The wiring check and the line challenge. -/
+/-- The wiring check and the line challenge, at the line's error `width / |F|`. -/
 noncomputable def lineCertificate (remaining : Nat) :
-    Reduction (F := F) (G := G) (LayerFalse layers inputs add mul remaining) (error F width) where
+    Reduction (F := F) (G := G) (LayerFalse layers inputs add mul remaining)
+      ((width : ENNReal) / Fintype.card F) where
   doomed process := ∃ state left right claim first coefficients,
     LineReady layers inputs add mul remaining state left right claim first coefficients ∧
     (process = lineCheck ctx handle width (add state.1) (mul state.1) state left right claim first
@@ -389,56 +533,84 @@ noncomputable def lineCertificate (remaining : Nat) :
     · exact ⟨state, left, right, claim, first, coefficients, ready, .inr ⟨t, next, .inr rfl⟩⟩
     · exact next
 
-/-- The line polynomial's coefficients, then the wiring check. -/
-noncomputable def constantCertificate (remaining : Nat) (state : State F) (left right : List F × F)
+variable (context : Context)
+
+/-- The line polynomial's coefficients, then the wiring check and the line
+challenge, charged per site. -/
+noncomputable def constantReduction (remaining : Nat) (state : State F) (left right : List F × F)
     (first : F) (ready : LayerFalse layers inputs add mul (remaining + 1) state ∧
       left.1.length = width ∧ right.1.length = width ∧
       MvPolynomial.eval (coordinates (width + width) (left.1 ++ right.1))
         (layerStatement inputs add mul remaining state.1 state.2.1).val ≠ right.2) :
-    Reduction (F := F) (G := G) (LayerFalse layers inputs add mul remaining) (error F width) :=
-  (Reduction.repeatN (lineCoefficient ctx) (coefficientCertificate ctx first)
-      (fun _ coefficients shape => ⟨coefficients, shape, .inl rfl⟩)).bind
+    Typed.Reduction (transcript (F := F) (G := G) context)
+      (fun _ next => LayerFalse layers inputs add mul remaining next) (siteCharge ctx context width) :=
+  (Typed.Reduction.repeatN (transcript context)
+      (invariant := fun _ remaining coefficients => CoefficientsFrom first width remaining coefficients)
+      (lineCoefficient ctx)
+      (fun remaining => sited (coefficientCertificate ctx first remaining) context _
+        fun _ ⟨_, _, shape⟩ => by
+          rcases shape with rfl | ⟨_, rfl⟩
+          · trivial
+          · trivial)
+      (fun _ _ coefficients shape => ⟨coefficients, shape, .inl rfl⟩)).bind (transcript context)
     (lineCheck ctx handle width (add state.1) (mul state.1) state left.1 right.1 right.2 first)
-    (lineCertificate layers inputs add mul ctx handle remaining)
-    (fun coefficients shape => ⟨state, left.1, right.1, right.2, first, coefficients,
+    (sited (lineCertificate layers inputs add mul ctx handle remaining) context _
+      fun _ ⟨state, left, right, claim, first, coefficients, _, shape⟩ => by
+        rcases shape with rfl | ⟨_, _, rfl | rfl⟩
+        · by_cases check : claim = wiringValue
+              (extension (width + width + width) (add state.1)
+                (coordinates (width + width + width) (state.2.1 ++ left ++ right)))
+              (extension (width + width + width) (mul state.1)
+                (coordinates (width + width + width) (state.2.1 ++ left ++ right)))
+              first coefficients.sum
+          · simp only [lineCheck, check, ↓reduceIte]
+            exact fun history => line_charge ctx context width history
+          · simp only [lineCheck, check, ↓reduceIte]
+        · trivial
+        · trivial)
+    (fun _ coefficients shape => ⟨state, left.1, right.1, right.2, first, coefficients,
       ⟨ready.1, ready.2.1, ready.2.2.1, ready.2.2.2, shape⟩, .inl rfl⟩)
 
 theorem constant_doomed (remaining : Nat) (state : State F) (left right : List F × F) (first : F)
     (ready : LayerFalse layers inputs add mul (remaining + 1) state ∧
       left.1.length = width ∧ right.1.length = width ∧
       MvPolynomial.eval (coordinates (width + width) (left.1 ++ right.1))
-        (layerStatement inputs add mul remaining state.1 state.2.1).val ≠ right.2) :
-    (constantCertificate (G := G) layers inputs add mul ctx handle remaining state left right first
-      ready).doomed (layerAfterConstant ctx handle width add mul state left right first) :=
-  Reduction.bind_doomed _ _ _ _ _
-    (Reduction.repeatN_doomed _ _ _ width [first] ⟨by simp; omega, rfl⟩)
+        (layerStatement inputs add mul remaining state.1 state.2.1).val ≠ right.2) (history : History F G) :
+    (constantReduction (G := G) layers inputs add mul ctx handle context remaining state left right first
+      ready).doomed history (layerAfterConstant ctx handle width add mul state left right first) :=
+  Typed.Reduction.bind_doomed _ _ _ _ _ _ _
+    (Typed.Reduction.repeatN_doomed _ _ _ _ history width [first] ⟨by simp; omega, rfl⟩)
 
-/-- The second `Rounds` application's result, then the line polynomial. -/
-noncomputable def afterRightCertificate (remaining : Nat) (state : State F) (left right : List F × F)
+/-- The line polynomial's constant term, received at any history, then the rest
+of the layer. -/
+noncomputable def afterRightReduction (remaining : Nat) (state : State F) (left right : List F × F)
     (ready : LayerFalse layers inputs add mul (remaining + 1) state ∧
       left.1.length = width ∧ right.1.length = width ∧
       MvPolynomial.eval (coordinates (width + width) (left.1 ++ right.1))
         (layerStatement inputs add mul remaining state.1 state.2.1).val ≠ right.2) :
-    Reduction (F := F) (G := G) (LayerFalse layers inputs add mul remaining) (error F width) :=
-  Reduction.receive scalar (lineConstantSite ctx) (ctx.roles 0)
-    (layerAfterConstant ctx handle width add mul state left right)
-    (fun first => constantCertificate layers inputs add mul ctx handle remaining state left right first
-      ready)
-    (fun first => constant_doomed layers inputs add mul ctx handle remaining state left right first
-      ready)
+    Typed.Reduction (transcript (F := F) (G := G) context)
+      (fun _ next => LayerFalse layers inputs add mul remaining next) (siteCharge ctx context width) :=
+  Typed.Reduction.union (transcript context) fun history : History F G =>
+    Typed.Reduction.receive (transcript context)
+      (operation := .receive scalar (lineConstantSite ctx) (ctx.roles 0)) rfl history
+      (layerAfterConstant ctx handle width add mul state left right)
+      (fun _ => Typed.Reduction.union (transcript context) fun first : F =>
+        constantReduction layers inputs add mul ctx handle context remaining state left right first ready)
+      (fun _ first _ => ⟨first, constant_doomed layers inputs add mul ctx handle context remaining state
+        left right first ready _⟩)
 
-/-- Both `Rounds` applications of a layer, from its false claim, end at a false
-claim at the complete Sumcheck point. -/
-noncomputable def afterLeftCertificate (remaining : Nat) (state : State F)
+/-- The second `Rounds` application's result, then the line polynomial. -/
+noncomputable def afterLeftReduction (remaining : Nat) (state : State F)
     (holds : LayerFalse layers inputs add mul (remaining + 1) state) (left : List F × F)
     (leftFalse : RoundsFalse (layerStatement inputs add mul remaining state.1 state.2.1) [] 0 left) :
-    Reduction (F := F) (G := G) (LayerFalse layers inputs add mul remaining) (error F width) :=
-  (roundsCertificate (layerStatement inputs add mul remaining state.1 state.2.1) left.1
-      (rightContext ctx) handle).bind
+    Typed.Reduction (transcript (F := F) (G := G) context)
+      (fun _ next => LayerFalse layers inputs add mul remaining next) (siteCharge ctx context width) :=
+  (roundsReduction (layerStatement inputs add mul remaining state.1 state.2.1) left.1 (rightContext ctx)
+      handle ctx context (.inr rfl)).bind (transcript context)
     (layerAfterRight ctx handle width add mul state left)
-    (Reduction.union fun (right : {right : List F × F //
+    (Typed.Reduction.union (transcript context) fun (right : {right : List F × F //
         RoundsFalse (layerStatement inputs add mul remaining state.1 state.2.1) left.1 0 right}) =>
-      afterRightCertificate layers inputs add mul ctx handle remaining state left right.1
+      afterRightReduction layers inputs add mul ctx handle context remaining state left right.1
         ⟨holds, by have := leftFalse.1; simpa using this, by have := right.2.1; simpa using this,
           falseClaim_terminal _ _ _ right.2.2.2 (by
             have leftSize := leftFalse.1
@@ -446,39 +618,45 @@ noncomputable def afterLeftCertificate (remaining : Nat) (state : State F)
             simp only [List.length_append]
             simp only [Nat.add_zero] at leftSize rightSize
             omega)⟩)
-    (fun right rightFalse => ⟨⟨right, rightFalse⟩, .inl rfl⟩)
+    (fun history right rightFalse => ⟨⟨right, rightFalse⟩, history, .inl ⟨rfl, rfl⟩⟩)
 
 /-- One layer, from a false claim with `remaining + 1` layers below it to one
 with `remaining` below it. -/
-noncomputable def layerCertificate (remaining : Nat) :
-    Reduction (F := F) (G := G) (LayerFalse layers inputs add mul remaining) (error F width) :=
-  Reduction.union fun (state : {state : State F // LayerFalse layers inputs add mul (remaining + 1) state}) =>
-    (roundsCertificate (layerStatement inputs add mul remaining state.1.1 state.1.2.1) []
-        (leftContext ctx) handle).bind
+noncomputable def layerReduction (remaining : Nat) :
+    Typed.Reduction (transcript (F := F) (G := G) context)
+      (fun _ next => LayerFalse layers inputs add mul remaining next) (siteCharge ctx context width) :=
+  Typed.Reduction.union (transcript context) fun (state : {state : State F //
+      LayerFalse layers inputs add mul (remaining + 1) state}) =>
+    (roundsReduction (layerStatement inputs add mul remaining state.1.1 state.1.2.1) [] (leftContext ctx)
+        handle ctx context (.inl rfl)).bind (transcript context)
       (layerAfterLeft ctx handle width add mul state.1)
-      (Reduction.union fun (left : {left : List F × F //
+      (Typed.Reduction.union (transcript context) fun (left : {left : List F × F //
           RoundsFalse (layerStatement inputs add mul remaining state.1.1 state.1.2.1) [] 0 left}) =>
-        afterLeftCertificate layers inputs add mul ctx handle remaining state.1 state.2 left.1 left.2)
-      (fun left leftFalse => ⟨⟨left, leftFalse⟩, Reduction.bind_doomed _ _ _ _ _
-        (rounds_doomed _ left.1 (rightContext ctx) handle left.2 (by
+        afterLeftReduction layers inputs add mul ctx handle context remaining state.1 state.2 left.1
+          left.2)
+      (fun history left leftFalse => ⟨⟨left, leftFalse⟩, Typed.Reduction.bind_doomed _ _ _ _ _ _ _
+        (rounds_doomed _ left.1 (rightContext ctx) handle ctx context (.inr rfl) history left.2 (by
           have := leftFalse.1
           simp only [Nat.add_zero] at this
           omega) (by simpa using leftFalse.2.2))⟩)
 
 theorem layer_doomed (remaining : Nat) (state : State F)
-    (holds : LayerFalse layers inputs add mul (remaining + 1) state) :
-    (layerCertificate (G := G) layers inputs add mul ctx handle remaining).doomed
+    (holds : LayerFalse layers inputs add mul (remaining + 1) state) (history : History F G) :
+    (layerReduction (G := G) layers inputs add mul ctx handle context remaining).doomed history
       (layerStep ctx handle width add mul state) :=
-  ⟨⟨state, holds⟩, Reduction.bind_doomed _ _ _ _ _
-    (rounds_doomed _ [] (leftContext ctx) handle state.2.2 (by simp)
+  ⟨⟨state, holds⟩, Typed.Reduction.bind_doomed _ _ _ _ _ _ _
+    (rounds_doomed _ [] (leftContext ctx) handle ctx context (.inl rfl) history state.2.2 (by simp)
       (layer_falseClaim layers inputs add mul remaining state holds))⟩
 
 /-- All layers: their final claim is a false claim about the inputs. -/
-noncomputable def layersCertificate :
-    Reduction (F := F) (G := G) (LayerFalse layers inputs add mul 0) (error F width) :=
-  Reduction.repeatN (layerStep ctx handle width add mul)
-    (layerCertificate layers inputs add mul ctx handle)
-    (fun remaining state holds => layer_doomed layers inputs add mul ctx handle remaining state holds)
+noncomputable def layersReduction :
+    Typed.Reduction (transcript (F := F) (G := G) context)
+      (fun _ final => LayerFalse layers inputs add mul 0 final) (siteCharge ctx context width) :=
+  Typed.Reduction.repeatN (transcript context)
+    (invariant := fun _ remaining state => LayerFalse layers inputs add mul remaining state)
+    (layerStep ctx handle width add mul) (layerReduction layers inputs add mul ctx handle context)
+    (fun history remaining state holds =>
+      layer_doomed layers inputs add mul ctx handle context remaining state holds history)
 
 end Layer
 
@@ -494,7 +672,7 @@ def outputDifference : Table F width :=
 
 /-- The input check rejects a false claim about the inputs. -/
 noncomputable def decisionCertificate :
-    Reduction (F := F) (G := G) (fun decided : Option Bool => ¬ decided = some true) (error F width) where
+    Reduction (F := F) (G := G) (fun decided : Option Bool => ¬ decided = some true) 0 where
   doomed process := ∃ state, LayerFalse layers inputs add mul 0 state ∧
     process = .done (decision width inputs state)
   step := by
@@ -503,23 +681,32 @@ noncomputable def decisionCertificate :
     simp only [Option.some.injEq, decide_eq_true_eq]
     exact fun same => wrong same.symm
 
-/-- The layers from the output claim, then the input check. -/
-noncomputable def afterOutputsCertificate :
-    Reduction (F := F) (G := G) (fun decided : Option Bool => ¬ decided = some true) (error F width) :=
-  (layersCertificate layers inputs add mul ctx handle).bind (fun final => .done (decision width inputs final))
-    (decisionCertificate layers width inputs add mul)
-    (fun final holds => ⟨final, holds, rfl⟩)
+variable (context : Context)
 
-/-- The round-by-round certificate of the plain GKR verifier. -/
-noncomputable def certificate :
-    Reduction (F := F) (G := G) (fun decided : Option Bool => ¬ decided = some true) (error F width) :=
-  (outputsCertificate ctx handle (outputDifference layers width outputs inputs add mul)).bind
-    (afterOutputs ctx handle layers width outputs inputs add mul)
-    (afterOutputsCertificate ctx handle layers width inputs add mul)
-    (fun point differ => by
+/-- The layers from the output claim, then the input check. -/
+noncomputable def afterOutputsReduction :
+    Typed.Reduction (transcript (F := F) (G := G) context) (fun _ (decided : Option Bool) => ¬ decided = some true)
+      (siteCharge ctx context width) :=
+  (layersReduction layers inputs add mul ctx handle context).bind (transcript context)
+    (fun final => .done (decision width inputs final))
+    (sited (decisionCertificate layers width inputs add mul) context _
+      fun _ ⟨_, _, same⟩ => by
+        rw [same]
+        trivial)
+    (fun _ final holds => ⟨final, holds, rfl⟩)
+
+/-- The charged reduction of the plain GKR verifier: one reduction per phase,
+each at its own site's error. -/
+noncomputable def reduction :
+    Typed.Reduction (transcript (F := F) (G := G) context) (fun _ (decided : Option Bool) => ¬ decided = some true)
+      (siteCharge ctx context width) :=
+  (outputsReduction ctx handle context (outputDifference layers width outputs inputs add mul)).bind
+    (transcript context) (afterOutputs ctx handle layers width outputs inputs add mul)
+    (afterOutputsReduction ctx handle layers width inputs add mul context)
+    (fun history point differ => by
       obtain ⟨sized, nonzero⟩ := outputsDiffer_final _ point differ
-      refine Reduction.bind_doomed _ _ _ _ _
-        (Reduction.repeatN_doomed _ _ _ layers (0, point, _) ⟨by simp, sized, ?_⟩)
+      refine Typed.Reduction.bind_doomed _ _ _ _ _ _ _
+        (Typed.Reduction.repeatN_doomed _ _ _ _ history layers (0, point, _) ⟨by simp, sized, ?_⟩)
       intro same
       apply nonzero
       change extension width (fun bits => outputs bits - values add mul inputs layers 0 bits)
@@ -527,14 +714,26 @@ noncomputable def certificate :
       rw [extension_sub]
       exact sub_eq_zero.mpr same)
 
-theorem verifier_doomed (wrong : outputs ≠ values add mul inputs layers 0) :
-    (certificate (G := G) ctx handle layers width outputs inputs add mul).doomed
+/-- The charged certificate of the plain GKR verifier. -/
+noncomputable def certificate :
+    Typed.ChargedCertificate (transcript (F := F) (G := G) context) (fun decided : Option Bool => decided = some true)
+      (siteCharge ctx context width) :=
+  (reduction ctx handle layers width outputs inputs add mul context).toCertificate (transcript context)
+    fun _ _ rejects => rejects
+
+theorem verifier_doomed (wrong : outputs ≠ values add mul inputs layers 0) (initial : History F G) :
+    (certificate (G := G) ctx handle layers width outputs inputs add mul context).doomed initial
       (verifier ctx handle layers width outputs inputs add mul) := by
   have nonzero : ∃ bits, outputDifference layers width outputs inputs add mul bits ≠ 0 := by
     obtain ⟨bits, different⟩ := Function.ne_iff.mp wrong
     exact ⟨bits, sub_ne_zero.mpr different⟩
-  exact Reduction.bind_doomed _ _ _ _ _
-    (Reduction.repeatN_doomed _ _ _ width [] (outputsDiffer_initial _ nonzero))
+  show (reduction ctx handle layers width outputs inputs add mul context).doomed initial
+    (verifier ctx handle layers width outputs inputs add mul)
+  exact Typed.Reduction.bind_doomed (transcript context)
+    (outputsReduction ctx handle context (outputDifference layers width outputs inputs add mul))
+    (afterOutputs ctx handle layers width outputs inputs add mul)
+    (afterOutputsReduction ctx handle layers width inputs add mul context) _ initial _
+    (Typed.Reduction.repeatN_doomed _ _ _ _ initial width [] (outputsDiffer_initial _ nonzero))
 
 omit [Field F] [Fintype F] [DecidableEq F] [SampleableType F] in
 theorem outputRound_queryBound (point : List F) :
@@ -581,6 +780,40 @@ theorem verifier_queryBound :
   refine QueryBound.mono _ bound (le_of_eq ?_)
   ring
 
+/-- Fiat–Shamir soundness of the plain GKR verifier against a weighted adversary
+budget.
+
+Adversary interface: the statement (claimed outputs, inputs, wiring, number of
+layers and width) and the initial transcript history are fixed before the
+experiment; the prover is an arbitrary oracle computation on the transcript
+oracle over all typed histories whose queries charge at most `proverCost` on
+every path, each oracle key charged its site's error (`siteCharge`: `1 / |F|`
+for an output-point key, `2 / |F|` for a round key of either layer Sumcheck
+application, `width / |F|` for a line key, nothing for any other key); the
+oracle starts empty and is shared with the transform, whose
+`width + layers (2 width + 1)` challenges are charged at most `max 2 width / |F|`
+each. Claimed outputs other than the circuit's are accepted with probability at
+most `proverCost + (width + layers (2 width + 1)) max 2 width / |F|`. -/
+theorem soundness_charged [DecidableEq G] (wrong : outputs ≠ values add mul inputs layers 0)
+    (initial : History F G) (prover : OracleComp (FieldOracle F G) (Proof F G)) (proverCost : ENNReal)
+    (proverBound : WorstCaseCostBound prover ⟨Typed.keyCharge (siteCharge (G := G) ctx context width)⟩
+      proverCost) :
+    Pr{let result ← (simulateQ randomOracle (FiatShamir.experiment context
+        (verifier ctx handle layers width outputs inputs add mul) initial prover)).run' ∅}[
+      Accepted (· = some true) result.1] ≤
+      proverCost + (width + layers * (2 * width + 1)) * error F width := by
+  rw [experiment_eq]
+  have bound := Typed.soundness_charged (certificate ctx handle layers width outputs inputs add mul context)
+    (verifier ctx handle layers width outputs inputs add mul) initial
+    (verifier_doomed ctx handle layers width outputs inputs add mul context wrong initial) _
+    (Typed.QueryBound.chargedCostBound (transcript context) (siteCharge_le ctx context width) _ _
+      (QueryBound.typed context id _ _ (verifier_queryBound ctx handle layers width outputs inputs add mul))
+      initial)
+    prover proverCost proverBound
+  convert bound using 2
+  push_cast
+  ring
+
 /-- Fiat–Shamir soundness of the plain GKR verifier.
 
 Adversary interface: the statement (claimed outputs, inputs, wiring, number of
@@ -590,7 +823,8 @@ oracle over all typed histories with at most `queries` queries on every path;
 the oracle starts empty and is shared with the transform, whose
 `width + layers (2 width + 1)` challenges are also charged. Claimed outputs other
 than the circuit's are accepted with probability at most
-`(queries + width + layers (2 width + 1)) max 2 width / |F|`. -/
+`(queries + width + layers (2 width + 1)) max 2 width / |F|`: against a total
+query budget every key is charged the largest site error. -/
 theorem soundness [DecidableEq G] (context : Context) (wrong : outputs ≠ values add mul inputs layers 0)
     (initial : History F G) (prover : OracleComp (FieldOracle F G) (Proof F G)) (queries : Nat)
     (proverBound : IsTotalQueryBound prover queries) :
@@ -598,15 +832,11 @@ theorem soundness [DecidableEq G] (context : Context) (wrong : outputs ≠ value
         (verifier ctx handle layers width outputs inputs add mul) initial prover)).run' ∅}[
       Accepted (· = some true) result.1] ≤
       (queries + (width + layers * (2 * width + 1))) * error F width := by
-  have bound := FiatShamir.soundness
-    (certificate ctx handle layers width outputs inputs add mul).roundByRound context
-    (verifier ctx handle layers width outputs inputs add mul)
-    (verifier_doomed ctx handle layers width outputs inputs add mul wrong)
-    (width + layers * (2 * width + 1)) (verifier_queryBound ctx handle layers width outputs inputs add mul)
-    initial prover queries proverBound
-  convert bound using 2
-  push_cast
-  ring
+  have bound := soundness_charged ctx handle layers width outputs inputs add mul context wrong initial prover
+    (queries * error F width)
+    (Typed.worstCaseCostBound_of_isTotalQueryBound _
+      (Typed.keyCharge_le (siteCharge_le ctx context width)) prover queries proverBound)
+  rwa [add_mul]
 
 end Verifier
 
