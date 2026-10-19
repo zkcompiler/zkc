@@ -311,6 +311,10 @@ import ZkcExamples.Construction.GuessProofBodies
 import ZkcExamples.Construction.GuessProofData
 import ZkcExamples.Construction.GuessProofModel
 import ZkcExamples.Construction.GuessProofParticipant
+import ZkcExamples.Construction.OkamotoProof
+import ZkcExamples.Construction.OkamotoProofBodies
+import ZkcExamples.Construction.OkamotoProofData
+import ZkcExamples.Construction.OkamotoProofParticipant
 import ZkcExamples.Construction.SchnorrAndProof
 import ZkcExamples.Construction.SchnorrAndProofBodies
 import ZkcExamples.Construction.SchnorrAndProofData

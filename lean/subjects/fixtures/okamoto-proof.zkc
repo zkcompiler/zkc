@@ -1,0 +1,47 @@
+module example;
+domain G1 = group("bls12-381.g1");
+
+/// Knowledge of a representation of `point` in two bases.
+relation Representation<G: Group>(parameter first_base: G, parameter second_base: G,
+                                   statement point: G,
+                                   witness first_scalar: G::Scalar,
+                                   witness second_scalar: G::Scalar) {
+  return point == first_base * first_scalar + second_base * second_scalar;
+}
+
+/// Okamoto's identification protocol: one commitment to two nonces, one
+/// challenge and two responses, accepted when the responses open the
+/// commitment plus the challenge times the statement.
+protocol Okamoto<G: Group> roles(P, V)
+    (first_base: G @(P,V), second_base: G @(P,V), point: G @(P,V),
+     first_scalar: G::Scalar @P, second_scalar: G::Scalar @P,
+     nonces: Random<G::Scalar> @P, challenges: Random<G::Scalar> @V)
+    -> (accepted: bool @V)
+    spec {
+      target knowledge = Representation<G>(in.first_base@V, in.second_base@V, in.point@V,
+                                           in.first_scalar, in.second_scalar)
+        accept out.accepted;
+    } {
+  #[site(first_nonce)] let first_nonce = nonces.draw();
+  #[site(second_nonce)] let second_nonce = nonces.draw();
+  #[site(commitment)] let commitment =
+    send P -> V(first_base * first_nonce + second_base * second_nonce);
+  #[site(challenge)] let challenge = challenges.draw();
+  #[site(delivery)] let received = send V -> P(challenge);
+  #[site(first_response)] let first_response =
+    send P -> V(first_nonce + received * first_scalar);
+  #[site(second_response)] let second_response =
+    send P -> V(second_nonce + received * second_scalar);
+  let accepted = first_base * first_response + second_base * second_response
+    == commitment + point * challenge;
+  return (accepted = accepted);
+}
+
+proof Proof = Okamoto<G1> {
+  prover P;
+  verifier V;
+  public { first_base, second_base, point };
+  accept accepted;
+  target knowledge;
+  construction fiat_shamir("merlin3.bls12-381.fr64be/0", challenges);
+}
