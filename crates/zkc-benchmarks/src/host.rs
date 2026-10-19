@@ -71,6 +71,7 @@ pub fn run(
     inputs: &[Input],
     preparation: bool,
     preparation_entries: Option<usize>,
+    preparation_bytes: Option<usize>,
 ) -> Result<Report> {
     if job.operation == Operation::Run || inputs.is_empty() {
         return Err("proof worker requires proof inputs and a proof operation".into());
@@ -96,16 +97,22 @@ pub fn run(
     let defaults = zkc_runtime::vm::PreparationLimits::default();
     let mut limits = defaults;
     if let Some(entries) = preparation_entries {
-        if entries > defaults.entries {
-            return Err("preparation control may only lower the default entry bound".into());
-        }
         limits.entries = entries;
+    }
+    if let Some(bytes) = preparation_bytes {
+        limits.bytes = bytes;
     }
     if !preparation {
         limits.entries = 0;
         limits.bytes = 0;
     }
     entry = entry.with_preparation_limits(limits);
+    let observed_limits = Limits {
+        entries: limits.entries,
+        bytes: limits.bytes,
+        default_entries: defaults.entries,
+        default_bytes: defaults.bytes,
+    };
     let data = inputs
         .iter()
         .map(|input| {
@@ -224,7 +231,14 @@ pub fn run(
             }
             Ok(())
         },
-    ).map_err(|cause| Failure::Invocation {completed: completed.get(), cause: Box::new(cause), preparation_before: prior.into_inner(), preparation_after: preparation_stats(&entry)})?;
+    )
+    .map_err(|cause| Failure::Invocation {
+        completed: completed.get(),
+        cause: Box::new(cause),
+        preparation_before: prior.into_inner(),
+        preparation_after: preparation_stats(&entry),
+        preparation_limits: observed_limits,
+    })?;
     let (index, last) = last.unwrap();
     let mut report = Report::new(
         "admitted_entry_call",
@@ -241,12 +255,7 @@ pub fn run(
     report.diagnostics = last.native.diagnostics();
     let diagnostics_ns = start.elapsed().as_nanos();
     report.lifecycle = Some(Lifecycle {
-        preparation_limits: Some(Limits {
-            default_entries: defaults.entries,
-            default_bytes: defaults.bytes,
-            entries: limits.entries,
-            bytes: limits.bytes,
-        }),
+        preparation_limits: Some(observed_limits),
         capture_ns,
         admit_ns,
         calls: calls.into_inner(),

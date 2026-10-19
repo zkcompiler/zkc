@@ -96,7 +96,7 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 | `pairing` | 2/8/32 BN254 pairings and scalar multiplication | Bilinearity consistency, not Groth16/KZG or independent kernel validation |
 | `transcript` | Independent round-count and payload-size variation | Ordered challenge recurrence and payload check; Merlin construction |
 | `fri` | Domain size, dense polynomial degree bound and query count vary separately | Same-stack proof validation; degree bound is not domain size |
-| `air` | Trace height, width and evaluation blowup vary separately | Quadratic recurrence with first/last/transition constraints; one table |
+| `air` | Trace height, width and evaluation blowup vary separately, including 1,024-row traces at widths 1 and 4 | Quadratic recurrence with first/last/transition constraints; one table; default execution capacities |
 | `stark` | The `air` shapes through the [parameterized library](../../libraries/arguments/stark/README.md#parameterized-single-table-argument): quartic challenges, Poseidon2 multi-opening Merkle trees, constant final polynomial | Same AIR and queries as `air`, so the two profiles compare directly; same-stack proof verification |
 | `bulletproofs` | BP+ source workload, counts 1/3/8/16; changing statements and preparation policies | Retained conformance inputs; independent comparisons remain in `monero` |
 | `machine` | LogUp/grand-product, optional memory absent/present | Correlated STARK library regression; small fixtures, not a production zkVM scaling study |
@@ -136,10 +136,15 @@ verification. Every generated proof is checked against its own statement.
 
 `--preparation enabled|disabled|both` selects matched source-proof jobs. Preparation
 costs stay inside SDK calls; entries, retained bytes and hits are observed after
-each call. `--preparation-entries N` lowers the default 128-entry bound for a
-saturation control; the default byte bound and execution capacities stay unchanged.
-It is recorded in the contract, not silently applied to other runs. Workers report the native default and the bounds passed to the Entry. Effective
-statistics must respect those bounds; disabled preparation must retain no state.
+each call. `--preparation-entries N` and `--preparation-bytes N` independently
+select the store's entry and byte bounds. Omitting either uses its native default
+(currently 128 entries and 8 MiB). Zero disables retention. These controls permit
+both saturation and larger working-set experiments without changing execution
+capacities or native defaults. Requested limits are recorded in the contract; compare
+capacity experiments separately from otherwise matched implementation timings.
+Workers report the native default and the bounds passed to the Entry. Effective
+limits are zero for disabled workers, including the unprepared half of `both`.
+Statistics must respect those bounds; disabled preparation must retain no state.
 Reports include final entries, retained bytes and hits. A bounded store need not
 improve a workload, and hits alone do not establish a timing benefit. The machine fixtures support fixed inputs
 only; BP+ uses at most four fixture patterns times the commitment count through
@@ -249,7 +254,8 @@ controls require a verification refusal instead. The compiled Entry selects the
 format. The worker records the error code and stop kind. Known format refusals include
 the driver's subsequent cancellation. Truncation also permits the separately
 recorded bounded-byte-read refusal, which alone does not identify the buffer read.
-Failed calls retain preparation statistics before and after the refusal. Some
+Failed calls retain effective preparation limits and statistics before and after
+the refusal; the same capacity checks apply to successful and refused calls. Some
 workloads have no eligible preparation, and early format failures need not reach
 a prepared operation; a preceding successful call alone does not prove a hit.
 Crashes, timeouts, unrelated cancellation and resource-limit failures do not pass.

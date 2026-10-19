@@ -38,7 +38,7 @@ def bulletproofs(root, shape, directory):
     changed = public | {'commitments': altered}
     source = root/'examples/projects/bulletproofs-plus/main.zkc'
     return Program(source.read_text(), [{'public': public, 'witness': private}], entry='example::Proof',
-                   dependencies=('bulletproofs',), proof=True, changed=changed, mutate_proof=mutate_response,
+                   dependencies=('constructions.monero.bulletproofs_plus',), proof=True, changed=changed, mutate_proof=mutate_response,
                    support=(source, corpus), oracle='retained Monero conformance corpus; same-stack verification here, independent Monero comparison in the monero family')
 
 
@@ -55,7 +55,8 @@ def machine(root, shape, directory, *, timeout):
     public, witness = [json.loads((generated/f'{name}.json').read_text()) for name in ('public', 'witness')]
     bundle = root/'compiler/adapters/accumulator-machine/fixtures/bundle.json'
     return Program((project/'main.zkc').read_text(), [{'public': public, 'witness': witness}],
-        entry=f'accumulator_machine::Proof{shape["reduction"]}', dependencies=('stark', 'fri'),
+        entry=f'accumulator_machine::Proof{shape["reduction"]}',
+        dependencies=('arguments.stark.configurations.koala_bear_octic', 'arguments.stark.whole_bundle', 'core.collections', 'relations.air'),
         assets={'machine': json.loads(bundle.read_text())}, proof=True,
         mutate_proof=mutate_claim,
         changed=public | {'final': str((int(public['final'])+1) % 2130706433)},

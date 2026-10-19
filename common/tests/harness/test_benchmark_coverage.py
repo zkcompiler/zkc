@@ -44,6 +44,7 @@ def test_coverage_has_matched_forms_and_independent_stark_dimensions(modules):
             assert all(program.inputs == programs[0].inputs for program in programs)
     air = [c.shape for c in cases if c.name == 'air']
     assert len({s['height'] for s in air if s['width'] == 1}) >= 3
+    assert all(any(s['height'] >= 1024 and s['width'] == width for s in air) for width in (1, 4))
     assert len({s['width'] for s in air if s['height'] == 32 and s['evaluation_size'] == 128}) >= 3
     assert len({s['evaluation_size'] for s in air if s['height'] == 32 and s['width'] == 4}) >= 2
     # The parameterized library is measured on exactly the air cases' shapes.
@@ -76,6 +77,28 @@ print('{{}}')
     assert all(forwarded.count(option) == 1 for option in args.compiler_option)
     assert forwarded[0] == 'language-package'
     assert manifest['compilation'][case.identifier][0]['sha256'] == modules['io'].digest(package)
+
+
+def test_generated_families_capture_workspace_dependency_closures(modules, tmp_path):
+    execution = importlib.import_module('bench.execution')
+    root = Path(__file__).resolve().parents[3]
+    compiler = tmp_path/'compiler'
+    compiler.write_text(f'#!{sys.executable}\nprint("{{}}")\n')
+    compiler.chmod(0o755)
+    args = SimpleNamespace(source=root, compiler=compiler, timeout=10, compiler_option=[])
+    families = {}
+    for case in modules['coverage'].cases():
+        families.setdefault(case.name, case)
+    capture = modules['runner'].Capture(tmp_path/'capture')
+    for family, case in families.items():
+        directory = tmp_path/'generated'/family
+        directory.mkdir(parents=True)
+        program = case.generate(root, directory)
+        execution.compile_program(args, tmp_path/'output', capture, {}, case, program)
+    assert (capture.directory/'source/zkc.workspace.toml').is_file()
+    assert (capture.directory/'source/libraries/core/primitives/algebra/curve.zkc').is_file()
+    assert (capture.directory/'source/libraries/arguments/stark/whole_bundle/zkc.toml').is_file()
+    capture.check()
 
 
 def test_distinct_stark_statements_keep_the_same_program(modules, tmp_path):
@@ -156,8 +179,75 @@ def test_lifecycle_evidence_is_checked(modules, fault):
         modules['results'].validate_worker(worker, {'warmups': 2, 'samples': 2, 'iterations': 1}, 'admitted_entry_call')
 
 
+@pytest.mark.parametrize('fault,diagnostic', [
+    ('entries', 'preparation exceeded its resource contract'),
+    ('bytes', 'preparation exceeded its resource contract'),
+    ('hits', 'preparation hits moved backwards'),
+    ('zero_entries', 'disabled preparation retained state'),
+    ('zero_bytes', 'disabled preparation retained state'),
+])
+def test_saved_worker_preparation_must_respect_its_contract(modules, fault, diagnostic):
+    worker = lifecycle_worker()
+    limits = worker['lifecycle']['preparation_limits']
+    stats = worker['lifecycle']['calls'][0]['preparation']
+    if fault == 'entries': stats['entries'] = limits['entries'] + 1
+    elif fault == 'bytes': stats['retained_bytes'] = limits['bytes'] + 1
+    elif fault == 'hits': stats['hits'] = 1  # The next call cannot have fewer hits.
+    else:
+        limits[fault.removeprefix('zero_')] = 0
+        for call in worker['lifecycle']['calls']:
+            call['preparation']['hits'] = 1
+    with pytest.raises(modules['io'].MeasurementError, match=diagnostic):
+        modules['results'].validate_worker(worker, {'warmups': 2, 'samples': 2, 'iterations': 1}, 'admitted_entry_call')
+
+
+@pytest.mark.parametrize('entries,capacity,accepted', [
+    (512, 64 << 20, True), (128, 8 << 20, False),
+    (512, 8 << 20, False), (128, 64 << 20, False),
+])
+def test_selected_limits_allow_retention_above_native_defaults(modules, entries, capacity, accepted):
+    worker = lifecycle_worker()
+    worker['lifecycle']['preparation_limits'].update(entries=entries, bytes=capacity)
+    for call in worker['lifecycle']['calls']:
+        call['preparation'].update(entries=200, retained_bytes=9 << 20)
+    plan = {'warmups': 2, 'samples': 2, 'iterations': 1}
+    if accepted:
+        modules['results'].validate_worker(worker, plan, 'admitted_entry_call')
+    else:
+        with pytest.raises(modules['io'].MeasurementError, match='preparation exceeded its resource contract'):
+            modules['results'].validate_worker(worker, plan, 'admitted_entry_call')
+
+
+@pytest.mark.parametrize('entries,capacity,enabled', [
+    (None, None, True), (512, None, True), (None, 64 << 20, True),
+    (512, 64 << 20, True), (0, 0, True), (0, None, True), (None, 0, True), (512, 64 << 20, False),
+])
+@pytest.mark.parametrize('changed_bound', [None, 'entries', 'bytes'])
+def test_worker_must_honor_both_requested_preparation_bounds(modules, tmp_path, entries, capacity, enabled, changed_bound):
+    response = lifecycle_worker()
+    limits = response['lifecycle']['preparation_limits']
+    limits['entries'] = (limits['default_entries'] if entries is None else entries) if enabled else 0
+    limits['bytes'] = (limits['default_bytes'] if capacity is None else capacity) if enabled else 0
+    if changed_bound:
+        limits[changed_bound] += 1
+    executable = tmp_path/'worker'
+    executable.write_text(f'#!{sys.executable}\nimport json\nprint(json.dumps({response!r}))\n')
+    executable.chmod(0o755)
+    backend = {'kind': 'host', 'inputs': [{}, {}], 'preparation': enabled,
+               'preparation_entries': entries, 'preparation_bytes': capacity}
+    job = modules['runner'].Job('case', 'zkc', 'verify', executable, backend,
+                               tmp_path/'proof', 'admitted_entry_call')
+    plan = {'warmups': 2, 'samples': 2, 'iterations': 1}
+    if changed_bound:
+        with pytest.raises(modules['io'].MeasurementError, match='preparation limits differ'):
+            modules['runner'].execute_job(job, tmp_path/'run', plan, 5)
+    else:
+        modules['runner'].execute_job(job, tmp_path/'run', plan, 5)
+
+
 def test_changing_statements_keep_individual_first_visits_and_distributions(modules):
-    job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call'}
+    job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call',
+           'backend': {'kind': 'host', 'preparation': True}}
     manifest = {'format': 'zkc.benchmark/0', 'compiler_options': [], 'observation': 'timing', 'status': 'passed', 'processes': 2,
                 'plan': {'warmups': 2, 'samples': 2, 'iterations': 1}, 'matrix': [job],
                 'results': [job | {'status': 'passed', 'repetition': i, 'worker': lifecycle_worker(times)}
@@ -166,6 +256,25 @@ def test_changing_statements_keep_individual_first_visits_and_distributions(modu
     assert [v['first_visit_ns']['median'] for v in row['inputs']] == [15, 150]
     assert [v['ns_per_call']['median'] for v in row['inputs']] == [40, 400]
     assert row['decode_ns_per_call']['median'] == 5
+
+
+@pytest.mark.parametrize('backend', [
+    {'kind': 'host', 'preparation': True, 'preparation_entries': 512},
+    {'kind': 'host', 'preparation': True, 'preparation_bytes': 64 << 20},
+    {'kind': 'host', 'preparation': False},
+    None, 'absent',
+])
+def test_saved_manifest_checks_requested_limits(modules, backend):
+    job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify',
+           'boundary': 'admitted_entry_call'}
+    if backend != 'absent':
+        job['backend'] = backend
+    manifest = {'format': 'zkc.benchmark/0', 'status': 'passed', 'processes': 1,
+                'compiler_options': [], 'observation': 'timing',
+                'plan': {'warmups': 2, 'samples': 2, 'iterations': 1}, 'matrix': [job],
+                'results': [job | {'status': 'passed', 'repetition': 0, 'worker': lifecycle_worker()}]}
+    with pytest.raises(modules['io'].MeasurementError, match='preparation (limits differ|request)'):
+        modules['results'].validate_manifest(manifest)
 
 
 def test_workers_receive_only_declared_environment(modules, monkeypatch):
@@ -190,6 +299,32 @@ def test_warm_refusal_requires_a_successful_preceding_call(modules, tmp_path, co
         modules['runner'].refuse(job, tmp_path/'negative', 5, completed=1)
     else:
         with pytest.raises(modules['io'].MeasurementError, match='intended invocation'):
+            modules['runner'].refuse(job, tmp_path/'negative', 5, completed=1)
+
+
+@pytest.mark.parametrize('fault', [None, 'before_entries', 'after_bytes', 'hits', 'zero_entries', 'zero_bytes', 'request'])
+def test_refusal_preparation_respects_requested_contract(modules, tmp_path, fault):
+    limits = {'entries': 512, 'bytes': 64 << 20, 'default_entries': 128, 'default_bytes': 8 << 20}
+    stats = {phase: {'entries': 200, 'retained_bytes': 9 << 20, 'hits': 1} for phase in ('before', 'after')}
+    backend = {'kind': 'host', 'preparation': True, 'preparation_entries': 512, 'preparation_bytes': 64 << 20}
+    if fault == 'before_entries': stats['before']['entries'] = 513
+    elif fault == 'after_bytes': stats['after']['retained_bytes'] = (64 << 20) + 1
+    elif fault == 'hits': stats['after']['hits'] = 0
+    elif fault in ('zero_entries', 'zero_bytes'):
+        bound = fault.removeprefix('zero_')
+        limits[bound] = backend[f'preparation_{bound}'] = 0
+        for observation in stats.values(): observation.update(entries=0, retained_bytes=0)
+    elif fault == 'request': limits['entries'] = 256
+    response = {'format': 'zkc.benchmark-worker/0', 'status': 'rejected', 'completed_calls': 1,
+                'preparation': stats, 'preparation_limits': limits}
+    executable = tmp_path/'worker'
+    executable.write_text(f'#!{sys.executable}\nimport json,sys\nprint(json.dumps({response!r}))\nsys.exit(1)\n')
+    executable.chmod(0o755)
+    job = modules['runner'].Job('case', 'zkc', 'verify', executable, backend, tmp_path/'proof', 'admitted_entry_call')
+    if fault is None:
+        modules['runner'].refuse(job, tmp_path/'negative', 5, completed=1)
+    else:
+        with pytest.raises(modules['io'].MeasurementError, match='preparation'):
             modules['runner'].refuse(job, tmp_path/'negative', 5, completed=1)
 
 
@@ -258,14 +393,18 @@ def test_monero_response_control_refuses_framed_or_noncanonical_layout(modules):
             mutate(invalid)
 
 
-def test_comparison_rejects_changed_native_preparation_defaults(modules):
+@pytest.mark.parametrize('bound', ['entries', 'bytes', 'default_entries', 'default_bytes'])
+def test_comparison_rejects_changed_preparation_bounds(modules, bound):
     from copy import deepcopy
-    job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call'}
+    job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call',
+           'backend': {'kind': 'host', 'preparation': True}}
     baseline = {'format': 'zkc.benchmark/0', 'compiler_options': [], 'observation': 'timing', 'status': 'passed', 'processes': 1,
                 'plan': {'warmups': 2, 'samples': 2, 'iterations': 1}, 'matrix': [job], 'host': {}, 'contracts': {},
                 'results': [job | {'status': 'passed', 'repetition': 0, 'worker': lifecycle_worker()}]}
     changed = deepcopy(baseline)
-    changed['results'][0]['worker']['lifecycle']['preparation_limits']['default_bytes'] *= 2
+    changed['results'][0]['worker']['lifecycle']['preparation_limits'][bound] *= 2
+    name = bound.removeprefix('default_')
+    changed['matrix'][0]['backend'][f'preparation_{name}'] = changed['results'][0]['worker']['lifecycle']['preparation_limits'][name]
     with pytest.raises(modules['io'].MeasurementError, match='preparation limits differ'):
         modules['results'].compare(baseline, changed)
 
@@ -312,7 +451,8 @@ def counted_manifest():
     worker['build']['execution_counts'] = True
     for call in worker['lifecycle']['calls']:
         call['execution_counts'] = {'events': dict.fromkeys(EVENTS, 0), 'operations': {}}
-    job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call'}
+    job = {'case': 'case', 'implementation': 'zkc', 'operation': 'verify', 'boundary': 'admitted_entry_call',
+           'backend': {'kind': 'host', 'preparation': True}}
     return {'format': 'zkc.benchmark/0', 'compiler_options': [], 'observation': 'execution_counts', 'status': 'passed',
             'processes': 1, 'plan': {'warmups': 2, 'samples': 2, 'iterations': 1},
             'matrix': [job], 'contracts': {},

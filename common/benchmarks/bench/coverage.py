@@ -65,7 +65,8 @@ def cases():
     for size, bound, queries in ((64, 16, 8), (1024, 16, 8), (1024, 256, 8), (4096, 1024, 8), (1024, 256, 16)):
         add(f'fri-n{size}-d{bound}-q{queries}', 'fri', {'evaluation_size': size, 'degree_bound': bound, 'queries': queries},
             'protocol', ('dense extension polynomial', 'FRI', 'Merkle', 'transcript'), 'Dense polynomials of degree bound-1; not an independently implemented FRI comparison.')
-    for height, width, blowup in ((8, 1, 4), (32, 1, 4), (128, 1, 4), (32, 4, 4), (32, 16, 4), (32, 4, 8)):
+    for height, width, blowup in ((8, 1, 4), (32, 1, 4), (128, 1, 4), (1024, 1, 4),
+                                  (32, 4, 4), (1024, 4, 4), (32, 16, 4), (32, 4, 8)):
         add(f'air-h{height}-w{width}-b{blowup}', 'air', {'height': height, 'width': width, 'evaluation_size': height*blowup, 'queries': 8},
             'protocol', ('trace extension', 'quadratic AIR', 'quotients', 'FRI', 'Merkle', 'transcript'),
             'Independent height/width/blowup sweeps; one table with no lookup or memory argument.')

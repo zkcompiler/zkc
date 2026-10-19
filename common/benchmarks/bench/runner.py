@@ -10,7 +10,7 @@ import shutil
 import sys
 
 from .io import Journal, digest, identity, measurement_slot, command_environment, performance_environment, read_report, require, write_json
-from .results import FORMAT, publish, validate_manifest, validate_preparation, validate_worker
+from .results import FORMAT, publish, validate_manifest, validate_preparation, validate_preparation_limits, validate_worker
 
 CONTROL = {'warmups': 0, 'samples': 1, 'iterations': 1}
 
@@ -89,20 +89,7 @@ def execute_job(job, directory, plan, timeout):
                 [i % count for i in range((plan['warmups']+plan['samples'])*plan['iterations'])],
                 'worker changed the input schedule')
     if job.backend.get('kind') == 'host':
-        previous_hits = 0
-        limit = job.backend.get('preparation_entries')
-        limits = report['lifecycle']['preparation_limits']
-        limit = limits['default_entries'] if limit is None else limit
-        expected = (limit, limits['default_bytes']) if job.backend['preparation'] else (0, 0)
-        require((limits['entries'], limits['bytes']) == expected, 'preparation limits differ from the request')
-        for call in report['lifecycle']['calls']:
-            stats = call['preparation']
-            require(stats['hits'] >= previous_hits, 'preparation hits moved backwards')
-            previous_hits = stats['hits']
-            require(stats['entries'] <= limits['entries'] and stats['retained_bytes'] <= limits['bytes'],
-                    'preparation exceeded its resource contract')
-            if not job.backend['preparation']:
-                require(all(value == 0 for value in stats.values()), 'disabled preparation retained state')
+        validate_preparation_limits(report['lifecycle']['preparation_limits'], job.backend)
     if job.operation == 'run':
         require(report['proof_bytes'] == 0, 'run worker reported a proof')
     elif job.operation == 'prove' or job.backend.get('kind') != 'host' or len(job.backend['inputs']) == 1:
@@ -256,10 +243,9 @@ def refuse(job, directory, timeout, *, truncated=False, completed=None, classes=
         require(isinstance(observed, dict) and observed.get('class') in classes,
                 'negative control refused at the wrong layer')
     if job.backend.get('kind') == 'host' and completed is not None:
+        limits = report.get('preparation_limits')
+        validate_preparation_limits(limits, job.backend)
         stats = report.get('preparation')
         require(isinstance(stats, dict) and set(stats) == {'before', 'after'}, 'missing refusal preparation observations')
-        for value in stats.values():
-            validate_preparation(value)
-            if not job.backend['preparation']:
-                require(all(v == 0 for v in value.values()), 'disabled preparation retained state on refusal')
-        require(stats['after']['hits'] >= stats['before']['hits'], 'refusal preparation hits moved backwards')
+        validate_preparation(stats['before'], limits)
+        validate_preparation(stats['after'], limits, stats['before']['hits'])

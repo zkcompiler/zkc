@@ -39,7 +39,7 @@ pub struct Lifecycle {
     pub peak_rss_after_diagnostics: Option<u64>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Copy, Debug, Serialize)]
 pub struct Limits {
     pub default_entries: usize,
     pub default_bytes: usize,

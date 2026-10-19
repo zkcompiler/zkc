@@ -11,7 +11,7 @@ class Program:
     source: str
     inputs: list
     entry: str = 'example::Demo'
-    dependencies: tuple = ('zkc',)
+    dependencies: tuple = ('core.collections',)
     assets: dict = field(default_factory=dict)
     proof: bool = False
     changed: dict | None = None
@@ -187,7 +187,7 @@ run Demo=Work;
     expected = sum(x*y*scale for x, y in zip(xs, weights, strict=True)) % a.FR
     inputs = {'xs': list(map(str, xs)), 'weights': list(map(str, weights)),
               'scale': str(scale), 'expected': str(expected)}
-    return Program(source, [{'P': inputs}], incorrect={'P': increment_first(inputs, 'expected', a.FR)},
+    return Program(source, [{'P': inputs}], dependencies=('core.algebra',), incorrect={'P': increment_first(inputs, 'expected', a.FR)},
                    oracle='Python scalar identity plus group law; shares native group kernels, not an independent curve implementation')
 
 
@@ -210,7 +210,7 @@ run Demo=Work;
     modulus = 21888242871839275222246405745257275088548364400416034343698204186575808495617
     r = a.dense(1, seed=75, modulus=modulus)[0][0]
     inputs = {'n': str(n//2), 'r': str(r), 'expected': str(r)}
-    return Program(source, [{'P': inputs}], incorrect={'P': increment_first(inputs, 'expected', modulus)},
+    return Program(source, [{'P': inputs}], dependencies=('core.algebra',), incorrect={'P': increment_first(inputs, 'expected', modulus)},
                    oracle='bilinearity consistency control; shares native pairing implementation')
 
 
