@@ -18,7 +18,9 @@ pipeline, with no step specific to a subject:
    encoding and the lowering rule;
 5. apply the manifest's generic mutation kinds to the fresh exports, the native
    candidate and the validator program, and require each applicable one to be
-   refused by its stage (or accepted, for a change the rule does not read);
+   refused by its stage (or accepted, for a change the rule does not read); a
+   helper body's copy is refused by the helper rule and accepted by the
+   lowering rule;
 6. with `--runtime`, run the runtime verifier on an honest proof at every
    instruction budget up to one past the threshold the Lean charge derives and
    on generic proof edits, and require its observations to equal those the Lean
@@ -340,7 +342,7 @@ class Driver(Runner):
         deployment, exported = artifacts["deployment"], artifacts["exported"]
         glue_module = subject.module_name("glue")
         parts = ["import Zkc.Executable.Installed", "import Zkc.Executable.Lowering",
-                 "import Zkc.Construction.Participant", f"import {glue_module}"]
+                 "import Zkc.Executable.Helpers", "import Zkc.Construction.Participant", f"import {glue_module}"]
         completeness = subject.get("executable", "completeness_module")
         if completeness:
             parts.append(f"import {completeness}")
@@ -354,7 +356,11 @@ class Driver(Runner):
                   "  | .error refusal => some refusal\n  | .ok _ => none",
                   "def exact (lowered : Except Refusal Lowered) : Option Bool :=\n"
                   "  lowered.toOption.map (fun lowered => decide (Code.instructionList lowered.code = "
-                  "Fresh.Constructed.participant.instructions))"]
+                  "Fresh.Constructed.participant.instructions))",
+                  "def helperAccepted : Except HelperRefusal Unit → Bool\n"
+                  "  | .ok () => true\n  | .error _ => false",
+                  "def helperOutcome : Except HelperRefusal Unit → String\n"
+                  "  | .ok () => \"none\"\n  | .error refusal => (repr refusal).pretty 1000000"]
         selected = self.role_map(subject, deployment)
         proofs = ["theorem actual_accepted : refusal (checkLowering installed Fresh.Constructed.participant "
                   "Fresh.Actual.validator) = none := by decide +kernel",
@@ -385,11 +391,19 @@ class Driver(Runner):
             evaluations.append(f'#eval IO.println ("charge " ++ toString ({charge} {arguments}))')
         outcomes = {}
         index = 0
-        for name, kind, function in mutations.kinds_for(subject.get("mutations", "kinds", [])):
-            if kind.stage != "lowering":
+        kinds = mutations.kinds_for(subject.get("mutations", "kinds", []))
+        if any(kind.stage == "helpers" for _, kind, _ in kinds):
+            # The helper rule reads the checked helpers of the admitted program,
+            # which only the composed rules' glue declares.
+            self.check(f"{subject.name}:helper-mutations-admitted-program",
+                       subject.get("construction", "rule", "compiled") == "compiled",
+                       "helper mutations need the glue's admitted program (construction.rule = compiled)")
+        for name, kind, function in kinds:
+            if kind.stage not in ("lowering", "helpers"):
                 continue
             sites = []
             for program in function(deployment, exported):
+                program, helper = program if kind.stage == "helpers" else (program, None)
                 value = copy.deepcopy(deployment)
                 value[4] = json.dumps(program, separators=(",", ":"))
                 value[5] = digest(value[4].encode())
@@ -402,6 +416,20 @@ class Driver(Runner):
                     continue
                 parts.append(strip_header(rendered))
                 statement = (f"refusal (checkLowering installed Fresh.Constructed.participant {namespace}.validator)")
+                if kind.stage == "helpers":
+                    rule = f'checkHelpers installed {{}}.validator {glue_module}.program ["{helper}"]'
+                    actual, mutated = rule.format("Fresh.Actual"), rule.format(namespace)
+                    # The helper rule refuses the copy wherever it accepts the actual
+                    # helper; the lowering rule accepts the copy.
+                    proofs.append(f"/-- {name} -/\ntheorem mutation{index}_refused : helperAccepted ({actual}) = true → "
+                                  f"helperAccepted ({mutated}) = false := by decide +kernel")
+                    proofs.append(f"theorem mutation{index}_lowering_accepted : {statement} = none := by decide +kernel")
+                    evaluations.append(f'#eval IO.println ("helper-rule {index} " ++ helperOutcome ({actual}))')
+                    evaluations.append(f'#eval IO.println ("mutation {index} " ++ helperOutcome ({mutated}))')
+                    sites.append(dict(site=len(sites), applicable=True, index=index, expected=kind.expected,
+                                      helper=helper))
+                    index += 1
+                    continue
                 if kind.expected == "accepted":
                     proofs.append(f"/-- {name} -/\ntheorem mutation{index}_accepted : {statement} = none := "
                                   "by decide +kernel")
@@ -425,8 +453,16 @@ class Driver(Runner):
             return found[0]
         for name, outcome in outcomes.items():
             for site in outcome["sites"]:
+                if site.get("applicable") and outcome["stage"] == "helpers":
+                    # A site applies where the helper rule accepts the actual helper.
+                    actual = value(f"helper-rule {site['index']}")
+                    if actual != "none":
+                        site.update(applicable=False, reason=f"the helper rule refuses the actual helper: {actual}")
+                        continue
+                    site["lowering"] = "accepted"
                 if site.get("applicable"):
                     site["reason"] = value(f"mutation {site['index']}")
+            outcome["applicable"] = any(site.get("applicable") for site in outcome["sites"])
             outcome["refused"] = sum(1 for site in outcome["sites"]
                                      if site.get("applicable") and site["reason"] != "none")
             outcome["accepted"] = sum(1 for site in outcome["sites"]

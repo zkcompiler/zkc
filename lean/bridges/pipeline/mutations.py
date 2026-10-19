@@ -18,7 +18,13 @@ Stages:
                 `protocol-constructed-participant` before any export;
   lowering      the `zkc.program/0` validator program, checked by the Lean
                 lowering rule `Zkc.Executable.checkLowering`; a refusal of any
-                reason, or acceptance for a change the rule does not read.
+                reason, or acceptance for a change the rule does not read;
+  helpers       a local function of a called helper in the validator program,
+                checked by the Lean helper rule `Zkc.Executable.checkHelpers`
+                against the admitted program's checked helper of its name; a
+                site applies where the rule accepts the actual helper, and the
+                lowering rule, which reads a helper body only for its sorts and
+                its freedom from transcript operations, accepts the copy.
 """
 
 import copy
@@ -683,6 +689,70 @@ def lowering_retarget_operand(deployment, exported):
     return program_copies(deployment, edit, exported)
 
 
+# ---------------------------------------------------------------------------
+# Helper bodies, checked by the helper rule
+
+def helper_mutation(name, property_):
+    def register(function):
+        KINDS[name] = (Kind(name, "helpers", property_, "refused"), function)
+        return function
+    return register
+
+
+def helper_copies(deployment, edit, exported):
+    """One mutated copy per local function of a helper the constructed validator
+    calls, in program order, each with the helper's name."""
+    program = json.loads(deployment[4])
+    names = helper_names(exported)
+    copies = []
+    for index, function in enumerate(program[2]):
+        if function[1] not in names:
+            continue
+        changed = copy.deepcopy(program)
+        if edit(changed, changed[2][index]):
+            copies.append((changed, function[1]))
+    return copies
+
+
+def renamed(value, old, new):
+    if isinstance(value, list):
+        return [renamed(item, old, new) for item in value]
+    return new if value == old else value
+
+
+@helper_mutation("helper-rebound", "a helper body binds each name once, as its checked helper does")
+def helper_rebound(deployment, exported):
+    def edit(program, function):
+        step = next((step for step in steps(function[4]) if step[5]), None)
+        if step is None or not function[2]:
+            return False
+        function[4] = renamed(function[4], step[5][0], function[2][0][0])
+        return True
+    return helper_copies(deployment, edit, exported)
+
+
+@helper_mutation("helper-binding", "a helper step uses the binding of its checked operation")
+def helper_binding(deployment, exported):
+    def edit(program, function):
+        step = next(steps(function[4]), None)
+        if step is None:
+            return False
+        table = {binding[0]: binding for binding in program[1]}
+        current = table.get(step[2])
+        if current is None:
+            return False
+        family = current[1].split(".", 1)[0]
+        others = [binding for binding in program[1] if binding[1] != current[1] and binding[2] == current[2]
+                  and binding[1] not in TRANSCRIPT_CONTRACTS]
+        replacement = next((binding for binding in others if binding[1].split(".", 1)[0] == family),
+                           others[0] if others else None)
+        if replacement is None:
+            return False
+        step[2] = replacement[0]
+        return True
+    return helper_copies(deployment, edit, exported)
+
+
 def accept_any(program, deployment):
     """Make every data comparison of the validator compare a value with itself,
     so that wrong messages are accepted: the receipt binding's mutated program."""
@@ -709,6 +779,7 @@ def kinds_for(names):
 def listing():
     table = {**KINDS, **NATIVE}
     return [dict(name=name, stage=kind_.stage, property=kind_.property, expected=kind_.expected,
-                 refusing_rule=kind_.refusing_rule if kind_.stage == "construction" else None,
+                 refusing_rule=kind_.refusing_rule if kind_.stage == "construction" else
+                 "Zkc.Executable.checkHelpers" if kind_.stage == "helpers" else None,
                  construction_accepts=kind_.construction_accepts)
             for name, (kind_, _) in sorted(table.items())]

@@ -49,7 +49,8 @@ kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
          "lowering-stale-transcript", "lowering-uninstalled-binding",
          "lowering-unchecked-representation", "lowering-formal-retyped",
          "lowering-function-duplicated", "lowering-helper-retargeted", "lowering-loop-maximum-raised",
-         "lowering-loop-count-retargeted", "lowering-loop-carried-swapped", "lowering-helper-constant"]
+         "lowering-loop-count-retargeted", "lowering-loop-carried-swapped", "lowering-helper-constant",
+         "helper-rebound", "helper-binding"]
 
 [executable]
 threshold = "derived"

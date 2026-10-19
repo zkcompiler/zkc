@@ -53,7 +53,11 @@ For each subject with the executable profile, after the construction checks:
    it names. The manifest's generic program mutation kinds are applied to the
    fresh program: each applicable one must be refused by the rule (its reason is
    recorded), or accepted when its kind changes only what the rule does not read
-   (a helper body's computation, which a preparation obligation covers). The
+   (a helper body's computation, which a preparation obligation covers).
+   Helper kinds edit the local function of a called helper: wherever the
+   helper rule (`checkHelpers`) accepts the actual helper against the admitted
+   program's checked helper of its name, the rule must refuse the copy (its
+   refusal is recorded) while the lowering rule accepts it. The
    validator's row of the deployment's role map, which the runtime uses, must
    select the policy's acceptance output and take the policy's public inputs in
    order, and the same file proves that the Lean statement's acceptance position
