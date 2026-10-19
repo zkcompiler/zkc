@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[3]
 def bench(monkeypatch):
     monkeypatch.syspath_prepend(str(ROOT/'common/benchmarks'))
     return {name: importlib.import_module('bench.'+name)
-            for name in ('coverage', 'commitments', 'library_cases', 'operations')}
+            for name in ('coverage', 'commitments', 'library_cases', 'operations', 'algebra')}
 
 
 def panel(bench, family):
@@ -159,3 +159,33 @@ def test_optional_memory_presence_keeps_the_arithmetic_program_fixed(bench, tmp_
     assert not a['public']['memory_present'] and p['public']['memory_present']
     assert not a['witness']['cells'] and len(p['witness']['cells']) == 5*16
     assert absent.source == present.source and absent.assets == present.assets
+
+
+def test_coset_oracle_obeys_coordinate_and_fold_identities(bench, tmp_path):
+    a = bench['algebra']
+    assert len(panel(bench, 'coset')) == 12
+    for degree in (1, 4, 8):
+        field = 'koala-bear'+(f'.ext{degree}-binomial3' if degree != 1 else '')
+        f = a.FieldOracle(field)
+        def decode(x):
+            return (int(x),) if degree == 1 else tuple(map(int, x))
+        shape = {'extension_degree': degree, 'elements': 32}
+        points = bench['operations'].coset(shape | {'operation': 'points'}).inputs[0]['P']
+        shift = decode(points['shift'])
+        values = list(map(decode, points['expected']))
+        assert values[0] == shift
+        assert values[16] == f.sub(f.zero, shift)
+        if degree > 1:
+            assert all(shift[1:])
+        folded = bench['operations'].coset(shape | {'operation': 'fold'}).inputs[0]['P']
+        xs, beta = list(map(decode, folded['xs'])), decode(folded['beta'])
+        for i, result in enumerate(map(decode, folded['expected'])):
+            # Multiply out the claimed inverse formula: no division or inverse
+            # calculation is shared with the generator's expected value.
+            twice_x = f.add(values[i], values[i])
+            assert f.mul(twice_x, result) == f.add(
+                f.mul(values[i], f.add(xs[i], xs[i+16])),
+                f.mul(beta, f.sub(xs[i], xs[i+16])))
+        program = bench['operations'].coset(shape | {'operation': 'fold'})
+        assert program.incorrect['P']['xs'] == program.inputs[0]['P']['xs']
+        assert program.incorrect['P']['expected'] != program.inputs[0]['P']['expected']

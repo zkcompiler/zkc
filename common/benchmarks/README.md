@@ -91,6 +91,7 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 | `expression` | Fixed panel of short/deep Horner, wide independent, shared-subexpression, capture-heavy and input-heavy functions; KB, Fr, dense KB Ext4/Ext8, binary64 and binary Ext3 | Independent authored Python formulas; map/sum/product; two additional validation-only shapes; source shape needs lowered-IR inspection |
 | `field_vector` | Separately named add, subtract, Hadamard multiply, scale, sum, product and dot controls; representative fields and sizes | Independent scalar expectations; SDK/run includes validation and Host costs |
 | `transform` | Separate DFT and interpolation calls, unit shift, full dense coefficients; KB/Ext4/Ext8 at 32, KB/Ext8 at 1,024 | Independent Python evaluation; polynomial adaptation and equality remain inside the SDK call |
+| `coset` | Separate point enumeration and even/odd folding; KB/Ext4/Ext8 at 32 and 8,192, dense non-base shifts | Independent integer field arithmetic; arbitrary fold inputs, full result checks and Host costs |
 | `curve_operation` | Separately named BLS12-381 G1 vector scaling, per-point scaling and MSM; 1/33/128 points | Includes point generation and every result check; weaker group-law consistency, sharing native group kernels |
 | `hash_bytes` | SHA-256 over 0/64/8,192 payload bytes | Independent Python `hashlib` digest; all bytes checked |
 | `poseidon` | Width-16 KoalaBear Poseidon2, 1/17/256 states | Published Plonky3 known answer repeated per state; full batch check, one distinct state |

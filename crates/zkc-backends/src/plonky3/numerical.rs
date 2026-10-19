@@ -165,7 +165,7 @@ fn execute<E: Family>(
             let mut x = d.shift();
             for _ in 0..d.size() {
                 out.push(x);
-                x *= d.generator();
+                x *= d.base_generator();
             }
             E::vector_value(out)
         }

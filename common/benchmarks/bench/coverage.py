@@ -32,7 +32,7 @@ class Case:
             return operations.host_vector(shape)
         if self.name in ('hash_bytes', 'poseidon', 'merkle'):
             return getattr(commitments, self.name)(shape)
-        if self.name in ('transform', 'curve_operation'):
+        if self.name in ('transform', 'coset', 'curve_operation'):
             return getattr(operations, self.name)(shape)
         return getattr(programs, self.name)(shape)
 
@@ -142,6 +142,13 @@ def cases():
             add(f'transform-ext{degree}-{operation}-{n}', 'transform',
                 {'extension_degree': degree, 'elements': n, 'operation': operation}, 'operation', (operation,),
                 'One direction, unit shift, dense full-degree coefficients; independent Python oracle. Includes polynomial adaptation, equality and Host costs.')
+    for degree in (1, 4, 8):
+        for n in (32, 8192):
+            for operation in ('points', 'fold'):
+                add(f'coset-ext{degree}-{operation}-{n}', 'coset',
+                    {'extension_degree': degree, 'elements': n, 'operation': operation},
+                    'operation', ('non-base shift', operation, 'vector equality'),
+                    'Independent integer field oracle; dense extension coordinates and arbitrary fold inputs. Includes equality and Host costs, not a low-degree test.')
     for n in (1, 33, 128):
         for operation in ('vector-scale', 'scale-each', 'msm'):
             add(f'curve-operation-{operation}-{n}', 'curve_operation',

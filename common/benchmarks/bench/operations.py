@@ -79,6 +79,37 @@ def transform(shape):
                   'expected': list(map(a.encode, expected))})
 
 
+def coset(shape):
+    """Separate subgroup traversal and folding with non-base coset shifts."""
+    degree, n, operation = shape['extension_degree'], shape['elements'], shape['operation']
+    field = 'koala-bear' + (f'.ext{degree}-binomial3' if degree != 1 else '')
+    f = a.FieldOracle(field)
+    shift, beta = f.dense(2, 291)
+    root = pow(1791270792, (1 << 24)//n, a.P)
+    parameters = 'shift:F, n:index'
+    inputs = {'shift': f.encode(shift), 'n': str(n)}
+    if operation == 'points':
+        expected = [tuple(c*pow(root, i, a.P) % a.P for c in shift) for i in range(n)]
+        result = 'kernel<F>("poly.domain_points",shift,n)'
+    elif operation == 'fold':
+        values = f.dense(n, 292)
+        inverse_shift = f.power(shift, a.P**degree-2)
+        expected = []
+        for i, (left, right) in enumerate(zip(values[:n//2], values[n//2:], strict=True)):
+            inverse_twice_x = tuple(c*pow(2*pow(root, i, a.P), -1, a.P) % a.P
+                                    for c in inverse_shift)
+            half_sum = tuple(c*pow(2, -1, a.P) % a.P for c in f.add(left, right))
+            expected.append(f.add(half_sum, f.mul(beta, f.mul(f.sub(left, right), inverse_twice_x))))
+        parameters += ', xs:Vector<F>, beta:F'
+        inputs |= {'xs': list(map(f.encode, values)), 'beta': f.encode(beta)}
+        result = 'kernel<F>("poly.even_odd_fold",xs,shift,beta)'
+    else:
+        raise ValueError(f'unknown coset operation: {operation}')
+    inputs['expected'] = list(map(f.encode, expected))
+    return local(field, parameters+', expected:Vector<F>',
+                 f'return v::equal({result},expected);', inputs)
+
+
 def curve_operation(shape):
     """Group-law checks are weaker than independent curve coordinates.
 

@@ -6,7 +6,7 @@
 //! retained; the DFT acts over the base field on each coordinate.
 
 use p3_dft::{Radix2DitParallel, TwoAdicSubgroupDft};
-use p3_field::{ExtensionField, Field, TwoAdicField};
+use p3_field::{ExtensionField, Field, PrimeCharacteristicRing, TwoAdicField};
 use p3_koala_bear::KoalaBear;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,7 +28,7 @@ pub enum Error {
 pub struct Domain<E> {
     size: usize,
     shift: E,
-    generator: E,
+    generator: KoalaBear,
 }
 impl<E: ExtensionField<KoalaBear>> Domain<E> {
     pub fn new(size: usize, shift: E, max_elements: usize) -> Result<Self, Error> {
@@ -44,7 +44,7 @@ impl<E: ExtensionField<KoalaBear>> Domain<E> {
         Ok(Self {
             size,
             shift,
-            generator: E::from(KoalaBear::two_adic_generator(size.trailing_zeros() as usize)),
+            generator: KoalaBear::two_adic_generator(size.trailing_zeros() as usize),
         })
     }
     pub fn size(&self) -> usize {
@@ -54,6 +54,11 @@ impl<E: ExtensionField<KoalaBear>> Domain<E> {
         self.shift
     }
     pub fn generator(&self) -> E {
+        E::from(self.generator)
+    }
+    /// The subgroup always lies in the base field, even for a non-base shift.
+    /// Retain that fact when advancing extension-valued coset points.
+    pub(super) fn base_generator(&self) -> KoalaBear {
         self.generator
     }
     pub fn point(&self, index: usize) -> Result<E, Error> {
@@ -148,8 +153,8 @@ pub fn fold<E: ExtensionField<KoalaBear>>(
         return Err(Error::EvaluationCount);
     }
     let half = next.size;
-    let inverse_two = E::TWO.inverse();
-    let mut inverse_twice_x = inverse_two / domain.shift;
+    let inverse_two = KoalaBear::TWO.inverse();
+    let mut inverse_twice_x = E::from(inverse_two) / domain.shift;
     let inverse_generator = domain.generator.inverse();
     let mut result = Vec::with_capacity(half);
     for (a, b) in values[..half].iter().zip(&values[half..]) {
@@ -270,6 +275,44 @@ mod tests {
     type E = BinomialExtensionField<KoalaBear, 8>;
     fn sample(i: usize) -> E {
         E::from_basis_coefficients_fn(|j| KoalaBear::from_usize(3 * i * i + 7 * i + j + 1))
+    }
+    fn base_action_matches_embedding<F: ExtensionField<KoalaBear>>() {
+        for log_n in 1..=6 {
+            let n = 1 << log_n;
+            let sample =
+                |i| F::from_basis_coefficients_fn(|j| KoalaBear::from_usize(3 * i + 7 * j + 1));
+            let domain = Domain::new(n, sample(3), n).unwrap();
+            let embedded = F::from(KoalaBear::two_adic_generator(log_n));
+            let mut recurrence = domain.shift();
+            for index in 0..n {
+                let expected = domain.shift() * embedded.exp_u64(index as u64);
+                assert_eq!(domain.point(index).unwrap(), expected);
+                assert_eq!(recurrence, expected);
+                recurrence *= domain.base_generator();
+            }
+            let values: Vec<_> = (0..n).map(sample).collect();
+            let challenge = sample(11);
+            let inverse_two = F::TWO.inverse();
+            let mut inverse_twice_x = inverse_two / domain.shift();
+            let inverse_generator = embedded.inverse();
+            let expected: Vec<_> = (0..n / 2)
+                .map(|i| {
+                    let (a, b) = (values[i], values[i + n / 2]);
+                    let result = (a + b) * inverse_two + challenge * (a - b) * inverse_twice_x;
+                    inverse_twice_x *= inverse_generator;
+                    result
+                })
+                .collect();
+            assert_eq!(fold(&values, domain, challenge).unwrap(), expected);
+            assert_eq!(domain.folded().unwrap().generator(), embedded.square());
+        }
+    }
+
+    #[test]
+    fn base_subgroup_action_preserves_non_base_cosets() {
+        base_action_matches_embedding::<KoalaBear>();
+        base_action_matches_embedding::<crate::KoalaBearExt4>();
+        base_action_matches_embedding::<crate::KoalaBearExt8>();
     }
     #[test]
     fn cosets_interpolation_fold_and_opening() {
