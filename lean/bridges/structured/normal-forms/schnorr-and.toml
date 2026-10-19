@@ -1,0 +1,23 @@
+# Participant normal forms of the original-stage `sigma::SchnorrAnd` Entry.
+fixture = "lean/bridges/structured/fixtures/schnorr-and.json"
+output = "lean/ZkcExamples/Structured/SchnorrAndNormalForms.lean"
+namespace = "ZkcExamples.Structured.SchnorrAndNormalForms"
+imports = ["ZkcExamples.Structured.SchnorrAndViews", "Zkc.Source.Structured.ReplyScript",
+           "Zkc.Source.Structured.ContractExecution", "Zkc.Source.Structured.ContractElaboration",
+           "Zkc.Source.Structured.ContractObligations",
+           "Mathlib.Algebra.Field.Basic", "Mathlib.Algebra.Module.Defs"]
+open = ["SchnorrAndViews"]
+options = ["smartUnfolding false"]
+carrier = "Field"
+
+[sites]
+s0 = "firstNonceSite"
+s2 = "secondNonceSite"
+
+[root]
+inputs = ["firstBase", "firstKey", "secondBase", "secondKey", "firstWitness", "secondWitness", "nonces",
+          "challenges"]
+roles = ["prover", "verifier"]
+
+[contract]
+clause = "knowledge"

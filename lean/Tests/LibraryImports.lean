@@ -447,6 +447,7 @@ import ZkcExamples.Structured.SchnorrAnd
 import ZkcExamples.Structured.SchnorrAndBinding
 import ZkcExamples.Structured.SchnorrAndBodies
 import ZkcExamples.Structured.SchnorrAndData
+import ZkcExamples.Structured.SchnorrAndNormalForms
 import ZkcExamples.Structured.SchnorrAndViews
 import ZkcExamples.Structured.SchnorrBinding
 import ZkcExamples.Structured.SchnorrCheckpoints
@@ -459,6 +460,7 @@ import ZkcExamples.Structured.SchnorrHonestProverControls
 import ZkcExamples.Structured.SchnorrInteractive
 import ZkcExamples.Structured.SchnorrInteractiveBodies
 import ZkcExamples.Structured.SchnorrInteractiveData
+import ZkcExamples.Structured.SchnorrInteractiveNormalForms
 import ZkcExamples.Structured.SchnorrReorderedData
 import ZkcExamples.Structured.SchnorrResponse
 import ZkcExamples.Structured.SchnorrResponseCandidateData
