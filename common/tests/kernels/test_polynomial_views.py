@@ -136,7 +136,7 @@ def test_invalid_domains_and_evaluation_extents_stop(toolchain, journal, directo
     ('claims::OpeningClaims<F>', 'claims::OpeningClaims<F>{selected:indices::empty(),offsets:indices::empty(),claimed:values}'),
     ('coset::CosetDomain<F>', 'coset::CosetDomain<F>{shift:3,size:4}'),
     ('coset::ColumnBatch<F>', 'coset::ColumnBatch<F>{geometry:coset::coset_domain<F>(3,4),width:1,data:values}'),
-    ('opening::BoundOpenings<F>', 'opening::BoundOpenings<F>{geometry:coset::coset_domain<F>(3,4),width:1,height:2,zeta:5,descriptors:claims::checked(indices::empty(),indices::empty(),values),points:values}'),
+    ('opening::BoundOpenings<F>', 'opening::BoundOpenings<F>{geometry:coset::coset_domain<F>(3,4),width:1,selected:indices::empty(),claimed:values,points:values}'),
     ('opening::VectorAccumulator<F>', 'opening::VectorAccumulator<F>{geometry:coset::coset_domain<F>(3,4),weights:opening::GeometricWeights<F>{ratio:1,next:1},values:values}'),
     ('opening::QueryRow<F>', 'opening::QueryRow<F>{geometry:coset::coset_domain<F>(3,4),width:1,position:0,values:values}'),
     ('opening::ScalarAccumulator<F>', 'opening::ScalarAccumulator<F>{geometry:coset::coset_domain<F>(3,4),position:0,weights:opening::GeometricWeights<F>{ratio:1,next:1},value:0}'),
