@@ -1053,6 +1053,34 @@ transport between oracle key forms, binding, memoization and the charged
 commitment bridge. Every declaration's axioms are within `propext`,
 `Classical.choice` and `Quot.sound`.
 
+## Endpoint applications
+
+`TestsSecurity.Endpoints` applies the registered
+[endpoints](spec/fiat-shamir-security.md#endpoints-over-artifact-indexed-evidence)
+to evidence built from generated per-Entry facts.
+
+- **Schnorr.** Knowledge evidence of the compiled `example::Proof` Entry from its
+  generated construction facts, the Schnorr family package, the generated model
+  equation, the relation the Proof Entry retains and, for program bytes, the
+  generated lowering facts. Its compiled verifier is the one of
+  `CompiledSchnorrFiatShamir` (`schnorr_verify_eq`), and both knowledge
+  endpoints apply (`schnorr_knowledge`, `schnorr_knowledge_bytes`).
+- **Guessing Entry.** Ordinary soundness evidence from the imported ArkLib
+  certificate. The fixed-statement endpoint gives back the bound of
+  `CompiledGuessFiatShamir.soundness` for that theorem's verifier
+  (`guess_fixed_soundness`), attained at zero queries; the adaptive endpoint,
+  with the policy-derived binding of the offset, bounds a prover that chooses the
+  offset after `Q` queries by `(Q + 1) / |F|` (`guess_adaptive_soundness`).
+- **Controls.** Lowering evidence is required exactly for program bytes and
+  binding evidence exactly for adaptive statements, by the evidence's indices; the
+  composed check refuses the Schnorr original with the guessing export
+  (`mismatched_artifacts`), so no evidence exists for that pair.
+
+The existing subject modules are not yet derived from the endpoints, and the
+subject manifests do not yet name evidence instances, so every assurance report
+remains `unresolved`. Every declaration's axioms are within `propext`,
+`Classical.choice` and `Quot.sound`.
+
 ## Construction obligation counterexamples
 
 `TestsSecurity.Counterexamples` refutes, for each example, the property it

@@ -508,6 +508,13 @@ compiled Entry, native transcript reading or executable is connected. Statement
 bindings relate policy statements to model statements, with the coverage of the
 application's false statements and the rejection of unmapped statements as
 separate registered obligations.
+[Registered endpoints](../lean/docs/spec/fiat-shamir-security.md#endpoints-over-artifact-indexed-evidence)
+state ordinary soundness, for fixed and adaptive statements, of a compiled
+verifier's ideal meaning and of host validation of program bytes, and
+fixed-statement knowledge soundness through a generic Sigma bridge, for evidence
+indexed by a compiled Entry's artifacts. They apply to the compiled Schnorr and
+guessing Entries; the subject modules are not yet derived from them, so no
+assurance report is established.
 
 The [scalar Lean bridge](../lean/bridges/common/README.md) imports actual retained
 PIR programs, proves open-process contracts, and applies selected ArkLib/VCVio

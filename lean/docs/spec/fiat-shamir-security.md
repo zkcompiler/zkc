@@ -1740,6 +1740,74 @@ whose digest modulo `2^depth` is the index (`keccakIndex`, exact by
 `keccakIndex_uniform` for `depth ≤ 256`), `|S| = 2^256` and `V = depth + 4`
 (`keccak_soundness`).
 
+## Endpoints over artifact-indexed evidence
+
+A security claim about a compiled Proof Entry is the application of a
+registered endpoint theorem (`ZkcSecurity.Registry.endpoints`) to evidence
+(`ZkcSecurity.Endpoint`). Evidence is indexed by what the claim is about:
+
+- the **artifacts** (`Artifacts`): the original export, the constructed
+  validator export, the published input types in policy order and, for program
+  bytes, the executable validator. A policy statement is any list of values of
+  the published types, malformed ones included;
+- the **covered semantic endpoint** (`Semantics`): the compiled verifier's ideal
+  meaning, or host validation of the deployed program's proof bytes;
+- the **statement form** (`Form`): fixed before the prover runs, or chosen by the
+  prover after its oracle queries;
+- the **statement relation** (`StatementRelation`): model statements, the
+  functional relation from policy to model statements, the false model
+  statements, and the policy statements the application counts as false;
+- the **regime** (`Regime`): the oracle's answer type and the decoding of a
+  challenge from it, exactly uniform field elements at `Regime.exact`.
+
+The compilation facts (`Compiled`) are the generated per-Entry facts: the
+admitted original, the composed construction and projection check, and the
+selection constructed from the admitted original and the policy and checked
+against the export. From them alone the compiled verifier on a statement is the
+transform of the admitted original validator on that statement
+(`Compiled.transform_eq`). Ordinary soundness evidence (`SoundnessEvidence`)
+adds the model equation (the original validator is the family's model validator
+of every model statement its statement denotes), a charged certificate family
+(`CertificateFamily`) dooming the model validator of every false model statement
+after every initial transcript, and the original validator's charge on every
+statement. Two requirements are selected by the indices, so they cannot be
+omitted: an adaptive claim requires binding evidence (`BindingEvidence`), the
+application context whose policy-derived codec (`policyCodec`: one typed
+public-value binding event with one row entry per published input) determines
+every statement, and coverage of the application's false statements, either by
+model falsity or rejection of unmapped statements, or by an implication from the
+application's false-acceptance event to the modeled one; a claim about program
+bytes requires lowering evidence (`LoweringEvidence`), the executable validator
+accepted by the lowering rule with prepared and sorted helpers.
+
+The ordinary soundness endpoints (`fixed_soundness`, `adaptive_soundness`,
+`fixed_soundness_bytes`, `adaptive_soundness_bytes`) are each one composition
+of [stage relations](#stage-relations) from the trivial game: the charged typed
+theorem, the construction equality, and for program bytes the translation of a
+byte prover into the prover of what its bytes decode to and host validation's
+pruning. The loss is the prover's pathwise weighted budget plus the original
+validator's charge, the supremum over statements for adaptive statements.
+
+Fixed-statement knowledge soundness goes through the generic Sigma bridge
+(`ZkcSecurity.Endpoint.Sigma`). A one-challenge transcript shape gives the
+commitment's message events in order (one or more), the challenge occurrence,
+and checked encoders and decoders of commitments and typed proofs. Routing sends
+a history that ends in a commitment's events and the challenge occurrence to its
+prior history and the commitment, and every other history, malformed and empty
+ones included, to itself on a separate branch; it is injective on all histories
+(`Shape.route_injective`), so the experiment of a corresponding verifier is
+exactly VCVio's knowledge verification run of the routed prover
+(`Shape.run_eq`), which issues one oracle query per history query
+(`Shape.reduce_bound`). Knowledge evidence (`KnowledgeEvidence`) carries a Sigma
+family (`SigmaFamily`) with the verifier correspondence and the shape fact of its
+model validator, the model equation and the correspondence of the application's
+witness relation with the protocol's. The endpoints (`knowledge_soundness`,
+`knowledge_soundness_bytes`) conclude that the replay extractor on the routed
+prover finds a witness with probability at least
+`accepting · (accepting / (Q + 1) - 1 / |F|)`; for program bytes, host
+validation's acceptance is at most the acceptance of what the bytes decode to and
+read as. Adaptive knowledge soundness is a separate property.
+
 ## Obligations
 
 The informal "random oracle" assumption separates into five obligations:
