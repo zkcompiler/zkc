@@ -238,6 +238,21 @@ theorem repeat_optional (U : UnitPayload) (bodies : Bodies U.definitions)
         (Nat.lt_of_not_ge bounded)]
       simp only [admittedRounds, bounded, ↓reduceIte, PIR.Proc.bind]
 
+/-- The generated normal form of the whole body at the verifier, with its repeat
+admitted: the original count admission, the actual rounds, and the actual return
+permutation of the carried state. -/
+theorem verifierReduce_rounds (U : UnitPayload) (bodies : Bodies U.definitions)
+    (ctx : ProtocolContext) (separate : ctx.roles 0 ≠ ctx.roles 1) (maximum : Nat)
+    (claim : Option F) (count service : Option Nat) :
+    SumcheckRoundNormalForms.verifierReduceProcess (G := G) U maximum ctx claim count service =
+      (admittedRounds maximum ctx count service claim).bind
+        (fun pc => .done (returnValues (embedV pc))) := by
+  unfold SumcheckRoundNormalForms.verifierReduceProcess
+  change (denoteRepeat (repeatSpec maximum) ctx (ctx.roles 1) count (embedV (G := G) (some [], claim))
+    (cap service) (bodyFn U ctx (ctx.roles 1))).bind (fun state => .done (returnValues state)) = _
+  rw [repeat_optional U bodies ctx _ rfl separate]
+  simp only [PIR.Proc.bind_assoc, PIR.Proc.bind]
+
 /-- The complete body includes the skipped P prelude, optional count admission,
 actual callback, exact six-slot return permutation, and output ownership mask. -/
 theorem reduce_optional (U : UnitPayload) (bodies : Bodies U.definitions)
