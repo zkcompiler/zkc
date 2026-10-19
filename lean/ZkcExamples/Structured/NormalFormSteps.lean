@@ -11,7 +11,7 @@ public import Zkc.Source.Structured.ContractComposition
 law returns or stops behaves as that law at its owner; an operation whose
 meaning is a process followed by a returned tuple continues with that tuple; and
 an active protocol application continues with the callee's masked returned
-tuple. -/
+tuple, also under the outer bind of a repeat callback's normal form. -/
 namespace ZkcExamples.Structured.NormalFormSteps
 open Zkc.Source
 
@@ -125,5 +125,45 @@ theorem apply_step (payload : UnitPayload)
   apply congrArg (PIR.Proc.bind process)
   funext values
   rw [plain_denote, outputs, ← continuation, Environment.prepend_values_get]
+
+/-- The same application step under an outer bind, as in the normal form of a repeat
+callback followed by the embedding of its carried state. -/
+theorem apply_step_after (payload : UnitPayload)
+    (definition : CheckedProtocol) (member : definition ∈ payload.protocols)
+    (signature : ProtocolSignature) (sameSignature : definition.signature = signature)
+    (body : Region protocolDialect signature.inputs signature.outputs)
+    (exactRaw : definition.raw = body.erase)
+    (roles : List Nat) (site : String) (ctx : ProtocolContext) (self : Nat)
+    {Γ out : List Ty} (operands : Operands Γ signature.inputs)
+    (next : Region protocolDialect (signature.outputs ++ Γ) out)
+    (before : Values (Component (assignment F G)) Γ)
+    (inside : (ctx.enter site roles).contains signature self = true)
+    (masked : Values (Component (assignment F G)) signature.inputs)
+    (mask : maskValues self ((ctx.enter site roles).mapScopes signature.inputScopes)
+      (operands.eval before.get) = masked)
+    (process : PIR.Proc (participantInterface F G) (Values (Component (assignment F G)) signature.outputs))
+    (callee : body.denote (participantMeaningWith (.silent _) (participantActions F G)
+      (payload.definitions.foldl (Evaluation.ComponentTables.extend (.silent _)) ⟨[], []⟩) self
+      (payload.plainProtocolTable F G) (ctx.enter site roles)) masked.get = process)
+    (added : Values (Component (assignment F G)) signature.outputs →
+      Values (Component (assignment F G)) signature.outputs)
+    (outputs : ∀ values,
+      maskValues self ((ctx.enter site roles).mapScopes signature.outputScopes) values = added values)
+    {B : Type} (result : Values (Component (assignment F G)) signature.outputs →
+      PIR.Proc (participantInterface F G) B)
+    (after : B → PIR.Proc (participantInterface F G) (Values (Component (assignment F G)) out))
+    (continuation : ∀ values,
+      next.denote (participantMeaningWith (.silent _) (participantActions F G)
+        (payload.definitions.foldl (Evaluation.ComponentTables.extend (.silent _)) ⟨[], []⟩) self
+        (payload.plainProtocolTable F G) ctx) ((added values).append before).get =
+          (result values).bind after) :
+    (Region.letOp (dialect := protocolDialect) (.protocolApply signature roles site) operands .nil
+      next).denote (participantMeaningWith (.silent _) (participantActions F G)
+        (payload.definitions.foldl (Evaluation.ComponentTables.extend (.silent _)) ⟨[], []⟩) self
+        (payload.plainProtocolTable F G) ctx) before.get =
+      (process.bind result).bind after := by
+  rw [PIR.Proc.bind_assoc]
+  exact apply_step payload definition member signature sameSignature body exactRaw roles site ctx self
+    operands next before inside masked mask process callee added outputs _ continuation
 
 end ZkcExamples.Structured.NormalFormSteps
