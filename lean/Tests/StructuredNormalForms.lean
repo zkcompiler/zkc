@@ -1,18 +1,21 @@
-import Zkc.Source.Structured.NormalForm.Check
-import ZkcExamples.Structured.ChaumPedersenNormalForms
+import Zkc.Source.Structured.NormalForm.Presentation
+import ZkcExamples.Structured.ChaumPedersenViews
 import ZkcExamples.Structured.SumcheckRoundNormalForms
 
-/-! Controls for the normalizer and the form checker. The migrated generated
-modules are the positive controls; these cases show that the kernel refuses
-a form literal that is not the normalizer's result, that the normalizer
-refuses what is outside its fragment by name, and that the checker accepts
-the generated form and refuses one that misstates an action. -/
+/-! Controls for the normalizer. The migrated generated modules are the
+positive controls; these cases show that the kernel refuses a form literal
+that is not the normalizer's result and that the normalizer refuses what is
+outside its fragment by name. -/
 set_option autoImplicit false
 namespace Tests.StructuredNormalForms
 open Zkc.Source Zkc.Source.Structured NormalForm ZkcExamples.Structured
 
+/-- The Chaum–Pedersen verifier's inputs: the public statement and its challenges. -/
+def verifierPattern : InputPattern ChaumPedersenViews.program.payload.entry.inputs :=
+  .cons .present (.cons .present (.cons .present (.cons .present (.cons .absent (.cons .absent (.cons .present .nil))))))
+
 /-- The verifier's form with the challenge sent to the response's site. -/
-noncomputable def misdirected : Form [] ChaumPedersenNormalForms.verifierPattern.scope
+noncomputable def misdirected : Form [] verifierPattern.scope
     ChaumPedersenViews.program.payload.entry.outputs :=
   .receive (.group "bls12-381.g1") "label_66697273745f636f6d6d69746d656e74_0" 0 <|
   .receive (.group "bls12-381.g1") "label_7365636f6e645f636f6d6d69746d656e74_0" 0 <|
@@ -24,22 +27,14 @@ noncomputable def misdirected : Form [] ChaumPedersenNormalForms.verifierPattern
 /-- A literal that is not the normalizer's result is refused by the kernel. -/
 example : True := by
   fail_if_success
-    have : normalize {} ChaumPedersenBodies.interactiveBody 1 2 ChaumPedersenNormalForms.verifierPattern =
+    have : normalize {} ChaumPedersenBodies.interactiveBody 1 2 verifierPattern =
         .ok misdirected := by
       kernel_rfl
   trivial
 
-/-- The checker refuses the same misstated form. -/
-example : check {} 1 2 ChaumPedersenBodies.interactiveBody ChaumPedersenNormalForms.verifierPattern
-    misdirected = false := by kernel_rfl
-
-/-- The checker accepts the generated form. -/
-example : check {} 1 2 ChaumPedersenBodies.interactiveBody ChaumPedersenNormalForms.verifierPattern
-    ChaumPedersenNormalForms.verifierForm = true := by kernel_rfl
-
 /-- A role index outside the declared roster is refused: `RosterDistinct`
 says nothing about it. -/
-example : normalize {} ChaumPedersenBodies.interactiveBody 1 1 ChaumPedersenNormalForms.verifierPattern =
+example : normalize {} ChaumPedersenBodies.interactiveBody 1 1 verifierPattern =
     .error "role-outside-roster" := by kernel_rfl
 
 /-- The Sumcheck round's owned calls need laws: without them the normalizer
