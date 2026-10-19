@@ -2,7 +2,7 @@
 fixture = "lean/bridges/structured/fixtures/chaum-pedersen.json"
 output = "lean/ZkcExamples/Structured/ChaumPedersenNormalForms.lean"
 namespace = "ZkcExamples.Structured.ChaumPedersenNormalForms"
-imports = ["ZkcExamples.Structured.ChaumPedersenViews", "Zkc.Source.Structured.NormalForm.Presentation", "Zkc.Source.Structured.ReplyScript",
+imports = ["ZkcExamples.Structured.ChaumPedersenViews", "Zkc.Source.Structured.ReplyScript",
            "Zkc.Source.Structured.ContractExecution", "Zkc.Source.Structured.ContractElaboration",
            "Zkc.Source.Structured.ContractObligations",
            "Mathlib.Algebra.Field.Basic", "Mathlib.Algebra.Module.Defs"]
@@ -16,8 +16,7 @@ s0 = "nonceSite"
 [root]
 inputs = ["firstBase", "firstKey", "secondBase", "secondKey", "witness", "nonces", "challenges"]
 roles = ["prover", "verifier"]
-proof = "normal-form"
-body = "ChaumPedersenBodies.interactiveBody"
+proof = "kernel"
 
 [contract]
 clause = "knowledge"

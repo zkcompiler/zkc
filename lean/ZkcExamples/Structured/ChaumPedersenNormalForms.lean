@@ -1,7 +1,6 @@
 module
 
 public import ZkcExamples.Structured.ChaumPedersenViews
-public import Zkc.Source.Structured.NormalForm.Presentation
 public import Zkc.Source.Structured.ReplyScript
 public import Zkc.Source.Structured.ContractExecution
 public import Zkc.Source.Structured.ContractElaboration
@@ -46,38 +45,10 @@ def proverProcess (firstBase secondBase : G) (witness : F) (nonces : Nat) :
   .call (.send (ty := .field scalarDomain) responseSite 1 (nonce + (delivery * witness))) fun _ =>
   .done (.cons none .nil)
 
-/-- The prover's inputs as the normalizer reads them: held inputs are present. -/
-def proverPattern : NormalForm.InputPattern program.payload.entry.inputs :=
-  .cons .present (.cons .present (.cons .present (.cons .present (.cons .present (.cons .present (.cons .absent .nil))))))
-
-/-- The prover's form, printed from the compiled normalizer; the kernel checks it. -/
-noncomputable def proverForm : NormalForm.Form [] proverPattern.scope program.payload.entry.outputs :=
-  .query "s0" "bls12-381.fr" (.cons (.var (.there (.there (.there (.there (.there .here)))))) .nil) <|
-  .send (.group "bls12-381.g1") "label_66697273745f636f6d6d69746d656e74_0" 1 (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var (.there .here)) (.cons (.var .here) .nil)) .here) <|
-  .send (.group "bls12-381.g1") "label_7365636f6e645f636f6d6d69746d656e74_0" 1 (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var (.there (.there (.there .here)))) (.cons (.var .here) .nil)) .here) <|
-  .receive (.field "bls12-381.fr") "label_64656c6976657279_0" 1 <|
-  .send (.field "bls12-381.fr") "label_726573706f6e7365_0" 1 (.calc (.fieldAdd "bls12-381.fr") rfl (.cons (.var (.there .here)) (.cons (.calc (.fieldMultiply "bls12-381.fr") rfl (.cons (.var .here) (.cons (.var (.there (.there (.there (.there (.there (.there .here))))))) .nil)) .here) .nil)) .here) <|
-  .done (.cons .absent .nil)
-
-theorem prover_normalized :
-    NormalForm.normalize {} ChaumPedersenBodies.interactiveBody 0 2 proverPattern = .ok proverForm := by
-  kernel_rfl
-
-/-- The form's process between the output masks is the readable process. -/
-theorem prover_presentation (tables : NormalForm.Tables (ringModel F G)) (firstBase firstKey secondBase secondKey : G) (witness : F) (nonces : Nat) :
-    (proverForm.denote (ringModel F G) tables ⟨fun entry => entry.elim0⟩ {}
-        (.cons firstBase (.cons firstKey (.cons secondBase (.cons secondKey (.cons witness (.cons nonces .nil))))))).bind
-        (fun out => .done (maskValues 0 program.payload.entry.outputScopes out)) =
-      proverProcess firstBase secondBase witness nonces := by
-  kernel_rfl
-
 theorem prover_process (firstBase firstKey secondBase secondKey : G) (witness : F) (nonces : Nat) :
     program.participant F G 0 (proverInputs firstBase firstKey secondBase secondKey witness nonces) =
-      proverProcess firstBase secondBase witness nonces :=
-  (NormalForm.participant_sound_uniform program ChaumPedersenBodies.interactiveBody entry_raw {} 0 2
-    proverPattern proverForm prover_normalized ⟨fun entry => entry.elim0⟩
-    (.cons firstBase (.cons firstKey (.cons secondBase (.cons secondKey (.cons witness (.cons nonces .nil)))))) _ (by kernel_rfl) (fun entry => entry.elim0)).trans
-    (prover_presentation _ firstBase firstKey secondBase secondKey witness nonces)
+      proverProcess firstBase secondBase witness nonces := by
+  kernel_rfl
 
 /-- The replies of one prover run: received values by type and site, and
 drawn values by site. Other requests are refused. -/
@@ -115,38 +86,10 @@ def verifierProcess (firstBase firstKey secondBase secondKey : G) (challenges : 
   .call (.receive (.field scalarDomain) responseSite 0) fun (response : F) =>
   .done (.cons (some ((decide (response • firstBase = firstCommitment + (challenge • firstKey))) && (decide (response • secondBase = secondCommitment + (challenge • secondKey))))) .nil)
 
-/-- The verifier's inputs as the normalizer reads them: held inputs are present. -/
-def verifierPattern : NormalForm.InputPattern program.payload.entry.inputs :=
-  .cons .present (.cons .present (.cons .present (.cons .present (.cons .absent (.cons .absent (.cons .present .nil))))))
-
-/-- The verifier's form, printed from the compiled normalizer; the kernel checks it. -/
-noncomputable def verifierForm : NormalForm.Form [] verifierPattern.scope program.payload.entry.outputs :=
-  .receive (.group "bls12-381.g1") "label_66697273745f636f6d6d69746d656e74_0" 0 <|
-  .receive (.group "bls12-381.g1") "label_7365636f6e645f636f6d6d69746d656e74_0" 0 <|
-  .query "label_6368616c6c656e6765" "bls12-381.fr" (.cons (.var (.there (.there (.there (.there (.there (.there .here))))))) .nil) <|
-  .send (.field "bls12-381.fr") "label_64656c6976657279_0" 0 (.var .here) <|
-  .receive (.field "bls12-381.fr") "label_726573706f6e7365_0" 0 <|
-  .done (.cons (.present (.calc .booleanAnd rfl (.cons (.calc (.groupEqual "bls12-381.g1") rfl (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var (.there (.there (.there (.there .here))))) (.cons (.var .here) .nil)) .here) (.cons (.calc (.groupAdd "bls12-381.g1") rfl (.cons (.var (.there (.there (.there .here)))) (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var (.there (.there (.there (.there (.there .here)))))) (.cons (.var (.there .here)) .nil)) .here) .nil)) .here) .nil)) .here) (.cons (.calc (.groupEqual "bls12-381.g1") rfl (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var (.there (.there (.there (.there (.there (.there .here))))))) (.cons (.var .here) .nil)) .here) (.cons (.calc (.groupAdd "bls12-381.g1") rfl (.cons (.var (.there (.there .here))) (.cons (.calc (.groupScale "bls12-381.g1" "bls12-381.fr") rfl (.cons (.var (.there (.there (.there (.there (.there (.there (.there .here)))))))) (.cons (.var (.there .here)) .nil)) .here) .nil)) .here) .nil)) .here) .nil)) .here)) .nil)
-
-theorem verifier_normalized :
-    NormalForm.normalize {} ChaumPedersenBodies.interactiveBody 1 2 verifierPattern = .ok verifierForm := by
-  kernel_rfl
-
-/-- The form's process between the output masks is the readable process. -/
-theorem verifier_presentation (tables : NormalForm.Tables (ringModel F G)) (firstBase firstKey secondBase secondKey : G) (challenges : Nat) :
-    (verifierForm.denote (ringModel F G) tables ⟨fun entry => entry.elim0⟩ {}
-        (.cons firstBase (.cons firstKey (.cons secondBase (.cons secondKey (.cons challenges .nil)))))).bind
-        (fun out => .done (maskValues 1 program.payload.entry.outputScopes out)) =
-      verifierProcess firstBase firstKey secondBase secondKey challenges := by
-  kernel_rfl
-
 theorem verifier_process (firstBase firstKey secondBase secondKey : G) (challenges : Nat) :
     program.participant F G 1 (verifierInputs firstBase firstKey secondBase secondKey challenges) =
-      verifierProcess firstBase firstKey secondBase secondKey challenges :=
-  (NormalForm.participant_sound_uniform program ChaumPedersenBodies.interactiveBody entry_raw {} 1 2
-    verifierPattern verifierForm verifier_normalized ⟨fun entry => entry.elim0⟩
-    (.cons firstBase (.cons firstKey (.cons secondBase (.cons secondKey (.cons challenges .nil))))) _ (by kernel_rfl) (fun entry => entry.elim0)).trans
-    (verifier_presentation _ firstBase firstKey secondBase secondKey challenges)
+      verifierProcess firstBase firstKey secondBase secondKey challenges := by
+  kernel_rfl
 
 /-- The replies of one verifier run: received values by type and site, and
 drawn values by site. Other requests are refused. -/

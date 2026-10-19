@@ -2,7 +2,7 @@
 fixture = "lean/bridges/structured/fixtures/schnorr-interactive.json"
 output = "lean/ZkcExamples/Structured/SchnorrInteractiveNormalForms.lean"
 namespace = "ZkcExamples.Structured.SchnorrInteractiveNormalForms"
-imports = ["ZkcExamples.Structured.SchnorrInteractive", "Zkc.Source.Structured.NormalForm.Presentation", "Zkc.Source.Structured.ReplyScript",
+imports = ["ZkcExamples.Structured.SchnorrInteractive", "Zkc.Source.Structured.ReplyScript",
            "Zkc.Source.Structured.ContractExecution", "Zkc.Source.Structured.ContractElaboration",
            "Zkc.Source.Structured.ContractObligations",
            "Mathlib.Algebra.Field.Basic", "Mathlib.Algebra.Module.Defs"]
@@ -16,8 +16,7 @@ s0 = "nonceSite"
 [root]
 inputs = ["base", "key", "witness", "nonces", "challenges"]
 roles = ["prover", "verifier"]
-proof = "normal-form"
-body = "SchnorrInteractiveBodies.interactiveBody"
+proof = "kernel"
 
 [contract]
 clause = "knowledge"
