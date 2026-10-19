@@ -27,7 +27,10 @@ elaborated and checked by the kernel, so a generator error, a stale request or
 a changed program is reported as a failed equation rather than trusted. Root
 equations are definitional. Equations over a shared typed body (for every unit
 whose checked body it is) are proved by explicit operation steps that use the
-helper laws named in the request.
+helper laws named in the request. A request may instead ask for normal-form
+proofs: each equation is then an instance of the normalizer's soundness
+theorem, with the form the compiled normalizer prints as a literal that the
+kernel checks.
 
 Within a body, a repeat whose callback the request states over (a `[[shared]]`
 entry whose `repeat` names it) may stand anywhere: its returned state is bound

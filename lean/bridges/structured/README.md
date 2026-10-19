@@ -337,8 +337,10 @@ Each of the following sections is optional:
 | `[[shared]]` with `[[shared.roles]]` | Normal forms over a typed body that several units share (the request's `body`): a repeat callback (`repeat` names a callback of `[bodies] callbacks`, a source label its callback carries, or the repeat's site) or a whole protocol body, at each listed role, with the process equation of the role's normal form for every unit whose tables satisfy the named helper laws. A repeat callback's role also gets `<role><Slot>Position` and `<role><Slot>Slot` for each carried slot it names, so statements about the state need no literal positions, and with `fold = true` also `<role>_fold`: the repeat on an admitted count, from any state whose masked slots are given, is the fold of the role's normal form over the iteration indices (`NormalFormSteps.repeat_embed`) |
 | `[unit]` with `name`, `views`, `helpers`, `program` | The admitted unit a whole-body entry over one unit is stated with: its plain tables, the names `structured_views` gives its declarations (`<views>.<declaration>Definition`, `_member`, `_raw`, `_signature`) and its program. A whole-body entry then needs no `meaning`, `closed` or `components` |
 
-Root equations are definitional. Shared equations are proved by explicit
-operation steps generated together with the normal form. A shared entry names
+Root equations are definitional; `proof = "kernel"` in `[root]` checks them by
+`kernel_rfl` alone. Shared equations are proved by explicit operation steps
+generated together with the normal form, unless the role asks for
+normal-form proofs (below). A shared entry names
 the typed `body`, the `function` to define, its `parameters`, the participant
 `meaning`, the `closed` and `components` helper tables, and, for a body with a
 repeat that ends the body, the `repeat_spec` and the `callback` function; a
@@ -355,6 +357,27 @@ true` makes them the optional components of a Math call. `guards` gives a proof
 for a guard whose condition is not a decided proposition, and `rewrites` states
 facts (`expr`, `value`, `proof`) that the proof rewrites with, for example a
 comparison that a premise decides.
+
+**Normal-form proofs.** With `proof = "normal-form"` (in `[root]`, together with
+the entry's typed `body`, or in a repeat callback's `[[shared.roles]]` entry,
+whose `[[shared]]` entry then also names its helper `tables` and `protocols`),
+an equation is an instance of the normalizer's soundness theorem
+(`Zkc.Source.Structured.NormalForm.normalize_sound`) instead of a step script.
+The generator runs the compiled normalizer (`structured-source normal-form`,
+built by `lake build structured-source`; `ZKC_STRUCTURED_SOURCE` selects
+another binary) and prints, per role, `<role>Pattern` (the inputs as the
+normalizer reads them), `<role>Form` (the role's form as a literal) and, for a
+callback, `<role>Signature` (the role's laws keyed by helper, each pinned to the
+inputs its call reads at every use), `<role>Results` (the results its laws
+present, from the request's templates), `<role>Finish` (the carried positions
+the role presents) and `<role>_laws` (each law premise discharged by the
+request's law term). The kernel alone checks `<role>_normalized` (the
+normalizer returns the literal), `<role>_presentation` (the literal's process is
+the readable one), `<role>_environment`, `<role>_finishes` and
+`<role>_embedding`. The statements of the readable definitions and of the
+process equations are unchanged, and the masked-state theorems become
+instances of `NormalForm.maskValues_embed`. The compiled run is not trusted: a
+form it prints wrongly is a failed kernel check.
 
 A whole-body entry over a `[unit]` may also name its `declaration` (and a `raw`
 equation when its `body` is not the one the views use). Each role then also gets
