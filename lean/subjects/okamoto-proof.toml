@@ -1,0 +1,35 @@
+schema = "zkc.subject/0"
+name = "okamoto-proof"
+
+[source]
+modules = { example = "lean/subjects/fixtures/okamoto-proof.zkc" }
+
+[entries]
+proof = "example::Proof"
+instantiation = "Okamoto<G1>"
+
+[profiles]
+construction = true
+
+[generated]
+data = "lean/ZkcExamples/Construction/OkamotoProofData.lean"
+bodies = "lean/ZkcExamples/Construction/OkamotoProofBodies.lean"
+participant = "lean/ZkcExamples/Construction/OkamotoProofParticipant.lean"
+glue = "lean/ZkcExamples/Construction/OkamotoProof.lean"
+
+[claims]
+endpoint = "ideal-meaning"
+properties = ["knowledge-soundness"]
+statement = "fixed"
+
+[assumptions]
+requested = ["exporter.structured-denotation", "exporter.checked-candidate",
+             "transport.canonical-decoding"]
+
+[mutations]
+kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
+         "challenge-names-delivery", "equality-self", "native-challenge-reads-host",
+         "native-domain-separator"]
+
+[bodies]
+entry = "proof"

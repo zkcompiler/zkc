@@ -12,17 +12,16 @@ import os
 from pathlib import Path
 import sys
 
-from check import MODULUS, ROOT, Suite, definition, digest, returned, write_json
+from check import MODULUS, ROOT, Suite, definition, digest, fixture_table, returned, write_json
 import snapshot
 
 FIXTURES = Path(__file__).parent / "fixtures"
 EXAMPLES = ROOT / "lean/ZkcExamples/Structured"
 # Lake may rebuild imported modules before it checks a proof; allow for that.
 LAKE_TIMEOUT = 1800
-SUBJECTS = (
-    ("schnorr-response", "schnorr_response", "SchnorrResponse"),
-    ("sumcheck-claim", "sumcheck_claim", "SumcheckClaim"),
-)
+# The retained pairs, from `fixtures.toml`: stem, source module and data name.
+SUBJECTS = tuple((stem, spec["module"], spec["data"])
+                 for stem, spec in fixture_table().items() if spec["suite"] == "inlining")
 
 
 def retain(suite, generated, maintained):

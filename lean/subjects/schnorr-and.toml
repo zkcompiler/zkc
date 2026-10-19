@@ -1,0 +1,51 @@
+schema = "zkc.subject/0"
+name = "schnorr-and"
+
+[source]
+project = "examples/projects/sigma"
+
+[entries]
+proof = "example::AndProof"
+interactive = "example::AndInteractive"
+
+[profiles]
+structured = true
+construction = true
+
+[generated]
+data = "lean/ZkcExamples/Construction/SchnorrAndProofData.lean"
+bodies = "lean/ZkcExamples/Construction/SchnorrAndProofBodies.lean"
+participant = "lean/ZkcExamples/Construction/SchnorrAndProofParticipant.lean"
+glue = "lean/ZkcExamples/Construction/SchnorrAndProof.lean"
+interactive_data = "lean/ZkcExamples/Structured/SchnorrAndData.lean"
+interactive_bodies = "lean/ZkcExamples/Structured/SchnorrAndBodies.lean"
+interactive_views = "lean/ZkcExamples/Structured/SchnorrAndViews.lean"
+interactive_export = "lean/bridges/structured/fixtures/schnorr-and.json"
+interactive_source = "lean/bridges/structured/fixtures/schnorr-and.mlir"
+
+[family]
+module = "ZkcSecurity.VCVio.SigmaAnd"
+instance = "ZkcSecurity.Examples.SchnorrAndSigma"
+kind = "sigma"
+
+[claims]
+endpoint = "ideal-meaning"
+properties = ["knowledge-soundness"]
+statement = "fixed"
+
+[assumptions]
+requested = ["exporter.structured-denotation", "exporter.checked-candidate",
+             "transport.canonical-decoding"]
+
+[mutations]
+kinds = ["observe-reads-input", "observe-repeats-value", "challenge-reads-host",
+         "challenge-names-delivery", "equality-self", "conjunction-self",
+         "native-challenge-reads-host", "native-domain-separator"]
+
+[construction]
+admission = "views"
+inputs = "values"
+
+[bodies]
+entry = "proof"
+interactive_entry = "interactive"

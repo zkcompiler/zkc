@@ -1,0 +1,29 @@
+schema = "zkc.subject/0"
+name = "okamoto"
+
+[source]
+modules = { okamoto = "lean/bridges/structured/fixtures/okamoto.zkc" }
+
+[entries]
+interactive = "okamoto::Interactive"
+instantiation = "Okamoto<G1>"
+
+[profiles]
+structured = true
+
+[generated]
+interactive_data = "lean/ZkcExamples/Structured/OkamotoData.lean"
+interactive_bodies = "lean/ZkcExamples/Structured/OkamotoBodies.lean"
+interactive_views = "lean/ZkcExamples/Structured/OkamotoViews.lean"
+interactive_export = "lean/bridges/structured/fixtures/okamoto.json"
+interactive_source = "lean/bridges/structured/fixtures/okamoto.mlir"
+
+[normal_forms]
+request = "lean/bridges/structured/normal-forms/okamoto.toml"
+
+
+[assumptions]
+requested = ["exporter.structured-denotation"]
+
+[bodies]
+interactive_entry = "interactive"

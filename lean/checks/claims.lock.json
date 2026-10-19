@@ -112,26 +112,32 @@
     "ZkcExamples.Construction.ChaumPedersenProof.compiled_transform": {
       "package": "main",
       "module": "ZkcExamples.Construction.ChaumPedersenProof",
-      "structural": "9fa9ba27d3dd15c4",
-      "explicit": "c290d4a19401cb2e"
+      "structural": "91b7e4ad2b768ed9",
+      "explicit": "9aaba7b5e15e8852"
     },
     "ZkcExamples.Construction.ComposedSumcheckProof.compiled_transform": {
       "package": "main",
       "module": "ZkcExamples.Construction.ComposedSumcheckProof",
-      "structural": "299b502a0bd3c5e6",
-      "explicit": "1b46abe3325230c5"
+      "structural": "75f52ec7fb48bfaf",
+      "explicit": "87c29969a4378852"
     },
     "ZkcExamples.Construction.GkrProof.compiled_transform": {
       "package": "main",
       "module": "ZkcExamples.Construction.GkrProof",
-      "structural": "da8ddca8addddaf6",
-      "explicit": "f4952b65028be5e3"
+      "structural": "dedb56cf69b405d7",
+      "explicit": "c9799520c1b87036"
+    },
+    "ZkcExamples.Construction.OkamotoProof.compiled_transform": {
+      "package": "main",
+      "module": "ZkcExamples.Construction.OkamotoProof",
+      "structural": "25db89cc73f622f1",
+      "explicit": "9a6017a43dc4e1b1"
     },
     "ZkcExamples.Construction.SchnorrAndProof.compiled_transform": {
       "package": "main",
       "module": "ZkcExamples.Construction.SchnorrAndProof",
-      "structural": "0ff1ffee821e2194",
-      "explicit": "cf7dc0d895efa412"
+      "structural": "07d3ed8a559fe5ce",
+      "explicit": "1d3d5449cbd4bd07"
     },
     "ZkcExamples.Construction.SchnorrProof.compiled_transform": {
       "package": "main",
@@ -142,8 +148,8 @@
     "ZkcExamples.Construction.SumcheckProof.compiled_transform": {
       "package": "main",
       "module": "ZkcExamples.Construction.SumcheckProof",
-      "structural": "324b4b717735d3cd",
-      "explicit": "d62ce2dd4482f3fc"
+      "structural": "9e8395b2edf9e6db",
+      "explicit": "1cff822c2c6f2fde"
     },
     "ZkcExamples.Executable.DeferredRounds.executable_validate": {
       "package": "main",

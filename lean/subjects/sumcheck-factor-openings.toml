@@ -1,0 +1,45 @@
+schema = "zkc.subject/0"
+name = "sumcheck-factor-openings"
+
+[source]
+modules = { factor_openings = "lean/bridges/common/fixtures/factor-openings.zkc" }
+
+[profiles]
+scalar = true
+
+[claims]
+properties = ["perfect-completeness", "interactive-soundness"]
+
+[scalar]
+contract = "sumcheck.public-factor-openings/0"
+namespace = "Zkc.Protocols.Sumcheck.FactorOpening"
+module = "Zkc.Protocols.Sumcheck.FactorOpening.Security"
+binders = "(statement : Statement F) (claim : F) (service : Nat)"
+arguments = "statement claim service"
+unfold = ["experiment", "experimentWith", "terminal", "publicChecks", "value",
+          "Zkc.Protocols.Sumcheck.Common.rounds", "Zkc.Protocols.Sumcheck.Common.roundsWith",
+          "Zkc.Protocols.Sumcheck.Common.standardArithmetic", "Zkc.Protocols.Sumcheck.Common.wireBoundary",
+          "Zkc.Protocols.Sumcheck.Common.wireEvaluate"]
+composed = true
+
+[scalar.inputs]
+"left.constant" = ["statement.left.constant", "field"]
+"left.second" = ["statement.left.second", "field"]
+"left.first" = ["statement.left.first", "field"]
+"left.mixed" = ["statement.left.mixed", "field"]
+"right.constant" = ["statement.right.constant", "field"]
+"right.second" = ["statement.right.second", "field"]
+"right.first" = ["statement.right.first", "field"]
+"right.mixed" = ["statement.right.mixed", "field"]
+claim = ["claim", "field"]
+service = ["service", "service"]
+
+[scalar.properties.perfect-completeness]
+theorem = "perfect_completeness"
+experiment = "interactive.independent-uniform-field/0"
+premises = ["honest abstract strategy", "two independent uniform full-field coins"]
+
+[scalar.properties.interactive-soundness]
+theorem = "soundness"
+experiment = "interactive.independent-uniform-field/0"
+premises = ["false public sum claim", "arbitrary fixed causal strategy", "two independent uniform full-field coins"]

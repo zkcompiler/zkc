@@ -16,32 +16,18 @@ the Lean rule to refuse; a malformed record refuses the whole program. This is
 a tested data boundary: no meaning is assigned here.
 """
 
-import argparse
-import hashlib
-import importlib.util
 import json
 from pathlib import Path
 import re
+import sys
 
-
-def _construction_renderer():
-    """Load the construction bridge's renderer under its own module name."""
-    path = Path(__file__).resolve().parents[1] / "construction/render.py"
-    spec = importlib.util.spec_from_file_location("construction_render", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-construction = _construction_renderer()
+sys.path.append(str(Path(__file__).resolve().parents[2]))
+from bridges.common import lean_render  # noqa: E402
+from bridges.common.lean_render import Refused, origin, record, require, seq, text  # noqa: E402
 
 PROGRAM = "zkc.program/0"
 DEPLOYMENT = "zkc.native-proof/0"
 TRANSCRIPT_CONTRACTS = {"transcript.native.indexed.observe.data", "transcript.native.indexed.challenge"}
-text = construction.text
-require = construction.require
-record = construction.record
-seq = construction.seq
 
 
 def physical(value):
@@ -59,7 +45,7 @@ def physical(value):
     elif re.fullmatch(r"transcript:[A-Za-z0-9_.:/-]+", logical):
         sort = f".transcript {text(logical.split(':', 1)[1])}"
     else:
-        raise construction.Refused(f"unsupported physical type {value!r}")
+        raise Refused(f"unsupported physical type {value!r}")
     term = f"⟨{sort}, {text(representation)}⟩"
     require(f"{logical}@{representation}" == value, "noncanonical physical type")
     return term
@@ -77,7 +63,7 @@ def ports(values):
 def parameter(contract, value, count):
     if contract in TRANSCRIPT_CONTRACTS:
         require(count == 1, "a transcript operation carries exactly one occurrence")
-        return f".template {construction.origin(value)}"
+        return f".template {origin(value)}"
     require(isinstance(value, str), "parameters are strings")
     return f".text {text(value)}"
 
@@ -185,7 +171,7 @@ def select(deployment):
             "expected a native proof deployment")
     candidate = deployment[4]
     require(isinstance(candidate, str), "candidate program")
-    digest = hashlib.sha256(candidate.encode()).hexdigest()
+    digest = lean_render.digest(candidate.encode())
     require(deployment[5] == digest, "candidate digest differs from the program bytes")
     policy = deployment[2][1]
     entry, validator_role = policy[1], policy[3]
@@ -202,8 +188,7 @@ def select(deployment):
 
 
 def render(deployment, namespace):
-    require(re.fullmatch(r"(?:[A-Za-z][A-Za-z0-9_]*\.)*[A-Za-z][A-Za-z0-9_]*", namespace) is not None,
-            "invalid Lean namespace")
+    lean_render.namespace(namespace)
     digest, entry, role, participant, functions, bindings = select(deployment)
     _, symbol, instance, actual_role, inputs, results, body, services = record(participant, 8)
     require(actual_role == role and instance == entry, "participant role and instance")
@@ -268,15 +253,5 @@ end {namespace}
 '''
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("input", type=Path, help="native proof deployment")
-    parser.add_argument("output", type=Path)
-    parser.add_argument("--namespace", required=True)
-    args = parser.parse_args()
-    deployment = json.loads(args.input.read_text(encoding="utf-8"))
-    args.output.write_text(render(deployment, args.namespace), encoding="utf-8")
-
-
 if __name__ == "__main__":
-    main()
+    lean_render.render_main(render, __doc__)

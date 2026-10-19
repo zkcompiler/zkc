@@ -1,9 +1,6 @@
 module
 
-public import ZkcExamples.Executable.SchnorrProofProgramData
-public import ZkcExamples.Construction.SchnorrProof
-public import Zkc.Executable.NormalizationSoundness
-public import Zkc.Executable.Installed
+public import ZkcExamples.Executable.SchnorrProofFacts
 
 @[expose] public section
 
@@ -15,7 +12,8 @@ runtime admits. The lowering rule accepts it against the constructed validator
 that the composed transcript-construction and participant projection check
 accepted (`accepted`): it reads back as exactly those instructions, without
 loops or helper calls, with a complete run charging 25 instructions, the
-runtime's measured threshold. With the composed rules' theorem for this Entry
+runtime's measured threshold. These facts are generated
+(`SchnorrProofFacts`, in this namespace). With the composed rules' theorem for this Entry
 (`ZkcExamples.Construction.SchnorrProof.compiled_transform`, an instance of
 `Zkc.Construction.compiled_transform` with no Entry-specific equation about the
 compiled program), the executable's meaning at any budget of at least 25, under
@@ -31,40 +29,6 @@ namespace ZkcExamples.Executable.SchnorrProof
 open Zkc.Construction Zkc.Executable
 open ZkcExamples.Construction
 
-abbrev validator : Validator := SchnorrProofProgramData.validator
-
-set_option maxRecDepth 20000 in
-/-- The reading of the executable validator. -/
-def lowered : Lowered :=
-  (checkLowering installed SchnorrProof.participant validator).toOption.get (by decide +kernel)
-
-/-- The per-compile lowering rule accepts the actual executable validator. -/
-theorem accepted : checkLowering installed SchnorrProof.participant validator = .ok lowered :=
-  ok_of_isSome _ _
-
-/-- The constructed validator calls no helper. -/
-theorem helpers : Instruction.helpers SchnorrProof.participant.instructions = [] := by
-  rw [← Instruction.helperList_eq]
-  decide +kernel
-
-/-- The constructed validator has no helper call. -/
-theorem calls : Instruction.callList SchnorrProof.participant.instructions = [] := by
-  decide +kernel
-
-set_option maxRecDepth 20000 in
-/-- A complete run charges 25 instructions. -/
-theorem total : lowered.total? = some 25 := by decide +kernel
-
-/-- The receive types: the commitment in G1, then the response in the scalar field. -/
-abbrev receives : List PhysicalType :=
-  [⟨.data (.group "bls12-381.g1"), "arkworks.g1/0"⟩, ⟨.data (.field "bls12-381.fr"), "arkworks.fr/0"⟩]
-
-set_option maxRecDepth 20000 in
-theorem plan_static : Plan.static lowered.plan = some receives := by decide +kernel
-
-theorem plan_types {F G : Type} (data : List (Value F G)) : Plan.types data lowered.plan = receives :=
-  Plan.types_static data plan_static
-
 variable {F G : Type} [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G]
 
 /-- No helper needs preparation. -/
@@ -79,11 +43,6 @@ theorem helpersSorted : ∀ call ∈ Instruction.callList SchnorrProof.participa
 
 /-- The data inputs of the executable: base then statement. -/
 abbrev data (base key : G) : List (Value F G) := (SchnorrProof.inputs (F := F) base key).map .data
-
-omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
-/-- The executable admits the validator's data inputs. -/
-theorem admitted (base key : G) : validator.admits (data (F := F) base key) = true := by
-  rfl
 
 omit [Field F] [DecidableEq F] [AddCommGroup G] [Module F G] [DecidableEq G] in
 theorem observation_mapOutcome {α β : Type} (f : α → β) (outcome : PIR.Outcome α) (complete : Bool) :

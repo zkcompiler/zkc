@@ -1,0 +1,42 @@
+schema = "zkc.subject/0"
+name = "gkr"
+
+[source]
+project = "examples/projects/gkr"
+
+[entries]
+proof = "example::Proof"
+
+[profiles]
+construction = true
+
+[generated]
+data = "lean/ZkcExamples/Structured/GkrSourceData.lean"
+participant = "lean/ZkcExamples/Construction/GkrProofParticipant.lean"
+glue = "lean/ZkcExamples/Construction/GkrProof.lean"
+
+[family]
+module = "ZkcSecurity.FiatShamir.Composition"
+instance = "ZkcSecurity.Examples.CompiledGkrFiatShamir"
+kind = "certificate"
+
+[claims]
+endpoint = "ideal-meaning"
+properties = ["soundness"]
+statement = "fixed"
+
+[assumptions]
+requested = ["exporter.structured-denotation", "model.history-oracle", "exporter.checked-candidate",
+             "transport.canonical-decoding"]
+
+[mutations]
+kinds = ["observe-repeats-value", "challenge-reads-host", "challenge-names-delivery", "drop-guard",
+         "equality-self", "update-self", "stale-yield", "call-reads-sibling",
+         "native-challenge-reads-host", "native-domain-separator", "native-helper-constant"]
+
+[construction]
+admission = "external"
+views = "ZkcExamples.Structured.GkrSourceViews"
+inputs = "values"
+# The instruction reading of the GKR Entry declares its own context equation.
+omit = ["context_eq"]
