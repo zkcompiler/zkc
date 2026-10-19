@@ -1,7 +1,8 @@
 """Explicit, unweighted coverage catalog for source execution experiments."""
 from dataclasses import dataclass
 
-from . import library_cases, programs, stark
+from . import algebra as a
+from . import expressions, library_cases, operations, programs, stark
 
 
 @dataclass(frozen=True)
@@ -23,6 +24,12 @@ class Case:
             return getattr(stark, self.name)(root, shape)
         if self.name == 'stark':
             return stark.library(root, shape)
+        if self.name == 'expression':
+            return expressions.expression(shape, root=root)
+        if self.name == 'field_vector':
+            return operations.field_vector(shape, root=root)
+        if self.name in ('transform', 'curve_operation'):
+            return getattr(operations, self.name)(shape)
         return getattr(programs, self.name)(shape)
 
 
@@ -92,6 +99,58 @@ def cases():
             add(f'machine-{reduction.lower()}-{fixture}', 'machine', {'reduction': reduction, 'fixture': fixture},
                 'regression', ('table composition', 'lookup/memory argument', 'FRI'),
                 'Shared STARK libraries and small fixtures; not independent evidence for scaling or a production zkVM.')
+    # Representative authored shapes, not a shape x field x size product. Roles
+    # are fixed here, before timing; no selector uses measured performance.
+    expression_panel = [(name, 'kb', 129, sink) for name in expressions.EXPRESSIONS
+                        for sink in ('map', 'sum', 'product')]
+    expression_panel += [('short-horner', 'kb', n, 'map') for n in (0, 1, 31, 32, 33, 127, 128, 4096)]
+    expression_panel += [
+        ('short-horner', 'fr', 33, 'sum'), ('wide-independent', 'fr', 128, 'map'),
+        ('deep-horner', 'fr', 1024, 'product'), ('capture-heavy', 'ext4', 31, 'sum'),
+        ('shared-subexpression', 'ext4', 129, 'map'), ('deep-horner', 'ext4', 1024, 'map'),
+        ('shared-subexpression', 'ext8', 33, 'product'), ('wide-independent', 'ext8', 127, 'map'),
+        ('capture-heavy', 'ext8', 1024, 'sum'), ('short-horner', 'binary64', 32, 'map'),
+        ('input-heavy', 'binary64', 128, 'sum'), ('shared-subexpression', 'binary64', 1024, 'product'),
+        ('short-horner', 'binary-ext3', 1024, 'map'), ('capture-heavy', 'binary-ext3', 127, 'sum'),
+        ('shared-subexpression', 'binary-ext3', 129, 'product'), ('input-heavy', 'kb', 1024, 'map'),
+        ('difference-products', 'ext4', 33, 'sum'), ('alternating-powers', 'binary64', 127, 'map'),
+    ]
+    fields = {'kb': 'koala-bear', 'fr': 'bls12-381.fr', 'ext4': 'koala-bear.ext4-binomial3',
+              'ext8': 'koala-bear.ext8-binomial3', 'binary64': a.BINARY,
+              'binary-ext3': a.BINARY_CUBIC}
+    for expression, short, n, sink in expression_panel:
+        definition = expressions.EXPRESSIONS[expression]
+        add(f'expression-{short}-{expression}-{sink}-{n}', 'expression',
+            {'field': fields[short], 'expression': expression, 'elements': n, 'sink': sink,
+             'role': definition.role, 'columns': len(definition.columns), 'captures': len(definition.captures)},
+            'operation', ('authored Math function', expression, sink),
+            'Fixed shape panel; independent scalar formula, full result check and Host costs. Source shape is not a guarantee of lowered IR shape.')
+    vector_panel = [('kb', op, 129) for op in ('add', 'subtract', 'hadamard', 'scale', 'sum', 'product', 'dot')]
+    vector_panel += [('kb', 'sum', 0), ('kb', 'product', 0), ('fr', 'dot', 1024),
+                     ('ext4', 'hadamard', 129), ('ext8', 'sum', 1024),
+                     ('binary64', 'product', 33), ('binary-ext3', 'dot', 33)]
+    for short, operation, n in vector_panel:
+        add(f'field-vector-{short}-{operation}-{n}', 'field_vector',
+            {'field': fields[short], 'elements': n, 'operation': operation}, 'operation', (operation,),
+            'Independent scalar arithmetic; SDK/run includes validation and Host costs, not kernel-only time.')
+    for degree, n in ((1, 32), (4, 32), (8, 32), (1, 1024), (8, 1024)):
+        for operation in ('dft', 'interpolate'):
+            add(f'transform-ext{degree}-{operation}-{n}', 'transform',
+                {'extension_degree': degree, 'elements': n, 'operation': operation}, 'operation', (operation,),
+                'One direction, unit shift, dense full-degree coefficients; independent Python oracle. Includes polynomial adaptation, equality and Host costs.')
+    for n in (1, 33, 128):
+        for operation in ('vector-scale', 'scale-each', 'msm'):
+            add(f'curve-operation-{operation}-{n}', 'curve_operation',
+                {'elements': n, 'operation': operation}, 'operation', ('point construction', operation, 'group-law validation'),
+                'BLS12-381 G1; weaker scalar/group-law oracle shares native group kernels. SDK/run includes point generation and validation, not kernel-only time.')
+    for height, width, degree, blowup in ((8, 2, 2, 4), (32, 4, 2, 4), (128, 4, 2, 4),
+                                          (32, 8, 2, 4), (32, 4, 3, 8)):
+        for family in ('air', 'stark'):
+            add(f'{family}-coupled-d{degree}-h{height}-w{width}-b{blowup}', family,
+                {'height': height, 'width': width, 'evaluation_size': height*blowup,
+                 'queries': 8, 'constraint': 'coupled', 'constraint_degree': degree},
+                'protocol', ('coupled columns', f'degree-{degree} AIR', 'quotients', 'FRI', 'Merkle', 'transcript'),
+                'Matched one-table AIR across both profiles; independent Python trace. Default capacities; not a production or multi-table scaling study.')
     return result
 
 

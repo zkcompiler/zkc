@@ -88,6 +88,10 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 | `sumcheck` | Public tables of 16–65,536 elements | Independent Rust algorithm; verifier includes linear public-table evaluation, no PCS |
 | `finite` | Identical pointwise polynomial + sum as reduction, collect + sum, bulk operations, total collect–fold and total fold; KoalaBear and BLS12-381 Fr; 0/17/1,024/8,192 elements | Independent Python expectations; exposes source-form recognition and materialization differences |
 | `numerical` | Two columns and a scalar capture; map, collect and vector operations; vector, sum and product results; KoalaBear, BLS Fr and dense degree-eight extension; 0–8,192 elements | Matched arithmetic and inputs across forms; includes equality and Host costs, with independent Python expectations |
+| `expression` | Fixed panel of short/deep Horner, wide independent, shared-subexpression, capture-heavy and input-heavy functions; KB, Fr, dense KB Ext4/Ext8, binary64 and binary Ext3 | Independent authored Python formulas; map/sum/product; two additional validation-only shapes; source shape needs lowered-IR inspection |
+| `field_vector` | Separately named add, subtract, Hadamard multiply, scale, sum, product and dot controls; representative fields and sizes | Independent scalar expectations; SDK/run includes validation and Host costs |
+| `transform` | Separate DFT and interpolation calls, unit shift, full dense coefficients; KB/Ext4/Ext8 at 32, KB/Ext8 at 1,024 | Independent Python evaluation; polynomial adaptation and equality remain inside the SDK call |
+| `curve_operation` | Separately named BLS12-381 G1 vector scaling, per-point scaling and MSM; 1/33/128 points | Includes point generation and every result check; weaker group-law consistency, sharing native group kernels |
 | `scan` | Scalar ordered scan and bulk prefix sum; 17/1,024/4,096 elements | Full output check; source-form comparison, no presumed storage-release benefit |
 | `control` | Rectangular nested loops, branches, indexing and carried state | Independent of machine libraries; not an unseen statistical holdout |
 | `matrix` | Rectangular matrix-vector multiplication, dense and sparse occupancy | Python expectations; R1CS-like arithmetic, not a full proof system |
@@ -97,7 +101,7 @@ the deterministic replay wrapper is linked only into `monero-reference`.
 | `pairing` | 2/8/32 BN254 pairings and scalar multiplication | Bilinearity consistency, not Groth16/KZG or independent kernel validation |
 | `transcript` | Independent round-count and payload-size variation | Ordered challenge recurrence and payload check; Merlin construction |
 | `fri` | Domain size, dense polynomial degree bound and query count vary separately | Same-stack proof validation; degree bound is not domain size |
-| `air` | Trace height, width and evaluation blowup vary separately, including 1,024-row traces at widths 1 and 4 | Quadratic recurrence with first/last/transition constraints; one table; default execution capacities |
+| `air` | Trace height, width and evaluation blowup vary separately, including original independent recurrences and new coupled quadratic/cubic columns | First/last/transition constraints; one table; default execution capacities |
 | `stark` | The `air` shapes through the [parameterized library](../../libraries/arguments/stark/README.md#parameterized-single-table-argument): quartic challenges, Poseidon2 multi-opening Merkle trees, constant final polynomial | Same AIR and queries as `air`, so the two profiles compare directly; same-stack proof verification |
 | `bulletproofs` | BP+ source workload, counts 1/3/8/16; changing statements and preparation policies | Retained conformance inputs; independent comparisons remain in `monero` |
 | `machine` | LogUp/grand-product, optional memory absent/present | Correlated STARK library regression; small fixtures, not a production zkVM scaling study |
@@ -111,6 +115,42 @@ collect–fold composition does not cross those boundaries.
 Python oracles execute outside the SDK timer. They use dense deterministic field
 values, including nonzero higher extension coordinates; the curve and pairing
 controls explicitly use weaker algebraic consistency checks.
+
+### Fixed numerical panel
+
+The panel adds 50 `expression`, 14 `field_vector`, 10 `transform`, nine
+`curve_operation`, and ten coupled AIR/STARK cases. Existing identifiers,
+formulas and the smoke list stay unchanged. Case counts imply no suite weights.
+
+[`expressions.py`](bench/expressions.py) defines short/deep Horner, independent
+branches, shared intermediates, capture-heavy and input-heavy Math bodies with
+separate scalar oracles. Representative sizes include empty/singleton inputs,
+31/32/33 and 127/128/129 tails, and larger columns, across six fields. Extension
+coordinates are dense; binary fields use canonical hexadecimal inputs and the
+captured [Python reference](../tests/support/binary_reference.py).
+`difference-products` and `alternating-powers` have fixed
+`dimensions.role = validation-only`; keep them out of tuning. The role is
+metadata: `--suite expression` includes both roles. Inspect the captured lowered
+IR before attributing performance to the authored expression's shape.
+
+[`operations.py`](bench/operations.py) isolates named operations in source.
+Transform directions use independent Python evaluation, rather than validating
+a native roundtrip. Curve controls use weaker scalar/group-law checks. Point
+generation, polynomial adaptation, validation and Host costs remain inside the
+SDK timer; these are **not kernel-only timings**. Hash/Merkle coverage remains
+in FRI/AIR compositions.
+
+The `air-coupled-*` and `stark-coupled-*` pairs share Bundles and traces with
+simultaneous updates `next[j] = current[j]^(degree-1) * current[(j+1) % width] +
+current[(j-1) % width] + j+1`. First/last constraints cover every column.
+Quadratic cases vary height and width; the cubic case uses blowup eight.
+Ordinary Python arithmetic generates the trace independently of the Bundle.
+Negative controls check interior and boundary violations.
+
+Default capacities stay unchanged. Generator tests check arithmetic and input
+sizes; compilation, lowered-IR inspection and native resource admission are
+separate validation steps. Production-scale traces, Host-limit stress and
+multi-table scaling remain additional experiments.
 
 Broader coverage does not establish universal performance. Full Groth16/KZG,
 recursive proving, production zkVM traces, other fields/hash families,
@@ -299,7 +339,8 @@ boundaries/interleaving in [Google Benchmark](https://google.github.io/benchmark
 ```sh
 cargo test --locked -p zkc-benchmarks
 uv run --no-sync --locked pytest common/tests/harness/test_benchmarks.py \
-  common/tests/harness/test_benchmark_coverage.py common/tests/harness/test_protocol_measurements.py \
+  common/tests/harness/test_benchmark_coverage.py common/tests/harness/test_benchmark_numerical.py \
+  common/tests/harness/test_protocol_measurements.py \
   common/tests/harness/test_processes.py
 uv run --no-sync --locked ruff check common/benchmarks
 python3 common/tests/check_docs.py --all
