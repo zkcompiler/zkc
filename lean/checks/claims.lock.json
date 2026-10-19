@@ -193,11 +193,29 @@
       "structural": "4f783f52e73012e0",
       "explicit": "f1d64ddbd2ec670d"
     },
+    "ZkcExamples.Structured.GkrSourceNormalForms.verifier_participant": {
+      "package": "main",
+      "module": "ZkcExamples.Structured.GkrSourceNormalForms",
+      "structural": "de5defde9df07152",
+      "explicit": "827f93271d62b5ac"
+    },
     "ZkcExamples.Structured.NormalFormSteps.apply_step": {
       "package": "main",
       "module": "ZkcExamples.Structured.NormalFormSteps",
       "structural": "39826b7bbf45dab0",
       "explicit": "9ab9ed37cfdd2d92"
+    },
+    "ZkcExamples.Structured.NormalFormSteps.apply_step_after": {
+      "package": "main",
+      "module": "ZkcExamples.Structured.NormalFormSteps",
+      "structural": "1801efb6a05dbca7",
+      "explicit": "dfc6e3284d2065f8"
+    },
+    "ZkcExamples.Structured.NormalFormSteps.repeat_embed": {
+      "package": "main",
+      "module": "ZkcExamples.Structured.NormalFormSteps",
+      "structural": "b08dc4c05e0e5fc4",
+      "explicit": "291fdcb95724cc49"
     },
     "ZkcExamples.Structured.Okamoto.extract_representation": {
       "package": "main",

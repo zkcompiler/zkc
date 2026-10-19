@@ -91,7 +91,7 @@ def test_native_lean_checks_subjects_then_requests_then_records(monkeypatch, tmp
     # Seed the repository's own request names, out of order: the run checks every
     # one of them, in name order.
     names = sorted(path.name for path in (ROOT / "lean/bridges/structured/normal-forms").glob("*.toml"))
-    assert len(names) == 10
+    assert len(names) == 11
     requests = tmp_path / "lean/bridges/structured/normal-forms"
     requests.mkdir(parents=True)
     for name in reversed(names):
