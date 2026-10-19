@@ -1,0 +1,49 @@
+module example;
+use zkc::vector::{Vector, get, length};
+use zkc::oracle::{Root, Path, State};
+use zkc::oracle as oracle;
+
+domain F = field("koala-bear");
+domain E = field("koala-bear.ext8-binomial3");
+domain Rows = commitment("rows.merkle-keccak256.koala-bear/0");
+
+// A row (a, b, c) satisfies the predicate when c = a * b.
+fn holds(row: Vector<F>) -> bool {
+  return get(row, 2) == get(row, 0) * get(row, 1);
+}
+
+fn shaped<LogRows: nat, Width: nat>(table: Vector<F>) -> bool {
+  return length(table) == index<pow2(LogRows)>() * index<Width>();
+}
+
+// P commits a table of 2^LogRows rows of Width values and sends its root.
+// V draws one position, P opens the row there, and V authenticates it against
+// the received root at V's own position and shape before testing the row.
+// The scheme, height and width are fixed by the program, not by the prover.
+protocol CommittedOpening<LogRows: nat, Width: nat> roles(P,V)
+    (table: Vector<F> @P, coins: Random<E> @V) -> (accepted: bool @V)
+    where 3 <= Width {
+  let table_ok @P = shaped<LogRows,Width>(table);
+  require @P table_ok;
+  let tree @P = oracle::commit<Rows>(table, index<Width>());
+  let root = send P -> V(tree.0);
+  let positionV = coins.index<pow2(LogRows)>();
+  let positionP = send V -> P(positionV);
+  let opened @P = oracle::open<Rows>(tree.1, positionP);
+  let row = send P -> V(opened.0);
+  let path = send P -> V(opened.1);
+  let authentic @V = oracle::check<Rows>(root, index<Width>(),
+    index<pow2(LogRows)>(), positionV, row, path);
+  require @V authentic;
+  let accepted @V = holds(row);
+  return (accepted = accepted);
+}
+
+run Interactive = CommittedOpening<3, 3>;
+proof Proof = CommittedOpening<3, 3> {
+  prover P;
+  verifier V;
+  public { };
+  accept accepted;
+  construction fiat_shamir("hash-chain.keccak256.koala-bear.ext8-binomial3.rejection31le/0", coins);
+}

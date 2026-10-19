@@ -10,6 +10,7 @@ Start with Schnorr, then Sumcheck and FRI before the STARK examples.
 | [Sumcheck](sumcheck/README.md) | Public-table multilinear Sumcheck, [composition](sumcheck/composed/README.md), and a [product expression](sumcheck/product/README.md) with extension-field challenges |
 | [GKR](gkr/README.md) | Layered arithmetic circuits with public wiring: degree-two Sumcheck per layer and the line reduction |
 | [FRI](fri/README.md) | Authenticated folding and a bounded terminal polynomial |
+| [Committed opening](committed-opening/README.md) | One Keccak row commitment, one index request on a hash-chain transcript and an authenticated terminal opening |
 | [Fibonacci](fibonacci/README.md) | One STARK protocol applied to Clean and Plonky3 AIRs |
 | [Parameterized STARK](stark/README.md) | The same AIRs through the configurable STARK library: quartic challenges, Poseidon2 Merkle trees, pruned multi-openings |
 | [FemtoCairo](femtocairo/README.md) | Clean VM execution with program and immutable-memory lookups |
