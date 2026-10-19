@@ -82,63 +82,64 @@ def execute(scope, args):
         compiler = Path(args.compiler_build).resolve() if args.compiler_build else compiler_directory(args.profile)
         bridge = ROOT / "lean/bridges/common"
         output = reports / "lean/native"
-        # The structured suites of this run share one executable store.
-        os.environ["ZKC_TOOL_STORE"] = str(output / "tool-store")
+        # The structured suites of this run share one executable store. Each child is
+        # given the store; this process's environment is left unchanged.
+        store = {"ZKC_TOOL_STORE": str(output / "tool-store")}
         run([sys.executable, bridge / "check.py", "--compiler", compiler / "zkc-compile",
              "--reference", compiler / "test/zkc-common_reference-test",
              "--lean", ROOT / "lean/.lake/build/bin/common-source", "--cases", "80",
-             "--report", output / "differential.json"])
+             "--report", output / "differential.json"], env=store)
         run([sys.executable, ROOT / "lean/bridges/structured/check.py",
              "--compiler", compiler / "zkc-compile",
              "--reference", compiler / "test/zkc-structured_reference-test",
              "--lean", ROOT / "lean/.lake/build/bin/structured-source",
-             "--report", output / "structured/report.json"])
+             "--report", output / "structured/report.json"], env=store)
         run([sys.executable, ROOT / "lean/bridges/structured/open_protocol.py",
              "--compiler", compiler / "zkc-compile",
              "--reference", compiler / "test/zkc-structured_reference-test",
              "--lean", ROOT / "lean/.lake/build/bin/structured-source",
-             "--report", output / "structured-open/report.json"])
+             "--report", output / "structured-open/report.json"], env=store)
         run([sys.executable, ROOT / "lean/bridges/structured/primitives.py",
              "--compiler", compiler / "zkc-compile",
              "--reference", compiler / "test/zkc-structured_reference-test",
              "--lean", ROOT / "lean/.lake/build/bin/structured-source",
-             "--report", output / "structured-primitives/report.json"])
+             "--report", output / "structured-primitives/report.json"], env=store)
         run([sys.executable, ROOT / "lean/bridges/structured/maps.py",
              "--compiler", compiler / "zkc-compile",
              "--reference", compiler / "test/zkc-structured_reference-test",
              "--lean", ROOT / "lean/.lake/build/bin/structured-source",
-             "--report", output / "structured-maps/report.json"])
+             "--report", output / "structured-maps/report.json"], env=store)
         run([sys.executable, ROOT / "lean/bridges/structured/applications.py",
              "--compiler", compiler / "zkc-compile",
              "--reference", compiler / "test/zkc-structured_reference-test",
              "--lean", ROOT / "lean/.lake/build/bin/structured-source",
-             "--report", output / "structured-applications/report.json"])
+             "--report", output / "structured-applications/report.json"], env=store)
         run([sys.executable, ROOT / "lean/bridges/structured/repeats.py",
              "--compiler", compiler / "zkc-compile",
              "--reference", compiler / "test/zkc-structured_reference-test",
              "--lean", ROOT / "lean/.lake/build/bin/structured-source",
-             "--report", output / "structured-repeats/report.json"])
+             "--report", output / "structured-repeats/report.json"], env=store)
         run([sys.executable, ROOT / "lean/bridges/structured/inlining.py",
              "--compiler", compiler / "zkc-compile",
              "--optimizer", compiler / "zkc-opt",
              "--reference", compiler / "test/zkc-structured_reference-test",
              "--lean", ROOT / "lean/.lake/build/bin/structured-source",
-             "--report", output / "structured-inlining/report.json"])
+             "--report", output / "structured-inlining/report.json"], env=store)
         run([sys.executable, bridge / "verify_tests.py", "--compiler", compiler / "zkc-compile",
-             "--output", output / "requests"])
+             "--output", output / "requests"], env=store)
         run([sys.executable, bridge / "intent_tests.py", "--compiler", compiler / "zkc-compile",
-             "--output", output / "intent"])
+             "--output", output / "intent"], env=store)
         # Every subject manifest: exports, generated modules, kernel checks, generic
         # mutations, the runtime differential and the per-subject evidence records.
         subjects = new_directory(output, "subjects")
         run([sys.executable, ROOT / "lean/bridges/subject.py", "--check", "--runtime",
              "--compiler", compiler / "zkc-compile", "--native", output_directory("native") / "zkc",
-             "--output", subjects])
+             "--output", subjects], env=store)
         for request in sorted((ROOT / "lean/bridges/structured/normal-forms").glob("*.toml")):
-            run([sys.executable, ROOT / "lean/bridges/structured/normal_forms.py", request, "--check"])
+            run([sys.executable, ROOT / "lean/bridges/structured/normal_forms.py", request, "--check"], env=store)
         # The assurance reports join the declaration records with this run's evidence.
         run([sys.executable, ROOT / "lean/checks/check_records.py", "--integration", "arklib",
-             "--evidence", subjects / "evidence"])
+             "--evidence", subjects / "evidence"], env=store)
     elif scope == "install":
         from check_sdk import check_install
         check_install(args, run)

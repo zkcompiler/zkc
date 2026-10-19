@@ -96,16 +96,23 @@ def test_native_lean_checks_subjects_then_requests_then_records(monkeypatch, tmp
     requests.mkdir(parents=True)
     for name in reversed(names):
         (requests / name).write_text("")
-    calls = []
+    calls, stores = [], set()
 
     def run(arguments, **kwargs):
         calls.append(list(map(str, arguments)))
+        stores.add((kwargs.get("env") or {}).get("ZKC_TOOL_STORE"))
 
     monkeypatch.setattr(developer, "run", run)
     monkeypatch.setattr(developer, "ROOT", tmp_path)
     monkeypatch.setenv("ZKC_REPORTS_DIR", str(tmp_path / "reports"))
+    monkeypatch.delenv("ZKC_TOOL_STORE", raising=False)
     monkeypatch.setattr(sys, "argv", ["run.py", "lean-native", "--compiler-build", str(tmp_path / "compiler")])
     developer.main()
+    # Every child shares one tool store, given to it; the store does not leak into
+    # this process, where later suites would find their tools already retained.
+    store, = stores
+    assert Path(store).is_relative_to(tmp_path / "reports")
+    assert "ZKC_TOOL_STORE" not in os.environ
     # The suites and request checks run first; then one subject driver run over every
     # manifest, every normal-form request in order, and the records check, with the
     # security package's registry, over the driver's evidence.
